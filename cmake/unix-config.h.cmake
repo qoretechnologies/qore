@@ -230,7 +230,6 @@
 #cmakedefine HAVE_GCC_VISIBILITY
 #cmakedefine HAVE_LIBATOMIC
 #cmakedefine HAVE_LLVM_BUG_22050
-#cmakedefine HAVE_LOCAL_VARIADIC_ARRAYS
 #cmakedefine HAVE_LSTAT_EMPTY_STRING_BUG
 #cmakedefine HAVE_NAMESPACES
 #cmakedefine HAVE_PTHREAD

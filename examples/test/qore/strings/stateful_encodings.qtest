@@ -37,7 +37,7 @@ class StatefulEncodingTest inherits QUnit::Test {
     #! returns True if iconv supports the encoding
     private bool supported(string enc) {
         try {
-            convert_encoding("a", enc);
+            @discard(convert_encoding("a", enc));
             return True;
         } catch (hash<ExceptionInfo> ex) {
             return False;

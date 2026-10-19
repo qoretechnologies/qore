@@ -1178,6 +1178,7 @@ private:
             case Action::PeerCertificate:
             case Action::CipherName:
             case Action::CipherVersion:
+            case Action::StreamTrailers:
                 return QoreValue();
         }
         return QoreValue();

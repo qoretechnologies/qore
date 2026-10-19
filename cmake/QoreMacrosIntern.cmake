@@ -353,14 +353,6 @@ endmacro()
 
 macro(qore_other_checks)
 
-# check if the compiler supports variadic local arrays
-check_cxx_source_compiles("
-int main(void){
-int x = 2; int y[x];
-return 0;
-}"
-HAVE_LOCAL_VARIADIC_ARRAYS)
-
 # see if struct flock is declared
 check_c_source_compiles("
 #include <fcntl.h>

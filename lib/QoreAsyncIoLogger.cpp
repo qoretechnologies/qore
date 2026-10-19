@@ -33,7 +33,10 @@
 #include "qore/intern/QoreLoggerBridge.h"
 #include "qore/intern/QoreAsyncIoLogger.h"
 #include <unistd.h>
+#ifdef __linux__
 #include <sys/syscall.h>
+#endif
+#include <pthread.h>
 #include <cstring>
 
 static QoreThreadLock async_io_logger_lock;
@@ -139,12 +142,26 @@ bool qore_async_io_trace_enabled() {
     return enabled != 0;
 }
 
+// the operating system's ID of the calling thread
+static long async_io_trace_tid() {
+#if defined(__linux__)
+    return static_cast<long>(syscall(SYS_gettid));
+#elif defined(__APPLE__)
+    // SYS_gettid is another system call on macOS, and syscall() is deprecated there
+    uint64_t tid = 0;
+    pthread_threadid_np(nullptr, &tid);
+    return static_cast<long>(tid);
+#else
+    return static_cast<long>(q_gettid());
+#endif
+}
+
 void qore_async_io_trace(const char* fmt, ...) {
     struct timespec ts;
     clock_gettime(CLOCK_REALTIME, &ts);
     struct tm tm;
     localtime_r(&ts.tv_sec, &tm);
-    long tid = (long)syscall(SYS_gettid);
+    long tid = async_io_trace_tid();
     char prefix[128];
     int plen = snprintf(prefix, sizeof(prefix),
         "[ASYNC-IO %04d-%02d-%02d %02d:%02d:%02d.%06ld tid=%ld] ",

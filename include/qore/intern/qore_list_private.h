@@ -341,9 +341,7 @@ struct qore_list_private {
         size_t end = offset + 1;
 
         if (end != length) {
-#pragma GCC diagnostic ignored "-Wclass-memaccess"
-            memmove(entry + offset, entry + end, sizeof(QoreValue) * (length - end));
-#pragma GCC diagnostic pop
+            memmove(static_cast<void*>(entry + offset), entry + end, sizeof(QoreValue) * (length - end));
             // zero out trailing entries
             zeroEntries(length - 1, length);
         } else // set last entry to 0
@@ -378,9 +376,7 @@ struct qore_list_private {
 
         // move down entries if necessary
         if (end != length) {
-#pragma GCC diagnostic ignored "-Wclass-memaccess"
-            memmove(entry + offset, entry + end, sizeof(QoreValue) * (length - end));
-#pragma GCC diagnostic pop
+            memmove(static_cast<void*>(entry + offset), entry + end, sizeof(QoreValue) * (length - end));
             // zero out trailing entries
             zeroEntries(length - len, length);
         } else // set last entry to 0
@@ -437,14 +433,12 @@ struct qore_list_private {
             size_t ol = length;
             resize(length - len + n);
             // move trailing entries forward if necessary
-            if (end != ol)
-#pragma GCC diagnostic ignored "-Wclass-memaccess"
-                memmove(entry + (end - len + n), entry + end, sizeof(QoreValue) * (ol - end));
-#pragma GCC diagnostic pop
+            if (end != ol) {
+                memmove(static_cast<void*>(entry + (end - len + n)), entry + end, sizeof(QoreValue) * (ol - end));
+            }
         } else if (len > n) { // make list smaller
-#pragma GCC diagnostic ignored "-Wclass-memaccess"
-            memmove(entry + offset + n, entry + offset + len, sizeof(QoreValue) * (length - offset - n));
-#pragma GCC diagnostic pop
+            memmove(static_cast<void*>(entry + offset + n), entry + offset + len,
+                sizeof(QoreValue) * (length - offset - n));
             // zero out trailing entries
             zeroEntries(length - (len - n), length);
             // resize list
@@ -552,9 +546,7 @@ struct qore_list_private {
         if (num >= allocated) {
             size_t d = num >> 2;
             allocated = num + (d < LIST_PAD ? LIST_PAD : d);
-#pragma GCC diagnostic ignored "-Wclass-memaccess"
-            entry = (QoreValue*)realloc(entry, sizeof(QoreValue) * allocated);
-#pragma GCC diagnostic pop
+            entry = static_cast<QoreValue*>(realloc(static_cast<void*>(entry), sizeof(QoreValue) * allocated));
         }
     }
 
@@ -569,9 +561,7 @@ struct qore_list_private {
             if (num >= allocated) {
                 size_t d = num >> 2;
                 allocated = num + (d < LIST_PAD ? LIST_PAD : d);
-#pragma GCC diagnostic ignored "-Wclass-memaccess"
-                entry = (QoreValue*)realloc(entry, sizeof(QoreValue) * allocated);
-#pragma GCC diagnostic pop
+                entry = static_cast<QoreValue*>(realloc(static_cast<void*>(entry), sizeof(QoreValue) * allocated));
             }
             zeroEntries(length, num);
         }

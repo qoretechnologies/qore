@@ -2601,11 +2601,11 @@ static int get_qore_value(const std::string& qv, std::string& v, const char* cna
             if (qv[len - 2] == 'm' && lc == 's') {
                 v += "0, 0, ";
                 char buf[20];
-                sprintf(buf, "%d", val * 1000);
+                snprintf(buf, sizeof(buf), "%d", val * 1000);
                 v += buf;
             } else {
                 char buf[20];
-                sprintf(buf, "%d", val);
+                snprintf(buf, sizeof(buf), "%d", val);
                 if (lc == 's') {
                     v += "0, ";
                     v += buf;
@@ -2725,7 +2725,7 @@ static int get_qore_value(const std::string& qv, std::string& v, const char* cna
             }
             v += "\", ";
             char buf[20];
-            sprintf(buf, "%ld", (long)(qv.size() / 2 - 1));
+            snprintf(buf, sizeof(buf), "%ld", (long)(qv.size() / 2 - 1));
             v += buf;
             v += ");\n";
             return 0;
@@ -4111,7 +4111,7 @@ protected:
                 }
 
                 char buf[20];
-                sprintf(buf, "%ld", (long)cn.size());
+                snprintf(buf, sizeof(buf), "%ld", (long)cn.size());
                 vname += "C";
                 vname += buf;
                 vname += cn;

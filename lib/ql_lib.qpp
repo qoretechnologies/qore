@@ -840,16 +840,12 @@ nothing setgroups(softlist<softint> group_ids) [flags=NAMED_ARGS;dom=PROCESS] {
     if (group_ids->empty())
         return QoreValue();
 
-#ifdef HAVE_LOCAL_VARIADIC_ARRAYS_X
-    gid_t l[group_ids->size()];
-#else
     gid_t* l = (gid_t*)malloc(sizeof(gid_t) * group_ids->size());
     if (!l) {
         xsink->outOfMemory();
         return QoreValue();
     }
     ON_BLOCK_EXIT(free, l);
-#endif
     for (size_t i = 0, e = group_ids->size(); i < e; ++i) {
         if (i && !(i % 100) && qore_check_cancel(xsink, "preparing supplementary groups")) {
             return QoreValue();

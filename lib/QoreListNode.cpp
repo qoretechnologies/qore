@@ -471,7 +471,6 @@ int QoreListNode::push(QoreValue val, ExceptionSink* xsink) {
     return priv->push(val, xsink);
 }
 
-#pragma GCC diagnostic ignored "-Wclass-memaccess"
 int QoreListNode::insert(QoreValue val, ExceptionSink* xsink) {
     assert(reference_count() == 1);
     ValueHolder holder(val, xsink);
@@ -482,7 +481,7 @@ int QoreListNode::insert(QoreValue val, ExceptionSink* xsink) {
 
     priv->resize(priv->length + 1);
     if (priv->length - 1) {
-        memmove(priv->entry + 1, priv->entry, sizeof(QoreValue) * (priv->length - 1));
+        memmove(static_cast<void*>(priv->entry + 1), priv->entry, sizeof(QoreValue) * (priv->length - 1));
     }
     priv->entry[0] = holder.release();
     if (needs_scan(val)) {
@@ -490,9 +489,7 @@ int QoreListNode::insert(QoreValue val, ExceptionSink* xsink) {
     }
     return 0;
 }
-#pragma GCC diagnostic pop
 
-#pragma GCC diagnostic ignored "-Wclass-memaccess"
 QoreValue QoreListNode::shift() {
     assert(reference_count() == 1);
     if (!priv->length) {
@@ -500,7 +497,7 @@ QoreValue QoreListNode::shift() {
     }
     QoreValue rv = priv->entry[0];
     size_t pos = priv->length - 1;
-    memmove(priv->entry, priv->entry + 1, sizeof(QoreValue) * pos);
+    memmove(static_cast<void*>(priv->entry), priv->entry + 1, sizeof(QoreValue) * pos);
     priv->entry[pos] = QoreValue();
     priv->resize(pos);
 
@@ -510,7 +507,6 @@ QoreValue QoreListNode::shift() {
 
     return rv;
 }
-#pragma GCC diagnostic pop
 
 QoreValue QoreListNode::pop() {
     assert(reference_count() == 1);

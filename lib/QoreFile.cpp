@@ -36,6 +36,7 @@
 #include "qore/intern/qore_encoding_private.h"
 #include "qore/intern/QC_FilePollOperation.h"
 
+#include <climits>
 #include <memory>
 #include <string>
 
@@ -280,21 +281,23 @@ int qore_qf_private::setNonBlockingIo(bool non_blocking, ExceptionSink* xsink) {
 }
 
 int qore_qf_private::readUnicode(int* n_len) const {
-#ifdef HAVE_LOCAL_VARIADIC_ARRAYS
-    char buf[charset->getMaxCharWidth()];
-#else
-    assert(charset->getMaxCharWidth() <= 4);
-    char buf[4];
-#endif
-    if (read(buf, 1) != 1)
+    // the width of a character in any encoding is at most UCHAR_MAX bytes
+    char buf[UCHAR_MAX];
+    assert(charset->getMaxCharWidth() <= static_cast<int>(sizeof(buf)));
+    if (read(buf, 1) != 1) {
         return -1;
+    }
 
     int len = (int)charset->getCharLen(buf, 1);
     if (len < 0) {
         len = -len;
+        if (len > static_cast<int>(sizeof(buf))) {
+            return -1;
+        }
         for (int i = 1; i < len; ++i) {
-            if (read(&buf[i], 1) != 1)
+            if (read(&buf[i], 1) != 1) {
                 return -1;
+            }
         }
     }
 

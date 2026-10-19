@@ -55,7 +55,7 @@ static std::atomic<uint64_t> socket_qore_sync_exec_seq{0};
 
 static void hash_set_int_key(QoreHashNode& h, int k, const char* str) {
     char buf[15];
-    sprintf(buf, "%d", k);
+    snprintf(buf, sizeof(buf), "%d", k);
     h.setKeyValue(buf, new QoreStringNode(str), nullptr);
 }
 

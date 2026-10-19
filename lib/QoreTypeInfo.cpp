@@ -3537,6 +3537,11 @@ bool QoreTypeSpec::acceptInput(ExceptionSink* xsink, const QoreTypeInfo& typeInf
             break;
         }
 
+        case QTS_TYPEPARAM:
+        case QTS_WILDCARD:
+            // a type parameter or a wildcard is replaced by its type argument before a value is accepted at runtime,
+            // so its own spec accepts no value
+            break;
     }
 
     if (ok) {

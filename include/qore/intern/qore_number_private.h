@@ -66,15 +66,40 @@ typedef mp_exp_t mpfr_exp_t;
 #define QORE_MPFR_SPRINTF_ARG 'L'
 #endif
 
-// some compilers (sun/oracle pro c notably) do not support arrays with a variable size
-// if not, we can't use the stack for the temporary variable and have to use a dynamically-allocated one
-// also MPFR_DECL_INIT is compiled incorrectly on g 5.2 on Solaris SPARC with all optimization levels
-// for some unknown reason (https://github.com/qorelanguage/qore/issues/958)
-#if defined(HAVE_LOCAL_VARIADIC_ARRAYS) && !(defined(SPARC) && defined(SOLARIS) && defined(__GNUC__))
-#define MPFR_TMP_VAR(x, p) MPFR_DECL_INIT(x, (p))
-#else
-#define MPFR_TMP_VAR(x, p) qore_number_private tmp_x((mpfr_prec_t)p); mpfr_t& x = tmp_x.num
-#endif
+//! A temporary MPFR number for one operation
+/** Its significand is on the stack for a precision up to QORE_MAX_PREC, which is the precision of every number, and
+    on the heap above it; it is made with MPFR's custom interface, so it is not cleared, and its precision is not
+    changed.  MPFR_DECL_INIT() is not used, as it declares a variable-length array, which is not standard C++.
+*/
+class QoreMpfrTmp {
+public:
+    DLLLOCAL explicit QoreMpfrTmp(mpfr_prec_t prec) {
+        size_t size = mpfr_custom_get_size(prec);
+        void* significand;
+        if (size <= sizeof(local)) {
+            significand = local;
+        } else {
+            heap.reset(new mp_limb_t[(size + sizeof(mp_limb_t) - 1) / sizeof(mp_limb_t)]);
+            significand = heap.get();
+        }
+        mpfr_custom_init(significand, prec);
+        mpfr_custom_init_set(num, MPFR_NAN_KIND, 0, prec, significand);
+    }
+
+    QoreMpfrTmp(const QoreMpfrTmp&) = delete;
+    QoreMpfrTmp& operator=(const QoreMpfrTmp&) = delete;
+
+    //! the number
+    mpfr_t num;
+
+private:
+    //! the significand of a number with a precision up to QORE_MAX_PREC
+    mp_limb_t local[(QORE_MAX_PREC + GMP_NUMB_BITS - 1) / GMP_NUMB_BITS];
+    //! the significand of a number with a higher precision
+    std::unique_ptr<mp_limb_t[]> heap;
+};
+
+#define MPFR_TMP_VAR(x, p) QoreMpfrTmp tmp_##x((mpfr_prec_t)(p)); mpfr_t& x = tmp_##x.num
 
 // for binary operations on MPFR data
 typedef int (*q_mpfr_binary_func_t)(mpfr_t, const mpfr_t, const mpfr_t, mpfr_rnd_t);
@@ -247,7 +272,7 @@ struct qore_number_private : public qore_number_private_intern {
         if (len <= 0)
             return;
         str.allocate(str.size() + len + 1);
-        ::sprintf((char*)(str.getBuffer() + str.size()), fmt, ld);
+        ::snprintf((char*)(str.getBuffer() + str.size()), len + 1, fmt, ld);
         str.terminate(str.size() + len);
 #endif
     }

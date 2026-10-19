@@ -1752,7 +1752,8 @@ static char32_t readUnicodeCharacter(void) {
     if (nread <= 0) return 0;
     if (c <= 0x7F) {  // short circuit ASCII
       utf8Count = 0;
-      return c;
+      // a UTF-8 code unit up to 0x7F is the code point itself
+      return static_cast<char32_t>(c);
     } else if (utf8Count < sizeof(utf8String) - 1) {
       utf8String[utf8Count++] = c;
       utf8String[utf8Count] = 0;
