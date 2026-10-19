@@ -348,6 +348,8 @@ class AOTSmokeTest inherits QUnit::Test {
             \testBatchFragmentStatementLocFilter());
         addTestCase("AOT qcc dump modern slot expressions",
             \testQccDumpModernSlotExprKinds());
+        addTestCase("AOT qcc dump assignment, absolute comparison and streaming slot expressions",
+            \testQccDumpCompoundSlotExprKinds());
         addTestCase("AOT qcc dump class injection metadata",
             \testQccDumpClassInjectionMetadata());
         # Strip source: static class variable access (module)
@@ -10503,6 +10505,74 @@ printf(\"%d\\n\", refprobe(3));
             "qcc dump reports no malformed slot expression payloads: " + dump_out);
         assertTrue(dump_out.regex("UNARY_MINUS\\s+\\(104\\)"),
             "qcc dump reports unary-minus expression kind from the slot registry: " + dump_out);
+    }
+
+    testQccDumpCompoundSlotExprKinds() {
+        # the expression of each key below is a slot expression; qcc --dump-info must skip the payloads of the
+        # compound assignment, absolute comparison, iterate and streaming expressions, or it reports the slot map of
+        # the function as malformed and stops reading it at the first one
+        hash<auto> paths = writeTempScript("%modern
+%require-types
+
+int sub probe(int i) {
+    hash<auto> h = {};
+    int x = i;
+    reference<auto> r1 = \\h.(cast<string>(x += i));
+    r1 = 1;
+    reference<auto> r2 = \\h.(cast<string>(x -= 1));
+    r2 = 2;
+    reference<auto> r3 = \\h.(cast<string>(x *= 3));
+    r3 = 3;
+    reference<auto> r4 = \\h.(cast<string>(x /= 3));
+    r4 = 4;
+    reference<auto> r5 = \\h.(cast<string>(x %= 100));
+    r5 = 5;
+    reference<auto> r6 = \\h.(cast<string>(x &= 255));
+    r6 = 6;
+    reference<auto> r7 = \\h.(cast<string>(x |= 256));
+    r7 = 7;
+    reference<auto> r8 = \\h.(cast<string>(x ^= 1));
+    r8 = 8;
+    reference<auto> r9 = \\h.(cast<string>(x <<= 1));
+    r9 = 9;
+    reference<auto> r10 = \\h.(cast<string>(x >>= 1));
+    r10 = 10;
+    reference<auto> r11 = \\h.((x === i) ? \"aeq\" : \"naeq\");
+    r11 = 11;
+    reference<auto> r12 = \\h.((x !== i) ? \"ane\" : \"nane\");
+    r12 = 12;
+    reference<auto> r13 = \\h.(cast<string>(first iterate (i, x)));
+    r13 = 13;
+    return h.size();
+}
+
+printf(\"%d\\n\", probe(3));
+");
+        on_exit {
+            unlink(paths.src);
+            unlink(paths.out);
+        }
+
+        string compile_out = backquote(sprintf(
+            "QORE_LIBDIR=%s %s -b --compile --output %s %s 2>&1; echo EXIT=$?",
+            libqore_dir, qore_bin, paths.out, paths.src));
+        assertTrue(compile_out.regex("EXIT=0"), "slot expression probe compiles: " + compile_out);
+
+        string dump_out = dumpQccSections(paths.out);
+        assertTrue(dump_out.regex("expr-slots=[1-9]"), "probe generated slot expressions: " + dump_out);
+        assertTrue(dump_out.regex("malformed=0"),
+            "qcc dump parses the slot expression payloads: " + dump_out);
+        foreach string kind in ("PLUS_EQ", "MINUS_EQ", "MULTIPLY_EQ", "DIVIDE_EQ", "MODULO_EQ", "AND_EQ", "OR_EQ",
+                "XOR_EQ", "SHL_EQ", "SHR_EQ", "LOG_AEQ", "LOG_ANE", "STREAMING", "ITERATE") {
+            assertTrue(dump_out.regex("\\b" + kind + "\\s+\\([0-9]+\\): [1-9]"),
+                "qcc dump reports the " + kind + " expression kind: " + dump_out);
+        }
+
+        # the compiled program gives the result of the interpreted one
+        string expected = backquote(sprintf("%s %s 2>&1", qore_bin, paths.src));
+        string actual = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, paths.out));
+        assertEq(expected, actual);
+        assertEq("9\n", actual);
     }
 
     testQccDumpClassInjectionMetadata() {

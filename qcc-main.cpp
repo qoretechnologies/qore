@@ -2526,6 +2526,16 @@ static bool dump_skip_expr_payload(const QoreAOTBinaryReader& reader,
         case AOTExprKind::LOG_OR:
         case AOTExprKind::RANGE:
         case AOTExprKind::ASSIGN:
+        case AOTExprKind::PLUS_EQ:
+        case AOTExprKind::MINUS_EQ:
+        case AOTExprKind::MULTIPLY_EQ:
+        case AOTExprKind::DIVIDE_EQ:
+        case AOTExprKind::MODULO_EQ:
+        case AOTExprKind::AND_EQ:
+        case AOTExprKind::OR_EQ:
+        case AOTExprKind::XOR_EQ:
+        case AOTExprKind::SHL_EQ:
+        case AOTExprKind::SHR_EQ:
             return dump_skip_inline_expr(reader, p, end, summary, func_name, child_ctx)
                 && dump_skip_inline_expr(reader, p, end, summary, func_name, child_ctx);
 
@@ -2543,7 +2553,27 @@ static bool dump_skip_expr_payload(const QoreAOTBinaryReader& reader,
 
         case AOTExprKind::EXISTS:
         case AOTExprKind::KEYS:
+        case AOTExprKind::ITERATE:
             return dump_skip_inline_expr(reader, p, end, summary, func_name, child_ctx);
+
+        case AOTExprKind::STREAMING:
+            // the streaming operator kind, the predicate and the source
+            return dump_skip_bytes(p, end, 1)
+                && dump_skip_inline_expr(reader, p, end, summary, func_name, child_ctx)
+                && dump_skip_inline_expr(reader, p, end, summary, func_name, child_ctx);
+
+        case AOTExprKind::DEFERRED_STATIC_METHOD_REF:
+            // the class path and the method name
+            return dump_skip_string_ref(reader, p, end)
+                && dump_skip_string_ref(reader, p, end);
+
+        case AOTExprKind::DEFERRED_FUNCTION_REF:
+            // the function path
+            return dump_skip_string_ref(reader, p, end);
+
+        case AOTExprKind::UNSUPPORTED:
+            // a compile-time marker that is never written: a payload with it is malformed
+            return false;
 
         case AOTExprKind::IMPLICIT_ARG:
             return dump_skip_bytes(p, end, 8);
@@ -2581,6 +2611,8 @@ static bool dump_skip_expr_payload(const QoreAOTBinaryReader& reader,
 
         case AOTExprKind::LOG_EQ:
         case AOTExprKind::LOG_NE:
+        case AOTExprKind::LOG_AEQ:
+        case AOTExprKind::LOG_ANE:
         case AOTExprKind::LOG_LT:
         case AOTExprKind::LOG_GT:
         case AOTExprKind::LOG_LE:
