@@ -1619,6 +1619,12 @@ fetch
       field \c id of \c order is \c order.id; the display name is the names of the path as they are written
       (\c Unit.Price, \c order.id).  The value was the names joined with dots, which a processor read as a path, so
       a field whose name has a dot could not be picked
+    - added @ref DataProvider::AbstractDataProvider::setFieldValue() "AbstractDataProvider::setFieldValue()", which
+      sets the value at a field path as
+      @ref DataProvider::AbstractDataProvider::getFieldValue() "AbstractDataProvider::getFieldValue()" reads it,
+      creating the hashes on the path that are missing; \c search-replace writes the value back at the path of its
+      field: it added a top-level key named by the path (\c order.name or <tt>Unit\\.Price</tt>) and left the field
+      unchanged
     - fixed @ref DataProvider::DataProviderActionCatalog::getActionOptionFromFields() "getActionOptionFromFields()"
       dropping the \c input_field_names marker, so the options of the registered processor actions that take field
       names of the input (such as \c group_by of \c group-by and \c fields of \c select-fields) did not have it, and

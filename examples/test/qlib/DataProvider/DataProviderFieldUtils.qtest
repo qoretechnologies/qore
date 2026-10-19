@@ -68,6 +68,8 @@ class DataProviderFieldUtilsTest inherits QUnit::Test {
         addTestCase("isPlainFieldPath - a path read as it is written", \isPlainFieldPathTest());
         addTestCase("column blocks - a field path with a backslash", \columnBlockEscapedKeyTest());
         addTestCase("ExpressionTypes::getType - field references are paths", \fieldReferenceTypeTest());
+        addTestCase("setFieldValue - paths, intermediates and errors", \setFieldValueTest());
+        addTestCase("search-replace - writes the field at its path", \searchReplacePathTest());
 
         # Processor backward compatibility tests
         addTestCase("RemoveFieldsProcessor - string compat", \removeFieldsStringCompat());
@@ -420,6 +422,62 @@ class DataProviderFieldUtilsTest inherits QUnit::Test {
 
         # an action without options has no option type
         assertNothing(DataProviderActionCatalog::getTypeForActionOptions(action - "options"));
+    }
+
+    #! A field path is set as getFieldValue() reads it, creating the hashes that are missing
+    setFieldValueTest() {
+        hash<auto> rec = {"x": 1, "order": {"id": 7}};
+        # plain
+        assertEq({"x": 2, "order": {"id": 7}}, AbstractDataProvider::setFieldValue(rec, "x", 2));
+        assertEq({"x": 1, "order": {"id": 7}, "y": 3}, AbstractDataProvider::setFieldValue(rec, "y", 3));
+        # nested, replacing an existing value and adding another
+        assertEq({"x": 1, "order": {"id": 8}}, AbstractDataProvider::setFieldValue(rec, "order.id", 8));
+        assertEq({"x": 1, "order": {"id": 7, "qty": 2}}, AbstractDataProvider::setFieldValue(rec, "order.qty", 2));
+        # a hash value is replaced as a whole
+        assertEq({"x": 1, "order": 5}, AbstractDataProvider::setFieldValue(rec, "order", 5));
+        # an escaped dot is part of a key, and an escaped backslash is one backslash
+        assertEq({"x": 1, "order": {"id": 7}, "Unit.Price": 2.5},
+            AbstractDataProvider::setFieldValue(rec, "Unit\\.Price", 2.5));
+        assertEq({"x": 1, "order": {"id": 7, "Unit.Price": 2.5}},
+            AbstractDataProvider::setFieldValue(rec, "order.Unit\\.Price", 2.5));
+        assertEq({"x": 1, "order": {"id": 7}, "p\\q": 1}, AbstractDataProvider::setFieldValue(rec, "p\\\\q", 1));
+        # the hashes on the path are created when they are missing
+        assertEq({"x": 1, "order": {"id": 7}, "a": {"b": {"c": NOTHING}}},
+            AbstractDataProvider::setFieldValue(rec, "a.b.c", NOTHING));
+        assertEq({"x": 1, "order": {"id": 7, "line": {"no": 1}}},
+            AbstractDataProvider::setFieldValue(rec, "order.line.no", 1));
+        # the empty path is the empty key, as getFieldValue() reads it
+        assertEq({"x": 1, "order": {"id": 7}, "": 0}, AbstractDataProvider::setFieldValue(rec, "", 0));
+        # the value set is read back
+        foreach string path in ("x", "order.id", "Unit\\.Price", "a.b.c", "order.Unit\\.Price", "p\\\\q.r", "") {
+            assertEq("v", AbstractDataProvider::getFieldValue(AbstractDataProvider::setFieldValue(rec, path, "v"),
+                path), path);
+        }
+        # the record passed is not changed
+        assertEq({"x": 1, "order": {"id": 7}}, rec);
+
+        # a value on the path that is not a hash
+        assertThrows("FIELD-PATH-ERROR", "cannot set field \"x.y\": the value at \"x\" is integer, not a hash",
+            \AbstractDataProvider::setFieldValue(), (rec, "x.y", 1));
+        assertThrows("FIELD-PATH-ERROR", "cannot set field \"order.id.z\": the value at \"order.id\" is integer, "
+            "not a hash", \AbstractDataProvider::setFieldValue(), (rec, "order.id.z", 1));
+        # the path is given as it is written (the description is a regular expression)
+        assertThrows("FIELD-PATH-ERROR", "the value at \"Unit\\\\\\.Price\" is list",
+            \AbstractDataProvider::setFieldValue(), ({"Unit.Price": (1,)}, "Unit\\.Price.x", 1));
+    }
+
+    #! search-replace writes the field that it reads, at its path
+    searchReplacePathTest() {
+        hash<auto> rec = {"order": {"name": "old name"}, "Unit.Price": "old price", "Unit": {"Price": "keep"}};
+        QoreSearchReplaceProcessor nested({"field": "order.name", "search": "old", "replace": "new"});
+        assertEq({"order": {"name": "new name"}, "Unit.Price": "old price", "Unit": {"Price": "keep"}},
+            nested.processRecord(rec));
+        QoreSearchReplaceProcessor escaped({"field": "Unit\\.Price", "search": "old", "replace": "new"});
+        assertEq({"order": {"name": "old name"}, "Unit.Price": "new price", "Unit": {"Price": "keep"}},
+            escaped.processRecord(rec));
+        # a missing field leaves the record as it is
+        QoreSearchReplaceProcessor missing({"field": "order.missing", "search": "old", "replace": "new"});
+        assertEq(rec, missing.processRecord(rec));
     }
 
     #! The type of a field reference is the type of the field at its path: an escaped dot is part of a key, and a

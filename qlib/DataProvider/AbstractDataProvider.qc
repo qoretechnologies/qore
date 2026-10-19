@@ -9064,6 +9064,60 @@ list<hash<DataProviderDebugInfo>> info = collector.getAll();
         return current;
     }
 
+    #! Returns a record with the value of a field set, creating the hashes on the field path that are missing
+    /** The field path is read as @ref getFieldValue() reads it (@ref getFieldPath()): dots separate its keys, and a
+        dot or a backslash that is part of a key is escaped (<tt>Unit\\.Price</tt>).  The record passed is not
+        changed; the record returned has the value at the path, and each hash on the path is copied as a plain hash
+        (<tt>hash<auto></tt>).
+
+        @param record the record
+        @param field_path the field name or dot-notation path (e.g. \c "address.city")
+        @param value the value to set; an existing value at the path is replaced
+
+        @return the record with the value set
+
+        @throw FIELD-PATH-ERROR a value on the path before its last key is not a hash; the message gives the path to
+        that value
+
+        @par Example:
+        @code{.py}
+# {"order": {"id": 1, "Unit.Price": 2.5}}
+hash<auto> rec = AbstractDataProvider::setFieldValue({"order": {"id": 1}}, "order.Unit\\.Price", 2.5);
+        @endcode
+
+        @since %DataProvider 3.11
+    */
+    static hash<auto> setFieldValue(hash<auto> record, string field_path, auto value) {
+        # Strip hashdecl type to plain hash<auto> so that any key can be set
+        hash<auto> rec = {} + record;
+        if (AbstractDataProvider::isPlainFieldPath(field_path)) {
+            rec{field_path} = value;
+            return rec;
+        }
+        return AbstractDataProvider::setFieldValueIntern(rec, AbstractDataProvider::getFieldPath(field_path), 0,
+            value, field_path);
+    }
+
+    #! Sets the value at the given key of a field path in a hash, and returns the hash
+    private static hash<auto> setFieldValueIntern(hash<auto> h, list<string> path, int i, auto value,
+            string field_path) {
+        string key = path[i];
+        if (i == path.size() - 1) {
+            h{key} = value;
+            return h;
+        }
+        auto child = h{key};
+        if (!exists child) {
+            child = {};
+        } else if (child.typeCode() != NT_HASH) {
+            # the paths are given as they are written: %y would double their backslashes
+            throw "FIELD-PATH-ERROR", sprintf("cannot set field \"%s\": the value at \"%s\" is %s, not a hash",
+                field_path, (map AbstractDataProvider::escapeFieldPathKey($1), path[0..i]).join("."), child.type());
+        }
+        h{key} = AbstractDataProvider::setFieldValueIntern({} + child, path, i + 1, value, field_path);
+        return h;
+    }
+
     #! Parses a field list from either a comma-separated string or a list of strings
     /** Provides backward compatibility for the transition from string to softlist\<string\> field options.
 

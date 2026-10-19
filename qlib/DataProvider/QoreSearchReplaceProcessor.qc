@@ -152,7 +152,8 @@ public class QoreSearchReplaceProcessor inherits AbstractDataProvider {
         if (!exists field_val || field_val.typeCode() != NT_STRING) {
             return record;
         }
-        return record + {field: replaceStringValue(field_val)};
+        # the field is written where it was read
+        return AbstractDataProvider::setFieldValue(record, field, replaceStringValue(field_val));
     }
 
     #! Applies the configured replacement to one string value
