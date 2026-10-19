@@ -622,23 +622,16 @@ public class EdifactSchemaTest inherits QUnit::Test {
         string root = normalize_dir(dirname(get_script_path()) + DirSep + "../../../..");
         string validator = root + DirSep + "tools" + DirSep + "edifact-fixture-validate.qr";
         string fixtures_root = root + DirSep + "examples/test/qlib/EdifactUtil/fixtures";
-        # the interpreter running the tests (run_tests.sh exports it), whatever the build directory is called
-        string qore_bin;
-        if (ENV.QORE_BINARY && is_executable(ENV.QORE_BINARY)) {
-            qore_bin = ENV.QORE_BINARY;
-        } else {
-            qore_bin = root + DirSep + "build/qore";
-            if (FsUtil::path_exists(root + DirSep + "build-ci/qore")) {
-                qore_bin = root + DirSep + "build-ci/qore";
-            }
-        }
+        # the interpreter running the tests (run_tests.sh exports it); otherwise the one running this test
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
 
         list<string> golden_releases = ("D01B", "D10B", "D20B", "D21B", "D23A", "D25A");
         string releases_arg = golden_releases.join(",");
-        string cmd = sprintf("%s %s --quiet --dir=%y --releases=%y > /dev/null 2>&1",
+        string cmd = sprintf("%s %s --quiet --dir=%y --releases=%y 2>&1",
             qore_bin, validator, fixtures_root, releases_arg);
-        int rc = system(cmd);
-        assertEq(0, rc);
+        int rc;
+        string out = backquote(cmd, \rc);
+        assertEq(0, rc, "fixture validator output: " + out);
 
         list<hash<auto>> golden_messages = (
             {"release": "D01B", "messages": ("ORDERS", "INVOIC", "DESADV")},
