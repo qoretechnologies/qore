@@ -4839,45 +4839,22 @@ public class MlTest inherits QUnit::Test {
             <ML::OnnxSessionConfig>{"providers": ()},
             {"max_sessions": 1, "queue_depth": 0, "timeout_ms": 1});
 
-        list<hash<auto>> long_batch;
-        for (int i = 0; i < 50000; ++i) {
-            push long_batch, {"X": ((2.0,),)};
-        }
-
-        Counter ready(1);
-        Counter cnt(1);
-        *hash<ExceptionInfo> bg_error;
-        background sub() {
-            on_exit cnt.dec();
-            try {
-                ready.dec();
-                list<hash<auto>> results = pool.runBatch(long_batch);
-                assertEq(long_batch.size(), results.size());
-                assertFloat(5.0, results[0].Y[0], 1e-5);
-            } catch (hash<ExceptionInfo> ex) {
-                bg_error = ex;
-            }
-        }();
-
-        ready.waitForZero();
-        bool active_seen = False;
-        for (int i = 0; i < 1000; ++i) {
-            if (pool.getPoolStats().active_runs > 0) {
-                active_seen = True;
-                break;
-            }
-            usleep(1ms);
-        }
-        assertTrue(active_seen, "background inference should occupy the only pool session");
+        # hold the only session: with no wait queue, every other caller is rejected at once
+        ML::OnnxSessionLease lease = pool.acquireSession();
         assertThrows("ML-ONNX-POOL-BACKPRESSURE", sub() {
             pool.run({"X": ((3.0,),)});
         });
-        cnt.waitForZero();
-        assertFalse(bg_error.val(), bg_error ? bg_error.err + ": " + bg_error.desc : "");
-
+        assertThrows("ML-ONNX-POOL-BACKPRESSURE", sub() {
+            pool.runBatch(({"X": ((3.0,),)},));
+        });
         hash<auto> stats = pool.getPoolStats();
-        assertTrue(stats.total_rejections >= 1,
-            "pool should count rejected callers when queue_depth is zero");
+        assertEq(2, stats.total_rejections, "pool should count rejected callers when queue_depth is zero");
+        assertEq(0, stats.total_waits);
+
+        # once the session is free again, the same call succeeds
+        lease.release();
+        assertFloat(7.0, pool.run({"X": ((3.0,),)}).Y[0], 1e-5);
+        assertEq(2, pool.getPoolStats().total_rejections);
     }
 
     onnxSessionPoolTimeoutTest() {
@@ -4889,56 +4866,20 @@ public class MlTest inherits QUnit::Test {
             <ML::OnnxSessionConfig>{"providers": ()},
             {"max_sessions": 1, "queue_depth": 1, "timeout_ms": 1});
 
-        list<hash<auto>> long_batch;
-        for (int i = 0; i < 500000; ++i) {
-            push long_batch, {"X": ((2.0,),)};
-        }
-
-        Counter ready(1);
-        Counter cnt(1);
-        *hash<ExceptionInfo> bg_error;
-        background sub() {
-            on_exit cnt.dec();
-            try {
-                ready.dec();
-                list<hash<auto>> results = pool.runBatch(long_batch);
-                assertEq(long_batch.size(), results.size());
-                assertFloat(5.0, results[0].Y[0], 1e-5);
-            } catch (hash<ExceptionInfo> ex) {
-                bg_error = ex;
-            }
-        }();
-
-        ready.waitForZero();
-        bool active_seen = False;
-        for (int i = 0; i < 1000; ++i) {
-            if (pool.getPoolStats().active_runs > 0) {
-                active_seen = True;
-                break;
-            }
-            usleep(1ms);
-        }
-        assertTrue(active_seen, "background inference should occupy the only pool session");
-
-        bool timeout_seen = False;
-        while (cnt.getCount() > 0 && !timeout_seen) {
-            try {
-                pool.run({"X": ((3.0,),)});
-            } catch (hash<ExceptionInfo> ex) {
-                if (ex.err == "ML-ONNX-POOL-TIMEOUT") {
-                    timeout_seen = True;
-                    break;
-                }
-                rethrow;
-            }
-        }
-        assertTrue(timeout_seen, "foreground inference should time out while the only pool session is occupied");
-        cnt.waitForZero();
-        assertFalse(bg_error.val(), bg_error ? bg_error.err + ": " + bg_error.desc : "");
-
+        # hold the only session: a caller waits in the queue for timeout_ms, and then times out
+        ML::OnnxSessionLease lease = pool.acquireSession();
+        assertThrows("ML-ONNX-POOL-TIMEOUT", sub() {
+            pool.run({"X": ((3.0,),)});
+        });
         hash<auto> stats = pool.getPoolStats();
-        assertTrue(stats.total_timeouts >= 1,
-            "pool should count timed-out callers when waiting exceeds timeout_ms");
+        assertEq(1, stats.total_timeouts, "pool should count timed-out callers when waiting exceeds timeout_ms");
+        assertEq(1, stats.total_waits);
+        assertEq(0, stats.waiting_callers);
+
+        # once the session is free again, the same call succeeds
+        lease.release();
+        assertFloat(7.0, pool.run({"X": ((3.0,),)}).Y[0], 1e-5);
+        assertEq(1, pool.getPoolStats().total_timeouts);
     }
 
     onnxSessionPoolAsyncTest() {
