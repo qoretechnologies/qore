@@ -15,6 +15,7 @@
 
 #include <qore/DBI.h>
 #include <qore/QoreColumnarResult.h>
+#include <qore/QoreRegexInterface.h>
 
 #include <algorithm>
 #include <sstream>
@@ -23,18 +24,20 @@ using namespace QoreDataFrameNS;
 
 namespace {
 
-static std::string qdfBuildInsertSql(const std::string& table_name,
-        const std::vector<Column>& columns) {
+// builds an INSERT statement from the SQL names of the table and its columns in the dialect of the driver
+// @param sql_table the table name as written in SQL, quoted by SqlUtil for the driver where needed
+// @param sql_columns the column names as written in SQL, quoted by SqlUtil for the driver where needed
+static std::string qdfBuildInsertSql(const std::string& sql_table, const std::vector<std::string>& sql_columns) {
     std::ostringstream sql;
-    sql << "INSERT INTO " << table_name << " (";
-    for (size_t c = 0; c < columns.size(); ++c) {
+    sql << "INSERT INTO " << sql_table << " (";
+    for (size_t c = 0; c < sql_columns.size(); ++c) {
         if (c) {
             sql << ", ";
         }
-        sql << columns[c].name;
+        sql << sql_columns[c];
     }
     sql << ") VALUES (";
-    for (size_t c = 0; c < columns.size(); ++c) {
+    for (size_t c = 0; c < sql_columns.size(); ++c) {
         if (c) {
             sql << ", ";
         }
@@ -42,6 +45,57 @@ static std::string qdfBuildInsertSql(const std::string& table_name,
     }
     sql << ")";
     return sql.str();
+}
+
+// the pattern of a plain SQL identifier: a letter or '_', followed by letters, digits, '_', '$' or '#'
+static constexpr const char* QdfSqlIdentifierPattern = "\\A[\\p{L}_][\\p{L}\\p{N}_$#]*\\z";
+
+// checks that a name can be written into SQL as an identifier, raising DATAFRAME-DB-ERROR if not
+// The table and column names are written into the SQL text of the INSERT statement, and SqlUtil only quotes the
+// reserved words of a driver; a name with any other character, such as a quote, a semicolon, a space or a
+// parenthesis, could change the statement, so only plain identifiers are accepted.
+//
+// @param re the compiled QdfSqlIdentifierPattern
+// @param name the name to check
+// @param what what the name is, for the exception description
+// @param xsink the exception is raised here if the name cannot be used
+//
+// @return 0 if the name is a plain identifier, -1 if an exception was raised
+static int qdfCheckSqlIdentifier(const QoreRegexInterface& re, const std::string& name, const char* what,
+        ExceptionSink* xsink) {
+    QoreString str(name, QCS_UTF8);
+    // a name that is not valid UTF-8 cannot be matched and is not an identifier
+    ExceptionSink match_xsink;
+    bool ok = re.match(str, &match_xsink);
+    if (match_xsink) {
+        match_xsink.clear();
+        ok = false;
+    }
+    if (!ok) {
+        // the part of the name before any NUL character is shown
+        xsink->raiseException("DATAFRAME-DB-ERROR", "%s '%s' is not a plain SQL identifier, so it cannot be written "
+            "into the SQL statement: an identifier must start with a letter or '_', followed only by letters, digits, "
+            "'_', '$' and '#'", what, name.c_str());
+        return -1;
+    }
+    return 0;
+}
+
+// checks that a table name, optionally qualified by a schema name as schema.table, can be written into SQL
+static int qdfCheckSqlTableName(const QoreRegexInterface& re, const std::string& table, ExceptionSink* xsink) {
+    size_t dot = table.find('.');
+    if (dot == std::string::npos) {
+        return qdfCheckSqlIdentifier(re, table, "table name", xsink);
+    }
+    if (table.find('.', dot + 1) != std::string::npos) {
+        xsink->raiseException("DATAFRAME-DB-ERROR", "table name '%s' has more than one '.'; a table is named as "
+            "'table' or 'schema.table'", table.c_str());
+        return -1;
+    }
+    if (qdfCheckSqlIdentifier(re, table.substr(0, dot), "schema name", xsink)) {
+        return -1;
+    }
+    return qdfCheckSqlIdentifier(re, table.substr(dot + 1), "table name", xsink);
 }
 
 static bool qdfHasMethod(const QoreObject* obj, const char* name) {
@@ -150,6 +204,8 @@ static QoreHashNode* qdfBuildColumnHashRange(const std::vector<Column>& columns,
             return nullptr;
         }
 
+        // toTable() accepts only plain identifiers as column names, so a name cannot have a NUL character
+        assert(col.name.find('\0') == std::string::npos);
         h->setKeyValue(col.name.c_str(), values.release(), xsink);
         if (*xsink) {
             return nullptr;
@@ -192,6 +248,8 @@ static QoreHashNode* qdfBuildTableDescription(const std::vector<Column>& columns
         if (*xsink) {
             return nullptr;
         }
+        // toTable() accepts only plain identifiers as column names, so a name cannot have a NUL character
+        assert(col.name.find('\0') == std::string::npos);
         cols->setKeyValue(col.name.c_str(), cdesc.release(), xsink);
         if (*xsink) {
             return nullptr;
@@ -229,6 +287,58 @@ static int qdfCallObjectMethod(QoreObject* obj, const char* method,
     return *xsink ? -1 : 0;
 }
 
+// returns the SQL name of an identifier, quoted by the SqlUtil table object for its driver if it is a reserved word
+static int qdfGetColumnSqlName(QoreObject* table, const std::string& name, std::string& sql_name,
+        ExceptionSink* xsink) {
+    ReferenceHolder<QoreListNode> args(new QoreListNode(autoTypeInfo), xsink);
+    args->push(new QoreStringNode(name, QCS_UTF8), xsink);
+    ValueHolder rv(table->evalMethod("getColumnSqlName", *args, xsink), xsink);
+    if (*xsink) {
+        return -1;
+    }
+    if (rv->getType() != NT_STRING) {
+        xsink->raiseException("DATAFRAME-DB-ERROR", "SqlUtil getColumnSqlName() returned type '%s'; expected "
+            "'string'", rv->getTypeName());
+        return -1;
+    }
+    sql_name = dataFrameStdString(rv->get<const QoreStringNode>());
+    return 0;
+}
+
+// gets the SQL names of the table and its columns in the dialect of the driver of a SqlUtil table object
+// Each identifier is quoted by SqlUtil for the driver if it is a reserved word; the table name and, for a name
+// qualified as schema.table, the schema name are quoted in the same way.
+static int qdfGetSqlNames(QoreObject* table, const std::string& table_name, const std::vector<Column>& columns,
+        std::string& sql_table, std::vector<std::string>& sql_columns, ExceptionSink* xsink) {
+    size_t dot = table_name.find('.');
+    if (dot == std::string::npos) {
+        if (qdfGetColumnSqlName(table, table_name, sql_table, xsink)) {
+            return -1;
+        }
+    } else {
+        std::string sql_schema;
+        if (qdfGetColumnSqlName(table, table_name.substr(0, dot), sql_schema, xsink)
+                || qdfGetColumnSqlName(table, table_name.substr(dot + 1), sql_table, xsink)) {
+            return -1;
+        }
+        sql_table = sql_schema + "." + sql_table;
+    }
+
+    sql_columns.clear();
+    sql_columns.reserve(columns.size());
+    for (size_t i = 0; i < columns.size(); ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "quoting DataFrame column names")) {
+            return -1;
+        }
+        std::string sql_name;
+        if (qdfGetColumnSqlName(table, columns[i].name, sql_name, xsink)) {
+            return -1;
+        }
+        sql_columns.push_back(std::move(sql_name));
+    }
+    return 0;
+}
+
 static int qdfCallObjectBoolMethod(QoreObject* obj, const char* method,
         bool& result, ExceptionSink* xsink) {
     ValueHolder rv(obj->evalMethod(method, nullptr, xsink), xsink);
@@ -239,16 +349,32 @@ static int qdfCallObjectBoolMethod(QoreObject* obj, const char* method,
     return 0;
 }
 
+// writes the DataFrame with a SqlUtil table object for the driver of the datasource
+// @param table_out the SqlUtil table object, set when the rows must be written with an INSERT statement instead,
+// because the table is not visible to SqlUtil (ex: a temporary table) or its bulk insert failed for the first block
+//
+// @return 0 if the rows were written, 1 if they must be written with an INSERT statement made with the SQL names
+// from \a table_out, -1 if an exception was raised
 static int qdfTryGenericBulkInsert(QoreProgram* pgm, QoreObject* ds,
         const std::string& table_name, const QoreHashNode* options,
         const std::vector<Column>& columns, int64_t n_rows, int64_t block_size,
-        ExceptionSink* xsink) {
+        ReferenceHolder<QoreObject>& table_out, ExceptionSink* xsink) {
     // SqlUtil delegates SQL generation and array-bind handling to the
     // driver-specific AbstractTable implementation, and emulates bulk DML when
-    // a driver does not support native array binding.
+    // a driver does not support native array binding.  It is also the only source of the SQL dialect of the
+    // driver: without it, a column name that is a reserved word could not be quoted, so nothing is written.
     ExceptionSink load_xsink;
     if (qdfLoadModule(pgm, "SqlUtil", &load_xsink)) {
-        return 1;
+        ValueHolder driver(ds->evalMethod("getDriverName", nullptr, xsink), xsink);
+        if (*xsink) {
+            return -1;
+        }
+        QoreStringValueHelper driver_name(*driver);
+        xsink->raiseException("DATAFRAME-DB-ERROR", "DataFrame::toTable() needs the SqlUtil module to quote the SQL "
+            "identifiers of the table for the '%s' driver, and it cannot be loaded", driver_name->c_str());
+        // the error loading SqlUtil follows as a chained exception
+        xsink->assimilate(load_xsink);
+        return -1;
     }
 
     const QoreClass* table_cls = pgm->findClass("SqlUtil::Table", xsink);
@@ -298,9 +424,11 @@ static int qdfTryGenericBulkInsert(QoreProgram* pgm, QoreObject* ds,
     bool exists = false;
     if (qdfCallObjectBoolMethod(*table, "checkExistence", exists, xsink)) {
         xsink->clear();
+        table_out = table.release();
         return 1;
     }
     if (!exists) {
+        table_out = table.release();
         return 1;
     }
 
@@ -318,6 +446,7 @@ static int qdfTryGenericBulkInsert(QoreProgram* pgm, QoreObject* ds,
         if (qdfCallObjectMethod(*table, "bulkInsert", data.release(), xsink)) {
             if (!inserted_any) {
                 xsink->clear();
+                table_out = table.release();
                 return 1;
             }
             return -1;
@@ -1442,7 +1571,8 @@ nothing DataFrame::writeParquet(string path, *hash<ParquetWriteOptions> options)
 
 //! Inserts DataFrame rows into a database table
 /** @param ds a Datasource or DatasourcePool object
-    @param table_name the target table name
+    @param table_name the target table name, as \c table or \c schema.table, where each name is a plain SQL
+    identifier (see below)
     @param options optional hash:
     - \c block_size (int, default 10000): rows per bulk database execution when
       supported
@@ -1453,12 +1583,21 @@ nothing DataFrame::writeParquet(string path, *hash<ParquetWriteOptions> options)
     - \c table_description (hash): optional SqlUtil table description hash; if
       omitted, one is inferred from the DataFrame column types
 
-    Column names from the DataFrame are used as the column list. When available,
-    the method writes through SqlUtil::AbstractTable bulk inserts, allowing each
-    driver to use its native bulk DML / array-bind support or SqlUtil's
-    emulation. If the generic SqlUtil module cannot be loaded, the method falls
-    back to a prepared insert statement when possible and finally to per-row
-    \c exec() calls.
+    Column names from the DataFrame are used as the column list. The method writes
+    through SqlUtil::AbstractTable bulk inserts, allowing each driver to use its
+    native bulk DML / array-bind support or SqlUtil's emulation. If SqlUtil cannot
+    see the table (for example, a temporary table) or its bulk insert of the first
+    block fails, the method writes the rows with a prepared insert statement when
+    possible and otherwise with per-row \c exec() calls, with the table and
+    column names written in the SQL dialect of the driver as SqlUtil writes them.
+
+    The table name and the column names are written into the SQL text, so each
+    must be a plain SQL identifier: a letter or \c _, followed only by letters,
+    digits, \c _, \c $ and \c #.  A name that is a reserved word of the driver
+    is quoted by SqlUtil.  Any other name, such as one with a quote, a semicolon,
+    a space or a parenthesis, is refused, as it could change the SQL statement.
+    SqlUtil is needed to quote the identifiers for the driver, so nothing is
+    written if it cannot be loaded.
 
     @note This method does not commit or roll back the datasource. Use
     Datasource::commit(), Datasource::rollback(), DatasourcePool::commit(), or
@@ -1472,15 +1611,23 @@ nothing DataFrame::writeParquet(string path, *hash<ParquetWriteOptions> options)
     ds.commit();
     @endcode
 
-    @throw DATAFRAME-DB-ERROR if the INSERT fails
-    @throw HASH-KEY-ERROR a column name has a NUL character, which the hash keys of the column batches and the table
-    description cannot contain
+    @throw DATAFRAME-DB-ERROR if the INSERT fails, the table name or a column name is not a plain SQL identifier,
+    or the SqlUtil module cannot be loaded
 */
 nothing DataFrame::toTable(object ds, string table_name, *hash<auto> options) [dom=DATABASE] {
     if (qore_check_cancel(xsink, "writing DataFrame to table")) {
         return QoreValue();
     }
 
+    // the table and column names are written into SQL, so they must be plain identifiers
+    QoreRegexInterface identifier_re(xsink, QdfSqlIdentifierPattern, QRE_UTF | QRE_UCP);
+    if (*xsink) {
+        return QoreValue();
+    }
+    std::string table = dataFrameStdString(table_name);
+    if (qdfCheckSqlTableName(identifier_re, table, xsink)) {
+        return QoreValue();
+    }
 
     int64_t n_rows_val = df->numRows();
     int64_t n_cols_val = df->numCols();
@@ -1509,13 +1656,18 @@ nothing DataFrame::toTable(object ds, string table_name, *hash<auto> options) [d
         std::lock_guard<std::mutex> lk(df->getMutex());
         columns = df->getColumns();
     }
-    // the column names are the keys of the column batches and of the table description
-    if (checkDataFrameColumnKeys(columns, xsink)) {
-        return QoreValue();
+    for (size_t i = 0; i < columns.size(); ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "checking DataFrame column names")) {
+            return QoreValue();
+        }
+        if (qdfCheckSqlIdentifier(identifier_re, columns[i].name, "column name", xsink)) {
+            return QoreValue();
+        }
     }
 
-    int rc = qdfTryGenericBulkInsert(getProgram(), ds, table_name->c_str(), options,
-        columns, n_rows_val, block_size, xsink);
+    ReferenceHolder<QoreObject> sqlutil_table(xsink);
+    int rc = qdfTryGenericBulkInsert(getProgram(), ds, table, options,
+        columns, n_rows_val, block_size, sqlutil_table, xsink);
     if (*xsink) {
         return QoreValue();
     }
@@ -1523,7 +1675,15 @@ nothing DataFrame::toTable(object ds, string table_name, *hash<auto> options) [d
         return QoreValue();
     }
 
-    std::string sql = qdfBuildInsertSql(table_name->c_str(), columns);
+    // the table is not visible to SqlUtil (ex: a temporary table): the rows are written with an INSERT statement
+    // made with the SQL names of the table and its columns in the dialect of the driver
+    assert(sqlutil_table);
+    std::string sql_table;
+    std::vector<std::string> sql_columns;
+    if (qdfGetSqlNames(*sqlutil_table, table, columns, sql_table, sql_columns, xsink)) {
+        return QoreValue();
+    }
+    std::string sql = qdfBuildInsertSql(sql_table, sql_columns);
     rc = qdfPreparedRowInsert(ds, sql, columns, n_rows_val, xsink);
     if (*xsink) {
         return QoreValue();

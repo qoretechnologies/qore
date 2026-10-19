@@ -74,6 +74,179 @@ class RecordingDatasource {
     }
 }
 
+#! a statement of a SqlRecordingDatasource that records the SQL it prepares and the arguments it executes it with
+class SqlRecordingStatement inherits AbstractSQLStatement {
+    private {
+        SqlRecordingDatasource ds;
+        *string sql;
+    }
+
+    constructor(SqlRecordingDatasource ds) {
+        self.ds = ds;
+    }
+
+    nothing prepare(string sql, ...) {
+        self.sql = sql;
+        ds.recordPrepare(sql);
+    }
+    nothing prepareRaw(string sql) {
+        self.sql = sql;
+        ds.recordPrepare(sql);
+    }
+    nothing bind(...) {}
+    nothing bindArgs(softlist<auto> arguments) {}
+    nothing bindPlaceholders(...) {}
+    nothing bindPlaceholdersArgs(softlist<auto> arguments) {}
+    nothing bindValues(...) {}
+    nothing bindValuesArgs(softlist<auto> arguments) {}
+    nothing exec(...) {
+        ds.recordExec(argv);
+    }
+    nothing execArgs(softlist<auto> arguments) {
+        ds.recordExec(arguments);
+    }
+    int affectedRows() {
+        return 1;
+    }
+    hash<auto> getOutput() {
+        return {};
+    }
+    hash<auto> getOutputRows() {
+        return {};
+    }
+    nothing define() {}
+    nothing close() {}
+    nothing commit() {}
+    nothing rollback() {}
+    nothing beginTransaction() {}
+    bool next() {
+        return False;
+    }
+    bool valid() {
+        return False;
+    }
+    *hash<auto> fetchRow() {}
+    *hash<auto> getValue() {}
+    list<auto> fetchRows(softint rows = -1) {
+        return ();
+    }
+    hash<auto> fetchColumns(softint rows = -1) {
+        return {};
+    }
+    hash<auto> describe() {
+        return {};
+    }
+    *string getSQL() {
+        return sql;
+    }
+    bool active() {
+        return False;
+    }
+    bool currentThreadInTransaction() {
+        return False;
+    }
+    auto memberGate(string key) {}
+}
+
+#! an SQLite datasource that records the SQL it is given; it has a table "t" only if constructed so
+class SqlRecordingDatasource inherits AbstractDatasource {
+    public {
+        #! the SQL executed directly
+        list<string> sql = ();
+        #! the SQL prepared in statements
+        list<string> prepared = ();
+        #! the arguments of each execution of a prepared statement
+        list<auto> executed = ();
+    }
+
+    private {
+        bool table_exists;
+    }
+
+    constructor(bool table_exists) {
+        self.table_exists = table_exists;
+    }
+
+    recordPrepare(string sql) {
+        push prepared, sql;
+    }
+
+    recordExec(*softlist<auto> args) {
+        push executed, args;
+    }
+
+    nothing commit() {}
+    nothing rollback() {}
+    auto exec(string sql, ...) {
+        push self.sql, sql;
+        return 1;
+    }
+    auto vexec(string sql, *softlist<auto> args) {
+        push self.sql, sql;
+        return 1;
+    }
+    auto execRaw(string sql) {
+        push self.sql, sql;
+        return 1;
+    }
+    auto select(string sql, ...) {}
+    auto selectTyped(string sql, ...) {}
+    # SqlUtil checks whether the table exists with one row query
+    auto selectRow(string sql, ...) {
+        return table_exists ? {"name": "t"} : NOTHING;
+    }
+    auto selectRows(string sql, ...) {}
+    auto selectRowsTyped(string sql, ...) {}
+    auto vselect(string sql, *softlist<auto> args) {}
+    auto vselectTyped(string sql, *softlist<auto> args) {}
+    auto vselectRow(string sql, *softlist<auto> args) {
+        return table_exists ? {"name": "t"} : NOTHING;
+    }
+    auto vselectRows(string sql, *softlist<auto> args) {}
+    auto vselectRowsTyped(string sql, *softlist<auto> args) {}
+    nothing beginTransaction() {}
+    *string getUserName() {}
+    *string getPassword() {}
+    *string getDBName() {
+        return "test";
+    }
+    *string getDBEncoding() {
+        return "UTF-8";
+    }
+    *string getOSEncoding() {
+        return "UTF-8";
+    }
+    *string getHostName() {}
+    *int getPort() {}
+    string getDriverName() {
+        return "sqlite3";
+    }
+    string getDriverRealName() {
+        return "sqlite3";
+    }
+    int getCapabilities() {
+        return 0;
+    }
+    AbstractSQLStatement getSQLStatement() {
+        return new SqlRecordingStatement(self);
+    }
+    auto getServerVersion() {
+        return "3.45.0";
+    }
+    auto getClientVersion() {
+        return "3.45.0";
+    }
+    bool inTransaction() {
+        return False;
+    }
+    hash<auto> getConfigHash() {
+        return {"type": "sqlite3", "db": "test"};
+    }
+    string getConfigString() {
+        return "sqlite3:test";
+    }
+}
+
 class DataFrameTest inherits QUnit::Test {
     constructor() : Test("DataFrameTest", "1.0", \ARGV) {
         addTestCase("constructionTest", \constructionTest());
@@ -125,6 +298,8 @@ class DataFrameTest inherits QUnit::Test {
         addTestCase("NUL characters in column names in files", \nulColumnNameFileTest());
         addTestCase("NUL characters in struct field names and map keys", \nulNestedKeyTest());
         addTestCase("null and NUL group and join keys", \nullKeyTest());
+        addTestCase("toTable() names are plain SQL identifiers", \sqlIdentifierTest());
+        addTestCase("toTable() needs SqlUtil", \sqlUtilRequiredTest());
 
         set_return_value(main());
     }
@@ -3264,7 +3439,7 @@ sub invalid_dataframe_api() {
         assertThrows("HASH-KEY-ERROR", \df.toColumnarResult(), NOTHING,
             "toColumnarResult() refuses a NUL column name");
         RecordingDatasource ds();
-        assertThrows("HASH-KEY-ERROR", \df.toTable(), (ds, "t"), "toTable() refuses a NUL column name");
+        assertThrows("DATAFRAME-DB-ERROR", \df.toTable(), (ds, "t"), "toTable() refuses a NUL column name");
         assertEq((), ds.getCalls(), "toTable() refuses a NUL column name before using the datasource");
 
         # grouped sum() and mean() return a DataFrame, so they keep a NUL column name
@@ -3394,5 +3569,95 @@ sub invalid_dataframe_api() {
         assertEq(4, outer.numRows(), "an outer join has the matched row and each unmatched row");
         assertEq((1, 2, 3, NOTHING), outer.getColumn("lv"), "an outer join keeps the unmatched left rows");
         assertEq((10, NOTHING, NOTHING, 20), outer.getColumn("rv"), "an outer join keeps the unmatched right row");
+    }
+
+    # the table and column names of toTable() are written into SQL, so they must be plain SQL identifiers, which cannot
+    # change the SQL statement; a reserved word is quoted by SqlUtil for the driver
+    sqlIdentifierTest() {
+        DataFrame::DataFrame plain({"a": (1,), "order": (2,)});
+
+        # the table exists: SqlUtil writes the rows
+        SqlRecordingDatasource ds(True);
+        plain.toTable(ds, "t");
+        assertEq(("insert into t (a,`order`) values (%v,%v)",), ds.sql,
+            "toTable() writes through SqlUtil, which quotes a reserved word");
+        ds = new SqlRecordingDatasource(True);
+        plain.toTable(ds, "main.t");
+        assertEq(("insert into main.t (a,`order`) values (%v,%v)",), ds.sql,
+            "toTable() writes a table qualified by a schema through SqlUtil");
+
+        # SqlUtil does not see the table (ex: a temporary table): the rows are written with a prepared statement made
+        # with the SQL names of the driver
+        ds = new SqlRecordingDatasource(False);
+        plain.toTable(ds, "t");
+        assertEq(("INSERT INTO t (a, `order`) VALUES (%v, %v)",), ds.prepared,
+            "the INSERT statement for a table SqlUtil does not see quotes a reserved word as SqlUtil does");
+        assertEq(((1, 2),), ds.executed, "the INSERT statement is executed with the row values");
+        assertEq((), ds.sql, "no SQL is executed directly");
+        ds = new SqlRecordingDatasource(False);
+        plain.toTable(ds, "main.order");
+        assertEq(("INSERT INTO main.`order` (a, `order`) VALUES (%v, %v)",), ds.prepared,
+            "the INSERT statement quotes a table name that is a reserved word");
+
+        # names that are not plain identifiers are refused before the datasource is used
+        list<string> bad_columns = (
+            "a) values (1); drop table x; --",
+            "a'b",
+            "a\"b",
+            "a`b",
+            "a;b",
+            "a b",
+            "a--b",
+            "a/*b*/",
+            "a(b)",
+            "1a",
+            "",
+            "a\x00b",
+        );
+        foreach string name in (bad_columns) {
+            DataFrame::DataFrame df();
+            df.addColumn(name, (1,));
+            foreach bool table_exists in ((True, False)) {
+                SqlRecordingDatasource bad_ds(table_exists);
+                assertThrows("DATAFRAME-DB-ERROR", "column name", \df.toTable(), (bad_ds, "t"),
+                    sprintf("toTable() refuses the column name %d of the list (table exists: %y)", $#, table_exists));
+                assertEq((), bad_ds.sql + bad_ds.prepared, "no SQL is sent for a refused column name");
+            }
+        }
+        list<string> bad_tables = (
+            "t (a) values (1); drop table x; --",
+            "t; drop table x",
+            "a.b.c",
+            ".t",
+            "t.",
+            "s.t x",
+            "t\x00x",
+        );
+        foreach string table in (bad_tables) {
+            foreach bool table_exists in ((True, False)) {
+                SqlRecordingDatasource bad_ds(table_exists);
+                assertThrows("DATAFRAME-DB-ERROR", "table name|schema name", \plain.toTable(), (bad_ds, table),
+                    sprintf("toTable() refuses the table name %d of the list (table exists: %y)", $#, table_exists));
+                assertEq((), bad_ds.sql + bad_ds.prepared, "no SQL is sent for a refused table name");
+            }
+        }
+
+        # identifiers with letters other than ASCII letters and with '$' and '#' are plain identifiers
+        DataFrame::DataFrame unicode({"größe": (1,), "_n$#1": (2,)});
+        ds = new SqlRecordingDatasource(True);
+        unicode.toTable(ds, "maße");
+        assertEq(("insert into maße (größe,_n$#1) values (%v,%v)",), ds.sql,
+            "toTable() accepts identifiers with letters other than ASCII letters, '$' and '#'");
+    }
+
+    # without SqlUtil, toTable() cannot quote the identifiers for the driver, so it writes nothing
+    sqlUtilRequiredTest() {
+        Program p(PO_NEW_STYLE | PO_NO_MODULES);
+        p.parse("sub write(object df, object ds) { df.toTable(ds, \"t\"); }", "no-modules");
+        DataFrame::DataFrame plain({"a": (1,)});
+        SqlRecordingDatasource ds(True);
+        assertThrows("DATAFRAME-DB-ERROR", "needs the SqlUtil module.*'sqlite3' driver", \p.callFunction(),
+            ("write", plain, ds), "toTable() refuses to write without SqlUtil");
+        assertEq((), ds.sql + ds.prepared, "no SQL is sent without SqlUtil");
     }
 }
