@@ -843,6 +843,29 @@
     Header values, request targets, passwords and URLs are not shown in the exception.
     @endparblock
 
+    @par Mail Is Sent With SMTP Transparency, and a Line Break Cannot Start Another SMTP Command or Header
+    @parblock
+    The @ref smtpclientintro "SmtpClient", @ref mailmessageintro "MailMessage" and @ref mimeintro "Mime" modules no
+    longer let a string in a message start another SMTP command or header:
+    - a message is always sent with SMTP transparency: every CR or LF that is not part of a CRLF line break is sent as
+      CRLF, and a \c "." is added at the start of every line that starts with \c "."; a message created with SMTP
+      mode off, or a bare LF before a line with only \c ".", let that line end the data and the lines after it be
+      read as SMTP commands (SMTP smuggling)
+    - the sender address of a message parsed from raw message text is its address, as for a message created to be
+      sent; it was the whole decoded \c From header, which could contain a line break that started another command;
+      a sender or recipient address with a NUL, CR or LF character raises \c MESSAGE-ERROR
+    - a header value with a CR or LF character is encoded (\c "=0D=0A") instead of being written with a line break
+      that started another header, a header name with a NUL, CR or LF character raises \c HEADER-ERROR, and a MIME
+      part header name or value with one raises \c PART-ERROR
+    - a SASL credential with a character that separates the fields of the SASL message raises
+      \c SMTPCLIENT-INVALID-AUTHENTICATION, and the \c OAUTHBEARER user name is escaped as RFC 7628 requires
+
+    Use @ref MailMessage::Message::serializeRaw() "Message::serializeRaw()" for a message that is stored or uploaded
+    rather than sent with SMTP.  @ref MailMessage::Message::getFrom() "Message::getFrom()" of a parsed message now
+    returns the sender's email address, and @ref MailMessage::Message::getSender() "Message::getSender()" the
+    \c From header.
+    @endparblock
+
     @par Modules Export Only Their Own Declarations and Reexported Modules
     @parblock
     Constants, enums and their members, and typedefs that a module received from another module it imported with a

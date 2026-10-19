@@ -27,6 +27,7 @@ public class Main inherits QUnit::Test {
         addTestCase("Test inline attachments", \testInlineAttachments(), NOTHING);
         addTestCase("Test Part and Attachment classes", \testPartAndAttachmentClasses(), NOTHING);
         addTestCase("Test deprecated encoding constants", \testDeprecatedEncodingConstants(), NOTHING);
+        addTestCase("Test SMTP transparency and header line breaks", \testLineBreaks(), NOTHING);
 
         set_return_value(main());
     }
@@ -1041,5 +1042,73 @@ lorem ipsum\r
             assertEq(ContentEncoding::Base64, att.getTransferEncoding(),
                 "EncBase64 works with Attachment constructor");
         }
+    }
+
+    testLineBreaks() {
+        # SMTP transparency
+        assertEq("a\r\nb\r\nc\r\nd\r\n", Message::encodeSmtpData("a\nb\rc\r\nd"));
+        assertEq("..a\r\n..\r\nb\r\n...c\r\n", Message::encodeSmtpData(".a\n.\nb\r..c"));
+        assertEq("a\r\n", Message::encodeSmtpData("a\r\n"));
+        assertEq("", Message::encodeSmtpData(""));
+
+        # serialize() in SMTP mode adds a "." to every line that starts with "." and writes bare CR and LF as CRLF;
+        # serializeRaw() does not change the body
+        Message msg(Sender, Subject);
+        msg.addTO(To);
+        msg.setBody(".hello\n.\nbye", ContentEncoding::None);
+        string raw = msg.serializeRaw();
+        assertRegex("\r\n\r\n\\.hello\n\\.\nbye\r\n$", raw);
+        assertEq(Message::encodeSmtpData(raw), msg.serialize());
+        assertRegex("\r\n\r\n\\.\\.hello\r\n\\.\\.\r\nbye\r\n$", msg.serialize());
+        # a message created with SMTP mode off is serialized as it is
+        msg = new Message(Sender, Subject, False);
+        msg.addTO(To);
+        msg.setBody(".hello\r\nbye", ContentEncoding::None);
+        assertEq(msg.serializeRaw(), msg.serialize());
+        assertRegex("\r\n\\.hello\r\n", msg.serialize());
+
+        # a header value with a line break is encoded; a header name with one, or a value that is not encoded, is
+        # refused
+        assertEq("X-Test: =?UTF-8?Q?a=0D=0AX-Injected:_1?=\r\n", Message::doHeaderValue("X-Test", "a\r\nX-Injected: 1"));
+        assertThrows("HEADER-ERROR", "message header name \"X-Test\\\\x0d\\\\x0aX-Injected\" contains a line break",
+            \Message::doHeaderValue(), ("X-Test\r\nX-Injected", "1"));
+        assertThrows("HEADER-ERROR", "message header \"X-Test\" value .* contains a line break",
+            \Message::doHeaderValue(), ("X-Test", "a\nb", "\r\n", False));
+        assertEq("X-Test: a b\r\n", Message::doHeaderValue("X-Test", "a b", "\r\n", False));
+        msg = new Message(Sender, Subject);
+        msg.addTO(To);
+        msg.setBody("body");
+        msg.addHeader({"X-Test\nX-Injected": "1"});
+        assertThrows("HEADER-ERROR", \msg.serializeRaw());
+        assertThrows("HEADER-ERROR", \msg.serialize());
+
+        # the address in angle brackets is the address, not text in the display name that looks like one
+        assertEq("sender@example.com", Message::getEmailAddress("support@bank.example <sender@example.com>"));
+        assertEq("sender@example.com", Message::getEmailAddress("\"x\" <sender@example.com> "));
+        assertEq("sender@example.com", Message::getEmailAddress("sender@example.com"));
+        assertNothing(Message::getEmailAddress("no address"));
+
+        # a parsed message: getFrom() is the address, getSender() the From header
+        Message parsed("From: Sender Name <sender@example.com>\r\nTo: to@example.com\r\nSubject: s\r\n\r\nbody\r\n");
+        assertEq("sender@example.com", parsed.getFrom());
+        assertEq("Sender Name <sender@example.com>", parsed.getSender());
+        parsed = new Message("From: no address\r\nTo: to@example.com\r\nSubject: s\r\n\r\nbody\r\n");
+        assertEq("", parsed.getFrom());
+        assertEq("no address", parsed.getSender());
+
+        # the headers given for an attachment are added to its part, except the generated ones; the Content-ID is
+        # found in any case
+        msg = new Message(Sender, Subject);
+        msg.addTO(To);
+        msg.setBody("body");
+        msg.attach("a.txt", MimeTypeText, "data", ContentEncoding::Base64, {"X-Tag": "t1",
+            "content-type": "x/ignored", "CONTENT-TRANSFER-ENCODING": "ignored", "Content-Length": 99});
+        msg.attach(new Attachment("b.png", MimeTypePng, <89504e47>, ContentEncoding::Base64, {"Content-ID": "<cid1>"}));
+        string ser = msg.serializeRaw();
+        assertRegex("\r\nX-Tag: t1\r\n", ser);
+        assertFalse(regex(ser, "x/ignored|: ignored|Content-Length: 99"));
+        assertRegex("\r\nContent-ID: <cid1>\r\n", ser);
+        assertEq(1, (ser =~ x/(Content-ID:)/g).size());
+        assertEq("cid1", msg.getAttachments()[1].getContentId());
     }
 }

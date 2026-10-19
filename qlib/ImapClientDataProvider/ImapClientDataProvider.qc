@@ -132,7 +132,7 @@ public class ImapClientDataProvider inherits ImapClientDataProviderBase {
         return {
             "uid": uid,
             "subject": m.getSubject(),
-            "from": m.getFrom(),
+            "from": m.getSender(),
             "to": m.getTO() ?? (),
             "date": ImapClient::ImapResponseParser::parseEnvelopeDate(
                 ImapClientDataProvider::getHeader(headers, "Date")),

@@ -25,10 +25,10 @@
 */
 
 # minimum qore version
-%requires qore >= 2.0
+%requires qore >= 3.0
 
 # need mime definitions
-%requires Mime >= 1.7
+%requires Mime >= 1.9
 
 # assume local var scope, do not use "$" for vars, members, and method calls
 %modern
@@ -80,6 +80,26 @@ msg.addTO("My Best Friend <you@friend.com>");
       - @ref MailMessage::EncDefault "EncDefault", @ref MailMessage::EncNone "EncNone",
         @ref MailMessage::EncBase64 "EncBase64", @ref MailMessage::EncQuotedPrintable "EncQuotedPrintable"
       - These constants are deprecated; use the @ref MailMessage::ContentEncoding "ContentEncoding" enum instead
+    - Added @ref MailMessage::Message::serializeRaw() "Message::serializeRaw()": serializes the message as it is
+      stored or uploaded (for example with the IMAP \c APPEND command), with no \c "." added at the start of the
+      lines that start with \c "."
+    - Added @ref MailMessage::Message::encodeSmtpData() "Message::encodeSmtpData()": gives message text SMTP
+      transparency for the SMTP \c DATA command
+    - @ref MailMessage::Message::serialize() "Message::serialize()" in SMTP mode writes every CR or LF character
+      that is not part of a CRLF line break as CRLF before it adds a \c "." to the lines that start with \c ".",
+      since a server can take a bare CR or LF as a line ending
+    - A message parsed from raw message text now returns the sender's email address from
+      @ref MailMessage::Message::getFrom() "Message::getFrom()" and the \c From header from
+      @ref MailMessage::Message::getSender() "Message::getSender()", as a message created to be sent does; they were
+      swapped, so the decoded \c From header, which can contain a line break, was used as the SMTP sender address
+    - A header name with a NUL, CR or LF character raises \c HEADER-ERROR when the message is serialized, and so
+      does such a header value when headers are not encoded; a header value with a CR or LF character is encoded,
+      so that it cannot end the header line (it was written with a line break before, see Mime 1.9)
+    - The headers given for an attachment are now added to its MIME part; they were dropped.  The \c Content-ID of
+      a part is found in its headers in any case
+    - @ref MailMessage::Message::getEmailAddress() "Message::getEmailAddress()" returns the address in angle brackets
+      at the end of the string when there is one, so that text in a display name that looks like an address is not
+      taken as the sender's or a recipient's address
 
     @subsection mailmessage_v1_5 MailMessage 1.5
     - Enhanced attachment handling:
@@ -595,8 +615,11 @@ public class Message {
             else if (lk == "content-transfer-encoding")
                 cte = h.firstValue();
             else if (lk == "from") {
-                from = Message::getEmailAddress(h.firstValue());
-                sender = h.firstValue();
+                # the From header in display format, and the sender's email address, as for a message created to be
+                # sent (they were swapped, so getFrom() returned the decoded header value, which could contain a
+                # line break, instead of the address used in the SMTP MAIL FROM command)
+                from = h.firstValue();
+                sender = Message::getEmailAddress(h.firstValue()) ?? "";
                 continue;
             } else if (lk == "to") {
                 to += h.firstValue();
@@ -777,10 +800,44 @@ public class Message {
     }
 
     #! serializes the message to a string that can be sent to an SMTP server, for example
-    /**
+    /** If the message was created in SMTP mode (the default), the string is given SMTP transparency with
+        @ref encodeSmtpData(): every CR or LF character that is not part of a CRLF line break is written as CRLF,
+        and a \c "." is added at the start of every line that starts with \c "."; otherwise the string is the same
+        as from @ref serializeRaw().
+
         @throw MESSAGE-ERROR the message is incomplete and cannot be sent
+        @throw HEADER-ERROR a header name contains a NUL, CR or LF character
+
+        @note use @ref serializeRaw() for a message that is stored or uploaded rather than sent with the SMTP
+        \c DATA command (for example with the IMAP \c APPEND command), since an SMTP server removes the \c "."
+        added at the start of a line, but a mailbox or an API that takes a whole message does not
+
+        @since MailMessage 1.5.1 a CR or LF character that is not part of a CRLF line break is written as CRLF in
+        SMTP mode, so that a line that starts with \c "." after it is given its added \c "." as well
     */
     string serialize() {
+        string str = serializeRaw();
+        return smtp_mode ? Message::encodeSmtpData(str) : str;
+    }
+
+    #! serializes the message to a string in the Internet message format (RFC 5322), as it is stored or uploaded
+    /** Unlike @ref serialize() in SMTP mode, no \c "." is added at the start of the lines that start with
+        \c "."; use this method for a message that is stored or uploaded as a whole, for example with the IMAP
+        \c APPEND command or an API that takes a raw message, rather than sent with the SMTP \c DATA command.
+
+        @return the message with its headers, ending with CRLF
+
+        @throw MESSAGE-ERROR the message is incomplete and cannot be sent
+        @throw HEADER-ERROR a header name contains a NUL, CR or LF character
+
+        @par Example:
+        @code{.py}
+imap.append("Sent", msg.serializeRaw());
+        @endcode
+
+        @since MailMessage 1.5.1
+    */
+    string serializeRaw() {
         # throws a MESSAGE-ERROR exception if the message cannot be sent
         checkSendPossible();
 
@@ -810,16 +867,39 @@ public class Message {
             }
         }
 
-        # RFC 5321 §4.5.2 SMTP transparency: any line starting with "." must
-        # be dot-stuffed (prepend a second ".") on the wire; otherwise the
-        # server un-stuffs the first "." and corrupts body lines that
-        # legitimately begin with a dot (e.g. ".hello").  Previously this
-        # only escaped the bare "\r\n.\r\n" terminator sequence, which left
-        # content lines like ".foo" undetected by many SMTP servers.
-        if (smtp_mode) {
-            str = regex_subst(str, "\r\n\\.", "\r\n..", RE_Global);
-        }
+        return str;
+    }
 
+    #! returns message text with SMTP transparency, ready to be sent with the SMTP \c DATA command
+    /** According to <a href="https://datatracker.ietf.org/doc/html/rfc5321#section-4.5.2">RFC 5321 section
+        4.5.2</a>:
+        - every CR or LF character that is not part of a CRLF line break is written as CRLF, since a server can
+          take a bare CR or LF as the end of a line, and so a line with only \c "." after it as the end of the data
+          (SMTP smuggling)
+        - a \c "." is added at the start of every line that starts with \c ".", which the server removes, so that
+          no line of the message can end the data
+        - CRLF is added at the end if the text does not end with one, so that the end-of-data line \c ".\r\n" can
+          follow it
+
+        @param str the message text, for example from @ref serializeRaw()
+
+        @return the text to send after the \c DATA command, without the end-of-data line \c ".\r\n"
+
+        @par Example:
+        @code{.py}
+string data = Message::encodeSmtpData(msg.serializeRaw()) + ".\r\n";
+        @endcode
+
+        @since MailMessage 1.5.1
+    */
+    static string encodeSmtpData(string str) {
+        # a CRLF line break is kept; a bare CR or LF is written as CRLF
+        str = regex_subst(str, "\r\n|\r|\n", "\r\n", RE_Global);
+        # a "." is added at the start of every line that starts with "."
+        str = regex_subst(str, "(^|\r\n)\\.", "$1..", RE_Global);
+        if (str.size() && str !~ /\r\n\z/) {
+            str += "\r\n";
+        }
         return str;
     }
 
@@ -923,8 +1003,20 @@ public class Message {
     }
 
     #! fetch the email address out of a sender/rcpt string
+    /** @param str an email address, or a display name and an email address in angle brackets (ex:
+        \c "John Doe <john@example.com>")
+
+        @return the email address: the address in angle brackets at the end of the string if there is one, otherwise
+        the first email address found in the string, or @ref nothing if there is none
+
+        @since MailMessage 1.5.1 the address in angle brackets at the end of the string is returned when there is
+        one; the first text that looked like an address was returned, which could be in the display name
+    */
     static *string getEmailAddress(string str) {
-        return (str =~ x/([a-zA-Z0-9\-\._\+\ = ]+@[a-zA-Z0-9\-\._]+)/)[0];
+        # the address of a name-addr (RFC 5322 section 3.4) is in angle brackets after the display name, which can
+        # contain text that looks like another address
+        *string addr = (str =~ x/<([a-zA-Z0-9\-\._\+=]+@[a-zA-Z0-9\-\._]+)>\s*$/)[0];
+        return addr ?? (str =~ x/([a-zA-Z0-9\-\._\+\ = ]+@[a-zA-Z0-9\-\._]+)/)[0];
     }
 
     #! returns @ref True "True" if the string contains an email address, @ref False "False" if not
@@ -1302,13 +1394,27 @@ msg.attachInline("logo.png", MimeTypePng, logo_data, "logo123");
     /** @param hdr the header to encode (ex: \c "Subject")
         @param val the value to encode
         @param eol the End-Of-Line marker for the string
-        @param encode encode non-ASCII values with quoted printable encoding (http://tools.ietf.org/html/rfc2047)
+        @param encode encode values that are not printable ASCII, including values with CR or LF characters, with
+        quoted printable encoding (http://tools.ietf.org/html/rfc2047), so that a value cannot end the header line
 
         @return a header string (ex: \c "Subject: =?UTF-8?Q?testing?=\r\n")
+
+        @throw HEADER-ERROR the header name contains a NUL, CR or LF character, or \a encode is @ref False and the
+        value contains one; such a character would end the header line and start another header (header injection)
+
+        @since MailMessage 1.5.1 a header name with a NUL, CR or LF character, or such a value that is not encoded,
+        raises \c HEADER-ERROR
     */
     static string doHeaderValue(string hdr, string val, string eol = "\r\n", bool encode = True) {
-        if (encode && !val.isDataPrintableAscii())
-            val = mime_encode_header_word_q(val);
+        check_line_text(hdr, "message header name", "HEADER-ERROR");
+        if (encode) {
+            # a value with a control character is not printable ASCII, so a CR or LF is encoded with the rest
+            if (!val.isDataPrintableAscii()) {
+                val = mime_encode_header_word_q(val);
+            }
+        } else {
+            check_line_text(val, sprintf("message header %y value", hdr), "HEADER-ERROR");
+        }
         return sprintf("%s: %s%s", hdr, val, eol);
     }
 
@@ -1602,10 +1708,17 @@ public class Part {
         # += to keep "hash<auto>"
         headers += hdr;
 
-        # Extract Content-ID from headers if present
-        if (hdr."content-id") {
-            # Remove angle brackets if present
-            content_id = (hdr."content-id" =~ x/<([^>]+)>/)[0] ?? hdr."content-id";
+        # Extract Content-ID from headers if present; header names are case-insensitive, and a repeated field
+        # (a list) gives its first value
+        foreach hash<auto> i in (hdr.pairIterator()) {
+            if (i.key.lwr() == "content-id") {
+                string cid = sprintf("%s", i.value.typeCode() == NT_LIST ? i.value[0] : i.value);
+                if (cid.val()) {
+                    # Remove angle brackets if present
+                    content_id = (cid =~ x/<([^>]+)>/)[0] ?? cid;
+                }
+                break;
+            }
         }
     }
 
@@ -1704,6 +1817,17 @@ public class Attachment inherits Part {
     private {
         #! True if this is an inline attachment
         bool inline_attachment = False;
+
+        #! the part headers generated for an attachment, in lower case; headers with these names given for the
+        #! attachment are not added to its part
+        const GeneratedPartHeaders = {
+            "content-type": True,
+            "content-disposition": True,
+            "content-disposition-encoded": True,
+            "content-transfer-encoding": True,
+            "content-length": True,
+            "content-id": True,
+        };
     }
 
     #! creates an Attachment object for a Message object
@@ -1747,12 +1871,26 @@ public class Attachment inherits Part {
     }
 
     #! adds itself to a multipart/mixed message
+    /** The headers given for the attachment are added to its MIME part, except the \c Content-Type,
+        \c Content-Disposition, \c Content-Transfer-Encoding, \c Content-Length and \c Content-ID headers (in any
+        case), which are generated from the attachment
+
+        @throw PART-ERROR a header name or value contains a NUL, CR or LF character
+
+        @since MailMessage 1.5.1 the headers given for the attachment are added to its MIME part; they were dropped
+    */
     add(MultiPartMixedMessage mpm) {
         # Use RFC 2231 encoding for non-ASCII filenames
         string encoded_name = encode_mime_filename(name);
         bool use_rfc2231 = (encoded_name != name);
 
+        # the headers given for the attachment (or parsed with it), without those generated for the part
         hash<auto> extra_hdr = {};
+        foreach hash<auto> i in (headers.pairIterator()) {
+            if (!GeneratedPartHeaders{i.key.lwr()}) {
+                extra_hdr{i.key} = i.value;
+            }
+        }
         if (use_rfc2231) {
             # RFC 2231 encoded filename
             extra_hdr."Content-Type" = "";

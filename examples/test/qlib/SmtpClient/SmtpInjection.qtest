@@ -1,0 +1,389 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+#
+# a string in a message must not start another SMTP command or another header: a local SMTP server that accepts a
+# bare LF as a line ending, as many servers do, records the commands and the data lines that it receives, so that
+# the test shows that no smuggled command, injected envelope address, injected header or injected SASL field
+# reaches the wire
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Mime
+%requires MailMessage
+%requires SmtpClient
+%requires QUnit
+
+%exec-class SmtpInjectionTest
+
+#! the commands, data lines and SASL payloads that the server received in one session
+hashdecl SmtpSessionInfo {
+    #! the command lines received, without line endings
+    list<string> commands = ();
+    #! the lines of the message data, without line endings and with the "." added by the client removed
+    list<string> data = ();
+    #! the decoded payloads of the AUTH commands received
+    list<string> auth = ();
+}
+
+#! an SMTP server that takes a CR LF or a bare LF as the end of a line, and a line with only "." as the end of the
+#! data
+class LenientSmtpServer {
+    private {
+        Socket listener();
+        Queue sessions();
+        Counter done(1);
+        const ReadTimeout = 10s;
+    }
+
+    constructor() {
+        listener.bindINET("127.0.0.1", 0, True, AF_INET);
+        listener.listen();
+        background run();
+    }
+
+    int getPort() {
+        return listener.getPort();
+    }
+
+    string getUrl() {
+        return sprintf("smtp://127.0.0.1:%d", getPort());
+    }
+
+    #! returns the next session served
+    hash<SmtpSessionInfo> getSession() {
+        return sessions.get(ReadTimeout);
+    }
+
+    #! returns True if no session was served (for a client that refused to send anything)
+    bool noSession() {
+        return !sessions.size();
+    }
+
+    #! ends the server: a connection that sends "STOP" ends the accept loop
+    stop() {
+        Socket s();
+        s.connectINET("127.0.0.1", getPort());
+        s.send("STOP\r\n");
+        done.waitForZero();
+        s.close();
+    }
+
+    private run() {
+        on_exit done.dec();
+        while (True) {
+            Socket s = listener.accept();
+            hash<SmtpSessionInfo> session();
+            bool stop;
+            try {
+                stop = serve(s, \session);
+            } catch (hash<ExceptionInfo> ex) {
+                # the client closed the connection: the session ends with what was received
+            }
+            try {
+                s.close();
+            } catch (hash<ExceptionInfo> ex) {
+            }
+            if (stop) {
+                break;
+            }
+            sessions.push(session);
+        }
+    }
+
+    #! returns the next line, without its line ending: CR LF or a bare LF, or NOTHING if the connection was closed
+    private *string readLine(Socket s) {
+        binary line = binary();
+        while (True) {
+            binary c;
+            try {
+                c = s.recvBinary(1, ReadTimeout);
+            } catch (hash<ExceptionInfo> ex) {
+                return;
+            }
+            if (!c.size()) {
+                return;
+            }
+            if (c == <0a>) {
+                break;
+            }
+            line += c;
+        }
+        string rv = line.toString();
+        if (rv =~ /\r$/) {
+            splice rv, -1;
+        }
+        return rv;
+    }
+
+    #! serves a session; returns True for the session that stops the server
+    private bool serve(Socket s, reference<hash<SmtpSessionInfo>> rv) {
+        s.send("220 mock.smtp.test ESMTP test\r\n");
+        while (True) {
+            *string line = readLine(s);
+            if (!exists line) {
+                break;
+            }
+            if (line == "STOP") {
+                return True;
+            }
+            rv.commands += line;
+            if (line =~ /^EHLO /i) {
+                s.send("250-mock.smtp.test\r\n250-AUTH PLAIN XOAUTH2 OAUTHBEARER\r\n250 OK\r\n");
+            } else if (line =~ /^AUTH /i) {
+                *string payload = (line =~ x/^AUTH \S+ (\S+)$/i)[0];
+                rv.auth += payload ? parse_base64_string_to_string(payload) : "";
+                s.send("235 2.7.0 Authentication successful\r\n");
+            } else if (line =~ /^DATA$/i) {
+                s.send("354 End data with <CR><LF>.<CR><LF>\r\n");
+                while (True) {
+                    *string dl = readLine(s);
+                    if (!exists dl || dl == ".") {
+                        break;
+                    }
+                    if (dl =~ /^\./) {
+                        splice dl, 0, 1;
+                    }
+                    rv.data += dl;
+                }
+                s.send("250 2.0.0 OK id=1\r\n");
+            } else if (line =~ /^QUIT$/i) {
+                s.send("221 2.0.0 Bye\r\n");
+                break;
+            } else {
+                s.send("250 2.1.0 OK\r\n");
+            }
+        }
+        return False;
+    }
+}
+
+class SmtpInjectionTest inherits QUnit::Test {
+    private {
+        const Sender = "sender@example.com";
+        const To = "to@example.com";
+    }
+
+    constructor() : Test("SmtpInjectionTest", "1.0") {
+        addTestCase("data: SMTP smuggling", \smuggling());
+        addTestCase("envelope: parsed sender address", \parsedSender());
+        addTestCase("headers", \headers());
+        addTestCase("attachment headers", \attachmentHeaders());
+        addTestCase("SASL credentials", \sasl());
+        set_return_value(main());
+    }
+
+    #! sends a message to a new server and returns the session
+    private hash<SmtpSessionInfo> send(MailMessage::Message msg, *hash<auto> opts) {
+        LenientSmtpServer server();
+        on_exit server.stop();
+        SmtpClient smtp = opts ? new SmtpClient(server.getUrl(), opts) : new SmtpClient(server.getUrl());
+        smtp.sendMessage(msg);
+        return server.getSession();
+    }
+
+    #! returns the commands that are not part of a normal send to the given recipients
+    private list<string> extraCommands(hash<SmtpSessionInfo> session) {
+        return cast<list<string>>(select session.commands,
+            $1 !~ /^(EHLO |AUTH |MAIL FROM: <sender@example\.com>$|RCPT TO: <to@example\.com>$|DATA$|QUIT$)/);
+    }
+
+    smuggling() {
+        # a message created with SMTP mode off: a line with only "." ended the data, and the lines after it were
+        # read as commands
+        string body = "line 1\r\n.\r\nMAIL FROM:<evil@example.com>\r\nRCPT TO:<victim@example.com>\r\nDATA\r\n"
+            "smuggled\r\n.\r\nline 2";
+        MailMessage::Message msg(Sender, "test", False);
+        msg.addTO(To);
+        msg.setBody(body, ContentEncoding::None);
+        hash<SmtpSessionInfo> session = send(msg);
+        assertEq((), extraCommands(session));
+        assertEq(1, (select session.commands, $1 =~ /^MAIL FROM/).size());
+        # the whole body arrives as data, with its "." lines
+        assertEq(("line 1", ".", "MAIL FROM:<evil@example.com>", "RCPT TO:<victim@example.com>", "DATA", "smuggled",
+            ".", "line 2"), session.data[session.data.size() - 8..]);
+
+        # in SMTP mode, with bare LF line breaks: a server that accepts a bare LF as a line ending took the "." line
+        # as the end of the data
+        body = "line 1\n.\nRSET\nMAIL FROM:<evil@example.com>\nRCPT TO:<victim@example.com>\n\rDATA\r.\rline 2";
+        msg = new MailMessage::Message(Sender, "test");
+        msg.addTO(To);
+        msg.setBody(body, ContentEncoding::None);
+        session = send(msg);
+        assertEq((), extraCommands(session));
+        assertEq(1, (select session.commands, $1 =~ /^MAIL FROM/).size());
+        # every bare CR or LF was sent as CR LF, and every line that starts with "." arrives with its "."
+        assertEq(("line 1", ".", "RSET", "MAIL FROM:<evil@example.com>", "RCPT TO:<victim@example.com>", "", "DATA",
+            ".", "line 2"), session.data[session.data.size() - 9..]);
+
+        # a line that starts with "." arrives as it was, and the data ends with the last line of the message: no
+        # empty line is added
+        msg = new MailMessage::Message(Sender, "test");
+        msg.addTO(To);
+        msg.setBody(".hello\r\n..two dots\r\nlast", ContentEncoding::None);
+        session = send(msg);
+        assertEq((".hello", "..two dots", "last"), session.data[session.data.size() - 3..]);
+    }
+
+    parsedSender() {
+        # the From header of a received message decodes to a value with a line break: its address is the sender,
+        # not the whole value, which started another command
+        string raw = "From: =?UTF-8?Q?x=0D=0ARCPT_TO:<evil@example.com>?= <sender@example.com>\r\n"
+            "To: to@example.com\r\nSubject: test\r\n\r\nbody\r\n";
+        MailMessage::Message msg(raw);
+        assertEq(Sender, msg.getFrom());
+        assertEq("x\r\nRCPT TO:<evil@example.com> <sender@example.com>", msg.getSender());
+        # the message is sent with a new body, as when it is forwarded
+        msg.setBody("forwarded body");
+        hash<SmtpSessionInfo> session = send(msg);
+        assertEq((), extraCommands(session));
+        assertEq(("MAIL FROM: <sender@example.com>",), select session.commands, $1 =~ /^MAIL FROM/);
+        # the From header is sent encoded, on one line
+        assertEq((), select session.data, $1 =~ /^RCPT/);
+
+        # an envelope address with a line break is refused before anything is sent
+        LenientSmtpServer server();
+        on_exit server.stop();
+        SmtpClient smtp(server.getUrl());
+        assertThrows("MESSAGE-ERROR", "SMTP sender address .* contains a line break",
+            \smtp.sendMessage(), new BadSenderMessage(Sender, "test"));
+        assertTrue(server.noSession());
+    }
+
+    headers() {
+        # a value with a line break: the subject, the To header and a custom header
+        MailMessage::Message msg(Sender, "subject\r\nX-Injected-1: yes");
+        msg.addTO(To + "\r\nX-Injected-2: yes");
+        msg.addHeader({"X-Custom": "a\r\nX-Injected-3: yes\r\n\r\ninjected body"});
+        msg.setBody("body", ContentEncoding::None);
+        hash<SmtpSessionInfo> session = send(msg);
+        assertEq((), extraCommands(session));
+        assertEq((), select session.data, $1 =~ /^(X-Injected|injected body)/);
+        assertEq(1, (select session.data, $1 =~ /^Subject: =\?UTF-8\?Q\?subject=0D=0AX-Injected-1:_yes\?=$/).size());
+        assertEq(1, (select session.data, $1 =~ /^X-Custom: .*=0D=0AX-Injected-3:/).size());
+
+        # a header name with a line break is refused before anything is sent
+        LenientSmtpServer server();
+        on_exit server.stop();
+        SmtpClient smtp(server.getUrl());
+        msg = new MailMessage::Message(Sender, "test");
+        msg.addTO(To);
+        msg.setBody("body");
+        msg.addHeader({"X-A\r\nX-Injected": "1"});
+        assertThrows("HEADER-ERROR", "message header name .* contains a line break", \smtp.sendMessage(), msg);
+        assertTrue(server.noSession());
+
+        # a long subject is split into encoded words on folded lines, each with the encoding label, between
+        # characters
+        string subject = (map sprintf("äöü%d", $1), xrange(30)).join(" ");
+        msg = new MailMessage::Message(Sender, subject);
+        msg.addTO(To);
+        msg.setBody("body");
+        session = send(msg);
+        int start = -1;
+        foreach string line in (session.data) {
+            if (line =~ /^Subject: /) {
+                start = $#;
+                break;
+            }
+        }
+        assertTrue(start >= 0);
+        # the folded lines are unfolded as a message is parsed
+        string hdr = session.data[start];
+        int words = 1;
+        for (int i = start + 1; session.data[i] =~ /^ /; ++i) {
+            assertRegex("^ =\\?UTF-8\\?Q\\?[^ ?]+\\?=$", session.data[i]);
+            assertTrue(session.data[i].size() <= 76);
+            hdr += session.data[i];
+            ++words;
+        }
+        assertTrue(words > 1);
+        assertEq(subject, mime_decode_header(MailMessage::Message::parseHeader(hdr, False).Subject));
+    }
+
+    attachmentHeaders() {
+        # the headers given for an attachment are sent in its part
+        MailMessage::Message msg(Sender, "test");
+        msg.addTO(To);
+        msg.setBody("body");
+        msg.attach("a.txt", MimeTypeText, "attachment", ContentEncoding::Base64, {"X-Attachment-Tag": "tag-1"});
+        hash<SmtpSessionInfo> session = send(msg);
+        assertEq(1, (select session.data, $1 == "X-Attachment-Tag: tag-1").size());
+
+        # an attachment header or Content-ID with a line break is refused before anything is sent
+        LenientSmtpServer server();
+        on_exit server.stop();
+        SmtpClient smtp(server.getUrl());
+        msg = new MailMessage::Message(Sender, "test");
+        msg.addTO(To);
+        msg.setBody("body");
+        msg.attach("a.txt", MimeTypeText, "attachment", ContentEncoding::Base64,
+            {"X-Attachment-Tag": "tag\r\nX-Injected: yes"});
+        assertThrows("PART-ERROR", "MIME header \"X-Attachment-Tag\" value .* contains a line break",
+            \smtp.sendMessage(), msg);
+        msg = new MailMessage::Message(Sender, "test");
+        msg.addTO(To);
+        msg.setBody("body");
+        msg.attachInline("logo.png", MimeTypePng, <89504e47>, "logo\r\nX-Injected: yes");
+        assertThrows("PART-ERROR", "MIME header \"Content-ID\" value .* contains a line break",
+            \smtp.sendMessage(), msg);
+        assertTrue(server.noSession());
+    }
+
+    sasl() {
+        MailMessage::Message msg(Sender, "test");
+        msg.addTO(To);
+        msg.setBody("body");
+
+        # PLAIN: a NUL character separates the fields of the message
+        {
+            LenientSmtpServer server();
+            on_exit server.stop();
+            SmtpClient smtp(server.getUrl(), {"username": "user", "password": "pass\x00word"});
+            assertThrows("SMTPCLIENT-INVALID-AUTHENTICATION", "password contains a NUL character",
+                \smtp.sendMessage(), msg);
+            smtp = new SmtpClient(server.getUrl(), {"username": "us\x00er", "password": "password"});
+            assertThrows("SMTPCLIENT-INVALID-AUTHENTICATION", "user name contains a NUL character",
+                \smtp.sendMessage(), msg);
+            assertTrue(server.noSession());
+        }
+
+        # XOAUTH2 and OAUTHBEARER: a ^A character separates the fields of the message
+        {
+            LenientSmtpServer server();
+            on_exit server.stop();
+            SmtpClient smtp(server.getUrl(), {"username": "user\x01auth=Bearer other", "token": "token"});
+            assertThrows("SMTPCLIENT-INVALID-AUTHENTICATION", "user name for a bearer-token login contains a NUL or "
+                "\\^A character", \smtp.sendMessage(), msg);
+            smtp = new SmtpClient(server.getUrl(), {"username": "user", "token": "token\x01\x01"});
+            assertThrows("SMTPCLIENT-INVALID-AUTHENTICATION", "bearer token contains a NUL or \\^A character",
+                \smtp.sendMessage(), msg);
+            assertTrue(server.noSession());
+        }
+
+        # OAUTHBEARER: "=" and "," in the user name are escaped in the GS2 header
+        hash<SmtpSessionInfo> session = send(msg, {"username": "a,b=c@example.com", "token": "token",
+            "auth_mechanism": "OAUTHBEARER"});
+        assertEq(1, session.auth.size());
+        assertRegex("^n,a=a=2Cb=3Dc@example\\.com,\x01host=127\\.0\\.0\\.1\x01port=[0-9]+\x01auth=Bearer token\x01\x01$",
+            session.auth[0]);
+
+        # valid credentials are sent
+        session = send(msg, {"username": "user", "password": "password"});
+        assertEq(("\x00user\x00password",), map $1.substr($1.find("\x00")), session.auth);
+    }
+}
+
+#! a message whose envelope sender has a line break
+class BadSenderMessage inherits MailMessage::Message {
+    constructor(string sender, string subject) : MailMessage::Message(sender, subject) {
+        addTO("to@example.com");
+        setBody("body");
+    }
+
+    *string getFrom() {
+        return "sender@example.com>\r\nRCPT TO:<evil@example.com";
+    }
+}

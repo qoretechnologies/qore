@@ -23,7 +23,7 @@
 */
 
 # minimum required Qore version
-%requires qore >= 2.0
+%requires qore >= 3.0
 
 %requires Util
 
@@ -168,6 +168,28 @@ printf("%y: header word b: %y\n", mime_decode_header(mime_encode_header_word_b(s
       in place of a content type, so its body was returned as an undecoded binary; RFC 2046
       section 5.1 defines the default part content type as \c "text/plain", which means that
       simple (non-file) \c multipart/form-data fields are now returned as strings
+    - a CR or LF character in a string encoded with
+      @ref Mime::mime_encode_header_word_q() "mime_encode_header_word_q()" or in header mode with
+      @ref Mime::mime_encode_quoted_printable() "mime_encode_quoted_printable()" is now encoded; it was written
+      as a line break, which ended the header line and let the rest of the string be read as another header
+      (header injection)
+    - the encoded words that a long string is split into by
+      @ref Mime::mime_encode_header_word_q() "mime_encode_header_word_q()" now carry the encoding label (they
+      started with \c "=??Q?"), are at most 75 characters long, and are split between characters, so that every
+      word can be decoded on its own, as RFC 2047 requires
+    - @ref Mime::mime_encode_header_word_b() "mime_encode_header_word_b()" splits a long string into encoded words
+      on folded lines; the line breaks of the base64 text were written inside one encoded word without folding
+      white space, which broke the header
+    - a part header name or value with a NUL, CR or LF character, which would end the header line and start
+      another header, raises \c PART-ERROR when the part is added and in
+      @ref Mime::MultiPartMessage::serializeHeaders() "MultiPartMessage::serializeHeaders()"
+    - @ref Mime::mime_decode_header() "mime_decode_header()" drops the white space between two encoded words, and
+      only there, as RFC 2047 requires, so that a value split into encoded words on folded lines is decoded as it
+      was encoded; one space was dropped before every encoded word after the first, and an encoded word was decoded
+      wherever the same word appeared
+    - @ref Mime::MultiPartMessage::serializeHeaders() "MultiPartMessage::serializeHeaders()" serializes a list
+      value, which is how @ref Mime::MultiPartMessage::parseBody() "MultiPartMessage::parseBody()" returns a
+      repeated header field, as a repeated header field; such a header was serialized with an empty value
 
     @subsection mime_1_8 v1.8
     - added @ref Mime::YamlMimeTypes "YamlMimeTypes" constant: set of all equivalent YAML MIME types
@@ -1104,10 +1126,21 @@ public namespace Mime {
     /** According to <a href="http://tools.ietf.org/html/rfc2045#section-6.7">RFC 2045 section 6.7</a>
 
         @param str the string to encode
-        @param hdr use rules for a MIME header (<a href="http://tools.ietf.org/html/rfc2047">RFC 2047</a>)
-        @param encoding the character encoding to use for header encoding
+        @param hdr use rules for the text of a \c "Q" encoded word in a MIME header
+        (<a href="http://tools.ietf.org/html/rfc2047">RFC 2047</a>): every CR and LF character is encoded, so that
+        the text cannot end the header line, and text that is too long for one encoded word is split between
+        characters into encoded words on folded lines
+        @param encoding the character encoding label of the encoded words that a header text is split into; if not
+        given, the encoding of \a str
+
+        @since %Mime 1.9 a CR or LF character in a header text is encoded instead of being written as a line break,
+        and the encoded words that a long header text is split into carry the encoding of the string as their label
+        when no \a encoding is given
     */
     public string sub mime_encode_quoted_printable(string str, bool hdr = False, *string encoding) {
+        if (hdr) {
+            return mime_encode_header_q_text(str, encoding ?? get_encoding(str));
+        }
         string rv;
         int lp = 0;
 
@@ -1132,33 +1165,16 @@ public namespace Mime {
 
             # new string to append
             string nc;
-            # if we are encoding a header and we have a space, transform to "_"
-            if (hdr && c == 32) {
-                nc = "_";
-                # check if the high bit is set or if it's an ASCII control character or '=', or we are encoding a
-                # header and the char is not '?' and '_', encode
-            } else if ((c & 0x80) || c < 32 || c == 61 || (!hdr && c == 46) || (hdr && (c == 63 || c == 95
-                || c == 137))) {
+            # check if the high bit is set or if it's an ASCII control character, '=' or '.', encode
+            if ((c & 0x80) || c < 32 || c == 61 || c == 46) {
                 nc = sprintf("=%02x", c).upr();
             } else {
                 nc = chr(c);
             }
 
-            # used for body and parts
-            if (!hdr && (nc.size() + lp) >= (MimeQuotedPrintableLineLen - 1)) {
+            if ((nc.size() + lp) >= (MimeQuotedPrintableLineLen - 1)) {
                 # insert soft line break
                 rv += "=\r\n";
-                lp = 0;
-            } else if (hdr && (nc.size() + lp) >= (MimeQuotedPrintableLineLen - 2)) {
-                # we MUST break up lines longer than 76 characters (the line length includes the '?=' but not the CRLF
-                # for every line break we put separate encoding blocks
-                # used for headers
-                # example (notice space after first line, it will break the headers without it)
-                # =?UTF-8?Q?F=C3=BCJon_Doe_Austria_<jondoe.verylongemailblablbalbablbalblbabla@gmail.?=
-                #  =?UTF-8?Q?com><jondoe.verylongemailblablbalbablbalblbabla@gmail.com>
-
-                # insert soft line break
-                rv += sprintf("?=\r\n =?%s?Q?", encoding);
                 lp = 0;
             }
 
@@ -1167,6 +1183,46 @@ public namespace Mime {
         }
         return rv;
     }
+
+    #! @cond nodoc
+    # the longest encoded word (RFC 2047 section 2), including the charset label and the delimiters
+    const MimeEncodedWordLen = 75;
+
+    # returns the text of "Q" encoded words for a header (RFC 2047 section 4.2): a space is written as "_", and a
+    # byte with the high bit set, a control character (CR and LF would end the header line), "=", "?" and "_" are
+    # encoded; text that is too long for one encoded word is split between characters, never inside a character,
+    # since every encoded word must be decodable on its own (RFC 2047 section 5), and continued in another encoded
+    # word with the same label on a folded line
+    string sub mime_encode_header_q_text(string str, string encoding) {
+        # the longest text of an encoded word: the word without "=?", the label, "?Q?" and "?="
+        int max_text = MimeEncodedWordLen - encoding.size() - 7;
+        string rv = "";
+        int lp = 0;
+        foreach string ch in (str.splitChars()) {
+            string nc = "";
+            if (ch == " ") {
+                nc = "_";
+            } else {
+                binary b = binary(ch);
+                for (int i = 0; i < b.size(); ++i) {
+                    int c = b[i];
+                    if ((c & 0x80) || c < 32 || c == 127 || c == 61 || c == 63 || c == 95) {
+                        nc += sprintf("=%02X", c);
+                    } else {
+                        nc += chr(c);
+                    }
+                }
+            }
+            if (lp && (lp + nc.size()) > max_text) {
+                rv += sprintf("?=\r\n =?%s?Q?", encoding);
+                lp = 0;
+            }
+            rv += nc;
+            lp += nc.size();
+        }
+        return rv;
+    }
+    #! @endcond
 
     #! encodes data according to the given encoding
     /** @param mime_data the data to encode
@@ -1193,17 +1249,43 @@ public namespace Mime {
     }
 
     #! returns a string in "B" ("BASE64") encoding for MIME header string words
-    /** According to <a href="http://tools.ietf.org/html/rfc2047">RFC 2047</a>
+    /** According to <a href="http://tools.ietf.org/html/rfc2047">RFC 2047</a>; a string that is too long for one
+        encoded word of at most 75 characters is split between characters into encoded words on folded lines
+
+        @since %Mime 1.9 a long string is split into encoded words on folded lines; the line breaks of the base64
+        text were written inside one encoded word, with no folding white space, before
     */
     public string sub mime_encode_header_word_b(string str) {
-        return sprintf("=?%s?B?%s?=", get_encoding(str), make_base64_string(str, MimeBase64LineLen));
+        string enc = get_encoding(str);
+        # the most bytes whose base64 text fits in an encoded word with the label, "=?", "?B?" and "?="
+        int max_bytes = ((MimeEncodedWordLen - enc.size() - 7) / 4) * 3;
+        list<string> words = ();
+        binary chunk = binary();
+        foreach string ch in (str.splitChars()) {
+            binary b = binary(ch);
+            if (chunk.size() && (chunk.size() + b.size()) > max_bytes) {
+                words += sprintf("=?%s?B?%s?=", enc, make_base64_string(chunk));
+                chunk = binary();
+            }
+            chunk += b;
+        }
+        words += sprintf("=?%s?B?%s?=", enc, make_base64_string(chunk));
+        return words.join("\r\n ");
     }
 
     #! returns a string in "Q" ("quoted-printable") encoding for MIME header string words
-    /** According to <a href="http://tools.ietf.org/html/rfc2047">RFC 2047</a>
+    /** According to <a href="http://tools.ietf.org/html/rfc2047">RFC 2047</a>; every CR and LF character is
+        encoded, so that the encoded word cannot end the header line, and a string that is too long for one encoded
+        word of at most 75 characters is split between characters into encoded words on folded lines, each with the
+        encoding of the string as its label
+
+        @since %Mime 1.9 a CR or LF character is encoded instead of being written as a line break, which ended the
+        header line and let the rest of the string be read as another header; the encoded words that a long string
+        is split into carry the encoding label (it was missing: \c "=??Q?") and are split between characters
     */
     public string sub mime_encode_header_word_q(string str) {
-        return sprintf("=?%s?Q?%s?=", get_encoding(str), mime_encode_quoted_printable(str, True));
+        string enc = get_encoding(str);
+        return sprintf("=?%s?Q?%s?=", enc, mime_encode_header_q_text(str, enc));
     }
     #/@}
 
@@ -1336,23 +1418,33 @@ public namespace Mime {
 
         @param hdr the header value string to decode
         @return the decoded value of the header
-     */
+
+        @note white space between two encoded words, including a folded line break, is not part of the decoded
+        value (<a href="http://tools.ietf.org/html/rfc2047#section-6.2">RFC 2047 section 6.2</a>)
+
+        @since %Mime 1.9 the white space between two encoded words is dropped, and only there; one space was dropped
+        before every encoded word after the first, and an encoded word was decoded wherever the same word appeared
+    */
     public string sub mime_decode_header(string hdr) {
-        int count = 0;
+        string rv = "";
+        # True if the text decoded last was an encoded word, so that white space before the next one is dropped
+        bool after_word = False;
         while (True) {
-            (*string enc, *string he, *string hw) = (hdr =~ x/=\?([^?]+)\?(Q|B)\?([^?]+)\?=/i);
-            if (!enc.val() || !he.val() || !hw.val()) {
+            (*string pre, *string enc, *string he, *string hw, *string rest)
+                = (hdr =~ x/^(.*?)=\?([^?]+)\?(Q|B)\?([^?]+)\?=(.*)$/is);
+            if (!exists enc) {
                 break;
             }
-            string dv = he.upr() == "Q" ? mime_decode_quoted_printable(hw, enc) : mime_decode_base64_to_string(hw, enc);
-            # remove space in front of multiline headers
-            string os = (!count)
-                ? sprintf("=?%s?%s?%s?=", enc, he, hw)
-                : sprintf(" =?%s?%s?%s?=", enc, he, hw);
-            hdr = replace(hdr, os, dv);
-            ++count;
+            # the text before the word; white space between two encoded words is dropped
+            string text = pre ?? "";
+            if (!after_word || text !~ /^[ \t\r\n]*$/) {
+                rv += text;
+            }
+            rv += he.upr() == "Q" ? mime_decode_quoted_printable(hw, enc) : mime_decode_base64_to_string(hw, enc);
+            after_word = True;
+            hdr = rest ?? "";
         }
-        return hdr;
+        return rv + hdr;
     }
     #/@}
 
@@ -1876,14 +1968,42 @@ hash<MimeHeaderValueInfo> h = mime_parse_header_value("attachment; filename=\"a 
         #! serializes a header hash to a binary object
         /** @param hdr the hash to serialize
 
-            @return the binary object representing the hash with each header separated by \c "\r\n"
+            @return the binary object representing the hash with each header separated by \c "\r\n"; a list value
+            is serialized as a header with the same name for each element, as a repeated header field is returned by
+            @ref parseBody()
+
+            @throw PART-ERROR a header name or value contains a NUL, CR or LF character, which would end the header
+            line and start another header (header injection)
+
+            @since %Mime 1.9 a header name or value with a NUL, CR or LF character raises \c PART-ERROR, and a list
+            value is serialized as a repeated header field
          */
         static binary serializeHeaders(hash hdr) {
             binary b;
-            map b += sprintf("%s: %s\r\n", $1.key, $1.value), hdr.pairIterator();
+            foreach hash<auto> i in (hdr.pairIterator()) {
+                foreach string val in (MultiPartMessage::checkHeader(i.key, i.value)) {
+                    b += sprintf("%s: %s\r\n", i.key, val);
+                }
+            }
             b += "\r\n";
             return b;
         }
+
+        #! @cond nodoc
+        # returns the values of a header as strings, one for each field (a list value is a repeated field); raises
+        # PART-ERROR for a header name or value with a NUL, CR or LF character, which would end the header line and
+        # start another header
+        private static list<string> checkHeader(string name, auto value) {
+            check_line_text(name, "MIME header name", "PART-ERROR");
+            list<string> rv = ();
+            foreach auto v in (value.typeCode() == NT_LIST ? value : (value,)) {
+                string val = sprintf("%s", v);
+                check_line_text(val, sprintf("MIME header %y value", name), "PART-ERROR");
+                rv += val;
+            }
+            return rv;
+        }
+        #! @endcond
 
         #! returns a string embedded with the current timestamp designed to be used as MultiPart boundary string
         static string getBoundary() {
@@ -2273,6 +2393,8 @@ hash: (2 members)
 
         private static hash<MessagePartInfo> getPart(data mime_data, hash<auto> hdr) {
             hdr = MultiPartMessage::normalizePartHeaders(hdr);
+            # a part header that would end its line is refused when the part is added, before it can be serialized
+            map MultiPartMessage::checkHeader($1.key, $1.value), hdr.pairIterator();
             if (exists hdr."Content-Length") {
                 throw "HTTP-MULTIPART-ERROR", "illegal part header 'Content-Length': the Content-Length header will "
                     "be generated automatically according to the size of each part";
