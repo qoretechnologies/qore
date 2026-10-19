@@ -2208,7 +2208,7 @@ namespace {
 class StatefulCompareHelper {
 public:
     //! converts both strings to UTF-8; if \a xsink is nullptr, an invalid text leaves the helper invalid
-    DLLLOCAL StatefulCompareHelper(const QoreString& a, const QoreString& b, ExceptionSink* xsink) {
+    StatefulCompareHelper(const QoreString& a, const QoreString& b, ExceptionSink* xsink) {
         ExceptionSink local_xsink;
         ExceptionSink* xs = xsink ? xsink : &local_xsink;
         if (!ua.set(&a, QCS_UTF8, xs) || !ub.set(&b, QCS_UTF8, xs)) {
@@ -2221,14 +2221,14 @@ public:
     }
 
     //! returns true if both strings were converted
-    DLLLOCAL explicit operator bool() const {
+    explicit operator bool() const {
         return ok;
     }
 
     //! compares the text: < 0, 0, or > 0 as the text of the first string is before, the same as, or after the second
     /** UTF-8 text in byte order is in the order of its code points
     */
-    DLLLOCAL int compare() const {
+    int compare() const {
         size_t al = a_utf8->size();
         size_t bl = b_utf8->size();
         int rc = memcmp(a_utf8->c_str(), b_utf8->c_str(), QORE_MIN(al, bl));
@@ -2239,12 +2239,12 @@ public:
     }
 
     //! returns true if the text of the first string starts with the text of the second
-    DLLLOCAL bool startsWith() const {
+    bool startsWith() const {
         return a_utf8->size() >= b_utf8->size() && !memcmp(a_utf8->c_str(), b_utf8->c_str(), b_utf8->size());
     }
 
     //! returns true if the text of the first string ends with the text of the second
-    DLLLOCAL bool endsWith() const {
+    bool endsWith() const {
         return a_utf8->size() >= b_utf8->size() && !memcmp(a_utf8->c_str() + a_utf8->size() - b_utf8->size(), b_utf8->c_str(), b_utf8->size());
     }
 

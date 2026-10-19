@@ -883,11 +883,11 @@ static void ut_cond_wait_cancel_in_window(UnitTestCounters& c) {
     CondWindowTest t;
     // installs the hook for the lifetime of the test; the waiter has finished when the test returns
     struct HookHelper {
-        DLLLOCAL HookHelper(CondWindowTest* t) {
+        HookHelper(CondWindowTest* t) {
             cond_window_test = t;
             qore_cond_wait_window_hook = cond_window_hook;
         }
-        DLLLOCAL ~HookHelper() {
+        ~HookHelper() {
             qore_cond_wait_window_hook = nullptr;
             cond_window_test = nullptr;
         }
@@ -1336,20 +1336,20 @@ public:
     int events = SOCK_POLLIN;
     std::vector<std::pair<int, int>> extra_fds;
 
-    DLLLOCAL virtual bool goalReached() const override {
+    virtual bool goalReached() const override {
         return false;
     }
 
-    DLLLOCAL virtual void abort(ExceptionSink*) override {
+    virtual void abort(ExceptionSink*) override {
     }
 
-    DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink) override {
+    virtual QoreHashNode* continuePoll(ExceptionSink* xsink) override {
         return extra_fds.empty()
             ? getSocketPollInfoHash(xsink, events)
             : getSocketPollInfoHash(xsink, events, extra_fds);
     }
 
-    DLLLOCAL virtual const char* getStateImpl() const override {
+    virtual const char* getStateImpl() const override {
         return "test";
     }
 };

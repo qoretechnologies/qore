@@ -53,7 +53,7 @@ struct CudaUploadOwner {
     void* device_ptr = nullptr;
     size_t element_size = 0;
 
-    DLLLOCAL ~CudaUploadOwner() {
+    ~CudaUploadOwner() {
         if (device_ptr) {
             // best-effort free at buffer end-of-life; errors here are not actionable
             cudaFree(device_ptr);
@@ -66,7 +66,7 @@ struct CudaUploadOwner {
 struct CudaPinnedOwner {
     void* host_ptr = nullptr;
 
-    DLLLOCAL ~CudaPinnedOwner() {
+    ~CudaPinnedOwner() {
         if (host_ptr) {
             cudaFreeHost(host_ptr);
         }

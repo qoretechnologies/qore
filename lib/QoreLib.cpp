@@ -578,11 +578,11 @@ thread_local unsigned parse_init_depth = 0;
 //! Records the node whose parse initialization is made for its scope; see qore_parse_init_entry
 class ParseInitEntryHelper {
 public:
-    DLLLOCAL explicit ParseInitEntryHelper(const AbstractQoreNode* n) : old(qore_parse_init_entry) {
+    explicit ParseInitEntryHelper(const AbstractQoreNode* n) : old(qore_parse_init_entry) {
         qore_parse_init_entry = n;
     }
 
-    DLLLOCAL ~ParseInitEntryHelper() {
+    ~ParseInitEntryHelper() {
         qore_parse_init_entry = old;
     }
 
@@ -594,15 +594,15 @@ private:
 //! Counts a level of nesting of parse initialization for its scope
 class ParseInitDepthHelper {
 public:
-    DLLLOCAL ParseInitDepthHelper() : depth(++parse_init_depth) {
+    ParseInitDepthHelper() : depth(++parse_init_depth) {
     }
 
-    DLLLOCAL ~ParseInitDepthHelper() {
+    ~ParseInitDepthHelper() {
         --parse_init_depth;
     }
 
     //! Returns the nesting depth of this level
-    DLLLOCAL unsigned get() const {
+    unsigned get() const {
         return depth;
     }
 

@@ -153,10 +153,10 @@ static bool i18n_json_validate_utf8(const std::string& value, ExceptionSink* xsi
 
 class I18nJsonParser {
 public:
-    DLLLOCAL I18nJsonParser(const char* data, size_t len, ExceptionSink* xsink) : data(data), len(len), xsink(xsink) {
+    I18nJsonParser(const char* data, size_t len, ExceptionSink* xsink) : data(data), len(len), xsink(xsink) {
     }
 
-    DLLLOCAL QoreValue parse() {
+    QoreValue parse() {
         skipWs();
         ValueHolder value(parseValue(), xsink);
         if (*xsink) {
@@ -176,17 +176,17 @@ private:
     size_t pos = 0;
     ExceptionSink* xsink = nullptr;
 
-    DLLLOCAL void raise(const char* msg) {
+    void raise(const char* msg) {
         xsink->raiseException("I18N-CATALOG-JSON-ERROR", "%s at byte offset %zu", msg, pos);
     }
 
-    DLLLOCAL void skipWs() {
+    void skipWs() {
         while (pos < len && i18n_json_is_ws(data[pos])) {
             ++pos;
         }
     }
 
-    DLLLOCAL bool consume(char c) {
+    bool consume(char c) {
         if (pos < len && data[pos] == c) {
             ++pos;
             return true;
@@ -194,7 +194,7 @@ private:
         return false;
     }
 
-    DLLLOCAL bool expect(char c, const char* msg) {
+    bool expect(char c, const char* msg) {
         if (consume(c)) {
             return true;
         }
@@ -202,7 +202,7 @@ private:
         return false;
     }
 
-    DLLLOCAL bool matchLiteral(const char* literal) {
+    bool matchLiteral(const char* literal) {
         size_t literal_len = strlen(literal);
         if (pos + literal_len > len || memcmp(data + pos, literal, literal_len)) {
             return false;
@@ -211,7 +211,7 @@ private:
         return true;
     }
 
-    DLLLOCAL bool parseHex4(uint32_t& out) {
+    bool parseHex4(uint32_t& out) {
         if (pos + 4 > len) {
             raise("truncated Unicode escape");
             return false;
@@ -231,7 +231,7 @@ private:
         return true;
     }
 
-    DLLLOCAL QoreStringNode* parseString() {
+    QoreStringNode* parseString() {
         if (!expect('"', "expected JSON string")) {
             return nullptr;
         }
@@ -325,7 +325,7 @@ private:
         return nullptr;
     }
 
-    DLLLOCAL QoreValue parseObject() {
+    QoreValue parseObject() {
         if (!expect('{', "expected JSON object")) {
             return QoreValue();
         }
@@ -386,7 +386,7 @@ private:
         return QoreValue();
     }
 
-    DLLLOCAL QoreValue parseArray() {
+    QoreValue parseArray() {
         if (!expect('[', "expected JSON array")) {
             return QoreValue();
         }
@@ -425,7 +425,7 @@ private:
         return QoreValue();
     }
 
-    DLLLOCAL QoreValue parseNumber() {
+    QoreValue parseNumber() {
         size_t start = pos;
         consume('-');
 
@@ -516,7 +516,7 @@ private:
         return value;
     }
 
-    DLLLOCAL QoreValue parseValue() {
+    QoreValue parseValue() {
         if (pos == len) {
             raise("expected JSON value");
             return QoreValue();

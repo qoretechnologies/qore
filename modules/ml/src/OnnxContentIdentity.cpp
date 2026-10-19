@@ -70,10 +70,10 @@ namespace {
 //! RAII wrapper for an OpenSSL digest context
 class DigestContext {
 public:
-    DLLLOCAL DigestContext() : ctx(EVP_MD_CTX_new()) {
+    DigestContext() : ctx(EVP_MD_CTX_new()) {
     }
 
-    DLLLOCAL ~DigestContext() {
+    ~DigestContext() {
         if (ctx) {
             EVP_MD_CTX_free(ctx);
         }
@@ -82,7 +82,7 @@ public:
     DigestContext(const DigestContext&) = delete;
     DigestContext& operator=(const DigestContext&) = delete;
 
-    DLLLOCAL bool init(ExceptionSink* xsink) {
+    bool init(ExceptionSink* xsink) {
         if (!ctx || !EVP_DigestInit_ex(ctx, EVP_sha256(), nullptr)) {
             xsink->raiseException(ML_ONNX_CONTENT_IDENTITY_ERROR,
                 "failed to initialize the %s digest context", QORE_ONNX_CONTENT_IDENTITY_ALGORITHM);
@@ -91,7 +91,7 @@ public:
         return true;
     }
 
-    DLLLOCAL bool update(const void* data, size_t len, ExceptionSink* xsink) {
+    bool update(const void* data, size_t len, ExceptionSink* xsink) {
         if (!len) {
             return true;
         }
@@ -103,7 +103,7 @@ public:
         return true;
     }
 
-    DLLLOCAL bool final(std::string& hex, ExceptionSink* xsink) {
+    bool final(std::string& hex, ExceptionSink* xsink) {
         unsigned char md[EVP_MAX_MD_SIZE];
         unsigned int md_len = 0;
         if (!EVP_DigestFinal_ex(ctx, md, &md_len)) {
@@ -128,19 +128,19 @@ private:
 //! RAII wrapper for a file descriptor
 class ScopedFd {
 public:
-    DLLLOCAL ScopedFd() = default;
+    ScopedFd() = default;
 
-    DLLLOCAL explicit ScopedFd(int fd) : fd(fd) {
+    explicit ScopedFd(int fd) : fd(fd) {
     }
 
-    DLLLOCAL ~ScopedFd() {
+    ~ScopedFd() {
         reset();
     }
 
     ScopedFd(const ScopedFd&) = delete;
     ScopedFd& operator=(const ScopedFd&) = delete;
 
-    DLLLOCAL void reset(int new_fd = -1) {
+    void reset(int new_fd = -1) {
         if (fd >= 0) {
             while (::close(fd) && errno == EINTR) {
                 // retry interrupted close
@@ -149,11 +149,11 @@ public:
         fd = new_fd;
     }
 
-    DLLLOCAL int get() const {
+    int get() const {
         return fd;
     }
 
-    DLLLOCAL bool valid() const {
+    bool valid() const {
         return fd >= 0;
     }
 
@@ -164,16 +164,16 @@ private:
 //! Bounds-checked protobuf wire-format reader
 class WireReader {
 public:
-    DLLLOCAL WireReader(const char* data, size_t len)
+    WireReader(const char* data, size_t len)
         : pos(reinterpret_cast<const uint8_t*>(data)),
           end(reinterpret_cast<const uint8_t*>(data) + len) {
     }
 
-    DLLLOCAL bool atEnd() const {
+    bool atEnd() const {
         return pos >= end;
     }
 
-    DLLLOCAL bool readVarint(uint64_t& out) {
+    bool readVarint(uint64_t& out) {
         out = 0;
         unsigned shift = 0;
         while (pos < end) {
@@ -190,7 +190,7 @@ public:
         return false;
     }
 
-    DLLLOCAL bool readTag(uint32_t& field, uint32_t& wire) {
+    bool readTag(uint32_t& field, uint32_t& wire) {
         uint64_t tag;
         if (!readVarint(tag)) {
             return false;
@@ -204,7 +204,7 @@ public:
         return true;
     }
 
-    DLLLOCAL bool readLengthDelimited(const char*& out, size_t& out_len) {
+    bool readLengthDelimited(const char*& out, size_t& out_len) {
         uint64_t len;
         if (!readVarint(len)) {
             return false;
@@ -219,7 +219,7 @@ public:
     }
 
     //! Skips a field of the given wire type; returns false on malformed input
-    DLLLOCAL bool skipField(uint32_t wire) {
+    bool skipField(uint32_t wire) {
         switch (wire) {
             case WIRE_VARINT: {
                 uint64_t ignored;
@@ -264,7 +264,7 @@ struct ScanContext {
     bool cancelled = false;
 
     //! Accounts for one scanned message and performs periodic cancellation checks
-    DLLLOCAL bool step() {
+    bool step() {
         if (++messages > ONNX_SCAN_MAX_MESSAGES) {
             xsink->raiseException(ML_ONNX_CONTENT_IDENTITY_ERROR,
                 "the ONNX model declares more than %llu protobuf messages; refusing to scan it for "
@@ -281,7 +281,7 @@ struct ScanContext {
     }
 
     //! Records a dependency class that cannot be enumerated from the model
-    DLLLOCAL void markUnsupported(const char* reason) {
+    void markUnsupported(const char* reason) {
         if (unsupported->empty()) {
             *unsupported = reason;
         }

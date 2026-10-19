@@ -193,16 +193,16 @@ namespace {
 */
 class ThreadUnicodeDecoders {
 public:
-    DLLLOCAL ThreadUnicodeDecoders() = default;
+    ThreadUnicodeDecoders() = default;
 
-    DLLLOCAL ~ThreadUnicodeDecoders() {
+    ~ThreadUnicodeDecoders() {
         for (auto& i : decoders) {
             iconv_close(i.second);
         }
     }
 
     //! returns the descriptor for decoding the given encoding to UTF-8, or (iconv_t)-1 if it cannot be opened
-    DLLLOCAL iconv_t get(const QoreEncoding* enc) {
+    iconv_t get(const QoreEncoding* enc) {
         for (auto& i : decoders) {
             if (i.first == enc) {
                 return i.second;
@@ -216,7 +216,7 @@ public:
         return cd;
     }
 
-    DLLLOCAL static iconv_t invalid() {
+    static iconv_t invalid() {
         return reinterpret_cast<iconv_t>(static_cast<intptr_t>(-1));
     }
 
@@ -1240,23 +1240,23 @@ std::string encode_unicode(UnicodeForm form, unsigned code) {
 // an iconv conversion descriptor for probing the properties of an encoding; closed when the object is destroyed
 class ProbeConverter {
 public:
-    DLLLOCAL ProbeConverter(const char* to, const char* from) : cd(iconv_open(to, from)) {
+    ProbeConverter(const char* to, const char* from) : cd(iconv_open(to, from)) {
     }
 
-    DLLLOCAL ~ProbeConverter() {
+    ~ProbeConverter() {
         if (valid()) {
             iconv_close(cd);
         }
     }
 
-    DLLLOCAL bool valid() const {
+    bool valid() const {
         // iconv_open() returns (iconv_t)-1 for an error
         return cd != reinterpret_cast<iconv_t>(static_cast<intptr_t>(-1));
     }
 
     // converts a short text with a new conversion state, including the bytes that return the output to the initial
     // shift state; returns false if the text cannot be converted or a character is converted non-reversibly
-    DLLLOCAL bool convert(const std::string& in, std::string& out) {
+    bool convert(const std::string& in, std::string& out) {
         assert(valid());
         out.clear();
         if (iconv_adapter(::iconv, cd, nullptr, nullptr, nullptr, nullptr) == static_cast<size_t>(-1)) {
@@ -1284,7 +1284,7 @@ private:
 
     // needed for platforms where the input buffer is defined as "const char"
     template<typename T>
-    DLLLOCAL static size_t iconv_adapter(size_t (*iconv_f)(iconv_t, T, size_t*, char**, size_t*), iconv_t handle,
+    static size_t iconv_adapter(size_t (*iconv_f)(iconv_t, T, size_t*, char**, size_t*), iconv_t handle,
             char** inbuf, size_t* inavail, char** outbuf, size_t* outavail) {
         return (*iconv_f)(handle, const_cast<T>(inbuf), inavail, outbuf, outavail);
     }

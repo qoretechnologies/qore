@@ -115,12 +115,12 @@ namespace {
 // the state that qore_wait_child_process() shares with its helper thread, which blocks until the process ends
 class QoreChildProcessWaiter {
 public:
-    DLLLOCAL QoreChildProcessWaiter(pid_t pid) : pid(pid) {
+    QoreChildProcessWaiter(pid_t pid) : pid(pid) {
     }
 
     // the helper thread: waits for the process to end without reaping it, so that its PID stays valid for kill()
     // until the caller reaps it
-    DLLLOCAL static void* run(void* arg) {
+    static void* run(void* arg) {
         QoreChildProcessWaiter* w = static_cast<QoreChildProcessWaiter*>(arg);
         int err = 0;
         while (true) {
@@ -179,14 +179,14 @@ QoreChildWaitResult qore_wait_child_process(pid_t pid, pid_t kill_target, int& s
     // joins the helper thread on every path out of this function, so that it never outlives the state it uses
     class ThreadJoiner {
     public:
-        DLLLOCAL ThreadJoiner(pthread_t ptid) : ptid(ptid) {
+        ThreadJoiner(pthread_t ptid) : ptid(ptid) {
         }
 
-        DLLLOCAL ~ThreadJoiner() {
+        ~ThreadJoiner() {
             join();
         }
 
-        DLLLOCAL void join() {
+        void join() {
             if (joinable) {
                 joinable = false;
                 int jrc = pthread_join(ptid, nullptr);

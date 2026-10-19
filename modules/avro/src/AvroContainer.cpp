@@ -46,14 +46,14 @@ namespace {
 
 class AvroBinarySource : public AvroSource {
 public:
-    DLLLOCAL AvroBinarySource(const BinaryNode* b) : b(b->binRefSelf()) {
+    AvroBinarySource(const BinaryNode* b) : b(b->binRefSelf()) {
     }
 
-    DLLLOCAL virtual ~AvroBinarySource() {
+    virtual ~AvroBinarySource() {
         b->deref();
     }
 
-    DLLLOCAL virtual int64 read(void* p, size_t len, ExceptionSink* xsink) override {
+    virtual int64 read(void* p, size_t len, ExceptionSink* xsink) override {
         size_t avail = b->size() - pos;
         if (!avail) {
             return 0;
@@ -73,11 +73,11 @@ private:
 
 class AvroFileSource : public AvroSource {
 public:
-    DLLLOCAL int open(const char* path, ExceptionSink* xsink) {
+    int open(const char* path, ExceptionSink* xsink) {
         return f.open2(xsink, path, O_RDONLY);
     }
 
-    DLLLOCAL virtual int64 read(void* p, size_t len, ExceptionSink* xsink) override {
+    virtual int64 read(void* p, size_t len, ExceptionSink* xsink) override {
         size_t rc = f.read(p, len, -1, xsink);
         return *xsink ? -1 : (int64)rc;
     }
@@ -89,14 +89,14 @@ private:
 //! reads from a Qore InputStream; takes ownership of the reference passed to the constructor
 class AvroStreamSource : public AvroSource {
 public:
-    DLLLOCAL AvroStreamSource(InputStream* is) : is(is) {
+    AvroStreamSource(InputStream* is) : is(is) {
     }
 
-    DLLLOCAL virtual ~AvroStreamSource() {
+    virtual ~AvroStreamSource() {
         is->deref();
     }
 
-    DLLLOCAL virtual int64 read(void* p, size_t len, ExceptionSink* xsink) override {
+    virtual int64 read(void* p, size_t len, ExceptionSink* xsink) override {
         int64 rc = is->read(p, (int64)len, xsink);
         return *xsink ? -1 : rc;
     }
@@ -107,15 +107,15 @@ private:
 
 class AvroFileSink : public AvroSink {
 public:
-    DLLLOCAL int open(const char* path, ExceptionSink* xsink) {
+    int open(const char* path, ExceptionSink* xsink) {
         return f.open2(xsink, path, O_CREAT | O_TRUNC | O_WRONLY, 0666);
     }
 
-    DLLLOCAL virtual int write(const void* p, size_t len, ExceptionSink* xsink) override {
+    virtual int write(const void* p, size_t len, ExceptionSink* xsink) override {
         return f.write(p, len, xsink) < 0 ? -1 : 0;
     }
 
-    DLLLOCAL virtual int close(ExceptionSink* xsink) override {
+    virtual int close(ExceptionSink* xsink) override {
         return f.close();
     }
 
@@ -126,19 +126,19 @@ private:
 //! writes to a Qore OutputStream; takes ownership of the reference passed to the constructor
 class AvroStreamSink : public AvroSink {
 public:
-    DLLLOCAL AvroStreamSink(OutputStream* os) : os(os) {
+    AvroStreamSink(OutputStream* os) : os(os) {
     }
 
-    DLLLOCAL virtual ~AvroStreamSink() {
+    virtual ~AvroStreamSink() {
         os->deref();
     }
 
-    DLLLOCAL virtual int write(const void* p, size_t len, ExceptionSink* xsink) override {
+    virtual int write(const void* p, size_t len, ExceptionSink* xsink) override {
         os->write(p, (int64)len, xsink);
         return *xsink ? -1 : 0;
     }
 
-    DLLLOCAL virtual int close(ExceptionSink* xsink) override {
+    virtual int close(ExceptionSink* xsink) override {
         // the stream is owned by the caller, who decides when to close it
         return 0;
     }

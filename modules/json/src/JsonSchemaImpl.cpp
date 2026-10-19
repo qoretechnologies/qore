@@ -48,11 +48,11 @@ public:
 //! Sets the exception sink for the stack and cancellation checks of a schema operation
 class SchemaRecursionHelper {
 public:
-    DLLLOCAL explicit SchemaRecursionHelper(ExceptionSink* xsink) : old_xsink(schema_recursion_xsink) {
+    explicit SchemaRecursionHelper(ExceptionSink* xsink) : old_xsink(schema_recursion_xsink) {
         schema_recursion_xsink = xsink;
     }
 
-    DLLLOCAL ~SchemaRecursionHelper() {
+    ~SchemaRecursionHelper() {
         schema_recursion_xsink = old_xsink;
     }
 
