@@ -1,0 +1,153 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires SqlUtil
+%requires MssqlSqlUtilBase
+%requires FreetdsSqlUtil
+
+%try-module freetds
+%define NO_FREETDS
+%endtry
+
+%exec-class MssqlKeyAlignmentTest
+
+#! Aligning the indexes and keys of SQL Server tables
+/** Each change is checked twice: its exact SQL, with tables described in memory and a datasource that does not
+    connect, and on the database given by \c QORE_DB_CONNSTR_FREETDS, where the SQL is run and the next alignment
+    needs none
+*/
+class MssqlKeyAlignmentTest inherits QUnit::Test {
+    private {
+        #! the columns of the test tables
+        const Columns = {
+            "id": {"native_type": "int", "notnull": True},
+            "a": {"native_type": "int"},
+            "b": {"native_type": "varchar", "size": 10},
+        };
+    }
+
+    constructor() : Test("MssqlKeyAlignmentTest", "1.0", \ARGV) {
+        addTestCase("the SQL of an index with other columns", \indexColumnChangeSql());
+        addTestCase("an index with other columns is dropped and created", \indexColumnChange());
+        set_return_value(main());
+    }
+
+    #! Returns a datasource that does not connect, to get SQL without a database
+    private OfflineDatasource offlineDatasource() {
+%ifdef NO_FREETDS
+        testSkip("freetds module unavailable");
+%endif
+        return new OfflineDatasource("freetds:user/pass@db", "Microsoft SQL Server 2022 (RTM) - 16.0.1000.6",
+            "mssql");
+    }
+
+    #! Returns a datasource to the database given by QORE_DB_CONNSTR_FREETDS
+    private Datasource datasource() {
+%ifdef NO_FREETDS
+        testSkip("freetds module unavailable");
+%endif
+        if (!ENV.QORE_DB_CONNSTR_FREETDS) {
+            testSkip("QORE_DB_CONNSTR_FREETDS is not set");
+        }
+        Datasource ds(ENV.QORE_DB_CONNSTR_FREETDS);
+        if (MssqlDatabase::isSybase(ds)) {
+            testSkip("the database is Sybase, not SQL Server");
+        }
+        return ds;
+    }
+
+    #! Returns the alignment SQL of a table described with \a current to a template described with \a template
+    private list<auto> alignSql(AbstractDatasource ds, string table, hash<auto> current, hash<auto> template) {
+        MssqlTable live(ds, table);
+        live.setupTable(current);
+        MssqlTable target(ds, table);
+        target.setupTable(template);
+        return live.getAlignSql(target);
+    }
+
+    #! Aligns the table in the database to a template with the description, runs the SQL and returns it
+    private list<auto> alignTable(AbstractDatasource ds, string table, hash<auto> desc) {
+        MssqlTable template(ds, table);
+        template.setupTable(desc);
+        MssqlTable current(ds, table);
+        list<auto> sql = current.getAlignSql(template);
+        on_success ds.commit();
+        on_error ds.rollback();
+        map ds.execRaw($1), sql;
+        return sql;
+    }
+
+    #! Drops the tables if they exist
+    private static dropTables(AbstractDatasource ds, softlist<string> tables) {
+        on_success ds.commit();
+        on_error ds.rollback();
+        foreach string table in (tables) {
+            ds.execRaw(sprintf("if object_id('dbo.%s', 'U') is not null drop table dbo.%s", table, table));
+        }
+    }
+
+    #! An index with other columns is dropped from its table and created
+    indexColumnChangeSql() {
+        OfflineDatasource ds = offlineDatasource();
+        assertEq(("drop index ix_mka on dbo.mka_t", "create index ix_mka on dbo.mka_t (a, b)"),
+            alignSql(ds, "mka_t", {"columns": Columns, "indexes": {"ix_mka": {"columns": ("a",)}}},
+                {"columns": Columns, "indexes": {"ix_mka": {"columns": ("a", "b")}}}));
+    }
+
+    #! The same change on the database
+    indexColumnChange() {
+        Datasource ds = datasource();
+        on_exit dropTables(ds, "mka_ix");
+        dropTables(ds, "mka_ix");
+        ds.execRaw("create table dbo.mka_ix (id int not null, a int, b varchar(10))");
+        ds.execRaw("create index ix_mka_ix on dbo.mka_ix (a)");
+        ds.commit();
+
+        hash<auto> desc = {"columns": Columns, "indexes": {"ix_mka_ix": {"columns": ("a", "b")}}};
+        assertEq(("drop index ix_mka_ix on dbo.mka_ix", "create index ix_mka_ix on dbo.mka_ix (a, b)"),
+            alignTable(ds, "mka_ix", desc));
+        assertEq(("a", "b"), (new MssqlTable(ds, "mka_ix")).getIndexes().ix_mka_ix.columns.keys());
+        assertEq((), alignTable(ds, "mka_ix", desc));
+    }
+}
+
+#! A datasource that does not connect: it reports a server version and driver, and its catalog queries return no
+#! rows
+class OfflineDatasource inherits Datasource {
+    private {
+        string version;
+        string real_driver;
+    }
+
+    constructor(string connstr, string version, string real_driver) : Datasource(connstr) {
+        self.version = version;
+        self.real_driver = real_driver;
+    }
+
+    auto getServerVersion() {
+        return version;
+    }
+
+    string getDriverRealName() {
+        return real_driver;
+    }
+
+    auto select(string sql, ...) {
+        return {};
+    }
+
+    auto selectRow(string sql, ...) {
+        # the default schema of SQL Server
+        return {"schema": "dbo"};
+    }
+
+    auto selectRows(string sql, ...) {
+        return ();
+    }
+}

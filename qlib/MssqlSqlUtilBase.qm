@@ -126,6 +126,8 @@ module MssqlSqlUtilBase {
       run
     - fixed changing the default value of a column: the existing default constraint is dropped by its name in the
       database before the new one is added; adding it failed with "Column already has a DEFAULT bound to it"
+    - fixed dropping an index, as table alignment does to recreate an index whose columns change: SQL Server
+      refused the \c DROP \c INDEX statement, which had no table name
 
     @subsection MssqlSqlUtilBasev10 MssqlSqlUtilBase v1.0
     - initial release
@@ -281,6 +283,19 @@ public class MssqlIndex inherits SqlUtil::AbstractIndex {
     #! returns the SQL statement that renames the index in the database
     softlist<string> getRenameSql(string table_name, string new_name) {
         return sprintf("exec sp_rename '%s.%s', '%s', 'INDEX'", table_name, name, new_name);
+    }
+
+    #! returns the SQL statement that drops the index from its table
+    /** SQL Server drops an index by its name and the name of its table
+
+        @param table_name the name of the table
+
+        @return the SQL statement that drops the index from its table
+
+        @since MssqlSqlUtilBase 1.1
+    */
+    string getDropSql(string table_name) {
+        return sprintf("drop index %s on %s", name, table_name);
     }
 }
 
