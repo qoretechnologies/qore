@@ -100,10 +100,21 @@ public class WebSocketClientPollOperationTest inherits QUnit::Test {
         return hc;
     }
 
-    #! Helper to drive a poll operation manually until a message arrives or timeout
-    private *hash<auto> drivePollUntilMessage(WebSocketClientPollOperation poll_op, timeout deadline = 10s) {
-        date end = now_us() + deadline;
-        while (now_us() < end) {
+    #! Waits for the socket event that a poll operation driven by the test waits for
+    /** @param pi the poll info that the operation's continuePoll() returned
+
+        @throw POLL-TIMEOUT no event within the hang guard
+    */
+    private static waitForPollInfo(hash<SocketPollInfo> pi) {
+        # with a poll_timeout_ms hint, Socket::poll() returns when the hint expires, and the operation is continued
+        if (!Socket::poll((pi,), HangGuard) && !exists pi.poll_timeout_ms) {
+            throw "POLL-TIMEOUT", sprintf("no socket event (events: %d) within %y", pi.events, HangGuard);
+        }
+    }
+
+    #! Helper to drive a poll operation manually until a message arrives or the operation ends
+    private *hash<auto> drivePollUntilMessage(WebSocketClientPollOperation poll_op) {
+        while (True) {
             *hash<SocketPollInfo> pi = poll_op.continuePoll();
             if (poll_op.goalReached()) {
                 break;
@@ -115,18 +126,20 @@ public class WebSocketClientPollOperationTest inherits QUnit::Test {
             if (!pi) {
                 break;
             }
-            Qore::usleep(1000);
+            waitForPollInfo(pi);
         }
         # Check one more time
         return poll_op.getReceivedMessage();
     }
 
     #! Helper to drive poll until goal is reached
-    private drivePollUntilGoal(WebSocketClientPollOperation poll_op, timeout deadline = 10s) {
-        date end = now_us() + deadline;
-        while (now_us() < end && !poll_op.goalReached()) {
-            poll_op.continuePoll();
-            Qore::usleep(1000);
+    private drivePollUntilGoal(WebSocketClientPollOperation poll_op) {
+        while (!poll_op.goalReached()) {
+            *hash<SocketPollInfo> pi = poll_op.continuePoll();
+            if (!pi) {
+                break;
+            }
+            waitForPollInfo(pi);
         }
     }
 
@@ -177,24 +190,21 @@ public class WebSocketClientPollOperationTest inherits QUnit::Test {
         poll_op.sendPing(<01020304>);
 
         # We should get a pong back from the server
-        date end = now_us() + 10s;
         *hash<auto> pong_msg;
-        while (now_us() < end) {
-            poll_op.continuePoll();
+        while (True) {
+            *hash<SocketPollInfo> pi = poll_op.continuePoll();
             *hash<auto> msg = poll_op.getReceivedMessage();
             if (msg && msg.type == "pong") {
                 pong_msg = msg;
                 break;
             }
-            if (poll_op.goalReached()) {
+            if (poll_op.goalReached() || !pi) {
                 break;
             }
-            Qore::usleep(1000);
+            waitForPollInfo(pi);
         }
         # The server should echo pings back as pongs
-        if (pong_msg) {
-            assertEq("pong", pong_msg.type, "received pong");
-        }
+        assertEq("pong", pong_msg.type, "received pong");
 
         poll_op.sendClose();
         drivePollUntilGoal(poll_op);
@@ -272,9 +282,8 @@ public class WebSocketClientPollOperationTest inherits QUnit::Test {
 
         # Collect all echoed messages
         list<string> received = ();
-        date end = now_us() + 15s;
-        while (received.size() < count && now_us() < end) {
-            poll_op.continuePoll();
+        while (received.size() < count) {
+            *hash<SocketPollInfo> pi = poll_op.continuePoll();
             while (True) {
                 *hash<auto> msg = poll_op.getReceivedMessage();
                 if (!msg) {
@@ -284,10 +293,10 @@ public class WebSocketClientPollOperationTest inherits QUnit::Test {
                     received += msg.data;
                 }
             }
-            if (poll_op.goalReached()) {
+            if (poll_op.goalReached() || !pi || received.size() == count) {
                 break;
             }
-            Qore::usleep(1000);
+            waitForPollInfo(pi);
         }
 
         assertEq(count, received.size(), "received all messages");
@@ -400,9 +409,8 @@ public class WebSocketClientPollOperationTest inherits QUnit::Test {
         # Collect echoes
         int total_expected = threads * msgs_per_thread;
         list<string> received = ();
-        date end = now_us() + 15s;
-        while (received.size() < total_expected && now_us() < end) {
-            poll_op.continuePoll();
+        while (received.size() < total_expected) {
+            *hash<SocketPollInfo> pi = poll_op.continuePoll();
             while (True) {
                 *hash<auto> msg = poll_op.getReceivedMessage();
                 if (!msg) {
@@ -412,7 +420,10 @@ public class WebSocketClientPollOperationTest inherits QUnit::Test {
                     received += msg.data;
                 }
             }
-            Qore::usleep(1000);
+            if (poll_op.goalReached() || !pi || received.size() == total_expected) {
+                break;
+            }
+            waitForPollInfo(pi);
         }
 
         assertEq(total_expected, received.size(), "received all concurrent messages");

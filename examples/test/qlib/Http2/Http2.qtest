@@ -22,6 +22,9 @@
 # HTTP/2 test certificate and key (PEM format)
 const CertPem = TestCertificates::CertPem;
 
+#! The bound on a blocking wait for a socket event, a result or a thread: a hang guard only, never a timing assertion
+const HangGuard = 60s;
+
 const KeyPem = TestCertificates::KeyPem;
 
 # Simple request handler for HTTP/2 tests
@@ -96,6 +99,18 @@ public class Http2Test inherits QUnit::Test {
         };
 
         const OptionColumn = 22;
+    }
+
+    #! Waits for the socket event that a poll operation driven by the test waits for
+    /** @param info the poll info that the operation's continuePoll() returned
+
+        @throw POLL-TIMEOUT no event within the hang guard
+    */
+    private static waitForPollInfo(hash<SocketPollInfo> info) {
+        # with a poll_timeout_ms hint, Socket::poll() returns when the hint expires, and the operation is continued
+        if (!Socket::poll((info,), HangGuard) && !exists info.poll_timeout_ms) {
+            throw "POLL-TIMEOUT", sprintf("no socket event (events: %d) within %y", info.events, HangGuard);
+        }
     }
 
     private {
@@ -324,7 +339,7 @@ public class Http2Test inherits QUnit::Test {
                     break;
                 }
                 # Simulate poll - just wait briefly
-                usleep(10ms);
+                waitForPollInfo(info);
                 iterations++;
             }
 
@@ -371,7 +386,7 @@ public class Http2Test inherits QUnit::Test {
                 if (!info) {
                     break;
                 }
-                usleep(10ms);
+                waitForPollInfo(info);
                 iterations++;
             }
 
@@ -404,7 +419,7 @@ public class Http2Test inherits QUnit::Test {
                 if (!info) {
                     break;
                 }
-                usleep(10ms);
+                waitForPollInfo(info);
                 iterations++;
             }
 
@@ -499,7 +514,7 @@ public class Http2Test inherits QUnit::Test {
                         if (!info) {
                             break;
                         }
-                        usleep(10ms);
+                        waitForPollInfo(info);
                         iterations++;
                     }
 
@@ -531,7 +546,7 @@ public class Http2Test inherits QUnit::Test {
                             if (!info) {
                                 break;
                             }
-                            usleep(10ms);
+                            waitForPollInfo(info);
                             iterations++;
                         }
 
@@ -658,7 +673,7 @@ public class Http2Test inherits QUnit::Test {
                         if (!info) {
                             break;
                         }
-                        usleep(10ms);
+                        waitForPollInfo(info);
                         iterations++;
                     }
 
@@ -692,7 +707,7 @@ public class Http2Test inherits QUnit::Test {
                             if (!info) {
                                 break;
                             }
-                            usleep(10ms);
+                            waitForPollInfo(info);
                             iterations++;
                         }
 
@@ -1027,7 +1042,7 @@ public class Http2Test inherits QUnit::Test {
                         if (!info) {
                             break;
                         }
-                        usleep(10ms);
+                        waitForPollInfo(info);
                         iterations++;
                     }
 
@@ -1070,7 +1085,7 @@ public class Http2Test inherits QUnit::Test {
                                         if (!info) {
                                             break;
                                         }
-                                        usleep(10ms);
+                                        waitForPollInfo(info);
                                         iterations++;
                                     }
                                     {
@@ -1094,7 +1109,7 @@ public class Http2Test inherits QUnit::Test {
                             if (!info) {
                                 break;
                             }
-                            usleep(10ms);
+                            waitForPollInfo(info);
                             iterations++;
                         }
                     }
@@ -1213,7 +1228,7 @@ public class Http2Test inherits QUnit::Test {
                 if (!info) {
                     break;
                 }
-                usleep(10ms);
+                waitForPollInfo(info);
                 iterations++;
             }
 
@@ -1255,7 +1270,7 @@ public class Http2Test inherits QUnit::Test {
                         if (!info) {
                             break;
                         }
-                        usleep(10ms);
+                        waitForPollInfo(info);
                         iterations++;
                     }
 
@@ -1277,7 +1292,7 @@ public class Http2Test inherits QUnit::Test {
                                 if (!info) {
                                     break;
                                 }
-                                usleep(10ms);
+                                waitForPollInfo(info);
                                 iterations++;
                             }
 
@@ -1298,7 +1313,7 @@ public class Http2Test inherits QUnit::Test {
                                     if (!info) {
                                         break;
                                     }
-                                    usleep(10ms);
+                                    waitForPollInfo(info);
                                     iterations++;
                                 }
                             }
@@ -1406,7 +1421,7 @@ public class Http2Test inherits QUnit::Test {
                             if (!info) {
                                 break;
                             }
-                            usleep(10ms);
+                            waitForPollInfo(info);
                             iterations++;
                         }
 
@@ -1427,7 +1442,7 @@ public class Http2Test inherits QUnit::Test {
                                 if (!info) {
                                     break;
                                 }
-                                usleep(10ms);
+                                waitForPollInfo(info);
                                 iterations++;
                             }
                         }
@@ -1546,8 +1561,7 @@ public class Http2Test inherits QUnit::Test {
                     if (proto == "h2") {
                         HttpServerAsyncIo::Http2PollOperation h2op(client);
 
-                        # Immediately close to trigger error
-                        usleep(50000);  # Wait briefly for client to start
+                        # Immediately close to trigger error: the TLS handshake with the client is done
                         client.close();
 
                         # Try to continue polling - should detect close
@@ -1558,10 +1572,10 @@ public class Http2Test inherits QUnit::Test {
                                 if (!info) {
                                     break;
                                 }
+                                waitForPollInfo(info);
                             } catch () {
                                 break;
                             }
-                            usleep(10ms);
                             iterations++;
                         }
 
@@ -1668,7 +1682,8 @@ public class Http2Test inherits QUnit::Test {
                     client.connect(sprintf("localhost:%d", test_port), 5000);
                     client.acceptAllCertificates(True);
                     client.upgradeClientToSSL(5000);
-                    usleep(100000);
+                    # keep the connection open until the server has made its check on it
+                    server_done.waitForZero(HangGuard);
                     client.close();
                 } catch () {}
                 client_done.dec();
@@ -2426,7 +2441,7 @@ public class Http2Test inherits QUnit::Test {
                         if (!info) {
                             break;
                         }
-                        usleep(10ms);
+                        waitForPollInfo(info);
                         iterations++;
                     }
 
@@ -2448,7 +2463,7 @@ public class Http2Test inherits QUnit::Test {
                             if (!info) {
                                 break;
                             }
-                            usleep(10ms);
+                            waitForPollInfo(info);
                             iterations++;
                         }
                     }
@@ -2487,7 +2502,7 @@ public class Http2Test inherits QUnit::Test {
                     if (!info) {
                         break;
                     }
-                    usleep(10ms);
+                    waitForPollInfo(info);
                     iterations++;
                 }
 
@@ -2606,7 +2621,7 @@ public class Http2Test inherits QUnit::Test {
                         if (!info) {
                             break;
                         }
-                        usleep(10ms);
+                        waitForPollInfo(info);
                         iterations++;
                     }
 
@@ -2614,8 +2629,11 @@ public class Http2Test inherits QUnit::Test {
                         h2op.startSendResponse(200, {"content-type": "text/plain"}, binary("ALPN test"));
                         iterations = 0;
                         while (h2op.getState() == "sending" && iterations < 100) {
-                            h2op.continuePoll();
-                            usleep(10ms);
+                            *hash<SocketPollInfo> info = h2op.continuePoll();
+                            if (!info) {
+                                break;
+                            }
+                            waitForPollInfo(info);
                             iterations++;
                         }
                     }
@@ -2651,7 +2669,7 @@ public class Http2Test inherits QUnit::Test {
                     if (!info) {
                         break;
                     }
-                    usleep(10ms);
+                    waitForPollInfo(info);
                     iterations++;
                 }
 
@@ -2762,7 +2780,7 @@ public class Http2Test inherits QUnit::Test {
                         if (!info) {
                             break;
                         }
-                        usleep(10ms);
+                        waitForPollInfo(info);
                         iterations++;
                     }
                     if (h2op.goalReached()) {
@@ -2770,8 +2788,11 @@ public class Http2Test inherits QUnit::Test {
                             binary("HTTP/2 response"));
                         iterations = 0;
                         while (h2op.getState() == "sending" && iterations < 100) {
-                            h2op.continuePoll();
-                            usleep(10ms);
+                            *hash<SocketPollInfo> info = h2op.continuePoll();
+                            if (!info) {
+                                break;
+                            }
+                            waitForPollInfo(info);
                             iterations++;
                         }
                     }
@@ -2810,7 +2831,7 @@ public class Http2Test inherits QUnit::Test {
                     if (!info) {
                         break;
                     }
-                    usleep(10ms);
+                    waitForPollInfo(info);
                     iterations++;
                 }
 
@@ -2901,7 +2922,7 @@ public class Http2Test inherits QUnit::Test {
                         if (!info) {
                             break;
                         }
-                        usleep(10ms);
+                        waitForPollInfo(info);
                         iterations++;
                     }
 
@@ -2918,7 +2939,7 @@ public class Http2Test inherits QUnit::Test {
                             if (!info) {
                                 break;
                             }
-                            usleep(10ms);
+                            waitForPollInfo(info);
                             iterations++;
                         }
 
@@ -2958,7 +2979,7 @@ public class Http2Test inherits QUnit::Test {
                     if (!info) {
                         break;
                     }
-                    usleep(10ms);
+                    waitForPollInfo(info);
                     iterations++;
                 }
 
@@ -3022,6 +3043,9 @@ public class Http2Test inherits QUnit::Test {
         hash<auto> test_results;
         Mutex result_mutex();
 
+        # Client thread done; declared before the server thread, which keeps the connection open until then
+        Counter client_done(1);
+
         # Server thread - deliberately slow to trigger timeout
         Counter server_done(1);
         background sub() {
@@ -3046,7 +3070,7 @@ public class Http2Test inherits QUnit::Test {
                         if (!info) {
                             break;
                         }
-                        usleep(10ms);
+                        waitForPollInfo(info);
                         iterations++;
                     }
 
@@ -3058,7 +3082,7 @@ public class Http2Test inherits QUnit::Test {
                 }
 
                 # Keep connection open but don't respond - let client timeout
-                usleep(2000ms);
+                client_done.waitForZero(HangGuard);
                 client.close();
             } catch (hash<ExceptionInfo> ex) {
                 # Connection might be closed by client
@@ -3067,7 +3091,6 @@ public class Http2Test inherits QUnit::Test {
         }();
 
         # Client thread - uses a short timeout
-        Counter client_done(1);
         background sub() {
             try {
                 HTTPClient client({
@@ -3080,26 +3103,19 @@ public class Http2Test inherits QUnit::Test {
 
                 AbstractPollOperation spop = client.startPollSendRecv("GET", "/timeout-test");
 
-                # Drive poll with a timeout
-                date start = now_ms();
-                int iterations = 0;
-                while (!spop.goalReached() && iterations < 200) {
-                    *hash<SocketPollInfo> info = spop.continuePoll();
-                    if (!info) {
-                        break;
-                    }
-                    # Check our own timeout (in addition to socket timeout)
-                    if ((now_ms() - start) > 1s) {
-                        break;  # Bail out
-                    }
-                    usleep(10ms);
-                    iterations++;
-                }
+                # A poll operation has no timeout of its own: the controller that drives it applies the
+                # operation's timeout, which ends the request the server never answers
+                hash<SocketPollResultInfo> result = AsyncIoController::exec(<SocketPollOperationInfo>{
+                    "sock": client,
+                    "spop": spop,
+                    "owner": sprintf("http2-poll-timeout-%d", gettid()),
+                    "to": 500ms,
+                });
 
                 {
                     AutoLock al(result_mutex);
-                    test_results.client_goal_reached = spop.goalReached();
-                    test_results.client_iterations = iterations;
+                    test_results.client_error = result.ex.err;
+                    test_results.client_error_desc = result.ex.desc;
                 }
             } catch (hash<ExceptionInfo> ex) {
                 AutoLock al(result_mutex);
@@ -3113,17 +3129,10 @@ public class Http2Test inherits QUnit::Test {
         client_done.waitForZero(10000ms);
         server_sock.close();
 
-        # Verify timeout behavior - either we get a timeout error or the goal is not reached
-        # Note: The exact behavior depends on how the server handles the connection
+        # Verify timeout behavior: the operation times out without reaching its goal
         if (test_results.server_alpn == "h2") {
-            # Either there's a timeout error or the poll didn't complete
-            bool timeout_or_incomplete = (exists test_results.client_error &&
-                    (test_results.client_error == "SOCKET-TIMEOUT" ||
-                     test_results.client_error == "HTTP2-TIMEOUT")) ||
-                !test_results.client_goal_reached;
-            assertTrue(timeout_or_incomplete,
-                sprintf("should timeout or not complete: error=%y, goal=%y",
-                    test_results.client_error, test_results.client_goal_reached));
+            assertEq("SOCKET-TIMEOUT", test_results.client_error,
+                sprintf("the request times out: %y", test_results.client_error_desc));
         }
     }
 
@@ -3175,7 +3184,7 @@ public class Http2Test inherits QUnit::Test {
                         if (!info) {
                             break;
                         }
-                        usleep(10ms);
+                        waitForPollInfo(info);
                         iterations++;
                     }
 
@@ -3195,8 +3204,11 @@ public class Http2Test inherits QUnit::Test {
 
                         iterations = 0;
                         while (h2op.getState() == "sending" && iterations < 200) {
-                            h2op.continuePoll();
-                            usleep(10ms);
+                            *hash<SocketPollInfo> info = h2op.continuePoll();
+                            if (!info) {
+                                break;
+                            }
+                            waitForPollInfo(info);
                             iterations++;
                         }
                     }
@@ -3231,7 +3243,7 @@ public class Http2Test inherits QUnit::Test {
                     if (!info) {
                         break;
                     }
-                    usleep(10ms);
+                    waitForPollInfo(info);
                     iterations++;
                 }
 
@@ -3325,7 +3337,7 @@ public class Http2Test inherits QUnit::Test {
                         if (!info) {
                             break;
                         }
-                        usleep(10ms);
+                        waitForPollInfo(info);
                         iterations++;
                     }
 
@@ -3350,8 +3362,11 @@ public class Http2Test inherits QUnit::Test {
 
                         iterations = 0;
                         while (h2op.getState() == "sending" && iterations < 100) {
-                            h2op.continuePoll();
-                            usleep(10ms);
+                            *hash<SocketPollInfo> info = h2op.continuePoll();
+                            if (!info) {
+                                break;
+                            }
+                            waitForPollInfo(info);
                             iterations++;
                         }
                     }
@@ -3392,7 +3407,7 @@ public class Http2Test inherits QUnit::Test {
                     if (!info) {
                         break;
                     }
-                    usleep(10ms);
+                    waitForPollInfo(info);
                     iterations++;
                 }
 
@@ -3531,7 +3546,7 @@ public class Http2Test inherits QUnit::Test {
                         if (!info) {
                             break;
                         }
-                        usleep(10ms);
+                        waitForPollInfo(info);
                         iterations++;
                     }
 
@@ -3590,8 +3605,8 @@ public class Http2Test inherits QUnit::Test {
                     client.setAlpnProtocols(("h2",));
                     client.upgradeServerToSSL();
 
-                    # Read partial data then close
-                    usleep(100ms);
+                    # Wait for the client's first data, then close without reading it
+                    client.isDataAvailable(HangGuard);
                     client.close();  # Abrupt close
                 } catch (hash<ExceptionInfo> ex) {
                     # Expected - connection closed
@@ -3618,7 +3633,7 @@ public class Http2Test inherits QUnit::Test {
                         if (!info) {
                             break;
                         }
-                        usleep(10ms);
+                        waitForPollInfo(info);
                         iterations++;
                     }
 
@@ -3725,7 +3740,7 @@ public class Http2Test inherits QUnit::Test {
                     if (!info) {
                         break;
                     }
-                    usleep(10ms);
+                    waitForPollInfo(info);
                     iterations++;
                 }
 
@@ -3794,7 +3809,7 @@ public class Http2Test inherits QUnit::Test {
                     if (!info) {
                         break;
                     }
-                    usleep(10ms);
+                    waitForPollInfo(info);
                     ++iterations;
                 }
 
@@ -3823,15 +3838,18 @@ public class Http2Test inherits QUnit::Test {
                         if (!info) {
                             break;
                         }
-                        usleep(10ms);
+                        waitForPollInfo(info);
                         ++iterations;
                     }
                     if (h2op.goalReached()) {
                         h2op.startSendResponse(200, {"content-type": "text/plain"}, binary("h2-ok"));
                         iterations = 0;
                         while (h2op.getState() == "sending" && iterations < 100) {
-                            h2op.continuePoll();
-                            usleep(10ms);
+                            *hash<SocketPollInfo> info = h2op.continuePoll();
+                            if (!info) {
+                                break;
+                            }
+                            waitForPollInfo(info);
                             ++iterations;
                         }
                     }
