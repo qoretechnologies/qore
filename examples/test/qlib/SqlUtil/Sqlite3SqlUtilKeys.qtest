@@ -203,11 +203,15 @@ class Sqlite3KeysTest inherits QUnit::Test {
         Datasource ds = getDatasource();
         on_exit ds.rollback();
 
-        # adding a key to a table without one
+        # adding a key to a table without one; the template's column is the table's column, so the key is the only
+        # difference: a NOT NULL change would be refused before the key on SQLite before 3.53.0, which cannot change a
+        # column of an existing table
         Sqlite3Table with_key(ds, "no_pk");
-        with_key.setupTable({"columns": {"x": {"native_type": "integer", "notnull": True}},
+        with_key.setupTable({"columns": {"x": {"native_type": "integer"}},
             "primary_key": {"name": "pk_no_pk", "columns": ("x",)}});
         Sqlite3Table no_pk(ds, "no_pk");
+        assertEq(no_pk.describe().x.nullable, with_key.describe().x.nullable,
+            "the template's column has the table's NOT NULL constraint");
         assertThrows("UNSUPPORTED", "cannot add the primary key \\(x\\) to table \"no_pk\": SQLite cannot add a "
             "primary key to an existing table", \no_pk.getAlignSql(), (with_key,));
 
