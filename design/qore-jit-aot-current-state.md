@@ -3620,3 +3620,43 @@ Next investigate a guarded indexed-list integer compound update with live slot,
 metadata, uniqueness and bounds checks plus the unchanged generic fallback.
 This is a distinct unimplemented/unmeasured hypothesis, not permission to omit
 COW, references, locks, metadata, reflection, exceptions or cancellation.
+
+## Rejected indexed integer update and two-member scalar getter (post-cee5710b3)
+
+Both candidates are rejected and not retained. Optimized confirmation
+whole-workload ns/item:
+
+|!Candidate / target|!Before|!Candidate|!Compiler selector off|!Change vs before
+|Indexed add / list_mutate|191.558033|154.734074|191.314456|-19.223%
+|Two-member getter / two_read_loop|384.420212|200.881701|381.809141|-47.744%
+|Two-member getter / two_read_short|1302.320531|1083.466556|1298.677836|-16.805%
+
+All target checks passed, but fixed non-regression gates rejected repeated
+disjoint adverse layout comparisons. Indexed add regressed effectful-method
+reverse/shuffle487 and two-read-getter reverse layouts; the getter regressed
+captured-closure default layout (+3.408% screen, +4.148% confirmation). Neither
+had a repeated aggregate warning. Every workload/layout/control and all 23760
+windows are retained in RESULTS.md's linked
+`results-aot-indexed-add-and-multi-getter-rejected-macos-arm64.json`. No rescue
+run or threshold change followed. The cause is not isolated; unchanged
+non-target LLVM bodies do not prove runtime-layout causality.
+
+Both prototypes and fixtures were recoverably archived and removed. Fresh
+restored Release/Debug qualification each passed 70 core fixtures / 117 cases /
+17609 assertions, plus upstream/module/lvalue/cancellation/reference coverage,
+1985 native Debug assertions in each of two modes, and exact restoration of
+all 79 owned Release qmod aliases. Failed test assumptions, pre-existing
+weak-root AST/compiled behavior, the original indexed archive/restore failure
+and its successful recovery remain recorded. Independent replay validates raw
+windows, decisions, qualification logs and source/artifact lineage. These are
+not fresh Java/develop ratios, isolated-call latencies or a global-ceiling
+result; no new runtime performance gain is retained by this checkpoint.
+
+First merge fetched develop `3f0019a6a` and qualify a fresh optimized baseline;
+the experiments above precede those upstream runtime/compiler changes. Then
+inspect and serially profile captured-closure binding. The native helper
+still looks up capture storage before each synchronized live integer read;
+investigate removing lookup work only with a complete invocation/context and
+lifetime proof. Do not cache captured values, drop locking, extend closure
+ownership, or trust reused addresses. This is an unimplemented/unmeasured
+hypothesis, distinct from both rejected candidates.

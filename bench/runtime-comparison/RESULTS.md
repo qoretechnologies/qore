@@ -19009,3 +19009,117 @@ retained improvement. The global performance ceiling remains unestablished.
 
 All 55 results, raw observations, compile/code-size diagnostics, source lineage,
 qualification and generated-code evidence: [results-aot-clear-sink-rejected-macos-arm64.json](results-aot-clear-sink-rejected-macos-arm64.json).
+
+## Rejected indexed integer update and two-member getter (post-cee5710b3)
+
+Both candidates are **rejected and not retained**. Each reduced its target
+workload substantially, but violated its predeclared repeated-layout
+non-regression gate. The source was recoverably archived and restored; these
+are experimental gains, not improvements now present on the branch.
+
+The measured branch revision is `cee5710b3`, with develop `bca388c1b` merged.
+A later fetch found develop `3f0019a6a` (185 additional commits, including
+runtime/compiler changes). Those changes are not in these measurements.
+Merge and qualify that revision before establishing the next candidate's
+optimized baseline; do not reuse these timings as a post-merge comparison.
+
+Each experiment used Release `-O3 -DNDEBUG` / qcc `-O3`, the exact frozen
+qualified before runtime, the candidate, and the candidate with its compiler
+selector disabled. There were 55 workloads and three fixed layouts (default,
+reverse, shuffle487). Each screen used three forks; each disjoint confirmation
+used five, with three 300 ms warmup and three 300 ms measured windows per fork.
+All 4455 screen and 7425 confirmation windows per experiment are retained:
+23760 measured windows in total, with no outlier removal or pooling of epochs.
+No owned build/test/profile/edit/analysis overlapped timing.
+
+The table shows whole-workload ns/item, aggregated as the median of the three
+layout medians of fork means. Negative changes mean less time. It is not
+isolated call latency, a fresh Java/develop comparison, or an overall score.
+
+|!Candidate / target|!Epoch|!Before ns/item|!Candidate ns/item|!Selector off ns/item|!Change vs before|!Change vs selector off
+|Indexed add / list_mutate|Screen|192.649329|154.253053|191.654640|-19.931%|-19.515%
+|Indexed add / list_mutate|Confirmation|191.558033|154.734074|191.314456|-19.223%|-19.121%
+|Two-member getter / two_read_loop|Screen|393.366518|199.869544|396.277474|-49.190%|-49.563%
+|Two-member getter / two_read_loop|Confirmation|384.420212|200.881701|381.809141|-47.744%|-47.387%
+|Two-member getter / two_read_short|Screen|1279.115062|1085.644292|1266.904634|-15.125%|-14.307%
+|Two-member getter / two_read_short|Confirmation|1302.320531|1083.466556|1298.677836|-16.805%|-16.572%
+
+Both candidates pass every target/layout/control check. Neither has a repeated
+aggregate warning, but the following >=3% slower layout comparisons repeat
+with disjoint observed fork-mean ranges in both epochs, triggering rejection:
+
+|!Candidate|!Workload|!Control|!Layout|!Screen time change|!Confirmation time change
+|Indexed add|effect_loop|Before|reverse|+7.870%|+10.604%
+|Indexed add|effect_loop|Before|shuffle487|+6.195%|+14.783%
+|Indexed add|two_read_loop|Before|reverse|+15.366%|+6.900%
+|Two-member getter|closure_capture|Before|default|+3.408%|+4.148%
+
+These observed ranges are not confidence intervals. Host load, frequency and
+thermals were uncontrolled. Unchanged optimized non-target function bodies do
+not establish the regression cause; runtime/code/data layout is a hypothesis,
+not a diagnosis. No thresholds, layouts or workloads were changed to rescue
+either candidate.
+
+### Implementation and validation
+
+The indexed-update prototype selected a versioned, guarded integer-add helper
+for a narrowly proved list lvalue path, preserving the generic fallback.
+Generated target code replaced the compound helper while retaining cleanup
+and cancellation. The getter prototype widened only pure zero-argument scalar
+getter eligibility from one read to two, retaining a live checked/locked read
+at each original position. It did not widen effectful/unary methods. A miss
+replayed the ordinary body before any effect or owned heap result.
+
+Selected candidate Release and Debug qualification each passed:
+
+|!Source state|!Core fixtures|!Cases|!Assertions per runtime|!Commands Release / Debug
+|Indexed-add candidate|72|125|17806|163 / 165
+|Two-member-getter candidate|70|119|18034|161 / 163
+|Restored HEAD|70|117|17609|161 / 163
+
+Every qualification also passed 56 upstream AST/IR checks, eight DataProvider
+suites, DataFrame, three cancellation suites, indexed-compound checks in all
+execution modes, 14 lvalue fixtures (84 cases; 1391 Release / 2724 Debug
+assertions), and 555 IR plus 555 AOT reference checks. Debug native tests passed
+in both normal and prepared-local-reload-disabled modes: 2016 assertions per
+mode for indexed add and 1985 for the getter and restored source. All 79 owned
+qmods were rebuilt and their exact Release aliases restored; unrelated aliases
+were preserved. This is selected macOS arm64 coverage, not full-repository,
+sanitizer or cross-platform certification.
+
+Failure and recovery records are preserved. The initial indexed test assumed
+negative indices were invalid, contrary to baseline behavior. A weak-root
+AST/compiled discrepancy was separately reproduced on baseline and is not
+fixed here; the final regression fixture instead exercises strong-owner
+mutation with a weak observer. An early native-test driver required qmod-alias
+recovery. The original indexed-source restore command failed on patch-hunk
+syntax after archival; a separate recorded recovery restored HEAD. Five
+tracked candidate files were independently reconstructed from HEAD and that
+patch and matched to qualified/timed hashes; all other candidate source copies
+and all restored bytes were checked. No failed receipt was replaced by a
+successful one.
+
+Independent replay checks all 23760 raw measured windows, randomized orders,
+fork/layout/aggregate summaries and both rejection decisions. Raw qualification
+logs, source/artifact lineage, references, compiler controls and loaded runtime
+paths are checked separately. Timed checksums establish observability and are
+not independently recomputed per window. Historical candidate Debug artifacts
+may have been overwritten by restored builds; their original independent
+verification and raw logs identify them, rather than current Debug bytes.
+Runtime binaries remain local and are not embedded in the report.
+
+After the evidence commit and upstream merge/qualification, investigate
+captured-closure binding and generated code, then profile serially to choose
+a distinct optimization. The current native capture helper
+performs a capture-map lookup followed by a live synchronized integer read.
+Avoiding lookup work must not cache values, weaken synchronization, retain a
+closure beyond its observable lifetime, or trust an address after reuse.
+No implementation or measured benefit for that hypothesis is established.
+Do not retry either rejected candidate unchanged. Refresh matched optimized
+Java/develop numbers after a meaningful retained improvement; two-member
+getters need their own analogous Java controls. Java parity and a global
+performance ceiling remain unestablished.
+
+All 55 workloads in each epoch, controls, raw observations, source and failure
+archives, qualification and final audit:
+[results-aot-indexed-add-and-multi-getter-rejected-macos-arm64.json](results-aot-indexed-add-and-multi-getter-rejected-macos-arm64.json).
