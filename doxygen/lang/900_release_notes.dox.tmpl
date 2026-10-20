@@ -4813,6 +4813,13 @@ while (*binary chunk = input.read(65536)) {
     - Fixed a rare crash at the end of a process that used asynchronous socket I/O: the end of the process could
       start an I/O thread of the global async I/O controller that it then did not wait for, so the thread could
       still be running while the process freed the data that the thread used
+    - Fixed @ref null "NULL" having the type \c nothing with @ref exec_mode_ir "IR", @ref exec_mode_jit "JIT" and
+      @ref exec_mode_tiered "tiered" execution and in @ref exec_mode_aot "AOT" compiled code: a hash or list of
+      \c NULL and values of one other type, such as <tt>{"r": 1, "a": NULL}</tt>, got the optional form of that type
+      as its value type (\c hash<string, *int>) and kept the \c NULL, so the \c NULL read back as
+      @ref nothing "NOTHING" from the hash but as \c NULL from a copy of it.  As with
+      @ref exec_mode_ast "AST execution", such a hash or list is now a \c hash<auto> or \c list<auto> holding
+      \c NULL in every execution mode, and an error message names the type of a \c NULL value as \c NULL
     - Fixed a crash of IR, JIT and tiered execution and of compiled (\c qcc) code when a
       @ref thread_exit "thread_exit statement" left a @ref try "try" block: the catch block was entered for the
       thread_exit, which is not an exception, and the thread crashed while making the exception information.  As in

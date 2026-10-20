@@ -613,6 +613,10 @@ bool QoreValue::hasEffect() const {
 }
 
 bool QoreValue::isScalar() const {
+    // NOTHING and NULL are not scalars, whether NULL is held inline or as the QoreNullNode
+    if (isNullOrNothing()) {
+        return false;
+    }
     if (!isPointer()) {
         return true;  // int, float, bool, char, short string are all scalar
     }
@@ -1158,6 +1162,10 @@ const QoreTypeInfo* QoreValue::getTypeInfo() const {
     if (isShortString()) {
         return stringTypeInfo;
     }
+    // NULL held inline has the type of the QoreNullNode, not "nothing"
+    if (bits == VAL_NULL) {
+        return nullTypeInfo;
+    }
     if (isPointer()) {
         return getTypeInfoForValue(getPointerUnsafe());
     }
@@ -1284,6 +1292,9 @@ const char* QoreValue::getFullTypeName(bool with_namespaces, QoreString& scratch
     }
     if (isShortString()) {
         return "string";
+    }
+    if (isNull()) {
+        return "NULL";
     }
     if (isPointer()) {
         return get_full_type_name(getPointerUnsafe(), with_namespaces, scratch);

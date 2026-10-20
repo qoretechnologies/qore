@@ -98,17 +98,9 @@ public class RgbColorDataTypeBase inherits HashDataType {
         @since DataProvider 3.9
     */
     auto acceptsValue(auto value) {
-        if (value.typeCode() == NT_HASH && value.hasKey("a")) {
-            # the opacity is taken from an untyped copy as HashDataType::acceptsValue() takes it: a hash with a
-            # narrower value type (ex: hash<string, *int> from a literal) can hold NULL, which a read of the member
-            # can give as NOTHING
-            hash<auto> copy = {};
-            copy += value;
-            auto a = remove copy.a;
-            if (!exists a || a.typeCode() == NT_NULL) {
-                # a null opacity takes the default, as a missing one does
-                value = copy;
-            }
+        if (value.typeCode() == NT_HASH && value.a.typeCode() == NT_NULL) {
+            # a null opacity takes the default, as a missing one does
+            value -= "a";
         }
         return HashDataType::acceptsValue(value);
     }

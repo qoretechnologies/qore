@@ -445,6 +445,59 @@ static void ut_qorevalue_operator_bool_null(UnitTestCounters& c) {
     UT_ASSERT(c, !(bool)simple_null, "QoreSimpleValue NULL is false in C++ bool context");
 }
 
+//! verifies that NULL held inline in a QoreValue is the same value as the QoreNullNode
+/** The IR and JIT engines hold NULL inline (QoreValue::makeNull()), while code run by the AST interpreter mostly
+    holds the QoreNullNode; every QoreValue accessor must give the same result for both, or the same program gives
+    different types (and different hash and list types folded from them) in each execution mode.
+*/
+static void ut_qorevalue_null_representations(UnitTestCounters& c) {
+    const QoreValue reps[] = {QoreValue::makeNull(), QoreValue(&Null)};
+    const char* names[] = {"inline NULL", "QoreNullNode"};
+    UT_ASSERT(c, !reps[0].isPointer(), "makeNull() holds NULL inline");
+    UT_ASSERT(c, reps[1].isPointer(), "the QoreNullNode is held as a pointer");
+
+    for (unsigned i = 0; i < 2; ++i) {
+        const QoreValue& v = reps[i];
+        std::string label = std::string(names[i]) + ": ";
+        UT_ASSERT(c, v.getType() == NT_NULL, (label + "getType()").c_str());
+        UT_ASSERT(c, !strcmp(v.getTypeName(), "NULL"), (label + "getTypeName()").c_str());
+        UT_ASSERT(c, v.isNull() && v.isNullOrNothing() && !v.isNothing(), (label + "isNull()").c_str());
+        UT_ASSERT(c, v.getTypeInfo() == nullTypeInfo, (label + "getTypeInfo()").c_str());
+        UT_ASSERT(c, v.getFullTypeInfo() == nullTypeInfo, (label + "getFullTypeInfo()").c_str());
+        UT_ASSERT(c, !strcmp(v.getFullTypeName(), "NULL"), (label + "getFullTypeName()").c_str());
+        UT_ASSERT(c, !strcmp(v.getFullTypeName(true), "NULL"), (label + "getFullTypeName(true)").c_str());
+        {
+            QoreString scratch;
+            UT_ASSERT(c, !strcmp(v.getFullTypeName(true, scratch), "NULL"),
+                (label + "getFullTypeName(true, scratch)").c_str());
+            UT_ASSERT(c, !strcmp(v.getFullTypeName(false, scratch), "NULL"),
+                (label + "getFullTypeName(false, scratch)").c_str());
+        }
+        UT_ASSERT(c, !v.isScalar(), (label + "isScalar()").c_str());
+        UT_ASSERT(c, v.isConstant(), (label + "isConstant()").c_str());
+        UT_ASSERT(c, !v.getAsBool() && !v.getAsBigInt() && v.getAsFloat() == 0.0,
+            (label + "getAsBool(), getAsBigInt(), getAsFloat()").c_str());
+        UT_ASSERT(c, v.isEqualHard(reps[1 - i]), (label + "=== the other representation").c_str());
+        UT_ASSERT(c, !v.isEqualHard(QoreValue()), (label + "!== NOTHING").c_str());
+        {
+            QoreString str;
+            UT_ASSERT(c, !v.getAsString(str, FMT_NONE, nullptr) && !strcmp(str.c_str(), "<NULL>"),
+                (label + "getAsString()").c_str());
+        }
+        // a common type folded from an int and NULL is the same as with the QoreNullNode: there is none
+        const QoreTypeInfo* common = bigIntTypeInfo;
+        UT_ASSERT(c, !QoreTypeInfo::matchCommonType(common, v.getFullTypeInfo()),
+            (label + "no common type with int").c_str());
+        UT_ASSERT(c, common == autoTypeInfo, (label + "the common type with int is auto").c_str());
+    }
+
+    // NOTHING is not a scalar either
+    UT_ASSERT(c, !QoreValue().isScalar(), "NOTHING: isScalar()");
+    UT_ASSERT(c, QoreValue().getTypeInfo() == nothingTypeInfo, "NOTHING: getTypeInfo()");
+    UT_ASSERT(c, QoreValue(1).isScalar() && QoreValue(true).isScalar() && QoreValue(1.5).isScalar(),
+        "int, bool and float are scalars");
+}
+
 //! verifies that QoreStringDataHelper reads both string representations identically
 /** A string of QoreValue::SHORTSTR_MAX_BYTES bytes or fewer is stored inline in the QoreValue
     itself, so QoreValue::get<QoreStringNode>() returns nullptr for it even though getType() returns
@@ -6004,6 +6057,7 @@ static QoreHashNode* make_unit_test_result(UnitTestCounters& c, ExceptionSink* x
 static QoreValue f_run_debug_unit_tests(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     UnitTestCounters c;
     ut_qorevalue_operator_bool_null(c);
+    ut_qorevalue_null_representations(c);
     ut_string_data_helper(c);
     ut_string_compare_soft_and_concat_chars(c);
     ut_stateful_string_api(c);
@@ -6019,6 +6073,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     UnitTestCounters c;
 
     ut_qorevalue_operator_bool_null(c);
+    ut_qorevalue_null_representations(c);
     ut_string_data_helper(c);
     ut_string_compare_soft_and_concat_chars(c);
     ut_stateful_string_api(c);
