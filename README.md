@@ -75,6 +75,12 @@ see; it prints a line when it ignores `QORE_MODULE_DIR`.  Set
 `QORE_TEST_PRESERVE_PROVIDER_ENV=1` to keep them, for example to test against
 the build directory of a binary module.
 
+A test that exceeds its time limit (`TEST_TIMEOUT`, or the test's own
+`# test-timeout:` budget) is first sent `SIGUSR1`, unless `QORE_TEST_OPTS`
+disables signal handling (`-b`): a QUnit test then prints the call stacks of all
+its threads.  Once it has printed them or `QORE_TEST_STACK_DUMP_WAIT` seconds
+(default 30) have passed, the test is ended as before.
+
 When running tests or tools that load the `jni` module in the same process as
 other native runtimes that use synchronous signals, such as V8 or Python, set up
 the JVM signal-chaining library in the environment before starting `qore`. On

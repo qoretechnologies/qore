@@ -37,11 +37,12 @@
 %requires Util
 
 module QUnit {
-    version = "0.5.1";
+    version = "0.5.2";
     desc = "User module for unit testing with dependency injection support";
     author = "Zdenek Behan <zdenek.behan@qoretechnologies.com>";
     url = "http://qore.org";
     license = "MIT";
+    init = \QUnit::Priv::installTimeoutStackDump();
 }
 
 /** @mainpage QUnit Module
@@ -158,6 +159,11 @@ public class MyTestClass inherits QUnit::DependencyInjectedTest {
 
     @section qunit_relnotes Release Notes
 
+    @subsection qunit_v0_5_2 Version 0.5.2
+    - when run by \c run_tests.sh, a test prints the call stacks of all its threads when it receives
+      \c SIGUSR1, which \c run_tests.sh sends to a test that exceeds its time limit before ending it, so the
+      log shows where the test hangs; a test that installs its own \c SIGUSR1 handler keeps it
+
     @subsection qunit_v0_5_1 Version 0.5.1
     - added @ref QUnit::Test::isConnectionError() "Test::isConnectionError()", a shared predicate
       for tests that talk to external services: it returns @ref True "True" for external-connection
@@ -234,6 +240,51 @@ public class MyTestClass inherits QUnit::DependencyInjectedTest {
 
 #! the main namespace for all public definitions in the %QUnit module
 public namespace QUnit {
+
+namespace Priv {
+    #! The environment variable naming the FIFO that \c run_tests.sh reads the test's events from
+    const TestEventFifoVar = "QORE_TEST_EVENT_FIFO";
+
+    #! Installs the SIGUSR1 handler that prints the call stacks of all threads, when run by \c run_tests.sh
+    /** \c run_tests.sh sends \c SIGUSR1 to a test that exceeds its time limit, waits until the test reports that it
+        has printed its stacks, and then ends it.  The handler is installed when the module is loaded, so a test that
+        installs its own \c SIGUSR1 handler replaces it.  The functions are called by name, as a Program that loads
+        this module can be restricted from using them; it then has no handler.
+    */
+    sub installTimeoutStackDump() {
+        if (!ENV{TestEventFifoVar}) {
+            return;
+        }
+        try {
+            call_function("set_signal_handler", SIGUSR1, \QUnit::Priv::timeoutStackDump());
+        } catch (hash<ExceptionInfo> ex) {
+            # this Program cannot handle signals; run_tests.sh then ends the test without the stacks
+        }
+    }
+
+    #! Prints the call stacks of all threads and reports to \c run_tests.sh that they have been printed
+    sub timeoutStackDump(int sig) {
+        try {
+            printf("=== QUnit: SIGUSR1: call stacks of all threads ===\n%N\n=== QUnit: end of call stacks ===\n",
+                call_function("get_all_thread_call_stacks"));
+        } catch (hash<ExceptionInfo> ex) {
+            printf("=== QUnit: SIGUSR1: the call stacks cannot be printed: %s: %s ===\n", ex.err, ex.desc);
+        }
+        flush();
+        *string fifo = ENV{TestEventFifoVar};
+        if (!fifo) {
+            return;
+        }
+        try {
+            # nonblocking: run_tests.sh keeps the FIFO open for reading, and a write must not wait if it does not
+            File f();
+            f.open2(fifo, O_WRONLY | O_NONBLOCK);
+            f.write("dumped\n");
+        } catch (hash<ExceptionInfo> ex) {
+            # run_tests.sh is not waiting for it; it ends the test after its time limit for the stacks
+        }
+    }
+}
 
 #! Whether assertion timestamps are enabled (-T flag or QUNIT_TIMESTAMPS env var)
 our bool timestamps_enabled;
