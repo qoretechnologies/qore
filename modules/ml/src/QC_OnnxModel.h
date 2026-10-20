@@ -813,6 +813,13 @@ private:
     DLLLOCAL void clearAsyncLeaderUnlocked();
     DLLLOCAL void resolveAsyncRequest(QorePromise* promise, QoreValue value);
     DLLLOCAL void rejectAsyncBatch(std::vector<std::unique_ptr<AsyncRequest>>& batch, ExceptionSink& err);
+    //! Moves the requests still queued for dynamic batching to the end of the given list
+    /** Called by a leader thread that exits early (when it is cancelled): no leader runs the requests left in the
+        queue, and a new leader is only started for a request submitted to an empty queue, so they are rejected with
+        the leader's batch; otherwise their Futures would never be settled and their inputs would stay referenced
+        until the pool is destroyed.  Also clears async_leader_tid for the calling leader.
+    */
+    DLLLOCAL void takeQueuedAsyncRequests(std::vector<std::unique_ptr<AsyncRequest>>& requests);
 
     DLLLOCAL static void singleAsyncThread(ExceptionSink* xsink, void* arg);
     DLLLOCAL static void dynamicRunAsyncThread(ExceptionSink* xsink, void* arg);

@@ -5434,6 +5434,17 @@ void QoreOnnxSessionPool::resolveAsyncRequest(QorePromise* promise, QoreValue va
     }
 }
 
+void QoreOnnxSessionPool::takeQueuedAsyncRequests(std::vector<std::unique_ptr<AsyncRequest>>& requests) {
+    std::lock_guard<std::mutex> lock(async_mutex);
+    requests.reserve(requests.size() + async_requests.size());
+    for (auto& request : async_requests) {
+        requests.push_back(std::move(request));
+    }
+    async_requests.clear();
+    // the leader exits with these requests; a request submitted from now on starts a new leader
+    clearAsyncLeaderUnlocked();
+}
+
 void QoreOnnxSessionPool::rejectAsyncBatch(std::vector<std::unique_ptr<AsyncRequest>>& batch,
         ExceptionSink& err) {
     std::string code = "ML-ONNX-ASYNC-ERROR";
@@ -5573,6 +5584,7 @@ void QoreOnnxSessionPool::processDynamicRunQueue(ExceptionSink* xsink) {
         if (qore_check_cancel(xsink, "OnnxSessionPool dynamic async batching")) {
             ExceptionSink err;
             err.assimilate(*xsink);
+            takeQueuedAsyncRequests(batch);
             rejectAsyncBatch(batch, err);
             return;
         }
@@ -5583,16 +5595,21 @@ void QoreOnnxSessionPool::processDynamicRunQueue(ExceptionSink* xsink) {
                     && qore_check_cancel(xsink, "OnnxSessionPool dynamic async batch input assembly")) {
                 ExceptionSink err;
                 err.assimilate(*xsink);
+                takeQueuedAsyncRequests(batch);
                 rejectAsyncBatch(batch, err);
                 return;
             }
             inputs->push(batch[i]->payload.refSelf(), xsink);
             if (*xsink) {
-                ExceptionSink err;
-                err.assimilate(*xsink);
-                rejectAsyncBatch(batch, err);
-                return;
+                break;
             }
+        }
+        if (*xsink) {
+            // only this batch fails; the leader goes on with the requests still queued, as after a failed run
+            ExceptionSink err;
+            err.assimilate(*xsink);
+            rejectAsyncBatch(batch, err);
+            continue;
         }
 
         const QoreListNode* output_names = batch.front()->output_names.get<const QoreListNode>();
@@ -5626,6 +5643,7 @@ void QoreOnnxSessionPool::processDynamicRunQueue(ExceptionSink* xsink) {
                 for (size_t j = i; j < batch.size(); ++j) {
                     remaining.push_back(std::move(batch[j]));
                 }
+                takeQueuedAsyncRequests(remaining);
                 rejectAsyncBatch(remaining, err);
                 return;
             }

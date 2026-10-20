@@ -202,6 +202,7 @@ public class MlTest inherits QUnit::Test {
         addTestCase("OnnxSessionPool async completion statistics", \onnxSessionPoolAsyncCompletionStatsTest());
         addTestCase("OnnxSessionPool async dynamic error statistics", \onnxSessionPoolAsyncDynamicErrorStatsTest());
         addTestCase("OnnxSessionPool async leader TID", \onnxSessionPoolAsyncLeaderTidTest());
+        addTestCase("OnnxSessionPool async leader cancellation", \onnxSessionPoolAsyncLeaderCancelTest());
         addTestCase("OnnxModel single value inference", \onnxSingleValueTest());
         addTestCase("OnnxModel error cases", \onnxErrorTest());
         addTestCase("OnnxModel bytes constructor", \onnxBytesConstructorTest());
@@ -5073,6 +5074,44 @@ public class MlTest inherits QUnit::Test {
         assertEq(leader, pool.getPoolStats().async_leader_tid, "the same leader batches the second request");
         assertFloat(3.0, f1.get(60s).Y[0], 1e-5);
         assertFloat(5.0, f2.get(60s).Y[0], 1e-5);
+    }
+
+    onnxSessionPoolAsyncLeaderCancelTest() {
+        if (skipOnnx()) {
+            return;
+        }
+
+        # the leader takes a batch only when it has two requests with the same outputs; the wait deadline never ends a
+        # wait here
+        ML::OnnxSessionPool pool(getTestModelPath(), <ML::OnnxSessionConfig>{"providers": ()},
+            {"max_sessions": 1, "dynamic_batch_size": 2, "dynamic_batch_wait_ms": 3600000});
+
+        # the first request starts the leader, which waits for a second request like it
+        Future<hash<auto>> f1 = pool.runAsync({"X": ((1.0,),)});
+        int leader = pool.getPoolStats().async_leader_tid;
+        assertTrue(leader > 0, "leader TID");
+        # this request asks for other outputs, so it is not batched with the first one and stays queued
+        Future<hash<auto>> f2 = pool.runAsync({"X": ((2.0,),)}, ("Y",));
+        # the request is kept for the leader also if it has not begun running yet
+        assertTrue(cancel_thread(leader, "leader cancelled by the test"));
+        # this request completes the first batch: the leader takes it, finds itself cancelled, and exits
+        Future<hash<auto>> f3 = pool.runAsync({"X": ((3.0,),)});
+
+        # every request is rejected, also the one still queued; the timeout is only a hang guard
+        list<Future<hash<auto>>> futures = (f1, f2, f3);
+        foreach Future<hash<auto>> f in (futures) {
+            assertThrows("THREAD-CANCELLED", "leader cancelled by the test", sub () { f.get(60s); }, NOTHING,
+                sprintf("request %d", $# + 1));
+        }
+        hash<auto> stats = pool.getPoolStats();
+        assertEq(0, stats.async_leader_tid, "the cancelled leader has exited");
+        assertEq(3, stats.async_errors);
+
+        # the next request starts a new leader, which serves it
+        Future<hash<auto>> f4 = pool.runAsync({"X": ((4.0,),)});
+        Future<hash<auto>> f5 = pool.runAsync({"X": ((5.0,),)});
+        assertFloat(9.0, f4.get(60s).Y[0], 1e-5);
+        assertFloat(11.0, f5.get(60s).Y[0], 1e-5);
     }
 
     onnxSessionPoolAsyncDynamicErrorStatsTest() {

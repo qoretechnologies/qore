@@ -878,6 +878,17 @@ bool OnnxSessionLease::isHeld() [flags=CONSTANT] {
     acquireSession() holds a session for the caller in an @ref OnnxSessionLease until it is released; a held
     session counts against the pool's capacity.
 
+    When dynamic batching is configured, one leader thread collects the requests of runAsync() into batches; its TID
+    is reported by getPoolStats() as \c async_leader_tid.  If the leader is cancelled with
+    @ref Qore::cancel_thread() "cancel_thread()", every request it has taken and every request still queued is
+    rejected with its \c THREAD-CANCELLED exception, and the next request starts a new leader.
+
+    @note The threads that run the requests of runAsync(), runTensorsAsync() and runBatchAsync() are started without
+    the calling @ref Qore::Program "Program", so an interrupt requested with
+    @ref Qore::SandboxManager::requestInterrupt() "SandboxManager::requestInterrupt()" for a sandboxed program does
+    not reach them: requests it has already submitted run to completion.  This is a current limitation; such a
+    request can be ended by cancelling its thread with @ref Qore::cancel_thread() "cancel_thread()".
+
     @par Example:
     @code{.py}
 ML::OnnxSessionPool pool("/models/customer-score.onnx",
@@ -1003,6 +1014,11 @@ ML::OnnxSessionPool pool("/models/customer-score.onnx",
     Future<hash<auto>> f = pool.runAsync({"X": ((42.0,),)}, ("score",));
 hash<auto> out = f.get(5s);
     @endcode
+
+    With dynamic batching, the request is run by the pool's leader thread (see getPoolStats(),
+    \c async_leader_tid); if the leader is cancelled, the Future is rejected with its \c THREAD-CANCELLED exception.
+
+    @note A sandbox interrupt does not reach the thread that runs the request; see @ref OnnxSessionPool
 
     @throw THREAD-CREATION-FAILURE if the async worker thread cannot be created
     @throw ML-ONNX-POOL-BACKPRESSURE if the async coalescing queue is full
