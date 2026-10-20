@@ -594,8 +594,9 @@ static bool write_depfile_list(const char* path, const std::string& output,
 // Program options
 static const char* output_path = nullptr;
 static int opt_level = 3;
-// Parallel backend codegen across N threads (split-after-opt). 0 = unset (single-object
-// codegen, the reference path). Propagated to libqore via the QCC_JOBS env var.
+// Maximum number of threads that compile the parts of a split module at once (split-after-opt).
+// 0 = unset (the CPU count). Propagated to libqore via the QCC_JOBS env var; it never changes the
+// output, as a module at or above the split threshold is always split into the same parts.
 static int aot_jobs = 0;
 static const char* target_triple = nullptr;
 static bool static_link = false;
@@ -1276,9 +1277,9 @@ static void print_usage(const char* prog) {
     printf("      --big-fn-threshold=N  Mark functions >= N IR blocks as OptimizeNone+NoInline\n");
     printf("                         (trades ~1-7%% runtime for up to 46x compile speedup;\n");
     printf("                         default: 200; 0 = off)\n");
-    printf("      --jobs=N           Parallel backend codegen threads, split-after-opt\n");
-    printf("                         (default: CPU count; throttled by the make jobserver;\n");
-    printf("                         1 = single-object codegen)\n");
+    printf("      --jobs=N           Parallel backend codegen threads for the parts of a\n");
+    printf("                         split module (default: CPU count; throttled by the make\n");
+    printf("                         jobserver; does not change the output)\n");
     printf("  -e, --entry=FN         Qore function the emitted C++ main() calls after\n"
            "                         registering script objects (default: main).\n"
            "                         Applies to one-shot multi-source mode and\n"

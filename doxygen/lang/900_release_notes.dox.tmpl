@@ -4820,6 +4820,15 @@ while (*binary chunk = input.read(65536)) {
       @ref nothing "NOTHING" from the hash but as \c NULL from a copy of it.  As with
       @ref exec_mode_ast "AST execution", such a hash or list is now a \c hash<auto> or \c list<auto> holding
       \c NULL in every execution mode, and an error message names the type of a \c NULL value as \c NULL
+    - Fixed \c qcc compiling identical source into different modules: a large module was split for
+      @ref qcc_parallel_codegen "parallel codegen" into as many parts as there were threads available when it was
+      compiled, which depends on the load of a <tt>make -j</tt> build and on the number of CPUs of the machine, and
+      the parts change the compiled code; two clean builds of %Qore's own modules gave different \c .qmod files for
+      33 of 391 modules.  A large module is now always split into 4 parts, and the number of threads only decides
+      how many parts are compiled at once.  On macOS, a compiled module also recorded the name of the temporary file
+      it was linked to, which has the process id in it, as its install name, and the names and modification times of
+      its object files, which are deleted after the link, in its debug map; it now gets its own path as its install
+      name and no debug map.  Identical source now gives identical compiled modules
     - Fixed a crash of IR, JIT and tiered execution and of compiled (\c qcc) code when a
       @ref thread_exit "thread_exit statement" left a @ref try "try" block: the catch block was entered for the
       thread_exit, which is not an exception, and the thread crashed while making the exception information.  As in

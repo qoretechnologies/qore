@@ -153,32 +153,46 @@ For multi-file script/application AOT, see
 
 `qcc` can parallelize LLVM backend codegen for a single compilation. It optimizes
 the whole module once (so cross-function optimization is unaffected), then
-`llvm::SplitModule(PreserveLocals=false)` partitions the optimized module into N
-balanced pieces along whole-function boundaries, codegens each piece concurrently on
-a worker thread (each with its own `LLVMContext` via a bitcode round-trip, since a
-`Value*` may not cross contexts, plus its own `TargetMachine`), and `ld -r`
-partial-links the per-partition objects back into one relocatable object.
+`llvm::SplitModule(PreserveLocals=false)` partitions the optimized module into 4
+(`QORE_AOT_SPLIT_PARTS`) balanced pieces along whole-function boundaries, codegens the
+pieces concurrently on worker threads (each piece with its own `LLVMContext` via a
+bitcode round-trip, since a `Value*` may not cross contexts, plus its own
+`TargetMachine`), and `ld -r` partial-links the per-partition objects, in partition
+order, back into one relocatable object.
 `SplitModule` externalizes internal symbols, so after the merge qcc re-internalizes
 the extras (ELF: `objcopy --localize-symbols`) to keep the split object
-symbol-equivalent to the single-object build. Output is byte-deterministic wherever
-the single-object build is.
+symbol-equivalent to the single-object build.
 
-- `--jobs=N` selects the number of codegen threads (default: CPU count, capped at
-  32; `1` = single-object, the reference path). `qcc` propagates it to the backend
-  via the `QCC_JOBS` environment variable.
+- The partition count is fixed, so the object depends only on the module: identical
+  source gives a byte-identical qmod whatever the build's load, the machine's CPU count
+  or the number of codegen threads. When the partition count followed the threads
+  available (the jobserver tokens free at that moment, or the CPU count), 33 of 391 qlib
+  qmods differed between two clean builds of the same source. Measured on DataProvider,
+  the largest qlib module: 4 parts compile in 27.4 s on free cores against 39.3 s for a
+  single object (16 and 32 parts: 25.5 s and 25.8 s), and 4 parts compiled one after
+  another on one core take 43.3 s.
+- `--jobs=N` selects the maximum number of codegen threads (default: CPU count, capped
+  at 32; `1` compiles the parts one after another). `qcc` propagates it to the backend
+  via the `QCC_JOBS` environment variable. It never changes the output.
 - Splitting is gated by a size threshold (`QCC_SPLIT_THRESHOLD`, default `50000`
   optimized-IR instructions — a CPU-speed-invariant metric) so trivially small
   modules are never split.
 - Concurrency is bounded by a **GNU make jobserver client**: qcc parses `MAKEFLAGS`
-  and acquires tokens *before* splitting; if no spare tokens are available (a
-  saturated `make -jN`), it falls back to single codegen so a parallel build is
-  never oversubscribed. The client supports both the make 4.4+ named-pipe form
+  and acquires tokens for the codegen threads; if no spare tokens are available (a
+  saturated `make -jN`), it compiles the parts one after another on its own slot so
+  a parallel build is never oversubscribed. The client supports both the make 4.4+
+  named-pipe form
   (`--jobserver-auth=fifo:PATH`) and the older inherited-fd form
   (`--jobserver-auth=R,W` / `--jobserver-fds=R,W`); each qcc process owns one
   implicit job slot and uses extra codegen threads only for tokens it can acquire
   non-blockingly. This makes parallel codegen safe to leave default-on under
-  `make -j`.
+  `make -j`, and the tokens never change the output.
 - `QORE_AOT_SIZE_DEBUG` traces the module instruction count and the split decision.
+- On macOS a module is linked with its final path as its install name and without a
+  debug map (`-Xlinker -S`): it is linked to a temporary file whose name has the process
+  id in it, and its object files are deleted after the link, so the default install
+  name and the debug map (object paths and modification times) made every link
+  different. ELF modules have no soname and keep their debug information.
 
 ## User Module Build Behavior
 
