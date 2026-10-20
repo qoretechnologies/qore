@@ -348,6 +348,10 @@ public:
     DLLLOCAL ~qore_socket_op_helper();
 };
 
+//! Creates the TLS connection of a socket and releases it again if setting it up fails
+/** Holds a reference of its own to the connection, so the connection can be set up with get() while another thread
+    closes the socket.
+*/
 class SSLSocketHelperHelper {
 protected:
     qore_socket_private* s;
@@ -359,6 +363,12 @@ public:
 
     DLLLOCAL ~SSLSocketHelperHelper();
 
+    //! Returns the new connection
+    DLLLOCAL SSLSocketHelper* get() const {
+        return ssl;
+    }
+
+    //! Releases the socket's reference to the new connection, unless a thread closing the socket released it
     DLLLOCAL void error();
 };
 
@@ -979,7 +989,13 @@ struct qore_socket_private : public QoreReferenceCounter {
     std::string socketname;
     // issue #3053: client target for SNI
     std::string client_target;
-    SSLSocketHelper* ssl = nullptr;
+    //! The TLS connection of the socket, if any
+    /** Set and cleared with @ref close_m held.  Another thread can close the socket, which releases the connection,
+        at any time, so the connection is only used through a reference taken with @ref close_m held (see getSsl() and
+        IoUseHelper); the pointer itself is read without the lock only to tell whether the socket has a TLS
+        connection.
+    */
+    std::atomic<SSLSocketHelper*> ssl{nullptr};
     mutable QoreThreadLock tls_state_cache_m;
     mutable std::string ssl_cipher_name_cache;
     mutable std::string ssl_cipher_version_cache;
@@ -1017,12 +1033,129 @@ struct qore_socket_private : public QoreReferenceCounter {
         (@ref close_and_reset(), @ref replaceDescriptor()) and every @c ::shutdown() made without the outer lock
         therefore happen under this lock, and a release happens exactly once.  It also serialises the SSL
         shutdown/deref pair, which crashed inside SSL_shutdown on freed state when two closers both saw an SSL
-        object (CI job 170545).
+        object (CI job 170545), with the references that other threads take to the TLS connection (getSsl(),
+        IoUseHelper), and the uses of the descriptor by I/O calls with its release (@ref shared_fd).
 
         No blocking I/O and no code that can release Qore objects run while this lock is held, so it can be
         acquired without the outer lock and while the outer lock is held.
     */
     QoreThreadLock close_m;
+
+    //! A reference to the TLS connection of a socket, released when the object is destroyed
+    class SslRef {
+    public:
+        DLLLOCAL SslRef() = default;
+
+        //! Takes over a reference
+        DLLLOCAL explicit SslRef(SSLSocketHelper* ssl) : ssl(ssl) {
+        }
+
+        DLLLOCAL SslRef(SslRef&& old) noexcept : ssl(old.ssl) {
+            old.ssl = nullptr;
+        }
+
+        DLLLOCAL ~SslRef() {
+            if (ssl) {
+                ssl->deref();
+            }
+        }
+
+        SslRef(const SslRef&) = delete;
+        SslRef& operator=(const SslRef&) = delete;
+        SslRef& operator=(SslRef&&) = delete;
+
+        DLLLOCAL SSLSocketHelper* operator->() const {
+            assert(ssl);
+            return ssl;
+        }
+
+        DLLLOCAL explicit operator bool() const {
+            return ssl != nullptr;
+        }
+
+        DLLLOCAL SSLSocketHelper* get() const {
+            return ssl;
+        }
+
+        //! Gives up the reference without releasing it and returns the connection
+        DLLLOCAL SSLSocketHelper* release() {
+            SSLSocketHelper* rv = ssl;
+            ssl = nullptr;
+            return rv;
+        }
+
+        //! Takes over a reference; the object must not hold one
+        DLLLOCAL void assign(SSLSocketHelper* s) {
+            assert(!ssl);
+            ssl = s;
+        }
+
+    private:
+        SSLSocketHelper* ssl = nullptr;
+    };
+
+    //! Returns a reference to the TLS connection of the socket, or an empty reference if the socket has none
+    /** The reference keeps the connection valid while another thread closes the socket.
+    */
+    DLLLOCAL SslRef getSsl();
+
+    //! A descriptor of the socket, shared by the socket with the I/O calls that use it
+    /** When the socket is closed while an I/O call uses its descriptor, the descriptor is shut down, which makes the
+        call fail, but it is closed only when the last call using it ends: the system gives the lowest free descriptor
+        number to the next socket or file opened by any thread, so a call still using the number of a closed
+        descriptor could read from or write to another connection.
+    */
+    struct SharedDescriptor {
+        //! the descriptor
+        int fd;
+        //! set when the socket was closed while I/O calls used the descriptor: the last one closes it
+        bool close_on_release = false;
+
+        DLLLOCAL SharedDescriptor(int fd) : fd(fd) {
+        }
+
+        DLLLOCAL ~SharedDescriptor() {
+            if (close_on_release) {
+                closeDescriptor(fd);
+            }
+        }
+    };
+
+    //! The socket's descriptor as shared with the I/O calls using it; guarded by @ref close_m
+    /** Created by the first IoUseHelper for the descriptor; every copy is made and released with @ref close_m held,
+        so its use count tells whether an I/O call uses the descriptor.
+    */
+    std::shared_ptr<SharedDescriptor> shared_fd;
+
+    //! Keeps the descriptor and the TLS connection of a socket valid for an I/O call
+    /** Another thread can close the socket while the call runs: the call then fails, but neither its descriptor
+        number nor its TLS connection can be released while it uses them.  Taken with @ref close_m held, so the
+        descriptor and the connection are those of the same open connection, or neither if the socket was closed.
+    */
+    class IoUseHelper {
+    public:
+        DLLLOCAL IoUseHelper(qore_socket_private& priv);
+
+        DLLLOCAL ~IoUseHelper();
+
+        IoUseHelper(const IoUseHelper&) = delete;
+        IoUseHelper& operator=(const IoUseHelper&) = delete;
+
+        //! Returns the TLS connection, or nullptr if the socket has none or was closed
+        DLLLOCAL SSLSocketHelper* getSsl() const {
+            return ssl.get();
+        }
+
+        //! Returns the descriptor, or @ref QORE_INVALID_SOCKET if the socket was closed
+        DLLLOCAL int getDescriptor() const {
+            return fd ? fd->fd : QORE_INVALID_SOCKET;
+        }
+
+    private:
+        qore_socket_private& priv;
+        std::shared_ptr<SharedDescriptor> fd;
+        SslRef ssl;
+    };
 
     //! Holds @ref close_m for the scope of the object
     class CloseLockHelper {
@@ -1051,6 +1184,30 @@ struct qore_socket_private : public QoreReferenceCounter {
         without @ref close_m would act on the reused number.
     */
     std::function<void()> dbg_after_fd_release;
+
+    //! Debug-only: run once at the start of the next SSL I/O call on the socket; set with dbgSetBeforeSslIo()
+    /** Lets a test close the socket from another thread at the point where an I/O call is about to use the TLS
+        connection.  Guarded by @ref dbg_close_lock_m.
+    */
+    std::function<void()> dbg_before_ssl_io;
+    //! Debug-only: true while @ref dbg_before_ssl_io is set, so the I/O calls of other sockets do not lock
+    std::atomic<bool> dbg_before_ssl_io_set{false};
+
+    //! Debug-only: sets the hook run once at the start of the next SSL I/O call on the socket
+    DLLLOCAL void dbgSetBeforeSslIo(std::function<void()> hook) {
+        std::lock_guard<std::mutex> g(dbg_close_lock_m);
+        dbg_before_ssl_io = std::move(hook);
+        dbg_before_ssl_io_set.store(true, std::memory_order_release);
+    }
+
+    //! Debug-only: returns the hook set with dbgSetBeforeSslIo() and clears it
+    DLLLOCAL std::function<void()> dbgTakeBeforeSslIo() {
+        std::lock_guard<std::mutex> g(dbg_close_lock_m);
+        std::function<void()> rv;
+        rv.swap(dbg_before_ssl_io);
+        dbg_before_ssl_io_set.store(false, std::memory_order_relaxed);
+        return rv;
+    }
 
     //! Debug-only: counts the acquisitions of @ref close_m that have started, for tests
     int dbg_close_lock_waits = 0;
@@ -1726,6 +1883,8 @@ struct qore_socket_private : public QoreReferenceCounter {
             return false;
         }
         sock = new_fd;
+        // the caller closes the old descriptor
+        shared_fd.reset();
         // any sync I/O helper mid-wait returns QSE_NOT_OPEN instead of using the old descriptor
         ++fd_generation;
         return true;
@@ -1760,27 +1919,34 @@ struct qore_socket_private : public QoreReferenceCounter {
     }
 
     //! Closes the descriptor and resets the connection state; @ref close_m must be held
+    /** If an I/O call uses the descriptor, the last I/O call using it closes it; see @ref SharedDescriptor
+    */
     DLLLOCAL int close_and_reset_locked() {
         assert(sock != QORE_INVALID_SOCKET);
         closeBindReservations();
-        int rc;
-        while (true) {
+        int rc = 0;
+        if (shared_fd && shared_fd->fd == sock && shared_fd.use_count() > 1) {
+            shared_fd->close_on_release = true;
+        } else {
+            while (true) {
 #ifdef _Q_WINDOWS
-            rc = ::closesocket(sock);
+                rc = ::closesocket(sock);
 #else
-            rc = ::close(sock);
+                rc = ::close(sock);
 #endif
-            // try again if close was interrupted by a signal
-            if (!rc || sock_get_error() != EINTR) {
-                break;
+                // try again if close was interrupted by a signal
+                if (!rc || sock_get_error() != EINTR) {
+                    break;
+                }
             }
-        }
-        //printd(5, "qore_socket_private::close_and_reset(this: %p) close(%d) returned %d\n", this, sock, rc);
+            //printd(5, "qore_socket_private::close_and_reset(this: %p) close(%d) returned %d\n", this, sock, rc);
 #ifdef DEBUG
-        if (dbg_after_fd_release) {
-            dbg_after_fd_release();
-        }
+            if (dbg_after_fd_release) {
+                dbg_after_fd_release();
+            }
 #endif
+        }
+        shared_fd.reset();
         sock = QORE_INVALID_SOCKET;
         // Bump fd_generation so any sync I/O helper currently in its
         // poll-wait phase (with outer_lock released) sees the generation
@@ -1865,31 +2031,30 @@ struct qore_socket_private : public QoreReferenceCounter {
             old_h2_stream_complete_callback.swap(h2_stream_complete_callback);
 
             if (sock >= 0) {
-                // Cancel any in-flight I/O on this socket BEFORE touching the SSL
-                // state.  The SSL object is not thread-safe (see SSLSocketHelper.h
-                // line 70: "all operations must be already locked"), and a concurrent
-                // SSL_read/SSL_write on another thread colliding with the SSL_shutdown
-                // below corrupts the internal cipher context — SIGSEGV inside
-                // EVP_CIPHER_get_mode / EVP_CIPHER_CTX_get0_cipher has been observed
-                // under H2 teardown load (e.g. CI jobs 170545, 170659).
-                //
-                // A TCP-level shutdown(SHUT_RDWR) makes any pending/blocking SSL I/O
-                // on other threads return a fatal error (EPIPE/ECONNRESET/WANT_READ
-                // loops resolve to failure), so by the time SSL_shutdown runs below
-                // no other thread is still inside an SSL call on this context.  This
-                // is the "cancel I/O first, then shutdown" invariant.
+                // Cancel any in-flight I/O on this socket first: a TCP-level shutdown(SHUT_RDWR) makes an I/O call
+                // in progress on another thread fail and return.  It does not wait for that call to return, so the
+                // call can still be using the descriptor and the TLS connection: both are released by the call's
+                // IoUseHelper when it is still in progress (see SharedDescriptor and getSsl()).
                 //
                 // Ignore errors from the shutdown syscall: already-shutdown sockets
                 // return ENOTCONN, and we only need best-effort cancellation here.
                 ::shutdown(sock, SHUTDOWN_ARG);
 
-                // if an SSL connection has been established, shut it down first and release it while the descriptor
-                // is still open; releasing it runs no Qore code
-                if (ssl) {
-                    ssl->shutdown();
-                    ssl->deref();
-                    ssl = nullptr;
+                // release the TLS connection, if any; releasing it runs no Qore code
+                if (SSLSocketHelper* old_ssl = ssl.load(std::memory_order_relaxed)) {
+                    // SSL_shutdown() only if no other thread holds the connection: the calls of an SSL object must
+                    // not run concurrently, and a concurrent SSL_read() or SSL_write() colliding with
+                    // SSL_shutdown() corrupts the cipher context (SIGSEGV inside EVP_CIPHER_get_mode /
+                    // EVP_CIPHER_CTX_get0_cipher under H2 teardown load, CI jobs 170545, 170659).  The other
+                    // threads take their references with this lock held, so none can start an SSL call before the
+                    // connection is released here.  Nothing is lost by not calling it: the descriptor is already
+                    // shut down, so the close notification could not be sent.
+                    if (old_ssl->onlySocketReference()) {
+                        old_ssl->shutdown();
+                    }
+                    ssl.store(nullptr, std::memory_order_relaxed);
                     advanceTlsStateGen();
+                    old_ssl->deref();
                 }
 
                 if (!socketname.empty()) {
@@ -2101,13 +2266,14 @@ struct qore_socket_private : public QoreReferenceCounter {
     DLLLOCAL int accept_intern(ExceptionSink* xsink, struct sockaddr *addr, socklen_t *size) {
         assert(xsink);
 
+        IoUseHelper io_use(*this);
         OptionalNonBlockingHelper onbh(*this, true, xsink);
         if (*xsink) {
             return -1;
         }
 
         while (true) {
-            int rc = ::accept(sock, addr, size);
+            int rc = ::accept(io_use.getDescriptor(), addr, size);
             if (rc != QORE_INVALID_SOCKET) {
                 // The listener is non-blocking while owned by the async I/O controller.
                 // Some platforms propagate that flag to accepted sockets; return accepted
@@ -2320,11 +2486,16 @@ struct qore_socket_private : public QoreReferenceCounter {
     }
 
     DLLLOCAL void do_ssl_established_event() {
+        // taken before event_queue_m, which close_internal() locks with close_m held
+        SslRef s = getSsl();
         AutoLocker al(event_queue_m);
         if (event_queue) {
             QoreHashNode* h = getEvent(QORE_EVENT_SSL_ESTABLISHED);
-            h->setKeyValue("cipher", new QoreStringNode(ssl->getCipherName()), nullptr);
-            h->setKeyValue("cipher_version", new QoreStringNode(ssl->getCipherVersion()), nullptr);
+            // the connection is gone if another thread closed the socket
+            if (s) {
+                h->setKeyValue("cipher", new QoreStringNode(s->getCipherName()), nullptr);
+                h->setKeyValue("cipher_version", new QoreStringNode(s->getCipherVersion()), nullptr);
+            }
             event_queue->pushAndTakeRef(h);
         }
     }
@@ -2525,7 +2696,13 @@ struct qore_socket_private : public QoreReferenceCounter {
 
     DLLLOCAL bool peekSslApplicationData(const char* mname, ExceptionSink* xsink) {
         assert(xsink);
-        assert(ssl);
+
+        IoUseHelper io_use(*this);
+        SSLSocketHelper* s = io_use.getSsl();
+        if (!s) {
+            se_not_open("Socket", mname, xsink);
+            return false;
+        }
 
         OptionalNonBlockingHelper nbh(*this, true, xsink);
         if (*xsink) {
@@ -2533,7 +2710,7 @@ struct qore_socket_private : public QoreReferenceCounter {
         }
 
         size_t real_io = 0;
-        int rc = ssl->doNonBlockingIo(xsink, mname, rbuf, 1, PEEK, real_io);
+        int rc = s->doNonBlockingIo(xsink, mname, rbuf, 1, PEEK, real_io);
         if (*xsink) {
             return false;
         }
@@ -3662,8 +3839,9 @@ struct qore_socket_private : public QoreReferenceCounter {
         // the generation is read first: a change of the TLS state while the cipher is read advances it, so the
         // values cached here are not used
         uint64_t gen = tls_state_gen.load(std::memory_order_acquire);
-        const char* name = ssl ? ssl->getCipherName() : nullptr;
-        const char* version = ssl ? ssl->getCipherVersion() : nullptr;
+        SslRef s = getSsl();
+        const char* name = s ? s->getCipherName() : nullptr;
+        const char* version = s ? s->getCipherVersion() : nullptr;
         AutoLocker al(tls_state_cache_m);
         tls_cipher_gen = gen;
         tls_cipher_name_set = name != nullptr;
@@ -3694,14 +3872,16 @@ struct qore_socket_private : public QoreReferenceCounter {
     DLLLOCAL void setSslVerifyMode(int mode) {
         //printd(5, "qore_socket_private::setSslVerifyMode() this: %p mode: %d\n", this, mode);
         ssl_verify_mode = mode;
-        if (ssl)
-            ssl->setVerifyMode(ssl_verify_mode, ssl_accept_all_certs, client_target);
+        if (SslRef s = getSsl()) {
+            s->setVerifyMode(ssl_verify_mode, ssl_accept_all_certs, client_target);
+        }
     }
 
     DLLLOCAL void acceptAllCertificates(bool accept_all = true) {
         ssl_accept_all_certs = accept_all;
-        if (ssl)
-            ssl->setVerifyMode(ssl_verify_mode, ssl_accept_all_certs, client_target);
+        if (SslRef s = getSsl()) {
+            s->setVerifyMode(ssl_verify_mode, ssl_accept_all_certs, client_target);
+        }
     }
 
     DLLLOCAL void setSslErrorString(QoreStringNode* err_str) {

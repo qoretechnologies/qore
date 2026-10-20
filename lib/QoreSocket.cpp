@@ -312,10 +312,11 @@ void se_closed(const char* cname, const char* mname, ExceptionSink* xsink) {
 }
 
 static int qore_socket_plain_data_available(qore_socket_private* priv, const char* mname, ExceptionSink* xsink) {
+    qore_socket_private::IoUseHelper io_use(*priv);
     unsigned loop = 0;
     while (true) {
         char c;
-        ssize_t rc = ::recv(priv->sock, &c, 1, MSG_PEEK | MSG_DONTWAIT);
+        ssize_t rc = ::recv(io_use.getDescriptor(), &c, 1, MSG_PEEK | MSG_DONTWAIT);
         if (rc > 0) {
             return 1;
         }
@@ -721,8 +722,10 @@ public:
         if (priv->buflen) {
             return true;
         }
-        if (priv->ssl && priv->ssl->pending() > 0) {
-            return true;
+        if (qore_socket_private::SslRef ssl = priv->getSsl()) {
+            if (ssl->pending() > 0) {
+                return true;
+            }
         }
         return priv->h2_session && (priv->h2_session->hasStreamData() || priv->h2_session->wantWrite());
     }
@@ -778,14 +781,15 @@ public:
             return nullptr;
         }
 
-        if (priv->ssl) {
+        qore_socket_private::IoUseHelper io_use(*priv);
+        if (SSLSocketHelper* ssl = io_use.getSsl()) {
             char c;
             size_t real_io = 0;
             OptionalNonBlockingHelper nbh(*priv, true, xsink);
             if (*xsink) {
                 return nullptr;
             }
-            int rc = priv->ssl->doNonBlockingIo(xsink, "isDataAvailable", &c, 1, PEEK, real_io);
+            int rc = ssl->doNonBlockingIo(xsink, "isDataAvailable", &c, 1, PEEK, real_io);
             if (*xsink) {
                 return nullptr;
             }
@@ -3463,20 +3467,21 @@ public:
         }
 
         qore_socket_private* priv = qore_socket_private::get(*sock);
+        qore_socket_private::SslRef ssl = priv->getSsl();
         switch (action) {
             case Action::GetCipherName:
                 // other threads read the cipher from the cache until the TLS state changes
                 priv->cacheTlsCipher();
-                setStringValue(priv->ssl ? priv->ssl->getCipherName() : nullptr);
+                setStringValue(ssl ? ssl->getCipherName() : nullptr);
                 break;
 
             case Action::GetCipherVersion:
                 priv->cacheTlsCipher();
-                setStringValue(priv->ssl ? priv->ssl->getCipherVersion() : nullptr);
+                setStringValue(ssl ? ssl->getCipherVersion() : nullptr);
                 break;
 
             case Action::IsSecure:
-                output = static_cast<bool>(priv->ssl);
+                output = static_cast<bool>(ssl);
                 break;
 
             case Action::SetAlpnProtocols:
@@ -3494,11 +3499,11 @@ public:
                 break;
 
             case Action::IsHttp2:
-                output = priv->ssl ? priv->ssl->isHttp2() : false;
+                output = ssl ? ssl->isHttp2() : false;
                 break;
 
             case Action::VerifyPeerCertificate:
-                output = priv->ssl ? static_cast<int64>(priv->ssl->verifyPeerCertificate()) : static_cast<int64>(-1);
+                output = ssl ? static_cast<int64>(ssl->verifyPeerCertificate()) : static_cast<int64>(-1);
                 break;
 
             case Action::GetRemoteCertificate:
@@ -3547,10 +3552,11 @@ private:
     }
 
     DLLLOCAL void setAlpnValue(qore_socket_private* priv) {
-        if (!priv->ssl) {
+        qore_socket_private::SslRef ssl = priv->getSsl();
+        if (!ssl) {
             return;
         }
-        std::string proto = priv->ssl->getAlpnProtocol();
+        std::string proto = ssl->getAlpnProtocol();
         if (!proto.empty()) {
             output = new QoreStringNode(proto.c_str());
         }
@@ -5623,9 +5629,48 @@ qore_socket_op_helper::~qore_socket_op_helper() {
     s->in_op = -1;
 }
 
-SSLSocketHelperHelper::SSLSocketHelperHelper(qore_socket_private* sock, bool set_thread_context) : s(sock) {
-    assert(!s->ssl);
-    ssl = s->ssl = new SSLSocketHelper(*sock);
+qore_socket_private::SslRef qore_socket_private::getSsl() {
+    CloseLockHelper cl(*this);
+    SSLSocketHelper* s = ssl.load(std::memory_order_relaxed);
+    if (s) {
+        s->ref();
+    }
+    return SslRef(s);
+}
+
+qore_socket_private::IoUseHelper::IoUseHelper(qore_socket_private& priv) : priv(priv) {
+    CloseLockHelper cl(priv);
+    if (priv.sock != QORE_INVALID_SOCKET) {
+        if (!priv.shared_fd || priv.shared_fd->fd != priv.sock) {
+            priv.shared_fd = std::make_shared<SharedDescriptor>(priv.sock);
+        }
+        fd = priv.shared_fd;
+    }
+    if (SSLSocketHelper* s = priv.ssl.load(std::memory_order_relaxed)) {
+        s->ref();
+        ssl.assign(s);
+    }
+}
+
+qore_socket_private::IoUseHelper::~IoUseHelper() {
+    if (fd) {
+        // the last use of a descriptor that the socket gave up closes it; every release of a descriptor is made with
+        // close_m held
+        CloseLockHelper cl(priv);
+        fd.reset();
+    }
+}
+
+SSLSocketHelperHelper::SSLSocketHelperHelper(qore_socket_private* sock, bool set_thread_context) : s(sock),
+        ssl(new SSLSocketHelper(*sock)) {
+    // the second reference is this object's own, released by the destructor: a thread closing the socket while the
+    // connection is set up releases the socket's reference
+    ssl->ref();
+    {
+        qore_socket_private::CloseLockHelper cl(*s);
+        assert(!s->ssl.load(std::memory_order_relaxed));
+        s->ssl.store(ssl, std::memory_order_relaxed);
+    }
     s->advanceTlsStateGen();
 
     //printd(5, "SSLSocketHelperHelper::SSLSocketHelperHelper() priv: %p STC: %d CR: %d\n", s, set_thread_context, s->ssl_capture_remote_cert);
@@ -5641,16 +5686,23 @@ SSLSocketHelperHelper::~SSLSocketHelperHelper() {
         qore_socket_private::current_socket = nullptr;
         //printd(5, "SSLSocketHelperHelper::~SSLSocketHelperHelper() priv: %p RESET\n", s);
     }
+    ssl->deref();
 }
 
 void SSLSocketHelperHelper::error() {
-    // s->ssl may already be nullptr if handleErrorIntern() closed the socket.
-    // during SSL negotiation, which derefs ssl and nulls s->ssl; in that case the
-    // SSLSocketReferenceHelper in setIntern() already deleted the object on deref
-    if (s->ssl) {
-        ssl->deref();
-        s->ssl = nullptr;
+    // the socket's reference is already released if the socket was closed while the connection was set up, by
+    // another thread or by handleErrorIntern()
+    bool release;
+    {
+        qore_socket_private::CloseLockHelper cl(*s);
+        release = s->ssl.load(std::memory_order_relaxed) == ssl;
+        if (release) {
+            s->ssl.store(nullptr, std::memory_order_relaxed);
+        }
+    }
+    if (release) {
         s->advanceTlsStateGen();
+        ssl->deref();
     }
 }
 
@@ -6455,6 +6507,9 @@ void SSLSocketHelper::clearRemoteCertContext() const {
 
 SSLSocketReferenceHelper::SSLSocketReferenceHelper(SSLSocketHelper* s, bool set_thread_context) : s(s) {
     s->ref();
+#ifdef DEBUG
+    s->dbg_call_refs.fetch_add(1, std::memory_order_relaxed);
+#endif
     if (set_thread_context && s->captureRemoteCert()) {
         context_saved = true;
     }
@@ -6464,6 +6519,9 @@ SSLSocketReferenceHelper::~SSLSocketReferenceHelper() {
     if (context_saved) {
         s->clearRemoteCertContext();
     }
+#ifdef DEBUG
+    s->dbg_call_refs.fetch_sub(1, std::memory_order_relaxed);
+#endif
     s->deref();
 }
 
@@ -8406,7 +8464,14 @@ SocketConnectSslPollState::SocketConnectSslPollState(ExceptionSink* xsink, qore_
     sock->do_start_ssl_event();
     // issue #3053: send target hostname to support SNI
     const char* sni_target_host = sock->client_target.empty() ? "" : sock->client_target.c_str();
-    if (sock->ssl->setClient(xsink, "connectSsl", sni_target_host, sock->sock, cert, pkey)) {
+    // the descriptor given to the TLS connection is that of the open socket, not a number released by a close
+    qore_socket_private::IoUseHelper io_use(*sock);
+    if (io_use.getDescriptor() == QORE_INVALID_SOCKET) {
+        se_not_open("Socket", "connectSSL", xsink);
+        sshh.error();
+        return;
+    }
+    if (sshh.get()->setClient(xsink, "connectSsl", sni_target_host, io_use.getDescriptor(), cert, pkey)) {
         sshh.error();
         return;
     }
@@ -8414,7 +8479,7 @@ SocketConnectSslPollState::SocketConnectSslPollState(ExceptionSink* xsink, qore_
     // Set ALPN protocols if configured (for HTTP/2 support).
     // This must match the async SSL poll setup paths.
     if (use_alpn && !sock->alpn_protocols.empty()) {
-        sock->ssl->setAlpnProtocols(sock->alpn_protocols);
+        sshh.get()->setAlpnProtocols(sock->alpn_protocols);
     }
 }
 
@@ -8425,19 +8490,29 @@ SocketConnectSslPollState::SocketConnectSslPollState(ExceptionSink* xsink, qore_
     - < 1 = error (exception raised)
 */
 int SocketConnectSslPollState::continuePoll(ExceptionSink* xsink) {
-    return sock->ssl->startConnect(xsink);
+    qore_socket_private::IoUseHelper io_use(*sock);
+    SSLSocketHelper* ssl = io_use.getSsl();
+    if (!ssl) {
+        se_not_open("Socket", "connectSSL", xsink);
+        return -1;
+    }
+    return ssl->startConnect(xsink);
 }
 
 SocketConnectLayeredSslPollState::SocketConnectLayeredSslPollState(ExceptionSink* xsink, qore_socket_private* sock,
         QoreSSLCertificate* cert, QoreSSLPrivateKey* pkey) : sock(sock) {
     assert(sock->sock);
     assert(sock->ssl);
-    SSLSocketHelper* outer = sock->ssl;
+    // the new connection takes over this reference to the connection that carries it
+    qore_socket_private::SslRef outer = sock->getSsl();
+    if (!outer) {
+        se_not_open("Socket", "connectSSL", xsink);
+        return;
+    }
     SSLSocketHelper* inner = new SSLSocketHelper(*sock);
-    // the new connection takes over a reference to the connection that carries it
-    outer->ref();
     const char* sni_target_host = sock->client_target.empty() ? "" : sock->client_target.c_str();
-    if (inner->setLayeredClient(xsink, "connectSsl", sni_target_host, outer, cert, pkey)) {
+    SSLSocketHelper* outer_ssl = outer.release();
+    if (inner->setLayeredClient(xsink, "connectSsl", sni_target_host, outer_ssl, cert, pkey)) {
         // the socket keeps the outer connection
         inner->deref();
         return;
@@ -8445,15 +8520,34 @@ SocketConnectLayeredSslPollState::SocketConnectLayeredSslPollState(ExceptionSink
     if (!sock->alpn_protocols.empty()) {
         inner->setAlpnProtocols(sock->alpn_protocols);
     }
-    // the socket's reference to the outer connection is now held by the new connection
-    sock->ssl = inner;
+    // the new connection replaces the outer connection as the socket's connection, unless another thread closed the
+    // socket meanwhile; the socket's reference to the outer connection is released, as the new connection holds one
+    bool replaced;
+    {
+        qore_socket_private::CloseLockHelper cl(*sock);
+        replaced = sock->ssl.load(std::memory_order_relaxed) == outer_ssl;
+        if (replaced) {
+            sock->ssl.store(inner, std::memory_order_relaxed);
+        }
+    }
+    if (!replaced) {
+        inner->deref();
+        se_not_open("Socket", "connectSSL", xsink);
+        return;
+    }
     sock->advanceTlsStateGen();
-    outer->deref();
+    outer_ssl->deref();
     sock->do_start_ssl_event();
 }
 
 int SocketConnectLayeredSslPollState::continuePoll(ExceptionSink* xsink) {
-    return sock->ssl->startConnect(xsink);
+    qore_socket_private::IoUseHelper io_use(*sock);
+    SSLSocketHelper* ssl = io_use.getSsl();
+    if (!ssl) {
+        se_not_open("Socket", "connectSSL", xsink);
+        return -1;
+    }
+    return ssl->startConnect(xsink);
 }
 
 SocketSendPollState::SocketSendPollState(ExceptionSink* xsink, qore_socket_private* sock, const char* data,
@@ -8467,6 +8561,7 @@ SocketSendPollState::SocketSendPollState(ExceptionSink* xsink, qore_socket_priva
     - < 0 = error (exception raised)
 */
 int SocketSendPollState::continuePoll(ExceptionSink* xsink) {
+    qore_socket_private::IoUseHelper io_use(*sock);
     OptionalNonBlockingHelper nbh(*sock, true, xsink);
     if (*xsink) {
         return -1;
@@ -8477,9 +8572,9 @@ int SocketSendPollState::continuePoll(ExceptionSink* xsink) {
 
     while (true) {
         ssize_t rc;
-        if (sock->ssl) {
+        if (SSLSocketHelper* ssl = io_use.getSsl()) {
             size_t real_io = 0;
-            rc = sock->ssl->doNonBlockingIo(xsink, "send", const_cast<char*>(data + sent), size - sent,
+            rc = ssl->doNonBlockingIo(xsink, "send", const_cast<char*>(data + sent), size - sent,
                 SslAction::WRITE, real_io);
             if (*xsink) {
                 assert(!real_io);
@@ -8502,7 +8597,7 @@ int SocketSendPollState::continuePoll(ExceptionSink* xsink) {
             }
             return rc;
         } else {
-            rc = ::send(sock->sock, data + sent, size - sent, 0);
+            rc = ::send(io_use.getDescriptor(), data + sent, size - sent, 0);
             //printd(5, "SocketSendPollState::continuePoll() left: %ld rc: %ld errno: %d)\n", size - sent, rc,
             //    errno);
             if (*xsink) {
@@ -8572,8 +8667,15 @@ SocketAcceptSslPollState::SocketAcceptSslPollState(ExceptionSink* xsink, qore_so
     SSLSocketHelperHelper sshh(sock, true);
 
     sock->do_start_ssl_event();
+    // the descriptor given to the TLS connection is that of the open socket, not a number released by a close
+    qore_socket_private::IoUseHelper io_use(*sock);
+    if (io_use.getDescriptor() == QORE_INVALID_SOCKET) {
+        se_not_open("Socket", "acceptSSL", xsink);
+        sshh.error();
+        return;
+    }
     int rc;
-    if ((rc = sock->ssl->setServer(xsink, "acceptSSL", sock->sock, cert, pkey))) {
+    if ((rc = sshh.get()->setServer(xsink, "acceptSSL", io_use.getDescriptor(), cert, pkey))) {
         sshh.error();
         assert(*xsink);
         return;
@@ -8581,12 +8683,18 @@ SocketAcceptSslPollState::SocketAcceptSslPollState(ExceptionSink* xsink, qore_so
 
     // Set ALPN protocols if configured (for HTTP/2 support)
     if (!sock->alpn_protocols.empty()) {
-        sock->ssl->setServerAlpnProtocols(sock->alpn_protocols);
+        sshh.get()->setServerAlpnProtocols(sock->alpn_protocols);
     }
 }
 
 int SocketAcceptSslPollState::continuePoll(ExceptionSink* xsink) {
-    return sock->ssl->startAccept(xsink);
+    qore_socket_private::IoUseHelper io_use(*sock);
+    SSLSocketHelper* ssl = io_use.getSsl();
+    if (!ssl) {
+        se_not_open("Socket", "acceptSSL", xsink);
+        return -1;
+    }
+    return ssl->startAccept(xsink);
 }
 
 SocketShutdownSslPollState::SocketShutdownSslPollState(ExceptionSink* xsink, qore_socket_private* sock)
@@ -8594,10 +8702,12 @@ SocketShutdownSslPollState::SocketShutdownSslPollState(ExceptionSink* xsink, qor
 }
 
 int SocketShutdownSslPollState::continuePoll(ExceptionSink* xsink) {
-    if (!sock->ssl) {
+    qore_socket_private::IoUseHelper io_use(*sock);
+    SSLSocketHelper* ssl = io_use.getSsl();
+    if (!ssl) {
         return 0;
     }
-    return sock->ssl->startShutdown(xsink);
+    return ssl->startShutdown(xsink);
 }
 
 SocketShutdownPollOperation::SocketShutdownPollOperation(QoreSocketObject* sock)
@@ -8653,6 +8763,7 @@ int SocketRecvPacketPollState::continuePollIntern(ExceptionSink* xsink) {
         return 0;
     }
 
+    qore_socket_private::IoUseHelper io_use(*sock);
     OptionalNonBlockingHelper nbh(*sock, true, xsink);
     if (*xsink) {
         return -1;
@@ -8670,9 +8781,9 @@ int SocketRecvPacketPollState::continuePollIntern(ExceptionSink* xsink) {
         }
 
         ssize_t rc;
-        if (sock->ssl) {
+        if (SSLSocketHelper* ssl = io_use.getSsl()) {
             size_t real_io = 0;
-            rc = sock->ssl->doNonBlockingIo(xsink, "read",
+            rc = ssl->doNonBlockingIo(xsink, "read",
                 reinterpret_cast<void*>(const_cast<char*>(reinterpret_cast<const char*>(bin->getPtr()) + realsize)),
                 DEFAULT_SOCKET_BUFSIZE, SslAction::READ, real_io);
             if (*xsink) {
@@ -8715,7 +8826,7 @@ int SocketRecvPacketPollState::continuePollIntern(ExceptionSink* xsink) {
             return rc;
         } else {
             //printd(5, "SocketRecvPacketPollState::continuePoll() calling recv\n");
-            rc = ::recv(sock->sock,
+            rc = ::recv(io_use.getDescriptor(),
 #ifdef _Q_WINDOWS
                 const_cast<char*>(reinterpret_cast<const char*>(bin->getPtr()) + realsize),
 #else
@@ -8824,6 +8935,7 @@ int SocketRecvPollState::continuePollIntern(ExceptionSink* xsink) {
         return 0;
     }
 
+    qore_socket_private::IoUseHelper io_use(*sock);
     OptionalNonBlockingHelper nbh(*sock, true, xsink);
     if (*xsink) {
         return -1;
@@ -8833,9 +8945,9 @@ int SocketRecvPollState::continuePollIntern(ExceptionSink* xsink) {
 
     while (true) {
         ssize_t rc;
-        if (sock->ssl) {
+        if (SSLSocketHelper* ssl = io_use.getSsl()) {
             size_t real_io = 0;
-            rc = sock->ssl->doNonBlockingIo(xsink, "read",
+            rc = ssl->doNonBlockingIo(xsink, "read",
                 reinterpret_cast<void*>(const_cast<char*>(reinterpret_cast<const char*>(bin->getPtr()) + received)),
                 size - received, SslAction::READ, real_io);
             if (*xsink) {
@@ -8874,7 +8986,7 @@ int SocketRecvPollState::continuePollIntern(ExceptionSink* xsink) {
             }
             return rc;
         } else {
-            rc = ::recv(sock->sock,
+            rc = ::recv(io_use.getDescriptor(),
 #ifdef _Q_WINDOWS
                 const_cast<char*>(reinterpret_cast<const char*>(bin->getPtr()) + received),
 #else
@@ -8976,6 +9088,7 @@ int SocketRecvSomePollState::continuePollIntern(ExceptionSink* xsink) {
         return 0;
     }
 
+    qore_socket_private::IoUseHelper io_use(*sock);
     OptionalNonBlockingHelper nbh(*sock, true, xsink);
     if (*xsink) {
         return -1;
@@ -8992,9 +9105,9 @@ int SocketRecvSomePollState::continuePollIntern(ExceptionSink* xsink) {
     char* buf = rbuf.get();
 
     ssize_t rc;
-    if (sock->ssl) {
+    if (SSLSocketHelper* ssl = io_use.getSsl()) {
         size_t real_io = 0;
-        rc = sock->ssl->doNonBlockingIo(xsink, "read", buf, read_size, SslAction::READ, real_io);
+        rc = ssl->doNonBlockingIo(xsink, "read", buf, read_size, SslAction::READ, real_io);
         if (*xsink) {
             assert(!real_io);
             return -1;
@@ -9012,7 +9125,7 @@ int SocketRecvSomePollState::continuePollIntern(ExceptionSink* xsink) {
     }
 
     while (true) {
-        rc = ::recv(sock->sock, buf, read_size, 0);
+        rc = ::recv(io_use.getDescriptor(), buf, read_size, 0);
         if (rc > 0) {
             bin->append(buf, rc);
             io = true;
@@ -9103,6 +9216,7 @@ int SocketRecvUntilBytesPollState::continuePollIntern(ExceptionSink* xsink) {
 }
 
 int SocketRecvUntilBytesPollState::doRecv(ExceptionSink* xsink) {
+    qore_socket_private::IoUseHelper io_use(*sock);
     OptionalNonBlockingHelper nbh(*sock, true, xsink);
     if (*xsink) {
         return -1;
@@ -9112,9 +9226,9 @@ int SocketRecvUntilBytesPollState::doRecv(ExceptionSink* xsink) {
 
     while (true) {
         ssize_t rc;
-        if (sock->ssl) {
+        if (SSLSocketHelper* ssl = io_use.getSsl()) {
             size_t real_io = 0;
-            rc = sock->ssl->doNonBlockingIo(xsink, "read", sock->rbuf, DEFAULT_SOCKET_BUFSIZE, SslAction::READ,
+            rc = ssl->doNonBlockingIo(xsink, "read", sock->rbuf, DEFAULT_SOCKET_BUFSIZE, SslAction::READ,
                 real_io);
             if (*xsink) {
                 return -1;
@@ -9128,7 +9242,7 @@ int SocketRecvUntilBytesPollState::doRecv(ExceptionSink* xsink) {
                     return SOCK_POLLIN;
                 }
                 short revents;
-                int prc = qore_socket_poll_fd_revents_now(sock->sock, POLLIN | POLLERR | POLLHUP, revents,
+                int prc = qore_socket_poll_fd_revents_now(io_use.getDescriptor(), POLLIN | POLLERR | POLLHUP, revents,
                     "SOCKET-RECV-ERROR", "socket", xsink);
                 if (prc < 0) {
                     return -1;
@@ -9144,7 +9258,7 @@ int SocketRecvUntilBytesPollState::doRecv(ExceptionSink* xsink) {
             assert(!rc || rc == 1 || rc == 2 || rc == 3 || rc == -1);
             return rc;
         } else {
-            rc = ::recv(sock->sock, sock->rbuf, DEFAULT_SOCKET_BUFSIZE, 0);
+            rc = ::recv(io_use.getDescriptor(), sock->rbuf, DEFAULT_SOCKET_BUFSIZE, 0);
             if (!rc) {
                 return 0;
             }
@@ -9201,6 +9315,7 @@ int SocketRecvFromPollState::continuePoll(ExceptionSink* xsink) {
         return 0;
     }
 
+    qore_socket_private::IoUseHelper io_use(*sock);
     OptionalNonBlockingHelper nbh(*sock, true, xsink);
     if (*xsink) {
         return -1;
@@ -9210,7 +9325,7 @@ int SocketRecvFromPollState::continuePoll(ExceptionSink* xsink) {
 
     while (true) {
         src_addr_len = sizeof(src_addr);
-        ssize_t rc = ::recvfrom(sock->sock,
+        ssize_t rc = ::recvfrom(io_use.getDescriptor(),
 #ifdef _Q_WINDOWS
             const_cast<char*>(reinterpret_cast<const char*>(bin->getPtr())),
 #else
@@ -9307,6 +9422,7 @@ SocketSendToPollState::SocketSendToPollState(ExceptionSink* xsink, qore_socket_p
 }
 
 int SocketSendToPollState::continuePoll(ExceptionSink* xsink) {
+    qore_socket_private::IoUseHelper io_use(*sock);
     OptionalNonBlockingHelper nbh(*sock, true, xsink);
     if (*xsink) {
         return -1;
@@ -9315,7 +9431,7 @@ int SocketSendToPollState::continuePoll(ExceptionSink* xsink) {
     unsigned loop = 0;
 
     while (true) {
-        ssize_t rc = ::sendto(sock->sock, data + sent, size - sent, 0,
+        ssize_t rc = ::sendto(io_use.getDescriptor(), data + sent, size - sent, 0,
             (const struct sockaddr*)&dest_addr, dest_addr_len);
 
         if (rc >= 0) {
@@ -10218,6 +10334,14 @@ int SSLSocketHelper::doNonBlockingIo(ExceptionSink* xsink, const char* mname, vo
     assert(xsink);
     assert(size);
     assert(!real_io);
+#ifdef DEBUG
+    // test hook: lets a test close the socket from another thread just before the call uses the connection
+    if (qs.dbg_before_ssl_io_set.load(std::memory_order_acquire)) {
+        if (std::function<void()> hook = qs.dbgTakeBeforeSslIo()) {
+            hook();
+        }
+    }
+#endif
     SSLSocketReferenceHelper ssrh(this);
 
     int rc;
@@ -10380,7 +10504,10 @@ DLLLOCAL OptionalNonBlockingHelper::~OptionalNonBlockingHelper() {
 // returns true if an error was raised or the connection was closed, false if not
 bool SSLSocketHelper::sslError(ExceptionSink* xsink, const char* mname, const char* func, bool always_error,
         SslCall call) {
-    assert(refs > 1);
+#ifdef DEBUG
+    // the caller holds a reference of its own: the socket's can be released while this runs
+    assert(dbg_call_refs.load(std::memory_order_relaxed) > 0);
+#endif
     assert(xsink);
 
     // Capture the transport error before ERR_get_error()/ERR_error_string() below can clobber
@@ -10626,7 +10753,9 @@ bool QoreSocket::isOpen() const {
 
 const char* QoreSocket::getSSLCipherName() const {
     if (qore_on_async_io_thread()) {
-        return priv->ssl ? priv->ssl->getCipherName() : nullptr;
+        qore_socket_private::SslRef ssl = priv->getSsl();
+        // the cipher names are static strings of the TLS library
+        return ssl ? ssl->getCipherName() : nullptr;
     }
 
     ExceptionSink xsink;
@@ -10644,7 +10773,9 @@ const char* QoreSocket::getSSLCipherName() const {
 
 const char* QoreSocket::getSSLCipherVersion() const {
     if (qore_on_async_io_thread()) {
-        return priv->ssl ? priv->ssl->getCipherVersion() : nullptr;
+        qore_socket_private::SslRef ssl = priv->getSsl();
+        // the cipher versions are static strings of the TLS library
+        return ssl ? ssl->getCipherVersion() : nullptr;
     }
 
     ExceptionSink xsink;
@@ -10708,10 +10839,11 @@ void QoreSocket::clearAlpnProtocols() {
 
 QoreStringNode* QoreSocket::getAlpnProtocol() const {
     if (qore_on_async_io_thread()) {
-        if (!priv->ssl) {
+        qore_socket_private::SslRef ssl = priv->getSsl();
+        if (!ssl) {
             return nullptr;
         }
-        std::string proto = priv->ssl->getAlpnProtocol();
+        std::string proto = ssl->getAlpnProtocol();
         return proto.empty() ? nullptr : new QoreStringNode(proto.c_str());
     }
 
@@ -10727,7 +10859,8 @@ QoreStringNode* QoreSocket::getAlpnProtocol() const {
 
 bool QoreSocket::isHttp2() const {
     if (qore_on_async_io_thread()) {
-        return priv->ssl ? priv->ssl->isHttp2() : false;
+        qore_socket_private::SslRef ssl = priv->getSsl();
+        return ssl ? ssl->isHttp2() : false;
     }
 
     ExceptionSink xsink;
@@ -10936,7 +11069,8 @@ int QoreSocket::waitForHttp2StreamDrain(int32_t stream_id, int timeout_ms, Excep
 
 long QoreSocket::verifyPeerCertificate() const {
     if (qore_on_async_io_thread()) {
-        return priv->ssl ? priv->ssl->verifyPeerCertificate() : -1;
+        qore_socket_private::SslRef ssl = priv->getSsl();
+        return ssl ? ssl->verifyPeerCertificate() : -1;
     }
 
     ExceptionSink xsink;
@@ -11080,12 +11214,13 @@ AbstractPollState* QoreSocket::startLayeredSslConnect(ExceptionSink* xsink, Qore
         se_not_open("Socket", "startSslConnect", xsink);
         return nullptr;
     }
-    if (!priv->ssl) {
+    qore_socket_private::SslRef ssl = priv->getSsl();
+    if (!ssl) {
         xsink->raiseException("SOCKET-SSL-ERROR", "Socket::startSslConnect(): a TLS connection carried by another "
             "TLS connection requires the socket to have a TLS connection");
         return nullptr;
     }
-    if (priv->ssl->isLayered()) {
+    if (ssl->isLayered()) {
         se_ssl_already_established("Socket", "startSslConnect", xsink);
         return nullptr;
     }
@@ -13224,9 +13359,9 @@ static QoreValue qore_socket_get_ssl_upgrade_output(my_socket_priv* priv) {
         AutoLocker al(priv->m);
         if (priv->valid && priv->socket) {
             qore_socket_private* sp = qore_socket_private::get(*priv->socket);
-            if (sp->ssl) {
+            if (qore_socket_private::SslRef ssl = sp->getSsl()) {
                 secure = true;
-                negotiated_protocol = sp->ssl->getAlpnProtocol();
+                negotiated_protocol = ssl->getAlpnProtocol();
                 is_http2 = (negotiated_protocol == "h2");
             }
         }
@@ -14290,7 +14425,16 @@ int SocketLingeringClosePollOperation::drain() {
             closeSocket();
             return 0;
         }
-        ssize_t rc = ::recv(qsp->sock, buf, sizeof(buf), 0);
+        ssize_t rc;
+        int e = 0;
+        {
+            // the descriptor is released before the socket is closed below
+            qore_socket_private::IoUseHelper io_use(*qsp);
+            rc = ::recv(io_use.getDescriptor(), buf, sizeof(buf), 0);
+            if (rc < 0) {
+                e = sock_get_error();
+            }
+        }
         if (rc > 0) {
             discarded += rc;
             continue;
@@ -14301,7 +14445,6 @@ int SocketLingeringClosePollOperation::drain() {
             closeSocket();
             return 0;
         }
-        int e = sock_get_error();
         if (e == EINTR) {
             continue;
         }
@@ -14735,7 +14878,8 @@ QoreHashNode* SocketDataAvailablePollOperation::continuePoll(ExceptionSink* xsin
         return nullptr;
     }
 
-    if (sp->ssl) {
+    qore_socket_private::IoUseHelper io_use(*sp);
+    if (SSLSocketHelper* ssl = io_use.getSsl()) {
         char c;
         size_t real_io = 0;
         OptionalNonBlockingHelper nbh(*sp, true, xsink);
@@ -14743,7 +14887,7 @@ QoreHashNode* SocketDataAvailablePollOperation::continuePoll(ExceptionSink* xsin
             complete(false);
             return nullptr;
         }
-        int rc = sp->ssl->doNonBlockingIo(xsink, "isDataAvailable", &c, 1, PEEK, real_io);
+        int rc = ssl->doNonBlockingIo(xsink, "isDataAvailable", &c, 1, PEEK, real_io);
         if (*xsink) {
             complete(false);
             return nullptr;

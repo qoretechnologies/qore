@@ -375,6 +375,35 @@ operations are canceled directly and the other threads get their commands withou
 only includes the calling thread's operations.  A close from an I/O thread is queued to the socket's thread after
 those commands (`closeSocketOnController()`), so it runs after the cancellation on that thread.
 
+### A socket closed while an I/O call uses it
+
+Not every close of a socket is ordered with its I/O calls.  The `abort()` of a poll operation closes the socket on
+the thread that calls it, which can be a callback worker running %Qore code (`Http2PollOperation::abort()` in
+HttpServerAsyncIo, for example) while the socket's I/O thread sends HTTP/2 frames for another operation; an HTTP/2
+client abort on the I/O thread and a close by an application thread do the same.  `close_m` serializes the closers
+with each other, not with the I/O calls, so a close can happen at any point of an I/O call on another thread:
+
+- every I/O call takes a `qore_socket_private::IoUseHelper` before it uses the socket's descriptor or its TLS
+  connection, and uses them only through it (`getDescriptor()`, `getSsl()`).  It is taken with `close_m` held, so it
+  has the descriptor and the TLS connection of one open connection, or neither if the socket was closed;
+- the close shuts the descriptor down at once, which makes the I/O call fail, but the descriptor is closed by the
+  last I/O call using it (`SharedDescriptor`): the system gives the lowest free number to the next socket or file
+  opened by any thread, so a call still using a closed descriptor's number could read from or write to another
+  connection;
+- the TLS connection (`SSLSocketHelper`) is reference counted with an atomic count, and the I/O call holds a
+  reference, so it is freed by its last holder.  The close calls `SSL_shutdown()` only when no other thread holds the
+  connection, as the calls of one SSL object must not run concurrently; the descriptor is already shut down, so the
+  close notification could not be sent anyway;
+- other uses of the TLS connection (the cipher, ALPN, `pending()` in `hasPendingData()`) take a reference with
+  `qore_socket_private::getSsl()`.
+
+Before this, the I/O call read the connection before taking its reference and the count was not atomic, so a close
+could free the connection under the call (an assertion failure in `SSLSocketHelper::sslError()` in debug builds, a
+use-after-free in release builds).  The debug-only `dbg_close_socket_at_next_ssl_io()` builtin closes a socket from
+another thread at the start of its next SSL I/O call; see
+`examples/test/qore/classes/Socket/ssl-close-during-io.qtest` and the `ut_socket_close_during_io_keeps_descriptor`
+unit test in `lib/ql_debug.cpp`.
+
 ### Periodic work owned by a Qore object
 
 `AsyncIoController::addTimer(date deadline, auto user_data, string owner)` is the correct mechanism

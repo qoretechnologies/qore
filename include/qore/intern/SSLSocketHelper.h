@@ -35,6 +35,7 @@
 
 #include <openssl/ssl.h>
 
+#include <atomic>
 #include <string>
 #include <vector>
 
@@ -76,22 +77,38 @@ static inline const char* get_action_method(SslAction action) {
 }
 
 class SSLSocketHelper {
+    friend class SSLSocketReferenceHelper;
 public:
     DLLLOCAL SSLSocketHelper(qore_socket_private& qs) : qs(qs) {
     }
 
-    // we do not need atomic dereferences here, all operations must be already locked
+    //! Releases a reference; the last one deletes the object
+    /** The references are released by different threads: a thread closing the socket releases the socket's own
+        reference while a thread in an I/O call holds another one, so the count is atomic.
+    */
     DLLLOCAL bool deref() {
-        if (!--refs) {
+        if (refs.fetch_sub(1, std::memory_order_acq_rel) == 1) {
             delete this;
             return true;
         }
         return false;
     }
 
-    // we do not need atomic dereferences here, all operations must be already locked
+    //! Takes a reference
+    /** The caller must hold a reference already, or hold qore_socket_private::close_m while the socket holds its
+        own; see qore_socket_private::getSsl()
+    */
     DLLLOCAL void ref() {
-        ++refs;
+        refs.fetch_add(1, std::memory_order_relaxed);
+    }
+
+    //! Returns true if no reference other than the socket's own is held
+    /** Called with qore_socket_private::close_m held while the socket holds its reference: the references of other
+        threads are only taken with that lock held, so no SSL call on another thread can be in progress or start
+        until the lock is released.
+    */
+    DLLLOCAL bool onlySocketReference() const {
+        return refs.load(std::memory_order_acquire) == 1;
     }
 
     // do nonblocking I/O for polling
@@ -200,7 +217,12 @@ private:
     SSL_METHOD_CONST SSL_METHOD* meth = nullptr;
     SSL_CTX* ctx = nullptr;
     SSL* ssl = nullptr;
-    unsigned refs = 1;
+    //! the references to this object: the socket's own and those of the calls using it; see qore_socket_private::getSsl()
+    std::atomic<unsigned> refs{1};
+#ifdef DEBUG
+    //! Debug-only: the number of SSLSocketReferenceHelper objects for this object; see sslError()
+    std::atomic<int> dbg_call_refs{0};
+#endif
     //! the TLS connection that carries this connection, if any; see setLayeredClient()
     SSLSocketHelper* outer = nullptr;
 
@@ -236,11 +258,14 @@ private:
 
     DLLLOCAL ~SSLSocketHelper();
 
-    // must be called with refs > 1
+    //! Reports the errors of a failed SSL call
+    /** Must be called with an SSLSocketReferenceHelper for this object: it can close the socket, which releases the
+        socket's reference, and a thread closing the socket can have released it already.
+    */
     DLLLOCAL bool sslError(ExceptionSink* xsink, const char* meth, const char* msg, bool always_error = true,
             SslCall call = SslCall::Transport);
 
-    // must be called with refs > 1
+    //! Reports a failed SSL call that returned SSL_ERROR_SYSCALL; must be called as sslError()
     DLLLOCAL int sysCallError(ExceptionSink* xsink, int rc, const char* mname, const char* ssl_func);
 
     //! Reports one OpenSSL error-queue entry, or the failure of a call that queued nothing
@@ -255,6 +280,9 @@ private:
             const char* func, bool always_error, SslCall call);
 };
 
+//! Holds a reference to an SSLSocketHelper for the duration of a call of one of its methods
+/** The caller must already hold a reference; see SSLSocketHelper::ref()
+*/
 class SSLSocketReferenceHelper {
 public:
     DLLLOCAL SSLSocketReferenceHelper(SSLSocketHelper* s, bool set_thread_context = false);

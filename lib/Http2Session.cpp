@@ -154,7 +154,8 @@ private:
         if (sock->buflen) {
             return true;
         }
-        return sock->ssl && sock->ssl->pending() > 0;
+        qore_socket_private::SslRef ssl = sock->getSsl();
+        return ssl && ssl->pending() > 0;
     }
 
     qore_socket_private* sock;
@@ -1143,7 +1144,8 @@ int Http2Session::sendPendingData(int timeout_ms, ExceptionSink* xsink) {
 
     // Send buffered data using proper async I/O pattern (like SocketSendPollState::continuePoll)
     if (send_offset < send_buffer.size()) {
-        printd(5, "sendPendingData() sending %zu bytes to socket (ssl=%p)\n", pending, sock->ssl);
+        printd(5, "sendPendingData() sending %zu bytes to socket (ssl=%p)\n", pending,
+            sock->ssl.load(std::memory_order_relaxed));
         {
             size_t off = send_offset;
             int count = 0;
@@ -1167,6 +1169,8 @@ int Http2Session::sendPendingData(int timeout_ms, ExceptionSink* xsink) {
             }
         }
 
+        // the descriptor and the TLS connection stay valid while another thread closes the socket
+        qore_socket_private::IoUseHelper io_use(*sock);
         // Always use non-blocking mode for async I/O
         OptionalNonBlockingHelper nbh(*sock, true, xsink);
         if (*xsink) {
@@ -1177,12 +1181,12 @@ int Http2Session::sendPendingData(int timeout_ms, ExceptionSink* xsink) {
         while (send_offset < send_buffer.size()) {
             ssize_t rc;
             size_t to_send = send_buffer.size() - send_offset;
-            if (sock->ssl) {
+            if (SSLSocketHelper* ssl = io_use.getSsl()) {
                 // Use doNonBlockingIo for proper async SSL I/O
                 // Returns: SOCK_POLLIN/SOCK_POLLOUT if need to poll, 0 if done, < 0 on error
                 size_t real_io = 0;
                 printd(5, "sendPendingData() calling doNonBlockingIo to_send=%zu\n", to_send);
-                rc = sock->ssl->doNonBlockingIo(xsink, "sendPendingData",
+                rc = ssl->doNonBlockingIo(xsink, "sendPendingData",
                     const_cast<char*>(reinterpret_cast<const char*>(send_buffer.data() + send_offset)),
                     to_send, SslAction::WRITE, real_io);
                 printd(5, "sendPendingData() doNonBlockingIo rc=%zd real_io=%zu xsink=%d\n", rc, real_io, (int)*xsink);
@@ -1213,7 +1217,7 @@ int Http2Session::sendPendingData(int timeout_ms, ExceptionSink* xsink) {
                 break;
             } else {
                 // Non-SSL: use regular send
-                rc = ::send(sock->sock, send_buffer.data() + send_offset, to_send, 0);
+                rc = ::send(io_use.getDescriptor(), send_buffer.data() + send_offset, to_send, 0);
                 printd(5, "sendPendingData() send rc=%zd errno=%d\n", rc, errno);
                 if (rc >= 0) {
                     // Advance offset past sent data
@@ -1374,7 +1378,11 @@ bool Http2Session::hasPendingBodyData(int32_t stream_id) const {
 }
 
 bool Http2Session::hasSocketBufferedData() const {
-    return sock->buflen > 0 || (sock->ssl && sock->ssl->pending() > 0);
+    if (sock->buflen > 0) {
+        return true;
+    }
+    qore_socket_private::SslRef ssl = sock->getSsl();
+    return ssl && ssl->pending() > 0;
 }
 
 Http2StreamInfo* Http2Session::getStream(int32_t stream_id) {

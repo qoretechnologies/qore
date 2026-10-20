@@ -1166,6 +1166,76 @@ static void ut_socket_close_race_releases_descriptor_once(UnitTestCounters& c) {
     close(other[1]);
 }
 
+//! Tests that a close made while an I/O call uses the socket's descriptor leaves it open until the call ends
+/** The system gives the lowest free descriptor number to the next socket or file opened by any thread, so an I/O call
+    still using the number of a closed descriptor could read from or write to another connection.  The close shuts
+    the descriptor down, so the call fails, and the last I/O call using it closes it.
+*/
+static void ut_socket_close_during_io_keeps_descriptor(UnitTestCounters& c) {
+    int sv[2];
+    if (socketpair(AF_UNIX, SOCK_STREAM, 0, sv)) {
+        UT_ASSERT(c, false, "socketpair() for the socket under test succeeds");
+        return;
+    }
+
+    const int fd = sv[0];
+    qore_socket_private* priv = new qore_socket_private(fd, AF_UNIX, SOCK_STREAM, 0);
+    {
+        qore_socket_private::IoUseHelper io_use(*priv);
+        UT_ASSERT_EQ(c, fd, io_use.getDescriptor(), "the I/O call uses the socket's descriptor");
+        UT_ASSERT(c, !io_use.getSsl(), "a socket without TLS has no TLS connection for the call");
+
+        // another thread closes the socket while the call uses the descriptor
+        std::thread closer([priv]() {
+            priv->prepareForClose();
+            priv->close_internal();
+        });
+        closer.join();
+
+        UT_ASSERT(c, priv->sock == QORE_INVALID_SOCKET, "the socket has no descriptor after the close");
+        UT_ASSERT(c, fcntl(fd, F_GETFD) != -1, "the descriptor stays open while the call uses it");
+        // the descriptor is shut down, so the call fails instead of blocking or reaching the peer
+        char b = 'x';
+        UT_ASSERT(c, ::send(fd, &b, 1, 0) == -1, "a send on the closed socket's descriptor fails");
+        char r = 0;
+        UT_ASSERT_EQ(c, (ssize_t)0, ::recv(sv[1], &r, 1, 0), "the peer sees the end of the connection");
+
+        // a descriptor opened while the call runs does not get the number
+        int other = dup(sv[1]);
+        UT_ASSERT(c, other != -1 && other != fd, "a descriptor opened meanwhile gets another number");
+        if (other != -1) {
+            close(other);
+        }
+
+        // a new I/O call made after the close does not get the descriptor
+        qore_socket_private::IoUseHelper late_use(*priv);
+        UT_ASSERT_EQ(c, static_cast<int>(QORE_INVALID_SOCKET), late_use.getDescriptor(),
+            "an I/O call made after the close gets no descriptor");
+    }
+    UT_ASSERT(c, fcntl(fd, F_GETFD) == -1, "the descriptor is closed when the last call using it ends");
+
+    // without an I/O call using it, the close releases the descriptor at once
+    int sv2[2];
+    if (socketpair(AF_UNIX, SOCK_STREAM, 0, sv2)) {
+        UT_ASSERT(c, false, "socketpair() for the second socket succeeds");
+    } else {
+        qore_socket_private* priv2 = new qore_socket_private(sv2[0], AF_UNIX, SOCK_STREAM, 0);
+        {
+            // a finished I/O call does not keep the descriptor
+            qore_socket_private::IoUseHelper io_use(*priv2);
+            UT_ASSERT_EQ(c, sv2[0], io_use.getDescriptor(), "the I/O call uses the second socket's descriptor");
+        }
+        priv2->prepareForClose();
+        priv2->close_internal();
+        UT_ASSERT(c, fcntl(sv2[0], F_GETFD) == -1, "the close releases a descriptor that no I/O call uses");
+        priv2->deref();
+        close(sv2[1]);
+    }
+
+    priv->deref();
+    close(sv[1]);
+}
+
 #ifdef DEBUG
 namespace {
 //! the variable whose other holder releases its reference in ut_closure_var_deref_rescan_reentry()
@@ -5579,6 +5649,29 @@ static void ut_qoresocket_fd_transfer_uses_async_controller(UnitTestCounters& c)
 }
 
 #ifdef DEBUG
+//! Debug-only: closes a socket from another thread at the start of its next SSL I/O call
+/** The close is made where the I/O call is about to use the TLS connection, which is where a close made by another
+    thread, such as the abort of a poll operation, can release the connection under the call.  DEBUG builds only.
+*/
+static QoreValue f_dbg_close_socket_at_next_ssl_io(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    const QoreObject* obj = get_param_value(params, 0).get<const QoreObject>();
+    if (!obj) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR",
+            "dbg_close_socket_at_next_ssl_io() requires a Socket argument");
+        return QoreValue();
+    }
+    ReferenceHolder<QoreSocketObject> sock(
+        reinterpret_cast<QoreSocketObject*>(
+            const_cast<QoreObject*>(obj)->getReferencedPrivateData(CID_SOCKET, xsink)),
+        xsink);
+    if (*xsink || !sock) {
+        return QoreValue();
+    }
+    sock->dbgCloseAtNextSslIo();
+    return QoreValue();
+}
+
 //! Debug-only: arm a one-shot fd-swap simulation on the next controller wait of @a sock.
 /** Tests use this to exercise the fd_generation re-verification path in
     controller-backed sync socket calls without racing an actual close()
@@ -5890,6 +5983,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     ut_debug_skips_foreign_thread_callbacks(c, rc.getProgram());
     ut_event_loop_remove_recycled_fd(c);
     ut_socket_close_race_releases_descriptor_once(c);
+    ut_socket_close_during_io_keeps_descriptor(c);
     ut_network_security_rules(c);
     ut_asyncio_construction(c);
     ut_asyncio_poll_timeout_rounding(c);
@@ -6773,6 +6867,9 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("run_unit_tests", f_run_unit_tests, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, hashTypeInfo);
 #ifdef DEBUG
     qns.addBuiltinVariant("dbg_force_fd_swap_next_wait", f_dbg_force_fd_swap_next_wait,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
+        QC_SOCKET->getTypeInfo(), QORE_PARAM_NO_ARG, "sock");
+    qns.addBuiltinVariant("dbg_close_socket_at_next_ssl_io", f_dbg_close_socket_at_next_ssl_io,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
         QC_SOCKET->getTypeInfo(), QORE_PARAM_NO_ARG, "sock");
     qns.addBuiltinVariant("dbg_detach_async_io_socket", f_dbg_detach_async_io_socket,

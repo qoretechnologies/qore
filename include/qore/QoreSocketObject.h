@@ -103,6 +103,15 @@ public:
         @since %Qore 3.0
     */
     DLLLOCAL void dbgForceFdSwapNextWait();
+
+    //! Debug-only: closes the socket from another thread at the start of the next SSL I/O call on it
+    /** Called via the @c dbg_close_socket_at_next_ssl_io() debug builtin in @ref lib/ql_debug.cpp: the close is
+        made where an I/O call is about to use the TLS connection, as an abort or a close made by another thread
+        can be.
+
+        @since %Qore 3.0
+    */
+    DLLLOCAL void dbgCloseAtNextSslIo();
 #endif
 
     DLLEXPORT QoreSocketObject();
