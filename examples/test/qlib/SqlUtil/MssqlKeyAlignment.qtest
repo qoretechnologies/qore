@@ -54,6 +54,20 @@ class MssqlKeyAlignmentTest inherits QUnit::Test {
             "mssql");
     }
 
+    #! Skips the test case if the server of a connection string cannot be reached
+    /** The CI test jobs set \c QORE_DB_CONNSTR_FREETDS to a server that they cannot reach; FreetdsSqlUtil.qtest
+        skips its tests then as well ("no DB connection")
+    */
+    private skipIfNoConnection(string connstr) {
+        Datasource ds(connstr);
+        try {
+            ds.open();
+        } catch (hash<ExceptionInfo> ex) {
+            testSkip(sprintf("no DB connection: %s: %s", ex.err, ex.desc));
+        }
+        ds.close();
+    }
+
     #! Returns a datasource to the database given by QORE_DB_CONNSTR_FREETDS
     private Datasource datasource() {
 %ifdef NO_FREETDS
@@ -62,6 +76,7 @@ class MssqlKeyAlignmentTest inherits QUnit::Test {
         if (!ENV.QORE_DB_CONNSTR_FREETDS) {
             testSkip("QORE_DB_CONNSTR_FREETDS is not set");
         }
+        skipIfNoConnection(ENV.QORE_DB_CONNSTR_FREETDS);
         Datasource ds(ENV.QORE_DB_CONNSTR_FREETDS);
         if (MssqlDatabase::isSybase(ds)) {
             testSkip("the database is Sybase, not SQL Server");
