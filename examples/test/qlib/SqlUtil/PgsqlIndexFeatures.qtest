@@ -22,6 +22,8 @@ class PgsqlIndexFeaturesTest inherits QUnit::Test {
         addTestCase("DataSchema option validation", \schemaOptions());
         addTestCase("catalog and DDL round trip", \roundTrip());
         addTestCase("fresh DataSchema install and repeated alignment", \freshInstall());
+        addTestCase("an index is renamed, and a unique index or constraint changed, with one statement each",
+            \renameAndUniqueChanges());
         set_return_value(main());
     }
 
@@ -162,6 +164,60 @@ class PgsqlIndexFeaturesTest inherits QUnit::Test {
         ds.execRaw("insert into cloned (id, a, b, c, state) values (3, 'z', 13, null, 'active')");
         rejected(ds, "insert into cloned (id, a, b, c, state) values (4, 'z2', 14, null, 'active')");
         rejected(ds, "insert into cloned (id, a, b, c, state) values (4, 'z', 14, 23, 'active')");
+    }
+
+    #! Aligns the table to a template with the description, runs the SQL in the database and returns it
+    private list<auto> alignTable(Datasource ds, string table, hash<auto> desc) {
+        PgsqlTable template(ds, table);
+        template.setupTable(desc);
+        PgsqlTable current(ds, table);
+        list<auto> sql = current.getAlignSql(template);
+        map ds.execRaw($1), sql;
+        return sql;
+    }
+
+    #! The rename SQL of an index is a list of one statement here, and a unique index or constraint with other
+    #! columns is dropped once and created once
+    private renameAndUniqueChanges() {
+        Datasource ds = datasource();
+        on_exit ds.rollback();
+        string ns = PgsqlRunSchema::getAuxName("unique");
+        ds.execRaw("create schema " + ns);
+        ds.execRaw("set local search_path = " + ns);
+        ds.execRaw("create table ui_probe (x int, y varchar(10))");
+        ds.execRaw("create unique index ui_probe_old on ui_probe (y)");
+        ds.execRaw("create table uk_probe (x int, y varchar(10), constraint uk_probe_y unique (y))");
+        hash<auto> columns = {"x": {"native_type": "integer"}, "y": {"native_type": "varchar", "size": 10}};
+        string ui_table = (new PgsqlTable(ds, "ui_probe")).getSqlName();
+        string uk_table = (new PgsqlTable(ds, "uk_probe")).getSqlName();
+
+        # renamed in place
+        hash<auto> ui_desc = {"columns": columns, "indexes": {"ui_probe_y": {"columns": ("y",), "unique": True}}};
+        assertEq(("alter index ui_probe_old rename to ui_probe_y",), alignTable(ds, "ui_probe", ui_desc));
+        assertEq((), alignTable(ds, "ui_probe", ui_desc));
+
+        # a unique index with other columns
+        hash<auto> ui_columns = ui_desc;
+        ui_columns.indexes.ui_probe_y.columns = ("y", "x");
+        assertEq(("drop index if exists ui_probe_y", sprintf("create unique index ui_probe_y on %s (y, x)", ui_table)),
+            alignTable(ds, "ui_probe", ui_columns));
+        assertEq((), alignTable(ds, "ui_probe", ui_columns));
+
+        # a unique constraint with other columns
+        hash<auto> uk_desc = {"columns": columns, "unique_constraints": {"uk_probe_y": {"columns": ("y", "x")}}};
+        assertEq((sprintf("alter table %s drop constraint uk_probe_y cascade", uk_table),
+            sprintf("alter table %s add constraint uk_probe_y unique  (y, x)", uk_table)),
+            alignTable(ds, "uk_probe", uk_desc));
+        assertEq((), alignTable(ds, "uk_probe", uk_desc));
+
+        # renameIndex() gives the statement in a list; it commits, which ends the transaction's search_path, so it
+        # comes last
+        PgsqlTable renamed(ds, "ui_probe");
+        softlist<string> sql;
+        renamed.renameIndex("ui_probe_y", "ui_probe_yy", \sql);
+        assertEq(("alter index ui_probe_y rename to ui_probe_yy",), sql);
+        assertEq(1, ds.selectRow("select count(*) as n from pg_indexes where schemaname = %v and indexname = %v",
+            ns, "ui_probe_yy").n.toInt());
     }
 
     private rejected(Datasource ds, string sql) {

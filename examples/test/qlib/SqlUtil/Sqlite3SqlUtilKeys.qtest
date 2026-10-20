@@ -41,6 +41,7 @@ class Sqlite3KeysTest inherits QUnit::Test {
         addTestCase("a unique constraint is added to an existing table as a unique index",
             \existingUniqueConstraintChanges());
         addTestCase("a unique index of an existing table is added, changed and dropped", \uniqueIndexes());
+        addTestCase("an index is renamed by dropping it and creating it", \indexRenames());
         addTestCase("upsert uses the key", \upsert());
         addTestCase("a select that locks rows is refused", \forUpdateRefused());
         addTestCase("duplicate rows are recognized", \duplicateRows());
@@ -660,10 +661,11 @@ class Sqlite3KeysTest inherits QUnit::Test {
             alignTable(ds, "ui_table", desc));
         assertEq((), alignTable(ds, "ui_table", desc));
 
-        # with other columns
+        # with other columns: the index is dropped and created once; its unique constraint is the index
         hash<auto> other_columns = desc;
         other_columns.indexes.ui_table_y.columns = ("y", "x");
-        alignTable(ds, "ui_table", other_columns);
+        assertEq(("drop index ui_table_y", "create unique index ui_table_y on ui_table (y, x)"),
+            alignTable(ds, "ui_table", other_columns));
         assertEq((), alignTable(ds, "ui_table", other_columns));
         assertEq({"ui_table_y": {"columns": ("y", "x"), "unique": True}},
             (new Sqlite3Table(ds, "ui_table")).getDescriptionHash().indexes);
@@ -673,6 +675,43 @@ class Sqlite3KeysTest inherits QUnit::Test {
         Sqlite3Table dropped(ds, "ui_table");
         assertEq(0, dropped.getIndexes().size());
         assertEq(0, dropped.getConstraints().size());
+    }
+
+    #! SQLite cannot rename an index: the index is dropped and created under the new name, in two statements
+    indexRenames() {
+        Datasource ds = getDatasource();
+        on_exit ds.rollback();
+
+        ds.exec("create table ix_renamed (x integer, y text)");
+        ds.exec("create index ix_renamed_old on ix_renamed (y collate nocase, x)");
+        hash<auto> desc = {"columns": {"x": {"native_type": "integer"}, "y": {"native_type": "text"}},
+            "indexes": {"ix_renamed_new": {"columns": ("y", "x"), "unique": False}}};
+        # an index with the definition of the template's index under another name is renamed, with its collation
+        assertEq(("drop index ix_renamed_old", "create index ix_renamed_new on ix_renamed (y COLLATE nocase, x)"),
+            alignTable(ds, "ix_renamed", desc));
+        hash<auto> indexes = map {$1.name: $1}, (new Sqlite3Table(ds, "ix_renamed")).getIndexes().iterator();
+        assertEq(("ix_renamed_new",), keys indexes, "both statements were run");
+        assertEq({"y": "nocase"}, cast<Sqlite3Index>(indexes.ix_renamed_new).collations);
+        assertEq((), alignTable(ds, "ix_renamed", desc));
+
+        # a unique index is renamed with its unique constraint
+        ds.exec("create unique index ui_renamed_old on ix_renamed (x)");
+        hash<auto> unique_desc = desc;
+        unique_desc.indexes.ui_renamed_new = {"columns": ("x",), "unique": True};
+        assertEq(("drop index ui_renamed_old", "create unique index ui_renamed_new on ix_renamed (x)"),
+            alignTable(ds, "ix_renamed", unique_desc));
+        assertEq({"ui_renamed_new": {"columns": ("x",)}},
+            (new Sqlite3Table(ds, "ix_renamed")).getDescriptionHash().unique_constraints);
+        assertEq((), alignTable(ds, "ix_renamed", unique_desc));
+
+        # renameIndex() gives and runs both statements
+        Sqlite3Table table(ds, "ix_renamed");
+        softlist<string> sql;
+        table.renameIndex("ix_renamed_new", "ix_renamed_newer", \sql);
+        assertEq(("drop index ix_renamed_new", "create index ix_renamed_newer on ix_renamed (y COLLATE nocase, x)"),
+            sql);
+        assertEq(("ix_renamed_newer", "ui_renamed_new"),
+            sort(keys (new Sqlite3Table(ds, "ix_renamed")).getDescriptionHash().indexes));
     }
 
     forUpdateRefused() {

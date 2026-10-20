@@ -2678,12 +2678,16 @@ AbstractIndex ix = table.renameIndex("uk_table_name", "unique_table_name");
 
         @param old_name the current name of the index
         @param new_name the new name for the index
-        @param sql an optional reference to a string to retrieve the SQL used to modify the table (only executed if the table is already in the database)
+        @param sql an optional reference to a list of strings to retrieve the SQL used to modify the table (only
+        executed if the table is already in the database); a database that cannot rename an index drops it and
+        creates it under the new name, which takes two statements
         @return the index object that was updated
 
         @throw INDEX-ERROR if the old index does not exist in the table or if the new index name already exists
+
+        @since SqlUtil 3.11.0 the SQL is returned in a list of strings instead of one string
     */
-    AbstractIndex renameIndex(string old_name, string new_name, reference<string> sql) {
+    AbstractIndex renameIndex(string old_name, string new_name, *reference<softlist<string>> sql) {
         l.lock();
         on_exit l.unlock();
         getIndexesUnlocked();
@@ -2699,7 +2703,9 @@ AbstractIndex ix = table.renameIndex("uk_table_name", "unique_table_name");
         rename = sub () { indexes.renameKey(old_name, new_name); };
 
         # rename index in table if the table already exists in the DB
-        execSql(sql = ix.getRenameSql(getSqlName(), new_name));
+        softlist<string> rename_sql = ix.getRenameSql(getSqlName(), new_name);
+        sql = rename_sql;
+        execSql(rename_sql);
 
         ix.name = new_name;
 
@@ -11384,13 +11390,12 @@ list<auto> l = table.getAlignSql(table2);
 
         # check for other constraints in the template that are not present or different in the current table
         foreach AbstractConstraint c in (t.constraints.iterator()) {
+            # a unique constraint that a unique index of the template creates is added, recreated and dropped with
+            # the index above
+            if (uixc && t.isUniqueIndexConstraintUnlocked(c)) {
+                continue;
+            }
             if (!constraints.hasKey(c.getName())) {
-                # make sure the constraint wasn't implicitly added with a unique index
-                if (uixc && (c instanceof AbstractUniqueConstraint)) {
-                    AbstractUniqueConstraint uk = c;
-                    if (t.indexes.hasKey(uk.getName()) && uk.matchKeys(t.indexes{uk.getName()}.columns.getHash()))
-                        continue;
-                }
                 # add constraint to table
                 l += AbstractDatabase::doCallback(opt, c.getCreateSql(getSqlName(), opt), AbstractDatabase::AC_Add,
                     "constraint", c.getName(), name);
@@ -11445,6 +11450,28 @@ list<auto> l = table.getAlignSql(table2);
         }
 
         return l;
+    }
+
+    #! returns @ref True "True" if the constraint is the unique constraint of an index of the table
+    /** On a database whose unique indexes are unique constraints
+        (@ref uniqueIndexCreatesConstraintImpl() "uniqueIndexCreatesConstraintImpl()"), a unique index of a table
+        description creates a unique constraint with the index's name and columns, which is the index
+
+        @param c the constraint of the table to check
+
+        @return @ref True "True" if \a c is a unique constraint with the name and the columns of an index of the table
+
+        @note the table lock must be held when calling this method
+
+        @since SqlUtil 3.11.0
+    */
+    private bool isUniqueIndexConstraintUnlocked(AbstractConstraint c) {
+        if (!(c instanceof AbstractUniqueConstraint)) {
+            return False;
+        }
+        AbstractUniqueConstraint uk = cast<AbstractUniqueConstraint>(c);
+        string uk_name = uk.getName();
+        return indexes.hasKey(uk_name) && uk.matchKeys(indexes{uk_name}.columns.getHash());
     }
 
     private *AbstractColumnSupportingConstraint getSupportingConstraint(string ixname) {

@@ -227,6 +227,12 @@ module Sqlite3SqlUtil {
       adding a foreign constraint to an existing table or dropping one raises \c UNSUPPORTED with a description;
       foreign constraints are declared but not enforced through the \c sqlite3 driver; see
       @ref sqlite3_foreign_constraints
+    - fixed renaming an index, as table alignment does for an index with the definition of the template's index
+      under another name: the index was dropped and not created again, as the SQL that drops it and creates it under
+      the new name was one string, of which the \c sqlite3 driver runs only the first statement; it is now two
+      statements (see @ref SqlUtil::AbstractIndex::getRenameSql() "AbstractIndex::getRenameSql()"), and the index is
+      created with the collations of its columns
+    - fixed the SQL that creates an index with a column collation, which had an empty \c COLLATE clause
     - fixed table descriptions with a unique constraint or a unique index, which raised a bare \c UNSUPPORTED when
       they were set up, so that such a table could be neither created nor aligned; a unique constraint is now created
       with its table, described from SQLite's index pragmas under the name of its automatic index, which is no longer
@@ -326,9 +332,17 @@ public namespace Sqlite3SqlUtil {
         }
 
         #! Returns a list of column name with COLLATE argument per column, if appropriate
+        /** @return the SQL name of each column of the index, in the index's order, followed by
+            <tt>COLLATE</tt> <em>collation</em> for a column with a collation
+        */
         list<string> getColumnCollationList() {
-            return map sprintf("%s%s", $1, (*string col = collations{$1} ? " COLLATE " + col : NOTHING)),
-                columns.getSqlColumnNameIterator();
+            list<string> rv = ();
+            foreach hash<auto> i in (columns.pairIterator()) {
+                string sql_name = i.value.ddl_name ?? i.key;
+                *string collation = collations{i.key};
+                rv += collation ? sprintf("%s COLLATE %s", sql_name, collation) : sql_name;
+            }
+            return rv;
         }
 
         #! returns @ref True "True" if the argument is equal to the current index, @ref False "False" if not
@@ -336,12 +350,16 @@ public namespace Sqlite3SqlUtil {
             return True;
         }
 
-        #! returns a string that can be used to rename the index in the database
-        /** however sqlite3 does not support renaming indexes, so the index is dropped and recreated
+        #! returns the SQL statements that rename the index in the database
+        /** SQLite cannot rename an index, so the index is dropped and created under the new name, with its columns
+            and their collations, in two statements
         */
-        string getRenameSql(string table_name, string new_name) {
-            return sprintf("drop index %s; create %sindex %s on %s (%s)", name, unique ? "unique " : "", new_name,
-                table_name, (foldl $1 + ", " + $2, columns.getSqlColumnNameIterator()));
+        softlist<string> getRenameSql(string table_name, string new_name) {
+            return (
+                getDropSql(table_name),
+                sprintf("create %sindex %s on %s (%s)", unique ? "unique " : "", new_name, table_name,
+                    (foldl $1 + ", " + $2, getColumnCollationList())),
+            );
         }
 
         #! returns a string that can be used to drop the index from the table

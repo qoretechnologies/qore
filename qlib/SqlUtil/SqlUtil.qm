@@ -155,6 +155,15 @@ module SqlUtil {
       of sequences or functions only; every section of the description is optional
     - fixed @ref SqlUtil::AbstractDatabase::getAlignSql() "AbstractDatabase::getAlignSql()" raising
       \c SCHEMA-DESCRIPTION-ERROR for any \c table_map, so that no table was renamed by it
+    - API change: @ref SqlUtil::AbstractIndex::getRenameSql() "AbstractIndex::getRenameSql()" returns a list of
+      SQL strings instead of one string, and @ref SqlUtil::AbstractTable::renameIndex() "AbstractTable::renameIndex()"
+      returns the SQL in a list in its optional reference argument: a database that cannot rename an index drops it
+      and creates it under the new name, in two statements, which the SQLite and Firebird drivers gave in one string;
+      as the \c sqlite3 driver runs one statement at a time, renaming an index on SQLite, as table alignment does for
+      an index that has another name than the template's, dropped the index and did not create it again
+    - fixed table alignment dropping and creating a unique index twice when its columns change on a database whose
+      unique indexes are unique constraints, such as SQLite: the unique constraint of a unique index is added,
+      recreated and dropped with the index only
     - added a driver hook that @ref SqlUtil::AbstractTable::getAlignSql() "AbstractTable::getAlignSql()" calls
       before it aligns the columns, so a driver refuses the changes that its database cannot make with any version
       before a column change that only an older version of the database cannot make, and an alignment reports the
@@ -9079,8 +9088,18 @@ AbstractIndex ix = indexes.pk_jobs;
         #! returns @ref True "True" if the argument is equal to the current index, @ref False "False" if not
         abstract bool equalImpl(AbstractIndex ix);
 
-        #! returns a string that can be used to rename the index in the database
-        abstract string getRenameSql(string table_name, string new_name);
+        #! returns a list of SQL strings that rename the index in the database
+        /** A database that cannot rename an index drops it and creates it under the new name, which takes two
+            statements; each element of the list is one statement
+
+            @param table_name the name of the table
+            @param new_name the new name of the index
+
+            @return a list of SQL strings that rename the index in the database
+
+            @since SqlUtil 3.11.0 this method returns a list of SQL strings instead of one string
+        */
+        abstract softlist<string> getRenameSql(string table_name, string new_name);
 
         #! compares two optional hashes for equality without regard to key order
         /** Qore's \c == operator on hashes is order-sensitive, but index storage options and

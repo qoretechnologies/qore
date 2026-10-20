@@ -1,0 +1,55 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires SqlUtil
+%requires MysqlSqlUtil
+%requires OracleSqlUtilBase
+%requires PgsqlSqlUtilBase
+%requires MssqlSqlUtilBase
+%requires XdbcFirebirdSqlUtilBase
+%requires Sqlite3SqlUtil
+%requires QUnit
+
+%exec-class IndexRenameSqlTest
+
+#! The SQL that renames an index is a list of statements on every database
+/** A database that cannot rename an index drops it and creates it under the new name, which takes two statements;
+    one string with both was run only up to the first statement by drivers that run one statement at a time, so the
+    index was dropped and not created again
+*/
+class IndexRenameSqlTest inherits QUnit::Test {
+    constructor() : Test("IndexRenameSqlTest", "1.0", \ARGV) {
+        addTestCase("the rename SQL of an index is a list of statements", \renameSql());
+        set_return_value(main());
+    }
+
+    private renameSql() {
+        hash<auto> cols = {"code": {}, "id": {}};
+
+        # renamed in place
+        assertEq(("alter index ix_old rename to ix_new",),
+            (new PgsqlIndex("ix_old", True, cols)).getRenameSql("orders", "ix_new"));
+        assertEq(("alter index ix_old rename to ix_new",),
+            (new OracleIndex("ix_old", True, cols, "UNIQUE")).getRenameSql("orders", "ix_new"));
+        assertEq(("exec sp_rename 'orders.ix_old', 'ix_new', 'INDEX'",),
+            (new MssqlIndex("ix_old", True, cols)).getRenameSql("orders", "ix_new"));
+        # dropped and added in one statement
+        assertEq(("alter table orders drop index ix_old, add unique index ix_new (code, id)",),
+            (new MysqlIndex("ix_old", True, cols)).getRenameSql("orders", "ix_new"));
+
+        # dropped and created under the new name: two statements
+        assertEq(("drop index ix_old", "create unique index ix_new on orders (code, id)"),
+            (new XdbcFirebirdIndex("ix_old", True, cols)).getRenameSql("orders", "ix_new"));
+        assertEq(("drop index ix_old", "create index ix_new on orders (code, id)"),
+            (new Sqlite3Index("ix_old", False, cols)).getRenameSql("orders", "ix_new"));
+        # with the collations of the index's columns
+        assertEq(("drop index ix_old", "create unique index ix_new on orders (code COLLATE nocase, id)"),
+            (new Sqlite3Index("ix_old", True, cols, {"code": "nocase"})).getRenameSql("orders", "ix_new"));
+    }
+}

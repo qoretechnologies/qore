@@ -277,8 +277,10 @@ public namespace MysqlSqlUtil {
             return t1 == t2;
         }
 
-        #! returns a string that can be used to rename the index in the database; hwoever mysql does not support renaming indexes, so the index is dropped and recreated :(
-        string getRenameSql(string table_name, string new_name) {
+        #! returns the SQL statement that renames the index in the database
+        /** the index is dropped and added under the new name in one \c ALTER \c TABLE statement
+        */
+        softlist<string> getRenameSql(string table_name, string new_name) {
             return sprintf("alter table %s drop index %s, add %sindex %s (%s)", table_name, name, unique ? "unique " : "", new_name, (foldl $1 + ", " + $2, columns.getSqlColumnNameIterator()));
         }
 

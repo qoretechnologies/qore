@@ -36,7 +36,7 @@
 # enable all warnings
 
 module XdbcFirebirdSqlUtilBase {
-    version = "0.1";
+    version = "0.2";
     desc = "user module for working with Firebird DBs using xDBC drivers";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -88,6 +88,11 @@ module XdbcFirebirdSqlUtilBase {
     explicitly to store decimal values
 
     @section xdbcfirebird_relnotes Release Notes
+
+    @subsection xdbcfirebirdsqlutilbasev_0_2 XdbcFirebirdSqlUtilBase Module v0.2
+    - fixed renaming an index, as table alignment does for an index with the definition of the template's index
+      under another name: the SQL that drops the index and creates it under the new name was two statements in one
+      string; it is now two strings (see @ref SqlUtil::AbstractIndex::getRenameSql() "AbstractIndex::getRenameSql()")
 
     @subsection xdbcfirebirdsqlutilbasev_0_1 XdbcFirebirdSqlUtilBase Module v0.1
     - initial release
@@ -144,12 +149,16 @@ public namespace XdbcFirebirdSqlUtilBase {
             return True;
         }
 
-        #! returns a string that can be used to rename the index in the database
-        /** however xdbcfirebird does not support renaming indexes, so the index is dropped and recreated
+        #! returns the SQL statements that rename the index in the database
+        /** Firebird cannot rename an index, so the index is dropped and created under the new name, in two
+            statements
         */
-        string getRenameSql(string table_name, string new_name) {
-            return sprintf("drop index %s; create %sindex %s on %s (%s)", name, unique ? "unique " : "", new_name,
-                table_name, (foldl $1 + ", " + $2, columns.getSqlColumnNameIterator()));
+        softlist<string> getRenameSql(string table_name, string new_name) {
+            return (
+                getDropSql(table_name),
+                sprintf("create %sindex %s on %s (%s)", unique ? "unique " : "", new_name, table_name,
+                    (foldl $1 + ", " + $2, columns.getSqlColumnNameIterator())),
+            );
         }
 
         #! returns a string that can be used to drop the index from the table
