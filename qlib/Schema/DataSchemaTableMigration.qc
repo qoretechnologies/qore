@@ -1360,6 +1360,29 @@ bool sub index_matches(hash<auto> live, list<string> columns, bool unique) {
         && (live.unique ?? False).toBool() == unique;
 }
 
+# Returns the indexes that a normalized contract creates, by name: the unique
+# index on the canonical key, created when the table keeps a primary key on
+# other columns, and the reviewed indexes
+hash<string, hash<auto>> sub created_indexes(hash<auto> contract) {
+    string canonical_key =
+        contract.constraints_and_indexes.primary_key.columns[0];
+    hash<string, hash<auto>> rv = {
+        bounded_identifier(contract.constraints_and_indexes.primary_key.name
+            + "_schema_unique"): {
+            "columns": (canonical_key,),
+            "unique": True,
+        },
+    };
+    foreach hash<auto> index in (
+            contract.constraints_and_indexes.indexes) {
+        rv{index.name} = {
+            "columns": index.columns,
+            "unique": index.unique.toBool(),
+        };
+    }
+    return rv;
+}
+
 sub validate_existing_indexes(hash<auto> live_indexes, hash<auto> contract,
         string canonical_key) {
     string unique_name = bounded_identifier(

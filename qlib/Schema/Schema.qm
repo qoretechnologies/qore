@@ -919,6 +919,10 @@ module Schema {
       elsewhere, where it belongs (e.g. \c sequence_columns on a table instead of under \c auto_triggers, which
       previously lost the sequence binding silently, or a top-level \c constraints or \c auto_triggers, which
       are declared per table)
+    - the alignment of a data schema keeps the indexes that its \c reconcile_table migrations created: the unique
+      index on the canonical key of a table that keeps its legacy primary key and the reviewed indexes of the
+      contract are added to the description of the table once the migration has created them, as table alignment
+      drops an index that the description of its table does not have (SqlUtil 3.11.0)
 
     @subsection schema_v1_8_0 Schema Module v1.8.0
     - added shared \c columns and \c indexes definitions at the top level of a data schema: a

@@ -256,6 +256,87 @@ public class DataSchema inherits AbstractVersionedSchema {
         return AbstractSchema::alignIntern(force, verbose, do_msgs, manage_transaction);
     }
 
+    #! Checks whether the schema can be updated, and adds the indexes that its table reconciliations created
+    /** Runs the pre-alignment migration steps of an upgrade (@ref checkUpgrade()); a schema that can be updated then
+        gets the indexes that its \c reconcile_table migrations created in the database added to the descriptions of
+        its tables (@ref addReconciledIndexes()), so that the alignment keeps them
+
+        @param force align even when the stored version matches
+        @param initial_schema_info the schema info hash, with the current version of the database, if known
+
+        @return True if the schema can be updated
+
+        @since Schema 1.9
+    */
+    private bool checkUpdateSchema(bool force, reference<hash<auto>> initial_schema_info) {
+        bool rv = AbstractVersionedSchema::checkUpdateSchema(force, \initial_schema_info);
+        if (rv) {
+            addReconciledIndexes();
+        }
+        return rv;
+    }
+
+    #! Adds the indexes that the table reconciliations of the schema created to the descriptions of their tables
+    /** A \c reconcile_table migration creates the reviewed indexes of its contract and, for a table that keeps a
+        primary key on other columns than the canonical key, a unique index on the canonical key named
+        <em>primary-key-name</em><tt>_schema_unique</tt>.  An alignment drops an index that the description of its
+        table does not have, so each such index that a table of the schema has in the database with the reviewed
+        definition is added to the description of the table, unless the description declares an index with its name
+        or with its definition under another name, has no column of the index, or, for the unique index on the
+        canonical key, has its primary key on the canonical key, which takes the index as its own.
+
+        An index of a migration that has not run yet, as a \c post_align migration of the upgrade that is being
+        aligned, or of a first installation, which runs no migration, is not in the database, and is not added: the
+        alignment does not create it before its migration.
+
+        @throw DATA-SCHEMA-TABLE-MIGRATION-ARG-ERROR the contract of a \c reconcile_table migration is invalid
+
+        @since Schema 1.9
+    */
+    private addReconciledIndexes() {
+        foreach hash<auto> migration in (schema_data.migrations ?? ()) {
+            foreach string phase in (("pre_align", "post_align")) {
+                foreach hash<auto> step in (migration{phase} ?? ()) {
+                    if (step.action != "reconcile_table") {
+                        continue;
+                    }
+                    hash<auto> contract = DataSchemaTableMigration::validate_contract(step.contract);
+                    *hash<auto> desc = schema.tables{contract.table};
+                    if (!desc) {
+                        continue;
+                    }
+                    SqlUtil::AbstractTable live = (new SqlUtil::Table(getDatasource(), contract.table)).getTable();
+                    if (!live.checkExistence()) {
+                        continue;
+                    }
+                    hash<auto> live_indexes = live.getDescriptionHash().indexes ?? {};
+                    string canonical_key = contract.constraints_and_indexes.primary_key.columns[0];
+                    string unique_name = DataSchemaTableMigration::bounded_identifier(
+                        contract.constraints_and_indexes.primary_key.name + "_schema_unique");
+                    foreach hash<auto> i in (DataSchemaTableMigration::created_indexes(contract).pairIterator()) {
+                        if (desc.indexes{i.key} || !live_indexes{i.key}
+                            || !DataSchemaTableMigration::index_matches(live_indexes{i.key}, i.value.columns,
+                                i.value.unique)) {
+                            continue;
+                        }
+                        if ((map 1, i.value.columns, !desc.columns{$1})) {
+                            continue;
+                        }
+                        if (i.key == unique_name && desc.primary_key.columns == (canonical_key,)) {
+                            continue;
+                        }
+                        if ((map 1, (desc.indexes ?? {}).iterator(), $1.columns == i.value.columns
+                            && ($1.unique ?? False).toBool() == i.value.unique)) {
+                            continue;
+                        }
+                        schema.tables{contract.table}.indexes{i.key} = i.value;
+                        desc.indexes{i.key} = i.value;
+                    }
+                }
+            }
+        }
+    }
+
     #! Executes pre-alignment migration steps when upgrading
     /** Called by AbstractVersionedSchema when the database schema is older than the target.
 

@@ -627,6 +627,19 @@ count, before/after active and quarantine row counts, and deterministic
 verification results. It does not return row values. Re-executing the same
 contract is idempotent.
 
+Schema alignment drops an index that the declarative model does not declare,
+so the alignment of a DataSchema with a `reconcile_table` migration keeps the
+indexes that the migration created: the unique index on the canonical key
+(`<primary key name>_schema_unique`, created when the table keeps a legacy
+primary key on other columns) and the reviewed indexes of the contract are
+added to the table's description once they exist in the database with the
+reviewed definition. An index that the model declares under the same name, or
+with the same definition under another name, is aligned as the model declares
+it; a model whose primary key is the canonical key takes the canonical-key
+index as its own. An index of a migration that has not run yet, such as a
+`post_align` migration of the upgrade being aligned, is not created by the
+alignment.
+
 Embedding applications can pass `ddl_change_callback` in
 `SchemaOptionInfo`, or to `Schema::execute_migration_action()`. The callback
 receives the actual datasource object and the affected table names after

@@ -1,0 +1,179 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires SqlUtil
+%requires Schema
+%requires ../SqlUtil/PgsqlTestIsolation.qm
+
+%try-module pgsql
+%define NO_PGSQL
+%endtry
+
+%try-module mysql
+%define NO_MYSQL
+%endtry
+
+%try-module freetds
+%define NO_FREETDS
+%endtry
+
+%exec-class ReconciledIndexAlignmentTest
+
+#! The indexes that a reconcile_table migration of a DataSchema creates are kept by the alignment of the schema
+/** An alignment drops the indexes that the description of a table does not have, so the unique index on the
+    canonical key and the reviewed indexes of a table reconciliation are added to the description of the table once
+    the migration has created them.  The tests run on the PostgreSQL, MySQL and SQL Server databases given by
+    \c QORE_DB_CONNSTR_PGSQL, \c QORE_DB_CONNSTR_MYSQL and \c QORE_DB_CONNSTR_FREETDS
+*/
+class ReconciledIndexAlignmentTest inherits QUnit::Test {
+    private {
+        #! the tables of the test schema
+        const Tables = ("payments", "payments_schema_quarantine", "pay_version");
+
+        #! the indexes that the table reconciliation creates
+        const ReconciledIndexes = ("ix_payments_amount", "pk_payments_schema_unique");
+    }
+
+    constructor() : Test("ReconciledIndexAlignmentTest", "1.0", \ARGV) {
+        addTestCase("PostgreSQL keeps the indexes of a table reconciliation", \pgsql());
+        addTestCase("MySQL keeps the indexes of a table reconciliation", \mysql());
+        addTestCase("SQL Server keeps the indexes of a table reconciliation", \mssql());
+        set_return_value(main());
+    }
+
+    globalTearDown() {
+        PgsqlRunSchema::teardown();
+    }
+
+    pgsql() {
+%ifdef NO_PGSQL
+        testSkip("pgsql module unavailable");
+%endif
+        if (!ENV.QORE_DB_CONNSTR_PGSQL) {
+            testSkip("QORE_DB_CONNSTR_PGSQL is not set");
+        }
+        PgsqlRunSchema::setup(ENV.QORE_DB_CONNSTR_PGSQL, "ReconciledIndexAlignment");
+        checkDatabase(ENV.QORE_DB_CONNSTR_PGSQL);
+    }
+
+    mysql() {
+%ifdef NO_MYSQL
+        testSkip("mysql module unavailable");
+%endif
+        if (!ENV.QORE_DB_CONNSTR_MYSQL) {
+            testSkip("QORE_DB_CONNSTR_MYSQL is not set");
+        }
+        checkDatabase(ENV.QORE_DB_CONNSTR_MYSQL);
+    }
+
+    mssql() {
+%ifdef NO_FREETDS
+        testSkip("freetds module unavailable");
+%endif
+        if (!ENV.QORE_DB_CONNSTR_FREETDS) {
+            testSkip("QORE_DB_CONNSTR_FREETDS is not set");
+        }
+        checkDatabase(ENV.QORE_DB_CONNSTR_FREETDS);
+    }
+
+    #! Returns the contract of the reconciliation of the payments table: a canonical key mapped from the legacy key,
+    #! and a reviewed index
+    private static hash<auto> contract() {
+        return {
+            "contract_version": 1,
+            "migration_id": "canonical-payment-id",
+            "table": "payments",
+            "canonical_columns": (
+                {"name": "payment_id", "type": "int", "primary_key": True, "missing_live": True},
+                {"name": "amount", "type": "int"},
+            ),
+            "column_mappings": (
+                {"target": "payment_id", "source": "id", "source_kind": "legacy_column",
+                    "conversion": "numeric_compatible"},
+                {"target": "amount", "source": "amount", "source_kind": "existing_column",
+                    "conversion": "identity"},
+            ),
+            "backfill": {"batch_size": 100, "quarantine_table": "payments_schema_quarantine"},
+            "constraints_and_indexes": {
+                "primary_key": {"name": "pk_payments", "columns": ("payment_id",)},
+                "indexes": ({"name": "ix_payments_amount", "columns": ("amount",), "unique": False},),
+            },
+        };
+    }
+
+    #! Returns the schema at the given version; from 1.1, the payments table has the canonical column, which the
+    #! reconciliation in the given phase adds and fills, and keeps its legacy primary key
+    private static hash<auto> definition(string version, *string phase) {
+        hash<auto!> payments = {
+            "columns": {"id": {"type": "int", "notnull": True}, "amount": {"type": "int"}},
+            "primary_key": {"name": "pk_payments_legacy", "columns": ("id",)},
+        };
+        hash<auto!> def = {
+            "schema": {"name": "Pay", "version": version, "version_table": "pay_version",
+                "version_column": "version", "version_where": {"name": "Pay"}},
+            "tables": {
+                "pay_version": {
+                    "columns": {"name": {"type": "varchar", "size": 40, "notnull": True},
+                        "version": {"type": "varchar", "size": 40}},
+                    "primary_key": {"name": "pk_pay_version", "columns": ("name",)},
+                },
+            },
+            "reference_data": {"normal": {"pay_version": {"columns": ("name", "version"),
+                "rows": (("Pay", version),)}}},
+        };
+        if (phase) {
+            payments.columns.payment_id = {"type": "int"};
+            def.migrations = ({"version": "1.1", phase: ({"action": "reconcile_table", "contract": contract()},)},);
+        }
+        def.tables.payments = payments;
+        return Schema::DataSchemaLoader::loadHash(def, True);
+    }
+
+    #! Drops the test tables if they exist
+    private static dropTables(AbstractDatasource ds) {
+        on_success ds.commit();
+        on_error ds.rollback();
+        Database db(ds);
+        map db.dropTableIfExists($1), Tables;
+    }
+
+    #! Returns the names of the indexes of the payments table
+    private static list<string> indexes(AbstractDatasource ds) {
+        return sort(keys (new Table(ds, "payments")).getIndexes().getHash()) ?? ();
+    }
+
+    #! Upgrades a schema with rows in the payments table to the version whose reconciliation in the given phase adds
+    #! the canonical key, and checks that its indexes are kept by the alignment and by a forced alignment
+    private checkReconciliation(string connstr, string phase) {
+        Datasource ds(connstr);
+        on_exit dropTables(ds);
+        dropTables(ds);
+
+        (new Schema::DataSchema(ds, definition("1.0"))).align(False, -1, False);
+        Table payments(ds, "payments");
+        payments.insert({"id": 1, "amount": 10});
+        payments.insert({"id": 2, "amount": 20});
+        ds.commit();
+
+        (new Schema::DataSchema(ds, definition("1.1", phase))).align(False, -1, False);
+        assertEq((1, 2), (map $1.payment_id, (new Table(ds, "payments")).selectRows({"orderby": "id"})), phase);
+        assertEq(ReconciledIndexes, indexes(ds), phase);
+
+        # a forced alignment of the schema keeps them, and changes nothing
+        hash<auto> info = (new Schema::DataSchema(ds, definition("1.1", phase))).alignWithInfo(True, -1, False);
+        assertEq(("unchanged",), keys info.change_map, phase);
+        assertEq(ReconciledIndexes, indexes(ds), phase);
+    }
+
+    #! Checks a reconciliation before and after the alignment of the upgrade
+    private checkDatabase(string connstr) {
+        checkReconciliation(connstr, "pre_align");
+        checkReconciliation(connstr, "post_align");
+    }
+}
