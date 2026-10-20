@@ -49,11 +49,13 @@
     closing quote raises \c SPLIT-ERROR when splitting a string, where its text was silently returned.  The new
     \c quote_escape parameter selects RFC 4180 splitting, where a backslash is an ordinary character.
 
-    HttpClientIo and RestClientIo report certificate verification failures from HTTP/1.1 and HTTP/2 requests immediately,
-    preserving OpenSSL's certificate verification reason. A refused certificate is no longer retried as a transient
-    connection failure, which could delay the call and replace the original reason with a connection timeout.
-    This also applies to automatic protocol selection with HTTP/3 disabled. Connections interrupted during the
-    handshake can still be retried.
+    HttpClientIo and RestClientIo report certificate verification failures from HTTP/1.1, HTTP/2 and HTTP/3 requests
+    immediately, preserving OpenSSL's certificate verification reason. A refused certificate is no longer retried as a
+    transient connection failure, which could delay the call and replace the original reason with a connection
+    timeout. This also applies to automatic protocol selection with HTTP/3 disabled. Connections interrupted during
+    the handshake can still be retried. An HTTP/3 (QUIC) connection that refuses the server certificate raises
+    \c SOCKET-SSL-ERROR with the same verification reason as a TLS connection over TCP instead of
+    \c QUIC-READ-ERROR, also with the @ref Qore::HTTPClient "HTTPClient" class.
 
     LLM streaming requests accept a @ref QoreLlmUtils::LlmCancellation "LlmCancellation" token in
     @ref QoreLlmUtils::LlmRequestOptions::cancellation "LlmRequestOptions::cancellation". Cancelling the token

@@ -23,6 +23,36 @@ class TlsVerifyHandler inherits AbstractHttpRequestHandler {
     }
 }
 
+#! Records the connections a connection manager creates, so that a test can tell whether a failed connection was retried
+/** A QUIC listener of HttpServer cannot report the handshakes it receives, so the connections are recorded where the
+    client creates them; every connection of a request with a forced protocol is created by
+    HttpClientConnectionManager::createConnection(), synchronous and asynchronous alike
+*/
+class RecordingManager inherits HttpClientIo::HttpClientConnectionManager {
+    private {
+        Mutex m();
+        list<HttpClientIo::HttpClientConnection> connections();
+    }
+
+    constructor(hash<HttpClientIo::HttpClientConnectionManagerOptions> opts)
+            : HttpClientIo::HttpClientConnectionManager(opts) {
+    }
+
+    #! Returns the connections created, in the order they were created
+    list<HttpClientIo::HttpClientConnection> getConnections() {
+        AutoLock al(m);
+        return connections;
+    }
+
+    private HttpClientIo::HttpClientConnection createConnection(hash<auto> url_info, string key, string protocol) {
+        HttpClientIo::HttpClientConnection conn = HttpClientIo::HttpClientConnectionManager::createConnection(url_info,
+            key, protocol);
+        AutoLock al(m);
+        connections += conn;
+        return conn;
+    }
+}
+
 #! Tests verification of server certificates against the default and against given CA certificates
 public class HttpClientTlsVerifyTest inherits QUnit::Test {
     public {
@@ -152,6 +182,15 @@ WKEuKQ7xuGuAiIESuSDBsSg=
 
         #! HTTP versions tested over TCP
         const TcpVersions = ("1.1", "2.0", "auto");
+
+        #! the client APIs whose connection failures are tested
+        const Apis = ("REST", "REST async", "HTTP", "HTTP async");
+
+        #! the client APIs that make the next HTTP/3 connection of a request in the calling thread
+        /** an asynchronous request makes it in an I/O worker, where the synchronous bind of its UDP socket raises
+            \c SOCKET-SYNC-ON-IO-THREAD-ERROR
+        */
+        const SyncApis = ("REST", "HTTP");
     }
 
     private {
@@ -177,6 +216,9 @@ WKEuKQ7xuGuAiIESuSDBsSg=
         addTestCase("HttpClientIo CA options", \httpClientIoTest());
         addTestCase("RestClientIo CA options", \restClientIoTest());
         addTestCase("TCP certificate failures are not retried", \certificateFailureTest());
+        addTestCase("HTTP/3 certificate failures are not retried", \http3CertificateFailureTest());
+        addTestCase("HTTP/3 with all certificates accepted", \http3AcceptAllTest());
+        addTestCase("HTTP/3 connection failures are retried", \http3ConnectFailureTest());
         addTestCase("HTTPClient option errors", \optionErrorTest());
         set_return_value(main());
     }
@@ -529,6 +571,111 @@ WKEuKQ7xuGuAiIESuSDBsSg=
         }
     }
 
+    #! A refused server certificate ends an HTTP/3 call as it does over TCP: with the original TLS error, no retry
+    http3CertificateFailureTest() {
+        foreach string host in ("localhost", "127.0.0.1") {
+            foreach bool trusted in (False, True) {
+                # "localhost" can resolve first to an address in another family than the listener's, so that a
+                # request needs a second connection (see SyncApis)
+                foreach string api in (host == "localhost" ? SyncApis : Apis) {
+                    singleHttp3CertificateFailure(host, trusted, api);
+                }
+            }
+        }
+    }
+
+    private singleHttp3CertificateFailure(string host, bool trusted, string api) {
+        string msg = sprintf("h3 %s trusted=%y %s", host, trusted, api);
+        # the certificate of the listener is not issued by a default CA; with the test CA trusted, the listener with
+        # the certificate issued for another host is used
+        string url = sprintf("https://%s:%d", host, trusted ? quic_wrong_port : quic_good_port);
+        RecordingManager mgr = http3Manager(trusted ? {"ssl_ca_file": ca_file} : NOTHING);
+        on_exit mgr.closeAll();
+        try {
+            http3Get(mgr, url, api);
+            fail(msg + ": no exception raised");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("SOCKET-SSL-ERROR", ex.err, msg + ": " + ex.desc);
+            # the error of the connection is the argument, as for a refused certificate over TCP
+            assertEq("SOCKET-SSL-ERROR", ex.arg.err, msg);
+            assertEq(NT_INT, ex.arg.arg.ssl_verify_error.typeCode(), msg);
+            assertGt(0, ex.arg.arg.ssl_verify_error, msg);
+            assertRegex("certificate verify failed", ex.desc, msg);
+            assertRegex(trusted ? (host == "localhost" ? "hostname mismatch" : "IP address mismatch")
+                : "unable to get local issuer certificate", ex.desc, msg);
+        }
+        # A host name can resolve to an address in another family first, where nothing receives datagrams; that
+        # attempt does not reach the server and is followed by one in the next family. The refused certificate must be
+        # the last connection: it is not retried.
+        list<HttpClientIo::HttpClientConnection> conns = mgr.getConnections();
+        list<HttpClientIo::HttpClientConnection> refused = select conns,
+            $1.getPollOperation().getError().arg.ssl_verify_error;
+        assertEq(1, refused.size(), msg + ": one certificate refusal");
+        assertTrue(refused[0] == conns.last(), msg + ": no connection after the certificate refusal");
+    }
+
+    #! A client that accepts all certificates connects over HTTP/3 to a listener whose certificate fails verification
+    http3AcceptAllTest() {
+        foreach string api in (Apis) {
+            RecordingManager mgr = http3Manager({"accept_all_certs": True});
+            on_exit mgr.closeAll();
+            assertEq("verified", http3Get(mgr, sprintf("https://127.0.0.1:%d", quic_wrong_port), api), api);
+            assertEq(1, mgr.getConnections().size(), api);
+        }
+    }
+
+    #! An HTTP/3 connection failure that is not a TLS error remains a connection error that is retried
+    /** a retry needs a second connection (see SyncApis) */
+    http3ConnectFailureTest() {
+        # nothing receives datagrams on this port
+        string url = sprintf("https://127.0.0.1:%d", get_free_port("127.0.0.1"));
+        foreach string api in (SyncApis) {
+            RecordingManager mgr = http3Manager({"accept_all_certs": True, "connect_timeout": 5s,
+                "max_request_retries": 1});
+            on_exit mgr.closeAll();
+            try {
+                http3Get(mgr, url, api);
+                fail(api + ": no exception raised");
+            } catch (hash<ExceptionInfo> ex) {
+                assertEq("HTTPCLIENT-CONNECT-ERROR", ex.err, api + ": " + ex.desc);
+                assertRegex("^QUIC-", ex.arg.err, api);
+            }
+            assertEq(2, mgr.getConnections().size(), api + ": one retry");
+        }
+    }
+
+    #! Returns a connection manager that forces HTTP/3 and verifies the server certificate
+    private RecordingManager http3Manager(*hash<auto> opts) {
+        return new RecordingManager(cast<hash<HttpClientIo::HttpClientConnectionManagerOptions>>({
+            "protocol": "h3",
+            "ssl_verify_mode": SSL_VERIFY_PEER,
+            "connect_timeout": 10s,
+            "request_timeout": 20s,
+            "max_request_retries": 2,
+        } + opts));
+    }
+
+    #! Makes a GET request for "/" with the given API and returns the response body
+    private auto http3Get(RecordingManager mgr, string url, string api) {
+        switch (api) {
+            case "REST": {
+                RestClientIo rest({"url": url, "data": "text"}, mgr);
+                on_exit rest.close();
+                return rest.restGet("/").body;
+            }
+            case "REST async": {
+                RestClientIo rest({"url": url, "data": "text"}, mgr);
+                on_exit rest.close();
+                return rest.restGetAsync("/").get(25s).body;
+            }
+            case "HTTP":
+                return mgr.request(url, "GET", "/").body;
+            case "HTTP async":
+                return mgr.requestAsync(url, "GET", "/").get(25s).body;
+        }
+        throw "TEST-ERROR", sprintf("unknown API %y", api);
+    }
+
     optionErrorTest() {
         assertThrows("HTTP-CLIENT-OPTION-ERROR", sub () {
             HTTPClient hc({"url": "https://localhost", "ssl_ca_file": 1});
@@ -539,6 +686,7 @@ WKEuKQ7xuGuAiIESuSDBsSg=
     }
 
     #! asserts that the call fails because the server certificate is rejected
+    /** the TLS error is raised as it is over TCP, whatever the protocol */
     private assertRejected(code c, auto args, string msg) {
         try {
             call_function_args(c, args);
@@ -547,6 +695,7 @@ WKEuKQ7xuGuAiIESuSDBsSg=
             if (m_options.verbose) {
                 printf("%s: %s: %s\n", msg, ex.err, ex.desc);
             }
+            assertEq("SOCKET-SSL-ERROR", ex.err, msg + ": " + ex.desc);
             assertRegex("certificate verify failed", ex.desc, msg + ": " + ex.err);
         }
     }

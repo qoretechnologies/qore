@@ -66,6 +66,19 @@ enum class SslCall : unsigned char {
     Transport,
 };
 
+class QoreStringNode;
+
+//! Returns why a certificate failed verification, for the error raised for the refused TLS handshake
+/** Shared by TLS connections over TCP and QUIC, so that a refused certificate is described in the same way whatever
+    the transport (issue #3818)
+
+    @param x509_ctx the store context of the verify callback call that reports the failure
+
+    @return a new string of the form <tt>verify error <code> depth <depth>: <reason>: <subject></tt>, with the issuer
+    added when the issuer certificate cannot be found; the caller owns the reference
+*/
+DLLLOCAL QoreStringNode* q_ssl_get_verify_error_desc(X509_STORE_CTX* x509_ctx);
+
 static inline const char* get_action_method(SslAction action) {
     switch (action) {
         case READ: return "SSL_read";

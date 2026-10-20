@@ -270,7 +270,7 @@ QoreHashNode* Http3ClientPollOperationPriv::handleConnecting(ExceptionSink* xsin
         QoreStringValueHelper err_str(poll_xsink.getExceptionErr());
         QoreStringValueHelper desc_str(poll_xsink.getExceptionDesc());
         setError(*err_str ? err_str->c_str() : "HTTP3-CONNECT-ERROR",
-            *desc_str ? desc_str->c_str() : "QUIC connection failed", xsink);
+            *desc_str ? desc_str->c_str() : "QUIC connection failed", xsink, poll_xsink.getExceptionArg());
         poll_xsink.clear();
         cleanupPendingState();
         return nullptr;
@@ -661,13 +661,17 @@ void Http3ClientPollOperationPriv::abort(ExceptionSink* xsink) {
     // use-after-free if a driver thread is still inside continuePoll
 }
 
-void Http3ClientPollOperationPriv::setError(const char* err, const char* desc, ExceptionSink* xsink) {
+void Http3ClientPollOperationPriv::setError(const char* err, const char* desc, ExceptionSink* xsink,
+        QoreValue arg) {
     {
         AutoLocker al(stream_lock);
         if (!error_info) {
             error_info = new QoreHashNode(autoTypeInfo);
             error_info->setKeyValue("err", new QoreStringNode(err), xsink);
             error_info->setKeyValue("desc", new QoreStringNode(desc), xsink);
+            if (!arg.isNothing()) {
+                error_info->setKeyValue("arg", arg.refSelf(), xsink);
+            }
         }
     }
     h3_state.store(H3State::CLOSED, std::memory_order_release);
@@ -1426,7 +1430,9 @@ bool Http3ClientPollOperationBase::hasError() [flags=RET_VALUE_ONLY] {
 }
 
 //! Returns error information if an error occurred
-/** @return error hash or NOTHING
+/** @return error hash or NOTHING: the \c err and \c desc keys and, if the error has an exception argument, the
+    \c arg key; a server certificate refused by the verification is \c SOCKET-SSL-ERROR with \c ssl_verify_error in
+    \c arg, as for a TLS connection over TCP
 */
 *hash<auto> Http3ClientPollOperationBase::getError() [flags=RET_VALUE_ONLY] {
     return priv->getErrorInfo();

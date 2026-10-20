@@ -2070,6 +2070,7 @@ const SSL_VERIFY_NONE = SSL_VERIFY_NONE;
     @note Since %Qore 3.0, a local certificate verification failure raises \c SOCKET-SSL-ERROR with a hash
     exception argument containing \c ssl_verify_error, the numeric OpenSSL certificate verification result.
     This distinguishes a refused certificate from an interrupted handshake without parsing the error description.
+    This applies to TLS connections over TCP and to QUIC (HTTP/3) connections alike.
 
     @see
     - @ref Qore::SSL_VERIFY_FAIL_IF_NO_PEER_CERT

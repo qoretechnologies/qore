@@ -65,9 +65,9 @@ module RestClientIo {
     %RestClientIo uses the @ref HttpClientIo::HttpClientConnectionManager "HttpClientConnectionManager"
     for multiplexed connections — multiple concurrent requests share connections without serialization.
 
-    Certificate verification failures from HTTP/1.1 and HTTP/2 requests raise \c SOCKET-SSL-ERROR with the original
-    diagnostic. Synchronous and asynchronous requests do not retry certificate refusals; connections interrupted
-    during the handshake can still be retried.
+    Certificate verification failures from HTTP/1.1, HTTP/2 and HTTP/3 requests raise \c SOCKET-SSL-ERROR with the
+    original diagnostic. Synchronous and asynchronous requests do not retry certificate refusals; connections
+    interrupted during the handshake can still be retried.
     This also applies to automatic protocol selection with HTTP/3 disabled.
 
     @par Example

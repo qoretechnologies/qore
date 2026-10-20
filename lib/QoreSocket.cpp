@@ -6434,27 +6434,34 @@ static int q_ssl_verify_accept_default(int preverify_ok, X509_STORE_CTX* x509_ct
     if (!preverify_ok) {
         SSL* ssl = reinterpret_cast<SSL*>(X509_STORE_CTX_get_ex_data(x509_ctx, SSL_get_ex_data_X509_STORE_CTX_idx()));
         qore_socket_private* qs = reinterpret_cast<qore_socket_private*>(SSL_get_ex_data(ssl, qore_ssl_data_index));
-
-        X509* err_cert = X509_STORE_CTX_get_current_cert(x509_ctx);
-        int err = X509_STORE_CTX_get_error(x509_ctx);
-        int depth = X509_STORE_CTX_get_error_depth(x509_ctx);
-
-        char buf[256];
-        X509_NAME_oneline(X509_get_subject_name(err_cert), buf, 256);
-
-        SimpleRefHolder<QoreStringNode> ssl_err(new QoreStringNodeMaker("verify error %d depth %d: %s: %s", err,
-            depth, X509_verify_cert_error_string(err), buf));
-
-        // At this point, err contains the last verification error
-        if (err == X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT) {
-            X509_NAME_oneline(X509_get_issuer_name(err_cert), buf, 256);
-            ssl_err->sprintf(", issuer: %s", buf);
-        }
-
-        qs->setSslErrorString(ssl_err.release());
+        qs->setSslErrorString(q_ssl_get_verify_error_desc(x509_ctx));
     }
 
     return preverify_ok;
+}
+
+QoreStringNode* q_ssl_get_verify_error_desc(X509_STORE_CTX* x509_ctx) {
+    X509* err_cert = X509_STORE_CTX_get_current_cert(x509_ctx);
+    int err = X509_STORE_CTX_get_error(x509_ctx);
+    int depth = X509_STORE_CTX_get_error_depth(x509_ctx);
+
+    SimpleRefHolder<QoreStringNode> ssl_err(new QoreStringNodeMaker("verify error %d depth %d: %s", err, depth,
+        X509_verify_cert_error_string(err)));
+    // OpenSSL can report an error without a current certificate
+    if (!err_cert) {
+        return ssl_err.release();
+    }
+
+    char buf[256];
+    X509_NAME_oneline(X509_get_subject_name(err_cert), buf, 256);
+    ssl_err->sprintf(": %s", buf);
+
+    // At this point, err contains the last verification error
+    if (err == X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT) {
+        X509_NAME_oneline(X509_get_issuer_name(err_cert), buf, 256);
+        ssl_err->sprintf(", issuer: %s", buf);
+    }
+    return ssl_err.release();
 }
 
 int SSLSocketHelper::setVerifyMode(int mode, bool accept_all_certs, const std::string& target) {

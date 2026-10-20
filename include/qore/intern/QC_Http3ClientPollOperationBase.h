@@ -488,7 +488,14 @@ private:
     DLLLOCAL AbstractAsyncAction* takeResponseAction(const std::string& sid, QoreHashNode* output, bool& buffered,
             ExceptionSink* xsink);
 
-    DLLLOCAL void setError(const char* err, const char* desc, ExceptionSink* xsink);
+    //! Records the error of the operation and closes it
+    /** @param err the error code
+        @param desc the error description
+        @param xsink for exceptions
+        @param arg the exception argument of the error, if any; kept in the \c arg key of the error info, so that a
+        refused certificate (\c SOCKET-SSL-ERROR with \c ssl_verify_error) can be told apart from a failed connection
+    */
+    DLLLOCAL void setError(const char* err, const char* desc, ExceptionSink* xsink, QoreValue arg = QoreValue());
     DLLLOCAL void notifyPendingStreams(const char* err, const char* desc, ExceptionSink* xsink);
     DLLLOCAL void cleanupPendingState();
     DLLLOCAL void fireReadyCallback(ExceptionSink* xsink);
