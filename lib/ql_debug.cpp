@@ -3170,6 +3170,7 @@ public:
         {
             std::lock_guard<std::mutex> lk(close_lock);
             last_conn = conn;
+            last_thread = std::this_thread::get_id();
             ++close_count;
         }
         close_cond.notify_all();
@@ -3200,11 +3201,55 @@ public:
         return close_count;
     }
 
+    //! Returns the thread that last called the close hook
+    DLLLOCAL std::thread::id getLastThread() {
+        std::lock_guard<std::mutex> lk(close_lock);
+        return last_thread;
+    }
+
 private:
     std::mutex close_lock;
     std::condition_variable close_cond;
     int close_count = 0;
     HttpClientConnectionBase* last_conn = nullptr;
+    std::thread::id last_thread;
+};
+
+//! Holds a test server's connection open until the test releases it
+/** The release is also made by the destructor, so that a test that returns early does not leave the server thread
+    waiting; declare the guard after the server, so that it is destroyed, and releases, before the server joins its
+    thread.
+*/
+struct UtServerRelease {
+    std::mutex m;
+    std::condition_variable cond;
+    bool released = false;
+
+    //! Waits until the test releases the connection
+    DLLLOCAL void wait() {
+        std::unique_lock<std::mutex> lk(m);
+        cond.wait(lk, [this] { return released; });
+    }
+
+    //! Releases the connection
+    DLLLOCAL void release() {
+        {
+            std::lock_guard<std::mutex> lk(m);
+            released = true;
+        }
+        cond.notify_all();
+    }
+};
+
+struct UtServerReleaseGuard {
+    UtServerRelease& rel;
+
+    DLLLOCAL explicit UtServerReleaseGuard(UtServerRelease& r) : rel(r) {
+    }
+
+    DLLLOCAL ~UtServerReleaseGuard() {
+        rel.release();
+    }
 };
 
 // Deterministic lock-order regression fixture.  Pool checkout calls
@@ -3655,17 +3700,18 @@ static void ut_http1_onclosed_hook_one_shot(UnitTestCounters& c) {
 static void ut_http1_onclosed_hook_app_thread_close(UnitTestCounters& c) {
     ExceptionSink xsink;
 
-    // Spin up a server that just accepts and closes — the client connect
-    // succeeds, then we close from the app thread.
+    // Spin up a server that accepts and holds the connection open until the app thread has closed it, so that
+    // the close is the app thread's: if the server closed first, the I/O thread would see EOF and fire the hook
+    UtServerRelease release;
     UtH1Server server;
     if (server.start() != 0) {
         UT_ASSERT(c, false, "test server bind/listen failed");
         return;
     }
+    UtServerReleaseGuard release_guard(release);
     int server_port = server.port;
-    server.serveOnce([](int cfd) {
-        // Accept and immediately close — the client will see EOF on first recv
-        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    server.serveOnce([&release](int cfd) {
+        release.wait();
     });
 
     ReferenceHolder<UtCountingManager> mgr(
@@ -3684,9 +3730,13 @@ static void ut_http1_onclosed_hook_app_thread_close(UnitTestCounters& c) {
     conn->closeConnection(&xsink);
     xsink.clear();
 
-    // Hook should have fired exactly once.
+    // Hook should have fired exactly once, from this thread.
     UT_ASSERT_EQ(c, 1, mgr->getCloseCount(),
         "manager.onConnectionClosed fired exactly once on app-thread close");
+    UT_ASSERT(c, mgr->getLastThread() == std::this_thread::get_id(),
+        "manager.onConnectionClosed fired from the app thread's close");
+    // the server can close its end now
+    release.release();
 
     conn->setManager(nullptr);
 }
