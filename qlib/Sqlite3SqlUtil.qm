@@ -116,6 +116,8 @@ module Sqlite3SqlUtil {
     with every SQLite version:
     - adding a primary key to the table, or dropping its primary key (see @ref sqlite3_primary_keys)
     - adding a foreign constraint to the table, or dropping or changing one (see @ref sqlite3_foreign_constraints)
+    - dropping or changing a unique constraint that the table was created with, or replacing it with a unique index
+      (see @ref sqlite3_unique_constraints)
     - changing a column's type, its default value, or whether it is an auto-increment or primary key column (see
       @ref sqlite3_column_changes)
 
@@ -174,6 +176,34 @@ module Sqlite3SqlUtil {
     on through the driver.  Only an SQLite library built with \c SQLITE_DEFAULT_FOREIGN_KEYS=1 enforces them.  This
     module does not change the setting.
 
+    @subsection sqlite3_unique_constraints Unique Constraints
+
+    SQLite creates a unique constraint with its table: each unique constraint of a table is written in its
+    \c CREATE \c TABLE statement as a table constraint,
+    <tt>constraint</tt> <em>name</em> <tt>unique (</tt>...<tt>)</tt>, with its columns in the constraint's order, and
+    SQLite enforces it with an automatic unique index, which cannot be dropped.  SQLite does not report the name of
+    such a constraint: a unique constraint that is read from the database is named as SQLite names its automatic
+    index, <tt>sqlite_autoindex_</tt><em>table</em><tt>_</tt><em>n</em>, and the automatic index is part of the
+    constraint, not an index of the table, as the automatic index of a primary key is.
+
+    A unique index on columns enforces the same constraint: as SQLite treats them alike, a unique index of a table is
+    also described as a unique constraint of the table, with the index's name, and a unique index in a table
+    description is also a unique constraint of the table.  A partial unique index, or one on an expression, is
+    described as an index only.
+
+    SQLite cannot add a unique table constraint to an existing table, so aligning an existing table to a template with
+    a new unique constraint creates a unique index with the constraint's name
+    (<tt>create unique index</tt> <em>name</em> <tt>on</tt> <em>table</em> <tt>(</tt>...<tt>)</tt>), which the next
+    alignment reads back as the same constraint and leaves as it is.  A unique constraint that is a unique index is
+    dropped by dropping its index, and changed by dropping its index and creating another.  A table is aligned to a
+    template by the columns of its unique constraints, not by their names: a unique constraint with the same columns
+    under another name is unchanged and needs no SQL.
+
+    A unique constraint that a table was created with cannot be dropped or changed, nor be replaced with a unique
+    index on its columns, so aligning an existing table to a template without it raises \c UNSUPPORTED with a
+    description, with every SQLite version (see @ref sqlite3_alignment_refusals); such a table can only be created
+    anew and its rows copied, which this module does not do.
+
     @section sqlite3_relnotes Release Notes
 
     @subsection sqlite3sqlutilv12 Sqlite3SqlUtil_1_2 Sqlite3SqlUtil Module v1.2
@@ -197,6 +227,12 @@ module Sqlite3SqlUtil {
       adding a foreign constraint to an existing table or dropping one raises \c UNSUPPORTED with a description;
       foreign constraints are declared but not enforced through the \c sqlite3 driver; see
       @ref sqlite3_foreign_constraints
+    - fixed table descriptions with a unique constraint or a unique index, which raised a bare \c UNSUPPORTED when
+      they were set up, so that such a table could be neither created nor aligned; a unique constraint is now created
+      with its table, described from SQLite's index pragmas under the name of its automatic index, which is no longer
+      described as an index of the table, added to an existing table as a unique index, and aligned by its columns;
+      a unique index is also a unique constraint of its table, as in SQLite; dropping or changing a unique constraint
+      that a table was created with raises \c UNSUPPORTED with a description; see @ref sqlite3_unique_constraints
     - fixed table alignment reporting a different refusal on an SQLite library older than 3.53.0 than on a newer
       one: a template that made a change that no SQLite version can make, such as adding a primary key, and changed
       a column's \c NOT \c NULL constraint, such as by declaring the key's column \c NOT \c NULL, raised
@@ -544,8 +580,33 @@ string str = col.getRenameSql(t, "new_name");
         }
     }
 
+    #! represents a Sqlite3-specific unique constraint
+    /** SQLite creates a unique constraint with its table: @ref Sqlite3Table writes it in the table's
+        \c CREATE \c TABLE statement (@ref getTableConstraintSql()), and SQLite enforces it with an automatic unique
+        index that cannot be dropped.  A unique constraint is added to an existing table as a unique index
+        (@ref getCreateSql()), which SQLite enforces in the same way and which can be dropped.  SQLite does not report
+        the name of a unique constraint created with its table, so a described one is named by @ref Sqlite3Table; see
+        @ref sqlite3_unique_constraints
+    */
     public class Sqlite3UniqueConstraint inherits SqlUtil::AbstractUniqueConstraint {
-        constructor(string name, hash<auto> cols) : AbstractUniqueConstraint(name, cols) {
+        private {
+            #! @ref True "True" if the constraint was created with its table, which SQLite cannot drop it from
+            bool table_constraint;
+        }
+
+        #! creates the object from the arguments
+        /** @param name the name of the constraint
+            @param cols the columns of the constraint, in the constraint's order
+            @param table_constraint @ref True "True" if the constraint is described from a table that was created with
+            it, as a \c UNIQUE table constraint, which SQLite cannot drop; @ref False "False" for a constraint of a
+            table description, or one described from a unique index
+            @param index the name of the unique index of the constraint, if it is described from one
+
+            @since Sqlite3SqlUtil 1.2 the \a table_constraint and \a index arguments
+        */
+        constructor(string name, hash<auto> cols, bool table_constraint = False, *string index)
+                : AbstractUniqueConstraint(name, cols, index) {
+            self.table_constraint = table_constraint;
         }
 
         #! returns the Sqlite3Column value of the given key if it exists, otherwise throws a \c KEY-ERROR exception
@@ -573,20 +634,110 @@ auto v = c.name;
             return h{k};
         }
 
+        #! returns @ref True "True" if the constraint was created with its table, which SQLite cannot drop it from
+        /** @return @ref True "True" if the constraint is described from a table that was created with it, as a
+            \c UNIQUE table constraint; @ref False "False" if it is described from a unique index or is a constraint of
+            a table description
+
+            @since Sqlite3SqlUtil 1.2
+        */
+        bool isTableConstraint() {
+            return table_constraint;
+        }
+
+        #! returns the \c UNIQUE table constraint that creates the constraint with its table
+        /** @par Example:
+            @code{.py}
+# "constraint uk_order_number unique (customer_id, 'order')"
+string sql = uk.getTableConstraintSql();
+            @endcode
+
+            @return the \c UNIQUE table constraint, named with the constraint's name, with its columns in the
+            constraint's order
+
+            @since Sqlite3SqlUtil 1.2
+        */
+        string getTableConstraintSql() {
+            return sprintf("constraint %s unique (%s)", name, (foldl $1 + ", " + $2, getSqlColumnNameIterator()));
+        }
+
+        #! returns the SQL that adds the constraint to an existing table: a unique index with the constraint's name
+        /** SQLite cannot add a \c UNIQUE table constraint to an existing table; a unique index enforces the same
+            constraint, and is described as the same constraint (see @ref sqlite3_unique_constraints)
+
+            @par Example:
+            @code{.py}
+# "create unique index uk_order_number on orders (customer_id, 'order')"
+string sql = uk.getCreateSql("orders");
+            @endcode
+
+            @param table_name the name of the table
+            @param opts this argument is ignored
+
+            @return the \c CREATE \c UNIQUE \c INDEX statement that adds the constraint to an existing table
+        */
         string getCreateSql(string table_name, *hash<auto> opts) {
             return getCreateSql(name, table_name, opts);
         }
 
-        list<string> getRenameSql(string table_name, string new_name) {
-        }
+        #! returns the SQL that adds the constraint to an existing table under the given name: a unique index
+        /** @param name the name of the constraint and its index
+            @param table_name the name of the table
+            @param opts this argument is ignored
 
+            @return the \c CREATE \c UNIQUE \c INDEX statement that adds the constraint to an existing table
+        */
         string getCreateSql(string name, string table_name, *hash<auto> opts) {
-            throw "UNSUPPORTED";
+            return sprintf("create unique index %s on %s (%s)", name, table_name,
+                (foldl $1 + ", " + $2, getSqlColumnNameIterator()));
         }
 
-        #! returns a string that can be used to drop the constraint from the database
+        #! returns an empty list: a unique constraint in SQLite is matched by its columns, not by its name
+        /** SQLite does not keep the name of a unique constraint created with its table, and a table is aligned to a
+            template by the columns of its unique constraints (see @ref sqlite3_unique_constraints)
+
+            @return an empty list; there is nothing to rename
+        */
+        list<string> getRenameSql(string table_name, string new_name) {
+            return ();
+        }
+
+        #! returns the SQL that drops the constraint's unique index from the table
+        /** @param table_name the name of the table
+
+            @return the \c DROP \c INDEX statement that drops the constraint's unique index
+
+            @throw UNSUPPORTED the constraint was created with its table, which SQLite cannot drop it from
+        */
         string getDropSql(string table_name) {
-            throw "UNSUPPORTED";
+            if (table_constraint) {
+                throw "UNSUPPORTED", sprintf("cannot drop the unique constraint (%s) of table %y: SQLite cannot drop a "
+                    "unique constraint that a table was created with", join(", ", self.keys()), table_name);
+            }
+            return sprintf("drop index %s", index ?? name);
+        }
+
+        #! returns no SQL: the constraint is its unique index, so recreating the index recreates the constraint
+        /** @param ds this argument is ignored
+            @param table_name this argument is ignored
+            @param opts this argument is ignored
+
+            @return a hash with empty \c disable and \c enable lists
+        */
+        hash<auto> getDisableReenableSql(AbstractDatasource ds, string table_name, *hash<auto> opts) {
+            return {"disable": (), "enable": ()};
+        }
+
+        #! finds the unique index of the constraint, unless the constraint was created with its table
+        /** The automatic index of a constraint that was created with its table is part of the constraint, and is not
+            described as an index, so it is never another unique index of the table with the same columns
+
+            @param indexes the indexes of the table
+        */
+        findMatchingIndex(*Indexes indexes) {
+            if (!table_constraint) {
+                AbstractColumnSupportingConstraint::findMatchingIndex(indexes);
+            }
         }
     }
 
@@ -1428,33 +1579,63 @@ string sql = pk.getTableConstraintSql();
             return new Sqlite3PrimaryKey(rv);
         }
 
-        private Indexes getIndexesImpl() {
-            hash<auto> rv;
+        #! describes each index of the table from SQLite's index pragmas
+        /** pragma index_list and index_xinfo describe every index, including those that SQLite creates itself for a
+            primary key or a unique constraint, which have no SQL, so no index SQL has to be parsed
 
-            # pragma index_list and index_xinfo describe every index - including those SQLite creates itself
-            # for a primary key or unique constraint, which have no SQL - so no index SQL has to be parsed
+            @return a list of one hash per index: \c name, \c unique, \c origin (\c "c" for an index created by
+            \c CREATE \c INDEX, \c "u" for the automatic index of a unique constraint created with the table,
+            \c "pk" for the automatic index of a primary key), \c partial, \c columns (the key columns in the
+            index's order), \c collations (the collation of each column that has one other than \c BINARY) and
+            \c expression (@ref True "True" if a key of the index is an expression, not a column)
+        */
+        private list<hash<auto>> getIndexInfo() {
+            list<hash<auto>> rv = ();
             *hash<auto> index_list = ds.select("pragma index_list(%s)", name);
-            foreach hash<auto> il in (index_list.contextIterator()) {
-                # the primary key's own index is described by getPrimaryKeyImpl()
-                if (il.origin == "pk") {
-                    continue;
-                }
-                hash<auto> index_columns = {};
-                *hash<string, string> collations;
+            # by name, so that a table is described the same way whatever order SQLite keeps its indexes in
+            list<hash<auto>> index_rows = map $1, index_list.contextIterator();
+            foreach hash<auto> il in (sort(index_rows, int sub (hash<auto> l, hash<auto> r) {
+                    return l.name <=> r.name;
+                })) {
+                hash<auto> ix = {
+                    "name": il.name,
+                    "unique": il.unique.toBool(),
+                    "origin": il.origin,
+                    "partial": il.partial.toBool(),
+                    "columns": {},
+                    "expression": False,
+                };
                 *hash<auto> info = ds.select("pragma index_xinfo(%s)", il.name);
                 foreach hash<auto> ii in (info.contextIterator()) {
-                    # only key columns; an expression has no column name
-                    if (!ii.key.toInt() || ii.name.typeCode() != NT_STRING) {
+                    if (!ii.key.toInt()) {
                         continue;
                     }
-                    index_columns{ii.name} = columns{ii.name};
+                    # an expression has no column name
+                    if (ii.name.typeCode() != NT_STRING) {
+                        ix.expression = True;
+                        continue;
+                    }
+                    ix.columns{ii.name} = columns{ii.name};
                     if (ii.coll.typeCode() == NT_STRING && ii.coll.upr() != "BINARY") {
-                        collations{ii.name} = ii.coll;
+                        ix.collations{ii.name} = ii.coll;
                     }
                 }
-                rv{il.name} = new Sqlite3Index(il.name, il.unique.toBool(), index_columns, collations);
+                rv += ix;
             }
+            return rv;
+        }
 
+        private Indexes getIndexesImpl() {
+            hash<auto> rv;
+            foreach hash<auto> ix in (getIndexInfo()) {
+                # the automatic index of the primary key or of a unique constraint created with the table is part of
+                # the key or constraint: it is described by getPrimaryKeyImpl() or getConstraintsImpl()
+                if (ix.origin == "pk" || ix.origin == "u") {
+                    continue;
+                }
+                *hash<string, string> collations = ix.collations;
+                rv{ix.name} = new Sqlite3Index(ix.name, ix.unique, ix.columns, collations);
+            }
             return new Indexes(rv);
         }
 
@@ -1502,25 +1683,34 @@ string sql = pk.getTableConstraintSql();
         private *list<auto> getCreateForeignConstraintsSqlUnlocked(*hash<auto> opt, bool cache = True) {
         }
 
+        #! returns no SQL: the unique constraints are created with the table or with their unique index
+        /** A unique constraint is written in the table's \c CREATE \c TABLE statement (@ref getCreateTableSqlImpl()),
+            and one that is a unique index of the table is created with the index
+        */
+        private *list<auto> getCreateConstraintsSqlUnlocked(*hash<auto> opt, bool cache = True) {
+        }
+
+        #! describes the unique constraints of the table from SQLite's index pragmas
+        /** A unique constraint created with the table is enforced by an automatic unique index, which is described as
+            the constraint, named as SQLite names the index
+            (<tt>sqlite_autoindex_</tt><em>table</em><tt>_</tt><em>n</em>), as SQLite does not report the name of the
+            constraint; it cannot be dropped.  A unique index on columns is also a unique constraint of the table,
+            which has the index's name and can be dropped with the index; see @ref sqlite3_unique_constraints
+        */
         private Constraints getConstraintsImpl() {
             hash<auto> rv;
-
-            Constraints c = new Constraints(rv);
-            /*
-            # get unique constraints
-            *hash qh = ds.select("");
-            delete rv;
-            foreach hash<auto> row in (qh.contextIterator()) {
-                reference<Sqlite3UniqueConstraint> ch = \rv.(row.constraint_name);
-                if (!ch)
-                    ch = new Sqlite3UniqueConstraint(row.constraint_name, {});
-                ch.add(row.column_name, columns{row.column_name});
+            foreach hash<auto> ix in (getIndexInfo()) {
+                # a partial unique index or one on an expression is not a unique constraint of its columns
+                if (!ix.unique || ix.partial || ix.expression || !ix.columns) {
+                    continue;
+                }
+                if (ix.origin == "u") {
+                    rv{ix.name} = new Sqlite3UniqueConstraint(ix.name, ix.columns, True);
+                } else if (ix.origin == "c") {
+                    rv{ix.name} = new Sqlite3UniqueConstraint(ix.name, ix.columns, False, ix.name);
+                }
             }
-
-            # add unique constraints to constraint hash
-            map c.add($1.key, $1.value), rv.pairIterator();
-            */
-            return c;
+            return new Constraints(rv);
         }
 
         private Triggers getTriggersImpl() {
@@ -1545,6 +1735,10 @@ string sql = pk.getTableConstraintSql();
             if (!primaryKey.empty()) {
                 defs += "  " + cast<Sqlite3PrimaryKey>(primaryKey).getTableConstraintSql();
             }
+            # nor a unique constraint: one that is a unique index is created with its index
+            getConstraintsUnlocked();
+            defs += map "  " + cast<Sqlite3UniqueConstraint>($1).getTableConstraintSql(), constraints.iterator(),
+                $1 instanceof Sqlite3UniqueConstraint && !cast<Sqlite3UniqueConstraint>($1).getIndex();
             # nor a foreign constraint
             if (!opt.omit.foreign_constraints) {
                 getForeignConstraintsUnlocked(opt);
@@ -1577,22 +1771,24 @@ string sql = pk.getTableConstraintSql();
         }
 
         #! refuses the changes of an alignment that SQLite cannot make with any version, before a column is aligned
-        /** SQLite cannot add a primary key or a foreign constraint to an existing table, and cannot change a column
-            of an existing table other than its \c NOT \c NULL constraint, with any version; it can change the
-            \c NOT \c NULL constraint from SQLite 3.53.0.  So these changes are refused here, before the columns are
-            aligned, and an alignment that makes one of them reports it with every SQLite version, not a \c NOT
-            \c NULL change that an older SQLite cannot make, such as the one that a new primary key implies for its
-            columns; see @ref sqlite3_alignment_refusals
+        /** SQLite cannot add a primary key or a foreign constraint to an existing table, cannot change or replace a
+            unique constraint that a table was created with, and cannot change a column of an existing table other
+            than its \c NOT \c NULL constraint, with any version; it can change the \c NOT \c NULL constraint from
+            SQLite 3.53.0.  So these changes are refused here, before the columns are aligned, and an alignment that
+            makes one of them reports it with every SQLite version, not a \c NOT \c NULL change that an older SQLite
+            cannot make, such as the one that a new primary key implies for its columns; see
+            @ref sqlite3_alignment_refusals
 
-            A primary key that the template does not have, or has with other columns, and a foreign constraint that
-            the template does not have, have already been refused by the alignment, which drops them before this
-            method is called.
+            A primary key that the template does not have, or has with other columns, and a foreign constraint or a
+            unique constraint that the template does not have, have already been refused by the alignment, which
+            drops them before this method is called.
 
             @param t the template table that the current table is aligned to
             @param opt the alignment options
 
             @throw UNSUPPORTED the alignment adds a primary key or a foreign constraint to the table, changes a foreign
-            constraint, or changes a column other than its \c NOT \c NULL constraint
+            constraint, changes a unique constraint that the table was created with or replaces it with a unique
+            index, or changes a column other than its \c NOT \c NULL constraint
 
             @since Sqlite3SqlUtil 1.2
         */
@@ -1616,6 +1812,24 @@ string sql = pk.getTableConstraintSql();
                     } else if (!fk.equal(foreignConstraints{fk_name})) {
                         foreignConstraints{fk_name}.getDropSql(table_name);
                     }
+                }
+            }
+
+            # a unique constraint that the table was created with cannot be changed, nor be replaced by a unique index
+            # of the template on its columns, which the alignment has matched it to by its columns; a unique
+            # constraint that is a unique index can be (and one that the template does not have has been refused)
+            foreach AbstractConstraint c in (constraints.iterator()) {
+                if (!(c instanceof Sqlite3UniqueConstraint)) {
+                    continue;
+                }
+                Sqlite3UniqueConstraint uk = cast<Sqlite3UniqueConstraint>(c);
+                string uk_name = uk.getName();
+                if (!uk.isTableConstraint() || !t.constraints.hasKey(uk_name)) {
+                    continue;
+                }
+                AbstractConstraint template_uk = t.constraints{uk_name};
+                if (!template_uk.equal(uk) || cast<AbstractUniqueConstraint>(template_uk).getIndex()) {
+                    uk.getDropSql(table_name);
                 }
             }
 

@@ -37,6 +37,10 @@ class Sqlite3KeysTest inherits QUnit::Test {
         addTestCase("a key change is refused before a column change with every SQLite version",
             \keyChangesBeforeColumnChanges());
         addTestCase("automatic indexes are described", \automaticIndexes());
+        addTestCase("a table is created with its unique constraints", \createdUniqueConstraints());
+        addTestCase("a unique constraint is added to an existing table as a unique index",
+            \existingUniqueConstraintChanges());
+        addTestCase("a unique index of an existing table is added, changed and dropped", \uniqueIndexes());
         addTestCase("upsert uses the key", \upsert());
         addTestCase("a select that locks rows is refused", \forUpdateRefused());
         addTestCase("duplicate rows are recognized", \duplicateRows());
@@ -82,10 +86,16 @@ class Sqlite3KeysTest inherits QUnit::Test {
         Datasource ds = getDatasource();
         # the composite key's own index is the primary key, not an extra index
         assertEq(0, (new Table(ds, "composite_pk")).getIndexes().size());
-        list<auto> indexes = map $1, (new Table(ds, "unique_col")).getIndexes().iterator();
-        assertEq(1, indexes.size(), "a unique constraint's index is described");
-        assertTrue(indexes[0].unique);
-        assertEq(("code",), indexes[0].columns.keys());
+        # and a unique constraint's own index is the constraint
+        Sqlite3Table unique_col(ds, "unique_col");
+        assertEq(0, unique_col.getIndexes().size(), "a unique constraint's index is not an extra index");
+        list<auto> uks = map $1, unique_col.getConstraints().iterator();
+        assertEq(1, uks.size(), "a unique constraint is described");
+        Sqlite3UniqueConstraint uk = uks[0];
+        assertEq("sqlite_autoindex_unique_col_1", uk.getName(), "a unique constraint has the name of its index");
+        assertEq(("code",), uk.keys());
+        assertTrue(uk.isTableConstraint());
+        assertNothing(uk.getIndex());
 
         # an index's columns are described without their quotes, and a lower-case unique index is unique
         hash<auto> quoted = map {$1.getName(): $1}, (new Table(ds, "quoted")).getIndexes().iterator();
@@ -383,6 +393,7 @@ class Sqlite3KeysTest inherits QUnit::Test {
             ds.exec("create table fk_order (id integer not null primary key)");
             ds.exec("create table fk_line (id integer not null primary key, order_id integer, item_id integer, "
                 "constraint fk_line_order foreign key (order_id) references fk_order (id))");
+            ds.exec("create table uk_line (x integer, y text, constraint uk_line_y unique (y))");
 
             # adding a key: the template declares the key's column NOT NULL, as a key column is, and the table's
             # column is nullable
@@ -431,7 +442,237 @@ class Sqlite3KeysTest inherits QUnit::Test {
             assertThrows("UNSUPPORTED", "^cannot drop the foreign constraint \\(order_id\\) referencing fk_order "
                 "\\(id\\) of table \"fk_line\": SQLite cannot drop a foreign constraint of an existing table",
                 \line.getAlignSql(), (changed_fk,), version);
+
+            # changing a unique constraint that the table was created with, which has the name that SQLite gives it,
+            # or replacing it with a unique index, on a table whose other column the template declares NOT NULL
+            Sqlite3Table uk_line(ds, "uk_line");
+            hash<auto> uk_line_desc = uk_line.getDescriptionHash();
+            uk_line_desc.columns.x.notnull = True;
+            checkNotNullChange(ds, "uk_line", "x", uk_line_desc);
+            string uk_refusal = "^cannot drop the unique constraint \\(y\\) of table \"uk_line\": SQLite cannot drop a "
+                "unique constraint that a table was created with";
+            hash<auto> changed_uk_desc = uk_line_desc;
+            string uk_name = changed_uk_desc.unique_constraints.firstKey();
+            assertEq("sqlite_autoindex_uk_line_1", uk_name, version);
+            changed_uk_desc.unique_constraints{uk_name}.columns = ("y", "x");
+            Sqlite3Table changed_uk(ds, "uk_line");
+            changed_uk.setupTable(changed_uk_desc);
+            assertThrows("UNSUPPORTED", uk_refusal, \uk_line.getAlignSql(), (changed_uk,), version);
+            hash<auto> uk_index_desc = uk_line_desc - "unique_constraints";
+            uk_index_desc.indexes = {"ui_uk_line_y": {"columns": ("y",), "unique": True}};
+            Sqlite3Table uk_index(ds, "uk_line");
+            uk_index.setupTable(uk_index_desc);
+            assertThrows("UNSUPPORTED", uk_refusal, \uk_line.getAlignSql(), (uk_index,), version);
         }
+    }
+
+    #! Aligns the table to a template with the description, runs the SQL in the database and returns it
+    private list<auto> alignTable(AbstractDatasource ds, string table, hash<auto> desc) {
+        Sqlite3Table template(ds, table);
+        template.setupTable(desc);
+        Sqlite3Table current(ds, table);
+        list<auto> sql = current.getAlignSql(template);
+        map ds.exec($1), sql;
+        return sql;
+    }
+
+    #! Checks that a row with the values of the columns of a unique key of another row is refused
+    private checkDuplicate(AbstractDatasource ds, string table, hash<auto> row, hash<auto> duplicate) {
+        Table t(ds, table);
+        t.insert(row);
+        try {
+            t.insert(duplicate);
+            fail(sprintf("a duplicate row was inserted in %y", table));
+        } catch (hash<ExceptionInfo> ex) {
+            assertTrue(t.isDuplicateRowError(ex), get_exception_string(ex));
+        }
+    }
+
+    #! SQLite creates a unique constraint with its table, so it is in the table's CREATE TABLE statement
+    createdUniqueConstraints() {
+        Datasource ds = getDatasource();
+        on_exit ds.rollback();
+
+        hash<auto> desc = {
+            "columns": {
+                "id": {"native_type": "integer", "notnull": True},
+                "group": {"native_type": "text", "notnull": True},
+                "code": {"native_type": "text"},
+                "v": {"native_type": "text"},
+            },
+            "primary_key": {"name": "pk_created_unique", "columns": ("id",)},
+            # a composite constraint in another order than its columns, with a reserved word
+            "unique_constraints": {"uk_created_unique_code": {"columns": ("code", "group")}},
+            # and a unique index, which is created as an index
+            "indexes": {"ui_created_unique_v": {"columns": ("v",), "unique": True}},
+        };
+        Sqlite3Table created(ds, "created_unique");
+        created.setupTable(desc);
+        assertEq(("create table created_unique (\n  id integer not null,\n  'group' text not null,\n  code text,\n"
+            "  v text,\n  primary key (id),\n  constraint uk_created_unique_code unique (code, 'group')\n)",
+            "create unique index ui_created_unique_v on created_unique (v)"), created.getCreateSql(),
+            "there is no separate unique constraint SQL");
+        created.create();
+
+        # SQLite does not report the name of the constraint, so it has the name of its automatic index, which is not
+        # an index of the table; the unique index is a unique constraint too
+        Sqlite3Table live(ds, "created_unique");
+        hash<auto> live_desc = live.getDescriptionHash();
+        assertEq({
+            "sqlite_autoindex_created_unique_1": {"columns": ("code", "group")},
+            "ui_created_unique_v": {"columns": ("v",)},
+        }, live_desc.unique_constraints);
+        assertEq({"ui_created_unique_v": {"columns": ("v",), "unique": True}}, live_desc.indexes);
+        Sqlite3UniqueConstraint table_uk = live.getConstraints().sqlite_autoindex_created_unique_1;
+        assertTrue(table_uk.isTableConstraint());
+        assertNothing(table_uk.getIndex());
+        Sqlite3UniqueConstraint index_uk = live.getConstraints().ui_created_unique_v;
+        assertFalse(index_uk.isTableConstraint());
+        assertEq("ui_created_unique_v", index_uk.getIndex());
+
+        # an unchanged unique constraint needs no SQL, whatever its name in the template, and so does the table's
+        # own description
+        assertEq((), alignTable(ds, "created_unique", desc));
+        assertEq((), alignTable(ds, "created_unique", live_desc));
+
+        # the description creates the constraints with another table
+        Sqlite3Table copy(ds, "created_unique_copy");
+        copy.setupTable(live_desc - "indexes");
+        assertEq("create table created_unique_copy (\n  id integer not null,\n  'group' text not null,\n"
+            "  code text,\n  v text,\n  primary key (id),\n"
+            "  constraint sqlite_autoindex_created_unique_1 unique (code, 'group'),\n"
+            "  constraint ui_created_unique_v unique (v)\n)", copy.getCreateTableSql());
+        copy.create();
+        assertEq({"sqlite_autoindex_created_unique_copy_1": {"columns": ("code", "group")},
+            "sqlite_autoindex_created_unique_copy_2": {"columns": ("v",)}},
+            (new Sqlite3Table(ds, "created_unique_copy")).getDescriptionHash().unique_constraints);
+
+        # the constraints are enforced
+        checkDuplicate(ds, "created_unique", {"id": 1, "group": "a", "code": "x", "v": "1"},
+            {"id": 2, "group": "a", "code": "x", "v": "2"});
+        checkDuplicate(ds, "created_unique", {"id": 3, "group": "b", "code": "x", "v": "3"},
+            {"id": 4, "group": "c", "code": "x", "v": "3"});
+
+        # a table without a primary key is upserted by its unique constraint
+        Sqlite3Table no_key(ds, "created_unique_no_key");
+        no_key.setupTable({"columns": {"code": {"native_type": "text", "notnull": True}, "v": {"native_type": "text"}},
+            "unique_constraints": {"uk_created_unique_no_key": {"columns": ("code",)}}});
+        no_key.create();
+        Table live_no_key(ds, "created_unique_no_key");
+        live_no_key.upsert({"code": "x", "v": "1"});
+        live_no_key.upsert({"code": "x", "v": "2"});
+        assertEq(({"code": "x", "v": "2"},), live_no_key.selectRows());
+    }
+
+    #! SQLite cannot add a unique constraint to an existing table with ALTER TABLE: a unique index enforces it, and
+    #! is described as the same constraint; a unique constraint that a table was created with cannot be dropped
+    existingUniqueConstraintChanges() {
+        Datasource ds = getDatasource();
+        on_exit ds.rollback();
+
+        ds.exec("create table uk_added (x integer, y text)");
+        hash<auto> desc = {"columns": {"x": {"native_type": "integer"}, "y": {"native_type": "text"}},
+            "unique_constraints": {"uk_added_y": {"columns": ("y",)}}};
+        # adding a unique constraint is creating a unique index
+        assertEq(("create unique index uk_added_y on uk_added (y)",), alignTable(ds, "uk_added", desc));
+        # which is described as the constraint, so the template needs no more SQL, nor does the table's description
+        Sqlite3Table added(ds, "uk_added");
+        hash<auto> added_desc = added.getDescriptionHash();
+        assertEq({"uk_added_y": {"columns": ("y",)}}, added_desc.unique_constraints);
+        assertEq({"uk_added_y": {"columns": ("y",), "unique": True}}, added_desc.indexes);
+        Sqlite3UniqueConstraint uk = added.getConstraints().uk_added_y;
+        assertFalse(uk.isTableConstraint());
+        assertEq("uk_added_y", uk.getIndex());
+        assertEq((), alignTable(ds, "uk_added", desc), "the added constraint needs no SQL");
+        assertEq((), alignTable(ds, "uk_added", added_desc), "the table's description needs no SQL");
+        # and the constraint is enforced
+        checkDuplicate(ds, "uk_added", {"x": 1, "y": "a"}, {"x": 2, "y": "a"});
+
+        # a unique index under another name is the same constraint
+        hash<auto> renamed = desc;
+        renamed.unique_constraints = {"uk_added_other": {"columns": ("y",)}};
+        assertEq((), alignTable(ds, "uk_added", renamed), "a unique constraint is matched by its columns");
+
+        # changing it is dropping its index and creating another
+        hash<auto> changed = desc;
+        changed.unique_constraints.uk_added_y.columns = ("y", "x");
+        assertEq(("drop index uk_added_y", "create unique index uk_added_y on uk_added (y, x)"),
+            alignTable(ds, "uk_added", changed));
+        assertEq((), alignTable(ds, "uk_added", changed));
+
+        # dropping it is dropping its index
+        assertEq(("drop index uk_added_y",), alignTable(ds, "uk_added", desc - "unique_constraints"));
+        Sqlite3Table dropped(ds, "uk_added");
+        assertEq(0, dropped.getIndexes().size());
+        assertEq(0, dropped.getConstraints().size());
+
+        # a unique constraint that a table was created with is not dropped, changed, or replaced by a unique index
+        Sqlite3Table created(ds, "uk_created");
+        created.setupTable({"columns": {"x": {"native_type": "integer"}, "y": {"native_type": "text"}},
+            "unique_constraints": {"uk_created_y": {"columns": ("y",)}}});
+        created.create();
+        hash<auto> created_desc = (new Sqlite3Table(ds, "uk_created")).getDescriptionHash();
+        string refusal = "^cannot drop the unique constraint \\(y\\) of table \"uk_created\": SQLite cannot drop a "
+            "unique constraint that a table was created with$";
+        assertThrows("UNSUPPORTED", refusal, \alignTable(), (ds, "uk_created", created_desc - "unique_constraints"));
+        hash<auto> changed_created = created_desc;
+        changed_created.unique_constraints.sqlite_autoindex_uk_created_1.columns = ("y", "x");
+        assertThrows("UNSUPPORTED", refusal, \alignTable(), (ds, "uk_created", changed_created));
+        hash<auto> as_index = created_desc - "unique_constraints";
+        as_index.indexes = {"ui_uk_created_y": {"columns": ("y",), "unique": True}};
+        assertThrows("UNSUPPORTED", refusal, \alignTable(), (ds, "uk_created", as_index),
+            "a unique index on its columns does not replace it");
+        assertEq(0, (new Sqlite3Table(ds, "uk_created")).getIndexes().size(), "no index was created");
+    }
+
+    #! A unique index is created with CREATE UNIQUE INDEX, and is a unique constraint of its table
+    uniqueIndexes() {
+        Datasource ds = getDatasource();
+        on_exit ds.rollback();
+
+        hash<auto> desc = {"columns": {"x": {"native_type": "integer"}, "y": {"native_type": "text"}},
+            "indexes": {"ui_table_y": {"columns": ("y",), "unique": True}}};
+        # a description with a unique index is set up; the index is a unique constraint
+        Sqlite3Table template(ds, "ui_table");
+        template.setupTable(desc);
+        assertEq({"ui_table_y": {"columns": ("y",)}}, template.getDescriptionHash().unique_constraints);
+        assertEq(("create table ui_table (\n  x integer,\n  y text\n)",
+            "create unique index ui_table_y on ui_table (y)"), template.getCreateSql(),
+            "a unique index is not a table constraint");
+
+        # added to an existing table
+        ds.exec("create table ui_table (x integer, y text)");
+        assertEq(("create unique index ui_table_y on ui_table (y)",), alignTable(ds, "ui_table", desc));
+        assertEq((), alignTable(ds, "ui_table", desc));
+        checkDuplicate(ds, "ui_table", {"x": 1, "y": "a"}, {"x": 2, "y": "a"});
+        ds.exec("delete from ui_table");
+
+        # made not unique
+        hash<auto> not_unique = desc;
+        not_unique.indexes.ui_table_y.unique = False;
+        assertEq(("drop index ui_table_y", "create index ui_table_y on ui_table (y)"),
+            alignTable(ds, "ui_table", not_unique));
+        assertEq((), alignTable(ds, "ui_table", not_unique));
+        assertEq(0, (new Sqlite3Table(ds, "ui_table")).getConstraints().size());
+
+        # and unique again
+        assertEq(("drop index ui_table_y", "create unique index ui_table_y on ui_table (y)"),
+            alignTable(ds, "ui_table", desc));
+        assertEq((), alignTable(ds, "ui_table", desc));
+
+        # with other columns
+        hash<auto> other_columns = desc;
+        other_columns.indexes.ui_table_y.columns = ("y", "x");
+        alignTable(ds, "ui_table", other_columns);
+        assertEq((), alignTable(ds, "ui_table", other_columns));
+        assertEq({"ui_table_y": {"columns": ("y", "x"), "unique": True}},
+            (new Sqlite3Table(ds, "ui_table")).getDescriptionHash().indexes);
+
+        # dropped
+        assertEq(("drop index ui_table_y",), alignTable(ds, "ui_table", desc - "indexes"));
+        Sqlite3Table dropped(ds, "ui_table");
+        assertEq(0, dropped.getIndexes().size());
+        assertEq(0, dropped.getConstraints().size());
     }
 
     forUpdateRefused() {

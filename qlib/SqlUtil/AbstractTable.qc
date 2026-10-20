@@ -1727,7 +1727,13 @@ list<auto> changes = source_table.getAlignSql(target);
             if (constraints.hasKey(un))
                 continue;
             hash<auto> uk_opt = opt.(getConstraintOptions().keys()) + (ch - "columns");
-            addUniqueConstraintUnlocked(un, ch.columns, uk_opt);
+            # a description constructs metadata only: drivers such as SQLite cannot add a unique constraint to an
+            # existing table with ALTER TABLE, so do not request the SQL that adds it here
+            AbstractUniqueConstraint uk = addUniqueConstraintUnlockedIntern(un, ch.columns, uk_opt, NOTHING, False);
+            if (!constraints) {
+                constraints @= new Constraints();
+            }
+            constraints.add(un, uk);
         }
 
         if (partitionStrategy && partitionUniqueKeysRequireAllColumnsImpl()) {
@@ -2486,7 +2492,8 @@ printf("%s;\n", sql);
         return uk;
     }
 
-    private AbstractUniqueConstraint addUniqueConstraintUnlockedIntern(string cname, softlist cols, *hash<auto> opt, *reference<string> sql) {
+    private AbstractUniqueConstraint addUniqueConstraintUnlockedIntern(string cname, softlist cols, *hash<auto> opt,
+            *reference<string> sql, bool generate_sql = True) {
         getColumnsUnlocked();
         if (!manual)
             getIndexesUnlocked();
@@ -2516,11 +2523,12 @@ printf("%s;\n", sql);
         # find matching index for unique constraint
         c.findMatchingIndex(indexes);
 
-        # add foreign constraint to table in the DB if the table already exists in the DB
-        if (opt.partition_aligned) {
-            prepareCreateSqlOptionsImpl(\opt);
+        if (generate_sql) {
+            if (opt.partition_aligned) {
+                prepareCreateSqlOptionsImpl(\opt);
+            }
+            sql = c.getCreateSql(getSqlName(), opt);
         }
-        sql = c.getCreateSql(getSqlName(), opt);
 
         # return the new constraint
         return c;
@@ -2601,8 +2609,8 @@ printf("%s;\n", sql);
         if (ix.unique && uniqueIndexCreatesConstraintImpl()) {
             getConstraintsUnlocked();
             if (!constraints.hasKey(ix.name)) {
-                string csql;
-                AbstractUniqueConstraint uk = addUniqueConstraintUnlockedIntern(iname, cols, opt, \csql);
+                # the index is the constraint, so there is no SQL for the constraint
+                AbstractUniqueConstraint uk = addUniqueConstraintUnlockedIntern(iname, cols, opt, NOTHING, False);
                 uk.setIndexBase(ix.name);
                 if (!constraints)
                     constraints @= new Constraints();
@@ -11244,6 +11252,12 @@ list<auto> l = table.getAlignSql(table2);
                 l += AbstractDatabase::doCallback(opt, c.getDropSql(getSqlName()), AbstractDatabase::AC_Drop,
                     "constraint", c.getName(), name);
                 constraints.take(c.getName());
+                # dropping a unique constraint drops the index of the same name that it is linked to, so the index
+                # is not the table's anymore: a template index with its name is created, not recreated
+                if (c instanceof AbstractUniqueConstraint && constraintsLinkedToIndexesImpl()
+                    && indexes.hasKey(c.getName())) {
+                    indexes.take(c.getName());
+                }
             }
         }
 

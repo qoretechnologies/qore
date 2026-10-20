@@ -129,6 +129,14 @@ module SqlUtil {
       foreign constraint to an existing table while constructing an in-memory table description, as it did for a
       primary key before 3.2.0; a description of a table with foreign constraints can now be set up on a database
       that cannot add a foreign constraint with \c ALTER \c TABLE, such as SQLite
+    - fixed @ref SqlUtil::AbstractTable::setupTable() "AbstractTable::setupTable()" requesting the DDL that adds a
+      unique constraint to an existing table while constructing an in-memory table description, also for the unique
+      constraint of a unique index on a database whose unique indexes are unique constraints, as for primary keys and
+      foreign constraints; a description of a table with a unique constraint or a unique index can now be set up on
+      a database that cannot add a unique constraint with \c ALTER \c TABLE, such as SQLite
+    - fixed table alignment dropping an index twice when it drops a unique constraint that the database drops with
+      the index of the same name, as when a unique index on SQLite is made not unique: the template's index is now
+      created after the constraint is dropped
     - fixed @ref SqlUtil::AbstractTable::getCreateTableSql() "AbstractTable::getCreateTableSql()" refusing its
       \c omit option with \c OPTION-ERROR: the options were validated after the omission options had been converted
       to a hash, which is not a valid value of the option

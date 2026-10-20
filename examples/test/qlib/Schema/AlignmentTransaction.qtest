@@ -36,6 +36,8 @@ class AlignmentTransactionTest inherits QUnit::Test {
         addTestCase("a SQLite table is created with its primary key, and an upgrade keeps it", \primaryKeyUpgrade());
         addTestCase("a SQLite table is created with its foreign constraints, and an upgrade keeps them",
             \foreignConstraintUpgrade());
+        addTestCase("a SQLite table is created with its unique constraints, and an upgrade keeps them",
+            \uniqueConstraintUpgrade());
         set_return_value(main());
     }
     #! Returns an in-memory SQLite datasource; with a version, the datasource reports it as the SQLite version
@@ -345,6 +347,90 @@ class AlignmentTransactionTest inherits QUnit::Test {
             \v3.alignWithInfo(), (True, -1, False));
         assertEq("2.0", get_version());
         assertEq(expected_fks, get_fks());
+    }
+
+    #! A table with a unique constraint is created with it on SQLite, which cannot add one to an existing table with
+    #! ALTER TABLE: an upgrade that changes nothing leaves it as it is, an upgrade that adds a unique constraint adds
+    #! a unique index, and one that drops the constraint that the table was created with is refused
+    private uniqueConstraintUpgrade() {
+        AbstractDatasource ds = datasource();
+        on_exit ds.rollback();
+        code definition = hash<auto> sub (string version, hash<auto> unique_constraints) {
+            return Schema::DataSchemaLoader::loadHash({
+                "schema": {"name": "accounts", "version": version, "version_table": "accounts_version",
+                    "version_column": "version", "version_where": {"name": "accounts"}},
+                "tables": {
+                    "accounts_version": {
+                        "columns": {"name": {"type": "text"}, "version": {"type": "text"}},
+                        "primary_key": {"name": "pk_accounts_version", "columns": ("name",)},
+                    },
+                    "account": {
+                        "columns": {"id": {"type": "int"}, "group": {"type": "text"}, "code": {"type": "text"},
+                            "email": {"type": "text"}},
+                        "primary_key": {"name": "pk_account", "columns": ("id",)},
+                        "unique_constraints": unique_constraints,
+                    },
+                },
+                "reference_data": {"normal": {"accounts_version": {"columns": ("name", "version"),
+                    "rows": (("accounts", version),)}}},
+            });
+        };
+        code get_version = string sub () {
+            return new SqlUtil::Table(ds, "accounts_version").selectRow({"where": {"name": "accounts"}}).version;
+        };
+        # the unique constraints, with the name of the one that the table was created with, which SQLite does not
+        # report, replaced by "created"
+        code get_uks = hash<auto> sub () {
+            hash<auto> rv;
+            foreach hash<auto> i in (new SqlUtil::Table(ds, "account").getTable().getDescriptionHash()
+                    .unique_constraints.pairIterator()) {
+                rv{i.key =~ /^sqlite_autoindex_account_[0-9]+$/ ? "created" : i.key} = i.value;
+            }
+            return rv;
+        };
+        # a composite constraint, with a reserved word
+        hash<auto> code_uk = {"uk_account_code": {"columns": ("group", "code")}};
+        hash<auto> email_uk = {"uk_account_email": {"columns": ("email",)}};
+
+        # a first install creates the table with its constraint, which SQLite reports under its own name
+        Schema::DataSchema v1(ds, definition("1.0", code_uk));
+        v1.alignWithInfo(True, -1, False);
+        assertEq("1.0", get_version());
+        assertEq({"created": {"columns": ("group", "code")}}, get_uks());
+        new SqlUtil::Table(ds, "account").insert({"id": 1, "group": "a", "code": "x", "email": "a@x"});
+        ds.commit();
+
+        # the same schema again: nothing is changed
+        Schema::DataSchema same(ds, definition("1.0", code_uk));
+        hash<SchemaAlignmentInfo> info = same.alignWithInfo(True, -1, False);
+        assertEq(("unchanged",), keys info.change_map, sprintf("%y", info.change_map));
+
+        # an upgrade adds a unique constraint, as a unique index
+        Schema::DataSchema v2(ds, definition("2.0", code_uk + email_uk));
+        info = v2.alignWithInfo(True, -1, False);
+        assertEq(("add", "unchanged"), sort(keys info.change_map), sprintf("%y", info.change_map));
+        assertEq(1, info.change_map.add, sprintf("%y", info.change_map));
+        ds.commit();
+        assertEq("2.0", get_version());
+        assertEq({"created": {"columns": ("group", "code")}, "uk_account_email": {"columns": ("email",)}},
+            get_uks());
+        # which is enforced
+        assertThrows("SQLITE3-EXEC", "UNIQUE constraint failed: account.email", sub () {
+            new SqlUtil::Table(ds, "account").insert({"id": 2, "group": "b", "code": "y", "email": "a@x"});
+        });
+
+        # and the upgraded schema again changes nothing
+        Schema::DataSchema same2(ds, definition("2.0", code_uk + email_uk));
+        info = same2.alignWithInfo(True, -1, False);
+        assertEq(("unchanged",), keys info.change_map, sprintf("%y", info.change_map));
+
+        # the constraint that the table was created with cannot be dropped: the alignment is refused and rolled back
+        Schema::DataSchema v3(ds, definition("3.0", email_uk));
+        assertThrows("UNSUPPORTED", "cannot drop the unique constraint \\(group, code\\) of table \"account\": SQLite "
+            "cannot drop a unique constraint that a table was created with", \v3.alignWithInfo(), (True, -1, False));
+        assertEq("2.0", get_version());
+        assertEq({"created": {"columns": ("group", "code")}, "uk_account_email": {"columns": ("email",)}},
+            get_uks());
     }
 
     #! PostgreSQL makes the populated column NOT NULL with its own DDL, and keeps the column's default
