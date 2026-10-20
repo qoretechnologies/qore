@@ -4808,6 +4808,8 @@ while (*binary chunk = input.read(65536)) {
       or write could use its TLS connection after it was freed, and could read from or write to another connection
       that had been given the closed descriptor's number.  The read or write now fails, and the connection and the
       descriptor are released when it ends
+    - Fixed a data race when @ref Qore::Socket::isOpen() "Socket::isOpen()" or another method that checks whether a
+      socket is open was called while another thread closed the socket
     - Fixed a crash of IR, JIT and tiered execution and of compiled (\c qcc) code when a
       @ref thread_exit "thread_exit statement" left a @ref try "try" block: the catch block was entered for the
       thread_exit, which is not an exception, and the thread crashed while making the exception information.  As in

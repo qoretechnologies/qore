@@ -1,0 +1,77 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    Regression test for Socket::isOpen() called while another thread closes the socket.
+
+    The close releases the socket's descriptor on the socket's I/O thread, with the socket's close lock held, while
+    isOpen() reads the descriptor without a lock, so the descriptor was a data race (reported by ThreadSanitizer).
+    The test makes a thread call isOpen() while another thread closes the socket, with nothing that orders the calls
+    with the close, which is what ThreadSanitizer needs to report the race: it must report nothing.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class IsOpenCloseRaceTest
+
+class IsOpenCloseRaceTest inherits QUnit::Test {
+    constructor() : Test("IsOpenCloseRaceTest", "1.0") {
+        addTestCase("isOpen() while another thread closes the socket", \isOpenCloseTest());
+        set_return_value(main());
+    }
+
+    private isOpenCloseTest() {
+        Socket listener();
+        listener.bindINET("127.0.0.1", "0", True, AF_INET);
+        listener.listen();
+        on_exit listener.close();
+        int port = listener.getSocketInfo().port;
+
+        for (int i = 0; i < 20; ++i) {
+            Socket client();
+            client.connect("127.0.0.1:" + port);
+            Socket peer = listener.accept();
+            on_exit peer.close();
+
+            assertTrue(client.isOpen(), "the socket is open before the close");
+            # the checking thread calls isOpen() after the counter that lets the close go ahead, so nothing orders its
+            # calls with the close; the calls are bounded, as a thread waiting for the close would not end under
+            # valgrind, which runs one thread at a time
+            Counter checking(1);
+            Counter done(1);
+            background sub () {
+                on_exit done.dec();
+                checking.dec();
+                for (int c = 0; c < 1000 && client.isOpen(); ++c) {
+                }
+            }();
+            checking.waitForZero();
+            client.close();
+            done.waitForZero();
+            assertFalse(client.isOpen(), "the socket is closed after the close");
+        }
+    }
+}

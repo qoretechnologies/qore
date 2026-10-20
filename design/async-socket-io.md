@@ -395,7 +395,9 @@ with each other, not with the I/O calls, so a close can happen at any point of a
   connection, as the calls of one SSL object must not run concurrently; the descriptor is already shut down, so the
   close notification could not be sent anyway;
 - other uses of the TLS connection (the cipher, ALPN, `pending()` in `hasPendingData()`) take a reference with
-  `qore_socket_private::getSsl()`.
+  `qore_socket_private::getSsl()`;
+- the descriptor number itself (`qore_socket_private::sock`) is atomic: it is read without a lock, for example by
+  `Socket::isOpen()`, while the close sets it with `close_m` held.
 
 Before this, the I/O call read the connection before taking its reference and the count was not atomic, so a close
 could free the connection under the call (an assertion failure in `SSLSocketHelper::sslError()` in debug builds, a

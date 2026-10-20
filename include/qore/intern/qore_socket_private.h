@@ -972,7 +972,13 @@ struct qore_socket_private : public QoreReferenceCounter {
     // for client certificate capture
     static thread_local qore_socket_private* current_socket;
 
-    int sock, sfamily, port, stype, sprot;
+    //! The socket's descriptor, or @ref QORE_INVALID_SOCKET if the socket is closed
+    /** Read without a lock, for example by isOpen(), while another thread closes the socket, which sets it with
+        @ref close_m held, so it is atomic.  An I/O call uses the descriptor through an IoUseHelper, which keeps it
+        open while the call runs.
+    */
+    std::atomic<int> sock;
+    int sfamily, port, stype, sprot;
 
     //! Sockets that hold the port of a TCP socket bound to a name on the name's addresses in other address families
     /** Bound but not listening, so a connection to such an address is refused and a client connecting to the name

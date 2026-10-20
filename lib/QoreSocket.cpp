@@ -1573,7 +1573,7 @@ public:
         qore_socket_private* accepted_priv = qore_socket_private::get(*accepted_socket);
         qore_socket_close_private_from_controller(priv);
         assert(priv->sock == QORE_INVALID_SOCKET);
-        priv->sock = accepted_priv->sock;
+        priv->sock = accepted_priv->sock.load();
         accepted_priv->sock = QORE_INVALID_SOCKET;
         accepted_socket.reset();
         priv->resetCloseInterrupt();

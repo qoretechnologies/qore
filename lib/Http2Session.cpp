@@ -1289,7 +1289,7 @@ int Http2Session::receiveData(int timeout_ms, ExceptionSink* xsink) {
     //
     // Socket receive does not touch nghttp2_session state; only
     // nghttp2_session_mem_recv below does, and we reacquire m for that.
-    printd(5, "receiveData() ENTRY fd=%d isServer=%d timeout_ms=%d\n", sock->sock, is_server, timeout_ms);
+    printd(5, "receiveData() ENTRY fd=%d isServer=%d timeout_ms=%d\n", sock->sock.load(), is_server, timeout_ms);
 
     bool timed_out = false;
     SimpleRefHolder<BinaryNode> data(qore_on_async_io_thread()
@@ -1315,7 +1315,8 @@ int Http2Session::receiveData(int timeout_ms, ExceptionSink* xsink) {
     }
 
     ssize_t len = static_cast<ssize_t>(data->size());
-    printd(5, "receiveData() recv len=%zd fd=%d isServer=%d xsink=%d\n", len, sock->sock, is_server, (int)*xsink);
+    printd(5, "receiveData() recv len=%zd fd=%d isServer=%d xsink=%d\n", len, sock->sock.load(), is_server,
+        static_cast<int>(*xsink));
     if (len == 0) {
         // EOF received - connection was closed by peer
         printd(5, "receiveData() len=0 (connection closed by peer)\n");
@@ -1784,7 +1785,7 @@ int Http2Session::onFrameSendCallback(nghttp2_session* session,
     uint32_t remote_max = h2 ? h2->remote_settings.max_frame_size : 0;
     uint32_t local_max = h2 ? h2->local_settings.max_frame_size : 0;
     int is_server = h2 ? h2->is_server : 0;
-    int fd = h2 ? h2->sock->sock : -1;
+    int fd = h2 ? h2->sock->sock.load() : -1;
     printd(5, "onFrameSendCallback type=%d stream_id=%d flags=%d len=%d remote_max_frame=%u local_max_frame=%u "
         "isServer=%d fd=%d\n",
         frame->hd.type, frame->hd.stream_id, frame->hd.flags, (int)frame->hd.length, remote_max, local_max,
@@ -1919,7 +1920,8 @@ int Http2Session::onFrameRecvCallback(nghttp2_session* session,
             (int)frame->hd.length, h2->local_settings.max_frame_size);
     }
     printd(5, "onFrameRecvCallback type=%d stream_id=%d flags=%d len=%d isServer=%d fd=%d\n",
-        frame->hd.type, frame->hd.stream_id, frame->hd.flags, (int)frame->hd.length, h2->is_server, h2->sock->sock);
+        frame->hd.type, frame->hd.stream_id, frame->hd.flags, static_cast<int>(frame->hd.length), h2->is_server,
+        h2->sock->sock.load());
     if (frame->hd.type == NGHTTP2_GOAWAY) {
         printd(5, "onFrameRecvCallback GOAWAY: last_stream_id=%d error_code=%u\n",
             frame->goaway.last_stream_id, frame->goaway.error_code);
@@ -3232,7 +3234,7 @@ void Http2Session::handleAsyncReadCompletion(int32_t stream_id, const char* data
 }
 
 int Http2Session::getSocketFd() const {
-    return sock ? sock->sock : -1;
+    return sock ? sock->sock.load() : -1;
 }
 #endif
 
