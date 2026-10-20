@@ -140,6 +140,8 @@ module MysqlSqlUtil {
       constraint, which was dropped and added again, so table alignment keeps a foreign constraint with the
       definition of the template's under another name under its name (see
       @ref SqlUtil::AbstractConstraint::supportsRename() "AbstractConstraint::supportsRename()")
+    - fixed renaming a trigger, which gave \c ALTER \c TRIGGER, which MySQL does not have: MySQL cannot rename a
+      trigger, so it is dropped and created under the new name
 
     @subsection mysqlsqlutilv15 MysqlSqlUtil v1.5
     - fixed case-sensitive regular-expression matching on MySQL 8.0.22+ and current MySQL releases by using an
@@ -699,9 +701,17 @@ auto v = c.name;
             return True;
         }
 
-        #! returns a string that can be used to rename the trigger in the database
+        #! returns the SQL that renames the trigger: MySQL cannot rename a trigger, so it is dropped and created under the
+        #! new name
+        /** A trigger is only its definition, which is created again unchanged under the new name
+
+            @param table_name the name of the table
+            @param new_name the new name of the trigger
+
+            @return the SQL statements that drop the trigger and create it under the new name
+        */
         softlist getRenameSql(string table_name, string new_name) {
-            return sprintf("alter trigger %s on %s rename to %s", name, table_name, new_name);
+            return (getDropSql(table_name)[0], sprintf("create trigger %s %s", new_name, src));
         }
     }
 

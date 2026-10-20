@@ -156,6 +156,8 @@ module MssqlSqlUtilBase {
       the name of their schema and their own name
     - fixed renaming a foreign or check constraint, which dropped it and added it under the new name: it is renamed
       with \c sp_rename as a unique constraint is
+    - fixed renaming a trigger, which named it without its schema: it is renamed with \c sp_rename by the name of
+      its schema and its own name
 
     @subsection MssqlSqlUtilBasev10 MssqlSqlUtilBase v1.0
     - initial release
@@ -185,20 +187,20 @@ sub parse_schema_name(string nname, reference<string> schema, reference<string> 
     }
 }
 
-#! returns the SQL statement that renames a constraint and its index, if any, with sp_rename
-/** \c sp_rename names a constraint by its schema and name, not by its table: the schema is the one of the table's
-    name, and a constraint of a table without a schema in its name is found in the default schema of the connection
+#! returns the SQL statement that renames an object of a table, a constraint with its index or a trigger, with sp_rename
+/** \c sp_rename names such an object by its schema and name, not by its table: the schema is the one of the table's
+    name, and an object of a table without a schema in its name is found in the default schema of the connection
 
     @param table_name the name of the table, with its schema, as given by
     @ref SqlUtil::AbstractTable::getSqlName() "AbstractTable::getSqlName()"
-    @param name the name of the constraint
-    @param new_name the new name of the constraint
+    @param name the name of the object
+    @param new_name the new name of the object
 
-    @return the SQL statement that renames the constraint
+    @return the SQL statement that renames the object
 
     @since MssqlSqlUtilBase 1.1
 */
-string sub mssql_constraint_rename_sql(string table_name, string name, string new_name) {
+string sub mssql_object_rename_sql(string table_name, string name, string new_name) {
     *string schema = (table_name =~ x/^(.+)\.[^.]+$/)[0];
     return sprintf("exec sp_rename '%s%s', '%s', 'OBJECT'", schema ? schema + "." : "", name, new_name);
 }
@@ -358,7 +360,7 @@ public class MssqlForeignConstraint inherits SqlUtil::AbstractForeignConstraint 
 
     #! returns the SQL that renames the constraint with sp_rename, so that it is never dropped and added again
     softlist getRenameSql(string table_name, string new_name) {
-        return mssql_constraint_rename_sql(table_name, name, new_name);
+        return mssql_object_rename_sql(table_name, name, new_name);
     }
 
     #! returns a string that can be used to create the constraint in the database
@@ -382,7 +384,7 @@ public class MssqlCheckConstraint inherits SqlUtil::AbstractCheckConstraint {
 
     #! returns the SQL that renames the constraint with sp_rename, so that it is never dropped and added again
     list getRenameSql(string table_name, string new_name) {
-        return (mssql_constraint_rename_sql(table_name, name, new_name),);
+        return (mssql_object_rename_sql(table_name, name, new_name),);
     }
 
     #! returns a string that can be used to create the constraint in the database
@@ -576,7 +578,7 @@ public class MssqlUniqueConstraintCommon inherits SqlUtil::AbstractUniqueConstra
         @since MssqlSqlUtilBase 1.1
     */
     private string getSpRenameSql(string table_name, string new_name) {
-        return mssql_constraint_rename_sql(table_name, name, new_name);
+        return mssql_object_rename_sql(table_name, name, new_name);
     }
 
     #! adds index options onto the sql creation string
@@ -823,10 +825,18 @@ public class MssqlTrigger inherits SqlUtil::AbstractTrigger {
         return True;
     }
 
-    #! returns a string that can be used to rename the trigger in the database
+    #! returns the SQL that renames the trigger with sp_rename
+    /** The trigger is renamed by its schema, the one of the table's name, and its name; the definition of the trigger
+        that SQL Server keeps (\c OBJECT_DEFINITION()) still has its old name, as for every object renamed with
+        \c sp_rename
+
+        @param table_name the name of the table, with its schema
+        @param new_name the new name of the trigger
+
+        @return the SQL statement that renames the trigger
+    */
     softlist getRenameSql(string table_name, string new_name) {
-        # no idea if this will work
-        return sprintf("sp_rename '%s', '%s', 'OBJECT'", name, new_name);
+        return mssql_object_rename_sql(table_name, name, new_name);
     }
 }
 

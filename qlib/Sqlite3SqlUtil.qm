@@ -213,6 +213,8 @@ module Sqlite3SqlUtil {
     @section sqlite3_relnotes Release Notes
 
     @subsection sqlite3sqlutilv12 Sqlite3SqlUtil_1_2 Sqlite3SqlUtil Module v1.2
+    - renaming a trigger raised \c UNSUPPORTED: SQLite cannot rename a trigger, so it is dropped and created under
+      the new name
     - a string column with a size, as in a portable description (<tt>{"qore_type": "string", "size": 96}</tt>), is
       accepted: SQLite does not limit the length of text, so the size is not part of the column; it raised
       \c COLUMN-ERROR, so that such a description, such as the quarantine table of a DataSchema \c reconcile_table
@@ -879,10 +881,17 @@ string sql = pk.getTableConstraintSql();
             return True;
         }
 
-        #! returns a string that can be used to rename the trigger in the database
+        #! returns the SQL that renames the trigger: SQLite cannot rename a trigger, so it is dropped and created under the
+        #! new name
+        /** A trigger is only its definition, which is created again unchanged under the new name
+
+            @param table_name the name of the table
+            @param new_name the new name of the trigger
+
+            @return the SQL statements that drop the trigger and create it under the new name
+        */
         softlist getRenameSql(string table_name, string new_name) {
-            throw "UNSUPPORTED";
-            #return sprintf("alter trigger %s on %s rename to %s", name, table_name, new_name);
+            return (getDropSql(table_name)[0], sprintf("create trigger %s %s", new_name, src));
         }
     }
 

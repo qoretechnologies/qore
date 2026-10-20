@@ -103,6 +103,8 @@ module XdbcFirebirdSqlUtilBase {
       definition of the template's under another name is now taken for the template's and kept under its name in the
       database, so that the next alignment needs no SQL either (see
       @ref SqlUtil::AbstractConstraint::supportsRename() "AbstractConstraint::supportsRename()")
+    - renaming a trigger raised \c UNSUPPORTED: Firebird cannot rename a trigger, so it is dropped and created under
+      the new name
 
     @subsection xdbcfirebirdsqlutilbasev_0_1 XdbcFirebirdSqlUtilBase Module v0.1
     - initial release
@@ -468,9 +470,17 @@ auto v = c.name;
             return True;
         }
 
-        #! returns a string that can be used to rename the trigger in the database
+        #! returns the SQL that renames the trigger: Firebird cannot rename a trigger, so it is dropped and created under the
+        #! new name
+        /** A trigger is only its definition, which is created again unchanged under the new name
+
+            @param table_name the name of the table
+            @param new_name the new name of the trigger
+
+            @return the SQL statements that drop the trigger and create it under the new name
+        */
         softlist getRenameSql(string table_name, string new_name) {
-            throw "UNSUPPORTED";
+            return (getDropSql(table_name)[0], sprintf("create trigger %s %s", new_name, src));
         }
     }
 
