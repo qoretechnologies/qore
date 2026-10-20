@@ -88,6 +88,9 @@ pmFneeIUuXJajOsh7jUyTxcrHl+4kkgHDExuFMNPHfrIG8xCj43fjzxD/spz3xRS
 l50Xb2GWQesIt9k5jF5IOw==
 -----END PRIVATE KEY-----";
 
+#! the number of sequential requests of the sustained request test
+const SustainedRequestCount = 50;
+
 %exec-class QuicComprehensiveTest
 
 class QuicComprehensiveTest inherits QUnit::Test {
@@ -753,7 +756,10 @@ class QuicComprehensiveTest inherits QUnit::Test {
 
     # ===== Group 4: Stress & Scalability =====
 
-    #! Test sustained throughput over time
+    #! Test a sustained series of requests on one connection
+    /** A fixed number of sequential requests, so the test checks the same thing however fast the machine is; it used
+        to send requests for up to three seconds, so its assertion count depended on the speed of the machine.
+    */
     testSustainedThroughput() {
         hash<auto> pair = createSocketPair();
         hash<auto> ctx = performHandshake(pair);
@@ -761,52 +767,16 @@ class QuicComprehensiveTest inherits QUnit::Test {
             cleanupContext(ctx);
         }
 
-        int completed = 0;
-        date start = now_us();
-        date deadline = start + 3s;
+        for (int i = 0; i < SustainedRequestCount; ++i) {
+            string path = sprintf("/throughput/%d", i);
+            string resp_body = sprintf("resp-%d", i);
 
-        while (now_us() < deadline) {
-            string path = sprintf("/throughput/%d", completed);
-            string resp_body = sprintf("resp-%d", completed);
-
-            if (completed > 0) {
+            if (i > 0) {
                 resubmitForNextRequest(\ctx);
             }
 
-            try {
-                hash<auto> result = doRoundTrip(ctx, "GET", path, NOTHING, NOTHING,
-                    200, NOTHING, resp_body);
-                assertEq(200, result.client_output.status_code,
-                    sprintf("throughput request %d: 200", completed));
-                completed++;
-            } catch (hash<ExceptionInfo> ex) {
-                if (m_options.verbose > 0) {
-                    printf("throughput test error at request %d: %s: %s\n",
-                        completed, ex.err, ex.desc);
-                }
-                break;
-            }
-
-            # Check if we're under valgrind (very slow) - skip after a few requests
-            if (completed >= 3 && now_us() - start > 2s) {
-                # Likely under valgrind, skip extended throughput
-                break;
-            }
-        }
-
-        assertTrue(completed > 0, sprintf("sustained throughput: %d requests completed", completed));
-        if (completed < 5) {
-            testSkip("likely running under valgrind");
-        }
-        if (m_options.verbose > 0) {
-            date elapsed_d = now_us() - start;
-            float elapsed_s = get_duration_microseconds(elapsed_d) / 1000000.0;
-            if (elapsed_s > 0) {
-                printf("  throughput: %d requests in %.2f seconds (%.1f req/s)\n",
-                    completed, elapsed_s, completed / elapsed_s);
-            } else {
-                printf("  throughput: %d requests completed\n", completed);
-            }
+            hash<auto> result = doRoundTrip(ctx, "GET", path, NOTHING, NOTHING, 200, NOTHING, resp_body);
+            assertEq(200, result.client_output.status_code, sprintf("sustained request %d: 200", i));
         }
     }
 
