@@ -54,18 +54,23 @@ GroupedDataFrame::copy() {
     Each value can be a string (single function) or a list of strings
     (multiple functions — result columns suffixed with _func).
 
-    Supported functions for numeric columns: "sum", "mean", "min", "max",
-    "std", "median", "count", "first", "last".
-    For any column: "count", "nunique".
+    Supported functions:
+    - for a column of any type: \c "count" and \c "nunique" (the number of values and of distinct values that
+      are not null, as an \c int64 column), \c "first" and \c "last" (the first and last value that is not null,
+      in a column of the type of the source column)
+    - for a numeric, string, date or bool column: \c "min" and \c "max"; the result of a numeric column is a
+      \c float64 column, and that of another column a column of its type, with strings compared byte by byte
+    - for a numeric column: \c "sum", \c "mean", \c "std" and \c "median", as a \c float64 column
 
     @return new DataFrame with one row per group
 
     @par Example:
     @code{.py}
-    DataFrame result = gdf.agg({"salary": "mean", "bonus": ("sum", "max")});
+    DataFrame result = gdf.agg({"salary": "mean", "bonus": ("sum", "max"), "name": "first"});
     @endcode
 
-    @throw DATAFRAME-COLUMN-ERROR if a column is not found
+    @throw DATAFRAME-COLUMN-ERROR a column is not found, or an aggregation cannot be applied to the type of a column
+    @throw DATAFRAME-ERROR an aggregation is unknown, or is not a string or a list of strings
 
 */
 DataFrame GroupedDataFrame::agg(hash<auto> agg_spec) [flags=RET_VALUE_ONLY] {

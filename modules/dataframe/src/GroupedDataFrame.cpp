@@ -310,6 +310,219 @@ double QoreGroupedDataFrame::aggregateNumeric(const ColumnData& cd,
     return std::numeric_limits<double>::quiet_NaN();
 }
 
+namespace {
+// raises the exception for an aggregation that cannot be applied to a column; the column name is kept whole
+void raiseAggregationError(ExceptionSink* xsink, const char* err, const std::string& func, const std::string& column,
+        const char* reason) {
+    QoreStringNodeHolder desc(new QoreStringNode("aggregation '"));
+    desc->concat(func.data(), func.size());
+    desc->concat("' of column '");
+    desc->concat(column.data(), column.size());
+    desc->sprintf("' %s", reason);
+    xsink->raiseException(err, desc.release());
+}
+
+// a column with one null value for each group, of the type and schema of the source column
+std::shared_ptr<ColumnData> makeGroupValueColumn(const ColumnData& src, int64_t n_groups,
+        const std::string& result_name) {
+    auto cd = std::make_shared<ColumnData>();
+    cd->type = src.type;
+    cd->n_rows = n_groups;
+    cd->null_mask.assign(static_cast<size_t>(n_groups), 1);
+    if (src.has_columnar_schema) {
+        cd->columnar_schema = src.columnar_schema;
+        cd->columnar_schema.name = result_name;
+        cd->has_columnar_schema = true;
+    }
+    switch (src.type) {
+        case ColumnType::FLOAT64:
+            cd->float_data = Eigen::VectorXd::Zero(n_groups);
+            break;
+        case ColumnType::INT64:
+            cd->int_data.resize(n_groups);
+            break;
+        case ColumnType::STRING:
+            cd->str_data.resize(n_groups);
+            break;
+        case ColumnType::BOOL:
+            cd->bool_data.resize(n_groups);
+            break;
+        case ColumnType::DATE:
+            cd->date_data.resize(n_groups);
+            break;
+        case ColumnType::AUTO:
+            cd->auto_data.resize(n_groups);
+            break;
+    }
+    return cd;
+}
+
+// sets the value of a group to the value of a row of the source column, which is not null
+void setGroupValue(ColumnData& dest, int64_t g, const ColumnData& src, int64_t r, ExceptionSink* xsink) {
+    assert(!src.isNull(r));
+    dest.null_mask[g] = 0;
+    switch (src.type) {
+        case ColumnType::FLOAT64:
+            dest.float_data(g) = src.float_data(r);
+            break;
+        case ColumnType::INT64:
+            dest.int_data[g] = src.int_data[r];
+            break;
+        case ColumnType::STRING:
+            dest.str_data[g] = src.str_data[r];
+            break;
+        case ColumnType::BOOL:
+            dest.bool_data[g] = src.bool_data[r];
+            break;
+        case ColumnType::DATE:
+            dest.date_data[g] = src.date_data[r];
+            break;
+        case ColumnType::AUTO:
+            dest.setAutoValue(g, src.auto_data[r], xsink);
+            break;
+    }
+}
+
+// returns true if the value of row a is less than that of row b in a string, date or bool column
+bool groupValueLess(const ColumnData& cd, int64_t a, int64_t b) {
+    switch (cd.type) {
+        case ColumnType::STRING:
+            return cd.str_data[a] < cd.str_data[b];
+        case ColumnType::DATE:
+            return cd.date_data[a] < cd.date_data[b];
+        case ColumnType::BOOL:
+            return cd.bool_data[a] < cd.bool_data[b];
+        default:
+            assert(false);
+            return false;
+    }
+}
+}
+
+std::shared_ptr<ColumnData> QoreGroupedDataFrame::aggregateColumn(const ColumnData& src_cd,
+        const std::string& col_name, const std::string& func, const std::string& result_name,
+        ExceptionSink* xsink) const {
+    int64_t n_groups = static_cast<int64_t>(groups.size());
+    bool numeric = src_cd.type == ColumnType::FLOAT64 || src_cd.type == ColumnType::INT64;
+    // the rows processed, for the cancellation checks
+    int64_t work = 0;
+    auto cancelled = [&work, xsink]() -> bool {
+        return !(++work % 100) && qore_check_cancel(xsink, "aggregating grouped DataFrame columns");
+    };
+
+    // the values of any type that are counted
+    if (func == "count" || func == "nunique") {
+        auto cd = std::make_shared<ColumnData>();
+        cd->type = ColumnType::INT64;
+        cd->n_rows = n_groups;
+        cd->null_mask.resize(n_groups, 0);
+        cd->int_data.resize(n_groups);
+        for (int64_t g = 0; g < n_groups; ++g) {
+            int64_t count = 0;
+            std::unordered_set<std::string> seen;
+            for (int64_t r : groups[g].row_indices) {
+                if (cancelled()) {
+                    return nullptr;
+                }
+                if (src_cd.isNull(r)) {
+                    continue;
+                }
+                if (func == "count") {
+                    ++count;
+                } else {
+                    seen.insert(dataFrameValueKey(src_cd, r));
+                }
+            }
+            cd->int_data[g] = func == "count" ? count : static_cast<int64_t>(seen.size());
+        }
+        return cd;
+    }
+
+    // a value of each group, of any type
+    if (func == "first" || func == "last") {
+        std::shared_ptr<ColumnData> cd = makeGroupValueColumn(src_cd, n_groups, result_name);
+        for (int64_t g = 0; g < n_groups; ++g) {
+            int64_t found = -1;
+            for (int64_t r : groups[g].row_indices) {
+                if (cancelled()) {
+                    return nullptr;
+                }
+                if (!src_cd.isNull(r)) {
+                    found = r;
+                    if (func == "first") {
+                        break;
+                    }
+                }
+            }
+            if (found >= 0) {
+                setGroupValue(*cd, g, src_cd, found, xsink);
+                if (*xsink) {
+                    return nullptr;
+                }
+            }
+        }
+        return cd;
+    }
+
+    // the smallest or largest value of a string, date or bool column, of the type of the column; numeric columns are
+    // aggregated as floating point numbers below
+    if ((func == "min" || func == "max") && (src_cd.type == ColumnType::STRING || src_cd.type == ColumnType::DATE
+            || src_cd.type == ColumnType::BOOL)) {
+        bool is_min = func == "min";
+        std::shared_ptr<ColumnData> cd = makeGroupValueColumn(src_cd, n_groups, result_name);
+        for (int64_t g = 0; g < n_groups; ++g) {
+            int64_t best = -1;
+            for (int64_t r : groups[g].row_indices) {
+                if (cancelled()) {
+                    return nullptr;
+                }
+                if (src_cd.isNull(r)) {
+                    continue;
+                }
+                if (best < 0 || (is_min ? groupValueLess(src_cd, r, best) : groupValueLess(src_cd, best, r))) {
+                    best = r;
+                }
+            }
+            if (best >= 0) {
+                setGroupValue(*cd, g, src_cd, best, xsink);
+            }
+        }
+        return cd;
+    }
+
+    if (func != "sum" && func != "mean" && func != "min" && func != "max" && func != "std" && func != "median") {
+        raiseAggregationError(xsink, "DATAFRAME-ERROR", func, col_name, "is unknown; expecting one of: \"sum\", "
+            "\"mean\", \"min\", \"max\", \"std\", \"median\", \"count\", \"nunique\", \"first\", \"last\"");
+        return nullptr;
+    }
+    if (!numeric) {
+        raiseAggregationError(xsink, "DATAFRAME-COLUMN-ERROR", func, col_name,
+            (std::string("cannot be applied to a column of type ") + columnTypeName(src_cd.type)).c_str());
+        return nullptr;
+    }
+
+    // numeric aggregations: a float64 column
+    auto cd = std::make_shared<ColumnData>();
+    cd->type = ColumnType::FLOAT64;
+    cd->n_rows = n_groups;
+    cd->null_mask.resize(n_groups, 0);
+    cd->float_data.resize(n_groups);
+    for (int64_t g = 0; g < n_groups; ++g) {
+        if (g && !(g % 100) && qore_check_cancel(xsink, "aggregating grouped DataFrame columns")) {
+            return nullptr;
+        }
+        double val = aggregateNumeric(src_cd, groups[g].row_indices, func, xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+        if (std::isnan(val)) {
+            cd->null_mask[g] = 1;
+        }
+        cd->float_data(g) = val;
+    }
+    return cd;
+}
+
 QoreDataFrame* QoreGroupedDataFrame::agg(const QoreHashNode* agg_spec,
         ExceptionSink* xsink) const {
     if (qore_check_cancel(xsink, "aggregating grouped DataFrame")) {
@@ -326,7 +539,7 @@ QoreDataFrame* QoreGroupedDataFrame::agg(const QoreHashNode* agg_spec,
         AggSpec spec;
         spec.column = hi.getKey();
 
-        // Get function name(s)
+        // Get function name(s); a value that is not a function name is an error, never ignored
         QoreValue func_val = hi.get();
         std::string func;
         if (getDataFrameString(func_val, func)) {
@@ -334,10 +547,18 @@ QoreDataFrame* QoreGroupedDataFrame::agg(const QoreHashNode* agg_spec,
         } else if (func_val.getType() == NT_LIST) {
             const QoreListNode* func_list = func_val.get<const QoreListNode>();
             for (size_t i = 0; i < func_list->size(); ++i) {
-                if (getDataFrameString(func_list->retrieveEntry(i), func)) {
-                    spec.funcs.push_back(func);
+                QoreValue v = func_list->retrieveEntry(i);
+                if (!getDataFrameString(v, func)) {
+                    xsink->raiseException("DATAFRAME-ERROR", "the aggregations of column '%s' must be strings; "
+                        "element %d has type '%s'", hi.getKey(), static_cast<int>(i), v.getTypeName());
+                    return nullptr;
                 }
+                spec.funcs.push_back(func);
             }
+        } else {
+            xsink->raiseException("DATAFRAME-ERROR", "the aggregation of column '%s' must be a string or a list of "
+                "strings; got type '%s'", hi.getKey(), func_val.getTypeName());
+            return nullptr;
         }
         specs.push_back(std::move(spec));
     }
@@ -447,98 +668,28 @@ QoreDataFrame* QoreGroupedDataFrame::aggSpecs(const std::vector<AggSpec>& specs,
         auto col_it = source_col_index.find(col_name);
         if (col_it == source_col_index.end()) {
             delete df;
-            xsink->raiseException("DATAFRAME-COLUMN-ERROR",
-                "aggregation column '%s' not found", col_name.c_str());
+            QoreStringNodeHolder desc(new QoreStringNode("aggregation column '"));
+            desc->concat(col_name.data(), col_name.size());
+            desc->concat("' not found");
+            xsink->raiseException("DATAFRAME-COLUMN-ERROR", desc.release());
             return nullptr;
         }
         const ColumnData& src_cd = *source_columns[col_it->second].data;
 
         for (const auto& func : funcs) {
-            // Numeric aggregations → float64 result column
-            if (src_cd.type == ColumnType::FLOAT64 || src_cd.type == ColumnType::INT64) {
-                auto cd = std::make_shared<ColumnData>();
-                cd->type = ColumnType::FLOAT64;
-                cd->n_rows = n_groups;
-                cd->null_mask.resize(n_groups, 0);
-                cd->float_data.resize(n_groups);
-
-                for (int64_t g = 0; g < n_groups; ++g) {
-                    if (g && !(g % 100) && qore_check_cancel(xsink, "aggregating grouped DataFrame columns")) {
-                        delete df;
-                        return nullptr;
-                    }
-                    double val = aggregateNumeric(src_cd, groups[g].row_indices, func, xsink);
-                    if (*xsink) {
-                        delete df;
-                        return nullptr;
-                    }
-                    if (std::isnan(val)) {
-                        cd->null_mask[g] = 1;
-                    }
-                    cd->float_data(g) = val;
-                }
-
-                std::string result_name = (funcs.size() > 1)
-                    ? col_name + "_" + func : col_name;
-                Column col;
-                col.name = result_name;
-                col.data = std::move(cd);
-                df->col_index[col.name] = df->columns.size();
-                df->columns.push_back(std::move(col));
-            } else if (func == "count") {
-                // count works on any type
-                auto cd = std::make_shared<ColumnData>();
-                cd->type = ColumnType::INT64;
-                cd->n_rows = n_groups;
-                cd->null_mask.resize(n_groups, 0);
-                cd->int_data.resize(n_groups);
-
-                for (int64_t g = 0; g < n_groups; ++g) {
-                    int64_t cnt = 0;
-                    for (int64_t r : groups[g].row_indices) {
-                        if (!src_cd.isNull(r)) {
-                            ++cnt;
-                        }
-                    }
-                    cd->int_data[g] = cnt;
-                }
-
-                std::string result_name = (funcs.size() > 1)
-                    ? col_name + "_" + func : col_name;
-                Column col;
-                col.name = result_name;
-                col.data = std::move(cd);
-                df->col_index[col.name] = df->columns.size();
-                df->columns.push_back(std::move(col));
-            } else if (func == "nunique") {
-                // unique count for string columns
-                auto cd = std::make_shared<ColumnData>();
-                cd->type = ColumnType::INT64;
-                cd->n_rows = n_groups;
-                cd->null_mask.resize(n_groups, 0);
-                cd->int_data.resize(n_groups);
-
-                for (int64_t g = 0; g < n_groups; ++g) {
-                    std::unordered_set<std::string> uniq;
-                    for (int64_t r : groups[g].row_indices) {
-                        if (!src_cd.isNull(r) && src_cd.type == ColumnType::STRING) {
-                            uniq.insert(src_cd.str_data[r]);
-                        }
-                    }
-                    cd->int_data[g] = (int64_t)uniq.size();
-                }
-
-                std::string result_name = (funcs.size() > 1)
-                    ? col_name + "_" + func : col_name;
-                Column col;
-                col.name = result_name;
-                col.data = std::move(cd);
-                df->col_index[col.name] = df->columns.size();
-                df->columns.push_back(std::move(col));
+            std::string result_name = (funcs.size() > 1) ? col_name + "_" + func : col_name;
+            std::shared_ptr<ColumnData> cd = aggregateColumn(src_cd, col_name, func, result_name, xsink);
+            if (!cd) {
+                delete df;
+                return nullptr;
             }
+            Column col;
+            col.name = std::move(result_name);
+            col.data = std::move(cd);
+            df->col_index[col.name] = df->columns.size();
+            df->columns.push_back(std::move(col));
         }
     }
-
     df->n_rows = n_groups;
     return df;
 }

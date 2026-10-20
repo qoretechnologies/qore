@@ -313,53 +313,6 @@ static void preserveColumnarSchema(ColumnData& data, const std::string& name,
     data.has_columnar_schema = true;
 }
 
-static std::string dataFrameValueKey(const ColumnData& cd, int64_t row) {
-    if (cd.isNull(row)) {
-        return std::string("\xffnull", 5);
-    }
-
-    std::string key;
-    switch (cd.type) {
-        case ColumnType::FLOAT64: {
-            double value = cd.float_data(row);
-            if (value == 0.0) {
-                value = 0.0;  // Normalize -0.0 to match numeric equality.
-            }
-            uint64_t bits;
-            std::memcpy(&bits, &value, sizeof(bits));
-            key.assign("f", 1);
-            key.append(reinterpret_cast<const char*>(&bits), sizeof(bits));
-            return key;
-        }
-        case ColumnType::INT64: {
-            int64_t value = cd.int_data[row];
-            key.assign("i", 1);
-            key.append(reinterpret_cast<const char*>(&value), sizeof(value));
-            return key;
-        }
-        case ColumnType::STRING:
-            key.assign("s", 1);
-            key.append(cd.str_data[row]);
-            return key;
-        case ColumnType::BOOL:
-            return cd.bool_data[row] ? std::string("b1", 2) : std::string("b0", 2);
-        case ColumnType::DATE: {
-            int64_t value = cd.date_data[row];
-            key.assign("d", 1);
-            key.append(reinterpret_cast<const char*>(&value), sizeof(value));
-            return key;
-        }
-        case ColumnType::AUTO: {
-            QoreStringValueHelper sh(cd.auto_data[row]);
-            key.assign("a", 1);
-            key.append(sh->c_str(), sh->size());
-            return key;
-        }
-        default:
-            return {};
-    }
-}
-
 static bool qoreDataFrameStringPredicate(QoreValue cell, const std::string& op, QoreValue value,
         ExceptionSink* xsink) {
     QoreStringValueHelper cell_str(cell);

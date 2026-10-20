@@ -256,6 +256,11 @@ DLLLOCAL void markScanColumnValuesStored(QoreObject& self, const std::vector<Col
 */
 DLLLOCAL bool scanColumnValues(const std::vector<Column>& columns, QorePrivateDataScanner& scanner);
 
+//! Returns a key of the value of a row that is equal for equal values of the column and different for others
+/** A null value has a key of its own.
+*/
+DLLLOCAL std::string dataFrameValueKey(const ColumnData& cd, int64_t row);
+
 DLLLOCAL ColumnType inferColumnType(const QoreListNode* values);
 
 //! Build a ColumnData from a list of Qore values with the given type

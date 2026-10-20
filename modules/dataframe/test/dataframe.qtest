@@ -339,6 +339,8 @@ class DataFrameTest inherits QUnit::Test {
         addTestCase("cycles made and broken by addColumn() and dropColumn() are collected", \dgcMutationTest());
         addTestCase("cycles through DataFrames are collected in concurrent threads", \dgcConcurrentTest());
         addTestCase("dropColumn() releases the values of the column after its lock", \dropColumnReleaseTest());
+        addTestCase("GroupedDataFrame aggregations of every column type", \aggColumnTypeTest());
+        addTestCase("GroupedDataFrame aggregations that cannot be applied raise errors", \aggErrorTest());
 
         set_return_value(main());
     }
@@ -3936,6 +3938,110 @@ sub invalid_dataframe_api() {
         }
         assertEq(1, destroyed.getCount(), "the object in the dropped column is destroyed");
         assertEq(1, cols_after, "the DataFrame has the other column");
+    }
+
+    # a DataFrame with one column of each type, grouped by k: rows 0 and 1 are group 1, row 2 is group 2
+    private DataFrame::GroupedDataFrame aggFrame() {
+        DataFrame::DataFrame df({
+            "k": (1, 1, 2),
+            "label": ("b", NOTHING, "c"),
+            "when": (2026-01-02, 2026-01-01, NOTHING),
+            "flag": (True, False, NOTHING),
+            "item": ({"x": 1}, NOTHING, (1, 2)),
+            "qty": (10, 20, NOTHING),
+            "price": (1.5, 2.5, NOTHING),
+        });
+        assertEq(("int64", "string", "date", "bool", "auto", "int64", "float64"), df.dtypes(),
+            "the test DataFrame has a column of each type");
+        return df.groupBy(("k",));
+    }
+
+    # first, last, count and nunique apply to a column of any type, and min and max to an ordered one
+    aggColumnTypeTest() {
+        DataFrame::GroupedDataFrame gdf = aggFrame();
+        list<string> funcs = ("first", "last", "count", "nunique");
+        DataFrame::DataFrame r = gdf.agg({
+            "label": funcs + ("min", "max"),
+            "when": funcs + ("min", "max"),
+            "flag": funcs + ("min", "max"),
+            "item": funcs,
+            "qty": funcs,
+            "price": funcs,
+        });
+        list<string> names = r.columnNames();
+        list<string> dtypes = r.dtypes();
+        hash<string, string> types = map {$1: dtypes[$#]}, names;
+
+        assertEq(("b", "c"), r.getColumn("label_first"), "first of a string column");
+        assertEq(("b", "c"), r.getColumn("label_last"), "last of a string column skips a null");
+        assertEq(("b", "c"), r.getColumn("label_min"), "min of a string column");
+        assertEq(("b", "c"), r.getColumn("label_max"), "max of a string column");
+        assertEq("string", types.label_first, "first of a string column is a string column");
+
+        assertEq((2026-01-02, NOTHING), r.getColumn("when_first"), "first of a date column");
+        assertEq((2026-01-01, NOTHING), r.getColumn("when_last"), "last of a date column");
+        assertEq((2026-01-01, NOTHING), r.getColumn("when_min"), "min of a date column");
+        assertEq((2026-01-02, NOTHING), r.getColumn("when_max"), "max of a date column");
+        assertEq("date", types.when_first, "first of a date column is a date column");
+
+        assertEq((True, NOTHING), r.getColumn("flag_first"), "first of a bool column");
+        assertEq((False, NOTHING), r.getColumn("flag_last"), "last of a bool column");
+        assertEq((False, NOTHING), r.getColumn("flag_min"), "min of a bool column");
+        assertEq((True, NOTHING), r.getColumn("flag_max"), "max of a bool column");
+        assertEq("bool", types.flag_first, "first of a bool column is a bool column");
+
+        assertEq(({"x": 1}, (1, 2)), r.getColumn("item_first"), "first of an auto column");
+        assertEq(({"x": 1}, (1, 2)), r.getColumn("item_last"), "last of an auto column skips a null");
+        assertEq("auto", types.item_first, "first of an auto column is an auto column");
+
+        assertEq((10, NOTHING), r.getColumn("qty_first"), "first of an int column is exact");
+        assertEq((20, NOTHING), r.getColumn("qty_last"), "last of an int column is exact");
+        assertEq("int64", types.qty_first, "first of an int column is an int column");
+        assertEq((1.5, NOTHING), r.getColumn("price_first"), "first of a float column");
+        assertEq((2.5, NOTHING), r.getColumn("price_last"), "last of a float column");
+
+        foreach string col in ("label", "when", "flag", "item", "qty", "price") {
+            assertEq("int64", types{col + "_count"}, sprintf("count of the %s column is an int column", col));
+            assertEq("int64", types{col + "_nunique"}, sprintf("nunique of the %s column is an int column", col));
+        }
+        assertEq((1, 1), r.getColumn("label_count"), "count of a string column");
+        assertEq((2, 0), r.getColumn("when_count"), "count of a date column");
+        assertEq((2, 0), r.getColumn("flag_count"), "count of a bool column");
+        assertEq((1, 1), r.getColumn("item_count"), "count of an auto column");
+        assertEq((2, 0), r.getColumn("qty_count"), "count of an int column");
+        assertEq((1, 1), r.getColumn("label_nunique"), "nunique of a string column");
+        assertEq((2, 0), r.getColumn("when_nunique"), "nunique of a date column");
+        assertEq((2, 0), r.getColumn("flag_nunique"), "nunique of a bool column");
+        assertEq((1, 1), r.getColumn("item_nunique"), "nunique of an auto column");
+        assertEq((2, 0), r.getColumn("qty_nunique"), "nunique of an int column");
+        assertEq((2, 0), r.getColumn("price_nunique"), "nunique of a float column");
+
+        # a single function names the result column after the source column
+        assertEq(("b", "c"), gdf.agg({"label": "first"}).getColumn("label"), "a single first() of a string column");
+        # the numeric aggregations are unchanged
+        assertEq((30.0, NOTHING), gdf.agg({"qty": "sum"}).getColumn("qty"), "sum of an int column");
+        assertEq((2.0, NOTHING), gdf.agg({"price": "mean"}).getColumn("price"), "mean of a float column");
+    }
+
+    # an aggregation that cannot be applied to a column raises an error naming the column and the aggregation
+    aggErrorTest() {
+        DataFrame::GroupedDataFrame gdf = aggFrame();
+        foreach hash<auto> i in ({"col": "label", "func": "sum"}, {"col": "label", "func": "mean"},
+                {"col": "when", "func": "std"}, {"col": "flag", "func": "median"}, {"col": "item", "func": "min"},
+                {"col": "item", "func": "max"}, {"col": "item", "func": "sum"}) {
+            assertThrows("DATAFRAME-COLUMN-ERROR", sprintf("'%s'.*'%s'", i.func, i.col), \gdf.agg(),
+                ({i.col: i.func},), sprintf("%s() of the %s column", i.func, i.col));
+            assertThrows("DATAFRAME-COLUMN-ERROR", sprintf("'%s'.*'%s'", i.func, i.col), \gdf.agg(),
+                ({i.col: ("count", i.func)},), sprintf("%s() of the %s column after count()", i.func, i.col));
+        }
+        assertThrows("DATAFRAME-ERROR", "'bogus'.*'qty'", \gdf.agg(), ({"qty": "bogus"},),
+            "an unknown aggregation");
+        assertThrows("DATAFRAME-ERROR", "'label'", \gdf.agg(), ({"label": 1},),
+            "an aggregation that is not a string");
+        assertThrows("DATAFRAME-ERROR", "'label'", \gdf.agg(), ({"label": ("first", 1)},),
+            "an aggregation list with a value that is not a string");
+        assertThrows("DATAFRAME-COLUMN-ERROR", "'missing'", \gdf.agg(), ({"missing": "count"},),
+            "an aggregation of a column that does not exist");
     }
 
     # threads make and release cycles through DataFrames while others make DataFrames that share the columns of one

@@ -110,6 +110,20 @@ private:
     //! Returns the specs applying the given function to each numeric column that is not a group column
     DLLLOCAL std::vector<AggSpec> numericSpecs(const char* func, ExceptionSink* xsink) const;
 
+    //! Returns the column of one aggregation of a source column, or nullptr if an exception was raised
+    /** count, nunique, first and last apply to a column of any type, min and max to a numeric, string, date or bool
+        column, and sum, mean, std and median to a numeric column; any other aggregation raises an exception.
+
+        @param src_cd the source column
+        @param col_name the name of the source column, for the exception
+        @param func the aggregation function
+        @param result_name the name of the result column
+        @param xsink \c DATAFRAME-COLUMN-ERROR is raised here for an aggregation that cannot be applied to the type of
+        the column, and \c DATAFRAME-ERROR for an unknown aggregation
+    */
+    DLLLOCAL std::shared_ptr<ColumnData> aggregateColumn(const ColumnData& src_cd, const std::string& col_name,
+        const std::string& func, const std::string& result_name, ExceptionSink* xsink) const;
+
     //! Helper: apply a single aggregation function to a column's values at given indices
     DLLLOCAL double aggregateNumeric(const ColumnData& cd,
         const std::vector<int64_t>& indices, const std::string& func, ExceptionSink* xsink) const;
