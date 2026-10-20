@@ -171,6 +171,9 @@ public class MyTestClass inherits QUnit::DependencyInjectedTest {
       object is the one its thread started in, as for a test script run with \c qore, and no Program in the call
       stack is restricted with @ref Qore::PO_NO_PROCESS_CONTROL "PO_NO_PROCESS_CONTROL"; a test that a host program
       creates in a Program of its own, a sandbox for example, leaves the host's \c SIGUSR1 handling alone
+    - a test object created in a thread that such a Program started itself (for example with the \c background
+      operator) is created in the Program that its thread started in, so when that Program may use process control,
+      the handler is installed and replaces the host's \c SIGUSR1 handler
 
     @section qunit_relnotes Release Notes
 
