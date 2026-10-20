@@ -11271,9 +11271,9 @@ list<auto> l = table.getAlignSql(table2);
         if (!t.primaryKey.empty()) {
             if (!primaryKey.empty()) {
                 if (!primaryKey.equal(t.primaryKey)) {
-                    # see if pk has the same definition but a different name; if so, it will be renamed later
-                    if (primaryKey.getName() == t.primaryKey.getName() || primaryKey.matchKeys(t.primaryKey)) {
-                        #printf("pk1: %Y\nXXXXXXX\npk2: %Y\n", primaryKey, t.primaryKey);
+                    # a key with the template's columns under another name is renamed later, never dropped: a drop
+                    # cascades to the foreign constraints that reference the key on some databases
+                    if (primaryKey.keys() != t.primaryKey.keys()) {
                         l += AbstractDatabase::doCallback(opt, primaryKey.getDropSql(getSqlName()),
                             AbstractDatabase::AC_Drop, "primary key", t.primaryKey.getName(), name);
                         # clear supporting constraint from index in the template since we've dropped the PK constraint
@@ -11353,12 +11353,14 @@ list<auto> l = table.getAlignSql(table2);
         # check for primary key differences
         if (!t.primaryKey.empty()) {
             if (!primaryKey.empty()) {
-                # we know the 2 primary key definitions have equal column definitions as it's checked above
-                # see if pk has a different name
+                # the 2 primary keys have the same columns, as a key with other columns has been dropped above; a key
+                # with another name is renamed, unless the database has no name for a primary key
                 if (primaryKey.getName() != t.primaryKey.getName()) {
-                    l += AbstractDatabase::doCallback(opt, primaryKey.getRenameSql(getSqlName(),
-                        t.primaryKey.getName()), AbstractDatabase::AC_Rename, "constraint", primaryKey.getName(),
-                        name, t.primaryKey.getName());
+                    if (primaryKey.supportsName() && t.primaryKey.supportsName()) {
+                        l += AbstractDatabase::doCallback(opt, primaryKey.getRenameSql(getSqlName(),
+                            t.primaryKey.getName()), AbstractDatabase::AC_Rename, "constraint", primaryKey.getName(),
+                            name, t.primaryKey.getName());
+                    }
                     primaryKey.rename(t.primaryKey.getName());
                 }
             } else {

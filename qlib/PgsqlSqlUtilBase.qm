@@ -227,6 +227,11 @@ $function$
     @section pgsql_relnotes Release Notes
 
     @subsection pgsqlsqlutilbasev119 PgsqlSqlUtilBase v1.19
+    - fixed aligning a table whose primary key or unique constraint has the template's columns under another name:
+      the key was dropped, which cascaded to the foreign constraints that reference it, and added again (a unique
+      constraint was added "using index" its dropped index, which failed); the key is now renamed in place, with
+      <tt>ALTER INDEX ... RENAME</tt> for a primary key and <tt>ALTER TABLE ... RENAME CONSTRAINT</tt> for a unique
+      constraint
     - fixed functions and types being looked up in every schema of the database instead of the schema that the
       connection resolves unqualified names in (see @ref pgsql_schema_scope), as tables, views, and sequences are:
       @ref SqlUtil::AbstractDatabase::getFunction() "getFunction()" reported the same function in two schemas as
@@ -1368,12 +1373,17 @@ auto v = c.name;
         return getCreateSql(name, table_name, opts);
     }
 
+    #! returns the SQL that renames the constraint, and its index with it
+    /** The constraint is renamed in place: dropping it and adding it under the new name would drop the foreign
+        constraints that reference it, as its drop cascades
+
+        @param table_name the name of the table
+        @param new_name the new name of the constraint
+
+        @return the \c ALTER \c TABLE ... \c RENAME \c CONSTRAINT statement in a list
+    */
     list<auto> getRenameSql(string table_name, string new_name) {
-        # the following is only valid with PostgreSQL 9.2+
-        #return sprintf("alter table %s rename constraint %s to %s", table_name, name, new_name);
-        list<auto> l += getDropSql(table_name);
-        l += getCreateSql(new_name, table_name);
-        return l;
+        return (sprintf("alter table %s rename constraint %s to %s", table_name, name, new_name),);
     }
 
     #! returns a string that can be used to rename the constraint
@@ -1438,10 +1448,8 @@ auto v = c.name;
         return sql;
     }
 
-    #! returns a string that can be used to rename the constraint
+    #! returns the SQL that renames the constraint, and its index with it
     softlist getRenameSql(string table_name, string new_name) {
-        # the following is only valid with PostgreSQL 9.2+
-        #return sprintf("alter table %s rename constraint %s to %s", table_name, name, new_name);
         return sprintf("alter index %s rename to %s", name, new_name);
     }
 

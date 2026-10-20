@@ -1,0 +1,94 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires SqlUtil
+%requires PgsqlSqlUtilBase
+%prepend-module-path "${SCRIPT_DIR}"
+%requires ./PgsqlTestIsolation.qm
+
+%try-module pgsql
+%define NO_PGSQL
+%endtry
+
+%exec-class PgsqlKeyAlignmentTest
+
+#! Aligning the keys of PostgreSQL tables that foreign constraints reference
+class PgsqlKeyAlignmentTest inherits QUnit::Test {
+    constructor() : Test("PgsqlKeyAlignmentTest", "1.0", \ARGV) {
+        addTestCase("a key with another name is renamed, and the foreign constraints that reference it are kept",
+            \keyRenames());
+        set_return_value(main());
+    }
+
+    globalTearDown() {
+        PgsqlRunSchema::teardown();
+    }
+
+    #! Returns a datasource whose tables are created in the run's own schema
+    private Datasource datasource() {
+%ifdef NO_PGSQL
+        testSkip("pgsql module unavailable");
+%endif
+        if (!ENV.QORE_DB_CONNSTR_PGSQL) {
+            testSkip("QORE_DB_CONNSTR_PGSQL is not set");
+        }
+        PgsqlRunSchema::setup(ENV.QORE_DB_CONNSTR_PGSQL, "PgsqlKeyAlignment");
+        return new Datasource(ENV.QORE_DB_CONNSTR_PGSQL);
+    }
+
+    #! Aligns the table to a template with the description, runs the SQL in the database and returns it
+    private list<auto> alignTable(Datasource ds, string table, hash<auto> desc) {
+        PgsqlTable template(ds, table);
+        template.setupTable(desc);
+        PgsqlTable current(ds, table);
+        list<auto> sql = current.getAlignSql(template);
+        map ds.execRaw($1), sql;
+        return sql;
+    }
+
+    #! Returns the names of the constraints of the table, by type ("p", "u" or "f")
+    private hash<auto> constraints(Datasource ds, string table) {
+        hash<auto> rv;
+        context (ds.select("select c.conname, c.contype from pg_constraint c join pg_class t on t.oid = c.conrelid "
+                "join pg_namespace n on n.oid = t.relnamespace where t.relname = %v and n.nspname = current_schema() "
+                "order by c.conname", table)) {
+            rv{%contype} += (%conname,);
+        }
+        return rv;
+    }
+
+    #! A primary key or unique constraint with the template's columns under another name is renamed: dropping it
+    #! would drop the foreign constraints that reference it, as its drop cascades
+    keyRenames() {
+        Datasource ds = datasource();
+        on_exit ds.rollback();
+        ds.execRaw("create table key_parent (id integer not null primary key, code varchar(10), "
+            "constraint uk_key_parent_old unique (code))");
+        ds.execRaw("create table key_child (id integer not null primary key, parent_id integer, parent_code "
+            "varchar(10), constraint fk_key_child_id foreign key (parent_id) references key_parent (id), "
+            "constraint fk_key_child_code foreign key (parent_code) references key_parent (code))");
+        string parent_name = (new PgsqlTable(ds, "key_parent")).getSqlName();
+        assertEq({"p": ("key_parent_pkey",), "u": ("uk_key_parent_old",)}, constraints(ds, "key_parent"));
+
+        hash<auto> desc = {
+            "columns": {
+                "id": {"native_type": "integer", "notnull": True},
+                "code": {"native_type": "varchar", "size": 10},
+            },
+            "primary_key": {"name": "pk_key_parent", "columns": ("id",)},
+            "unique_constraints": {"uk_key_parent_code": {"columns": ("code",)}},
+        };
+        assertEq((sprintf("alter table %s rename constraint uk_key_parent_old to uk_key_parent_code", parent_name),
+            "alter index key_parent_pkey rename to pk_key_parent"), alignTable(ds, "key_parent", desc));
+        assertEq({"p": ("pk_key_parent",), "u": ("uk_key_parent_code",)}, constraints(ds, "key_parent"));
+        assertEq({"f": ("fk_key_child_code", "fk_key_child_id"), "p": ("key_child_pkey",)},
+            constraints(ds, "key_child"), "the foreign constraints that reference the keys are kept");
+        assertEq((), alignTable(ds, "key_parent", desc));
+    }
+}

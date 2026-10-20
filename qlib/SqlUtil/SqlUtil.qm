@@ -155,6 +155,12 @@ module SqlUtil {
       of sequences or functions only; every section of the description is optional
     - fixed @ref SqlUtil::AbstractDatabase::getAlignSql() "AbstractDatabase::getAlignSql()" raising
       \c SCHEMA-DESCRIPTION-ERROR for any \c table_map, so that no table was renamed by it
+    - fixed table alignment dropping a primary key that has the template's columns under another name and adding it
+      again, which on a database whose drop of a key cascades, such as PostgreSQL, also dropped the foreign
+      constraints that reference it, and renaming a primary key that has other columns instead of dropping it: a
+      key with other columns is dropped and added, and a key with the template's columns under another name is
+      renamed, or kept as it is on a database whose primary keys have no name
+      (@ref SqlUtil::AbstractPrimaryKey::supportsName() "AbstractPrimaryKey::supportsName()")
     - API change: @ref SqlUtil::AbstractIndex::getRenameSql() "AbstractIndex::getRenameSql()" returns a list of
       SQL strings instead of one string, and @ref SqlUtil::AbstractTable::renameIndex() "AbstractTable::renameIndex()"
       returns the SQL in a list in its optional reference argument: a database that cannot rename an index drops it
@@ -9547,6 +9553,18 @@ uk.addSourceConstraint(table_name, constraint_name);
         }
 
         constructor(string n, *hash<auto> c) : AbstractUniqueConstraint(n, c) {
+        }
+
+        #! returns @ref True "True" if the primary key has a name in the database that can be renamed
+        /** A table is aligned to a template whose primary key has the table's columns under another name by renaming
+            the key; a driver whose primary keys have no name returns @ref False "False", and the name is ignored
+
+            @return @ref True "True"; drivers whose primary keys have no name reimplement this method
+
+            @since SqlUtil 3.11.0
+        */
+        bool supportsName() {
+            return True;
         }
     }
 
