@@ -635,6 +635,36 @@ public class AbstractTable inherits AbstractSqlUtilBase {
         partitionStrategyLoaded = old.partitionStrategyLoaded;
         partitionsLoaded = old.partitionsLoaded;
 
+        # the copied indexes support the copied constraints, not those of the table that was copied, so that a
+        # constraint renamed or dropped with its index in the copy is the one that the index supports
+        if (indexes) {
+            foreach AbstractIndex ix in (indexes.iterator()) {
+                *AbstractColumnSupportingConstraint c = ix.getSupportingConstraint();
+                if (c) {
+                    if (old.primaryKey && c == old.primaryKey) {
+                        ix.setSupportingConstraint(primaryKey);
+                    } else if (old.constraints) {
+                        foreach hash<auto> i in (old.constraints.getHash().pairIterator()) {
+                            if (i.value == c) {
+                                ix.setSupportingConstraint(cast<AbstractColumnSupportingConstraint>(
+                                    constraints{i.key}));
+                                break;
+                            }
+                        }
+                    }
+                }
+                *AbstractForeignConstraint fk = ix.getForeignConstraint();
+                if (fk && old.foreignConstraints) {
+                    foreach hash<auto> i in (old.foreignConstraints.getHash().pairIterator()) {
+                        if (i.value == fk) {
+                            ix.setSupportingConstraint(cast<AbstractForeignConstraint>(foreignConstraints{i.key}));
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
         copyImpl(old);
     }
 
@@ -2690,8 +2720,9 @@ AbstractIndex ix = table.renameIndex("uk_table_name", "unique_table_name");
         @param old_name the current name of the index
         @param new_name the new name for the index
         @param sql an optional reference to a list of strings to retrieve the SQL used to modify the table (only
-        executed if the table is already in the database); a database that cannot rename an index drops it and
-        creates it under the new name, which takes two statements
+        executed if the table is already in the database); an index that the database cannot rename
+        (@ref SqlUtil::AbstractIndex::supportsRename() "AbstractIndex::supportsRename()") is renamed in the table's
+        description only, and keeps its name in the database, and the list is empty
         @return the index object that was updated
 
         @throw INDEX-ERROR if the old index does not exist in the table or if the new index name already exists
@@ -2713,12 +2744,13 @@ AbstractIndex ix = table.renameIndex("uk_table_name", "unique_table_name");
         ix = indexes{old_name};
         rename = sub () { indexes.renameKey(old_name, new_name); };
 
-        # rename index in table if the table already exists in the DB
-        softlist<string> rename_sql = ix.getRenameSql(getSqlName(), new_name);
+        # rename index in table if the table already exists in the DB; an index that the database cannot rename is
+        # renamed in the description of the table only, and keeps its name in the database
+        softlist<string> rename_sql = ix.supportsRename() ? ix.getRenameSql(getSqlName(), new_name) : ();
         sql = rename_sql;
         execSql(rename_sql);
 
-        ix.name = new_name;
+        ix.rename(new_name);
 
         # rename index in container structure
         rename();
@@ -11130,8 +11162,11 @@ list<auto> l = table.getAlignSql(table2);
             if (indexes.hasKey(key)) {
                 AbstractIndex ix = indexes{key};
                 string value = i.getValue();
-                l += AbstractDatabase::doCallback(opt, ix.getRenameSql(getSqlName(), value),
-                    AbstractDatabase::AC_Rename, "index", ix.name, name, value);
+                # an index that the database cannot rename keeps its name in the database
+                if (ix.supportsRename()) {
+                    l += AbstractDatabase::doCallback(opt, ix.getRenameSql(getSqlName(), value),
+                        AbstractDatabase::AC_Rename, "index", ix.name, name, value);
+                }
                 renameIndexUnlocked(ix, value);
             }
         }
@@ -11143,9 +11178,12 @@ list<auto> l = table.getAlignSql(table2);
                     && t.indexes
                     && (*AbstractIndex other = t.indexes.findEqual(ix))
                     && !indexes.hasKey(other.name)) {
-                    # rename index
-                    l += AbstractDatabase::doCallback(opt, ix.getRenameSql(getSqlName(), other.name),
-                        AbstractDatabase::AC_Rename, "index", ix.name, name, other.name);
+                    # rename index; one that the database cannot rename is the template's index under its name in
+                    # the database
+                    if (ix.supportsRename()) {
+                        l += AbstractDatabase::doCallback(opt, ix.getRenameSql(getSqlName(), other.name),
+                            AbstractDatabase::AC_Rename, "index", ix.name, name, other.name);
+                    }
                     renameIndexUnlocked(ix, other.name);
                 }
             }
@@ -11393,8 +11431,11 @@ list<auto> l = table.getAlignSql(table2);
                         AbstractDatabase::AC_Add, "index", ix.name, name);
                 } else if (!indexesEqualImpl(ix, indexes{ix.name}, index_expressions_available)) {
                     l += getDropReferencingForeignConstraintsSqlUnlocked(indexes{ix.name}.columns.keys(), opt);
-                    l += AbstractDatabase::doCallback(opt, ix.getRecreateSql(ds, getSqlName(), opt),
-                        AbstractDatabase::AC_Recreate, "index", ix.name, name);
+                    # an index that has another name in the database is dropped by that name
+                    AbstractIndex current = indexes{ix.name};
+                    l += AbstractDatabase::doCallback(opt, ix.getRecreateSql(ds, getSqlName(), opt,
+                        current.getDbName() != ix.name ? current : NOTHING), AbstractDatabase::AC_Recreate, "index",
+                        ix.name, name);
                 } else
                     AbstractDatabase::doOkCallback(opt, AbstractDatabase::AC_Unchanged, "index", ix.name, name);
             }
@@ -11603,7 +11644,8 @@ list<auto> l = table.getAlignSql(table2);
     private renameIndexUnlocked(AbstractIndex ix, string new_name) {
         string old_name = ix.name;
         indexes.renameKey(old_name, new_name);
-        ix.name = new_name;
+        # an index that the database cannot rename keeps its name in the database
+        ix.rename(new_name);
 
         # if constraints are linked to indexes, then rename any matching constraint as well
         if (constraintsLinkedToIndexesImpl()) {

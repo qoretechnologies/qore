@@ -229,9 +229,10 @@ module Sqlite3SqlUtil {
       @ref sqlite3_foreign_constraints
     - fixed renaming an index, as table alignment does for an index with the definition of the template's index
       under another name: the index was dropped and not created again, as the SQL that drops it and creates it under
-      the new name was one string, of which the \c sqlite3 driver runs only the first statement; it is now two
-      statements (see @ref SqlUtil::AbstractIndex::getRenameSql() "AbstractIndex::getRenameSql()"), and the index is
-      created with the collations of its columns
+      the new name was one string, of which the \c sqlite3 driver runs only the first statement; SQLite cannot rename
+      an index, so such an index is now taken for the template's index and kept under its name in the database,
+      without rebuilding it, and is dropped by that name (see
+      @ref SqlUtil::AbstractIndex::supportsRename() "AbstractIndex::supportsRename()")
     - fixed the SQL that creates an index with a column collation, which had an empty \c COLLATE clause
     - fixed table descriptions with a unique constraint or a unique index, which raised a bare \c UNSUPPORTED when
       they were set up, so that such a table could be neither created nor aligned; a unique constraint is now created
@@ -350,21 +351,28 @@ public namespace Sqlite3SqlUtil {
             return True;
         }
 
-        #! returns the SQL statements that rename the index in the database
-        /** SQLite cannot rename an index, so the index is dropped and created under the new name, with its columns
-            and their collations, in two statements
+        #! returns no SQL: SQLite cannot rename an index
+        /** An index is never dropped and created again under another name; see @ref supportsRename()
         */
         softlist<string> getRenameSql(string table_name, string new_name) {
-            return (
-                getDropSql(table_name),
-                sprintf("create %sindex %s on %s (%s)", unique ? "unique " : "", new_name, table_name,
-                    (foldl $1 + ", " + $2, getColumnCollationList())),
-            );
+            return ();
         }
 
-        #! returns a string that can be used to drop the index from the table
+        #! returns @ref False "False": SQLite cannot rename an index
+        /** Table alignment takes an index with the definition of a template index under another name for the
+            template's index, and keeps it under its name in the database, which the SQL that drops it uses (see
+            @ref SqlUtil::AbstractIndex::supportsRename() "AbstractIndex::supportsRename()" and
+            @ref SqlUtil::AbstractIndex::getDbName() "AbstractIndex::getDbName()")
+
+            @since Sqlite3SqlUtil 1.2
+        */
+        bool supportsRename() {
+            return False;
+        }
+
+        #! returns a string that can be used to drop the index from the table, by its name in the database
         string getDropSql(string table_name) {
-            return sprintf("drop index %s", name);
+            return sprintf("drop index %s", getDbName());
         }
     }
 

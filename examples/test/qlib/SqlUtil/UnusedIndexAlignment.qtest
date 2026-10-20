@@ -135,21 +135,24 @@ class UnusedIndexAlignmentTest inherits QUnit::Test {
 %ifndef NO_ODBC
         {
             OfflineDatasource ds("odbc:user/pass@db", "WI-V3.0.10 Firebird 3.0", "firebird");
-            assertEq((
-                "drop index ix_uia_ren",
-                "create index ix_uia_new on uia_t (b, a)",
-                "drop index ix_uia_old",
-            ), memoryAlignSql(AbstractTable sub () { return new XdbcFirebirdTable(ds, "uia_t"); }), "Firebird");
+            # Firebird cannot rename an index: the index with the template index's definition keeps its name
+            assertEq(("drop index ix_uia_old",),
+                memoryAlignSql(AbstractTable sub () { return new XdbcFirebirdTable(ds, "uia_t"); }), "Firebird");
+            # an index renamed with index_map and changed in the template is dropped by its name in the database
+            AbstractTable current = new XdbcFirebirdTable(ds, "uia_t");
+            current.setupTable(parentDescription({"ix_uia_old": {"columns": ("b",)}}));
+            AbstractTable template = new XdbcFirebirdTable(ds, "uia_t");
+            template.setupTable(parentDescription({"ix_uia_new": {"columns": ("b", "a")}}));
+            assertEq(("drop index ix_uia_old", "create index ix_uia_new on uia_t (b, a)"),
+                current.getAlignSql(template, {"index_map": {"ix_uia_old": "ix_uia_new"}}), "Firebird index_map");
         }
 %endif
 %ifndef NO_SQLITE3
         {
             Datasource ds("sqlite3:@:memory:");
-            assertEq((
-                "drop index ix_uia_ren",
-                "create index ix_uia_new on uia_t (b, a)",
-                "drop index ix_uia_old",
-            ), memoryAlignSql(AbstractTable sub () { return new Sqlite3Table(ds, "uia_t"); }), "SQLite");
+            # SQLite cannot rename an index: the index with the template index's definition keeps its name
+            assertEq(("drop index ix_uia_old",),
+                memoryAlignSql(AbstractTable sub () { return new Sqlite3Table(ds, "uia_t"); }), "SQLite");
         }
 %endif
     }

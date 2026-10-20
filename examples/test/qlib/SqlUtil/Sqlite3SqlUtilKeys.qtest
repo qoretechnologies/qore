@@ -41,7 +41,7 @@ class Sqlite3KeysTest inherits QUnit::Test {
         addTestCase("a unique constraint is added to an existing table as a unique index",
             \existingUniqueConstraintChanges());
         addTestCase("a unique index of an existing table is added, changed and dropped", \uniqueIndexes());
-        addTestCase("an index is renamed by dropping it and creating it", \indexRenames());
+        addTestCase("an index under another name is the template's, kept under its name", \indexRenames());
         addTestCase("a unique key that a foreign constraint references is aligned in either order of the tables",
             \referencedKeys());
         addTestCase("upsert uses the key", \upsert());
@@ -470,11 +470,11 @@ class Sqlite3KeysTest inherits QUnit::Test {
     }
 
     #! Aligns the table to a template with the description, runs the SQL in the database and returns it
-    private list<auto> alignTable(AbstractDatasource ds, string table, hash<auto> desc) {
+    private list<auto> alignTable(AbstractDatasource ds, string table, hash<auto> desc, *hash<auto> opt) {
         Sqlite3Table template(ds, table);
         template.setupTable(desc);
         Sqlite3Table current(ds, table);
-        list<auto> sql = current.getAlignSql(template);
+        list<auto> sql = current.getAlignSql(template, opt);
         map ds.exec($1), sql;
         return sql;
     }
@@ -679,7 +679,8 @@ class Sqlite3KeysTest inherits QUnit::Test {
         assertEq(0, dropped.getConstraints().size());
     }
 
-    #! SQLite cannot rename an index: the index is dropped and created under the new name, in two statements
+    #! SQLite cannot rename an index: an index with the definition of the template's under another name is the
+    #! template's index, kept under its name without being rebuilt, and dropped by that name
     indexRenames() {
         Datasource ds = getDatasource();
         on_exit ds.rollback();
@@ -688,32 +689,42 @@ class Sqlite3KeysTest inherits QUnit::Test {
         ds.exec("create index ix_renamed_old on ix_renamed (y collate nocase, x)");
         hash<auto> desc = {"columns": {"x": {"native_type": "integer"}, "y": {"native_type": "text"}},
             "indexes": {"ix_renamed_new": {"columns": ("y", "x"), "unique": False}}};
-        # an index with the definition of the template's index under another name is renamed, with its collation
-        assertEq(("drop index ix_renamed_old", "create index ix_renamed_new on ix_renamed (y COLLATE nocase, x)"),
-            alignTable(ds, "ix_renamed", desc));
-        hash<auto> indexes = map {$1.name: $1}, (new Sqlite3Table(ds, "ix_renamed")).getIndexes().iterator();
-        assertEq(("ix_renamed_new",), keys indexes, "both statements were run");
-        assertEq({"y": "nocase"}, cast<Sqlite3Index>(indexes.ix_renamed_new).collations);
+        # an index with the definition of the template's index under another name needs no SQL, and keeps its name
+        assertEq((), alignTable(ds, "ix_renamed", desc));
+        assertEq(("ix_renamed_old",), keys (new Sqlite3Table(ds, "ix_renamed")).getIndexes().getHash());
         assertEq((), alignTable(ds, "ix_renamed", desc));
 
-        # a unique index is renamed with its unique constraint
+        # a unique index, with its unique constraint
         ds.exec("create unique index ui_renamed_old on ix_renamed (x)");
         hash<auto> unique_desc = desc;
         unique_desc.indexes.ui_renamed_new = {"columns": ("x",), "unique": True};
-        assertEq(("drop index ui_renamed_old", "create unique index ui_renamed_new on ix_renamed (x)"),
-            alignTable(ds, "ix_renamed", unique_desc));
-        assertEq({"ui_renamed_new": {"columns": ("x",)}},
+        assertEq((), alignTable(ds, "ix_renamed", unique_desc));
+        assertEq({"ui_renamed_old": {"columns": ("x",)}},
             (new Sqlite3Table(ds, "ix_renamed")).getDescriptionHash().unique_constraints);
         assertEq((), alignTable(ds, "ix_renamed", unique_desc));
 
-        # renameIndex() gives and runs both statements
+        # an index renamed with index_map and changed in the template is dropped by its name in the database
+        hash<auto> changed = unique_desc;
+        changed.indexes.ix_renamed_new.columns = ("x", "y");
+        assertEq(("drop index ix_renamed_old", "create index ix_renamed_new on ix_renamed (x, y)"),
+            alignTable(ds, "ix_renamed", changed, {"index_map": {"ix_renamed_old": "ix_renamed_new"}}));
+        assertEq(("ix_renamed_new", "ui_renamed_old"),
+            sort(keys (new Sqlite3Table(ds, "ix_renamed")).getIndexes().getHash()));
+        assertEq((), alignTable(ds, "ix_renamed", changed));
+
+        # renamed with index_map, and not in the template: it is dropped by its name in the database
+        assertEq(("drop index ui_renamed_old",), alignTable(ds, "ix_renamed", desc + {"indexes": changed.indexes
+            - "ui_renamed_new"}, {"index_map": {"ui_renamed_old": "ui_renamed_tmp"}}));
+
+        # renameIndex() renames the index in the table's description only; it keeps its name in the database
         Sqlite3Table table(ds, "ix_renamed");
         softlist<string> sql;
-        table.renameIndex("ix_renamed_new", "ix_renamed_newer", \sql);
-        assertEq(("drop index ix_renamed_new", "create index ix_renamed_newer on ix_renamed (y COLLATE nocase, x)"),
-            sql);
-        assertEq(("ix_renamed_newer", "ui_renamed_new"),
-            sort(keys (new Sqlite3Table(ds, "ix_renamed")).getDescriptionHash().indexes));
+        AbstractIndex ix = table.renameIndex("ix_renamed_new", "ix_renamed_newer", \sql);
+        assertEq((), sql);
+        assertEq("ix_renamed_newer", ix.getName());
+        assertEq("ix_renamed_new", ix.getDbName());
+        assertEq("drop index ix_renamed_new", ix.getDropSql(table.getSqlName()));
+        assertEq(("ix_renamed_new",), keys (new Sqlite3Table(ds, "ix_renamed")).getIndexes().getHash());
     }
 
     #! Creates a parent table with an index on code and a child table whose foreign constraint references it

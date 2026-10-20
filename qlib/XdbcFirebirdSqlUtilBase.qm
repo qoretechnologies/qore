@@ -91,8 +91,10 @@ module XdbcFirebirdSqlUtilBase {
 
     @subsection xdbcfirebirdsqlutilbasev_0_2 XdbcFirebirdSqlUtilBase Module v0.2
     - fixed renaming an index, as table alignment does for an index with the definition of the template's index
-      under another name: the SQL that drops the index and creates it under the new name was two statements in one
-      string; it is now two strings (see @ref SqlUtil::AbstractIndex::getRenameSql() "AbstractIndex::getRenameSql()")
+      under another name: the SQL that dropped the index and created it under the new name was two statements in one
+      string; Firebird cannot rename an index, so such an index is now taken for the template's index and kept under
+      its name in the database, without rebuilding it, and is dropped by that name (see
+      @ref SqlUtil::AbstractIndex::supportsRename() "AbstractIndex::supportsRename()")
     - fixed table alignment of a unique index with other columns, which dropped a unique constraint of the same
       name, dropped the index, created it and added the constraint again: the index is now dropped once and created
       once, and only the foreign constraints that reference it are dropped and added again around it
@@ -157,21 +159,28 @@ public namespace XdbcFirebirdSqlUtilBase {
             return True;
         }
 
-        #! returns the SQL statements that rename the index in the database
-        /** Firebird cannot rename an index, so the index is dropped and created under the new name, in two
-            statements
+        #! returns no SQL: Firebird cannot rename an index
+        /** An index is never dropped and created again under another name; see @ref supportsRename()
         */
         softlist<string> getRenameSql(string table_name, string new_name) {
-            return (
-                getDropSql(table_name),
-                sprintf("create %sindex %s on %s (%s)", unique ? "unique " : "", new_name, table_name,
-                    (foldl $1 + ", " + $2, columns.getSqlColumnNameIterator())),
-            );
+            return ();
         }
 
-        #! returns a string that can be used to drop the index from the table
+        #! returns @ref False "False": Firebird cannot rename an index
+        /** Table alignment takes an index with the definition of a template index under another name for the
+            template's index, and keeps it under its name in the database, which the SQL that drops it uses (see
+            @ref SqlUtil::AbstractIndex::supportsRename() "AbstractIndex::supportsRename()" and
+            @ref SqlUtil::AbstractIndex::getDbName() "AbstractIndex::getDbName()")
+
+            @since XdbcFirebirdSqlUtilBase 0.2
+        */
+        bool supportsRename() {
+            return False;
+        }
+
+        #! returns a string that can be used to drop the index from the table, by its name in the database
         string getDropSql(string table_name) {
-            return sprintf("drop index %s", name);
+            return sprintf("drop index %s", getDbName());
         }
     }
 

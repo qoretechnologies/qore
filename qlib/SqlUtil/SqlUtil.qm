@@ -173,10 +173,17 @@ module SqlUtil {
       (@ref SqlUtil::AbstractPrimaryKey::supportsName() "AbstractPrimaryKey::supportsName()")
     - API change: @ref SqlUtil::AbstractIndex::getRenameSql() "AbstractIndex::getRenameSql()" returns a list of
       SQL strings instead of one string, and @ref SqlUtil::AbstractTable::renameIndex() "AbstractTable::renameIndex()"
-      returns the SQL in a list in its optional reference argument: a database that cannot rename an index drops it
-      and creates it under the new name, in two statements, which the SQLite and Firebird drivers gave in one string;
-      as the \c sqlite3 driver runs one statement at a time, renaming an index on SQLite, as table alignment does for
-      an index that has another name than the template's, dropped the index and did not create it again
+      returns the SQL in a list in its optional reference argument; the SQLite and Firebird drivers gave the SQL that
+      drops an index and creates it under the new name in one string, and as the \c sqlite3 driver runs one statement
+      at a time, renaming an index on SQLite, as table alignment does for an index that has another name than the
+      template's, dropped the index and did not create it again
+    - an index is renamed, never dropped and created again under another name: an index that the database cannot
+      rename (@ref SqlUtil::AbstractIndex::supportsRename() "AbstractIndex::supportsRename()"), as on SQLite and
+      Firebird, with the definition of a template index under another name is taken for the template's index by
+      table alignment, and by @ref SqlUtil::AbstractTable::renameIndex() "AbstractTable::renameIndex()", and kept
+      under its name in the database without being rebuilt; the table's description keeps that name
+      (@ref SqlUtil::AbstractIndex::getDbName() "AbstractIndex::getDbName()"), by which the index is dropped, as when
+      it is recreated with other columns, so the next alignment needs no SQL
     - table alignment drops an index that the template does not have again, as it did before SqlUtil 1.7.2: an
       index that was added to the table by hand, or that is left from an older version of the schema, is dropped
       when the table is aligned; since SqlUtil 1.7.2, such an index was kept unless it was the index of a
@@ -9068,6 +9075,9 @@ AbstractIndex ix = indexes.pk_jobs;
 
             #! Any foreign constraint that this index supports
             *AbstractForeignConstraint foreign_constraint;
+
+            #! the name of the index in the database, when it is not the index's name (see @ref getDbName())
+            *string db_name;
         }
 
         #! creates the object from the name, a unique flag, and a hash of column information
@@ -9082,6 +9092,51 @@ AbstractIndex ix = indexes.pk_jobs;
             return name;
         }
 
+        #! returns the name of the index in the database
+        /** This is the index's name, unless the database cannot rename the index (@ref supportsRename()) and the
+            index was renamed in the description of its table only (@ref rename()), as table alignment does for an
+            index with the definition of a template index under another name: the SQL that drops the index names it
+            by this name
+
+            @return the name of the index in the database
+
+            @since SqlUtil 3.11.0
+        */
+        string getDbName() {
+            return db_name ?? name;
+        }
+
+        #! renames the index in the description of its table
+        /** An index that the database cannot rename (@ref supportsRename()) keeps its name in the database, which
+            @ref getDbName() returns, so that the index is dropped by that name
+
+            @param new_name the new name of the index
+
+            @since SqlUtil 3.11.0
+        */
+        rename(string new_name) {
+            if (!supportsRename() && !db_name) {
+                db_name = name;
+            }
+            name = new_name;
+        }
+
+        #! returns @ref True "True" if the database can rename the index
+        /** An index that the database cannot rename is never dropped and created again under another name: table
+            alignment takes an index with the definition of a template index under another name for the template's
+            index, and keeps it under its name in the database (@ref getDbName()), and
+            @ref SqlUtil::AbstractTable::renameIndex() "AbstractTable::renameIndex()" renames it in the description
+            of the table only
+
+            @return @ref True "True" if the database can rename the index (the default), @ref False "False" if not,
+            in which case @ref getRenameSql() returns no SQL
+
+            @since SqlUtil 3.11.0
+        */
+        bool supportsRename() {
+            return True;
+        }
+
         #! returns @ref True "True" if the constraint references the named column
         bool hasColumn(string cname) {
             return columns.hasKey(cname);
@@ -9090,9 +9145,9 @@ AbstractIndex ix = indexes.pk_jobs;
         #! returns a string that can be used to create the index in the database
         abstract string getCreateSql(string table_name, *hash<auto> opt);
 
-        #! returns a string that can be used to drop the index from the database
+        #! returns a string that can be used to drop the index from the database, by its name in the database
         string getDropSql(string table_name) {
-            return sprintf("drop index %s", name);
+            return sprintf("drop index %s", getDbName());
         }
 
         #! returns @ref True "True" if the argument is equal to the current index, @ref False "False" if not
@@ -9121,8 +9176,8 @@ AbstractIndex ix = indexes.pk_jobs;
         abstract bool equalImpl(AbstractIndex ix);
 
         #! returns a list of SQL strings that rename the index in the database
-        /** A database that cannot rename an index drops it and creates it under the new name, which takes two
-            statements; each element of the list is one statement
+        /** Each element of the list is one statement; a database that cannot rename an index
+            (@ref supportsRename()) returns no SQL
 
             @param table_name the name of the table
             @param new_name the new name of the index
@@ -9205,7 +9260,17 @@ AbstractIndex ix = indexes.pk_jobs;
         }
 
         #! returns a list of strings to drop and recreate the current index; if there are dependent constraints, the list contains commands to disable the constraints before dropping the index and also contains commands to re-enable the contraints after re-creating the index
-        list<auto> getRecreateSql(AbstractDatasource ds, string table_name, *hash<auto> opt) {
+        /** @param ds the datasource of the tables of the dependent constraints
+            @param table_name the name of the table
+            @param opt options for the SQL that creates the index
+            @param current the index in the database that is recreated, if it has another name in the database
+            (@ref getDbName()); it is dropped by that name
+
+            @return the SQL that recreates the index
+
+            @since SqlUtil 3.11.0 the \a current parameter
+        */
+        list<auto> getRecreateSql(AbstractDatasource ds, string table_name, *hash<auto> opt, *AbstractIndex current) {
             list l = ();
             list enl;
             # get drop SQL and disable any dependent constraints plus a list of strings to re-enable the constraints
@@ -9216,7 +9281,7 @@ AbstractIndex ix = indexes.pk_jobs;
             }
 
             ## drop current index
-            l += getDropSql(table_name);
+            l += current ? current.getDropSql(table_name) : getDropSql(table_name);
 
             # add new index to table
             l += getCreateSql(table_name, opt);
