@@ -590,6 +590,42 @@ void WebSocketClientPollOperationPriv::queueSendClose(uint16_t code, const char*
     }
 }
 
+void WebSocketClientPollOperationPriv::requestClose(uint16_t code, const char* reason, ExceptionSink* xsink) {
+    // the request goes through the send queue: the thread driving the operation takes it in order with the frames
+    // queued before it and starts the close handshake there; see applyCloseRequest()
+    ReferenceHolder<QoreHashNode> request(new QoreHashNode(autoTypeInfo), xsink);
+    request->setKeyValue("close_code", static_cast<int64>(code), xsink);
+    request->setKeyValue("close_reason", new QoreStringNode(reason ? reason : ""), xsink);
+    if (*xsink) {
+        return;
+    }
+    send_queue->push(xsink, request.release());
+    if (!*xsink) {
+        close_requested.store(true, std::memory_order_release);
+    }
+}
+
+void WebSocketClientPollOperationPriv::applyCloseRequest(const QoreHashNode* request, ExceptionSink* xsink) {
+    // a close already in progress (for example the echo of a close the peer started) or a closed connection
+    // makes the request moot
+    if (ws_state != WsState::CONNECTED) {
+        return;
+    }
+    uint16_t code = static_cast<uint16_t>(request->getKeyValue("close_code").getAsBigInt());
+    QoreStringValueHelper reason(request->getKeyValue("close_reason"));
+    close_initiated = true;
+    close_code = code;
+    close_reason = reason->c_str();
+
+    // Client->server: MUST mask
+    SimpleRefHolder<BinaryNode> frame(WebSocketFrameEncoder::encodeClose(code, close_reason.c_str(), true));
+    if (!pending_send) {
+        pending_send = new BinaryNode();
+    }
+    pending_send->append(frame->getPtr(), frame->size());
+    ws_state = WsState::CLOSING;
+}
+
 QoreValue WebSocketClientPollOperationPriv::getReceivedFrame(ExceptionSink* xsink) {
     if (recv_queue->empty()) {
         return QoreValue();
@@ -628,6 +664,15 @@ void WebSocketClientPollOperationPriv::drainSendQueue(ExceptionSink* xsink) {
         }
         if (timed_out || val.isNothing()) {
             break;
+        }
+        if (val.getType() == NT_HASH) {
+            // a close request from requestClose(): its close frame follows the frames queued before it
+            applyCloseRequest(val.get<const QoreHashNode>(), xsink);
+            val.discard(xsink);
+            if (*xsink) {
+                return;
+            }
+            continue;
         }
         if (val.getType() == NT_BINARY) {
             const BinaryNode* bin = val.get<const BinaryNode>();
@@ -1013,14 +1058,17 @@ nothing WebSocketClientPollOperationBase::sendRawFrame(binary frame_data) [flags
 
 //! Initiates the close handshake with client masking
 /** Sends a masked WebSocket CLOSE frame with the given code and reason.
-    Transitions the state to CLOSING.
     Thread-safe: can be called from any thread.
+
+    The close is queued with the frames to send: the operation's next step sends the frames queued before it, then
+    the CLOSE frame.  @ref getState() reports \c "closing" from the call on; a call made when the connection is
+    already closing or closed has no effect.
 
     @param code the close code (default 1000 = normal closure)
     @param reason the close reason string (default empty)
 */
 nothing WebSocketClientPollOperationBase::sendClose(int code = 1000, string reason = "") [flags=NAMED_ARGS] {
-    priv->queueSendClose(static_cast<uint16_t>(code), reason->c_str(), xsink);
+    priv->requestClose(static_cast<uint16_t>(code), reason->c_str(), xsink);
 }
 
 //! Gets the next received frame (non-blocking)

@@ -55,6 +55,7 @@ public class WebSocketClientPollOperationTest inherits QUnit::Test {
         addTestCase("ping/pong", \pingPongTest());
         addTestCase("close handshake", \closeHandshakeTest());
         addTestCase("poll state machine", \pollStateMachineTest());
+        addTestCase("repeated close request", \repeatedCloseTest());
         addTestCase("multiple messages", \multipleMessagesTest());
         addTestCase("controller integration", \controllerIntegrationTest());
         addTestCase("concurrent send via channel", \concurrentSendTest());
@@ -235,6 +236,24 @@ public class WebSocketClientPollOperationTest inherits QUnit::Test {
 
         drivePollUntilGoal(poll_op);
         assertTrue(poll_op.goalReached(), "goal reached");
+    }
+
+    #! A close requested while a close is already in progress is ignored
+    /** sendClose() queues the request for the thread that drives the operation, which starts the close handshake
+        with the first request; a later request finds the operation closing and changes nothing.
+    */
+    repeatedCloseTest() {
+        HTTPClient hc = wsHandshake();
+        WebSocketClientPollOperation poll_op(hc, "http1", 0, NOTHING, 15s, logger);
+
+        poll_op.sendClose(WSCC_NormalClosure, "first");
+        poll_op.sendClose(WSCC_GoingAway, "second");
+        assertEq("closing", poll_op.getState(), "the operation is closing after the first request");
+
+        drivePollUntilGoal(poll_op);
+        assertEq("closed", poll_op.getState(), "the close handshake completes");
+        assertEq(WSCC_NormalClosure, poll_op.getCloseCode(), "the first request's close code is sent");
+        assertEq("first", poll_op.getCloseReason(), "the first request's close reason is sent");
     }
 
     #! Test multiple messages in sequence
