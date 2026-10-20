@@ -90,6 +90,25 @@ module MysqlSqlUtil {
     where a trigger will set a default value for a column when a NULL is inserted, MySQL will raise an error if there is a NOT NULL
     constraint on the column.
 
+    @subsection mysql_alignment_limits Table Alignment Limits on MySQL
+
+    MySQL needs an index on the columns of every foreign constraint, and creates one, with the name of the
+    foreign constraint, for a foreign constraint whose columns have none.  Table alignment
+    (@ref SqlUtil::AbstractTable::getAlignSql() "AbstractTable::getAlignSql()") keeps such an index as the index of
+    its foreign constraint, and drops any other index that the template does not have, with these consequences:
+    - an index with another name than its foreign constraint that the template does not have is dropped, and MySQL
+      refuses to drop it while it is the only index on the columns of a foreign constraint that the template keeps
+      (error 1553: <em>Cannot drop index '...': needed in a foreign key constraint</em>); add the index to the
+      template, or give the template another index on the columns of the foreign constraint
+    - MySQL does not drop the index that it created for a foreign constraint when the foreign constraint is dropped:
+      the alignment that drops a foreign constraint that the template does not have keeps its index, and the next
+      alignment drops it as an index that the template does not have
+    - MySQL cannot rename a foreign constraint: a foreign constraint with the definition of the template's under
+      another name is kept under its name, as the template's, and is never dropped and added again (see
+      @ref SqlUtil::AbstractConstraint::supportsRename() "AbstractConstraint::supportsRename()")
+    - an index and a unique constraint, which is a unique index in MySQL, are renamed with \c RENAME \c INDEX, which
+      needs MySQL 5.7 or MariaDB 10.5.2 or later
+
     @subsection mysql_partitioning_select Partition Support in Selects
 
     %MysqlSqlUtil advertises @ref SqlUtil::AbstractTable::supportsPartitionRead() "supportsPartitionRead()" and

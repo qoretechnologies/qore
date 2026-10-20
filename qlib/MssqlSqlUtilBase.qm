@@ -113,6 +113,20 @@ module MssqlSqlUtilBase {
     @ref SqlUtil::AbstractTable::ColumnDescOptions "column description option" with the native Mssql type name
     instead (under the \c "driver" and \c "Mssql" keys for schemas supporting multiple databases).
 
+    @subsection mssql_unique_indexes Unique Indexes and Unique Constraints
+
+    A unique index of a table description on SQL Server also gets a unique constraint of the same name in the
+    description, which is the index, as on MySQL: the driver reports that a unique index creates a unique constraint.
+    SQL Server's <tt>CREATE UNIQUE INDEX</tt> creates no constraint, however, so a unique index read from the
+    database has none, and table alignment creates, recreates and drops a unique index of a template as an index
+    only: the constraint is never dropped or added around it (see
+    @ref MssqlSqlUtilBase::MssqlUniqueConstraint::getDisableReenableSql() "MssqlUniqueConstraint::getDisableReenableSql()").
+    A unique constraint added with <tt>ALTER TABLE ... ADD CONSTRAINT ... UNIQUE</tt> creates an index of its name,
+    which is read from the database as the constraint, not as an index.  A foreign constraint can reference the
+    columns of either; one that references a unique index is described with its referenced columns, and a unique
+    index that a foreign constraint references is dropped or recreated after the foreign constraint is dropped in a
+    schema alignment.
+
     @subsection MssqlSqlUtilBasev11 MssqlSqlUtilBase v1.1
     - added the size of the default schema of the connection's user (\c SCHEMA_NAME(); see
       @ref SqlUtil::AbstractDatabase::getCurrentSchemaPhysicalSize() "AbstractDatabase::getCurrentSchemaPhysicalSize()")
