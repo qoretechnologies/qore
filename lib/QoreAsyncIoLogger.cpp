@@ -134,12 +134,13 @@ void qore_async_io_logger_cleanup() {
 #if defined(DEBUG) || defined(DEBUG_ASYNC_IO)
 
 bool qore_async_io_trace_enabled() {
-    static int enabled = -1;
-    if (enabled < 0) {
+    // initialized once, on the first call; the initialization of a local static is thread-safe, while the I/O threads
+    // of several controllers call this concurrently
+    static const bool enabled = [] () {
         const char* val = getenv("QORE_ASYNC_IO_TRACE");
-        enabled = (val && val[0] == '1') ? 1 : 0;
-    }
-    return enabled != 0;
+        return val && val[0] == '1';
+    }();
+    return enabled;
 }
 
 // the operating system's ID of the calling thread
