@@ -18,16 +18,7 @@
 %exec-class HttpClientIoSandboxTest
 
 #! Makes a request for a sandboxed Program as module code does: this function runs in an unsandboxed Program
-auto sub sandbox_request(string url, string path, string protocol, string api, int retries) {
-    HttpClientIo::HttpClientConnectionManager mgr(cast<hash<HttpClientIo::HttpClientConnectionManagerOptions>>({
-        "protocol": protocol,
-        "enable_http3": True,
-        "accept_all_certs": True,
-        "connect_timeout": 30s,
-        "request_timeout": 60s,
-        "max_request_retries": retries,
-    }));
-    on_exit mgr.closeAll();
+auto sub sandbox_request(RecordingManager mgr, string url, string path, string api) {
     switch (api) {
         case "REST": {
             RestClientIo rest({"url": url, "data": "text"}, mgr);
@@ -45,6 +36,43 @@ auto sub sandbox_request(string url, string path, string protocol, string api, i
             return mgr.requestAsync(url, "GET", path).get(60s).body;
     }
     throw "TEST-ERROR", sprintf("unknown API %y", api);
+}
+
+#! Records the connections a connection manager makes and the origins they are made to
+/** Every new connection, of a forced protocol or of either protocol of a race between HTTP/3 and HTTP/2, is
+    submitted to the I/O controller; a connection that wins a race is submitted again, so each connection is recorded
+    once
+*/
+class RecordingManager inherits HttpClientIo::HttpClientConnectionManager {
+    private {
+        Mutex m();
+        #! the connections made, in the order they were started: "key" (the origin) and "conn"
+        list<hash<auto>> records();
+        #! the IDs of the connections recorded
+        hash<string, bool> ids();
+    }
+
+    constructor(hash<HttpClientIo::HttpClientConnectionManagerOptions> opts)
+            : HttpClientIo::HttpClientConnectionManager(opts) {
+    }
+
+    #! Returns the protocols of the connections made to the given origin, in the order they were started
+    list<string> getProtocols(string key) {
+        AutoLock al(m);
+        return map $1.conn.getProtocol(), records, $1.key == key;
+    }
+
+    private submitConnectionToController(string key, HttpClientIo::HttpClientConnection conn, bool initial = True) {
+        {
+            AutoLock al(m);
+            string id = conn.getConnectionId().toString();
+            if (!ids{id}) {
+                ids{id} = True;
+                records += {"key": key, "conn": conn};
+            }
+        }
+        HttpClientIo::HttpClientConnectionManager::submitConnectionToController(key, conn, initial);
+    }
 }
 
 #! Redirects "/redirect" to the location set and counts the requests for "/target"
@@ -134,14 +162,21 @@ public class HttpClientIoSandboxTest inherits QUnit::Test {
         int targets = handler.targets.getCount();
         foreach hash<auto> t in (requestCases()) {
             string msg = sprintf("%s %s", t.protocol, t.api);
-            assertDenied(\p.callFunction(), ("run", url, "/redirect", t.protocol, t.api, 0), msg);
+            {
+                RecordingManager mgr = getManager(t.protocol, 1);
+                on_exit mgr.closeAll();
+                assertDenied(\p.callFunction(), ("run", mgr, url, "/redirect", t.api), msg);
+                assertNotRetried(mgr, msg);
+            }
             # without the sandbox, the redirect is followed
-            assertEq("reached", sandbox_request(url, "/redirect", t.protocol, t.api, 0), msg);
+            RecordingManager mgr = getManager(t.protocol, 1);
+            on_exit mgr.closeAll();
+            assertEq("reached", sandbox_request(mgr, url, "/redirect", t.api), msg);
             assertEq(++targets, handler.targets.getCount(), msg + ": only the unsandboxed request reached B");
         }
     }
 
-    #! The sandbox denies connections to the server's port; a connection error is retried, and the retry is refused
+    #! The sandbox denies connections to the server's port: the denial is not retried as a connection error
     retryTest() {
         SandboxManager sm();
         sm.setNetworkDefaultPolicy(True);
@@ -151,8 +186,11 @@ public class HttpClientIoSandboxTest inherits QUnit::Test {
         int targets = handler.targets.getCount();
         foreach hash<auto> t in (requestCases()) {
             string msg = sprintf("%s %s", t.protocol, t.api);
-            assertDenied(\p.callFunction(), ("run", url, "/target", t.protocol, t.api, 1), msg);
+            RecordingManager mgr = getManager(t.protocol, 1);
+            on_exit mgr.closeAll();
+            assertDenied(\p.callFunction(), ("run", mgr, url, "/target", t.api), msg);
             assertEq(targets, handler.targets.getCount(), msg + ": the server was never reached");
+            assertNotRetried(mgr, msg);
         }
     }
 
@@ -172,21 +210,40 @@ public class HttpClientIoSandboxTest inherits QUnit::Test {
         Program p(PO_NO_CHILD_PO_RESTRICTIONS);
         p.setSandboxManager(sm);
         p.importFunction("sandbox_request");
-        p.parse("%modern\nauto sub run(string url, string path, string protocol, string api, int retries) { "
-            "return sandbox_request(url, path, protocol, api, retries); }", "http-client-io-sandbox-" + label);
+        p.parse("%modern\nauto sub run(object mgr, string url, string path, string api) { "
+            "return sandbox_request(mgr, url, path, api); }", "http-client-io-sandbox-" + label);
         return p;
     }
 
-    #! Asserts that the call fails because the sandbox denies the connection
+    #! Returns a connection manager that allows one retry of a failed connection
+    private RecordingManager getManager(string protocol, int retries) {
+        return new RecordingManager(cast<hash<HttpClientIo::HttpClientConnectionManagerOptions>>({
+            "protocol": protocol,
+            "enable_http3": True,
+            "accept_all_certs": True,
+            "connect_timeout": 30s,
+            "request_timeout": 60s,
+            "max_request_retries": retries,
+        }));
+    }
+
+    #! Asserts that the call fails because the sandbox denies the connection: the denial is raised as it is
     private assertDenied(code c, list<auto> args, string msg) {
         try {
             call_function_args(c, args);
             fail(msg + ": no exception raised");
         } catch (hash<ExceptionInfo> ex) {
-            # the denial is the error of the connection
-            assertEq("NETWORK-ACCESS-DENIED", ex.err == "NETWORK-ACCESS-DENIED" ? ex.err : ex.arg.err,
-                msg + ": " + ex.err + ": " + ex.desc);
+            assertEq("NETWORK-ACCESS-DENIED", ex.err, msg + ": " + ex.err + ": " + ex.desc);
             assertRegex(sprintf("port %d", port_b), ex.desc, msg);
+            # the argument is the error of the connection
+            assertEq("NETWORK-ACCESS-DENIED", ex.arg.err, msg);
         }
+    }
+
+    #! Asserts that no connection to server B was made again after the denial: one connection per protocol at most
+    private assertNotRetried(RecordingManager mgr, string msg) {
+        list<string> protocols = mgr.getProtocols(sprintf("127.0.0.1:%d", port_b));
+        assertTrue(protocols.size() > 0, msg + ": a connection to B was made");
+        assertEq(protocols.size(), (map {$1: True}, protocols).size(), msg + ": " + protocols.join(", "));
     }
 }

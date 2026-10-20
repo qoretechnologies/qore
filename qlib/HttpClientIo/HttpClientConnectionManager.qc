@@ -2763,16 +2763,20 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
         no longer surface the H3/QUIC handshake timeout while silently hiding that
         the H2/TCP attempt also failed.
 
-        A refused server certificate is reported as it is, as for a connection that
-        is not raced (see @ref HttpClientConnection::waitForReady()): a race in which
-        a protocol refused the certificate raises that protocol's
-        \c SOCKET-SSL-ERROR, whatever the other protocol's failure, so that the
-        refusal is neither retried nor hidden.
+        A denial of the @ref sandboxing "sandbox" or a refused server certificate is
+        reported as it is, as for a connection that is not raced (see
+        @ref HttpClientConnection::waitForReady()), whatever the other protocol's
+        failure, so that it is neither retried nor hidden: a denial if either protocol
+        was denied, else a certificate refusal; the HTTP/2 connection's error if both
+        were.
 
         @param h3conn the HTTP/3 candidate (closed here)
         @param h2conn the HTTP/2 candidate (closed here)
         @param key the host:port pool key
 
+        @throw NETWORK-ACCESS-DENIED the sandbox denied a protocol's connection; the argument is the connection's
+        error
+        @throw FILESYSTEM-ACCESS-DENIED the sandbox denied the file of a protocol's UNIX domain socket
         @throw SOCKET-SSL-ERROR a protocol refused the server certificate; the error of the HTTP/2 connection if both
         refused it; the argument is the connection's error, with \c ssl_verify_error in its \c arg key
         @throw SOCKET-CONNECT-ERROR the underlying TCP-refused error (fast-fail)
@@ -2787,12 +2791,17 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
         try { h3conn.close(); } catch () {}
         try { h2conn.close(); } catch () {}
 
-        # a refused certificate is never retried and never hidden behind the other protocol's failure
-        if (http_is_certificate_refusal(h2_err)) {
-            throw h2_err.err, h2_err.desc, h2_err;
+        # a sandbox denial or a refused certificate is never retried and never hidden behind the other protocol's
+        # failure
+        foreach *hash<auto> err in ((h2_err, h3_err)) {
+            if (http_is_sandbox_denial(err)) {
+                throw err.err, err.desc, err;
+            }
         }
-        if (http_is_certificate_refusal(h3_err)) {
-            throw h3_err.err, h3_err.desc, h3_err;
+        foreach *hash<auto> err in ((h2_err, h3_err)) {
+            if (http_is_certificate_refusal(err)) {
+                throw err.err, err.desc, err;
+            }
         }
 
         # Build a user-friendly error message reporting BOTH legs' underlying
@@ -2996,6 +3005,7 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
         @throw SOCKET-CONNECT-ERROR TCP refused (fast-fail; identical to the
         synchronous race)
         @throw SOCKET-SSL-ERROR a protocol refused the server certificate (see @ref heThrowConnectError())
+        @throw NETWORK-ACCESS-DENIED the sandbox denied a protocol's connection (see @ref heThrowConnectError())
         @throw HTTPCLIENT-CONNECT-ERROR neither protocol connected
 
         @note Winner / error / cache semantics are identical to the synchronous
@@ -3337,6 +3347,7 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
         @throw HTTPCLIENT-CONNECT-ERROR neither protocol connected
         @throw SOCKET-CONNECT-ERROR TCP was refused (fast-fail)
         @throw SOCKET-SSL-ERROR a protocol refused the server certificate (see @ref heThrowConnectError())
+        @throw NETWORK-ACCESS-DENIED the sandbox denied a protocol's connection (see @ref heThrowConnectError())
 
         @note Caller holds async_race_lock.
     */
@@ -3940,6 +3951,23 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
             || err == "HTTP3-LOCAL-CLOSE"         # we sent CONNECTION_CLOSE
             || err == "HTTP3-PEER-CLOSE"          # peer sent CONNECTION_CLOSE
             || err == "HTTP3-READ-ERROR";
+    }
+
+    #! Returns @ref True if the given connection error ends a request instead of being retried
+    /** A denial of the @ref sandboxing "sandbox" (\c NETWORK-ACCESS-DENIED, \c FILESYSTEM-ACCESS-DENIED) or a
+        server certificate refused by the verification (\c SOCKET-SSL-ERROR with \c ssl_verify_error in its exception
+        argument) would be denied or refused again: HttpClientIo raises such an error as it is, with the connection's
+        error as the exception argument, and does not retry the connection.  A client that drives its own connection
+        attempts must do the same.
+
+        @param err the error of a connection (see @ref HttpClientIo::HttpClientPollOperation::getError())
+
+        @return @ref True if the error is a sandbox denial or a certificate refusal
+
+        @since HttpClientIo 1.0
+    */
+    static bool isTerminalConnectionError(*hash<auto> err) {
+        return http_is_terminal_connection_error(err);
     }
 
     #! Static version of isConnectionError() for use by other classes

@@ -172,9 +172,11 @@ manager.closeAll();
       When both legs lose and HTTP/2 was refused via ALPN, the endpoint speaks
       neither HTTP/3 nor HTTP/2 and the race falls back to HTTP/1.1 instead of
       failing; the result is cached per host and re-probed periodically.
-      A server certificate refused by either leg ends the race with that leg's
-      \c SOCKET-SSL-ERROR, as for a single protocol, and is not retried, even if
-      the other leg failed for another reason.
+      A denial of the @ref sandboxing "sandbox" or a server certificate refused by
+      either leg ends the race with that leg's error (\c NETWORK-ACCESS-DENIED,
+      \c SOCKET-SSL-ERROR), as for a single protocol, and is not retried, even if
+      the other leg failed for another reason; see
+      @ref HttpClientIo::HttpClientConnectionManager::isTerminalConnectionError()
       Alt-Svc advertisements supply the UDP port for future races without
       overriding the negotiated protocol or draining working connections.
       Fresh automatic H3 connections and expired fallback entries race both
@@ -954,6 +956,24 @@ HttpClientConnectionManager mgr(<HttpClientConnectionManagerOptions>{
     */
     bool sub http_is_certificate_refusal(*hash<auto> err) {
         return err.err == "SOCKET-SSL-ERROR" && err.arg.typeCode() == NT_HASH && err.arg.ssl_verify_error;
+    }
+
+    #! Returns True if the given connection error is a denial of the sandbox
+    /** A connection, or the bind of its socket, that the network or filesystem policy of the
+        @ref sandboxing "sandbox" denies would be denied again; it is never retried as a failed connection.
+
+        @param err the error of a connection (see @ref HttpClientIo::HttpClientPollOperation::getError())
+    */
+    bool sub http_is_sandbox_denial(*hash<auto> err) {
+        return err.err == "NETWORK-ACCESS-DENIED" || err.err == "FILESYSTEM-ACCESS-DENIED";
+    }
+
+    #! Returns True if the given connection error ends a request: a refused certificate or a denial of the sandbox
+    /** Such an error is raised as it is, and the connection is not retried (see
+        @ref HttpClientIo::HttpClientConnectionManager::isTerminalConnectionError())
+    */
+    bool sub http_is_terminal_connection_error(*hash<auto> err) {
+        return http_is_sandbox_denial(err) || http_is_certificate_refusal(err);
     }
 
     #! Returns True if the given octet is a hexadecimal digit

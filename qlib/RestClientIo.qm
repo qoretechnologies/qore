@@ -68,8 +68,10 @@ module RestClientIo {
     Certificate verification failures from HTTP/1.1, HTTP/2 and HTTP/3 requests raise \c SOCKET-SSL-ERROR with the
     original diagnostic. Synchronous and asynchronous requests do not retry certificate refusals; connections
     interrupted during the handshake can still be retried.
-    This also applies to automatic protocol selection: when HTTP/3 and HTTP/2 are tried in parallel, a certificate
-    refused by either protocol is reported, even if the other protocol failed for another reason.
+    A connection that the @ref sandboxing "sandbox" denies raises \c NETWORK-ACCESS-DENIED (or
+    \c FILESYSTEM-ACCESS-DENIED) as it is and is not retried either.
+    This also applies to automatic protocol selection: when HTTP/3 and HTTP/2 are tried in parallel, a denial or a
+    certificate refusal of either protocol is reported, even if the other protocol failed for another reason.
 
     @par Example
     @code{.py}
@@ -5403,9 +5405,9 @@ class RestClientIoAsyncConnector {
             return;
         }
         *hash<auto> err = conn.getPollOperation().getError();
-        # Match the synchronous connection wait: certificate refusals must reach the caller before any retry
-        # can replace the certificate verification reason with a timeout.
-        if (err.err == "SOCKET-SSL-ERROR" && err.arg.typeCode() == NT_HASH && err.arg.ssl_verify_error) {
+        # Match the synchronous connection wait: a certificate refusal or a sandbox denial must reach the caller
+        # before any retry, which would be refused or denied again, or replace the reason with a timeout.
+        if (HttpClientIo::HttpClientConnectionManager::isTerminalConnectionError(err)) {
             throw err.err, err.desc, err;
         }
         if (++failures <= mgr.getMaxRequestRetries()) {

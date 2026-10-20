@@ -589,6 +589,9 @@ public class HttpClientConnection inherits HttpClientConnectionBase {
         it back out of the description string
         @throw SOCKET-SSL-ERROR certificate verification failed; the original reason is preserved and the refusal
         is not retried as a transient connection failure
+        @throw NETWORK-ACCESS-DENIED the @ref sandboxing "sandbox" denies the connection or the bind of its socket;
+        the denial is raised as it is and is not retried
+        @throw FILESYSTEM-ACCESS-DENIED the @ref sandboxing "sandbox" denies the file of a UNIX domain socket
     */
     bool waitForReady(timeout timeout_ms = 30s) {
         log(LoggerLevel::DEBUG, "waitForReady() timeout=%y", timeout_ms);
@@ -596,7 +599,7 @@ public class HttpClientConnection inherits HttpClientConnectionBase {
 
         if (self.isClosed()) {
             *hash<auto> err = getPollOperation().getError();
-            if (http_is_certificate_refusal(err)) {
+            if (http_is_terminal_connection_error(err)) {
                 throw err.err, err.desc, err;
             }
             throw "HTTPCLIENT-CONNECT-ERROR",
