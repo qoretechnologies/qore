@@ -23,13 +23,17 @@
 %define NO_FREETDS
 %endtry
 
+%try-module sqlite3
+%define NO_SQLITE3
+%endtry
+
 %exec-class ReconciledIndexAlignmentTest
 
 #! The indexes that a reconcile_table migration of a DataSchema creates are kept by the alignment of the schema
 /** An alignment drops the indexes that the description of a table does not have, so the unique index on the
     canonical key and the reviewed indexes of a table reconciliation are added to the description of the table once
-    the migration has created them.  The tests run on the PostgreSQL, MySQL and SQL Server databases given by
-    \c QORE_DB_CONNSTR_PGSQL, \c QORE_DB_CONNSTR_MYSQL and \c QORE_DB_CONNSTR_FREETDS
+    the migration has created them.  The tests run on SQLite and on the PostgreSQL, MySQL and SQL Server databases
+    given by \c QORE_DB_CONNSTR_PGSQL, \c QORE_DB_CONNSTR_MYSQL and \c QORE_DB_CONNSTR_FREETDS
 */
 class ReconciledIndexAlignmentTest inherits QUnit::Test {
     private {
@@ -41,6 +45,7 @@ class ReconciledIndexAlignmentTest inherits QUnit::Test {
     }
 
     constructor() : Test("ReconciledIndexAlignmentTest", "1.0", \ARGV) {
+        addTestCase("SQLite keeps the indexes of a table reconciliation", \sqlite());
         addTestCase("PostgreSQL keeps the indexes of a table reconciliation", \pgsql());
         addTestCase("MySQL keeps the indexes of a table reconciliation", \mysql());
         addTestCase("SQL Server keeps the indexes of a table reconciliation", \mssql());
@@ -49,6 +54,13 @@ class ReconciledIndexAlignmentTest inherits QUnit::Test {
 
     globalTearDown() {
         PgsqlRunSchema::teardown();
+    }
+
+    sqlite() {
+%ifdef NO_SQLITE3
+        testSkip("sqlite3 module unavailable");
+%endif
+        checkDatabase("sqlite3:@:memory:");
     }
 
     pgsql() {

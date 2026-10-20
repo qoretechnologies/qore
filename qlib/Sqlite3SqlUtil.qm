@@ -88,6 +88,12 @@ module Sqlite3SqlUtil {
     |@ref SqlUtil::NUMERIC|\c real
     |@ref SqlUtil::VARCHAR|\c text
 
+    SQLite does not limit the length of text, so the size of a string column (\c string, @ref SqlUtil::CHAR,
+    @ref SqlUtil::VARCHAR, or the native \c text and \c varchar types), as in
+    <tt>{"qore_type": "string", "size": 96}</tt>, is accepted and is not part of the column: the column is created as
+    \c text (or \c varchar), and is described from the database without a size, so a description with a size is
+    aligned with no change.
+
     @subsection sqlite3_column_changes Changing Columns
 
     SQLite can change only one thing about a column of an existing table: its \c NOT \c NULL constraint, and only from
@@ -207,6 +213,10 @@ module Sqlite3SqlUtil {
     @section sqlite3_relnotes Release Notes
 
     @subsection sqlite3sqlutilv12 Sqlite3SqlUtil_1_2 Sqlite3SqlUtil Module v1.2
+    - a string column with a size, as in a portable description (<tt>{"qore_type": "string", "size": 96}</tt>), is
+      accepted: SQLite does not limit the length of text, so the size is not part of the column; it raised
+      \c COLUMN-ERROR, so that such a description, such as the quarantine table of a DataSchema \c reconcile_table
+      migration, could not be used on SQLite (see @ref sqlite3_type_mapping)
     - a column's \c NOT \c NULL constraint can be set or dropped on SQLite 3.53.0 and later, as by
       @ref SqlUtil::AbstractTable::getModifyColumnSql() "AbstractTable::getModifyColumnSql()" or table alignment;
       every column change raised \c UNSUPPORTED before.  A change that SQLite cannot make, or a \c NOT \c NULL
@@ -1225,11 +1235,15 @@ string sql = pk.getTableConstraintSql();
                     "qore": Type::Int,
                     "ai": True,
                 },
+                # SQLite does not limit the length of text: a size is accepted, as portable descriptions give one for
+                # a string column, and is not part of the column (see @ref sqlite3_type_mapping)
                 "text": {
                     "qore": Type::String,
+                    "size": SZ_OPT,
                 },
                 "varchar": {
                     "qore": Type::String,
+                    "size": SZ_OPT,
                 },
                 "blob": {
                     "qore": Type::Binary,

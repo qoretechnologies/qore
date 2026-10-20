@@ -31,7 +31,30 @@ class Sqlite3ColumnsTest inherits QUnit::Test {
         addTestCase("table alignment refuses another column change before a NOT NULL change",
             \alignmentRefusalOrder());
         addTestCase("the SQLite library changes a NOT NULL constraint", \liveChange());
+        addTestCase("a string column with a size is text, and is aligned with no change", \sizedStrings());
         set_return_value(main());
+    }
+
+    #! A string column with a size, as in a portable description, is created as text without the size, which SQLite
+    #! does not limit, and a table created from the description is aligned to it with no change
+    private sizedStrings() {
+        AbstractDatasource ds = datasource();
+        on_exit ds.rollback();
+        Database db(ds);
+        hash<auto> desc = {"columns": {
+            "id": {"qore_type": "integer", "notnull": True},
+            "s": {"qore_type": "string", "size": 96},
+            "c": {"qore_type": SqlUtil::CHAR, "size": 3},
+            "v": {"native_type": "varchar", "size": 10},
+        }};
+        AbstractTable table = db.makeTable("sized_strings", desc);
+        assertEq(("create table sized_strings (\n  id int not null,\n  s text,\n  c text,\n  v varchar\n)",),
+            table.getCreateSql());
+        table.create();
+        ds.commit();
+        assertEq({"id": "int", "s": "text", "c": "text", "v": "varchar"},
+            map {$1.name: $1.getNativeTypeString()}, db.getTable("sized_strings").describe().iterator());
+        assertEq((), db.getTable("sized_strings").getAlignSql(db.makeTable("sized_strings", desc)));
     }
 
     #! Returns an in-memory database with a table "t"; with a version, the datasource reports it as the SQLite version
