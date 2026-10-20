@@ -39,6 +39,7 @@ public class TryChildModuleTest inherits QUnit::Test {
         addTestCase("mutual child declarations", \cycleTest());
         addTestCase("broken child module", \brokenTest());
         addTestCase("broken child module reporting", \brokenReportTest());
+        addTestCase("child module loaded from its source after its binary module failed", \fallbackChildTest());
         addTestCase("version constraints", \versionTest());
         addTestCase("PO_NO_MODULES", \noModulesTest());
         addTestCase("declaration errors", \declarationErrorTest());
@@ -82,6 +83,121 @@ public class TryChildModuleTest inherits QUnit::Test {
         tmp.file.write(code);
         tmp.file.close();
         return backquote(sprintf("QORE_MODULE_DIR=%s %s %s 2>&1", dir, qore_bin, tmp.path));
+    }
+
+    #! runs the given code in a subprocess with only the given directory as the module path
+    /** returns the merged standard output and error output
+
+        @param moddir the module directory
+        @param code the script to run
+        @param rc the exit code of the process
+    */
+    private string runScriptIn(string moddir, string code, reference<int> rc) {
+        TmpFile tmp("tcm-", ".qr");
+        tmp.file.write(code);
+        tmp.file.close();
+        return backquote(sprintf("QORE_MODULE_DIR_ONLY=1 QORE_MODULE_DIR=%s %s %s 2>&1", moddir, qore_bin, tmp.path),
+            \rc);
+    }
+
+    #! writes a file
+    private static writeFile(string path, string content) {
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(content);
+        f.close();
+    }
+
+    #! writes a base module that declares an optional child module, and the child module's source with a binary
+    #! module next to it that cannot be loaded, so the child module is loaded from its source with a warning
+    /** @param dir the directory
+        @param base the name of the base module
+        @param child the name of the child module
+        @param child_body the body of the child module's init closure
+    */
+    private static writeFallbackModules(string dir, string base, string child, string child_body) {
+        TryChildModuleTest::writeFile(dir + "/" + base + ".qm", sprintf("%%modern
+%%try-child-module %s
+
+module %s {
+    version = \"1.0\";
+    desc = \"test base module with a child module that is loaded from its source\";
+    author = \"Qore Technologies, s.r.o.\";
+    license = \"MIT\";
+}
+
+public class %s {
+    public {
+        static list<string> children = ();
+    }
+
+    static string hello() {
+        return \"hello\";
+    }
+}
+", child, base, base));
+        TryChildModuleTest::writeFile(dir + "/" + child + ".qm", sprintf("%%modern
+%%requires(reexport) %s
+
+module %s {
+    version = \"1.0\";
+    desc = \"test child module whose binary module cannot be loaded\";
+    author = \"Qore Technologies, s.r.o.\";
+    license = \"MIT\";
+    init = sub () {
+        %s
+    };
+}
+", base, child, child_body));
+        # not a binary module: loading it fails, and the source next to it is loaded instead, with a warning
+        TryChildModuleTest::writeFile(dir + "/" + child + ".qmod", "not a binary module\n");
+    }
+
+    fallbackChildTest() {
+        # A child module whose binary module cannot be loaded (for example, compiled for another Qore) is loaded
+        # from its source, with a warning.  The warning is the child's: it must not fail the import of the module
+        # that declares the child.  A %requires load has no warning sink separate from its exception sink, and
+        # the child was loaded with that sink as its warning sink, so the warning failed the parent's import.
+        TmpDir tmp();
+        TryChildModuleTest::writeFallbackModules(tmp.path, "TcmFbBase", "TcmFbExt",
+            "push TcmFbBase::children, \"ext\";");
+        int rc;
+        string out = runScriptIn(tmp.path, "%modern
+%requires TcmFbBase
+
+printf(\"hello: %s children: %y\\n\", TcmFbBase::hello(), TcmFbBase::children);
+", \rc);
+        assertEq(0, rc, out);
+        assertRegex("warning: binary module '[^']*TcmFbExt\\.qmod' for feature 'TcmFbExt' failed to load; loading "
+            "source module '[^']*TcmFbExt\\.qm' instead", out);
+        # the child module is attached from its source
+        assertRegex("hello: hello children: \\[\"ext\"\\]", out);
+        assertFalse(out =~ /BINARY-MODULE-SOURCE-FALLBACK/, out);
+
+        # a genuine error in the child module's source still makes the child fail: as an optional child it is
+        # reported and skipped, and a %requires of the child module itself fails
+        TmpDir tmp2();
+        TryChildModuleTest::writeFallbackModules(tmp2.path, "TcmFbErrBase", "TcmFbErrExt",
+            "TcmFbErrBase::no_such_method();");
+        out = runScriptIn(tmp2.path, "%modern
+%requires TcmFbErrBase
+
+printf(\"hello: %s children: %y\\n\", TcmFbErrBase::hello(), TcmFbErrBase::children);
+", \rc);
+        assertEq(0, rc, out);
+        assertRegex("warning: module 'TcmFbErrBase': child module 'TcmFbErrExt' declared with %try-child-module is "
+            "present but failed to load and was skipped", out);
+        assertRegex("PARSE-EXCEPTION: cannot resolve call 'TcmFbErrBase::no_such_method\\(\\)'", out);
+        assertRegex("hello: hello children: \\[\\]", out);
+
+        out = runScriptIn(tmp2.path, "%modern
+%requires TcmFbErrExt
+
+printf(\"loaded\\n\");
+", \rc);
+        assertNeq(0, rc, out);
+        assertRegex("PARSE-EXCEPTION: cannot resolve call 'TcmFbErrBase::no_such_method\\(\\)'", out);
+        assertFalse(out =~ /^loaded$/m, out);
     }
 
     basicTest() {

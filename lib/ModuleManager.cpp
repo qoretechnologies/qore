@@ -2382,7 +2382,10 @@ int QoreModuleManager::attachChildModules(QoreAbstractModule& mi, ExceptionSink&
         if (!qore_parse_module_spec(c.spec.c_str(), cname, op, version, cx)) {
             printd(5, "QoreModuleManager::attachChildModules() '%s': attaching child '%s'\n", mi.getName(),
                 cname.c_str());
-            cmi = loadModuleIntern(cx, wsink, cname.c_str(), nullptr, false, op,
+            // the child's warnings are its own: with no warning sink of the caller's separate from its exception
+            // sink (the %requires path), they are written to stderr as for a module loaded with %requires, and not
+            // raised in the caller's sink, where they would fail the import of the module that declares the child
+            cmi = loadModuleIntern(cx, &xsink == &wsink ? cx : wsink, cname.c_str(), nullptr, false, op,
                 op == MOD_OP_NONE ? nullptr : &version, nullptr, nullptr, QMLO_NONE, warning_mask, nullptr,
                 ppgm, &not_found);
         }
