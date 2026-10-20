@@ -29,10 +29,7 @@ print_usage () {
   echo "  QORE_TEST_QMOD_DIR       Directory with AOT qmods to prefer before ./qlib."
   echo "  QORE_TEST_SOURCE_MODULES Set to '1' to ignore the default build qmod directory."
   echo "  QORE_TEST_PRESERVE_PROVIDER_ENV"
-  echo "                           Set to '1' to keep the QORE_MODULE_DIR, QORE_DATA_PROVIDERS and"
-  echo "                           QORE_PROVIDER_INDEX_DIR that the environment sets; by default they are ignored,"
-  echo "                           so that modules from outside the tree (e.g. a Qorus instance's module copies)"
-  echo "                           do not change what the tests see; an ignored QORE_MODULE_DIR is reported."
+  echo "                           Set to '1' to preserve external provider discovery env vars."
 }
 
 err_multiple_format_opts() {
@@ -250,17 +247,10 @@ if [ -n "$BUILD_MODULE_DIRS" ]; then
         TEST_MODULE_DIRS="$BUILD_MODULE_DIRS"
     fi
 fi
-# Keep qore tests hermetic by default: a module directory that the developer's shell sets (e.g. a Qorus instance's
-# module copies) is searched by the module loader and by data provider discovery, so its modules can change what the
-# tests see
-if [ "${QORE_TEST_PRESERVE_PROVIDER_ENV}" != "1" ] && [ -n "$QORE_MODULE_DIR" ]; then
-    echo "run_tests.sh: ignoring the inherited QORE_MODULE_DIR; set QORE_TEST_PRESERVE_PROVIDER_ENV=1 to keep it"
-    QORE_MODULE_DIR=""
-fi
 if [ -n "$TEST_MODULE_DIRS" ]; then
-    export QORE_MODULE_DIR=$TEST_MODULE_DIRS:$QORE_SOURCE_DIR/qlib${QORE_MODULE_DIR:+:$QORE_MODULE_DIR}
+    export QORE_MODULE_DIR=$TEST_MODULE_DIRS:$QORE_SOURCE_DIR/qlib:$QORE_MODULE_DIR
 else
-    export QORE_MODULE_DIR=$QORE_SOURCE_DIR/qlib${QORE_MODULE_DIR:+:$QORE_MODULE_DIR}
+    export QORE_MODULE_DIR=$QORE_SOURCE_DIR/qlib:$QORE_MODULE_DIR
 fi
 # Export build qore binary path so that tests spawning sub-processes (via backquote, etc.)
 # use the same build binary rather than the system-installed qore.
@@ -268,8 +258,7 @@ export QORE_EXECUTABLE="$QORE"
 
 # Keep qore tests hermetic by default. Developer shells often have Qorus or
 # application provider discovery configured, which can make negative provider
-# lookup tests print unrelated module-load diagnostics; the inherited
-# QORE_MODULE_DIR is handled above.
+# lookup tests print unrelated module-load diagnostics.
 if [ "${QORE_TEST_PRESERVE_PROVIDER_ENV}" != "1" ]; then
     unset QORE_DATA_PROVIDERS
     unset QORE_PROVIDER_INDEX_DIR
