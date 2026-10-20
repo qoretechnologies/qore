@@ -19,7 +19,12 @@ http://www.myspace.com/alcestmusic,FR,Alcest,alcest.jpg,2013-01-31T13:20:51,345
 http://www.amorphis.net/,FI,Amorphis,amorphis.jpg,2012-10-15T23:08:04,384
 http://www.anthrax.com/,US,Anthrax,anthrax.jpg,2012-12-29T14:02:53,395
 ";
-        string rfile = tmp_location() + "/test.csv";
+        #! the base name of the files the test creates in the temporary directory
+        /** unique for every run, so that runs on the same host, at the same time or after a run that left files
+            behind, never use each other's files
+        */
+        string unique_name = sprintf("qore_csvtest2_%d_%s", getpid(), get_random_string(8));
+        string rfile = tmp_location() + DirSep + unique_name + "-test.csv";
         File f = new File();
 
         string wfile1;
@@ -35,13 +40,13 @@ http://www.anthrax.com/,US,Anthrax,anthrax.jpg,2012-12-29T14:02:53,395
     }
 
     setUp() {
-        f.open(rfile, O_WRONLY | O_CREAT);
+        f.open(rfile, O_WRONLY | O_CREAT | O_TRUNC);
         f.write(str);
         f.close();
 
         wdir = tmp_location();
-        wfile1 = wdir + "/file1.csv";
-        wfile2 = wdir + "/file2.csv";
+        wfile1 = wdir + DirSep + unique_name + "-file1.csv";
+        wfile2 = wdir + DirSep + unique_name + "-file2.csv";
     }
 
     tearDown() {

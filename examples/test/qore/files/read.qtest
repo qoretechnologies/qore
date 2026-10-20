@@ -24,10 +24,13 @@ class ReadTest inherits QUnit::Test {
     }
 
     readTest() {
-        string file = tmp_location() + "/test";
+        # unique for every run, so that runs on the same host, at the same time or after a run that left the file
+        # behind, never use each other's file
+        string file = tmp_location() + DirSep + sprintf("qore_read_test_%d_%s", getpid(), get_random_string(8));
+        on_exit unlink(file);
         File fw();
 
-        fw.open(file, O_WRONLY | O_CREAT);
+        fw.open(file, O_WRONLY | O_CREAT | O_TRUNC);
         fw.write(String);
         fw.close();
 
@@ -42,8 +45,6 @@ class ReadTest inherits QUnit::Test {
         testAssertionValue('read string check', s, String);
         testAssertionValue('ReadOnlyFile::readTextFile() string check', ReadOnlyFile::readTextFile(file), String);
         assertThrows("FILE-OPEN2-ERROR", \ReadOnlyFile::readTextFile(), tmp_location() + DirSep + get_random_string());
-
-        unlink(file);
     }
 
     readShortBinaryTest() {

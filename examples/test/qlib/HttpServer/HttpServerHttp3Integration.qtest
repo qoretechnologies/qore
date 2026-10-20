@@ -1478,8 +1478,8 @@ l50Xb2GWQesIt9k5jF5IOw==
                 "logger": mLogger,
                 "request_timeout": 15s,
                 "connect_timeout": 10s,
-                # Set a fake proxy — QUIC cannot tunnel through HTTP proxies
-                "proxy_url": "http://127.0.0.1:9999",
+                # Set a fake proxy — QUIC cannot tunnel through HTTP proxies; nothing listens on its port
+                "proxy_url": sprintf("http://127.0.0.1:%d", getUnusedPort()),
             },
         );
         on_exit delete mgr;
@@ -1683,5 +1683,17 @@ l50Xb2GWQesIt9k5jF5IOw==
         assertTrue(dt3_ms < 5000,
             sprintf("third request via localhost took %d ms (expected <5000)",
                 dt3_ms));
+    }
+
+    #! returns a port on 127.0.0.1 that no socket is bound to at the time of the call
+    /** binds a socket to port 0, so that the system assigns a free port, and closes it again; a fixed port can be in
+        use on the host, for example by a listener of another test run at the same time
+    */
+    private static int getUnusedPort() {
+        Socket s();
+        s.bindINET("127.0.0.1", "0", False, AF_INET);
+        int port = s.getSocketInfo().port;
+        s.close();
+        return port;
     }
 }

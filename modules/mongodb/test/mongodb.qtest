@@ -28,6 +28,7 @@
 %modern
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 
+%requires Util
 %requires QUnit
 %requires FsUtil
 %requires mongodb
@@ -38,7 +39,11 @@ public class MongoDbTest inherits QUnit::Test {
     private {
         *string mongodb_url;
         *MongoClient client;
-        string test_db = "qore_test_db";
+        #! the database the test creates its collections in
+        /** unique for every run, so that runs against the same server at the same time never use each other's
+            collections; the database is dropped when the test ends
+        */
+        string test_db = sprintf("qore_test_db_%d_%s", getpid(), get_random_string(8));
         string test_coll = "qore_test_collection";
     }
 
@@ -67,6 +72,17 @@ public class MongoDbTest inherits QUnit::Test {
         addTestCase("Interrupt test", \interruptTests());
         addTestCase("TLS files respect the sandbox", \tlsFileSandboxTests());
         set_return_value(main());
+    }
+
+    globalTearDown() {
+        # drop only the database of this run
+        if (client) {
+            try {
+                client.getDatabase(test_db).drop();
+            } catch (hash<ExceptionInfo> ex) {
+                # the server may not be available
+            }
+        }
     }
 
     private bool ensureClient() {

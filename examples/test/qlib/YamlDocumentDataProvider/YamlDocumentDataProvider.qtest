@@ -5,6 +5,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 
+%requires Util
 %requires QUnit
 %requires yaml
 %requires DataProvider
@@ -13,6 +14,14 @@
 %exec-class YamlDocumentDataProviderTest
 
 class YamlDocumentDataProviderTest inherits QUnit::Test {
+    private {
+        #! the base name of the files the test creates in the temporary directory
+        /** unique for every run, so that runs on the same host, at the same time or after a run that left files
+            behind, never use each other's files
+        */
+        string unique_name = sprintf("qore_yaml_document_dp_test_%d_%s", getpid(), get_random_string(8));
+    }
+
     constructor() : Test("YamlDocumentDataProviderTest", "1.0") {
         addTestCase("data in the other byte order than its encoding", \byteOrderTest());
         addTestCase("provider from data", \testProviderFromData());
@@ -113,14 +122,13 @@ class YamlDocumentDataProviderTest inherits QUnit::Test {
     testProviderFromPath() {
         # Create a temp file
         string yaml = "---\nitem: 1\n---\nitem: 2";
-        string path = tmp_location() + "/test_yaml_dp.yaml";
+        string path = tmp_location() + DirSep + unique_name + "-test_yaml_dp.yaml";
+        on_exit unlink(path);
         {
             File f();
             f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
             f.write(yaml);
         }
-
-        on_exit unlink(path);
 
         YamlDocumentReadDataProvider provider({"path": path});
 
@@ -410,7 +418,7 @@ scalar value";
     }
 
     testWriteToFile() {
-        string path = tmp_location() + "/test_yaml_write.yaml";
+        string path = tmp_location() + DirSep + unique_name + "-test_yaml_write.yaml";
         on_exit unlink(path);
 
         YamlDocumentWriteDataProvider provider({"path": path});

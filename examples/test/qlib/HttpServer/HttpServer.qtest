@@ -4397,10 +4397,11 @@ public class HttpServerTest inherits QUnit::Test {
         # immediately.  With async I/O, the poll op detects the error and
         # the client must propagate it within the connect timeout.
         {
+            int closed_port = getUnusedPort();
             date start = now_us();
             try {
                 RestClientIo rc({
-                    "url": "http://127.0.0.1:59999",
+                    "url": sprintf("http://127.0.0.1:%d", closed_port),
                     "connect_timeout": 10s,
                     "timeout": 10s,
                 });
@@ -4420,10 +4421,11 @@ public class HttpServerTest inherits QUnit::Test {
 
         # Test with HTTPS to verify SSL path also handles connection refused
         {
+            int closed_port = getUnusedPort();
             date start = now_us();
             try {
                 RestClientIo rc({
-                    "url": "https://127.0.0.1:59999",
+                    "url": sprintf("https://127.0.0.1:%d", closed_port),
                     "connect_timeout": 10s,
                     "timeout": 10s,
                 });
@@ -4435,6 +4437,18 @@ public class HttpServerTest inherits QUnit::Test {
                     sprintf("SSL connection refused took %y, expected < 15s", elapsed));
             }
         }
+    }
+
+    #! returns a port on 127.0.0.1 that no socket is bound to at the time of the call
+    /** binds a socket to port 0, so that the system assigns a free port, and closes it again; a fixed port can be in
+        use on the host, for example by a listener of another test run at the same time
+    */
+    private static int getUnusedPort() {
+        Socket s();
+        s.bindINET("127.0.0.1", "0", False, AF_INET);
+        int port = s.getSocketInfo().port;
+        s.close();
+        return port;
     }
 }
 

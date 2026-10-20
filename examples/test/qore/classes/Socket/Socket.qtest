@@ -145,6 +145,12 @@ class SocketTest inherits QUnit::Test {
 
         string client_host;
 
+        #! the error that ended the server thread before it could accept a connection, if any
+        *string server_error;
+
+        #! the error that ended the client thread before it connected to the server, if any
+        *string client_error;
+
         const MyOpts = {
             "server"     : "S,server=s",
             "servonly"   : "O,server-only",
@@ -2569,6 +2575,11 @@ class SocketTest inherits QUnit::Test {
         stopc.waitForZero();
         if (m_options.events)
             queue.push();
+
+        # a server that could not bind or listen, or a client that could not connect to the port the server got,
+        # fails the test
+        assertEq(NOTHING, server_error, "server bind and listen");
+        assertEq(NOTHING, client_error, "client connect");
     }
 
     private server_thread() {
@@ -2597,14 +2608,24 @@ class SocketTest inherits QUnit::Test {
                     break;
                 } catch (hash<ExceptionInfo> ex) {
                     if ($# == (elements addr - 1)) {
-                        #SocketTest::printf("server: error binding socket to %s:%d %s: %s (arg: %y)\n", a.address_desc, server_port, ex.err, ex.desc, ex.arg);
+                        server_error = sprintf("error binding socket to %s:%d %s: %s (arg: %y)", a.address_desc,
+                            server_port, ex.err, ex.desc, ex.arg);
+                        SocketTest::printf("server: %s\n", server_error);
                         thread_exit;
                     }
                 }
             }
 
+            # with no port given, the system assigned one; the client connects to the port the server got
+            server_port = s.getSocketInfo().port;
+            client_port = server_port;
+            if (m_options.servonly) {
+                SocketTest::printf("server: listening on port %d\n", server_port);
+            }
+
             if (s.listen()) {
-                SocketTest::printf("listen error (%s)\n", strerror(errno()));
+                server_error = sprintf("listen error (%s)", strerror(errno()));
+                SocketTest::printf("%s\n", server_error);
                 thread_exit;
             }
         }
@@ -2648,8 +2669,14 @@ class SocketTest inherits QUnit::Test {
 
     private client_thread() {
         on_exit stopc.dec();
-        if (!exists m_options.server)
+        if (!exists m_options.server) {
             counter.waitForZero();
+            # a server that could not bind or listen fails the test; the client does not connect to whatever else
+            # listens on the port
+            if (server_error) {
+                return;
+            }
+        }
         Socket s();
         # setting the callback will output far too much data
         if (m_options.events)
@@ -2672,7 +2699,8 @@ class SocketTest inherits QUnit::Test {
             else
                 s.connectINET(client_host, client_port, 15s, fam);
         } catch (hash<ExceptionInfo> ex) {
-            SocketTest::printf("client error %s: %s: %s\n", get_ex_pos(ex), ex.err, ex.desc);
+            client_error = sprintf("%s: %s: %s", get_ex_pos(ex), ex.err, ex.desc);
+            SocketTest::printf("client error %s\n", client_error);
             thread_exit;
         }
 
@@ -2847,8 +2875,9 @@ class SocketTest inherits QUnit::Test {
             exit(1);
         }
 
-        if (!(server_port = int(shift ARGV)))
-            server_port = 9001;
+        # with no port given, the server binds to a port the system assigns, so that runs on the same host at the
+        # same time never use each other's server
+        server_port = int(shift ARGV);
 
         if (exists m_options.server) {
             if (m_options.server == int(m_options.server)) {

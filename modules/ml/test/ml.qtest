@@ -29,6 +29,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 
+%requires ../../../qlib/Util.qm
 %requires ../../../qlib/QUnit.qm
 %requires ../../../qlib/FsUtil.qm
 %requires ml
@@ -448,6 +449,14 @@ public class MlTest inherits QUnit::Test {
         addTestCase("NUL: refused in ONNX Runtime identifiers", \nulOnnxIdentifierTest());
         addTestCase("NUL: refused in paths", \nulPathTest());
         set_return_value(main());
+    }
+
+    #! returns the path of a model file in the temporary directory for the model name
+    /** the name is unique for every run, so that runs on the same host, at the same time or after a run that left
+        files behind, never use each other's files
+    */
+    private static string getModelPath(string name) {
+        return tmp_location() + DirSep + sprintf("test_ml_%s_%d_%s.qml", name, getpid(), get_random_string(8));
     }
 
     capabilitiesTest() {
@@ -6998,7 +7007,7 @@ bool sub identity_complete(string path, *hash<auto> config) {
 
         list<hash<ML::KMeansResult>> orig = km.predictMatrix(((1.05, 1.05),));
 
-        string tmpfile = "/tmp/test_ml_kmeans.qml";
+        string tmpfile = getModelPath("kmeans");
         on_exit { unlink(tmpfile); }
         ML::ml_save_model(km, tmpfile);
 
@@ -7016,7 +7025,7 @@ bool sub identity_complete(string path, *hash<auto> config) {
 
         list<hash<ML::LinearRegressionResult>> orig = lr.predictMatrix(((2.5,),));
 
-        string tmpfile = "/tmp/test_ml_lr.qml";
+        string tmpfile = getModelPath("lr");
         on_exit { unlink(tmpfile); }
         ML::ml_save_model(lr, tmpfile);
 
@@ -7033,7 +7042,7 @@ bool sub identity_complete(string path, *hash<auto> config) {
 
         list<auto> orig_t = ss.transformMatrix(((20.0, 400.0),));
 
-        string tmpfile = "/tmp/test_ml_stdscaler.qml";
+        string tmpfile = getModelPath("stdscaler");
         on_exit { unlink(tmpfile); }
         ML::ml_save_model(ss, tmpfile);
 
@@ -7582,7 +7591,7 @@ bool sub identity_complete(string path, *hash<auto> config) {
         }
 
         # File round-trip
-        string tmpfile = "/tmp/test_ml_gbt_multi.qml";
+        string tmpfile = getModelPath("gbt_multi");
         on_exit { unlink(tmpfile); }
         ML::ml_save_model(gbt, tmpfile);
         auto loaded = ML::ml_load_model(tmpfile);
@@ -8208,7 +8217,7 @@ bool sub identity_complete(string path, *hash<auto> config) {
 
         list<auto> orig = pf.transformMatrix(((2.0, 3.0, 4.0),));
 
-        string tmpfile = "/tmp/test_ml_pf.qml";
+        string tmpfile = getModelPath("pf");
         on_exit { unlink(tmpfile); }
         ML::ml_save_model(pf, tmpfile);
 
@@ -8367,7 +8376,7 @@ bool sub identity_complete(string path, *hash<auto> config) {
 
         list<auto> orig = skb.transformMatrix(((5.0, 0.5, 50.0),));
 
-        string tmpfile = "/tmp/test_ml_skb.qml";
+        string tmpfile = getModelPath("skb");
         on_exit { unlink(tmpfile); }
         ML::ml_save_model(skb, tmpfile);
 
@@ -8557,7 +8566,7 @@ bool sub identity_complete(string path, *hash<auto> config) {
 
         list<auto> orig = rfe.transformMatrix(((5.0, 0.5, 50.0),));
 
-        string tmpfile = "/tmp/test_ml_rfe.qml";
+        string tmpfile = getModelPath("rfe");
         on_exit { unlink(tmpfile); }
         ML::ml_save_model(rfe, tmpfile);
 

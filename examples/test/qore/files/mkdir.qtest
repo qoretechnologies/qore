@@ -13,9 +13,11 @@ class MkdirTest inherits QUnit::Test {
     public {}
 
     private {
-        const dir_pos = "/mkpos";
-        const dir_neg = "/mkneg/mk2/mk3/mk4";
-        const dir_par = "/mkparpos3";
+        #! the base name of the directories the test creates in the temporary directory
+        /** unique for every run, so that runs on the same host, at the same time or after a run that left
+            directories behind, never use each other's directories
+        */
+        string unique_name = sprintf("qore_mkdir_test_%d_%s", getpid(), get_random_string(8));
     }
 
     constructor() : Test("mkdir Test", "1.0") {
@@ -27,14 +29,14 @@ class MkdirTest inherits QUnit::Test {
     }
 
     mkdirPosTest() {
-        string dir = tmp_location() + dir_pos;
+        string dir = tmp_location() + DirSep + unique_name + "-mkpos";
         on_exit rmdir(dir);
         int ret = mkdir(dir);
         assertEq(0, ret);
     }
 
     mkdirNegTest() {
-        string dir = tmp_location() + dir_neg;
+        string dir = tmp_location() + DirSep + unique_name + "-mkneg/mk2/mk3/mk4";
         on_exit rmdir(dir);
         int ret = mkdir(dir);
         assertEq(-1, ret);
@@ -44,7 +46,7 @@ class MkdirTest inherits QUnit::Test {
     }
 
     mkdirParentTest() {
-        string dir1 = tmp_location() + dir_par;
+        string dir1 = tmp_location() + DirSep + unique_name + "-mkparpos3";
         string dir2 = dir1 + DirSep + "mk2";
         string dir3 = dir2 + DirSep + "mk3";
         int ret = mkdir(dir3, 0777, True);

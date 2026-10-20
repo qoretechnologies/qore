@@ -58,6 +58,12 @@ f2:3,00:5:25,34";
                 "amount3": 25.34n,
             },
         );
+
+        #! the base name of the files the test creates in the temporary directory
+        /** unique for every run, so that runs on the same host, at the same time or after a run that left files
+            behind, never use each other's files
+        */
+        string unique_name = sprintf("qore_csvutil_test_%d_%s", getpid(), get_random_string(8));
     }
 
     constructor() : Test("CsvUtilTest", "1.0") {
@@ -1237,14 +1243,13 @@ UK,1234567893,28052012";
     }
 
     csvFileIterator() {
-        string file = tmp_location() + "/test-file.csv";
-        unlink(file);
+        string file = tmp_location() + DirSep + unique_name + "-test-file.csv";
+        on_exit unlink(file);
         {
             File f();
-            f.open2(file, O_WRONLY | O_CREAT);
+            f.open2(file, O_WRONLY | O_CREAT | O_TRUNC);
             f.write("a,b,c\n1,2,3\n");
         }
-        on_exit unlink(file);
 
         CsvFileIterator i(file);
         assertEq(True, i.hasCallableMethod("hstat"));
@@ -1271,11 +1276,11 @@ UK,1234567893,28052012";
     }
 
     issue2739() {
-        string file = tmp_location() + "/test-issue2739.csv";
+        string file = tmp_location() + DirSep + unique_name + "-test-issue2739.csv";
         on_exit unlink(file);
 
         File f();
-        f.open2(file, O_WRONLY | O_CREAT);
+        f.open2(file, O_WRONLY | O_CREAT | O_TRUNC);
         f.write(
             "abcd,1234,2072-02-29\n"
             "\"efgh\",\"5678\",\"2096-02-29\"\n"

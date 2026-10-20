@@ -918,7 +918,7 @@ class McpClientTest inherits QUnit::Test {
         assertTrue(invalid_url_handled, "Invalid URL should be rejected");
 
         # Test with unreachable host (connection should fail during initialize)
-        McpClient::McpClient client4b("http://localhost:59999");
+        McpClient::McpClient client4b(sprintf("http://127.0.0.1:%d", getUnusedPort()));
         assertThrows("HTTPCLIENT-CONNECT-ERROR", sub () {
             client4b.initialize(<McpClientInfo>{"name": "TestClient", "version": "1.0"});
         });
@@ -962,5 +962,17 @@ class McpClientTest inherits QUnit::Test {
         assertTrue(tools.size() >= 2, "Legacy client should return tool list");
 
         client.close();
+    }
+
+    #! returns a port on 127.0.0.1 that no socket is bound to at the time of the call
+    /** binds a socket to port 0, so that the system assigns a free port, and closes it again; a fixed port can be in
+        use on the host, for example by a listener of another test run at the same time
+    */
+    private static int getUnusedPort() {
+        Socket s();
+        s.bindINET("127.0.0.1", "0", False, AF_INET);
+        int port = s.getSocketInfo().port;
+        s.close();
+        return port;
     }
 }

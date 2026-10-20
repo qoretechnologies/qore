@@ -3,6 +3,7 @@
 
 /* Copyright (C) 2026 Qore Technologies, s.r.o. */
 
+%requires ../../../qlib/Util.qm
 %requires ../../../qlib/QUnit.qm
 %requires krb5
 %requires ../../../qlib/Krb5Util/Krb5Util.qm
@@ -34,6 +35,14 @@ class CaptureLogAppender inherits Qore::Logger::LoggerAppender {
 }
 
 public class Krb5ModuleTest inherits QUnit::Test {
+    private {
+        #! the base name of the credential cache and keytab files the test creates in /tmp
+        /** unique for every run, so that runs on the same host, at the same time or after a run that left files
+            behind, never use each other's files; the files are in /tmp, as the sandbox cases allow /tmp
+        */
+        string unique_name = sprintf("module-krb5-%d-%s", getpid(), get_random_string(8));
+    }
+
     constructor() : Test("Krb5ModuleTest", "1.0") {
         addTestCase("utility module helpers", \testUtilityModuleHelpers());
         addTestCase("utility find HTTP Negotiate header",
@@ -279,11 +288,11 @@ public class Krb5ModuleTest inherits QUnit::Test {
     }
 
     private string getSandboxCachePath(string suffix) {
-        return sprintf("/tmp/module-krb5-%s.ccache", suffix);
+        return sprintf("/tmp/%s-%s.ccache", unique_name, suffix);
     }
 
     private string getSandboxKeytabPath(string suffix) {
-        return sprintf("/tmp/module-krb5-%s.keytab", suffix);
+        return sprintf("/tmp/%s-%s.keytab", unique_name, suffix);
     }
 
     private cleanupSandboxCache(string path) {
@@ -1080,7 +1089,7 @@ Krb5Util::createImpersonatedClientContext(\"HTTP/backend.example.com@EXAMPLE.COM
 
     private testFileCacheSandboxAllow() {
         string cachePath = getSandboxCachePath("sandbox-allow");
-        cleanupSandboxCache(cachePath);
+        on_exit cleanupSandboxCache(cachePath);
 
         Program p(PO_MODERN);
         p.loadModule("krb5");
@@ -1100,7 +1109,6 @@ Krb5Util::createImpersonatedClientContext(\"HTTP/backend.example.com@EXAMPLE.COM
 
         string principal = p.callFunction("test_allowed_cache");
         assertEq("service/qorus.example.com@EXAMPLE.COM", principal);
-        cleanupSandboxCache(cachePath);
     }
 
     private testMemoryKeytabRoundtrip() {
@@ -1180,7 +1188,7 @@ Krb5Util::createImpersonatedClientContext(\"HTTP/backend.example.com@EXAMPLE.COM
 
     private testFileKeytabSandboxAllow() {
         string keytabPath = getSandboxKeytabPath("sandbox-allow");
-        cleanupSandboxKeytab(keytabPath);
+        on_exit cleanupSandboxKeytab(keytabPath);
 
         Program p(PO_MODERN);
         p.loadModule("krb5");
@@ -1202,7 +1210,6 @@ Krb5Util::createImpersonatedClientContext(\"HTTP/backend.example.com@EXAMPLE.COM
 
         string principal = p.callFunction("test_allowed_keytab");
         assertEq("HTTP/qorus.example.com@EXAMPLE.COM", principal);
-        cleanupSandboxKeytab(keytabPath);
     }
 
     private testPrincipalParsing() {
@@ -2017,7 +2024,7 @@ Krb5Util::createImpersonatedClientContext(\"HTTP/backend.example.com@EXAMPLE.COM
 
     private testListCredentialCachesSandboxRedaction() {
         string cachePath = getSandboxCachePath("collection-redaction");
-        cleanupSandboxCache(cachePath);
+        on_exit cleanupSandboxCache(cachePath);
 
         Qore::Krb5::Krb5Context ctx();
         Qore::Krb5::Krb5Principal principal("service/qorus.example.com@EXAMPLE.COM");
@@ -2032,7 +2039,6 @@ Krb5Util::createImpersonatedClientContext(\"HTTP/backend.example.com@EXAMPLE.COM
             } else {
                 unsetenv("KRB5CCNAME");
             }
-            cleanupSandboxCache(cachePath);
         }
 
         Program p(PO_MODERN);
@@ -2066,8 +2072,6 @@ Krb5Util::createImpersonatedClientContext(\"HTTP/backend.example.com@EXAMPLE.COM
             }
         }
         assertTrue(foundRedacted);
-
-        cleanupSandboxCache(cachePath);
     }
 
     private testInitialCredentialsBooleanOptionsAccepted() {

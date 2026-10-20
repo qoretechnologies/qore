@@ -158,6 +158,12 @@ class JsonLdContextTest inherits QUnit::Test {
         string base_url;
         HttpJsonLdDocumentLoader httpLoader;
         JsonLdContextCache cache;
+
+        #! the base name of the files the test creates in the temporary directory
+        /** unique for every run, so that runs on the same host, at the same time or after a run that left files
+            behind, never use each other's files
+        */
+        string unique_name = sprintf("qore_jsonld_context_test_%d_%s", getpid(), get_random_string(8));
     }
 
     constructor() : QUnit::Test("JsonLdContext test", "1.0") {
@@ -696,7 +702,10 @@ class JsonLdContextTest inherits QUnit::Test {
     private fileDocumentLoaderTest() {
         # Create a temporary JSON-LD context file
         string tmp_dir = tmp_location();
-        string file_path = tmp_dir + "/test-context.jsonld";
+        string file_path = tmp_dir + DirSep + unique_name + "-test-context.jsonld";
+        on_exit {
+            unlink(file_path);
+        }
         {
             File f();
             f.open(file_path, O_WRONLY | O_CREAT | O_TRUNC);
@@ -706,10 +715,6 @@ class JsonLdContextTest inherits QUnit::Test {
                     "age": "http://schema.org/age",
                 },
             }));
-        }
-
-        on_exit {
-            unlink(file_path);
         }
 
         FileJsonLdDocumentLoader loader();
@@ -803,17 +808,16 @@ class JsonLdContextTest inherits QUnit::Test {
 
         # Create a temporary file
         string tmp_dir = tmp_location();
-        string file_path = tmp_dir + "/cache-test.jsonld";
+        string file_path = tmp_dir + DirSep + unique_name + "-cache-test.jsonld";
+        on_exit {
+            unlink(file_path);
+        }
         {
             File f();
             f.open(file_path, O_WRONLY | O_CREAT | O_TRUNC);
             f.write(make_json({
                 "@context": {"test": "http://example.com/test"},
             }));
-        }
-
-        on_exit {
-            unlink(file_path);
         }
 
         # First load - cache miss

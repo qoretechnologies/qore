@@ -31,7 +31,11 @@ public class MongoDbDataProviderTest inherits QUnit::Test {
         *MongoClient client;
         bool connection_failed = False;
 %endif
-        string test_db = "qore_data_provider_test";
+        #! the database the test creates its collection in
+        /** unique for every run, so that runs against the same server at the same time, or after a run that left the
+            database behind, never use each other's collection; the database is dropped when the test ends
+        */
+        string test_db = sprintf("qore_data_provider_test_%d_%s", getpid(), get_random_string(8));
         string test_coll = "test_collection";
     }
 
@@ -125,6 +129,11 @@ sub typed_mongodb_provider(MongoDbDataProvider::MongoDbCollectionDataProvider pr
                 # ignore cleanup errors
             }
         }
+    }
+
+    globalTearDown() {
+        # drop the database of this run, also when a test case left a collection in it
+        cleanup();
     }
 
     connectionTest() {
@@ -952,7 +961,9 @@ sub typed_mongodb_provider(MongoDbDataProvider::MongoDbCollectionDataProvider pr
         }
         if (!ensureConnection()) return;
 
-        string vs_db = "qore_vector_search_test";
+        # the database is unique for every run, so that runs against the same cluster at the same time never use
+        # each other's collection and search index
+        string vs_db = sprintf("qore_vector_search_test_%d_%s", getpid(), get_random_string(8));
         string vs_coll = "vectors";
         string vs_index = "qore_vs_idx";
 

@@ -11,6 +11,14 @@
 %exec-class IOInterruptTest
 
 public class IOInterruptTest inherits QUnit::Test {
+    private {
+        #! the base name of the files the test creates in the temporary directory
+        /** unique for every run, so that runs on the same host, at the same time or after a run that left files
+            behind, never use each other's files
+        */
+        string unique_name = sprintf("qore_io_interrupt_test_%d_%s", getpid(), get_random_string(8));
+    }
+
     constructor() : Test("IOInterruptTest", "1.0") {
         # Basic interrupt mechanism tests
         addTestCase("SandboxManager interrupt mechanism", \testSandboxManagerInterrupt());
@@ -101,14 +109,14 @@ public class IOInterruptTest inherits QUnit::Test {
     #------------------------------------------------------------------
 
     testFileReadNoInterrupt() {
-        string tmpfile = tmp_location() + "/test_read_interrupt.txt";
+        string tmpfile = tmp_location() + DirSep + unique_name + "-read.txt";
         string test_data = "test data for interrupt testing\n" + strmul("x", 1000);
+        on_exit unlink(tmpfile);
         {
             File f();
             f.open2(tmpfile, O_CREAT | O_WRONLY | O_TRUNC);
             f.write(test_data);
         }
-        on_exit unlink(tmpfile);
 
         # Test that file read works normally
         {
@@ -123,7 +131,7 @@ public class IOInterruptTest inherits QUnit::Test {
     }
 
     testFileWriteNoInterrupt() {
-        string tmpfile = tmp_location() + "/test_write_interrupt.txt";
+        string tmpfile = tmp_location() + DirSep + unique_name + "-write.txt";
         on_exit {
             if (is_file(tmpfile))
                 unlink(tmpfile);
@@ -151,13 +159,13 @@ public class IOInterruptTest inherits QUnit::Test {
     }
 
     testFileLockNoInterrupt() {
-        string tmpfile = tmp_location() + "/test_lock_interrupt.txt";
+        string tmpfile = tmp_location() + DirSep + unique_name + "-lock.txt";
+        on_exit unlink(tmpfile);
         {
             File f();
             f.open2(tmpfile, O_CREAT | O_WRONLY | O_TRUNC);
             f.write("test");
         }
-        on_exit unlink(tmpfile);
 
         # Test that file locking works normally
         {
@@ -481,13 +489,13 @@ int sub wait_counter() {
 
     testNoSandboxManager() {
         # Test that operations work without SandboxManager
-        string tmpfile = tmp_location() + "/test_no_sm.txt";
+        string tmpfile = tmp_location() + DirSep + unique_name + "-no-sm.txt";
+        on_exit unlink(tmpfile);
         {
             File f();
             f.open2(tmpfile, O_CREAT | O_WRONLY | O_TRUNC);
             f.write("test data for no sandbox manager test");
         }
-        on_exit unlink(tmpfile);
 
         # Operation should work normally without sandbox manager
         {

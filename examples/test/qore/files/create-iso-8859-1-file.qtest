@@ -21,11 +21,14 @@ class CreateIso88591FileTest inherits QUnit::Test {
 %endif
 
         string tmp = tmp_location();
-        string file = tmp + "/iso-8859-1.txt";
+        # unique for every run, so that runs on the same host, at the same time or after a run that left the file
+        # behind, never use each other's file
+        string file = tmp + DirSep + sprintf("qore_iso_8859_1_test_%d_%s.txt", getpid(), get_random_string(8));
+        on_exit unlink(file);
         string str = "Öffentl. Körperschaft/\n\n";
 
         File f = new File("ISO-8859-1");
-        f.open(file, O_WRONLY | O_CREAT);
+        f.open(file, O_WRONLY | O_CREAT | O_TRUNC);
         f.write(str);
         f.close();
 
@@ -33,7 +36,5 @@ class CreateIso88591FileTest inherits QUnit::Test {
         content = force_encoding(content, "iso-8859-1");
 
         assertEq(str, content, "file content check");
-
-        unlink(file);
     }
 }
