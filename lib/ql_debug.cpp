@@ -3167,14 +3167,43 @@ public:
     }
 
     DLLLOCAL void onConnectionClosed(HttpClientConnectionBase* conn) override {
-        ++close_count;
-        last_conn = conn;
+        {
+            std::lock_guard<std::mutex> lk(close_lock);
+            last_conn = conn;
+            ++close_count;
+        }
+        close_cond.notify_all();
         // Also call the base implementation so the connection is removed
         // from the pool (no-op here since we never add to the pool, but
         // documents the intended subclass pattern).
         HttpClientConnectionManagerBase::onConnectionClosed(conn);
     }
-    std::atomic<int> close_count{0};
+
+    //! Waits until the close hook has fired at least \a n times; returns the number of times it has fired
+    /** The wait is bounded only so that a hook that never fires fails the test instead of hanging it.
+    */
+    DLLLOCAL int waitForCloseCount(int n) {
+        std::unique_lock<std::mutex> lk(close_lock);
+        close_cond.wait_for(lk, std::chrono::seconds(30), [this, n] { return close_count >= n; });
+        return close_count;
+    }
+
+    //! Returns the connection the close hook was last called with
+    DLLLOCAL HttpClientConnectionBase* getLastConn() {
+        std::lock_guard<std::mutex> lk(close_lock);
+        return last_conn;
+    }
+
+    //! Returns the number of times the close hook has fired
+    DLLLOCAL int getCloseCount() {
+        std::lock_guard<std::mutex> lk(close_lock);
+        return close_count;
+    }
+
+private:
+    std::mutex close_lock;
+    std::condition_variable close_cond;
+    int close_count = 0;
     HttpClientConnectionBase* last_conn = nullptr;
 };
 
@@ -3604,22 +3633,18 @@ static void ut_http1_onclosed_hook_one_shot(UnitTestCounters& c) {
     UT_ASSERT(c, xsink.isException(), "exception raised on refused connect");
     xsink.clear();
 
-    // Hook may dispatch slightly after the state transition since
-    // setClosed → onClosedHook runs on the I/O thread but signals our
-    // condition var first.  Spin briefly to give the hook a chance to fire.
-    for (int i = 0; i < 100 && mgr->close_count.load() == 0; ++i) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(10));
-    }
-    UT_ASSERT_EQ(c, 1, (int)mgr->close_count.load(),
+    // The hook may be dispatched after the state transition, since setClosed → onClosedHook runs on the I/O thread
+    // but signals our condition var first: wait for it
+    UT_ASSERT_EQ(c, 1, mgr->waitForCloseCount(1),
         "manager.onConnectionClosed fired exactly once");
-    UT_ASSERT(c, mgr->last_conn == *conn,
+    UT_ASSERT(c, mgr->getLastConn() == *conn,
         "manager received the correct connection pointer");
 
     // Force a second setClosed via closeConnection() — should NOT re-fire
     // the hook because the one-shot guard latches it.
     conn->closeConnection(&xsink);
     xsink.clear();
-    UT_ASSERT_EQ(c, 1, (int)mgr->close_count.load(),
+    UT_ASSERT_EQ(c, 1, mgr->getCloseCount(),
         "manager.onConnectionClosed not re-fired on second setClosed");
 
     // Clear the manager back-pointer BEFORE deref'ing the manager — the
@@ -3660,7 +3685,7 @@ static void ut_http1_onclosed_hook_app_thread_close(UnitTestCounters& c) {
     xsink.clear();
 
     // Hook should have fired exactly once.
-    UT_ASSERT_EQ(c, 1, (int)mgr->close_count.load(),
+    UT_ASSERT_EQ(c, 1, mgr->getCloseCount(),
         "manager.onConnectionClosed fired exactly once on app-thread close");
 
     conn->setManager(nullptr);
