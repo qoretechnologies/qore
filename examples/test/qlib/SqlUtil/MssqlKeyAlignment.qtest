@@ -55,8 +55,9 @@ class MssqlKeyAlignmentTest inherits QUnit::Test {
     }
 
     #! Skips the test case if the server of a connection string cannot be reached
-    /** The CI test jobs set \c QORE_DB_CONNSTR_FREETDS to a server that they cannot reach; FreetdsSqlUtil.qtest
-        skips its tests then as well ("no DB connection")
+    /** The CI test jobs set connection strings for servers that they cannot reach (\c QORE_DB_CONNSTR_FREETDS on
+        Linux, \c QORE_DB_CONNSTR_MYSQL on macOS); the database tests of SqlUtil (FreetdsSqlUtil.qtest,
+        MysqlSqlUtil.qtest, PgsqlSqlUtil.qtest) skip their tests then as well ("no DB connection")
     */
     private skipIfNoConnection(string connstr) {
         Datasource ds(connstr);

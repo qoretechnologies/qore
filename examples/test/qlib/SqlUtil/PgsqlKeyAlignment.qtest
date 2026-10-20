@@ -34,6 +34,21 @@ class PgsqlKeyAlignmentTest inherits QUnit::Test {
         PgsqlRunSchema::teardown();
     }
 
+    #! Skips the test case if the server of a connection string cannot be reached
+    /** The CI test jobs set connection strings for servers that they cannot reach (\c QORE_DB_CONNSTR_FREETDS on
+        Linux, \c QORE_DB_CONNSTR_MYSQL on macOS); the database tests of SqlUtil (FreetdsSqlUtil.qtest,
+        MysqlSqlUtil.qtest, PgsqlSqlUtil.qtest) skip their tests then as well ("no DB connection")
+    */
+    private skipIfNoConnection(string connstr) {
+        Datasource ds(connstr);
+        try {
+            ds.open();
+        } catch (hash<ExceptionInfo> ex) {
+            testSkip(sprintf("no DB connection: %s: %s", ex.err, ex.desc));
+        }
+        ds.close();
+    }
+
     #! Returns a datasource whose tables are created in the run's own schema
     private Datasource datasource() {
 %ifdef NO_PGSQL
@@ -42,6 +57,7 @@ class PgsqlKeyAlignmentTest inherits QUnit::Test {
         if (!ENV.QORE_DB_CONNSTR_PGSQL) {
             testSkip("QORE_DB_CONNSTR_PGSQL is not set");
         }
+        skipIfNoConnection(ENV.QORE_DB_CONNSTR_PGSQL);
         PgsqlRunSchema::setup(ENV.QORE_DB_CONNSTR_PGSQL, "PgsqlKeyAlignment");
         return new Datasource(ENV.QORE_DB_CONNSTR_PGSQL);
     }
