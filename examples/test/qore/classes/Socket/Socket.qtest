@@ -2101,6 +2101,8 @@ class SocketTest inherits QUnit::Test {
     # Reproduces an SSL async send edge case: partial writes that require polling.
     sslPollSendPartialTest() {
         binary bigmsg = get_random_bytes(32 * 1024 * 1024);
+        # the receiver thread delivers the data it received or the exception that ended it, so the test never waits
+        # for a thread that is gone
         Queue q();
 
         setenv("QORE_TEST_SSL_PARTIAL_WRITE", "1");
@@ -2108,58 +2110,59 @@ class SocketTest inherits QUnit::Test {
         setenv("QORE_TEST_SSL_PARTIAL_WRITE_LIMIT", "4");
         on_exit unsetenv("QORE_TEST_SSL_PARTIAL_WRITE_LIMIT");
 
+        Socket server();
+        server.bind(0);
+        server.listen();
+        server.setCertificate(TestCert);
+        server.setPrivateKey(TestCert);
+        # closing the listening socket ends the receiver's accept if the sender never connects
+        on_exit server.close();
+        int port = server.getSocketInfo().port;
+
         background sub () {
-            Socket server();
-            server.bind(0);
-            server.listen();
-            server.setCertificate(TestCert);
-            server.setPrivateKey(TestCert);
-            q.push(server.getSocketInfo().port);
+            try {
+                Socket receiver = server.acceptSSL();
 
-            Socket receiver = server.acceptSSL(15s);
-
-            SocketPollOperation spop_recv = receiver.startPollRecvData();
-            binary bmsg;
-            date start = now();
-            while (bmsg.size() < bigmsg.size()) {
-                if (now() - start > 20s) {
-                    throw "TEST-ERROR", "timeout waiting for SSL poll recv data";
-                }
-                *hash<SocketPollInfo> info = spop_recv.continuePoll();
-                if (info) {
-                    Socket::poll((info,), 1s);
-                    continue;
-                }
-                binary chunk = spop_recv.getOutput();
-                if (chunk.size()) {
-                    bmsg += chunk;
-                    if (bmsg.size() > bigmsg.size()) {
-                        break;
+                SocketPollOperation spop_recv = receiver.startPollRecvData();
+                binary bmsg;
+                while (bmsg.size() < bigmsg.size()) {
+                    *hash<SocketPollInfo> info = spop_recv.continuePoll();
+                    if (info) {
+                        Socket::poll((info,), 1s);
+                        continue;
                     }
-                    usleep(2ms);
+                    binary chunk = spop_recv.getOutput();
+                    if (chunk.size()) {
+                        bmsg += chunk;
+                        if (bmsg.size() > bigmsg.size()) {
+                            break;
+                        }
+                        usleep(2ms);
+                    }
+                    if (bmsg.size() < bigmsg.size()) {
+                        spop_recv = receiver.startPollRecvData();
+                    }
                 }
-                if (bmsg.size() < bigmsg.size()) {
-                    spop_recv = receiver.startPollRecvData();
-                }
+                q.push(bmsg);
+            } catch (hash<ExceptionInfo> ex) {
+                q.push(ex);
             }
-            q.push(bmsg);
         }();
 
-        int port = q.get();
         Socket sender();
         sender.connectSSL("127.0.0.1:" + port);
 
         SocketPollOperation spop_send = sender.startPollSend(bigmsg);
-        date send_start = now();
         while (*hash<SocketPollInfo> info = spop_send.continuePoll()) {
-            if (now() - send_start > 20s) {
-                throw "TEST-ERROR", "timeout waiting for SSL poll send data";
-            }
             Socket::poll((info,), 1s);
         }
 
-        binary bmsg = q.get();
+        auto received = q.get();
         sender.close();
+        if (received.typeCode() == NT_HASH) {
+            fail(sprintf("the receiver failed: %s", get_exception_string(received)));
+        }
+        binary bmsg = received;
         assertEq(bigmsg.size(), bmsg.size());
         assertEq(bigmsg.toSHA512(), bmsg.toSHA512());
     }
