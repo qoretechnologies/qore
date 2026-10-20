@@ -2155,6 +2155,137 @@ public:
     }
 };
 
+//! A submission that loses the race with the controller's shutdown releases its result Queue
+/** submit() packages an operation from a thread that is not its I/O thread into a SubmitOp command; when the
+    controller starts shutting down before the command is pushed, cleanupAbandonedCommand() delivers a canceled
+    result to the operation's result Queue and releases the command's references.  The command's reference to the
+    Queue was dropped without being released, which leaked the Queue and the result in it, and with it the socket
+    and the poll operation the result refers to.
+
+    The test forces the race deterministically: it marks the running controller as shutting down (as stop() does
+    before it waits for the I/O threads) and submits with its own result Queue, whose reference count must be the
+    same after the rejected submission as before it.
+*/
+class AsyncIoAbandonedSubmitTest {
+public:
+    static void run(UnitTestCounters& c) {
+        ExceptionSink xsink;
+        ReferenceHolder<AsyncIoControllerPriv> ctrl(new AsyncIoControllerPriv(false, &xsink), &xsink);
+        UT_ASSERT(c, !xsink, "abandoned-submit controller construction succeeds");
+        if (xsink) {
+            xsink.clear();
+            return;
+        }
+        // stops the controller on every exit path, after clearing the forced shutdown mark
+        struct Cleanup {
+            AsyncIoControllerPriv* ctrl;
+            ExceptionSink& xsink;
+            UnitTestCounters& c;
+
+            ~Cleanup() {
+                {
+                    AutoLocker al(ctrl->m);
+                    ctrl->shutting_down = false;
+                }
+                xsink.clear();
+                ctrl->stopClear(&xsink);
+                UT_ASSERT(c, !xsink, "abandoned-submit controller cleanup succeeds");
+                xsink.clear();
+            }
+        } cleanup{*ctrl, xsink, c};
+
+        ctrl->setMaxIoThreads(1, &xsink);
+        ctrl->start(&xsink);
+        UT_ASSERT(c, !xsink, "abandoned-submit controller starts");
+        if (xsink) {
+            return;
+        }
+        bool ready = ctrl->waitReady(5000, &xsink);
+        UT_ASSERT(c, ready && !xsink, "abandoned-submit controller becomes ready");
+        if (!ready || xsink) {
+            return;
+        }
+
+        QoreSocketObject* sock = new QoreSocketObject;
+        ReferenceHolder<QoreObject> sock_obj(new QoreObject(QC_SOCKET, getProgram(), sock), &xsink);
+        int rc = sock->bindINET("127.0.0.1", "0", true, AF_INET, SOCK_STREAM, 0, &xsink);
+        UT_ASSERT(c, !rc && !xsink, "abandoned-submit listener binds");
+        if (rc || xsink) {
+            return;
+        }
+        rc = sock->listen(20);
+        UT_ASSERT_EQ(c, 0, rc, "abandoned-submit listener listens");
+        if (rc) {
+            return;
+        }
+        sock->ref();
+        SocketAcceptPollOperation* accept = new SocketAcceptPollOperation(&xsink, sock, false, true);
+        ReferenceHolder<QoreObject> op_obj(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), accept), &xsink);
+        UT_ASSERT(c, !xsink, "abandoned-submit accept operation construction succeeds");
+        if (xsink) {
+            return;
+        }
+        accept->setSelf(*op_obj);
+        op_obj->setValue("sock", sock_obj->objectRefSelf(), &xsink);
+        op_obj->setValue("goal", new QoreStringNode("accept"), &xsink);
+        UT_ASSERT(c, !xsink, "abandoned-submit accept operation is initialized");
+        if (xsink) {
+            return;
+        }
+
+        // the caller's own result Queue, typed as the hashdecl requires
+        Queue* queue = new Queue;
+        ReferenceHolder<QoreObject> queue_obj(new QoreObject(QC_QUEUE, getProgram(), queue), &xsink);
+        {
+            type_vec_t args;
+            args.push_back(hashdeclSocketPollResultInfo->getTypeInfo(false));
+            queue_obj->setInstantiatedTypeInfo(QC_QUEUE->getTypeInfo(args, false));
+        }
+        int queue_refs = queue->reference_count();
+
+        ReferenceHolder<QoreHashNode> info(new QoreHashNode(hashdeclSocketPollOperationInfo, &xsink), &xsink);
+        info->setKeyValue("sock", sock_obj->objectRefSelf(), &xsink);
+        info->setKeyValue("spop", op_obj->objectRefSelf(), &xsink);
+        info->setKeyValue("owner", new QoreStringNode("abandoned-submit-unit-test"), &xsink);
+        info->setKeyValue("to", -1, &xsink);
+        info->setKeyValue("resultQueue", queue_obj->objectRefSelf(), &xsink);
+        UT_ASSERT(c, !xsink, "abandoned-submit submission info is initialized");
+        if (xsink) {
+            return;
+        }
+
+        // the controller is shutting down after submit() found its I/O thread running and before the command
+        // could be pushed: the window stop() opens when it marks the controller before waiting for its threads
+        {
+            AutoLocker al(ctrl->m);
+            ctrl->shutting_down = true;
+        }
+        ReferenceHolder<QoreObject> rv(ctrl->submit(nullptr, info.release(), false, &xsink), &xsink);
+        UT_ASSERT(c, !rv, "an abandoned submission returns no Queue");
+        UT_ASSERT(c, static_cast<bool>(xsink), "an abandoned submission raises an exception");
+        if (xsink) {
+            QoreStringDataHelper err(xsink.getExceptionErr());
+            UT_ASSERT(c, err == "ASYNC-IO-ERROR", "an abandoned submission raises ASYNC-IO-ERROR");
+            xsink.clear();
+        }
+
+        UT_ASSERT_EQ(c, 1, static_cast<int>(queue->size()),
+            "an abandoned submission delivers exactly one result to its Queue");
+        if (queue->size() == 1) {
+            bool timed_out = false;
+            ValueHolder result(queue->shift(&xsink, 0, &timed_out), &xsink);
+            UT_ASSERT(c, !timed_out && !xsink && result->getType() == NT_HASH,
+                "the abandoned submission's result is a hash");
+            if (result->getType() == NT_HASH) {
+                UT_ASSERT(c, result->get<QoreHashNode>()->getKeyValue("canceled").getAsBool(),
+                    "the abandoned submission's result is canceled");
+            }
+        }
+        UT_ASSERT_EQ(c, queue_refs, queue->reference_count(),
+            "an abandoned submission releases its reference to the result Queue");
+    }
+};
+
 //! An HTTP/3 response drained by the I/O thread while its request registers with the connection is delivered
 /** The I/O thread routes each response drained from the QUIC session with
     Http3ClientPollOperationPriv::takeResponseAction(); the requesting thread registers its action with
@@ -6261,6 +6392,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
 #ifdef DEBUG
     AsyncIoCloseTest::resize(c);
     AsyncIoCloseTest::run(c);
+    AsyncIoAbandonedSubmitTest::run(c);
     ut_cond_wait_cancel_in_window(c);
     Http3ClientResponseRegistrationTest::run(c);
     ut_fast_real_deref_releases_last(c);

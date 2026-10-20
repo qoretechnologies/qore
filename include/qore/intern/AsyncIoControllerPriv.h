@@ -527,6 +527,7 @@ class AsyncIoControllerPriv : public AbstractPrivateData {
 #ifdef DEBUG
     friend class AsyncIoCloseTest;
     friend class AsyncIoOpCacheTest;
+    friend class AsyncIoAbandonedSubmitTest;
 #endif
     friend class QoreCallDispatcher;  // for enqueueContinuePollResult from worker thread
 

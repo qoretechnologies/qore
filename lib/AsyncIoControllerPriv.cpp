@@ -865,9 +865,9 @@ void AsyncIoControllerPriv::cleanupAbandonedCommand(Command& cmd, ExceptionSink*
                 }
             }
             if (result) {
-                // deliverResult takes ownership of spop_obj ref (ref'd
-                // here) and result; we null cmd.submit_spop_obj so the
-                // cleanup below doesn't double-deref.
+                // deliverResult takes ownership of the result and of the spop_obj reference made here; it only
+                // pushes to the queue and never takes the command's reference to it, which is released with the
+                // command's other references below
                 QoreObject* spop_obj = cmd.submit_spop_obj;
                 if (spop_obj) {
                     spop_obj->ref();
@@ -875,11 +875,6 @@ void AsyncIoControllerPriv::cleanupAbandonedCommand(Command& cmd, ExceptionSink*
                 deliverResult(cmd.submit_queue, spop_obj,
                     cmd.submit_has_qore_on_complete, result, xsink, std::string(),
                     std::move(cmd.submit_sandbox_ctx));
-                // deliverResult consumed queue ref when spop_obj is null,
-                // or kept queue if spop_obj was used for onComplete.
-                // In both cases it drops the original queue ref — clear
-                // the cmd field to avoid double-deref.
-                cmd.submit_queue = nullptr;
             }
             if (cmd.submit_socket_async_io) {
                 clear_socket_async_io_owner(cmd.submit_sock, xsink);
