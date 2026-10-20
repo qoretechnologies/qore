@@ -128,6 +128,9 @@ module MssqlSqlUtilBase {
       database before the new one is added; adding it failed with "Column already has a DEFAULT bound to it"
     - fixed dropping an index, as table alignment does to recreate an index whose columns change: SQL Server
       refused the \c DROP \c INDEX statement, which had no table name
+    - fixed describing the foreign constraints of a table, which found none, so that table alignment added the
+      foreign constraints of the template again, which SQL Server refused; a foreign constraint that references a
+      unique index is also described
 
     @subsection MssqlSqlUtilBasev10 MssqlSqlUtilBase v1.0
     - initial release
@@ -2443,42 +2446,48 @@ and s.name = %v and t.name = %v order by i.name, ic.key_ordinal", schema, name);
     }
 
     private ForeignConstraints getForeignConstraintsImpl(*hash opts) {
-        return is_sybase ? getForeignConstraintsSybaseImpl() : getForeignConstraintsMssqlImpl();
+        return is_sybase ? getForeignConstraintsSybaseImpl() : getForeignConstraintsMssqlImpl(opts);
     }
 
     private ForeignConstraints getForeignConstraintsSybaseImpl() {
         return new ForeignConstraints();
     }
 
-    private ForeignConstraints getForeignConstraintsMssqlImpl() {
-        hash rv;
+    #! describes the foreign constraints of the table from the SQL Server catalog
+    /** The catalog views give the referenced columns of every foreign constraint, also of one that references a
+        unique index, which is not a constraint and has no rows in \c information_schema.key_column_usage
+
+        @param opts the options of the description; its \c table_cache key, if any, gives the descriptions of the
+        referenced tables
+    */
+    private ForeignConstraints getForeignConstraintsMssqlImpl(*hash<auto> opts) {
+        hash<auto> rv;
         # get foreign referential constraints
-        *hash qh = ds.select("select tc.constraint_name, c1.column_name source_column,
-    c2.column_name target_column
+        *hash<auto> qh = ds.select("select fk.name constraint_name, sc.name source_column, rs.name target_schema,
+    rt.name target_table, tc.name target_column
 from
-    information_schema.table_constraints tc,
-    information_schema.referential_constraints rc,
-    information_schema.key_column_usage c1,
-    information_schema.key_column_usage c2
+    sys.foreign_keys fk
+    join sys.tables t on (t.object_id = fk.parent_object_id)
+    join sys.schemas s on (s.schema_id = t.schema_id)
+    join sys.foreign_key_columns fkc on (fkc.constraint_object_id = fk.object_id)
+    join sys.columns sc on (sc.object_id = fkc.parent_object_id and sc.column_id = fkc.parent_column_id)
+    join sys.tables rt on (rt.object_id = fkc.referenced_object_id)
+    join sys.schemas rs on (rs.schema_id = rt.schema_id)
+    join sys.columns tc on (tc.object_id = fkc.referenced_object_id and tc.column_id = fkc.referenced_column_id)
 where
-    tc.table_schema = %v and tc.table_name = %v and tc.constraint_type = 'FOREIGN KEY'
-    and tc.constraint_catalog = rc.constraint_catalog and tc.constraint_name = rc.constraint_name
-    and rc.constraint_catalog = c1.constraint_catalog and rc.constraint_schema = c1.constraint_schema
-        and rc.constraint_name = c1.constraint_name
-    and rc.unique_constraint_catalog = c2.constraint_catalog and rc.unique_constraint_schema = c2.constraint_schema
-        and rc.unique_constraint_name = c2.constraint_name
-    and c2.ordinal_position = c1.ordinal_position
+    s.name = %v and t.name = %v
 order by
-    rc.constraint_name, c1.ordinal_position",
-                                name, schema);
+    fk.name, fkc.constraint_column_id", schema, name);
         if (qh.constraint_name) {
-            hash ch;
+            hash<auto> ch;
             foreach hash<auto> row in (qh.contextIterator()) {
-                reference<hash> c = \ch.(row.constraint_name.lwr());
-                row.source_column = row.source_column.lwr();
-                c.columns.(row.source_column) = columns{row.source_column};
-                c.target.table = row.target_table.lwr();
-                c.target.columns.(row.target_column.lwr()) = True;
+                reference<hash<auto>> c = \ch{row.constraint_name.lwr()};
+                string source_column = row.source_column.lwr();
+                c.columns{source_column} = columns{source_column};
+                # a table in another schema is referenced with its schema
+                c.target.table = (row.target_schema.lwr() == schema.lwr() ? "" : row.target_schema.lwr() + ".")
+                    + row.target_table.lwr();
+                c.target.columns{row.target_column.lwr()} = True;
             }
 
             foreach hash<auto> c in (ch.pairIterator()) {
@@ -2486,7 +2495,7 @@ order by
                 Columns targ_columns = getReferencedTableColumnsUnlocked(c.value.target.table, opts.table_cache);
                 ForeignConstraintTarget fct(c.value.target.table,
                     targ_columns.subset(c.value.target.columns.keys()));
-                rv.(c.key) = new MssqlForeignConstraint(c.key, new Columns(c.value.columns), fct);
+                rv{c.key} = new MssqlForeignConstraint(c.key, new Columns(c.value.columns), fct);
             }
         }
 

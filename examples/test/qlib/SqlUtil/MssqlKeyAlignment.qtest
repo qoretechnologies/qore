@@ -35,6 +35,7 @@ class MssqlKeyAlignmentTest inherits QUnit::Test {
     constructor() : Test("MssqlKeyAlignmentTest", "1.0", \ARGV) {
         addTestCase("the SQL of an index with other columns", \indexColumnChangeSql());
         addTestCase("an index with other columns is dropped and created", \indexColumnChange());
+        addTestCase("the foreign constraints of a table are described", \foreignConstraintDescription());
         set_return_value(main());
     }
 
@@ -114,6 +115,38 @@ class MssqlKeyAlignmentTest inherits QUnit::Test {
             alignTable(ds, "mka_ix", desc));
         assertEq(("a", "b"), (new MssqlTable(ds, "mka_ix")).getIndexes().ix_mka_ix.columns.keys());
         assertEq((), alignTable(ds, "mka_ix", desc));
+    }
+
+    #! The foreign constraints of a table are described, those that reference a unique constraint and those that
+    #! reference a unique index, and a table with the foreign constraints of its template needs no SQL
+    foreignConstraintDescription() {
+        Datasource ds = datasource();
+        on_exit dropTables(ds, ("mka_fc", "mka_fp"));
+        dropTables(ds, ("mka_fc", "mka_fp"));
+        ds.execRaw("create table dbo.mka_fp (id int not null, a int, b varchar(10), "
+            "constraint pk_mka_fp primary key (id), constraint uk_mka_fp unique (b))");
+        ds.execRaw("create unique index uix_mka_fp on dbo.mka_fp (a)");
+        ds.execRaw("create table dbo.mka_fc (id int not null, a int, b varchar(10), "
+            "constraint fk_mka_fc_a foreign key (a) references dbo.mka_fp (a), "
+            "constraint fk_mka_fc_b foreign key (b) references dbo.mka_fp (b))");
+        ds.commit();
+
+        *hash<auto> fks = (new MssqlTable(ds, "mka_fc")).getForeignConstraints().getHash();
+        assertEq(("fk_mka_fc_a", "fk_mka_fc_b"), keys fks);
+        foreach string column in (("a", "b")) {
+            AbstractForeignConstraint fk = fks{"fk_mka_fc_" + column};
+            assertEq((column,), fk.keys(), column);
+            assertEq("mka_fp", fk.target.table, column);
+            assertEq((column,), fk.target.columns.keys(), column);
+        }
+
+        assertEq((), alignTable(ds, "mka_fc", {
+            "columns": Columns,
+            "foreign_constraints": {
+                "fk_mka_fc_a": {"columns": ("a",), "table": "mka_fp", "target_columns": ("a",)},
+                "fk_mka_fc_b": {"columns": ("b",), "table": "mka_fp", "target_columns": ("b",)},
+            },
+        }));
     }
 }
 
