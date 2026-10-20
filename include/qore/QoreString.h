@@ -995,7 +995,15 @@ public:
     //! returns true if the other string is equal to this string (encodings also must be equal)
     DLLEXPORT bool operator==(const std::string& other) const;
 
-    //! returns true if the other string is equal to this string (encodings also must be equal)
+    //! returns true if the null-terminated string given is equal to this string
+    /** The whole string is compared: a string with a NUL character is not equal to the C string that ends at its
+        first NUL character (ex: \c "1.0\0x" is not equal to \c "1.0"); a null pointer is equal to an empty string
+
+        @note does not work with UTF-16 or other non-ASCII-compatible multi-byte encodings
+
+        @since %Qore 3.0 the whole string is compared; a string was equal to the C string that ended at its first NUL
+        character
+    */
     DLLEXPORT bool operator==(const char* other) const;
 
     //! returns true if the other string is not equal to this string (encodings also must be equal)

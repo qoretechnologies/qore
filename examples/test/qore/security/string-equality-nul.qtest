@@ -1,0 +1,54 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+#
+# a string compared with a keyword in the C++ API (QoreString::operator==(const char*)) was compared with strcmp(),
+# so a string with a NUL character was equal to the keyword that ends at its first NUL character; the whole string
+# is now compared, so "connect\x00x" is not the goal "connect" and "data\x00x" is not the server-sent event field
+# "data"
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class StringEqualityNulTest
+
+class StringEqualityNulTest inherits QUnit::Test {
+    constructor() : Test("StringEqualityNulTest", "1.0") {
+        addTestCase("poll operation goals", \goals());
+        addTestCase("server-sent event fields", \sseFields());
+        set_return_value(main());
+    }
+
+    goals() {
+        # cut at the NUL character, the goal was "connect"
+        assertThrows("INVALID-GOAL", sub () {
+            SocketPollOperation op(new Socket(), "connect\x00x", {"url": "127.0.0.1:1"});
+        });
+        assertThrows("INVALID-GOAL", sub () {
+            SocketPollOperation op(new Socket(), "connect-ssl\x00x", {"url": "127.0.0.1:1"});
+        });
+        # the goals themselves
+        SocketPollOperation op(new Socket(), "connect", {"url": "127.0.0.1:1"});
+        assertEq("connect", op.getGoal());
+    }
+
+    sseFields() {
+        # cut at the NUL character, the field names were "data", "event", "id" and "retry"; a field with another
+        # name is ignored
+        hash<SseMessageInfo> evt = Socket::parseServerSentEvent("data\x00x: hidden\nevent\x00x: other\nid\x00x: 5\n"
+            "retry\x00x: 10\ndata: shown\n\n");
+        assertEq("shown", evt.data);
+        assertNothing(evt.event);
+        assertNothing(evt.id);
+        assertNothing(evt.retry);
+        # the field names themselves
+        evt = Socket::parseServerSentEvent("event: update\nid: 5\nretry: 10\ndata: shown\n\n");
+        assertEq("update", evt.event);
+        assertEq("5", evt.id);
+        assertEq(10, evt.retry);
+        assertEq("shown", evt.data);
+    }
+}

@@ -4190,11 +4190,14 @@ bool QoreString::operator==(const std::string& other) const {
 }
 
 bool QoreString::operator==(const char* other) const {
-   // NOTE: does not work with UTF-16 or other non-ASCII-compatible multi-byte encodings
-   if (!priv->len) {
-      return !other || !other[0];
-   }
-   return !strcmp(other, priv->effective_buf());
+    // NOTE: does not work with UTF-16 or other non-ASCII-compatible multi-byte encodings
+    if (!other) {
+        return !priv->len;
+    }
+    // the whole string is compared: with strcmp(), a string with a NUL character was equal to the C string that ends
+    // at its first NUL character, so a keyword given as "connect\0x" matched "connect"
+    size_t len = ::strlen(other);
+    return len == priv->len && (!len || !memcmp(other, priv->effective_buf(), len));
 }
 
 QoreString& QoreString::operator+=(const char* str) {
