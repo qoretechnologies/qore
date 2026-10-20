@@ -80,6 +80,9 @@ pmFneeIUuXJajOsh7jUyTxcrHl+4kkgHDExuFMNPHfrIG8xCj43fjzxD/spz3xRS
 l50Xb2GWQesIt9k5jF5IOw==
 -----END PRIVATE KEY-----";
 
+#! The bound on a blocking Queue::get() for a state event or a result: a hang guard only, never a timing assertion
+const HangGuard = 60s;
+
 %exec-class QuicE2ETest
 
 class QuicE2ETest inherits QUnit::Test {
@@ -194,17 +197,22 @@ class QuicE2ETest inherits QUnit::Test {
             "owner": "server",
             "to": 10s,
         });
+        # the controller reports the client's change into "reading" (handshake and HTTP/3 setup done), and the end
+        # of the operation if it ends before
+        Queue<hash<SocketPollStateInfo>> client_states();
         Queue client_q = ctrl.submit(<SocketPollOperationInfo>{
             "sock": client_sock,
             "spop": client_op,
             "owner": "client",
             "to": 10s,
+            "stateQueue": client_states,
+            "notifyStates": "reading",
         });
 
         # The client poll operation needs the HTTP/3 layer to be initialized before
         # we can submit a request. Use a background thread that waits for the client
-        # to reach "reading" state (handshake + HTTP/3 setup complete), then submits
-        # the request.
+        # to reach "reading" state (handshake + HTTP/3 setup complete) on its state
+        # Queue, then submits the request.
         Counter request_submitted(1);
         bool submit_error = False;
         string submit_error_msg;
@@ -212,24 +220,16 @@ class QuicE2ETest inherits QUnit::Test {
         code request_submitter = sub() {
             on_exit request_submitted.dec();
             try {
-                # Wait for client to reach "reading" state (HTTP/3 ready)
-                # AbstractPollOperation doesn't provide event callbacks for state
-                # transitions; use Queue.get() with short timeout to yield the thread
-                # while the AsyncSocketIoController drives the handshake
-                Queue yield_q();
-                date deadline = now_us() + 10s;
-                while (client_op.getState() != "reading") {
-                    date remaining = deadline - now_us();
-                    if (remaining <= 0us) {
-                        submit_error = True;
-                        submit_error_msg = "timeout waiting for client to reach reading state; "
-                            "state=" + client_op.getState();
-                        return;
-                    }
-                    try {
-                        yield_q.get(min(remaining, 5ms));
-                    } catch () {
-                    }
+                # Wait for client to reach "reading" state (HTTP/3 ready); the client's own
+                # timeout ends a stalled handshake, which reports the end of the operation,
+                # so the bound on the wait is a hang guard only
+                hash<SocketPollStateInfo> event = client_states.get(HangGuard);
+                if (event.done) {
+                    *hash<SocketPollResultInfo> result = client_q.get(HangGuard);
+                    submit_error = True;
+                    submit_error_msg = sprintf("the client ended in state %y before it was ready: %y",
+                        event.state, result.ex ?? result);
+                    return;
                 }
 
                 # Now submit the GET request

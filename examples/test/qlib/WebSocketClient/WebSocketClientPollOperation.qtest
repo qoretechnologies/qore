@@ -19,6 +19,9 @@
 %requires WebSocketClient
 %requires AsyncSocketIo
 
+#! The bound on a blocking wait for a message or a state event: a hang guard only, never a timing assertion
+const HangGuard = 60s;
+
 %exec-class WebSocketClientPollOperationTest
 
 #! WebSocket connection that echoes messages back
@@ -304,6 +307,8 @@ public class WebSocketClientPollOperationTest inherits QUnit::Test {
         # Create a controller for this test
         AsyncSocketIo::AsyncSocketIoController controller(logger);
         string owner = "test-" + get_random_string(8);
+        # the controller reports the operation's change into "closed", and its end if it ends before
+        Queue<hash<SocketPollStateInfo>> ws_states();
 
         # Use DelegatingPollOperation to add completion handling to the C++
         # WebSocketClientPollOperation (which doesn't support setCompletionHandler).
@@ -319,6 +324,8 @@ public class WebSocketClientPollOperationTest inherits QUnit::Test {
                         "spop": wrapper,
                         "owner": owner,
                         "to": -1s,
+                        "stateQueue": ws_states,
+                        "notifyStates": "closed",
                     }, True);
                 } catch (hash<ExceptionInfo> ex) {
                     # Controller may be stopping
@@ -332,6 +339,8 @@ public class WebSocketClientPollOperationTest inherits QUnit::Test {
             "spop": wrapper,
             "owner": owner,
             "to": -1s,
+            "stateQueue": ws_states,
+            "notifyStates": "closed",
         });
 
         controller.waitForProcessing(5s);
@@ -340,12 +349,11 @@ public class WebSocketClientPollOperationTest inherits QUnit::Test {
         poll_op.sendText("controller-test");
         controller.wakeSocket(hc);
 
-        # Wait for the echo
+        # Wait for the echo; the bound on each wait is a hang guard only
         *hash<auto> msg;
-        date end = now_us() + 10s;
-        while (now_us() < end) {
-            msg = poll_op.getReceivedMessage(100ms);
-            if (msg && msg.type == "text") {
+        while (True) {
+            msg = poll_op.getReceivedMessage(HangGuard);
+            if (!msg || msg.type == "text") {
                 break;
             }
         }
@@ -357,11 +365,10 @@ public class WebSocketClientPollOperationTest inherits QUnit::Test {
         poll_op.sendClose();
         controller.wakeSocket(hc);
 
-        # Wait for close to complete
-        end = now_us() + 10s;
-        while (now_us() < end && !poll_op.goalReached()) {
-            Qore::usleep(10000);
-        }
+        # Wait for close to complete: the operation reports its change into "closed" on the I/O thread
+        hash<SocketPollStateInfo> event = ws_states.get(HangGuard);
+        assertEq("closed", event.state, "the close handshake completes");
+        assertFalse(event.done, "the operation reports the close before it ends");
 
         controller.cancelByOwner(owner);
         controller.flushCallbacksByOwner(owner);

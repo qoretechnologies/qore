@@ -83,6 +83,45 @@ l50Xb2GWQesIt9k5jF5IOw==
 #! the number of sequential requests of the sustained request test
 const SustainedRequestCount = 50;
 
+#! The bound on a blocking Queue::get() for a state event or a result: a hang guard only, never a timing assertion
+const HangGuard = 60s;
+
+#! Waits for one submission of a QUIC client operation to be ready for a request
+/** The client operation is submitted with @ref states as its state Queue and \c "reading" as the only state to
+    report: the change into \c "reading" means that the handshake and the HTTP/3 setup are done; an event with
+    \c done set means that the submission ended before (the operation's own timeout ends a stalled handshake).
+*/
+class ClientReadiness {
+    public {
+        #! the state Queue of the submission
+        Queue<hash<SocketPollStateInfo>> states();
+    }
+
+    private {
+        #! True once the submission has reported "reading"
+        bool reading = False;
+    }
+
+    #! Waits until the client is ready for a request; throws an exception if the submission ends before
+    /** @param result_q the submission's result Queue, which has its result once it has ended
+    */
+    waitForReading(Queue result_q) {
+        if (reading) {
+            return;
+        }
+        hash<SocketPollStateInfo> event = states.get(HangGuard);
+        if (event.done) {
+            *hash<SocketPollResultInfo> result = result_q.get(HangGuard);
+            throw "QUIC-CLIENT-ERROR", sprintf("the client ended in state %y before it was ready: %y", event.state,
+                result.ex ?? result);
+        }
+        if (event.state != "reading") {
+            throw "QUIC-CLIENT-ERROR", sprintf("unexpected client state event: %y", event);
+        }
+        reading = True;
+    }
+}
+
 %exec-class QuicComprehensiveTest
 
 class QuicComprehensiveTest inherits QUnit::Test {
@@ -177,21 +216,31 @@ class QuicComprehensiveTest inherits QUnit::Test {
             "owner": owner_base + "-server",
             "to": to,
         });
-        Queue client_q = ctrl.submit(<SocketPollOperationInfo>{
-            "sock": pair.client_sock,
-            "spop": client_op,
-            "owner": owner_base + "-client",
-            "to": to,
-        });
-
-        return pair + {
+        hash<auto> ctx = pair + {
             "ctrl": ctrl,
             "owner_base": owner_base,
             "server_op": server_op,
             "client_op": client_op,
             "server_q": server_q,
-            "client_q": client_q,
         };
+        submitClient(\ctx, to);
+        return ctx;
+    }
+
+    #! Helper: submits the client operation with a state Queue that reports when it is ready for a request
+    /** Each submission has its own @ref ClientReadiness, as a submission reports its change into "reading" once;
+        after a round trip, the client is submitted again and goes from "response-ready" back to "reading".
+    */
+    private submitClient(reference<hash<auto>> ctx, timeout to, *bool replace) {
+        ctx.client_ready = new ClientReadiness();
+        ctx.client_q = ctx.ctrl.submit(<SocketPollOperationInfo>{
+            "sock": ctx.client_sock,
+            "spop": ctx.client_op,
+            "owner": ctx.owner_base + "-client",
+            "to": to,
+            "stateQueue": ctx.client_ready.states,
+            "notifyStates": "reading",
+        }, replace);
     }
 
     #! Helper: cancel all operations for this test context on the global controller
@@ -205,38 +254,15 @@ class QuicComprehensiveTest inherits QUnit::Test {
     }
 
     #! Helper: wait for client to reach "reading" state (HTTP/3 ready)
-    /** @note Uses short Queue.get() waits to yield the thread while the
-        AsyncSocketIoController drives the handshake in its I/O thread.
-        AbstractPollOperation does not provide an event/callback mechanism
-        for state transitions, so we must poll getState() with yields.
-    */
-    private waitForClientReading(AbstractPollOperation client_op, *timeout to) {
-        if (!to) {
-            to = 10s;
-        }
-        Queue yield_q();
-        date deadline = now_us() + to;
-        while (client_op.getState() != "reading") {
-            date remaining = deadline - now_us();
-            if (remaining <= 0us) {
-                throw "TIMEOUT", sprintf("timeout waiting for client reading state; state=%s",
-                    client_op.getState());
-            }
-            # Yield via Queue.get() with short timeout; the I/O controller
-            # thread drives the QUIC handshake and transitions the state
-            try {
-                yield_q.get(min(remaining, 5ms));
-            } catch () {
-                # Queue.get() throws QUEUE-TIMEOUT; continue checking state
-            }
-        }
+    private waitForClientReading(hash<auto> ctx) {
+        ctx.client_ready.waitForReading(ctx.client_q);
     }
 
     #! Helper: submit a request from client, wake controller, wait for server to receive it
     private hash<auto> submitRequestAndWaitForServer(hash<auto> ctx, string method, string path,
             *hash<auto> req_headers, *data req_body) {
         # Wait for client to be in reading state
-        waitForClientReading(ctx.client_op);
+        waitForClientReading(ctx);
 
         # Submit request
         int stream_id = ctx.client_sock.submitQuicRequest(method, path, req_headers, req_body);
@@ -358,12 +384,7 @@ class QuicComprehensiveTest inherits QUnit::Test {
         }, True);
 
         # Re-submit client connect op - it will go from response-ready -> reading
-        ctx.client_q = ctx.ctrl.submit(<SocketPollOperationInfo>{
-            "sock": ctx.client_sock,
-            "spop": ctx.client_op,
-            "owner": ctx.owner_base + "-client",
-            "to": 30s,
-        }, True);
+        submitClient(\ctx, 30s, True);
     }
 
     # ===== Group 1: Full Round-Trip =====
@@ -560,7 +581,7 @@ class QuicComprehensiveTest inherits QUnit::Test {
         int num_streams = 3;
 
         # Wait for client reading state
-        waitForClientReading(ctx.client_op);
+        waitForClientReading(ctx);
 
         # Submit multiple requests before getting any response
         list<int> stream_ids = ();
@@ -611,12 +632,7 @@ class QuicComprehensiveTest inherits QUnit::Test {
             }, True);
 
             # Re-submit client for next response
-            ctx.client_q = ctx.ctrl.submit(<SocketPollOperationInfo>{
-                "sock": ctx.client_sock,
-                "spop": ctx.client_op,
-                "owner": ctx.owner_base + "-client",
-                "to": 30s,
-            }, True);
+            submitClient(\ctx, 30s, True);
 
             # Wait for server to receive next request
             server_result = ctx.server_q.get(30000);
@@ -662,7 +678,7 @@ class QuicComprehensiveTest inherits QUnit::Test {
         binary large_body = binary(large_str);
 
         # Submit request
-        waitForClientReading(ctx.client_op);
+        waitForClientReading(ctx);
         int stream_id = ctx.client_sock.submitQuicRequest("GET", "/large-response");
         assertTrue(stream_id >= 0, "large response: valid stream_id");
         ctx.ctrl.wakeSocket(ctx.client_sock);
@@ -818,27 +834,18 @@ class QuicComprehensiveTest inherits QUnit::Test {
                         "owner": owner_server,
                         "to": internal_to,
                     });
+                    ClientReadiness client_ready();
                     Queue client_q = ctrl.submit(<SocketPollOperationInfo>{
                         "sock": cli,
                         "spop": client_op,
                         "owner": owner_client,
                         "to": internal_to,
+                        "stateQueue": client_ready.states,
+                        "notifyStates": "reading",
                     });
 
-                    # Wait for client reading state (see waitForClientReading() for rationale)
-                    Queue yield_q();
-                    date deadline = now_us() + 10s;
-                    while (client_op.getState() != "reading") {
-                        date remaining = deadline - now_us();
-                        if (remaining <= 0us) {
-                            throw "TIMEOUT", sprintf("conn %d: timeout waiting for reading state",
-                                conn_idx);
-                        }
-                        try {
-                            yield_q.get(min(remaining, 5ms));
-                        } catch () {
-                        }
-                    }
+                    # Wait for client reading state
+                    client_ready.waitForReading(client_q);
 
                     # Submit request
                     string path = sprintf("/conn/%d", conn_idx);
@@ -1053,26 +1060,6 @@ class QuicComprehensiveTest inherits QUnit::Test {
 
     # ---- Group 6: GOAWAY / Graceful Shutdown ----
 
-    #! Helper: poll until a condition returns True or deadline expires
-    /** Uses Queue.get() with short timeout to yield to the controller's I/O
-        thread between checks, matching the waitForClientReading() pattern.
-    */
-    private waitForCondition(code<bool()> condition, timeout to = 10s) {
-        Queue yield_q();
-        date deadline = now_us() + to;
-        while (!condition()) {
-            date remaining = deadline - now_us();
-            if (remaining <= 0us) {
-                throw "TIMEOUT", "condition not met within timeout";
-            }
-            try {
-                yield_q.get(min(remaining, 5ms));
-            } catch () {
-                # QUEUE-TIMEOUT; continue checking
-            }
-        }
-    }
-
     testGoawayShutdown() {
         hash<auto> pair = createSocketPair();
         hash<auto> ctx = performHandshake(pair);
@@ -1104,13 +1091,9 @@ class QuicComprehensiveTest inherits QUnit::Test {
         # Wake again to flush the final GOAWAY
         ctx.ctrl.wakeSocket(ctx.server_sock);
 
-        # Poll until the server reports goaway_sent (deterministic: the controller
-        # I/O thread flushes packets between our yield-via-Queue.get() calls)
-        waitForCondition(bool sub() {
-            return ctx.server_sock.getQuicSessionGoawayState(session_id).goaway_sent;
-        });
-
-        # Verify the server session reports goaway_sent
+        # Verify the server session reports goaway_sent: submitQuicShutdown() runs on the
+        # controller and returns after the session has recorded the GOAWAY, which the
+        # controller then flushes to the wire
         hash<auto> server_state = ctx.server_sock.getQuicSessionGoawayState(session_id);
         assertTrue(server_state.goaway_sent, "server should report goaway_sent=True");
         assertEq(-1, server_state.goaway_max_stream_id,
@@ -1127,7 +1110,7 @@ class QuicComprehensiveTest inherits QUnit::Test {
         on_exit cleanupContext(ctx);
 
         # Wait for client to be ready
-        waitForClientReading(ctx.client_op);
+        waitForClientReading(ctx);
 
         # Get the session ID from the client
         int client_session_id = ctx.client_sock.getQuicSessionId();

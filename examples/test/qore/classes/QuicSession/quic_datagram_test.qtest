@@ -80,6 +80,9 @@ pmFneeIUuXJajOsh7jUyTxcrHl+4kkgHDExuFMNPHfrIG8xCj43fjzxD/spz3xRS
 l50Xb2GWQesIt9k5jF5IOw==
 -----END PRIVATE KEY-----";
 
+#! The bound on a blocking Queue::get() for a state event or a result: a hang guard only, never a timing assertion
+const HangGuard = 60s;
+
 %exec-class QuicDatagramTest
 
 class QuicDatagramTest inherits QUnit::Test {
@@ -140,11 +143,16 @@ class QuicDatagramTest inherits QUnit::Test {
             "owner": "server",
             "to": to,
         });
+        # the controller reports the client's change into "reading" (handshake and HTTP/3 setup done), and the end
+        # of the operation if it ends before
+        Queue<hash<SocketPollStateInfo>> client_states();
         Queue client_q = ctrl.submit(<SocketPollOperationInfo>{
             "sock": pair.client_sock,
             "spop": client_op,
             "owner": "client",
             "to": to,
+            "stateQueue": client_states,
+            "notifyStates": "reading",
         });
 
         return pair + {
@@ -153,32 +161,28 @@ class QuicDatagramTest inherits QUnit::Test {
             "client_op": client_op,
             "server_q": server_q,
             "client_q": client_q,
+            "client_states": client_states,
         };
     }
 
     #! Helper: wait for client to reach "reading" state (HTTP/3 ready)
-    private waitForClientReading(AbstractPollOperation client_op, *timeout to) {
-        if (!to) {
-            to = 10s;
+    /** Blocks on the client's state Queue: the client operation's own timeout ends a stalled handshake, which
+        reports the end of the operation; the bound on the wait is a hang guard only.
+    */
+    private waitForClientReading(hash<auto> ctx) {
+        hash<SocketPollStateInfo> event = ctx.client_states.get(HangGuard);
+        if (event.done) {
+            *hash<SocketPollResultInfo> result = ctx.client_q.get(HangGuard);
+            throw "QUIC-CLIENT-ERROR", sprintf("the client ended in state %y before it was ready: %y", event.state,
+                result.ex ?? result);
         }
-        Queue yield_q();
-        date deadline = now_us() + to;
-        while (client_op.getState() != "reading") {
-            date remaining = deadline - now_us();
-            if (remaining <= 0us) {
-                throw "TIMEOUT", sprintf("timeout waiting for client reading state; state=%s",
-                    client_op.getState());
-            }
-            try {
-                yield_q.get(min(remaining, 5ms));
-            } catch () {}
-        }
+        assertEq("reading", event.state, "the client is ready for a request");
     }
 
     #! Helper: submit a request from client and wait for server to receive it
     private hash<auto> submitRequestAndWaitForServer(hash<auto> ctx, string method, string path,
             *hash<auto> req_headers, *data req_body) {
-        waitForClientReading(ctx.client_op);
+        waitForClientReading(ctx);
 
         int stream_id = ctx.client_sock.submitQuicRequest(method, path, req_headers, req_body);
         assertTrue(stream_id >= 0, "submitQuicRequest returned valid stream_id");
