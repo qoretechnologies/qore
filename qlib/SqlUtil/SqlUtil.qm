@@ -177,6 +177,14 @@ module SqlUtil {
       and creates it under the new name, in two statements, which the SQLite and Firebird drivers gave in one string;
       as the \c sqlite3 driver runs one statement at a time, renaming an index on SQLite, as table alignment does for
       an index that has another name than the template's, dropped the index and did not create it again
+    - table alignment drops an index that the template does not have again, as it did before SqlUtil 1.7.2: an
+      index that was added to the table by hand, or that is left from an older version of the schema, is dropped
+      when the table is aligned; since SqlUtil 1.7.2, such an index was kept unless it was the index of a
+      constraint.  An index with the definition of an index of the template under another name is renamed, as
+      before, and the index of a primary key, unique constraint or foreign constraint, such as the index that MySQL
+      creates for a foreign constraint, is kept or dropped with its constraint; an index that must stay is added to
+      the template, or the alignment leaves out the indexes with the \c omit option (see
+      @ref SqlUtil::AbstractTable::AlignTableOptions "AlignTableOptions")
     - fixed table alignment dropping and creating a unique index twice when its columns change on a database whose
       unique indexes are unique constraints, such as SQLite: the unique constraint of a unique index is added,
       recreated and dropped with the index only

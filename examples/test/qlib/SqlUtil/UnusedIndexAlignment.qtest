@@ -1,0 +1,301 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires SqlUtil
+%requires PgsqlSqlUtilBase
+%requires OracleSqlUtilBase
+%requires MysqlSqlUtil
+%requires MssqlSqlUtilBase
+%requires FreetdsSqlUtil
+%requires XdbcFirebirdSqlUtilBase
+%requires Sqlite3SqlUtil
+%prepend-module-path "${SCRIPT_DIR}"
+%requires ./PgsqlTestIsolation.qm
+
+%try-module pgsql
+%define NO_PGSQL
+%endtry
+
+%try-module oracle
+%define NO_ORACLE
+%endtry
+
+%try-module mysql
+%define NO_MYSQL
+%endtry
+
+%try-module freetds
+%define NO_FREETDS
+%endtry
+
+%try-module odbc
+%define NO_ODBC
+%endtry
+
+%try-module sqlite3
+%define NO_SQLITE3
+%endtry
+
+%exec-class UnusedIndexAlignmentTest
+
+#! A table alignment drops the indexes of the table that its template does not have
+/** An index with the definition of a template index under another name is renamed, and the indexes of the template's
+    keys and foreign constraints are kept.  The exact SQL is checked on every database with tables described in
+    memory; the alignment is run on SQLite and on the PostgreSQL, MySQL and SQL Server databases given by
+    \c QORE_DB_CONNSTR_PGSQL, \c QORE_DB_CONNSTR_MYSQL and \c QORE_DB_CONNSTR_FREETDS
+*/
+class UnusedIndexAlignmentTest inherits QUnit::Test {
+    constructor() : Test("UnusedIndexAlignmentTest", "1.0", \ARGV) {
+        addTestCase("the SQL that drops an index that the template does not have", \dropSql());
+        addTestCase("SQLite drops the indexes that the template does not have", \sqlite());
+        addTestCase("PostgreSQL drops the indexes that the template does not have", \pgsql());
+        addTestCase("MySQL drops the indexes that the template does not have", \mysql());
+        addTestCase("SQL Server drops the indexes that the template does not have", \mssql());
+        set_return_value(main());
+    }
+
+    globalTearDown() {
+        PgsqlRunSchema::teardown();
+    }
+
+    #! Returns the description of the parent table: its indexes are the given ones and the one of the template
+    private static hash<auto> parentDescription(*hash<auto> indexes) {
+        return {
+            "columns": {
+                "id": {"qore_type": "integer", "notnull": True},
+                "a": {"qore_type": "integer"},
+                "b": {"qore_type": "integer"},
+                "c": {"qore_type": "integer"},
+            },
+            "primary_key": {"name": "pk_uia_t", "columns": ("id",)},
+            "unique_constraints": {"uk_uia_t": {"columns": ("a", "b")}},
+            "indexes": {"ix_uia_keep": {"columns": ("a",)}} + indexes,
+        };
+    }
+
+    #! Returns the alignment SQL of a table described in memory with an index that the template does not have and
+    #! an index of the template under another name
+    private static list<auto> memoryAlignSql(code new_table) {
+        AbstractTable current = new_table();
+        current.setupTable(parentDescription({
+            "ix_uia_old": {"columns": ("b",)},
+            "ix_uia_ren": {"columns": ("b", "a")},
+        }));
+        AbstractTable template = new_table();
+        template.setupTable(parentDescription({"ix_uia_new": {"columns": ("b", "a")}}));
+        return current.getAlignSql(template);
+    }
+
+    #! The index that the template does not have is dropped, and the index with the definition of a template index
+    #! is renamed, on every database
+    dropSql() {
+%ifndef NO_PGSQL
+        {
+            OfflineDatasource ds("pgsql:user/pass@db", "PostgreSQL 16.4", "pgsql");
+            assertEq((
+                "alter index ix_uia_ren rename to ix_uia_new",
+                "drop index if exists ix_uia_old",
+            ), memoryAlignSql(AbstractTable sub () { return new PgsqlTable(ds, "uia_t"); }), "PostgreSQL");
+        }
+%endif
+%ifndef NO_ORACLE
+        {
+            OfflineDatasource ds("oracle:user/pass@db", "Oracle Database 19c Enterprise Edition Release "
+                "19.0.0.0.0", "oracle");
+            assertEq((
+                "alter index ix_uia_ren rename to ix_uia_new",
+                "drop index ix_uia_old",
+            ), memoryAlignSql(AbstractTable sub () { return new OracleTable(ds, "uia_t"); }), "Oracle");
+        }
+%endif
+%ifndef NO_MYSQL
+        {
+            OfflineDatasource ds("mysql:user/pass@db%localhost:1", "11.4.2-MariaDB", "mysql");
+            assertEq((
+                "alter table db.uia_t drop index ix_uia_ren, add index ix_uia_new (b, a)",
+                "alter table db.uia_t drop index ix_uia_old",
+            ), memoryAlignSql(AbstractTable sub () { return new MysqlTable(ds, "uia_t"); }), "MySQL");
+        }
+%endif
+%ifndef NO_FREETDS
+        {
+            OfflineDatasource ds("freetds:user/pass@db", "Microsoft SQL Server 2022 (RTM) - 16.0.1000.6", "mssql");
+            assertEq((
+                "exec sp_rename 'dbo.uia_t.ix_uia_ren', 'ix_uia_new', 'INDEX'",
+                "drop index ix_uia_old on dbo.uia_t",
+            ), memoryAlignSql(AbstractTable sub () { return new FreetdsTable(ds, "uia_t"); }), "SQL Server");
+        }
+%endif
+%ifndef NO_ODBC
+        {
+            OfflineDatasource ds("odbc:user/pass@db", "WI-V3.0.10 Firebird 3.0", "firebird");
+            assertEq((
+                "drop index ix_uia_ren",
+                "create index ix_uia_new on uia_t (b, a)",
+                "drop index ix_uia_old",
+            ), memoryAlignSql(AbstractTable sub () { return new XdbcFirebirdTable(ds, "uia_t"); }), "Firebird");
+        }
+%endif
+%ifndef NO_SQLITE3
+        {
+            Datasource ds("sqlite3:@:memory:");
+            assertEq((
+                "drop index ix_uia_ren",
+                "create index ix_uia_new on uia_t (b, a)",
+                "drop index ix_uia_old",
+            ), memoryAlignSql(AbstractTable sub () { return new Sqlite3Table(ds, "uia_t"); }), "SQLite");
+        }
+%endif
+    }
+
+    sqlite() {
+%ifdef NO_SQLITE3
+        testSkip("sqlite3 module unavailable");
+%endif
+        checkDatabase(new Datasource("sqlite3:@:memory:"));
+    }
+
+    pgsql() {
+%ifdef NO_PGSQL
+        testSkip("pgsql module unavailable");
+%endif
+        if (!ENV.QORE_DB_CONNSTR_PGSQL) {
+            testSkip("QORE_DB_CONNSTR_PGSQL is not set");
+        }
+        PgsqlRunSchema::setup(ENV.QORE_DB_CONNSTR_PGSQL, "UnusedIndexAlignment");
+        checkDatabase(new Datasource(ENV.QORE_DB_CONNSTR_PGSQL));
+    }
+
+    mysql() {
+%ifdef NO_MYSQL
+        testSkip("mysql module unavailable");
+%endif
+        if (!ENV.QORE_DB_CONNSTR_MYSQL) {
+            testSkip("QORE_DB_CONNSTR_MYSQL is not set");
+        }
+        checkDatabase(new Datasource(ENV.QORE_DB_CONNSTR_MYSQL));
+    }
+
+    mssql() {
+%ifdef NO_FREETDS
+        testSkip("freetds module unavailable");
+%endif
+        if (!ENV.QORE_DB_CONNSTR_FREETDS) {
+            testSkip("QORE_DB_CONNSTR_FREETDS is not set");
+        }
+        Datasource ds(ENV.QORE_DB_CONNSTR_FREETDS);
+        if (MssqlDatabase::isSybase(ds)) {
+            testSkip("the database is Sybase, not SQL Server");
+        }
+        checkDatabase(ds);
+    }
+
+    #! The description of the child table of the database test: a foreign constraint without an index, which MySQL
+    #! creates an index for, with the foreign constraint's name
+    const ChildDescription = {
+        "columns": {
+            "id": {"qore_type": "integer", "notnull": True},
+            "pid": {"qore_type": "integer"},
+        },
+        "primary_key": {"name": "pk_uia_c", "columns": ("id",)},
+        "foreign_constraints": {"fk_uia_c": {"columns": ("pid",), "table": "uia_t", "target_columns": ("id",)}},
+    };
+
+    #! Drops the test tables if they exist
+    private static dropTables(Database db) {
+        AbstractDatasource ds = db.getDatasource();
+        on_success ds.commit();
+        on_error ds.rollback();
+        db.dropTableIfExists("uia_c");
+        db.dropTableIfExists("uia_t");
+    }
+
+    #! Creates a table with a plain index and a unique index that its template does not have, aligns it to the
+    #! template, runs the SQL, and checks that only those indexes are dropped and that the next alignment needs no SQL
+    private checkDatabase(AbstractDatasource ds) {
+        Database db(ds);
+        on_exit dropTables(db);
+        dropTables(db);
+        {
+            on_success ds.commit();
+            on_error ds.rollback();
+            db.makeTable("uia_t", parentDescription({
+                "ix_uia_old": {"columns": ("b",)},
+                "uix_uia_old": {"columns": ("c",), "unique": True},
+            })).create();
+            db.makeTable("uia_c", ChildDescription).create();
+        }
+
+        AbstractTable live = db.getTable("uia_t");
+        Indexes indexes = live.getIndexes();
+        list<string> expected = map indexes{$1}.getDropSql(live.getSqlName()), ("ix_uia_old", "uix_uia_old");
+
+        AbstractTable template = db.makeTable("uia_t", parentDescription());
+        list<auto> sql = live.getAlignSql(template);
+        assertEq(sort(expected), sort(sql));
+        {
+            on_success ds.commit();
+            on_error ds.rollback();
+            map ds.execRaw($1), sql;
+        }
+
+        AbstractTable after = db.getTable("uia_t");
+        assertTrue(after.getIndexes().hasKey("ix_uia_keep"));
+        assertFalse(after.getIndexes().hasKey("ix_uia_old"));
+        assertFalse(after.getIndexes().hasKey("uix_uia_old"));
+        # the unique constraint of the template is kept; SQLite does not keep the name of a unique constraint created
+        # with its table
+        assertEq(Type::Object, after.getConstraints().findEqualUniqueConstraint(template.getConstraints().uk_uia_t)
+            .type());
+        assertEq((), db.getTable("uia_t").getAlignSql(template));
+
+        # the index of a foreign constraint of the template is kept
+        assertEq((), db.getTable("uia_c").getAlignSql(db.makeTable("uia_c", ChildDescription)));
+    }
+}
+
+#! A datasource that does not connect: it reports a server version and driver, and its catalog queries return no
+#! rows
+class OfflineDatasource inherits Datasource {
+    private {
+        string version;
+        string real_driver;
+    }
+
+    constructor(string connstr, string version, string real_driver) : Datasource(connstr) {
+        self.version = version;
+        self.real_driver = real_driver;
+    }
+
+    auto getServerVersion() {
+        return version;
+    }
+
+    string getDriverRealName() {
+        return real_driver;
+    }
+
+    auto select(string sql, ...) {
+        return {};
+    }
+
+    auto selectRow(string sql, ...) {
+        # the default schema of SQL Server and of PostgreSQL
+        if (sql =~ /schema_name\(\)/) {
+            return {"schema": "dbo"};
+        }
+        if (sql =~ /current_schema\(\)/) {
+            return {"schema": "public"};
+        }
+    }
+
+    auto selectRows(string sql, ...) {
+        return ();
+    }
+}

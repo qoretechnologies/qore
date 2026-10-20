@@ -55,6 +55,10 @@ public class SchemaForeignConstraintAlignment {
             SQL) and \c fk (the foreign constraint)
         */
         list<hash<auto>> deferred = ();
+
+        #! the foreign constraints that the alignment of a table dropped from tables that are not aligned yet, by
+        #! table and foreign constraint name
+        hash<string, hash<string, AbstractForeignConstraint>> dropped;
     }
 
     #! creates the object from the template tables of a schema and its tables in the database
@@ -168,9 +172,30 @@ public class SchemaForeignConstraintAlignment {
                 l += AbstractDatabase::doCallback(opt, drop_fk.getDropSql(child.getSqlName()),
                     AbstractDatabase::AC_Drop, "foreign constraint", drop_fk.getName(), i.key);
                 fks.take(fk_name);
+                if (!aligned{i.key}) {
+                    dropped{i.key}{fk_name} = fk;
+                }
             }
         }
         return l;
+    }
+
+    #! returns a foreign constraint of a table that the alignment of another table dropped before the table is aligned
+    /** The foreign constraint is removed from the description of the table in the database, so that the alignment of
+        the table adds the foreign constraint of its template; the index that the database created for it, as MySQL
+        does, is still the index of a foreign constraint of the table, as when the table is aligned first, and is not
+        dropped as an index that the template of the table does not have
+
+        @param table the name of the table
+        @param name the name of the foreign constraint
+
+        @return the foreign constraint, or @ref nothing if the alignment of another table did not drop a foreign
+        constraint with this name from the table
+
+        @since SqlUtil 3.11.0
+    */
+    *AbstractForeignConstraint getDroppedForeignConstraint(string table, string name) {
+        return dropped{table}{name};
     }
 
     #! defers adding a foreign constraint until the table that it references is aligned

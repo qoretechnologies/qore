@@ -10976,6 +10976,12 @@ string sql = table.getCreateTableSql();
     #! returns a list of SQL strings required to align the table to the table given as an argument
     /** if the tables are identical then an empty list is returned
 
+        The table keeps only what its template has: a column, index, constraint or trigger of the table that the
+        template does not have is dropped, unless the \c omit option leaves out its kind.  An index or constraint
+        with the definition of one of the template under another name is renamed instead, and the index of a primary
+        key, unique constraint or foreign constraint, such as the index that MySQL creates for a foreign constraint,
+        is kept or dropped with its constraint.
+
         @par Example:
         @code{.py}
 list<auto> l = table.getAlignSql(table2);
@@ -11159,38 +11165,42 @@ list<auto> l = table.getAlignSql(table2);
                         if (supporting_constraint) {
                             continue;
                         }
+                        # a foreign constraint with the same name and columns that the alignment of another table of
+                        # the schema dropped first, because the key that it references changes, is the table's, as
+                        # when the table is aligned first
+                        *SchemaForeignConstraintAlignment fka = opt.foreign_constraint_alignment;
+                        if (fka) {
+                            *AbstractForeignConstraint fk = fka.getDroppedForeignConstraint(name, ix.name);
+                            if (fk && fk.matchKeys(ix.columns)) {
+                                continue;
+                            }
+                        }
                     }
-                    # the foreign constraints that reference the index are dropped before it
-                    if (ix.getAllSupportingConstraints()) {
+                    # the foreign constraints that reference a unique index are dropped before it
+                    if (ix.unique) {
                         l += getDropReferencingForeignConstraintsSqlUnlocked(ix.columns.keys(), opt);
                     }
-                    # see if the index is supporting a constraint that has to be dropped first
-                    foreach AbstractColumnConstraint csc in (ix.getAllSupportingConstraints()) {
-                        if (constraintsLinkedToIndexesImpl()) {
+                    # on a database that links constraints to indexes, the constraints that the index supports are
+                    # dropped, and a unique constraint or primary key is dropped with its index; otherwise, and for
+                    # an index that supports no constraint, the index is dropped
+                    bool dropped;
+                    if (constraintsLinkedToIndexesImpl()) {
+                        foreach AbstractColumnConstraint csc in (ix.getAllSupportingConstraints()) {
                             code rmv;
                             AbstractConstraint c = findDropConstraintUnlocked(csc.getName(), \rmv);
 
                             l += AbstractDatabase::doCallback(opt, c.getDropSql(getSqlName()),
                                 AbstractDatabase::AC_Drop, "constraint", c.getName(), name);
                             rmv();
-                        } else {
-                            l += AbstractDatabase::doCallback(opt, ix.getDropSql(getSqlName()),
-                                AbstractDatabase::AC_Drop, "index", ix.name, name);
+                            if (csc instanceof AbstractColumnSupportingConstraint) {
+                                dropped = True;
+                            }
                         }
                     }
-                    /*
-                    *AbstractColumnSupportingConstraint csc = ix.getSupportingConstraint();
-                    if (csc && constraintsLinkedToIndexesImpl()) {
-                        code rmv;
-                        AbstractConstraint c = findDropConstraintUnlocked(csc.getName(), \rmv);
-
-                        l += AbstractDatabase::doCallback(opt, c.getDropSql(getSqlName()), AbstractDatabase::AC_Drop,
-                            "constraint", c.getName(), name);
-                        rmv();
-                    } else
-                        l += AbstractDatabase::doCallback(opt, ix.getDropSql(getSqlName()), AbstractDatabase::AC_Drop,
-                            "index", ix.name, name);
-                    */
+                    if (!dropped) {
+                        l += AbstractDatabase::doCallback(opt, ix.getDropSql(getSqlName()),
+                            AbstractDatabase::AC_Drop, "index", ix.name, name);
+                    }
                     if (uixc) {
                         *AbstractUniqueConstraint c = ix.getSupportingConstraint();
                         if (c && constraints.hasKey(c.getName()))

@@ -463,8 +463,9 @@ Fresh installs skip both `pre_align` and `post_align` migrations. Keep required 
 the declarative model, including partial and covering indexes, so both new and upgraded databases
 receive them. Raw DDL that exists only in a historical migration is **not** replayed during a fresh
 install. Declare an existing migration-created index using the same name to bring it under alignment;
-an unchanged definition preserves the index. Schema alignment continues to preserve undeclared indexes
-under its existing policy.
+an unchanged definition preserves the index. Schema alignment drops an index that the declarative model
+does not declare, as SqlUtil table alignment does, so an index created by a migration is kept only if
+the model declares it.
 
 ### Source-Version Gating
 

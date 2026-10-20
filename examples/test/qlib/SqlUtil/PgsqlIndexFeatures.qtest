@@ -272,12 +272,11 @@ class PgsqlIndexFeaturesTest inherits QUnit::Test {
         assertEq((), live.getAlignSql(expected), "server-rewritten NOT IN predicate aligns unchanged");
         auto oid = ds.selectRow("select 'idx_active'::regclass::oid as oid").oid;
         ds.execRaw("create index idx_undeclared on orders (state)");
-        auto extra_oid = ds.selectRow("select 'idx_undeclared'::regclass::oid as oid").oid;
         new Schema::DataSchema(ds, definition).alignWithInfoInTransaction(True, -1, False);
         assertEq(oid, ds.selectRow("select 'idx_active'::regclass::oid as oid").oid,
             "repeated alignment preserves the same physical index");
-        assertEq(extra_oid, ds.selectRow("select 'idx_undeclared'::regclass::oid as oid").oid,
-            "schema alignment preserves undeclared indexes");
+        assertTrue(ds.selectRow("select to_regclass('idx_undeclared') is null as dropped").dropped,
+            "schema alignment drops an index that the schema does not declare");
         hash<auto> changed = definition.tables.orders;
         changed.indexes.idx_active.where = "state <> 'failed'";
         PgsqlTable changed_table(ds, "orders");
