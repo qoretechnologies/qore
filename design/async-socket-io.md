@@ -204,14 +204,67 @@ Submits an operation to the controller. The `SocketPollOperationInfo` hashdecl:
 | `to`          | `date`                     | Timeout (default: 30s). Negative = no timeout.          |
 | `owner`       | `string`                   | Required. Owner ID for `cancelByOwner()`.               |
 | `other`       | `*hash<auto>`              | Free-form data returned with the result.                |
-| `resultQueue` | `*Queue`                   | Optional shared result Queue.                           |
-| `callback`    | `*code`                    | Optional completion callback (mutually exclusive with `resultQueue`). |
+| `resultQueue` | `*Queue`                   | Optional shared result Queue; must not have a maximum size. |
+| `stateQueue`  | `*Queue<hash<SocketPollStateInfo>>` | Optional Queue for the operation's state events (see [State Events](#state-events)); must not have a maximum size. |
+| `notifyStates`| `*softlist<string>`        | The states to report on `stateQueue` (default: every change); requires `stateQueue`. |
 | `key`         | `*string`                  | Optional custom cache key (default: `sock.uniqueHash()`). |
 | `thread_key`  | `*string`                  | Accepted for source compatibility and ignored: an operation always runs on the I/O thread of its `sock` (see [I/O Thread Routing](#io-thread-routing)). |
+| `has_on_complete` | `bool`                 | Forces `onComplete()` dispatch when the override cannot be detected. |
 
-When `callback` is provided, results are delivered by the callback dispatcher worker pool.
-When `resultQueue` is provided, results are pushed to that Queue. Otherwise a new Queue is
-created and returned.
+When the operation's class overrides `AbstractPollOperation::onComplete()`, the result is passed to it on a callback
+dispatcher worker.  When `resultQueue` is provided, results are pushed to that Queue (as well).  Otherwise a new
+Queue is created and returned.
+
+No queue the controller pushes to may have a maximum size: `submit()` raises `ASYNC-IO-ERROR` for a `resultQueue`
+or `stateQueue` created with one, as a push to a full Queue would block the I/O thread.
+
+### State Events
+
+A caller that has to wait for an operation to reach a state (for example a QUIC client that is ready for a request
+once its handshake and HTTP/3 setup are done) must not poll `getState()`: that is a wait bounded by wall-clock time,
+and it reads a field that the I/O thread writes without synchronization (`SocketQuicClientPollOperation::qcs_state`
+is a plain enum).  It submits the operation with a `stateQueue` and blocks on that Queue instead; the events are
+`hash<SocketPollStateInfo>` (`sock`, `spop`, `state`, `done`, `other`).
+
+- **Where the state is read.**  After each `continuePoll()` call (a *step*), whatever its outcome (more polling,
+  completion or an exception), on the thread that ran the step: the I/O thread reads `getStateImpl()` in Phase 2 for
+  pure C++ operations; for Qore operations and C++ operations that need a worker (`needsWorkerDispatch()`), the
+  `DT_CONTINUE_POLL` worker calls `getState()` right after `continuePoll()`, under the same
+  `qore_continue_poll_lock`, and sends the string back in the `ContinuePollResult` command.  The state is therefore
+  read on the thread that writes it, with no new lock and no change in the operation classes.  A field an operation
+  also writes from another thread is read by its own `continuePoll()` on the I/O thread anyway, so this read adds no
+  race of its own.
+- **What is reported.**  The I/O thread keeps the state read after the previous step in the operation's `PollInfo`
+  (`last_state`, `state_seen`): the first state read is always reported, a later one when it differs
+  (`noteOperationState()`).  Changes within one step are merged into one.  With `notifyStates`, only changes into one
+  of the given states are pushed; the comparison is with the last state *read*, so a state left and entered again is
+  reported again.
+- **The last event.**  Every submission ends with exactly one event with `done` set and the last state read (none if
+  the operation ended before its first step): `deliverStateEnd()` is called by `doCancelIntern()` before it delivers
+  the canceled result, and by `PollInfo::cleanup()` before the deliver-exactly-once backstop; `PollInfo::cleanup()`
+  runs in Phase 3 and in the `ContinuePollResult` handler before the deferred result delivery.  An abandoned
+  `SubmitOp` (`cleanupAbandonedCommand()`) pushes it before its canceled result.  `state_end_delivered` makes it
+  exactly once.
+- **Ordering.**  An operation's events are pushed by the I/O thread in step order, and all of them, the last one
+  included, before its result is pushed or dispatched to `onComplete()`: the state of a step is noted in Phase 2 or
+  in the `ContinuePollResult` handler before the result of that step is delivered, and the last event precedes the
+  result on every path above.  A caller that received the result can drain the state Queue without blocking; a caller
+  that received the last event gets the result from the result Queue.
+- **Cost.**  Without a `stateQueue` the controller does not read the state at all (one null check per step).
+- **References.**  An event references the operation, its pollable object and its `other` data.  The controller
+  keeps the Queue's object as well as its private data and pushes each event with it, as `Queue::push()` does from
+  Qore code, so the deterministic garbage collector sees the references held by the queued events: an operation that
+  references its own state Queue (a member, or a callback's closure) and leaves events in it is part of a cycle
+  that is collected once nothing outside the cycle references it.  (The result Queue is pushed to without its
+  object, as before.)
+- **Constraints.**  The push never waits (the Queue has no maximum size).  An exception from a Qore `getState()` ends
+  the operation with that exception.  An operation whose `continuePoll()` runs in C++ on the I/O thread cannot have a
+  `getState()` implemented in Qore (a Qore subclass override, or a `DelegatingPollOperation` around such an
+  operation): `submit()` rejects it with a `stateQueue`, as Qore code does not run on the I/O thread.  A
+  `DelegatingPollOperation` around a C++ operation reads the inner state with `getStateImpl()`, without a Qore
+  method call.
+- **Resubmission.**  A new submission of the same operation object has a new `PollInfo` and reports its first step
+  again; a submission replaced by another one with the same key ends with its last event.
 
 The `replace` flag allows replacing an existing operation on the same key (used for connection
 re-polling patterns like HTTP/2 persistent connections).  Keys are looked up in the cache of the operation's I/O

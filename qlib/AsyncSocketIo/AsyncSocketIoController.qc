@@ -174,13 +174,16 @@ public class AsyncSocketIoController inherits LoggerWrapper {
     }
 
     #! Submits a socket poll operation to the I/O controller
-    /** @param info a hash describing the socket, poll operation, owner, and optional key/goal
+    /** @param info a hash describing the socket, poll operation, owner, and optional key/goal; a \c stateQueue
+        receives the operation's state events (see @ref Qore::AsyncIoController::submit() "AsyncIoController::submit()")
         @param replace if @ref True "True", replaces any existing operation for the same socket
 
         @return a @ref Qore::Thread::Queue "Queue<hash<SocketPollResultInfo>>" if the operation has a goal,
             otherwise @ref nothing
 
         @throw CONTROLLER-ADD-ERROR missing required \c sock, \c spop, or \c owner field in \a info
+        @throw ASYNC-IO-ERROR the controller rejected the operation; see
+        @ref Qore::AsyncIoController::submit() "AsyncIoController::submit()"
     */
     *object<Queue<hash<SocketPollResultInfo>>> submit(hash<SocketPollOperationInfo> info, *bool replace) {
         if (!info.sock) {

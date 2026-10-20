@@ -40,6 +40,7 @@
 #include "qore/intern/QC_Http2ClientPollOperationBase.h"
 #include "qore/intern/QC_Http3ClientPollOperationBase.h"
 #include "qore/intern/QC_Http3ServerPollOperation.h"
+#include "qore/intern/QC_DelegatingPollOperation.h"
 #include "qore/intern/qore_socket_private.h"
 #include "qore/intern/QoreLibIntern.h"
 #include "qore/intern/QoreAsyncIoLogger.h"
@@ -459,6 +460,11 @@ QoreHashNode* SocketPollOperationBase::getSocketPollInfoHash(ExceptionSink* xsin
 // --- PollInfo implementation ---
 
 void AsyncIoControllerPriv::PollInfo::cleanup(ExceptionSink* xsink) {
+    // the last state event precedes any result, including the backstop completion below; on the paths that deliver
+    // a result before cleanup() (doCancelIntern()), it has been pushed already
+    if (controller && state_queue && !state_end_delivered) {
+        controller->deliverStateEnd(*this);
+    }
     // Deliver-exactly-once backstop: if this op owns a result queue but no
     // terminal completion was ever committed, synthesize and deliver a
     // canceled completion now — before the queue ref is dropped below — so a
@@ -504,6 +510,8 @@ void AsyncIoControllerPriv::PollInfo::cleanup(ExceptionSink* xsink) {
     refs.poll_info = poll_info;
     refs.other = other;
     refs.queue = queue;
+    refs.state_queue = state_queue;
+    refs.state_queue_obj = state_queue_obj;
     refs.spop_base = spop_base;
     sock_obj = nullptr;
     sock = nullptr;
@@ -511,6 +519,8 @@ void AsyncIoControllerPriv::PollInfo::cleanup(ExceptionSink* xsink) {
     poll_info = nullptr;
     other = nullptr;
     queue = nullptr;
+    state_queue = nullptr;
+    state_queue_obj = nullptr;
     spop_base = nullptr;
     // releasing the context runs no Qore code (it only holds sandbox manager references)
     sandbox_ctx.reset();
@@ -552,6 +562,14 @@ void AsyncIoDeferredRelease::release(ExceptionSink* xsink) {
     if (queue) {
         queue->deref(xsink);
         queue = nullptr;
+    }
+    if (state_queue) {
+        state_queue->deref(xsink);
+        state_queue = nullptr;
+    }
+    if (state_queue_obj) {
+        state_queue_obj->deref(xsink);
+        state_queue_obj = nullptr;
     }
     if (spop_base) {
         spop_base->deref(xsink);
@@ -864,6 +882,12 @@ void AsyncIoControllerPriv::cleanupAbandonedCommand(Command& cmd, ExceptionSink*
                     result = r.release();
                 }
             }
+            // the operation never made a step: its only state event is the last one, without a state, and it
+            // precedes the result
+            if (cmd.submit_state_queue) {
+                pushStateEvent(cmd.submit_state_queue, cmd.submit_state_queue_obj, cmd.submit_sock_obj,
+                    cmd.submit_spop_obj, nullptr, true, cmd.submit_other, cmd.owner);
+            }
             if (result) {
                 // deliverResult takes ownership of the result and of the spop_obj reference made here; it only
                 // pushes to the queue and never takes the command's reference to it, which is released with the
@@ -896,6 +920,8 @@ void AsyncIoControllerPriv::cleanupAbandonedCommand(Command& cmd, ExceptionSink*
                 refs.poll_info = cmd.submit_poll_info;
                 refs.other = cmd.submit_other;
                 refs.queue = cmd.submit_queue;
+                refs.state_queue = cmd.submit_state_queue;
+                refs.state_queue_obj = cmd.submit_state_queue_obj;
                 refs.spop_base = cmd.submit_spop_base;
                 cmd.submit_sock_obj = nullptr;
                 cmd.submit_sock = nullptr;
@@ -904,6 +930,8 @@ void AsyncIoControllerPriv::cleanupAbandonedCommand(Command& cmd, ExceptionSink*
                 cmd.submit_poll_info = nullptr;
                 cmd.submit_other = nullptr;
                 cmd.submit_queue = nullptr;
+                cmd.submit_state_queue = nullptr;
+                cmd.submit_state_queue_obj = nullptr;
                 releaseOffIoThread(refs, xsink);
             }
             break;
@@ -1030,11 +1058,12 @@ void QoreCallDispatcher::dispatchAsync(ResolvedCallReferenceNode* callback, Qore
 
 void QoreCallDispatcher::dispatchContinuePollAsync(QoreObject* spop_obj,
         AsyncIoControllerPriv* controller, const std::string& key, int thread_idx, const std::string& owner,
-        AsyncIoSandboxContext sandbox_ctx) {
+        AsyncIoSandboxContext sandbox_ctx, bool read_state) {
     AsyncWorkItem item{spop_obj, nullptr, nullptr, nullptr, DT_CONTINUE_POLL, controller, key};
     item.thread_idx = thread_idx;
     item.owner = owner;
     item.sandbox_ctx = std::move(sandbox_ctx);
+    item.read_state = read_state;
     enqueue(std::move(item));
 }
 
@@ -1698,6 +1727,9 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
                     QoreHashNode* new_poll_info = nullptr;
                     QoreHashNode* ex_hash = nullptr;
                     bool completed = false;
+                    // the operation's state after the step, for its state events
+                    std::string state;
+                    bool has_state = false;
 
                     {
                         // Qore poll operations may mutate object-member state and
@@ -1779,11 +1811,39 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
                             // Method may not exist — that's fine, not all Qore poll ops have it
                             stream_xsink.clear();
                         }
+
+                        // The state is read on this thread, right after the step and under the same lock, as the
+                        // step that changed it ran here; the I/O thread decides whether it is reported.  An
+                        // exception from getState() ends the operation as if the step had raised it.
+                        if (async_item.read_state) {
+                            ExceptionSink state_xsink;
+                            ValueHolder state_val(async_item.spop_obj->evalMethod("getState", nullptr,
+                                &state_xsink), &state_xsink);
+                            if (state_xsink) {
+                                if (!ex_hash) {
+                                    QoreException* ex_obj = state_xsink.getException();
+                                    if (ex_obj) {
+                                        ex_hash = ex_obj->makeExceptionObject();
+                                    }
+                                    if (new_poll_info) {
+                                        new_poll_info->deref(&work_xsink);
+                                        new_poll_info = nullptr;
+                                    }
+                                    completed = false;
+                                }
+                                state_xsink.clear();
+                            } else {
+                                QoreStringValueHelper str(*state_val);
+                                state.assign(str->c_str(), str->size());
+                                has_state = true;
+                            }
+                        }
                     }
 
                     // Send result back to the I/O thread
                     async_item.controller->enqueueContinuePollResult(
-                        async_item.key, async_item.thread_idx, new_poll_info, ex_hash, completed);
+                        async_item.key, async_item.thread_idx, new_poll_info, ex_hash, completed,
+                        has_state ? &state : nullptr, async_item.spop_obj);
                     async_item.controller->deref(&work_xsink);
                     async_item.controller = nullptr;
                     break;
@@ -2596,6 +2656,8 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
     // Pointers are nulled as ownership transfers to PollInfo or the caller.
     struct SubmitResources {
         Queue* result_queue;
+        Queue* state_queue;
+        QoreObject* state_queue_obj;
         QoreHashNode* other_hash;
         QoreHashNode* poll_info_hash;
         QoreObject* new_queue_obj;
@@ -2603,11 +2665,13 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
 
         ~SubmitResources() {
             if (result_queue) { result_queue->deref(xsink); }
+            if (state_queue) { state_queue->deref(xsink); }
+            if (state_queue_obj) { state_queue_obj->deref(xsink); }
             if (other_hash) { other_hash->deref(xsink); }
             if (poll_info_hash) { poll_info_hash->deref(xsink); }
             if (new_queue_obj) { new_queue_obj->deref(xsink); }
         }
-    } res{nullptr, nullptr, nullptr, nullptr, xsink};
+    } res{nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, xsink};
 
     // Get result queue
     v = info->getKeyValue("resultQueue");
@@ -2620,6 +2684,60 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
         }
         if (res.result_queue) {
             result_queue_obj = qobj;
+        }
+    }
+    // the I/O thread never waits for room in a queue
+    if (res.result_queue && res.result_queue->getMax() != -1) {
+        xsink->raiseException("ASYNC-IO-ERROR", "the resultQueue of an operation must not have a maximum size; "
+            "got a Queue with a maximum size of " QLLD, static_cast<int64>(res.result_queue->getMax()));
+        return nullptr;
+    }
+
+    // Get the state event queue and the states to report; see noteOperationState()
+    v = info->getKeyValue("stateQueue");
+    if (v.getType() == NT_OBJECT) {
+        QoreObject* qobj = v.get<QoreObject>();
+        res.state_queue = static_cast<Queue*>(qobj->getReferencedPrivateData(CID_QUEUE, xsink));
+        if (*xsink) {
+            return nullptr;
+        }
+        // the events are pushed with the Queue's object, so that the deterministic garbage collector sees the
+        // references they hold (to the operation, for one): an operation that references its own state Queue, for
+        // example through a callback, can then be collected with events left in the Queue
+        if (res.state_queue) {
+            res.state_queue_obj = qobj;
+            qobj->ref();
+        }
+    }
+    if (res.state_queue && res.state_queue->getMax() != -1) {
+        xsink->raiseException("ASYNC-IO-ERROR", "the stateQueue of an operation must not have a maximum size; "
+            "got a Queue with a maximum size of " QLLD, static_cast<int64>(res.state_queue->getMax()));
+        return nullptr;
+    }
+    std::vector<std::string> notify_states;
+    v = info->getKeyValue("notifyStates");
+    if (v.getType() == NT_LIST) {
+        if (!res.state_queue) {
+            xsink->raiseException("ASYNC-IO-ERROR", "notifyStates was given without a stateQueue to report the "
+                "states on");
+            return nullptr;
+        }
+        ConstListIterator li(v.get<const QoreListNode>());
+        while (li.next()) {
+            QoreStringValueHelper str(li.getValue());
+            notify_states.push_back(str->c_str());
+        }
+    }
+    if (res.state_queue && spop_base && !spop_base->needsWorkerDispatch()) {
+        // the I/O thread reads the state of this operation with getStateImpl() after each step, as it runs its
+        // steps; it cannot run a getState() implemented in Qore, which would also return another state
+        const QoreMethod* get_state_meth = spop_cls->findMethod("getState");
+        if ((get_state_meth && !get_state_meth->isBuiltin())
+                || !qore_delegating_poll_op_reads_state_natively(spop_base)) {
+            xsink->raiseException("ASYNC-IO-ERROR", "the getState() method of the operation (class '%s') is "
+                "implemented in Qore, while its continuePoll() runs in C++ on the async I/O thread, where Qore code "
+                "does not run; the operation cannot be submitted with a stateQueue", spop_cls->getName());
+            return nullptr;
         }
     }
 
@@ -2752,6 +2870,9 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
         pinfo.inherited_owner = current_continue_poll_owner;
         pinfo.other = res.other_hash; res.other_hash = nullptr;
         pinfo.queue = res.result_queue; res.result_queue = nullptr;
+        pinfo.state_queue = res.state_queue; res.state_queue = nullptr;
+        pinfo.state_queue_obj = res.state_queue_obj; res.state_queue_obj = nullptr;
+        pinfo.notify_states = std::move(notify_states);
         pinfo.timeout_date_us = 0;
         pinfo.has_qore_abort = has_qore_abort;
         pinfo.has_qore_on_complete = has_qore_on_complete;
@@ -2811,6 +2932,9 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
         cmd.submit_poll_info = res.poll_info_hash; res.poll_info_hash = nullptr;
         cmd.submit_other = res.other_hash; res.other_hash = nullptr;
         cmd.submit_queue = res.result_queue; res.result_queue = nullptr;
+        cmd.submit_state_queue = res.state_queue; res.state_queue = nullptr;
+        cmd.submit_state_queue_obj = res.state_queue_obj; res.state_queue_obj = nullptr;
+        cmd.submit_notify_states = std::move(notify_states);
         cmd.submit_timeout_us = timeout_us;
         cmd.submit_has_qore_abort = has_qore_abort;
         cmd.submit_has_qore_on_complete = has_qore_on_complete;
@@ -5400,7 +5524,7 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                     op.spop_obj->ref();
                     call_dispatcher.load(std::memory_order_acquire)->dispatchContinuePollAsync(
                         op.spop_obj, this, node->first, t.thread_idx, node->second.owner,
-                        node->second.sandbox_ctx);
+                        node->second.sandbox_ctx, node->second.state_queue != nullptr);
                     continue;  // do NOT add to poll_results
                 }
 
@@ -5452,6 +5576,12 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                 }
                 const std::string& op_owner = node->second.owner;
                 const AsyncIoSandboxContext& op_sandbox_ctx = node->second.sandbox_ctx;
+
+                // the state is read here, on the thread that ran the step, whatever its outcome; an event pushed
+                // now precedes the result, which Phase 3 delivers
+                if (node->second.state_queue) {
+                    noteOperationState(node->second, node->second.spop_base->getStateImpl());
+                }
 
                 // Check for stream data notifications (HTTP/2 CONNECT streams)
                 // After the C++ drain pushes data to Queues, dispatch onStreamData()
@@ -5571,7 +5701,7 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                 op.spop_obj->ref();
                 call_dispatcher.load(std::memory_order_acquire)->dispatchContinuePollAsync(
                     op.spop_obj, this, node->first, t.thread_idx, node->second.owner,
-                    node->second.sandbox_ctx);
+                    node->second.sandbox_ctx, node->second.state_queue != nullptr);
                 continue;  // do NOT add to poll_results
             }
 
@@ -7007,6 +7137,8 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                         pinfo.poll_info = cmd.submit_poll_info;
                         pinfo.other = cmd.submit_other;
                         pinfo.queue = cmd.submit_queue;
+                        pinfo.state_queue = cmd.submit_state_queue;
+                        pinfo.state_queue_obj = cmd.submit_state_queue_obj;
                         pinfo.timeout_us = cmd.submit_timeout_us;
                         pinfo.owner = cmd.owner;
                         pinfo.has_qore_abort = cmd.submit_has_qore_abort;
@@ -7024,6 +7156,8 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                         cmd.submit_poll_info = nullptr;
                         cmd.submit_other = nullptr;
                         cmd.submit_queue = nullptr;
+                        cmd.submit_state_queue = nullptr;
+                        cmd.submit_state_queue_obj = nullptr;
                         cmd.submit_socket_async_io = false;
                         cmd.submit_route_sock_hash.clear();
                         cmd.submit_route_thread_idx = -1;
@@ -7071,6 +7205,8 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                             pinfo.poll_info = cmd.submit_poll_info;
                             pinfo.other = cmd.submit_other;
                             pinfo.queue = cmd.submit_queue;
+                            pinfo.state_queue = cmd.submit_state_queue;
+                            pinfo.state_queue_obj = cmd.submit_state_queue_obj;
                             pinfo.timeout_us = cmd.submit_timeout_us;
                             pinfo.owner = cmd.owner;
                             pinfo.has_qore_abort = cmd.submit_has_qore_abort;
@@ -7088,6 +7224,8 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                             cmd.submit_poll_info = nullptr;
                             cmd.submit_other = nullptr;
                             cmd.submit_queue = nullptr;
+                            cmd.submit_state_queue = nullptr;
+                            cmd.submit_state_queue_obj = nullptr;
                             cmd.submit_socket_async_io = false;
                             cmd.submit_route_sock_hash.clear();
                             cmd.submit_route_thread_idx = -1;
@@ -7148,6 +7286,9 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                     pinfo.poll_info = cmd.submit_poll_info;     // ownership transferred
                     pinfo.other = cmd.submit_other;             // ownership transferred
                     pinfo.queue = cmd.submit_queue;             // ownership transferred
+                    pinfo.state_queue = cmd.submit_state_queue; // ownership transferred
+                    pinfo.state_queue_obj = cmd.submit_state_queue_obj; // ownership transferred
+                    pinfo.notify_states = std::move(cmd.submit_notify_states);
                     pinfo.timeout_us = cmd.submit_timeout_us;
                     pinfo.owner = cmd.owner;
                     pinfo.inherited_owner = cmd.inherited_owner;
@@ -7176,6 +7317,8 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                     cmd.submit_poll_info = nullptr;
                     cmd.submit_other = nullptr;
                     cmd.submit_queue = nullptr;
+                    cmd.submit_state_queue = nullptr;
+                    cmd.submit_state_queue_obj = nullptr;
                     cmd.submit_socket_async_io = false;
                     cmd.submit_route_sock_hash.clear();
                     cmd.submit_route_thread_idx = -1;
@@ -7208,6 +7351,12 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                             if (pit != t.pending_aborts.end()) {
                                 PollInfo deferred = std::move(pit->second);
                                 t.pending_aborts.erase(pit);
+                                // the step that was in flight is reported before the cancellation ends the
+                                // operation
+                                if (cmd.continue_poll_has_state && deferred.state_queue
+                                        && deferred.spop_obj == cmd.continue_poll_spop) {
+                                    noteOperationState(deferred, cmd.continue_poll_state.c_str());
+                                }
                                 doCancelIntern(deferred, xsink);
                                 deferred.cleanup(xsink);
                                 completePendingSocketCancel(t, cmd.key, xsink);
@@ -7217,6 +7366,13 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
 
                         PollInfo& pinfo = it->second;
                         pinfo.continue_poll_in_flight = false;
+
+                        // the state the worker read after the step; an event pushed now precedes the result that
+                        // this command can deliver below
+                        if (cmd.continue_poll_has_state && pinfo.state_queue
+                                && pinfo.spop_obj == cmd.continue_poll_spop) {
+                            noteOperationState(pinfo, cmd.continue_poll_state.c_str());
+                        }
 
                         if (cmd.continue_poll_ex || cmd.continue_poll_completed) {
                             // Operation finished (error or completed)
@@ -7474,6 +7630,9 @@ void AsyncIoControllerPriv::doCancelIntern(PollInfo& pinfo, ExceptionSink* xsink
 
     bool handled = pinfo.spop_base ? pinfo.spop_base->handleCompletion(true, nullptr, xsink) : false;
     bool deliver_result = pinfo.queue || pinfo.has_qore_on_complete || !handled;
+
+    // the last state event precedes the result
+    deliverStateEnd(pinfo);
 
     // Build result hash
     QoreHashNode* result = deliver_result ? buildResultHash(pinfo, true, nullptr, xsink) : nullptr;
@@ -8234,7 +8393,8 @@ QoreObject* AsyncIoControllerPriv::getSocketFromPollInfo(QoreHashNode* poll_info
 }
 
 void AsyncIoControllerPriv::enqueueContinuePollResult(const std::string& key, int thread_idx,
-        QoreHashNode* new_poll_info, QoreHashNode* ex_hash, bool completed) {
+        QoreHashNode* new_poll_info, QoreHashNode* ex_hash, bool completed, const std::string* state,
+        const QoreObject* spop_obj) {
     // Route to the I/O thread that dispatched the continuePoll() and holds the operation; the operation key does not
     // identify it, since operations are routed by their socket
     bool do_signal = false;
@@ -8253,6 +8413,11 @@ void AsyncIoControllerPriv::enqueueContinuePollResult(const std::string& key, in
             c.continue_poll_result = new_poll_info;
             c.continue_poll_ex = ex_hash;
             c.continue_poll_completed = completed;
+            if (state) {
+                c.continue_poll_has_state = true;
+                c.continue_poll_state = *state;
+            }
+            c.continue_poll_spop = spop_obj;
             target->cmdq.push(std::move(c));
             do_signal = true;
             // notify() does not block; notifying under m keeps the context alive until it returns
@@ -8335,6 +8500,73 @@ void AsyncIoControllerPriv::deliverResult(Queue* queue, QoreObject* spop_obj,
         log(QORE_LOG_LEVEL_ERROR, "deliverResult: dropping result for %s — no onComplete "
             "and no queue", spop_obj ? spop_obj->getClassName() : "null");
         release_refs(spop_obj, result);
+    }
+}
+
+void AsyncIoControllerPriv::noteOperationState(PollInfo& pinfo, const char* state) {
+    assert(pinfo.state_queue);
+    // getState() returns an empty string for a null state
+    const char* str = state ? state : "";
+    if (pinfo.state_seen && pinfo.last_state == str) {
+        return;
+    }
+    pinfo.state_seen = true;
+    pinfo.last_state = str;
+    // a change into a state that is not to be reported is still the operation's last state: a later change back
+    // into a reported state is a change
+    if (!pinfo.notify_states.empty()
+            && std::find(pinfo.notify_states.begin(), pinfo.notify_states.end(), pinfo.last_state)
+                == pinfo.notify_states.end()) {
+        return;
+    }
+    pushStateEvent(pinfo.state_queue, pinfo.state_queue_obj, pinfo.sock_obj, pinfo.spop_obj, &pinfo.last_state, false,
+        pinfo.other, pinfo.owner);
+}
+
+void AsyncIoControllerPriv::deliverStateEnd(PollInfo& pinfo) {
+    if (!pinfo.state_queue || pinfo.state_end_delivered) {
+        return;
+    }
+    pinfo.state_end_delivered = true;
+    pushStateEvent(pinfo.state_queue, pinfo.state_queue_obj, pinfo.sock_obj, pinfo.spop_obj,
+        pinfo.state_seen ? &pinfo.last_state : nullptr, true, pinfo.other, pinfo.owner);
+}
+
+void AsyncIoControllerPriv::pushStateEvent(Queue* state_queue, QoreObject* state_queue_obj, QoreObject* sock_obj,
+        QoreObject* spop_obj, const std::string* state, bool done, QoreHashNode* other, const std::string& owner) {
+    assert(state_queue);
+    // a sink of its own: the caller's can be the I/O thread's long-lived sink (see buildResultHash())
+    ExceptionSink event_xsink;
+    ReferenceHolder<QoreHashNode> event(new QoreHashNode(hashdeclSocketPollStateInfo, &event_xsink), &event_xsink);
+    if (!event_xsink) {
+        if (sock_obj) {
+            event->setKeyValue("sock", sock_obj->refSelf(), &event_xsink);
+        }
+        if (spop_obj) {
+            event->setKeyValue("spop", spop_obj->refSelf(), &event_xsink);
+        }
+        if (state) {
+            event->setKeyValue("state", new QoreStringNode(*state), &event_xsink);
+        }
+        if (done) {
+            event->setKeyValue("done", true, &event_xsink);
+        }
+        if (other) {
+            event->setKeyValue("other", other->refSelf(), &event_xsink);
+        }
+    }
+    if (!event_xsink) {
+        // the queue has no maximum size (see submit()): the push does not wait; the event's references are not the
+        // last ones to its objects, as the caller holds the operation's, so a failed push releases nothing that runs
+        // a destructor
+        state_queue->push(&event_xsink, state_queue_obj, event.release());
+    }
+    if (event_xsink) {
+        QoreStringValueHelper err(event_xsink.getExceptionErr());
+        QoreStringValueHelper desc(event_xsink.getExceptionDesc());
+        log(QORE_LOG_LEVEL_ERROR, "AsyncIoController: failed to report a state event for an operation "
+            "(owner: '%s'): %s: %s", owner.c_str(), *err ? err->c_str() : "?", *desc ? desc->c_str() : "?");
+        event_xsink.clear();
     }
 }
 

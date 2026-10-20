@@ -318,6 +318,17 @@
     than that of the other operations on its socket, as with readiness polls of
     @ref Qore::Socket::poll() "Socket::poll()".
 
+    Operations submitted to the async I/O controller can report their state: with the new \c stateQueue key of
+    @ref Qore::SocketPollOperationInfo "SocketPollOperationInfo", the controller pushes a
+    @ref Qore::SocketPollStateInfo "SocketPollStateInfo" event onto the given Queue after each step that changes the
+    operation's state (only for changes into the states given with the new \c notifyStates key, if set), and a last
+    event when the operation ends for any reason, before its result is delivered; see
+    @ref asynciocontroller_state_events.  Code that waits for an operation to reach a state blocks on the Queue
+    instead of calling @ref Qore::AbstractPollOperation::getState() "getState()" repeatedly while the controller
+    changes the state on its I/O thread.  @ref Qore::AsyncIoController::submit() "AsyncIoController::submit()"
+    raises \c ASYNC-IO-ERROR for a result or state Queue with a maximum size: a push to a full result Queue blocked
+    the I/O thread, and with it every operation on that thread, until the Queue had room.
+
     The async I/O controller runs one I/O thread per CPU available to the process by default (on Linux, the CPUs of its
     CPU affinity mask, and at most the CPU time its cgroup CPU quota allows, as in a container started with a CPU
     limit), at most 8; it ran a single I/O thread unless \c QORE_IO_THREADS was set, so all network I/O of a process

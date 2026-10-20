@@ -156,13 +156,15 @@ struct AsyncIoDeferredRelease {
     QoreHashNode* poll_info = nullptr;               //!< Poll info hash (referenced, or nullptr)
     QoreHashNode* other = nullptr;                   //!< Free-form data (referenced, or nullptr)
     Queue* queue = nullptr;                          //!< Result queue (referenced, or nullptr)
+    Queue* state_queue = nullptr;                    //!< State event queue (referenced, or nullptr)
+    QoreObject* state_queue_obj = nullptr;           //!< State event queue object (referenced, or nullptr)
     SocketPollOperationBase* spop_base = nullptr;    //!< C++ poll operation (referenced, or nullptr)
     QoreValue udata;                                 //!< Timer user data, e.g. a callback (referenced)
 
     //! Returns True if no references are held
     DLLLOCAL bool empty() const {
-        return !sock_obj && !sock && !spop_obj && !poll_info && !other && !queue && !spop_base
-            && !udata.hasNode();
+        return !sock_obj && !sock && !spop_obj && !poll_info && !other && !queue && !state_queue && !state_queue_obj
+            && !spop_base && !udata.hasNode();
     }
 
     //! Returns the program the released objects belong to, if known
@@ -251,6 +253,8 @@ public:
         //! The sandbox context of the poll operation's submitter, applied while the item runs; see
         //! AsyncIoSandboxContext
         AsyncIoSandboxContext sandbox_ctx;
+        //! For DT_CONTINUE_POLL: read the operation's state after continuePoll() for its state events
+        bool read_state = false;
     };
 
     //! Creates the dispatcher
@@ -292,10 +296,13 @@ public:
         @param thread_idx the index of the I/O thread whose cache holds the operation; the result is delivered to
         this thread
         @param owner optional owner identifier for per-owner flush tracking
+        @param read_state if true, the worker reads the operation's state with getState() after continuePoll() and
+        sends it back with the result, for the operation's state events
     */
     DLLLOCAL void dispatchContinuePollAsync(QoreObject* spop_obj,
         AsyncIoControllerPriv* controller, const std::string& key, int thread_idx,
-        const std::string& owner = std::string(), AsyncIoSandboxContext sandbox_ctx = AsyncIoSandboxContext());
+        const std::string& owner = std::string(), AsyncIoSandboxContext sandbox_ctx = AsyncIoSandboxContext(),
+        bool read_state = false);
 
     //! Dispatch onStreamData(stream_key) asynchronously (fire-and-forget)
     /** Called by the I/O thread after stream data arrives.
@@ -952,6 +959,15 @@ private:
         QoreHashNode* continue_poll_result = nullptr;  //!< For ContinuePollResult: new poll info (or nullptr)
         QoreHashNode* continue_poll_ex = nullptr;      //!< For ContinuePollResult: exception (or nullptr)
         bool continue_poll_completed = false;           //!< For ContinuePollResult: true if completed
+        //! For ContinuePollResult: true if the worker read the operation's state for its state events
+        bool continue_poll_has_state = false;
+        //! For ContinuePollResult: the operation's state after the step, if continue_poll_has_state
+        std::string continue_poll_state;
+        //! For ContinuePollResult: the poll operation that made the step; an identity only, not referenced
+        /** The state is only applied to the cache entry of this operation: an entry with the same key can belong to
+            another operation by the time the result arrives.
+        */
+        const QoreObject* continue_poll_spop = nullptr;
         std::string sock_hash;          //!< For WakeSocket/CancelSocket/CloseSocket: socket hash
         AbstractPollableIoObjectBase* close_sock = nullptr; //!< For CloseSocket: referenced I/O object
         bool submit_replace = false;    //!< For SubmitOp: replace existing operation with same key
@@ -971,6 +987,9 @@ private:
         QoreHashNode* submit_poll_info = nullptr;        //!< Referenced initial poll info (or nullptr)
         QoreHashNode* submit_other = nullptr;            //!< Referenced other data (or nullptr)
         Queue* submit_queue = nullptr;                   //!< Referenced result queue (or nullptr)
+        Queue* submit_state_queue = nullptr;             //!< Referenced state event queue (or nullptr)
+        QoreObject* submit_state_queue_obj = nullptr;    //!< Referenced state event queue object (or nullptr)
+        std::vector<std::string> submit_notify_states;   //!< The states to report; empty = all
         int64 submit_timeout_us = 0;                     //!< Timeout in microseconds
         bool submit_has_qore_abort = false;              //!< True if abort() is overridden in Qore
         bool submit_has_qore_on_complete = false;        //!< True if onComplete() is overridden in Qore
@@ -996,6 +1015,18 @@ private:
         std::string inherited_owner;
         QoreHashNode* other;            //!< Free-form data (referenced, or nullptr)
         Queue* queue;                   //!< Result queue (referenced, or nullptr)
+        //! State event queue (referenced, or nullptr); see noteOperationState() and deliverStateEnd()
+        Queue* state_queue = nullptr;
+        //! The object of \c state_queue (referenced, or nullptr); events are pushed with it, see pushStateEvent()
+        QoreObject* state_queue_obj = nullptr;
+        //! The states to report on \c state_queue; empty = every change
+        std::vector<std::string> notify_states;
+        //! The state read after the operation's last step, if \c state_seen
+        std::string last_state;
+        //! True once the operation's state has been read after a step
+        bool state_seen = false;
+        //! True once the last state event (\c done) has been pushed; it is pushed exactly once
+        bool state_end_delivered = false;
         SocketPollOperationBase* spop_base; //!< C++ poll operation (referenced, or nullptr)
         bool has_qore_abort;            //!< True if abort() is overridden in Qore
         bool has_qore_on_complete;      //!< True if onComplete() is overridden in Qore
@@ -1812,9 +1843,12 @@ private:
         @param new_poll_info the new poll info (referenced, ownership transferred) or nullptr
         @param ex_hash the exception hash (referenced, ownership transferred) or nullptr
         @param completed true if the operation completed
+        @param state the operation's state after the step, read for its state events, or nullptr
+        @param spop_obj the poll operation that made the step; an identity only, not referenced
     */
     DLLLOCAL void enqueueContinuePollResult(const std::string& key, int thread_idx, QoreHashNode* new_poll_info,
-        QoreHashNode* ex_hash, bool completed);
+        QoreHashNode* ex_hash, bool completed, const std::string* state = nullptr,
+        const QoreObject* spop_obj = nullptr);
 
     //! Dispatch a stream-data-ready notification from a worker thread
     /** Called by the DT_CONTINUE_POLL worker after getAndClearDataReadyStreams() to
@@ -1852,6 +1886,35 @@ private:
     DLLLOCAL void deliverResult(Queue* queue, QoreObject* spop_obj, bool has_on_complete,
         QoreHashNode* result, ExceptionSink* xsink, const std::string& owner = std::string(),
         AsyncIoSandboxContext sandbox_ctx = AsyncIoSandboxContext());
+
+    //! Notes the state an operation with a state queue has after a step, and reports it if it changed
+    /** Called on the I/O thread with the state read after each step: the first state read is always reported,
+        later ones when they differ from the state read after the step before; with notify states, only changes
+        into one of them are reported.
+
+        @param pinfo the operation; must have a state queue
+        @param state the state, as returned by getStateImpl() (nullptr is the empty string, as getState() returns)
+    */
+    DLLLOCAL void noteOperationState(PollInfo& pinfo, const char* state);
+
+    //! Pushes the last state event (\c done) of an operation with a state queue, exactly once
+    /** Called on every path that ends an operation, before its result is delivered, so that all its events
+        precede its result.  It only pushes to the state queue, which has its own lock, so it can be called whether
+        or not the controller mutex is held.
+    */
+    DLLLOCAL void deliverStateEnd(PollInfo& pinfo);
+
+    //! Pushes a state event to a state queue
+    /** The queue never has a maximum size (see submit()), so the push never waits.  The event is pushed with the
+        queue's object, as Queue::push() does, so that the deterministic garbage collector sees the references the
+        event holds: a queue reachable from the operation (a member, a callback's closure) with events left in it
+        is part of a cycle that is collected.  A failure to build or push the event is logged; it cannot affect the
+        operation.
+
+        @param state the state, or nullptr for an event without a state
+    */
+    DLLLOCAL void pushStateEvent(Queue* state_queue, QoreObject* state_queue_obj, QoreObject* sock_obj,
+        QoreObject* spop_obj, const std::string* state, bool done, QoreHashNode* other, const std::string& owner);
 
     //! Shared call dispatcher for async callback/abort delivery (lazily created, atomic for lock-free check)
     std::atomic<QoreCallDispatcher*> call_dispatcher{nullptr};

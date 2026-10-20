@@ -291,6 +291,7 @@ const TypedHashDecl* hashdeclStatInfo,
     * hashdeclSocketPollOperationInfo,
     * hashdeclHttpRedirectInfo,
     * hashdeclSocketPollResultInfo,
+    * hashdeclSocketPollStateInfo,
     * hashdeclEventPollInfo,
     * hashdeclTimerEventInfo,
     * hashdeclRegexMatchInfo,
@@ -1502,6 +1503,8 @@ StaticSystemNamespace::StaticSystemNamespace() : RootQoreNamespace(new qore_root
     // Must be after initSocketClass, preinitAbstractPollOperationClass, and get_thread_ns (Queue).
     // Must be before initAsyncIoControllerClass which references these hashdecls.
     hashdeclSocketPollResultInfo = init_hashdecl_SocketPollResultInfo(qns);
+    // SocketPollOperationInfo references SocketPollStateInfo through stateQueue
+    hashdeclSocketPollStateInfo = init_hashdecl_SocketPollStateInfo(qns);
     hashdeclSocketPollOperationInfo = init_hashdecl_SocketPollOperationInfo(qns);
     // Now that SocketPollResultInfo is available, finish AbstractPollOperation init
     // (adds onComplete(hash<SocketPollResultInfo>) which references the hashdecl)

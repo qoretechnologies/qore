@@ -2164,7 +2164,8 @@ public:
 
     The test forces the race deterministically: it marks the running controller as shutting down (as stop() does
     before it waits for the I/O threads) and submits with its own result Queue, whose reference count must be the
-    same after the rejected submission as before it.
+    same after the rejected submission as before it.  The submission also has a state Queue: an operation that ends
+    before its first step reports exactly one state event, the last one (\c done), without a state.
 */
 class AsyncIoAbandonedSubmitTest {
 public:
@@ -2243,12 +2244,22 @@ public:
         }
         int queue_refs = queue->reference_count();
 
+        Queue* state_queue = new Queue;
+        ReferenceHolder<QoreObject> state_queue_obj(new QoreObject(QC_QUEUE, getProgram(), state_queue), &xsink);
+        {
+            type_vec_t args;
+            args.push_back(hashdeclSocketPollStateInfo->getTypeInfo(false));
+            state_queue_obj->setInstantiatedTypeInfo(QC_QUEUE->getTypeInfo(args, false));
+        }
+        int state_queue_refs = state_queue->reference_count();
+
         ReferenceHolder<QoreHashNode> info(new QoreHashNode(hashdeclSocketPollOperationInfo, &xsink), &xsink);
         info->setKeyValue("sock", sock_obj->objectRefSelf(), &xsink);
         info->setKeyValue("spop", op_obj->objectRefSelf(), &xsink);
         info->setKeyValue("owner", new QoreStringNode("abandoned-submit-unit-test"), &xsink);
         info->setKeyValue("to", -1, &xsink);
         info->setKeyValue("resultQueue", queue_obj->objectRefSelf(), &xsink);
+        info->setKeyValue("stateQueue", state_queue_obj->objectRefSelf(), &xsink);
         UT_ASSERT(c, !xsink, "abandoned-submit submission info is initialized");
         if (xsink) {
             return;
@@ -2283,6 +2294,25 @@ public:
         }
         UT_ASSERT_EQ(c, queue_refs, queue->reference_count(),
             "an abandoned submission releases its reference to the result Queue");
+
+        UT_ASSERT_EQ(c, 1, static_cast<int>(state_queue->size()),
+            "an abandoned submission reports exactly one state event");
+        if (state_queue->size() == 1) {
+            bool timed_out = false;
+            ValueHolder event(state_queue->shift(&xsink, 0, &timed_out), &xsink);
+            UT_ASSERT(c, !timed_out && !xsink && event->getType() == NT_HASH,
+                "the abandoned submission's state event is a hash");
+            if (event->getType() == NT_HASH) {
+                const QoreHashNode* h = event->get<const QoreHashNode>();
+                UT_ASSERT(c, h->getKeyValue("done").getAsBool(), "the abandoned submission's event is the last one");
+                UT_ASSERT(c, h->getKeyValue("state").isNothing(),
+                    "the event of an operation that never made a step has no state");
+                UT_ASSERT(c, h->getKeyValue("spop").getType() == NT_OBJECT,
+                    "the abandoned submission's event has the operation");
+            }
+        }
+        UT_ASSERT_EQ(c, state_queue_refs, state_queue->reference_count(),
+            "an abandoned submission releases its reference to the state Queue");
     }
 };
 

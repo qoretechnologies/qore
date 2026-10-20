@@ -54,6 +54,37 @@ static AsyncIoControllerPriv* get_singleton(QoreObject*& obj, ExceptionSink* xsi
     return ctrl;
 }
 
+//! Socket poll state event hash
+/** Pushed onto the @ref Qore::SocketPollOperationInfo::stateQueue "stateQueue" of an operation submitted with
+    @ref Qore::AsyncIoController::submit() when the operation's state changes, and once more when the operation
+    ends; see @ref asynciocontroller_state_events
+
+    @since %Qore 3.0
+*/
+hashdecl Qore::SocketPollStateInfo {
+    //! The pollable I/O object the operation was submitted for
+    AbstractPollableIoObjectBase sock;
+
+    //! The poll operation
+    AbstractPollOperation<?> spop;
+
+    //! The operation's state: the value of @ref Qore::AbstractPollOperation::getState() "getState()"
+    /** In a state change event, the state the operation has after the step that changed it.  In the event with
+        \c done set, the last state the controller read, or @ref nothing if the operation ended before its first
+        step.
+    */
+    *string state;
+
+    //! @ref True "True" in the last event of the operation, pushed when the operation ends for any reason
+    /** The operation's result is delivered after this event; this event is pushed whatever the
+        @ref Qore::SocketPollOperationInfo::notifyStates "notifyStates" of the operation.
+    */
+    bool done = False;
+
+    //! Free-form data provided when the operation was submitted
+    *hash<auto> other;
+}
+
 //! Socket polling operation info hash
 /** Contains all the information needed to submit an async I/O operation
 
@@ -85,8 +116,29 @@ hashdecl Qore::SocketPollOperationInfo {
 
         If neither a Queue nor an @ref AbstractPollOperation::onComplete() "onComplete()" override
         is provided, a new Queue is created and returned from @ref Qore::AsyncIoController::submit().
+
+        The Queue must not have a maximum size: the I/O thread never waits for room in a Queue.
     */
     *Queue<hash<SocketPollResultInfo>> resultQueue;
+
+    //! Optional Queue for the operation's state events
+    /** When given, the controller reports the operation's state on this Queue: an event after each step that
+        changes it and a last event with \c done set when the operation ends, before its result is delivered; see
+        @ref asynciocontroller_state_events.  Several operations can share one Queue.
+
+        The Queue must not have a maximum size: the I/O thread never waits for room in a Queue.
+
+        @since %Qore 3.0
+    */
+    *Queue<hash<SocketPollStateInfo>> stateQueue;
+
+    //! The states to report on the @ref stateQueue
+    /** When given, only changes into one of these states are reported; the last event, with \c done set, is
+        always reported.  Requires a @ref stateQueue.
+
+        @since %Qore 3.0
+    */
+    *softlist<string> notifyStates;
 
     //! Optional custom cache key; default: sock.uniqueHash()
     /** Allows multiple concurrent operations on the same socket (e.g., concurrent accepts
@@ -160,6 +212,58 @@ hashdecl Qore::SocketPollResultInfo {
     - Phase 2 (continuePoll outside lock): drive operations, collect results
     - Phase 3 (Update under lock + deferred delivery): update cache/EventLoop, deliver callbacks
 
+    @anchor asynciocontroller_state_events
+    @par State Events
+    An operation submitted with a @ref Qore::SocketPollOperationInfo::stateQueue "stateQueue" reports its state
+    on that Queue as @ref Qore::SocketPollStateInfo "SocketPollStateInfo" events, so a caller can wait for the
+    operation to reach a state by blocking on the Queue instead of calling
+    @ref Qore::AbstractPollOperation::getState() "getState()" repeatedly while the controller drives the operation:
+    - the controller reads the operation's state after each step, i.e. each
+      @ref Qore::AbstractPollOperation::continuePoll() "continuePoll()" call, whether the step continues the
+      operation, completes it or raises an exception, on the thread that made the call: the I/O thread for
+      operations implemented in C++, a callback worker for operations implemented in %Qore
+    - the state after the first step is always reported; after that, a step is reported when it leaves the
+      operation in another state than the step before it.  Several state changes made within one step are seen as
+      one change, to the state the step leaves
+    - with @ref Qore::SocketPollOperationInfo::notifyStates "notifyStates", only changes into one of the given
+      states are reported
+    - when the operation ends for any reason (its goal is reached, it raises an exception, times out, is canceled,
+      replaced by another operation with the same key, or the controller shuts down), one last event is reported
+      with \c done set and the last state the controller read, or no state if the operation ended before its first
+      step
+    - the events of an operation are pushed in the order of its steps, and all of them, the last one included, are
+      pushed before the operation's result is pushed to its result Queue or passed to
+      @ref Qore::AbstractPollOperation::onComplete() "onComplete()": once the result is received, all events are
+      on the state Queue, and once the last event is received, the result follows
+    - a submission without a state Queue costs nothing: the controller does not read the operation's state
+    - an exception raised by the %Qore @ref Qore::AbstractPollOperation::getState() "getState()" method of an
+      operation ends the operation with that exception, as if its step had raised it
+    - submitting the same operation again starts a new submission, which reports its first step again
+
+    @par Example: waiting for an operation to reach a state
+    @code{.py}
+# wait until a QUIC client has completed its handshake and set up HTTP/3, then send a request
+Socket sock();
+sock.bindINET("127.0.0.1", "0", False, AF_INET, SOCK_DGRAM);
+AbstractPollOperation op = sock.startPollQuicConnect("127.0.0.1", port);
+Queue<hash<SocketPollStateInfo>> states();
+*Queue<hash<SocketPollResultInfo>> result_queue = AsyncIoController::submit(<SocketPollOperationInfo>{
+    "sock": sock,
+    "spop": op,
+    "owner": "quic-client",
+    "stateQueue": states,
+    "notifyStates": "reading",
+});
+hash<SocketPollStateInfo> event = states.get();
+if (event.done) {
+    # the operation ended before it was ready; its result tells why
+    hash<SocketPollResultInfo> result = result_queue.get();
+    throw result.ex.err, result.ex.desc;
+}
+sock.submitQuicRequest("GET", "/");
+AsyncIoController::wakeSocket(sock);
+    @endcode
+
     @note This class is not available with the @ref PO_NO_NETWORK parse option
 
     @since %Qore 3.0
@@ -209,13 +313,19 @@ AsyncIoController::copy() {
     hash<SocketPollResultInfo> result = q.get();
     @endcode
 
-    @param operation_info the operation info hash
+    @param operation_info the operation info hash; with a
+    @ref Qore::SocketPollOperationInfo::stateQueue "stateQueue", the operation also reports its state; see
+    @ref asynciocontroller_state_events
     @param replace_existing if @ref True "True", cancel any existing operation with the same key
 
     @return a Queue object for receiving the result, or @ref nothing if a callback was provided
     in the info hash
 
-    @throw ASYNC-IO-ERROR if the controller is shutting down or the info hash is invalid
+    @throw ASYNC-IO-ERROR if the controller is shutting down or the info hash is invalid: the result Queue or the
+    state Queue has a maximum size, \c notifyStates is given without a \c stateQueue, or a \c stateQueue is given
+    for an operation implemented in C++ whose continuePoll() runs on the I/O thread while its getState() is
+    implemented in %Qore (%Qore code does not run on the I/O thread, where the controller reads the state of such an
+    operation)
 
     @note The steps of the operation that run on callback workers, such as
     @ref Qore::AbstractPollOperation::continuePoll() "continuePoll()" and
@@ -247,14 +357,15 @@ static *Queue<hash<SocketPollResultInfo>> AsyncIoController::submit(hash<SocketP
 /** This is the blocking companion to @ref Qore::AsyncIoController::submit(). It uses the controller event loop
     for the actual I/O operation, then waits on the operation's result Queue.
 
-    @param operation_info the operation info hash
+    @param operation_info the operation info hash; as with @ref Qore::AsyncIoController::submit() "submit()", a
+    \c stateQueue receives the operation's state events, all of them before this method returns
     @param replace_existing if @ref True "True", cancel any existing operation with the same key
 
     @return the operation result hash
 
-    @throw ASYNC-IO-ERROR if the controller is shutting down, the info hash is invalid,
-    or the operation uses an @ref AbstractPollOperation::onComplete() "onComplete()"
-    callback, or if called from the async I/O thread
+    @throw ASYNC-IO-ERROR if the controller is shutting down, the info hash is invalid (see
+    @ref Qore::AsyncIoController::submit() "submit()"), or the operation uses an
+    @ref AbstractPollOperation::onComplete() "onComplete()" callback, or if called from the async I/O thread
 
     @since %Qore 3.0
 */

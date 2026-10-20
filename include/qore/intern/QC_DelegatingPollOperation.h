@@ -54,4 +54,18 @@ DLLLOCAL extern qore_classid_t CID_DELEGATINGPOLLOPERATION;
 DLLLOCAL bool qore_delegating_poll_op_scan_members(class AbstractPrivateData* priv_data,
     RObject& obj, RSetHelper& rsh, ExceptionSink* xsink);
 
+//! Returns false if the given C++ poll operation is a DelegatingPollOperation whose state comes from Qore code
+/** The async I/O controller reads the state of a C++ operation whose continuePoll() runs on the I/O thread with
+    getStateImpl(), where Qore code must not run.  A DelegatingPollOperation reports the state of its inner
+    operation; when the inner operation's getState() is implemented in Qore, its state can only be read with a call
+    to that method.
+
+    @param op the C++ poll operation
+
+    @return true if the state of \a op can be read with getStateImpl() without running Qore code
+
+    @since %Qore 3.0
+*/
+DLLLOCAL bool qore_delegating_poll_op_reads_state_natively(const class SocketPollOperationBase* op);
+
 #endif // _QORE_INTERN_QC_DELEGATINGPOLLOPERATION_H
