@@ -3674,3 +3674,41 @@ investigate removing lookup work only with a complete invocation/context and
 lifetime proof. Do not cache captured values, drop locking, extend closure
 ownership, or trust reused addresses. This is an unimplemented/unmeasured
 hypothesis, distinct from both rejected candidates.
+
+## Rejected first-capture lookup (post-5e73080ca)
+
+Develop `3f0019a6a` is merged and the exact merged tree passed selected full
+Release/Debug qualification. A fresh optimized AOT screen then tested an exact
+first-capture identity check before ordered lookup, preserving normal capture
+locking and all fallback/admission rules.
+
+The shortcut is rejected and removed: captured-closure time improved only
+1.934% versus the frozen merged baseline and 1.361% versus a compile-disabled
+control on the same candidate runtime, below the predeclared 3% target.
+Default-layout times were 23.128278 / 22.761392 / 22.688409 ns/item respectively.
+All 189 runs / 567 measured windows, three layouts and two multiple-capture
+probes are preserved in RESULTS.md and
+`results-aot-capture-first-entry-rejected-macos-arm64.json`. This is not a
+retained speedup or a new Java/develop comparison.
+
+All 18 executables passed 5265 reference checks. Candidate and freshly restored
+Release each passed 15 focused fixtures / 40 QUnit cases, respectively
+702 / 642 assertions, with no skips, plus three exit-status fixtures. All six
+experimental source files match the merged baseline again. Existing Debug
+artifacts are unchanged; no fresh candidate Debug or broader retention gate is
+claimed. Two outer reporting/equivalence failures and fresh successful retries
+remain distinct in the evidence.
+
+Historical qualification case totals include explicitly skipped cases despite
+QUnit's misleading summary. In the merged core suite, 117 registered means
+109 passed + eight Linux-only skips; in Release's lvalue suite, 84 registered
+means 81 passed + three Debug-only skips. Debug executes all 84 lvalue cases.
+Use explicit skip ledgers; this does not change timing values.
+
+Next investigate duplicate callback-tag/enable decoding on the already-proven
+closure miss route, starting with machine-code inspection. An internal
+known-closure continuation could reuse an immediate checked identity without
+retaining a closure or caching its values. All live guards and current signature
+checks must remain. This distinct hypothesis is unimplemented and unmeasured;
+do not retry the rejected signature proof or map shortcut unchanged. Java parity
+and a global performance ceiling remain open.

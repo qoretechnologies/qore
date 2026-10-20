@@ -19123,3 +19123,90 @@ performance ceiling remain unestablished.
 All 55 workloads in each epoch, controls, raw observations, source and failure
 archives, qualification and final audit:
 [results-aot-indexed-add-and-multi-getter-rejected-macos-arm64.json](results-aot-indexed-add-and-multi-getter-rejected-macos-arm64.json).
+
+## Rejected first-capture lookup after the develop merge (2026-10-21)
+
+Merge `5e73080ca` integrates `origin/develop` at `3f0019a6a`. Its exact source
+tree passed selected full Release/Debug qualification before this experiment.
+The new frozen baseline uses those optimized Release artifacts, built before
+the merge commit from the identical merged index tree. Every measured
+executable was compiled with `qcc -O3`; the runtime uses `-O3 -DNDEBUG`.
+This is a branch-before/prototype comparison, not a new develop/Java epoch.
+
+The prototype checked the exact identity of the first immutable capture-map
+entry before falling back to ordered lookup. It retained each synchronized
+value read, unassigned/reference fallback, live admission checks and ownership.
+A versioned helper left the old helper available; a compile-disabled control
+used the same candidate runtime without selecting the shortcut.
+
+**Rejected, not retained.** The predeclared target required at least 3% lower
+captured-closure time across three fixed layouts against both controls. The
+screen found only 1.934% versus the frozen baseline and 1.361% versus the
+same-runtime control. No confirmation or broader retention run was needed.
+There was no >=3% disjoint adverse layout comparison in this screen; rejection
+is for insufficient target gain, not a demonstrated regression.
+
+Captured-closure ns per recurrence item (lower is better):
+
+|!Layout|!Before|!Candidate|!Compiler selector off|!Change vs before|!Change vs selector off
+|default|23.128278|22.761392|22.688409|-1.586%|+0.322%
+|reverse|22.907078|22.404158|22.987132|-2.195%|-2.536%
+|shuffle487|23.157126|22.689203|23.116177|-2.021%|-1.847%
+
+For context, the same epoch's default-layout baseline measured direct calls at
+1.457041 ns/item, function-reference calls at 6.600013, polymorphic calls at
+22.029479, and noncapturing closures at 17.168363. These are workload timings,
+not isolated call latencies or fresh comparisons with Java.
+
+The screen has 189 serial runs / 567 measured windows: seven workloads, three
+fixed link layouts, three modes, three process forks, and three measured
+200-ms windows after three warmup windows. Two additional workloads read the
+first or second of two distinct captures more often. Fork medians are combined
+with a median per layout, then a geometric mean across layouts for the target
+gate. No thresholds, workloads or layouts were changed after timing. Host load,
+frequency and thermals were not controlled.
+
+All 18 optimized executables passed 5265 independent reference checks.
+Compile-disabled LLVM function bodies match the baseline; enabled bodies
+differ only in capture-helper selection. Only the startup metadata-size operand
+was excluded, after verifying its serialized global-array length. Independent
+replay checks all raw timing windows, artifact/source bindings and that LLVM
+comparison. Diagnostic sampling is excluded from timing: the original capture
+helper had 358 of 3821 active-thread leaf samples, including guard/return work;
+this is not a predicted removable cost or speedup ceiling.
+
+Candidate focused Release qualification passed 15 fixtures: 40 QUnit cases /
+702 assertions, no skips, plus three exit-status fixtures. All six experimental
+production/fixture files were restored exactly to the merged source, then a
+fresh Release build and QUnit/FsUtil qmod rebuild passed the same gate with
+40 cases / 642 assertions, no skips, and the same three exit-status fixtures.
+The candidate-only assertions were removed with its fixture changes. Existing
+merged-tree Debug artifacts remain unchanged; no new candidate Debug,
+full-retention, sanitizer or cross-platform qualification is claimed.
+
+Two tooling failures are preserved separately: the first focused driver
+expected a QUnit summary from an exit-status fixture, and the first preparation
+driver rejected the startup metadata-size difference. Their child commands
+succeeded; corrected drivers ran fresh gates. Neither failed outer run is
+relabeled as successful.
+
+Qualification accounting clarification: the longstanding `QUnit::skipped()`
+predicate can report skipped cases as succeeded. Historical tables' case totals
+are registered/reported totals, not necessarily executed passes. The merged
+core suite has 117 registered cases = 109 passed + eight Linux-only skips in
+each runtime; its lvalue suite has 84 registered cases = 81 passed + three
+Debug-only skips in Release, and 84 passed in Debug. Explicit skip ledgers,
+not the misleading summary, determine pass counts. Raw archives are preserved;
+benchmark timing and reference-check counts are unaffected.
+
+Next inspect the already-proven closure miss route: it checks the callback
+type/enable gate before calling a continuation that checks them again.
+Determine from generated machine code whether a known-closure continuation can
+reuse that immediate proof while retaining all live Program/body/readiness,
+signature, debugger, stack, ownership and capture checks. This is distinct
+from the rejected signature-proof shortcut and is not yet implemented or
+measured. No Java parity or global performance ceiling is established.
+
+Raw timings, replay/measurement code, prototype patch, qualification logs,
+failure records, artifact hashes and all audit items:
+[results-aot-capture-first-entry-rejected-macos-arm64.json](results-aot-capture-first-entry-rejected-macos-arm64.json).
