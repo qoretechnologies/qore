@@ -39,8 +39,7 @@ class IndexRenameSqlTest inherits QUnit::Test {
             (new OracleIndex("ix_old", True, cols, "UNIQUE")).getRenameSql("orders", "ix_new"));
         assertEq(("exec sp_rename 'orders.ix_old', 'ix_new', 'INDEX'",),
             (new MssqlIndex("ix_old", True, cols)).getRenameSql("orders", "ix_new"));
-        # dropped and added in one statement
-        assertEq(("alter table orders drop index ix_old, add unique index ix_new (code, id)",),
+        assertEq(("alter table orders rename index ix_old to ix_new",),
             (new MysqlIndex("ix_old", True, cols)).getRenameSql("orders", "ix_new"));
 
         # dropped and created under the new name: two statements

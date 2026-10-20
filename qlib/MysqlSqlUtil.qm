@@ -115,6 +115,12 @@ module MysqlSqlUtil {
       it and added its unique constraint, an index of the same name, again, so the alignment failed: a unique
       constraint is its index on MySQL, so the index is now dropped once and created once, and only the foreign
       constraints that reference it are dropped and added again around it
+    - fixed renaming a unique constraint or an index, which dropped it and added it under the new name, so that a
+      unique constraint that a foreign constraint references could not be renamed: both are renamed with
+      \c RENAME \c INDEX, which needs MySQL 5.7 or MariaDB 10.5.2 or later; MySQL cannot rename a foreign
+      constraint, which was dropped and added again, so table alignment keeps a foreign constraint with the
+      definition of the template's under another name under its name (see
+      @ref SqlUtil::AbstractConstraint::supportsRename() "AbstractConstraint::supportsRename()")
 
     @subsection mysqlsqlutilv15 MysqlSqlUtil v1.5
     - fixed case-sensitive regular-expression matching on MySQL 8.0.22+ and current MySQL releases by using an
@@ -285,10 +291,10 @@ public namespace MysqlSqlUtil {
         }
 
         #! returns the SQL statement that renames the index in the database
-        /** the index is dropped and added under the new name in one \c ALTER \c TABLE statement
+        /** The index is renamed with \c RENAME \c INDEX, which needs MySQL 5.7 or MariaDB 10.5.2 or later
         */
         softlist<string> getRenameSql(string table_name, string new_name) {
-            return sprintf("alter table %s drop index %s, add %sindex %s (%s)", table_name, name, unique ? "unique " : "", new_name, (foldl $1 + ", " + $2, columns.getSqlColumnNameIterator()));
+            return sprintf("alter table %s rename index %s to %s", table_name, name, new_name);
         }
 
         #! returns a string that can be used to drop the index from the table
@@ -306,9 +312,22 @@ public namespace MysqlSqlUtil {
             return getCreateSql(name, table_name, opt);
         }
 
-        #! returns a string that drops the constraint and re-adds it, since MySQL does not support renaming constraints
+        #! returns no SQL: MySQL cannot rename a foreign constraint
+        /** A foreign constraint is never dropped and added again under another name; see @ref supportsRename()
+        */
         softlist getRenameSql(string table_name, string new_name) {
-            return getDropSql(table_name) + ", " + getAddSql(new_name, table_name);
+            return ();
+        }
+
+        #! returns @ref False "False": MySQL cannot rename a foreign constraint
+        /** Table alignment takes a foreign constraint with the definition of the template's under another name for
+            the template's, and keeps it under its name in the database; see
+            @ref SqlUtil::AbstractConstraint::supportsRename() "AbstractConstraint::supportsRename()"
+
+            @since MysqlSqlUtil 1.6
+        */
+        bool supportsRename() {
+            return False;
         }
 
         string getCreateSql(string name, string table_name, *hash opt) {
@@ -549,12 +568,12 @@ auto v = c.name;
             return getCreateSql(name, table_name, opts);
         }
 
+        #! returns the SQL that renames the constraint
+        /** A unique constraint in MySQL is its unique index, which is renamed with \c RENAME \c INDEX, which needs
+            MySQL 5.7 or MariaDB 10.5.2 or later, so that the foreign constraints that reference it are kept
+        */
         list getRenameSql(string table_name, string new_name) {
-            # the following is only valid with MySQL 9.2+
-            #return sprintf("alter table %s rename constraint %s to %s", table_name, name, new_name);
-            list l += getDropSql(table_name);
-            l += getCreateSql(new_name, table_name);
-            return l;
+            return (sprintf("alter table %s rename index %s to %s", table_name, name, new_name),);
         }
 
         string getCreateSql(string name, string table_name, *hash opts) {

@@ -34,9 +34,9 @@ class PgsqlForeignConstraintTest inherits QUnit::Test {
             new ForeignConstraintTarget("parent", columns(("user",))));
         assertEq('alter table child add constraint fk_reserved foreign key ("order") references parent ("user")',
             fk.getCreateSql("child"));
-        list<string> renamed = fk.getRenameSql("child", "fk_renamed");
-        assertEq('alter table child add constraint fk_renamed foreign key ("order") references parent ("user")',
-            renamed[1]);
+        # the constraint is renamed in place, never dropped and added again
+        assertEq(("alter table child rename constraint fk_reserved to fk_renamed",),
+            fk.getRenameSql("child", "fk_renamed"));
     }
     private composite() {
         PgsqlForeignConstraint fk("fk_composite", columns(("draft_user", "type", "draft_id")),

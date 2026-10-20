@@ -3125,6 +3125,10 @@ AbstractConstraint con = table.renameConstraint("pk_table_name", "pkey_table_nam
         @param lsql an optional reference to a list of strings to retrieve the SQL used to modify the constraint (only executed if the table is already in the database)
         @return the constraint object that was updated
 
+        @note a constraint that the database cannot rename
+        (@ref SqlUtil::AbstractConstraint::supportsRename() "AbstractConstraint::supportsRename()") is renamed in the
+        table's description only, and \a lsql is an empty list
+
         @throw CONSTRAINT-ERROR if the old constraint does not exist in the table or if the new constraint name already exists
     */
     AbstractConstraint renameConstraint(string old_name, string new_name, reference lsql) {
@@ -3167,8 +3171,13 @@ AbstractConstraint con = table.renameConstraint("pk_table_name", "pkey_table_nam
             throw "CONSTRAINT-ERROR", sprintf("%s: has no constraint %y; valid constraints: %y", getDesc(), old_name, cl);
         }
 
-        # rename foreign constraint in table if the table already exists in the DB
-        execSql(lsql = c.getRenameSql(getSqlName(), new_name));
+        # rename foreign constraint in table if the table already exists in the DB; a constraint that the database
+        # cannot rename is renamed in the description of the table only
+        if (c.supportsRename()) {
+            execSql(lsql = c.getRenameSql(getSqlName(), new_name));
+        } else {
+            lsql = ();
+        }
 
         c.rename(new_name);
 
@@ -11229,8 +11238,11 @@ list<auto> l = table.getAlignSql(table2);
                 c = primaryKey;
 
             if (c) {
-                l += AbstractDatabase::doCallback(opt, c.getRenameSql(getSqlName(), value),
-                    AbstractDatabase::AC_Rename, "constraint", c.getName(), name, value);
+                # a constraint that the database cannot rename keeps its name in the database
+                if (c.supportsRename()) {
+                    l += AbstractDatabase::doCallback(opt, c.getRenameSql(getSqlName(), value),
+                        AbstractDatabase::AC_Rename, "constraint", c.getName(), name, value);
+                }
                 c.rename(value);
             }
         }
@@ -11244,9 +11256,12 @@ list<auto> l = table.getAlignSql(table2);
                 && t.constraints
                 && (*AbstractUniqueConstraint other = t.constraints.findEqualUniqueConstraint(uk))
                 && !constraints.hasKey(other.getName())) {
-                # rename constraint
-                l += AbstractDatabase::doCallback(opt, uk.getRenameSql(getSqlName(), other.getName()),
-                    AbstractDatabase::AC_Rename, "constraint", uk.getName(), name, other.getName());
+                # rename constraint; one that the database cannot rename is the template's constraint under its name
+                # in the database
+                if (uk.supportsRename()) {
+                    l += AbstractDatabase::doCallback(opt, uk.getRenameSql(getSqlName(), other.getName()),
+                        AbstractDatabase::AC_Rename, "constraint", uk.getName(), name, other.getName());
+                }
                 constraints.renameKey(uk.getName(), other.getName());
                 uk.rename(other.getName());
             }
@@ -11259,9 +11274,12 @@ list<auto> l = table.getAlignSql(table2);
                     && t.foreignConstraints
                     && (*AbstractForeignConstraint other = t.foreignConstraints.findEqual(fk))
                     && !foreignConstraints.hasKey(other.getName())) {
-                    # rename constraint
-                    l += AbstractDatabase::doCallback(opt, fk.getRenameSql(getSqlName(), other.getName()),
-                        AbstractDatabase::AC_Rename, "constraint", fk.getName(), name, other.getName());
+                    # rename constraint; one that the database cannot rename is the template's constraint under its
+                    # name in the database
+                    if (fk.supportsRename()) {
+                        l += AbstractDatabase::doCallback(opt, fk.getRenameSql(getSqlName(), other.getName()),
+                            AbstractDatabase::AC_Rename, "constraint", fk.getName(), name, other.getName());
+                    }
                     foreignConstraints.renameKey(fk.getName(), other.getName());
                     fk.rename(other.getName());
                 }

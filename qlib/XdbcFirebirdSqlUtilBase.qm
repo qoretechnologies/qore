@@ -96,6 +96,11 @@ module XdbcFirebirdSqlUtilBase {
     - fixed table alignment of a unique index with other columns, which dropped a unique constraint of the same
       name, dropped the index, created it and added the constraint again: the index is now dropped once and created
       once, and only the foreign constraints that reference it are dropped and added again around it
+    - Firebird cannot rename a constraint: table alignment dropped a foreign constraint with the definition of the
+      template's under another name and added it again under the new name; a unique or foreign constraint with the
+      definition of the template's under another name is now taken for the template's and kept under its name in the
+      database, so that the next alignment needs no SQL either (see
+      @ref SqlUtil::AbstractConstraint::supportsRename() "AbstractConstraint::supportsRename()")
 
     @subsection xdbcfirebirdsqlutilbasev_0_1 XdbcFirebirdSqlUtilBase Module v0.1
     - initial release
@@ -179,9 +184,22 @@ public namespace XdbcFirebirdSqlUtilBase {
             return getCreateSql(name, table_name, opt);
         }
 
-        #! returns a string that drops the constraint and re-adds it, since XdbcFirebird does not support renaming constraints
+        #! returns no SQL: Firebird cannot rename a constraint
+        /** A foreign constraint is never dropped and added again under another name; see @ref supportsRename()
+        */
         softlist getRenameSql(string table_name, string new_name) {
-            return getDropSql(table_name) + ", " + getAddSql(new_name, table_name);
+            return ();
+        }
+
+        #! returns @ref False "False": Firebird cannot rename a constraint
+        /** Table alignment takes a foreign constraint with the definition of the template's under another name for
+            the template's, and keeps it under its name in the database; see
+            @ref SqlUtil::AbstractConstraint::supportsRename() "AbstractConstraint::supportsRename()"
+
+            @since XdbcFirebirdSqlUtilBase 0.2
+        */
+        bool supportsRename() {
+            return False;
         }
 
         string getCreateSql(string name, string table_name, *hash<auto> opt) {
@@ -323,7 +341,22 @@ auto v = c.name;
             return getCreateSql(name, table_name, opts);
         }
 
+        #! returns no SQL: Firebird cannot rename a constraint
+        /** A unique constraint is never dropped and added again under another name; see @ref supportsRename()
+        */
         list<string> getRenameSql(string table_name, string new_name) {
+            return ();
+        }
+
+        #! returns @ref False "False": Firebird cannot rename a constraint
+        /** Table alignment takes a unique constraint with the columns of the template's under another name for the
+            template's, and keeps it under its name in the database; see
+            @ref SqlUtil::AbstractConstraint::supportsRename() "AbstractConstraint::supportsRename()"
+
+            @since XdbcFirebirdSqlUtilBase 0.2
+        */
+        bool supportsRename() {
+            return False;
         }
 
         #! returns a string that can be used to create the constraint in the database

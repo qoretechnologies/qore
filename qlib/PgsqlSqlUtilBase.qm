@@ -232,6 +232,8 @@ $function$
       constraint was added "using index" its dropped index, which failed); the key is now renamed in place, with
       <tt>ALTER INDEX ... RENAME</tt> for a primary key and <tt>ALTER TABLE ... RENAME CONSTRAINT</tt> for a unique
       constraint
+    - fixed renaming a foreign or check constraint, which dropped it, for a foreign constraint with \c cascade, and
+      added it under the new name: it is renamed in place with <tt>ALTER TABLE ... RENAME CONSTRAINT</tt>
     - fixed functions and types being looked up in every schema of the database instead of the schema that the
       connection resolves unqualified names in (see @ref pgsql_schema_scope), as tables, views, and sequences are:
       @ref SqlUtil::AbstractDatabase::getFunction() "getFunction()" reported the same function in two schemas as
@@ -1014,12 +1016,9 @@ public class PgsqlForeignConstraint inherits SqlUtil::AbstractForeignConstraint 
         return sprintf("alter table %s drop constraint if exists %s cascade", table_name, name);
     }
 
+    #! returns the SQL that renames the constraint in place
     softlist getRenameSql(string table_name, string new_name) {
-        # the following is only valid with PostgreSQL 9.2+
-        #return sprintf("alter table %s rename constraint %s to %s", table_name, name, new_name);
-        list l += getDropSql(table_name);
-        l += getCreateSql(new_name, table_name);
-        return l;
+        return sprintf("alter table %s rename constraint %s to %s", table_name, name, new_name);
     }
 
     #! Returns foreign-key DDL with the recorded SQL names of all participating columns
@@ -1057,12 +1056,9 @@ public class PgsqlCheckConstraint inherits SqlUtil::AbstractCheckConstraint {
         return getCreateSql(name, table_name, opt);
     }
 
+    #! returns the SQL that renames the constraint in place
     list getRenameSql(string table_name, string new_name) {
-        # the following is only valid with PostgreSQL 9.2+
-        #return sprintf("alter table %s rename constraint %s to %s", table_name, name, new_name);
-        list l += getDropSql(table_name);
-        l += getCreateSql(new_name, table_name);
-        return l;
+        return (sprintf("alter table %s rename constraint %s to %s", table_name, name, new_name),);
     }
 
     #! returns a string that can be used to create the constraint in the database

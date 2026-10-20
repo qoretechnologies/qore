@@ -90,20 +90,18 @@ class ForeignConstraintColumnQuotingTest inherits QUnit::Test {
             string definition = "foreign key (" + quoted_order + ") references parent (" + quoted_select + ")";
             assertEq(create_prefix + "fk_reserved " + definition, create_sql(fk));
 
-            # Recreating a renamed constraint must preserve the same column quoting.
+            # a foreign constraint is renamed in place, never dropped and added again; a database that cannot
+            # rename it gives no SQL
             softlist<string> renamed = fk.getRenameSql("child", "fk_renamed");
-            if (sqlite) {
-                # SQLite does not keep the name of a foreign constraint, so there is nothing to rename
-                assertEq((), renamed);
-            } else if (driver == "Oracle") {
+            if (driver == "Oracle") {
                 assertEq(("alter table child rename constraint fk_reserved to fk_renamed",), renamed);
             } else if (driver == "MS SQL") {
-                assertEq(("alter table child drop constraint fk_reserved",
-                    "alter table child add constraint fk_renamed " + definition), renamed);
+                # sp_rename finds the constraint in the default schema of a table name without a schema
+                assertEq(("exec sp_rename 'fk_reserved', 'fk_renamed', 'OBJECT'",), renamed);
             } else {
-                string drop_kind = driver == "Firebird" ? "constraint" : "foreign key";
-                assertEq(("alter table child drop " + drop_kind + " fk_reserved, add constraint fk_renamed "
-                    + definition,), renamed);
+                # SQLite does not keep the name of a foreign constraint; MySQL and Firebird cannot rename one
+                assertEq((), renamed);
+                assertFalse(fk.supportsRename());
             }
         });
 

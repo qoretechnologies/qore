@@ -412,6 +412,16 @@ string sql = fk.getTableConstraintSql();
             return ();
         }
 
+        #! returns @ref False "False": SQLite does not keep the name of a foreign constraint
+        /** A foreign constraint is aligned by its definition (see @ref sqlite3_foreign_constraints and
+            @ref SqlUtil::AbstractConstraint::supportsRename() "AbstractConstraint::supportsRename()")
+
+            @since Sqlite3SqlUtil 1.2
+        */
+        bool supportsRename() {
+            return False;
+        }
+
         #! SQLite cannot add a foreign constraint to an existing table
         /** The foreign constraints of a table are created with the table (@ref getTableConstraintSql())
 
@@ -718,6 +728,17 @@ string sql = uk.getCreateSql("orders");
         */
         list<string> getRenameSql(string table_name, string new_name) {
             return ();
+        }
+
+        #! returns @ref False "False": a unique constraint in SQLite cannot be renamed
+        /** A unique constraint created with its table has no name in SQLite, and one that is a unique index cannot be
+            renamed either; a unique constraint is aligned by its columns (see @ref sqlite3_unique_constraints and
+            @ref SqlUtil::AbstractConstraint::supportsRename() "AbstractConstraint::supportsRename()")
+
+            @since Sqlite3SqlUtil 1.2
+        */
+        bool supportsRename() {
+            return False;
         }
 
         #! returns the SQL that drops the constraint's unique index from the table

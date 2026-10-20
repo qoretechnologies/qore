@@ -188,6 +188,14 @@ module SqlUtil {
     - fixed table alignment dropping and creating a unique index twice when its columns change on a database whose
       unique indexes are unique constraints, such as SQLite: the unique constraint of a unique index is added,
       recreated and dropped with the index only
+    - a constraint is renamed, never dropped and added again under another name: table alignment and
+      @ref SqlUtil::AbstractTable::renameConstraint() "AbstractTable::renameConstraint()" take a constraint that the
+      database cannot rename (@ref SqlUtil::AbstractConstraint::supportsRename() "AbstractConstraint::supportsRename()"),
+      such as a foreign constraint on MySQL or a unique or foreign constraint on Firebird or SQLite, with the
+      definition of the template's constraint under another name, for the template's constraint, and keep it under
+      its name in the database, so that the next alignment needs no SQL either; a database that can rename a
+      constraint renames it: SQL Server and PostgreSQL rename foreign and check constraints, and MySQL renames a
+      unique constraint and an index, which they dropped and added again
     - added a driver hook that @ref SqlUtil::AbstractTable::getAlignSql() "AbstractTable::getAlignSql()" calls
       before it aligns the columns, so a driver refuses the changes that its database cannot make with any version
       before a column change that only an older version of the database cannot make, and an alignment reports the
@@ -9307,6 +9315,23 @@ AbstractConstraint ix = constraints.uk_jobs;
         #! returns a list of SQL strings that can be used to rename the constraint in the database
         abstract list<auto> getRenameSql(string table_name, string new_name);
 
+        #! returns @ref True "True" if the database can rename the constraint
+        /** A constraint that the database cannot rename is never dropped and added again under another name: table
+            alignment takes a constraint with the definition of a constraint of its template under another name for
+            the template's constraint, and keeps it under its name in the database, as it does for a primary key
+            that has no name (@ref AbstractPrimaryKey::supportsName()), and
+            @ref SqlUtil::AbstractTable::renameConstraint() "AbstractTable::renameConstraint()" renames it only in the
+            table's description
+
+            @return @ref True "True" if the database can rename the constraint (the default), @ref False "False" if
+            not, in which case @ref getRenameSql() returns no SQL
+
+            @since SqlUtil 3.11.0
+        */
+        bool supportsRename() {
+            return True;
+        }
+
         #! returns a string that can be used to temporarily disable the constraint from the database; if disabling constraints is not supported, then the constraint will be dropped
         string getDisableSql(string table_name) {
             return getDropSql(table_name);
@@ -9590,6 +9615,15 @@ uk.addSourceConstraint(table_name, constraint_name);
         */
         bool supportsName() {
             return True;
+        }
+
+        #! returns @ref True "True" if the database can rename the primary key, which is when it has a name
+        /** @return the value of @ref supportsName()
+
+            @since SqlUtil 3.11.0
+        */
+        bool supportsRename() {
+            return supportsName();
         }
     }
 

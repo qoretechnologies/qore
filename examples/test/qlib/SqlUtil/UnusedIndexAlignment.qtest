@@ -118,7 +118,7 @@ class UnusedIndexAlignmentTest inherits QUnit::Test {
         {
             OfflineDatasource ds("mysql:user/pass@db%localhost:1", "11.4.2-MariaDB", "mysql");
             assertEq((
-                "alter table db.uia_t drop index ix_uia_ren, add index ix_uia_new (b, a)",
+                "alter table db.uia_t rename index ix_uia_ren to ix_uia_new",
                 "alter table db.uia_t drop index ix_uia_old",
             ), memoryAlignSql(AbstractTable sub () { return new MysqlTable(ds, "uia_t"); }), "MySQL");
         }
