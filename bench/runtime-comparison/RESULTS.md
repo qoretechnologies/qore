@@ -18862,3 +18862,150 @@ The prototype sources were archived recoverably and removed/restored; the restor
 Next, investigate a distinct AOT-only redundant exception-sink check proof. The current generated direct-call loop rechecks the sink after both the slow cancellation helper and the fast polling path. A candidate must prove the sink clear on every incoming fast path, invalidate that proof across any potentially modifying operation, and preserve all live cancellation loads, slow helper calls, thread-exit checks, exception cleanup and entry checks. Inspect actual generated code and negative cases before committing to measurements; no installed implementation or measured benefit is established yet. Do not retry the rejected selector version unchanged.
 
 Full raw samples, controls, source identities, generated-code inspection and qualification evidence: [results-aot-finite-key-selector-rejected-macos-arm64.json](results-aot-finite-key-selector-rejected-macos-arm64.json).
+
+## Rejected proved-clear AOT exception-sink checks (post-02ce653ed)
+
+Rejected: direct calls take 1.552219 ns/item before and 1.555521 with the candidate
+(+0.212729%); the compile-disabled control takes 1.544499 (+0.713660% versus that
+control). The predeclared target required at least 5% less aggregate time against
+both controls and an improvement in every fixed layout. It fails six of eight
+target checks. No confirmation or rescue run was made. No runtime/compiler/test
+change from this experiment is retained.
+
+The late AOT pass used a compiler-owned sink-argument attribute and a bounded
+must-clear CFG proof to bypass exact, complete exception-sink checks on clean
+incoming edges. Entry, unknown calls, stores, partial checks and exceptional
+paths remained conservative. Per-iteration cancellation polling, deferral order,
+thread/program atomic loads, slow helper, null-context fallback and cleanup
+were unchanged. No runtime helper ABI, TLS, frame, lock or Program convention
+changed; IR/JIT lowering was unchanged.
+
+Untimed inspection selected ten micro functions (20 bypassed edges). The actual
+arm64 direct-call fast loop traverses 12 instructions instead of 18 on its clean
+non-pending path, but the complete function remains 128 instructions. This
+static reduction did not produce a throughput gain; it does not establish the
+cause or a performance ceiling. Method-call LLVM was unchanged because a
+potentially fallible receiver-reload path prevented the proof. Accordingly,
+method calls were removed from the target set before any timing, with the
+previous plan archived; they remain among all 55 regression workloads. The
+5% target and repeated 3% regression rules were not changed.
+
+### Optimized screen
+
+Release -O3 -DNDEBUG and qcc -O3; 55 workloads, three fixed layouts
+(default/reverse/shuffle-487), three modes and three forks. Each run uses 4096
+items, seed 7, and three warmup plus three measured 300 ms windows; fixed run
+order seed 137053. All 1485 runs / 4455 measured windows are retained. Pass off
+uses the candidate compiler with QORE_DISABLE_AOT_CLEAR_SINK_CHECKS present only
+while compiling; that control is absent at execution. The baseline is source
+commit 02ce653ed, qualified at c80d44b03; only the three intervening audited
+evidence/documentation files differ. Develop f6c33ac63 is already merged.
+
+Values are the median of three layout medians of fork means, in ns/item;
+negative changes mean less time. Observed ranges are not confidence intervals.
+Host load/frequency/thermals were uncontrolled; large arithmetic outliers are
+preserved, not discarded. Direct-call fork means are separately retained in
+the report. No owned build/test/profile/edit/analysis overlaps timing. These are
+whole-workload measurements, not isolated call latency or a fresh Java/develop
+comparison, and they are not a single overall Qore performance score.
+
+|!Workload|!Before ns/item|!Candidate ns/item|!Pass off ns/item|!Change vs before|!Change vs pass off
+|arithmetic|1.549733|1.561406|1.558313|+0.753%|+0.198%
+|direct_call|1.552219|1.555521|1.544499|+0.213%|+0.714%
+|method_call|1.594942|1.582826|1.587770|-0.760%|-0.311%
+|indirect_call|6.800516|6.845365|6.812126|+0.660%|+0.488%
+|polymorphic_call|22.744481|22.892205|23.007055|+0.649%|-0.499%
+|polymorphic_expression_call|10.680883|10.791270|10.736118|+1.034%|+0.514%
+|monomorphic_call|3.513019|3.480952|3.517902|-0.913%|-1.050%
+|optional_method_call|10.767370|10.724622|10.760167|-0.397%|-0.330%
+|polymorphic_float_call|23.392183|23.193287|23.119617|-0.850%|+0.319%
+|polymorphic_float_expression_call|10.851272|10.854240|10.848809|+0.027%|+0.050%
+|monomorphic_float_call|3.469884|3.483674|3.489576|+0.397%|-0.169%
+|optional_float_method_call|10.831114|10.824521|10.790471|-0.061%|+0.316%
+|boxed_float_method_call|19.285324|19.375055|19.359567|+0.465%|+0.080%
+|dynamic_int_result_call|10.642791|10.696133|10.773341|+0.501%|-0.717%
+|dynamic_int_result_fallback|21.863452|21.909048|21.949890|+0.209%|-0.186%
+|boxed_int_method_call|16.248098|16.162140|16.140477|-0.529%|+0.134%
+|boxed_int_method_fallback|31.372432|31.191189|30.866866|-0.578%|+1.051%
+|boxed_float_method_fallback|32.864159|32.436899|32.369920|-1.300%|+0.207%
+|boxed_int_method_effect|88.115902|90.146705|89.421073|+2.305%|+0.811%
+|dynamic_float_result_call|11.952541|11.762669|11.853716|-1.589%|-0.768%
+|indirect_wide|6.836294|6.740313|6.888985|-1.404%|-2.158%
+|indirect_float|6.689925|6.656925|6.693668|-0.493%|-0.549%
+|indirect_int_result|6.290857|6.187939|6.167984|-1.636%|+0.324%
+|indirect_float_result|7.401616|7.475909|7.328635|+1.004%|+2.010%
+|indirect_tagged_float|6.856173|6.943110|6.795480|+1.268%|+2.172%
+|indirect_branch_float|6.722515|6.784447|6.739343|+0.921%|+0.669%
+|indirect_affine|6.762970|6.815093|6.887453|+0.771%|-1.051%
+|indirect_affine_wide|6.938822|6.902129|6.849511|-0.529%|+0.768%
+|indirect_branch_int|6.836994|6.758361|6.682802|-1.150%|+1.131%
+|dispatch_control|1.643922|1.620582|1.632623|-1.420%|-0.737%
+|list_read|2.729712|2.801670|2.722880|+2.636%|+2.894%
+|list_build|27.249883|27.042031|27.368813|-0.763%|-1.194%
+|list_mutate|190.344785|189.760862|191.453159|-0.307%|-0.884%
+|temporary_list|1.634839|1.649844|1.630074|+0.918%|+1.213%
+|temporary_hash|333.308916|340.042581|335.779429|+2.020%|+1.270%
+|closure_call|17.796934|17.833239|17.824759|+0.204%|+0.048%
+|closure_capture|24.798322|23.928155|23.892955|-3.509%|+0.147%
+|csv_report|985.567954|985.669649|973.306166|+0.010%|+1.270%
+|object_orders|1904.908270|1918.928784|1901.475694|+0.736%|+0.918%
+|callback_pipeline|84.657295|84.175108|84.564898|-0.570%|-0.461%
+|text_index|1348.671283|1361.233127|1344.920697|+0.931%|+1.213%
+|object_loop|169.223477|170.398210|170.618365|+0.694%|-0.129%
+|object_short|1088.576087|1070.433981|1084.657689|-1.667%|-1.311%
+|float_loop|169.795691|169.671071|172.753496|-0.073%|-1.784%
+|float_short|1086.946011|1077.077863|1106.388563|-0.908%|-2.649%
+|string_loop|371.752100|383.188863|375.416070|+3.076%|+2.070%
+|string_short|1261.716621|1256.089722|1253.383879|-0.446%|+0.216%
+|effect_loop|365.334140|339.809471|343.802905|-6.987%|-1.162%
+|effect_short|1301.914860|1260.004205|1272.745768|-3.219%|-1.001%
+|two_read_loop|403.532498|403.500820|408.475172|-0.008%|-1.218%
+|two_read_short|1349.231053|1321.402414|1316.532428|-2.063%|+0.370%
+|default_loop|707.499432|729.488597|716.329533|+3.108%|+1.837%
+|default_short|1661.192656|1680.337593|1632.363454|+1.152%|+2.939%
+|string_result_loop|446.062675|441.588267|449.787032|-1.003%|-1.823%
+|string_result_short|1381.461367|1368.265034|1384.768781|-0.955%|-1.192%
+
+### Validation and disposition
+
+The candidate passed selected Release and Debug qualification: 79 core fixtures,
+128 cases and 23395 assertions each. After recoverable archival and removal of
+all 18 changed source/fixture files (15 restored, three new fixtures removed),
+fresh restored Release and Debug qualification each passed 70 core fixtures,
+117 cases and 17609 assertions. Each runtime also passed 48 upstream AST/IR
+runs, eight DataProvider suites, DataFrame, three cancellation suites, 13 lvalue
+fixtures (82 cases, 1330 Release / 2663 Debug assertions), and 555 IR plus 555
+AOT reference checks. Debug passed 1985 native tests with the compile control
+unset and set. All 79 owned qmods were rebuilt and their Release aliases
+restored; unrelated aliases were preserved. This is selected macOS arm64
+coverage, not full-suite, sanitizer or cross-platform certification.
+
+Pre-timing fixture corrections and failed attempts are recorded: the initial
+implicit destructor-reassignment fixture failed on baseline IR and was replaced
+with explicit deletion; no-debug lowering contains location-update calls and
+is correctly ineligible; 12 existing LLVM text matchers were updated to accept
+only the exact optional sink annotation. Broad qualification was restarted and
+passed. Those test changes are not retained either.
+
+The original preparation command's final tool receipt was unavailable after
+context recovery. Its recorded prepare-terminal exit code belongs to a newly
+observed independent recovery preflight, not an inferred original process exit.
+All 27 prepared binaries, source/artifact hashes, reference checks and loaded
+library paths were reverified before timing. Actual timing/verification/decision
+process exits were observed. Independent replay checks every raw timing window,
+fixed order, summary, comparison, reference and artifact. Timed checksums are
+parsed for observability, not independently recalculated per window; semantic
+correctness is checked separately against the reference grids.
+
+Next investigate indexed-list compound mutation, not an unchanged retry of this
+pass. Existing code still resolves the root, navigates references/COW/type and
+index rules, dispatches generic compound operations and reloads local state.
+Explore a narrowly guarded integer update using current runtime metadata and
+slot identity, retaining the full fallback for sharing, references, closures,
+negative/sparse indices, weak values and reflection. Inspect actual selection
+and measure a separately declared candidate; no implementation or gain is
+established here. A fresh optimized Java/develop checkpoint follows a meaningful
+retained improvement. The global performance ceiling remains unestablished.
+
+All 55 results, raw observations, compile/code-size diagnostics, source lineage,
+qualification and generated-code evidence: [results-aot-clear-sink-rejected-macos-arm64.json](results-aot-clear-sink-rejected-macos-arm64.json).

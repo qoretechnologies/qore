@@ -3597,3 +3597,26 @@ Next: independently remove only provably exclusive literal-selector graphs after
 ## Rejected finite hash selector elision (post-c80d44b03)
 
 The exclusive-selector experiment is **rejected and not retained**. In the final measured epoch, `temporary_hash` used 340.723007 ns/item before and 1.623138 with the prototype (-99.524%); the projection-only control used 41.266645 ns/item. Repeated aggregate loss: `monomorphic_call` versus `compile_disabled` is +3.125223% / +3.548359% in screen / confirmation. There are also 3 repeated disjoint adverse layout comparisons. The full 55-workload results, all three controls and the fixed non-regression decision are recorded in `bench/runtime-comparison/results-aot-finite-key-selector-rejected-macos-arm64.json` and `bench/runtime-comparison/RESULTS.md`. These optimized AOT workload measurements are not isolated call latency or a fresh Java/develop comparison. The compiler/fixtures were recoverably archived and restored, and the restored baseline passed fresh Release/Debug qualification. No Java-parity or global-ceiling conclusion follows. Next investigate a distinct AOT-only proof of redundant exception-sink checks on already-clear fast cancellation paths, preserving all polls, fallible-operation checks, thread exit and cleanup; only an ignored, uncompiled recognizer draft exists so far.
+
+## Rejected proved-clear AOT exception-sink checks (post-02ce653ed)
+
+Rejected and not retained: direct-call workload time is 1.552219 -> 1.555521
+ns/item (+0.212729% versus before; +0.713660% versus compile-disabled). The
+predeclared 5% target fails, so no confirmation or rescue run follows. All 4455
+optimized windows across 55 workloads / three fixed layouts / both controls
+are retained in `bench/runtime-comparison/results-aot-clear-sink-rejected-macos-arm64.json` and RESULTS.md.
+
+The AOT-only proof removed redundant sink-check instructions on already-clear
+edges while retaining every cancellation poll and unknown-effect/entry/cleanup
+check. Actual direct fast-loop instruction count falls from 18 to 12, but no
+throughput benefit is observed. Method-call code remains unchanged. This is not
+an isolated-call or fresh Java/develop comparison, or a global-ceiling result.
+All candidate source/fixtures were archived recoverably and restored. Fresh
+selected Release/Debug qualification passes 70 files / 117 cases / 17609
+assertions each, plus module/lvalue/cancellation/native/reference coverage and
+79 rebuilt qmods with exact Release-alias restoration.
+
+Next investigate a guarded indexed-list integer compound update with live slot,
+metadata, uniqueness and bounds checks plus the unchanged generic fallback.
+This is a distinct unimplemented/unmeasured hypothesis, not permission to omit
+COW, references, locks, metadata, reflection, exceptions or cancellation.
