@@ -431,8 +431,16 @@ list l = db.getAlignSql(schema_hash);
 
         @return a list of SQL strings that can be used to align the structure and configuration of the current schema with that of the argument; if the objects described are identical then an empty list is returned
 
+        The foreign constraints between the tables of the schema are aligned whatever the order of the tables (see
+        @ref SqlUtil::SchemaForeignConstraintAlignment "SchemaForeignConstraintAlignment"): the foreign constraints
+        that reference a key or index that the alignment drops or recreates are dropped before it, and a foreign
+        constraint is added after the table that it references is aligned.
+
         @throw SCHEMA-DESCRIPTION-ERROR the @ref schema_desc_hash "schema description hash" has an error or a required object does not exist
         @throw OPTION-ERROR invalid or unsupported option passed
+        @throw FOREIGN-CONSTRAINT-ERROR a foreign constraint of a table description references columns of another
+        table of the schema that are a unique key of the table in the database, but not in its description, so that
+        it would not reference a unique key; raised before any SQL
     */
     list<auto> getAlignSql(hash schema_hash, *hash<auto> opt, *Tables table_cache) {
         validateOptionsIntern("SCHEMA-DESCRIPTION-ERROR", getSchemaDescriptionOptions(), \schema_hash);
@@ -454,6 +462,16 @@ list l = db.getAlignSql(schema_hash);
         AbstractDatabase::checkDriverOptions(\schema_hash, drv);
         AbstractDatabase::checkDriverOptions(\schema_hash.sequence_map, drv);
         AbstractDatabase::checkDriverOptions(\schema_hash.sequences, drv);
+
+        # create template tables; every section of a schema description is optional; no SQL is run before the
+        # foreign constraints of the templates are checked below
+        if (schema_hash.tables) {
+            table_cache.populate(ds, schema_hash.tables, copt);
+            opt.foreign_constraint_alignment = getForeignConstraintAlignmentUnlocked(schema_hash, table_cache,
+                opt.db_table_cache);
+            # a template whose foreign constraint would not reference a unique key is refused before any SQL
+            opt.foreign_constraint_alignment.checkTemplates();
+        }
 
         # call driver-specific align schema sql function (start)
         list tl = getAlignSqlImpl(schema_hash, opt + ("start": True));
@@ -497,11 +515,6 @@ list l = db.getAlignSql(schema_hash);
             l += AbstractDatabase::doCallback(opt, seq.getCreateSql(), AC_Create, "sequence", name);
         }
 
-        # create template tables; every section of a schema description is optional
-        if (schema_hash.tables) {
-            table_cache.populate(ds, schema_hash.tables, copt);
-        }
-
         # rename any tables
         AbstractDatabase::checkDriverOptions(\schema_hash.table_map, drv);
         # each source and target name; iterating the hash itself gave the hash, so any table_map raised an error
@@ -532,6 +545,12 @@ list l = db.getAlignSql(schema_hash);
             tl = t.getAlignSql(table_cache{name}, opt + schema_hash.tables{name}.rename + ("table_cache": table_cache));
             if (tl)
                 l += tl;
+            opt.foreign_constraint_alignment.tableAligned(name);
+        }
+
+        # add the foreign constraints that reference tables that were not aligned yet when their tables were aligned
+        if (opt.foreign_constraint_alignment) {
+            l += opt.foreign_constraint_alignment.getDeferredSql(opt);
         }
 
         tl = alignCodeUnlocked("function", schema_hash, \getFunction(), \makeFunction(), opt, Type::String);
@@ -545,6 +564,35 @@ list l = db.getAlignSql(schema_hash);
         if (tl) l += tl;
 
         return l;
+    }
+
+    #! returns the foreign constraints of the tables of a schema alignment
+    /** The tables of the schema that exist in the database are read with their foreign constraints and stored in the
+        table cache for the database, before any table is aligned, so that the foreign constraints that reference a
+        table are known whatever the order of the tables; a table that the schema renames (\c table_map) is not
+
+        @param schema_hash the schema description
+        @param table_cache the template tables of the schema
+        @param db_table_cache the cache of the tables in the database
+
+        @return the foreign constraints of the tables of the schema alignment
+
+        @since SqlUtil 3.11.0
+    */
+    private SchemaForeignConstraintAlignment getForeignConstraintAlignmentUnlocked(hash<auto> schema_hash,
+            Tables table_cache, Tables db_table_cache) {
+        hash<string, bool> renamed = map {$1: True}, schema_hash.table_map.iterator(), $1.typeCode() == NT_STRING;
+        hash<string, AbstractTable> live = {};
+        foreach string name in (schema_hash.tables.keyIterator()) {
+            if (renamed{name}) {
+                continue;
+            }
+            *AbstractTable t = db_table_cache.getIfExists(ds, name);
+            if (t) {
+                live{name} = t;
+            }
+        }
+        return new SchemaForeignConstraintAlignment(table_cache, live);
     }
 
     #! accepts a hash argument describing a database schema and returns a list of SQL strings that can be used to drop any existing objects described in the schema; if none of the described objects exist, then an empty list is returned

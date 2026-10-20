@@ -216,6 +216,10 @@ class MysqlTest inherits SqlTestBase {
             addTestCase("a unique index or constraint with other columns is dropped and created once",
                 \uniqueColumnChanges());
             addTestCase("the first value of an emulated sequence is its start value", \sequenceStartTest());
+            addTestCase("a referenced unique key changes with the foreign constraint that references it",
+                \referencedKeyChanges());
+            addTestCase("a template that changes a referenced unique key without the foreign constraint is refused",
+                \inconsistentTemplates());
         }
         addTestCase("the SQL of a unique index or constraint with other columns", \uniqueColumnChangeSql());
         addTestCase("the SQL of a new emulated sequence", \sequenceSql());
@@ -656,6 +660,102 @@ class MysqlTest inherits SqlTestBase {
         ds.commit();
         assertEq(5, db.getNextSequenceValue("qtest_mysql_seq"));
         assertEq(6, db.getNextSequenceValue("qtest_mysql_seq"));
+    }
+
+    #! Creates a parent table with a unique index on code and a child table whose foreign constraint references it
+    private createReferencedKey(AbstractDatasource ds) {
+        ds.execRaw("drop table if exists fk_key_child");
+        ds.execRaw("drop table if exists fk_key_parent");
+        ds.execRaw("create table fk_key_parent (id int not null primary key, code varchar(10), x int)");
+        ds.execRaw("create unique index ui_fk_key_parent on fk_key_parent (code)");
+        ds.execRaw("create table fk_key_child (id int not null primary key, code varchar(10), x int, "
+            "constraint fk_key_child foreign key (code) references fk_key_parent (code))");
+        ds.commit();
+    }
+
+    #! Drops the parent and child tables
+    private dropReferencedKey(AbstractDatasource ds) {
+        try {
+            ds.rollback();
+            ds.execRaw("drop table if exists fk_key_child");
+            ds.execRaw("drop table if exists fk_key_parent");
+            ds.commit();
+        } catch (hash<ExceptionInfo> ex) {
+        }
+    }
+
+    #! Returns the schema of the parent and child tables, in the given order, with the given columns of the parent's
+    #! unique index and of the child's foreign constraint
+    private hash<auto> keySchema(bool child_first, list<string> key_columns, list<string> fk_columns) {
+        hash<auto> columns = {
+            "id": {"native_type": "int", "notnull": True},
+            "code": {"native_type": "varchar", "size": 10},
+            "x": {"native_type": "int"},
+        };
+        hash<auto> parent = {
+            "columns": columns,
+            "primary_key": {"name": "PRIMARY", "columns": ("id",)},
+            "indexes": {"ui_fk_key_parent": {"columns": key_columns, "unique": True}},
+        };
+        hash<auto> child = {
+            "columns": columns,
+            "primary_key": {"name": "PRIMARY", "columns": ("id",)},
+            "foreign_constraints": {"fk_key_child": {"columns": fk_columns, "table": "fk_key_parent",
+                "target_columns": fk_columns}},
+        };
+        return {"tables": child_first
+            ? {"fk_key_child": child, "fk_key_parent": parent}
+            : {"fk_key_parent": parent, "fk_key_child": child}};
+    }
+
+    #! Aligns the schema with an SQL callback that records each statement, and runs the SQL
+    private list<auto> alignSchema(AbstractDatasource ds, hash<auto> schema, reference<list<string>> called) {
+        Database db(ds);
+        list<auto> sql = db.getAlignSql(schema, {"sql_callback": sub (string str) { called += str; }});
+        on_success ds.commit();
+        on_error ds.rollback();
+        map ds.execRaw($1), sql;
+        return sql;
+    }
+
+    #! A unique key that a foreign constraint references, changed with the foreign constraint, is aligned in either
+    #! order of the tables: the foreign constraint is dropped first and added after the key
+    private referencedKeyChanges() {
+        AbstractDatasource ds = table.getDatasource();
+        on_exit dropReferencedKey(ds);
+        foreach bool child_first in ((True, False)) {
+            createReferencedKey(ds);
+            string parent_name = (new MysqlTable(ds, "fk_key_parent")).getSqlName();
+            string child_name = (new MysqlTable(ds, "fk_key_child")).getSqlName();
+            list<string> called = ();
+            hash<auto> schema = keySchema(child_first, ("code", "x"), ("code", "x"));
+            assertEq((
+                sprintf("alter table %s drop foreign key fk_key_child", child_name),
+                sprintf("alter table %s drop index ui_fk_key_parent", parent_name),
+                sprintf("create unique index ui_fk_key_parent on %s (code, x)", parent_name),
+                sprintf("alter table %s add constraint fk_key_child foreign key (code, x) references fk_key_parent "
+                    "(code, x)", child_name),
+            ), alignSchema(ds, schema, \called), sprintf("child first: %y", child_first));
+            assertEq((), alignSchema(ds, schema, \called), sprintf("child first: %y", child_first));
+        }
+    }
+
+    #! A template that changes a unique key that a foreign constraint references, but not the foreign constraint, is
+    #! refused before any SQL, in either order of the tables
+    private inconsistentTemplates() {
+        AbstractDatasource ds = table.getDatasource();
+        on_exit dropReferencedKey(ds);
+        foreach bool child_first in ((True, False)) {
+            createReferencedKey(ds);
+            list<string> called = ();
+            assertThrows("FOREIGN-CONSTRAINT-ERROR", "^foreign constraint \"fk_key_child\" of table \"fk_key_child\" "
+                "references the columns \\(code\\) of table \"fk_key_parent\", whose template changes its unique key "
+                "\"ui_fk_key_parent\" on them to \\(code, x\\): the foreign constraint would not reference a unique "
+                "key; change the foreign constraint with the key$", \alignSchema(),
+                (ds, keySchema(child_first, ("code", "x"), ("code",)), \called),
+                sprintf("child first: %y", child_first));
+            assertEq((), called, "no SQL was run");
+        }
     }
 
     #! Aligns the table to a template with the description, runs the SQL in the database and returns it

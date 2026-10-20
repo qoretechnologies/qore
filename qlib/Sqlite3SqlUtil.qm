@@ -2105,6 +2105,15 @@ string str = table.getSqlValue(date);
             return True;
         }
 
+        #! returns @ref False "False": SQLite drops a key or index that a foreign constraint references
+        /** SQLite checks a foreign constraint's key only when a row is written, so a schema alignment does not drop
+            the foreign constraints that reference a key or index before it drops or recreates it; SQLite cannot drop
+            a foreign constraint of an existing table anyway
+        */
+        private bool foreignConstraintsDependOnKeysImpl() {
+            return False;
+        }
+
         #! returns @ref True "True" if the database automatically creates a unique constraint when a unique index is created (ex: sqlite3)
         private bool uniqueIndexCreatesConstraintImpl() {
             return True;

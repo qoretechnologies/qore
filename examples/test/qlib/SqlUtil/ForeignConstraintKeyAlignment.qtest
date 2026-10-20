@@ -1,0 +1,172 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires SqlUtil
+%requires OracleSqlUtilBase
+%requires MssqlSqlUtilBase
+%requires FreetdsSqlUtil
+%requires XdbcFirebirdSqlUtilBase
+
+%try-module oracle
+%define NO_ORACLE
+%endtry
+
+%try-module freetds
+%define NO_FREETDS
+%endtry
+
+%try-module odbc
+%define NO_ODBC
+%endtry
+
+%exec-class ForeignConstraintKeyAlignmentTest
+
+#! The SQL of a schema alignment that changes a unique key that a foreign constraint references, on databases that are
+#! not available here: the tables are described in memory, with a datasource that does not connect
+/** The foreign constraint is dropped before the key, and added after the key, whatever the order of the tables; a
+    template that changes the key without the foreign constraint is refused
+*/
+class ForeignConstraintKeyAlignmentTest inherits QUnit::Test {
+    constructor() : Test("ForeignConstraintKeyAlignmentTest", "1.0", \ARGV) {
+        addTestCase("Oracle", \oracle());
+        addTestCase("SQL Server", \mssql());
+        addTestCase("Firebird", \firebird());
+        set_return_value(main());
+    }
+
+    #! Returns the description of the parent table, with a unique constraint on the given columns, or of the child
+    #! table, with a foreign constraint on the given columns
+    private hash<auto> description(string table, list<string> columns) {
+        hash<auto> desc = {
+            "columns": {
+                "id": {"qore_type": "integer", "notnull": True},
+                "code": {"qore_type": "string", "size": 10},
+                "x": {"qore_type": "integer"},
+            },
+            "primary_key": {"name": "pk_" + table, "columns": ("id",)},
+        };
+        if (table == "fk_key_parent") {
+            desc.unique_constraints = {"uk_fk_key_parent": {"columns": columns}};
+        } else {
+            desc.foreign_constraints = {"fk_key_child": {"columns": columns, "table": "fk_key_parent",
+                "target_columns": columns}};
+        }
+        return desc;
+    }
+
+    #! Aligns the parent and child tables, described with a unique key and a foreign constraint on code, to templates
+    #! with the given columns, in the given order, and returns the SQL
+    private list<auto> alignSql(code new_table, bool child_first, list<string> key_columns, list<string> fk_columns) {
+        Tables live_cache();
+        Tables templates();
+        hash<string, AbstractTable> live;
+        foreach string table in (("fk_key_parent", "fk_key_child")) {
+            AbstractTable current = new_table(table);
+            current.setupTable(description(table, ("code",)), {"table_cache": live_cache});
+            live{table} = current;
+            AbstractTable template = new_table(table);
+            template.setupTable(description(table, table == "fk_key_parent" ? key_columns : fk_columns),
+                {"table_cache": templates});
+            templates.add(table, template);
+        }
+        SchemaForeignConstraintAlignment fka(templates, live);
+        fka.checkTemplates();
+        list<auto> sql = ();
+        foreach string table in (child_first ? ("fk_key_child", "fk_key_parent") : ("fk_key_parent", "fk_key_child")) {
+            sql += live{table}.getAlignSql(templates{table}, {"foreign_constraint_alignment": fka});
+            fka.tableAligned(table);
+        }
+        sql += fka.getDeferredSql();
+        return sql;
+    }
+
+    #! Checks the SQL of the key changed with the foreign constraint, and the refusal of a template that changes the
+    #! key without it, in both orders of the tables
+    private checkDriver(code new_table, string parent, string child) {
+        foreach bool child_first in ((True, False)) {
+            string order = sprintf("child first: %y", child_first);
+            assertEq((
+                sprintf("alter table %s drop constraint fk_key_child", child),
+                sprintf("alter table %s drop constraint uk_fk_key_parent", parent),
+                sprintf("alter table %s add constraint uk_fk_key_parent unique (code, x)", parent),
+                sprintf("alter table %s add constraint fk_key_child foreign key (code, x) references fk_key_parent "
+                    "(code, x)", child),
+            ), map regex_subst($1, "  +", " ", RE_Global), alignSql(new_table, child_first, ("code", "x"),
+                ("code", "x")), order);
+            assertThrows("FOREIGN-CONSTRAINT-ERROR", "^foreign constraint \"fk_key_child\" of table \"fk_key_child\" "
+                "references the columns \\(code\\) of table \"fk_key_parent\", whose template changes its unique key "
+                "\"uk_fk_key_parent\" on them to \\(code, x\\): the foreign constraint would not reference a unique "
+                "key; change the foreign constraint with the key$", \alignSql(),
+                (new_table, child_first, ("code", "x"), ("code",)), order);
+        }
+    }
+
+    oracle() {
+%ifdef NO_ORACLE
+        testSkip("no oracle module");
+%endif
+        OfflineDatasource ds("oracle:user/pass@db", "Oracle Database 19c Enterprise Edition Release 19.0.0.0.0",
+            "oracle");
+        checkDriver(AbstractTable sub (string table) { return new OracleTable(ds, table); }, "user.fk_key_parent",
+            "user.fk_key_child");
+    }
+
+    mssql() {
+%ifdef NO_FREETDS
+        testSkip("no freetds module");
+%endif
+        OfflineDatasource ds("freetds:user/pass@db", "Microsoft SQL Server 2019 (RTM) - 15.0.2000.5", "mssql");
+        checkDriver(AbstractTable sub (string table) { return new FreetdsTable(ds, table); }, "dbo.fk_key_parent",
+            "dbo.fk_key_child");
+    }
+
+    firebird() {
+%ifdef NO_ODBC
+        testSkip("no odbc module");
+%endif
+        OfflineDatasource ds("odbc:user/pass@db", "WI-V3.0.10 Firebird 3.0", "firebird");
+        checkDriver(AbstractTable sub (string table) { return new XdbcFirebirdTable(ds, table); }, "fk_key_parent",
+            "fk_key_child");
+    }
+}
+
+#! A datasource that does not connect: it reports a server version and driver, and its catalog queries return no
+#! rows
+class OfflineDatasource inherits Datasource {
+    private {
+        string version;
+        string real_driver;
+    }
+
+    constructor(string connstr, string version, string real_driver) : Datasource(connstr) {
+        self.version = version;
+        self.real_driver = real_driver;
+    }
+
+    auto getServerVersion() {
+        return version;
+    }
+
+    string getDriverRealName() {
+        return real_driver;
+    }
+
+    auto select(string sql, ...) {
+        return {};
+    }
+
+    auto selectRow(string sql, ...) {
+        # the default schema of SQL Server
+        return {"schema": "dbo"};
+    }
+
+    auto selectRows(string sql, ...) {
+        return ();
+    }
+}

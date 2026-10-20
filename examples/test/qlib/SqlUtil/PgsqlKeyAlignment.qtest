@@ -23,6 +23,10 @@ class PgsqlKeyAlignmentTest inherits QUnit::Test {
     constructor() : Test("PgsqlKeyAlignmentTest", "1.0", \ARGV) {
         addTestCase("a key with another name is renamed, and the foreign constraints that reference it are kept",
             \keyRenames());
+        addTestCase("a referenced unique key changes with the foreign constraint that references it",
+            \referencedKeyChanges());
+        addTestCase("a template that changes a referenced unique key without the foreign constraint is refused",
+            \inconsistentTemplates());
         set_return_value(main());
     }
 
@@ -50,6 +54,91 @@ class PgsqlKeyAlignmentTest inherits QUnit::Test {
         list<auto> sql = current.getAlignSql(template);
         map ds.execRaw($1), sql;
         return sql;
+    }
+
+    #! Creates a parent table with a unique index on code and a child table whose foreign constraint references it
+    private createReferencedKey(Datasource ds) {
+        ds.execRaw("drop table if exists fk_key_child");
+        ds.execRaw("drop table if exists fk_key_parent");
+        ds.execRaw("create table fk_key_parent (id integer not null, code varchar(10), x integer, "
+            "constraint pk_fk_key_parent primary key (id))");
+        ds.execRaw("create unique index ui_fk_key_parent on fk_key_parent (code)");
+        ds.execRaw("create table fk_key_child (id integer not null, code varchar(10), x integer, "
+            "constraint pk_fk_key_child primary key (id), "
+            "constraint fk_key_child foreign key (code) references fk_key_parent (code))");
+    }
+
+    #! Returns the schema of the parent and child tables, in the given order, with the given columns of the parent's
+    #! unique index and of the child's foreign constraint
+    private hash<auto> keySchema(bool child_first, list<string> key_columns, list<string> fk_columns) {
+        hash<auto> columns = {
+            "id": {"native_type": "integer", "notnull": True},
+            "code": {"native_type": "varchar", "size": 10},
+            "x": {"native_type": "integer"},
+        };
+        hash<auto> parent = {
+            "columns": columns,
+            "primary_key": {"name": "pk_fk_key_parent", "columns": ("id",)},
+            "indexes": {"ui_fk_key_parent": {"columns": key_columns, "unique": True}},
+        };
+        hash<auto> child = {
+            "columns": columns,
+            "primary_key": {"name": "pk_fk_key_child", "columns": ("id",)},
+            "foreign_constraints": {"fk_key_child": {"columns": fk_columns, "table": "fk_key_parent",
+                "target_columns": fk_columns}},
+        };
+        return {"tables": child_first
+            ? {"fk_key_child": child, "fk_key_parent": parent}
+            : {"fk_key_parent": parent, "fk_key_child": child}};
+    }
+
+    #! Aligns the schema with an SQL callback that records each statement, and runs the SQL
+    private list<auto> alignSchema(Datasource ds, hash<auto> schema, reference<list<string>> called) {
+        Database db(ds);
+        list<auto> sql = db.getAlignSql(schema, {"sql_callback": sub (string str) { called += str; }});
+        map ds.execRaw($1), sql;
+        return sql;
+    }
+
+    #! A unique key that a foreign constraint references, changed with the foreign constraint, is aligned in either
+    #! order of the tables: the foreign constraint is dropped first and added after the key
+    referencedKeyChanges() {
+        Datasource ds = datasource();
+        on_exit ds.rollback();
+        foreach bool child_first in ((True, False)) {
+            createReferencedKey(ds);
+            string parent_name = (new PgsqlTable(ds, "fk_key_parent")).getSqlName();
+            string child_name = (new PgsqlTable(ds, "fk_key_child")).getSqlName();
+            list<string> called = ();
+            hash<auto> schema = keySchema(child_first, ("code", "x"), ("code", "x"));
+            assertEq((
+                sprintf("alter table %s drop constraint if exists fk_key_child cascade", child_name),
+                "drop index if exists ui_fk_key_parent",
+                sprintf("create unique index ui_fk_key_parent on %s (code, x)", parent_name),
+                sprintf("alter table %s add constraint fk_key_child foreign key (code, x) references fk_key_parent "
+                    "(code, x)", child_name),
+            ), alignSchema(ds, schema, \called), sprintf("child first: %y", child_first));
+            assertEq((), alignSchema(ds, schema, \called), sprintf("child first: %y", child_first));
+            assertEq({"f": ("fk_key_child",), "p": ("pk_fk_key_child",)}, constraints(ds, "fk_key_child"));
+        }
+    }
+
+    #! A template that changes a unique key that a foreign constraint references, but not the foreign constraint, is
+    #! refused before any SQL, in either order of the tables
+    inconsistentTemplates() {
+        Datasource ds = datasource();
+        on_exit ds.rollback();
+        foreach bool child_first in ((True, False)) {
+            createReferencedKey(ds);
+            list<string> called = ();
+            assertThrows("FOREIGN-CONSTRAINT-ERROR", "^foreign constraint \"fk_key_child\" of table \"fk_key_child\" "
+                "references the columns \\(code\\) of table \"fk_key_parent\", whose template changes its unique key "
+                "\"ui_fk_key_parent\" on them to \\(code, x\\): the foreign constraint would not reference a unique "
+                "key; change the foreign constraint with the key$", \alignSchema(),
+                (ds, keySchema(child_first, ("code", "x"), ("code",)), \called),
+                sprintf("child first: %y", child_first));
+            assertEq((), called, "no SQL was run");
+        }
     }
 
     #! Returns the names of the constraints of the table, by type ("p", "u" or "f")

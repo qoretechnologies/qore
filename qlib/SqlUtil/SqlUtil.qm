@@ -155,6 +155,16 @@ module SqlUtil {
       of sequences or functions only; every section of the description is optional
     - fixed @ref SqlUtil::AbstractDatabase::getAlignSql() "AbstractDatabase::getAlignSql()" raising
       \c SCHEMA-DESCRIPTION-ERROR for any \c table_map, so that no table was renamed by it
+    - fixed schema alignment (@ref SqlUtil::AbstractDatabase::getAlignSql() "AbstractDatabase::getAlignSql()") of a
+      unique key that a foreign constraint references: a key or index that a table's alignment dropped or recreated,
+      as when its columns change, was dropped while the foreign constraint still referenced it, which PostgreSQL and
+      MySQL refuse, or before a foreign constraint of a table aligned first was added referencing its new columns;
+      the foreign constraints of the tables of the schema are now read from the database before any table is
+      aligned, a foreign constraint that references a key or index that is dropped or recreated is dropped before
+      it, and a foreign constraint is added after the table that it references is aligned, whatever the order of the
+      tables (@ref SqlUtil::SchemaForeignConstraintAlignment "SchemaForeignConstraintAlignment"); a template whose
+      foreign constraint references columns that are a unique key of the other table in the database, but not in its
+      template, is refused with \c FOREIGN-CONSTRAINT-ERROR before any SQL, on every database
     - fixed table alignment dropping a primary key that has the template's columns under another name and adding it
       again, which on a database whose drop of a key cascades, such as PostgreSQL, also dropped the foreign
       constraints that reference it, and renaming a primary key that has other columns instead of dropping it: a
@@ -9442,6 +9452,13 @@ AbstractConstraint ix = constraints.uk_jobs;
                 "disable": (),
                 "enable": (),
             };
+
+            # a schema alignment drops the foreign constraints that reference the index in the database before it
+            # recreates the index, and adds those of the templates after it
+            # (SchemaForeignConstraintAlignment)
+            if (opts.foreign_constraint_alignment) {
+                return ch;
+            }
 
             HashIterator i(sourceConstraints);
             while (i.next()) {

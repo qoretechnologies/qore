@@ -42,6 +42,8 @@ class Sqlite3KeysTest inherits QUnit::Test {
             \existingUniqueConstraintChanges());
         addTestCase("a unique index of an existing table is added, changed and dropped", \uniqueIndexes());
         addTestCase("an index is renamed by dropping it and creating it", \indexRenames());
+        addTestCase("a unique key that a foreign constraint references is aligned in either order of the tables",
+            \referencedKeys());
         addTestCase("upsert uses the key", \upsert());
         addTestCase("a select that locks rows is refused", \forUpdateRefused());
         addTestCase("duplicate rows are recognized", \duplicateRows());
@@ -712,6 +714,82 @@ class Sqlite3KeysTest inherits QUnit::Test {
             sql);
         assertEq(("ix_renamed_newer", "ui_renamed_new"),
             sort(keys (new Sqlite3Table(ds, "ix_renamed")).getDescriptionHash().indexes));
+    }
+
+    #! Creates a parent table with an index on code and a child table whose foreign constraint references it
+    private createReferencedKey(Datasource ds, bool unique) {
+        ds.exec("drop table if exists fk_key_child");
+        ds.exec("drop table if exists fk_key_parent");
+        ds.exec("create table fk_key_parent (id integer not null primary key, code text, x integer)");
+        ds.exec(sprintf("create %sindex ui_fk_key_parent on fk_key_parent (code)", unique ? "unique " : ""));
+        ds.exec("create table fk_key_child (id integer not null primary key, code text, x integer, "
+            "constraint fk_key_child foreign key (code) references fk_key_parent (code))");
+    }
+
+    #! Returns the schema of the parent and child tables, in the given order, with the given columns of the parent's
+    #! unique index and of the child's foreign constraint
+    private hash<auto> keySchema(bool child_first, list<string> key_columns, list<string> fk_columns) {
+        hash<auto> columns = {
+            "id": {"native_type": "integer", "notnull": True},
+            "code": {"native_type": "text"},
+            "x": {"native_type": "integer"},
+        };
+        hash<auto> parent = {
+            "columns": columns,
+            "primary_key": {"name": "pk_fk_key_parent", "columns": ("id",)},
+            "indexes": {"ui_fk_key_parent": {"columns": key_columns, "unique": True}},
+        };
+        hash<auto> child = {
+            "columns": columns,
+            "primary_key": {"name": "pk_fk_key_child", "columns": ("id",)},
+            "foreign_constraints": {"fk_key_child": {"columns": fk_columns, "table": "fk_key_parent",
+                "target_columns": fk_columns}},
+        };
+        return {"tables": child_first
+            ? {"fk_key_child": child, "fk_key_parent": parent}
+            : {"fk_key_parent": parent, "fk_key_child": child}};
+    }
+
+    #! Aligns the schema with an SQL callback that records each statement, and runs the SQL
+    private list<auto> alignSchema(Datasource ds, hash<auto> schema, reference<list<string>> called) {
+        Database db(ds);
+        list<auto> sql = db.getAlignSql(schema, {"sql_callback": sub (string str) { called += str; }});
+        map ds.exec($1), sql;
+        return sql;
+    }
+
+    #! SQLite drops a key or index that a foreign constraint references, so the foreign constraint is not dropped
+    #! with it; a template whose foreign constraint would not reference a unique key is refused before any SQL, as on
+    #! every database, and one that changes the foreign constraint is refused as SQLite cannot change it
+    referencedKeys() {
+        Datasource ds = getDatasource();
+        on_exit ds.rollback();
+        foreach bool child_first in ((True, False)) {
+            string order = sprintf("child first: %y", child_first);
+
+            # an index made unique: the foreign constraint is kept
+            createReferencedKey(ds, False);
+            list<string> called = ();
+            hash<auto> unique_schema = keySchema(child_first, ("code",), ("code",));
+            assertEq(("drop index ui_fk_key_parent", "create unique index ui_fk_key_parent on fk_key_parent (code)"),
+                alignSchema(ds, unique_schema, \called), order);
+            assertEq((), alignSchema(ds, unique_schema, \called), order);
+
+            # a template that changes the referenced key without the foreign constraint
+            createReferencedKey(ds, True);
+            called = ();
+            assertThrows("FOREIGN-CONSTRAINT-ERROR", "^foreign constraint \"fk_key_child\" of table \"fk_key_child\" "
+                "references the columns \\(code\\) of table \"fk_key_parent\", whose template changes its unique key "
+                "\"ui_fk_key_parent\" on them to \\(code, x\\): the foreign constraint would not reference a unique "
+                "key; change the foreign constraint with the key$", \alignSchema(),
+                (ds, keySchema(child_first, ("code", "x"), ("code",)), \called), order);
+            assertEq((), called, "no SQL was run");
+
+            # and one that changes the foreign constraint with it, which SQLite cannot change
+            assertThrows("UNSUPPORTED", "^cannot drop the foreign constraint \\(code\\) referencing fk_key_parent "
+                "\\(code\\) of table \"fk_key_child\": SQLite cannot drop a foreign constraint of an existing table",
+                \alignSchema(), (ds, keySchema(child_first, ("code", "x"), ("code", "x")), \called), order);
+        }
     }
 
     forUpdateRefused() {

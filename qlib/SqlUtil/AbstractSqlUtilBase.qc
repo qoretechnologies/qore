@@ -227,6 +227,15 @@ public class AbstractSqlUtilBase inherits Qore::Serializable {
                 break;
             }
 
+            case "SchemaForeignConstraintAlignment": {
+                if (!(opt instanceof SchemaForeignConstraintAlignment)) {
+                    throw err, sprintf("%s: key %y has type %s, expecting class \"SchemaForeignConstraintAlignment\"",
+                        tag, k, opt.typeCode() == NT_OBJECT ? sprintf("class \"%s\"", opt.className())
+                            : sprintf("\"%s\"", opt.type()));
+                }
+                break;
+            }
+
             # no validation for NOTHING
             case Type::NothingType: break;
 
