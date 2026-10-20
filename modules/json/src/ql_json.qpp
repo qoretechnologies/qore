@@ -597,17 +597,16 @@ static QoreStringNode* make_jsonrpc11_error(int64 code, const QoreStringNode* er
     }
 
     if (fmt) {
-        str->sprintf("\"error\":\n  {\n    \"name\": \"JSONRPCError\",\n    \"code\": %d,\n    \"message\": \"",
-            (int)code);
+        str->sprintf("\"error\":\n  {\n    \"name\": \"JSONRPCError\",\n    \"code\": %d,\n    \"message\": ",
+            static_cast<int>(code));
     } else {
-        str->sprintf("\"error\":{\"name\":\"JSONRPCError\",\"code\":%d,\"message\":\"", (int)code);
+        str->sprintf("\"error\":{\"name\":\"JSONRPCError\",\"code\":%d,\"message\":", static_cast<int>(code));
     }
-    // concat here so character encodings can be automatically converted if necessary
-    str->concatEscape(error, '"', '\\', xsink);
-    if (*xsink)
+    // the message is serialized as a JSON string: only double quotes and backslashes were escaped, so a control
+    // character such as a line break was written as it is, which is not valid in a JSON string
+    if (json_serialize_value(**str, error, fmt ? 4 : -1, xsink)) {
         return nullptr;
-
-    str->concat('\"');
+    }
 
     // get optional "error" value
     if (!error_msg.isNullOrNothing()) {

@@ -256,9 +256,14 @@ public:
     DLLEXPORT int concatEncodeUriRequest(ExceptionSink* xsink, const QoreString& url);
 
     //! concatenates a string and escapes character c with esc_char (converts encodings if necessary)
+    /** @since %Qore 3.0 the whole string is concatenated; a string with a NUL character was cut at the NUL character
+    */
     DLLEXPORT void concatEscape(const QoreString* str, char c, char esc_char, ExceptionSink* xsink);
 
-    //! concatenates a string and escapes character c with esc_char
+    //! concatenates a null-terminated string and escapes character c with esc_char
+    /** @note the string ends at its first NUL character; use concatEscape(const QoreString*, char, char,
+        ExceptionSink*) for a string that can contain NUL characters
+    */
     DLLEXPORT void concatEscape(const char* str, char c, char esc_char = '\\');
 
     //! concatenation with HTML special character encoding

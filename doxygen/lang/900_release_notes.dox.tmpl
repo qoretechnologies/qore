@@ -4739,6 +4739,11 @@ while (*binary chunk = input.read(65536)) {
     - @ref Qore::qore_add_module_to_blacklist() "qore_add_module_to_blacklist()" and
       @ref Qore::qore_add_module_to_blacklist_ex() "qore_add_module_to_blacklist_ex()" raise \c BLACKLIST-ERROR for a
       module name with a NUL character instead of blacklisting the name cut at the NUL character
+    - A string with a NUL character is serialized whole by the \c json module (with the NUL character escaped as
+      \c \\u0000) and formatted whole with \c "%y" and \c "%N" (see @ref string_formatting); it was cut at the
+      NUL character, so the rest of the string was missing from the JSON text and from formatted output.  The
+      message of a JSON-RPC 1.1 error made by \c make_jsonrpc11_error() is serialized as a JSON string; only double
+      quotes and backslashes were escaped in it, so that a control character such as a line break made invalid JSON
     - Fixed a crash of \c make_jsonrpc_request() of the \c json module for a JSON-RPC 1.0 request (version
       \c "1.0" or no version) with no params
     - The JSON-RPC version of a \c JsonRpcClient object of the \c json module is written to the request as a JSON

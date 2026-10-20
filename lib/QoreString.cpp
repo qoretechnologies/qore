@@ -3554,7 +3554,23 @@ void QoreString::concatEscape(const QoreString* str, char c, char esc_char, Exce
         // if priv->buffer needs to be resized
         priv->check_char(cstr->priv->len + priv->len);
 
-        concatEscape(cstr->priv->effective_buf(), c, esc_char);
+        // the whole string is escaped: the variant for a C string stops at the first NUL character, so a string with
+        // a NUL character was cut there (ex: when serialized as a JSON string or formatted with "%y")
+        const char* p = cstr->priv->effective_buf();
+        for (size_t i = 0, e = cstr->priv->len; i < e; ++i) {
+            if (p[i] == c || p[i] == esc_char) {
+                // check for space in priv->buffer
+                priv->check_char(priv->len + 1);
+                priv->buf[priv->len++] = esc_char;
+            } else {
+                priv->check_char(priv->len);
+            }
+            priv->buf[priv->len++] = p[i];
+        }
+        // see if priv->buffer needs to be resized for '\0'
+        priv->check_char(priv->len);
+        // terminate string
+        priv->buf[priv->len] = '\0';
     }
 }
 
