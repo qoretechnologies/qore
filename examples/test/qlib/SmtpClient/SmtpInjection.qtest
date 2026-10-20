@@ -111,11 +111,11 @@ class LenientSmtpServer {
             }
             line += c;
         }
-        string rv = line.toString();
-        if (rv =~ /\r$/) {
-            splice rv, -1;
+        # the CR is removed from the bytes, since the line need not be valid UTF-8
+        if (line.size() && line[line.size() - 1] == 13) {
+            line = line.substr(0, line.size() - 1);
         }
-        return rv;
+        return line.toString();
     }
 
     #! serves a session; returns True for the session that stops the server
@@ -172,6 +172,7 @@ class SmtpInjectionTest inherits QUnit::Test {
         addTestCase("headers", \headers());
         addTestCase("attachment headers", \attachmentHeaders());
         addTestCase("SASL credentials", \sasl());
+        addTestCase("character encoding of the message", \encoding());
         set_return_value(main());
     }
 
@@ -373,6 +374,18 @@ class SmtpInjectionTest inherits QUnit::Test {
         # valid credentials are sent
         session = send(msg, {"username": "user", "password": "password"});
         assertEq(("\x00user\x00password",), map $1.substr($1.find("\x00")), session.auth);
+    }
+
+    encoding() {
+        # a body written as it is is sent in the charset that its Content-Type declares; it was sent in UTF-8
+        string body = convert_encoding("café\r\nline 2\r\n", "ISO-8859-1");
+        MailMessage::Message msg(Sender, "test");
+        msg.addTO(To);
+        msg.setBody(body, ContentEncoding::None);
+        msg.addHeader({"Content-Type": "text/plain; charset=ISO-8859-1"});
+        hash<SmtpSessionInfo> session = send(msg);
+        assertEq(binary(convert_encoding("café", "ISO-8859-1")), binary(session.data[session.data.size() - 2]));
+        assertEq("line 2", session.data.last());
     }
 }
 

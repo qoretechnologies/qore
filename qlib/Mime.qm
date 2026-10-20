@@ -187,6 +187,12 @@ printf("%y: header word b: %y\n", mime_decode_header(mime_encode_header_word_b(s
       only there, as RFC 2047 requires, so that a value split into encoded words on folded lines is decoded as it
       was encoded; one space was dropped before every encoded word after the first, and an encoded word was decoded
       wherever the same word appeared
+    - @ref Mime::MultiPartMessage::parseBody() "MultiPartMessage::parseBody()" decodes a text part written as it is
+      (\c 7bit, \c 8bit or \c binary) in the charset that it declares; it was decoded in the default encoding, so
+      text in another charset was not converted
+    - the \c charset parameter of a \c Content-Type value is read without the parameters after it; with
+      \c "text/plain; charset=ISO-8859-1; format=flowed", the charset was \c "ISO-8859-1; format=flowed", which
+      names no character encoding
     - @ref Mime::MultiPartMessage::serializeHeaders() "MultiPartMessage::serializeHeaders()" serializes a list
       value, which is how @ref Mime::MultiPartMessage::parseBody() "MultiPartMessage::parseBody()" returns a
       repeated header field, as a repeated header field; such a header was serialized with an empty value
@@ -1372,6 +1378,14 @@ public namespace Mime {
 
         @throw MIME-TRANSFER-ENCODING-ERROR unknown transfer encoding
      */
+    #! @cond nodoc
+    # returns the charset parameter of a Content-Type value, if any; the parameter was taken with any parameters
+    # after it (ex: "ISO-8859-1; format=flowed"), which named no character encoding
+    *string sub mime_get_charset(*string ct) {
+        return (ct =~ x/charset="?([^";\s]+)"?/i)[0];
+    }
+    #! @endcond
+
     public data sub mime_decode_transfer_data(data mime_data, string enc, *string ct, *bool is_body) {
         enc = enc.lwr();
         switch (enc) {
@@ -1390,7 +1404,7 @@ public namespace Mime {
 
             case ContentTransEncQuotedPrintable: {
                 # extract charset from content-type if available for output encoding
-                *string charset = (ct =~ x/charset="?([^"]+)"?/)[0];
+                *string charset = mime_get_charset(ct);
                 mime_data = mime_decode_quoted_printable(
                     mime_data.typeCode() == NT_STRING ? mime_data : mime_data.toString("us-ascii"), charset, is_body
                 );
@@ -1403,7 +1417,7 @@ public namespace Mime {
 
         if (mime_data.typeCode() == NT_STRING) {
             # see if there is a character encoding specification in the content-type
-            *string senc = (ct =~ x/charset="?([^"]+)"?/)[0];
+            *string senc = mime_get_charset(ct);
             if (exists senc)
                 mime_data = force_encoding(mime_data, senc);
         }
@@ -2227,8 +2241,12 @@ hash: (2 members)
 
                     # decode the part's body
                     pstr = mime_decode_transfer_data(pstr, pcte, pct, True);
-                    if (pstr.typeCode() == NT_BINARY && pct =~ /text/)
-                        pstr = binary_to_string(pstr);
+                    if (pstr.typeCode() == NT_BINARY && pct =~ /text/) {
+                        # the text is in the charset that the part declares; it was taken as text in the default
+                        # encoding, so text in another charset written as it is (8bit) was not converted
+                        *string charset = mime_get_charset(pct);
+                        pstr = charset ? binary_to_string(pstr, charset) : binary_to_string(pstr);
+                    }
 
                     # see if the part has parts itself
                     if (pct =~ /multipart\//i) {

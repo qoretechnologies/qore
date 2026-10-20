@@ -28,6 +28,9 @@ public class Main inherits QUnit::Test {
         addTestCase("Test Part and Attachment classes", \testPartAndAttachmentClasses(), NOTHING);
         addTestCase("Test deprecated encoding constants", \testDeprecatedEncodingConstants(), NOTHING);
         addTestCase("Test SMTP transparency and header line breaks", \testLineBreaks(), NOTHING);
+        addTestCase("Test re-serialization of parsed messages", \testParsedRoundTrip(), NOTHING);
+        addTestCase("Test read receipt header parsing", \testReadReceipt(), NOTHING);
+        addTestCase("Test character encoding of serialized messages", \testEncoding(), NOTHING);
 
         set_return_value(main());
     }
@@ -1110,5 +1113,190 @@ lorem ipsum\r
         assertRegex("\r\nContent-ID: <cid1>\r\n", ser);
         assertEq(1, (ser =~ x/(Content-ID:)/g).size());
         assertEq("cid1", msg.getAttachments()[1].getContentId());
+    }
+
+    #! returns the content of a message that a round trip must keep; the MIME headers are generated again
+    private static hash<auto> getContent(Message msg) {
+        hash<auto> rv = {
+            "from": msg.getFrom(),
+            "sender": msg.getSender(),
+            "to": msg.getTO(),
+            "cc": msg.getCC(),
+            "subject": msg.getSubject(),
+            "body": msg.getBody(),
+            "body_encoding": msg.getBodyTransferEncoding(),
+            "important": msg.important(),
+            "headers": {},
+            "attachments": (),
+            "parts": (),
+        };
+        foreach hash<auto> i in (msg.getHeaders().pairIterator()) {
+            if (!inlist(i.key.lwr(), ("mime-version", "content-type", "content-transfer-encoding"))) {
+                rv.headers{i.key} = i.value;
+            }
+        }
+        foreach Attachment att in (msg.getAttachments()) {
+            rv.attachments += {
+                "name": att.getName(),
+                "mime": att.getMime(),
+                "data": att.getData(),
+                "inline": att.isInline(),
+                "content_id": att.getContentId(),
+            };
+        }
+        foreach Part part in (msg.getParts()) {
+            rv.parts += {"mime": part.getMime(), "data": part.getData()};
+        }
+        return rv;
+    }
+
+    #! returns the number of headers with the given name in a header block
+    private static int countHeaders(string hdrs, string name) {
+        string prefix = name.lwr() + ":";
+        return (select hdrs.split("\r\n"), $1.lwr().substr(0, prefix.size()) == prefix).size();
+    }
+
+    #! parses a message, serializes and parses it again, and checks that the content is kept; returns the message
+    private Message checkRoundTrip(string raw, string name) {
+        Message m1(raw);
+        string s1 = m1.serializeRaw();
+        Message m2(s1);
+        assertEq(getContent(m1), getContent(m2), name + ": parse -> serialize -> parse");
+        # the second serialization is the same as the first, except for generated multipart boundaries
+        string s2 = m2.serializeRaw();
+        assertEq(stripBoundaries(s1), stripBoundaries(s2), name + ": serialized again");
+        # no MIME header is written twice
+        string hdrs = s1.substr(0, s1.find("\r\n\r\n"));
+        foreach string h in (("MIME-Version", "Content-Type", "Content-Transfer-Encoding")) {
+            assertTrue(countHeaders(hdrs, h) <= 1, name + ": one " + h + " header");
+        }
+        return m1;
+    }
+
+    #! replaces the multipart boundaries in a serialized message
+    private static string stripBoundaries(string str) {
+        int i = 0;
+        foreach string b in (str =~ x/boundary="?([^";\r]+)"?/g) {
+            str = replace(str, b, sprintf("BOUNDARY-%d", i++));
+        }
+        return str;
+    }
+
+    testParsedRoundTrip() {
+        # a message with a quoted-printable body, as received
+        string raw = "From: Sender Name <sender@example.com>\r\nTo: to@example.com\r\nSubject: test\r\n"
+            "Date: Mon, 19 Oct 2026 10:00:00 +0200\r\nMessage-ID: <id1@example.com>\r\nMIME-Version: 1.0\r\n"
+            "Content-Type: text/plain; charset=UTF-8\r\nContent-Transfer-Encoding: quoted-printable\r\n\r\n"
+            "caf=C3=A9 =\r\nline\r\n.dot\r\n";
+        Message msg = checkRoundTrip(raw, "quoted-printable");
+        # the quoted-printable decoder gives the body Unix line breaks on Unix
+        assertEq("café line\n.dot\n", replace(msg.getBody(), "\r\n", "\n"));
+        assertEq(ContentEncoding::QuotedPrintable, msg.getBodyTransferEncoding());
+        assertEq("Mon, 19 Oct 2026 10:00:00 +0200", msg.getHeaders().Date);
+
+        # a message with a 7bit body and no MIME headers: written as it is
+        raw = "From: sender@example.com\r\nTo: to@example.com\r\nSubject: plain\r\n\r\nline 1\r\nline 2\r\n";
+        msg = checkRoundTrip(raw, "plain");
+        assertEq(raw, msg.serializeRaw());
+
+        # a 7bit MIME message: written as it is, with its MIME headers
+        raw = "From: sender@example.com\r\nTo: to@example.com\r\nSubject: mime\r\nMIME-Version: 1.0\r\n"
+            "Content-Type: text/html; charset=UTF-8\r\nContent-Transfer-Encoding: 7bit\r\n\r\n<p>hi</p>\r\n";
+        msg = checkRoundTrip(raw, "7bit");
+        assertEq(raw, msg.serializeRaw());
+
+        # a message created to be sent, with attachments, including a text attachment that is not base64
+        Message out(Sender, Subject);
+        out.addTO(To);
+        out.setBody("body text\r\n", ContentEncoding::QuotedPrintable, "text/plain");
+        out.attach("a.txt", MimeTypeText, "attachment 1\r\n", ContentEncoding::QuotedPrintable,
+            {"X-Tag": "t1"});
+        out.attach("b.bin", MimeTypeOctetStream, <00010203>);
+        out.attachInline("logo.png", MimeTypePng, <89504e47>, "logo1");
+        msg = checkRoundTrip(out.serializeRaw(), "attachments");
+        assertEq("body text\n", replace(msg.getBody(), "\r\n", "\n"));
+        assertEq(("a.txt", "b.bin", "logo.png"), map $1.getName(), msg.getAttachments());
+        assertEq("t1", msg.getAttachments()[0].getHeaders()."x-tag");
+        # no preamble is taken as the body or as a part
+        assertEq((), msg.getParts());
+
+        # a received multipart/alternative message in multipart/mixed, with 7bit and 8bit parts and a part with no
+        # Content-Type, which is text/plain
+        raw = "From: Sender <sender@example.com>\r\nTo: to@example.com\r\nSubject: alternative\r\n"
+            "MIME-Version: 1.0\r\nContent-Type: multipart/mixed; boundary=\"outer\"\r\n\r\n"
+            "This is a multi-part message in MIME format.\r\n--outer\r\n"
+            "Content-Type: multipart/alternative; boundary=\"inner\"\r\n\r\n"
+            "--inner\r\nContent-Transfer-Encoding: 7bit\r\n\r\nplain text\r\n"
+            "--inner\r\nContent-Type: text/html; charset=UTF-8\r\nContent-Transfer-Encoding: 8bit\r\n\r\n"
+            "<p>café</p>\r\n--inner--\r\n"
+            "--outer\r\nContent-Type: text/plain; name=\"notes.txt\"\r\nContent-Disposition: attachment; "
+            "filename=\"notes.txt\"\r\nContent-Transfer-Encoding: 7bit\r\n\r\nnotes\r\n--outer--\r\n";
+        msg = checkRoundTrip(raw, "alternative");
+        assertEq("plain text", msg.getBody());
+        assertEq(1, msg.getParts().size());
+        assertEq("text/html", msg.getParts()[0].getMime());
+        assertEq("<p>café</p>", msg.getParts()[0].getData());
+        assertEq("notes.txt", msg.getAttachments()[0].getName());
+        assertEq("notes", msg.getAttachments()[0].getData());
+
+        # an alternative message without attachments
+        raw = "From: sender@example.com\r\nTo: to@example.com\r\nSubject: alt\r\nMIME-Version: 1.0\r\n"
+            "Content-Type: multipart/alternative; boundary=b1\r\n\r\n--b1\r\n"
+            "Content-Type: text/plain; charset=UTF-8\r\n\r\nplain\r\n--b1\r\n"
+            "Content-Type: text/html; charset=UTF-8\r\nContent-Transfer-Encoding: quoted-printable\r\n\r\n"
+            "<b>html=3D</b>\r\n--b1--\r\n";
+        msg = checkRoundTrip(raw, "alternative only");
+        assertEq("plain", msg.getBody());
+        assertEq("<b>html=</b>", msg.getParts()[0].getData());
+    }
+
+    testReadReceipt() {
+        string raw = "From: sender@example.com\r\nTo: to@example.com\r\nSubject: receipt\r\n"
+            "Disposition-Notification-To: sender@example.com\r\nX-Other: 1\r\n\r\nbody\r\n";
+        Message msg(raw);
+        # receiptDelivery() is the Disposition-Notification-To setting
+        assertTrue(msg.receiptDelivery());
+        # the header is a setting of the message, not one of its other headers
+        assertEq({"X-Other": "1"}, msg.getHeaders());
+        assertRegex("\r\nDisposition-Notification-To: sender@example.com\r\n", msg.serializeRaw());
+    }
+
+    testEncoding() {
+        string body = convert_encoding("café\r\n.dot\r\n", "ISO-8859-1");
+        # a body written as it is keeps the bytes of its encoding
+        Message msg(Sender, Subject);
+        msg.addTO(To);
+        msg.setBody(body, ContentEncoding::None);
+        msg.addHeader({"Content-Type": "text/plain; charset=ISO-8859-1"});
+        string ser = msg.serializeRaw();
+        assertEq("ISO-8859-1", get_encoding(ser));
+        assertTrue(binary(ser).find(<e9>) >= 0, "the body is in ISO-8859-1");
+        assertEq(-1, binary(ser).find(<c3a9>), "the body is not in UTF-8");
+        # SMTP transparency keeps the bytes as well
+        string data = msg.serialize();
+        assertTrue(binary(data).find(binary(convert_encoding("café\r\n..dot\r\n", "ISO-8859-1"))) >= 0);
+        assertEq(-1, binary(data).find(<c3a9>));
+        string smtp = Message::encodeSmtpData(ser);
+        assertEq(binary(data), binary(smtp));
+
+        # a quoted-printable body is encoded from its bytes, and its charset is declared
+        msg = new Message(Sender, Subject);
+        msg.addTO(To);
+        msg.setBody(body, ContentEncoding::QuotedPrintable, "text/plain");
+        ser = msg.serializeRaw();
+        assertRegex("Content-Type: text/plain; charset=ISO-8859-1\r\n", ser);
+        assertRegex("caf=E9", ser);
+
+        # in a multipart message, the inline body is written as it is with its charset
+        msg = new Message(Sender, Subject);
+        msg.addTO(To);
+        msg.setBody(body, ContentEncoding::None, "text/plain");
+        msg.attach("a.bin", MimeTypeOctetStream, <00>);
+        ser = msg.serializeRaw();
+        assertTrue(binary(ser).find(<e9>) >= 0);
+        assertEq(-1, binary(ser).find(<c3a9>));
+        assertRegex("charset=ISO-8859-1", ser);
+        Message parsed(ser);
+        assertEq(convert_encoding(body, "UTF-8"), convert_encoding(parsed.getBody(), "UTF-8"));
     }
 }

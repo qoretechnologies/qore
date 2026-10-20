@@ -100,6 +100,32 @@ msg.addTO("My Best Friend <you@friend.com>");
     - @ref MailMessage::Message::getEmailAddress() "Message::getEmailAddress()" returns the address in angle brackets
       at the end of the string when there is one, so that text in a display name that looks like an address is not
       taken as the sender's or a recipient's address
+    - A message parsed from raw message text can be serialized again, for example to forward it, and a message that
+      is parsed, serialized and parsed again is the same message:
+      - its body is written again with its content transfer encoding; serializing it failed with
+        \c MIME-TRANSFER-ENCODING-ERROR (\c "default" is not a transfer encoding)
+      - the MIME headers are generated again, and the \c MIME-Version, \c Content-Type and
+        \c Content-Transfer-Encoding headers parsed with it are no longer written a second time (they are still
+        returned by @ref MailMessage::Message::getHeaders() "Message::getHeaders()")
+      - its alternative parts (\c multipart/alternative) are written again; they were dropped
+      - the preamble and epilogue of a multipart message are no longer taken as its body or as a part, a part with no
+        \c Content-Type is \c text/plain (it was \c "7bit"), and an attachment with the \c 7bit, \c 8bit or
+        \c binary transfer encoding no longer makes the parse fail with \c UNKNOWN-ENCODING
+      - a body that ends with a line break is no longer given an empty line every time the message is serialized
+    - The \c Disposition-Notification-To header of a parsed message sets
+      @ref MailMessage::Message::receiptDelivery() "Message::receiptDelivery()", as a message created to be sent does;
+      the header name was compared in the wrong case, so it was never recognized.  The header is therefore no
+      longer returned by @ref MailMessage::Message::getHeaders() "Message::getHeaders()" for a parsed message.
+    - @ref MailMessage::Message::getInfo() "Message::getInfo()" of a parsed message returns the \c From header as
+      \c from and the sender's email address as \c sender, as documented; they were swapped
+    - A message is serialized in the character encoding of its body, so that a body written as it is keeps the bytes
+      of the charset that its \c Content-Type declares; it was converted to UTF-8 with the headers, and
+      @ref MailMessage::Message::encodeSmtpData() "Message::encodeSmtpData()" converted it to UTF-8 as well.  A
+      charset is added to the \c Content-Type of a body with non-ASCII characters if it has none.
+    - @ref MailMessage::Message::getHeaderString() "Message::getHeaderString()" and
+      @ref MailMessage::Message::serialize() "Message::serialize()" no longer change the message: a \c Content-Type
+      header was removed or taken as the type of the body, and the body encoding of a message with attachments was
+      changed from \c none to \c 7bit
 
     @subsection mailmessage_v1_5 MailMessage 1.5
     - Enhanced attachment handling:
@@ -539,6 +565,14 @@ public class Message {
         # SMTP mode: do not serialize a single "." alone on a line
         bool smtp_mode = True;
 
+        # the MIME headers of a message, in lower case: they are generated from its body, parts and attachments, so
+        # headers with these names given for the message or parsed with it are not written a second time
+        const MimeHeaders = {
+            "mime-version": True,
+            "content-type": True,
+            "content-transfer-encoding": True,
+        };
+
         # multipart type tracking
         bool isMultipartMsg = False;
         *string multipartType;
@@ -582,9 +616,20 @@ public class Message {
     }
 
     #! creates a Message object from raw message text from a received email message
-    /** @param msg the raw message text as received
+    /** The message can be serialized again (for example to forward it) with @ref serialize() or @ref serializeRaw():
+        its body is written again with its content transfer encoding, its alternative parts (\c multipart/alternative)
+        and attachments are written again, and the MIME headers are generated again instead of being written twice.
+
+        The \c From, \c To, \c CC, \c BCC, \c Subject, importance and receipt headers are settings of the message
+        (see @ref getSender(), @ref getTO(), @ref getSubject(), @ref important(), @ref receiptRead() and
+        @ref receiptDelivery()); the other headers are returned by @ref getHeaders().
+
+        @param msg the raw message text as received
 
         @throw MESSAGE-PARSE-ERROR invalid message data
+
+        @since MailMessage 1.5.1 the message can be serialized again; the \c Disposition-Notification-To header sets
+        @ref receiptDelivery() and is no longer returned by @ref getHeaders()
     */
     constructor(string msg) {
         int pos = 0;
@@ -641,7 +686,7 @@ public class Message {
                 # FIXME: we do not check if the return receipt is the same as the sender
                 deliveryReceipt = True;
                 continue;
-            } else if (lk == "Disposition-Notification-To") {
+            } else if (lk == "disposition-notification-to") {
                 # FIXME: we do not check if the read receipt is the same as the sender
                 readReceipt = True;
                 continue;
@@ -682,21 +727,18 @@ public class Message {
 
             hash<MessageInfo> mpb = MultiPartMessage::parseBody(boundary, msg, True);
 
-            # reassign message body to
-            msg = mpb.body;
-
-            # process/decode parts
+            # process/decode parts; the preamble and the epilogue of the multipart body are not part of the message
+            # content (RFC 2046 section 5.1.1): they were taken as the body or as another part
             map processPart($1), mpb.part;
-        } else if (ct)
-            bodyContentType = ct;
-
-        # assign the message body to what's left of the message, if anything
-        if (msg.val()) {
-            data pb = mime_decode_transfer_data(msg, cte, ct);
-            if (body.empty())
-                body = pb;
-            else
-                parts += new Part("", ct.val() ? ct : MimeTypeUnknown, pb, cte);
+        } else {
+            if (ct) {
+                bodyContentType = ct;
+            }
+            # the rest of the message is the body, which is written again with its content transfer encoding
+            if (msg.val()) {
+                body = mime_decode_transfer_data(msg, cte, ct);
+                bodyEncoding = Message::getParsedEncoding(cte, body);
+            }
         }
     }
 
@@ -841,29 +883,28 @@ imap.append("Sent", msg.serializeRaw());
         # throws a MESSAGE-ERROR exception if the message cannot be sent
         checkSendPossible();
 
-        string str = getHeaderString();
+        # the message is made in the character encoding of its body, so that a body written as it is keeps the bytes
+        # of the encoding that its Content-Type declares; it was converted to UTF-8 with the headers.  The headers
+        # are ASCII once encoded, so they are the same bytes in any ASCII-compatible encoding.
+        string enc = Message::getSerializationEncoding(body);
+        string str = convert_encoding(getHeaderString(), enc);
 
         # is this a multipart msg?
-        if (attachments) {
-            MultiPartMixedMessage mpm(mpboundary);
-
-            if (bodyEncoding == ContentEncoding::None) {
-                bodyEncoding = ContentTransEnc7Bit;
-            }
-
-            # add the message body with content-disposition: "inline"
-            mpm.addEncodePart(body, bodyEncoding, bodyContentType ? bodyContentType : MimeTypeText, "inline");
-
-            # add attachments
-            map $1.add(mpm), attachments;
-
-            str += mpm.serialize().toString();
+        if (attachments || parts) {
+            str += binary_to_string(getMultipartIntern(), enc);
             str += "\r\n";
         } else {
+            str += "\r\n";
             if (bodyEncoding == ContentEncoding::None) {
-                str += "\r\n" + body + "\r\n";
+                string b = body;
+                str += b;
             } else {
-                str += "\r\n" + mime_encode_transfer_data(body, bodyEncoding) + "\r\n";
+                str += mime_encode_transfer_data(body, bodyEncoding);
+            }
+            # the message ends with a line break; one was added after a body that ended with one, so the body of a
+            # parsed message grew by an empty line every time it was serialized again
+            if (!Message::endsWithCrLf(str)) {
+                str += "\r\n";
             }
         }
 
@@ -893,19 +934,37 @@ string data = Message::encodeSmtpData(msg.serializeRaw()) + ".\r\n";
         @since MailMessage 1.5.1
     */
     static string encodeSmtpData(string str) {
-        # a CRLF line break is kept; a bare CR or LF is written as CRLF
-        str = regex_subst(str, "\r\n|\r|\n", "\r\n", RE_Global);
-        # a "." is added at the start of every line that starts with "."
-        str = regex_subst(str, "(^|\r\n)\\.", "$1..", RE_Global);
-        if (str.size() && str !~ /\r\n\z/) {
-            str += "\r\n";
+        string enc = get_encoding(str);
+        if (!Message::isAsciiCompatEncoding(enc)) {
+            str = convert_encoding(str, "UTF-8");
+            enc = "UTF-8";
         }
-        return str;
+        # the bytes of the text are kept: regular expressions work on UTF-8, so the text is processed as ISO-8859-1,
+        # in which every byte is a character, and converted back to it; the text was converted to UTF-8, so a body in
+        # another encoding was sent in UTF-8, contrary to its Content-Type
+        string tmp = force_encoding(str, "ISO-8859-1");
+        # a CRLF line break is kept; a bare CR or LF is written as CRLF
+        tmp = regex_subst(tmp, "\r\n|\r|\n", "\r\n", RE_Global);
+        # a "." is added at the start of every line that starts with "."
+        tmp = regex_subst(tmp, "(^|\r\n)\\.", "$1..", RE_Global);
+        if (tmp.size() && !Message::endsWithCrLf(tmp)) {
+            tmp += "\r\n";
+        }
+        return force_encoding(convert_encoding(tmp, "ISO-8859-1"), enc);
     }
 
     private processPart(hash<auto> p) {
-        # part content type (default = no encoding)
-        string pct = Mime::ContentTransEnc7Bit;
+        # a part that has parts (ex: multipart/alternative in multipart/mixed) holds no content of its own: its body
+        # is the preamble and epilogue of its multipart body, which was taken as the message body or as a part
+        if (p.part) {
+            map processPart($1), p.part;
+            return;
+        }
+
+        # part content type: text/plain if no type is given (RFC 2046 section 5.1); "7bit" was used
+        string pct = MimeTypeText;
+        # the Content-Type value of the part, if any
+        *string pct_hdr;
         # part content transfer encoding (default: no encoding)
         string pcte = ContentTransEncBinary;
         # part content disposition
@@ -918,7 +977,7 @@ string data = Message::encodeSmtpData(msg.serializeRaw()) + ".\r\n";
             if (h.key == "content-transfer-encoding") {
                 pcte = h.value.lwr();
             } else if (h.key == "content-type") {
-                pct = h.value;
+                pct = pct_hdr = h.value;
             } else if (h.key == "content-disposition") {
                 pcd = h.value;
             } else if (h.key == "content-id") {
@@ -989,18 +1048,147 @@ string data = Message::encodeSmtpData(msg.serializeRaw()) + ".\r\n";
                 pn = "unnamed-attachment-" + $#;
             }
 
-            attachments += new Attachment(pn, pct, p.body, pcte, p.hdr, cid, is_inline_attachment);
+            # the attachment is encoded again with its content transfer encoding if it has one for re-encoding
+            # (base64 or quoted-printable), otherwise with the default for its data: "7bit", "8bit" and "binary"
+            # are not encodings of an attachment, and parsing the message failed with UNKNOWN-ENCODING
+            attachments += new Attachment(pn, pct, p.body, Message::getParsedAttachmentEncoding(pcte), p.hdr, cid,
+                is_inline_attachment);
         } else {
             # Not an attachment - set as message body or add to parts
-            if (!body) {
+            if (!exists body) {
                 body = p.body;
+                bodyContentType = pct_hdr;
+                bodyEncoding = Message::getParsedEncoding(pcte, p.body);
             } else {
-                parts += new Part(pn.val() ? pn : "", pct, p.body, pcte, p.hdr);
+                parts += new Part(pn.val() ? pn : "", pct, p.body, Message::getParsedPartEncoding(pcte, p.body),
+                    p.hdr);
+            }
+        }
+    }
+
+    #! @cond nodoc
+    # returns the encoding to serialize a message body parsed with the given content transfer encoding with: base64
+    # and quoted-printable data is encoded again, other data ("7bit", "8bit", "binary") is written as it is, except
+    # binary data, which is encoded with base64
+    private static string getParsedEncoding(string cte, data body) {
+        switch (cte.lwr()) {
+            case ContentTransEncBase64: return ContentEncoding::Base64;
+            case ContentTransEncQuotedPrintable: return ContentEncoding::QuotedPrintable;
+        }
+        return body.typeCode() == NT_BINARY ? ContentEncoding::Base64 : ContentEncoding::None;
+    }
+
+    # returns the encoding of an attachment parsed with the given content transfer encoding
+    private static string getParsedAttachmentEncoding(string cte) {
+        switch (cte.lwr()) {
+            case ContentTransEncBase64: return ContentEncoding::Base64;
+            case ContentTransEncQuotedPrintable: return ContentEncoding::QuotedPrintable;
+        }
+        return ContentEncoding::Default;
+    }
+
+    # returns the content transfer encoding of a part parsed with the given content transfer encoding: a transfer
+    # encoding that the Mime module cannot write is replaced with base64 or quoted-printable
+    private static string getParsedPartEncoding(string cte, data body) {
+        cte = cte.lwr();
+        if (inlist(cte, (ContentTransEnc7Bit, ContentTransEnc8Bit, ContentTransEncBinary, ContentTransEncBase64,
+                ContentTransEncQuotedPrintable))) {
+            return cte;
+        }
+        return body.typeCode() == NT_BINARY ? ContentTransEncBase64 : ContentTransEncQuotedPrintable;
+    }
+
+    # returns True if the string ends with CRLF; its bytes are checked, without a conversion of the whole string
+    private static bool endsWithCrLf(string str) {
+        int len = str.size();
+        return len >= 2 && get_byte(str, len - 2) == 13 && get_byte(str, len - 1) == 10;
+    }
+
+    # returns True if a character encoding is ASCII-compatible, so that CR, LF and the ASCII characters of the
+    # message syntax are the same bytes in it
+    private static bool isAsciiCompatEncoding(string enc) {
+        return enc !~ /^utf-?(16|32)/i;
+    }
+
+    # returns the character encoding of a serialized message: the encoding of its body if it is a string in an
+    # ASCII-compatible encoding, otherwise the default encoding
+    private static string getSerializationEncoding(*data body) {
+        if (body.typeCode() == NT_STRING) {
+            string enc = get_encoding(body);
+            if (Message::isAsciiCompatEncoding(enc)) {
+                return enc;
+            }
+        }
+        return get_default_encoding();
+    }
+
+    # returns the content type of the body: the one set for the body, otherwise a Content-Type header given or parsed
+    # with the message that is not the type of a multipart message; a charset is added for a body with non-ASCII
+    # characters if the type has none, so that the encoding of the body is declared
+    private *string getBodyContentTypeIntern() {
+        *string ct = bodyContentType;
+        if (!ct) {
+            foreach string k in (keys headers) {
+                if (k.lwr() == "content-type") {
+                    string v = headers{k};
+                    if (v !~ /^\s*multipart\//i) {
+                        ct = v;
+                    }
+                    break;
+                }
+            }
+        }
+        if (ct && body.typeCode() == NT_STRING && ct !~ /charset=/i && !body.isDataAscii()) {
+            ct += sprintf("; charset=%s", get_encoding(body));
+        }
+        return ct;
+    }
+
+    # returns the content transfer encoding of a body that is written as it is in a MIME part
+    private static string getRawTransferEncoding(data body) {
+        if (body.typeCode() == NT_BINARY) {
+            return ContentTransEncBinary;
+        }
+        return body.isDataAscii() ? ContentTransEnc7Bit : ContentTransEnc8Bit;
+    }
+
+    # returns the multipart body of a message with alternative parts or attachments, with its MIME headers: the
+    # body and its alternative parts are written as a multipart/alternative part, in a multipart/mixed part with the
+    # attachments if there are any
+    private binary getMultipartIntern() {
+        string ct = getBodyContentTypeIntern() ?? MimeTypeText;
+        string benc = bodyEncoding == ContentEncoding::None ? Message::getRawTransferEncoding(body) : bodyEncoding;
+
+        *MultiPartAlternativeMessage mpa;
+        if (parts) {
+            mpa = new MultiPartAlternativeMessage();
+            mpa.addEncodePart(body, benc, ct);
+            map $1.add(mpa), parts;
+            if (!attachments) {
+                hash<MessageInfo> mi = mpa.getMsgAndHeaders();
+                return MultiPartMessage::serializeHeaders({"MIME-Version": "1.0"} + mi.hdr) + mi.body;
             }
         }
 
-        map processPart($1), p.part;
+        MultiPartMixedMessage mpm(mpboundary);
+        if (mpa) {
+            hash<MessageInfo> mi = mpa.getMsgAndHeaders();
+            # the multipart/alternative part is 7bit if all of its parts are, otherwise 8bit
+            bool is7bit = inlist(benc, (ContentTransEncBase64, ContentTransEncQuotedPrintable, ContentTransEnc7Bit))
+                && !(select parts, !inlist($1.getTransferEncoding(), (ContentTransEncBase64,
+                    ContentTransEncQuotedPrintable, ContentTransEnc7Bit)));
+            mpm.addPart(mi.body, mi.hdr."Content-Type", "inline",
+                {"Content-Transfer-Encoding": is7bit ? ContentTransEnc7Bit : ContentTransEnc8Bit});
+        } else {
+            # add the message body with content-disposition: "inline"
+            mpm.addEncodePart(body, benc, ct, "inline");
+        }
+
+        # add attachments
+        map $1.add(mpm), attachments;
+        return mpm.serialize();
     }
+    #! @endcond
 
     #! fetch the email address out of a sender/rcpt string
     /** @param str an email address, or a display name and an email address in angle brackets (ex:
@@ -1419,10 +1607,19 @@ msg.attachInline("logo.png", MimeTypePng, logo_data, "logo123");
     }
 
     #! returns a string of the message headers
-    /** @param eol the End-Of-Line marker for the string
+    /** If the message has a MIME structure (a body with a content transfer encoding, alternative parts or
+        attachments), its MIME headers are generated, and \c MIME-Version, \c Content-Type and
+        \c Content-Transfer-Encoding headers given or parsed with the message are not written; a \c Content-Type
+        header given for the message is then the type of the body unless a type is set for the body.  The multipart
+        MIME headers of a message with alternative parts or attachments are not included.
+
+        @param eol the End-Of-Line marker for the string
         @param encode encode non-ASCII values with quoted printable encoding (http://tools.ietf.org/html/rfc2047)
 
         @return a string with all the message headers separated by the EOL marker
+
+        @since MailMessage 1.5.1 the message is not changed: a \c Content-Type header was removed or taken as the
+        type of the body
     */
     string getHeaderString(string eol = "\r\n", bool encode = True) {
         string hdr = Message::doHeaderValue("From", from, eol, encode);
@@ -1452,23 +1649,27 @@ msg.attachInline("logo.png", MimeTypePng, logo_data, "logo123");
         if (readReceipt)
             hdr += Message::doHeaderValue("Disposition-Notification-To", from, eol, encode);
 
-        # make sure that any explicitly-set Content-Type header is overridden by the CT for the body
-        if (headers."Content-Type") {
-            if (bodyContentType)
-                delete headers."Content-Type";
-            else if (attachments)
-                bodyContentType = remove headers."Content-Type";
-        }
+        # the MIME headers are generated if the message has a MIME structure (a body with a content transfer encoding,
+        # alternative parts or attachments); MIME headers given or parsed with the message are then not written,
+        # since a parsed message had them twice (a Content-Type header given for the message is the type of the body,
+        # unless a type is set for the body)
+        bool mime = attachments || parts || bodyEncoding != ContentEncoding::None;
 
         # additional headers
-        foreach string k in (keys headers)
+        foreach string k in (keys headers) {
+            if (mime && MimeHeaders{k.lwr()}) {
+                continue;
+            }
             hdr += Message::doHeaderValue(k, headers{k}, eol, encode);
+        }
 
         # include MIME headers for msg body if necessary
-        if (!attachments && bodyEncoding != ContentEncoding::None) {
+        if (!attachments && !parts && bodyEncoding != ContentEncoding::None) {
             hdr += Message::doHeaderValue("MIME-Version", "1.0", eol, encode);
-            if (bodyContentType)
-                hdr += Message::doHeaderValue("Content-Type", bodyContentType, eol, encode);
+            *string ct = getBodyContentTypeIntern();
+            if (ct) {
+                hdr += Message::doHeaderValue("Content-Type", ct, eol, encode);
+            }
             hdr += Message::doHeaderValue("Content-Transfer-Encoding", bodyEncoding, eol, encode);
         }
 
