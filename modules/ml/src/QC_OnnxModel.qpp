@@ -1065,7 +1065,11 @@ Future<list<hash<auto>>> OnnxSessionPool::runBatchAsync(list<auto> batch, *list<
 
 //! Returns current pool counters and configuration
 /** @return hash with configured limits, active/waiting counts, run counters,
-    timeout/rejection counters, and dynamic batching settings
+    timeout/rejection counters, and dynamic batching settings, including:
+    - \c async_leader_tid: the TID of the thread that batches the requests of runAsync() when dynamic batching is
+      configured, or 0 if it is not running; the thread is started by the runAsync() call that finds no request
+      queued, and its TID is set before that call returns, so the thread can be monitored or cancelled with
+      @ref Qore::cancel_thread() "cancel_thread()"
 
     @note After an inference future returns its result or inference error,
     its completion or error counter is visible here. Cancelling a future does

@@ -5502,7 +5502,17 @@ void QoreOnnxSessionPool::singleAsyncThread(ExceptionSink* xsink, void* arg) {
 void QoreOnnxSessionPool::dynamicRunAsyncThread(ExceptionSink* xsink, void* arg) {
     QoreOnnxSessionPool* pool = static_cast<QoreOnnxSessionPool*>(arg);
     pool->processDynamicRunQueue(xsink);
+    {
+        // the leader is no longer running, unless a newer leader was started in the meantime
+        std::lock_guard<std::mutex> lock(pool->async_mutex);
+        pool->clearAsyncLeaderUnlocked();
+    }
     pool->deref(xsink);
+}
+
+void QoreOnnxSessionPool::clearAsyncLeaderUnlocked() {
+    int tid = q_gettid();
+    async_leader_tid.compare_exchange_strong(tid, 0);
 }
 
 void QoreOnnxSessionPool::processDynamicRunQueue(ExceptionSink* xsink) {
@@ -5511,6 +5521,8 @@ void QoreOnnxSessionPool::processDynamicRunQueue(ExceptionSink* xsink) {
         {
             std::unique_lock<std::mutex> lock(async_mutex);
             if (async_requests.empty()) {
+                // the leader exits; a request submitted from now on starts a new leader
+                clearAsyncLeaderUnlocked();
                 return;
             }
 
@@ -5684,6 +5696,7 @@ QoreObject* QoreOnnxSessionPool::submitDynamicRunAsync(const QoreHashNode* input
                 deref(xsink);
                 return nullptr;
             }
+            async_leader_tid = tid;
         } else {
             async_cv.notify_one();
         }
@@ -5752,6 +5765,7 @@ QoreHashNode* QoreOnnxSessionPool::getPoolStats(ExceptionSink* xsink) const {
     rv->setKeyValue("max_active_runs_observed", static_cast<int64_t>(max_active_runs_observed), xsink);
     rv->setKeyValue("max_waiting_callers_observed", static_cast<int64_t>(max_waiting_callers_observed), xsink);
     rv->setKeyValue("async_submitted", static_cast<int64_t>(async_submitted.load()), xsink);
+    rv->setKeyValue("async_leader_tid", static_cast<int64_t>(async_leader_tid.load()), xsink);
     rv->setKeyValue("async_completed", static_cast<int64_t>(async_completed.load()), xsink);
     rv->setKeyValue("async_errors", static_cast<int64_t>(async_errors.load()), xsink);
     rv->setKeyValue("async_batches", static_cast<int64_t>(async_batches.load()), xsink);

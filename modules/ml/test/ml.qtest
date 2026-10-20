@@ -201,6 +201,7 @@ public class MlTest inherits QUnit::Test {
         addTestCase("OnnxSessionPool async dynamic batching", \onnxSessionPoolAsyncDynamicBatchTest());
         addTestCase("OnnxSessionPool async completion statistics", \onnxSessionPoolAsyncCompletionStatsTest());
         addTestCase("OnnxSessionPool async dynamic error statistics", \onnxSessionPoolAsyncDynamicErrorStatsTest());
+        addTestCase("OnnxSessionPool async leader TID", \onnxSessionPoolAsyncLeaderTidTest());
         addTestCase("OnnxModel single value inference", \onnxSingleValueTest());
         addTestCase("OnnxModel error cases", \onnxErrorTest());
         addTestCase("OnnxModel bytes constructor", \onnxBytesConstructorTest());
@@ -5049,6 +5050,29 @@ public class MlTest inherits QUnit::Test {
         assertAsyncPoolCounters(pool, 1, 1, 0);
         pool.resetPoolStats();
         assertAsyncPoolCounters(pool, 0, 0, 0);
+    }
+
+    onnxSessionPoolAsyncLeaderTidTest() {
+        if (skipOnnx()) {
+            return;
+        }
+
+        # the leader takes a batch only when it has two requests; the wait deadline never ends a wait here
+        ML::OnnxSessionPool pool(getTestModelPath(), <ML::OnnxSessionConfig>{"providers": ()},
+            {"max_sessions": 1, "dynamic_batch_size": 2, "dynamic_batch_wait_ms": 3600000});
+        assertEq(0, pool.getPoolStats().async_leader_tid, "no leader before the first request");
+
+        # the request that finds the queue empty starts the leader, whose TID is set when the call returns
+        Future<hash<auto>> f1 = pool.runAsync({"X": ((1.0,),)});
+        int leader = pool.getPoolStats().async_leader_tid;
+        assertTrue(leader > 0, "leader TID");
+        assertTrue(leader != gettid());
+
+        # the second request completes the batch; the timeouts are only hang guards
+        Future<hash<auto>> f2 = pool.runAsync({"X": ((2.0,),)});
+        assertEq(leader, pool.getPoolStats().async_leader_tid, "the same leader batches the second request");
+        assertFloat(3.0, f1.get(60s).Y[0], 1e-5);
+        assertFloat(5.0, f2.get(60s).Y[0], 1e-5);
     }
 
     onnxSessionPoolAsyncDynamicErrorStatsTest() {

@@ -787,6 +787,10 @@ private:
     std::deque<std::unique_ptr<AsyncRequest>> async_requests;
 
     std::atomic<uint64_t> async_submitted{0};
+    //! the TID of the leader thread batching dynamic async requests, or 0 if none is running
+    /** Set when a leader is started and cleared when it exits, both with async_mutex held; read without it
+    */
+    std::atomic<int> async_leader_tid{0};
     std::atomic<uint64_t> async_completed{0};
     std::atomic<uint64_t> async_errors{0};
     std::atomic<uint64_t> async_batches{0};
@@ -805,6 +809,8 @@ private:
     DLLLOCAL QoreObject* submitDynamicRunAsync(const QoreHashNode* inputs,
         const QoreListNode* output_names, QoreProgram* pgm, ExceptionSink* xsink);
     DLLLOCAL void processDynamicRunQueue(ExceptionSink* xsink);
+    //! Clears async_leader_tid if it is the TID of the calling leader thread; must be called with async_mutex held
+    DLLLOCAL void clearAsyncLeaderUnlocked();
     DLLLOCAL void resolveAsyncRequest(QorePromise* promise, QoreValue value);
     DLLLOCAL void rejectAsyncBatch(std::vector<std::unique_ptr<AsyncRequest>>& batch, ExceptionSink& err);
 
