@@ -1471,6 +1471,7 @@ l50Xb2GWQesIt9k5jF5IOw==
         HttpServer server = setup.server;
         on_exit delete server;
 
+        int proxy_port = getUnusedPort();
         HttpClientIo::HttpClientConnectionManager mgr(
             <HttpClientIo::HttpClientConnectionManagerOptions>{
                 "protocol": "auto",
@@ -1479,7 +1480,7 @@ l50Xb2GWQesIt9k5jF5IOw==
                 "request_timeout": 15s,
                 "connect_timeout": 10s,
                 # Set a fake proxy — QUIC cannot tunnel through HTTP proxies; nothing listens on its port
-                "proxy_url": sprintf("http://127.0.0.1:%d", getUnusedPort()),
+                "proxy_url": sprintf("http://127.0.0.1:%d", proxy_port),
             },
         );
         on_exit delete mgr;
@@ -1493,14 +1494,21 @@ l50Xb2GWQesIt9k5jF5IOw==
         assertEq(0, stats.total_connections, "proxy: no connections before request");
 
         # Verify resolveProtocol would return "h2" not "h3" by making a
-        # request that fails (proxy unreachable) and checking the error
+        # request that fails (proxy unreachable) and checking the error: with
+        # HTTP/3 the request would bypass the proxy and reach the server.  The
+        # exception is caught only around the request, so that a request that
+        # does not fail is reported
+        *hash<ExceptionInfo> err;
         try {
             mgr.request(sprintf("https://127.0.0.1:%d", setup.port), "GET", "/test");
-            fail("proxy: request should fail (fake proxy)");
         } catch (hash<ExceptionInfo> ex) {
-            # Expected: connection error because the proxy doesn't exist
-            assertTrue(True, "proxy: request fails through fake proxy as expected");
+            err = ex;
         }
+        assertTrue(exists err, "proxy: request should fail (fake proxy)");
+        # the connection that failed is the one to the proxy
+        assertEq("HTTPCLIENT-CONNECT-ERROR", err.err, "proxy: request fails connecting");
+        assertRegex(sprintf("127\\.0\\.0\\.1:%d\\b", proxy_port), err.desc ?? "",
+            "proxy: the failed connection is the one to the proxy");
     }
 
     #! Test: cross-origin Alt-Svc is ignored (host mismatch per RFC 7838 §2.1)

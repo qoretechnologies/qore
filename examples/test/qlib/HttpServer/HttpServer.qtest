@@ -4395,48 +4395,36 @@ public class HttpServerTest inherits QUnit::Test {
     asyncModeConnectionRefusedTest() {
         # Use a port with nothing listening — kernel returns ECONNREFUSED
         # immediately.  With async I/O, the poll op detects the error and
-        # the client must propagate it within the connect timeout.
-        {
-            int closed_port = getUnusedPort();
-            date start = now_us();
-            try {
-                RestClientIo rc({
-                    "url": sprintf("http://127.0.0.1:%d", closed_port),
-                    "connect_timeout": 10s,
-                    "timeout": 10s,
-                });
-                rc.restGet("/test");
-                assertTrue(False, "connection to closed port must throw");
-            } catch (hash<ExceptionInfo> ex) {
-                date elapsed = now_us() - start;
-                # Must fail fast, not wait the full connect timeout
-                # (use generous 15s threshold for resource-constrained CI)
-                assertTrue(elapsed < 15s,
-                    sprintf("connection refused took %y, expected < 15s", elapsed));
-                # Must be a connect error, not a timeout
-                assertRegex("CONNECT-ERROR|SOCKET-CONNECT-ERROR",
-                    ex.err, "connection refused error type");
-            }
-        }
-
+        # the client must propagate it as a connect error.
+        checkConnectionRefused("http");
         # Test with HTTPS to verify SSL path also handles connection refused
-        {
-            int closed_port = getUnusedPort();
-            date start = now_us();
-            try {
-                RestClientIo rc({
-                    "url": sprintf("https://127.0.0.1:%d", closed_port),
-                    "connect_timeout": 10s,
-                    "timeout": 10s,
-                });
-                rc.restGet("/test");
-                assertTrue(False, "SSL connection to closed port must throw");
-            } catch (hash<ExceptionInfo> ex) {
-                date elapsed = now_us() - start;
-                assertTrue(elapsed < 15s,
-                    sprintf("SSL connection refused took %y, expected < 15s", elapsed));
-            }
+        checkConnectionRefused("https");
+    }
+
+    #! Checks that a request to a port nothing listens on fails with the connect error of the refused connection
+    /** The exception is caught only around the request, so that a request that does not fail is reported, instead of
+        the assertion's own exception being caught as the expected failure.  The connection is refused at once, but
+        the connect timeout is long, so that a client that does not see the refusal and waits gives a timeout error
+        instead of the connect error: the error tells the two apart, not the time it took.
+    */
+    private checkConnectionRefused(string scheme) {
+        int closed_port = getUnusedPort();
+        *hash<ExceptionInfo> err;
+        try {
+            RestClientIo rc({
+                "url": sprintf("%s://127.0.0.1:%d", scheme, closed_port),
+                "connect_timeout": 60s,
+                "timeout": 60s,
+            });
+            rc.restGet("/test");
+        } catch (hash<ExceptionInfo> ex) {
+            err = ex;
         }
+        assertTrue(exists err, sprintf("%s connection to a closed port must throw", scheme));
+        # a connect error for the refused connection (ECONNREFUSED), never a timeout
+        assertRegex("^(HTTPCLIENT|SOCKET)-CONNECT-ERROR$", err.err ?? "", sprintf("%s connection refused error type",
+            scheme));
+        assertRegex("refused", err.desc ?? "", sprintf("%s connection refused error description", scheme));
     }
 
     #! returns a port on 127.0.0.1 that no socket is bound to at the time of the call
