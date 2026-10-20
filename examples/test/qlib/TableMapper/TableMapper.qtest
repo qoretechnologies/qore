@@ -822,7 +822,7 @@ public class TableMapperTest inherits QUnit::Test {
             *hash ret = mapper.queueData(Input3);
             if (!ret) { ret = mapper.flush(); }
             assertEq(OutputBulk3a, ret);
-            checkMap(table.selectRows(("orderby": "string")), Output3b);
+            checkMap(selectRowsByStringNullLast(), Output3b);
             assertEq(3, mapper.getCount());
 
             # issue #1849 test
@@ -1184,6 +1184,22 @@ public class TableMapperTest inherits QUnit::Test {
         assertEq(Output2, l, "mapBulk");
         assertEq(3, i.getCount());
         assertEq(3, m.getCount());
+    }
+
+    #! returns the rows of the test table ordered by their string, with a null string last
+    /** A database orders a null string by its own rule: PostgreSQL and Oracle put it last in ascending order, MySQL
+        first, so the rows are ordered here
+    */
+    private list<hash<auto>> selectRowsByStringNullLast() {
+        list<hash<auto>> rows = map $1, table.selectRows();
+        return sort(rows, int sub (hash<auto> l, hash<auto> r) {
+            bool l_null = l.string === NULL || !exists l.string;
+            bool r_null = r.string === NULL || !exists r.string;
+            if (l_null || r_null) {
+                return l_null == r_null ? 0 : (l_null ? 1 : -1);
+            }
+            return l.string <=> r.string;
+        });
     }
 
     # FIXME this is very ad-hoc checking - 'ol' used only

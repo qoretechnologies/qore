@@ -215,8 +215,10 @@ class MysqlTest inherits SqlTestBase {
             addTestCase("list partition lifecycle", \listPartitionLifecycleTest());
             addTestCase("a unique index or constraint with other columns is dropped and created once",
                 \uniqueColumnChanges());
+            addTestCase("the first value of an emulated sequence is its start value", \sequenceStartTest());
         }
         addTestCase("the SQL of a unique index or constraint with other columns", \uniqueColumnChangeSql());
+        addTestCase("the SQL of a new emulated sequence", \sequenceSql());
 
         set_return_value(main());
     }
@@ -628,6 +630,32 @@ class MysqlTest inherits SqlTestBase {
         assertEq((), alignTable(ds, "mysql_uk_test", uk_desc));
         assertEq(("y", "x"),
             (new MysqlTable(ds, "mysql_uk_test")).getConstraints().uk_mysql_uk_test.keys());
+    }
+
+    #! A new emulated sequence holds the value before its start value, which the sequence function adds 1 to
+    private sequenceSql() {
+        assertEq("insert into sqlutil_sequences (name, id) values ('qtest_seq', 4)",
+            (new MysqlSequence("sqlutil_sequences", "qtest_seq", 5)).getCreateSql());
+        assertEq("insert into sqlutil_sequences (name, id) values ('qtest_seq', 0)",
+            (new MysqlSequence("sqlutil_sequences", "qtest_seq")).getCreateSql());
+    }
+
+    #! An emulated sequence gives its start value first, as a database sequence does
+    private sequenceStartTest() {
+        AbstractDatasource ds = table.getDatasource();
+        MysqlDatabase db(ds);
+        on_exit {
+            try {
+                db.dropSequenceIfExists("qtest_mysql_seq");
+                ds.commit();
+            } catch (hash<ExceptionInfo> ex) {
+            }
+        }
+        db.dropSequenceIfExists("qtest_mysql_seq");
+        map ds.execRaw($1), db.getAlignSql({"sequences": {"qtest_mysql_seq": {"start": 5}}});
+        ds.commit();
+        assertEq(5, db.getNextSequenceValue("qtest_mysql_seq"));
+        assertEq(6, db.getNextSequenceValue("qtest_mysql_seq"));
     }
 
     #! Aligns the table to a template with the description, runs the SQL in the database and returns it

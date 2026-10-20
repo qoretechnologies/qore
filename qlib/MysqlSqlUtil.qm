@@ -108,6 +108,9 @@ module MysqlSqlUtil {
       @ref SqlUtil::AbstractDatabase::createTempTable() "AbstractDatabase::createTempTable()"
     - fixed numeric column comparison; an assignment was used in place of a comparison, so comparing two numeric
       columns overwrote the \c unsigned attribute of the column being compared and returned the wrong result
+    - fixed the first value of an emulated sequence (see @ref SqlUtil::AbstractDatabase::getNextSequenceValue()
+      "AbstractDatabase::getNextSequenceValue()"), which was its start value plus 1; it is now its start value, as with
+      a database sequence; a sequence that exists continues from its current value
     - fixed table alignment of a unique index with other columns, which dropped the index, dropped it again, created
       it and added its unique constraint, an index of the same name, again, so the alignment failed: a unique
       constraint is its index on MySQL, so the index is now dropped once and created once, and only the foreign
@@ -709,8 +712,12 @@ auto v = c.name;
         }
 
         #! returns a string that can be used to create the sequence in the database
+        /** The sequence table holds the last value issued for each sequence, and the sequence function adds 1 to it
+            and returns the result, so a new sequence holds the value before its start value: its first value is its
+            start value, as with a database sequence
+        */
         string getCreateSql(*hash opt) {
-            return sprintf("insert into %s (name, id) values ('%s', %d)", table_name, name, start);
+            return sprintf("insert into %s (name, id) values ('%s', %d)", table_name, name, start - 1);
         }
 
         #! returns a string that can be used to rename the sequence in the database
