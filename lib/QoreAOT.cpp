@@ -1019,6 +1019,9 @@ static void collectEmbeddedUserModules(std::unordered_set<std::string>& local_mo
     std::unordered_map<std::string, std::string>& local_module_paths,
     const qore_program_private* pp);
 
+// `.qoa` archives are written by LLVM's archive writer (see createStaticArchive())
+#include <llvm/Object/ArchiveWriter.h>
+#include <llvm/Support/Path.h>
 // Phase 4 slice 10: llvm::object::ObjectFile for reading fragment
 // metadata out of `.qo` ELF symbol tables at compile time (`-L<dir>`
 // preload path).
@@ -31255,11 +31258,38 @@ bool QoreAOT::compileModuleFromObjects(const char* dir_path,
     return true;
 }
 
-// Phase 4 slice 7: package a list of objects into a Unix `ar` archive
-// via `ar rcs <archive> <obj1> <obj2> …`.  Produces a standard static
-// library suitable for `-l<name>` or direct path linkage in a C++
-// host's link line.  Cross-compile: `ar` is target-agnostic for simple
-// archive creation, but we still honor the escape used elsewhere.
+//! The archive format of the host's linker, as llvm-ar chooses it for a host
+static llvm::object::Archive::Kind getHostArchiveKind() {
+    llvm::Triple host(llvm::sys::getProcessTriple());
+    if (host.isOSDarwin()) {
+        return llvm::object::Archive::K_DARWIN;
+    }
+    if (host.isOSAIX()) {
+        return llvm::object::Archive::K_AIXBIG;
+    }
+    return llvm::object::Archive::K_GNU;
+}
+
+//! Packages objects into a static archive for linking into a C++ host (Phase 4 slice 7)
+/** The archive is a standard static library, suitable for \c -l<name> or direct path linkage in a C++ host's link
+    line, in the host linker's format (Darwin on Apple platforms, the big archive format on AIX, GNU otherwise) and
+    with a symbol table.  Each object is a member named after its file name (without its directory), in the given
+    order.
+
+    It is written by LLVM's archive writer in deterministic mode: member headers record no modification time, owner
+    or group and a fixed mode, so the same objects always give the same archive, independent of when and by whom they
+    were built.  The system \c ar is not used: GNU \c ar records each member's time, owner, group and mode unless it
+    is given \c D, Apple's \c ar zeroes only the times, and only when \c ZERO_AR_DATE is set, so the archive depended
+    on which \c ar was first in \c PATH, and building it failed where there was none.  The archive is written to a
+    temporary file and renamed into place.
+
+    @param obj_paths the objects to archive
+    @param archive_path the archive to write; replaced if it exists
+    @param error set to the reason on failure
+    @param target_triple a cross-compilation target; the archive is then left to the target's toolchain
+
+    @return true on success, false on failure, with \a error set
+*/
 static bool createStaticArchive(const std::vector<std::string>& obj_paths,
         const std::string& archive_path, std::string& error,
         const char* target_triple = nullptr) {
@@ -31273,20 +31303,36 @@ static bool createStaticArchive(const std::vector<std::string>& obj_paths,
         return false;
     }
 
-    // ar rcs archive.qoa input1.o input2.o ...
-    // -r: replace/insert; -c: create archive silently; -s: write symbol index.
-    // Existing archive is overwritten — remove first to avoid ar appending
-    // stale entries from a previous build.
-    remove(archive_path.c_str());
-
-    std::string cmd = "ar rcs " + archive_path;
-    for (const std::string& p : obj_paths) {
-        cmd += " " + p;
+    std::vector<llvm::NewArchiveMember> members;
+    members.reserve(obj_paths.size());
+    for (size_t i = 0; i < obj_paths.size(); ++i) {
+        if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT archive creation")) {
+            error = "AOT archive creation cancelled";
+            return false;
+        }
+        llvm::Expected<llvm::NewArchiveMember> member
+            = llvm::NewArchiveMember::getFile(obj_paths[i], /* Deterministic */ true);
+        if (!member) {
+            error = "cannot read archive member '" + obj_paths[i] + "': " + llvm::toString(member.takeError());
+            return false;
+        }
+        // getFile() names the member after the path it was given; like ar, name it after the file alone, so the
+        // archive does not depend on where the objects were built.  The name refers to the member buffer's
+        // identifier, which the member owns.
+        member->MemberName = llvm::sys::path::filename(member->MemberName);
+        members.push_back(std::move(*member));
     }
-    printd(2, "AOT: archive command: %s\n", cmd.c_str());
-    int rc = system(cmd.c_str());
-    if (rc != 0) {
-        error = "ar command failed with exit code " + std::to_string(rc);
+    assert(members.size() == obj_paths.size());
+
+#if LLVM_VERSION_MAJOR >= 18
+    const llvm::SymtabWritingMode symtab = llvm::SymtabWritingMode::NormalSymtab;
+#else
+    const bool symtab = true;
+#endif
+    printd(2, "AOT: writing archive '%s' with %zu member(s)\n", archive_path.c_str(), members.size());
+    if (llvm::Error err = llvm::writeArchive(archive_path, members, symtab, getHostArchiveKind(),
+            /* Deterministic */ true, /* Thin */ false)) {
+        error = "cannot write archive '" + archive_path + "': " + llvm::toString(std::move(err));
         return false;
     }
     return true;
@@ -31341,7 +31387,8 @@ static void emitQoaRegisterAllFunction(llvm::LLVMContext& ctx,
 // archive suitable for static linkage into a C++ host.  Mirrors
 // `compileModuleFromObjects` but swaps two things: the glue emits
 // prefixed module-info globals + a `qore_qoa_register_all` entry
-// point, and final packaging uses `ar rcs` instead of `ld -shared`.
+// point, and final packaging writes a static archive (see
+// createStaticArchive()) instead of linking with `ld -shared`.
 bool QoreAOT::archiveModuleFromObjects(const char* dir_path,
                                        const std::vector<std::string>& object_paths,
                                        const std::string& output_path,

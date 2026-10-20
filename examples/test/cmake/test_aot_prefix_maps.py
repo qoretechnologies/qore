@@ -6,6 +6,7 @@
 import json
 import os
 from pathlib import Path
+import shutil
 import subprocess
 import tempfile
 import unittest
@@ -41,6 +42,33 @@ public int sub repro_value(int value) {
     return value + 1;
 }
 '''
+
+
+def ar_members(data):
+    """Returns the member headers of a System V (GNU) ar archive with their resolved names"""
+    if not data.startswith(b"!<arch>\n"):
+        raise ValueError("not an ar archive")
+    members = []
+    long_names = b""
+    pos = 8
+    while pos < len(data):
+        header = data[pos:pos + 60]
+        if len(header) != 60 or header[58:60] != b"`\n":
+            raise ValueError(f"invalid member header at offset {pos}")
+        size = int(header[48:58])
+        name = header[:16].decode().rstrip()
+        body = data[pos + 60:pos + 60 + size]
+        if name == "//":
+            long_names = body
+        elif name != "/" and name.startswith("/"):
+            offset = int(name[1:])
+            name = long_names[offset:long_names.index(b"/\n", offset)].decode()
+        elif name != "/":
+            name = name.removesuffix("/")
+        members.append({"name": name, "date": header[16:28].strip(), "uid": header[28:34].strip(),
+                        "gid": header[34:40].strip(), "mode": header[40:48].strip(), "body": body})
+        pos += 60 + size + (size & 1)
+    return members
 
 
 class AotPrefixMapsTest(unittest.TestCase):
@@ -259,6 +287,79 @@ public class Zeta inherits Alpha {
             with self.subTest(artifact=kind):
                 self.assertEqual(outputs[0][kind], outputs[1][kind],
                                  "Directory order changed the compiled artifact")
+
+    def test_archive_is_independent_of_member_times_owners_and_modes(self):
+        # The same objects archived again later, by a build with another umask or in another directory, must give
+        # the same archive: member headers record no time, owner or group, a fixed mode and the file name alone, also
+        # for the glue object qcc writes each time.
+        source = self.root / "ReproProbe"
+        source.mkdir()
+        files = {"ReproProbe.qm": HEADER, "functions.qc": FUNCTIONS}
+        for name, text in files.items():
+            (source / name).write_text(text)
+        objects = []
+        for name in sorted(files):
+            obj = self.root / (name + ".qo")
+            self.run_tool(QCC, "-c", "-O3", f"--context={source}", "-o", obj, source / name)
+            objects.append(obj)
+        archive = self.root / "ReproProbe.qoa"
+        built = []
+        for mtime, mode in ((1700000000, 0o644), (1700003600, 0o600)):
+            for obj in objects:
+                os.chmod(obj, mode)
+                os.utime(obj, (mtime, mtime))
+            self.run_tool(QCC, "-a", "-O3", f"--context={source}", "-o", archive, *objects)
+            built.append(archive.read_bytes())
+        # a directory whose name the shell would split: the objects are not passed through a command line
+        elsewhere = self.root / "elsewhere with spaces"
+        elsewhere.mkdir()
+        copies = [Path(shutil.copy2(obj, elsewhere)) for obj in objects]
+        self.run_tool(QCC, "-a", "-O3", f"--context={source}", "-o", archive, *copies)
+        built.append(archive.read_bytes())
+        self.assertEqual(built[0], built[1], "Member times or modes changed the archive")
+        self.assertEqual(built[0], built[2], "The objects' directory changed the archive")
+        self.assertEqual([], sorted(path.name for path in self.root.iterdir() if ".agg." in path.name),
+                         "the glue object is not left behind")
+
+        members = ar_members(built[0])
+        self.assertEqual(["/", "ReproProbe.qoa.agg.o", "ReproProbe.qm.qo", "functions.qc.qo"],
+                         [member["name"] for member in members if member["name"] != "//"])
+        for member in members:
+            if member["name"] == "//":
+                continue
+            self.assertEqual((b"0", b"0", b"0"), (member["date"], member["uid"], member["gid"]), member["name"])
+            if member["name"] != "/":
+                self.assertEqual(b"644", member["mode"], member["name"])
+        symbols = next(member for member in members if member["name"] == "/")
+        self.assertIn(b"qore_qoa_register_all", symbols["body"], "the symbol table indexes the entry point")
+        for obj in objects:
+            member = next(m for m in members if m["name"] == obj.name)
+            self.assertEqual(obj.read_bytes(), member["body"])
+
+        # the archive is a static library for the system's tools: ar lists it, and a host links its entry point
+        ar = shutil.which("ar")
+        if ar:
+            self.assertEqual(["ReproProbe.qoa.agg.o", "ReproProbe.qm.qo", "functions.qc.qo"],
+                             self.run_tool(ar, "t", archive).split())
+        cxx = shutil.which("c++")
+        libqore_dir = QCC.parent
+        if cxx and (libqore_dir / "libqore.so").exists():
+            host = self.root / "host.cpp"
+            host.write_text('extern "C" void qore_qoa_register_all(void*);\n'
+                            "int main(int argc, char**) { if (argc > 99) { qore_qoa_register_all(nullptr); }"
+                            " return 0; }\n")
+            self.run_tool(cxx, "-o", self.root / "host", host, archive, f"-L{libqore_dir}", "-lqore",
+                          f"-Wl,-rpath,{libqore_dir}", "-ldl")
+            self.assertEqual("", self.run_tool(self.root / "host"))
+
+        # an archive that cannot be written fails the build, and leaves neither the glue object nor a partial archive
+        blocked = self.root / "Blocked.qoa"
+        blocked.mkdir()
+        out = self.run_tool(QCC, "-a", "-O3", f"--context={source}", "-o", blocked, *objects, success=False)
+        self.assertIn(f"cannot write archive '{blocked}'", out)
+        self.assertEqual([], list(blocked.iterdir()))
+        self.assertEqual([], sorted(path.name for path in self.root.iterdir()
+                                    if ".agg." in path.name or "temp-archive" in path.name))
 
     def test_closure_capture_metadata_is_independent_of_allocator_layout(self):
         source = self.root / "ReproProbe.qm"

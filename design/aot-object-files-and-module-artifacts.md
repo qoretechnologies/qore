@@ -24,6 +24,17 @@ Relevant code:
 | `.qo` | `qcc -c file.qr` / `file.qc` / `file.qm` | Relocatable object containing native code and AOT metadata |
 | `.qoa` | `qcc -a --context=DIR *.qo` | Static archive exposing `qore_qoa_register_all()` |
 
+`qcc -a` writes a `.qoa` with LLVM's archive writer, in the host linker's
+format (Darwin on Apple platforms, the big archive format on AIX, GNU
+elsewhere) and with a symbol table; the members are the glue object and the
+given objects, named after their files, in that order. The archive is
+deterministic: member headers record no modification time, owner or group and
+mode 644, so the same objects give the same archive however long after they
+were built and by whom. The system `ar` is not used, because what it records
+differs between implementations: GNU `ar` records each member's time, owner,
+group and mode unless given `D`, and Apple's `ar` zeroes only the times, and
+only when `ZERO_AR_DATE` is set.
+
 `.qo` is both object code and declaration carrier. It contains compiled native
 functions plus enough AOT metadata for later compile/link stages to preload
 cross-file declarations.

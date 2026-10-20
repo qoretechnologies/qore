@@ -681,7 +681,7 @@ static const char* qolink_map_path = nullptr;
 // design/aot-object-files-and-module-artifacts.md.
 static bool from_objects = false;
 // -a / --archive mode.  Combined with --context=DIR
-// + positional .qo inputs, produces a `.qoa` static archive (ar rcs)
+// + positional .qo inputs, produces a `.qoa` static archive (deterministic)
 // exposing `qore_qoa_register_all(QoreProgram*)`.  Target use case:
 // static linkage into a C++ host (e.g. qorus-core).
 static bool archive_mode = false;
@@ -1254,7 +1254,7 @@ static void print_usage(const char* prog) {
            "                         standard .qmod by linking the .qo's + fresh glue\n");
     printf("  -a, --archive          Archive mode: positional args are per-file .qo inputs;\n"
            "                         requires --context=DIR; produces a .qoa static archive\n"
-           "                         (ar rcs) exposing qore_qoa_register_all() for a C++ host\n");
+           "                         exposing qore_qoa_register_all() for a C++ host\n");
     printf("  -S, --static           Link single-source executables statically against libqore\n");
     printf("  -t, --target=TRIPLE    Target triple for cross-compilation\n");
     printf("      --show-targets     Show supported target architectures and quit\n");
