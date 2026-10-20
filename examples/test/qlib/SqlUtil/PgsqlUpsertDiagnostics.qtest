@@ -219,7 +219,9 @@ class PgsqlUpsertDiagnosticsTest inherits QUnit::Test {
         string result_path = tmp_dir + "/result.bin";
         string stdout_path = tmp_dir + "/stdout.txt";
         string stderr_path = tmp_dir + "/stderr.txt";
-        probe.rc = system(sprintf("%s %s%s %s > %s 2> %s", shellQuote(ENV.QORE_EXECUTABLE ?? "qore"),
+        # the child is the interpreter running this test, as the qore found on PATH can be another version or missing
+        string qore = ENV.QORE_EXECUTABLE ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        probe.rc = system(sprintf("%s %s%s %s > %s 2> %s", shellQuote(qore),
             form == "source" ? "-DSourceModules " : "", shellQuote(probe_path), shellQuote(result_path),
             shellQuote(stdout_path), shellQuote(stderr_path)));
         probe.stdout = ReadOnlyFile::readTextFile(stdout_path);

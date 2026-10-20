@@ -58,17 +58,13 @@ class QschemaCliTest inherits QUnit::Test {
         return "'" + replace(value, "'", "'\"'\"'") + "'";
     }
 
+    #! Returns the interpreter that runs qschema: QORE_PATH if set, else the interpreter running this test
     private string getQorePath() {
         if (ENV.QORE_PATH) {
             return ENV.QORE_PATH;
         }
-        foreach string dir in ("build", "build-ci", "build-debug") {
-            string path = normalize_dir(get_script_dir() + "/../../../../" + dir + "/qore");
-            if (is_file(path)) {
-                return path;
-            }
-        }
-        return "qore";
+        # not the qore found on PATH or in a build directory, which can be another version than the one tested
+        return ENV.QORE_EXECUTABLE ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
     }
 
     private hash<auto> runCommand(string command, string name) {

@@ -168,9 +168,27 @@ class FileTest inherits QUnit::Test {
         }
         on_exit unlink(fn);
 
-        # this test works on all platforms but was made for Windows
-        string hex = backquote('qore -ne "printf(\"a\r\n\");" | qore ' + fn);
+        # this test works on all platforms but was made for Windows; both children are the interpreter running this
+        # test, as the qore found on PATH can be another version or missing
+        string qore = shellQuote(getQoreExecutable());
+        string hex = backquote(qore + ' -ne "printf(\"a\r\n\");" | ' + qore + " " + shellQuote(fn));
         assertEq("610d0a", hex);
+    }
+
+    #! Returns the interpreter running this test as an absolute path, so a child process runs the same build
+    private static string getQoreExecutable() {
+        string qore = ENV.QORE_EXECUTABLE ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        # a relative path is made absolute, as a child can run in another directory; a bare name is looked up in PATH
+        return absolute_path(qore) || qore !~ /[\/\\]/ ? qore : getcwd() + DirSep + qore;
+    }
+
+    #! Quotes a string as one word for the shell
+    private static string shellQuote(string str) {
+%ifdef Windows
+        return "\"" + str + "\"";
+%else
+        return "'" + replace(str, "'", "'\\''") + "'";
+%endif
     }
 
     redirectTest() {

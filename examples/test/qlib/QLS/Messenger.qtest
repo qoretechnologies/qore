@@ -57,7 +57,7 @@ class MessengerTest inherits QUnit::Test {
         if ((ENV.QORE_MODULE_DIR ?? "").val()) {
             modulePath += ":" + ENV.QORE_MODULE_DIR;
         }
-        string qoreExe = ENV.QORE_EXECUTABLE ?? ENV.QORE_BINARY ?? "qore";
+        string qoreExe = ENV.QORE_EXECUTABLE ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
         string cmd = sprintf("QORE_MODULE_DIR=%s %s %s",
             shellQuote(modulePath), shellQuote(qoreExe), shellQuote(scriptPath));
         if (stdinFile) {

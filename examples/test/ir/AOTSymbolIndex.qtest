@@ -105,6 +105,19 @@ class AOTSymbolIndexTest inherits QUnit::Test {
         return backquote(cmd + " 2>&1");
     }
 
+    #! Returns the command that runs the source-order helper
+    /** This is QORE_QCC_SOURCE_ORDER_HELPER if set, else the helper in this checkout run by the interpreter running
+        this test; run directly, its \c #! line would run it with the qore found on PATH, which can be another
+        version or missing
+    */
+    private string getSourceOrderCommand() {
+        if (*string helper = ENV.QORE_QCC_SOURCE_ORDER_HELPER) {
+            return helper;
+        }
+        return sprintf("%s %s", qore_bin,
+            realpath(dirname(get_script_path()) + "/../../../tools/qore-qo-source-order"));
+    }
+
     private write(string path, string body) {
         File f();
         f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
@@ -1173,8 +1186,7 @@ class AOTSymbolIndexTest inherits QUnit::Test {
         string context_file = tmp_dir + "/.qcc-context";
         string manifest = tmp_dir + "/source-symbols.manifest";
         string app = tmp_dir + "/source-ns-app";
-        string source_order = ENV.QORE_QCC_SOURCE_ORDER_HELPER
-            ?? realpath(dirname(get_script_path()) + "/../../../tools/qore-qo-source-order");
+        string source_order = getSourceOrderCommand();
 
         write(provider_src,
             "%new-style\n"
@@ -1274,8 +1286,7 @@ class AOTSymbolIndexTest inherits QUnit::Test {
         string consumer_qo = tmp_dir + "/cache-consumer.qo";
         string context_file = tmp_dir + "/.qcc-context";
         string cache_file = context_file + ".source-order-v2.json";
-        string source_order = ENV.QORE_QCC_SOURCE_ORDER_HELPER
-            ?? realpath(dirname(get_script_path()) + "/../../../tools/qore-qo-source-order");
+        string source_order = getSourceOrderCommand();
 
         write(provider_src, "%modern\nclass CacheBase {}\n");
         write(consumer_src, "%modern\nclass CacheChild inherits CacheBase {}\n");
@@ -1321,8 +1332,7 @@ class AOTSymbolIndexTest inherits QUnit::Test {
         string child_qo = qo_dir + "/static-default-child.qo";
         string context_file = tmp_dir + "/.qcc-context";
         string manifest = tmp_dir + "/source-symbols.manifest";
-        string source_order = ENV.QORE_QCC_SOURCE_ORDER_HELPER
-            ?? realpath(dirname(get_script_path()) + "/../../../tools/qore-qo-source-order");
+        string source_order = getSourceOrderCommand();
 
         write(base_src,
             "%modern\n"

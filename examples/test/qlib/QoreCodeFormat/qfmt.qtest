@@ -64,15 +64,10 @@ class QfmtTest inherits QUnit::Test {
         }
     }
 
+    #! Returns the interpreter running this test, which runs qfmt
     private string get_qore_path() {
-        # Try to find qore in known build directories
-        foreach string dir in ("build", "build-ci", "build-debug") {
-            string buildQore = normalize_dir(get_script_dir() + "/../../../../" + dir + "/qore");
-            if (is_file(buildQore)) {
-                return buildQore;
-            }
-        }
-        return "qore";
+        # not the qore found on PATH or in a build directory, which can be another version than the one tested
+        return ENV.QORE_EXECUTABLE ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
     }
 
     #! Run qfmt with given arguments and optional stdin input

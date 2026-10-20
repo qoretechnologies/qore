@@ -63,7 +63,7 @@ public class QdpDpqlTest inherits QUnit::Test {
     }
 
     private string getQoreBinary() {
-        return getenv("QORE_BINARY") ?? "qore";
+        return ENV.QORE_EXECUTABLE ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
     }
 
     private hash<auto> runQdp(string args) {

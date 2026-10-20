@@ -61,8 +61,25 @@ class ExceptionTest inherits QUnit::Test {
         TmpFile tmp();
         tmp.file.write("on_error printf(\"OOPS: %y\n\", $1); thread_exit;");
         tmp.file.close();
-        int rc = system("qore " + tmp.path);
+        # the child is the interpreter running this test, as the qore found on PATH can be another version or missing
+        int rc = system(shellQuote(getQoreExecutable()) + " " + shellQuote(tmp.path));
         assertEq(0, rc);
+    }
+
+    #! Returns the interpreter running this test as an absolute path, so a child process runs the same build
+    private static string getQoreExecutable() {
+        string qore = ENV.QORE_EXECUTABLE ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        # a relative path is made absolute, as a child can run in another directory; a bare name is looked up in PATH
+        return absolute_path(qore) || qore !~ /[\/\\]/ ? qore : getcwd() + DirSep + qore;
+    }
+
+    #! Quotes a string as one word for the shell
+    private static string shellQuote(string str) {
+%ifdef Windows
+        return "\"" + str + "\"";
+%else
+        return "'" + replace(str, "'", "'\\''") + "'";
+%endif
     }
 
     rethrowTest() {

@@ -2636,8 +2636,27 @@ class ReflectionTest inherits QUnit::Test {
     }
 
     issue3035Test() {
-        string name = `qore -lreflection -ne 'printf("%s", Class::forName("Mutex").getPathName());'`;
+        # the child is the interpreter running this test: the qore found on PATH can be older than the reflection
+        # module being tested, or missing
+        string name = backquote(shellQuote(getQoreExecutable())
+            + " -lreflection -ne 'printf(\"%s\", Class::forName(\"Mutex\").getPathName());'");
         assertEq("Qore::Thread::Mutex", name);
+    }
+
+    #! Returns the interpreter running this test as an absolute path, so a child process runs the same build
+    private static string getQoreExecutable() {
+        string qore = ENV.QORE_EXECUTABLE ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        # a relative path is made absolute, as a child can run in another directory; a bare name is looked up in PATH
+        return absolute_path(qore) || qore !~ /[\/\\]/ ? qore : getcwd() + DirSep + qore;
+    }
+
+    #! Quotes a string as one word for the shell
+    private static string shellQuote(string str) {
+%ifdef Windows
+        return "\"" + str + "\"";
+%else
+        return "'" + replace(str, "'", "'\\''") + "'";
+%endif
     }
 
     reflectionTests() {

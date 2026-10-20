@@ -23,11 +23,32 @@ class RecursiveDependencyTest inherits QUnit::Test {
         load_module("./R1.qm");
 
         string dir = get_script_dir();
+        # the child is the interpreter running this test, as the qore found on PATH can be another version or missing
+        string qore = shellQuote(getQoreExecutable());
         foreach string script in (Scripts) {
-            string cmd = sprintf("cd %y && qore %y 2>&1", dir, script);
-            string str = backquote(cmd);
+            string cmd = sprintf("cd %s && %s %s 2>&1", shellQuote(dir), qore, shellQuote(script));
+            int rc;
+            string str = backquote(cmd, \rc);
             on_error printf("str: %y\n", str);
             assertEq("", str, script);
+            # a child that cannot run at all prints nothing either
+            assertEq(0, rc, script);
         }
+    }
+
+    #! Returns the interpreter running this test as an absolute path, so a child process runs the same build
+    private static string getQoreExecutable() {
+        string qore = ENV.QORE_EXECUTABLE ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        # a relative path is made absolute, as a child can run in another directory; a bare name is looked up in PATH
+        return absolute_path(qore) || qore !~ /[\/\\]/ ? qore : getcwd() + DirSep + qore;
+    }
+
+    #! Quotes a string as one word for the shell
+    private static string shellQuote(string str) {
+%ifdef Windows
+        return "\"" + str + "\"";
+%else
+        return "'" + replace(str, "'", "'\\''") + "'";
+%endif
     }
 }

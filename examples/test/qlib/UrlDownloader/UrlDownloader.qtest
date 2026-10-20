@@ -760,7 +760,7 @@ try {
 }
 ", normalize_dir(get_script_dir() + "/../../../../qlib"), dir.path));
 
-        string qore = getenv("QORE_BINARY") ?? "qore";
+        string qore = ENV.QORE_EXECUTABLE ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
         if (qore =~ /\//) {
             qore = normalize_dir(qore);
         }

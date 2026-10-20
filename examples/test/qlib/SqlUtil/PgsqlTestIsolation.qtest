@@ -109,8 +109,10 @@ class PgsqlTestIsolationTest inherits QUnit::Test {
     private exitWithoutTeardown() {
         checkSkip();
         string module = get_script_dir() + "PgsqlTestIsolation.qm";
-        string out = backquote(sprintf("qore -ne '%%requires %s\nprintf(\"%%s\\n\", "
-            "PgsqlRunSchema::setup(ENV.QORE_DB_CONNSTR_PGSQL, \"exitguard\"));' 2>&1", module));
+        # the child is the interpreter running this test, as the qore found on PATH can be another version or missing
+        string out = backquote(sprintf("%s -ne '%%requires %s\nprintf(\"%%s\\n\", "
+            "PgsqlRunSchema::setup(ENV.QORE_DB_CONNSTR_PGSQL, \"exitguard\"));' 2>&1",
+            shellQuote(getQoreExecutable()), module));
         string schema = trim(out);
         assertRegex("^qtest_exitguard_[a-z0-9]+_[0-9]+_[0-9]+$", schema);
         Datasource ds(connstr);
@@ -125,9 +127,9 @@ class PgsqlTestIsolationTest inherits QUnit::Test {
         string ready = tmp_location() + DirSep + sprintf("pgsql-test-isolation-%d-%s", getpid(),
             get_random_string(8));
         on_exit unlink(ready);
-        string out = backquote(sprintf("PGSQL_TEST_ISOLATION_READY=%s qore -ne '%%requires %s\nprintf(\"%%s "
+        string out = backquote(sprintf("PGSQL_TEST_ISOLATION_READY=%s %s -ne '%%requires %s\nprintf(\"%%s "
             "%%y\\n\", PgsqlRunSchema::setup(ENV.QORE_DB_CONNSTR_PGSQL, \"ready\"), "
-            "getenv(\"PGSQL_TEST_ISOLATION_READY\"));' 2>&1", ready, module));
+            "getenv(\"PGSQL_TEST_ISOLATION_READY\"));' 2>&1", ready, shellQuote(getQoreExecutable()), module));
         (string schema, string env) = trim(out).split(" ");
         assertRegex("^qtest_ready_[a-z0-9]+_[0-9]+_[0-9]+$", schema);
         assertEq(schema + "\n", ReadOnlyFile::readTextFile(ready), "the file gets the schema's name");
@@ -238,5 +240,17 @@ class PgsqlTestIsolationTest inherits QUnit::Test {
             .nspname ?? ());
         # a second teardown does nothing
         PgsqlRunSchema::teardown();
+    }
+
+    #! Returns the interpreter running this test as an absolute path, so a child process runs the same build
+    private static string getQoreExecutable() {
+        string qore = ENV.QORE_EXECUTABLE ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        # a relative path is made absolute, as a child can run in another directory; a bare name is looked up in PATH
+        return absolute_path(qore) || qore !~ /[\/\\]/ ? qore : getcwd() + DirSep + qore;
+    }
+
+    #! Quotes a string as one word for the shell
+    private static string shellQuote(string str) {
+        return "'" + replace(str, "'", "'\\''") + "'";
     }
 }
