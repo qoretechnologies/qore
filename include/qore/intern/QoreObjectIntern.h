@@ -219,6 +219,15 @@ public:
     */
     std::atomic<int> scan_private_data{0};
 
+    //! A class ID registered with QoreObject::addPrivateDataScan() and the number of registrations for it
+    typedef std::vector<std::pair<qore_classid_t, int>> private_data_scan_list_t;
+
+    //! The private data that the scanner reports with AbstractScannablePrivateData::scanValues(), or nullptr
+    /** Allocated by the first registration, as most objects never have one; changed and read under rlck.  Each
+        registration is also counted in scan_private_data.
+    */
+    private_data_scan_list_t* private_data_scans = nullptr;
+
     bool system_object;
     //! set when the object's destruction has started; read without the object's locks as status is
     std::atomic<bool> in_destructor;
@@ -239,6 +248,11 @@ public:
 
     DLLLOCAL void incScanPrivateData();
     DLLLOCAL void decScanPrivateData();
+
+    //! Registers private data for AbstractScannablePrivateData::scanValues(); see QoreObject::addPrivateDataScan()
+    DLLLOCAL void addPrivateDataScan(qore_classid_t key);
+    //! Undoes one registration of addPrivateDataScan(); see QoreObject::removePrivateDataScan()
+    DLLLOCAL void removePrivateDataScan(qore_classid_t key);
 
     DLLLOCAL void plusEquals(const AbstractQoreNode* v, AutoVLock& vl, SafeDerefHelper& sdh, ExceptionSink* xsink) {
         if (!v) {
@@ -606,6 +620,14 @@ public:
         or has no private data for \a key
     */
     DLLLOCAL AbstractPrivateData* getScanPrivateData(qore_classid_t key) const;
+
+    //! Reports the values of the private data registered with addPrivateDataScan() to a scan
+    /** @param rsh the scan
+        @param xsink receives private data dereferences only; see scanMembers()
+
+        @return true if the scan must end
+    */
+    DLLLOCAL bool scanRegisteredPrivateData(RSetHelper& rsh, ExceptionSink& xsink);
 
     DLLLOCAL QoreValue evalBuiltinMethodWithPrivateData(const QoreMethod& method,
             const BuiltinNormalMethodVariantBase* meth, const QoreListNode* args, RuntimeConfig& rc,

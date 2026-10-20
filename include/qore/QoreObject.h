@@ -316,6 +316,50 @@ public:
     */
     DLLEXPORT AbstractPrivateData* getReferencedPrivateDataIfExists(qore_classid_t key) const;
 
+    //! Has the garbage collector scan the private data of the class with AbstractScannablePrivateData::scanValues()
+    /** Called by private data deriving from AbstractScannablePrivateData when it starts holding a value that needs a
+        scan, under its own lock; each call is undone by one call to removePrivateDataScan().
+
+        @param key the class ID of the private data, which must derive from AbstractScannablePrivateData
+
+        @see AbstractScannablePrivateData
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT void addPrivateDataScan(qore_classid_t key);
+
+    //! Undoes one call to addPrivateDataScan() for the given class ID
+    /** Called by the private data when it no longer holds a value that needs a scan, under its own lock.
+
+        @param key the class ID given to addPrivateDataScan()
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT void removePrivateDataScan(qore_classid_t key);
+
+    //! Marks a value that needs a scan as stored in the object's private data
+    /** No scan follows the reference that the private data now holds, so the recursive sets that it changes must not
+        trust their reference counts until one has.  Called after the value is stored and while it is still referenced,
+        under the private data's lock.
+
+        @param value the value stored; nothing is marked but the object if it does not need a scan
+
+        @see AbstractScannablePrivateData
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT void privateDataValueStored(const QoreValue& value);
+
+    //! Marks that the object's private data is giving up a value that needs a scan
+    /** Called under the private data's lock before the value can be released, or handed out with the private data's
+        own reference: the object's recursive set counted that reference as internal.
+
+        @see AbstractScannablePrivateData
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT void privateDataValuesRemoved();
+
     //! returns the private data corresponding to the class ID passed with an incremented reference count if it exists, caller owns the reference
     /**
         @param key the class ID of the class to get the private data for

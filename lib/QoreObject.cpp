@@ -51,6 +51,7 @@
 #include "qore/intern/ql_debug.h"
 #include "qore/intern/QoreHashKeyHelper.h"
 
+#include <algorithm>
 #include <cstdlib>
 #include <cstring>
 #include <string>
@@ -202,6 +203,7 @@ qore_object_private::~qore_object_private() {
     assert(!data);
     assert(!privateData);
     assert(!rset.load(std::memory_order_relaxed));
+    delete private_data_scans;
     if (QoreStringNode* h = unique_hash.load(std::memory_order_relaxed)) {
         h->deref();
     }
@@ -268,6 +270,42 @@ void qore_object_private::incScanPrivateData() {
 void qore_object_private::decScanPrivateData() {
     AutoLocker lck(rlck);
     // a plain load and store, as rlck excludes other writers
+    int n = scan_private_data.load(std::memory_order_relaxed);
+    assert(n > 0);
+    scan_private_data.store(n - 1, std::memory_order_relaxed);
+}
+
+void qore_object_private::addPrivateDataScan(qore_classid_t key) {
+    AutoLocker lck(rlck);
+    // the counts are changed last, so an allocation failure leaves them as they were
+    if (!private_data_scans) {
+        private_data_scans = new private_data_scan_list_t;
+    }
+    private_data_scan_list_t::iterator i = std::find_if(private_data_scans->begin(), private_data_scans->end(),
+        [key](const std::pair<qore_classid_t, int>& e) { return e.first == key; });
+    if (i == private_data_scans->end()) {
+        private_data_scans->emplace_back(key, 1);
+    } else {
+        ++i->second;
+    }
+    // a plain load and store, as rlck excludes other writers; see incScanPrivateData()
+    int n = scan_private_data.load(std::memory_order_relaxed) + 1;
+    scan_private_data.store(n, std::memory_order_relaxed);
+    if (!deferred_scan) {
+        deferred_scan = true;
+    }
+}
+
+void qore_object_private::removePrivateDataScan(qore_classid_t key) {
+    AutoLocker lck(rlck);
+    assert(private_data_scans);
+    private_data_scan_list_t::iterator i = std::find_if(private_data_scans->begin(), private_data_scans->end(),
+        [key](const std::pair<qore_classid_t, int>& e) { return e.first == key; });
+    assert(i != private_data_scans->end());
+    assert(i->second > 0);
+    if (!--i->second) {
+        private_data_scans->erase(i);
+    }
     int n = scan_private_data.load(std::memory_order_relaxed);
     assert(n > 0);
     scan_private_data.store(n - 1, std::memory_order_relaxed);
@@ -539,6 +577,42 @@ bool qore_object_private::scanMembers(RSetHelper& rsh) {
         // See design/dgc.md Pattern B.
         if (qore_delegating_poll_op_scan_members(getScanPrivateData(CID_DELEGATINGPOLLOPERATION), *this, rsh,
                 &xsink)) {
+            return true;
+        }
+        // the private data registered with QoreObject::addPrivateDataScan(); see AbstractScannablePrivateData
+        if (scanRegisteredPrivateData(rsh, xsink)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+bool qore_object_private::scanRegisteredPrivateData(RSetHelper& rsh, ExceptionSink& xsink) {
+    // The class IDs are copied, as rlck is not held while the private data is scanned: the scan of a value can
+    // need it.  A registration made after the copy has marked the edges it added (see
+    // QoreObject::privateDataValueStored()), so the scan can miss it, but each private data is reported once.
+    std::vector<qore_classid_t> keys;
+    {
+        AutoLocker lck(rlck);
+        if (!private_data_scans) {
+            return false;
+        }
+        keys.reserve(private_data_scans->size());
+        for (const std::pair<qore_classid_t, int>& i : *private_data_scans) {
+            keys.push_back(i.first);
+        }
+    }
+
+    for (qore_classid_t key : keys) {
+        // the registered class ID is one whose private data derives from AbstractScannablePrivateData
+        ReferenceHolder<AbstractScannablePrivateData> pd(
+            static_cast<AbstractScannablePrivateData*>(getScanPrivateData(key)), &xsink);
+        if (!*pd) {
+            continue;
+        }
+        QorePrivateDataScanner scanner(*this, rsh);
+        if (pd->scanValues(scanner)) {
             return true;
         }
     }
@@ -2206,6 +2280,37 @@ AbstractPrivateData* QoreObject::getReferencedPrivateDataIfExists(qore_classid_t
     // getScanPrivateData() returns nullptr for a deleted object, an object with no private data, and one that no
     // longer holds private data for this class ID, in every case without raising an exception
     return priv->getScanPrivateData(key);
+}
+
+void QoreObject::addPrivateDataScan(qore_classid_t key) {
+    priv->addPrivateDataScan(key);
+}
+
+void QoreObject::removePrivateDataScan(qore_classid_t key) {
+    priv->removePrivateDataScan(key);
+}
+
+void QoreObject::privateDataValueStored(const QoreValue& value) {
+    qore_dgc_value_stored(*priv, value);
+}
+
+void QoreObject::privateDataValuesRemoved() {
+    priv->edgesRemoved();
+}
+
+bool QorePrivateDataScanner::scan(const QoreValue& value) {
+    // an opaque reference ('@=') is not an edge the collector may follow, as for an object member
+    if (!value.hasNode() || value.isOpaque()) {
+        return false;
+    }
+    // a copy of the value without a reference, as for the members (scanMembersIntern()): the scan only takes its
+    // own reference to the node
+    QoreValue v(value);
+    return obj.scanCheck(rsh, v.getInternalNode());
+}
+
+bool AbstractScannablePrivateData::needsScan(const QoreValue& value) {
+    return needs_scan(value);
 }
 
 AbstractPrivateData* QoreObject::getAndClearPrivateData(qore_classid_t key, ExceptionSink* xsink) {

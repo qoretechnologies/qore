@@ -1924,6 +1924,11 @@ dsp.setMutationObserver(*hash<SqlMutationDecisionInfo> sub (hash<SqlMutationEven
     - fixed reference cycles closed only by values stored in a @ref Qore::Thread::Queue "Queue" or a
       @ref Qore::TreeMap "TreeMap" (for example a reference to an object's member pushed into a queue held by that
       object) being kept for the life of the process
+    - binary modules can have the garbage collector follow the values that the private data of their objects holds
+      in C++ containers: private data derived from the new C++ class \c AbstractScannablePrivateData reports them to
+      the collector with \c scanValues() while its object has registered it with
+      \c QoreObject::addPrivateDataScan(), so that a reference cycle through such a value is collected;
+      \c _QORE_HAS_SCANNABLE_PRIVATE_DATA is defined when the API is available
     - garbage collection no longer walks a graph that an earlier scan has already walked and that has not gained an
       edge since: storing a reference to a large, unchanged object graph in a new object now costs the same whatever
       the size of the graph, which speeds up loading schema-heavy modules

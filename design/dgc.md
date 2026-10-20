@@ -855,7 +855,7 @@ if (scan_private_data) {
 }
 ```
 
-**When you introduce a new C++ container class that can hold `QoreValue` and be stored as private data, you must add a `scanMembers` method and register it in this dispatcher**, and the enclosing object must set `scan_private_data = true` (or override `needsScan` to return true when appropriate).
+**When you introduce a new C++ container class in libqore that can hold `QoreValue` and be stored as private data, you must add a `scanMembers` method and register it in this dispatcher**, and the enclosing object must set `scan_private_data = true` (or override `needsScan` to return true when appropriate). A module cannot add itself to the dispatcher; it uses the public API below.
 
 **Every time such a container stores a value that needs a scan (`needs_scan()`), it must call
 `qore_dgc_value_stored(holder, value)`** with the object whose private data it is. No scan follows the store, so
@@ -870,6 +870,49 @@ see "Values handed out by a container" below. `TreeMapData::put()`, `qore_queue_
 **Look the private data up with `getScanPrivateData()`, never with a raising lookup such as `getReferencedPrivateData(key, xsink)`.** Most scanned objects do not have the data being probed for, so a raising lookup creates and discards an exception for nearly every object. Creating an exception captures the call stack, and call stack capture calls external language stack location helpers: the Python helper acquires the GIL. The scan holds r-sections at that point, so a thread that holds the GIL and waits for one of those objects (for example a Python thread whose Qore thread initialization dereferences an object) deadlocks with the scan. Nothing in a scan may raise an exception or call into user or foreign-language code.
 
 Failing to do this produces exactly the symptom that motivated this document: a cycle with an "invisible" edge through a C++ container; DGC sees `rcount < references` on some member, calls `canDelete` → returns 0, and the cycle leaks forever.
+
+### Pattern B for modules: `AbstractScannablePrivateData`
+
+A module's private data reports its values through the public API in `include/qore/AbstractPrivateData.h` and
+`include/qore/QoreObject.h`:
+
+- The private data class derives from `AbstractScannablePrivateData` and implements
+  `scanValues(QorePrivateDataScanner&)`, which calls `QorePrivateDataScanner::scan()` for each value it holds (the
+  scanner wraps `RObject::scanCheck()` and skips opaque values as `scanMembersIntern()` does).
+  `AbstractScannablePrivateData::needsScan()` is `needs_scan()`.
+- Registration is opt-in per class ID: the private data calls `QoreObject::addPrivateDataScan(cid)` when it starts
+  holding a value that needs a scan and `removePrivateDataScan(cid)` when it stops, under its own lock, as Queue
+  changes `scan_private_data`. The object keeps the registered class IDs in `qore_object_private::private_data_scans`,
+  allocated by the first registration and changed under `rlck`; each registration also counts in
+  `scan_private_data`.
+- The dispatcher (`qore_object_private::scanRegisteredPrivateData()`, called last in the private data branch of
+  `scanMembers()`, inside the same `RSetHeldEdgeHelper`) copies the class IDs under `rlck`, then looks each one up
+  with `getScanPrivateData()` and calls `scanValues()` without `rlck`, as scanning a value can need it.
+- `QoreObject::privateDataValueStored(value)` is `qore_dgc_value_stored()` and
+  `QoreObject::privateDataValuesRemoved()` is `RObject::edgesRemoved()`, with the same rules as for libqore's
+  containers: mark a stored value after it is stored and while it is still referenced, mark a value given up before
+  it can be released or handed out with the container's reference, both under the container's lock.
+- `_QORE_HAS_SCANNABLE_PRIVATE_DATA` is defined when the API is available.
+
+The rules for `scanValues()` are the scanner rules: it tries the container's lock and returns false if the lock is
+held, it raises no exception and calls no Qore or foreign-language code, and it releases no reference. A container
+lock that is held while the module releases values or runs Qore code can be tried by a scan on the same thread, so
+the lock that `scanValues()` tries should only be held while the container itself is changed, with the values it
+gives up released after the lock.
+
+**The virtual is on a subclass, not on `AbstractPrivateData`.** A new virtual function on `AbstractPrivateData`
+would move the vtable slots of every public subclass that has virtual functions of its own (`InputStream::read()`,
+the output streams, `AbstractPollableIoObjectBase`, ...), so a module built against the earlier header would call
+the wrong function, and the module API version does not stop such a module from loading. The registration by
+class ID means the dispatcher only calls `scanValues()` on private data that a module built with this API has
+registered.
+
+**Each value is reported by one object.** The scanner counts each report as a reference: a value that two objects
+report but that is referenced once has an `rcount` above its references, so `RSet::canDelete()` sees no
+reference from outside the set, and deletes the value while it is still held. A C++ container shared between the
+private data of several objects (copy on write, for example) must therefore have one reporter, or each holder must
+have its own references to the values, in a copy of the container. A Qore list or hash shared by reference
+counting is not such a container: each holder has its own reference to the node, so each can report it.
 
 ### Values handed out by a container
 
@@ -1085,6 +1128,8 @@ Debug builds add `dbg_hold_object_lock()` and `dbg_scan_wait_notify()`, which ma
 - `lib/QoreObject.cpp` — `scanMembers`, `scanMembersIntern`, `customDeref`, the dispatcher that calls private-data scanners.
 - `lib/QoreQueue.cpp` — `qore_queue_private::scanMembers` (Pattern B reference implementation).
 - `lib/QC_TreeMap.qpp` — TreeMap custom scanner (Pattern B).
+- `include/qore/AbstractPrivateData.h` — `AbstractScannablePrivateData` and `QorePrivateDataScanner`, Pattern B for
+  modules; `QoreObject::addPrivateDataScan()` and the marks are in `include/qore/QoreObject.h`.
 - `lib/QC_StreamReader.qpp` — `internal_members` + `setValueIntern` (Pattern A reference implementation).
 - `include/qore/QoreObject.h` — `realRef`/`realDeref`, `QoreObjectRealRefHelper`.
 - `lib/Variable.cpp`, `lib/thread.cpp`, `lib/FunctionCallNode.cpp` — `realRef` call sites showing legitimate uses.
