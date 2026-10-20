@@ -3116,6 +3116,7 @@ public class Http2Test inherits QUnit::Test {
                     AutoLock al(result_mutex);
                     test_results.client_error = result.ex.err;
                     test_results.client_error_desc = result.ex.desc;
+                    test_results.client_goal_reached = spop.goalReached();
                 }
             } catch (hash<ExceptionInfo> ex) {
                 AutoLock al(result_mutex);
@@ -3133,6 +3134,7 @@ public class Http2Test inherits QUnit::Test {
         if (test_results.server_alpn == "h2") {
             assertEq("SOCKET-TIMEOUT", test_results.client_error,
                 sprintf("the request times out: %y", test_results.client_error_desc));
+            assertFalse(test_results.client_goal_reached, "the timed-out request has not reached its goal");
         }
     }
 

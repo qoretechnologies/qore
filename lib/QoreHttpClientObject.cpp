@@ -7740,8 +7740,10 @@ public:
 
     bool goalReached() const override {
         AutoLocker al(op_lock);
+        // an operation that has ended reached its goal only if it ended with its result: it also ends with an
+        // error, a timeout or an abort()
         if (done) {
-            return true;
+            return goal;
         }
         if (phase != Phase::WAITING_RESPONSE || !future || !future->isDone()) {
             return false;
@@ -8030,6 +8032,8 @@ public:
             }
             done = true;
             phase = Phase::DONE;
+            // the response is the goal unless the request failed; an error is raised below
+            goal = !future->isError();
             if (notifier) {
                 notifier->acknowledge(xsink);
             }
@@ -8097,6 +8101,7 @@ public:
             }
             notifier->acknowledge(xsink);
             done = true;
+            goal = !*xsink;
             return nullptr;
         }
 
@@ -8159,6 +8164,8 @@ public:
 
         done = true;
         phase = Phase::DONE;
+        // connect mode: the established connection is the goal
+        goal = true;
         clearPendingUnlocked(xsink);
         return nullptr;
     }
@@ -8979,6 +8986,9 @@ private:
     QoreEventNotifier* notifier = nullptr;
     qore_httpclient_priv* priv_ref = nullptr;  // back-ref for user-disconnect detection
     mutable bool done = false;
+    //! True if the operation has ended by reaching its goal; done is set on every terminal path, errors and abort()
+    //! included
+    bool goal = false;
     bool connect_mode = false;
     bool connect_mode_pre_notified = false;
     bool connect_mode_wait_armed = false;
