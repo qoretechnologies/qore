@@ -1758,15 +1758,25 @@ QoreValue qore_root_ns_private::parseResolveBarewordIntern(const QoreProgramLoca
 
     bool abr = (bool)(parse_get_parse_options() & PO_ALLOW_BARE_REFS);
 
-    // if bare refs are enabled, first look for a local variable
-    if (abr) {
+    // returns a reference to a local variable with the bareword's name, if there is one
+    auto find_lvar_ref = [&](bool include_top_level) -> VarRefNode* {
         bool in_closure;
-        LocalVar* id = find_local_var(bword, in_closure);
-        if (id) {
-            //printd(5, "qore_root_ns_private::parseResolveBarewordIntern() %s is an lvar: %p\n", bword, id);
-            typeInfo = id->parseGetTypeInfo();
-            found = true;
-            return new VarRefNode(loc, strdup(bword), id, in_closure);
+        LocalVar* id = find_local_var(bword, in_closure, include_top_level);
+        if (!id) {
+            return nullptr;
+        }
+        //printd(5, "qore_root_ns_private::parseResolveBarewordIntern() %s is an lvar: %p\n", bword, id);
+        typeInfo = id->parseGetTypeInfo();
+        found = true;
+        return new VarRefNode(loc, strdup(bword), id, in_closure);
+    };
+
+    // if bare refs are enabled, first look for a local variable; in a class, a top-level local variable has global
+    // scope (it is in effect a global thread-local variable), so it is only found after the class's own members,
+    // constants and static variables, like a global variable
+    if (abr) {
+        if (VarRefNode* vr = find_lvar_ref(!pc)) {
+            return vr;
         }
     }
 
@@ -1796,6 +1806,13 @@ QoreValue qore_root_ns_private::parseResolveBarewordIntern(const QoreProgramLoca
             //printd(5, "qore_root_ns_private::parseResolveBarewordIntern() resolved '%s' -> static var of class "
             //    "'%s'\n", bword, pc->getName());
             return new StaticClassVarRefNode(loc, bword, *qc, *vi);
+        }
+
+        // now look for a top-level local variable
+        if (abr) {
+            if (VarRefNode* vr = find_lvar_ref(true)) {
+                return vr;
+            }
         }
     }
 

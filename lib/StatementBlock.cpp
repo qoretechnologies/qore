@@ -454,14 +454,22 @@ LocalVar* pop_local_var(bool set_unassigned) {
    return rc;
 }
 
-LocalVar* find_local_var(const char* name, bool& in_closure) {
+LocalVar* find_local_var(const char* name, bool& in_closure, bool include_top_level) {
     VNode* vnode = getVStack();
     ClosureParseEnvironment* cenv = thread_get_closure_parse_env();
     std::vector<ClosureParseEnvironment*> capture_envs;
     in_closure = false;
 
+    // returns the next node to search, or nullptr if the search would continue from the variables of a function to
+    // the top-level local variables of the program (nextSearch() jumps to them instead of following "next") and they
+    // are not included
+    auto next_search = [include_top_level](VNode* v) -> VNode* {
+        VNode* n = v->nextSearch();
+        return (!include_top_level && n && n != v->next) ? nullptr : n;
+    };
+
     if (vnode && !vnode->lvar)
-        vnode = vnode->nextSearch();
+        vnode = next_search(vnode);
 
     //printd(5, "find_local_var('%s' %p) vnode: %p\n", name, name, vnode);
 
@@ -485,7 +493,7 @@ LocalVar* find_local_var(const char* name, bool& in_closure) {
             vnode->setRef();
             return vnode->lvar;
         }
-        vnode = vnode->nextSearch();
+        vnode = next_search(vnode);
     }
 
     //printd(5, "find_local_var('%s' %p) returning 0 NOT FOUND\n", name, name);

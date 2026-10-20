@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -163,6 +163,16 @@ DLLLOCAL void push_local_var(LocalVar* lv, const QoreProgramLocation* loc);
 DLLLOCAL LocalVar* push_local_var(const char* name, const QoreProgramLocation* loc, const QoreTypeInfo* typeInfo,
         int& err, bool is_auto = true, int n_refs = 0, int pflag = 0);
 
-DLLLOCAL LocalVar* find_local_var(const char* name, bool &in_closure);
+//! Finds the local variable with the given name in the current parse scope
+/** @param name the name of the variable
+    @param in_closure set to true if the variable is bound in a closure being parsed
+    @param include_top_level if false, the search does not continue from the variables of a function (or method)
+    to the top-level local variables of the program: these have global scope (they are in effect global
+    thread-local variables), so in a class they come after the class's own members, constants and static variables,
+    like global variables; the local variables of top-level code being parsed are found in any case
+
+    @return the local variable, or nullptr if not found
+*/
+DLLLOCAL LocalVar* find_local_var(const char* name, bool &in_closure, bool include_top_level = true);
 
 #endif // _QORE_ABSTRACTSTATEMENT_H

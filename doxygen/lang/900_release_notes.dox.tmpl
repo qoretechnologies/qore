@@ -594,6 +594,18 @@
 
     @subsection qore_3_0_0_compatibility Changes That Can Affect Backwards-Compatibility
 
+    @par A Bare Name in a Class Refers to the Class Before a Top-Level Local Variable
+    With @ref allow-bare-refs "%allow-bare-refs" (set by @ref new-style "%new-style" and \c %%modern), a bare name in
+    a method refers to the method's own local variables first, then to the class's members, constants, static
+    variables and methods, and only then to a top-level local variable of the program, which has global scope like a
+    global variable (see @ref threading_and_variables).  A top-level local variable was found first, before the
+    class's names, so a bare member name in a method gave the top-level local variable of the same name (and in
+    another thread, that thread's empty copy of it), and a bare call gave a closure in a top-level local variable
+    instead of the method, while the same names declared with \c our or \c thread_local gave the class's member or
+    method, as they do now.  In a static method, a bare name of an instance member is a parse error even when a
+    top-level local variable has the same name, as it is when a global variable has it; use a different name for the
+    top-level local variable.
+
     @par Stream Conversions Raise an Error for a Character the Target Encoding Cannot Hold
     @ref Qore::EncodingConversionInputStream "EncodingConversionInputStream" and
     @ref Qore::EncodingConversionOutputStream "EncodingConversionOutputStream" raise an \c ENCODING-CONVERSION-ERROR

@@ -1,0 +1,208 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class BareRefTopLevelLocalTest
+
+#! Tests that a bare reference in a class finds the class's names before a top-level local variable
+/** A top-level local variable has global scope (it is in effect a global thread-local variable), so a bare name in
+    a method is resolved like a global variable: the method's own local variables first, then the class's members,
+    constants, static variables and methods, and then the top-level local variable.  A top-level local variable was
+    found first, before the class's names, so a bare member name in a method gave the top-level local variable (and
+    in another thread, that thread's empty copy of it) while the same name declared with "our" or "thread_local"
+    gave the member.
+
+    Each case is a script run with the interpreter running the test in each execution mode, because a top-level
+    local variable cannot be declared in a test with %exec-class.
+*/
+class BareRefTopLevelLocalTest inherits QUnit::Test {
+    public {
+        #! the execution modes a %modern script runs in
+        const ModernModes = ("ast", "ir", "jit", "tiered");
+
+        #! the class used by most cases: a member, a constant, a static variable and a method share their names with
+        #! top-level local variables
+        const ClassSource = "class C {
+    public {
+        const items_const = \"constant\";
+        static string items_static = \"static variable\";
+    }
+    private {
+        list<int> items = (1, 2, 3, 4);
+    }
+    int bare() {
+        return items.size();
+    }
+    int viaSelf() {
+        return self.items.size();
+    }
+    int inClosureThread() {
+        Counter c(1);
+        int rv;
+        background sub () { on_exit c.dec(); rv = items.size(); }();
+        c.waitForZero();
+        return rv;
+    }
+    int inMethodThread() {
+        Counter c(1);
+        background methodThread(c);
+        c.waitForZero();
+        return method_thread_rv;
+    }
+    private methodThread(Counter c) {
+        on_exit c.dec();
+        method_thread_rv = items.size();
+    }
+    string greet() {
+        return \"method\";
+    }
+    string callGreet() {
+        return greet();
+    }
+    string constant() {
+        return items_const;
+    }
+    string staticVar() {
+        return items_static;
+    }
+    static string sgreet() {
+        return \"static method\";
+    }
+    static string callStaticGreet() {
+        return sgreet();
+    }
+    int ownLocal() {
+        list<int> items = (1,);
+        return items.size();
+    }
+    int topLevelOnly() {
+        return only_top_level.size();
+    }
+    public { int method_thread_rv; }
+}
+";
+
+        #! the top-level local variables with the names of the class's members, constant, static variable and methods
+        const TopLevelSource = "list<int> items = (1, 2);
+string items_const = \"top-level local\";
+string items_static = \"top-level local\";
+code greet = string sub () { return \"top-level closure\"; };
+code sgreet = string sub () { return \"top-level closure\"; };
+list<int> only_top_level = (1, 2, 3);
+";
+
+        #! prints the results of the class
+        const ReportSource = "C c();
+printf(\"bare=%d self=%d closure-thread=%d method-thread=%d call=%s constant=%s static-var=%s static-call=%s \"
+    \"own-local=%d top-level-only=%d top-level-code=%d\\n\", c.bare(), c.viaSelf(), c.inClosureThread(),
+    c.inMethodThread(), c.callGreet(), c.constant(), c.staticVar(), C::callStaticGreet(), c.ownLocal(),
+    c.topLevelOnly(), items.size());
+";
+
+        #! the results when the class's names are found before the top-level local variables
+        const Expected = "bare=4 self=4 closure-thread=4 method-thread=4 call=method constant=constant "
+            "static-var=static variable static-call=static method own-local=1 top-level-only=3 top-level-code=2";
+    }
+
+    private {
+        string qore_bin;
+        TmpDir tmp("qore-bare-ref-top-level-");
+        int seq = 0;
+    }
+
+    constructor() : QUnit::Test("BareRefTopLevelLocalTest", "1.0") {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+
+        addTestCase("top-level locals declared after the class", \declaredAfterTest());
+        addTestCase("top-level locals declared before the class", \declaredBeforeTest());
+        addTestCase("%new-style without %modern", \newStyleTest());
+        addTestCase("a top-level local declared with \"my\"", \myTest());
+        addTestCase("a member in a static method", \staticMethodMemberTest());
+        addTestCase("functions still reach top-level locals", \functionTest());
+        addTestCase("a Program parsed from a method uses its own top-level locals", \childProgramTest());
+        set_return_value(main());
+    }
+
+    declaredAfterTest() {
+        foreach string mode in (ModernModes) {
+            assertEq(Expected, run("%modern\n" + ClassSource + TopLevelSource + ReportSource, mode), mode);
+        }
+    }
+
+    declaredBeforeTest() {
+        foreach string mode in (ModernModes) {
+            assertEq(Expected, run("%modern\n" + TopLevelSource + ClassSource + ReportSource, mode), mode);
+        }
+    }
+
+    newStyleTest() {
+        # the optimized execution modes need %modern
+        assertEq(Expected, run("%new-style\n%require-types\n%strict-args\n" + ClassSource + TopLevelSource
+            + ReportSource, "ast"));
+    }
+
+    myTest() {
+        foreach string mode in (ModernModes) {
+            assertEq("bare=4", run("%modern\nclass D {\n    private {\n        list<int> items = (1, 2, 3, 4);\n"
+                "    }\n    int bare() {\n        return items.size();\n    }\n}\nmy list<int> items = (1, 2);\n"
+                "printf(\"bare=%d\\n\", new D().bare());\n", mode), mode);
+        }
+    }
+
+    # a static method has no object, so a member name in it is an error, as it is when a global variable has the
+    # same name
+    staticMethodMemberTest() {
+        foreach string decl in (("list<int> items = (1, 2);", "our list<int> items = (1, 2);")) {
+            string out = run("%modern\nclass S {\n    private {\n        list<int> items = (1, 2, 3, 4);\n    }\n"
+                "    static int sbare() {\n        return items.size();\n    }\n}\n" + decl + "\n"
+                "printf(\"sbare=%d\\n\", S::sbare());\n", "ast");
+            assertRegex("cannot reference member \"items\" when not in an object context", out, decl);
+        }
+    }
+
+    # top-level local variables keep their global scope
+    functionTest() {
+        foreach string mode in (ModernModes) {
+            assertEq("f=2 bg=0", run("%modern\nint sub f() {\n    return items.size();\n}\nlist<int> items = (1, 2);\n"
+                "Counter c(1);\nint bg;\nbackground sub () { on_exit c.dec(); bg = f(); }();\nc.waitForZero();\n"
+                "printf(\"f=%d bg=%d\\n\", f(), bg);\n", mode), mode);
+        }
+    }
+
+    # the top-level code of a Program parsed from a method of a class (or a closure in it) with a member of the same
+    # name is not in that class, so it finds its own top-level local variable
+    childProgramTest() {
+        foreach string mode in (ModernModes) {
+            assertEq("method=2 closure=2 function=2", run("%modern\n%no-child-restrictions\nclass Parser {\n"
+                "    private {\n        list<int> items = (1, 2, 3, 4);\n    }\n"
+                "    string parse(string code) {\n        Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES);\n"
+                "        p.parse(code, \"child\");\n        return p.run();\n    }\n"
+                "    string parseInClosure(string code) {\n        code f = string sub () {\n"
+                "            Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES);\n            p.parse(code, \"child\");\n"
+                "            return p.run();\n        };\n        return f();\n    }\n}\n"
+                "Parser parser();\n"
+                "string top = \"list<int> items = (1, 2); return items.size().toString();\";\n"
+                "string fn = \"list<int> items = (1, 2); int sub f() { return items.size(); } return f().toString();\";\n"
+                "printf(\"method=%s closure=%s function=%s\\n\", parser.parse(top), parser.parseInClosure(top), "
+                "parser.parse(fn));\n", mode), mode);
+        }
+    }
+
+    #! runs the script in the given execution mode and returns its output, without the trailing newline
+    private string run(string source, string mode) {
+        string path = sprintf("%s/case-%d.q", tmp.path, ++seq);
+        File f();
+        f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(source);
+        f.close();
+        string out = backquote(sprintf("%s -b --exec-mode=%s %s 2>&1", qore_bin, mode, path));
+        trim out;
+        return out;
+    }
+}
