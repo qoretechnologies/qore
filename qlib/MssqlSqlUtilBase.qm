@@ -135,6 +135,11 @@ module MssqlSqlUtilBase {
       name, dropped the index, created it and added the constraint again, so that the alignment failed: the index is
       now dropped once and created once, and only the foreign constraints that reference it are dropped and added
       again around it
+    - fixed renaming a primary key, as table alignment does for a primary key with the template's columns under
+      another name, which SQL Server refused, as \c sp_rename was given the name of the table and of the key, and
+      renaming a unique constraint, which dropped the constraint and added it under the new name, and which SQL
+      Server refused for a constraint that a foreign constraint references: both are renamed with \c sp_rename by
+      the name of their schema and their own name
 
     @subsection MssqlSqlUtilBasev10 MssqlSqlUtilBase v1.0
     - initial release
@@ -529,6 +534,24 @@ public class MssqlUniqueConstraintCommon inherits SqlUtil::AbstractUniqueConstra
         delete index;
     }
 
+    #! returns the SQL statement that renames the constraint and its index
+    /** \c sp_rename names a constraint by its schema and name, not by its table: the schema is the one of the
+        table's name, and a constraint of a table without a schema in its name is found in the default schema of the
+        connection
+
+        @param table_name the name of the table, with its schema, as given by
+        @ref SqlUtil::AbstractTable::getSqlName() "AbstractTable::getSqlName()"
+        @param new_name the new name of the constraint
+
+        @return the SQL statement that renames the constraint and its index
+
+        @since MssqlSqlUtilBase 1.1
+    */
+    private string getSpRenameSql(string table_name, string new_name) {
+        *string schema = (table_name =~ x/^(.+)\.[^.]+$/)[0];
+        return sprintf("exec sp_rename '%s%s', '%s', 'OBJECT'", schema ? schema + "." : "", name, new_name);
+    }
+
     #! adds index options onto the sql creation string
     getIndexSql(reference<string> sql, string name, *hash opts) {
         sql += sprintf(" (%s)", (foldl $1 + ", " + $2, getSqlColumnNameIterator()));
@@ -593,15 +616,20 @@ auto v = c.name;
         return getCreateSql(name, table_name, opts);
     }
 
+    #! returns the SQL that renames the constraint
+    /** The constraint and its index are renamed with \c sp_rename, so that the foreign constraints that reference
+        it are kept
+
+        @param table_name the name of the table
+        @param new_name the new name of the constraint
+
+        @return a list with the SQL statement that renames the constraint
+    */
     list getRenameSql(string table_name, string new_name) {
-        # the following is only valid with Mssql 9.2+
-        #return sprintf("alter table %s rename constraint %s to %s", table_name, name, new_name);
-        list l += getDropSql(table_name);
-        l += getCreateSql(new_name, table_name);
-        return l;
+        return (getSpRenameSql(table_name, new_name),);
     }
 
-    #! returns a string that can be used to rename the constraint
+    #! returns a string that can be used to create the constraint with the given name
     string getCreateSql(string name, string table_name, *hash opts) {
         string sql = sprintf("alter table %s add constraint %s unique ", table_name, name);
         getIndexSql(\sql, name, opts);
@@ -679,9 +707,17 @@ auto v = c.name;
         return sql;
     }
 
-    #! returns a string that can be used to rename the constraint
+    #! returns the SQL that renames the primary key
+    /** The primary key and its index are renamed with \c sp_rename, so that the foreign constraints that reference
+        it are kept
+
+        @param table_name the name of the table
+        @param new_name the new name of the primary key
+
+        @return the SQL statement that renames the primary key
+    */
     softlist getRenameSql(string table_name, string new_name) {
-        return sprintf("sp_rename '%s.%s', '%s', 'OBJECT'", table_name, name, new_name);
+        return getSpRenameSql(table_name, new_name);
     }
 }
 

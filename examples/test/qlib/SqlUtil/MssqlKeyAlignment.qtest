@@ -40,6 +40,8 @@ class MssqlKeyAlignmentTest inherits QUnit::Test {
         addTestCase("a unique index with other columns is dropped and created once", \uniqueIndexColumnChange());
         addTestCase("a referenced unique index changes with the foreign constraint that references it",
             \referencedUniqueIndexChange());
+        addTestCase("the SQL of a primary key and a unique constraint under other names", \keyRenameSql());
+        addTestCase("a referenced primary key and unique constraint are renamed", \keyRenames());
         set_return_value(main());
     }
 
@@ -233,6 +235,56 @@ class MssqlKeyAlignmentTest inherits QUnit::Test {
             ), map regex_subst($1, "  +", " ", RE_Global), alignSchema(ds, schema), order);
             assertEq((), alignSchema(ds, schema), order);
         }
+    }
+
+    #! A primary key and a unique constraint with the template's columns under other names are renamed with
+    #! sp_rename by the name of their schema and their own name
+    keyRenameSql() {
+        OfflineDatasource ds = offlineDatasource();
+        assertEq((
+            "exec sp_rename 'dbo.uk_mka_old', 'uk_mka_new', 'OBJECT'",
+            "exec sp_rename 'dbo.pk_mka_old', 'pk_mka_new', 'OBJECT'",
+        ), alignSql(ds, "mka_t", {
+            "columns": Columns,
+            "primary_key": {"name": "pk_mka_old", "columns": ("id",)},
+            "unique_constraints": {"uk_mka_old": {"columns": ("b",)}},
+        }, {
+            "columns": Columns,
+            "primary_key": {"name": "pk_mka_new", "columns": ("id",)},
+            "unique_constraints": {"uk_mka_new": {"columns": ("b",)}},
+        }));
+    }
+
+    #! The same change on the database, where foreign constraints of another table reference the keys: the keys are
+    #! renamed and the foreign constraints are kept; a key that is dropped and added again cannot be dropped while a
+    #! foreign constraint references it
+    keyRenames() {
+        Datasource ds = datasource();
+        on_exit dropTables(ds, ("mka_rc", "mka_rp"));
+        dropTables(ds, ("mka_rc", "mka_rp"));
+        ds.execRaw("create table dbo.mka_rp (id int not null, a int, b varchar(10), "
+            "constraint pk_mka_rp_old primary key (id), constraint uk_mka_rp_old unique (b))");
+        ds.execRaw("create table dbo.mka_rc (id int not null, a int, b varchar(10), "
+            "constraint pk_mka_rc primary key (id), "
+            "constraint fk_mka_rc_a foreign key (a) references dbo.mka_rp (id), "
+            "constraint fk_mka_rc_b foreign key (b) references dbo.mka_rp (b))");
+        ds.commit();
+
+        hash<auto> desc = {
+            "columns": Columns,
+            "primary_key": {"name": "pk_mka_rp_new", "columns": ("id",)},
+            "unique_constraints": {"uk_mka_rp_new": {"columns": ("b",)}},
+        };
+        assertEq((
+            "exec sp_rename 'dbo.uk_mka_rp_old', 'uk_mka_rp_new', 'OBJECT'",
+            "exec sp_rename 'dbo.pk_mka_rp_old', 'pk_mka_rp_new', 'OBJECT'",
+        ), alignTable(ds, "mka_rp", desc));
+        MssqlTable parent(ds, "mka_rp");
+        assertEq("pk_mka_rp_new", parent.getPrimaryKey().getName());
+        assertEq(("uk_mka_rp_new",), keys parent.getConstraints().getHash());
+        assertEq(("fk_mka_rc_a", "fk_mka_rc_b"), keys (new MssqlTable(ds, "mka_rc")).getForeignConstraints()
+            .getHash());
+        assertEq((), alignTable(ds, "mka_rp", desc));
     }
 }
 
