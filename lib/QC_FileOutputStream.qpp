@@ -3,7 +3,7 @@
 /*
   Qore Programming Language
 
-  Copyright (C) 2016 - 2024 Qore Technologies, s.r.o.
+  Copyright (C) 2016 - 2026 Qore Technologies, s.r.o.
 
   Permission is hereby granted, free of charge, to any person obtaining a
   copy of this software and associated documentation files (the "Software"),
@@ -69,6 +69,9 @@ qclass FileOutputStream [system_constructor=FILEOUTPUTSTREAM_system_constructor;
     @param encoding the @ref character_encoding "character encoding" of the file; if not present, defaults to the @ref default_encoding "default encoding"
 
     @note raw binary data is written to the output stream, so it's up to the caller to ensure that only valid character data for the given encoding is written to the @ref FileOutputStream object
+
+    @throw FILE-OPEN2-ERROR the file cannot be opened or created
+    @throw FILE-OPEN2-ERROR the path contains a NUL character; see @ref path_nul_characters
  */
 FileOutputStream::constructor(string path, bool append = False, softint mode = 0644, *string encoding)
         [flags=NAMED_ARGS] {

@@ -1,0 +1,220 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+#
+# a function, method, class, variable or type name given as a runtime string is looked up as a C string, so a name
+# with a NUL character was cut at the NUL character and named another identifier: a dispatcher that only calls
+# methods whose names end with "_public" called deleteAll() for "deleteAll\x00_public"; such a name is now refused
+# with the error that the API raises for a name that does not exist
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires reflection
+
+%exec-class IdentifierNulTest
+
+our int nul_test_global;
+
+hashdecl NulTestHash {
+    int a = 1;
+}
+
+enum NulTestEnum {
+    One = "one",
+}
+
+class NulTestData inherits Serializable {
+    public {
+        int a = 1;
+    }
+}
+
+class NulTestService {
+    string list_public() {
+        return "list";
+    }
+
+    string deleteAll() {
+        return "deleteAll called";
+    }
+
+    static string sm() {
+        return "sm";
+    }
+}
+
+class IdentifierNulTest inherits QUnit::Test {
+    constructor() : Test("IdentifierNulTest", "1.0") {
+        nul_test_global = 1;
+        addTestCase("method dispatch by name", \dispatch());
+        addTestCase("functions", \functions());
+        addTestCase("classes and objects", \classes());
+        addTestCase("Program", \program());
+        addTestCase("deserialization", \deserialization());
+        addTestCase("reflection", \reflection());
+        set_return_value(main());
+    }
+
+    #! an RPC-style dispatcher: only methods whose names end with "_public" may be called
+    private auto dispatchCall(object obj, string action) {
+        if (action !~ /_public$/) {
+            throw "ACCESS-DENIED", sprintf("%y may not be called", action);
+        }
+        return call_object_method(obj, action);
+    }
+
+    dispatch() {
+        NulTestService svc();
+        assertEq("list", dispatchCall(svc, "list_public"));
+        assertThrows("ACCESS-DENIED", \dispatchCall(), (svc, "deleteAll"));
+        # cut at the NUL character, the name is "deleteAll"
+        try {
+            dispatchCall(svc, "deleteAll\x00_public");
+            fail("the dispatcher called a method");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("METHOD-DOES-NOT-EXIST", ex.err);
+            assertEq("method name \"deleteAll\\x00_public\" contains a NUL character at byte offset 9; method "
+                "names cannot contain NUL characters", ex.desc);
+            assertEq(Err::EINVAL, ex.arg);
+        }
+        assertThrows("METHOD-DOES-NOT-EXIST", "contains a NUL character", \call_object_method_args(),
+            (svc, "deleteAll\x00_public"));
+        assertFalse(svc.hasCallableMethod("deleteAll\x00_public"));
+        assertEq(Err::EINVAL, errno());
+        assertFalse(svc.hasCallableNormalMethod("deleteAll\x00_public"));
+        assertFalse(svc.hasCallableStaticMethod("sm\x00_public"));
+        assertThrows("CALL-REFERENCE-ERROR", "identifier .* contains a NUL character",
+            sub () { svc.getCallReference("deleteAll\x00_public"); });
+        assertTrue(svc.hasCallableMethod("deleteAll"));
+    }
+
+    functions() {
+        assertThrows("NO-FUNCTION", "function name \"strlen\\\\x00_public\" contains a NUL character",
+            \call_function(), ("strlen\x00_public", "abc"));
+        assertThrows("NO-FUNCTION", "contains a NUL character", \call_function_args(), ("strlen\x00_public", "abc"));
+        assertThrows("NO-FUNCTION", "contains a NUL character", \call_builtin_function(), ("strlen\x00x", "abc"));
+        assertThrows("NO-FUNCTION", "contains a NUL character", \call_builtin_function_args(),
+            ("strlen\x00x", "abc"));
+        assertFalse(exists_function("strlen\x00x"));
+        assertEq(Err::EINVAL, errno());
+        assertNothing(function_type("strlen\x00x"));
+        assertEq(Err::EINVAL, errno());
+        assertThrows("UNKNOWN-VARIABLE", "variable name .* contains a NUL character", \set_global_var_value(),
+            ("nul_test_global\x00x", 2));
+        assertEq(1, nul_test_global);
+        # the names themselves
+        assertEq(3, call_function("strlen", "abc"));
+        assertTrue(exists_function("strlen"));
+    }
+
+    classes() {
+        assertThrows("UNKNOWN-CLASS", "class name .* contains a NUL character", \call_static_method(),
+            ("NulTestService\x00x", "sm"));
+        assertThrows("UNKNOWN-METHOD", "method name .* contains a NUL character", \call_static_method(),
+            ("NulTestService", "sm\x00x"));
+        assertThrows("UNKNOWN-METHOD", "method name .* contains a NUL character", \call_static_method_args(),
+            ("NulTestService", "sm\x00x"));
+        assertThrows("CREATE-OBJECT-ERROR", "class name .* contains a NUL character", \create_object(),
+            "NulTestService\x00x");
+        assertThrows("CREATE-OBJECT-ERROR", "class name .* contains a NUL character", \create_object_args(),
+            "NulTestService\x00x");
+        assertThrows("PSEUDO-METHOD-DOES-NOT-EXIST", "method name .* contains a NUL character", \call_pseudo(),
+            ("abc", "size\x00x"));
+        assertThrows("PSEUDO-METHOD-DOES-NOT-EXIST", "method name .* contains a NUL character",
+            \call_pseudo_args(), ("abc", "size\x00x"));
+        assertEq("sm", call_static_method("NulTestService", "sm"));
+        assertEq(3, call_pseudo("abc", "size"));
+    }
+
+    program() {
+        Program p(PO_NEW_STYLE);
+        p.parse("our int pv; int sub f() { return 1; } class PC { static int psm() { return 2; } } "
+            "hashdecl PH { int a = 1; }", "nul-test");
+        p.setGlobalVarValue("pv", 1);
+        assertThrows("NO-FUNCTION", "contains a NUL character", \p.callFunction(), "f\x00x");
+        assertThrows("NO-FUNCTION", "contains a NUL character", \p.callFunctionArgs(), "f\x00x");
+        assertThrows("UNKNOWN-CLASS", "contains a NUL character", \p.callStaticMethod(), ("PC\x00x", "psm"));
+        assertThrows("UNKNOWN-METHOD", "contains a NUL character", \p.callStaticMethod(), ("PC", "psm\x00x"));
+        assertThrows("UNKNOWN-METHOD", "contains a NUL character", \p.callStaticMethodArgs(), ("PC", "psm\x00x"));
+        assertFalse(p.existsFunction("f\x00x"));
+        assertEq(Err::EINVAL, errno());
+        bool found = True;
+        assertNothing(p.getGlobalVariable("pv\x00x", \found));
+        assertFalse(found);
+        assertThrows("UNKNOWN-VARIABLE", "contains a NUL character", \p.setGlobalVarValue(), ("pv\x00x", 2));
+        assertEq(1, p.getGlobalVariable("pv"));
+        assertThrows("PROGRAM-ERROR", "contains a NUL character", \p.findFunctionVariants(), "f\x00x");
+        assertThrows("CALL-REFERENCE-ERROR", "contains a NUL character", \p.getCallReference(), "f\x00x");
+        assertThrows("PROGRAM-ERROR", "define name .* contains a NUL character", \p.define(), ("DEF\x00x", 1));
+        assertThrows("PROGRAM-ERROR", "define name .* contains a NUL character", \p.undefine(), "DEF\x00x");
+        assertFalse(p.isDefined("DEF"));
+        p.define("DEF", 1);
+        assertFalse(p.isDefined("DEF\x00x"));
+        assertNothing(p.getDefine("DEF\x00x"));
+        assertEq(1, p.getDefine("DEF"));
+        assertThrows("PARSE-OPTION-ERROR", "contains a NUL character", \Program::hasParseOption(),
+            "PO_NEW_STYLE\x00x");
+
+        Program target(PO_NEW_STYLE);
+        assertThrows("PROGRAM-IMPORTFUNCTION-NO-FUNCTION", "contains a NUL character", \target.importFunction(),
+            "strlen\x00x");
+        assertThrows("PROGRAM-IMPORTFUNCTION-NO-FUNCTION", "contains a NUL character", \target.importFunction(),
+            ("strlen", "my_strlen\x00x"));
+        assertThrows("PROGRAM-IMPORTGLOBALVARIABLE-EXCEPTION", "contains a NUL character",
+            \target.importGlobalVariable(), "nul_test_global\x00x");
+        assertThrows("CLASS-IMPORT-ERROR", "contains a NUL character", \target.importClass(),
+            "NulTestService\x00x");
+        assertThrows("HASHDECL-IMPORT-ERROR", "contains a NUL character", \target.importHashDecl(),
+            "NulTestHash\x00x");
+    }
+
+    deserialization() {
+        NulTestData obj();
+        hash<auto> data = Serializable::serializeToData(obj);
+        string key = data._index.firstKey();
+        data._index{key}._class += "\x00x";
+        assertThrows("DESERIALIZATION-ERROR", "class name .* contains a NUL character",
+            \Serializable::deserialize(), data);
+
+        hash<NulTestHash> h();
+        data = Serializable::serializeToData(h);
+        key = data._index.firstKey();
+        data._index{key}._hash += "\x00x";
+        assertThrows("DESERIALIZATION-ERROR", "hash type name .* contains a NUL character",
+            \Serializable::deserialize(), data);
+
+        data = Serializable::serializeToData(NulTestEnum::One);
+        data._data._enum += "\x00x";
+        assertThrows("DESERIALIZATION-ERROR", "enum name .* contains a NUL character", \Serializable::deserialize(),
+            data);
+    }
+
+    reflection() {
+        assertThrows("UNKNOWN-CLASS", "contains a NUL character", \Reflection::Class::forName(),
+            "NulTestService\x00x");
+        assertThrows("UNKNOWN-CLASS", "contains a NUL character",
+            sub () { Reflection::Class c("NulTestService\x00x"); });
+        Reflection::Class cls = Reflection::Class::forName("NulTestService");
+        assertThrows("UNKNOWN-METHOD", "contains a NUL character", \cls.getMethod(), "deleteAll\x00_public");
+        assertThrows("UNKNOWN-METHOD", "contains a NUL character", \cls.findMethod(), "deleteAll\x00_public");
+        assertThrows("UNKNOWN-METHOD", "contains a NUL character", \cls.getNormalMethod(), "deleteAll\x00_public");
+        assertThrows("METHOD-ERROR", "contains a NUL character", \cls.getNormalVariant(), "deleteAll\x00_public");
+        assertThrows("UNKNOWN-METHOD", "contains a NUL character",
+            sub () { Reflection::NormalMethod m("NulTestService", "deleteAll\x00_public"); });
+        assertThrows("UNKNOWN-FUNCTION", "contains a NUL character", \Reflection::Function::forName(), "strlen\x00x");
+        assertThrows("UNKNOWN-TYPED-HASH", "contains a NUL character", \Reflection::TypedHash::forName(),
+            "NulTestHash\x00x");
+        assertThrows("UNKNOWN-ENUM", "contains a NUL character", \Reflection::Enum::forName(), "NulTestEnum\x00x");
+        assertThrows("UNKNOWN-GLOBAL-VAR", "contains a NUL character", \Reflection::GlobalVar::forName(),
+            "nul_test_global\x00x");
+        assertThrows("UNKNOWN-NAMESPACE", "contains a NUL character", \Reflection::Namespace::forName(), "Qore\x00x");
+        Reflection::Namespace ns = Reflection::Namespace::forName("Qore");
+        assertThrows("UNKNOWN-FUNCTION", "contains a NUL character", \ns.getFunction(), "strlen\x00x");
+        assertThrows("UNKNOWN-CLASS", "contains a NUL character", \ns.getClass(), "File\x00x");
+        assertThrows("UNKNOWN-TYPE", "contains a NUL character", sub () { Reflection::Type t("int\x00x"); });
+        assertEq("deleteAll", cls.getMethod("deleteAll").getName());
+    }
+}

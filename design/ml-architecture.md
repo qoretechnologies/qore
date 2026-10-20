@@ -453,6 +453,29 @@ always describes the same instance that encodes, scores or infers — never a se
 constructed to answer the question. Tokenizer configuration and preprocessing/pooling policy are
 deliberately outside this identity and must be bound by the producer that applies them.
 
+### Sandboxing
+
+With a filesystem sandbox policy (`QoreSandboxManagerHelper(QoreSandboxManagerHelper::Policy)`), ONNX Runtime may only
+touch files the sandbox allowed:
+
+- **Model bytes and external data**: every `QoreOnnxModel` constructor forces content identity capture to `Required`
+  (`onnxSandboxIdentityMode()`), so the model and each external data file are read by the checked `readWholeFile()`
+  and given to ONNX Runtime from memory (`AddExternalInitializersFromFilesInMemory()`). `best_effort` capture is not
+  enough: it discards a failed capture, including a sandbox denial, and lets ONNX Runtime load the path itself.
+  `applyCapturedExternalInitializers()` sets `session.load_model_format` to the format the capture read the bytes
+  in, because ONNX Runtime otherwise decides the format of in-memory bytes from an explicit entry or the `ORTM`
+  identifier (`InferenceSession::Load()`), which could differ. An ORT format model is complete from its bytes:
+  inference loads ORT format initializers without an external data reader (`LoadInitializerOrtFormat()` called from
+  `onnxruntime/core/graph/graph.cc`), so such a model cannot read external data.
+- **Option allow-lists** (`OnnxModel.cpp`): `onnx_sandbox_session_config_allowed` and
+  `onnx_sandbox_run_config_allowed` are the keys of `onnxruntime_session_options_config_keys.h` and
+  `onnxruntime_run_options_config_keys.h` (ONNX Runtime 1.23, API 23) that name no file and produce no output;
+  `onnx_sandbox_session_config_paths` are the keys that name a file, checked with the access ONNX Runtime needs;
+  `onnx_sandbox_session_config_flags` are flags that write a file, allowed only when off or when the file is named.
+  Provider options are limited to the documented `known_options`. Every other key is refused, so a key added by a
+  newer ONNX Runtime is refused until it is classified here: when upgrading ONNX Runtime, read the comments of every
+  new key in both headers and add it to the matching list.
+
 ## Tokenizer Module
 
 Separate binary module (`modules/tokenizer/`) providing HuggingFace-compatible text
@@ -475,6 +498,44 @@ ONNX tooling. Model package registration does not require protobuf parsing: the
 registry stores and classifies ONNX artifacts as executable binary model files.
 Detailed ONNX graph inspection/export remains in the ONNX/protobuf layers so the
 registry can stay safe, fast, and backend-agnostic.
+
+## Testing Under Valgrind
+
+Run `modules/ml/test/ml.qtest` (or a subset with `--include=PATTERN`) under valgrind in IR mode, with the
+build's `ml`, `json`, `yaml`, `reflection` and `protobuf` module directories and the source `qlib` in
+`QORE_MODULE_DIR`:
+
+```
+env QORE_PCRE2_NO_JIT=1 valgrind --leak-check=full --errors-for-leak-kinds=definite \
+    qore -b --exec-mode=ir --enable-debug modules/ml/test/ml.qtest
+```
+
+The `ml` module does not link Apache Arrow, so the `ARROW_DEFAULT_MEMORY_POOL=system` setting the
+DataFrame tests need under valgrind does not apply.
+
+### Known third-party leak: ONNX Runtime 1.23.0 on Alpine (musl)
+
+With Alpine's `onnxruntime-1.23.0-r0` package, valgrind reports two blocks of 256 bytes as
+"definitely lost". They are allocated with `calloc()` inside `libonnxruntime.so.1.23.0` (through
+`ld-musl`) when an ONNX Runtime session is created, so every run that loads an ONNX model reports
+them. They are not suppressed, so a musl run must be judged with exactly these two records
+excluded; any other leak is a finding.
+
+The leak does not involve module code. It reproduces with a script that only loads the bundled test model
+and runs it once, also with `intra_op_threads` and `inter_op_threads` set to 1. It does not appear when the
+script only loads the `ml` module without creating a session:
+
+```
+%modern
+%requires ml
+ML::OnnxModel m("modules/ml/test/data/test_linear.onnx", <ML::OnnxSessionConfig>{"providers": ()});
+printf("%y\n", m.run({"X": ((1.0,),)}));
+```
+
+| Platform | ONNX Runtime | valgrind | Result |
+|---|---|---|---|
+| Ubuntu 26.04.1 LTS (glibc) | `libonnxruntime1.23` 1.23.2+dfsg-6ubuntu1 | 3.26.0 | 0 errors |
+| Alpine Linux v3.23 (musl 1.2.5-r23), `qore-test-base:develop-alpine` | `onnxruntime-1.23.0-r0` | 3.25.1 | 2 errors: 2 × 256 bytes definitely lost |
 
 ## Extension Guide: Adding a New Algorithm
 

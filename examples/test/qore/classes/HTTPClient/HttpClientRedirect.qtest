@@ -26,6 +26,7 @@
     the same redirects to the same targets and report the same metadata.
 */
 
+%modern
 %no-child-restrictions
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
@@ -707,7 +708,7 @@ public class HttpClientRedirectTest inherits QUnit::Test {
         }
         assertEq("/block", peer_b.blocked.get());
         op.abort();
-        assertTrue(op.goalReached());
+        assertFalse(op.goalReached(), "an aborted operation has not reached its goal");
         assertNothing(op.getOutput());
         peer_b.block.dec();
         # the client remains usable

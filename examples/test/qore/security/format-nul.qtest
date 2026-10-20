@@ -1,0 +1,42 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+#
+# a string formatted with "%y" or "%N" was escaped as a C string, so a string with a NUL character was cut at the NUL
+# character ("a\x00b" was formatted as "a"), and the text after it was missing from logs and messages; the whole
+# string is now formatted
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class FormatNulTest
+
+class FormatNulTest inherits QUnit::Test {
+    constructor() : Test("FormatNulTest", "1.0") {
+        addTestCase("formatted strings", \formatted());
+        addTestCase("bounded formatting", \bounded());
+        set_return_value(main());
+    }
+
+    formatted() {
+        string v = "a\x00b\"c";
+        assertEq("\"a\x00b\\\"c\"", sprintf("%y", v));
+        assertEq("\"a\x00b\\\"c\"", sprintf("%N", v));
+        # in containers; a short string is kept in the value itself
+        assertEq("[\"a\x00b\"]", sprintf("%y", ("a\x00b",)));
+        assertEq("{k: \"a\x00b\\\"c\"}", sprintf("%y", {"k": v}));
+        # the strings themselves
+        assertEq("\"abc\"", sprintf("%y", "abc"));
+    }
+
+    bounded() {
+        # a string longer than the output budget is cut to the budget, not at its NUL character
+        string v = "a\x00" + strmul("b", 100);
+        string out = format_bounded(v, <FormatBounds>{"max_bytes": 20});
+        assertEq("\"a\x00", out.substr(0, 3));
+        assertRegex("b+\"\\.\\.\\.<truncated>", out);
+    }
+}

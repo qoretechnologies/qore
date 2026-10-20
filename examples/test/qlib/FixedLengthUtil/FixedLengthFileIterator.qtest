@@ -56,14 +56,16 @@ class Test inherits QUnit::Test {
     }
 
     basicTests() {
-        string file = tmp_location() + "/file.fll";
-        unlink(file);
+        # unique for every run, so that runs on the same host, at the same time or after a run that left the file
+        # behind, never use each other's file
+        string file = tmp_location() + DirSep + sprintf("qore_fixed_length_file_iterator_test_%d_%s.fll", getpid(),
+            get_random_string(8));
+        on_exit unlink(file);
         {
             File FW();
-            FW.open2(file, O_WRONLY | O_CREAT);
+            FW.open2(file, O_WRONLY | O_CREAT | O_TRUNC);
             FW.write("11111bb\ncddd31122014\n\n\n22222gg\n");
         }
-        on_exit unlink(file);
 
         FixedLengthFileIterator i(file, Specs, GlobalOptions);
         assertEq(True, i.hasCallableMethod("hstat"));

@@ -13,6 +13,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}"
 %requires SqlUtilTestBase
+%requires ./PgsqlTestIsolation.qm
 
 %exec-class PgsqlTest
 
@@ -193,12 +194,12 @@ class PgsqlTest inherits SqlTestBase {
             try {
                 on_error ds.rollback();
                 on_success ds.commit();
-                ds.exec("drop table pgsql_test");
+                ds.exec("drop table " + runName("pgsql_test"));
             } catch () {}
             try {
                 on_error ds.rollback();
                 on_success ds.commit();
-                ds.exec("drop sequence pgsql_test_seq");
+                ds.exec("drop sequence " + runName("pgsql_test_seq"));
             } catch () {}
 
             schema_info = schema.alignWithInfo(False, m_options.verbose, m_options.verbose > 0);
@@ -290,11 +291,24 @@ class PgsqlTest inherits SqlTestBase {
             "\"jdbc:user/pass@postgresql:db{classpath=/usr/share/java/postgresql.jar}\")", OptionColumn);
     }
 
+    #! Drops the test schema, then the run's schema
+    globalTearDown() {
+        SqlTestBase::globalTearDown();
+        PgsqlRunSchema::teardown();
+    }
+
+    #! Returns the name qualified with the run's schema, for SQL that must not reach another schema
+    private static string runName(string name) {
+        return PgsqlRunSchema::getName() + "." + name;
+    }
+
     Datasource getDatasource() {
         if (!m_options.connstr) {
             m_options.connstr = ENV.QORE_DB_CONNSTR_JDBC_PGSQL;
         }
-        Datasource ds(m_options.connstr);
+        # the run's own schema: a JDBC connection does not use libpq, so its URL names the schema
+        PgsqlRunSchema::setup(m_options.connstr, "JdbcPgsqlSqlUtil");
+        Datasource ds(PgsqlRunSchema::getConnectionString(m_options.connstr));
         if (ds.getDriverRealName() != "PostgreSQL") {
             throw "PGSQL-ERROR", sprintf("cannot execute the pgsql tests on a connection using driver %y",
                 ds.getDriverRealName());

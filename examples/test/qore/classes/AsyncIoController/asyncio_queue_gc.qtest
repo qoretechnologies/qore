@@ -1,0 +1,152 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class AsyncIoQueueGcTest
+
+#! The bound on every blocking wait in this test: a hang guard only, never a timing assertion
+const HangGuard = 60s;
+
+#! A poll operation that keeps its own result Queue
+/** A result left in the Queue makes a reference cycle: operation -> result Queue -> result -> operation.
+
+    With a notifier to wait for, the first step waits for it and the second one reaches the goal; without one, the
+    first step reaches the goal.
+*/
+class SelfResultOperation inherits AbstractPollOperation<auto> {
+    public {
+        #! the operation's own result Queue
+        Queue<hash<SocketPollResultInfo>> results();
+        #! decremented when the operation waits for its notifier
+        Counter waiting(1);
+    }
+
+    private {
+        #! decremented when the operation is destroyed
+        Counter destroyed;
+        *EventNotifier go;
+        bool waited = False;
+        bool done = False;
+    }
+
+    constructor(Counter destroyed, *EventNotifier go) {
+        self.destroyed = destroyed;
+        self.go = go;
+    }
+
+    destructor() {
+        destroyed.dec();
+    }
+
+    string getGoal() {
+        return "done";
+    }
+
+    string getState() {
+        return done ? "done" : (waited ? "waiting" : "pending");
+    }
+
+    bool goalReached() {
+        return done;
+    }
+
+    *hash<SocketPollInfo> continuePoll() {
+        if (go && !waited) {
+            waited = True;
+            waiting.dec();
+            return <SocketPollInfo>{
+                "events": SOCK_POLLIN,
+                "socket": go,
+            };
+        }
+        done = True;
+        return NOTHING;
+    }
+}
+
+#! A SelfResultOperation that signals when its result has been delivered
+/** The controller pushes the result to the result Queue before it calls onComplete().
+*/
+class NotifyingSelfResultOperation inherits SelfResultOperation {
+    public {
+        #! decremented when onComplete() has run
+        Counter delivered(1);
+    }
+
+    constructor(Counter destroyed) : SelfResultOperation(destroyed) {
+    }
+
+    onComplete(hash<SocketPollResultInfo> result) {
+        delivered.dec();
+    }
+}
+
+class AsyncIoQueueGcTest inherits QUnit::Test {
+    constructor() : Test("AsyncIoQueueGcTest", "1.0") {
+        addTestCase("a result delivered after every other reference is gone", \testResultAfterRelease());
+        addTestCase("a result delivered while the submitter holds the operation", \testResultWhileHeld());
+        set_return_value(main());
+    }
+
+    #! Submits an operation that waits for \a go and keeps its own result Queue
+    /** No reference to the operation remains when this method returns; it returns once the operation waits for
+        \a go, so the result is delivered only after the test notifies it.
+    */
+    private submitWaiting(Counter destroyed, string owner, EventNotifier go) {
+        EventNotifier n();
+        SelfResultOperation op(destroyed, go);
+        AsyncIoController::submit(<SocketPollOperationInfo>{
+            "sock": n,
+            "spop": op,
+            "owner": owner,
+            "to": -1s,
+            "resultQueue": op.results,
+        });
+        assertEq(0, op.waiting.waitForZero(HangGuard), "the operation waits for its notifier");
+    }
+
+    #! Submits an operation that reaches its goal in its first step and keeps its own result Queue
+    /** Returns once the result is in the operation's Queue, before the operation's last reference from this method
+        is released.
+    */
+    private submitAndWaitForResult(Counter destroyed, string owner) {
+        EventNotifier n();
+        NotifyingSelfResultOperation op(destroyed);
+        AsyncIoController::submit(<SocketPollOperationInfo>{
+            "sock": n,
+            "spop": op,
+            "owner": owner,
+            "to": -1s,
+            "resultQueue": op.results,
+        });
+        assertEq(0, op.delivered.waitForZero(HangGuard), "the result is delivered");
+        assertEq(1, op.results.size(), "the result is left in the operation's own Queue");
+    }
+
+    testResultAfterRelease() {
+        string owner = sprintf("queue-gc-after-%d", getpid());
+        on_exit AsyncIoController::cancelByOwner(owner);
+        Counter destroyed(1);
+        EventNotifier go();
+        submitWaiting(destroyed, owner, go);
+        # only the controller holds the operation now; its result, pushed to the operation's own Queue, closes the
+        # cycle, and once the controller has released its references to the operation and to the Queue, the
+        # collector destroys the operation with the result left in its Queue
+        go.notify();
+        assertEq(0, destroyed.waitForZero(HangGuard), "the operation and its result Queue are collected");
+    }
+
+    testResultWhileHeld() {
+        string owner = sprintf("queue-gc-held-%d", getpid());
+        on_exit AsyncIoController::cancelByOwner(owner);
+        Counter destroyed(1);
+        submitAndWaitForResult(destroyed, owner);
+        # the cycle was closed while the submitter held the operation; releasing that reference leaves the cycle
+        assertEq(0, destroyed.waitForZero(HangGuard), "the operation and its result Queue are collected");
+    }
+}

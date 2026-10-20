@@ -1,0 +1,396 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# Filesystem entry points that bypassed the sandbox filesystem policy or the PO_NO_FILESYSTEM parse option: the static
+# ReadOnlyFile stat methods, Dir::removeFile(), Dir::stat()/hstat()/statvfs()/exists(), mkdir() with parents, the parent
+# directories created by Dir::create() and mkdir_ex(), File::chown(), Dir listings and glob() matches the policy hides,
+# TimeZone paths and deserialized date regions under PO_NO_FILESYSTEM, and time zone regions leaving the zoneinfo
+# directory.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+
+%requires QUnit
+%requires Util
+%requires FsUtil
+
+%exec-class SandboxEntryPointsTest
+
+class SandboxEntryPointsTest inherits QUnit::Test {
+    private {
+        #! the test directory (canonical, so that sandbox rules and results compare equal)
+        string dir;
+        #! a zoneinfo file to copy, if any
+        *string zoneinfo;
+    }
+
+    #! zoneinfo files to look for
+    const ZoneinfoFiles = ("/usr/share/zoneinfo/UTC", "/usr/lib/zoneinfo/UTC", "/usr/share/lib/zoneinfo/UTC");
+
+    constructor() : QUnit::Test("sandbox filesystem entry points", "1.0", \ARGV) {
+        addTestCase("static stat methods follow the read policy", \testStaticStat());
+        addTestCase("Dir::removeFile() needs delete access", \testRemoveFile());
+        addTestCase("Dir status methods follow the read policy", \testDirStatus());
+        addTestCase("mkdir() with parents follows the create policy", \testMkdirParents());
+        addTestCase("each created parent directory needs create access", \testCreateParents());
+        addTestCase("File::chown() needs write access", \testFileChown());
+        addTestCase("Dir listings and glob() leave out what the policy hides", \testListings());
+        addTestCase("TimeZone paths under PO_NO_FILESYSTEM read no file", \testTimeZoneNoFilesystem());
+        addTestCase("time zone regions cannot leave the zoneinfo directory", \testTimeZoneRegions());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        string tmp = tmp_location() + DirSep + "qore-sandbox-ep-" + get_random_string(8);
+        mkdir_ex(tmp);
+        dir = realpath(tmp);
+        foreach string zf in (ZoneinfoFiles) {
+            if (is_file(zf)) {
+                zoneinfo = zf;
+                break;
+            }
+        }
+    }
+
+    globalTearDown() {
+        if (dir.val()) {
+            try {
+                remove_tree(dir);
+            } catch (hash<ExceptionInfo> ex) {
+            }
+        }
+    }
+
+    #! creates a file with the given content
+    static string makeFile(string path, data content = "data\n") {
+        File f();
+        f.open2(path, O_CREAT | O_TRUNC | O_WRONLY, 0644);
+        f.write(content);
+        f.close();
+        return path;
+    }
+
+    #! returns a rule hash allowing the given access to the given path
+    static hash<string, int> rule(string path, int access) {
+        hash<string, int> h;
+        h{path} = access;
+        return h;
+    }
+
+    #! returns a Program whose sandbox denies every filesystem access except the given rules
+    static Program sandbox(*hash<string, int> rules, *list<string> denied, string code) {
+        Program p(PO_NEW_STYLE);
+        SandboxManager sm();
+        sm.setFilesystemDefaultPolicy(False);
+        if (rules) {
+            foreach hash<auto> i in (rules.pairIterator()) {
+                sm.addFilesystemAllowedPath(i.key, i.value);
+            }
+        }
+        foreach string path in (denied) {
+            sm.addFilesystemDeniedPath(path);
+        }
+        p.setSandboxManager(sm);
+        p.parse(code, "sandbox-entry-points");
+        return p;
+    }
+
+    testStaticStat() {
+        string allowed = dir + "/stat-allowed";
+        mkdir_ex(allowed);
+        string inside = makeFile(allowed + "/a.txt");
+        mkdir_ex(dir + "/stat-outside");
+        string outside = makeFile(dir + "/stat-outside/b.txt");
+
+        Program p = sandbox(rule(allowed, QSEC_READ), NOTHING, "
+            auto sub st(string m, string path) {
+                switch (m) {
+                    case \"stat\": return ReadOnlyFile::stat(path);
+                    case \"lstat\": return ReadOnlyFile::lstat(path);
+                    case \"hstat\": return ReadOnlyFile::hstat(path);
+                    case \"hlstat\": return ReadOnlyFile::hlstat(path);
+                    case \"statvfs\": return ReadOnlyFile::statvfs(path);
+                    case \"File::hstat\": return File::hstat(path);
+                }
+            }
+        ");
+        list<string> methods = ("stat", "lstat", "hstat", "hlstat", "File::hstat");
+        if (Option::HAVE_STATVFS) {
+            methods += "statvfs";
+        }
+        foreach string m in (methods) {
+            assertThrows("FILESYSTEM-ACCESS-DENIED", \p.callFunction(), ("st", m, outside),
+                "ReadOnlyFile::" + m + "() outside the allowed path");
+            assertTrue(exists p.callFunction("st", m, inside), "ReadOnlyFile::" + m + "() on an allowed path");
+        }
+        assertEq("REGULAR", p.callFunction("st", "hstat", inside).type, "the status of an allowed file is read");
+    }
+
+    testRemoveFile() {
+        string rm = dir + "/rm";
+        mkdir_ex(rm);
+        string victim = makeFile(rm + "/victim.txt");
+        string code = "auto sub rm(string dir, string name) { Dir d(); d.chdir(dir); return d.removeFile(name); }";
+
+        Program p = sandbox(rule(rm, QSEC_READ), NOTHING, code);
+        assertThrows("FILESYSTEM-ACCESS-DENIED", \p.callFunction(), ("rm", rm, "victim.txt"),
+            "Dir::removeFile() without delete access");
+        assertTrue(is_file(victim), "the file is not removed");
+
+        Program p2 = sandbox(rule(rm, QSEC_READ | QSEC_DELETE), NOTHING, code);
+        assertTrue(p2.callFunction("rm", rm, "victim.txt"), "Dir::removeFile() with delete access");
+        assertFalse(is_file(victim), "the file is removed with delete access");
+    }
+
+    testDirStatus() {
+        string top = dir + "/status";
+        mkdir_ex(top + "/secret", 0755, True);
+        Program p = sandbox(rule(top, QSEC_READ), (top + "/secret",), "
+            auto sub ds(string dir, string m, *string sub_dir) {
+                Dir d();
+                d.chdir(dir);
+                if (sub_dir) {
+                    d = d.openDir(sub_dir);
+                }
+                switch (m) {
+                    case \"stat\": return d.stat();
+                    case \"hstat\": return d.hstat();
+                    case \"statvfs\": return d.statvfs();
+                    case \"exists\": return d.exists();
+                }
+            }
+        ");
+        list<string> methods = ("stat", "hstat", "exists");
+        if (Option::HAVE_STATVFS) {
+            methods += "statvfs";
+        }
+        foreach string m in (methods) {
+            assertThrows("FILESYSTEM-ACCESS-DENIED", \p.callFunction(), ("ds", top, m, "secret"),
+                "Dir::" + m + "() on a denied directory");
+            assertTrue(p.callFunction("ds", top, m).val(), "Dir::" + m + "() on an allowed directory");
+        }
+    }
+
+    testMkdirParents() {
+        string target = dir + "/mkp/a/b";
+        Program p = sandbox(NOTHING, NOTHING, "
+            auto sub mk(string path, bool parents) { return mkdir(path, 0755, parents); }
+            auto sub mkex(string path) { mkdir_ex(path, 0755, True); }
+        ");
+        assertThrows("FILESYSTEM-ACCESS-DENIED", \p.callFunction(), ("mk", target, False),
+            "mkdir() without parents in a sandbox that denies everything");
+        assertThrows("FILESYSTEM-ACCESS-DENIED", \p.callFunction(), ("mk", target, True),
+            "mkdir() with parents in a sandbox that denies everything");
+        assertThrows("FILESYSTEM-ACCESS-DENIED", \p.callFunction(), ("mkex", target),
+            "mkdir_ex() with parents in a sandbox that denies everything");
+        assertFalse(is_dir(dir + "/mkp"), "no directory is created");
+    }
+
+    testCreateParents() {
+        # the rule covers the directory, but not its parents
+        string target = dir + "/mkc/a/b/c";
+        string code = "
+            auto sub mk(string path) { return mkdir(path, 0755, True); }
+            auto sub mkex(string path) { mkdir_ex(path, 0755, True); }
+            auto sub create(string path) { Dir d(); d.chdir(path); return d.create(0755); }
+        ";
+        Program p = sandbox(rule(target, QSEC_READ | QSEC_CREATE), NOTHING, code);
+        foreach string f in ("mk", "mkex", "create") {
+            assertThrows("FILESYSTEM-ACCESS-DENIED", \p.callFunction(), (f, target),
+                f + ": a parent directory outside the rule");
+        }
+        assertFalse(is_dir(dir + "/mkc"), "no parent directory is created");
+
+        # a rule covering the parents
+        string allowed = dir + "/mkc2";
+        Program p2 = sandbox(rule(allowed, QSEC_READ | QSEC_CREATE), NOTHING, code);
+        assertEq(0, p2.callFunction("mk", allowed + "/a/b"), "mkdir() with parents under the rule");
+        p2.callFunction("mkex", allowed + "/c/d");
+        assertEq(3, p2.callFunction("create", allowed + "/e/f/g"), "Dir::create() under the rule");
+        assertTrue(is_dir(allowed + "/a/b") && is_dir(allowed + "/c/d") && is_dir(allowed + "/e/f/g"),
+            "the directories are created under the rule");
+    }
+
+    testFileChown() {
+        if (!Option::HAVE_UNIX_FILEMGT) {
+            testSkip("no UNIX file management");
+        }
+        string own = dir + "/own";
+        mkdir_ex(own);
+        string file = makeFile(own + "/file.txt");
+        string code = "auto sub ch(string path) { File f(); f.open2(path); f.chown(-1, -1); }";
+
+        Program p = sandbox(rule(own, QSEC_READ), NOTHING, code);
+        assertThrows("FILESYSTEM-ACCESS-DENIED", \p.callFunction(), ("ch", file),
+            "File::chown() on a file opened for reading without write access");
+
+        Program p2 = sandbox(rule(own, QSEC_READ | QSEC_WRITE), NOTHING, code);
+        p2.callFunction("ch", file);
+        assertEq(getuid(), hstat(file).uid, "File::chown() with write access");
+    }
+
+    testListings() {
+        string ls = dir + "/ls";
+        mkdir_ex(ls + "/hidden", 0755, True);
+        mkdir_ex(ls + "/shown", 0755, True);
+        makeFile(ls + "/a.txt");
+        makeFile(ls + "/b.txt");
+        makeFile(ls + "/secret.txt");
+        mkdir_ex(dir + "/ls-outside");
+        string outside = makeFile(dir + "/ls-outside/c.txt");
+        if (Option::HAVE_UNIX_FILEMGT) {
+            # a link to a file outside the allowed path
+            symlink(outside, ls + "/link.txt");
+        }
+
+        # without a sandbox, every entry is listed
+        {
+            Dir d();
+            d.chdir(ls);
+            list<string> all = ("a.txt", "b.txt", "hidden", "secret.txt", "shown");
+            if (Option::HAVE_UNIX_FILEMGT) {
+                all += "link.txt";
+            }
+            assertEq(sort(all), sort(d.list()), "without a sandbox, every entry is listed");
+        }
+
+        Program p = sandbox(rule(ls, QSEC_READ), (ls + "/secret.txt", ls + "/hidden"), "
+            list<auto> sub names(string dir, string m) {
+                Dir d();
+                d.chdir(dir);
+                switch (m) {
+                    case \"list\": return sort(d.list());
+                    case \"list regex\": return sort(d.list(\"\\\\.txt$\"));
+                    case \"list full\": return sort(map $1.name, d.list(True));
+                    case \"listNames\": return sort(d.listNames());
+                    case \"listInfo\": return sort(map $1.name, d.listInfo());
+                    case \"listFiles\": return sort(d.listFiles());
+                    case \"listFileNames\": return sort(d.listFileNames());
+                    case \"listFileInfo\": return sort(map $1.name, d.listFileInfo());
+                    case \"listDirs\": return sort(d.listDirs());
+                    case \"listDirNames\": return sort(d.listDirNames());
+                    case \"listDirInfo\": return sort(map $1.name, d.listDirInfo());
+                }
+                return ();
+            }
+            *list<string> sub g(string pattern) {
+                *list<string> l = glob(pattern);
+                return l ? sort(l) : l;
+            }
+        ");
+        list<string> files = ("a.txt", "b.txt");
+        list<string> dirs = ("shown",);
+        list<string> all = sort(files + dirs);
+        hash<string, list<string>> expected = {
+            "list": all,
+            "list regex": files,
+            "list full": all,
+            "listNames": all,
+            "listInfo": all,
+            "listFiles": files,
+            "listFileNames": files,
+            "listFileInfo": files,
+            "listDirs": dirs,
+            "listDirNames": dirs,
+            "listDirInfo": dirs,
+        };
+        foreach hash<auto> i in (expected.pairIterator()) {
+            assertEq(i.value, p.callFunction("names", ls, i.key), "Dir::" + i.key + "() leaves out hidden entries");
+        }
+        assertEq((ls + "/a.txt", ls + "/b.txt"), p.callFunction("g", ls + "/*.txt"),
+            "glob() leaves out hidden matches instead of failing");
+        assertEq((ls + "/shown",), p.callFunction("g", ls + "/sh*"), "glob() lists an allowed match");
+    }
+
+    #! asserts that the code raises only ILLEGAL-FILESYSTEM-ACCESS, with no error from an attempt to open the file
+    assertNoFilesystem(code c, string label) {
+        try {
+            c();
+            assertTrue(False, label + ": an exception is raised");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("ILLEGAL-FILESYSTEM-ACCESS", ex.err, label);
+            # the path does not exist, so an attempt to open it would have added a FILE-OPEN2-ERROR
+            assertEq(NOTHING, ex.next ? ex.next.err : NOTHING, label + ": the file is not opened");
+        }
+    }
+
+    testTimeZoneNoFilesystem() {
+        Program p(PO_NEW_STYLE | PO_NO_FILESYSTEM);
+        p.parse("
+            sub tz(string path) { TimeZone t(path); }
+            auto sub des(binary data) { return Serializable::deserialize(data); }
+        ", "tz-no-filesystem");
+
+        # the time zone cache is global, so each path is used only once in the process
+        string missing = dir + "/tz-missing-" + get_random_string(8);
+        assertNoFilesystem(sub () { p.callFunction("tz", missing); }, "TimeZone(path) under PO_NO_FILESYSTEM");
+
+        # a serialized date names its zone by the path of its zoneinfo file; the path replaces a region of the same
+        # length in the serialized data
+        string region = "Europe/Prague";
+        string date_path = "/tmp/qtz-" + get_random_string(4);
+        assertEq(region.size(), date_path.size(), "same length");
+        date d = (new TimeZone(region)).date("2026-01-15T10:00:00");
+        string hex = make_hex_string(Serializable::serialize(d));
+        binary data = parse_hex_string(replace(hex, make_hex_string(binary(region)),
+            make_hex_string(binary(date_path))));
+        assertNoFilesystem(sub () { p.callFunction("des", data); },
+            "a deserialized date with a zoneinfo path under PO_NO_FILESYSTEM");
+
+        if (!zoneinfo) {
+            return;
+        }
+        # an existing zoneinfo file is not read either: once it is removed, the zone cannot be created, since it was
+        # never read and cached
+        string tz_path = dir + "/tz-" + get_random_string(8);
+        makeFile(tz_path, ReadOnlyFile::readBinaryFile(zoneinfo));
+        assertThrows("ILLEGAL-FILESYSTEM-ACCESS", \p.callFunction(), ("tz", tz_path),
+            "TimeZone(path) of an existing file under PO_NO_FILESYSTEM");
+        unlink(tz_path);
+        assertThrows("FILE-OPEN2-ERROR", sub () { TimeZone t(tz_path); }, NOTHING,
+            "the zone was not read under PO_NO_FILESYSTEM");
+    }
+
+    testTimeZoneRegions() {
+        Program p(PO_NEW_STYLE);
+        list<hash<auto>> cases = (
+            {"region": "Europe/../../../../etc/passwd", "desc": "contains a \"..\" path component"},
+            {"region": "Europe/../UTC", "desc": "contains a \"..\" path component"},
+            {"region": "Europe//Prague", "desc": "contains an empty path component"},
+            {"region": "Europe/Prague/", "desc": "contains an empty path component"},
+            {"region": "Europe\\Prague", "desc": "contains a backslash"},
+        );
+        foreach hash<auto> c in (cases) {
+            string desc = sprintf("^time zone region \"%s\" %s", replace(replace(c.region, "\\", "\\\\"), ".", "\\."),
+                c.desc);
+            assertThrows("TZINFO-ERROR", desc, sub () { TimeZone t(c.region); }, NOTHING,
+                "TimeZone(" + c.region + ")");
+            assertThrows("TZINFO-ERROR", desc, sub () { TimeZone::setRegion(c.region); }, NOTHING,
+                "TimeZone::setRegion(" + c.region + ")");
+            assertThrows("TZINFO-ERROR", desc, \p.setTimeZoneRegion(), (c.region,),
+                "Program::setTimeZoneRegion(" + c.region + ")");
+        }
+
+        # a serialized date with a region of the same length with a ".." component
+        string region = "Europe/Prague";
+        string bad = "Europe/../UTC";
+        date d = (new TimeZone(region)).date("2026-01-15T10:00:00");
+        string hex = make_hex_string(Serializable::serialize(d));
+        binary data = parse_hex_string(replace(hex, make_hex_string(binary(region)), make_hex_string(binary(bad))));
+        assertThrows("TZINFO-ERROR", "^time zone region \"Europe/\\.\\./UTC\" contains a \"\\.\\.\" path component",
+            auto sub () { return Serializable::deserialize(data); }, NOTHING, "Serializable::deserialize() of a date");
+
+        # a region without such components and a path with them are not affected
+        assertEq(region, (new TimeZone(region)).region(), "a region is loaded");
+        if (zoneinfo) {
+            string tz_path = dir + "/tz-dot-" + get_random_string(8);
+            mkdir_ex(dir + "/tz-sub");
+            makeFile(tz_path, ReadOnlyFile::readBinaryFile(zoneinfo));
+            TimeZone t(dir + "/tz-sub/../" + basename(tz_path));
+            assertEq(0, t.UTCOffset(), "a path with a \"..\" component is a path");
+        }
+    }
+}

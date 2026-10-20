@@ -47,7 +47,10 @@
 #include "qore/intern/FileOutputStream.h"
 
 #include <atomic>
+#include <cstdio>
 #include <limits>
+#include <system_error>
+#include <thread>
 
 static std::atomic<uint64_t> qore_socket_object_sync_exec_seq{0};
 
@@ -169,7 +172,7 @@ public:
         return 0;
     }
 
-    DLLLOCAL virtual void deref(ExceptionSink* xsink) {
+    DLLLOCAL virtual void deref(ExceptionSink* xsink) override {
         if (ROdereference()) {
             clearNonBlock();
             sock->deref(xsink);
@@ -311,7 +314,7 @@ public:
         return 0;
     }
 
-    DLLLOCAL virtual void deref(ExceptionSink* xsink) {
+    DLLLOCAL virtual void deref(ExceptionSink* xsink) override {
         if (ROdereference()) {
             clearNonBlock();
             sock->deref(xsink);
@@ -1178,6 +1181,7 @@ private:
             case Action::PeerCertificate:
             case Action::CipherName:
             case Action::CipherVersion:
+            case Action::StreamTrailers:
                 return QoreValue();
         }
         return QoreValue();
@@ -1715,7 +1719,7 @@ public:
         qore_socket_object_set_h2_headers(header_map, headers);
     }
 
-    DLLLOCAL void deref(ExceptionSink* xsink) {
+    DLLLOCAL void deref(ExceptionSink* xsink) override {
         if (ROdereference()) {
             sock->deref(xsink);
             delete this;
@@ -1995,7 +1999,7 @@ public:
         setInputStream(input_stream, ref_input_stream);
     }
 
-    DLLLOCAL void deref(ExceptionSink* xsink) {
+    DLLLOCAL void deref(ExceptionSink* xsink) override {
         if (ROdereference()) {
             if (queue) {
                 queue->deref(xsink);
@@ -2312,7 +2316,7 @@ public:
             : sock(sock), action(action), host_lookup(host_lookup) {
     }
 
-    DLLLOCAL void deref(ExceptionSink* xsink) {
+    DLLLOCAL void deref(ExceptionSink* xsink) override {
         if (ROdereference()) {
             sock->deref(xsink);
             delete this;
@@ -2481,20 +2485,21 @@ public:
         }
 
         qore_socket_private* sp = qore_socket_private::get(*priv->socket);
+        qore_socket_private::SslRef ssl = sp->getSsl();
         switch (action) {
             case Action::GetCipherName:
                 // other threads read the cipher from the cache until the TLS state changes
                 sp->cacheTlsCipher();
-                setStringValue(sp->ssl ? sp->ssl->getCipherName() : nullptr);
+                setStringValue(ssl ? ssl->getCipherName() : nullptr);
                 break;
 
             case Action::GetCipherVersion:
                 sp->cacheTlsCipher();
-                setStringValue(sp->ssl ? sp->ssl->getCipherVersion() : nullptr);
+                setStringValue(ssl ? ssl->getCipherVersion() : nullptr);
                 break;
 
             case Action::IsSecure:
-                output = static_cast<bool>(sp->ssl);
+                output = static_cast<bool>(ssl);
                 break;
 
             case Action::SetAlpnProtocols:
@@ -2513,11 +2518,11 @@ public:
                 break;
 
             case Action::IsHttp2:
-                output = sp->ssl ? sp->ssl->isHttp2() : false;
+                output = ssl ? ssl->isHttp2() : false;
                 break;
 
             case Action::VerifyPeerCertificate:
-                output = sp->ssl ? static_cast<int64>(sp->ssl->verifyPeerCertificate()) : static_cast<int64>(-1);
+                output = ssl ? static_cast<int64>(ssl->verifyPeerCertificate()) : static_cast<int64>(-1);
                 break;
 
             case Action::GetRemoteCertificate:
@@ -2567,10 +2572,11 @@ private:
     }
 
     DLLLOCAL void setAlpnValue(qore_socket_private* sp) {
-        if (!sp->ssl) {
+        qore_socket_private::SslRef ssl = sp->getSsl();
+        if (!ssl) {
             return;
         }
-        std::string proto = sp->ssl->getAlpnProtocol();
+        std::string proto = ssl->getAlpnProtocol();
         if (!proto.empty()) {
             output = new QoreStringNode(proto.c_str());
         }
@@ -4172,6 +4178,10 @@ static int qore_socket_object_exec_send_http_response(QoreSocketObject* s, QoreH
 
 static int qore_socket_object_exec_send_http_chunked_body_trailer(QoreSocketObject* s,
         const QoreHashNode* trailer, int source, int timeout_ms, ExceptionSink* xsink) {
+    // the values are written to the message as C strings, which would be cut at a NUL character
+    if (q_check_http_header_values(trailer, "SOCKET-SEND-ERROR", xsink)) {
+        return -1;
+    }
     my_socket_priv* priv = my_socket_priv::getPriv(*s);
     QoreSocketObjectAsyncIoGuard async_guard(*priv, xsink, NB_SEND);
     if (!async_guard) {
@@ -4674,10 +4684,12 @@ bool QoreSocketObject::hasPendingData() const {
     if (priv->socket->priv->buflen) {
         return true;
     }
-    // Check SSL buffer without syscalls or locking — safe from any thread
-    // SSL_pending() is documented as thread-safe for read-only queries
-    if (priv->socket->priv->ssl && priv->socket->priv->ssl->pending() > 0) {
-        return true;
+    // Check the SSL buffer without syscalls; the reference keeps the TLS connection valid if another thread closes
+    // the socket
+    if (qore_socket_private::SslRef ssl = priv->socket->priv->getSsl()) {
+        if (ssl->pending() > 0) {
+            return true;
+        }
     }
     // Check H2/H3 session for pending data at the protocol level:
     // - hasStreamData(): CONNECT stream DATA received in a previous read cycle
@@ -5477,8 +5489,9 @@ int QoreSocketObject::checkIdleDataForAsyncPollLocked(ExceptionSink* xsink) {
     }
     // Plain TCP: raw non-blocking peek. Callers are async poll operations
     // already running under AsyncIoController ownership.
+    qore_socket_private::IoUseHelper io_use(*p);
     char peek_buf;
-    ssize_t rc = ::recv(p->sock, &peek_buf, 1, MSG_PEEK | MSG_DONTWAIT);
+    ssize_t rc = ::recv(io_use.getDescriptor(), &peek_buf, 1, MSG_PEEK | MSG_DONTWAIT);
     if (rc > 0) {
         return 1;
     }
@@ -6088,6 +6101,25 @@ int QoreSocketObject::getSocket() {
 void QoreSocketObject::dbgForceFdSwapNextWait() {
     AutoLocker al(priv->m);
     qore_socket_private::get(*priv->socket)->debug_force_fd_swap_next_wait = true;
+}
+
+void QoreSocketObject::dbgCloseAtNextSslIo() {
+    AutoLocker al(priv->m);
+    qore_socket_private* sp = qore_socket_private::get(*priv->socket);
+    sp->dbgSetBeforeSslIo([sp]() {
+        // the socket is closed by another thread, and the I/O call continues once the close is complete; the I/O
+        // call's poll state holds a reference to the socket
+        try {
+            std::thread closer([sp]() {
+                sp->prepareForClose();
+                sp->close_internal();
+            });
+            closer.join();
+        } catch (const std::system_error& e) {
+            // the socket stays open, so the test's I/O call does not fail
+            fprintf(stderr, "dbgCloseAtNextSslIo(): cannot start the closing thread: %s\n", e.what());
+        }
+    });
 }
 #endif
 

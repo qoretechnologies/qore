@@ -1213,6 +1213,9 @@ static void collectEmbeddedUserModules(std::unordered_set<std::string>& local_mo
     std::unordered_map<std::string, std::string>& local_module_paths,
     const qore_program_private* pp);
 
+// `.qoa` archives are written by LLVM's archive writer (see createStaticArchive())
+#include <llvm/Object/ArchiveWriter.h>
+#include <llvm/Support/Path.h>
 // Phase 4 slice 10: llvm::object::ObjectFile for reading fragment
 // metadata out of `.qo` ELF symbol tables at compile time (`-L<dir>`
 // preload path).
@@ -23012,18 +23015,25 @@ static bool shellSingleQuote(const std::string& value, std::string& quoted) {
     return true;
 }
 
-// Default-on parallel codegen tuning. JOBS_CAP bounds the auto-selected job count (= CPU
+// Parallel codegen tuning. JOBS_CAP bounds the auto-selected number of codegen threads (= CPU
 // count when QCC_JOBS is unset). SPLIT_THRESHOLD_DEFAULT is the optimized-IR instruction
-// count below which a module is NOT split (the split overhead would outweigh the win, and
-// under a busy build the jobserver gives ~1 concurrency where it is pure loss). Only the
+// count below which a module is NOT split (the split overhead would outweigh the win). Only the
 // long-pole modules that gate the build tail clear it. Override with QCC_SPLIT_THRESHOLD.
 #define QORE_AOT_JOBS_CAP 32u
 // ~50k optimized IR instructions: measured break-even is well below the smallest real qlib
 // module (Mime ~58k wins standalone), while trivially-small modules (where SplitModule +
-// bitcode + ld -r overhead would dominate) stay single. The concurrency gate in
-// codegenModuleSplit (single codegen when no spare cores) is what keeps default-on safe under
-// a saturated build; this threshold only spares tiny standalone/incremental rebuilds.
+// bitcode + ld -r overhead would dominate) stay single.
 #define QORE_AOT_SPLIT_THRESHOLD_DEFAULT 50000L
+// The number of parts a module at or above the split threshold is always partitioned into.
+// The parts, and so the compiled object, depend only on the module: never on the load of the
+// build (the make jobserver's free tokens), the machine's CPU count or QCC_JOBS, which only
+// limit how many parts are compiled at once.  When the part count followed the threads
+// available, two builds of the same source gave different objects (33 of 391 qlib qmods
+// differed between two clean builds), and the output differed between machines.  Measured on
+// the largest qlib module (DataProvider): 4 parts compile in 27.4 s with free cores against
+// 39.3 s for a single object, 16 and 32 parts gain little more (25.5 s / 25.8 s), and 4 parts
+// compiled one after another on one core take 43.3 s (+11%).
+#define QORE_AOT_SPLIT_PARTS 4u
 
 // GNU-make jobserver client (the same mechanism GCC-LTO `-flto=jobserver` and Cargo/rustc
 // use): bounds the total concurrent codegen threads across all qcc invocations under
@@ -23130,14 +23140,16 @@ private:
 };
 
 // Phase 3 parallel codegen (split-after-opt): partition the already-optimized `module` into
-// up to `jobs` parts and codegen each on a worker thread with its own LLVMContext +
-// TargetMachine (cross-context Value* is UB, so parts move via bitcode), then partial-link
-// (ld -r) the parts into one relocatable object at `out_o`, preserving emitObjectFile's
-// single-object contract. Optimization stays whole-module (done by the caller) so
-// cross-function inlining and runtime perf are unchanged. PreserveLocals=false is required to
-// balance the partitions (=true keeps the dense web of AOT local symbols in one partition,
-// defeating parallelism). The final .qmod/exe link controls symbol visibility, so the locals
-// SplitModule externalizes do not leak into the artifact's exported (dynamic) symbol table.
+// QORE_AOT_SPLIT_PARTS parts and codegen them on up to `jobs` worker threads, each part with its
+// own LLVMContext + TargetMachine (cross-context Value* is UB, so parts move via bitcode), then
+// partial-link (ld -r) the parts in part order into one relocatable object at `out_o`,
+// preserving emitObjectFile's single-object contract.  The object depends only on the module:
+// the number of threads changes how long the codegen takes, never its output. Optimization
+// stays whole-module (done by the caller) so cross-function inlining and runtime perf are
+// unchanged. PreserveLocals=false is required to balance the partitions (=true keeps the dense
+// web of AOT local symbols in one partition, defeating parallelism). The final .qmod/exe link
+// controls symbol visibility, so the locals SplitModule externalizes do not leak into the
+// artifact's exported (dynamic) symbol table.
 static bool codegenModuleSplit(llvm::Module& module, int jobs, const std::string& triple,
         const std::string& out_o, std::string& error, bool debug_opt,
         std::vector<AOTCompiledFuncWithSlots>& func_slots, bool& pc_locs_built) {
@@ -23159,36 +23171,6 @@ static bool codegenModuleSplit(llvm::Module& module, int jobs, const std::string
             llvm::TargetOptions{}, llvm::Reloc::PIC_);
 #endif
     };
-
-    // Determine actual concurrency BEFORE splitting: under a make jobserver acquire up to
-    // jobs-1 tokens (the busy phase yields ~0 -> concurrency 1; the tail yields many);
-    // standalone there is no jobserver, so concurrency = jobs. When only one thread is
-    // available there are no spare cores, so splitting would add pure overhead (SplitModule +
-    // bitcode + ld -r) for no parallel win -> fall back to single-object codegen. This is what
-    // makes default-on safe under a saturated `make -jN`: only modules that reach spare cores
-    // (the build tail, or a standalone rebuild) actually split. Determinism: standalone the
-    // concurrency is fixed (= jobs), so the output is reproducible; under a jobserver it varies
-    // with load, but the build keys content-digest stamps on inputs, not output bytes.
-    JobserverClient js;
-    int concurrency = js.available() ? (1 + js.acquire(jobs - 1)) : jobs;
-    if (concurrency < 1) {
-        concurrency = 1;
-    }
-    if (concurrency <= 1) {
-        llvm::TargetMachine* tm = makeTM();
-        if (!tm) {
-            error = "failed to create target machine for '" + triple + "'";
-            return false;
-        }
-        module.setDataLayout(tm->createDataLayout());
-        bool ok = codegenModuleToObject(module, tm, out_o, error, debug_opt);
-        delete tm;
-        if (debug_opt) {
-            fprintf(stderr, "AOT: concurrency=1 (no spare cores) -> single codegen %s\n",
-                out_o.c_str());
-        }
-        return ok;
-    }
 
     // Record the symbols that are legitimately global (defined, non-local) in the ORIGINAL
     // module. SplitModule(PreserveLocals=false) promotes the module's internal symbols to
@@ -23220,10 +23202,11 @@ static bool codegenModuleSplit(llvm::Module& module, int jobs, const std::string
         collect_global(a);
     }
 
-    // Partition into `concurrency` parts (matched to the cores we hold) + serialize each to
-    // bitcode on the main thread (in module's context).
+    // Partition into QORE_AOT_SPLIT_PARTS parts + serialize each to bitcode on the main thread
+    // (in module's context).  The part count must not depend on the threads available, or the
+    // object would depend on the build's load and the machine.
     std::vector<llvm::SmallString<0>> bc;
-    llvm::SplitModule(module, static_cast<unsigned>(concurrency),
+    llvm::SplitModule(module, QORE_AOT_SPLIT_PARTS,
         [&bc](std::unique_ptr<llvm::Module> mp) {
             llvm::SmallString<0> buf;
             llvm::raw_svector_ostream os(buf);
@@ -23274,12 +23257,29 @@ static bool codegenModuleSplit(llvm::Module& module, int jobs, const std::string
         }
         delete tm;
     };
-    // nparts == concurrency (the cores we hold), so run exactly one thread per part. `objs` is
-    // indexed by part, so the ld -r output is deterministic regardless of thread scheduling.
+    // The threads that compile the parts: up to `jobs`, and under a make jobserver only as many
+    // as the tokens it gives (the process always owns one), so parallel codegen never
+    // oversubscribes `make -jN`; when no token is free the parts are compiled one after another.
+    // Each thread takes the next part until none is left. `objs` is indexed by part, so the
+    // ld -r output does not depend on the number of threads or on their scheduling.
+    unsigned max_threads = jobs > 1 ? static_cast<unsigned>(jobs) : 1u;
+    if (max_threads > nparts) {
+        max_threads = static_cast<unsigned>(nparts);
+    }
+    JobserverClient js;
+    unsigned nthreads = js.available()
+        ? 1u + static_cast<unsigned>(js.acquire(static_cast<int>(max_threads) - 1))
+        : max_threads;
+    std::atomic<size_t> next_part{0};
+    auto run_parts = [&]() {
+        for (size_t i = next_part.fetch_add(1); i < nparts; i = next_part.fetch_add(1)) {
+            worker(i);
+        }
+    };
     std::vector<llvm::thread> threads;
-    threads.reserve(nparts);
-    for (size_t i = 0; i < nparts; ++i) {
-        threads.push_back(q_start_llvm_compile_thread(worker, i));
+    threads.reserve(nthreads);
+    for (unsigned t = 0; t < nthreads; ++t) {
+        threads.push_back(q_start_llvm_compile_thread(run_parts));
     }
     for (auto& th : threads) {
         th.join();
@@ -23554,8 +23554,8 @@ static bool codegenModuleSplit(llvm::Module& module, int jobs, const std::string
         }
     }
     if (debug_opt && all) {
-        fprintf(stderr, "AOT: parallel codegen %zu parts, concurrency=%d (jobs=%d, jobserver=%s)"
-            " -> %s\n", nparts, concurrency, jobs, js.available() ? "yes" : "no", out_o.c_str());
+        fprintf(stderr, "AOT: parallel codegen %zu parts, threads=%u (jobs=%d, jobserver=%s)"
+            " -> %s\n", nparts, nthreads, jobs, js.available() ? "yes" : "no", out_o.c_str());
     }
     return all;
 }
@@ -23794,13 +23794,14 @@ static bool emitObjectFile(llvm::Module& module, const std::string& path, std::s
     // name does not end in `.qo`, so a concurrent sibling scan (regex
     // `.+\.qo$`) skips it.  Same idiom as linkSharedLib's atomic replace.
     std::string tmp_path = path + ".tmp." + std::to_string(getpid());
-    // Backend codegen of the optimized module -> one relocatable object. With QCC_JOBS>1
-    // (native main-module emit only), use split-after-opt parallel codegen; otherwise the
-    // single-object reference path. Both produce one .o at tmp_path.
-    // Effective parallelism: explicit QCC_JOBS wins; otherwise default-on to the machine's
-    // CPU count (capped). Under `make -jN` the jobserver in codegenModuleSplit throttles
-    // actual concurrency, so default-on never oversubscribes. A negative/zero QCC_JOBS
-    // disables (single-object).
+    // Backend codegen of the optimized module -> one relocatable object. A native main-module
+    // emit at or above the split threshold uses split-after-opt parallel codegen into
+    // QORE_AOT_SPLIT_PARTS parts; otherwise the single-object reference path. Both produce one
+    // .o at tmp_path, and which one is used depends only on the module, so the output never
+    // depends on the threads available.
+    // Codegen threads for the parts: explicit QCC_JOBS wins; otherwise the machine's CPU count
+    // (capped). Under `make -jN` the jobserver in codegenModuleSplit throttles them, so parallel
+    // codegen never oversubscribes. A negative/zero QCC_JOBS means one thread.
     int aot_jobs;
     if (const char* jenv = getenv("QCC_JOBS")) {
         aot_jobs = atoi(jenv);
@@ -23812,11 +23813,11 @@ static bool emitObjectFile(llvm::Module& module, const std::string& path, std::s
         aot_jobs = hc ? static_cast<int>(hc < QORE_AOT_JOBS_CAP ? hc : QORE_AOT_JOBS_CAP) : 1;
     }
     // Split only modules whose optimized IR instruction count exceeds the threshold: below it,
-    // the split overhead (SplitModule + bitcode + ld -r) outweighs the parallel codegen win,
-    // and under a busy build (jobserver concurrency ~1) it would be pure loss. Long-pole modules
-    // that gate the build tail clear the threshold and benefit from full concurrency there. The
-    // size metric is CPU-speed-invariant; override via QCC_SPLIT_THRESHOLD for tuning.
-    bool do_split = (aot_jobs > 1 && func_slots && !func_slots->empty() && !target_triple);
+    // the split overhead (SplitModule + bitcode + ld -r) outweighs the parallel codegen win.
+    // Long-pole modules that gate the build tail clear the threshold and benefit from full
+    // concurrency there. The size metric is CPU-speed-invariant; override via
+    // QCC_SPLIT_THRESHOLD for tuning.
+    bool do_split = (func_slots && !func_slots->empty() && !target_triple);
     if (do_split) {
         size_t insts = 0;
         for (llvm::Function& f : module) {
@@ -26578,6 +26579,36 @@ static std::string createAOTModuleVersionScript(const std::string& so_path, std:
 #endif
 }
 
+//! Appends the options that make a module linked for the host depend only on its objects on macOS
+/** A module is linked to a temporary file that is renamed when it is complete, so that a module being linked is never
+    loaded, and its object files are deleted when it has been linked.  On Mach-O:
+    - the linker takes the install name (LC_ID_DYLIB) from the output file, and the temporary file's name has the
+      process id in it; the module gets its final path as its install name instead
+    - the linker records the object files and their modification times in a debug map, which a debugger reads the
+      debug information from; the objects are deleted, so the map only made the module depend on when and by which
+      process it was compiled (the parts of a split module have the process id in their names), and it is left out
+
+    Each made every link of the same objects give a different module (the UUID derived from the contents and the code
+    signature differed as well).  The install name of a module loaded with dlopen() has no other use.  ELF modules are
+    linked without a soname, and their debug information is in the module itself.
+
+    @param cmd the link command to append the options to
+    @param so_path the final path of the module
+    @param error set if the path cannot be given to the linker
+
+    @return true for success
+*/
+static bool appendAOTModuleLinkOptions(std::string& cmd, const std::string& so_path, std::string& error) {
+#ifdef __APPLE__
+    std::string install_name;
+    if (!quoteAOTLinkArgument(so_path, install_name, error)) {
+        return false;
+    }
+    cmd += " -Xlinker -install_name -Xlinker " + install_name + " -Xlinker -S";
+#endif
+    return true;
+}
+
 static bool linkSharedLib(const std::string& obj_path, const std::string& so_path, std::string& error,
         const char* target_triple = nullptr) {
     if (target_triple) {
@@ -26605,6 +26636,9 @@ static bool linkSharedLib(const std::string& obj_path, const std::string& so_pat
         return false;
     }
     std::string cmd = compiler + " -shared -o " + output + " " + object + " -L" + libdir + " -lqore";
+    if (!appendAOTModuleLinkOptions(cmd, so_path, error)) {
+        return false;
+    }
     if (config.emit_rpath) {
         cmd += " -Xlinker -rpath -Xlinker " + libdir;
     }
@@ -27187,6 +27221,7 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
         // to properly register AOT functions on all classes and functions from .qc/.ql files.
         std::string combined_source = main_source;
 
+        int file_warn_mask = qore_program_private::getModuleFileWarningMask(*qpgm);
         // Parse each .qc/.ql file for compilation and add to combined source
         if (fileList && fileList->size() > 0) {
             for (size_t i = 0; i < fileList->size(); ++i) {
@@ -27210,7 +27245,7 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
                     continue;
                 }
 
-                qpgm->parsePending(file_source.c_str(), file_path.c_str(), &xsink, &wsink, QP_WARN_DEFAULT);
+                qpgm->parsePending(file_source.c_str(), file_path.c_str(), &xsink, &wsink, file_warn_mask);
                 if (xsink.isException()) {
                     mod_ctx.close();
                     xsink.handleExceptions();
@@ -31288,6 +31323,7 @@ bool QoreAOT::compileSeparatedModuleFile(const char* dir_path,
 
         std::string combined_source = main_source;
 
+        int file_warn_mask = qore_program_private::getModuleFileWarningMask(*qpgm);
         // Parse siblings in the same order as whole-module compilation and source loading.
         size_t source_index = 0;
         for (const std::string& fname : sorted_secondary_names) {
@@ -31304,7 +31340,7 @@ bool QoreAOT::compileSeparatedModuleFile(const char* dir_path,
                 continue;
             }
             qpgm->parsePending(file_source.c_str(), file_path.c_str(), &xsink, &wsink,
-                QP_WARN_DEFAULT);
+                file_warn_mask);
             if (xsink.isException()) {
                 mod_ctx.close();
                 xsink.handleExceptions();
@@ -31659,6 +31695,9 @@ static bool linkSharedLibMulti(const std::vector<std::string>& obj_paths,
         return false;
     }
     std::string cmd = compiler + " -shared -o " + output;
+    if (!appendAOTModuleLinkOptions(cmd, so_path, error)) {
+        return false;
+    }
     size_t count = 0;
     for (const std::string& p : obj_paths) {
         if (!(count++ % 100) && qore_check_cancel(nullptr, "AOT native linking")) {
@@ -31836,6 +31875,7 @@ bool QoreAOT::compileModuleFromObjects(const char* dir_path,
         }
 
         std::string combined_source = main_source;
+        int file_warn_mask = qore_program_private::getModuleFileWarningMask(*qpgm);
         if (fileList && fileList->size() > 0) {
             for (size_t i = 0; i < fileList->size(); ++i) {
                 if (!(i % 10) && qore_check_cancel(&xsink, "AOT module source parsing")) {
@@ -31855,7 +31895,7 @@ bool QoreAOT::compileModuleFromObjects(const char* dir_path,
                     continue;
                 }
                 qpgm->parsePending(file_source.c_str(), file_path.c_str(),
-                    &xsink, &wsink, QP_WARN_DEFAULT);
+                    &xsink, &wsink, file_warn_mask);
                 if (xsink.isException()) {
                     mod_ctx.close();
                     xsink.handleExceptions();
@@ -32158,11 +32198,38 @@ bool QoreAOT::compileModuleFromObjects(const char* dir_path,
     return true;
 }
 
-// Phase 4 slice 7: package a list of objects into a Unix `ar` archive
-// via `ar rcs <archive> <obj1> <obj2> …`.  Produces a standard static
-// library suitable for `-l<name>` or direct path linkage in a C++
-// host's link line.  Cross-compile: `ar` is target-agnostic for simple
-// archive creation, but we still honor the escape used elsewhere.
+//! The archive format of the host's linker, as llvm-ar chooses it for a host
+static llvm::object::Archive::Kind getHostArchiveKind() {
+    llvm::Triple host(llvm::sys::getProcessTriple());
+    if (host.isOSDarwin()) {
+        return llvm::object::Archive::K_DARWIN;
+    }
+    if (host.isOSAIX()) {
+        return llvm::object::Archive::K_AIXBIG;
+    }
+    return llvm::object::Archive::K_GNU;
+}
+
+//! Packages objects into a static archive for linking into a C++ host (Phase 4 slice 7)
+/** The archive is a standard static library, suitable for \c -l<name> or direct path linkage in a C++ host's link
+    line, in the host linker's format (Darwin on Apple platforms, the big archive format on AIX, GNU otherwise) and
+    with a symbol table.  Each object is a member named after its file name (without its directory), in the given
+    order.
+
+    It is written by LLVM's archive writer in deterministic mode: member headers record no modification time, owner
+    or group and a fixed mode, so the same objects always give the same archive, independent of when and by whom they
+    were built.  The system \c ar is not used: GNU \c ar records each member's time, owner, group and mode unless it
+    is given \c D, Apple's \c ar zeroes only the times, and only when \c ZERO_AR_DATE is set, so the archive depended
+    on which \c ar was first in \c PATH, and building it failed where there was none.  The archive is written to a
+    temporary file and renamed into place.
+
+    @param obj_paths the objects to archive
+    @param archive_path the archive to write; replaced if it exists
+    @param error set to the reason on failure
+    @param target_triple a cross-compilation target; the archive is then left to the target's toolchain
+
+    @return true on success, false on failure, with \a error set
+*/
 static bool createStaticArchive(const std::vector<std::string>& obj_paths,
         const std::string& archive_path, std::string& error,
         const char* target_triple = nullptr) {
@@ -32176,20 +32243,36 @@ static bool createStaticArchive(const std::vector<std::string>& obj_paths,
         return false;
     }
 
-    // ar rcs archive.qoa input1.o input2.o ...
-    // -r: replace/insert; -c: create archive silently; -s: write symbol index.
-    // Existing archive is overwritten — remove first to avoid ar appending
-    // stale entries from a previous build.
-    remove(archive_path.c_str());
-
-    std::string cmd = "ar rcs " + archive_path;
-    for (const std::string& p : obj_paths) {
-        cmd += " " + p;
+    std::vector<llvm::NewArchiveMember> members;
+    members.reserve(obj_paths.size());
+    for (size_t i = 0; i < obj_paths.size(); ++i) {
+        if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT archive creation")) {
+            error = "AOT archive creation cancelled";
+            return false;
+        }
+        llvm::Expected<llvm::NewArchiveMember> member
+            = llvm::NewArchiveMember::getFile(obj_paths[i], /* Deterministic */ true);
+        if (!member) {
+            error = "cannot read archive member '" + obj_paths[i] + "': " + llvm::toString(member.takeError());
+            return false;
+        }
+        // getFile() names the member after the path it was given; like ar, name it after the file alone, so the
+        // archive does not depend on where the objects were built.  The name refers to the member buffer's
+        // identifier, which the member owns.
+        member->MemberName = llvm::sys::path::filename(member->MemberName);
+        members.push_back(std::move(*member));
     }
-    printd(2, "AOT: archive command: %s\n", cmd.c_str());
-    int rc = system(cmd.c_str());
-    if (rc != 0) {
-        error = "ar command failed with exit code " + std::to_string(rc);
+    assert(members.size() == obj_paths.size());
+
+#if LLVM_VERSION_MAJOR >= 18
+    const llvm::SymtabWritingMode symtab = llvm::SymtabWritingMode::NormalSymtab;
+#else
+    const bool symtab = true;
+#endif
+    printd(2, "AOT: writing archive '%s' with %zu member(s)\n", archive_path.c_str(), members.size());
+    if (llvm::Error err = llvm::writeArchive(archive_path, members, symtab, getHostArchiveKind(),
+            /* Deterministic */ true, /* Thin */ false)) {
+        error = "cannot write archive '" + archive_path + "': " + llvm::toString(std::move(err));
         return false;
     }
     return true;
@@ -32244,7 +32327,8 @@ static void emitQoaRegisterAllFunction(llvm::LLVMContext& ctx,
 // archive suitable for static linkage into a C++ host.  Mirrors
 // `compileModuleFromObjects` but swaps two things: the glue emits
 // prefixed module-info globals + a `qore_qoa_register_all` entry
-// point, and final packaging uses `ar rcs` instead of `ld -shared`.
+// point, and final packaging writes a static archive (see
+// createStaticArchive()) instead of linking with `ld -shared`.
 bool QoreAOT::archiveModuleFromObjects(const char* dir_path,
                                        const std::vector<std::string>& object_paths,
                                        const std::string& output_path,
@@ -32355,6 +32439,7 @@ bool QoreAOT::archiveModuleFromObjects(const char* dir_path,
         }
 
         std::string combined_source = main_source;
+        int file_warn_mask = qore_program_private::getModuleFileWarningMask(*qpgm);
         if (fileList && fileList->size() > 0) {
             for (size_t i = 0; i < fileList->size(); ++i) {
                 if (!(i % 10) && qore_check_cancel(&xsink, "AOT module source parsing")) {
@@ -32374,7 +32459,7 @@ bool QoreAOT::archiveModuleFromObjects(const char* dir_path,
                     continue;
                 }
                 qpgm->parsePending(file_source.c_str(), file_path.c_str(),
-                    &xsink, &wsink, QP_WARN_DEFAULT);
+                    &xsink, &wsink, file_warn_mask);
                 if (xsink.isException()) {
                     mod_ctx.close();
                     xsink.handleExceptions();

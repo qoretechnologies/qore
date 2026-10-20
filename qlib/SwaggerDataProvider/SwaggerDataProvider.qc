@@ -231,7 +231,6 @@ public class SwaggerDataProvider inherits SwaggerDataProviderCommon {
         if (rest) {
             url = rest.getUrl();
         } else {
-            string url;
             if (schema.schemes) {
                 url = schema.schemes.https ? "https" : schema.schemes.firstKey();
             } else {
@@ -239,8 +238,9 @@ public class SwaggerDataProvider inherits SwaggerDataProviderCommon {
             }
             url += "://";
             url += schema.host ?? "localhost";
+            # the basePath of a Swagger schema begins with a slash
             if (schema.basePath) {
-                url += "/" + schema.basePath;
+                url += schema.basePath;
             }
         }
         return sprintf("Swagger/OpenAPI data provider for URL `%s` and URI path `%s`", get_masked_url(url), uri_path);

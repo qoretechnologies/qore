@@ -88,6 +88,7 @@ bool resolvePipelineStep(const std::string& algorithm, PipelineStepType& type_ou
 } // namespace
 
 std::vector<uint8_t> QoreMLPipeline::serializeState() const {
+    std::lock_guard<std::mutex> lk(mtx);
     std::vector<uint8_t> buf;
     MLSerialization::writeBool(buf, fitted);
     MLSerialization::writeUint32(buf, static_cast<uint32_t>(steps.size()));
@@ -174,8 +175,9 @@ QoreMLPipeline* QoreMLPipeline::deserializeState(const uint8_t* data, size_t len
         QoreObject* step_obj = new QoreObject(step_cls, pgm);
         step_obj->setPrivate(step_cid, priv);
 
-        // addStep refs the object; release our local one after.
-        p->addStep(step_name, step_type, step_obj);
+        // the private data is not attached to an object yet, so addStep() references the step object itself; the
+        // reference made here is released after
+        p->addStep(step_name, step_type, step_obj, nullptr, xsink);
         step_obj->deref(xsink);
         if (*xsink) {
             return nullptr;
@@ -185,9 +187,56 @@ QoreMLPipeline* QoreMLPipeline::deserializeState(const uint8_t* data, size_t len
     return p.release();
 }
 
-void QoreMLPipeline::addStep(const std::string& name, PipelineStepType type, QoreObject* obj) {
-    obj->ref();
+int QoreMLPipeline::addStep(const std::string& name, PipelineStepType type, QoreObject* obj, QoreObject* self,
+        ExceptionSink* xsink) {
+    std::lock_guard<std::mutex> lk(mtx);
+    if (!self) {
+        assert(owns_steps);
+        obj->ref();
+        steps.push_back({name, type, obj});
+        return 0;
+    }
+    assert(!owns_steps);
+    // the reference to the step object is held by the steps internal member set below
     steps.push_back({name, type, obj});
+    if (setStepsMember(self, xsink)) {
+        steps.pop_back();
+        return -1;
+    }
+    return 0;
+}
+
+int QoreMLPipeline::setStepsMember(QoreObject* self, ExceptionSink* xsink) {
+    ReferenceHolder<QoreListNode> l(new QoreListNode(QC_ABSTRACTMLMODEL->getTypeInfo()), xsink);
+    for (const PipelineStep& step : steps) {
+        l->push(step.obj->refSelf(), xsink);
+    }
+    return self->setMemberValue("steps", QC_MLPIPELINE, l.release(), xsink);
+}
+
+int QoreMLPipeline::attach(QoreObject* self, ExceptionSink* xsink) {
+    std::lock_guard<std::mutex> lk(mtx);
+    assert(owns_steps);
+    if (setStepsMember(self, xsink)) {
+        return -1;
+    }
+    // the steps member now references the step objects, so the references held here are released; this releases no
+    // step object
+    for (const PipelineStep& step : steps) {
+        step.obj->deref(xsink);
+    }
+    owns_steps = false;
+    return 0;
+}
+
+void QoreMLPipeline::destructor(ExceptionSink* xsink) {
+    std::lock_guard<std::mutex> lk(mtx);
+    if (!owns_steps) {
+        for (const PipelineStep& step : steps) {
+            step.obj->ref();
+        }
+        owns_steps = true;
+    }
 }
 
 bool QoreMLPipeline::isTransformer(PipelineStepType type) {
@@ -715,6 +764,7 @@ QoreListNode* QoreMLPipeline::predictMatrix(const MatrixXd& X, ExceptionSink* xs
 }
 
 QoreListNode* QoreMLPipeline::getStepNames(ExceptionSink* xsink) const {
+    std::lock_guard<std::mutex> lk(mtx);
     ReferenceHolder<QoreListNode> rv(new QoreListNode(stringTypeInfo), xsink);
     for (const auto& step : steps) {
         rv->push(new QoreStringNode(step.name), xsink);

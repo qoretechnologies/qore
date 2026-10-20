@@ -192,7 +192,7 @@ object sub test3() { return create_object_args(\"PrivTest\", 1);}
         addTestCase("inheritance", \inheritance());
         addTestCase("weak refs", \weakRefTest());
         addTestCase("object plus-equals", \objectPlusEqualsTest());
-        addTestCase("no private data", \noPrivateDataTest());
+        addTestCase("C++ methods on a Qore subclass and on a deleted object", \builtinMethodTest());
         set_return_value(main());
     }
 
@@ -432,16 +432,14 @@ object sub test3() { return create_object_args(\"PrivTest\", 1);}
         assertEq(99, obj.c);
     }
 
-    #! Tests that calling a C++ method on an object with no C++ private data throws
-    #! OBJECT-INCOMPATIBLE instead of the misleading OBJECT-ALREADY-DELETED
-    noPrivateDataTest() {
-        # NullDatasource inherits abstract C++ class AbstractDatasource but has no C++ private
-        # data (no constructor calls setPrivate()), so calling a non-abstract C++ method on it
-        # triggers getReferencedPrivateData() with privateData == nullptr
+    #! Tests calling a C++ method on a Qore subclass of an abstract C++ class, and on a deleted object
+    builtinMethodTest() {
+        # NullDatasource inherits the abstract C++ class AbstractDatasource, whose constructor gives the object the
+        # private data of the class, so the non-abstract C++ methods of the class can be called on it
         AbstractDatasource ds = new NullDatasource();
-        assertThrows("OBJECT-INCOMPATIBLE", \ds.currentThreadInTransaction());
+        assertThrows("ABSTRACT-DATASOURCE-ERROR", \ds.currentThreadInTransaction());
 
-        # verify that genuinely deleted objects still throw OBJECT-ALREADY-DELETED;
+        # verify that genuinely deleted objects throw OBJECT-ALREADY-DELETED;
         # capture the method reference before delete so the closure holds a strong ref
         code ref = \ds.currentThreadInTransaction();
         delete ds;

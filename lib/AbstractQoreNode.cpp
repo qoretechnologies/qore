@@ -800,11 +800,11 @@ namespace {
 //! Counts a release in progress on the thread's stack for as long as it exists
 class ReleaseDepthHelper {
 public:
-    DLLLOCAL ReleaseDepthHelper(ReleaseState& state) : state(state) {
+    ReleaseDepthHelper(ReleaseState& state) : state(state) {
         ++state.depth;
     }
 
-    DLLLOCAL ~ReleaseDepthHelper() {
+    ~ReleaseDepthHelper() {
         assert(state.depth);
         --state.depth;
     }

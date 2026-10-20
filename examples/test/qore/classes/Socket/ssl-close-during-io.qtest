@@ -1,0 +1,168 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    Regression test for a TLS socket closed by another thread while an I/O call uses its TLS connection.
+
+    A socket can be closed by another thread at any time, for example by the abort of an HTTP/2 server poll
+    operation while the socket's I/O thread sends HTTP/2 frames.  The I/O call read the socket's TLS connection
+    before taking its reference to it, and the reference count was not atomic, so the close could release the
+    connection under the call: a use-after-free, or in a debug build an assertion failure in the error handling
+    of the failed SSL call.  The close also called SSL_shutdown() while the call was in an SSL call of the same
+    connection.  The debug-only dbg_close_socket_at_next_ssl_io() closes the socket from another thread at the start
+    of the next SSL I/O call, where the call is about to use the connection; the call must fail and the socket must
+    be closed, without touching freed memory.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires ../../../TestCertificates.qm
+
+%exec-class SslCloseDuringIoTest
+
+class SslCloseDuringIoTest inherits QUnit::Test {
+    constructor() : Test("SslCloseDuringIoTest", "1.0") {
+        addTestCase("a send fails when another thread closes the socket", \sendTest());
+        addTestCase("a receive ends when another thread closes the socket", \recvTest());
+        addTestCase("the socket can be connected again after the close", \reconnectTest());
+        set_return_value(main());
+    }
+
+    private sendTest() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("dbg_close_socket_at_next_ssl_io() is only registered in a library-debug build");
+        }
+
+        hash<auto> conn = connectPair();
+        on_exit closePair(conn);
+        Socket client = conn.client;
+
+        # the connection works before the close
+        client.send("ping");
+        assertEq("ping", conn.received.get());
+
+        call_function("dbg_close_socket_at_next_ssl_io", client);
+        assertThrows("SOCKET-SSL-ERROR", \client.send(), "after-close");
+        assertFalse(client.isOpen(), "the socket is closed after the failed send");
+        # the peer sees the connection end
+        assertEq(NOTHING, conn.received.get());
+    }
+
+    private recvTest() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("dbg_close_socket_at_next_ssl_io() is only registered in a library-debug build");
+        }
+
+        hash<auto> conn = connectPair();
+        on_exit closePair(conn);
+        Socket client = conn.client;
+
+        call_function("dbg_close_socket_at_next_ssl_io", client);
+        # the read sees the end of the connection
+        assertEq("", client.recv(-1, 10s), "nothing is received from the closed connection");
+        assertFalse(client.isOpen(), "the socket is closed after the receive");
+    }
+
+    private reconnectTest() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("dbg_close_socket_at_next_ssl_io() is only registered in a library-debug build");
+        }
+
+        hash<auto> conn = connectPair();
+        on_exit closePair(conn);
+        Socket client = conn.client;
+
+        call_function("dbg_close_socket_at_next_ssl_io", client);
+        assertThrows("SOCKET-SSL-ERROR", \client.send(), "after-close");
+        assertFalse(client.isOpen());
+
+        # the same Socket object makes a new TLS connection
+        hash<auto> conn2 = connectPair(client);
+        on_exit closePair(conn2);
+        client.send("again");
+        assertEq("again", conn2.received.get());
+    }
+
+    #! Starts a TLS server for one connection that queues what it receives, and connects to it
+    /** @param client the socket to connect with; a new one if not given
+
+        @return a hash with \c client: the connected socket, \c received: a Queue with the data the server
+        receives, ending with @ref nothing when the connection ends, \c listener: the listening socket, and
+        \c done: a Counter that reaches zero when the server thread ends
+    */
+    private hash<auto> connectPair(*Socket client) {
+        Socket listener();
+        listener.bindINET("localhost", "0", True);
+        int port = listener.getSocketInfo().port;
+        listener.listen();
+        listener.setCertificate(TestCertificates::CertPem);
+        listener.setPrivateKey(TestCertificates::KeyPem);
+
+        Queue received();
+        Counter done(1);
+        background sub () {
+            on_exit {
+                received.push(NOTHING);
+                done.dec();
+            }
+            try {
+                *Socket peer = listener.acceptSSL(10s);
+                if (!peer) {
+                    return;
+                }
+                while (True) {
+                    *string str = peer.recv(-1, 10s);
+                    if (!exists str || !str.size()) {
+                        break;
+                    }
+                    received.push(str);
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                # the connection ends with an error when the client's socket is closed without a TLS shutdown
+            }
+        }();
+
+        if (!client) {
+            client = new Socket();
+        }
+        client.connectSSL("localhost:" + port, 10s);
+        return {
+            "client": client,
+            "received": received,
+            "listener": listener,
+            "done": done,
+        };
+    }
+
+    #! Closes the client and waits for the server thread of the pair to end
+    private closePair(hash<auto> conn) {
+        try {
+            conn.client.close();
+        } catch () {
+        }
+        conn.done.waitForZero();
+        conn.listener.close();
+    }
+}

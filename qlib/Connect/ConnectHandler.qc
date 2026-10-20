@@ -692,7 +692,6 @@ handler.registerDatagramBidi("Sensor", "Exchange",
             # Async H2 end-of-stream write + io_wake to flush promptly.
             # Replaces the former sendHttp2StreamData + flushHttp2 sync pair.
             s.sendHttp2StreamData(stream_id, end_frame, True);
-            *code<nothing()> io_wake = cx."header-info".io_wake;
             if (io_wake) {
                 io_wake();
             }
@@ -781,7 +780,6 @@ handler.registerDatagramBidi("Sensor", "Exchange",
             # Async H2 end-of-stream write + io_wake to flush promptly.
             # Replaces the former sendHttp2StreamData + flushHttp2 sync pair.
             s.sendHttp2StreamData(stream_id, end_frame, True);
-            *code<nothing()> io_wake = cx."header-info".io_wake;
             if (io_wake) {
                 io_wake();
             }
@@ -856,7 +854,6 @@ handler.registerDatagramBidi("Sensor", "Exchange",
             # Async H2 end-of-stream write + io_wake to flush promptly.
             # Replaces the former sendHttp2StreamData + flushHttp2 sync pair.
             s.sendHttp2StreamData(stream_id, end_frame, True);
-            *code<nothing()> io_wake = cx."header-info".io_wake;
             if (io_wake) {
                 io_wake();
             }

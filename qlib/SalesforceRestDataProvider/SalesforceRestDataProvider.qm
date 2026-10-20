@@ -251,6 +251,9 @@ module SalesforceRestDataProvider {
     - declared \c SalesforcePubSubDataProvider as an optional child module, so that an installed Salesforce
       Pub/Sub API event source attaches itself without the consumer having to load it explicitly
       (<a href="https://github.com/qoretechnologies/qore/issues/5365">issue 5365</a>)
+    - the field of a search expression is a field path: a path of more than one key is written in SOQL relationship
+      syntax (\c Account.Name), and a field whose key has a dot raises \c WHERE-ERROR instead of being sent as its
+      escaped text
 
     @subsection salesforcerestdataprovider_v2_0 SalesforceRestDataProvider v2.0
     - added support for the data provider action catalog API

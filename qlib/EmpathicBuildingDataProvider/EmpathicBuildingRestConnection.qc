@@ -196,7 +196,6 @@ public class EmpathicBuildingRestClient inherits RestClient::RestClient {
         # use URL form encoding for the message body
         setSerialization("url");
 
-        hash<auto> info;
         return gotOAuth2LoginInfo(doHaltianLoginRequest(\info));
     }
 }
@@ -338,7 +337,7 @@ public class EmpathicBuildingRestClientIo inherits RestClientIo::RestClientIo {
     private refreshTokenForRequest(*hash<auto> hdr) {
         AutoLock al(login_lock);
         {
-            AutoReadLock al(config_lock);
+            AutoReadLock crl(config_lock);
             string header = token_api_key_header_val.val() ? token_api_key_header_val : "authorization";
             # Compare with the token actually sent, not the token current when the response arrived.
             # A late rejection of an old token must not invalidate another request's retry.

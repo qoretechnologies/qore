@@ -11,6 +11,7 @@
 public class PwdTest inherits QUnit::Test {
     constructor() : Test("PwdTest", "1.0") {
         addTestCase("Pwd tests", \pwdTestMethod(), NOTHING);
+        addTestCase("Pwd error codes", \pwdErrorCodeTest());
 
         # Return for compatibility with test harness that checks return value.
         set_return_value(main());
@@ -33,6 +34,28 @@ public class PwdTest inherits QUnit::Test {
         testAssertion("getgrgid2()", \getgrgid2(), (0,), new TestResultPartialHashMatch(("gr_gid" : 0)));
 
         testAssertion("getgrnam()", \getgrnam(), (h.gr_name,), new TestResultPartialHashMatch(("gr_gid" : 0)));
-        testAssertion("getgrnam2()", \getgrnam(), (h.gr_name,), new TestResultPartialHashMatch(("gr_gid" : 0)));
+        testAssertion("getgrnam2()", \getgrnam2(), (h.gr_name,), new TestResultPartialHashMatch(("gr_gid" : 0)));
+    }
+
+    # the functions that raise an exception for an unknown user or group raise their documented error codes
+    pwdErrorCodeTest() {
+        if (!Option::HAVE_UNIX_USERMGT) {
+            testSkip("No support for UNIX user management");
+        }
+
+        # names and IDs that no system defines
+        string user = "qore-no-such-user-" + getpid();
+        string group = "qore-no-such-group-" + getpid();
+        int id = 2147483000;
+        assertNothing(getpwnam(user));
+        assertNothing(getgrnam(group));
+        assertNothing(getpwuid(id));
+        assertNothing(getgrgid(id));
+
+        # the description depends on whether the system reports an error for an unknown name
+        assertThrows("GETPWNAM2-ERROR", \getpwnam2(), user);
+        assertThrows("GETGRNAM2-ERROR", \getgrnam2(), group);
+        assertThrows("GETPWUID2-ERROR", \getpwuid2(), id);
+        assertThrows("GETGRGID2-ERROR", \getgrgid2(), id);
     }
 }

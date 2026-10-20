@@ -1,0 +1,157 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Util
+%requires Mime
+%requires Logger
+%requires HttpServerUtil
+%requires HttpServer
+%requires HttpClientIo
+%requires RestClientIo
+%requires ../../TestCertificates.qm
+
+%exec-class HttpClientIoRaceTest
+
+class TestHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return makeResponse(200, "reached", {"Content-Type": MimeTypeText});
+    }
+}
+
+#! The race of HTTP/3 and HTTP/2 of automatic protocol selection ends early only on a success
+/** When one protocol fails, the race waits for the other one's own outcome.  The server here receives HTTP/3 only:
+    nothing accepts TCP connections on its port, so HTTP/2 fails at once.  The client's first QUIC
+    flight of datagrams is dropped (\c QORE_QUIC_TEST_DROP_CLIENT_DATAGRAMS, DEBUG builds only), so the HTTP/3
+    handshake cannot complete before its retransmission timer fires, long after HTTP/2 has started and failed.
+*/
+public class HttpClientIoRaceTest inherits QUnit::Test {
+    public {
+        #! the client APIs tested
+        const Apis = ("REST", "REST async", "HTTP", "HTTP async");
+    }
+
+    private {
+        HttpServer server;
+        #! a QUIC listener; nothing listens on its port for TCP
+        int quic_port;
+    }
+
+    constructor() : Test("HttpClientIoRaceTest", "1.0") {
+        addTestCase("a server that receives HTTP/3 only is reached", \http3OnlyTest());
+        addTestCase("a certificate refused over HTTP/3 is reported when HTTP/2 fails first",
+            \certificateRefusalTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        server = new HttpServer(<HttpServerOptionInfo>{"logger": new Logger("http-client-io-race",
+            LoggerLevel::getLevelInfo())});
+        server.setDefaultHandler("test", new TestHandler());
+        server.waitForAsyncIo();
+        quic_port = server.addQuicListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
+            "cert": new SSLCertificate(TestCertificates::CertPem),
+            "key": new SSLPrivateKey(TestCertificates::KeyPem),
+        }).port;
+        server.waitForAsyncIo();
+    }
+
+    globalTearDown() {
+        if (server) {
+            server.stop();
+        }
+    }
+
+    #! HTTP/2 fails before the HTTP/3 handshake completes; the race waits for HTTP/3, which connects
+    http3OnlyTest() {
+        if (!dropFirstDatagram()) {
+            return;
+        }
+        on_exit unsetenv("QORE_QUIC_TEST_DROP_CLIENT_DATAGRAMS");
+        string url = sprintf("https://127.0.0.1:%d", quic_port);
+        foreach string api in (Apis) {
+            HttpClientIo::HttpClientConnectionManager mgr = getManager({"accept_all_certs": True});
+            on_exit mgr.closeAll();
+            hash<auto> resp = get(mgr, url, api);
+            assertEq("reached", resp.body, api);
+            assertEq("h3", resp.protocol, api);
+        }
+    }
+
+    #! HTTP/2 fails before HTTP/3 refuses the certificate; the race waits for HTTP/3 and reports the refusal
+    certificateRefusalTest() {
+        if (!dropFirstDatagram()) {
+            return;
+        }
+        on_exit unsetenv("QORE_QUIC_TEST_DROP_CLIENT_DATAGRAMS");
+        string url = sprintf("https://127.0.0.1:%d", quic_port);
+        foreach string api in (Apis) {
+            HttpClientIo::HttpClientConnectionManager mgr = getManager({"ssl_verify_mode": SSL_VERIFY_PEER});
+            on_exit mgr.closeAll();
+            try {
+                get(mgr, url, api);
+                fail(api + ": no exception raised");
+            } catch (hash<ExceptionInfo> ex) {
+                assertEq("SOCKET-SSL-ERROR", ex.err, api + ": " + ex.desc);
+                assertRegex("QUIC TLS handshake failed", ex.desc, api);
+                assertGt(0, ex.arg.arg.ssl_verify_error, api);
+            }
+        }
+    }
+
+    #! Drops the first flight of QUIC datagrams of each connection, if the build supports it, and returns True if so
+    /** The ClientHello can span two datagrams; dropping only the first one gets an immediate Retry from the server
+    */
+    private bool dropFirstDatagram() {
+        if (!inlist("debug", get_feature_list())) {
+            testSkip("QORE_QUIC_TEST_DROP_CLIENT_DATAGRAMS needs a DEBUG build");
+            return False;
+        }
+        setenv("QORE_QUIC_TEST_DROP_CLIENT_DATAGRAMS", "0,1");
+        return True;
+    }
+
+    #! Returns a connection manager for automatic protocol selection with HTTP/3
+    /** The timeouts are long enough for the retransmission of the dropped datagrams on a slow host */
+    private HttpClientIo::HttpClientConnectionManager getManager(hash<auto> opts) {
+        return new HttpClientIo::HttpClientConnectionManager(
+                cast<hash<HttpClientIo::HttpClientConnectionManagerOptions>>({
+            "protocol": "auto",
+            "enable_http3": True,
+            "connect_timeout": 30s,
+            "request_timeout": 60s,
+        } + opts));
+    }
+
+    #! Makes a GET request with the given API and returns the response body and the protocol
+    private hash<auto> get(HttpClientIo::HttpClientConnectionManager mgr, string url, string api) {
+        switch (api) {
+            case "REST": {
+                RestClientIo rest({"url": url, "data": "text"}, mgr);
+                on_exit rest.close();
+                hash<auto> resp = rest.restGet("/");
+                return {"body": resp.body, "protocol": resp.protocol};
+            }
+            case "REST async": {
+                RestClientIo rest({"url": url, "data": "text"}, mgr);
+                on_exit rest.close();
+                hash<auto> resp = rest.restGetAsync("/").get(60s);
+                return {"body": resp.body, "protocol": resp.protocol};
+            }
+            case "HTTP": {
+                hash<auto> resp = mgr.request(url, "GET", "/");
+                return {"body": resp.body, "protocol": resp.protocol};
+            }
+            case "HTTP async": {
+                hash<auto> resp = mgr.requestAsync(url, "GET", "/").get(60s);
+                return {"body": resp.body, "protocol": resp.protocol};
+            }
+        }
+        throw "TEST-ERROR", sprintf("unknown API %y", api);
+    }
+}

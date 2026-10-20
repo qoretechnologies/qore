@@ -7,6 +7,9 @@
     This module is always delivered with %Qore and therefore mirrors the %Qore version.
 
     @section astparser_3_0 astparser Module Version 3.0
+    - a file name with a NUL character is refused instead of being cut at the NUL character:
+      @ref astparser::AstParser::parseFile() "AstParser::parseFile()" returns @ref nothing and
+      @ref astparser::AstTree::printTree() "AstTree::printTree()" raises \c FILE-OPEN-ERROR
     - supports brace-delimited match, substitution, transliteration and extraction expressions,
       including nested and escaped braces, multiline contents and operation-specific modifiers
     - added @ref astparser::AstTreeSearcher::findScopeSymbols() "AstTreeSearcher::findScopeSymbols()"

@@ -62,10 +62,7 @@ class Test inherits QUnit::Test {
     }
 
     check() {
-        string file = tmp_location() + "/file.fll";
-
         MyFixedLengthDataWriter1 w1(Specs, GlobalOptions);
-        on_exit unlink(file);
         testAssertion("file content check", \w1.write(), (Data,), new TestResultValue(DataText));
 
         code wr = sub (list d) {

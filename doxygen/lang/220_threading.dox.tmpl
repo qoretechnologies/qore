@@ -58,6 +58,10 @@ new T();
     |<tt><b>background</b> c()</tt> where \c c is a @ref call_reference "call reference" to a method|no|call references do not prolong the lifetime of an object
     |<tt><b>background</b> T::sm()</tt>|not applicable|a static method call has no object
 
+    If the thread cannot be created, the @ref background "background" expression raises a
+    \c THREAD-CREATION-FAILURE exception and the reference taken on the object is released, so its lifetime is not
+    prolonged.
+
     A @ref call_reference "call reference" is the exception to the rule: <tt>\\</tt><em>method</em><tt>()</tt> and
     <tt>\\</tt><em>obj.method</em><tt>()</tt> bind their object weakly by design, so a background expression that
     reaches an object only through a call reference does not prolong that object's lifetime. If the object is
@@ -130,6 +134,15 @@ x=null@endverbatim
     An alternative to global thread-local variables is offered by the
     @ref Qore::save_thread_data() "save_thread_data()" and @ref Qore::get_thread_data() "get_thread_data()" functions
     (documented in @ref threading_functions).
+
+    @anchor thread_local_data_family
+    The thread-local data that these functions use is shared by a family of @ref Qore::Program "Program" objects: a
+    Program created without a parent (the main Program, or one created as an independent Program) and every Program
+    created from it or from one of its members, so code in a child Program sees the data that its parent saves in the
+    same thread, and the other way around.  A thread's data is freed when the thread ends or when the family's root
+    Program is destroyed, whichever comes first.  Data that a thread saves while the root is being destroyed is freed
+    by the end of the root's destruction, and a child Program that is still alive then has thread-local data of its
+    own, empty at first.
 
     @section thread_synchronization Thread Management and Inter-Thread Communication
 

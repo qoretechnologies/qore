@@ -66,6 +66,7 @@
 #include "qore/intern/QoreHttp2ClientConnection.h"
 #include "qore/intern/Http2Session.h"
 #include "qore/intern/qore_socket_private.h"
+#include "qore/intern/qore_program_private.h"
 #include "qore/intern/QoreHttp3ClientConnection.h"
 #include "qore/intern/QC_Http3ClientPollOperationBase.h"
 #include "qore/intern/NegotiatingConnectionPollOp.h"
@@ -301,6 +302,28 @@ struct UnitTestCounters {
         printf("  FAIL: %s (line %d)\n", msg, __LINE__); \
     } \
 } while (0)
+
+//! Reserves a loopback TCP port that nothing listens on: binds a socket to an ephemeral port and closes it
+/** @return the port, or -1 if no port could be reserved
+*/
+static int ut_reserve_closed_port() {
+    int sfd = socket(AF_INET, SOCK_STREAM, 0);
+    if (sfd < 0) {
+        return -1;
+    }
+    sockaddr_in addr{};
+    addr.sin_family = AF_INET;
+    addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    addr.sin_port = 0;
+    socklen_t alen = sizeof(addr);
+    // ::bind() and not bind(): where namespace std is used, bind() is std::bind(), which binds nothing
+    int rc = ::bind(sfd, reinterpret_cast<sockaddr*>(&addr), sizeof(addr));
+    if (!rc) {
+        rc = getsockname(sfd, reinterpret_cast<sockaddr*>(&addr), &alen);
+    }
+    ::close(sfd);
+    return rc ? -1 : ntohs(addr.sin_port);
+}
 
 #define UT_ASSERT_EQ(counters, expected, actual, msg) do { \
     ++(counters).test_count; \
@@ -1484,6 +1507,59 @@ static void ut_qorevalue_operator_bool_null(UnitTestCounters& c) {
     UT_ASSERT(c, !(bool)simple_null, "QoreSimpleValue NULL is false in C++ bool context");
 }
 
+//! verifies that NULL held inline in a QoreValue is the same value as the QoreNullNode
+/** The IR and JIT engines hold NULL inline (QoreValue::makeNull()), while code run by the AST interpreter mostly
+    holds the QoreNullNode; every QoreValue accessor must give the same result for both, or the same program gives
+    different types (and different hash and list types folded from them) in each execution mode.
+*/
+static void ut_qorevalue_null_representations(UnitTestCounters& c) {
+    const QoreValue reps[] = {QoreValue::makeNull(), QoreValue(&Null)};
+    const char* names[] = {"inline NULL", "QoreNullNode"};
+    UT_ASSERT(c, !reps[0].isPointer(), "makeNull() holds NULL inline");
+    UT_ASSERT(c, reps[1].isPointer(), "the QoreNullNode is held as a pointer");
+
+    for (unsigned i = 0; i < 2; ++i) {
+        const QoreValue& v = reps[i];
+        std::string label = std::string(names[i]) + ": ";
+        UT_ASSERT(c, v.getType() == NT_NULL, (label + "getType()").c_str());
+        UT_ASSERT(c, !strcmp(v.getTypeName(), "NULL"), (label + "getTypeName()").c_str());
+        UT_ASSERT(c, v.isNull() && v.isNullOrNothing() && !v.isNothing(), (label + "isNull()").c_str());
+        UT_ASSERT(c, v.getTypeInfo() == nullTypeInfo, (label + "getTypeInfo()").c_str());
+        UT_ASSERT(c, v.getFullTypeInfo() == nullTypeInfo, (label + "getFullTypeInfo()").c_str());
+        UT_ASSERT(c, !strcmp(v.getFullTypeName(), "NULL"), (label + "getFullTypeName()").c_str());
+        UT_ASSERT(c, !strcmp(v.getFullTypeName(true), "NULL"), (label + "getFullTypeName(true)").c_str());
+        {
+            QoreString scratch;
+            UT_ASSERT(c, !strcmp(v.getFullTypeName(true, scratch), "NULL"),
+                (label + "getFullTypeName(true, scratch)").c_str());
+            UT_ASSERT(c, !strcmp(v.getFullTypeName(false, scratch), "NULL"),
+                (label + "getFullTypeName(false, scratch)").c_str());
+        }
+        UT_ASSERT(c, !v.isScalar(), (label + "isScalar()").c_str());
+        UT_ASSERT(c, v.isConstant(), (label + "isConstant()").c_str());
+        UT_ASSERT(c, !v.getAsBool() && !v.getAsBigInt() && v.getAsFloat() == 0.0,
+            (label + "getAsBool(), getAsBigInt(), getAsFloat()").c_str());
+        UT_ASSERT(c, v.isEqualHard(reps[1 - i]), (label + "=== the other representation").c_str());
+        UT_ASSERT(c, !v.isEqualHard(QoreValue()), (label + "!== NOTHING").c_str());
+        {
+            QoreString str;
+            UT_ASSERT(c, !v.getAsString(str, FMT_NONE, nullptr) && !strcmp(str.c_str(), "<NULL>"),
+                (label + "getAsString()").c_str());
+        }
+        // a common type folded from an int and NULL is the same as with the QoreNullNode: there is none
+        const QoreTypeInfo* common = bigIntTypeInfo;
+        UT_ASSERT(c, !QoreTypeInfo::matchCommonType(common, v.getFullTypeInfo()),
+            (label + "no common type with int").c_str());
+        UT_ASSERT(c, common == autoTypeInfo, (label + "the common type with int is auto").c_str());
+    }
+
+    // NOTHING is not a scalar either
+    UT_ASSERT(c, !QoreValue().isScalar(), "NOTHING: isScalar()");
+    UT_ASSERT(c, QoreValue().getTypeInfo() == nothingTypeInfo, "NOTHING: getTypeInfo()");
+    UT_ASSERT(c, QoreValue(1).isScalar() && QoreValue(true).isScalar() && QoreValue(1.5).isScalar(),
+        "int, bool and float are scalars");
+}
+
 //! verifies that QoreStringDataHelper reads both string representations identically
 /** A string of QoreValue::SHORTSTR_MAX_BYTES bytes or fewer is stored inline in the QoreValue
     itself, so QoreValue::get<QoreStringNode>() returns nullptr for it even though getType() returns
@@ -1972,11 +2048,11 @@ static void ut_cond_wait_cancel_in_window(UnitTestCounters& c) {
     CondWindowTest t;
     // installs the hook for the lifetime of the test; the waiter has finished when the test returns
     struct HookHelper {
-        DLLLOCAL HookHelper(CondWindowTest* t) {
+        HookHelper(CondWindowTest* t) {
             cond_window_test = t;
             qore_cond_wait_window_hook = cond_window_hook;
         }
-        DLLLOCAL ~HookHelper() {
+        ~HookHelper() {
             qore_cond_wait_window_hook = nullptr;
             cond_window_test = nullptr;
         }
@@ -2233,6 +2309,76 @@ static void ut_socket_close_race_releases_descriptor_once(UnitTestCounters& c) {
     close(other[1]);
 }
 
+//! Tests that a close made while an I/O call uses the socket's descriptor leaves it open until the call ends
+/** The system gives the lowest free descriptor number to the next socket or file opened by any thread, so an I/O call
+    still using the number of a closed descriptor could read from or write to another connection.  The close shuts
+    the descriptor down, so the call fails, and the last I/O call using it closes it.
+*/
+static void ut_socket_close_during_io_keeps_descriptor(UnitTestCounters& c) {
+    int sv[2];
+    if (socketpair(AF_UNIX, SOCK_STREAM, 0, sv)) {
+        UT_ASSERT(c, false, "socketpair() for the socket under test succeeds");
+        return;
+    }
+
+    const int fd = sv[0];
+    qore_socket_private* priv = new qore_socket_private(fd, AF_UNIX, SOCK_STREAM, 0);
+    {
+        qore_socket_private::IoUseHelper io_use(*priv);
+        UT_ASSERT_EQ(c, fd, io_use.getDescriptor(), "the I/O call uses the socket's descriptor");
+        UT_ASSERT(c, !io_use.getSsl(), "a socket without TLS has no TLS connection for the call");
+
+        // another thread closes the socket while the call uses the descriptor
+        std::thread closer([priv]() {
+            priv->prepareForClose();
+            priv->close_internal();
+        });
+        closer.join();
+
+        UT_ASSERT(c, priv->sock == QORE_INVALID_SOCKET, "the socket has no descriptor after the close");
+        UT_ASSERT(c, fcntl(fd, F_GETFD) != -1, "the descriptor stays open while the call uses it");
+        // the descriptor is shut down, so the call fails instead of blocking or reaching the peer
+        char b = 'x';
+        UT_ASSERT(c, ::send(fd, &b, 1, 0) == -1, "a send on the closed socket's descriptor fails");
+        char r = 0;
+        UT_ASSERT_EQ(c, (ssize_t)0, ::recv(sv[1], &r, 1, 0), "the peer sees the end of the connection");
+
+        // a descriptor opened while the call runs does not get the number
+        int other = dup(sv[1]);
+        UT_ASSERT(c, other != -1 && other != fd, "a descriptor opened meanwhile gets another number");
+        if (other != -1) {
+            close(other);
+        }
+
+        // a new I/O call made after the close does not get the descriptor
+        qore_socket_private::IoUseHelper late_use(*priv);
+        UT_ASSERT_EQ(c, static_cast<int>(QORE_INVALID_SOCKET), late_use.getDescriptor(),
+            "an I/O call made after the close gets no descriptor");
+    }
+    UT_ASSERT(c, fcntl(fd, F_GETFD) == -1, "the descriptor is closed when the last call using it ends");
+
+    // without an I/O call using it, the close releases the descriptor at once
+    int sv2[2];
+    if (socketpair(AF_UNIX, SOCK_STREAM, 0, sv2)) {
+        UT_ASSERT(c, false, "socketpair() for the second socket succeeds");
+    } else {
+        qore_socket_private* priv2 = new qore_socket_private(sv2[0], AF_UNIX, SOCK_STREAM, 0);
+        {
+            // a finished I/O call does not keep the descriptor
+            qore_socket_private::IoUseHelper io_use(*priv2);
+            UT_ASSERT_EQ(c, sv2[0], io_use.getDescriptor(), "the I/O call uses the second socket's descriptor");
+        }
+        priv2->prepareForClose();
+        priv2->close_internal();
+        UT_ASSERT(c, fcntl(sv2[0], F_GETFD) == -1, "the close releases a descriptor that no I/O call uses");
+        priv2->deref();
+        close(sv2[1]);
+    }
+
+    priv->deref();
+    close(sv[1]);
+}
+
 #ifdef DEBUG
 namespace {
 //! the variable whose other holder releases its reference in ut_closure_var_deref_rescan_reentry()
@@ -2391,6 +2537,99 @@ void ut_fast_real_release_other(RObject* o) {
     never released the last reference, which aborted WebSocketPerfTest.qtest in debug builds, and did not delete the
     object in release builds.  The hook releases the other reference at exactly that point.
 */
+//! The shared state of the Program family thread-local data test
+struct UtFamilyThreadData {
+    QoreProgram* child = nullptr;
+    QoreThreadLock m;
+    QoreCondition cond;
+    //! the thread's data in the root's family, with a reference held by the test
+    QoreHashNode* h = nullptr;
+    //! the thread's data in the child's own family after the root's teardown, with a reference held by the test
+    QoreHashNode* h2 = nullptr;
+    //! 1: h saved; 2: root deleted; 3: h2 saved; 4: child deleted; 5: the thread is done
+    int step = 0;
+    //! the thread had no data in the child's own family after the root's teardown
+    bool none_after_teardown = false;
+
+    DLLLOCAL void set(int n) {
+        AutoLocker al(m);
+        step = n;
+        cond.broadcast();
+    }
+
+    DLLLOCAL void wait(int n) {
+        AutoLocker al(m);
+        while (step < n) {
+            cond.wait(m);
+        }
+    }
+};
+
+static void ut_family_thread_data_thread(ExceptionSink* xsink, void* arg) {
+    UtFamilyThreadData& t = *reinterpret_cast<UtFamilyThreadData*>(arg);
+    qore_program_private* cp = qore_program_private::get(*t.child);
+    // the thread gets data in the root's family through the child, without running code of either Program
+    QoreHashNode* h = cp->getThreadDataRef(true);
+    qore_hash_private::get(*h)->setKeyValue("k", 1, xsink);
+    t.h = h;
+    t.set(1);
+    t.wait(2);
+    // the root is gone: the child is the root of a family of its own, in which the thread has no data yet
+    QoreHashNode* none = cp->getThreadDataRef(false);
+    t.none_after_teardown = !none;
+    if (none) {
+        none->deref(xsink);
+    }
+    t.h2 = cp->getThreadDataRef(true);
+    t.set(3);
+    t.wait(4);
+    t.set(5);
+}
+
+//! A root Program's teardown frees the thread-local data of a thread that is still alive
+/** The thread gets thread-local data in the family of a root Program through a child Program and stays alive;
+    deleting the root frees the thread's data; the child, still alive, is then the root of a family of its own, and
+    its teardown frees the thread's data in it.  The test holds a reference to each hash, so freeing it shows as the
+    hash's reference count dropping to the test's own reference.
+*/
+static void ut_program_family_thread_data(UnitTestCounters& c) {
+    ExceptionSink xsink;
+    QoreProgram* root = new QoreProgram(QoreParseOptions(PO_DEFAULT));
+    UtFamilyThreadData t;
+    t.child = new QoreProgram(root, QoreParseOptions(PO_DEFAULT));
+    UT_ASSERT(c, qore_program_private::get(*t.child)->tld_root.load() == qore_program_private::get(*root),
+        "a child is in the family of its parent");
+    if (q_start_thread(&xsink, ut_family_thread_data_thread, &t) < 0) {
+        UT_ASSERT(c, false, "the thread starts");
+        xsink.clear();
+        t.child->deref(&xsink);
+        root->deref(&xsink);
+        xsink.clear();
+        return;
+    }
+    t.wait(1);
+    UT_ASSERT_EQ(c, 2, t.h->reference_count(), "the thread's map and the test reference the thread's data");
+    root->deref(&xsink);
+    UT_ASSERT(c, !xsink, "the root's teardown raises no exception");
+    UT_ASSERT_EQ(c, 1, t.h->reference_count(), "the root's teardown freed the data of the live thread");
+    UT_ASSERT(c, qore_program_private::get(*t.child)->tld_root.load() == qore_program_private::get(*t.child),
+        "the child outliving its root is the root of a family of its own");
+    t.set(2);
+    t.wait(3);
+    UT_ASSERT(c, t.none_after_teardown, "the thread had no data in the child's own family at first");
+    UT_ASSERT(c, t.h2 && t.h2 != t.h, "the thread got data in the child's own family");
+    UT_ASSERT_EQ(c, 2, t.h2->reference_count(), "the thread's map and the test reference the new data");
+    t.child->deref(&xsink);
+    UT_ASSERT(c, !xsink, "the child's teardown raises no exception");
+    UT_ASSERT_EQ(c, 1, t.h2->reference_count(), "the child's teardown freed the thread's data in its family");
+    t.set(4);
+    t.wait(5);
+    t.h->deref(&xsink);
+    t.h2->deref(&xsink);
+    UT_ASSERT(c, !xsink, "freeing the data raises no exception");
+    xsink.clear();
+}
+
 static void ut_fast_real_deref_releases_last(UnitTestCounters& c) {
     ExceptionSink xsink;
     QoreObject* obj = new QoreObject(QC_COUNTER, getProgram(), new Counter(0));
@@ -2416,6 +2655,71 @@ static void ut_fast_real_deref_releases_last(UnitTestCounters& c) {
     xsink.clear();
     obj->tDeref();
 }
+
+namespace {
+//! the object whose other reference is released in ut_superseded_snapshot_lock_free_release()
+QoreObject* ut_scan_other_holder = nullptr;
+bool ut_scan_hook_ran = false;
+
+void ut_release_other_before_scan(RObject* o) {
+    if (!ut_scan_other_holder || o != qore_object_private::get(*ut_scan_other_holder)) {
+        return;
+    }
+    QoreObject* obj = ut_scan_other_holder;
+    ut_scan_other_holder = nullptr;
+    RObject::dbg_before_deref_scan.store(nullptr);
+    ut_scan_hook_ran = true;
+    // the object has no recursive set yet, and the dereference in progress has taken the scan due at it, so this
+    // release takes the lock-free path and decides nothing, as a release made by another thread during the scan does
+    ExceptionSink xsink;
+    obj->deref(&xsink);
+    xsink.clear();
+}
+}
+
+//! Tests that a cycle is collected when another holder releases its reference while a dereference scans
+/** A Queue that holds itself is a cycle that only the Queue's private data closes, and the push marks a scan due
+    at the object's next dereference.  Two holders release their references at the same time: the first takes its
+    count and the scan due, and makes the scan; the second finds no recursive set and no scan due, releases its
+    reference with no lock and decides nothing.  The scan then finds the cycle, but the first dereference's count
+    has been superseded, and RSet::canDelete() left the decision to the release that superseded it: the cycle was
+    never collected.  The async I/O controller releases its references to a result Queue on two callback workers,
+    which stranded a poll operation that keeps its own result Queue with the result in it.  RSet::canDelete() now
+    decides with the count as it is when releases have superseded the dereference's count.  The hook releases the
+    other reference at exactly that point.
+*/
+static void ut_superseded_snapshot_lock_free_release(UnitTestCounters& c) {
+    ExceptionSink xsink;
+    Queue* q = new Queue;
+    QoreObject* obj = new QoreObject(QC_QUEUE, getProgram(), q);
+    // a weak reference keeps the object allocated, so the test can see that it was collected
+    obj->tRef();
+    // the other holder's reference
+    obj->ref();
+    // the Queue holds itself
+    q->push(&xsink, obj, obj->refSelf());
+    UT_ASSERT(c, !xsink, "the Queue takes the value");
+
+    ut_scan_hook_ran = false;
+    ut_scan_other_holder = obj;
+    RObject::dbg_before_deref_scan.store(ut_release_other_before_scan);
+    // the reference returned by the constructor
+    obj->deref(&xsink);
+    RObject::dbg_before_deref_scan.store(nullptr);
+    ut_scan_other_holder = nullptr;
+
+    UT_ASSERT(c, ut_scan_hook_ran, "the other reference is released while the first dereference scans");
+    UT_ASSERT(c, !obj->isValid(), "the Queue that only holds itself is collected");
+    if (obj->isValid()) {
+        // a failure leaks nothing: the cycle is broken with a reference of the test's own, which then goes
+        obj->ref();
+        q->clear(&xsink, obj);
+        obj->deref(&xsink);
+    }
+    UT_ASSERT(c, !xsink, "releasing the Queue raises no exception");
+    xsink.clear();
+    obj->tDeref();
+}
 #endif
 
 namespace {
@@ -2425,20 +2729,20 @@ public:
     int events = SOCK_POLLIN;
     std::vector<std::pair<int, int>> extra_fds;
 
-    DLLLOCAL virtual bool goalReached() const override {
+    virtual bool goalReached() const override {
         return false;
     }
 
-    DLLLOCAL virtual void abort(ExceptionSink*) override {
+    virtual void abort(ExceptionSink*) override {
     }
 
-    DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink) override {
+    virtual QoreHashNode* continuePoll(ExceptionSink* xsink) override {
         return extra_fds.empty()
             ? getSocketPollInfoHash(xsink, events)
             : getSocketPollInfoHash(xsink, events, extra_fds);
     }
 
-    DLLLOCAL virtual const char* getStateImpl() const override {
+    virtual const char* getStateImpl() const override {
         return "test";
     }
 };
@@ -2817,6 +3121,28 @@ class AsyncIoCloseTest {
     };
 
 public:
+    //! Stops one I/O thread of a running controller, as autostop stops an idle thread, and waits until it has stopped
+    /** @return 0 if the thread stopped, -1 if the controller has no running I/O thread with the index
+    */
+    static int quitIoThread(AsyncIoControllerPriv& ctrl, int index) {
+        AutoLocker al(ctrl.m);
+        if (index < 0 || index >= static_cast<int>(ctrl.io_threads.size()) || !ctrl.io_threads[index]->tid) {
+            return -1;
+        }
+        AsyncIoControllerPriv::IoThreadContext& t = *ctrl.io_threads[index];
+        AsyncIoControllerPriv::Command cmd;
+        cmd.cmd = AsyncIoControllerPriv::IoCommand::Quit;
+        t.cmdq.push(std::move(cmd));
+        t.notifier->notify();
+        // a stopping I/O thread signals io_cond when io_waiting is set
+        while (t.tid) {
+            ctrl.io_waiting = true;
+            ctrl.io_cond.wait(ctrl.m);
+            ctrl.io_waiting = false;
+        }
+        return 0;
+    }
+
     static void resize(UnitTestCounters& c) {
         ExceptionSink xsink;
         ReferenceHolder<AsyncIoControllerPriv> ctrl(new AsyncIoControllerPriv(false, &xsink), &xsink);
@@ -2980,6 +3306,435 @@ public:
                 UT_ASSERT_EQ(c, 0, static_cast<int>(queue->size()), "close delivers exactly one completion");
             }
         }
+    }
+};
+
+//! Commands sent to every I/O thread while one of them is stopping
+/** An I/O thread that stops (autostop, or a Quit command) drains its command queue for the last time and cancels the
+    operations in its cache, and only then clears its thread ID.  The fan-outs (cancelByOwner(), cancelByProgram(),
+    cancelByKey(), cancelSocket(), getInfo()) sent a command to every thread with a thread ID, unless the controller-
+    wide io_exiting flag was set: while one thread was stopping, they canceled nothing on the threads still running;
+    and once another thread had stopped and cleared io_exiting, a command pushed to a thread past its last drain was
+    never processed, and cancelByOwner() waited for it forever (seen as a hung quic_comprehensive_test).
+
+    The test holds thread 0 after its last command drain with a debug hook and checks, with thread 1 running and then
+    stopped, that cancelByOwner() cancels the operation of the owner on thread 1 and returns without thread 0.
+*/
+class AsyncIoStoppingThreadTest {
+    typedef AsyncIoControllerPriv Ctrl;
+
+    //! Stops an I/O thread with a Quit command; holds it after its last command drain if \a hold is set
+    /** Returns when the thread is held or has stopped; -1 if the thread is not running
+    */
+    static int quitThread(Ctrl& ctrl, int index, bool hold) {
+        AutoLocker al(ctrl.m);
+        Ctrl::IoThreadContext& t = *ctrl.io_threads[index];
+        if (!t.tid) {
+            return -1;
+        }
+        t.dbg_hold_after_drain = hold;
+        Ctrl::Command cmd;
+        cmd.cmd = Ctrl::IoCommand::Quit;
+        t.cmdq.push(std::move(cmd));
+        t.notifier->notify();
+        if (hold) {
+            while (!t.dbg_held) {
+                t.dbg_cond.wait(ctrl.m);
+            }
+        } else {
+            waitStoppedLocked(ctrl, t);
+        }
+        return 0;
+    }
+
+    //! Waits until the given thread has stopped; the caller holds the controller's lock
+    static void waitStoppedLocked(Ctrl& ctrl, Ctrl::IoThreadContext& t) {
+        while (t.tid) {
+            ctrl.io_waiting = true;
+            ctrl.io_cond.wait(ctrl.m);
+            ctrl.io_waiting = false;
+        }
+    }
+
+    //! Releases a held thread and waits until it has stopped
+    static void release(Ctrl& ctrl, int index) {
+        AutoLocker al(ctrl.m);
+        Ctrl::IoThreadContext& t = *ctrl.io_threads[index];
+        t.dbg_hold_after_drain = false;
+        t.dbg_cond.broadcast();
+        waitStoppedLocked(ctrl, t);
+    }
+
+    //! A cancelByOwner() call made on another thread, which the test waits for with a hang guard
+    struct CancelRun {
+        Ctrl* ctrl;
+        std::string owner;
+        QoreThreadLock l;
+        QoreCondition c;
+        bool done = false;
+        int rc = -1;
+
+        DLLLOCAL CancelRun(Ctrl* ctrl, const char* owner) : ctrl(ctrl), owner(owner) {
+        }
+
+        DLLLOCAL void run() {
+            ExceptionSink xsink;
+            SimpleRefHolder<QoreStringNode> o(new QoreStringNode(owner));
+            int count = ctrl->cancelByOwner(*o, &xsink);
+            xsink.clear();
+            AutoLocker al(l);
+            rc = count;
+            done = true;
+            c.broadcast();
+        }
+
+        //! Waits for the call to return, at most for the hang guard; returns true if it returned
+        DLLLOCAL bool wait(int guard_ms) {
+            AutoLocker al(l);
+            while (!done) {
+                if (c.wait2(l, guard_ms)) {
+                    break;
+                }
+            }
+            return done;
+        }
+    };
+
+    //! Submits an accept operation of the given owner on a new listener; returns the I/O thread it runs on, or -1
+    /** The listener and the operation's result Queue are returned referenced in \a sock_obj and \a queue_obj
+    */
+    static int submitAccept(Ctrl& ctrl, const char* owner, QoreObject*& sock_obj, QoreObject*& queue_obj,
+            ExceptionSink& xsink) {
+        sock_obj = nullptr;
+        queue_obj = nullptr;
+        QoreSocketObject* sock = new QoreSocketObject;
+        ReferenceHolder<QoreObject> sock_holder(new QoreObject(QC_SOCKET, getProgram(), sock), &xsink);
+        if (sock->bindINET("127.0.0.1", "0", true, AF_INET, SOCK_STREAM, 0, &xsink) || sock->listen(20)) {
+            return -1;
+        }
+        sock->ref();
+        SocketAcceptPollOperation* accept = new SocketAcceptPollOperation(&xsink, sock, false, true);
+        ReferenceHolder<QoreObject> op_obj(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), accept), &xsink);
+        if (xsink) {
+            return -1;
+        }
+        accept->setSelf(*op_obj);
+        op_obj->setValue("sock", sock_holder->objectRefSelf(), &xsink);
+        op_obj->setValue("goal", new QoreStringNode("accept"), &xsink);
+        ReferenceHolder<QoreHashNode> info(new QoreHashNode(hashdeclSocketPollOperationInfo, &xsink), &xsink);
+        info->setKeyValue("sock", sock_holder->objectRefSelf(), &xsink);
+        info->setKeyValue("spop", op_obj->objectRefSelf(), &xsink);
+        info->setKeyValue("owner", new QoreStringNode(owner), &xsink);
+        info->setKeyValue("to", -1, &xsink);
+        if (xsink) {
+            return -1;
+        }
+        int thread_idx = -1;
+        ReferenceHolder<QoreObject> queue_holder(ctrl.submit(nullptr, info.release(), false, &xsink, &thread_idx),
+            &xsink);
+        if (xsink || !queue_holder) {
+            return -1;
+        }
+        sock_obj = sock_holder.release();
+        queue_obj = queue_holder.release();
+        return thread_idx;
+    }
+
+    //! Returns true if the given I/O thread is held after its last command drain
+    static bool isHeld(Ctrl& ctrl, int index) {
+        AutoLocker al(ctrl.m);
+        return ctrl.io_threads[index]->dbg_held;
+    }
+
+public:
+    static void run(UnitTestCounters& c) {
+        ExceptionSink xsink;
+        ReferenceHolder<Ctrl> ctrl(new Ctrl(false, &xsink), &xsink);
+        UT_ASSERT(c, !xsink, "stopping-thread controller construction succeeds");
+        if (xsink) {
+            xsink.clear();
+            return;
+        }
+        // stops the controller on every exit path; a held thread is released first
+        struct Cleanup {
+            Ctrl* ctrl;
+            ExceptionSink& xsink;
+
+            ~Cleanup() {
+                {
+                    AutoLocker al(ctrl->m);
+                    for (auto& tp : ctrl->io_threads) {
+                        tp->dbg_hold_after_drain = false;
+                        tp->dbg_cond.broadcast();
+                    }
+                }
+                xsink.clear();
+                ctrl->stopClear(&xsink);
+                xsink.clear();
+            }
+        } cleanup{*ctrl, xsink};
+
+        ctrl->setMaxIoThreads(2, &xsink);
+        ctrl->start(&xsink);
+        bool ready = !xsink && ctrl->waitReady(5000, &xsink);
+        UT_ASSERT(c, ready && !xsink, "stopping-thread controller starts two I/O threads");
+        if (!ready || xsink) {
+            return;
+        }
+
+        // an operation of owner-a on thread 1: listeners are submitted until one is routed there; those routed to
+        // thread 0 are canceled when thread 0 stops
+        ReferenceHolder<QoreObject> sock_obj(&xsink);
+        ReferenceHolder<QoreObject> queue_obj(&xsink);
+        std::vector<QoreObject*> thread0_objs;
+        int idx = -1;
+        for (int i = 0; i < 64 && idx != 1; ++i) {
+            QoreObject* so;
+            QoreObject* qo;
+            idx = submitAccept(**ctrl, "owner-a", so, qo, xsink);
+            if (idx < 0) {
+                break;
+            }
+            if (idx == 1) {
+                sock_obj = so;
+                queue_obj = qo;
+            } else {
+                thread0_objs.push_back(so);
+                thread0_objs.push_back(qo);
+            }
+        }
+        // released at the end, after the operations on thread 0 have been canceled
+        struct ObjectsRelease {
+            std::vector<QoreObject*>& objs;
+            ExceptionSink& xsink;
+
+            ~ObjectsRelease() {
+                for (QoreObject* o : objs) {
+                    o->deref(&xsink);
+                }
+            }
+        } thread0_release{thread0_objs, xsink};
+        UT_ASSERT(c, idx == 1 && !xsink, "an operation of owner-a runs on I/O thread 1");
+        if (idx != 1 || xsink) {
+            return;
+        }
+        ReferenceHolder<Queue> queue(static_cast<Queue*>(queue_obj->getReferencedPrivateData(CID_QUEUE, &xsink)),
+            &xsink);
+        bool processed = ctrl->waitForProcessing(5000, &xsink);
+        UT_ASSERT(c, processed && !xsink, "the operations are submitted");
+
+        // thread 0 is stopping: held after its last command drain
+        UT_ASSERT_EQ(c, 0, quitThread(**ctrl, 0, true), "I/O thread 0 is held after its last command drain");
+
+        // the operation of owner-a on the running thread 1 is canceled
+        {
+            CancelRun cancel_run(*ctrl, "owner-a");
+            std::thread th([&cancel_run]() { cancel_run.run(); });
+            bool returned = cancel_run.wait(30000);
+            UT_ASSERT(c, returned, "cancelByOwner() returns while I/O thread 0 is stopping");
+            if (returned) {
+                UT_ASSERT_EQ(c, 1, cancel_run.rc, "cancelByOwner() cancels the operation on the running I/O thread 1");
+            } else {
+                // the command was sent to the held thread: restart it after its stop so that it processes it
+                release(**ctrl, 0);
+                ctrl->start(&xsink);
+                xsink.clear();
+            }
+            th.join();
+        }
+        if (queue) {
+            bool timed_out = false;
+            ValueHolder result(queue->shift(&xsink, 30000, &timed_out), &xsink);
+            UT_ASSERT(c, !timed_out && result->getType() == NT_HASH
+                && result->get<QoreHashNode>()->getKeyValue("canceled").getAsBool(),
+                "the canceled operation delivers a canceled result");
+            xsink.clear();
+        }
+
+        // thread 1 stops completely while thread 0 is still stopping: no thread processes commands now
+        if (!isHeld(**ctrl, 0)) {
+            UT_ASSERT_EQ(c, 0, quitThread(**ctrl, 0, true), "I/O thread 0 is held again");
+        }
+        UT_ASSERT_EQ(c, 0, quitThread(**ctrl, 1, false), "I/O thread 1 stops");
+        {
+            CancelRun cancel_run(*ctrl, "owner-b");
+            std::thread th([&cancel_run]() { cancel_run.run(); });
+            bool returned = cancel_run.wait(30000);
+            UT_ASSERT(c, returned, "cancelByOwner() returns when the only thread with an ID is past its last drain");
+            {
+                AutoLocker al(ctrl->m);
+                UT_ASSERT(c, ctrl->io_threads[0]->cmdq.empty(),
+                    "no command is left in the queue of the stopping thread");
+            }
+            release(**ctrl, 0);
+            if (!returned) {
+                // the command is stranded in the stopped thread's queue: a restart processes it
+                ctrl->start(&xsink);
+                xsink.clear();
+            }
+            th.join();
+        }
+    }
+};
+
+//! A submission that loses the race with the controller's shutdown releases its result Queue
+/** submit() packages an operation from a thread that is not its I/O thread into a SubmitOp command; when the
+    controller starts shutting down before the command is pushed, cleanupAbandonedCommand() delivers a canceled
+    result to the operation's result Queue and releases the command's references.  The command's reference to the
+    Queue was dropped without being released, which leaked the Queue and the result in it, and with it the socket
+    and the poll operation the result refers to.
+
+    The test forces the race deterministically: it marks the running controller as shutting down (as stop() does
+    before it waits for the I/O threads) and submits with its own result Queue, whose reference count must be the
+    same after the rejected submission as before it.  The submission also has a state Queue: an operation that ends
+    before its first step reports exactly one state event, the last one (\c done), without a state.
+*/
+class AsyncIoAbandonedSubmitTest {
+public:
+    static void run(UnitTestCounters& c) {
+        ExceptionSink xsink;
+        ReferenceHolder<AsyncIoControllerPriv> ctrl(new AsyncIoControllerPriv(false, &xsink), &xsink);
+        UT_ASSERT(c, !xsink, "abandoned-submit controller construction succeeds");
+        if (xsink) {
+            xsink.clear();
+            return;
+        }
+        // stops the controller on every exit path, after clearing the forced shutdown mark
+        struct Cleanup {
+            AsyncIoControllerPriv* ctrl;
+            ExceptionSink& xsink;
+            UnitTestCounters& c;
+
+            ~Cleanup() {
+                {
+                    AutoLocker al(ctrl->m);
+                    ctrl->shutting_down = false;
+                }
+                xsink.clear();
+                ctrl->stopClear(&xsink);
+                UT_ASSERT(c, !xsink, "abandoned-submit controller cleanup succeeds");
+                xsink.clear();
+            }
+        } cleanup{*ctrl, xsink, c};
+
+        ctrl->setMaxIoThreads(1, &xsink);
+        ctrl->start(&xsink);
+        UT_ASSERT(c, !xsink, "abandoned-submit controller starts");
+        if (xsink) {
+            return;
+        }
+        bool ready = ctrl->waitReady(5000, &xsink);
+        UT_ASSERT(c, ready && !xsink, "abandoned-submit controller becomes ready");
+        if (!ready || xsink) {
+            return;
+        }
+
+        QoreSocketObject* sock = new QoreSocketObject;
+        ReferenceHolder<QoreObject> sock_obj(new QoreObject(QC_SOCKET, getProgram(), sock), &xsink);
+        int rc = sock->bindINET("127.0.0.1", "0", true, AF_INET, SOCK_STREAM, 0, &xsink);
+        UT_ASSERT(c, !rc && !xsink, "abandoned-submit listener binds");
+        if (rc || xsink) {
+            return;
+        }
+        rc = sock->listen(20);
+        UT_ASSERT_EQ(c, 0, rc, "abandoned-submit listener listens");
+        if (rc) {
+            return;
+        }
+        sock->ref();
+        SocketAcceptPollOperation* accept = new SocketAcceptPollOperation(&xsink, sock, false, true);
+        ReferenceHolder<QoreObject> op_obj(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), accept), &xsink);
+        UT_ASSERT(c, !xsink, "abandoned-submit accept operation construction succeeds");
+        if (xsink) {
+            return;
+        }
+        accept->setSelf(*op_obj);
+        op_obj->setValue("sock", sock_obj->objectRefSelf(), &xsink);
+        op_obj->setValue("goal", new QoreStringNode("accept"), &xsink);
+        UT_ASSERT(c, !xsink, "abandoned-submit accept operation is initialized");
+        if (xsink) {
+            return;
+        }
+
+        // the caller's own result Queue, typed as the hashdecl requires
+        Queue* queue = new Queue;
+        ReferenceHolder<QoreObject> queue_obj(new QoreObject(QC_QUEUE, getProgram(), queue), &xsink);
+        {
+            type_vec_t args;
+            args.push_back(hashdeclSocketPollResultInfo->getTypeInfo(false));
+            queue_obj->setInstantiatedTypeInfo(QC_QUEUE->getTypeInfo(args, false));
+        }
+        int queue_refs = queue->reference_count();
+
+        Queue* state_queue = new Queue;
+        ReferenceHolder<QoreObject> state_queue_obj(new QoreObject(QC_QUEUE, getProgram(), state_queue), &xsink);
+        {
+            type_vec_t args;
+            args.push_back(hashdeclSocketPollStateInfo->getTypeInfo(false));
+            state_queue_obj->setInstantiatedTypeInfo(QC_QUEUE->getTypeInfo(args, false));
+        }
+        int state_queue_refs = state_queue->reference_count();
+
+        ReferenceHolder<QoreHashNode> info(new QoreHashNode(hashdeclSocketPollOperationInfo, &xsink), &xsink);
+        info->setKeyValue("sock", sock_obj->objectRefSelf(), &xsink);
+        info->setKeyValue("spop", op_obj->objectRefSelf(), &xsink);
+        info->setKeyValue("owner", new QoreStringNode("abandoned-submit-unit-test"), &xsink);
+        info->setKeyValue("to", -1, &xsink);
+        info->setKeyValue("resultQueue", queue_obj->objectRefSelf(), &xsink);
+        info->setKeyValue("stateQueue", state_queue_obj->objectRefSelf(), &xsink);
+        UT_ASSERT(c, !xsink, "abandoned-submit submission info is initialized");
+        if (xsink) {
+            return;
+        }
+
+        // the controller is shutting down after submit() found its I/O thread running and before the command
+        // could be pushed: the window stop() opens when it marks the controller before waiting for its threads
+        {
+            AutoLocker al(ctrl->m);
+            ctrl->shutting_down = true;
+        }
+        ReferenceHolder<QoreObject> rv(ctrl->submit(nullptr, info.release(), false, &xsink), &xsink);
+        UT_ASSERT(c, !rv, "an abandoned submission returns no Queue");
+        UT_ASSERT(c, static_cast<bool>(xsink), "an abandoned submission raises an exception");
+        if (xsink) {
+            QoreStringDataHelper err(xsink.getExceptionErr());
+            UT_ASSERT(c, err == "ASYNC-IO-ERROR", "an abandoned submission raises ASYNC-IO-ERROR");
+            xsink.clear();
+        }
+
+        UT_ASSERT_EQ(c, 1, static_cast<int>(queue->size()),
+            "an abandoned submission delivers exactly one result to its Queue");
+        if (queue->size() == 1) {
+            bool timed_out = false;
+            ValueHolder result(queue->shift(&xsink, 0, &timed_out), &xsink);
+            UT_ASSERT(c, !timed_out && !xsink && result->getType() == NT_HASH,
+                "the abandoned submission's result is a hash");
+            if (result->getType() == NT_HASH) {
+                UT_ASSERT(c, result->get<QoreHashNode>()->getKeyValue("canceled").getAsBool(),
+                    "the abandoned submission's result is canceled");
+            }
+        }
+        UT_ASSERT_EQ(c, queue_refs, queue->reference_count(),
+            "an abandoned submission releases its reference to the result Queue");
+
+        UT_ASSERT_EQ(c, 1, static_cast<int>(state_queue->size()),
+            "an abandoned submission reports exactly one state event");
+        if (state_queue->size() == 1) {
+            bool timed_out = false;
+            ValueHolder event(state_queue->shift(&xsink, 0, &timed_out), &xsink);
+            UT_ASSERT(c, !timed_out && !xsink && event->getType() == NT_HASH,
+                "the abandoned submission's state event is a hash");
+            if (event->getType() == NT_HASH) {
+                const QoreHashNode* h = event->get<const QoreHashNode>();
+                UT_ASSERT(c, h->getKeyValue("done").getAsBool(), "the abandoned submission's event is the last one");
+                UT_ASSERT(c, h->getKeyValue("state").isNothing(),
+                    "the event of an operation that never made a step has no state");
+                UT_ASSERT(c, h->getKeyValue("spop").getType() == NT_OBJECT,
+                    "the abandoned submission's event has the operation");
+            }
+        }
+        UT_ASSERT_EQ(c, state_queue_refs, state_queue->reference_count(),
+            "an abandoned submission releases its reference to the state Queue");
     }
 };
 
@@ -3995,15 +4750,89 @@ public:
     }
 
     DLLLOCAL void onConnectionClosed(HttpClientConnectionBase* conn) override {
-        ++close_count;
-        last_conn = conn;
+        {
+            std::lock_guard<std::mutex> lk(close_lock);
+            last_conn = conn;
+            last_thread = std::this_thread::get_id();
+            ++close_count;
+        }
+        close_cond.notify_all();
         // Also call the base implementation so the connection is removed
         // from the pool (no-op here since we never add to the pool, but
         // documents the intended subclass pattern).
         HttpClientConnectionManagerBase::onConnectionClosed(conn);
     }
-    std::atomic<int> close_count{0};
+
+    //! Waits until the close hook has fired at least \a n times; returns the number of times it has fired
+    /** The wait is bounded only so that a hook that never fires fails the test instead of hanging it.
+    */
+    DLLLOCAL int waitForCloseCount(int n) {
+        std::unique_lock<std::mutex> lk(close_lock);
+        close_cond.wait_for(lk, std::chrono::seconds(30), [this, n] { return close_count >= n; });
+        return close_count;
+    }
+
+    //! Returns the connection the close hook was last called with
+    DLLLOCAL HttpClientConnectionBase* getLastConn() {
+        std::lock_guard<std::mutex> lk(close_lock);
+        return last_conn;
+    }
+
+    //! Returns the number of times the close hook has fired
+    DLLLOCAL int getCloseCount() {
+        std::lock_guard<std::mutex> lk(close_lock);
+        return close_count;
+    }
+
+    //! Returns the thread that last called the close hook
+    DLLLOCAL std::thread::id getLastThread() {
+        std::lock_guard<std::mutex> lk(close_lock);
+        return last_thread;
+    }
+
+private:
+    std::mutex close_lock;
+    std::condition_variable close_cond;
+    int close_count = 0;
     HttpClientConnectionBase* last_conn = nullptr;
+    std::thread::id last_thread;
+};
+
+//! Holds a test server's connection open until the test releases it
+/** The release is also made by the destructor, so that a test that returns early does not leave the server thread
+    waiting; declare the guard after the server, so that it is destroyed, and releases, before the server joins its
+    thread.
+*/
+struct UtServerRelease {
+    std::mutex m;
+    std::condition_variable cond;
+    bool released = false;
+
+    //! Waits until the test releases the connection
+    DLLLOCAL void wait() {
+        std::unique_lock<std::mutex> lk(m);
+        cond.wait(lk, [this] { return released; });
+    }
+
+    //! Releases the connection
+    DLLLOCAL void release() {
+        {
+            std::lock_guard<std::mutex> lk(m);
+            released = true;
+        }
+        cond.notify_all();
+    }
+};
+
+struct UtServerReleaseGuard {
+    UtServerRelease& rel;
+
+    DLLLOCAL explicit UtServerReleaseGuard(UtServerRelease& r) : rel(r) {
+    }
+
+    DLLLOCAL ~UtServerReleaseGuard() {
+        rel.release();
+    }
 };
 
 // Deterministic lock-order regression fixture.  Pool checkout calls
@@ -4405,20 +5234,11 @@ static void ut_http1_onclosed_hook_one_shot(UnitTestCounters& c) {
     // Pick an ephemeral closed port — connect will be refused, the poll op
     // will transition to CLOSED, and onClosedHook should fire once via the
     // I/O thread setError → setClosed path.
-    int sfd = socket(AF_INET, SOCK_STREAM, 0);
-    if (sfd < 0) {
+    int dead_port = ut_reserve_closed_port();
+    if (dead_port <= 0) {
         UT_ASSERT(c, false, "reserve socket succeeds");
         return;
     }
-    sockaddr_in addr{};
-    addr.sin_family = AF_INET;
-    addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-    addr.sin_port = 0;
-    ::bind(sfd, reinterpret_cast<sockaddr*>(&addr), sizeof(addr));
-    socklen_t alen = sizeof(addr);
-    getsockname(sfd, reinterpret_cast<sockaddr*>(&addr), &alen);
-    int dead_port = ntohs(addr.sin_port);
-    ::close(sfd);
 
     ReferenceHolder<UtCountingManager> mgr(
         new UtCountingManager(HttpClientConnectionManagerBase::Options{}, &xsink),
@@ -4441,22 +5261,18 @@ static void ut_http1_onclosed_hook_one_shot(UnitTestCounters& c) {
     UT_ASSERT(c, xsink.isException(), "exception raised on refused connect");
     xsink.clear();
 
-    // Hook may dispatch slightly after the state transition since
-    // setClosed → onClosedHook runs on the I/O thread but signals our
-    // condition var first.  Spin briefly to give the hook a chance to fire.
-    for (int i = 0; i < 100 && mgr->close_count.load() == 0; ++i) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(10));
-    }
-    UT_ASSERT_EQ(c, 1, (int)mgr->close_count.load(),
+    // The hook may be dispatched after the state transition, since setClosed → onClosedHook runs on the I/O thread
+    // but signals our condition var first: wait for it
+    UT_ASSERT_EQ(c, 1, mgr->waitForCloseCount(1),
         "manager.onConnectionClosed fired exactly once");
-    UT_ASSERT(c, mgr->last_conn == *conn,
+    UT_ASSERT(c, mgr->getLastConn() == *conn,
         "manager received the correct connection pointer");
 
     // Force a second setClosed via closeConnection() — should NOT re-fire
     // the hook because the one-shot guard latches it.
     conn->closeConnection(&xsink);
     xsink.clear();
-    UT_ASSERT_EQ(c, 1, (int)mgr->close_count.load(),
+    UT_ASSERT_EQ(c, 1, mgr->getCloseCount(),
         "manager.onConnectionClosed not re-fired on second setClosed");
 
     // Clear the manager back-pointer BEFORE deref'ing the manager — the
@@ -4467,17 +5283,18 @@ static void ut_http1_onclosed_hook_one_shot(UnitTestCounters& c) {
 static void ut_http1_onclosed_hook_app_thread_close(UnitTestCounters& c) {
     ExceptionSink xsink;
 
-    // Spin up a server that just accepts and closes — the client connect
-    // succeeds, then we close from the app thread.
+    // Spin up a server that accepts and holds the connection open until the app thread has closed it, so that
+    // the close is the app thread's: if the server closed first, the I/O thread would see EOF and fire the hook
+    UtServerRelease release;
     UtH1Server server;
     if (server.start() != 0) {
         UT_ASSERT(c, false, "test server bind/listen failed");
         return;
     }
+    UtServerReleaseGuard release_guard(release);
     int server_port = server.port;
-    server.serveOnce([](int cfd) {
-        // Accept and immediately close — the client will see EOF on first recv
-        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    server.serveOnce([&release](int cfd) {
+        release.wait();
     });
 
     ReferenceHolder<UtCountingManager> mgr(
@@ -4496,9 +5313,13 @@ static void ut_http1_onclosed_hook_app_thread_close(UnitTestCounters& c) {
     conn->closeConnection(&xsink);
     xsink.clear();
 
-    // Hook should have fired exactly once.
-    UT_ASSERT_EQ(c, 1, (int)mgr->close_count.load(),
+    // Hook should have fired exactly once, from this thread.
+    UT_ASSERT_EQ(c, 1, mgr->getCloseCount(),
         "manager.onConnectionClosed fired exactly once on app-thread close");
+    UT_ASSERT(c, mgr->getLastThread() == std::this_thread::get_id(),
+        "manager.onConnectionClosed fired from the app thread's close");
+    // the server can close its end now
+    release.release();
 
     conn->setManager(nullptr);
 }
@@ -5237,20 +6058,11 @@ static void ut_http2_connection_construct(UnitTestCounters& c) {
     // Bind an ephemeral port and immediately close — the next connect
     // is refused.  H2 socket setup includes ALPN configuration which
     // exercises the SSL code path on construction.
-    int sfd = socket(AF_INET, SOCK_STREAM, 0);
-    if (sfd < 0) {
+    int dead_port = ut_reserve_closed_port();
+    if (dead_port <= 0) {
         UT_ASSERT(c, false, "reserve socket succeeds");
         return;
     }
-    sockaddr_in addr{};
-    addr.sin_family = AF_INET;
-    addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-    addr.sin_port = 0;
-    ::bind(sfd, reinterpret_cast<sockaddr*>(&addr), sizeof(addr));
-    socklen_t alen = sizeof(addr);
-    getsockname(sfd, reinterpret_cast<sockaddr*>(&addr), &alen);
-    int dead_port = ntohs(addr.sin_port);
-    ::close(sfd);
 
     // Plain HTTP h2c connection (no ALPN required) — verifies the
     // construction path without exercising the SSL setup.
@@ -5276,17 +6088,11 @@ static void ut_http2_connection_alpn_setup(UnitTestCounters& c) {
     // HTTPS H2 — the constructor configures ALPN ("h2") on the socket
     // BEFORE the SSL handshake.  The actual handshake will fail (no
     // server) but we verify that the ALPN setup path doesn't crash.
-    int sfd = socket(AF_INET, SOCK_STREAM, 0);
-    if (sfd < 0) { UT_ASSERT(c, false, "reserve socket"); return; }
-    sockaddr_in addr{};
-    addr.sin_family = AF_INET;
-    addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-    addr.sin_port = 0;
-    ::bind(sfd, reinterpret_cast<sockaddr*>(&addr), sizeof(addr));
-    socklen_t alen = sizeof(addr);
-    getsockname(sfd, reinterpret_cast<sockaddr*>(&addr), &alen);
-    int dead_port = ntohs(addr.sin_port);
-    ::close(sfd);
+    int dead_port = ut_reserve_closed_port();
+    if (dead_port <= 0) {
+        UT_ASSERT(c, false, "reserve socket");
+        return;
+    }
 
     ReferenceHolder<Http2ClientConnection> conn(
         new Http2ClientConnection("127.0.0.1", dead_port,
@@ -5587,17 +6393,11 @@ static void ut_manager_negotiate_refused_port(UnitTestCounters& c) {
     if (xsink) { xsink.clear(); return; }
 
     // Bind+close an ephemeral port so the next connect is refused.
-    int sfd = socket(AF_INET, SOCK_STREAM, 0);
-    if (sfd < 0) { UT_ASSERT(c, false, "reserve socket"); return; }
-    sockaddr_in addr{};
-    addr.sin_family = AF_INET;
-    addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-    addr.sin_port = 0;
-    ::bind(sfd, reinterpret_cast<sockaddr*>(&addr), sizeof(addr));
-    socklen_t alen = sizeof(addr);
-    getsockname(sfd, reinterpret_cast<sockaddr*>(&addr), &alen);
-    int dead_port = ntohs(addr.sin_port);
-    ::close(sfd);
+    int dead_port = ut_reserve_closed_port();
+    if (dead_port <= 0) {
+        UT_ASSERT(c, false, "reserve socket");
+        return;
+    }
 
     // https scheme triggers the NEGOTIATE path.  Connect fails at TCP
     // (refused); the error propagates out of the negotiation helper.
@@ -5727,17 +6527,11 @@ static void ut_manager_h2_dispatch(UnitTestCounters& c) {
     // Acquire to a refused port — used to raise PROTOCOL-NOT-IMPLEMENTED
     // before P4; now should attempt the connect and surface a CONNECT
     // error.
-    int sfd = socket(AF_INET, SOCK_STREAM, 0);
-    if (sfd < 0) { UT_ASSERT(c, false, "reserve socket"); return; }
-    sockaddr_in addr{};
-    addr.sin_family = AF_INET;
-    addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-    addr.sin_port = 0;
-    ::bind(sfd, reinterpret_cast<sockaddr*>(&addr), sizeof(addr));
-    socklen_t alen = sizeof(addr);
-    getsockname(sfd, reinterpret_cast<sockaddr*>(&addr), &alen);
-    int dead_port = ntohs(addr.sin_port);
-    ::close(sfd);
+    int dead_port = ut_reserve_closed_port();
+    if (dead_port <= 0) {
+        UT_ASSERT(c, false, "reserve socket");
+        return;
+    }
 
     HttpClientConnectionBase* conn = mgr->acquireConnection(
         "http", "127.0.0.1", dead_port, &xsink);
@@ -5756,17 +6550,11 @@ static void ut_http3_connection_construct(UnitTestCounters& c) {
     // Use localhost with a closed port — the QUIC handshake will fail but
     // the construction path (UDP bind + SocketQuicClientPollOperation
     // creation + controller submission) is exercised.
-    int sfd = socket(AF_INET, SOCK_STREAM, 0);
-    if (sfd < 0) { UT_ASSERT(c, false, "reserve socket"); return; }
-    sockaddr_in addr{};
-    addr.sin_family = AF_INET;
-    addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-    addr.sin_port = 0;
-    ::bind(sfd, reinterpret_cast<sockaddr*>(&addr), sizeof(addr));
-    socklen_t alen = sizeof(addr);
-    getsockname(sfd, reinterpret_cast<sockaddr*>(&addr), &alen);
-    int dead_port = ntohs(addr.sin_port);
-    ::close(sfd);
+    int dead_port = ut_reserve_closed_port();
+    if (dead_port <= 0) {
+        UT_ASSERT(c, false, "reserve socket");
+        return;
+    }
 
     ReferenceHolder<Http3ClientConnection> conn(
         new Http3ClientConnection("127.0.0.1", dead_port,
@@ -5795,17 +6583,11 @@ static void ut_manager_h3_dispatch(UnitTestCounters& c) {
     UT_ASSERT(c, !xsink, "manager(H3) construction succeeds");
     if (xsink) { xsink.clear(); return; }
 
-    int sfd = socket(AF_INET, SOCK_STREAM, 0);
-    if (sfd < 0) { UT_ASSERT(c, false, "reserve socket"); return; }
-    sockaddr_in addr{};
-    addr.sin_family = AF_INET;
-    addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-    addr.sin_port = 0;
-    ::bind(sfd, reinterpret_cast<sockaddr*>(&addr), sizeof(addr));
-    socklen_t alen = sizeof(addr);
-    getsockname(sfd, reinterpret_cast<sockaddr*>(&addr), &alen);
-    int dead_port = ntohs(addr.sin_port);
-    ::close(sfd);
+    int dead_port = ut_reserve_closed_port();
+    if (dead_port <= 0) {
+        UT_ASSERT(c, false, "reserve socket");
+        return;
+    }
 
     // H3 requires HTTPS scheme — but we're just testing the manager
     // dispatch path (no PROTOCOL-NOT-IMPLEMENTED anymore)
@@ -5861,17 +6643,11 @@ static void ut_manager_proxy_h1_connect(UnitTestCounters& c) {
     // Reserve an ephemeral port to use as the "proxy" address.  It's closed
     // immediately so the connect will fail — but the error message should
     // reference this port, proving the H1 connection targets the proxy.
-    int sfd = socket(AF_INET, SOCK_STREAM, 0);
-    if (sfd < 0) { UT_ASSERT(c, false, "reserve proxy port"); return; }
-    sockaddr_in addr{};
-    addr.sin_family = AF_INET;
-    addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-    addr.sin_port = 0;
-    bind(sfd, reinterpret_cast<sockaddr*>(&addr), sizeof(addr));
-    socklen_t alen = sizeof(addr);
-    getsockname(sfd, reinterpret_cast<sockaddr*>(&addr), &alen);
-    int proxy_port = ntohs(addr.sin_port);
-    ::close(sfd);
+    int proxy_port = ut_reserve_closed_port();
+    if (proxy_port <= 0) {
+        UT_ASSERT(c, false, "reserve proxy port");
+        return;
+    }
 
     // Create manager with proxy pointing to the dead port
     char proxy_url[128];
@@ -6700,6 +7476,53 @@ static void ut_qoresocket_fd_transfer_uses_async_controller(UnitTestCounters& c)
 }
 
 #ifdef DEBUG
+//! Debug-only: closes a socket from another thread at the start of its next SSL I/O call
+/** The close is made where the I/O call is about to use the TLS connection, which is where a close made by another
+    thread, such as the abort of a poll operation, can release the connection under the call.  DEBUG builds only.
+*/
+static QoreValue f_dbg_close_socket_at_next_ssl_io(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    const QoreObject* obj = get_param_value(params, 0).get<const QoreObject>();
+    if (!obj) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR",
+            "dbg_close_socket_at_next_ssl_io() requires a Socket argument");
+        return QoreValue();
+    }
+    ReferenceHolder<QoreSocketObject> sock(
+        reinterpret_cast<QoreSocketObject*>(
+            const_cast<QoreObject*>(obj)->getReferencedPrivateData(CID_SOCKET, xsink)),
+        xsink);
+    if (*xsink || !sock) {
+        return QoreValue();
+    }
+    sock->dbgCloseAtNextSslIo();
+    return QoreValue();
+}
+
+//! Debug-only: stops one I/O thread of the global async I/O controller and waits until it has stopped
+/** Puts the controller in the state that autostop leaves it in when an idle I/O thread has stopped before another
+    one: a test then ends the process in that state, in which the cleanup at exit stopped the controller with an
+    I/O thread that it started only to deliver its quit command.  DEBUG builds only.
+*/
+static QoreValue f_dbg_async_io_quit_io_thread(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    int index = static_cast<int>(get_param_value(params, 0).getAsBigInt());
+    ReferenceHolder<QoreObject> ctl_obj(qore_get_async_io_controller_obj(xsink), xsink);
+    if (*xsink || !ctl_obj) {
+        return QoreValue();
+    }
+    ReferenceHolder<AsyncIoControllerPriv> ctrl(
+        static_cast<AsyncIoControllerPriv*>(ctl_obj->getReferencedPrivateData(CID_ASYNCIOCONTROLLER, xsink)), xsink);
+    if (*xsink || !ctrl) {
+        return QoreValue();
+    }
+    if (AsyncIoCloseTest::quitIoThread(**ctrl, index)) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "the async I/O controller has no running I/O thread %d",
+            index);
+    }
+    return QoreValue();
+}
+
 //! Debug-only: arm a one-shot fd-swap simulation on the next controller wait of @a sock.
 /** Tests use this to exercise the fd_generation re-verification path in
     controller-backed sync socket calls without racing an actual close()
@@ -6993,6 +7816,7 @@ static QoreValue f_run_debug_unit_tests(const QoreListNode* params, RuntimeConfi
     ut_aot_scalar_local_store(c);
     ut_aot_prepared_local_reload(c);
     ut_qorevalue_operator_bool_null(c);
+    ut_qorevalue_null_representations(c);
     ut_string_data_helper(c);
     ut_string_compare_soft_and_concat_chars(c);
     ut_stateful_string_api(c);
@@ -7016,6 +7840,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     ut_aot_prepared_local_reload(c);
 
     ut_qorevalue_operator_bool_null(c);
+    ut_qorevalue_null_representations(c);
     ut_string_data_helper(c);
     ut_string_compare_soft_and_concat_chars(c);
     ut_stateful_string_api(c);
@@ -7026,6 +7851,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     ut_debug_skips_foreign_thread_callbacks(c, rc.getProgram());
     ut_event_loop_remove_recycled_fd(c);
     ut_socket_close_race_releases_descriptor_once(c);
+    ut_socket_close_during_io_keeps_descriptor(c);
     ut_network_security_rules(c);
     ut_asyncio_construction(c);
     ut_asyncio_poll_timeout_rounding(c);
@@ -7033,11 +7859,15 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
 #ifdef DEBUG
     AsyncIoCloseTest::resize(c);
     AsyncIoCloseTest::run(c);
+    AsyncIoAbandonedSubmitTest::run(c);
+    AsyncIoStoppingThreadTest::run(c);
     ut_cond_wait_cancel_in_window(c);
     Http3ClientResponseRegistrationTest::run(c);
     ut_fast_real_deref_releases_last(c);
+    ut_superseded_snapshot_lock_free_release(c);
     AsyncIoOpCacheTest::run(c);
 #endif
+    ut_program_family_thread_data(c);
     ut_asyncio_autostop(c);
     ut_asyncio_start_stop(c);
     ut_asyncio_get_info(c);
@@ -7388,7 +8218,9 @@ static QoreValue f_dbg_ref_set_unique_remove_key(const QoreListNode* params, Run
     if (*xsink) {
         return QoreValue();
     }
-    if (h->setKeyValue(set_key->c_str(), get_param_value(params, 2).refSelf(), xsink)) {
+    // the QoreString overload converts the key to the default encoding and raises HASH-KEY-ERROR for a key with a
+    // NUL character
+    if (h->setKeyValue(**set_key, get_param_value(params, 2).refSelf(), xsink)) {
         return QoreValue();
     }
     rv = ref.removeHashObjKey(remove_key->c_str());
@@ -7675,6 +8507,121 @@ static QoreValue f_dbg_deref_wait_notify(const QoreListNode* params, RuntimeConf
     return QoreValue();
 }
 
+namespace {
+//! the armed hold of dbg_hold_closure_var_deref(); one at a time
+struct ClosureVarDerefHold {
+    std::mutex m;
+    std::string name;
+    Counter* held = nullptr;
+    Counter* release = nullptr;
+};
+
+ClosureVarDerefHold closure_var_deref_hold;
+
+//! runs in the thread that dereferences the variable, with no lock held; disarms itself, so it holds that thread once
+void dbg_hold_closure_var_deref_hook(const char* name) {
+    ClosureVarDerefHold& h = closure_var_deref_hold;
+    ExceptionSink xsink;
+    ReferenceHolder<Counter> held(&xsink);
+    ReferenceHolder<Counter> release(&xsink);
+    {
+        std::lock_guard<std::mutex> l(h.m);
+        if (!h.held || h.name != name) {
+            return;
+        }
+        held = h.held;
+        release = h.release;
+        h.held = nullptr;
+        h.release = nullptr;
+        qore_dbg_closure_var_decide_hook.store(nullptr);
+    }
+    held->dec(&xsink);
+    if (!xsink) {
+        release->waitForZero(&xsink);
+    }
+    // the thread is dereferencing a variable; a Counter deleted meanwhile is the test's error, not the dereference's
+    if (xsink) {
+        printd(0, "dbg_hold_closure_var_deref(): %s\n", xsink.getExceptionErr().getTypeName());
+        xsink.clear();
+    }
+}
+
+//! the collections of closure-bound variables counted by dbg_count_closure_var_collections()
+struct ClosureVarCollections {
+    std::mutex m;
+    std::string name;
+    int64 count = 0;
+};
+
+ClosureVarCollections closure_var_collections;
+
+void dbg_count_closure_var_collections_hook(const char* name) {
+    ClosureVarCollections& h = closure_var_collections;
+    std::lock_guard<std::mutex> l(h.m);
+    if (h.name == name) {
+        ++h.count;
+    }
+}
+}
+
+//! holds the next thread that dereferences a closure-bound variable of the given name with a decision to make
+/** The hold is taken once, in ClosureVarValue::deref(), after the dereference has taken its count and before it
+    decides collection, with no lock held: another thread can then release a reference to the variable and decide
+    first.
+
+    @param name the name of the variable
+    @param held decremented once the dereferencing thread is held
+    @param release the dereferencing thread continues when this Counter reaches zero
+
+    @throw DBG-ARGUMENT-ERROR a hold is already armed
+*/
+static QoreValue f_dbg_hold_closure_var_deref(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    const QoreStringNode* name = get_param_value(params, 0).get<const QoreStringNode>();
+    ReferenceHolder<Counter> held(get_counter_arg(params, 1, xsink), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    ReferenceHolder<Counter> release(get_counter_arg(params, 2, xsink), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    ClosureVarDerefHold& h = closure_var_deref_hold;
+    std::lock_guard<std::mutex> l(h.m);
+    if (h.held) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "a hold is already armed for variable '%s'", h.name.c_str());
+        return QoreValue();
+    }
+    h.name = name->c_str();
+    h.held = held.release();
+    h.release = release.release();
+    qore_dbg_closure_var_decide_hook.store(dbg_hold_closure_var_deref_hook);
+    return QoreValue();
+}
+
+//! starts counting the dereferences that collect closure-bound variables of the given name with their sets
+/** @param name the name of the variable; replaces the name counted before, and the count starts at 0
+*/
+static QoreValue f_dbg_count_closure_var_collections(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    const QoreStringNode* name = get_param_value(params, 0).get<const QoreStringNode>();
+    ClosureVarCollections& h = closure_var_collections;
+    std::lock_guard<std::mutex> l(h.m);
+    h.name = name->c_str();
+    h.count = 0;
+    qore_dbg_closure_var_collect_hook.store(dbg_count_closure_var_collections_hook);
+    return QoreValue();
+}
+
+//! returns the number of collections counted since dbg_count_closure_var_collections(), and stops counting
+static QoreValue f_dbg_get_closure_var_collections(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    ClosureVarCollections& h = closure_var_collections;
+    std::lock_guard<std::mutex> l(h.m);
+    qore_dbg_closure_var_collect_hook.store(nullptr);
+    h.name.clear();
+    return h.count;
+}
+
 #ifdef DEBUG
 std::atomic<qore_dbg_http1_defer_close_hook_t> qore_dbg_http1_defer_close_hook{nullptr};
 #endif
@@ -7909,6 +8856,12 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_force_fd_swap_next_wait", f_dbg_force_fd_swap_next_wait,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
         QC_SOCKET->getTypeInfo(), QORE_PARAM_NO_ARG, "sock");
+    qns.addBuiltinVariant("dbg_async_io_quit_io_thread", f_dbg_async_io_quit_io_thread,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
+        bigIntTypeInfo, QORE_PARAM_NO_ARG, "index");
+    qns.addBuiltinVariant("dbg_close_socket_at_next_ssl_io", f_dbg_close_socket_at_next_ssl_io,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
+        QC_SOCKET->getTypeInfo(), QORE_PARAM_NO_ARG, "sock");
     qns.addBuiltinVariant("dbg_detach_async_io_socket", f_dbg_detach_async_io_socket,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
         QC_SOCKET->getTypeInfo(), QORE_PARAM_NO_ARG, "sock");
@@ -7963,6 +8916,14 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_deref_wait_notify", f_dbg_deref_wait_notify,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 2, stringTypeInfo, QORE_PARAM_NO_ARG, "name",
         QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "waiting");
+    qns.addBuiltinVariant("dbg_hold_closure_var_deref", f_dbg_hold_closure_var_deref,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 3, stringTypeInfo, QORE_PARAM_NO_ARG, "name",
+        QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "held", QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG,
+        "release");
+    qns.addBuiltinVariant("dbg_count_closure_var_collections", f_dbg_count_closure_var_collections,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1, stringTypeInfo, QORE_PARAM_NO_ARG, "name");
+    qns.addBuiltinVariant("dbg_get_closure_var_collections", f_dbg_get_closure_var_collections,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntTypeInfo, 0);
     qns.addBuiltinVariant("dbg_defer_http1_connection_close", f_dbg_defer_http1_connection_close,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1, QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "deferred");
     qns.addBuiltinVariant("dbg_release_http1_connection_close", f_dbg_release_http1_connection_close,

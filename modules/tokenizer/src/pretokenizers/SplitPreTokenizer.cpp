@@ -88,7 +88,9 @@ SplitPreTokenizer::SplitPreTokenizer(const QoreHashNode* config, ExceptionSink* 
     // lookarounds) work as written — std::regex (ECMAScript) supports none of them.
     int errornumber = 0;
     PCRE2_SIZE erroroffset = 0;
-    re = pcre2_compile(reinterpret_cast<PCRE2_SPTR>(pat.c_str()), PCRE2_ZERO_TERMINATED,
+    // the pattern is given with its length, so a pattern with a NUL character (ex: a String pattern splitting on
+    // NUL characters) is used whole
+    re = pcre2_compile(reinterpret_cast<PCRE2_SPTR>(pat.data()), pat.size(),
         PCRE2_UTF | PCRE2_UCP, &errornumber, &erroroffset, nullptr);
     if (!re) {
         PCRE2_UCHAR buf[256];
@@ -105,8 +107,12 @@ SplitPreTokenizer::SplitPreTokenizer(const QoreHashNode* config, ExceptionSink* 
     // remaining subject reaches 5,000,000 code units (REQ_CU_MAX * 1000 in pcre2_match.c), after
     // which an unanchored pattern is retried at every offset -- quadratic in the text length.  The
     // JIT has no such cutoff.  pcre2_jit_compile() modifies the pcre2_code block, so it must run
-    // here, before the pretokenizer is visible to other threads.
-    pcre2_jit_compile(re, PCRE2_JIT_COMPLETE);
+    // here, before the pretokenizer is visible to other threads.  No JIT code is made when PCRE2 JIT is disabled
+    // for the process (QORE_PCRE2_NO_JIT=1, ex: for a memory checker, which cannot follow JIT code); the
+    // interpreter is then used, with the cost above on very large texts.
+    if (qore_pcre2_jit_enabled()) {
+        pcre2_jit_compile(re, PCRE2_JIT_COMPLETE);
+    }
 
     QoreValue bv = config->getKeyValue("behavior");
     std::string bs = bv.isNullOrNothing() ? "" : safeGetStdString(bv);

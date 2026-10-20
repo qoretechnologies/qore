@@ -87,15 +87,19 @@ int HFTokenizer::getVocabSize() [flags=CONSTANT] {
 }
 
 //! Converts a token ID to its string representation
-/** @param id the token ID
-    @return the token string
+/** As in Hugging Face tokenizers, an added token with the ID is found before the model vocabulary.
+
+    @param id the token ID
+    @return the token string, or an empty string if the ID is not known
 */
 string HFTokenizer::idToToken(int id) [flags=CONSTANT] {
     return tok->idToToken(id, xsink);
 }
 
 //! Converts a token string to its ID
-/** @param token the token string
+/** As in Hugging Face tokenizers, an added token with the content is found before the model vocabulary.
+
+    @param token the token string
     @return the token ID, or -1 if not found
 */
 int HFTokenizer::tokenToId(string token) [flags=CONSTANT] {
@@ -105,8 +109,11 @@ int HFTokenizer::tokenToId(string token) [flags=CONSTANT] {
 //! Returns the full vocabulary as a token-to-ID hash
 /** Includes all model vocabulary entries plus any added tokens.
     @return a hash mapping token strings to their integer IDs
+
+    @throw HASH-KEY-ERROR a token has a NUL character, which a hash key cannot contain; use
+    @ref Qore::Tokenizer::HFTokenizer::tokenToId() "tokenToId()" to look such a token up
 */
-hash<string, int> HFTokenizer::getVocab() [flags=CONSTANT] {
+hash<string, int> HFTokenizer::getVocab() [flags=RET_VALUE_ONLY] {
     return tok->getVocab(xsink);
 }
 
@@ -371,10 +378,25 @@ nothing HFTokenizer::loadConfig(hash<auto> config) {
 /** Uses the chat_template from tokenizer_config.json to format a list of
     role/content message pairs into the prompt format expected by the model.
 
+    The template can use:
+    - <tt>{% for message in messages %} ... {% endfor %}</tt>: renders its body for each message; loops cannot be
+      nested
+    - <tt>{% if message['role'] == 'user' %} ... {% elif message['role'] == 'system' %} ... {% else %} ...
+      {% endif %}</tt>: if blocks, which can be nested; any condition other than a comparison of the role with a
+      string is false
+    - <tt>{{ bos_token }}</tt>, <tt>{{ eos_token }}</tt>, <tt>{{ message['role'] }}</tt> and
+      <tt>{{ message['content'] }}</tt>
+
+    Any other tag is written to the output as it is.  The role and content of a message and the tokens are written
+    as they are and are never read as template text, so a message cannot change the template.  A template without
+    a message loop gives the contents of the messages, one per line.
+
     @param messages list of hashes with \c role and \c content keys
     @return the formatted prompt string ready for tokenization
 
-    @throw TOKENIZER-ERROR if no chat_template is configured
+    @throw TOKENIZER-ERROR if no chat_template is configured, or the template is malformed: a block that is not
+    closed or is closed without being opened, an \c elif or \c else outside an if block, a loop in a loop, or
+    blocks nested more than 100 deep
 
     @par Example:
     @code{.py}

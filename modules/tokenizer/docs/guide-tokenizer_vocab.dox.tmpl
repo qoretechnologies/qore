@@ -19,4 +19,10 @@ printf("Total entries: %d\n", vocab.size());
 # Get the pad token ID (auto-detected from [PAD] or <pad>)
 printf("Pad token ID: %d\n", tok.getPadTokenId());
     @endcode
+
+    Text and tokens are kept whole, including any NUL characters.  A token with a NUL character (for example, an
+    added token) cannot be a hash key, so @ref Qore::Tokenizer::HFTokenizer::getVocab() "getVocab()" raises
+    \c HASH-KEY-ERROR when the vocabulary has one; look such a token up with
+    @ref Qore::Tokenizer::HFTokenizer::tokenToId() "tokenToId()" and
+    @ref Qore::Tokenizer::HFTokenizer::idToToken() "idToToken()" instead.
 */

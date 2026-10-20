@@ -90,17 +90,17 @@ public:
    DLLLOCAL virtual void derefForCallback(ExceptionSink* xsink) override {
       qo->deref(xsink);
    }
-   DLLLOCAL virtual void onAttach(QoreProgram *pgm, DebugRunStateEnum &rs, const AbstractStatement* &rts, ExceptionSink* xsink) {
+   DLLLOCAL virtual void onAttach(QoreProgram *pgm, DebugRunStateEnum &rs, const AbstractStatement* &rts, ExceptionSink* xsink) override {
       //printd(5, "QoreDebugProgramWithCoreObject::onAttach() this: %p, pgm: %p\n", this, pgm);
       ExceptionSink xsink2;
       callMethod("onAttach", pgm, 0, 0, rs, rts, xsink, xsink2);
    }
-   DLLLOCAL virtual void onDetach(QoreProgram *pgm, DebugRunStateEnum &rs, const AbstractStatement* &rts, ExceptionSink* xsink) {
+   DLLLOCAL virtual void onDetach(QoreProgram *pgm, DebugRunStateEnum &rs, const AbstractStatement* &rts, ExceptionSink* xsink) override {
       printd(5, "QoreDebugProgramWithCoreObject::onDetach() this: %p, pgm: %p\n", this, pgm);
       ExceptionSink xsink2;
       callMethod("onDetach", pgm, 0, 0, rs, rts, xsink, xsink2);
    }
-   DLLLOCAL virtual void onStep(QoreProgram *pgm, const StatementBlock *blockStatement, const AbstractStatement *statement, unsigned bkptId, int &flow, DebugRunStateEnum &rs, const AbstractStatement* &rts, ExceptionSink* xsink) {
+   DLLLOCAL virtual void onStep(QoreProgram *pgm, const StatementBlock *blockStatement, const AbstractStatement *statement, unsigned bkptId, int &flow, DebugRunStateEnum &rs, const AbstractStatement* &rts, ExceptionSink* xsink) override {
       ExceptionSink xsink2;
       QoreValue params[4];
       params[0] = pgm->getStatementId(blockStatement);
@@ -120,7 +120,7 @@ public:
       flow = v.getAsBigInt();
       v.discard(&xsink2);
    }
-   DLLLOCAL virtual void onFunctionEnter(QoreProgram *pgm, const StatementBlock *blockStatement, DebugRunStateEnum &rs, const AbstractStatement* &rts, ExceptionSink* xsink) {
+   DLLLOCAL virtual void onFunctionEnter(QoreProgram *pgm, const StatementBlock *blockStatement, DebugRunStateEnum &rs, const AbstractStatement* &rts, ExceptionSink* xsink) override {
       ExceptionSink xsink2;
       QoreValue params[1];
       params[0] = pgm->getStatementId(blockStatement);
@@ -130,7 +130,7 @@ public:
       */
       callMethod("onFunctionEnter", pgm, 1, params, rs, rts, xsink, xsink2);
    }
-   DLLLOCAL virtual void onFunctionExit(QoreProgram *pgm, const StatementBlock *blockStatement, QoreValue& returnValue, DebugRunStateEnum &rs, const AbstractStatement* &rts, ExceptionSink* xsink) {
+   DLLLOCAL virtual void onFunctionExit(QoreProgram *pgm, const StatementBlock *blockStatement, QoreValue& returnValue, DebugRunStateEnum &rs, const AbstractStatement* &rts, ExceptionSink* xsink) override {
       ExceptionSink xsink2;
       QoreValue params[2];
       params[0] = pgm->getStatementId(blockStatement);
@@ -145,7 +145,7 @@ public:
       returnValue = rah.getOutputValue(); // caller owns ref
       //printd(5, "QoreDebugProgramWithCoreObject::onFunctionExit() getRetValue#3: type: %d, in: %p\n", returnValue.type, returnValue.getInternalNode());
    }
-   DLLLOCAL virtual void onException(QoreProgram *pgm, const AbstractStatement *statement, DebugRunStateEnum &rs, const AbstractStatement* &rts, ExceptionSink* xsink) {
+   DLLLOCAL virtual void onException(QoreProgram *pgm, const AbstractStatement *statement, DebugRunStateEnum &rs, const AbstractStatement* &rts, ExceptionSink* xsink) override {
       ExceptionSink xsink2;
       QoreValue params[3];
       params[0] = pgm->getStatementId(statement);
@@ -165,7 +165,7 @@ public:
       }
       v.discard(&xsink2);
    }
-   DLLLOCAL virtual void onExit(QoreProgram *pgm, const StatementBlock *blockStatement, QoreValue& returnValue, DebugRunStateEnum &rs, const AbstractStatement* &rts, ExceptionSink* xsink) {
+   DLLLOCAL virtual void onExit(QoreProgram *pgm, const StatementBlock *blockStatement, QoreValue& returnValue, DebugRunStateEnum &rs, const AbstractStatement* &rts, ExceptionSink* xsink) override {
       ExceptionSink xsink2;
       QoreValue params[2];
       params[0] = pgm->getStatementId(blockStatement);

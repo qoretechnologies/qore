@@ -36,15 +36,16 @@
 #include <cstdlib>
 #include <cstring>
 
-namespace {
-//! Immutable after first regex use; set before starting Qore, including embedded runtimes.
-bool qore_pcre2_no_jit() {
-    static const bool disabled = []() {
+// read once, at the first call; set QORE_PCRE2_NO_JIT before starting Qore, including embedded runtimes
+bool qore_pcre2_jit_enabled() {
+    static const bool enabled = []() {
         const char* value = std::getenv("QORE_PCRE2_NO_JIT");
-        return value && !std::strcmp(value, "1");
+        return !value || std::strcmp(value, "1");
     }();
-    return disabled;
+    return enabled;
 }
+
+namespace {
 
 //! The calling thread's PCRE2 match context and its JIT stack.
 /** A JIT stack must not be used by two threads at the same time, so each thread owns one; the match
@@ -116,7 +117,7 @@ pcre2_match_context* qore_pcre2_thread_match_context() {
 
 void QoreRegexBase::jitCompile() {
     assert(p);
-    if (qore_pcre2_no_jit()) {
+    if (!qore_pcre2_jit_enabled()) {
         return;
     }
     // ignore errors; PCRE2 uses the interpreter when no JIT code is attached
@@ -125,7 +126,7 @@ void QoreRegexBase::jitCompile() {
 
 int qore_pcre2_match(const pcre2_code* code, PCRE2_SPTR8 subject, PCRE2_SIZE length,
         PCRE2_SIZE startoffset, uint32_t options, pcre2_match_data* md) {
-    if (qore_pcre2_no_jit()) {
+    if (!qore_pcre2_jit_enabled()) {
         // Also covers patterns with JIT code attached by an embedding application. No JIT
         // stack or thread-local match context is needed for the interpreter.
         return pcre2_match(code, subject, length, startoffset, options | PCRE2_NO_JIT, md, nullptr);

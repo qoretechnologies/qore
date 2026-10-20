@@ -60,42 +60,41 @@ static void reserveAppendCapacity(QoreDataFrameNS::ColumnData& col, int64_t rows
 
 namespace QoreDataFrameNS {
 
-// Build a string key from column values at a given row index
+// Build a key from column values at a given row index; each value is a tagged component with its length, so that
+// different value tuples always make different keys, and a null value never matches an empty string
 static std::string buildJoinKey(const std::vector<size_t>& key_col_indices,
         const std::vector<Column>& columns, int64_t row) {
     std::string key;
     for (size_t ki = 0; ki < key_col_indices.size(); ++ki) {
         const ColumnData& cd = *columns[key_col_indices[ki]].data;
-        if (ki > 0) {
-            key += '\x01';
-        }
         if (cd.isNull(row)) {
-            key += "\x00NULL\x00";
-        } else {
-            switch (cd.type) {
-                case ColumnType::INT64:
-                    key += std::to_string(cd.int_data[row]);
-                    break;
-                case ColumnType::FLOAT64:
-                    key += std::to_string(cd.float_data(row));
-                    break;
-                case ColumnType::STRING:
-                    key += cd.str_data[row];
-                    break;
-                case ColumnType::BOOL:
-                    key += cd.bool_data[row] ? "1" : "0";
-                    break;
-                case ColumnType::DATE:
-                    key += std::to_string(cd.date_data[row]);
-                    break;
-                case ColumnType::AUTO: {
-                    QoreStringValueHelper sh(cd.auto_data[row]);
-                    key += sh->c_str();
-                    break;
-                }
-                default:
-                    break;
+            appendDataFrameKeyNull(key);
+            continue;
+        }
+        switch (cd.type) {
+            case ColumnType::INT64:
+                appendDataFrameKeyValue(key, std::to_string(cd.int_data[row]));
+                break;
+            case ColumnType::FLOAT64:
+                appendDataFrameKeyValue(key, std::to_string(cd.float_data(row)));
+                break;
+            case ColumnType::STRING:
+                appendDataFrameKeyValue(key, cd.str_data[row]);
+                break;
+            case ColumnType::BOOL:
+                appendDataFrameKeyValue(key, cd.bool_data[row] ? "1" : "0", 1);
+                break;
+            case ColumnType::DATE:
+                appendDataFrameKeyValue(key, std::to_string(cd.date_data[row]));
+                break;
+            case ColumnType::AUTO: {
+                QoreStringValueHelper sh(cd.auto_data[row]);
+                appendDataFrameKeyValue(key, sh->c_str(), sh->size());
+                break;
             }
+            default:
+                appendDataFrameKeyValue(key, "", 0);
+                break;
         }
     }
     return key;

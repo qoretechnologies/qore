@@ -270,7 +270,10 @@ static QoreHashNode* get_json_object(const char*& buf, int& line_number, const Q
                 "(expecting JSON value)", line_number);
             break;
         }
-        h->setKeyValue(&str, val, xsink);
+        // the key is converted to the default encoding; a key with a NUL character raises HASH-KEY-ERROR
+        if (h->setKeyValue(str, val, xsink) || *xsink) {
+            break;
+        }
 
         skip_whitespace(buf, line_number);
         if (*buf == '}') {
@@ -502,11 +505,16 @@ static int do_json_list(ExceptionSink* xsink, QoreString* str, const QoreListNod
     return 0;
 }
 
-static int do_json_string_intern(ExceptionSink* xsink, QoreString* str, const char* utf8_str, int format,
+static int do_json_string_intern(ExceptionSink* xsink, QoreString* str, const QoreString* vstr, int format,
         QoreSandboxManager* sm) {
     str->concat('"');
     qore_size_t i = str->size();
-    str->concatEscape(utf8_str, '"', '\\');
+    // the whole string is written: a NUL character is escaped as \u0000 below; the string was passed as a C string
+    // and cut at its first NUL character
+    str->concatEscape(vstr, '"', '\\', xsink);
+    if (*xsink) {
+        return -1;
+    }
 
     // iteration counter for periodic interrupt checks (sandbox only); the scan below is bounded
     // only by the length of the string being serialized, and each iteration does encoding-aware
@@ -562,7 +570,7 @@ static int do_json_string(ExceptionSink* xsink, QoreString* str, const QoreStrin
    if (*xsink)
       return -1;
 
-   return do_json_string_intern(xsink, str, t->c_str(), format, sm);
+   return do_json_string_intern(xsink, str, *t, format, sm);
 }
 
 static int do_json_value(QoreString* str, QoreValue v, int format, int depth,

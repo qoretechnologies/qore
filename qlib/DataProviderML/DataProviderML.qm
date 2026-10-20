@@ -1670,6 +1670,29 @@ module DataProviderML {
     logic can combine anomaly scores, cluster assignments, and forecasts for comprehensive
     decision-making.
 
+    @section dataproviderml_field_paths Field Paths in Options and Events
+
+    The fields that a processor reads are given in its options as @ref dpql_field_paths "field paths": dots separate
+    the keys of a nested field, and a dot that is part of a key is escaped, so \c order.amount is the key \c amount
+    of the key \c order, and <tt>Unit\\.Price</tt> is the key \c Unit.Price.
+
+    The events that the processors emit name these fields in two ways:
+    - the \c field of an analytics event, such as
+      @ref DataProviderML::HoltWintersForecastEventInfo "HoltWintersForecastEventInfo" and
+      @ref DataProviderML::SeasonalDecompositionEventInfo "SeasonalDecompositionEventInfo", and the \c field_name of
+      a @ref DataProviderML::DataProfileFieldInfo "DataProfileFieldInfo" event are the field path as it is given in
+      the options, escaped as it is written (<tt>Unit\\.Price</tt>), so the value names the field without ambiguity
+      and can be given back to a processor as it is
+    - the keys of the \c record_values, \c scaled_values and \c imputed_values hashes of an event are the display
+      names of the fields: the keys of each path joined with dots, as
+      @ref DataProvider::AbstractDataProvider::getFieldPathDisplayName()
+      "AbstractDataProvider::getFieldPathDisplayName()" gives them (\c Unit.Price for <tt>Unit\\.Price</tt>); an
+      output field named after an input field is named the same way
+    .
+    To show the field of an event, use @ref DataProvider::AbstractDataProvider::getFieldPathDisplayName()
+    "AbstractDataProvider::getFieldPathDisplayName()";
+    @ref DataProvider::AbstractDataProvider::getFieldPath() "AbstractDataProvider::getFieldPath()" gives its keys.
+
     @section dataproviderml_columnar Columnar and DataFrame Input
 
     DataProviderML processors accept the standard DataProvider pipeline shapes:
@@ -1974,6 +1997,7 @@ public namespace DataProviderML {
         #! point was easier to separate from the rest, suggesting it is more unusual
         float average_path_length;
         #! The original input values for the fields that were analyzed
+        #! (keyed by the display name of each field; see @ref dataproviderml_field_paths)
         hash<auto> record_values;
     }
 
@@ -1990,6 +2014,7 @@ public namespace DataProviderML {
         #! How many other data points are close enough to this one to be considered neighbors
         int neighbor_count;
         #! The original input values for the fields that were analyzed
+        #! (keyed by the display name of each field; see @ref dataproviderml_field_paths)
         hash<auto> record_values;
     }
 
@@ -2006,6 +2031,7 @@ public namespace DataProviderML {
         #! close the record was to being assigned to a different group
         list<float> centroid_distances;
         #! The original input values for the fields that were analyzed
+        #! (keyed by the display name of each field; see @ref dataproviderml_field_paths)
         hash<auto> record_values;
     }
 
@@ -2021,6 +2047,7 @@ public namespace DataProviderML {
         #! variation in the data is captured
         float total_explained_variance;
         #! The original input values for the fields that were analyzed
+        #! (keyed by the display name of each field; see @ref dataproviderml_field_paths)
         hash<auto> record_values;
     }
 
@@ -2065,6 +2092,7 @@ public namespace DataProviderML {
         #! point to which the weighted input field values are added
         float intercept;
         #! The original input values for the fields that were analyzed
+        #! (keyed by the display name of each field; see @ref dataproviderml_field_paths)
         hash<auto> record_values;
     }
 
@@ -2082,6 +2110,7 @@ public namespace DataProviderML {
         #! is more isolated from other data points
         float k_distance;
         #! The original input values for the fields that were analyzed
+        #! (keyed by the display name of each field; see @ref dataproviderml_field_paths)
         hash<auto> record_values;
     }
 
@@ -2104,6 +2133,7 @@ public namespace DataProviderML {
         #! different records fit the discovered groups
         float log_likelihood;
         #! The original input values for the fields that were analyzed
+        #! (keyed by the display name of each field; see @ref dataproviderml_field_paths)
         hash<auto> record_values;
     }
 
@@ -2117,6 +2147,7 @@ public namespace DataProviderML {
         #! or "CUDAExecutionProvider" for GPU acceleration)
         string execution_provider;
         #! The original input values for the fields that were fed into the model
+        #! (keyed by the display name of each field; see @ref dataproviderml_field_paths)
         hash<auto> record_values;
         #! The model's output values; keys are the output names defined in the model and
         #! values are the corresponding results (e.g., predicted classes, probabilities,
@@ -2139,6 +2170,7 @@ public namespace DataProviderML {
         #! The version ID of the loaded model
         string version_id;
         #! The input field values passed to the model
+        #! (keyed by the display name of each field; see @ref dataproviderml_field_paths)
         hash<auto> record_values;
         #! The ONNX Runtime execution provider used for registry-backed ONNX models
         *string execution_provider;
@@ -2179,8 +2211,10 @@ public namespace DataProviderML {
         #! The type of analysis that produced this result (always "standard-scaler")
         string event_type = "standard-scaler";
         #! The original input values for the fields that were analyzed
+        #! (keyed by the display name of each field; see @ref dataproviderml_field_paths)
         hash<auto> record_values;
         #! The scaled values for each field (zero mean, unit variance)
+        #! (keyed by the display name of each field; see @ref dataproviderml_field_paths)
         hash<auto> scaled_values;
     }
 
@@ -2189,8 +2223,10 @@ public namespace DataProviderML {
         #! The type of analysis that produced this result (always "min-max-scaler")
         string event_type = "min-max-scaler";
         #! The original input values for the fields that were analyzed
+        #! (keyed by the display name of each field; see @ref dataproviderml_field_paths)
         hash<auto> record_values;
         #! The scaled values for each field in the target range [feature_min, feature_max]
+        #! (keyed by the display name of each field; see @ref dataproviderml_field_paths)
         hash<auto> scaled_values;
         #! The lower bound of the target range used for scaling
         float feature_min;
@@ -2204,8 +2240,10 @@ public namespace DataProviderML {
         string event_type = "imputer";
         #! The original input values for the fields that were analyzed; NOTHING values
         #! indicate fields that were missing and have been filled
+        #! (keyed by the display name of each field; see @ref dataproviderml_field_paths)
         hash<auto> record_values;
         #! The imputed values for each field with missing values replaced
+        #! (keyed by the display name of each field; see @ref dataproviderml_field_paths)
         hash<auto> imputed_values;
         #! The number of fields that had missing (NOTHING) values in this record
         int missing_count;
@@ -2291,6 +2329,7 @@ public namespace DataProviderML {
         #! classes the list might be (0.7, 0.2, 0.1) meaning 70%% chance of class 0
         list<float> probabilities;
         #! The original input values for the fields that were analyzed
+        #! (keyed by the display name of each field; see @ref dataproviderml_field_paths)
         hash<auto> record_values;
     }
 
@@ -2305,6 +2344,7 @@ public namespace DataProviderML {
         #! predicted class
         float confidence;
         #! The original input values for the fields that were analyzed
+        #! (keyed by the display name of each field; see @ref dataproviderml_field_paths)
         hash<auto> record_values;
     }
 
@@ -2316,6 +2356,7 @@ public namespace DataProviderML {
         #! of the k nearest neighbors' target values
         float prediction;
         #! The original input values for the fields that were analyzed
+        #! (keyed by the display name of each field; see @ref dataproviderml_field_paths)
         hash<auto> record_values;
     }
 
@@ -2330,6 +2371,7 @@ public namespace DataProviderML {
         #! the predicted class
         float confidence;
         #! The original input values for the fields that were analyzed
+        #! (keyed by the display name of each field; see @ref dataproviderml_field_paths)
         hash<auto> record_values;
     }
 
@@ -2341,6 +2383,7 @@ public namespace DataProviderML {
         #! leaf node reached by this record
         float prediction;
         #! The original input values for the fields that were analyzed
+        #! (keyed by the display name of each field; see @ref dataproviderml_field_paths)
         hash<auto> record_values;
     }
 
@@ -2354,6 +2397,7 @@ public namespace DataProviderML {
         #! agree); represents the proportion of trees voting for the predicted class
         float confidence;
         #! The original input values for the fields that were analyzed
+        #! (keyed by the display name of each field; see @ref dataproviderml_field_paths)
         hash<auto> record_values;
     }
 
@@ -2365,6 +2409,7 @@ public namespace DataProviderML {
         #! trees in the forest
         float prediction;
         #! The original input values for the fields that were analyzed
+        #! (keyed by the display name of each field; see @ref dataproviderml_field_paths)
         hash<auto> record_values;
     }
 
@@ -2378,6 +2423,7 @@ public namespace DataProviderML {
         #! derived from the boosted model's probability estimate for the predicted class
         float confidence;
         #! The original input values for the fields that were analyzed
+        #! (keyed by the display name of each field; see @ref dataproviderml_field_paths)
         hash<auto> record_values;
     }
 
@@ -2389,6 +2435,7 @@ public namespace DataProviderML {
         #! sequentially built trees
         float prediction;
         #! The original input values for the fields that were analyzed
+        #! (keyed by the display name of each field; see @ref dataproviderml_field_paths)
         hash<auto> record_values;
     }
 
@@ -2398,7 +2445,13 @@ public namespace DataProviderML {
     public hashdecl DataProfileFieldInfo {
         #! The type of analysis that produced this result (always "data-profile")
         string event_type = "data-profile";
-        #! The field name that was profiled
+        #! The field that was profiled: its field path as it is given in the \c fields option
+        /** The @ref dpql_field_paths "field path" is written as it is given, with a dot that is part of a key
+            escaped (<tt>Unit\\.Price</tt>), so it names the field without ambiguity;
+            @ref DataProvider::AbstractDataProvider::getFieldPathDisplayName()
+            "AbstractDataProvider::getFieldPathDisplayName()" gives the name to show for it (see
+            @ref dataproviderml_field_paths)
+        */
         string field_name;
         #! Total number of records in the batch
         int count;

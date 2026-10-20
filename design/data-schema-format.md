@@ -463,8 +463,9 @@ Fresh installs skip both `pre_align` and `post_align` migrations. Keep required 
 the declarative model, including partial and covering indexes, so both new and upgraded databases
 receive them. Raw DDL that exists only in a historical migration is **not** replayed during a fresh
 install. Declare an existing migration-created index using the same name to bring it under alignment;
-an unchanged definition preserves the index. Schema alignment continues to preserve undeclared indexes
-under its existing policy.
+an unchanged definition preserves the index. Schema alignment drops an index that the declarative model
+does not declare, as SqlUtil table alignment does, so an index created by a migration is kept only if
+the model declares it.
 
 ### Source-Version Gating
 
@@ -625,6 +626,19 @@ Successful execution returns bounded aggregate evidence: material change
 count, before/after active and quarantine row counts, and deterministic
 verification results. It does not return row values. Re-executing the same
 contract is idempotent.
+
+Schema alignment drops an index that the declarative model does not declare,
+so the alignment of a DataSchema with a `reconcile_table` migration keeps the
+indexes that the migration created: the unique index on the canonical key
+(`<primary key name>_schema_unique`, created when the table keeps a legacy
+primary key on other columns) and the reviewed indexes of the contract are
+added to the table's description once they exist in the database with the
+reviewed definition. An index that the model declares under the same name, or
+with the same definition under another name, is aligned as the model declares
+it; a model whose primary key is the canonical key takes the canonical-key
+index as its own. An index of a migration that has not run yet, such as a
+`post_align` migration of the upgrade being aligned, is not created by the
+alignment.
 
 Embedding applications can pass `ddl_change_callback` in
 `SchemaOptionInfo`, or to `Schema::execute_migration_action()`. The callback

@@ -145,13 +145,15 @@ static bool columnar_type_is_one_of(const std::string& value, std::initializer_l
     return false;
 }
 
+// returns the whole string, with any NUL characters, so that a value with a NUL character is never cut to another
+// valid value
 static std::string columnar_get_string_value(QoreValue value) {
     if (value.getType() != NT_STRING) {
         return std::string();
     }
 
     QoreStringValueHelper str(value);
-    return std::string(str->c_str());
+    return std::string(str->c_str(), str->size());
 }
 
 static std::string columnar_get_desc_string(const QoreHashNode* desc, const char* key) {
@@ -1158,6 +1160,10 @@ static QoreColumnarTypeDescriptor columnar_descriptor_from_desc_hash(const QoreH
 
     std::string name = columnar_get_desc_string(desc, "name");
     if (!name.empty()) {
+        // a column or field name is the key of the hashes of the result and of its struct values
+        if (QoreHashNode::checkKey(name.data(), name.size(), xsink)) {
+            return schema;
+        }
         schema.name = std::move(name);
     }
 
@@ -1178,12 +1184,23 @@ static QoreColumnarTypeDescriptor columnar_descriptor_from_desc_hash(const QoreH
         schema.nullable = nullable.getAsBool();
     }
 
+    // the native type, buffer type, time unit and time zone are passed on as C strings (to the shape and type
+    // lookups and in Arrow format strings), so a value with a NUL character, which would be cut at the NUL character
+    // and name another value, is refused
     std::string native_type = columnar_get_desc_string(desc, "native_type");
+    if (q_check_no_nul(native_type.data(), native_type.size(), "native type", "native types",
+            "COLUMNAR-SCHEMA-ERROR", xsink)) {
+        return schema;
+    }
     if (!native_type.empty()) {
         schema.native_type = native_type;
     }
 
     std::string buffer_type = columnar_get_desc_string(desc, "buffer_type");
+    if (q_check_no_nul(buffer_type.data(), buffer_type.size(), "buffer type", "buffer types",
+            "COLUMNAR-SCHEMA-ERROR", xsink)) {
+        return schema;
+    }
     if (!buffer_type.empty()) {
         QoreBufferElementType parsed = QoreBufferElementType::Invalid;
         if (qore_buffer_element_type_from_name(buffer_type.c_str(), parsed)) {
@@ -1202,10 +1219,18 @@ static QoreColumnarTypeDescriptor columnar_descriptor_from_desc_hash(const QoreH
     schema.fixed_size = static_cast<int32_t>(columnar_get_desc_int(desc, "fixed_size", schema.fixed_size));
 
     std::string time_unit = columnar_get_desc_string(desc, "time_unit");
+    if (q_check_no_nul(time_unit.data(), time_unit.size(), "time unit", "time units", "COLUMNAR-SCHEMA-ERROR",
+            xsink)) {
+        return schema;
+    }
     if (!time_unit.empty()) {
         schema.time_unit = std::move(time_unit);
     }
     std::string timezone = columnar_get_desc_string(desc, "timezone");
+    if (q_check_no_nul(timezone.data(), timezone.size(), "time zone", "time zones", "COLUMNAR-SCHEMA-ERROR",
+            xsink)) {
+        return schema;
+    }
     if (!timezone.empty()) {
         schema.timezone = std::move(timezone);
     }
@@ -1503,8 +1528,9 @@ static std::string columnar_required_string(const QoreHashNode* h, const char* k
             key, context, value.getTypeName());
         return std::string();
     }
+    // the whole string, with any NUL characters
     QoreStringValueHelper str(value);
-    return std::string(str->c_str());
+    return std::string(str->c_str(), str->size());
 }
 
 static int64 columnar_required_int(const QoreHashNode* h, const char* key, const char* context,
@@ -1602,6 +1628,12 @@ static QoreBufferElementType columnar_required_buffer_type(const QoreHashNode* h
         ExceptionSink* xsink) {
     std::string type_name = columnar_required_string(h, "element_type", context, xsink);
     if (*xsink) {
+        return QoreBufferElementType::Invalid;
+    }
+    // the type name is looked up as a C string, so a name with a NUL character, which would be cut at the NUL
+    // character and name another type, is refused
+    if (q_check_no_nul(type_name.data(), type_name.size(), "buffer element type", "buffer element types",
+            "DESERIALIZATION-ERROR", xsink)) {
         return QoreBufferElementType::Invalid;
     }
 
@@ -3802,6 +3834,10 @@ static QoreValue qore_arrow_value_at(const ArrowSchema* schema, const ArrowArray
             if (*xsink) {
                 return QoreValue();
             }
+            // a map key with a NUL character cannot be a hash key
+            if (QoreHashNode::checkKey(key_str->c_str(), key_str->size(), xsink)) {
+                return QoreValue();
+            }
             hash->setKeyValue(key_str->c_str(),
                 qore_arrow_value_at(entries_schema->children[1], entries_array->children[1], entry_index, xsink),
                 xsink);
@@ -4068,6 +4104,12 @@ QoreColumnarResult* QoreColumnarResult::fromColumnHash(const QoreHashNode* colum
         QoreValue value = i.get();
         const QoreHashNode* column_desc = columnar_get_desc_column(desc, i.getKey());
         std::string native_type = columnar_get_desc_string(column_desc, "native_type");
+        // the native type is passed on as a C string, so a value with a NUL character, which would be cut at the NUL
+        // character, is refused
+        if (q_check_no_nul(native_type.data(), native_type.size(), "native type", "native types",
+                "COLUMNAR-RESULT-ERROR", xsink)) {
+            return nullptr;
+        }
 
         if (value.getType() == NT_BUFFER) {
             const QoreBufferNode* buffer = value.get<const QoreBufferNode>();
@@ -4312,6 +4354,10 @@ QoreColumnarResult* QoreColumnarResult::deserialize(const QoreHashNode* sdata, E
         const QoreHashNode* data_hash = columnar_required_hash(column_hash, "data", "columnar result column",
             xsink);
         if (*xsink) {
+            return nullptr;
+        }
+        // a column name is the key of the records and column hashes of the result
+        if (QoreHashNode::checkKey(name.data(), name.size(), xsink)) {
             return nullptr;
         }
 
@@ -4743,13 +4789,43 @@ QoreValue QoreColumnarResult::getColumnValue(const char* name, ExceptionSink* xs
     return column->data.refSelf();
 }
 
+void QoreColumnarResult::attach(QoreObject& self) const {
+    bool registered = false;
+    for (const Column& column : columns) {
+        if (!needs_scan(column.data)) {
+            continue;
+        }
+        if (!registered) {
+            // the columns do not change, so the registration is kept for the life of the object
+            self.addPrivateDataScan(CID_COLUMNARRESULT);
+            registered = true;
+        }
+        // no scan follows the new edge
+        self.privateDataValueStored(column.data);
+    }
+}
+
+bool QoreColumnarResult::scanValues(QorePrivateDataScanner& scanner) {
+    // the columns do not change once the result is the private data of an object, and it is the private data of one
+    // object only, so each container is reported once and read without a lock
+    for (const Column& column : columns) {
+        if (scanner.scan(column.data)) {
+            return true;
+        }
+    }
+    return false;
+}
+
 QoreObject* qore_columnar_result_to_object(QoreColumnarResult* result, ExceptionSink* xsink) {
     if (!result) {
         return nullptr;
     }
+    // the result is given to one object: an object reports its column containers, which the result references once
+    assert(result->reference_count() == 1);
     ReferenceHolder<QoreColumnarResult> result_holder(result, xsink);
     ReferenceHolder<QoreObject> obj(new QoreObject(QC_COLUMNARRESULT, nullptr), xsink);
     obj->setPrivate(CID_COLUMNARRESULT, result_holder.release());
+    result->attach(**obj);
     return obj.release();
 }
 

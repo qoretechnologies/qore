@@ -55,7 +55,7 @@ static std::atomic<uint64_t> socket_qore_sync_exec_seq{0};
 
 static void hash_set_int_key(QoreHashNode& h, int k, const char* str) {
     char buf[15];
-    sprintf(buf, "%d", k);
+    snprintf(buf, sizeof(buf), "%d", k);
     h.setKeyValue(buf, new QoreStringNode(str), nullptr);
 }
 
@@ -347,6 +347,34 @@ private:
     ExceptionSink* xsink;
 };
 
+// the strings of an HTTP/1 request are written to the message as C strings, which would be cut at a NUL character,
+// and a CR or LF would end the request line and start a header or another request; the headers are checked when the
+// message is made
+static int socket_check_http_request(const QoreStringNode* method, const QoreStringNode* path,
+        const QoreStringNode* http_version, const char* err, ExceptionSink* xsink) {
+    if (q_check_http_request(method, path, nullptr, err, err, nullptr, xsink)
+        || q_check_http_text(http_version->c_str(), http_version->size(), "HTTP version", "HTTP versions", err,
+            false, xsink)) {
+        return -1;
+    }
+    return 0;
+}
+
+// the strings of an HTTP/1 response are written to the message as C strings, which would be cut at a NUL character,
+// and a CR or LF would end the status line and start a header; headers are only given here when the message is made
+// without my_socket_priv, which checks them otherwise
+static int socket_check_http_response(const QoreStringNode* status_description, const QoreStringNode* http_version,
+        const QoreHashNode* headers, const char* err, ExceptionSink* xsink) {
+    if (q_check_http_text(status_description->c_str(), status_description->size(), "HTTP status message",
+            "HTTP status messages", err, false, xsink)
+        || q_check_http_text(http_version->c_str(), http_version->size(), "HTTP version", "HTTP versions", err, false,
+            xsink)
+        || q_check_http_header_values(headers, err, xsink)) {
+        return -1;
+    }
+    return 0;
+}
+
 static int socket_exec_send_http_message(QoreObject* self, QoreSocketObject* s, QoreHashNode* info,
         const char* method, const char* path, const char* http_version, const QoreHashNode* headers,
         const void* data, size_t size, const QoreStringNode* body_event, int timeout_ms, ExceptionSink* xsink) {
@@ -421,6 +449,10 @@ static int socket_exec_send_http_response(QoreObject* self, QoreSocketObject* s,
 
 static int socket_exec_send_http_chunked_body_trailer(QoreObject* self, QoreSocketObject* s,
         const QoreHashNode* trailer, int timeout_ms, ExceptionSink* xsink) {
+    // the values are written to the message as C strings, which would be cut at a NUL character
+    if (q_check_http_header_values(trailer, "SOCKET-SEND-ERROR", xsink)) {
+        return -1;
+    }
     my_socket_priv* priv = my_socket_priv::getPriv(*s);
     SocketExecAsyncIoGuard async_guard(*priv, xsink, NB_SEND);
     if (!async_guard) {
@@ -1340,7 +1372,7 @@ public:
         return 0;
     }
 
-    DLLLOCAL virtual void deref(ExceptionSink* xsink) {
+    DLLLOCAL virtual void deref(ExceptionSink* xsink) override {
         if (ROdereference()) {
             clearNonBlock();
             sock->deref(xsink);
@@ -2038,6 +2070,7 @@ const SSL_VERIFY_NONE = SSL_VERIFY_NONE;
     @note Since %Qore 3.0, a local certificate verification failure raises \c SOCKET-SSL-ERROR with a hash
     exception argument containing \c ssl_verify_error, the numeric OpenSSL certificate verification result.
     This distinguishes a refused certificate from an interrupted handshake without parsing the error description.
+    This applies to TLS connections over TCP and to QUIC (HTTP/3) connections alike.
 
     @see
     - @ref Qore::SSL_VERIFY_FAIL_IF_NO_PEER_CERT
@@ -2458,8 +2491,13 @@ Socket::destructor() {
     does not add latency.
 
     @since %Qore 1.12
+
+    @throw SOCKET-CONNECT-ERROR the target contains a NUL character; see @ref path_nul_characters
 */
 AbstractPollOperation<auto> Socket::startPollConnect(string target) [flags=NAMED_ARGS] {
+    if (q_check_no_nul(target->c_str(), target->size(), "socket target", "socket targets", "SOCKET-CONNECT-ERROR", xsink)) {
+        return QoreValue();
+    }
     s->ref();
     ReferenceHolder<SocketPollOperationBase> poller(new SocketConnectPollOperation(xsink, false, target->c_str(), s),
         xsink);
@@ -2487,8 +2525,13 @@ AbstractPollOperation<auto> Socket::startPollConnect(string target) [flags=NAMED
     does not add latency.
 
     @since %Qore 1.12
+
+    @throw SOCKET-CONNECT-ERROR the target contains a NUL character; see @ref path_nul_characters
 */
 AbstractPollOperation<auto> Socket::startPollConnectSsl(string target) [flags=NAMED_ARGS] {
+    if (q_check_no_nul(target->c_str(), target->size(), "socket target", "socket targets", "SOCKET-CONNECT-ERROR", xsink)) {
+        return QoreValue();
+    }
     s->ref();
     ReferenceHolder<SocketPollOperationBase> poller(new SocketConnectPollOperation(xsink, true, target->c_str(), s),
         xsink);
@@ -2577,7 +2620,7 @@ AbstractPollOperation<auto> Socket::startPollSend(binary data) [flags=NAMED_ARGS
     }
     @endcode
 
-    @throw SOCKET-STARTPOLLSENDHTTPRESPONSE-ERROR invalid status code or unsupported body type
+    @throw SOCKET-STARTPOLLSENDHTTPRESPONSE-ERROR invalid status code or unsupported body type, or the status message, HTTP version or a header name or value contains a NUL or another control character than horizontal tab (since %Qore 3.0); header values are not shown in the exception
 
     @note This method properly handles the \c Content-Length header by calculating it from the body size, ignoring
     any \c Content-Length header passed in the \a headers argument.
@@ -2588,6 +2631,10 @@ AbstractPollOperation<auto> Socket::startPollSend(binary data) [flags=NAMED_ARGS
 */
 AbstractPollOperation<auto> Socket::startPollSendHttpResponse(int status_code, string status_description,
         string http_version, *hash<auto> headers, *data body) [flags=NAMED_ARGS] {
+    if (socket_check_http_response(status_description, http_version, headers,
+            "SOCKET-STARTPOLLSENDHTTPRESPONSE-ERROR", xsink)) {
+        return QoreValue();
+    }
     // Validate status code (must be between 100 and 599)
     if (status_code < 100 || status_code >= 600) {
         xsink->raiseException("SOCKET-STARTPOLLSENDHTTPRESPONSE-ERROR",
@@ -2657,12 +2704,16 @@ AbstractPollOperation<auto> Socket::startPollSendHttpResponse(int status_code, s
       headers) and \c "info" (header info) keys
     - If \c getState() returns \c "timeout": the idle timeout expired; connection should be closed
 
-    @throw SOCKET-STARTPOLLSENDHTTPRESPONSEANDREADHEADER-ERROR invalid status code or unsupported body type
+    @throw SOCKET-STARTPOLLSENDHTTPRESPONSEANDREADHEADER-ERROR invalid status code or unsupported body type, or the status message, HTTP version or a header name or value contains a NUL or another control character than horizontal tab (since %Qore 3.0); header values are not shown in the exception
 
     @since %Qore 3.0
 */
 AbstractPollOperation<auto> Socket::startPollSendHttpResponseAndReadHeader(int status_code, string status_description,
         string http_version, *hash<auto> headers, *data body, timeout idle_timeout) [flags=NAMED_ARGS] {
+    if (socket_check_http_response(status_description, http_version, headers,
+            "SOCKET-STARTPOLLSENDHTTPRESPONSEANDREADHEADER-ERROR", xsink)) {
+        return QoreValue();
+    }
     // Validate status code (must be between 100 and 599)
     if (status_code < 100 || status_code >= 600) {
         xsink->raiseException("SOCKET-STARTPOLLSENDHTTPRESPONSEANDREADHEADER-ERROR",
@@ -2736,7 +2787,8 @@ AbstractPollOperation<auto> Socket::startPollSendHttpResponseAndReadHeader(int s
     - If \c getState() returns \c "timeout": the idle timeout expired
 
     @throw SOCKET-STARTPOLLSENDHTTPRESPONSEWITHSTREAMANDREADHEADER-ERROR invalid status code, a non-I/O-thread-safe
-    InputStream, or a negative content length
+    InputStream, or a negative content length, or the status message, HTTP version or a header name or value contains a NUL
+    or another control character than horizontal tab (since %Qore 3.0); header values are not shown in the exception
     @throw HTTP-STREAM-ERROR raised during polling if the InputStream provides fewer bytes than
     Content-Length (truncated stream), or if poll() on a pollable InputStream fd fails
 
@@ -2745,6 +2797,10 @@ AbstractPollOperation<auto> Socket::startPollSendHttpResponseAndReadHeader(int s
 AbstractPollOperation<auto> Socket::startPollSendHttpResponseWithStreamAndReadHeader(int status_code,
         string status_description, string http_version, *hash<auto> headers,
         InputStream[InputStream] body, softint content_length, timeout idle_timeout) [flags=NAMED_ARGS] {
+    if (socket_check_http_response(status_description, http_version, headers,
+            "SOCKET-STARTPOLLSENDHTTPRESPONSEWITHSTREAMANDREADHEADER-ERROR", xsink)) {
+        return QoreValue();
+    }
     // Validate status code (must be between 100 and 599)
     if (status_code < 100 || status_code >= 600) {
         xsink->raiseException("SOCKET-STARTPOLLSENDHTTPRESPONSEWITHSTREAMANDREADHEADER-ERROR",
@@ -2841,10 +2897,16 @@ AbstractPollOperation<auto> Socket::startPollSendHttpResponseWithStreamAndReadHe
     @return an @ref Qore::AbstractPollOperation object
 
     @since %Qore 3.0
+
+    @throw SOCKET-STARTPOLLSENDHTTPCHUNKEDRESPONSEWITHSTREAMANDREADHEADER-ERROR the status message, HTTP version or a header name or value contains a NUL or another control character than horizontal tab (since %Qore 3.0); header values are not shown in the exception
 */
 AbstractPollOperation<auto> Socket::startPollSendHttpChunkedResponseAndReadHeader(int status_code,
         string status_description, string http_version, *hash<auto> headers,
         InputStream[InputStream] body, timeout idle_timeout) [flags=NAMED_ARGS] {
+    if (socket_check_http_response(status_description, http_version, headers,
+            "SOCKET-STARTPOLLSENDHTTPCHUNKEDRESPONSEWITHSTREAMANDREADHEADER-ERROR", xsink)) {
+        return QoreValue();
+    }
     if (status_code < 100 || status_code >= 600) {
         xsink->raiseException("SOCKET-STARTPOLLSENDHTTPCHUNKEDRESPONSEWITHSTREAMANDREADHEADER-ERROR",
             "expecting valid HTTP status code between 100 and 599, got value %d instead", status_code);
@@ -2933,7 +2995,8 @@ AbstractPollOperation<auto> Socket::startPollSendHttpChunkedResponseAndReadHeade
     @return an @ref Qore::AbstractPollOperation object; when goal is reached, getState() returns "stream-complete"
 
     @throw SOCKET-STARTPOLLSENDHTTPRESPONSEWITHSTREAM-ERROR invalid status code, a non-I/O-thread-safe
-    InputStream, or a negative content length
+    InputStream, or a negative content length, or the status message, HTTP version or a header name or value contains a NUL
+    or another control character than horizontal tab (since %Qore 3.0); header values are not shown in the exception
     @throw HTTP-STREAM-ERROR raised during polling if the InputStream provides fewer bytes than
     Content-Length (truncated stream), or if poll() on a pollable InputStream fd fails
 
@@ -2942,6 +3005,10 @@ AbstractPollOperation<auto> Socket::startPollSendHttpChunkedResponseAndReadHeade
 AbstractPollOperation<auto> Socket::startPollSendHttpResponseWithStream(int status_code,
         string status_description, string http_version, *hash<auto> headers,
         InputStream[InputStream] body, softint content_length) [flags=NAMED_ARGS] {
+    if (socket_check_http_response(status_description, http_version, headers,
+            "SOCKET-STARTPOLLSENDHTTPRESPONSEWITHSTREAM-ERROR", xsink)) {
+        return QoreValue();
+    }
     // Validate status code (must be between 100 and 599)
     if (status_code < 100 || status_code >= 600) {
         xsink->raiseException("SOCKET-STARTPOLLSENDHTTPRESPONSEWITHSTREAM-ERROR",
@@ -3029,13 +3096,17 @@ AbstractPollOperation<auto> Socket::startPollSendHttpResponseWithStream(int stat
 
     @return an @ref Qore::AbstractPollOperation object; when goal is reached, getState() returns "stream-complete"
 
-    @throw SOCKET-STARTPOLLSENDHTTPCHUNKEDRESPONSEWITHSTREAM-ERROR invalid status code or non-I/O-safe InputStream
+    @throw SOCKET-STARTPOLLSENDHTTPCHUNKEDRESPONSEWITHSTREAM-ERROR invalid status code or non-I/O-safe InputStream, or the status message, HTTP version or a header name or value contains a NUL or another control character than horizontal tab (since %Qore 3.0); header values are not shown in the exception
 
     @since %Qore 3.0
 */
 AbstractPollOperation<auto> Socket::startPollSendHttpChunkedResponseWithStream(int status_code,
         string status_description, string http_version, *hash<auto> headers,
         InputStream[InputStream] body) [flags=NAMED_ARGS] {
+    if (socket_check_http_response(status_description, http_version, headers,
+            "SOCKET-STARTPOLLSENDHTTPCHUNKEDRESPONSEWITHSTREAM-ERROR", xsink)) {
+        return QoreValue();
+    }
     if (status_code < 100 || status_code >= 600) {
         xsink->raiseException("SOCKET-STARTPOLLSENDHTTPCHUNKEDRESPONSEWITHSTREAM-ERROR",
             "expecting valid HTTP status code between 100 and 599, got value %d instead", status_code);
@@ -3578,11 +3649,16 @@ sock.connect("/tmp/socket");@endcode
 
     @throw SOCKET-CONNECT-ERROR An error occured connecting to the remote socket (cannot resolve hostname, no
     listener, timeout exceeded, etc).
+    @throw SOCKET-CONNECT-ERROR the target contains a NUL character; see @ref path_nul_characters
 
     @see Socket::connectUNIX(), Socket::connectUNIX(), Socket::connectSSL(), Socket::connectINETSSL(), and
     Socket::connectUNIXSSL()
 */
 nothing Socket::connect(string target, timeout timeout_ms = -1) [flags=NAMED_ARGS] {
+    // a target with a NUL character would be cut at the NUL character, so "/tmp/s\x00:80" would be a UNIX socket
+    if (q_check_no_nul(target->c_str(), target->size(), "socket target", "socket targets", "SOCKET-CONNECT-ERROR", xsink)) {
+        return QoreValue();
+    }
     socket_exec_connect(self, s, target->c_str(), timeout_ms, false, xsink);
 }
 
@@ -3611,12 +3687,16 @@ sock.connectINET("2001:0db8:85a3:0000:0000:8a2e:0370:7334", 80, 20s);@endcode
     @param socket_type The type of socket; see @ref socket_type_constants; typically @ref SOCK_STREAM for TCP sockets
     @param protocol The protocol number for the socket (if not sure leave this 0)
 
-    @throw SOCKET-CONNECT-ERROR An error occured connecting to the remote socket (cannot resolve hostname, no listener, timeout exceeded, etc)
+    @throw SOCKET-CONNECT-ERROR An error occured connecting to the remote socket (cannot resolve hostname, no listener, timeout exceeded, the hostname or service name contains a NUL character, etc)
 
     @see Socket::connect(), Socket::connectUNIX(), Socket::connectSSL(), Socket::connectINETSSL(), and Socket::connectUNIXSSL()
 */
 nothing Socket::connectINET(string host, softstring service, timeout timeout_ms = -1, softint family = AF_UNSPEC,
         softint socket_type = SOCK_STREAM, softint protocol = 0) [flags=NAMED_ARGS] {
+    // the names are passed to the resolver as C strings, which would be cut at a NUL character
+    if (q_check_host_service(host, service, "SOCKET-CONNECT-ERROR", xsink)) {
+        return QoreValue();
+    }
     socket_exec_connect_inet(self, s, host->c_str(), service->c_str(), family, socket_type, protocol, timeout_ms,
         false, xsink);
 }
@@ -3636,6 +3716,7 @@ sock.connectUNIX("/tmp/socket"); @endcode
     @param protocol The protocol number for the socket (if not sure leave this 0)
 
     @throw SOCKET-CONNECT-ERROR An error occured connecting to the socket
+    @throw SOCKET-CONNECT-ERROR the path contains a NUL character; see @ref path_nul_characters
 
     @see Socket::connect(), Socket::connectINET(), Socket::connectSSL(), Socket::connectINETSSL(), and Socket::connectUNIXSSL()
 
@@ -3643,6 +3724,9 @@ sock.connectUNIX("/tmp/socket"); @endcode
 */
 nothing Socket::connectUNIX(string path, softint socket_type = SOCK_STREAM,
         softint protocol = 0) [flags=NAMED_ARGS] {
+    if (q_check_path(*path, "SOCKET-CONNECT-ERROR", xsink)) {
+        return QoreValue();
+    }
     socket_exec_connect_unix(self, s, path->c_str(), socket_type, protocol, -1, false, xsink);
 }
 
@@ -3672,10 +3756,14 @@ sock.connectSSL("/tmp/socket"); @endcode
 
     @throw SOCKET-CONNECT-ERROR An error occured connecting to the remote socket (cannot resolve hostname, no listener, timeout exceeded, etc)
     @throw SOCKET-SSL-ERROR An error occurred establishing the TLS/SSL connection
+    @throw SOCKET-CONNECT-ERROR the target contains a NUL character; see @ref path_nul_characters
 
     @see Socket::connect(), Socket::connectUNIX(), Socket::connectUNIXSSL(), Socket::connectINETSSL(), and Socket::connectINET()
 */
 nothing Socket::connectSSL(string target, timeout timeout_ms = -1) [flags=NAMED_ARGS] {
+    if (q_check_no_nul(target->c_str(), target->size(), "socket target", "socket targets", "SOCKET-CONNECT-ERROR", xsink)) {
+        return QoreValue();
+    }
     socket_exec_connect(self, s, target->c_str(), timeout_ms, true, xsink);
 }
 
@@ -3704,7 +3792,7 @@ sock.connectINETSSL("2001:0db8:85a3:0000:0000:8a2e:0370:7334", 80, 20s); @endcod
     @param socket_type The type of socket; see @ref socket_type_constants; typically @ref SOCK_STREAM for TCP sockets
     @param protocol The protocol number for the socket (if not sure leave this 0)
 
-    @throw SOCKET-CONNECT-ERROR An error occured connecting to the remote socket (cannot resolve hostname, no listener, timeout exceeded, etc)
+    @throw SOCKET-CONNECT-ERROR An error occured connecting to the remote socket (cannot resolve hostname, no listener, timeout exceeded, the hostname or service name contains a NUL character, etc)
     @throw SOCKET-SSL-ERROR An error occurred establishing the TLS/SSL connection
 
     @see Socket::connect(), Socket::connectUNIX(), Socket::connectSSL(), Socket::connectINET(), and Socket::connectUNIXSSL()
@@ -3712,6 +3800,10 @@ sock.connectINETSSL("2001:0db8:85a3:0000:0000:8a2e:0370:7334", 80, 20s); @endcod
 nothing Socket::connectINETSSL(string host, softstring service, timeout timeout_ms = -1,
         softint family = AF_UNSPEC, softint socket_type = SOCK_STREAM,
         softint protocol = 0) [flags=NAMED_ARGS] {
+    // the names are passed to the resolver as C strings, which would be cut at a NUL character
+    if (q_check_host_service(host, service, "SOCKET-CONNECT-ERROR", xsink)) {
+        return QoreValue();
+    }
     socket_exec_connect_inet(self, s, host->c_str(), service->c_str(), family, socket_type, protocol, timeout_ms,
         true, xsink);
 }
@@ -3732,6 +3824,7 @@ sock.connectUNIXSSL("/tmp/socket"); @endcode
 
     @throw SOCKET-CONNECT-ERROR An error occured connecting to the socket
     @throw SOCKET-SSL-ERROR An error occurred establishing the TLS/SSL connection
+    @throw SOCKET-CONNECT-ERROR the path contains a NUL character; see @ref path_nul_characters
 
     @see Socket::connect(), Socket::connectUNIX(), Socket::connectSSL(), Socket::connectINETSSL(), and Socket::connectINET()
 
@@ -3739,6 +3832,9 @@ sock.connectUNIXSSL("/tmp/socket"); @endcode
 */
 nothing Socket::connectUNIXSSL(string path, softint socket_type = SOCK_STREAM,
         softint protocol = 0) [flags=NAMED_ARGS] {
+    if (q_check_path(*path, "SOCKET-CONNECT-ERROR", xsink)) {
+        return QoreValue();
+    }
     socket_exec_connect_unix(self, s, path->c_str(), socket_type, protocol, -1, true, xsink);
 }
 
@@ -3766,8 +3862,15 @@ if (sock.bind("/tmp/my-socket", True))
     @see Socket::bindINET() and Socket::bindUNIX()
 
     @note UNIX domain sockets are not available on native Windows ports
+
+    @note a target containing a NUL character fails: -1 is returned and errno() returns \c EINVAL; see
+    @ref path_nul_characters
 */
 int Socket::bind(string target, softbool reuse_address = False) [flags=NAMED_ARGS] {
+    // a target with a NUL character would be cut at the NUL character; the bind fails with EINVAL
+    if (q_check_path(*target)) {
+        return -1;
+    }
     return s->bind(target->c_str(), reuse_address);
 }
 
@@ -3808,6 +3911,7 @@ sock.bindUNIX("/tmp/socket"); @endcode
     @param protocol the protocol number for the socket; use 0 for the default protocol
 
     @throw SOCKET-BIND-ERROR Error opening socket for bind; error binding on socket
+    @throw SOCKET-BIND-ERROR the path contains a NUL character; see @ref path_nul_characters
 
     @see Socket::bind() and Socket::bindINET()
 
@@ -3815,6 +3919,9 @@ sock.bindUNIX("/tmp/socket"); @endcode
 */
 nothing Socket::bindUNIX(string path, softint socket_type = SOCK_STREAM,
         softint protocol = 0) [flags=NAMED_ARGS] {
+    if (q_check_path(*path, "SOCKET-BIND-ERROR", xsink)) {
+        return QoreValue();
+    }
     s->bindUNIX(path->c_str(), socket_type, protocol, xsink);
 }
 
@@ -3852,7 +3959,7 @@ sock.bindINET("fe80::21c:42ff:fe00:8", 1001, True); @endcode
     @param socket_type the type of socket; see @ref socket_type_constants; typically @ref SOCK_STREAM for TCP sockets
     @param protocol the protocol number for the socket; use 0 for the default protocol
 
-    @throw SOCKET-BIND-ERROR Both hostname and service name are empty or not set; error opening socket for bind; error binding on socket.
+    @throw SOCKET-BIND-ERROR Both hostname and service name are empty or not set; the hostname or service name contains a NUL character; error opening socket for bind; error binding on socket.
     @throw QOREADDRINFO-GETINFO-ERROR error looking up either nodename or servicename (or not known)
 
     @see Socket::bind() and Socket::bindUNIX()
@@ -3867,6 +3974,10 @@ nothing Socket::bindINET(*string bind_address, *softstring service, softbool reu
             "parameter) were either not present or empty strings; at least one of the first 2 parameters must be "
             "present for a successful call to Socket::bindINET()");
 
+    // the names are passed to the resolver as C strings, which would be cut at a NUL character
+    if (q_check_host_service(bind_address, service, "SOCKET-BIND-ERROR", xsink)) {
+        return QoreValue();
+    }
     s->bindINET(bind_address ? bind_address->c_str() : nullptr, service ? service->c_str() : nullptr,
         reuse_address, family, socket_type, protocol, xsink);
 }
@@ -4978,13 +5089,16 @@ sock.sendHTTPMessage("POST", "/RPC2", "1.1", ("Content-Type" : "text/xml"), xml)
     @throw SOCKET-NOT-OPEN the socket is not connected
     @throw SOCKET-TIMEOUT the data requested was not received in the timeout period
     @throw ENCODING-CONVERSION-ERROR the given string could not be converted to the socket's character encoding
-    @throw SOCKET-SEND-ERROR Send failed
+    @throw SOCKET-SEND-ERROR Send failed, or the method, path, HTTP version or a header name or value contains a NUL or another control character than horizontal tab (since %Qore 3.0); the path and header values are not shown in the exception
     @throw SOCKET-SSL-ERROR there was an error sending SSL data
 
     @see Socket::sendHTTPResponse(), Socket::readHTTPHeader()
 */
 nothing Socket::sendHTTPMessage(string method, string path, string http_version, hash<auto> headers, string body,
         *reference<hash> info, timeout timeout_ms = -1) [flags=NAMED_ARGS] {
+    if (socket_check_http_request(method, path, http_version, "SOCKET-SEND-ERROR", xsink)) {
+        return QoreValue();
+    }
     OptHashRefHelper ohrh(info, xsink);
     QoreStringNodeValueHelper tstr(body, s->getEncoding(), xsink);
     if (*xsink) {
@@ -5022,13 +5136,16 @@ sock.sendHTTPMessage("POST", "/RPC2", "1.1", ("Content-Type" : "text/xml"), xml)
 
     @throw SOCKET-NOT-OPEN the socket is not connected
     @throw SOCKET-TIMEOUT the data requested was not received in the timeout period
-    @throw SOCKET-SEND-ERROR Send failed
+    @throw SOCKET-SEND-ERROR Send failed, or the method, path, HTTP version or a header name or value contains a NUL or another control character than horizontal tab (since %Qore 3.0); the path and header values are not shown in the exception
     @throw SOCKET-SSL-ERROR there was an error sending SSL data
 
     @see Socket::sendHTTPResponse(), Socket::readHTTPHeader()
 */
 nothing Socket::sendHTTPMessage(string method, string path, string http_version, hash<auto> headers, *binary body,
         *reference<hash<auto>> info, timeout timeout_ms = -1) [flags=NAMED_ARGS] {
+    if (socket_check_http_request(method, path, http_version, "SOCKET-SEND-ERROR", xsink)) {
+        return QoreValue();
+    }
     OptHashRefHelper ohrh(info, xsink);
     socket_exec_send_http_message(self, s, *ohrh, method->c_str(), path->c_str(), http_version->c_str(), headers,
         body ? body->getPtr() : nullptr, body ? body->size() : 0, nullptr, timeout_ms, xsink);
@@ -5056,7 +5173,7 @@ sock.sendHTTPMessageWithCallback(send_callback, "POST", "/RPC2", "1.1", ("Conten
 
     @throw SOCKET-NOT-OPEN the socket is not connected
     @throw SOCKET-TIMEOUT the data requested was not received in the timeout period
-    @throw SOCKET-SEND-ERROR Send failed
+    @throw SOCKET-SEND-ERROR Send failed, or the method, path, HTTP version or a header name or value contains a NUL or another control character than horizontal tab (since %Qore 3.0); the path and header values are not shown in the exception
     @throw SOCKET-SSL-ERROR there was an error sending SSL data
 
     @see Socket::sendHTTPResponse(), Socket::readHTTPHeader()
@@ -5065,6 +5182,9 @@ sock.sendHTTPMessageWithCallback(send_callback, "POST", "/RPC2", "1.1", ("Conten
 */
 nothing Socket::sendHTTPMessageWithCallback(code send_callback, string method, string path, string http_version,
         hash<auto> headers, *reference<hash<auto>> info, timeout timeout_ms = -1) [flags=NAMED_ARGS] {
+    if (socket_check_http_request(method, path, http_version, "SOCKET-SEND-ERROR", xsink)) {
+        return QoreValue();
+    }
     OptHashRefHelper ohrh(info, xsink);
     socket_exec_send_http_message_callback(self, s, *ohrh, method->c_str(), path->c_str(), http_version->c_str(),
         headers, send_callback, timeout_ms, xsink);
@@ -5093,10 +5213,13 @@ sock.sendHTTPResponse(200, "OK", "1.1", ("Connection":"Keep-Alive"));
     @throw ENCODING-CONVERSION-ERROR the given string could not be converted to the socket's character encoding
     @throw SOCKET-NOT-OPEN the socket is not connected
     @throw SOCKET-TIMEOUT the data requested was not received in the timeout period
-    @throw SOCKET-SEND-ERROR send failed
+    @throw SOCKET-SEND-ERROR send failed, or the status message, HTTP version or a header name or value contains a NUL or another control character than horizontal tab (since %Qore 3.0); header values are not shown in the exception
 */
 nothing Socket::sendHTTPResponse(softint status_code, string status_description, string http_version,
         hash<auto> headers, string body, timeout timeout_ms = -1) {
+    if (socket_check_http_response(status_description, http_version, nullptr, "SOCKET-SEND-ERROR", xsink)) {
+        return QoreValue();
+    }
     if (check_response_code(status_code, xsink)) {
         return QoreValue();
     }
@@ -5144,12 +5267,15 @@ sock.sendHTTPResponse(200, "OK", "1.1", ("Connection":"Keep-Alive"));
     @throw ENCODING-CONVERSION-ERROR the given string could not be converted to the socket's character encoding
     @throw SOCKET-NOT-OPEN the socket is not connected
     @throw SOCKET-TIMEOUT the data requested was not received in the timeout period
-    @throw SOCKET-SEND-ERROR send failed
+    @throw SOCKET-SEND-ERROR send failed, or the status message, HTTP version or a header name or value contains a NUL or another control character than horizontal tab (since %Qore 3.0); header values are not shown in the exception
 
     @since %Qore 0.9.4
 */
 nothing Socket::sendHTTPResponse(softint status_code, string status_description, string http_version,
         hash<auto> headers, string body, *reference<hash<auto>> info, timeout timeout_ms = -1) [flags=NAMED_ARGS] {
+    if (socket_check_http_response(status_description, http_version, nullptr, "SOCKET-SEND-ERROR", xsink)) {
+        return QoreValue();
+    }
     if (check_response_code(status_code, xsink)) {
         return QoreValue();
     }
@@ -5191,10 +5317,13 @@ sock.sendHTTPResponse(200, "OK", "1.1", {"Connection":"Keep-Alive"}, bin);
     @throw SOCKET-SENDHTTPRESPONSE-STATUS-ERROR raised if the status_code (first argument) is < 100 or > 599
     @throw SOCKET-NOT-OPEN the socket is not connected
     @throw SOCKET-TIMEOUT the data requested was not received in the timeout period
-    @throw SOCKET-SEND-ERROR send failed
+    @throw SOCKET-SEND-ERROR send failed, or the status message, HTTP version or a header name or value contains a NUL or another control character than horizontal tab (since %Qore 3.0); header values are not shown in the exception
 */
 nothing Socket::sendHTTPResponse(softint status_code, string status_description, string http_version,
         hash<auto> headers, *binary body, timeout timeout_ms = -1) {
+    if (socket_check_http_response(status_description, http_version, nullptr, "SOCKET-SEND-ERROR", xsink)) {
+        return QoreValue();
+    }
     if (check_response_code(status_code, xsink)) {
         return QoreValue();
     }
@@ -5234,12 +5363,15 @@ sock.sendHTTPResponse(200, "OK", "1.1", {"Connection":"Keep-Alive"}, bin);
     @throw SOCKET-SENDHTTPRESPONSE-STATUS-ERROR raised if the status_code (first argument) is < 100 or > 599
     @throw SOCKET-NOT-OPEN the socket is not connected
     @throw SOCKET-TIMEOUT the data requested was not received in the timeout period
-    @throw SOCKET-SEND-ERROR send failed
+    @throw SOCKET-SEND-ERROR send failed, or the status message, HTTP version or a header name or value contains a NUL or another control character than horizontal tab (since %Qore 3.0); header values are not shown in the exception
 
     @since %Qore 0.9.4
 */
 nothing Socket::sendHTTPResponse(softint status_code, string status_description, string http_version,
         hash<auto> headers, *binary body, *reference<hash<auto>> info, timeout timeout_ms = -1) [flags=NAMED_ARGS] {
+    if (socket_check_http_response(status_description, http_version, nullptr, "SOCKET-SEND-ERROR", xsink)) {
+        return QoreValue();
+    }
     if (check_response_code(status_code, xsink)) {
         return QoreValue();
     }
@@ -5285,7 +5417,7 @@ sock.sendHTTPResponse(200, "OK", "1.1", {"Connection": "Keep-Alive", "Transfer-E
 
     @throw SOCKET-NOT-OPEN the socket is not connected
     @throw SOCKET-TIMEOUT the data requested was not received in the timeout period
-    @throw SOCKET-SEND-ERROR send failed or the InputStream is not I/O-thread-safe
+    @throw SOCKET-SEND-ERROR send failed or the InputStream is not I/O-thread-safe, or the status message, HTTP version or a header name or value contains a NUL or another control character than horizontal tab (since %Qore 3.0); header values are not shown in the exception
     @throw HTTP-CHUNK-ERROR the chunk size given is not greater than 0
     @throw HTTP-TRAILER-ERROR the trailer callback must return either @ref nothing or @ref hash_type "hash"; this
     exception is thrown is another type is returned
@@ -5295,6 +5427,9 @@ sock.sendHTTPResponse(200, "OK", "1.1", {"Connection": "Keep-Alive", "Transfer-E
 nothing Socket::sendHTTPResponse(softint status_code, string status_description, string http_version,
         hash<auto> headers, Qore::InputStream[InputStream] input_stream, int max_chunk_size = 4096,
         *reference<hash<auto>> info, timeout timeout_ms = -1, *code trailers_callback) [flags=NAMED_ARGS] {
+    if (socket_check_http_response(status_description, http_version, nullptr, "SOCKET-SEND-ERROR", xsink)) {
+        return QoreValue();
+    }
     if (check_response_code(status_code, xsink)) {
         return QoreValue();
     }
@@ -5342,12 +5477,15 @@ sock.sendHTTPResponseWithCallback(send_callback, 200, "OK", "1.1", {"Connection"
     @throw SOCKET-SENDHTTPRESPONSE-STATUS-ERROR raised if the status_code (first argument) is < 100 or > 599
     @throw SOCKET-NOT-OPEN the socket is not connected
     @throw SOCKET-TIMEOUT the data requested was not received in the timeout period
-    @throw SOCKET-SEND-ERROR send failed
+    @throw SOCKET-SEND-ERROR send failed, or the status message, HTTP version or a header name or value contains a NUL or another control character than horizontal tab (since %Qore 3.0); header values are not shown in the exception
 
     @since %Qore 0.8.10
 */
 nothing Socket::sendHTTPResponseWithCallback(code send_callback, softint status_code, string status_description,
         string http_version, hash<auto> headers, timeout timeout_ms = -1) {
+    if (socket_check_http_response(status_description, http_version, nullptr, "SOCKET-SEND-ERROR", xsink)) {
+        return QoreValue();
+    }
     if (check_response_code(status_code, xsink)) {
         return QoreValue();
     }
@@ -5391,13 +5529,16 @@ sock.sendHTTPResponseWithCallback(send_callback, 200, "OK", "1.1", {"Connection"
     @throw SOCKET-SENDHTTPRESPONSE-STATUS-ERROR raised if the status_code (first argument) is < 100 or > 599
     @throw SOCKET-NOT-OPEN the socket is not connected
     @throw SOCKET-TIMEOUT the data requested was not received in the timeout period
-    @throw SOCKET-SEND-ERROR send failed
+    @throw SOCKET-SEND-ERROR send failed, or the status message, HTTP version or a header name or value contains a NUL or another control character than horizontal tab (since %Qore 3.0); header values are not shown in the exception
 
     @since %Qore 0.9.4
 */
 nothing Socket::sendHTTPResponseWithCallback(code send_callback, softint status_code, string status_description,
         string http_version, hash<auto> headers, *reference<hash<auto>> info,
         timeout timeout_ms = -1) [flags=NAMED_ARGS] {
+    if (socket_check_http_response(status_description, http_version, nullptr, "SOCKET-SEND-ERROR", xsink)) {
+        return QoreValue();
+    }
     if (check_response_code(status_code, xsink)) {
         return QoreValue();
     }
@@ -5445,13 +5586,16 @@ sock.close();
     @throw SOCKET-SENDHTTPRESPONSE-STATUS-ERROR raised if the status_code (first argument) is < 100 or > 599
     @throw SOCKET-NOT-OPEN the socket is not connected
     @throw SOCKET-TIMEOUT the data requested was not received in the timeout period
-    @throw SOCKET-SEND-ERROR send failed
+    @throw SOCKET-SEND-ERROR send failed, or the status message, HTTP version or a header name or value contains a NUL or another control character than horizontal tab (since %Qore 3.0); header values are not shown in the exception
     @throw HTTP2-ERROR the socket has an HTTP/2 session; a response header without a message body is an HTTP/1 message
 
     @since %Qore 3.0
 */
 nothing Socket::sendHTTPResponseHeader(softint status_code, string status_description, string http_version,
         hash<auto> headers, *reference<hash<auto>> info, timeout timeout_ms = -1) [flags=NAMED_ARGS] {
+    if (socket_check_http_response(status_description, http_version, headers, "SOCKET-SEND-ERROR", xsink)) {
+        return QoreValue();
+    }
     if (check_response_code(status_code, xsink)) {
         return QoreValue();
     }
@@ -5524,7 +5668,7 @@ sock.sendHTTPChunkedBodyTrailer({});
 
     @throw SOCKET-NOT-OPEN the socket is not connected
     @throw SOCKET-TIMEOUT the data requested was not received in the timeout period
-    @throw SOCKET-SEND-ERROR send failed
+    @throw SOCKET-SEND-ERROR send failed, or a trailer name or value contains a NUL or another control character than horizontal tab (since %Qore 3.0); the value is not shown in the exception
 
     @since %Qore 0.8.13
 */
@@ -6147,7 +6291,13 @@ sock.setAlpnProtocols(("h2", "http/1.1"));
 
     @note This method must be called before connecting or upgrading to SSL/TLS
 
-    @since %Qore 2.2
+    @throw SOCKET-ALPN-ERROR the list is empty or has no non-empty protocol name, or a protocol name contains a NUL
+    character
+
+    @since
+    - %Qore 2.2
+    - %Qore 3.0 a protocol name with a NUL character raises \c SOCKET-ALPN-ERROR; previously it was cut at the NUL
+      character
 */
 nothing Socket::setAlpnProtocols(list<string> protocols) [flags=NAMED_ARGS] {
     s->setAlpnProtocols(protocols, xsink);
@@ -6753,6 +6903,7 @@ sock.connectSSL("server.example.com:443");
     again
 
     @throw SOCKET-SSL-ERROR raised by the TLS handshake if the CA certificates cannot be loaded
+    @throw SOCKET-SSL-ERROR a path contains a NUL character; see @ref path_nul_characters
 
     @see
     - @ref Qore::Socket::setSslVerifyMode() "Socket::setSslVerifyMode()"
@@ -6761,6 +6912,10 @@ sock.connectSSL("server.example.com:443");
     @since %Qore 3.0
 */
 nothing Socket::setSslCaLocations(*string ca_file, *string ca_path) [dom=FILESYSTEM;flags=NAMED_ARGS] {
+    if ((ca_file && q_check_path(*ca_file, "SOCKET-SSL-ERROR", xsink))
+            || (ca_path && q_check_path(*ca_path, "SOCKET-SSL-ERROR", xsink))) {
+        return QoreValue();
+    }
     QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
     if (smh) {
         if (ca_file && !smh->checkFilesystemAccess(ca_file->c_str(), QSEC_READ, xsink)) {
@@ -6884,7 +7039,8 @@ int Socket::getHttp2MaxRequestBodySize() [flags=CONSTANT] {
     @param protocol a hint for the protocol number; 0 = the default protocol
     @param timeout_ms the timeout for the controller-backed resolution operation; -1 = never timeout
 
-    @throw QOREADDRINFO-GETINFO-ERROR error looking up either nodename or servicename (or not known)
+    @throw QOREADDRINFO-GETINFO-ERROR error looking up either nodename or servicename (or not known), or the node or
+    service name contains a NUL character
     @throw ASYNC-IO-ERROR called from the async I/O thread or the global async I/O controller is unavailable
 
     @since %Qore 3.0
@@ -6892,6 +7048,10 @@ int Socket::getHttp2MaxRequestBodySize() [flags=CONSTANT] {
 static list<hash<auto>> Socket::resolveAddrInfo(*string node, *softstring service,
         softint family = AF_UNSPEC, softint flags = 0, softint socket_type = SOCK_STREAM, softint protocol = 0,
         timeout timeout_ms = -1) [flags=RET_VALUE_ONLY,NAMED_ARGS;dom=EXTERNAL_INFO] {
+    // the names are passed to the resolver as C strings, which would be cut at a NUL character
+    if (q_check_host_service(node, service, "QOREADDRINFO-GETINFO-ERROR", xsink)) {
+        return QoreValue();
+    }
     return qore_socket_resolve_addrinfo_asyncio(xsink, node ? node->c_str() : nullptr,
         service ? service->c_str() : nullptr, family, flags, socket_type, protocol, timeout_ms);
 }
@@ -7154,7 +7314,7 @@ AbstractPollOperation<auto> Socket::startPollSendHttp2StreamingResponse(int stre
     @return the promised stream ID on success (positive integer), or -1 on error
 
     @throw SOCKET-NOT-OPEN The socket is not connected
-    @throw HTTP2-ERROR HTTP/2 push promise submission failed or not in server mode
+    @throw HTTP2-ERROR HTTP/2 push promise submission failed or not in server mode, or the path contains a NUL or another control character than horizontal tab
 
     @note Server Push can be disabled by clients; check if the push was successful by verifying
     the return value is positive.
@@ -7162,6 +7322,10 @@ AbstractPollOperation<auto> Socket::startPollSendHttp2StreamingResponse(int stre
     @since %Qore 2.2
 */
 int Socket::submitHttp2PushPromise(int stream_id, string path, *hash<auto> headers) [flags=NAMED_ARGS] {
+    // the path is sent as a C string, which would be cut at a NUL character
+    if (q_check_http_request(nullptr, path, nullptr, nullptr, "HTTP2-ERROR", nullptr, xsink)) {
+        return QoreValue();
+    }
     return s->submitHttp2PushPromise(stream_id, path->c_str(), headers, xsink);
 }
 
@@ -7651,7 +7815,8 @@ nothing Socket::cancelHttp2Stream(int stream_id) [flags=NAMED_ARGS] {
     - \c body: response body (binary)
     - \c session_id: the QUIC session ID
 
-    @throw QUIC-ERROR if QUIC/HTTP/3 support is not available or address resolution fails
+    @throw QUIC-ERROR if QUIC/HTTP/3 support is not available, address resolution fails, or the hostname contains a
+    NUL character
     @throw SOCKET-NOT-OPEN if the socket is not open
 
     @note Requires a UDP socket bound with @ref bindINET() before calling this method
@@ -7661,6 +7826,10 @@ nothing Socket::cancelHttp2Stream(int stream_id) [flags=NAMED_ARGS] {
 AbstractPollOperation<auto> Socket::startPollQuicConnect(string host, int port, int family = AF_INET) [flags=NAMED_ARGS] {
     if (port < 1 || port > 65535) {
         xsink->raiseException("QUIC-ERROR", "port %d is out of range (1-65535)", (int)port);
+        return QoreValue();
+    }
+    // the hostname is passed to the resolver and to TLS as a C string, which would be cut at a NUL character
+    if (q_check_host_service(host, nullptr, "QUIC-ERROR", xsink)) {
         return QoreValue();
     }
     s->ref();
@@ -7876,7 +8045,7 @@ bool Socket::isQuic() [flags=CONSTANT] {
 
     @return the stream ID assigned to this request
 
-    @throw QUIC-ERROR if no QUIC session is active or an error occurs
+    @throw QUIC-ERROR if no QUIC session is active or an error occurs, or the method or path contains a NUL or another control character than horizontal tab
 
     @note This method requires an active QUIC session, typically established via
     @ref startPollQuicConnect()
@@ -7885,6 +8054,10 @@ bool Socket::isQuic() [flags=CONSTANT] {
 */
 int Socket::submitQuicRequest(string method, string path, *hash<auto> headers, *data body,
         bool suppress_wake = False) [flags=NAMED_ARGS] {
+    // the method and path are sent as C strings, which would be cut at a NUL character
+    if (q_check_http_request(method, path, nullptr, "QUIC-ERROR", "QUIC-ERROR", nullptr, xsink)) {
+        return QoreValue();
+    }
     const void* body_ptr = nullptr;
     size_t body_len = 0;
     char body_short_buf[7];
@@ -7920,12 +8093,16 @@ int Socket::submitQuicRequest(string method, string path, *hash<auto> headers, *
 
     @return the stream ID assigned to this request
 
-    @throw QUIC-ERROR if no QUIC session is active or an error occurs
+    @throw QUIC-ERROR if no QUIC session is active or an error occurs, or the method or path contains a NUL or another control character than horizontal tab
 
     @since %Qore 3.0
 */
 int Socket::submitQuicRequestStreaming(string method, string path, *hash<auto> headers,
         bool suppress_wake = False) [flags=NAMED_ARGS] {
+    // the method and path are sent as C strings, which would be cut at a NUL character
+    if (q_check_http_request(method, path, nullptr, "QUIC-ERROR", "QUIC-ERROR", nullptr, xsink)) {
+        return QoreValue();
+    }
     int64_t stream_id = suppress_wake
         ? s->submitQuicRequestStreamingNoWake(method->c_str(), path->c_str(), headers, xsink)
         : s->submitQuicRequestStreaming(method->c_str(), path->c_str(), headers, xsink);

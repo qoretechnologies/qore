@@ -22,8 +22,6 @@
     DEALINGS IN THE SOFTWARE.
 */
 
-%modern
-
 public namespace Schema {
 
 #! Access level constants for controlling migration action permissions
@@ -141,9 +139,10 @@ public class DataSchema inherits AbstractVersionedSchema {
 
     #! Returns the table definitions with auto_triggers expanded for the current driver
     /** Also extracts \c populate metadata from column definitions: for columns with
-        \c populate + \c notnull that are genuinely new (not already in the DB), the \c notnull
+        \c populate + \c notnull that are new in a table already in the DB, the \c notnull
         flag is temporarily stripped so DDL alignment adds them as nullable. The \c populate
-        expressions are stored in \c pending_populates for \c executePopulateBackfill().
+        expressions are stored in \c pending_populates for \c executePopulateBackfill().  A table that is not in the
+        DB yet has no rows to populate, so its columns are created as they are declared.
     */
     private *hash<auto> getTablesImpl() {
         if (!schema_data.tables) {
@@ -257,6 +256,87 @@ public class DataSchema inherits AbstractVersionedSchema {
         return AbstractSchema::alignIntern(force, verbose, do_msgs, manage_transaction);
     }
 
+    #! Checks whether the schema can be updated, and adds the indexes that its table reconciliations created
+    /** Runs the pre-alignment migration steps of an upgrade (@ref checkUpgrade()); a schema that can be updated then
+        gets the indexes that its \c reconcile_table migrations created in the database added to the descriptions of
+        its tables (@ref addReconciledIndexes()), so that the alignment keeps them
+
+        @param force align even when the stored version matches
+        @param initial_schema_info the schema info hash, with the current version of the database, if known
+
+        @return True if the schema can be updated
+
+        @since Schema 1.9
+    */
+    private bool checkUpdateSchema(bool force, reference<hash<auto>> initial_schema_info) {
+        bool rv = AbstractVersionedSchema::checkUpdateSchema(force, \initial_schema_info);
+        if (rv) {
+            addReconciledIndexes();
+        }
+        return rv;
+    }
+
+    #! Adds the indexes that the table reconciliations of the schema created to the descriptions of their tables
+    /** A \c reconcile_table migration creates the reviewed indexes of its contract and, for a table that keeps a
+        primary key on other columns than the canonical key, a unique index on the canonical key named
+        <em>primary-key-name</em><tt>_schema_unique</tt>.  An alignment drops an index that the description of its
+        table does not have, so each such index that a table of the schema has in the database with the reviewed
+        definition is added to the description of the table, unless the description declares an index with its name
+        or with its definition under another name, has no column of the index, or, for the unique index on the
+        canonical key, has its primary key on the canonical key, which takes the index as its own.
+
+        An index of a migration that has not run yet, as a \c post_align migration of the upgrade that is being
+        aligned, or of a first installation, which runs no migration, is not in the database, and is not added: the
+        alignment does not create it before its migration.
+
+        @throw DATA-SCHEMA-TABLE-MIGRATION-ARG-ERROR the contract of a \c reconcile_table migration is invalid
+
+        @since Schema 1.9
+    */
+    private addReconciledIndexes() {
+        foreach hash<auto> migration in (schema_data.migrations ?? ()) {
+            foreach string phase in (("pre_align", "post_align")) {
+                foreach hash<auto> step in (migration{phase} ?? ()) {
+                    if (step.action != "reconcile_table") {
+                        continue;
+                    }
+                    hash<auto> contract = DataSchemaTableMigration::validate_contract(step.contract);
+                    *hash<auto> desc = schema.tables{contract.table};
+                    if (!desc) {
+                        continue;
+                    }
+                    SqlUtil::AbstractTable live = (new SqlUtil::Table(getDatasource(), contract.table)).getTable();
+                    if (!live.checkExistence()) {
+                        continue;
+                    }
+                    hash<auto> live_indexes = live.getDescriptionHash().indexes ?? {};
+                    string canonical_key = contract.constraints_and_indexes.primary_key.columns[0];
+                    string unique_name = DataSchemaTableMigration::bounded_identifier(
+                        contract.constraints_and_indexes.primary_key.name + "_schema_unique");
+                    foreach hash<auto> i in (DataSchemaTableMigration::created_indexes(contract).pairIterator()) {
+                        if (desc.indexes{i.key} || !live_indexes{i.key}
+                            || !DataSchemaTableMigration::index_matches(live_indexes{i.key}, i.value.columns,
+                                i.value.unique)) {
+                            continue;
+                        }
+                        if ((map 1, i.value.columns, !desc.columns{$1})) {
+                            continue;
+                        }
+                        if (i.key == unique_name && desc.primary_key.columns == (canonical_key,)) {
+                            continue;
+                        }
+                        if ((map 1, (desc.indexes ?? {}).iterator(), $1.columns == i.value.columns
+                            && ($1.unique ?? False).toBool() == i.value.unique)) {
+                            continue;
+                        }
+                        schema.tables{contract.table}.indexes{i.key} = i.value;
+                        desc.indexes{i.key} = i.value;
+                    }
+                }
+            }
+        }
+    }
+
     #! Executes pre-alignment migration steps when upgrading
     /** Called by AbstractVersionedSchema when the database schema is older than the target.
 
@@ -300,9 +380,10 @@ public class DataSchema inherits AbstractVersionedSchema {
     #! Extracts populate metadata and strips populate/notnull from genuinely new columns
     /** For each table that has columns with a \c populate attribute, this method:
         - snapshots the current DB columns (to detect which columns are genuinely new)
-        - for each populate column that is new: stores the populate info, strips \c notnull
-          (so DDL adds it nullable) and strips \c populate (not a GenericColumnInfo key)
-        - for columns that already exist: just strips \c populate
+        - for each populate column that is new in a table that is already in the DB: stores the populate info,
+          strips \c notnull (so DDL adds it nullable) and strips \c populate (not a GenericColumnInfo key)
+        - for columns that already exist, and for the columns of a table that is not in the DB yet, which has no
+          rows to populate: just strips \c populate, so the column is created as it is declared
 
         @param tables reference to the expanded tables hash (modified in place)
         @return a hash of populate metadata (table → column → info), or NOTHING if none
@@ -330,17 +411,11 @@ public class DataSchema inherits AbstractVersionedSchema {
                 continue;
             }
 
-            # snapshot the columns that currently exist in the DB for this table
-            hash<string, bool> existing_cols();
-            try {
-                SqlUtil::Table t(ds, table_name);
-                AbstractTable at = t.getTable();
-                if (at.checkExistence()) {
-                    existing_cols = map {$1: True}, at.describe().keys();
-                }
-            } catch () {
-                # table doesn't exist yet — no existing columns
-            }
+            # snapshot the columns that currently exist in the DB for this table; checkExistence() reports a table
+            # that is not in the DB, so an exception here is a real error
+            AbstractTable at = (new SqlUtil::Table(ds, table_name)).getTable();
+            bool table_exists = at.checkExistence();
+            hash<string, bool> existing_cols = table_exists ? map {$1: True}, at.describe().keys() : {};
 
             foreach hash<auto> cpair in (tpair.value.columns.pairIterator()) {
                 string col_name = cpair.key;
@@ -352,8 +427,9 @@ public class DataSchema inherits AbstractVersionedSchema {
                 # strip populate from the column def (not a GenericColumnInfo key)
                 delete tables{table_name}.columns{col_name}.populate;
 
-                if (existing_cols{col_name}) {
-                    # column already exists in the DB — skip populate, keep notnull as-is
+                if (!table_exists || existing_cols{col_name}) {
+                    # the column already exists in the DB, or its table is created with it and has no rows to
+                    # populate — skip populate, keep notnull as-is
                     continue;
                 }
 
@@ -381,9 +457,11 @@ public class DataSchema inherits AbstractVersionedSchema {
     /** For each table/column in \c pending_populates:
         1. Renders the populate expression to a SQL UPDATE
         2. Executes <tt>UPDATE ... SET col = &lt;expr&gt; WHERE col IS NULL</tt>
-        3. If the column was originally NOT NULL: \c ALTER TABLE ... ALTER COLUMN ... SET NOT NULL
+        3. If the column was originally NOT NULL: the column is made NOT NULL with the DDL of the database's
+           SqlUtil driver (@ref SqlUtil::AbstractColumn::getModifySql() "AbstractColumn::getModifySql()"); a
+           database that cannot change the column raises an exception, as SQLite before 3.53.0 does
 
-        @param table_cache the table cache from alignment
+        @param table_cache the template tables of the alignment, which declare the columns
         @param verbose the verbosity level
     */
     private executePopulateBackfill(SqlUtil::Tables table_cache, int verbose) {
@@ -404,20 +482,23 @@ public class DataSchema inherits AbstractVersionedSchema {
                         AbstractDatabase::AC_Update);
                 }
 
-                # render and execute the backfill UPDATE
-                string update_sql = renderPopulateUpdate(table, col_name, pop_info.populate);
-                int rows = ds.exec(update_sql);
+                # render and execute the backfill UPDATE with the values it binds
+                hash<SqlCommandInfo> update = renderPopulateUpdate(table, col_name, pop_info.populate);
+                int rows = ds.vexec(update.sql, update.args);
 
                 if (verbose > 0) {
                     info_callback(sprintf("  %d row%s populated", rows, rows == 1 ? "" : "s"),
                         AbstractDatabase::AC_Update);
                 }
 
-                # re-apply NOT NULL if it was stripped
+                # re-apply NOT NULL if it was stripped: the column becomes the column the schema declares (the
+                # template that alignment added it from, with every driver-specific attribute), NOT NULL
                 if (pop_info.notnull) {
-                    string alter_sql = sprintf("alter table %s alter column %s set not null",
-                        table.getSqlName(), col_name);
-                    ds.exec(alter_sql);
+                    AbstractColumn target = table_cache{table_name}.describe(){col_name}.copy();
+                    target.nullable = False;
+                    foreach string sql in (table.describe(){col_name}.getModifySql(table, target)) {
+                        ds.exec(sql);
+                    }
                     if (verbose > 0) {
                         info_callback(sprintf("  NOT NULL constraint applied to %s.%s",
                             table_name, col_name), AbstractDatabase::AC_Update);
@@ -438,23 +519,35 @@ public class DataSchema inherits AbstractVersionedSchema {
         @param table the live AbstractTable object for expression rendering
         @param col_name the column being populated
         @param populate_val the populate value from the schema definition
-        @return a complete SQL UPDATE statement ready for execution
+        @return a complete SQL UPDATE statement and the values it binds, ready for execution
+
+        @throw POPULATE-ERROR the populate value has no form given above; a field is not a column
     */
-    private string renderPopulateUpdate(AbstractTable table, string col_name, auto populate_val) {
+    private hash<SqlCommandInfo> renderPopulateUpdate(AbstractTable table, string col_name, auto populate_val) {
         string tname = table.getSqlName();
+        # the column name as the database requires it (a reserved word is quoted)
+        string column = table.getColumnSqlName(col_name);
 
         # literal scalar: inline the value (SqlUtil will handle quoting via %v)
         if (populate_val.typeCode() != NT_HASH) {
-            return sprintf("update %s set %s = %s where %s is null",
-                tname, col_name, table.getSqlValue(populate_val), col_name);
+            return <SqlCommandInfo>{
+                "sql": sprintf("update %s set %s = %s where %s is null",
+                    tname, column, table.getSqlValue(populate_val), column),
+                "args": (),
+            };
         }
 
         hash<auto> ph = populate_val;
 
         # {field: col} shorthand — copy from another column
         if (ph.hasKey("field")) {
-            return sprintf("update %s set %s = %s where %s is null",
-                tname, col_name, ph.field, col_name);
+            string source = DataSchema::getPopulateColumn(table, col_name,
+                <DataProviderFieldReference>{"field": ph.field});
+            return <SqlCommandInfo>{
+                "sql": sprintf("update %s set %s = %s where %s is null",
+                    tname, column, table.getColumnSqlName(source), column),
+                "args": (),
+            };
         }
 
         # {sql: {pgsql: "...", ...}} — raw per-driver SQL
@@ -470,8 +563,10 @@ public class DataSchema inherits AbstractVersionedSchema {
                 throw "POPULATE-ERROR", sprintf("table %y column %y: populate.sql has no "
                     "entry for driver %y", table.getName(), col_name, driver);
             }
-            return sprintf("update %s set %s = %s where %s is null",
-                tname, col_name, raw_sql, col_name);
+            return <SqlCommandInfo>{
+                "sql": sprintf("update %s set %s = %s where %s is null", tname, column, raw_sql, column),
+                "args": (),
+            };
         }
 
         # {exp: name, args: [...]} — DPQL expression
@@ -491,6 +586,8 @@ public class DataSchema inherits AbstractVersionedSchema {
             # convert plain field-reference / sub-expression hashes (as parsed from .ysm/.jsm)
             # into the typed hashdecls the expression engine requires
             list<auto> exp_args = map DataSchema::normalizeDpqlArg($1), (ph.args ?? ());
+            # a field reference is a field path: one key is a column, which SqlUtil names as the database requires
+            exp_args = map DataSchema::getPopulateArg(table, col_name, $1), exp_args;
 
             if (sql_exp) {
                 # expression exists in the SQL expression map — use SqlUtil to render it
@@ -500,9 +597,8 @@ public class DataSchema inherits AbstractVersionedSchema {
                     "args": exp_args,
                 };
                 hash<auto> where_hash = {col_name: NULL};
-                # getUpdateSql returns {sql: "...", args: (...)}
-                hash<auto> cmd = table.getUpdateSql(set_hash, where_hash);
-                return cmd.sql;
+                # the SQL binds the values of the expression, such as the 1 of "@amount + 1"
+                return table.getUpdateSql(set_hash, where_hash);
             }
 
             # fallback: evaluate expression client-side and use as a literal
@@ -511,8 +607,11 @@ public class DataSchema inherits AbstractVersionedSchema {
                     "exp": exp_name,
                     "args": exp_args,
                 });
-            return sprintf("update %s set %s = %s where %s is null",
-                tname, col_name, table.getSqlValue(result_val), col_name);
+            return <SqlCommandInfo>{
+                "sql": sprintf("update %s set %s = %s where %s is null",
+                    tname, column, table.getSqlValue(result_val), column),
+                "args": (),
+            };
         }
 
         throw "POPULATE-ERROR", sprintf("table %y column %y: unrecognized populate format; "
@@ -543,6 +642,60 @@ public class DataSchema inherits AbstractVersionedSchema {
             if (arg.hasKey("field")) {
                 return <DataProviderFieldReference>{"field": arg.field};
             }
+        }
+        return arg;
+    }
+
+    #! Returns the column a field reference of a populate expression names
+    /** The field of a field reference is a field path (@ref DataProvider::AbstractDataProvider::getFieldPath()
+        "AbstractDataProvider::getFieldPath()"): a path of one key is the column of that name
+
+        @param table the table
+        @param col_name the column being populated
+        @param ref the field reference
+
+        @return the name of the column
+
+        @throw POPULATE-ERROR the field is a field path of more than one key, which is not a column, or its key has a
+        dot, which SqlUtil and the database read as a table and a column
+
+        @since Schema 1.9
+    */
+    private static string getPopulateColumn(AbstractTable table, string col_name,
+            hash<DataProviderFieldReference> ref) {
+        list<string> path = ref.field_path ?? AbstractDataProvider::getFieldPath(ref.field);
+        if (path.size() != 1) {
+            throw "POPULATE-ERROR", sprintf("table %y column %y: the populate field \"%s\" is not a column: a field "
+                "path of more than one key cannot be read from a table", table.getName(), col_name, ref.field);
+        }
+        if (path[0].find(".") >= 0) {
+            throw "POPULATE-ERROR", sprintf("table %y column %y: the populate field \"%s\" cannot be named as a "
+                "column: a column name with a dot is read as a table and a column", table.getName(), col_name,
+                ref.field);
+        }
+        return path[0];
+    }
+
+    #! Returns an argument of a populate expression with its field references given as columns
+    /** @param table the table
+        @param col_name the column being populated
+        @param arg the argument
+
+        @return the argument with its field references given as columns (@ref getPopulateColumn())
+
+        @since Schema 1.9
+    */
+    private static auto getPopulateArg(AbstractTable table, string col_name, auto arg) {
+        code<hash<DataProviderFieldReference>(hash<DataProviderFieldReference>)> column_ref =
+                hash<DataProviderFieldReference> sub (hash<DataProviderFieldReference> ref) {
+            return <DataProviderFieldReference>{"field": DataSchema::getPopulateColumn(table, col_name, ref)};
+        };
+        if (arg instanceof hash<DataProviderFieldReference>) {
+            return column_ref(arg);
+        }
+        if (arg instanceof hash<DataProviderExpression>) {
+            return AbstractDataProvider::translateFieldReferences(cast<hash<DataProviderExpression>>(arg),
+                column_ref);
         }
         return arg;
     }

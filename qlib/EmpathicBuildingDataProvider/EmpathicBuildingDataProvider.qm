@@ -180,6 +180,9 @@ module EmpathicBuildingDataProvider {
     @section empathicbuildingdataprovider_relnotes Release Notes
 
     @subsection empathicbuildingdataprovider_v1_2 EmpathicBuildingDataProvider v1.2
+    - the info hash of a request made with
+      @ref EmpathicBuildingDataProvider::EmpathicBuildingRestClient "EmpathicBuildingRestClient" describes its login
+      request when the login fails; it was left empty
     - the debug message of a failed login or token refresh no longer contains the request body (with the password or the
       refresh token) and gives the request headers with their credentials redacted
     - migrated to the async multiplexed @ref RestClientIo::RestClientIo "RestClientIo"

@@ -1,0 +1,235 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class SeparatedModuleWarningsTest
+
+#! Tests that the warning directives of a separated module's .qm file apply to all of the module's files
+/** The module loader and qcc parse the .qm file of a separated module first, then each of its other files.  The
+    parse options the .qm file sets carried over to the other files, but each file was parsed with the warning mask
+    of the caller, so the warnings that \%modern enables in the .qm file were not enabled in the other files: qcc
+    reported a duplicate local variable in a .qc file only if that file had its own \%modern, and the module loader
+    accepted an unknown warning name in it.  Each file is now parsed with the warning mask the .qm file left, and a
+    file's own warning directives still apply only to that file.
+
+    The module loader raises parse-time warnings as exceptions and does not report the warnings found when the
+    module is committed, so its cases use an unknown warning name; qcc reports both kinds, so its cases use a
+    duplicate local variable.
+*/
+class SeparatedModuleWarningsTest inherits QUnit::Test {
+    public {
+        #! a declaration that raises \c DUPLICATE-LOCAL-VARIABLE, which only \%modern enables of the default warnings
+        const DuplicateLocal = "int x = 1; { int x = 2; return x; }";
+
+        #! the qcc options of every compile here, which only parses and checks the module
+        const QccOpts = "-O0";
+    }
+
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string libqore_dir;
+        int seq = 0;
+    }
+
+    constructor() : QUnit::Test("SeparatedModuleWarningsTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+
+        addTestCase("the module loader parses each file with the warning mask of the .qm file", \loaderModern());
+        addTestCase("a warning disabled in the .qm file stays disabled in the module loader", \loaderQmDisabled());
+        addTestCase("a file's own warning directives apply only to that file in the module loader",
+            \loaderFileLocal());
+        addTestCase("without warning directives in the .qm file, the module loader uses the caller's warnings",
+            \loaderNoDirectives());
+        addTestCase("qcc parses each file with the warning mask of the .qm file", \qccModern());
+        addTestCase("a warning disabled in the .qm file stays disabled in qcc", \qccQmDisabled());
+        addTestCase("a file's own warning directives apply only to that file in qcc", \qccFileLocal());
+        addTestCase("qcc's per-file, aggregate and archive modes use the warning mask of the .qm file",
+            \qccObjectModes());
+        set_return_value(main());
+    }
+
+    loaderModern() {
+        TmpDir tmp("qore-module-warnings-");
+        string name = uniqueName("LdModern");
+        string dir = makeModule(tmp.path, name, "%modern\n", {
+            "A.qc": "%disable-warning no-such-warning\n" + funcSource(name, "a", "return 1;"),
+        });
+        *hash<ExceptionInfo> ex = loadError(dir);
+        assertEq("UNKNOWN-WARNING", ex.err);
+        assertEq("A.qc", basename(ex.file ?? ""));
+    }
+
+    loaderQmDisabled() {
+        TmpDir tmp("qore-module-warnings-");
+        string name = uniqueName("LdQmOff");
+        string dir = makeModule(tmp.path, name, "%modern\n%disable-warning unknown-warning\n", {
+            "A.qc": "%disable-warning no-such-warning\n" + funcSource(name, "a", "return 1;"),
+        });
+        assertEq(1, load(dir, name, "a"));
+    }
+
+    loaderFileLocal() {
+        TmpDir tmp("qore-module-warnings-");
+        string name = uniqueName("LdLocal");
+        # A.qc is parsed first; its own %disable-warning must not reach B.qc
+        string dir = makeModule(tmp.path, name, "%modern\n", {
+            "A.qc": "%disable-warning unknown-warning\n%disable-warning no-such-warning\n"
+                + funcSource(name, "a", "return 1;"),
+            "B.qc": "%disable-warning no-such-warning\n" + funcSource(name, "b", "return 2;"),
+        });
+        *hash<ExceptionInfo> ex = loadError(dir);
+        assertEq("UNKNOWN-WARNING", ex.err);
+        assertEq("B.qc", basename(ex.file ?? ""));
+    }
+
+    loaderNoDirectives() {
+        TmpDir tmp("qore-module-warnings-");
+        string name = uniqueName("LdPlain");
+        # without %modern, the .qm file leaves the caller's warning mask, which does not include unknown-warning
+        string dir = makeModule(tmp.path, name, "%new-style\n%require-types\n%strict-args\n", {
+            "A.qc": "%disable-warning no-such-warning\n" + funcSource(name, "a", "return 1;"),
+        });
+        assertEq(1, load(dir, name, "a"));
+    }
+
+    qccModern() {
+        TmpDir tmp("qore-module-warnings-");
+        string name = uniqueName("QccModern");
+        string dir = makeModule(tmp.path, name, "%modern\n", {
+            "A.qc": funcSource(name, "a", DuplicateLocal),
+        });
+        hash<string, list<string>> warnings = compileModule(tmp.path, dir, name);
+        assertEq(("DUPLICATE-LOCAL-VARIABLE",), warnings."A.qc");
+    }
+
+    qccQmDisabled() {
+        TmpDir tmp("qore-module-warnings-");
+        string name = uniqueName("QccQmOff");
+        string dir = makeModule(tmp.path, name, "%modern\n%disable-warning duplicate-local-vars\n", {
+            "A.qc": funcSource(name, "a", DuplicateLocal),
+        });
+        assertEq({}, compileModule(tmp.path, dir, name));
+    }
+
+    qccFileLocal() {
+        TmpDir tmp("qore-module-warnings-");
+        string name = uniqueName("QccLocal");
+        # A.qc is parsed first; its own %disable-warning must not reach B.qc
+        string dir = makeModule(tmp.path, name, "%modern\n", {
+            "A.qc": "%disable-warning duplicate-local-vars\n" + funcSource(name, "a", DuplicateLocal),
+            "B.qc": funcSource(name, "b", DuplicateLocal),
+        });
+        assertEq({"B.qc": ("DUPLICATE-LOCAL-VARIABLE",)}, compileModule(tmp.path, dir, name));
+    }
+
+    qccObjectModes() {
+        TmpDir tmp("qore-module-warnings-");
+        string name = uniqueName("QccObj");
+        string dir = makeModule(tmp.path, name, "%modern\n", {
+            "A.qc": funcSource(name, "a", DuplicateLocal),
+        });
+        string obj_dir = tmp.path + DirSep + "obj";
+        mkdir(obj_dir);
+        list<string> objs;
+        # each per-file compile parses the whole module
+        foreach string file in ((name + ".qm", "A.qc")) {
+            string obj = obj_dir + DirSep + file + ".qo";
+            string out = qcc(sprintf("-c --context=%s -o %s %s", dir, obj, dir + DirSep + file));
+            assertTrue(is_file(obj), "per-file compile of " + file + ": " + out);
+            assertEq({"A.qc": ("DUPLICATE-LOCAL-VARIABLE",)}, warningsByFile(out), "per-file compile of " + file);
+            objs += obj;
+        }
+
+        string qmod = tmp.path + DirSep + name + ".qmod";
+        string out = qcc(sprintf("-m --from-objects --context=%s -o %s %s", dir, qmod, objs.join(" ")));
+        assertTrue(is_file(qmod), "aggregate: " + out);
+        assertEq({"A.qc": ("DUPLICATE-LOCAL-VARIABLE",)}, warningsByFile(out), "aggregate");
+
+        string qoa = tmp.path + DirSep + name + ".qoa";
+        out = qcc(sprintf("-a --context=%s -o %s %s", dir, qoa, objs.join(" ")));
+        assertTrue(is_file(qoa), "archive: " + out);
+        assertEq({"A.qc": ("DUPLICATE-LOCAL-VARIABLE",)}, warningsByFile(out), "archive");
+    }
+
+    #! compiles the module with qcc and returns the warnings it reported, by file name
+    private hash<string, list<string>> compileModule(string tmp_dir, string dir, string name) {
+        string qmod = tmp_dir + DirSep + name + ".qmod";
+        string out = qcc(sprintf("-m -o %s %s", qmod, dir));
+        assertTrue(is_file(qmod), "qcc compile: " + out);
+        return warningsByFile(out);
+    }
+
+    #! runs qcc with the given arguments and returns its output
+    private string qcc(string args) {
+        return backquote(sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s %s %s %s 2>&1", libqore_dir, libqore_dir,
+            qcc_bin, QccOpts, args));
+    }
+
+    #! returns the warnings in qcc output, by the name of the file each one is in
+    private static hash<string, list<string>> warningsByFile(string out) {
+        hash<string, list<string>> rv = {};
+        *list<*string> matches = (out =~ x/warning encountered at ([^\n]+):[0-9]+ \([^\n]*\)\n([A-Z][A-Z-]+):/g);
+        for (int i = 0; i < matches.size(); i += 2) {
+            rv{basename(matches[i])} += (matches[i + 1],);
+        }
+        return rv;
+    }
+
+    #! loads the module in a new Program and returns what the given function in it returns
+    private int load(string dir, string name, string func) {
+        Program p();
+        p.parse(sprintf("%%requires %s\nint sub get() { return %s::%s(); }\n", dir, name, func), "load");
+        return p.callFunction("get");
+    }
+
+    #! returns the exception raised when loading the module, or nothing if it was loaded
+    private *hash<ExceptionInfo> loadError(string dir) {
+        try {
+            Program p();
+            p.parse(sprintf("%%requires %s\n", dir), "load");
+        } catch (hash<ExceptionInfo> ex) {
+            return ex;
+        }
+    }
+
+    #! writes a separated module with the given directives in its .qm file and the given other files
+    private static string makeModule(string tmp_dir, string name, string qm_directives, hash<string, string> files) {
+        string dir = tmp_dir + DirSep + name;
+        mkdir(dir);
+        writeFile(dir + DirSep + name + ".qm", qm_directives + sprintf("module %s {
+    version = \"1.0\";
+    desc = \"separated module warning test\";
+    author = \"Qore Technologies, s.r.o.\";
+    url = \"https://qore.org\";
+}
+", name));
+        map writeFile(dir + DirSep + $1.key, $1.value), files.pairIterator();
+        return dir;
+    }
+
+    #! returns the source of a public function in the module's namespace
+    private static string funcSource(string name, string func, string body) {
+        return sprintf("public namespace %s {\npublic int sub %s() {\n    %s\n}\n}\n", name, func, body);
+    }
+
+    private string uniqueName(string prefix) {
+        return sprintf("%s%d%d", prefix, getpid(), ++seq);
+    }
+
+    private static writeFile(string path, string text) {
+        File f();
+        f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(text);
+    }
+}

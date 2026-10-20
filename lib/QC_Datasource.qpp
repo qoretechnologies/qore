@@ -82,7 +82,7 @@ static void ds_constructor_hash(const QoreHashNode* opts, QoreObject* self, Queu
     if (*xsink) return;
     if (found) ds->setPendingUsername(str.c_str());
 
-    found = check_hash_key(opts, "pass", DSC_ERR, str, xsink);
+    found = check_hash_key(opts, "pass", DSC_ERR, str, xsink, true);
     if (*xsink) return;
     if (found) ds->setPendingPassword(str.c_str());
 
@@ -130,6 +130,12 @@ static void ds_constructor_hash(const QoreHashNode* opts, QoreObject* self, Queu
 static void create_datasource_from_conf(const QoreString& conf, QoreObject& self, Queue* queue, QoreValue arg,
         ExceptionSink* xsink) {
     ReferenceHolder<Queue> holder(queue, xsink);
+
+    // the string would be parsed cut at a NUL character; it is not shown, as it can contain a password
+    if (q_check_secret_no_nul(conf.c_str(), conf.size(), "datasource string", "datasource strings",
+            "DATASOURCE-PARSE-ERROR", xsink)) {
+        return;
+    }
 
     qore_offset_t colon = conf.find(':');
     qore_offset_t atsign = conf.find('@');
@@ -707,12 +713,29 @@ qclass Datasource [dom=DATABASE; arg=ManagedDatasource* ds; ns=Qore::SQL; vparen
 Datasource db(DSPGSQL, "user", "pass", "database", "utf8", "localhost", 5432);
     @endcode
 
-    @throw DATASOURCE-UNSUPPORTED-DATABASE DBI driver cannot be loaded
-    @throw DATASOURCE-CONSTRUCTOR-ERROR port value is \<= 0
+    @throw DATASOURCE-UNSUPPORTED-DATABASE DBI driver cannot be loaded, or the driver name contains a NUL character (since %Qore 3.0)
+    @throw DATASOURCE-CONSTRUCTOR-ERROR port value is \<= 0, or a user name, password, database name, encoding or hostname contains a NUL character (since %Qore 3.0); a password is not shown in the exception
     @throw DBI-OPTION-ERROR unknown or unsupported option passed to driver
+    @throw DATASOURCE-PARSE-ERROR the driver argument is a datasource string with a NUL character (since %Qore 3.0); it is not shown in the exception, as it can contain a password
 */
 Datasource::constructor(string driver, *string username, *string password, *string database, *string encoding,
         *string host, *softint port, *hash<auto> options, *Qore::Thread::Queue[Queue] queue, auto argument) {
+    // the strings are passed on as C strings, which would be cut at a NUL character; the driver argument can be a
+    // datasource string with a password, so it is not shown, and neither is the password
+    if (q_check_secret_no_nul(driver->c_str(), driver->size(), "driver or datasource string",
+            "driver names and datasource strings", driver->find('@') != -1 ? "DATASOURCE-PARSE-ERROR"
+                : "DATASOURCE-UNSUPPORTED-DATABASE", xsink)
+        || (username && q_check_no_nul(username->c_str(), username->size(), "user name", "datasource values", DSC_ERR,
+            xsink))
+        || (password && q_check_secret_no_nul(password->c_str(), password->size(), "password", "datasource values",
+            DSC_ERR, xsink))
+        || (database && q_check_no_nul(database->c_str(), database->size(), "database name", "datasource values",
+            DSC_ERR, xsink))
+        || (encoding && q_check_no_nul(encoding->c_str(), encoding->size(), "encoding", "datasource values", DSC_ERR,
+            xsink))
+        || (host && q_check_no_nul(host->c_str(), host->size(), "hostname", "datasource values", DSC_ERR, xsink))) {
+        return;
+    }
     if (!port && driver->find('@') != -1) {
         qore_offset_t colon = driver->find(':');
         qore_offset_t atsign = driver->find('@');
@@ -785,8 +808,9 @@ Datasource ds("pgsql:user/pass@db01(utf8)%localhost:5432");
     @endcode
 
     @throw DATASOURCE-UNSUPPORTED-DATABASE DBI driver cannot be loaded
-    @throw DATASOURCE-CONSTRUCTOR-ERRO missing required parameter for connection; port value is \<= 0
+    @throw DATASOURCE-CONSTRUCTOR-ERROR missing required parameter for connection; port value is \<= 0
     @throw DBI-OPTION-ERROR unknown or unsupported option passed to driver
+    @throw DATASOURCE-PARSE-ERROR the datasource string cannot be parsed or contains a NUL character (since %Qore 3.0); a datasource string with a NUL character is not shown in the exception, as it can contain a password
 
     @since %Qore 0.8.6
 */
@@ -834,7 +858,7 @@ Datasource db(("type": DSPGSQL, "user": "username", "pass": "password", "db": "d
 
     @throw DATASOURCE-UNSUPPORTED-DATABASE DBI driver cannot be loaded
     @throw DATASOURCE-CONSTRUCTOR-ERROR missing or invalid \c "driver" key, other key name not assigned to a string;
-    port value is \<= 0
+    port value is \<= 0, or a string value contains a NUL character (since %Qore 3.0); the value of the \c "pass" key is not shown in the exception
     @throw DBI-OPTION-ERROR unknown or unsupported option passed to driver
 */
 Datasource::constructor(hash<auto> options, *Qore::Thread::Queue[Queue] queue, auto argument) {
@@ -1554,8 +1578,15 @@ list<auto> Datasource::getCapabilityList() [flags=CONSTANT] {
     @code{.py}
 db.setUserName(user);
     @endcode
+
+    @throw DATASOURCE-ERROR the value contains a NUL character (since %Qore 3.0)
 */
 nothing Datasource::setUserName(string username) [flags=NAMED_ARGS] {
+    // the value is passed to the driver as a C string, which would be cut at a NUL character
+    if (q_check_no_nul(username->c_str(), username->size(), "user name", "datasource values", "DATASOURCE-ERROR",
+            xsink)) {
+        return QoreValue();
+    }
     ds->setPendingUsername(username->c_str());
 }
 
@@ -1568,8 +1599,15 @@ nothing Datasource::setUserName(string username) [flags=NAMED_ARGS] {
     @code{.py}
 db.setPassword(pass);
     @endcode
+
+    @throw DATASOURCE-ERROR the value contains a NUL character (since %Qore 3.0); the password is not shown in the exception
 */
 nothing Datasource::setPassword(string password) [flags=NAMED_ARGS] {
+    // the value is passed to the driver as a C string, which would be cut at a NUL character; it is not shown
+    if (q_check_secret_no_nul(password->c_str(), password->size(), "password", "datasource values",
+            "DATASOURCE-ERROR", xsink)) {
+        return QoreValue();
+    }
     ds->setPendingPassword(password->c_str());
 }
 
@@ -1582,8 +1620,15 @@ nothing Datasource::setPassword(string password) [flags=NAMED_ARGS] {
     @code{.py}
 db.setDBName(db);
     @endcode
+
+    @throw DATASOURCE-ERROR the value contains a NUL character (since %Qore 3.0)
 */
 nothing Datasource::setDBName(string database) [flags=NAMED_ARGS] {
+    // the value is passed to the driver as a C string, which would be cut at a NUL character
+    if (q_check_no_nul(database->c_str(), database->size(), "database name", "datasource values", "DATASOURCE-ERROR",
+            xsink)) {
+        return QoreValue();
+    }
     ds->setPendingDBName(database->c_str());
 }
 
@@ -1598,8 +1643,15 @@ nothing Datasource::setDBName(string database) [flags=NAMED_ARGS] {
     @code{.py}
 db.setDBCharset(encoding);
     @endcode
+
+    @throw DATASOURCE-ERROR the value contains a NUL character (since %Qore 3.0)
 */
 nothing Datasource::setDBCharset(string encoding) [flags=NAMED_ARGS] {
+    // the value is passed to the driver as a C string, which would be cut at a NUL character
+    if (q_check_no_nul(encoding->c_str(), encoding->size(), "encoding", "datasource values", "DATASOURCE-ERROR",
+            xsink)) {
+        return QoreValue();
+    }
     ds->setPendingDBEncoding(encoding->c_str());
 }
 
@@ -1612,8 +1664,15 @@ nothing Datasource::setDBCharset(string encoding) [flags=NAMED_ARGS] {
     @code{.py}
 db.setDBEncoding(encoding);
     @endcode
+
+    @throw DATASOURCE-ERROR the value contains a NUL character (since %Qore 3.0)
 */
 nothing Datasource::setDBEncoding(string encoding) [flags=NAMED_ARGS] {
+    // the value is passed to the driver as a C string, which would be cut at a NUL character
+    if (q_check_no_nul(encoding->c_str(), encoding->size(), "encoding", "datasource values", "DATASOURCE-ERROR",
+            xsink)) {
+        return QoreValue();
+    }
     ds->setPendingDBEncoding(encoding->c_str());
 }
 
@@ -1626,8 +1685,14 @@ nothing Datasource::setDBEncoding(string encoding) [flags=NAMED_ARGS] {
     @code{.py}
 db.setHostName(host);
     @endcode
+
+    @throw DATASOURCE-ERROR the value contains a NUL character (since %Qore 3.0)
 */
 nothing Datasource::setHostName(string host) [flags=NAMED_ARGS] {
+    // the value is passed to the driver as a C string, which would be cut at a NUL character
+    if (q_check_no_nul(host->c_str(), host->size(), "hostname", "datasource values", "DATASOURCE-ERROR", xsink)) {
+        return QoreValue();
+    }
     ds->setPendingHostName(host->c_str());
 }
 
@@ -1918,13 +1983,17 @@ hash<auto> Datasource::getOptionHash() [flags=RET_VALUE_ONLY] {
 
     @note in order to ensure atomicity when dealing with Datasource options, the transaction lock is acquired before executing this method if it was not already owned by the calling thread
 
-    @throw DBI-OPTION-ERROR unknown or unsupported option passed to driver
+    @throw DBI-OPTION-ERROR unknown or unsupported option passed to driver, or the option name or a string option value contains a NUL character (since %Qore 3.0); option values are not shown in the exception
     @throw DATASOURCE-ERROR the datasource must be open for this call
     @throw TRANSACTION-LOCK-TIMEOUT Timeout trying to acquire the transaction lock
 
     @since %Qore 0.8.6
 */
 Datasource::setOption(string option, auto value) [flags=NAMED_ARGS] {
+    // the option name is passed on as a C string, which would be cut at a NUL character
+    if (q_check_no_nul(option->c_str(), option->size(), "option name", "option names", "DBI-OPTION-ERROR", xsink)) {
+        return QoreValue();
+    }
     ds->setOption(option->c_str(), value, xsink);
 }
 
@@ -1933,12 +2002,16 @@ Datasource::setOption(string option, auto value) [flags=NAMED_ARGS] {
 
     @note in order to ensure atomicity when dealing with Datasource options, the transaction lock is acquired before executing this method if it was not already owned by the calling thread
 
-    @throw DBI-OPTION-ERROR unknown or unsupported option passed to driver
+    @throw DBI-OPTION-ERROR unknown or unsupported option passed to driver, or the option name contains a NUL character (since %Qore 3.0)
     @throw TRANSACTION-LOCK-TIMEOUT Timeout trying to acquire the transaction lock
 
     @since %Qore 0.8.6
 */
 auto Datasource::getOption(string option) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    // the option name is passed on as a C string, which would be cut at a NUL character
+    if (q_check_no_nul(option->c_str(), option->size(), "option name", "option names", "DBI-OPTION-ERROR", xsink)) {
+        return QoreValue();
+    }
     return ds->getOption(option->c_str(), xsink);
 }
 

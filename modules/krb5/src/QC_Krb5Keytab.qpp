@@ -91,6 +91,9 @@ bool Krb5Keytab::hasContent() [flags=CONSTANT] {
 */
 nothing Krb5Keytab::addEntry(Krb5Principal[QoreKrb5Principal] principal, string key_hex, int enctype,
         *int kvno) {
+    if (krb5_check_no_nul(key_hex, "key_hex", "hex strings", "KRB5-KEYTAB-ERROR", true, xsink)) {
+        return QoreValue();
+    }
     keytab->addEntry(**principal, key_hex->c_str(), static_cast<krb5_enctype>(enctype),
         kvno ? static_cast<krb5_kvno>(static_cast<int>(kvno)) : 1, xsink);
 }

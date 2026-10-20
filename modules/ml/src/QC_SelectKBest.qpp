@@ -52,7 +52,7 @@ SelectKBest::constructor(*hash<auto> options) {
         v = options->getKeyValue("score_func");
         if (!v.isNullOrNothing()) {
             QoreStringValueHelper str(v);
-            score_func = str->c_str();
+            score_func = mlStdString(**str);
         }
     }
     if (k < 1) {

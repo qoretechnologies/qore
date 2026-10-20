@@ -1,6 +1,14 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 
+# Creates threads until Qore refuses to create another one (THREAD-CREATION-FAILURE), so it runs as many threads as
+# Qore allows (MAX_QORE_THREADS, 8192 on Linux).  Under valgrind, give valgrind room for all of them, or valgrind
+# aborts the test before Qore's limit is reached:
+#     valgrind --max-threads=8300 qore -b max-threads-count.qtest
+#
+# The cases wait for threads on Counters, never for a time: the assignment case runs first, while the test's thread
+# is the only one, and the count case waits for each thread it started to finish.
+
 %modern
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
@@ -17,8 +25,10 @@ public class MaxThreadCountTest inherits QUnit::Test {
     }
 
     constructor() : Test("Max thread count test", "1.0") {
-        addTestCase("max thread count", \testMaxThreadCount());
+        # the TID case runs first: the order of the TIDs it is given is only meaningful while no threads of an
+        # earlier case are still ending and freeing TIDs
         addTestCase("TID assignments", \testTidAssignments());
+        addTestCase("max thread count", \testMaxThreadCount());
 
         # Return for compatibility with test harness that checks return value.
         set_return_value(main());
@@ -177,7 +187,8 @@ public class MaxThreadCountTest inherits QUnit::Test {
 
         assertGt(100, limit);
 
-        c0.waitForZero(1s);
+        # every thread started has finished
+        c0.waitForZero();
     }
 
     testTidAssignments() {
@@ -192,17 +203,8 @@ public class MaxThreadCountTest inherits QUnit::Test {
             c.waitForZero();
         };
 
-        # wait for all threads from previous test to complete
-        {
-            date now = now_us();
-            while (num_threads() > 1) {
-                sleep(5ms);
-                date d = now_us() - now;
-                if (d > 20s) {
-                    throw "TIMEOUT-ERROR", "timeout waiting for threads to terminate";
-                }
-            }
-        }
+        # this case runs first, so the test's own thread is the only one
+        assertEq(1, num_threads(), "no other thread is running");
 
         try {
             while (True) {

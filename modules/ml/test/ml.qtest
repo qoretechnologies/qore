@@ -29,12 +29,36 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 
+%requires ../../../qlib/Util.qm
 %requires ../../../qlib/QUnit.qm
 %requires ../../../qlib/FsUtil.qm
 %requires ml
 %requires ../../../qlib/QoreOnnxExport
 
 %exec-class MlTest
+
+#! A StandardScaler step that refers back to the pipeline it is a step of, and counts its destruction
+class PipelineCycleScaler inherits ML::StandardScaler {
+    public {
+        static int destroyed = 0;
+        *ML::MLPipeline pipeline;
+    }
+
+    destructor() {
+        ++destroyed;
+    }
+}
+
+#! A pipeline that counts its destruction
+class PipelineCycleCounted inherits ML::MLPipeline {
+    public {
+        static int destroyed = 0;
+    }
+
+    destructor() {
+        ++destroyed;
+    }
+}
 
 public class MlTest inherits QUnit::Test {
     constructor() : Test("MlTest", "1.0") {
@@ -166,17 +190,24 @@ public class MlTest inherits QUnit::Test {
         addTestCase("OnnxModel preallocated I/O binding", \onnxPreallocatedIoBindingTest());
         addTestCase("OnnxModel optimized ONNX artifact", \onnxOptimizedArtifactTest());
         addTestCase("OnnxModel ORT artifact", \onnxOrtArtifactTest());
+        addTestCase("ONNX model files respect the sandbox", \onnxSandboxFileTest());
+        addTestCase("ONNX file checks honor a policy barrier", \onnxSandboxPolicyBarrierTest());
+        addTestCase("ONNX model data is read through the sandbox", \onnxSandboxModelDataTest());
+        addTestCase("ONNX Runtime options respect the sandbox", \onnxSandboxOptionsTest());
         addTestCase("OnnxModel profiling and stats", \onnxProfilingStatsTest());
         addTestCase("OnnxModel multi-input tensor inference", \onnxMultiInputTensorInferenceTest());
         addTestCase("OnnxModel batch inference", \onnxBatchTest());
         addTestCase("OnnxSessionPool inference and stats", \onnxSessionPoolTest());
         addTestCase("OnnxSessionPool dynamic batch ordering", \onnxSessionPoolDynamicBatchTest());
+        addTestCase("OnnxSessionPool session lease", \onnxSessionLeaseTest());
         addTestCase("OnnxSessionPool backpressure", \onnxSessionPoolBackpressureTest());
         addTestCase("OnnxSessionPool timeout", \onnxSessionPoolTimeoutTest());
         addTestCase("OnnxSessionPool async inference", \onnxSessionPoolAsyncTest());
         addTestCase("OnnxSessionPool async dynamic batching", \onnxSessionPoolAsyncDynamicBatchTest());
         addTestCase("OnnxSessionPool async completion statistics", \onnxSessionPoolAsyncCompletionStatsTest());
         addTestCase("OnnxSessionPool async dynamic error statistics", \onnxSessionPoolAsyncDynamicErrorStatsTest());
+        addTestCase("OnnxSessionPool async leader TID", \onnxSessionPoolAsyncLeaderTidTest());
+        addTestCase("OnnxSessionPool async leader cancellation", \onnxSessionPoolAsyncLeaderCancelTest());
         addTestCase("OnnxModel single value inference", \onnxSingleValueTest());
         addTestCase("OnnxModel error cases", \onnxErrorTest());
         addTestCase("OnnxModel bytes constructor", \onnxBytesConstructorTest());
@@ -407,7 +438,25 @@ public class MlTest inherits QUnit::Test {
             \pipelineSerializeTest());
         addTestCase("MLPipeline file save / load round-trip",
             \pipelineFileRoundTripTest());
+        addTestCase("MLPipeline step referencing its pipeline is collected", \pipelineStepCycleTest());
+        # strings with NUL characters: data and names are kept whole
+        addTestCase("NUL: class labels", \nulClassLabelTest());
+        addTestCase("NUL: documents, feature and step names", \nulDocumentAndNameTest());
+        addTestCase("NUL: target fields", \nulTargetFieldTest());
+        addTestCase("NUL: option values", \nulOptionValueTest());
+        addTestCase("NUL: restored field names", \nulRestoredFieldNameTest());
+        addTestCase("NUL: ONNX string tensors and model data", \nulOnnxDataTest());
+        addTestCase("NUL: refused in ONNX Runtime identifiers", \nulOnnxIdentifierTest());
+        addTestCase("NUL: refused in paths", \nulPathTest());
         set_return_value(main());
+    }
+
+    #! returns the path of a model file in the temporary directory for the model name
+    /** the name is unique for every run, so that runs on the same host, at the same time or after a run that left
+        files behind, never use each other's files
+    */
+    private static string getModelPath(string name) {
+        return tmp_location() + DirSep + sprintf("test_ml_%s_%d_%s.qml", name, getpid(), get_random_string(8));
     }
 
     capabilitiesTest() {
@@ -4567,6 +4616,304 @@ public class MlTest inherits QUnit::Test {
         assertFloat(9.0, result.Y[0], 1e-5);
     }
 
+    #! Makes a program whose filesystem sandbox is rooted at \a allowed
+    private Program makeOnnxSandboxProgram(string allowed) {
+        Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+        p.parse("
+%modern
+%requires ml
+
+*hash<ExceptionInfo> sub load(string path) {
+    try {
+        ML::OnnxModel m(path);
+    } catch (hash<ExceptionInfo> ex) {
+        return ex;
+    }
+}
+
+*hash<ExceptionInfo> sub load_config(string path, *hash<auto> config) {
+    try {
+        hash<ML::OnnxSessionConfig> cfg = <ML::OnnxSessionConfig>{\"providers\": ()};
+        if (config) {
+            foreach string key in (keys config) {
+                cfg{key} = config{key};
+            }
+        }
+        ML::OnnxModel m(path, cfg);
+    } catch (hash<ExceptionInfo> ex) {
+        return ex;
+    }
+}
+
+*hash<ExceptionInfo> sub load_pool(string path) {
+    try {
+        ML::OnnxSessionPool pool(path, <ML::OnnxSessionConfig>{\"providers\": ()});
+    } catch (hash<ExceptionInfo> ex) {
+        return ex;
+    }
+}
+
+*hash<ExceptionInfo> sub optimize(string input, string output) {
+    try {
+        ML::onnx_optimize_model(input_path: input, output_path: output,
+            options: <ML::OnnxSessionConfig>{\"providers\": ()});
+    } catch (hash<ExceptionInfo> ex) {
+        return ex;
+    }
+}
+
+*hash<ExceptionInfo> sub load_bytes(binary data) {
+    try {
+        ML::OnnxModel m(data);
+    } catch (hash<ExceptionInfo> ex) {
+        return ex;
+    }
+}
+
+bool sub identity_complete(string path, *hash<auto> config) {
+    hash<ML::OnnxSessionConfig> cfg = <ML::OnnxSessionConfig>{\"providers\": ()};
+    if (config) {
+        foreach string key in (keys config) {
+            cfg{key} = config{key};
+        }
+    }
+    ML::OnnxModel m(path, cfg);
+    return m.getContentIdentity().complete;
+}
+
+*hash<ExceptionInfo> sub load_provider(string path, hash<auto> options) {
+    try {
+        ML::OnnxModel m(path, <ML::OnnxSessionConfig>{
+            \"providers\": (<ML::OnnxProviderConfig>{\"name\": \"CPU\", \"options\": options},),
+        });
+    } catch (hash<ExceptionInfo> ex) {
+        return ex;
+    }
+}
+
+*hash<ExceptionInfo> sub run_options(hash<auto> config) {
+    try {
+        ML::OnnxRunOptions o({\"config\": config});
+    } catch (hash<ExceptionInfo> ex) {
+        return ex;
+    }
+}
+
+*hash<ExceptionInfo> sub save_optimized(string path, string output) {
+    try {
+        ML::OnnxModel m(path, <ML::OnnxSessionConfig>{\"providers\": ()});
+        m.saveOptimized(output_path: output);
+    } catch (hash<ExceptionInfo> ex) {
+        return ex;
+    }
+}
+        ", "ml_onnx_sandbox");
+        SandboxManager sm();
+        sm.setFilesystemSandboxRoot(allowed);
+        p.setSandboxManager(sm);
+        return p;
+    }
+
+    #! ONNX model files and the files ONNX Runtime writes are subject to the sandbox of the calling program
+    onnxSandboxFileTest() {
+        if (skipOnnx()) {
+            return;
+        }
+        FsUtil::TmpDir tmp("qore-ml-sandbox-");
+        string allowed = tmp.path + "/allowed";
+        string outside = tmp.path + "/outside";
+        mkdir(allowed);
+        mkdir(outside);
+        binary model = ReadOnlyFile::readBinaryFile(getTestModelPath());
+        ciWrite(allowed + "/model.onnx", model);
+        ciWrite(outside + "/model.onnx", model);
+        Program p = makeOnnxSandboxProgram(allowed);
+
+        # a model inside the sandbox root is loaded
+        assertNothing(p.callFunction("load", allowed + "/model.onnx"), "a model inside the sandbox root is loaded");
+        assertNothing(p.callFunction("load_config", allowed + "/model.onnx"),
+            "a configured model inside the sandbox root is loaded");
+
+        # a model outside the sandbox root is denied by every constructor
+        assertEq("FILESYSTEM-ACCESS-DENIED", p.callFunction("load", outside + "/model.onnx").err,
+            "OnnxModel cannot load a model outside the sandbox root");
+        assertEq("FILESYSTEM-ACCESS-DENIED", p.callFunction("load_config", outside + "/model.onnx").err,
+            "a configured OnnxModel cannot load a model outside the sandbox root");
+        assertEq("FILESYSTEM-ACCESS-DENIED", p.callFunction("load_pool", outside + "/model.onnx").err,
+            "OnnxSessionPool cannot load a model outside the sandbox root");
+        assertEq("FILESYSTEM-ACCESS-DENIED", p.callFunction("optimize", outside + "/model.onnx",
+            allowed + "/optimized.onnx").err, "onnx_optimize_model() cannot read a model outside the sandbox root");
+
+        # files that ONNX Runtime writes outside the sandbox root are denied, and none is written
+        assertEq("FILESYSTEM-ACCESS-DENIED", p.callFunction("optimize", allowed + "/model.onnx",
+            outside + "/optimized.onnx").err, "onnx_optimize_model() cannot write outside the sandbox root");
+        assertFalse(is_file(outside + "/optimized.onnx"), "a denied optimization writes no file");
+        assertEq("FILESYSTEM-ACCESS-DENIED", p.callFunction("save_optimized", allowed + "/model.onnx",
+            outside + "/saved.ort").err, "saveOptimized() cannot write outside the sandbox root");
+        assertFalse(is_file(outside + "/saved.ort"), "a denied saveOptimized() writes no file");
+        assertEq("FILESYSTEM-ACCESS-DENIED", p.callFunction("load_config", allowed + "/model.onnx",
+            {"optimized_model_filepath": outside + "/session-optimized.onnx"}).err,
+            "optimized_model_filepath cannot name a file outside the sandbox root");
+        assertFalse(is_file(outside + "/session-optimized.onnx"), "a denied optimized model path writes no file");
+        assertEq("FILESYSTEM-ACCESS-DENIED", p.callFunction("load_config", allowed + "/model.onnx",
+            {"profile_file_prefix": outside + "/profile"}).err,
+            "profile_file_prefix cannot name a file outside the sandbox root");
+        assertFalse(glob(outside + "/profile*").val(), "a denied profile prefix writes no profile");
+
+        # files inside the sandbox root are written
+        assertNothing(p.callFunction("optimize", allowed + "/model.onnx", allowed + "/optimized.onnx"),
+            "onnx_optimize_model() writes inside the sandbox root");
+        assertTrue(is_file(allowed + "/optimized.onnx"), "the optimized model is written inside the sandbox root");
+    }
+
+    #! the ONNX file checks are policy checks, so a policy barrier lifts the policy of a sandboxed caller
+    onnxSandboxPolicyBarrierTest() {
+        if (skipOnnx()) {
+            return;
+        }
+        Program p(PO_NEW_STYLE);
+        SandboxManager sm();
+        sm.setFilesystemDefaultPolicy(False);
+        p.setSandboxManager(sm);
+        # the sandboxed program calls back out into trusted code
+        p.parse("auto sub run(code c, string path) { return c(path); }", "ml-barrier-caller");
+
+        # code in this program, which has no sandbox manager, inherits the policy of the sandboxed caller; content
+        # identity capture reads the model and its external data itself
+        code plain = auto sub (string path) {
+            ML::OnnxModel m(path, <ML::OnnxSessionConfig>{"providers": (), "content_identity": "required"});
+            return m.getContentIdentity().complete;
+        };
+        assertThrows("FILESYSTEM-ACCESS-DENIED", NOTHING, \p.callFunction(), ("run", plain, getTestModelPath()),
+            "a model outside the sandbox of the calling program is denied");
+
+        code barriered = auto sub (string path) {
+            return SandboxManager::callWithSystemPolicy(plain, path);
+        };
+        assertTrue(p.callFunction("run", barriered, getTestModelPath()),
+            "a model is loaded and its content captured inside a policy barrier");
+    }
+
+    #! with a sandbox, ONNX Runtime is only given model and external data bytes that were read through the sandbox
+    onnxSandboxModelDataTest() {
+        if (skipOnnx()) {
+            return;
+        }
+        FsUtil::TmpDir tmp("qore-ml-sandbox-data-");
+        string allowed = tmp.path + "/allowed";
+        string outside = tmp.path + "/outside";
+        mkdir(allowed);
+        mkdir(outside);
+        Program p = makeOnnxSandboxProgram(allowed);
+
+        # external data that is a link to a file outside the sandbox root is denied, whatever the capture mode
+        ciWrite(outside + "/weights.bin", ciFloatBytes(2.0));
+        mkdir(allowed + "/linked");
+        symlink(outside + "/weights.bin", allowed + "/linked/weights.bin");
+        ciWrite(allowed + "/linked/model.onnx", ciExternalModel("weights.bin"));
+        assertEq("FILESYSTEM-ACCESS-DENIED", p.callFunction("load", allowed + "/linked/model.onnx").err,
+            "external data outside the sandbox root is denied");
+        foreach string mode in (("disabled", "best_effort")) {
+            assertEq("FILESYSTEM-ACCESS-DENIED", p.callFunction("load_config", allowed + "/linked/model.onnx",
+                {"content_identity": mode}).err,
+                sprintf("external data outside the sandbox root is denied with content_identity %y", mode));
+        }
+
+        # a model with external data inside the sandbox root is loaded, and its content is captured
+        ciWrite(allowed + "/weights.bin", ciFloatBytes(1.0));
+        ciWrite(allowed + "/model.onnx", ciExternalModel("weights.bin"));
+        assertNothing(p.callFunction("load", allowed + "/model.onnx"),
+            "a model with external data inside the sandbox root is loaded");
+        assertTrue(p.callFunction("identity_complete", allowed + "/model.onnx"),
+            "the content of a model loaded by a sandboxed program is captured");
+
+        # external data that ONNX Runtime would read by itself cannot be loaded by a sandboxed program
+        ciWrite(allowed + "/nested.onnx", ciNestedIfModel());
+        assertEq("ML-ONNX-CONTENT-IDENTITY-ERROR", p.callFunction("load", allowed + "/nested.onnx").err,
+            "external data that is not read through the sandbox is refused");
+
+        # an ORT format model cannot reference external data, so its bytes are all of its content
+        ML::OnnxModel source(getTestModelPath(), <ML::OnnxSessionConfig>{"providers": ()});
+        source.saveOptimized(output_path: allowed + "/model.ort");
+        assertNothing(p.callFunction("load_config", allowed + "/model.ort", {"load_model_format": "ORT"}),
+            "an ORT format model inside the sandbox root is loaded");
+        assertTrue(p.callFunction("identity_complete", allowed + "/model.ort"),
+            "the content of an ORT format model is captured");
+        assertNothing(p.callFunction("load", allowed + "/model.ort"),
+            "an ORT format model is loaded without an explicit format");
+
+        # a model in memory is loaded
+        assertNothing(p.callFunction("load_bytes", ReadOnlyFile::readBinaryFile(getTestModelPath())),
+            "a model in memory is loaded by a sandboxed program");
+    }
+
+    #! with a sandbox, only ONNX Runtime options that name no file, or whose file is checked, may be set
+    onnxSandboxOptionsTest() {
+        if (skipOnnx()) {
+            return;
+        }
+        FsUtil::TmpDir tmp("qore-ml-sandbox-options-");
+        string allowed = tmp.path + "/allowed";
+        string outside = tmp.path + "/outside";
+        mkdir(allowed);
+        mkdir(outside);
+        string model = allowed + "/model.onnx";
+        ciWrite(model, ReadOnlyFile::readBinaryFile(getTestModelPath()));
+        Program p = makeOnnxSandboxProgram(allowed);
+
+        # options that only tune the session
+        assertNothing(p.callFunction("load_config", model, {"config": {"session.intra_op.allow_spinning": "0",
+            "ep.context_enable": "0"}}), "session options that name no file may be set");
+
+        # options that name a file outside the sandbox root
+        foreach string key in (("ep.context_file_path", "session.collect_node_memory_stats_to_file",
+                "optimization.memory_optimizer_config", "session.node_partition_config_file")) {
+            assertEq("FILESYSTEM-ACCESS-DENIED", p.callFunction("load_config", model,
+                {"config": {key: outside + "/file"}}).err, sprintf("%y cannot name a file outside the sandbox root",
+                key));
+        }
+        assertEq("FILESYSTEM-ACCESS-DENIED", p.callFunction("load_config", model, {
+            "optimized_model_filepath": allowed + "/optimized.onnx",
+            "config": {"session.optimized_model_external_initializers_file_name": "../outside/weights.bin"},
+        }).err, "the external initializers of the optimized model cannot be written outside the sandbox root");
+        assertFalse(is_file(outside + "/weights.bin"), "no external initializers are written outside the root");
+        assertEq("FILESYSTEM-ACCESS-DENIED", p.callFunction("load_config", model, {
+            "optimized_model_filepath": allowed + "/optimized.onnx",
+            "config": {"session.optimized_model_external_initializers_file_name": outside + "/weights.bin"},
+        }).err, "an absolute external initializers file name is checked as it is given");
+
+        # options that write a file the sandbox cannot check
+        *hash<ExceptionInfo> ex = p.callFunction("load_config", model,
+            {"config": {"session.debug_layout_transformation": "1"}});
+        assertEq("ML-ONNX-ERROR", ex.err, "a flag that dumps files cannot be set");
+        assertRegex("'session.debug_layout_transformation'", ex.desc, "the error names the option");
+        ex = p.callFunction("load_config", model, {"config": {"ep.context_enable": "1"}});
+        assertEq("ML-ONNX-ERROR", ex.err, "the EP context model cannot be written next to the model");
+        assertRegex("ep.context_file_path", ex.desc, "the error names the option that must name the file");
+
+        # options that the sandbox cannot check, and options ONNX Runtime does not define
+        foreach hash<auto> config in (
+                {"session.model_external_initializers_file_folder_path": allowed},
+                {"session.resource_cuda_partitioning_settings": "1024,stats.csv"},
+                {"qore.unknown_option": "1"},
+                ) {
+            ex = p.callFunction("load_config", model, {"config": config});
+            assertEq("ML-ONNX-ERROR", ex.err, sprintf("session option %y is refused", keys config));
+            assertRegex("cannot be set by a sandboxed program", ex.desc, "the error explains the refusal");
+        }
+
+        # run options
+        assertNothing(p.callFunction("run_options", {"gpu_graph_id": "0"}), "run options that name no file may be set");
+        ex = p.callFunction("run_options", {"qnn.lora_config": outside + "/lora.json"});
+        assertEq("ML-ONNX-RUN-OPTIONS-ERROR", ex.err, "a run option that names a file is refused");
+        assertRegex("'qnn.lora_config'", ex.desc, "the error names the run option");
+
+        # execution provider options
+        ex = p.callFunction("load_provider", model, {"backend_path": outside + "/libQnnHtp.so"});
+        assertEq("ML-ONNX-PROVIDER-ERROR", ex.err, "a provider option that loads a library is refused");
+        assertRegex("cannot be set by a sandboxed program", ex.desc, "the error explains the refusal");
+    }
+
     onnxOrtArtifactTest() {
         if (skipOnnx()) {
             return;
@@ -4755,6 +5102,73 @@ public class MlTest inherits QUnit::Test {
         assertEq(5, stats.total_batch_items);
     }
 
+    onnxSessionLeaseTest() {
+        if (skipOnnx()) {
+            return;
+        }
+
+        ML::OnnxSessionPool pool(getTestModelPath(), <ML::OnnxSessionConfig>{"providers": ()},
+            {"max_sessions": 1, "queue_depth": 0});
+
+        # a held session counts against the pool's capacity
+        *ML::OnnxSessionLease lease = pool.acquireSession();
+        assertTrue(lease.isHeld());
+        assertEq(1, pool.getPoolStats().active_runs);
+        assertThrows("ML-ONNX-POOL-BACKPRESSURE", \pool.run(), {"X": ((1.0,),)});
+        assertThrows("ML-ONNX-POOL-BACKPRESSURE", \pool.acquireSession());
+        assertEq(2, pool.getPoolStats().total_rejections);
+
+        # an explicit release returns the session, and a second release does nothing
+        lease.release();
+        assertFalse(lease.isHeld());
+        lease.release();
+        assertEq(0, pool.getPoolStats().active_runs);
+        assertFloat(3.0, pool.run({"X": ((1.0,),)}).Y[0], 1e-5);
+
+        # deleting the lease returns the session
+        lease = pool.acquireSession();
+        assertEq(1, pool.getPoolStats().active_runs);
+        delete lease;
+        assertEq(0, pool.getPoolStats().active_runs);
+
+        # and so does its last reference going out of scope
+        {
+            ML::OnnxSessionLease scoped = pool.acquireSession();
+            assertTrue(scoped.isHeld());
+            assertEq(1, pool.getPoolStats().active_runs);
+        }
+        assertEq(0, pool.getPoolStats().active_runs);
+
+        # a lease is not counted as a run
+        assertEq(1, pool.getPoolStats().total_runs);
+
+        # a caller that waits for a held session times out after timeout_ms
+        ML::OnnxSessionPool tpool(getTestModelPath(), <ML::OnnxSessionConfig>{"providers": ()},
+            {"max_sessions": 1, "queue_depth": 1, "timeout_ms": 1});
+        ML::OnnxSessionLease held = tpool.acquireSession();
+        assertThrows("ML-ONNX-POOL-TIMEOUT", \tpool.acquireSession());
+        hash<auto> stats = tpool.getPoolStats();
+        assertEq(1, stats.total_timeouts);
+        assertEq(0, stats.waiting_callers);
+        held.release();
+        ML::OnnxSessionLease again = tpool.acquireSession();
+        assertTrue(again.isHeld());
+        again.release();
+
+        # the lease keeps its pool's sessions valid after the pool object is gone
+        {
+            ML::OnnxSessionPool gone(getTestModelPath(), <ML::OnnxSessionConfig>{"providers": ()});
+            lease = gone.acquireSession();
+        }
+        assertTrue(lease.isHeld());
+        lease.release();
+        assertFalse(lease.isHeld());
+
+        # leases come only from acquireSession() and cannot be copied
+        assertThrows("ML-ONNX-POOL-ERROR", sub () { ML::OnnxSessionLease l(); });
+        assertThrows("COPY-ERROR", sub () { ML::OnnxSessionLease c = lease.copy(); });
+    }
+
     onnxSessionPoolBackpressureTest() {
         if (skipOnnx()) {
             return;
@@ -4764,45 +5178,22 @@ public class MlTest inherits QUnit::Test {
             <ML::OnnxSessionConfig>{"providers": ()},
             {"max_sessions": 1, "queue_depth": 0, "timeout_ms": 1});
 
-        list<hash<auto>> long_batch;
-        for (int i = 0; i < 50000; ++i) {
-            push long_batch, {"X": ((2.0,),)};
-        }
-
-        Counter ready(1);
-        Counter cnt(1);
-        *hash<ExceptionInfo> bg_error;
-        background sub() {
-            on_exit cnt.dec();
-            try {
-                ready.dec();
-                list<hash<auto>> results = pool.runBatch(long_batch);
-                assertEq(long_batch.size(), results.size());
-                assertFloat(5.0, results[0].Y[0], 1e-5);
-            } catch (hash<ExceptionInfo> ex) {
-                bg_error = ex;
-            }
-        }();
-
-        ready.waitForZero();
-        bool active_seen = False;
-        for (int i = 0; i < 1000; ++i) {
-            if (pool.getPoolStats().active_runs > 0) {
-                active_seen = True;
-                break;
-            }
-            usleep(1ms);
-        }
-        assertTrue(active_seen, "background inference should occupy the only pool session");
+        # hold the only session: with no wait queue, every other caller is rejected at once
+        ML::OnnxSessionLease lease = pool.acquireSession();
         assertThrows("ML-ONNX-POOL-BACKPRESSURE", sub() {
             pool.run({"X": ((3.0,),)});
         });
-        cnt.waitForZero();
-        assertFalse(bg_error.val(), bg_error ? bg_error.err + ": " + bg_error.desc : "");
-
+        assertThrows("ML-ONNX-POOL-BACKPRESSURE", sub() {
+            pool.runBatch(({"X": ((3.0,),)},));
+        });
         hash<auto> stats = pool.getPoolStats();
-        assertTrue(stats.total_rejections >= 1,
-            "pool should count rejected callers when queue_depth is zero");
+        assertEq(2, stats.total_rejections, "pool should count rejected callers when queue_depth is zero");
+        assertEq(0, stats.total_waits);
+
+        # once the session is free again, the same call succeeds
+        lease.release();
+        assertFloat(7.0, pool.run({"X": ((3.0,),)}).Y[0], 1e-5);
+        assertEq(2, pool.getPoolStats().total_rejections);
     }
 
     onnxSessionPoolTimeoutTest() {
@@ -4814,56 +5205,20 @@ public class MlTest inherits QUnit::Test {
             <ML::OnnxSessionConfig>{"providers": ()},
             {"max_sessions": 1, "queue_depth": 1, "timeout_ms": 1});
 
-        list<hash<auto>> long_batch;
-        for (int i = 0; i < 500000; ++i) {
-            push long_batch, {"X": ((2.0,),)};
-        }
-
-        Counter ready(1);
-        Counter cnt(1);
-        *hash<ExceptionInfo> bg_error;
-        background sub() {
-            on_exit cnt.dec();
-            try {
-                ready.dec();
-                list<hash<auto>> results = pool.runBatch(long_batch);
-                assertEq(long_batch.size(), results.size());
-                assertFloat(5.0, results[0].Y[0], 1e-5);
-            } catch (hash<ExceptionInfo> ex) {
-                bg_error = ex;
-            }
-        }();
-
-        ready.waitForZero();
-        bool active_seen = False;
-        for (int i = 0; i < 1000; ++i) {
-            if (pool.getPoolStats().active_runs > 0) {
-                active_seen = True;
-                break;
-            }
-            usleep(1ms);
-        }
-        assertTrue(active_seen, "background inference should occupy the only pool session");
-
-        bool timeout_seen = False;
-        while (cnt.getCount() > 0 && !timeout_seen) {
-            try {
-                pool.run({"X": ((3.0,),)});
-            } catch (hash<ExceptionInfo> ex) {
-                if (ex.err == "ML-ONNX-POOL-TIMEOUT") {
-                    timeout_seen = True;
-                    break;
-                }
-                rethrow;
-            }
-        }
-        assertTrue(timeout_seen, "foreground inference should time out while the only pool session is occupied");
-        cnt.waitForZero();
-        assertFalse(bg_error.val(), bg_error ? bg_error.err + ": " + bg_error.desc : "");
-
+        # hold the only session: a caller waits in the queue for timeout_ms, and then times out
+        ML::OnnxSessionLease lease = pool.acquireSession();
+        assertThrows("ML-ONNX-POOL-TIMEOUT", sub() {
+            pool.run({"X": ((3.0,),)});
+        });
         hash<auto> stats = pool.getPoolStats();
-        assertTrue(stats.total_timeouts >= 1,
-            "pool should count timed-out callers when waiting exceeds timeout_ms");
+        assertEq(1, stats.total_timeouts, "pool should count timed-out callers when waiting exceeds timeout_ms");
+        assertEq(1, stats.total_waits);
+        assertEq(0, stats.waiting_callers);
+
+        # once the session is free again, the same call succeeds
+        lease.release();
+        assertFloat(7.0, pool.run({"X": ((3.0,),)}).Y[0], 1e-5);
+        assertEq(1, pool.getPoolStats().total_timeouts);
     }
 
     onnxSessionPoolAsyncTest() {
@@ -5009,6 +5364,67 @@ public class MlTest inherits QUnit::Test {
         assertAsyncPoolCounters(pool, 1, 1, 0);
         pool.resetPoolStats();
         assertAsyncPoolCounters(pool, 0, 0, 0);
+    }
+
+    onnxSessionPoolAsyncLeaderTidTest() {
+        if (skipOnnx()) {
+            return;
+        }
+
+        # the leader takes a batch only when it has two requests; the wait deadline never ends a wait here
+        ML::OnnxSessionPool pool(getTestModelPath(), <ML::OnnxSessionConfig>{"providers": ()},
+            {"max_sessions": 1, "dynamic_batch_size": 2, "dynamic_batch_wait_ms": 3600000});
+        assertEq(0, pool.getPoolStats().async_leader_tid, "no leader before the first request");
+
+        # the request that finds the queue empty starts the leader, whose TID is set when the call returns
+        Future<hash<auto>> f1 = pool.runAsync({"X": ((1.0,),)});
+        int leader = pool.getPoolStats().async_leader_tid;
+        assertTrue(leader > 0, "leader TID");
+        assertTrue(leader != gettid());
+
+        # the second request completes the batch; the timeouts are only hang guards
+        Future<hash<auto>> f2 = pool.runAsync({"X": ((2.0,),)});
+        assertEq(leader, pool.getPoolStats().async_leader_tid, "the same leader batches the second request");
+        assertFloat(3.0, f1.get(60s).Y[0], 1e-5);
+        assertFloat(5.0, f2.get(60s).Y[0], 1e-5);
+    }
+
+    onnxSessionPoolAsyncLeaderCancelTest() {
+        if (skipOnnx()) {
+            return;
+        }
+
+        # the leader takes a batch only when it has two requests with the same outputs; the wait deadline never ends a
+        # wait here
+        ML::OnnxSessionPool pool(getTestModelPath(), <ML::OnnxSessionConfig>{"providers": ()},
+            {"max_sessions": 1, "dynamic_batch_size": 2, "dynamic_batch_wait_ms": 3600000});
+
+        # the first request starts the leader, which waits for a second request like it
+        Future<hash<auto>> f1 = pool.runAsync({"X": ((1.0,),)});
+        int leader = pool.getPoolStats().async_leader_tid;
+        assertTrue(leader > 0, "leader TID");
+        # this request asks for other outputs, so it is not batched with the first one and stays queued
+        Future<hash<auto>> f2 = pool.runAsync({"X": ((2.0,),)}, ("Y",));
+        # the request is kept for the leader also if it has not begun running yet
+        assertTrue(cancel_thread(leader, "leader cancelled by the test"));
+        # this request completes the first batch: the leader takes it, finds itself cancelled, and exits
+        Future<hash<auto>> f3 = pool.runAsync({"X": ((3.0,),)});
+
+        # every request is rejected, also the one still queued; the timeout is only a hang guard
+        list<Future<hash<auto>>> futures = (f1, f2, f3);
+        foreach Future<hash<auto>> f in (futures) {
+            assertThrows("THREAD-CANCELLED", "leader cancelled by the test", sub () { f.get(60s); }, NOTHING,
+                sprintf("request %d", $# + 1));
+        }
+        hash<auto> stats = pool.getPoolStats();
+        assertEq(0, stats.async_leader_tid, "the cancelled leader has exited");
+        assertEq(3, stats.async_errors);
+
+        # the next request starts a new leader, which serves it
+        Future<hash<auto>> f4 = pool.runAsync({"X": ((4.0,),)});
+        Future<hash<auto>> f5 = pool.runAsync({"X": ((5.0,),)});
+        assertFloat(9.0, f4.get(60s).Y[0], 1e-5);
+        assertFloat(11.0, f5.get(60s).Y[0], 1e-5);
     }
 
     onnxSessionPoolAsyncDynamicErrorStatsTest() {
@@ -6591,7 +7007,7 @@ public class MlTest inherits QUnit::Test {
 
         list<hash<ML::KMeansResult>> orig = km.predictMatrix(((1.05, 1.05),));
 
-        string tmpfile = "/tmp/test_ml_kmeans.qml";
+        string tmpfile = getModelPath("kmeans");
         on_exit { unlink(tmpfile); }
         ML::ml_save_model(km, tmpfile);
 
@@ -6609,7 +7025,7 @@ public class MlTest inherits QUnit::Test {
 
         list<hash<ML::LinearRegressionResult>> orig = lr.predictMatrix(((2.5,),));
 
-        string tmpfile = "/tmp/test_ml_lr.qml";
+        string tmpfile = getModelPath("lr");
         on_exit { unlink(tmpfile); }
         ML::ml_save_model(lr, tmpfile);
 
@@ -6626,7 +7042,7 @@ public class MlTest inherits QUnit::Test {
 
         list<auto> orig_t = ss.transformMatrix(((20.0, 400.0),));
 
-        string tmpfile = "/tmp/test_ml_stdscaler.qml";
+        string tmpfile = getModelPath("stdscaler");
         on_exit { unlink(tmpfile); }
         ML::ml_save_model(ss, tmpfile);
 
@@ -7175,7 +7591,7 @@ public class MlTest inherits QUnit::Test {
         }
 
         # File round-trip
-        string tmpfile = "/tmp/test_ml_gbt_multi.qml";
+        string tmpfile = getModelPath("gbt_multi");
         on_exit { unlink(tmpfile); }
         ML::ml_save_model(gbt, tmpfile);
         auto loaded = ML::ml_load_model(tmpfile);
@@ -7801,7 +8217,7 @@ public class MlTest inherits QUnit::Test {
 
         list<auto> orig = pf.transformMatrix(((2.0, 3.0, 4.0),));
 
-        string tmpfile = "/tmp/test_ml_pf.qml";
+        string tmpfile = getModelPath("pf");
         on_exit { unlink(tmpfile); }
         ML::ml_save_model(pf, tmpfile);
 
@@ -7960,7 +8376,7 @@ public class MlTest inherits QUnit::Test {
 
         list<auto> orig = skb.transformMatrix(((5.0, 0.5, 50.0),));
 
-        string tmpfile = "/tmp/test_ml_skb.qml";
+        string tmpfile = getModelPath("skb");
         on_exit { unlink(tmpfile); }
         ML::ml_save_model(skb, tmpfile);
 
@@ -8150,7 +8566,7 @@ public class MlTest inherits QUnit::Test {
 
         list<auto> orig = rfe.transformMatrix(((5.0, 0.5, 50.0),));
 
-        string tmpfile = "/tmp/test_ml_rfe.qml";
+        string tmpfile = getModelPath("rfe");
         on_exit { unlink(tmpfile); }
         ML::ml_save_model(rfe, tmpfile);
 
@@ -9416,6 +9832,50 @@ public class MlTest inherits QUnit::Test {
         assertFloat(orig_pred[0].prediction, rest_pred[0].prediction, 1e-10);
     }
 
+    pipelineStepCycleTest() {
+        # a step that refers to its pipeline makes a cycle through the pipeline's reference to the step, which the
+        # garbage collector must see to collect the cycle when both go out of scope
+        PipelineCycleScaler::destroyed = 0;
+        PipelineCycleCounted::destroyed = 0;
+        {
+            PipelineCycleCounted p();
+            PipelineCycleScaler s();
+            s.pipeline = p;
+            p.addStandardScaler("scale", s);
+            p.addLinearRegression("model", new ML::LinearRegression());
+            p.fitMatrixWithTarget(((1.0,), (2.0,), (3.0,)), (3.0, 5.0, 7.0));
+            assertEq(("scale", "model"), p.getStepNames());
+        }
+        assertEq(1, PipelineCycleScaler::destroyed, "step");
+        assertEq(1, PipelineCycleCounted::destroyed, "pipeline");
+
+        # a step that is still referenced elsewhere outlives its pipeline, and is released with its last reference
+        PipelineCycleScaler::destroyed = 0;
+        PipelineCycleCounted::destroyed = 0;
+        PipelineCycleScaler kept();
+        {
+            PipelineCycleCounted p();
+            p.addStandardScaler("scale", kept);
+        }
+        assertEq(1, PipelineCycleCounted::destroyed, "pipeline without a cycle");
+        assertEq(0, PipelineCycleScaler::destroyed, "step referenced elsewhere");
+        kept.fitMatrix(((1.0,), (3.0,)));
+        assertEq(((-1.0,), (1.0,)), kept.transformMatrix(((1.0,), (3.0,))));
+        delete kept;
+        assertEq(1, PipelineCycleScaler::destroyed, "step after its last reference");
+
+        # a pipeline restored from serialized data hands the steps it creates to its object in the same way
+        ML::MLPipeline p();
+        p.addStandardScaler("scale", new ML::StandardScaler());
+        p.addLinearRegression("model", new ML::LinearRegression());
+        p.fitMatrixWithTarget(((1.0,), (2.0,), (3.0,)), (3.0, 5.0, 7.0));
+        ML::MLPipeline restored = cast<ML::MLPipeline>(ML::ml_deserialize(ML::ml_serialize(p)));
+        assertEq(("scale", "model"), restored.getStepNames());
+        assertFloat(9.0, restored.predictMatrix(((4.0,),))[0].prediction, 1e-6);
+        restored.addStandardScaler("extra", new ML::StandardScaler());
+        assertEq(("scale", "model", "extra"), restored.getStepNames());
+    }
+
     pipelineFileRoundTripTest() {
         # ml_save_model / ml_load_model also handle MLPipeline.
         ML::MLPipeline p();
@@ -9440,5 +9900,378 @@ public class MlTest inherits QUnit::Test {
         list<hash<auto>> orig_pred = p.predictMatrix(((3.0,),));
         list<hash<auto>> rest_pred = rp.predictMatrix(((3.0,),));
         assertFloat(orig_pred[0].prediction, rest_pred[0].prediction, 1e-10);
+    }
+
+    nulClassLabelTest() {
+        # class labels that differ only after a NUL character are different classes
+        ML::LabelEncoder le();
+        le.fit(("a\x00b", "a\x00c", "a", "a\x00b"));
+        assertEq(nulHex(("a", "a\x00b", "a\x00c")), nulHex(le.getClasses()));
+        assertEq((1, 2, 0, -1), le.transform(("a\x00b", "a\x00c", "a", "a\x00d")));
+        assertEq(nulHex(("a\x00b", "a\x00c", "a")), nulHex(le.inverseTransform((1, 2, 0))));
+
+        # and they survive serialization
+        ML::LabelEncoder restored = cast<ML::LabelEncoder>(ML::ml_deserialize(ML::ml_serialize(le)));
+        assertEq(nulHex(("a", "a\x00b", "a\x00c")), nulHex(restored.getClasses()));
+        assertEq((2, 1), restored.transform(("a\x00c", "a\x00b")));
+    }
+
+    nulDocumentAndNameTest() {
+        # the text after a NUL character is part of the document; the NUL character separates words
+        ML::TextFeatures tf({"mode": "count"});
+        tf.fit(("alpha\x00beta gamma",));
+        assertEq(("alpha", "beta", "gamma"), tf.getVocabulary());
+        assertEq(((1.0, 1.0, 0.0),), tf.transform(("beta\x00alpha",)));
+
+        # a feature name with a NUL character is not a supported feature
+        assertThrows("ML-DATETIMEFEATURES-ERROR", "unknown feature name", sub () {
+            ML::DateTimeFeatures dtf({"features": ("year\x00x",)});
+        });
+
+        # step names are kept whole, also through serialization
+        ML::MLPipeline p();
+        p.addStandardScaler("scale\x00a", new ML::StandardScaler());
+        p.addLinearRegression("model\x00b", new ML::LinearRegression());
+        assertEq(nulHex(("scale\x00a", "model\x00b")), nulHex(p.getStepNames()));
+        p.fitMatrixWithTarget(((1.0,), (2.0,), (3.0,), (4.0,)), (3.0, 5.0, 7.0, 9.0));
+        ML::MLPipeline rp = cast<ML::MLPipeline>(ML::ml_deserialize(ML::ml_serialize(p)));
+        assertEq(nulHex(("scale\x00a", "model\x00b")), nulHex(rp.getStepNames()));
+    }
+
+    nulTargetFieldTest() {
+        list<hash<auto>> data = (
+            {"x": 1.0, "w": 2.0, "y": 0},
+            {"x": 2.0, "w": 1.0, "y": 0},
+            {"x": 8.0, "w": 9.0, "y": 1},
+            {"x": 9.0, "w": 8.0, "y": 1},
+        );
+        # a target name with a NUL character names no field of the records; it is not cut to "y"
+        hash<string, code> fits = {
+            "ML-DATA-ERROR:LinearRegression": sub (string t) { ML::LinearRegression m(); m.fit(data, t); },
+            "ML-DATA-ERROR:Ridge": sub (string t) { ML::Ridge m(); m.fit(data, t); },
+            "ML-DATA-ERROR:Lasso": sub (string t) { ML::Lasso m(); m.fit(data, t); },
+            "ML-DATA-ERROR:ElasticNet": sub (string t) { ML::ElasticNet m(); m.fit(data, t); },
+            "ML-DATA-ERROR:LogisticRegression": sub (string t) { ML::LogisticRegression m(); m.fit(data, t); },
+            "ML-DATA-ERROR:KNN": sub (string t) { ML::KNN m({"k": 1}); m.fit(data, t); },
+            "ML-DECISION-TREE-ERROR:DecisionTree": sub (string t) {
+                ML::DecisionTree m({"task": "classification"});
+                m.fit(data, t);
+            },
+            "ML-RANDOM-FOREST-ERROR:RandomForest": sub (string t) {
+                ML::RandomForest m({"task": "classification", "n_trees": 2, "seed": 1});
+                m.fit(data, t);
+            },
+            "ML-GBT-ERROR:GradientBoostedTrees": sub (string t) {
+                ML::GradientBoostedTrees m({"task": "regression", "n_estimators": 2});
+                m.fit(data, t);
+            },
+            "ML-NAIVE-BAYES-ERROR:NaiveBayes": sub (string t) { ML::NaiveBayes m(); m.fit(data, t); },
+            "ML-SVM-ERROR:SVM": sub (string t) { ML::SVM m({}); m.fit(data, t); },
+        };
+        foreach hash<auto> i in (fits.pairIterator()) {
+            (*string err, *string cls) = (i.key =~ x/^([^:]+):(.+)$/);
+            assertThrows(err, "target field", i.value, ("y\x00z",), cls + ": NUL target");
+            # a target that is not a field of the records is an error, not a target of zeros
+            assertThrows(err, "target field", i.value, ("missing",), cls + ": missing target");
+            # the whole name trains the model
+            i.value("y");
+        }
+    }
+
+    nulOptionValueTest() {
+        # an option value with a NUL character is not the value before the NUL character
+        list<list<auto>> cases = (
+            ("ML-DBSCAN-ERROR", sub () { ML::DBSCAN m({"epsilon": 1.0, "min_points": 2, "metric": "cosine\x00x"}); }),
+            ("ML-KMEANS-ERROR", sub () { ML::KMeans m({"k": 2, "init": "random\x00x"}); }),
+            ("ML-HOLTWINTERS-ERROR", sub () { ML::HoltWinters m({"period": 4, "seasonal_type": "additive\x00x"}); }),
+            ("ML-SEASONAL-DECOMPOSITION-ERROR", sub () {
+                ML::SeasonalDecomposition m({"period": 4, "type": "additive\x00x"});
+            }),
+            ("ML-IMPUTER-ERROR", sub () { ML::Imputer m({"strategy": "mean\x00x"}); }),
+            ("ML-KNN-ERROR", sub () { ML::KNN m({"k": 1, "metric": "euclidean\x00x"}); }),
+            ("ML-KNN-ERROR", sub () { ML::KNN m({"k": 1, "task": "regression\x00x"}); }),
+            ("ML-KNN-ERROR", sub () { ML::KNN m({"k": 1, "weight_func": "distance\x00x"}); }),
+            ("ML-LOGISTIC-REGRESSION-ERROR", sub () { ML::LogisticRegression m({"penalty": "none\x00x"}); }),
+            ("ML-DECISION-TREE-ERROR", sub () { ML::DecisionTree m({"task": "regression\x00x"}); }),
+            ("ML-GMM-ERROR", sub () { ML::GMM m({"n_components": 2, "covariance_type": "diagonal\x00x"}); }),
+            ("ML-GBT-ERROR", sub () { ML::GradientBoostedTrees m({"task": "regression\x00x"}); }),
+            ("ML-RANDOM-FOREST-ERROR", sub () { ML::RandomForest m({"task": "regression\x00x"}); }),
+            ("ML-SVM-ERROR", sub () { ML::SVM m({"kernel": "rbf\x00x"}); }),
+            ("ML-TEXT-FEATURES-ERROR", sub () { ML::TextFeatures m({"mode": "count\x00x"}); }),
+            ("ML-TEXT-FEATURES-ERROR", sub () { ML::TextFeatures m({"tokenizer_mode": "whitespace\x00x"}); }),
+            ("ML-SELECT-K-BEST-ERROR", sub () {
+                ML::SelectKBest m({"k": 1, "score_func": "f_classif\x00x"});
+                m.fitMatrix(((1.0, 2.0), (2.0, 1.0), (8.0, 9.0), (9.0, 8.0)), (0, 0, 1, 1));
+            }),
+            ("ML-TENSOR-ERROR", sub () {
+                ML::Tensor hidden(data: new buffer<float32>((1.0, 2.0, 3.0, 4.0)), shape: (1, 2, 2));
+                ML::Tensor mask(data: new buffer<int64>((1, 1)), shape: (1, 2));
+                hidden.poolTokenEmbeddings(mask, "mean\x00x");
+            }),
+        );
+        foreach list<auto> c in (cases) {
+            assertThrows(c[0], c[1], NOTHING, sprintf("case %d", $#));
+        }
+
+        # a device kind with a NUL character is not the device kind before the NUL character
+        ML::Tensor host(data: new buffer<float32>((1.0, 2.0)), shape: (2,));
+        assertEq("other", host.mockDevice("cuda\x00x", 0).deviceInfo().kind);
+
+        if (!ML::ml_get_capabilities().has_onnx) {
+            return;
+        }
+        FsUtil::TmpDir tmp("qore-ml-nul-");
+        ciWrite(tmp.path + "/model.onnx", ciSelfContainedModel());
+        hash<ML::OnnxSessionConfig> config = ciConfig();
+        config.content_identity = "required\x00x";
+        assertThrows("ML-ONNX-CONTENT-IDENTITY-ERROR", "content_identity.*NUL character", \ciConstruct(),
+            (tmp.path + "/model.onnx", config));
+        config = ciConfig();
+        config.load_model_format = "ONNX\x00x";
+        assertThrows("ML-ONNX-ERROR", "load_model_format.*NUL character", \ciConstruct(),
+            (tmp.path + "/model.onnx", config));
+        config = ciConfig();
+        config.save_model_format = "ONNX\x00x";
+        assertThrows("ML-ONNX-ERROR", "save_model_format.*NUL character", \ciConstruct(),
+            (tmp.path + "/model.onnx", config));
+    }
+
+    nulRestoredFieldNameTest() {
+        # a model restored with a field name that has a NUL character keeps the name; a hash returned with it as a
+        # key raises HASH-KEY-ERROR, and the name never finds the field named by the part before the NUL character
+        list<hash<auto>> data = ({"fieldnul1": 1.0, "other": 10.0}, {"fieldnul1": 3.0, "other": 30.0});
+        hash<string, object> models = {
+            "StandardScaler": new ML::StandardScaler(),
+            "MinMaxScaler": new ML::MinMaxScaler(),
+            "Imputer": new ML::Imputer(),
+        };
+        foreach hash<auto> i in (models.pairIterator()) {
+            i.value.fit(data);
+            ML::AbstractMLModel restored = ML::ml_deserialize(nulRenameField(ML::ml_serialize(i.value),
+                "fieldnul1", "field\x00ul1"));
+            assertEq(nulHex(("field\x00ul1", "other")), nulHex(restored.getFieldNames()), i.key);
+            auto m = restored;
+            assertThrows("HASH-KEY-ERROR", "NUL character", sub () { m.transform({"field": 2.0, "other": 20.0}); },
+                NOTHING, i.key + " transform");
+            if (i.key != "Imputer") {
+                assertThrows("HASH-KEY-ERROR", "NUL character", sub () {
+                    m.inverseTransform({"field": 0.0, "other": 0.0});
+                }, NOTHING, i.key + " inverseTransform");
+            }
+            # the matrix API does not use the names
+            assertEq(i.value.transformMatrix(((2.0, 20.0),)), m.transformMatrix(((2.0, 20.0),)), i.key);
+        }
+
+        ML::LinearRegression lr();
+        lr.fit(({"fieldnul1": 1.0, "y": 3.0}, {"fieldnul1": 2.0, "y": 5.0}, {"fieldnul1": 3.0, "y": 7.0}), "y");
+        ML::LinearRegression rlr = cast<ML::LinearRegression>(ML::ml_deserialize(nulRenameField(ML::ml_serialize(lr),
+            "fieldnul1", "field\x00ul1")));
+        assertEq(nulHex(("field\x00ul1",)), nulHex(rlr.getFieldNames()));
+        # the value of "field" is not the value of the feature
+        assertTrue(rlr.predict({"field": 100.0}).prediction.nanp());
+    }
+
+    nulOnnxDataTest() {
+        if (!ML::ml_get_capabilities().has_onnx) {
+            testSkip("ONNX Runtime not available");
+            return;
+        }
+        # string tensor elements are passed to and from ONNX Runtime whole
+        ML::OnnxModel model(nulIdentityModel(QoreOnnxExport::ONNX_STRING), ciConfig());
+        list<list<string>> data = (("a\x00b", "plain"), ("\x00", ""));
+        assertEq(nulHex(data), nulHex(model.run({"S": data}).T), "list input");
+        ML::Tensor t(data: data, dtype: "string");
+        assertEq(nulHex(data), nulHex(model.run({"S": t}).T), "Tensor input");
+        ML::OnnxIoBinding b = model.createBinding();
+        b.bindInput("S", data);
+        b.bindOutputs();
+        assertEq(nulHex(data), nulHex(b.run().T), "bound list input");
+        b.clearInputs();
+        b.bindInput("S", t);
+        assertEq(nulHex(data), nulHex(b.run().T), "bound Tensor input");
+
+        # an unsigned 64-bit value given as a string must be all digits
+        ML::OnnxModel umodel(nulIdentityModel(QoreOnnxExport::ONNX_UINT64), ciConfig());
+        assertEq(((12, 13),), umodel.run({"S": (("12", "13"),)}).T);
+        assertThrows("ML-ONNX-INFERENCE-ERROR", "not an unsigned decimal integer", sub () {
+            umodel.run({"S": (("12\x00x", "13"),)});
+        });
+
+        # a value declared in the model's external data must be all digits
+        FsUtil::TmpDir tmp("qore-ml-nul-");
+        ciWrite(tmp.path + "/weights.bin", ciFloatBytes(1.0));
+        hash<auto> ext = QoreOnnxExport::OnnxGraphBuilder::makeTensorExternal("B", (1,), QoreOnnxExport::ONNX_FLOAT,
+            "weights.bin", 0, 4);
+        ext.external_data[2].value = "4\x00junk";
+        ciWrite(tmp.path + "/model.onnx", QoreOnnxExport::OnnxGraphBuilder::serialize(
+            QoreOnnxExport::OnnxGraphBuilder::buildModel("qore-ml-nul-external",
+                (QoreOnnxExport::OnnxGraphBuilder::makeNode("Add", ("X", "B"), ("Y",)),),
+                (QoreOnnxExport::OnnxGraphBuilder::makeInput("X", 1),),
+                (QoreOnnxExport::OnnxGraphBuilder::makeOutput("Y", 1),), (ext,))));
+        assertThrows("ML-ONNX-CONTENT-IDENTITY-ERROR", "invalid length value", \ciConstruct(),
+            (tmp.path + "/model.onnx", ciConfig("required")));
+    }
+
+    nulOnnxIdentifierTest() {
+        # a tensor dtype is looked up by a NUL-terminated name
+        assertThrows("ML-TENSOR-DTYPE-ERROR", "NUL character", sub () {
+            ML::Tensor t(data: (1.0, 2.0), dtype: "float32\x00x");
+        });
+        assertThrows("ML-TENSOR-DTYPE-ERROR", "NUL character", sub () {
+            ML::Tensor t = ML::Tensor::fromColumns((new buffer<float64>((1.0,)),), "float64\x00x");
+        });
+
+        if (skipOnnx()) {
+            return;
+        }
+        # ONNX Runtime names tensors, providers, devices and settings by NUL-terminated strings, so a name with a
+        # NUL character would silently name another one
+        ML::OnnxModel model(getTestModelPath(), ciConfig());
+        assertThrows("ML-ONNX-INFERENCE-ERROR", "NUL character", sub () { model.run({"X": ((1.0,),)}, ("Y\x00z",)); });
+        ML::OnnxIoBinding b = model.createBinding();
+        assertThrows("ML-ONNX-BINDING-ERROR", "NUL character", sub () { b.bindInput("X\x00y", ((1.0,),)); });
+        assertThrows("ML-ONNX-BINDING-ERROR", "NUL character", sub () { b.bindOutput("Y\x00z"); });
+        assertThrows("ML-ONNX-BINDING-ERROR", "NUL character", sub () { b.bindOutputDevice("Y\x00z"); });
+        assertThrows("ML-ONNX-BINDING-ERROR", "NUL character", sub () {
+            b.bindOutputTensor("Y\x00z", new ML::Tensor(data: new buffer<float32>((0.0,)), shape: (1, 1)));
+        });
+        assertThrows("ML-ONNX-DEVICE-BINDING-ERROR", "NUL character", sub () {
+            b.bindOutputDevice("Y", {"kind": "cuda\x00x"});
+        });
+        assertThrows("ML-ONNX-RUN-OPTIONS-ERROR", "NUL character", sub () {
+            ML::OnnxRunOptions o({"run_tag": "tag\x00x"});
+        });
+        assertThrows("ML-ONNX-RUN-OPTIONS-ERROR", "NUL character", sub () {
+            ML::OnnxRunOptions o({"config": {"qore.test": "1\x00x"}});
+        });
+
+        list<hash<ML::OnnxSessionConfig>> configs = (
+            nulConfig({"config": {"qore.test": "1\x00x"}}),
+            nulConfig({"providers": (<ML::OnnxProviderConfig>{"name": "CPU\x00x"},)}),
+            nulConfig({"providers": (<ML::OnnxProviderConfig>{"name": "CPU", "options": {"x": "1\x00x"}},)}),
+            nulConfig({"required_providers": ("CPU\x00x",)}),
+            nulConfig({"device_binding": <ML::OnnxDeviceBindingConfig>{
+                "enabled": True, "default_output_device": "cpu\x00x",
+            }}),
+            nulConfig({"load_model_format": "ORT\x00x"}),
+            nulConfig({"save_model_format": "ORT\x00x"}),
+        );
+        list<string> errs = ("ML-ONNX-RUN-OPTIONS-ERROR", "ML-ONNX-PROVIDER-ERROR", "ML-ONNX-PROVIDER-ERROR",
+            "ML-ONNX-PROVIDER-ERROR", "ML-ONNX-DEVICE-BINDING-ERROR", "ML-ONNX-ERROR", "ML-ONNX-ERROR");
+        foreach hash<ML::OnnxSessionConfig> config in (configs) {
+            assertThrows(errs[$#], "NUL character", \ciConstruct(), (getTestModelPath(), config),
+                sprintf("session config %d", $#));
+        }
+    }
+
+    nulPathTest() {
+        FsUtil::TmpDir tmp("qore-ml-nul-");
+        # a native model file is opened by its NUL-terminated path
+        ML::LinearRegression lr();
+        lr.fitMatrix(((1.0,), (2.0,), (3.0,)), (3.0, 5.0, 7.0));
+        assertThrows("FILE-OPEN2-ERROR", "NUL character", \ML::ml_save_model(), (lr, tmp.path + "/m.qml\x00x"));
+        assertFalse(is_file(tmp.path + "/m.qml"));
+        ML::ml_save_model(lr, tmp.path + "/m.qml");
+        assertThrows("FILE-OPEN2-ERROR", "NUL character", \ML::ml_load_model(), tmp.path + "/m.qml\x00x");
+
+        if (skipOnnx()) {
+            return;
+        }
+        # so are ONNX model files, optimized models and profile files
+        string path = getTestModelPath();
+        assertThrows("ML-ONNX-ERROR", "NUL character", sub () { ML::OnnxModel m(path + "\x00x"); });
+        assertThrows("ML-ONNX-ERROR", "NUL character", \ciConstruct(), (path + "\x00x", ciConfig()));
+        assertThrows("ML-ONNX-ERROR", "NUL character", sub () {
+            ML::OnnxSessionPool p(path + "\x00x", ciConfig());
+        });
+        ML::OnnxModel model(path, ciConfig());
+        assertThrows("ML-ONNX-ERROR", "NUL character", sub () {
+            model.saveOptimized(output_path: tmp.path + "/opt.onnx\x00x");
+        });
+        assertThrows("ML-ONNX-ERROR", "NUL character", sub () {
+            ML::onnx_optimize_model(input_path: path + "\x00x", output_path: tmp.path + "/opt.onnx");
+        });
+        assertThrows("ML-ONNX-ERROR", "NUL character", sub () {
+            ML::onnx_optimize_model(input_path: path, output_path: tmp.path + "/opt.onnx\x00x");
+        });
+        assertThrows("ML-ONNX-ERROR", "NUL character", \ciConstruct(),
+            (path, nulConfig({"optimized_model_filepath": tmp.path + "/opt.onnx\x00x"})));
+        assertThrows("ML-ONNX-ERROR", "NUL character", \ciConstruct(),
+            (path, nulConfig({"profile_file_prefix": tmp.path + "/profile\x00x"})));
+        # nothing was written to the paths before the NUL characters
+        assertEq((), glob(tmp.path + "/opt.onnx*") ?? ());
+        assertEq((), glob(tmp.path + "/profile*") ?? ());
+    }
+
+    #! Returns the session config of the content identity tests with the given settings added
+    private hash<ML::OnnxSessionConfig> nulConfig(hash<auto> extra) {
+        hash<ML::OnnxSessionConfig> rv = ciConfig();
+        foreach hash<auto> i in (extra.pairIterator()) {
+            rv{i.key} = i.value;
+        }
+        return rv;
+    }
+
+    #! Returns the value with each string replaced by the hex of its bytes
+    /** printf("%y") and the assertion failure output cut a string at a NUL character, so strings with NUL characters
+        are compared as hex, which shows them whole
+    */
+    private auto nulHex(auto v) {
+        switch (v.typeCode()) {
+            case NT_STRING:
+                return make_hex_string(binary(v));
+            case NT_LIST:
+                return map nulHex($1), v;
+        }
+        return v;
+    }
+
+    #! Builds an Identity model from input S to output T of the given element type, with 2 values per row
+    private binary nulIdentityModel(int elem_type) {
+        return QoreOnnxExport::OnnxGraphBuilder::serialize(
+            QoreOnnxExport::OnnxGraphBuilder::buildModel("qore-ml-nul-identity",
+                (QoreOnnxExport::OnnxGraphBuilder::makeNode("Identity", ("S",), ("T",)),),
+                (QoreOnnxExport::OnnxGraphBuilder::makeInput("S", 2, elem_type),),
+                (QoreOnnxExport::OnnxGraphBuilder::makeOutput("T", 2, elem_type),), ()));
+    }
+
+    #! Renames a field in a model serialized in the native format, which has the same length after renaming
+    private binary nulRenameField(binary blob, string from, string to) {
+        assertEq(from.size(), to.size());
+        # a name is stored as its length in 4 little-endian bytes followed by its bytes
+        string len_hex = sprintf("%02x000000", from.size());
+        string from_hex = len_hex + make_hex_string(binary(from));
+        string to_hex = len_hex + make_hex_string(binary(to));
+        # the bytes before the CRC, which is the last 4 bytes
+        string hex = make_hex_string(blob);
+        hex = hex.substr(0, hex.size() - 8);
+        int count = 0;
+        int pos = 0;
+        while ((pos = hex.find(from_hex, pos)) >= 0) {
+            # only whole bytes are names
+            if (!(pos % 2)) {
+                hex = hex.substr(0, pos) + to_hex + hex.substr(pos + to_hex.size());
+                ++count;
+            }
+            ++pos;
+        }
+        # the name is in the header and in the model state
+        assertEq(2, count, "field name occurrences");
+        binary body = parse_hex_string(hex);
+        int crc = nulCrc32(body);
+        return body + parse_hex_string(sprintf("%02x%02x%02x%02x", crc & 0xff, (crc >> 8) & 0xff,
+            (crc >> 16) & 0xff, (crc >> 24) & 0xff));
+    }
+
+    #! Returns the CRC-32 (polynomial 0xEDB88320) of the given bytes, as the native model format uses
+    private int nulCrc32(binary data) {
+        int crc = 0xffffffff;
+        for (int i = 0; i < data.size(); ++i) {
+            crc ^= data[i];
+            for (int j = 0; j < 8; ++j) {
+                crc = (crc & 1) ? ((crc >> 1) ^ 0xedb88320) : (crc >> 1);
+            }
+        }
+        return crc ^ 0xffffffff;
     }
 }

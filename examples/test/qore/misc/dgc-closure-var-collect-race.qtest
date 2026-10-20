@@ -1,0 +1,117 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class DgcClosureVarCollectRaceTest
+
+/*  Two dereferences of a closure-bound variable in a recursive set decide to collect it at the same time.
+
+    The variable holds a closure that captures it, and two other closures capture it as well.  Releasing those two
+    closures on two threads releases the variable's two references from outside the set.  The first dereference
+    takes its count and is held before it decides (dbg_hold_closure_var_deref()); the second one's count is the
+    current one, so it collects the variable, and waits for the first dereference to finish before deleting it.
+    The first one's count has been superseded by the second release, and RSet::canDelete() decides with the count
+    as it is now when releases have superseded a dereference's count (a release with no lock decides nothing, so
+    the decision cannot be left to it): the first dereference rescans the variable, whose value the second one has
+    not released yet, and decides to collect it as well.  Both deleted the variable's value, at the same time;
+    only the dereference that claims the collection (RObject::claimCollection()) may.
+
+    The hooks are only in debug builds.
+*/
+
+#! destroyed with the closure that the variable holds
+class DgcClosureVarRaceTracker {
+    public {
+        static Counter destroyed();
+    }
+
+    destructor() {
+        DgcClosureVarRaceTracker::destroyed.inc();
+    }
+}
+
+public class DgcClosureVarCollectRaceTest inherits QUnit::Test {
+    public {
+        #! a wait that runs out means the interleaving was not reached; a failure, never a retry
+        const HoldTimeout = 30s;
+
+        #! the name of the closure-bound variable that the hooks act on
+        const VarName = "dgc_closure_var_race_shared";
+    }
+
+    constructor() : QUnit::Test("dgc-closure-var-collect-race", "1.0") {
+        addTestCase("two dereferences decide to collect a closure-bound variable", \twoDecidersTest());
+        set_return_value(main());
+    }
+
+    #! Makes the cycle through the variable and pushes the two closures that hold it from outside to \a holders
+    /** No local variable of the caller holds the variable or the closures in the cycle.
+    */
+    static makeCycle(Queue<code<auto()>> holders) {
+        DgcClosureVarRaceTracker tracker();
+        code<auto()> dgc_closure_var_race_shared;
+        # the variable holds a closure that captures it: a recursive set of the variable and the closure
+        dgc_closure_var_race_shared = auto sub () { return (dgc_closure_var_race_shared, tracker); };
+        holders.push(auto sub () { return dgc_closure_var_race_shared; });
+        holders.push(auto sub () { return dgc_closure_var_race_shared; });
+    }
+
+    twoDecidersTest() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the hooks that order the dereferences are only in debug builds");
+        }
+
+        int destroyed = DgcClosureVarRaceTracker::destroyed.getCount();
+
+        Queue<code<auto()>> holders();
+        DgcClosureVarCollectRaceTest::makeCycle(holders);
+
+        Counter held(1);
+        Counter release(1);
+        Counter waiting(1);
+        call_function("dbg_count_closure_var_collections", VarName);
+        call_function("dbg_hold_closure_var_deref", VarName, held, release);
+
+        Counter done(2);
+        # the first dereference: releasing its closure releases one reference of the variable from outside the set;
+        # the hook holds it after it has taken its count, before it decides
+        background sub () {
+            on_exit done.dec();
+            {
+                code<auto()> c = holders.get();
+                remove c;
+            }
+        }();
+
+        if (held.waitForZero(HoldTimeout)) {
+            release.dec();
+            done.waitForZero();
+            fail("the first dereference was not held");
+        }
+
+        # the second dereference releases the last reference from outside the set: its count is the current one, so
+        # it collects the variable, and waits for the first dereference before deleting it
+        call_function("dbg_deref_wait_notify", VarName, waiting);
+        background sub () {
+            on_exit done.dec();
+            {
+                code<auto()> c = holders.get();
+                remove c;
+            }
+        }();
+
+        int rc = waiting.waitForZero(HoldTimeout);
+        release.dec();
+        assertEq(0, rc, "the second dereference collects the variable and waits for the first one");
+
+        done.waitForZero();
+
+        assertEq(1, call_function("dbg_get_closure_var_collections"), "one dereference collects the variable");
+        assertEq(1, DgcClosureVarRaceTracker::destroyed.getCount() - destroyed,
+            "the closure that the variable held is released once");
+    }
+}

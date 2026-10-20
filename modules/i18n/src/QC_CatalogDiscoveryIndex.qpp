@@ -93,8 +93,9 @@ CatalogDiscoveryIndex::copy() {
 
     @return existing native catalog JSON file paths in load order
 
-    @throw I18N-CATALOG-ERROR if \a domain or \a opts is invalid, or a catalog fragment directory cannot be read
-    @throw I18N-LOCALE-ERROR if \a locale is invalid
+    @throw I18N-CATALOG-ERROR if \a domain or \a opts is invalid (including a NUL character in the domain or a path),
+    or a catalog fragment directory cannot be read
+    @throw I18N-LOCALE-ERROR if \a locale is invalid (including a NUL character)
 
     @par Example
     @code{.py}
@@ -117,7 +118,8 @@ list<string> CatalogDiscoveryIndex::discover(string domain, string locale, *hash
     @return distinct catalog locale names, with \c root first when present and all other names in lexical order
 
     @throw FILESYSTEM-ACCESS-DENIED if a sandbox does not permit listing a required catalog directory
-    @throw I18N-CATALOG-ERROR if \a domain or \a opts is invalid, or a catalog directory cannot be read
+    @throw I18N-CATALOG-ERROR if \a domain or \a opts is invalid (including a NUL character in the domain or a path),
+    or a catalog directory cannot be read
 
     @par Example
     @code{.py}

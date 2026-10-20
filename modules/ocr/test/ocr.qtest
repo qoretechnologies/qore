@@ -6,11 +6,30 @@
 */
 
 %modern
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires ocr
 %requires Util
+%requires FsUtil
 %requires QUnit
 
 %exec-class OcrModuleTest
+
+#! the number of components in Tesseract trained data (TESSDATA_NUM_ENTRIES)
+const TessdataNumComponents = 24;
+
+#! a program with a filesystem sandbox, and the directories inside and outside its sandbox root
+hashdecl OcrSandboxFixture {
+    #! the directory holding the other directories; removed by the test
+    string root;
+    #! the sandbox root
+    string allowed;
+    #! a directory outside the sandbox root
+    string outside;
+    #! the sandboxed program
+    Program program;
+    #! the program's sandbox manager
+    SandboxManager sm;
+}
 
 public class OcrModuleTest inherits QUnit::Test {
     private {
@@ -23,6 +42,13 @@ public class OcrModuleTest inherits QUnit::Test {
         addTestCase("ocr_has_tesseract", \hasTesseractTest());
         addTestCase("TesseractEngine - constructor", \constructorTest());
         addTestCase("TesseractEngine - constructor bad language", \constructorBadLangTest());
+        addTestCase("TesseractEngine - language codes cannot name paths", \languagePathTest());
+        addTestCase("TesseractEngine - an explicit datapath respects the sandbox", \datapathSandboxTest());
+        addTestCase("TesseractEngine - sandboxed trained data cannot set file parameters",
+            \trainedDataConfigSandboxTest());
+        addTestCase("TesseractEngine - sandboxed trained data is loaded through the sandbox",
+            \trainedDataModelSandboxTest());
+        addTestCase("TesseractEngine - an explicit datapath needs filesystem rights", \noFilesystemTest());
         addTestCase("TesseractEngine - getCapabilities", \capabilitiesTest());
 
         if (!is_file(test_image_path)) {
@@ -51,6 +77,319 @@ public class OcrModuleTest inherits QUnit::Test {
                 new Ocr::TesseractEngine("", "nonexistent_language_xyz");
             }
         );
+    }
+
+    languagePathTest() {
+        # a language code names <code>.traineddata in the data directory, so a path character is refused before any
+        # file is opened
+        foreach string lang in (("../eng", "eng+../../tmp/x", "eng/x", "eng+", "+eng", "eng++fra", "eng\x00x",
+                "eng fra")) {
+            assertThrows("OCR-INIT-ERROR", "invalid language specification", sub () {
+                new Ocr::TesseractEngine("", lang);
+            }, NOTHING, sprintf("language %y is refused", lang));
+        }
+        assertThrows("OCR-INIT-ERROR", "NUL character", sub () {
+            new Ocr::TesseractEngine("/usr/share\x00/x", "eng");
+        }, NOTHING, "a datapath with a NUL character is refused");
+    }
+
+    #! Makes a program whose filesystem sandbox is rooted at a new directory, and a directory outside it
+    private hash<OcrSandboxFixture> makeSandboxFixture() {
+        string root = make_tmp_dir("qore-ocr-sandbox-");
+        string allowed = root + "/allowed";
+        string outside = root + "/outside";
+        mkdir(allowed);
+        mkdir(outside);
+
+        Program program(PO_NO_CHILD_PO_RESTRICTIONS);
+        program.parse("
+%modern
+%requires ocr
+
+*hash<ExceptionInfo> sub make_engine(string datapath, string lang) {
+    try {
+        new Ocr::TesseractEngine(datapath, lang);
+    } catch (hash<ExceptionInfo> ex) {
+        return ex;
+    }
+}
+
+string sub extract_text(string datapath, string lang, binary img) {
+    Ocr::TesseractEngine engine(datapath, lang);
+    return engine.extractText(img);
+}
+        ", "ocr_sandbox");
+
+        SandboxManager sm();
+        sm.setFilesystemSandboxRoot(allowed);
+        program.setSandboxManager(sm);
+        return <OcrSandboxFixture>{
+            "root": root,
+            "allowed": allowed,
+            "outside": outside,
+            "program": program,
+            "sm": sm,
+        };
+    }
+
+    #! Writes a file
+    private static writeFile(string path, data content) {
+        File f();
+        f.open2(path, O_CREAT | O_TRUNC | O_WRONLY);
+        f.write(content);
+        f.close();
+    }
+
+    #! Builds trained data from its components, keyed by component index
+    /** The format is Tesseract's: a 32-bit component count, a table of 64-bit offsets (-1 for a missing component)
+        and the components in order.
+    */
+    private static binary makeTrainedData(hash<string, binary> components) {
+        BinaryOutputStream bos();
+        StreamWriter w(bos);
+        w.writei4LSB(TessdataNumComponents);
+        int offset = 4 + 8 * TessdataNumComponents;
+        for (int i = 0; i < TessdataNumComponents; ++i) {
+            *binary component = components{string(i)};
+            if (component) {
+                w.writei8LSB(offset);
+                offset += component.size();
+            } else {
+                w.writei8LSB(-1);
+            }
+        }
+        for (int i = 0; i < TessdataNumComponents; ++i) {
+            *binary component = components{string(i)};
+            if (component) {
+                w.write(component);
+            }
+        }
+        return bos.getData();
+    }
+
+    #! Splits trained data into its components, keyed by component index
+    private hash<string, binary> readTrainedData(binary data) {
+        BinaryInputStream bis(data);
+        StreamReader r(bis);
+        int n = r.readi4LSB();
+        list<int> offsets = map r.readi8LSB(), xrange(n);
+        hash<string, binary> rv();
+        for (int i = 0; i < n; ++i) {
+            if (offsets[i] < 0) {
+                continue;
+            }
+            int end = data.size();
+            for (int j = i + 1; j < n; ++j) {
+                if (offsets[j] != -1) {
+                    end = offsets[j];
+                    break;
+                }
+            }
+            # the components are stored in order, so they are read one after the other
+            binary component = r.readBinary(end - offsets[i]);
+            assertEq(end - offsets[i], component.size(), "the trained data component is read whole");
+            rv{string(i)} = component;
+        }
+        return rv;
+    }
+
+    #! Returns the path of a trained data file in the system data directory, if there is one
+    private *string findSystemTrainedData(string lang) {
+        list<string> dirs = ();
+        if (*string prefix = ENV.TESSDATA_PREFIX) {
+            dirs += (prefix, prefix + "/tessdata");
+        }
+        dirs += ("/usr/share/tessdata", "/usr/share/tesseract-ocr/5/tessdata", "/usr/share/tesseract-ocr/4.00/tessdata",
+            "/usr/local/share/tessdata", "/opt/homebrew/share/tessdata");
+        foreach string dir in (dirs) {
+            string path = dir + "/" + lang + ".traineddata";
+            if (is_file(path)) {
+                return path;
+            }
+        }
+    }
+
+    datapathSandboxTest() {
+        hash<OcrSandboxFixture> fx = makeSandboxFixture();
+        on_exit remove_tree(fx.root);
+        # trained data that cannot be loaded: the test is about which files may be read, not about OCR
+        foreach string dir in ((fx.allowed, fx.outside)) {
+            writeFile(dir + "/eng.traineddata", "not trained data");
+        }
+
+        # a data directory outside the sandbox root is refused before Tesseract loads anything from it
+        *hash<ExceptionInfo> ex = fx.program.callFunction("make_engine", fx.outside, "eng");
+        assertEq("FILESYSTEM-ACCESS-DENIED", ex.err, "a data directory outside the sandbox root is denied");
+
+        # the trained data of each requested language is checked; Tesseract loads the languages in order
+        fx.sm.addFilesystemDeniedPath(fx.allowed + "/deu.traineddata");
+        ex = fx.program.callFunction("make_engine", fx.allowed, "deu+eng");
+        assertEq("FILESYSTEM-ACCESS-DENIED", ex.err, "a denied trained data file of a requested language is denied");
+
+        # trained data inside the sandbox root may be read; it is then refused as invalid
+        ex = fx.program.callFunction("make_engine", fx.allowed, "eng");
+        assertEq("OCR-INIT-ERROR", ex.err, "trained data inside the sandbox root may be read");
+        assertRegex("not valid trained data", ex.desc, "invalid trained data is refused");
+    }
+
+    #! the language configuration of trained data can only set parameters that name no file and produce no output
+    trainedDataConfigSandboxTest() {
+        hash<OcrSandboxFixture> fx = makeSandboxFixture();
+        on_exit remove_tree(fx.root);
+        string written = fx.outside + "/params.txt";
+        string eng = fx.allowed + "/eng.traineddata";
+
+        # trained data without a model: Tesseract applies its configuration, and writes a parameter file, before it
+        # loads a model
+        writeFile(eng, makeTrainedData({"0": binary("tessedit_write_params_to_file " + written + "\n")}));
+        *hash<ExceptionInfo> ex = fx.program.callFunction("make_engine", fx.allowed, "eng");
+        assertFalse(is_file(written), "trained data cannot make Tesseract write a file outside the sandbox root");
+        assertEq("OCR-INIT-ERROR", ex.err, "trained data that sets a file parameter is refused");
+        assertRegex("'tessedit_write_params_to_file'", ex.desc, "the error names the refused parameter");
+
+        foreach string param in (("user_words_file", "user_patterns_file", "debug_file")) {
+            writeFile(eng, makeTrainedData({"0": binary(param + " " + fx.outside + "/words.txt\n")}));
+            ex = fx.program.callFunction("make_engine", fx.allowed, "eng");
+            assertEq("OCR-INIT-ERROR", ex.err, sprintf("trained data that sets %y is refused", param));
+            assertRegex("'" + param + "'", ex.desc, sprintf("the error names %y", param));
+        }
+
+        # the configuration is the data right after the offset table, whatever offset the table gives it
+        {
+            binary cfg = binary("tessedit_write_params_to_file " + written + "\n");
+            BinaryOutputStream bos();
+            StreamWriter w(bos);
+            w.writei4LSB(TessdataNumComponents);
+            w.writei8LSB(1000);
+            w.writei8LSB(1000 + cfg.size());
+            for (int i = 2; i < TessdataNumComponents; ++i) {
+                w.writei8LSB(-1);
+            }
+            w.write(cfg);
+            # the second component is 16 bytes long
+            w.write(binary(strmul("x", 1000 - (4 + 8 * TessdataNumComponents) + 16)));
+            writeFile(eng, bos.getData());
+        }
+        ex = fx.program.callFunction("make_engine", fx.allowed, "eng");
+        assertFalse(is_file(written), "a configuration with a misleading offset cannot write a file");
+        assertEq("OCR-INIT-ERROR", ex.err, "a configuration with a misleading offset is checked");
+        assertRegex("'tessedit_write_params_to_file'", ex.desc, "the configuration at the real position is checked");
+
+        # Tesseract stops reading a line at a NUL character, so the rest of the line is not seen by a check
+        {
+            BinaryOutputStream bos();
+            StreamWriter w(bos);
+            w.write("preserve_interword_spaces 1");
+            w.writei1(0);
+            w.write("\ntessedit_write_params_to_file " + written + "\n");
+            writeFile(eng, makeTrainedData({"0": bos.getData()}));
+        }
+        ex = fx.program.callFunction("make_engine", fx.allowed, "eng");
+        assertFalse(is_file(written), "a configuration with a NUL character cannot write a file");
+        assertEq("OCR-INIT-ERROR", ex.err, "a configuration with a NUL character is refused");
+        assertRegex("NUL", ex.desc, "the error names the NUL character");
+
+        # Tesseract reads a long line in pieces and reads each piece as a line, so the end of a long comment would be
+        # read as a parameter
+        writeFile(eng, makeTrainedData({"0": binary("#" + strmul("x", 4094) + "tessedit_write_params_to_file "
+            + written + "\n")}));
+        ex = fx.program.callFunction("make_engine", fx.allowed, "eng");
+        assertFalse(is_file(written), "a configuration with a long line cannot write a file");
+        assertEq("OCR-INIT-ERROR", ex.err, "a configuration with a long line is refused");
+        assertRegex("longer than", ex.desc, "the error names the long line");
+
+        # sub-languages are named like requested languages
+        writeFile(eng, makeTrainedData({"0": binary("tessedit_load_sublangs ../outside/evil\n")}));
+        ex = fx.program.callFunction("make_engine", fx.allowed, "eng");
+        assertEq("OCR-INIT-ERROR", ex.err, "a sub-language path that leaves the data directory is refused");
+        assertRegex("sub-languages", ex.desc, "the error names the sub-languages");
+
+        # the parameters of the official trained data pass the check; Tesseract then fails without a model
+        writeFile(eng, makeTrainedData({"0": binary("# official parameters\npreserve_interword_spaces 1\n"
+            "tessedit_ocr_engine_mode\t1\ntessedit_load_sublangs eng_sub+~osd\n")}));
+        ex = fx.program.callFunction("make_engine", fx.allowed, "eng");
+        assertEq("OCR-INIT-ERROR", ex.err, "trained data without a model cannot be loaded");
+        assertRegex("failed to initialize Tesseract", ex.desc, "a configuration of allowed parameters is accepted");
+    }
+
+    #! with a sandbox, Tesseract loads each trained data file through a check, including sub-languages
+    trainedDataModelSandboxTest() {
+        *string system_eng = findSystemTrainedData("eng");
+        if (!system_eng) {
+            testSkip("no eng.traineddata in the system data directory to build trained data with a model from");
+        }
+        hash<string, binary> eng = readTrainedData(ReadOnlyFile::readBinaryFile(system_eng));
+        hash<OcrSandboxFixture> fx = makeSandboxFixture();
+        on_exit remove_tree(fx.root);
+        binary img = ReadOnlyFile::readBinaryFile(test_image_path);
+        string written = fx.outside + "/params.txt";
+
+        # trained data outside the sandbox root that writes a file when it is loaded
+        hash<string, binary> evil = eng;
+        evil{"0"} = binary("tessedit_write_params_to_file " + written + "\n");
+        writeFile(fx.outside + "/evil.traineddata", makeTrainedData(evil));
+
+        # trained data with a sub-language inside the sandbox root, configured like the official trained data
+        hash<string, binary> main = eng;
+        main{"0"} = binary("preserve_interword_spaces 1\ntessedit_load_sublangs sub\n");
+        writeFile(fx.allowed + "/eng.traineddata", makeTrainedData(main));
+        writeFile(fx.allowed + "/sub.traineddata", makeTrainedData(eng));
+        assertRegex("Qore", fx.program.callFunction("extract_text", fx.allowed, "eng", img),
+            "a sandboxed program can use trained data and a sub-language inside the sandbox root");
+
+        # a sub-language that is a link to trained data outside the sandbox root
+        unlink(fx.allowed + "/sub.traineddata");
+        symlink(fx.outside + "/evil.traineddata", fx.allowed + "/sub.traineddata");
+        *hash<ExceptionInfo> ex = fx.program.callFunction("make_engine", fx.allowed, "eng");
+        assertFalse(is_file(written), "a sub-language outside the sandbox root is not loaded");
+        assertEq("FILESYSTEM-ACCESS-DENIED", ex.err, "a sub-language outside the sandbox root is denied");
+
+        # a requested language that is a link to trained data outside the sandbox root
+        symlink(fx.outside + "/evil.traineddata", fx.allowed + "/evl.traineddata");
+        ex = fx.program.callFunction("make_engine", fx.allowed, "evl");
+        assertFalse(is_file(written), "a requested language outside the sandbox root is not loaded");
+        assertEq("FILESYSTEM-ACCESS-DENIED", ex.err, "a requested language outside the sandbox root is denied");
+    }
+
+    #! the system data directory needs no filesystem rights; an explicit data directory does
+    noFilesystemTest() {
+        bool have_system_data;
+        try {
+            new Ocr::TesseractEngine("", "eng");
+            have_system_data = True;
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("OCR-INIT-ERROR", ex.err, "only missing system data prevents an engine with the system data");
+        }
+
+        Program p(PO_NO_CHILD_PO_RESTRICTIONS | PO_NO_FILESYSTEM);
+        p.parse("
+%modern
+%requires ocr
+
+*hash<ExceptionInfo> sub make_engine(string datapath) {
+    try {
+        new Ocr::TesseractEngine(datapath, \"eng\");
+    } catch (hash<ExceptionInfo> ex) {
+        return ex;
+    }
+}
+
+string sub extract_text(binary img) {
+    Ocr::TesseractEngine engine();
+    return engine.extractText(img);
+}
+        ", "ocr_no_filesystem");
+
+        *hash<ExceptionInfo> ex = p.callFunction("make_engine", tmp_location());
+        assertEq("ILLEGAL-FILESYSTEM-ACCESS", ex.err, "an explicit data directory needs filesystem rights");
+
+        ex = p.callFunction("make_engine", "");
+        assertNeq("ILLEGAL-FILESYSTEM-ACCESS", ex.err, "the system data directory needs no filesystem rights");
+        if (have_system_data) {
+            assertNothing(ex, "an engine with the system data is made without filesystem rights");
+            assertRegex("Qore", p.callFunction("extract_text", ReadOnlyFile::readBinaryFile(test_image_path)),
+                "text is extracted without filesystem rights");
+        }
     }
 
     capabilitiesTest() {

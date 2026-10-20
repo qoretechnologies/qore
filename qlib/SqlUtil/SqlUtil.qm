@@ -23,7 +23,7 @@
 */
 
 # minimum required Qore version
-%requires qore >= 1.0
+%requires qore >= 2.0
 
 # requires the Util module
 %requires Util >= 1.0
@@ -125,6 +125,88 @@ module SqlUtil {
       "AbstractDatabase::getCurrentSchemaPhysicalSize()", which measures the physical size of the schema that
       unqualified names resolve to on the connection, without the cost of measuring the whole database, on
       PostgreSQL, Oracle, MySQL/MariaDB and SQL Server.
+    - fixed @ref SqlUtil::AbstractTable::setupTable() "AbstractTable::setupTable()" requesting the DDL that adds a
+      foreign constraint to an existing table while constructing an in-memory table description, as it did for a
+      primary key before 3.2.0; a description of a table with foreign constraints can now be set up on a database
+      that cannot add a foreign constraint with \c ALTER \c TABLE, such as SQLite
+    - fixed @ref SqlUtil::AbstractTable::setupTable() "AbstractTable::setupTable()" requesting the DDL that adds a
+      unique constraint to an existing table while constructing an in-memory table description, also for the unique
+      constraint of a unique index on a database whose unique indexes are unique constraints, as for primary keys and
+      foreign constraints; a description of a table with a unique constraint or a unique index can now be set up on
+      a database that cannot add a unique constraint with \c ALTER \c TABLE, such as SQLite
+    - fixed table alignment dropping an index twice when it drops a unique constraint that the database drops with
+      the index of the same name, as when a unique index on SQLite is made not unique: the template's index is now
+      created after the constraint is dropped
+    - fixed @ref SqlUtil::AbstractTable::getCreateTableSql() "AbstractTable::getCreateTableSql()" refusing its
+      \c omit option with \c OPTION-ERROR: the options were validated after the omission options had been converted
+      to a hash, which is not a valid value of the option
+    - fixed @ref SqlUtil::AbstractTable::getCreateSql() "AbstractTable::getCreateSql()",
+      @ref SqlUtil::AbstractTable::getCreateSqlString() "AbstractTable::getCreateSqlString()" and
+      @ref SqlUtil::AbstractTable::create() "AbstractTable::create()" raising \c RUNTIME-TYPE-ERROR for options given
+      in a hash literal, such as <tt>{"omit": "indexes"}</tt>: a hash literal is typed by its values, and the methods
+      set values of other types in the options they were given; they now set them in a copy that takes any value
+    - fixed option validation discarding the conversions it made, so an option kept the type it was given in: each
+      option is now converted to the type of its option, as a string \c "10" for the \c limit
+      @ref select_option_hash "select option" is the integer \c 10, and a string given for an option that takes a
+      list is a list of one string; a column number given as a string in \c orderby or \c groupby, such as
+      \c "2", was refused with \c OPTION-ERROR, and is now the column number, checked to be positive as a number is
+    - fixed @ref SqlUtil::AbstractDatabase::getAlignSql() "AbstractDatabase::getAlignSql()" raising
+      \c RUNTIME-OVERLOAD-ERROR for a @ref schema_desc_hash "schema description hash" without tables, such as one
+      of sequences or functions only; every section of the description is optional
+    - fixed @ref SqlUtil::AbstractDatabase::getAlignSql() "AbstractDatabase::getAlignSql()" raising
+      \c SCHEMA-DESCRIPTION-ERROR for any \c table_map, so that no table was renamed by it
+    - fixed schema alignment (@ref SqlUtil::AbstractDatabase::getAlignSql() "AbstractDatabase::getAlignSql()") of a
+      unique key that a foreign constraint references: a key or index that a table's alignment dropped or recreated,
+      as when its columns change, was dropped while the foreign constraint still referenced it, which PostgreSQL and
+      MySQL refuse, or before a foreign constraint of a table aligned first was added referencing its new columns;
+      the foreign constraints of the tables of the schema are now read from the database before any table is
+      aligned, a foreign constraint that references a key or index that is dropped or recreated is dropped before
+      it, and a foreign constraint is added after the table that it references is aligned, whatever the order of the
+      tables (@ref SqlUtil::SchemaForeignConstraintAlignment "SchemaForeignConstraintAlignment"); a template whose
+      foreign constraint references columns that are a unique key of the other table in the database, but not in its
+      template, is refused with \c FOREIGN-CONSTRAINT-ERROR before any SQL, on every database
+    - fixed table alignment dropping a primary key that has the template's columns under another name and adding it
+      again, which on a database whose drop of a key cascades, such as PostgreSQL, also dropped the foreign
+      constraints that reference it, and renaming a primary key that has other columns instead of dropping it: a
+      key with other columns is dropped and added, and a key with the template's columns under another name is
+      renamed, or kept as it is on a database whose primary keys have no name
+      (@ref SqlUtil::AbstractPrimaryKey::supportsName() "AbstractPrimaryKey::supportsName()")
+    - API change: @ref SqlUtil::AbstractIndex::getRenameSql() "AbstractIndex::getRenameSql()" returns a list of
+      SQL strings instead of one string, and @ref SqlUtil::AbstractTable::renameIndex() "AbstractTable::renameIndex()"
+      returns the SQL in a list in its optional reference argument; the SQLite and Firebird drivers gave the SQL that
+      drops an index and creates it under the new name in one string, and as the \c sqlite3 driver runs one statement
+      at a time, renaming an index on SQLite, as table alignment does for an index that has another name than the
+      template's, dropped the index and did not create it again
+    - an index is renamed, never dropped and created again under another name: an index that the database cannot
+      rename (@ref SqlUtil::AbstractIndex::supportsRename() "AbstractIndex::supportsRename()"), as on SQLite and
+      Firebird, with the definition of a template index under another name is taken for the template's index by
+      table alignment, and by @ref SqlUtil::AbstractTable::renameIndex() "AbstractTable::renameIndex()", and kept
+      under its name in the database without being rebuilt; the table's description keeps that name
+      (@ref SqlUtil::AbstractIndex::getDbName() "AbstractIndex::getDbName()"), by which the index is dropped, as when
+      it is recreated with other columns, so the next alignment needs no SQL
+    - table alignment drops an index that the template does not have again, as it did before SqlUtil 1.7.2: an
+      index that was added to the table by hand, or that is left from an older version of the schema, is dropped
+      when the table is aligned; since SqlUtil 1.7.2, such an index was kept unless it was the index of a
+      constraint.  An index with the definition of an index of the template under another name is renamed, as
+      before, and the index of a primary key, unique constraint or foreign constraint, such as the index that MySQL
+      creates for a foreign constraint, is kept or dropped with its constraint; an index that must stay is added to
+      the template, or the alignment leaves out the indexes with the \c omit option (see
+      @ref SqlUtil::AbstractTable::AlignTableOptions "AlignTableOptions")
+    - fixed table alignment dropping and creating a unique index twice when its columns change on a database whose
+      unique indexes are unique constraints, such as SQLite: the unique constraint of a unique index is added,
+      recreated and dropped with the index only
+    - a constraint is renamed, never dropped and added again under another name: table alignment and
+      @ref SqlUtil::AbstractTable::renameConstraint() "AbstractTable::renameConstraint()" take a constraint that the
+      database cannot rename (@ref SqlUtil::AbstractConstraint::supportsRename() "AbstractConstraint::supportsRename()"),
+      such as a foreign constraint on MySQL or a unique or foreign constraint on Firebird or SQLite, with the
+      definition of the template's constraint under another name, for the template's constraint, and keep it under
+      its name in the database, so that the next alignment needs no SQL either; a database that can rename a
+      constraint renames it: SQL Server and PostgreSQL rename foreign and check constraints, and MySQL renames a
+      unique constraint and an index, which they dropped and added again
+    - added a driver hook that @ref SqlUtil::AbstractTable::getAlignSql() "AbstractTable::getAlignSql()" calls
+      before it aligns the columns, so a driver refuses the changes that its database cannot make with any version
+      before a column change that only an older version of the database cannot make, and an alignment reports the
+      same refusal with every version of the database, as on SQLite
 
     @subsection sqlutilv3_10_0 SqlUtil v3.10.0
     - Added an offline table rewrite transaction that limits only lock waits, for single schema statements
@@ -8993,6 +9075,9 @@ AbstractIndex ix = indexes.pk_jobs;
 
             #! Any foreign constraint that this index supports
             *AbstractForeignConstraint foreign_constraint;
+
+            #! the name of the index in the database, when it is not the index's name (see @ref getDbName())
+            *string db_name;
         }
 
         #! creates the object from the name, a unique flag, and a hash of column information
@@ -9007,6 +9092,51 @@ AbstractIndex ix = indexes.pk_jobs;
             return name;
         }
 
+        #! returns the name of the index in the database
+        /** This is the index's name, unless the database cannot rename the index (@ref supportsRename()) and the
+            index was renamed in the description of its table only (@ref rename()), as table alignment does for an
+            index with the definition of a template index under another name: the SQL that drops the index names it
+            by this name
+
+            @return the name of the index in the database
+
+            @since SqlUtil 3.11.0
+        */
+        string getDbName() {
+            return db_name ?? name;
+        }
+
+        #! renames the index in the description of its table
+        /** An index that the database cannot rename (@ref supportsRename()) keeps its name in the database, which
+            @ref getDbName() returns, so that the index is dropped by that name
+
+            @param new_name the new name of the index
+
+            @since SqlUtil 3.11.0
+        */
+        rename(string new_name) {
+            if (!supportsRename() && !db_name) {
+                db_name = name;
+            }
+            name = new_name;
+        }
+
+        #! returns @ref True "True" if the database can rename the index
+        /** An index that the database cannot rename is never dropped and created again under another name: table
+            alignment takes an index with the definition of a template index under another name for the template's
+            index, and keeps it under its name in the database (@ref getDbName()), and
+            @ref SqlUtil::AbstractTable::renameIndex() "AbstractTable::renameIndex()" renames it in the description
+            of the table only
+
+            @return @ref True "True" if the database can rename the index (the default), @ref False "False" if not,
+            in which case @ref getRenameSql() returns no SQL
+
+            @since SqlUtil 3.11.0
+        */
+        bool supportsRename() {
+            return True;
+        }
+
         #! returns @ref True "True" if the constraint references the named column
         bool hasColumn(string cname) {
             return columns.hasKey(cname);
@@ -9015,9 +9145,9 @@ AbstractIndex ix = indexes.pk_jobs;
         #! returns a string that can be used to create the index in the database
         abstract string getCreateSql(string table_name, *hash<auto> opt);
 
-        #! returns a string that can be used to drop the index from the database
+        #! returns a string that can be used to drop the index from the database, by its name in the database
         string getDropSql(string table_name) {
-            return sprintf("drop index %s", name);
+            return sprintf("drop index %s", getDbName());
         }
 
         #! returns @ref True "True" if the argument is equal to the current index, @ref False "False" if not
@@ -9045,8 +9175,18 @@ AbstractIndex ix = indexes.pk_jobs;
         #! returns @ref True "True" if the argument is equal to the current index, @ref False "False" if not
         abstract bool equalImpl(AbstractIndex ix);
 
-        #! returns a string that can be used to rename the index in the database
-        abstract string getRenameSql(string table_name, string new_name);
+        #! returns a list of SQL strings that rename the index in the database
+        /** Each element of the list is one statement; a database that cannot rename an index
+            (@ref supportsRename()) returns no SQL
+
+            @param table_name the name of the table
+            @param new_name the new name of the index
+
+            @return a list of SQL strings that rename the index in the database
+
+            @since SqlUtil 3.11.0 this method returns a list of SQL strings instead of one string
+        */
+        abstract softlist<string> getRenameSql(string table_name, string new_name);
 
         #! compares two optional hashes for equality without regard to key order
         /** Qore's \c == operator on hashes is order-sensitive, but index storage options and
@@ -9120,7 +9260,17 @@ AbstractIndex ix = indexes.pk_jobs;
         }
 
         #! returns a list of strings to drop and recreate the current index; if there are dependent constraints, the list contains commands to disable the constraints before dropping the index and also contains commands to re-enable the contraints after re-creating the index
-        list<auto> getRecreateSql(AbstractDatasource ds, string table_name, *hash<auto> opt) {
+        /** @param ds the datasource of the tables of the dependent constraints
+            @param table_name the name of the table
+            @param opt options for the SQL that creates the index
+            @param current the index in the database that is recreated, if it has another name in the database
+            (@ref getDbName()); it is dropped by that name
+
+            @return the SQL that recreates the index
+
+            @since SqlUtil 3.11.0 the \a current parameter
+        */
+        list<auto> getRecreateSql(AbstractDatasource ds, string table_name, *hash<auto> opt, *AbstractIndex current) {
             list l = ();
             list enl;
             # get drop SQL and disable any dependent constraints plus a list of strings to re-enable the constraints
@@ -9131,7 +9281,7 @@ AbstractIndex ix = indexes.pk_jobs;
             }
 
             ## drop current index
-            l += getDropSql(table_name);
+            l += current ? current.getDropSql(table_name) : getDropSql(table_name);
 
             # add new index to table
             l += getCreateSql(table_name, opt);
@@ -9229,6 +9379,23 @@ AbstractConstraint ix = constraints.uk_jobs;
 
         #! returns a list of SQL strings that can be used to rename the constraint in the database
         abstract list<auto> getRenameSql(string table_name, string new_name);
+
+        #! returns @ref True "True" if the database can rename the constraint
+        /** A constraint that the database cannot rename is never dropped and added again under another name: table
+            alignment takes a constraint with the definition of a constraint of its template under another name for
+            the template's constraint, and keeps it under its name in the database, as it does for a primary key
+            that has no name (@ref AbstractPrimaryKey::supportsName()), and
+            @ref SqlUtil::AbstractTable::renameConstraint() "AbstractTable::renameConstraint()" renames it only in the
+            table's description
+
+            @return @ref True "True" if the database can rename the constraint (the default), @ref False "False" if
+            not, in which case @ref getRenameSql() returns no SQL
+
+            @since SqlUtil 3.11.0
+        */
+        bool supportsRename() {
+            return True;
+        }
 
         #! returns a string that can be used to temporarily disable the constraint from the database; if disabling constraints is not supported, then the constraint will be dropped
         string getDisableSql(string table_name) {
@@ -9360,10 +9527,36 @@ AbstractConstraint ix = constraints.uk_jobs;
 
         #! returns lists of SQL strings to disable this constraint plus any dependent constraints and another list of SQL strings to reenable the same constraints; used when updating indexes that depend on constraints
         hash<auto> getDisableReenableSql(AbstractDatasource ds, string table_name, *hash<auto> opts) {
+            hash<auto> ch = getSourceConstraintDisableReenableSql(ds, opts);
+            ch.disable += getDisableSql(table_name);
+            unshift ch.enable, getEnableSql(table_name, opts);
+            return ch;
+        }
+
+        #! returns lists of SQL strings to disable and enable the foreign constraints that reference this constraint
+        /** A driver whose unique constraint is its index uses this method to recreate the index without disabling
+            the constraint itself, which is the index
+
+            @param ds the datasource of the tables of the foreign constraints
+            @param opts options for the SQL that re-enables the foreign constraints
+
+            @return a hash with a \c disable key, giving a list of SQL strings that disable the foreign constraints that
+            reference this constraint, and an \c enable key, giving a list of SQL strings that re-enable them
+
+            @since SqlUtil 3.11.0
+        */
+        private hash<auto> getSourceConstraintDisableReenableSql(AbstractDatasource ds, *hash<auto> opts) {
             hash<auto> ch = {
                 "disable": (),
                 "enable": (),
             };
+
+            # a schema alignment drops the foreign constraints that reference the index in the database before it
+            # recreates the index, and adds those of the templates after it
+            # (SchemaForeignConstraintAlignment)
+            if (opts.foreign_constraint_alignment) {
+                return ch;
+            }
 
             HashIterator i(sourceConstraints);
             while (i.next()) {
@@ -9377,9 +9570,6 @@ AbstractConstraint ix = constraints.uk_jobs;
                     unshift ch.enable, fk.getEnableSql(key, opts);
                 }
             }
-
-            ch.disable += getDisableSql(table_name);
-            unshift ch.enable, getEnableSql(table_name, opts);
 
             return ch;
         }
@@ -9478,6 +9668,27 @@ uk.addSourceConstraint(table_name, constraint_name);
         }
 
         constructor(string n, *hash<auto> c) : AbstractUniqueConstraint(n, c) {
+        }
+
+        #! returns @ref True "True" if the primary key has a name in the database that can be renamed
+        /** A table is aligned to a template whose primary key has the table's columns under another name by renaming
+            the key; a driver whose primary keys have no name returns @ref False "False", and the name is ignored
+
+            @return @ref True "True"; drivers whose primary keys have no name reimplement this method
+
+            @since SqlUtil 3.11.0
+        */
+        bool supportsName() {
+            return True;
+        }
+
+        #! returns @ref True "True" if the database can rename the primary key, which is when it has a name
+        /** @return the value of @ref supportsName()
+
+            @since SqlUtil 3.11.0
+        */
+        bool supportsRename() {
+            return supportsName();
         }
     }
 

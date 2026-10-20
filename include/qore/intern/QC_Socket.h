@@ -538,6 +538,11 @@ public:
         ConstListIterator li(protocols);
         while (li.next()) {
             QoreStringValueHelper str(li.getValue());
+            // a protocol name is sent in the TLS handshake as a C string, which would be cut at a NUL character
+            if (q_check_no_nul(str->c_str(), str->size(), "ALPN protocol", "ALPN protocols", "SOCKET-ALPN-ERROR",
+                    xsink)) {
+                return -1;
+            }
             if (!str->empty()) {
                 proto_list.push_back(str->c_str());
             }

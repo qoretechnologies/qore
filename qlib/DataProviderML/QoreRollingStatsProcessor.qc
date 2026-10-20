@@ -142,7 +142,9 @@ public class QoreRollingStatsProcessor inherits AbstractDataProviderMLProcessor 
     #! Creates the object with the given options
     constructor(hash<auto> options) {
         *hash<auto> copts = checkOptions("CONSTRUCTOR-ERROR", ConstructorOptions, options);
-        fields = DataProvider::AbstractDataProvider::parseFieldList(copts.fields);
+        checkFieldPathOptions(options, copts);
+        fields = DataProvider::AbstractDataProvider::parseFieldList(
+            DataProvider::AbstractDataProvider::getFieldListOption(options, copts, "fields"));
         if (!fields) {
             throw "CONSTRUCTOR-ERROR", "no valid field names provided in 'fields' option";
         }
@@ -152,7 +154,8 @@ public class QoreRollingStatsProcessor inherits AbstractDataProviderMLProcessor 
                 sprintf("window_size must be >= 1; got %d", window_size);
         }
         if (copts.statistics) {
-            statistics = DataProvider::AbstractDataProvider::parseFieldList(copts.statistics);
+            statistics = DataProvider::AbstractDataProvider::parseFieldList(
+                DataProvider::AbstractDataProvider::getFieldListOption(options, copts, "statistics"));
         }
         if (!statistics) {
             statistics = ("mean",);
@@ -329,19 +332,24 @@ public class QoreRollingStatsProcessor inherits AbstractDataProviderMLProcessor 
         hash<auto> result;
         foreach string field in (fields) {
             if (emit_mean) {
-                result{field + "_mean"} = buffer<float64>::sized(count);
+                result{AbstractDataProviderMLProcessor::getDerivedFieldName(field, "", "_mean")} =
+                    buffer<float64>::sized(count);
             }
             if (emit_std) {
-                result{field + "_std"} = buffer<float64>::sized(count);
+                result{AbstractDataProviderMLProcessor::getDerivedFieldName(field, "", "_std")} =
+                    buffer<float64>::sized(count);
             }
             if (emit_min) {
-                result{field + "_min"} = buffer<float64>::sized(count);
+                result{AbstractDataProviderMLProcessor::getDerivedFieldName(field, "", "_min")} =
+                    buffer<float64>::sized(count);
             }
             if (emit_max) {
-                result{field + "_max"} = buffer<float64>::sized(count);
+                result{AbstractDataProviderMLProcessor::getDerivedFieldName(field, "", "_max")} =
+                    buffer<float64>::sized(count);
             }
             if (emit_sum) {
-                result{field + "_sum"} = buffer<float64>::sized(count);
+                result{AbstractDataProviderMLProcessor::getDerivedFieldName(field, "", "_sum")} =
+                    buffer<float64>::sized(count);
             }
         }
         return result;
@@ -364,19 +372,20 @@ public class QoreRollingStatsProcessor inherits AbstractDataProviderMLProcessor 
         }
         float mean = total / n;
         if (emit_mean) {
-            result{field + "_mean"} = mean;
+            result{AbstractDataProviderMLProcessor::getDerivedFieldName(field, "", "_mean")} = mean;
         }
         if (emit_std) {
-            result{field + "_std"} = calculateStd(values, mean);
+            result{AbstractDataProviderMLProcessor::getDerivedFieldName(field, "", "_std")} =
+                calculateStd(values, mean);
         }
         if (emit_min) {
-            result{field + "_min"} = min_val;
+            result{AbstractDataProviderMLProcessor::getDerivedFieldName(field, "", "_min")} = min_val;
         }
         if (emit_max) {
-            result{field + "_max"} = max_val;
+            result{AbstractDataProviderMLProcessor::getDerivedFieldName(field, "", "_max")} = max_val;
         }
         if (emit_sum) {
-            result{field + "_sum"} = total;
+            result{AbstractDataProviderMLProcessor::getDerivedFieldName(field, "", "_sum")} = total;
         }
     }
 
@@ -397,19 +406,20 @@ public class QoreRollingStatsProcessor inherits AbstractDataProviderMLProcessor 
         }
         float mean = total / n;
         if (emit_mean) {
-            output_columns{field + "_mean"}[row] = mean;
+            output_columns{AbstractDataProviderMLProcessor::getDerivedFieldName(field, "", "_mean")}[row] = mean;
         }
         if (emit_std) {
-            output_columns{field + "_std"}[row] = calculateStd(values, mean);
+            output_columns{AbstractDataProviderMLProcessor::getDerivedFieldName(field, "", "_std")}[row] =
+                calculateStd(values, mean);
         }
         if (emit_min) {
-            output_columns{field + "_min"}[row] = min_val;
+            output_columns{AbstractDataProviderMLProcessor::getDerivedFieldName(field, "", "_min")}[row] = min_val;
         }
         if (emit_max) {
-            output_columns{field + "_max"}[row] = max_val;
+            output_columns{AbstractDataProviderMLProcessor::getDerivedFieldName(field, "", "_max")}[row] = max_val;
         }
         if (emit_sum) {
-            output_columns{field + "_sum"}[row] = total;
+            output_columns{AbstractDataProviderMLProcessor::getDerivedFieldName(field, "", "_sum")}[row] = total;
         }
     }
 

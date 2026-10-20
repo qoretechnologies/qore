@@ -103,9 +103,13 @@ list<hash<auto>> types = PluginRegistry::getProcessRegistry().getTypes("datafram
 
     @return plugin type descriptor hashes
 
-    @throw PLUGIN-REGISTRY-MODULE-NOT-LOADED the module is not loaded in the process
+    @throw PLUGIN-REGISTRY-MODULE-NOT-LOADED the module is not loaded in the process, or the module name contains a NUL character (since %Qore 3.0)
  */
 list<hash<auto>> PluginRegistry::getTypes(string module_name) [flags=RET_VALUE_ONLY] {
+    // the name is looked up as a C string, which would be cut at a NUL character and name another module
+    if (q_check_no_nul(module_name->c_str(), module_name->size(), "module name", "module names", "PLUGIN-REGISTRY-MODULE-NOT-LOADED", xsink)) {
+        return QoreValue();
+    }
     TempEncodingHelper name(module_name, QCS_DEFAULT, xsink);
     if (*xsink) {
         return QoreValue();
@@ -125,9 +129,13 @@ list<hash<auto>> ops = PluginRegistry::getProcessRegistry().getOperations("dataf
 
     @return plugin operation descriptor hashes
 
-    @throw PLUGIN-REGISTRY-MODULE-NOT-LOADED the module is not loaded in the process
+    @throw PLUGIN-REGISTRY-MODULE-NOT-LOADED the module is not loaded in the process, or the module name contains a NUL character (since %Qore 3.0)
  */
 list<hash<auto>> PluginRegistry::getOperations(string module_name) [flags=RET_VALUE_ONLY] {
+    // the name is looked up as a C string, which would be cut at a NUL character and name another module
+    if (q_check_no_nul(module_name->c_str(), module_name->size(), "module name", "module names", "PLUGIN-REGISTRY-MODULE-NOT-LOADED", xsink)) {
+        return QoreValue();
+    }
     TempEncodingHelper name(module_name, QCS_DEFAULT, xsink);
     if (*xsink) {
         return QoreValue();

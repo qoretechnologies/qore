@@ -71,6 +71,7 @@ public:
     DLLLOCAL int64 getDocumentCount() const { return document_count; }
 
 private:
+    //! the stream; referenced by the stream internal member of the writer object, released after the private data
     QoreObject* output_stream;
     yaml_emitter_t emitter;
     yaml_event_t event;
@@ -108,6 +109,7 @@ public:
     DLLLOCAL const char* getErrorMessage() const { return error_message.c_str(); }
 
 private:
+    //! the stream of the writer, which the handler does not reference
     QoreObject* output_stream;
     bool has_error;
     std::string error_message;

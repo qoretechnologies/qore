@@ -256,9 +256,14 @@ public:
     DLLEXPORT int concatEncodeUriRequest(ExceptionSink* xsink, const QoreString& url);
 
     //! concatenates a string and escapes character c with esc_char (converts encodings if necessary)
+    /** @since %Qore 3.0 the whole string is concatenated; a string with a NUL character was cut at the NUL character
+    */
     DLLEXPORT void concatEscape(const QoreString* str, char c, char esc_char, ExceptionSink* xsink);
 
-    //! concatenates a string and escapes character c with esc_char
+    //! concatenates a null-terminated string and escapes character c with esc_char
+    /** @note the string ends at its first NUL character; use concatEscape(const QoreString*, char, char,
+        ExceptionSink*) for a string that can contain NUL characters
+    */
     DLLEXPORT void concatEscape(const char* str, char c, char esc_char = '\\');
 
     //! concatenation with HTML special character encoding
@@ -568,11 +573,18 @@ public:
 
     //! this will concatentate a formatted string to the existing string according to the format string and the arguments
     /** NOTE that the formatted string is concatenated to the end of the current string!
+
+        @return 0; nothing is concatenated if the output cannot be formatted, such as an output longer than
+        \c INT_MAX characters
     */
     DLLEXPORT int sprintf(const char* fmt, ...);
 
     //! this will concatentate a formatted string to the existing string according to the format string and the arguments
     /** NOTE that the formatted string is concatenated to the end of the current string!
+
+        @return -1 if the buffer was too small, in which case the call must be repeated with the same arguments (and
+        a new \c va_list), 0 otherwise; nothing is concatenated if the output cannot be formatted, such as an output
+        longer than \c INT_MAX characters
     */
     DLLEXPORT int vsprintf(const char* fmt, va_list args);
 
@@ -988,7 +1000,15 @@ public:
     //! returns true if the other string is equal to this string (encodings also must be equal)
     DLLEXPORT bool operator==(const std::string& other) const;
 
-    //! returns true if the other string is equal to this string (encodings also must be equal)
+    //! returns true if the null-terminated string given is equal to this string
+    /** The whole string is compared: a string with a NUL character is not equal to the C string that ends at its
+        first NUL character (ex: \c "1.0\0x" is not equal to \c "1.0"); a null pointer is equal to an empty string
+
+        @note does not work with UTF-16 or other non-ASCII-compatible multi-byte encodings
+
+        @since %Qore 3.0 the whole string is compared; a string was equal to the C string that ended at its first NUL
+        character
+    */
     DLLEXPORT bool operator==(const char* other) const;
 
     //! returns true if the other string is not equal to this string (encodings also must be equal)

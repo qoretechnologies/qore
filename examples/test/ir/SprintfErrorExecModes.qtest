@@ -1,0 +1,192 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  SprintfErrorExecModes.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+%no-child-restrictions
+
+%requires ../../../qlib/Util.qm
+%requires ../../../qlib/QUnit.qm
+%requires ../ExecModeHarness.qm
+
+%exec-class SprintfErrorExecModesTest
+
+#! The string formatting functions that can raise an exception are not declared constant
+/** sprintf(), f_sprintf(), vsprintf() and f_vsprintf() raise SPRINTF-ERROR for a conversion whose output cannot be
+    formatted.  A call with constant arguments that raises is not evaluated when the program is parsed: it raises
+    when it runs, in every execution mode, also when its result is ignored, and the warning for an ignored result
+    says that the call may raise an exception.
+*/
+public class SprintfErrorExecModesTest inherits QUnit::Test {
+    private {
+        # each conversion has an output longer than INT_MAX characters
+        const Script = "%modern
+%enable-all-warnings
+try {
+    string s = sprintf(\"abc%2147483647d\", 1);
+    printf(\"sprintf: %d\\n\", s.size());
+} catch (hash<ExceptionInfo> ex) {
+    printf(\"sprintf: %s\\n\", ex.err);
+}
+try {
+    sprintf(\"abc%2147483647d\", 1);
+    printf(\"sprintf statement: no exception\\n\");
+} catch (hash<ExceptionInfo> ex) {
+    printf(\"sprintf statement: %s\\n\", ex.err);
+}
+try {
+    string s = f_sprintf(\"abc%2147483647d\", 1);
+    printf(\"f_sprintf: %d\\n\", s.size());
+} catch (hash<ExceptionInfo> ex) {
+    printf(\"f_sprintf: %s\\n\", ex.err);
+}
+try {
+    f_sprintf(\"abc%2147483647d\", 1);
+    printf(\"f_sprintf statement: no exception\\n\");
+} catch (hash<ExceptionInfo> ex) {
+    printf(\"f_sprintf statement: %s\\n\", ex.err);
+}
+try {
+    string s = vsprintf(\"abc%2147483647d\", 1);
+    printf(\"vsprintf: %d\\n\", s.size());
+} catch (hash<ExceptionInfo> ex) {
+    printf(\"vsprintf: %s\\n\", ex.err);
+}
+try {
+    vsprintf(\"abc%2147483647d\", 1);
+    printf(\"vsprintf statement: no exception\\n\");
+} catch (hash<ExceptionInfo> ex) {
+    printf(\"vsprintf statement: %s\\n\", ex.err);
+}
+try {
+    string s = f_vsprintf(\"abc%2147483647d\", 1);
+    printf(\"f_vsprintf: %d\\n\", s.size());
+} catch (hash<ExceptionInfo> ex) {
+    printf(\"f_vsprintf: %s\\n\", ex.err);
+}
+try {
+    f_vsprintf(\"abc%2147483647d\", 1);
+    printf(\"f_vsprintf statement: no exception\\n\");
+} catch (hash<ExceptionInfo> ex) {
+    printf(\"f_vsprintf statement: %s\\n\", ex.err);
+}
+printf(\"done\\n\");
+";
+
+        # the output of the script in every execution mode
+        const Expected = "sprintf: SPRINTF-ERROR
+sprintf statement: SPRINTF-ERROR
+f_sprintf: SPRINTF-ERROR
+f_sprintf statement: SPRINTF-ERROR
+vsprintf: SPRINTF-ERROR
+vsprintf statement: SPRINTF-ERROR
+f_vsprintf: SPRINTF-ERROR
+f_vsprintf statement: SPRINTF-ERROR
+done
+";
+
+        const Functions = ("sprintf", "f_sprintf", "vsprintf", "f_vsprintf");
+
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+        string dir;
+        string script_path;
+    }
+
+    constructor() : QUnit::Test("SprintfErrorExecModes", "1.0") {
+        addTestCase("the exception is raised when the call runs", \raisedAtRunTime());
+        addTestCase("the call is not evaluated when the program is parsed", \notEvaluatedAtParseTime());
+        addTestCase("an ignored result may raise an exception", \ignoredResultWarning());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : dirname(qore_bin) + "/qcc");
+        dir = tmp_location() + DirSep + sprintf("sprintf-error-exec-modes-%d-%s", getpid(),
+            get_random_bytes(4).toHex());
+        mkdir(dir);
+        script_path = dir + DirSep + "script.q";
+        File f();
+        f.open2(script_path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(Script);
+        f.close();
+        # only top-level code: native code is required with JIT execution
+        ExecModeHarness::set_default_check(NativeCheck::Jit);
+    }
+
+    globalTearDown() {
+        if (dir && is_dir(dir)) {
+            foreach string name in ("script.q", "script", "script.o") {
+                if (is_file(dir + DirSep + name)) {
+                    unlink(dir + DirSep + name);
+                }
+            }
+            rmdir(dir);
+        }
+    }
+
+    raisedAtRunTime() {
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            string out = ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s %s --exec-mode=%s %s", libqore_dir,
+                qore_bin, mode, script_path));
+            assertEq(Expected, getResults(out), mode);
+        }
+        if (!is_file(qcc_bin)) {
+            testSkip("no qcc");
+        }
+        string exe = dir + DirSep + "script";
+        string compile_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s -o %s %s 2>&1", libqore_dir, qcc_bin, exe,
+            script_path));
+        assertTrue(is_file(exe), "qcc compiles the script: " + compile_out);
+        string out = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, exe));
+        assertEq(Expected, getResults(out), "aot");
+    }
+
+    notEvaluatedAtParseTime() {
+        # only parsing the script (--code-frames parses it and shows its diagnostics) raises no exception
+        string out = backquote(sprintf("LD_LIBRARY_PATH=%s %s --code-frames %s 2>&1; echo EXIT=$?", libqore_dir,
+            qore_bin, script_path));
+        assertRegex("EXIT=0", out);
+        assertNRegex("SPRINTF-ERROR", out);
+    }
+
+    ignoredResultWarning() {
+        string out = backquote(sprintf("LD_LIBRARY_PATH=%s %s --code-frames %s 2>&1", libqore_dir, qore_bin,
+            script_path));
+        foreach string func in (Functions) {
+            assertRegex("call to function " + func + "\\(\\) does not have any side effects except that it may throw "
+                "an exception and the return value is ignored", out, func);
+            assertNRegex("call to function " + func + "\\(\\) does not have any side effects and the return value "
+                "is ignored", out, func);
+        }
+    }
+
+    #! returns the lines of the script's results, without the warnings on stderr
+    private static string getResults(string out) {
+        return (select out.split("\n"), $1 =~ /^(f_)?v?sprintf( statement)?: |^done$/).join("\n") + "\n";
+    }
+}

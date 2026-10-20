@@ -103,7 +103,7 @@ public:
     }
 
     using AbstractPrivateData::deref;
-    DLLLOCAL virtual void deref(ExceptionSink* xsink) {
+    DLLLOCAL virtual void deref(ExceptionSink* xsink) override {
         if (ROdereference()) {
             if (h)
                 h->deref(xsink);
@@ -221,11 +221,11 @@ public:
         return rv.release();
     }
 
-    DLLLOCAL virtual const char* getName() const {
+    DLLLOCAL virtual const char* getName() const override {
         return "HashListIterator";
     }
 
-    DLLLOCAL virtual const QoreTypeInfo* getElementType() const {
+    DLLLOCAL virtual const QoreTypeInfo* getElementType() const override {
         return h->getValueTypeInfo();
     }
 

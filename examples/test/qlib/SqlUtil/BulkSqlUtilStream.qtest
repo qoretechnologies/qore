@@ -4,6 +4,8 @@
 %modern
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%prepend-module-path "${SCRIPT_DIR}"
+%requires ./PgsqlTestIsolation.qm
 %requires QUnit
 %requires SqlUtil
 %requires BulkSqlUtil
@@ -108,9 +110,21 @@ public class BulkSqlUtilStreamTest inherits QUnit::Test {
         set_return_value(main());
     }
 
+    globalTearDown() {
+        # drops the run's schema with everything left in it, if the connection is a PostgreSQL connection
+        PgsqlRunSchema::teardown();
+    }
+
     private usageIntern() {
         TestReporter::usageIntern(OptionColumn);
         printOption("-c,--conn=ARG", "set the DB connection string", OptionColumn);
+    }
+
+    #! returns the test table's name in the run's schema on PostgreSQL, so that it can never resolve to a table in
+    #! another schema
+    private static string getQualifiedTableName() {
+        *string schema = PgsqlRunSchema::getName();
+        return schema ? schema + "." + TableName : TableName;
     }
 
     private Datasource getDs() {
@@ -122,6 +136,8 @@ public class BulkSqlUtilStreamTest inherits QUnit::Test {
         }
         Datasource ds;
         try {
+            # a run on PostgreSQL uses its own schema
+            PgsqlRunSchema::setup(connstr, "BulkSqlUtilStream");
             ds = new Datasource(connstr);
             ds.setAutoCommit(False);
             ds.open();
@@ -134,7 +150,7 @@ public class BulkSqlUtilStreamTest inherits QUnit::Test {
     #! creates the test table with no observer attached
     private Datasource setupTable() {
         Datasource ds = getDs();
-        ds.execRaw(sprintf("drop table if exists %s", TableName));
+        ds.execRaw(sprintf("drop table if exists %s", getQualifiedTableName()));
         ds.execRaw(sprintf("create table %s (id integer, val varchar(64))", TableName));
         ds.commit();
         obs.reset();
@@ -146,7 +162,7 @@ public class BulkSqlUtilStreamTest inherits QUnit::Test {
         ds.clearMutationObserver();
         try {
             ds.rollback();
-            ds.execRaw(sprintf("drop table if exists %s", TableName));
+            ds.execRaw(sprintf("drop table if exists %s", getQualifiedTableName()));
             ds.commit();
         } catch (hash<ExceptionInfo> ex) {
             # ignore cleanup failures
@@ -311,7 +327,7 @@ public class BulkSqlUtilStreamTest inherits QUnit::Test {
 
             # drop the table underneath the operation so that the next block fails in the server
             ds.commit();
-            ds.execRaw(sprintf("drop table %s", TableName));
+            ds.execRaw(sprintf("drop table %s", getQualifiedTableName()));
             ds.commit();
 
             # fewer rows than block_size, so the failure happens in the explicit flush below rather
@@ -332,7 +348,7 @@ public class BulkSqlUtilStreamTest inherits QUnit::Test {
     noObserverTest() {
         Datasource ds = getDs();
         on_exit dropTable(ds);
-        ds.execRaw(sprintf("drop table if exists %s", TableName));
+        ds.execRaw(sprintf("drop table if exists %s", getQualifiedTableName()));
         ds.execRaw(sprintf("create table %s (id integer, val varchar(64))", TableName));
         ds.commit();
 

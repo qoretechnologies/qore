@@ -39,8 +39,6 @@
 #include <string>
 #include <type_traits>
 
-using namespace std::placeholders;
-
 //! the maximum buffer/read size for a single read
 #define DefaultStreamReaderHelperBufferSize 4096
 

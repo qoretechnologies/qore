@@ -1,0 +1,225 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class AOTSplitCodegenDeterminismTest
+
+#! A module split for parallel codegen compiles to the same object with any number of codegen threads
+/** A module at or above the split threshold (QCC_SPLIT_THRESHOLD) is partitioned for parallel backend codegen.  The
+    number of parts followed the threads available (QCC_JOBS, the CPU count, or the free tokens of a make jobserver),
+    and the parts change the compiled code, so the same source gave different modules from one build to the next
+    and from one machine to the next.  The module is now always split into the same number of parts, and the
+    threads only decide how many parts are compiled at once.  On macOS, the module also recorded the name of the
+    temporary file it was linked to (with the process id in it) as its install name, and the names and modification
+    times of its deleted object files in its debug map, so no two compiles gave the same module.
+
+    The test lowers the split threshold so that a small module is split, and compiles it with several thread
+    counts, outside of any make jobserver.
+*/
+class AOTSplitCodegenDeterminismTest inherits QUnit::Test {
+    public {
+        #! the thread counts the module is compiled with
+        const JobCounts = (1, 2, 3, 7, 32);
+
+        #! a module with independent functions, so that it can be split into several parts
+        const ModuleSource = "%modern
+
+module SplitDeterminism {
+    version = \"1.0\";
+    desc = \"a module split for parallel codegen\";
+    author = \"Qore Technologies, s.r.o.\";
+    url = \"https://qore.org\";
+    license = \"MIT\";
+}
+
+public namespace SplitDeterminism {
+public int sub sum_to(int n) {
+    int rv = 0;
+    for (int i = 1; i <= n; ++i) {
+        rv += i;
+    }
+    return rv;
+}
+
+public string sub repeat(string s, int n) {
+    string rv;
+    for (int i = 0; i < n; ++i) {
+        rv += s;
+    }
+    return rv;
+}
+
+public list<int> sub squares(int n) {
+    return map $1 * $1, xrange(1, n);
+}
+
+public hash<string, int> sub lengths(list<string> l) {
+    hash<string, int> rv = {};
+    foreach string s in (l) {
+        rv{s} = s.length();
+    }
+    return rv;
+}
+
+public float sub mean(list<float> l) {
+    float rv = 0.0;
+    foreach float f in (l) {
+        rv += f;
+    }
+    return l ? rv / l.size() : 0.0;
+}
+
+public int sub fib(int n) {
+    int a = 0;
+    int b = 1;
+    for (int i = 0; i < n; ++i) {
+        int t = a + b;
+        a = b;
+        b = t;
+    }
+    return a;
+}
+
+public string sub join_keys(hash<auto> h) {
+    return (keys h).join(\",\");
+}
+
+public bool sub all_positive(list<int> l) {
+    foreach int i in (l) {
+        if (i <= 0) {
+            return False;
+        }
+    }
+    return True;
+}
+
+public int sub count_vowels(string s) {
+    int rv = 0;
+    for (int i = 0; i < s.length(); ++i) {
+        if (s[i] =~ /[aeiou]/i) {
+            ++rv;
+        }
+    }
+    return rv;
+}
+
+public list<string> sub upper_all(list<string> l) {
+    return map $1.upr(), l;
+}
+
+public int sub max_of(list<int> l) {
+    int rv = l ? l[0] : 0;
+    foreach int i in (l) {
+        if (i > rv) {
+            rv = i;
+        }
+    }
+    return rv;
+}
+
+public string sub describe(int n) {
+    return sprintf(\"%d is %s\", n, n % 2 ? \"odd\" : \"even\");
+}
+}
+";
+
+        #! a script that calls every function of the compiled module and prints the results
+        const ScriptSource = "%modern
+%requires SplitDeterminism
+printf(\"%y\\n\", (
+    SplitDeterminism::sum_to(10),
+    SplitDeterminism::repeat(\"ab\", 3),
+    SplitDeterminism::squares(4),
+    SplitDeterminism::lengths((\"a\", \"bcd\")),
+    SplitDeterminism::mean((1.0, 2.0, 6.0)),
+    SplitDeterminism::fib(10),
+    SplitDeterminism::join_keys({\"x\": 1, \"y\": 2}),
+    SplitDeterminism::all_positive((1, 2, 3)),
+    SplitDeterminism::count_vowels(\"Determinism\"),
+    SplitDeterminism::upper_all((\"a\", \"b\")),
+    SplitDeterminism::max_of((3, 9, 4)),
+    SplitDeterminism::describe(7),
+));
+";
+
+        #! the output of the script
+        const ScriptOutput = "[55, \"ababab\", [1, 4, 9], {a: 1, bcd: 3}, 3.0, 55, \"x,y\", True, 4, "
+            "[\"A\", \"B\"], 9, \"7 is odd\"]\n";
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+    }
+
+    constructor() : QUnit::Test("AOTSplitCodegenDeterminismTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+
+        addTestCase("a split module does not depend on the codegen threads", \testThreads());
+        set_return_value(main());
+    }
+
+    testThreads() {
+        TmpDir tmp("qore-aot-split-");
+        string qm_path = tmp.path + DirSep + "SplitDeterminism.qm";
+        File qm();
+        qm.open2(qm_path, O_WRONLY | O_CREAT | O_TRUNC);
+        qm.write(ModuleSource);
+        qm.close();
+
+        string qmod_path = tmp.path + DirSep + "SplitDeterminism.qmod";
+        # the compiled module and the compiler's output for each thread count
+        hash<string, binary> modules;
+        hash<string, string> outputs;
+        foreach int jobs in (JobCounts) {
+            # MAKEFLAGS is removed so that no make jobserver limits the threads; QORE_DEBUG_OPT reports the parts
+            string out = backquote(sprintf("env -u MAKEFLAGS QCC_JOBS=%d QCC_SPLIT_THRESHOLD=1 QORE_DEBUG_OPT=1 "
+                "QORE_LIBDIR=%s %s -b --compile-module --output %s %s 2>&1", jobs, libqore_dir, qore_bin, qmod_path,
+                qm_path));
+            assertTrue(is_file(qmod_path), sprintf("QCC_JOBS=%d: compiled the module: %s", jobs, out));
+            modules{jobs} = ReadOnlyFile::readBinaryFile(qmod_path);
+            outputs{jobs} = out;
+            unlink(qmod_path);
+        }
+
+        # the same object with every thread count
+        binary first = modules{JobCounts[0]};
+        foreach int jobs in (JobCounts) {
+            string label = sprintf("QCC_JOBS=%d", jobs);
+            assertEq(first.size(), modules{jobs}.size(), label + ": the same size as with QCC_JOBS=1");
+            assertTrue(first == modules{jobs}, label + ": the same bytes as with QCC_JOBS=1");
+        }
+
+        # the module was split, into the same number of parts with every thread count
+        foreach int jobs in (JobCounts) {
+            string label = sprintf("QCC_JOBS=%d", jobs);
+            *list<*string> parts = (outputs{jobs} =~ x/AOT: parallel codegen ([0-9]+) parts, threads=([0-9]+)/);
+            assertEq("4", parts[0], label + ": the module is split into 4 parts");
+            int threads = parts[1].toInt();
+            assertTrue(threads >= 1 && threads <= jobs, label + ": threads: " + threads);
+        }
+
+        # the compiled module runs
+        File qmod();
+        qmod.open2(qmod_path, O_WRONLY | O_CREAT | O_TRUNC);
+        qmod.write(first);
+        qmod.close();
+        string script_path = tmp.path + DirSep + "run.qr";
+        File script();
+        script.open2(script_path, O_WRONLY | O_CREAT | O_TRUNC);
+        script.write(ScriptSource);
+        script.close();
+        string run_out = backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b %s 2>&1",
+            libqore_dir, libqore_dir, tmp.path, qore_bin, script_path));
+        assertEq(ScriptOutput, run_out, "the compiled module runs");
+    }
+}

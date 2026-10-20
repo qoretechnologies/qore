@@ -124,6 +124,9 @@ stream.close();
       ("response_format: Extra inputs are not permitted"): a schema that Anthropic's structured output can express
       within its limits is sent as \c output_config.format, with the constraints it does not support moved into the
       descriptions; any other schema is stated in a system instruction, and the caller validates the answer
+    - chat and completion requests honour the request's own timeout
+      (@ref QoreLlmUtils::LlmRequestOptions::timeout_ms "timeout_ms"); they were cut off at the client's timeout
+      (120 seconds by default) whatever the request asked for
 */
 
 %requires json
@@ -587,8 +590,9 @@ public class AnthropicLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
         hash<auto> resp;
         try {
             resp = withRetry(hash<auto> sub () {
-                return rest_client.restPost("/v1/messages", body,
-                    buildAuthHeaders());
+                # the request's own timeout (LlmRequestOptions::timeout_ms), not only the client's
+                return rest_client.restPostWithTimeout("/v1/messages", body,
+                    buildAuthHeaders(), getRequestTimeoutMs(opts));
             }, opts);
         } catch (hash<ExceptionInfo> ex) {
             if (ex.err == "LLM-CANCELLED") {
@@ -628,8 +632,9 @@ public class AnthropicLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
         hash<auto> resp;
         try {
             resp = withRetry(hash<auto> sub () {
-                return rest_client.restPost("/v1/messages", body,
-                    buildAuthHeaders());
+                # the request's own timeout (LlmRequestOptions::timeout_ms), not only the client's
+                return rest_client.restPostWithTimeout("/v1/messages", body,
+                    buildAuthHeaders(), getRequestTimeoutMs(opts));
             }, opts);
         } catch (hash<ExceptionInfo> ex) {
             if (ex.err == "LLM-CANCELLED") {

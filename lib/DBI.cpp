@@ -311,12 +311,22 @@ OptInputHelper::OptInputHelper(ExceptionSink* xs, const qore_dbi_private& driver
         return;
     }
     const QoreTypeInfo* ti = i->second.typeInfo;
-    if (!QoreTypeInfo::mayRequireFilter(ti, v)) {
-        return;
+    if (QoreTypeInfo::mayRequireFilter(ti, v)) {
+        tmp = true;
+        val.ref();
+        QoreTypeInfo::acceptInputParam(ti, -1, "<dbi driver option>", val, xsink);
+        if (*xsink) {
+            return;
+        }
     }
-    tmp = true;
-    val.ref();
-    QoreTypeInfo::acceptInputParam(ti, -1, "<dbi driver option>", val, xsink);
+    // a string value would be cut at a NUL character by a driver that uses it as a C string; the value is not shown,
+    // as an option can be a secret
+    if (val.getType() == NT_STRING) {
+        // a string can be held in inline short string storage, which has no QoreStringNode
+        QoreStringDataHelper str(val);
+        QoreStringMaker what("driver '%s' option '%s' value", driver.name, opt);
+        q_check_secret_no_nul(str.c_str(), str.size(), what.c_str(), "DBI option values", "DBI-OPTION-ERROR", xsink);
+    }
 }
 
 qore_dbi_private::qore_dbi_private(const char* nme, const qore_dbi_mlist_private& methods, int cps)

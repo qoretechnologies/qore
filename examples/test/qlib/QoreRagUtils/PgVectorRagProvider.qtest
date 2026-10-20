@@ -126,6 +126,17 @@ public class PgVectorRagProviderTest inherits QUnit::Test {
         };
 
         const OptionColumn = 22;
+
+        #! the relative tolerance of a score compared with its expected value
+        /** A score is one subtraction (1 - dist) or a negation of a distance given as a decimal literal, and it is
+            compared with another decimal literal.  The subtraction is correctly rounded, but the decimal literals
+            are converted to binary by the C library, whose precision is not guaranteed: under valgrind on musl,
+            which converts decimal numbers with long double arithmetic that valgrind runs with double precision,
+            0.1, 0.3, 0.7 and 0.9 are off by up to 1.5e-13 relative, so 1 - 0.1 differed from 0.9 by 8.5e-14.
+            1e-12 is several times the largest error seen, and any wrong score (such as dist instead of 1 - dist,
+            or the wrong sign) is off by more than 0.1.
+        */
+        const ScoreRelTolerance = 1e-12;
     }
 
     private {
@@ -279,6 +290,11 @@ public class PgVectorRagProviderTest inherits QUnit::Test {
         assertEq(("doc1", "doc2", "doc3"), calls[0].args[0]);
     }
 
+    #! asserts that a score equals the expected value within ScoreRelTolerance of the expected value
+    private assertScore(float expected, float actual, string name) {
+        assertFloatEq(expected, actual, abs(expected) * ScoreRelTolerance, name);
+    }
+
     private searchTest() {
         FakePgsqlDatasource ds();
         ds.select_response = {
@@ -304,8 +320,8 @@ public class PgVectorRagProviderTest inherits QUnit::Test {
         assertEq("doc1", hits[0].id);
         assertEq("A", hits[0].payload.title);
         # score = 1 - dist for cosine
-        assertEq(0.9, hits[0].score);
-        assertEq(0.7, hits[1].score);
+        assertScore(0.9, hits[0].score, "cosine score of the first hit");
+        assertScore(0.7, hits[1].score, "cosine score of the second hit");
     }
 
     private searchFilterTest() {
@@ -386,7 +402,7 @@ public class PgVectorRagProviderTest inherits QUnit::Test {
             "options": {"datasource": ds_cos, "dimension": 3, "distance": "cosine"},
         });
         # cosine: 1 - dist = 0.75
-        assertEq(0.75, cos_store.search((0.0, 0.0, 0.0), 1)[0].score);
+        assertScore(0.75, cos_store.search((0.0, 0.0, 0.0), 1)[0].score, "cosine score");
 
         FakePgsqlDatasource ds_l2();
         ds_l2.select_response = {"id": ("a",), "payload": ('{}',), "dist": (1.5,)};
@@ -396,7 +412,7 @@ public class PgVectorRagProviderTest inherits QUnit::Test {
             "options": {"datasource": ds_l2, "dimension": 3, "distance": "l2"},
         });
         # l2: -dist = -1.5
-        assertEq(-1.5, l2_store.search((0.0, 0.0, 0.0), 1)[0].score);
+        assertScore(-1.5, l2_store.search((0.0, 0.0, 0.0), 1)[0].score, "l2 score");
     }
 
     #! Exercises PgVectorRagProvider against a real Postgres+pgvector DB

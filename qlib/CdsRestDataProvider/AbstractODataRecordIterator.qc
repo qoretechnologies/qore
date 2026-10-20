@@ -167,7 +167,9 @@ public class AbstractODataRecordIterator inherits AbstractDataProviderRecordIter
             throw "WHERE-ERROR", sprintf("the first argument to expression %y must be a field reference",
                 exp.exp);
         }
-        string field = cast<hash<DataProviderFieldReference>>(exp.args[0]).field;
+        hash<DataProviderFieldReference> field_ref = cast<hash<DataProviderFieldReference>>(exp.args[0]);
+        # the field is a field path, written as an OData property path
+        string field = AbstractODataRecordIterator::getPropertyPath(field_ref.field, field_ref.field_path);
 
         # Build args list: (self, field, value1, value2, ...)
         list<auto> impl_args = (self, field);
@@ -289,8 +291,41 @@ public class AbstractODataRecordIterator inherits AbstractDataProviderRecordIter
         return foldl $1 + " and " + $2, clauses;
     }
 
+    #! Returns the OData property path of a field path: its keys joined with \c "/"
+    /** OData names a navigation property and a property of the entity it leads to with a \c "/" (\c order.id is
+        <tt>order/id</tt>).  A property name has neither a dot nor a slash, and a segment of a path with a dot is a
+        cast to a type, so a key with either cannot be named: the field is refused rather than sent as another name.
+
+        @param field the field path
+        @param field_path the keys of the path, if already read
+
+        @return the OData property path
+
+        @throw WHERE-ERROR a key of the field path has a dot or a slash
+
+        @par Example:
+        @code{.py}
+string path = AbstractODataRecordIterator::getPropertyPath("primarycontactid.fullname");
+# path: "primarycontactid/fullname"
+        @endcode
+
+        @since CdsRestDataProvider 2.2
+    */
+    static string getPropertyPath(string field, *list<string> field_path) {
+        list<string> path = field_path ?? AbstractDataProvider::getFieldPath(field);
+        foreach string key in (path) {
+            if (key.find(".") >= 0 || key.find("/") >= 0) {
+                throw "WHERE-ERROR", sprintf("the field %y has the key %y, which OData cannot name: a property name "
+                    "has no dot or slash, and a dot in a property path is a cast to a type", field, key);
+            }
+        }
+        return path.join("/");
+    }
+
     #! Legacy where expression handler for backward compatibility
     private string doWhereExpressionInternLegacy(string key, auto value) {
+        # the key is a field path, written as an OData property path
+        string property = AbstractODataRecordIterator::getPropertyPath(key);
         if (value.typeCode() == NT_HASH && value.op) {
             *hash<auto> op = DefaultQueryOpMap{value.op};
             if (!op) {
@@ -302,7 +337,7 @@ public class AbstractODataRecordIterator inherits AbstractDataProviderRecordIter
             if (op.recursive) {
                 column_name = doWhereExpressionInternLegacy(key, value.arg);
             } else {
-                column_name = key;
+                column_name = property;
             }
             if (!op.no_process_arg) {
                 value.arg = getArgValue(key, value.arg);
@@ -310,7 +345,7 @@ public class AbstractODataRecordIterator inherits AbstractDataProviderRecordIter
             return op.code(self, column_name, value.arg);
         }
 
-        return sprintf("%s eq %s", key, getArgValue(key, value));
+        return sprintf("%s eq %s", property, getArgValue(key, value));
     }
 
     #! Increments the row pointer when retrieving rows from a select statement

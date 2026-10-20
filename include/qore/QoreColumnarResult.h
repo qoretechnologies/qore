@@ -97,7 +97,12 @@ DLLEXPORT const char* qore_columnar_column_type_name(QoreColumnarColumnType type
 DLLEXPORT const char* qore_columnar_type_kind_name(QoreColumnarTypeKind kind);
 
 //! Column-oriented result set storage for DBI and DataFrame integrations.
-class QoreColumnarResult : public AbstractPrivateData {
+/** A result is built with its static constructors or addColumn() and then given to one object as its private data
+    (qore_columnar_result_to_object()); it does not change once it is the private data of an object.  The object
+    reports the column containers to the garbage collector (see AbstractScannablePrivateData), so a reference cycle
+    through a value in a column is collected.
+*/
+class QoreColumnarResult : public AbstractScannablePrivateData {
 public:
     //! A single result column.
     struct Column {
@@ -232,6 +237,17 @@ public:
 
     //! Returns a referenced column container by name.
     DLLEXPORT QoreValue getColumnValue(const char* name, ExceptionSink* xsink) const;
+
+    //! Called once the result is the private data of the object: the object reports its column containers
+    /** @since %Qore 3.0 */
+    DLLLOCAL void attach(QoreObject& self) const;
+
+    //! Reports the column containers that can be part of a cycle to the garbage collector
+    /** The columns do not change once the result is the private data of an object, so no lock is needed.
+
+        @since %Qore 3.0
+    */
+    DLLLOCAL bool scanValues(QorePrivateDataScanner& scanner) override;
 
 protected:
     DLLEXPORT virtual ~QoreColumnarResult();

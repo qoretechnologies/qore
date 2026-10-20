@@ -52,7 +52,7 @@ qclass SeasonalDecomposition [arg=QoreSeasonalDecomposition* sd; ns=Qore::ML; fl
 */
 SeasonalDecomposition::constructor(hash<auto> options) {
     int64 period = 0;
-    const char* type = "additive";
+    std::string type = "additive";
 
     QoreValue v = options->getKeyValue("period");
     if (v.isNullOrNothing()) {
@@ -65,7 +65,7 @@ SeasonalDecomposition::constructor(hash<auto> options) {
     v = options->getKeyValue("type");
     if (!v.isNullOrNothing() && v.getType() == NT_STRING) {
         QoreStringValueHelper type_str(v);
-        type = type_str->c_str();
+        type = mlStdString(**type_str);
     }
 
     if (period < 2) {
@@ -74,9 +74,9 @@ SeasonalDecomposition::constructor(hash<auto> options) {
         return;
     }
 
-    if (strcmp(type, "additive") != 0 && strcmp(type, "multiplicative") != 0) {
+    if (type != "additive" && type != "multiplicative") {
         xsink->raiseException("ML-SEASONAL-DECOMPOSITION-ERROR",
-            "type must be 'additive' or 'multiplicative'; got '%s'", type);
+            "type must be 'additive' or 'multiplicative'; got '%s'", type.c_str());
         return;
     }
 
@@ -128,5 +128,5 @@ int SeasonalDecomposition::getPeriod() [flags=CONSTANT] {
 /** @return "additive" or "multiplicative"
 */
 string SeasonalDecomposition::getType() [flags=CONSTANT] {
-    return new QoreStringNode(sd->getType().c_str());
+    return new QoreStringNode(sd->getType());
 }

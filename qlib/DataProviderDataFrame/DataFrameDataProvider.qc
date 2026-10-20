@@ -66,6 +66,21 @@ public class DataFrameDataProvider inherits DataProvider::AbstractDataProvider {
     private {
         #! The wrapped DataFrame
         DataFrame::DataFrame dataframe;
+
+        #! The generic search operator of each old-style DataFrame filter operator
+        const LegacyFilterOperatorMap = {
+            DP_SEARCH_OP_EQ: DP_SEARCH_OP_EQ,
+            DP_SEARCH_OP_NE: DP_SEARCH_OP_NE,
+            DP_SEARCH_OP_GT: DP_SEARCH_OP_GT,
+            DP_SEARCH_OP_GE: DP_SEARCH_OP_GE,
+            DP_SEARCH_OP_LT: DP_SEARCH_OP_LT,
+            DP_SEARCH_OP_LE: DP_SEARCH_OP_LE,
+            "contains": DP_OP_CONTAINS,
+            "startswith": DP_OP_STARTS_WITH,
+            "endswith": DP_OP_ENDS_WITH,
+            "is_null": DP_OP_IS_NULL,
+            "not_null": DP_OP_IS_NOT_NULL,
+        };
     }
 
     #! Creates the provider from a DataFrame
@@ -207,9 +222,26 @@ public class DataFrameDataProvider inherits DataProvider::AbstractDataProvider {
             }
         }
 
+        # the field is a field path: one key is a column, which the DataFrame filters itself; any other path is read
+        # by the expression filter, which is given each comparison of the hash as its generic search operator, as
+        # it would compare the hash itself as a value and match no record
+        hash<DataProviderFieldReference> ref = cast<hash<DataProviderFieldReference>>(expr.args[0]);
+        list<string> path = ref.field_path ?? AbstractDataProvider::getFieldPath(ref.field);
         DataFrame::DataFrame filtered = df;
         foreach string filter_op in (ops) {
-            filtered = filtered.filter(expr.args[0].field, filter_op, value{filter_op});
+            if (path.size() == 1) {
+                filtered = filtered.filter(path[0], filter_op, value{filter_op});
+                continue;
+            }
+            string generic_op = LegacyFilterOperatorMap{filter_op};
+            # "is_null" and "not_null" take no value
+            list<auto> args = (generic_op == DP_OP_IS_NULL || generic_op == DP_OP_IS_NOT_NULL)
+                ? (ref,)
+                : (ref, value{filter_op});
+            filtered = DataProvider::ColumnarExpressionFilter::filterDataFrame(filtered, <DataProviderExpression>{
+                "exp": generic_op,
+                "args": args,
+            });
         }
         return filtered;
     }

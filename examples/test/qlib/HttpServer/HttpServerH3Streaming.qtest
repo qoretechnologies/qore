@@ -1063,13 +1063,6 @@ l50Xb2GWQesIt9k5jF5IOw==
     }
 
     constructor() : Test("HttpServerH3StreamingTest", "1.0") {
-        @debug {
-            set_signal_handler(SIGUSR1, sub (int sig) {
-                printf("=== SIGUSR1 Thread Stacks ===\n%Y\n=== End Thread Stacks ===\n",
-                    get_all_thread_call_stacks());
-            });
-        }
-
         mPayload = generatePayload(TestPayloadSize);
 
         addTestCase("HTTP/3 unary POST (baseline)", \testH3UnaryPost());

@@ -46,11 +46,16 @@ namespace Qore::SQL;
 
     @return a @ref datasource_hash "datasource hash" of the components of a datasource string
 
-    @throw DATASOURCE-PARSE-ERROR a syntax error occurred parsing the datasource string (missing field, unexpected character, etc)
+    @throw DATASOURCE-PARSE-ERROR a syntax error occurred parsing the datasource string (missing field, unexpected character, etc), or the string contains a NUL character (since %Qore 3.0), in which case it is not shown in the exception, as it can contain a password
 
     @deprecated use parse_datasource() instead; camel-case function names were deprecated in %Qore 0.8.12
  */
 hash parseDatasource(string ds) [flags=RET_VALUE_ONLY,DEPRECATED] {
+    // the string would be parsed cut at a NUL character; it is not shown, as it can contain a password
+    if (q_check_secret_no_nul(ds->c_str(), ds->size(), "datasource string", "datasource strings",
+            "DATASOURCE-PARSE-ERROR", xsink)) {
+        return QoreValue();
+    }
     return parseDatasource(ds->c_str(), xsink);
 }
 
@@ -77,8 +82,15 @@ nothing parseDatasource() [flags=NOOP,DEPRECATED] {
     @return a list of each capability supported by the given DBI driver (see @ref dbi_capabilities) or @ref nothing if the driver cannot be found
 
     @deprecated use dbi_get_driver_capability_list() instead; camel-case function names were deprecated in %Qore 0.8.12
- */
+
+    @note since %Qore 3.0 a driver name with a NUL character returns @ref nothing, and @ref Qore::errno() "errno()" returns
+    \c EINVAL
+*/
 *list<string> getDBIDriverCapabilityList(string driver) [flags=CONSTANT,DEPRECATED] {
+    // the driver name is looked up as a C string, which would be cut at a NUL character
+    if (q_check_no_nul(driver->c_str(), driver->size())) {
+        return QoreValue();
+    }
     DBIDriver *dd = DBI.find(driver->getBuffer());
     return !dd ? QoreValue() : QoreValue(qore_dbi_private::get(*dd)->getCapList());
 }
@@ -96,8 +108,15 @@ nothing getDBIDriverCapabilityList() [flags=NOOP,DEPRECATED] {
     @return an integer representing the capabilities of a DBI driver binary-OR'ed together (see @ref dbi_capabilities) or @ref nothing if the driver is not already loaded
 
     @deprecated use dbi_get_driver_capabilities() instead; camel-case function names were deprecated in %Qore 0.8.12
- */
+
+    @note since %Qore 3.0 a driver name with a NUL character returns @ref nothing, and @ref Qore::errno() "errno()" returns
+    \c EINVAL
+*/
 *int getDBIDriverCapabilities(string driver) [flags=CONSTANT,DEPRECATED] {
+    // the driver name is looked up as a C string, which would be cut at a NUL character
+    if (q_check_no_nul(driver->c_str(), driver->size())) {
+        return QoreValue();
+    }
     DBIDriver* dd = DBI.find(driver->getBuffer());
     return !dd ? QoreValue() : QoreValue(qore_dbi_private::get(*dd)->getCaps());
 }
@@ -144,7 +163,8 @@ hash<auto> h = parse_datasource("pgsql:user/pass@dbname(utf8)%dbhost.internal:15
     @endcode
 
     @throw DATASOURCE-PARSE-ERROR a syntax error occurred parsing the datasource string (missing field, unexpected
-    character, etc)
+    character, etc), or the string contains a NUL character (since %Qore 3.0), in which case it is not shown in the
+    exception, as it can contain a password
 
     @note similar to parseDatasource() except uses the standard function naming scheme (i.e. \c "names_like_this()"
     instead of \c "camelCase()") and does not have a @ref NOOP variant
@@ -152,6 +172,11 @@ hash<auto> h = parse_datasource("pgsql:user/pass@dbname(utf8)%dbhost.internal:15
     @since %Qore 0.8.6
 */
 hash<auto> parse_datasource(string datasource) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    // the string would be parsed cut at a NUL character; it is not shown, as it can contain a password
+    if (q_check_secret_no_nul(datasource->c_str(), datasource->size(), "datasource string", "datasource strings",
+            "DATASOURCE-PARSE-ERROR", xsink)) {
+        return QoreValue();
+    }
     return parseDatasource(datasource->getBuffer(), xsink);
 }
 
@@ -189,8 +214,15 @@ hash<auto> parse_datasource(string datasource) [flags=RET_VALUE_ONLY,NAMED_ARGS]
     \c "names_like_this()" instead of \c "camelCase()") and does not have a @ref NOOP variant
 
     @since %Qore 0.8.6
+
+    @note since %Qore 3.0 a driver name with a NUL character returns @ref nothing, and @ref Qore::errno() "errno()" returns
+    \c EINVAL
 */
 *list<string> dbi_get_driver_capability_list(string driver) [flags=CONSTANT,NAMED_ARGS] {
+    // the driver name is looked up as a C string, which would be cut at a NUL character
+    if (q_check_no_nul(driver->c_str(), driver->size())) {
+        return QoreValue();
+    }
     DBIDriver *dd = DBI.find(driver->getBuffer());
     return !dd ? 0 : qore_dbi_private::get(*dd)->getCapList();
 }
@@ -212,8 +244,15 @@ int caps = dbi_get_driver_capabilities("pgsql");
     @ref NOOP variant
 
     @since %Qore 0.8.6
+
+    @note since %Qore 3.0 a driver name with a NUL character returns 0, and @ref Qore::errno() "errno()" returns
+    \c EINVAL
 */
 int dbi_get_driver_capabilities(string driver) [flags=CONSTANT,NAMED_ARGS] {
+    // the driver name is looked up as a C string, which would be cut at a NUL character
+    if (q_check_no_nul(driver->c_str(), driver->size())) {
+        return 0;
+    }
     DBIDriver* dd = DBI.find(driver->getBuffer());
     return !dd ? 0 : qore_dbi_private::get(*dd)->getCaps();
 }
@@ -235,8 +274,15 @@ int dbi_get_driver_capabilities(string driver) [flags=CONSTANT,NAMED_ARGS] {
     @endcode
 
     @since %Qore 0.8.6
+
+    @note since %Qore 3.0 a driver name with a NUL character returns @ref nothing, and @ref Qore::errno() "errno()" returns
+    \c EINVAL
 */
 *hash<auto> dbi_get_driver_options(string driver) [flags=CONSTANT,NAMED_ARGS] {
+    // the driver name is looked up as a C string, which would be cut at a NUL character
+    if (q_check_no_nul(driver->c_str(), driver->size())) {
+        return QoreValue();
+    }
     DBIDriver* dd = DBI.find(driver->getBuffer());
     return !dd ? 0 : qore_dbi_private::get(*dd)->getOptionHash();
 }

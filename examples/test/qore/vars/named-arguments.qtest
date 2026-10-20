@@ -1509,7 +1509,7 @@ public class NamedArgumentsTest inherits QUnit::Test {
             "AbstractHttpPollConnection connection, Promise promise, EventNotifier notifier, "
             "Queue queue, object channel) { "
             "Http3ClientPollOperationBase h3(socket: socket, host: \"localhost\", port: 443, "
-            "connection: connection, family: AF_UNSPEC, connect_timeout: 1s); "
+            "connection: connection, family: AF_UNSPEC, connect_timeout: 1s, avoid_families: (AF_INET6,)); "
             "h3.setQuicStreamLimit(stream_limit: 10); "
             "h3.checkCapacity(max_streams: 10); "
             "h3.endSubmitOk(stream_id: 1); "

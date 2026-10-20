@@ -23,11 +23,11 @@
 */
 
 # minimum qore version
-%requires qore >= 2.0
+%requires qore >= 3.0
 
 %requires Mime >= 1.7
 %requires Util
-%requires(reexport) MailMessage >= 1.5
+%requires(reexport) MailMessage >= 1.5.1
 %requires(reexport) ConnectionProvider >= 1.4
 %requires(reexport) Logger
 

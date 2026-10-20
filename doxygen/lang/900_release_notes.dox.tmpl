@@ -8,10 +8,26 @@
     result without an unused-result warning or a dummy local variable. It preserves evaluation, exceptions,
     and temporary-value cleanup in all execution modes and remains active when debugging is disabled.
 
+    <b>Security</b>: the steps of a poll operation that the async I/O controller runs on its callback workers,
+    such as \c continuePoll() and \c onComplete() of an operation implemented in %Qore, are governed by the
+    @ref sandboxing "sandbox" of the code that submitted the operation (see
+    @ref Qore::AsyncIoController::submit() "AsyncIoController::submit()").  They ran without it, so an asynchronous
+    @ref httpclientiointro "HttpClientIo" or @ref restclientiointro "RestClientIo" request made by sandboxed code
+    could follow a redirect to, or retry a connection to, an address its sandbox denies.
+
     <b>Security</b>: credential headers, including headers a client declares sensitive with the new
     \c sensitive_headers option or \c addSensitiveHeaders() and headers whose names contain \c token, \c secret,
     \c api-key, \c password or \c auth, are no longer exposed in the exception information, request information or
     logs of the @ref restclientintro "RestClient" and @ref restclientiointro "RestClientIo" modules.
+
+    <b>Security</b>: @ref Qore::sprintf() "sprintf()", @ref Qore::printf() "printf()" and the other
+    @ref string_formatting "string formatting" functions no longer write past the end of a buffer on the stack when a
+    floating-point or number conversion has a long field width and precision, such as <tt>%-+01000000.100000e</tt>; a
+    field width or precision larger than 2147482623, such as <tt>%2147483647d</tt>, raises a \c SPRINTF-ERROR
+    exception with every C library, where it could corrupt the result or crash the process, or gave a result that
+    depended on the C library (a field width or precision with more digits than an \c int can hold also overflowed
+    while it was read); a number conversion whose output would be longer than 2147483647 characters raises the same
+    exception, where it gave \c "<number error>".
 
     <b>CSV files are RFC 4180 by default</b>: the @ref csvutilintro "CsvUtil" writers escape a quote in a quoted
     field by doubling it, as spreadsheet programs and most applications do, instead of with a backslash, and quote
@@ -40,11 +56,29 @@
     closing quote raises \c SPLIT-ERROR when splitting a string, where its text was silently returned.  The new
     \c quote_escape parameter selects RFC 4180 splitting, where a backslash is an ordinary character.
 
-    HttpClientIo and RestClientIo report certificate verification failures from HTTP/1.1 and HTTP/2 requests immediately,
-    preserving OpenSSL's certificate verification reason. A refused certificate is no longer retried as a transient
-    connection failure, which could delay the call and replace the original reason with a connection timeout.
-    This also applies to automatic protocol selection with HTTP/3 disabled. Connections interrupted during the
-    handshake can still be retried.
+    HttpClientIo and RestClientIo report certificate verification failures from HTTP/1.1, HTTP/2 and HTTP/3 requests
+    immediately, preserving OpenSSL's certificate verification reason. A refused certificate is no longer retried as a
+    transient connection failure, which could delay the call and replace the original reason with a connection
+    timeout. A connection that the @ref sandboxing "sandbox" denies is likewise reported as it is, with
+    \c NETWORK-ACCESS-DENIED or \c FILESYSTEM-ACCESS-DENIED, instead of \c HTTPCLIENT-CONNECT-ERROR, and is not
+    retried. This also applies to automatic protocol selection: when HTTP/3 and HTTP/2 are tried in parallel, a
+    denial or a certificate refusal of either protocol is reported as it is, even if the other protocol failed for
+    another reason. The parallel attempt ends early only when a protocol connects: when one protocol fails, the
+    outcome of the other one is awaited, so a server that receives HTTP/3 only is reached even when the refusal of
+    the TCP connection comes first. Connections interrupted during the handshake can still be retried. An HTTP/3
+    (QUIC) connection that refuses the server certificate raises \c SOCKET-SSL-ERROR with the same verification
+    reason as a TLS connection over TCP instead of \c QUIC-READ-ERROR, also with the
+    @ref Qore::HTTPClient "HTTPClient" class.
+
+    HttpClientIo creates HTTP/3 connections without blocking: the connection's poll operation resolves the host name
+    and binds the UDP socket in the I/O controller, and the bind is subject to the network policy of the
+    @ref sandboxing "sandbox" of the code that makes the request.  Asynchronous requests, including those of
+    RestClientIo, can therefore retry an HTTP/3 connection, try another address family of the host, and race
+    HTTP/3 against HTTP/2 for a redirect to another origin, where these steps run in an I/O worker; they raised
+    \c SOCKET-SYNC-ON-IO-THREAD-ERROR, or used HTTP/2 only and remembered it for the host.
+    @ref Qore::Http3ClientPollOperationBase "Http3ClientPollOperationBase" accepts an unbound socket and the address
+    families to avoid, and reports the family of the connection with
+    @ref Qore::Http3ClientPollOperationBase::getAddressFamily() "getAddressFamily()".
 
     LLM streaming requests accept a @ref QoreLlmUtils::LlmCancellation "LlmCancellation" token in
     @ref QoreLlmUtils::LlmRequestOptions::cancellation "LlmRequestOptions::cancellation". Cancelling the token
@@ -179,6 +213,8 @@
     constraints Anthropic does not support (numeric ranges, <tt>maxItems</tt>, <tt>uniqueItems</tt>) moved into the
     descriptions; a larger schema, or one with an open object, is stated in a system instruction, and the caller
     validates the answer.
+    Its chat and completion requests also honour the request's own timeout (<tt>timeout_ms</tt>); they were cut off
+    at the client's timeout, 120 seconds by default, whatever the request asked for.
 
     AOT-compiled typed <tt>foreach</tt> loops now safely skip uninitialized or removed
     lists, matching the interpreter. A conditionally assigned list inside an outer
@@ -282,6 +318,17 @@
     than that of the other operations on its socket, as with readiness polls of
     @ref Qore::Socket::poll() "Socket::poll()".
 
+    Operations submitted to the async I/O controller can report their state: with the new \c stateQueue key of
+    @ref Qore::SocketPollOperationInfo "SocketPollOperationInfo", the controller pushes a
+    @ref Qore::SocketPollStateInfo "SocketPollStateInfo" event onto the given Queue after each step that changes the
+    operation's state (only for changes into the states given with the new \c notifyStates key, if set), and a last
+    event when the operation ends for any reason, before its result is delivered; see
+    @ref asynciocontroller_state_events.  Code that waits for an operation to reach a state blocks on the Queue
+    instead of calling @ref Qore::AbstractPollOperation::getState() "getState()" repeatedly while the controller
+    changes the state on its I/O thread.  @ref Qore::AsyncIoController::submit() "AsyncIoController::submit()"
+    raises \c ASYNC-IO-ERROR for a result or state Queue with a maximum size: a push to a full result Queue blocked
+    the I/O thread, and with it every operation on that thread, until the Queue had room.
+
     The async I/O controller runs one I/O thread per CPU available to the process by default (on Linux, the CPUs of its
     CPU affinity mask, and at most the CPU time its cgroup CPU quota allows, as in a container started with a CPU
     limit), at most 8; it ran a single I/O thread unless \c QORE_IO_THREADS was set, so all network I/O of a process
@@ -291,7 +338,12 @@
     deadlines of its operations take one entry per operation instead of one per event, a socket that is already
     non-blocking is not set again on every read or write, the poll info that a native poll operation returns for the
     next event reuses the previous one instead of being created anew, and operations are looked up by an integer ID
-    instead of by their key.
+    instead of by their key.  When an I/O thread stops while another one runs or stops,
+    @ref Qore::AsyncIoController::cancelByOwner() "AsyncIoController::cancelByOwner()" and the other cancellations
+    cancel the operations on the running threads, where they canceled nothing, and no longer wait forever for a
+    command left to a thread that was stopping.  An operation that replaces another one with the same key while a step of
+    the replaced one runs on a callback worker no longer receives the result of that step, and the replaced operation
+    is canceled once its step has returned instead of while it runs.
 
     @ref Qore::Socket::getSSLCipherName() "Socket::getSSLCipherName()" and
     @ref Qore::Socket::getSSLCipherVersion() "Socket::getSSLCipherVersion()" read the cipher from the socket's I/O
@@ -586,6 +638,35 @@
 
     @subsection qore_3_0_0_compatibility Changes That Can Affect Backwards-Compatibility
 
+    @par Thread-Local Data Is Freed With the Program That Owns It
+    @parblock
+    The thread-local data that @ref Qore::save_thread_data() "save_thread_data()" saves is shared by a family of
+    @ref Qore::Program "Program" objects: a Program created without a parent (the main Program, or one created as an
+    independent Program), its root, and every Program created from it or from one of its members.  A thread's data in
+    a family is now freed when the family's root is destroyed, also for a thread that is still alive, such as an idle
+    @ref Qore::Thread::ThreadPool "ThreadPool" worker; it was freed only when the thread ended, and not at all for a
+    thread that had used the data only through a Program that no longer existed, such as a pool worker that had run
+    tasks of a child Program.  Once the root's teardown has started, data that a thread saves in the family is freed
+    by the end of the teardown; a child Program that is still alive when its root's teardown ends has thread-local
+    data of its own, empty at first.  Clearing or freeing the data, at the end of a pool task, a thread or a root's
+    teardown, no longer holds an internal lock while destructors run, so a destructor run then can use thread-local
+    data, enter another Program, or start a thread; a destructor that entered a Program the pool worker had not entered
+    deadlocked the worker.  For C++ modules, \c QoreProgram::getThreadData() never returns nullptr, and the hash it
+    returns is valid until the thread ends or the family's root is destroyed.
+    @endparblock
+
+    @par A Bare Name in a Class Refers to the Class Before a Top-Level Local Variable
+    With @ref allow-bare-refs "%allow-bare-refs" (set by @ref new-style "%new-style" and \c %%modern), a bare name in
+    a method refers to the method's own local variables first, then to the class's members, constants, static
+    variables and methods, and only then to a top-level local variable of the program, which has global scope like a
+    global variable (see @ref threading_and_variables).  A top-level local variable was found first, before the
+    class's names, so a bare member name in a method gave the top-level local variable of the same name (and in
+    another thread, that thread's empty copy of it), and a bare call gave a closure in a top-level local variable
+    instead of the method, while the same names declared with \c our or \c thread_local gave the class's member or
+    method, as they do now.  In a static method, a bare name of an instance member is a parse error even when a
+    top-level local variable has the same name, as it is when a global variable has it; use a different name for the
+    top-level local variable.
+
     @par Stream Conversions Raise an Error for a Character the Target Encoding Cannot Hold
     @ref Qore::EncodingConversionInputStream "EncodingConversionInputStream" and
     @ref Qore::EncodingConversionOutputStream "EncodingConversionOutputStream" raise an \c ENCODING-CONVERSION-ERROR
@@ -651,6 +732,234 @@
     <tt>while ((i = str.find(sep, i)) >= 0) { ...; i += sep.size(); }</tt> with an empty \c sep, must now check
     for an empty search string; @ref Qore::replace() "replace()" and the string \c split() methods do not change
     a string for an empty search string, as before.
+    @endparblock
+
+    @par A Hash Key Cannot Contain a NUL Character
+    @parblock
+    A hash key or object member name is a NUL-terminated string, so a string with a NUL character used as a key was
+    cut at the NUL character and named another key: <tt>{"a\\x00b": 1}</tt> made a hash with the key \c "a", and
+    <tt>h{"order\\x00id"}</tt> read and wrote \c h.order.  Such a key now raises a \c HASH-KEY-ERROR exception,
+    which gives the key and the byte offset of its first NUL character.  A constant key of a hash literal is reported
+    when the code is parsed; a key computed at run time is reported when the hash or object is read or written, in
+    every execution mode.  The same error is raised by \c hash() from a list, \c has_key(), the thread-local data
+    functions, the slice of a hash or an object, deserialization, @ref Qore::TreeMap "TreeMap" paths, and the JSON,
+    CBOR, TOON, YAML and i18n catalog parsers; a JSON Pointer with a NUL character raises \c JSON-POINTER-ERROR.  C++
+    code that makes a key from a string with a length checks it with the new QoreHashNode::checkKey().
+    @endparblock
+
+    @par A Path Cannot Contain a NUL Character
+    @parblock
+    A path is passed to the operating system as a NUL-terminated string, so a path with a NUL character was cut at the
+    NUL character and named another file than the string: <tt>ReadOnlyFile::readTextFile(path + "\\x00.txt")</tt>
+    read the file named by \c path although the string passed a check on its \c ".txt" extension,
+    <tt>unlink(path + "\\x00.zzz")</tt> deleted \c path, and <tt>Dir::chdir(dir + "\\x00/zzz")</tt> changed to
+    \c dir.  Every API that passes a string to the operating system as a file or directory path, a UNIX domain socket
+    path or socket target, a module name or path, or a time zone region now refuses a string with a NUL character,
+    before any @ref sandboxing "sandbox" check and before any system call (see @ref path_nul_characters):
+    - an API with an error code raises it, with \c EINVAL as the argument and a description giving the string and
+      the byte offset of its first NUL character: the @ref Qore::File "File", @ref Qore::ReadOnlyFile "ReadOnlyFile",
+      @ref Qore::FileLineIterator "FileLineIterator", @ref Qore::FileInputStream "FileInputStream",
+      @ref Qore::FileOutputStream "FileOutputStream", @ref Qore::FilePollOperation "FilePollOperation" and
+      @ref Qore::Dir "Dir" methods, @ref Qore::rename() "rename()", @ref Qore::mkdir_ex() "mkdir_ex()",
+      @ref Qore::readlink() "readlink()", @ref Qore::symlink() "symlink()", @ref Qore::realpath() "realpath()",
+      @ref Qore::load_module() "load_module()" and the other module loading functions and
+      @ref Qore::Program "Program" methods, @ref Qore::Program::setScriptPath() "Program::setScriptPath()",
+      @ref Qore::TimeZone "TimeZone" regions (also in deserialized dates), the @ref Qore::Socket "Socket" connect
+      and bind methods, @ref Qore::Socket::setSslCaLocations() "Socket::setSslCaLocations()",
+      @ref Qore::PollPipeline "PollPipeline" connect steps, the @ref Qore::HTTPClient "HTTPClient" URL host (such as
+      a decoded \c "socket=" path) and SSL file options, the @ref Qore::FtpClient "FtpClient" local paths, and the
+      @ref Qore::SandboxManager "SandboxManager" path rules
+    - an API that reports errors with its return value and @ref Qore::errno() "errno()" returns its failure value and
+      sets @ref Qore::errno() "errno()" to \c EINVAL: the \c is_*() functions return @ref False "False";
+      @ref Qore::stat() "stat()", @ref Qore::lstat() "lstat()", @ref Qore::hstat() "hstat()",
+      @ref Qore::hlstat() "hlstat()", @ref Qore::statvfs() "statvfs()" and @ref Qore::glob() "glob()" return
+      @ref nothing; @ref Qore::unlink() "unlink()", @ref Qore::mkdir() "mkdir()", @ref Qore::rmdir() "rmdir()",
+      @ref Qore::chmod() "chmod()", @ref Qore::chdir() "chdir()", @ref Qore::mkfifo() "mkfifo()",
+      @ref Qore::chown() "chown()", @ref Qore::lchown() "lchown()", @ref Qore::File::open() "File::open()" and
+      @ref Qore::Socket::bind() "Socket::bind()" return -1
+
+    C++ code that passes a string with a length to the operating system checks it with the new q_check_path(), or
+    q_check_no_nul() for other strings.
+    @endparblock
+
+    @par Every Filesystem Entry Point Follows the Sandbox Filesystem Policy
+    @parblock
+    Some filesystem operations were not checked against the @ref sandboxing "sandbox" filesystem policy or the
+    @ref Qore::PO_NO_FILESYSTEM "PO_NO_FILESYSTEM" parse option; they now are (see @ref sandbox_filesystem):
+    - @ref Qore::mkdir() "mkdir()" with \a parents made directories with no check at all, and
+      @ref Qore::mkdir_ex() "mkdir_ex()" with \a parents and @ref Qore::Dir::create() "Dir::create()" checked only
+      the directory itself; the directory and each parent directory that would be created now need \c QSEC_CREATE
+      access
+    - the static @ref Qore::ReadOnlyFile::stat() "ReadOnlyFile::stat()", \c lstat(), \c hstat(), \c hlstat() and
+      \c statvfs() methods (also called through @ref Qore::File "File") need \c QSEC_READ access, and
+      @ref Qore::Dir::stat() "Dir::stat()", @ref Qore::Dir::hstat() "Dir::hstat()",
+      @ref Qore::Dir::statvfs() "Dir::statvfs()" and @ref Qore::Dir::exists() "Dir::exists()" need \c QSEC_READ
+      access to the directory
+    - @ref Qore::Dir::removeFile() "Dir::removeFile()" needs \c QSEC_DELETE access to the file, and
+      @ref Qore::File::chown() "File::chown()" needs \c QSEC_WRITE access to the file, whatever access the file was
+      opened with
+    - the @ref Qore::Dir "Dir" listing methods and @ref Qore::glob() "glob()" leave out the entries that the policy
+      does not allow to be read, instead of listing them (\c Dir) or failing the whole call (\c glob()); see
+      @ref sandbox_fs_listings
+    - @ref Qore::TimeZone "TimeZone" objects created from a zoneinfo path and deserialized dates whose zone is a
+      zoneinfo path raised \c ILLEGAL-FILESYSTEM-ACCESS under @ref Qore::PO_NO_FILESYSTEM "PO_NO_FILESYSTEM" but
+      still opened the file; the file is no longer opened
+    - a time zone region with a \c ".." or an empty path component or a backslash, which could name a file outside of
+      the zoneinfo directory, raises \c TZINFO-ERROR; see @ref sandbox_fs_tz_regions
+    @endparblock
+    @par getpwuid2(), getpwnam2() and getgrnam2() Raise Their Documented Error Codes
+    @ref Qore::getpwuid2() "getpwuid2()", @ref Qore::getpwnam2() "getpwnam2()" and
+    @ref Qore::getgrnam2() "getgrnam2()" raised exceptions with misspelled error codes for an unknown user or group
+    or a lookup error: \c GETPPWUID2-ERROR, \c GETPPWNAM2-ERROR and \c GETPGRNAM2-ERROR.  They now raise the error
+    codes they document: \c GETPWUID2-ERROR, \c GETPWNAM2-ERROR and \c GETGRNAM2-ERROR.  Code that catches the
+    misspelled error codes must catch the documented ones instead.
+
+    @par A String With a NUL Character Is Refused Where It Would Be Cut
+    @parblock
+    A string passed to the operating system, a C library or a network protocol was cut at its first NUL character
+    there, so it named something else than the string, after any check made by %Qore code on the whole string: a host
+    name such as <tt>"evil.example\\x00.trusted.example"</tt> passes a check that it ends with
+    <tt>".trusted.example"</tt>, but a connection was made to \c evil.example.  Such a string is now refused before
+    it is used, and before any @ref sandboxing "sandbox" check (see @ref string_nul_characters):
+    - commands: @ref Qore::system() "system()" (\c SYSTEM-ERROR), @ref Qore::backquote() "backquote()"
+      (\c BACKQUOTE-ERROR) and @ref Qore::exec() "exec()" (\c EXEC-ERROR)
+    - environment variables: @ref Qore::getenv() "getenv()" returns @ref nothing, and
+      @ref Qore::setenv() "setenv()" and @ref Qore::unsetenv() "unsetenv()" return -1, with
+      @ref Qore::errno() "errno()" returning \c EINVAL
+    - user and group names: @ref Qore::getpwnam() "getpwnam()" and @ref Qore::getgrnam() "getgrnam()" return
+      @ref nothing with \c EINVAL, @ref Qore::getpwnam2() "getpwnam2()", @ref Qore::getgrnam2() "getgrnam2()",
+      @ref Qore::Dir::chown() "Dir::chown()" and @ref Qore::Dir::chgrp() "Dir::chgrp()" raise their error codes
+    - host names, addresses and service names: @ref Qore::gethostbyname() "gethostbyname()" and
+      @ref Qore::gethostbyname_long() "gethostbyname_long()" return @ref nothing with \c EINVAL;
+      @ref Qore::gethostbyaddr() "gethostbyaddr()", @ref Qore::getaddrinfo() "getaddrinfo()", the asynchronous
+      lookups, @ref Qore::Socket::connectINET() "Socket::connectINET()",
+      @ref Qore::Socket::bindINET() "Socket::bindINET()", @ref Qore::Socket::resolveAddrInfo()
+      "Socket::resolveAddrInfo()", @ref Qore::Http1Connection "Http1Connection" and the FTP poll operations raise
+      their error codes
+    - URLs: @ref Qore::parse_url() "parse_url()" and @ref Qore::get_safe_url() "get_safe_url()" raise
+      \c PARSE-URL-ERROR, @ref Qore::parseURL() "parseURL()" returns @ref nothing, and the URLs of
+      @ref Qore::HTTPClient "HTTPClient" and @ref Qore::FtpClient "FtpClient" raise \c HTTP-CLIENT-URL-ERROR and
+      \c FTP-URL-ERROR
+    - HTTP messages: the method (\c HTTP-CLIENT-METHOD-ERROR), request target (\c HTTP-CLIENT-URL-ERROR) and header
+      values (the new \c HTTP-CLIENT-HEADER-ERROR) of @ref Qore::HTTPClient "HTTPClient" requests, its user name,
+      password, default path, HTTP version and default headers, and the request line, status line and header values of
+      the messages sent by @ref Qore::Socket "Socket" (\c SOCKET-SEND-ERROR), and the request strings of the HTTP/1
+      and HTTP/2 client poll operations; also TLS ALPN protocol names
+      (@ref Qore::Socket::setAlpnProtocols() "Socket::setAlpnProtocols()") and the POP3 APOP credentials of
+      @ref Qore::PollPipeline "PollPipeline"
+    - FTP: remote paths, commands, the host name, user name and password of @ref Qore::FtpClient "FtpClient" raise the
+      error code of the method
+    - databases: datasource strings (\c DATASOURCE-PARSE-ERROR), connection values given to the constructors and
+      setters of @ref Qore::SQL::Datasource "Datasource" and @ref Qore::SQL::DatasourcePool "DatasourcePool" (an
+      SQLite database file name cut at the NUL character named another file), driver names, and DBI option names and
+      string values (\c DBI-OPTION-ERROR)
+    - the principals, credential cache and keytab names, passwords and hex strings of the \c krb5 module, and the URI,
+      database and collection names and ObjectId strings of the \c mongodb module
+    - algorithm and mode names: digest names (@ref Qore::digest() "digest()", @ref Qore::hmac() "hmac()",
+      @ref Qore::pbkdf2() "pbkdf2()" and @ref Qore::Digest "Digest": \c DIGEST-ERROR), cipher names
+      (@ref Qore::encrypt() "encrypt()" and @ref Qore::get_encryptor() "get_encryptor()": \c ENCRYPT-ERROR;
+      @ref Qore::decrypt_to_binary() "decrypt_to_binary()", @ref Qore::decrypt_to_string() "decrypt_to_string()" and
+      @ref Qore::get_decryptor() "get_decryptor()": \c DECRYPT-ERROR), compression algorithm names
+      (@ref Qore::get_compressor() "get_compressor()" and @ref Qore::get_decompressor() "get_decompressor()":
+      \c COMPRESS-ERROR), the HTTP/2 and HTTP/3 modes of @ref Qore::HTTPClient "HTTPClient" and
+      @ref Qore::set_global_http2_mode() "set_global_http2_mode()", and the GSSAPI mechanism and name type options of
+      the \c krb5 module; @ref Qore::get_cipher_info() "get_cipher_info()" and @ref Qore::has_digest() "has_digest()"
+      return @ref nothing and @ref False with \c EINVAL
+    - character encoding names: a name with a NUL character is the name of an encoding that %Qore does not know (the
+      whole name, with the NUL character escaped as \c \\x00), so converting to or from it raises
+      \c ENCODING-CONVERSION-ERROR instead of using the encoding named by the part before the NUL character
+    - keywords compared with a string: a string with a NUL character is no longer equal to the keyword before the
+      NUL character (for example, the goal <tt>"connect\\x00x"</tt> given to
+      @ref Qore::SocketPollOperation "SocketPollOperation" raises \c INVALID-GOAL, and a server-sent event field
+      named <tt>"data\\x00x"</tt> is not the \c data field); in the C++ API,
+      <tt>QoreString::operator==(const char*)</tt> now compares the whole string, as the other equality operators of
+      \c QoreString do, instead of the part before its first NUL character
+
+    Passwords, URLs, datasource strings, HTTP request targets and header values, and DBI option values are not shown
+    in the exception, so that a secret does not appear in a log.  @ref Qore::basename() "basename()",
+    @ref Qore::dirname() "dirname()", @ref Qore::get_masked_url() "get_masked_url()", the URL encoding functions and
+    the host functions of the \c sshutil module, which do not pass the string on, process the whole string instead of
+    the part before the NUL character.
+    @endparblock
+
+    @par A Name With a NUL Character Names No Function, Method, Class or Other Identifier
+    @parblock
+    A function, method, class, variable, type or other identifier named by a runtime string was looked up with the
+    name cut at its first NUL character, so a check made by %Qore code on the whole name could be bypassed: a
+    dispatcher that only calls methods whose names end with \c "_public" called \c deleteAll() for
+    <tt>call_object_method(obj, "deleteAll\\x00_public")</tt>.  Such a name is now refused with the error that the API
+    raises for a name that does not exist (with \c EINVAL as the argument and a description showing the name and the
+    offset of the NUL character), or the API returns the value it returns for a name that does not exist, with
+    @ref Qore::errno() "errno()" returning \c EINVAL:
+    - functions: @ref Qore::call_function() "call_function()", @ref Qore::call_function_args() "call_function_args()",
+      @ref Qore::call_builtin_function() "call_builtin_function()" and
+      @ref Qore::call_builtin_function_args() "call_builtin_function_args()" (\c NO-FUNCTION),
+      @ref Qore::exists_function() "exists_function()" and @ref Qore::function_type() "function_type()"
+    - methods and classes: @ref Qore::call_object_method() "call_object_method()",
+      @ref Qore::call_object_method_args() "call_object_method_args()" (\c METHOD-DOES-NOT-EXIST),
+      @ref Qore::call_static_method() "call_static_method()" and
+      @ref Qore::call_static_method_args() "call_static_method_args()" (\c UNKNOWN-CLASS, \c UNKNOWN-METHOD),
+      @ref Qore::call_pseudo() "call_pseudo()" and @ref Qore::call_pseudo_args() "call_pseudo_args()",
+      @ref Qore::create_object() "create_object()" and @ref Qore::create_object_args() "create_object_args()"
+      (\c CREATE-OBJECT-ERROR), the \c hasCallable*Method() and \c getCallReference() pseudo-methods of objects
+    - variables: @ref Qore::set_global_var_value() "set_global_var_value()" and
+      @ref Qore::set_local_var_value() "set_local_var_value()" (\c UNKNOWN-VARIABLE)
+    - the function, method, class, hashdecl, global variable, define and parse option names of
+      @ref Qore::Program "Program" and @ref Qore::ProgramControl "ProgramControl", including the names to import
+      functions, classes and hashdecls as
+    - the class, enum, type, hashdecl, module and plugin module names of serialized data (\c DESERIALIZATION-ERROR)
+    - the names looked up by the reflection module (classes, methods, members, constants, functions, namespaces,
+      global variables, typed hashes, enums, types and plugin modules)
+    @endparblock
+
+    @par A CR, LF or Other Control Character Is Refused in HTTP Message Lines and FTP Commands
+    @parblock
+    A CR or LF in a string written to a line of an HTTP message or to an FTP command ended the line there and started
+    another one: a header value <tt>"x\\r\\nSet-Cookie: a=b"</tt> sent a second header (header injection), a request
+    target, method, version or status message with a line break sent another header or request (request and response
+    splitting), and an FTP remote path <tt>"a.txt\\r\\nDELE b.txt"</tt> sent a second command (FTP command
+    injection).  Such a string is now refused before anything is sent, with the error code of the API:
+    - HTTP: the method, request target, version, status message, and header and trailer names and values sent by
+      @ref Qore::Socket "Socket" (\c SOCKET-SEND-ERROR and the codes of the response poll operations), the method,
+      header names and values, default headers, and the URL and proxy URL (whose host is sent in the \c Host header
+      or the \c CONNECT request) of @ref Qore::HTTPClient "HTTPClient", the HTTP/1 and HTTP/2 client poll
+      operations and their target hosts, and @ref Qore::Http1Connection "Http1Connection" hosts; these strings cannot
+      contain any control character other than horizontal tab (RFC 9110 section 5.5, RFC 9112); the request target
+      of an @ref Qore::HTTPClient "HTTPClient" request is percent-encoded, as before, so a line break in it is sent
+      as \c %0D%0A
+    - FTP: the remote paths, commands and arguments, user names, passwords and URLs of
+      @ref Qore::FtpClient "FtpClient" and the FTP poll operations, including the remote file name that
+      @ref Qore::FtpClient::put() "FtpClient::put()" takes from the local path, cannot contain CR or LF characters
+    - the user name of a POP3 \c APOP command made by @ref Qore::PollPipeline "PollPipeline"
+
+    Header values, request targets, passwords and URLs are not shown in the exception.
+    @endparblock
+
+    @par Mail Is Sent With SMTP Transparency, and a Line Break Cannot Start Another Mail Command or Header
+    @parblock
+    The @ref smtpclientintro "SmtpClient", @ref mailmessageintro "MailMessage", @ref mimeintro "Mime" and
+    @ref pop3clientintro "Pop3Client" modules no longer let a string start another command or header:
+    - a message is always sent with SMTP transparency: every CR or LF that is not part of a CRLF line break is sent as
+      CRLF, and a \c "." is added at the start of every line that starts with \c "."; a message created with SMTP
+      mode off, or a bare LF before a line with only \c ".", let that line end the data and the lines after it be
+      read as SMTP commands (SMTP smuggling)
+    - the sender address of a message parsed from raw message text is its address, as for a message created to be
+      sent; it was the whole decoded \c From header, which could contain a line break that started another command;
+      a sender or recipient address with a NUL, CR or LF character raises \c MESSAGE-ERROR
+    - a header value with a CR or LF character is encoded (\c "=0D=0A") instead of being written with a line break
+      that started another header, a header name with a NUL, CR or LF character raises \c HEADER-ERROR, and a MIME
+      part header name or value with one raises \c PART-ERROR
+    - a SASL credential with a character that separates the fields of the SASL message raises
+      \c SMTPCLIENT-INVALID-AUTHENTICATION, and the \c OAUTHBEARER user name is escaped as RFC 7628 requires
+    - a POP3 command or message ID with a NUL, CR or LF character (for example \c "1\r\nDELE 2" as the ID of a
+      message to retrieve) raises \c POP3-SERVER-ERROR, and a POP3 user name or password with one, or an
+      \c XOAUTH2 user name or token with a NUL or \c ^A character, raises \c POP3-URL-ERROR or
+      \c POP3-CONFIG-ERROR, before anything is sent
+
+    Use @ref MailMessage::Message::serializeRaw() "Message::serializeRaw()" for a message that is stored or uploaded
+    rather than sent with SMTP.  @ref MailMessage::Message::getFrom() "Message::getFrom()" of a parsed message now
+    returns the sender's email address, and @ref MailMessage::Message::getSender() "Message::getSender()" the
+    \c From header.
     @endparblock
 
     @par Modules Export Only Their Own Declarations and Reexported Modules
@@ -809,6 +1118,21 @@
     @ref DbDataProvider::DbTablesDataProvider "DbTablesDataProvider" or the tables analyzed by
     @ref SqlUtil::AbstractDatabase::computeStatistics() "AbstractDatabase::computeStatistics()" without the
     \c tables option, must use a connection whose \c search_path names those schemas.
+    @endparblock
+
+    @par Schema Alignment Drops Indexes That the Template Does Not Have
+    @parblock
+    Aligning a table or a schema with @ref sqlutilintro "SqlUtil"
+    (@ref SqlUtil::AbstractTable::getAlignSql() "AbstractTable::getAlignSql()",
+    @ref SqlUtil::AbstractDatabase::getAlignSql() "AbstractDatabase::getAlignSql()", and the
+    @ref schemaintro "Schema" module, including \c qschema \c align) drops an index of the table that the template
+    does not have again, on every database, as it did before SqlUtil 1.7.2: an index that was added to a table by
+    hand, or that is left from an older version of the schema, is dropped by the next alignment; since SqlUtil 1.7.2
+    such an index was kept.  An index with the definition of an index of the template under another name is renamed,
+    the index of a primary key, unique constraint or foreign constraint, such as the index that MySQL creates for a
+    foreign constraint, is kept or dropped with its constraint, and the indexes that a \c reconcile_table migration
+    of a data schema created are kept.  To keep an index, add it to the template, or leave the indexes out of the
+    alignment with the \c omit option (see @ref SqlUtil::AbstractTable::AlignTableOptions "AlignTableOptions").
     @endparblock
 
     @par Stream Sockets Bound on All Interfaces Serve IPv4 and IPv6
@@ -1734,6 +2058,11 @@ dsp.setMutationObserver(*hash<SqlMutationDecisionInfo> sub (hash<SqlMutationEven
     - fixed reference cycles closed only by values stored in a @ref Qore::Thread::Queue "Queue" or a
       @ref Qore::TreeMap "TreeMap" (for example a reference to an object's member pushed into a queue held by that
       object) being kept for the life of the process
+    - binary modules can have the garbage collector follow the values that the private data of their objects holds
+      in C++ containers: private data derived from the new C++ class \c AbstractScannablePrivateData reports them to
+      the collector with \c scanValues() while its object has registered it with
+      \c QoreObject::addPrivateDataScan(), so that a reference cycle through such a value is collected;
+      \c _QORE_HAS_SCANNABLE_PRIVATE_DATA is defined when the API is available
     - garbage collection no longer walks a graph that an earlier scan has already walked and that has not gained an
       edge since: storing a reference to a large, unchanged object graph in a new object now costs the same whatever
       the size of the graph, which speeds up loading schema-heavy modules
@@ -1847,6 +2176,9 @@ dsp.setMutationObserver(*hash<SqlMutationDecisionInfo> sub (hash<SqlMutationEven
       - @ref Qore::cancel_thread() "cancel_thread()": requests cooperative cancellation of another thread
       - @ref Qore::channel_select() "channel_select()": waits on multiple @ref Qore::Thread::Channel "Channel"
         objects for the first ready operation (send or recv)
+      - @ref Qore::check_line_text() "check_line_text()": raises the given error code for a string with a NUL, CR or
+        LF character, which cannot be written to a line of a line-based protocol, without showing the string if it
+        can hold a secret; see @ref string_line_characters
       - @ref Qore::check_unicode_byte_order() "check_unicode_byte_order()": raises \c ENCODING-BYTE-ORDER-ERROR for
         data in the other byte order than its declared UTF-16 or UTF-32 encoding, and
         @ref Qore::get_unicode_byte_order() "get_unicode_byte_order()": returns the UTF-16 or UTF-32 byte order of
@@ -3093,7 +3425,16 @@ while (*binary chunk = input.read(65536)) {
       - fixed passing a REST client in the \c snrestclient option, which always failed
 
     - @ref sqlite3sqlutilintro "Sqlite3SqlUtil" module
+      - a column's \c NOT \c NULL constraint can be set or dropped, as by table alignment, with SQLite 3.53.0 and
+        later; any other change to a column of an existing table still raises \c UNSUPPORTED, now with a
+        description of what SQLite cannot change (see @ref sqlite3_column_changes)
       - fixed tables reporting no primary key, so \c upsert() always failed
+      - fixed tables being created without their primary key, so that the key was not enforced and every schema
+        upgrade of a table with a primary key raised \c UNSUPPORTED; the primary key is now created with its table
+        (see @ref sqlite3_primary_keys)
+      - fixed creating a table with foreign constraints, which failed with an SQL syntax error; they are now
+        created with their table and aligned by their definitions, as SQLite does not report their names; they are
+        declared but not enforced through the \c sqlite3 driver (see @ref sqlite3_foreign_constraints)
       - fixed duplicate-row detection never recognizing a duplicate key
       - fixed describing a table's indexes: automatic indexes failed, lower-case unique indexes were not unique,
         and quoted column names kept their quotes
@@ -3159,6 +3500,8 @@ while (*binary chunk = input.read(65536)) {
       - fixed the bulk update closure returned by
         @ref SqlUtil::AbstractTable::getBulkUpdateClosure() "AbstractTable::getBulkUpdateClosure()" executing an
         unrestricted \c select on the table in each call that updated more than one row row by row
+      - table and schema alignment drop an index that the template does not have again, as before SqlUtil 1.7.2;
+        see @ref qore_3_0_0_compatibility
 
     - @ref utilintro "Util" module
       - @ref Util::get_file_from_http() "get_file_from_http()" and @ref Util::get_file_from_url() "get_file_from_url()"
@@ -4465,6 +4808,116 @@ while (*binary chunk = input.read(65536)) {
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - Fixed the warnings of the files of a separated user module other than its \c .qm file: each was parsed with the
+      warnings of the code loading the module (with \c qcc, the default warnings), not those the \c .qm file sets, so
+      \c %%modern in the \c .qm file did not enable all warnings in the other files.  The module loader accepted an
+      unknown warning name in a @ref disable-warning "%disable-warning" directive there, for example, and \c qcc did
+      not report a duplicate local variable.  Each file now starts with the warnings the \c .qm file sets, and a
+      warning directive in a file applies only to that file
+    - @ref Qore::sprintf() "sprintf()", @ref Qore::f_sprintf() "f_sprintf()", @ref Qore::vsprintf() "vsprintf()"
+      and @ref Qore::f_vsprintf() "f_vsprintf()" are no longer declared as constant functions, as they can raise an
+      exception: the warning for a call whose result is ignored says that the call may raise an exception
+    - Fixed a crash of in-place arithmetic on @ref number "arbitrary-precision numbers": the
+      @ref plus_equals_operator "+=", @ref minus_equals_operator "-=", @ref multiply_equals_operator "*=" and
+      @ref divide_equals_operator "/=" operators raised the precision of their result without limit (each
+      multiplication added the precisions of the two numbers), so that a loop of in-place multiplications used memory
+      and time without limit and crashed when the precision outgrew the stack; their result now has at most the
+      maximum precision of a number (8192 bits), as the result of the other operations has
+    - Fixed a memory leak of the @ref Qore::Program "Program" container passed to
+      @ref Qore::load_user_module_with_program() "load_user_module_with_program()" when the module was already loaded;
+      the container is released whenever the module is not loaded into it
+    - @ref Qore::qore_add_module_to_blacklist() "qore_add_module_to_blacklist()" and
+      @ref Qore::qore_add_module_to_blacklist_ex() "qore_add_module_to_blacklist_ex()" raise \c BLACKLIST-ERROR for a
+      module name with a NUL character instead of blacklisting the name cut at the NUL character
+    - A string with a NUL character is serialized whole by the \c json module (with the NUL character escaped as
+      \c \\u0000) and formatted whole with \c "%y" and \c "%N" (see @ref string_formatting); it was cut at the
+      NUL character, so the rest of the string was missing from the JSON text and from formatted output.  The
+      message of a JSON-RPC 1.1 error made by \c make_jsonrpc11_error() is serialized as a JSON string; only double
+      quotes and backslashes were escaped in it, so that a control character such as a line break made invalid JSON
+    - Fixed a crash of \c make_jsonrpc_request() of the \c json module for a JSON-RPC 1.0 request (version
+      \c "1.0" or no version) with no params
+    - The JSON-RPC version of a \c JsonRpcClient object of the \c json module is written to the request as a JSON
+      string; it was written inside quotes as it is, so that a double quote in it ended the string and the rest of
+      the version was written as members of the request.  The JSON-RPC version given to \c JsonRpcClient and to the
+      JSON-RPC functions of the \c json module is written whole; a version with a NUL character was cut there
+    - Fixed a crash in @ref Qore::ReadOnlyFile::startPollRead() "ReadOnlyFile::startPollRead()" when the path could
+      not be converted to the @ref default_encoding "default character encoding"; the \c ENCODING-CONVERSION-ERROR
+      exception is now raised
+    - Fixed a crash of @ref Qore::encode_url() "encode_url()" and @ref Qore::encode_uri_request()
+      "encode_uri_request()" with a UTF-8 string that ends in the middle of a character, which read past the end of
+      the string; such a string raises an \c INVALID-ENCODING exception
+    - Fixed a memory leak when a @ref background "background" call of a method of the current object
+      (<tt><b>background</b> method()</tt>) could not create its thread, for example when the thread limit was
+      reached: the reference taken on the object was never released after the \c THREAD-CREATION-FAILURE exception,
+      so the object was never destroyed and its destructor never ran, and the @ref Qore::Program "Program" that it
+      belongs to was never freed
+    - Fixed calling the methods implemented by the abstract classes
+      @ref Qore::SQL::AbstractDatasource "AbstractDatasource",
+      @ref Qore::SQL::AbstractSQLStatement "AbstractSQLStatement",
+      @ref Qore::AbstractLineIterator "AbstractLineIterator" and
+      @ref Qore::AbstractPollOperation "AbstractPollOperation" on a subclass implemented in %Qore: they raised
+      \c OBJECT-INCOMPATIBLE, as such an object had no private data of the abstract class.  For example
+      @ref Qore::SQL::AbstractDatasource::getDriverRealName() "AbstractDatasource::getDriverRealName()" failed, so
+      the @ref sqlutilintro "SqlUtil" module could not be used with a datasource implemented in %Qore unless the
+      datasource implemented the method itself
+    - Fixed the top-level code of a @ref Qore::Program "Program" being parsed in the class of the method that parses
+      it: with @ref Qore::Program::parse() "Program::parse()", a bare call to a static method of the
+      @ref Qore::Program "Program" class, such as \c hasParseOption(), called that method, and a function of the
+      parsed Program with the name of such a method was not called
+    - Fixed the CSV and Parquet files of the @ref dataframeintro "dataframe" module not being subject to the filesystem
+      policy of a @ref sandboxing "sandbox": a sandboxed program could read and write them outside the sandbox's
+      allowed paths; they now raise \c FILESYSTEM-ACCESS-DENIED, as core file access does
+    - Fixed the files of ONNX models in the @ref mlintro "ml" module not being subject to the filesystem policy of a
+      @ref sandboxing "sandbox": a sandboxed program could make ONNX Runtime read a model and its external data, and
+      write optimized models, profiles and the files named by ONNX Runtime options, outside the sandbox's allowed
+      paths, and load a library named by an execution provider option
+    - Fixed the history files of the @ref linenoiseintro "linenoise" module not being subject to the filesystem policy
+      of a @ref sandboxing "sandbox": a sandboxed program could read and write them outside the sandbox's allowed
+      paths; they now raise \c FILESYSTEM-ACCESS-DENIED, as core file access does
+    - Fixed the TLS CA and certificate key files named by a connection string of the @ref mongodbintro "mongodb"
+      module not being subject to the filesystem policy of a @ref sandboxing "sandbox": a sandboxed program could make
+      the MongoDB driver read them outside the sandbox's allowed paths
+    - Fixed the trained data in an explicit data directory of the @ref ocrintro "ocr" module not being subject to the
+      filesystem policy of a @ref sandboxing "sandbox": a sandboxed program could make Tesseract read trained data
+      outside the sandbox's allowed paths, and trained data it wrote could make Tesseract read and write other files;
+      OCR with the system data directory no longer needs filesystem access rights
+    - Fixed a crash or memory corruption when a socket was closed by another thread while a read or write on it was in
+      progress, for example when an HTTP/2 server connection was aborted while its frames were being sent: the read
+      or write could use its TLS connection after it was freed, and could read from or write to another connection
+      that had been given the closed descriptor's number.  The read or write now fails, and the connection and the
+      descriptor are released when it ends
+    - Fixed a data race when @ref Qore::Socket::isOpen() "Socket::isOpen()" or another method that checks whether a
+      socket is open was called while another thread closed the socket
+    - Fixed a rare crash at the end of a process that used asynchronous socket I/O: the end of the process could
+      start an I/O thread of the global async I/O controller that it then did not wait for, so the thread could
+      still be running while the process freed the data that the thread used
+    - Fixed @ref null "NULL" having the type \c nothing with @ref exec_mode_ir "IR", @ref exec_mode_jit "JIT" and
+      @ref exec_mode_tiered "tiered" execution and in @ref exec_mode_aot "AOT" compiled code: a hash or list of
+      \c NULL and values of one other type, such as <tt>{"r": 1, "a": NULL}</tt>, got the optional form of that type
+      as its value type (\c hash<string, *int>) and kept the \c NULL, so the \c NULL read back as
+      @ref nothing "NOTHING" from the hash but as \c NULL from a copy of it.  As with
+      @ref exec_mode_ast "AST execution", such a hash or list is now a \c hash<auto> or \c list<auto> holding
+      \c NULL in every execution mode, and an error message names the type of a \c NULL value as \c NULL
+    - Fixed \c qcc compiling identical source into different modules: a large module was split for
+      @ref qcc_parallel_codegen "parallel codegen" into as many parts as there were threads available when it was
+      compiled, which depends on the load of a <tt>make -j</tt> build and on the number of CPUs of the machine, and
+      the parts change the compiled code; two clean builds of %Qore's own modules gave different \c .qmod files for
+      33 of 391 modules.  A large module is now always split into 4 parts, and the number of threads only decides
+      how many parts are compiled at once.  On macOS, a compiled module also recorded the name of the temporary file
+      it was linked to, which has the process id in it, as its install name, and the names and modification times of
+      its object files, which are deleted after the link, in its debug map; it now gets its own path as its install
+      name and no debug map.  Identical source now gives identical compiled modules
+    - Fixed a crash of IR, JIT and tiered execution and of compiled (\c qcc) code when a
+      @ref thread_exit "thread_exit statement" left a @ref try "try" block: the catch block was entered for the
+      thread_exit, which is not an exception, and the thread crashed while making the exception information.  As in
+      AST execution, a try block does not catch a thread_exit; an exception pending with it, such as one raised by an
+      \c on_exit handler while the thread exits, is discarded without running the catch block.  Since tiered
+      execution is the default for code with \c %%modern, a script whose thread_exit passed through a try block
+      crashed without an execution mode option
+    - Fixed IR and tiered execution not running \c on_success handlers when a
+      @ref thread_exit "thread_exit statement" left their block; a thread_exit is not an exception, so the
+      \c on_success and \c on_exit handlers of each block it leaves are run, as in AST and JIT execution and in
+      compiled (\c qcc) code
     - The errors of URLs no longer contain the password of the URL: the \c PARSE-URL-ERROR exceptions of
       @ref Qore::parse_url() "parse_url()", @ref Qore::get_safe_url() "get_safe_url()" and every other parser of a
       URL, the \c RESOLVE-URL-ERROR exceptions of @ref Qore::resolve_url() "resolve_url()", and the URL errors of
@@ -5020,6 +5473,17 @@ while (*binary chunk = input.read(65536)) {
       by name: a class declared in a file compiled to a separate <tt>.qo</tt> object, \c new with a dynamic class
       name, or @ref Qore::create_object() "create_object()".  The object was refused with \c CREATE-OBJECT-ERROR in
       exactly the Programs that allow the domain
+    - Fixed creating objects with the @ref reflectionintro "reflection" module in a domain that a Program has to
+      allow explicitly, such as a @ref Qore::DebugProgram "DebugProgram" subclass:
+      @ref Qore::Reflection::Class::newObject() "Class::newObject()",
+      @ref Qore::Reflection::Class::newObjectArgs() "Class::newObjectArgs()",
+      @ref Qore::Reflection::Class::callConstructor() "Class::callConstructor()" and the \c call() and
+      \c callArgs() methods of @ref Qore::Reflection::ConstructorMethod "ConstructorMethod" and
+      @ref Qore::Reflection::ConstructorMethodVariant "ConstructorMethodVariant" refused the object with
+      \c CREATE-OBJECT-ERROR in a Program that allows the domain, and created it in a Program that does not, which
+      bypassed the Program's sandboxing restrictions.  They now check a class as
+      @ref Qore::create_object() "create_object()" does, and the new \c QoreClass::runtimeCheckDomain() C++ API
+      function makes the same check for code that instantiates a class it resolves at runtime
     - Fixed closures created in object methods seeing a live object after it had been destroyed, contrary to the
       documented @ref object_scope "object scope" rules and to AST and JIT execution: the IR interpreter
       (\c ir and \c tiered execution) kept the temporary receiver of a method call (<tt>new C().getClosure()</tt>)

@@ -22,14 +22,6 @@
     DEALINGS IN THE SOFTWARE.
 */
 
-# minimum required Qore version
-%requires qore >= 0.9.4
-# assume local scope for variables, do not use "$" signs
-%modern
-# require type definitions everywhere
-#! strict argument handling
-# enable all warnings
-
 #! contains all public definitions in the SqlUtil module
 public namespace SqlUtil {
 #! represents a database; this class embeds an AbstractDatabase object that is created automatically in the constructor based on the database driver for the AbstractDatasource object providing the database connection

@@ -131,20 +131,21 @@ QoreHashNode* qore_hash_private::getSlice(const QoreListNode* value_list, Except
 
     ConstListIterator li(value_list);
     while (li.next()) {
-        QoreStringValueHelper key(li.getValue(), QCS_DEFAULT, xsink);
+        // the key in the default encoding; a key with a NUL character raises HASH-KEY-ERROR
+        QoreHashKeyHelper key(li.getValue(), xsink);
         if (*xsink) {
             return nullptr;
         }
 
         bool exists;
-        QoreValue v = getKeyValueExistence(key->c_str(), exists, xsink);
+        QoreValue v = getKeyValueExistence(key.c_str(), exists, xsink);
         if (*xsink) {
             return nullptr;
         }
         if (!exists) {
             continue;
         }
-        qore_hash_private::get(*rv)->setKeyValue(key->c_str(), v.refSelf(), xsink);
+        qore_hash_private::get(*rv)->setKeyValue(key.c_str(), v.refSelf(), xsink);
         if (*xsink) {
             return nullptr;
         }
@@ -553,6 +554,7 @@ void QoreHashKeyHelper::setupSlow(const QoreString& str, ExceptionSink* xsink) {
     }
     key = tmp->c_str();
     len = tmp->size();
+    checkNul(xsink);
 }
 
 void QoreHashKeyHelper::setupSlow(const QoreValue& n, ExceptionSink* xsink) {
@@ -572,6 +574,7 @@ void QoreHashKeyHelper::setupSlow(const QoreValue& n, ExceptionSink* xsink) {
         key = (*str)->c_str();
         len = (*str)->size();
     }
+    checkNul(xsink);
 }
 
 int QoreHashKeyHelper::getConstKey(const QoreValue& n, std::string& name) {
@@ -584,6 +587,62 @@ int QoreHashKeyHelper::getConstKey(const QoreValue& n, std::string& name) {
     }
     name.assign(key.c_str(), key.size());
     return 0;
+}
+
+QoreStringNode* QoreHashKeyHelper::getConstKeyNulError(const QoreValue& n) {
+    if (n.isShortString()) {
+        char sbuf[8];
+        n.getShortString(sbuf);
+        size_t slen = n.shortStringLen();
+        return strlen(sbuf) != slen ? getNulKeyDesc(sbuf, slen) : nullptr;
+    }
+    if (n.getType() != NT_STRING) {
+        return nullptr;
+    }
+    const QoreStringNode* str = n.get<const QoreStringNode>();
+    return strlen(str->c_str()) != str->size() ? getNulKeyDesc(str->c_str(), str->size()) : nullptr;
+}
+
+QoreStringNode* QoreHashKeyHelper::getNulKeyDesc(const char* key, size_t len) {
+    const char* nul = static_cast<const char*>(memchr(key, '\0', len));
+    assert(nul);
+    size_t offset = nul - key;
+    // the key is shown with at most its first 64 characters, with control characters, quotes and backslashes
+    // escaped, so that the NUL character and where it is can be seen
+    static constexpr size_t max_chars = 64;
+    bool invalid = false;
+    size_t show = QCS_DEFAULT->getByteLen(key, key + len, max_chars, invalid);
+    if (invalid || show > len) {
+        show = len < max_chars ? len : max_chars;
+    }
+    QoreStringNode* desc = new QoreStringNode("key \"");
+    for (size_t i = 0; i < show; ++i) {
+        unsigned char c = static_cast<unsigned char>(key[i]);
+        if (c < 0x20 || c == 0x7f) {
+            desc->sprintf("\\x%02x", c);
+        } else if (c == '"' || c == '\\') {
+            desc->concat('\\');
+            desc->concat(static_cast<char>(c));
+        } else {
+            desc->concat(static_cast<char>(c));
+        }
+    }
+    if (show < len) {
+        desc->concat("...");
+    }
+    desc->sprintf("\" contains a NUL character at byte offset %zu; a hash key or object member name cannot contain a "
+        "NUL character", offset);
+    return desc;
+}
+
+int QoreHashNode::checkKey(const char* key, size_t len, ExceptionSink* xsink) {
+    assert(xsink);
+    // the key need not be NUL-terminated (ex: a std::string_view into a buffer)
+    if (!memchr(key, '\0', len)) {
+        return 0;
+    }
+    xsink->raiseException("HASH-KEY-ERROR", QoreHashKeyHelper::getNulKeyDesc(key, len));
+    return -1;
 }
 
 QoreValue QoreHashNode::getKeyValueExistence(const QoreString& key, bool& exists, ExceptionSink* xsink) const {

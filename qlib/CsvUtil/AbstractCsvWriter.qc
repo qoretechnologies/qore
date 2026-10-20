@@ -22,9 +22,6 @@
     DEALINGS IN THE SOFTWARE.
 */
 
-# assume local var scope, do not use "$" for vars, members, and method calls
-%modern
-
 #! the CsvUtil namespace. All classes used in the CsvUtil module should be inside this namespace
 public namespace CsvUtil {
     #! The AbstractCsvWriter class provides a parent for all CSV writers

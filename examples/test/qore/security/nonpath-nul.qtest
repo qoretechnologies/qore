@@ -1,0 +1,383 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+#
+# a string with a NUL character is refused before it reaches a C library, operating system or protocol boundary that
+# would cut it at the NUL character, so that no check made on the whole string can be bypassed: commands, the
+# environment, user and group names, host names and services, and HTTP messages; string helpers that do not cross
+# such a boundary process the whole string
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires FsUtil
+%requires QUnit
+
+%exec-class NonPathNulTest
+
+class NonPathNulTest inherits QUnit::Test {
+    private {
+        # a host that passes an allow-list check made on the whole string, but that names 127.0.0.1 cut at the NUL
+        # character
+        const SuffixHost = "127.0.0.1\x00.trusted.example";
+    }
+
+    constructor() : Test("NonPathNulTest", "1.0") {
+        addTestCase("the exception description", \exceptionDescription());
+        addTestCase("commands", \commands());
+        addTestCase("exec()", \execCommand());
+        addTestCase("commands in a sandboxed Program", \sandboxedCommands());
+        addTestCase("environment variables", \environment());
+        addTestCase("user and group names", \usersAndGroups());
+        addTestCase("Dir::chown() and Dir::chgrp() with names", \dirOwnerNames());
+        addTestCase("basename() and dirname()", \basenameDirname());
+        addTestCase("URL helpers", \urlHelpers());
+        addTestCase("resolver functions", \resolver());
+        addTestCase("socket connections to a host with a NUL character", \socketConnect());
+        addTestCase("socket binds and lookups", \socketBindAndLookup());
+        addTestCase("HTTP messages sent with a Socket", \socketHttpMessages());
+        set_return_value(main());
+    }
+
+    #! the description shows the escaped string and the offset of the NUL character; EINVAL is the argument
+    exceptionDescription() {
+        Socket s();
+        try {
+            s.connectINET(SuffixHost, 80);
+            fail("connectINET() did not raise an exception");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("SOCKET-CONNECT-ERROR", ex.err);
+            assertEq("hostname \"127.0.0.1\\x00.trusted.example\" contains a NUL character at byte offset 9; "
+                "hostnames cannot contain NUL characters", ex.desc);
+            assertEq(Err::EINVAL, ex.arg);
+        }
+        assertFalse(s.isOpen());
+    }
+
+    commands() {
+%ifdef Windows
+        testSkip("Windows");
+%endif
+        # the shell would run "exit 3"; the whole command is refused
+        assertThrows("SYSTEM-ERROR", "command \"exit 3\\\\x00; exit 0\" contains a NUL character at byte offset 6",
+            \system(), "exit 3\x00; exit 0");
+        # commands without NUL characters are executed as before
+        assertEq(7, system("exit 7"));
+
+        int rc = -1;
+        assertThrows("BACKQUOTE-ERROR", "contains a NUL character at byte offset 10",
+            sub () { backquote("echo first\x00second", \rc); });
+        assertEq(-1, rc, "the return code is not assigned");
+        assertEq("ok\n", backquote("echo ok", \rc));
+        assertEq(0, rc);
+    }
+
+    #! exec() replaces the process, so it is tested in a child process
+    execCommand() {
+%ifdef Windows
+        testSkip("Windows");
+%endif
+        TmpDir tmp("qore-exec-nul-");
+        string script = tmp.path + DirSep + "exec.q";
+        {
+            File f();
+            f.open2(script, O_CREAT | O_WRONLY | O_TRUNC);
+            # the command cut at the NUL character would print "exec-ran"
+            f.write("%modern\nexec(\"echo exec-ran\\x00-and-more\");\n");
+        }
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        int rc;
+        string output = backquote(sprintf("%s %s 2>&1", qore_bin, script), \rc);
+        assertNeq(0, rc);
+        assertRegex("EXEC-ERROR", output);
+        assertRegex("contains a NUL character at byte offset 13", output);
+        assertFalse(output =~ /^exec-ran$/m, "the command cut at the NUL character was not executed");
+    }
+
+    #! a sandboxed Program is refused the command before its sandbox check, as any Program
+    sandboxedCommands() {
+%ifdef Windows
+        testSkip("Windows");
+%endif
+        SandboxManager sm();
+        sm.addFilesystemAllowedPath("/bin/sh", QSEC_EXECUTE);
+        Program p(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES);
+        p.setSandboxManager(sm);
+        p.parse("
+%modern
+
+int sub run_system(string cmd) {
+    return system(cmd);
+}
+
+string sub run_backquote(string cmd) {
+    return backquote(cmd);
+}
+", "nul_sandbox_test");
+
+        assertThrows("SYSTEM-ERROR", "contains a NUL character", \p.callFunction(), ("run_system", "exit 3\x00"));
+        assertThrows("BACKQUOTE-ERROR", "contains a NUL character", \p.callFunction(),
+            ("run_backquote", "echo a\x00b"));
+        # the sandbox allows the shell, so a command without a NUL character runs
+        assertEq(5, p.callFunction("run_system", "exit 5"));
+    }
+
+    environment() {
+        string name = "QORE_NUL_TEST_" + getpid();
+        on_exit {
+            unsetenv(name);
+        }
+        # a name cut at the NUL character would set another variable
+        assertEq(-1, setenv(name + "\x00_SUFFIX", "x"));
+        assertEq(Err::EINVAL, errno());
+        assertNothing(getenv(name));
+
+        # a value cut at the NUL character would be set to a different value
+        assertEq(-1, setenv(name, "value\x00more"));
+        assertEq(Err::EINVAL, errno());
+        assertNothing(getenv(name));
+
+        assertEq(0, setenv(name, "value"));
+        assertEq("value", getenv(name));
+
+        # the name cut at the NUL character is the name of the variable that was just set
+        assertNothing(getenv(name + "\x00_SUFFIX"));
+        assertEq(Err::EINVAL, errno());
+
+        assertEq(-1, unsetenv(name + "\x00_SUFFIX"));
+        assertEq(Err::EINVAL, errno());
+        assertEq("value", getenv(name), "the variable was not unset");
+
+        assertEq(0, unsetenv(name));
+        assertNothing(getenv(name));
+    }
+
+    usersAndGroups() {
+        if (!Option::HAVE_UNIX_USERMGT) {
+            testSkip("No support for UNIX user management");
+        }
+        hash<auto> pw = getpwuid(getuid());
+        hash<auto> gr = getgrgid(getgid());
+        string user = pw.pw_name + "\x00-other";
+        string group = gr.gr_name + "\x00-other";
+
+        # the names cut at the NUL character are the current user and group
+        assertNothing(getpwnam(user));
+        assertEq(Err::EINVAL, errno());
+        assertNothing(getgrnam(group));
+        assertEq(Err::EINVAL, errno());
+        assertThrows("GETPWNAM2-ERROR", "contains a NUL character at byte offset " + pw.pw_name.size(),
+            \getpwnam2(), user);
+        assertThrows("GETGRNAM2-ERROR", "contains a NUL character at byte offset " + gr.gr_name.size(),
+            \getgrnam2(), group);
+
+        # the names without the NUL character are found
+        assertEq(getuid(), getpwnam(pw.pw_name).pw_uid);
+        assertEq(getgid(), getgrnam(gr.gr_name).gr_gid);
+        assertEq(getuid(), getpwnam2(pw.pw_name).pw_uid);
+        assertEq(getgid(), getgrnam2(gr.gr_name).gr_gid);
+    }
+
+    dirOwnerNames() {
+        if (!Option::HAVE_UNIX_FILEMGT || !Option::HAVE_UNIX_USERMGT) {
+            testSkip("No support for UNIX file and user management");
+        }
+        TmpDir tmp("qore-chown-nul-");
+        Dir d();
+        d.chdir(tmp.path);
+        string user = getpwuid(getuid()).pw_name;
+        string group = getgrgid(getgid()).gr_name;
+
+        # the names cut at the NUL character are the current user and group, which would be set
+        assertThrows("DIR-CHOWN-PARAMETER-ERROR", "user name .* contains a NUL character", \d.chown(),
+            user + "\x00-other");
+        assertThrows("DIR-CHGRP-PARAMETER-ERROR", "group name .* contains a NUL character", \d.chgrp(),
+            group + "\x00-other");
+
+        # the names themselves are accepted
+        d.chown(user);
+        d.chgrp(group);
+        assertEq(getuid(), hstat(tmp.path).uid);
+    }
+
+    #! basename() and dirname() only process the string, so they process the whole string
+    basenameDirname() {
+        assertEq("d", basename("/a/b\x00c/d"));
+        assertEq("/a/b\x00c", dirname("/a/b\x00c/d"));
+        assertEq("b\x00c", basename("/a/b\x00c"));
+        assertEq("/a", dirname("/a/b\x00c"));
+        assertEq("x\x00y", basename("x\x00y"));
+        assertEq(".", dirname("x\x00y"));
+        assertEq("/", dirname("/x\x00y"));
+        # as before
+        assertEq("file_name", basename("/usr/local/bin/file_name"));
+        assertEq("/usr/local/bin", dirname("/usr/local/bin/file_name"));
+        assertEq("file_name", basename("file_name"));
+        assertEq(".", dirname("file_name"));
+        assertEq("/", dirname("/file_name"));
+        assertEq("", basename("/a/"));
+    }
+
+    #! a URL cannot contain a NUL character; the URL encoding functions process the whole string
+    urlHelpers() {
+        string url = "http://user:secret@" + SuffixHost + ":81/path";
+        try {
+            parse_url(url);
+            fail("parse_url() did not raise an exception");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("PARSE-URL-ERROR", ex.err);
+            assertEq("URL contains a NUL character; URLs cannot contain NUL characters", ex.desc);
+            assertEq(Err::EINVAL, ex.arg);
+        }
+        assertThrows("PARSE-URL-ERROR", "URL contains a NUL character", \parse_url(), (url, QURL_DECODE));
+        assertNothing(parseURL(url));
+        assertThrows("PARSE-URL-ERROR", "URL contains a NUL character", \get_safe_url(), url);
+        # the password is masked in the whole string
+        assertEq("http://user:<masked>@127.0.0.1\x00.trusted.example:81/path", get_masked_url(url));
+        assertEq("http://a:<masked>@x\x00y", get_masked_url("http://a:b\x00c@x\x00y"));
+        # the URL without the NUL character
+        assertEq("127.0.0.1", parse_url("http://user:secret@127.0.0.1:81/path").host);
+
+        assertEq("a%20b%00c%20d", encode_url("a b\x00c d"));
+        assertEq("a b\x00c d", decode_url("a%20b\x00c%20d"));
+        assertEq("a b\x00c d", decode_url(encode_url("a b\x00c d")));
+        assertEq("a%20b\x00c%20d?x+y\x00z", encode_uri_request("a b\x00c d?x y\x00z"));
+        assertEq("a b\x00c d?x y\x00z", decode_uri_request("a%20b\x00c%20d?x+y\x00z"));
+    }
+
+    resolver() {
+        # the address cut at the NUL character would be returned
+        assertNothing(gethostbyname(SuffixHost));
+        assertEq(Err::EINVAL, errno());
+        assertNothing(gethostbyname_long(SuffixHost));
+        assertEq(Err::EINVAL, errno());
+        assertEq("127.0.0.1", gethostbyname("127.0.0.1"));
+
+        assertThrows("GETHOSTBYADDR-ERROR", "address .* contains a NUL character at byte offset 9",
+            \gethostbyaddr(), SuffixHost);
+        assertThrows("GETHOSTBYADDR-ERROR", "contains a NUL character", \gethostbyaddr_long(), SuffixHost);
+
+        assertThrows("QOREADDRINFO-GETINFO-ERROR", "hostname .* contains a NUL character at byte offset 9",
+            \getaddrinfo(), SuffixHost);
+        assertThrows("QOREADDRINFO-GETINFO-ERROR", "service name .* contains a NUL character at byte offset 2",
+            \getaddrinfo(), ("127.0.0.1", "80\x00-other"));
+        assertThrows("QOREADDRINFO-GETINFO-ERROR", "contains a NUL character", \getaddrinfo_async(), SuffixHost);
+        assertThrows("QOREADDRINFO-GETINFO-ERROR", "contains a NUL character", \Socket::resolveAddrInfo(),
+            SuffixHost);
+        assertThrows("QOREADDRINFO-GETNAMEINFO-ERROR", "address .* contains a NUL character",
+            \getnameinfo_async(), ("127.0.0.1\x00x", AF_INET, 80));
+
+        list<hash<auto>> l = getaddrinfo("127.0.0.1", "80", AF_INET);
+        assertEq("127.0.0.1", l[0].address);
+    }
+
+    #! a connection to a host with a NUL character is refused before the name is resolved
+    socketConnect() {
+        Socket listener();
+        listener.bindINET("127.0.0.1", 0, True, AF_INET);
+        listener.listen();
+        int port = listener.getPort();
+
+        # the allow-list check that a client would make on the whole string passes
+        assertTrue(SuffixHost =~ /\.trusted\.example$/);
+        Socket s();
+        assertThrows("SOCKET-CONNECT-ERROR", "hostname .* contains a NUL character at byte offset 9",
+            \s.connectINET(), (SuffixHost, port));
+        assertFalse(s.isOpen());
+        assertThrows("SOCKET-CONNECT-ERROR", "hostname .* contains a NUL character at byte offset 9",
+            \s.connectINETSSL(), (SuffixHost, port));
+        assertFalse(s.isOpen());
+        # a service with a NUL character
+        assertThrows("SOCKET-CONNECT-ERROR", "service name .* contains a NUL character",
+            \s.connectINET(), ("127.0.0.1", port.toString() + "\x00-other"));
+        assertFalse(s.isOpen());
+
+        # the host itself is connected to
+        s.connectINET("127.0.0.1", port);
+        assertTrue(s.isOpen());
+        Socket ns = listener.accept();
+        assertTrue(ns.isOpen());
+    }
+
+    socketBindAndLookup() {
+        Socket s();
+        assertThrows("SOCKET-BIND-ERROR", "hostname .* contains a NUL character at byte offset 9", \s.bindINET(),
+            (SuffixHost, 0, True, AF_INET));
+        assertFalse(s.isOpen());
+        assertThrows("SOCKET-BIND-ERROR", "service name .* contains a NUL character", \s.bindINET(),
+            ("127.0.0.1", "0\x00-other", True, AF_INET));
+        assertFalse(s.isOpen());
+
+        Socket u();
+        assertThrows("QUIC-ERROR", "hostname .* contains a NUL character", \u.startPollQuicConnect(),
+            (SuffixHost, 443));
+
+        # an ALPN protocol name would be sent cut at the NUL character in the TLS handshake
+        assertThrows("SOCKET-ALPN-ERROR", "ALPN protocol \"h2\\\\x00x\" contains a NUL character",
+            sub () { u.setAlpnProtocols(("h2\x00x", "http/1.1")); });
+
+        assertThrows("HTTPCLIENT-CONNECT-ERROR", "hostname .* contains a NUL character at byte offset 9",
+            sub () { Http1Connection c(SuffixHost, 80); });
+
+        # POP3 APOP credentials would be used cut at the NUL character; the password is not shown
+        PollPipeline pp();
+        assertThrows("POLL-PIPELINE-ERROR", "user name .* contains a NUL character",
+            \pp.addMakePop3ApopCommand(), ("cmd", "present", "admin\x00.guest", "pw"));
+        try {
+            pp.addMakePop3ApopCommand("cmd", "present", "user", "secret\x00pw");
+            fail("PollPipeline::addMakePop3ApopCommand() did not raise an exception");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("POLL-PIPELINE-ERROR", ex.err);
+            assertEq("password contains a NUL character; passwords cannot contain NUL characters", ex.desc);
+        }
+    }
+
+    #! an HTTP message with a NUL character in its request line, status line or a header value is not sent
+    socketHttpMessages() {
+        Socket listener();
+        listener.bindINET("127.0.0.1", 0, True, AF_INET);
+        listener.listen();
+        Socket client();
+        client.connectINET("127.0.0.1", listener.getPort());
+        Socket server = listener.accept();
+
+        # the request line would be cut at the NUL character
+        assertThrows("SOCKET-SEND-ERROR", "HTTP request target contains a NUL character", \client.sendHTTPMessage(),
+            ("GET", "/public\x00/../admin", "1.1", {}, ""));
+        assertThrows("SOCKET-SEND-ERROR", "HTTP method .* contains a NUL character", \client.sendHTTPMessage(),
+            ("GET\x00X", "/", "1.1", {}, ""));
+        assertThrows("SOCKET-SEND-ERROR", "HTTP version .* contains a NUL character", \client.sendHTTPMessage(),
+            ("GET", "/", "1.1\x00", {}, ""));
+        # a header value would be cut at the NUL character; it is not shown, as it can be a credential
+        try {
+            client.sendHTTPMessage("GET", "/", "1.1", {"Authorization": "Bearer token\x00-more"}, "");
+            fail("sendHTTPMessage() did not raise an exception");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("SOCKET-SEND-ERROR", ex.err);
+            assertEq("HTTP header 'Authorization' value contains a NUL character; HTTP header values cannot contain "
+                "NUL characters", ex.desc);
+        }
+        assertThrows("SOCKET-SEND-ERROR", "HTTP header 'X-List' value contains a NUL character",
+            \client.sendHTTPMessage(), ("GET", "/", "1.1", {"X-List": ("a", "b\x00c")}, ""));
+
+        # none of them was sent: the first message received is the next one
+        client.sendHTTPMessage("GET", "/next", "1.1", {"X-Token": "abc"}, "");
+        hash<auto> req = server.readHTTPHeader();
+        assertEq("GET", req.method);
+        assertEq("/next", req.path);
+        assertEq("abc", req."x-token");
+
+        assertThrows("SOCKET-SEND-ERROR", "HTTP status message .* contains a NUL character",
+            \server.sendHTTPResponse(), (200, "OK\x00more", "1.1", {}, ""));
+        assertThrows("SOCKET-SEND-ERROR", "HTTP header 'Set-Cookie' value contains a NUL character",
+            \server.sendHTTPResponse(), (200, "OK", "1.1", {"Set-Cookie": "a=b\x00c"}, ""));
+        assertThrows("SOCKET-SEND-ERROR", "HTTP header 'X-H' value contains a NUL character",
+            \server.sendHTTPResponseHeader(), (200, "OK", "1.1", {"X-H": "a\x00b"}));
+        server.sendHTTPResponse(201, "Created", "1.1", {"X-Ok": "1"}, "");
+        hash<auto> resp = client.readHTTPHeader();
+        assertEq(201, resp.status_code);
+        assertEq("Created", resp.status_message);
+    }
+}

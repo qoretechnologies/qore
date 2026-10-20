@@ -22,12 +22,6 @@
     DEALINGS IN THE SOFTWARE.
 */
 
-# assume local scope for variables, do not use "$" signs
-%modern
-# require type definitions everywhere
-#! strict argument handling
-# enable all warnings
-
 #! contains all public definitions in the DataProvider module
 public namespace DataProvider {
 #! Defines the abstract class for data provider iterators; the destructor releases the iterator

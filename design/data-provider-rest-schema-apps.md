@@ -807,6 +807,7 @@ fits:
 | Intercom's query is a **tree of hashes in the request body** | `render_query` renders the whole expression and may return any type, while the operator tables still decide what is pushed down |
 | Klaviyo indexes each field for particular comparisons - no `>=` on a profile's `created`, one on a campaign's `created_at` | `field_ops` states the matrix per field; a per-field-only `fields` set turns `created >= x` into a **failed** search rather than a wrong one |
 | Intercom's `>=` and `<=` do not exist at all | leave them unmapped; mapping `>=` onto `>` silently drops the boundary records |
+| A field reference is a field path: `Unit\.Price` is the one key `Unit.Price` | `fields`, `field_ops`, `field_map` and a filter rule name a field by its keys joined with dots (`owner.uuid`), never by the escaped text; a key with a dot cannot be named, so its predicate is answered client-side unless a `render_query` hook reads the path with `getFieldPath()` |
 
 **Measure the matrix; do not read it.** Klaviyo's is in each argument's own description and was still
 verified live. Intercom's description says only "the accepted field that you want to search on" and

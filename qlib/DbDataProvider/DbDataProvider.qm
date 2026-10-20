@@ -344,6 +344,12 @@ module DbDataProvider {
     @section dbdataprovider_relnotes Release Notes
 
     @subsection dbdataprovider_v2_5 DbDataProvider v2.5
+    - the field of a field reference in a search, update or delete condition is a field path: a path of one key is the
+      column of that name, quoted if it is a reserved word; a path of more than one key, or a key with a dot, which
+      SqlUtil reads as an alias and a column, is read client-side in a search (with the \c allow_client_side_filter
+      search option) and refused in an update or a delete (\c UNSUPPORTED-FIELD-REFERENCE); it was sent to SqlUtil as
+      it was written (@ref DbDataProvider::DbTableDataProvider::getColumnReference()
+      "DbTableDataProvider::getColumnReference()")
     - update and delete APIs now preserve affected-row counts when optional search options are omitted, including
       zero-row results, while retaining caller-owned transaction boundaries
     - bulk create operations now return every requested server-generated value across flush blocks instead of only

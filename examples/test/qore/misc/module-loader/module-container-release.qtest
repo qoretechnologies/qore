@@ -1,0 +1,86 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# A Program container passed to load a user module is owned by the call; when the module is not loaded into it, for
+# example because it is already loaded, the container is released instead of being leaked.  A module name with a NUL
+# character cannot be blacklisted, since it would blacklist the name cut at the NUL character.
+
+%modern
+%allow-injection
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+
+%requires QUnit
+%requires Util
+
+%exec-class ModuleContainerReleaseTest
+
+class ModuleContainerReleaseTest inherits QUnit::Test {
+    constructor() : QUnit::Test("module container release", "1.0", \ARGV) {
+        addTestCase("a container for an already-loaded module is released", \testAlreadyLoaded());
+        addTestCase("a container for a refused module name is released", \testRefusedName());
+        addTestCase("a module name with a NUL character cannot be blacklisted", \testBlacklistNul());
+        set_return_value(main());
+    }
+
+    #! returns a Program container that decrements the given Counter when it is destroyed
+    static Program container(Counter released) {
+        Program p(PO_NEW_STYLE);
+        p.parse("
+            class Watch {
+                private { Counter released; }
+                constructor(Counter released) { self.released = released; }
+                destructor() { released.dec(); }
+            }
+            our *Watch watch;
+            sub init(Counter released) { watch = new Watch(released); }
+        ", "container");
+        p.callFunction("init", released);
+        return p;
+    }
+
+    testAlreadyLoaded() {
+        # Util is already loaded, so the module is not loaded into the container
+        Counter released(1);
+        load_user_module_with_program("Util", container(released));
+        assertEq(0, released.getCount(), "load_user_module_with_program() releases the container");
+
+        released.inc();
+        Program p(PO_NEW_STYLE);
+        assertThrows("LOAD-MODULE-ERROR", \p.loadUserModuleWithProgram(), ("Util", container(released)));
+        assertEq(0, released.getCount(), "Program::loadUserModuleWithProgram() releases the container");
+    }
+
+    testRefusedName() {
+        Counter released(1);
+        assertThrows("LOAD-MODULE-ERROR", \load_user_module_with_program(), ("Util\x00.txt", container(released)));
+        assertEq(0, released.getCount(), "load_user_module_with_program() releases the container");
+
+        released.inc();
+        Program p(PO_NEW_STYLE);
+        assertThrows("LOAD-MODULE-ERROR", \p.loadUserModuleWithProgram(), ("Util\x00.txt", container(released)));
+        assertEq(0, released.getCount(), "Program::loadUserModuleWithProgram() releases the container");
+
+        released.inc();
+        assertThrows("LOAD-MODULE-ERROR", \p.loadUserModuleWithProgramWarn(), ("Util\x00.txt", container(released)));
+        assertEq(0, released.getCount(), "Program::loadUserModuleWithProgramWarn() releases the container");
+    }
+
+    testBlacklistNul() {
+        # a name that names no module; cut at the NUL character it would blacklist "NoSuchModule"
+        string name = "NoSuchModule" + get_random_string(8);
+        string desc = sprintf("^module name \"%s\\\\x00\\.txt\" contains a NUL character at byte offset %d", name,
+            name.size());
+        assertThrows("BLACKLIST-ERROR", desc, \qore_add_module_to_blacklist(), (name + "\x00.txt",));
+        assertThrows("BLACKLIST-ERROR", desc, \qore_add_module_to_blacklist_ex(), (name + "\x00.txt",));
+        # the module name before the NUL character is not blacklisted
+        try {
+            load_module(name);
+            assertTrue(False, "the module does not exist");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("LOAD-MODULE-ERROR", ex.err);
+            assertFalse(ex.desc =~ /blacklisted/, "the module name is not blacklisted");
+        }
+    }
+}

@@ -137,6 +137,7 @@ public class QorePdfOcrProcessor inherits AbstractDataProviderMLProcessor {
     #! Creates the object with the given options
     constructor(hash<auto> options) {
         *hash<auto> copts = checkOptions("CONSTRUCTOR-ERROR", ConstructorOptions, options);
+        checkFieldPathOptions(options, copts);
         pdf_field = copts.pdf_field;
         if (!pdf_field.val()) {
             throw "CONSTRUCTOR-ERROR", "pdf_field option is required";

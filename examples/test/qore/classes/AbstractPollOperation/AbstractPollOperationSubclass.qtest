@@ -1,0 +1,50 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  AbstractPollOperationSubclass.qtest Copyright 2026 Qore Technologies, s.r.o.
+    MIT License
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class AbstractPollOperationSubclassTest
+
+#! a poll operation implemented in Qore, implementing only the abstract methods
+class MinimalPollOperation inherits AbstractPollOperation {
+    string getGoal() {
+        return "done";
+    }
+
+    string getState() {
+        return "done";
+    }
+
+    bool goalReached() {
+        return True;
+    }
+
+    *hash<SocketPollInfo> continuePoll() {
+    }
+}
+
+class AbstractPollOperationSubclassTest inherits QUnit::Test {
+    constructor() : QUnit::Test("AbstractPollOperation subclass test", "1.0") {
+        addTestCase("the methods implemented by AbstractPollOperation", \methodTest());
+        set_return_value(main());
+    }
+
+    # the methods implemented by AbstractPollOperation behave as documented on a subclass implemented in Qore
+    methodTest() {
+        MinimalPollOperation op();
+        assertEq(NOTHING, op.abort(), "abort() does nothing");
+        assertEq(NOTHING, op.getOutput(), "getOutput() returns nothing");
+        assertEq(NOTHING, op.onComplete(<SocketPollResultInfo>{"sock": new Socket(), "spop": op}),
+            "onComplete() does nothing");
+
+        MinimalPollOperation copy = op.copy();
+        assertEq(NOTHING, copy.getOutput(), "a copy can call the methods implemented by AbstractPollOperation");
+    }
+}

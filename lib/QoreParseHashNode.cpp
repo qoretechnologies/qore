@@ -116,6 +116,16 @@ int QoreParseHashNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_con
         }
         const QoreTypeInfo* argTypeInfo = parse_context.typeInfo;
 
+        // a constant key with a NUL character cannot be a hash key, which is an error when the code is compiled
+        if (keys[i].isValue()) {
+            if (QoreStringNode* desc = QoreHashKeyHelper::getConstKeyNulError(keys[i])) {
+                parseException(*lvec[i], "HASH-KEY-ERROR", desc);
+                if (!err) {
+                    err = -1;
+                }
+            }
+        }
+
         if (!p.isEqualValue(keys[i]) && (!keys[i] || keys[i].isValue())) {
             // a key that cannot be converted to the default encoding raises an error when the hash is evaluated
             std::string key;

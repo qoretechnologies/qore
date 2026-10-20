@@ -3,7 +3,7 @@
 /*
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -87,12 +87,16 @@ Function f("Qore::printf");
 
     @param path the function name or namespace-justified path as a string
 
-    @throw UNKNOWN-FUNCTION cannot find a function with the given name or path
+    @throw UNKNOWN-FUNCTION cannot find a function with the given name or path, or the function name contains a NUL character (since %Qore 3.0)
     @throw ENCODING-CONVERSION-ERROR this exception could be thrown if the string argument is not in the @ref default_encoding "default character encoding" and an error occurs during encoding conversion
 
     @see forName()
  */
 Function::constructor(string path) {
+    // the name is looked up as a C string, which would be cut at a NUL character and name another function
+    if (q_check_no_nul(path->c_str(), path->size(), "function name", "function names", "UNKNOWN-FUNCTION", xsink)) {
+        return;
+    }
     QoreProgram* lookup_pgm = runtime_cfg.getProgram() ? runtime_cfg.getProgram() : getProgram();
     QoreReflectionFunction* f = get_function(xsink, *path, lookup_pgm);
     if (f) {
@@ -243,10 +247,14 @@ Function f = Function::forName("Qore::printf");
 
     @return a function object corresponding to the name or namespace-justified path provided as an argument
 
-    @throw UNKNOWN-FUNCTION cannot find a function with the given name or path
+    @throw UNKNOWN-FUNCTION cannot find a function with the given name or path, or the function name contains a NUL character (since %Qore 3.0)
     @throw ENCODING-CONVERSION-ERROR this exception could be thrown if the string argument is not in the @ref default_encoding "default character encoding" and an error occurs during encoding conversion
  */
 static Function Function::forName(string path) [flags=RET_VALUE_ONLY] {
+    // the name is looked up as a C string, which would be cut at a NUL character and name another function
+    if (q_check_no_nul(path->c_str(), path->size(), "function name", "function names", "UNKNOWN-FUNCTION", xsink)) {
+        return QoreValue();
+    }
     QoreProgram* lookup_pgm = runtime_cfg.getProgram() ? runtime_cfg.getProgram() : getProgram();
     return get_function_object(xsink, *path, lookup_pgm);
 }
@@ -262,10 +270,14 @@ Function f = Function::forName(pgm, "Qore::printf");
 
     @return a function object corresponding to the name or namespace-justified path provided as an argument
 
-    @throw UNKNOWN-FUNCTION cannot find a function with the given name or path
+    @throw UNKNOWN-FUNCTION cannot find a function with the given name or path, or the function name contains a NUL character (since %Qore 3.0)
     @throw ENCODING-CONVERSION-ERROR this exception could be thrown if the string argument is not in the @ref default_encoding "default character encoding" and an error occurs during encoding conversion
  */
 static Function Function::forName(Program[QoreProgram] pgm, string path) [flags=RET_VALUE_ONLY] {
+    // the name is looked up as a C string, which would be cut at a NUL character and name another function
+    if (q_check_no_nul(path->c_str(), path->size(), "function name", "function names", "UNKNOWN-FUNCTION", xsink)) {
+        return QoreValue();
+    }
     return get_function_object(xsink, *path, *pgm);
 }
 

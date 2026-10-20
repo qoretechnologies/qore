@@ -42,14 +42,14 @@ namespace {
 // a pipe whose descriptors are closed when it goes out of scope
 class TestPipe {
 public:
-    DLLLOCAL TestPipe(ExceptionSink* xsink) {
+    TestPipe(ExceptionSink* xsink) {
         if (pipe(fds)) {
             fds[0] = fds[1] = -1;
             xsink->raiseErrnoException("PIPE-ERROR", errno, "pipe() failed");
         }
     }
 
-    DLLLOCAL ~TestPipe() {
+    ~TestPipe() {
         if (fds[0] != -1) {
             close(fds[0]);
             close(fds[1]);
@@ -57,7 +57,7 @@ public:
     }
 
     // makes the read end readable; returns 0 for success
-    DLLLOCAL int fill(ExceptionSink* xsink) {
+    int fill(ExceptionSink* xsink) {
         char c = 'x';
         if (write(fds[1], &c, 1) != 1) {
             xsink->raiseErrnoException("PIPE-ERROR", errno, "write() failed");
@@ -66,7 +66,7 @@ public:
         return 0;
     }
 
-    DLLLOCAL int readFd() const {
+    int readFd() const {
         return fds[0];
     }
 

@@ -71,7 +71,8 @@ public class QoreSelectFieldsProcessor inherits AbstractDataProvider {
     constructor(hash<auto> options) {
         *hash<auto> copts = checkOptions("CONSTRUCTOR-ERROR", ConstructorOptions, options);
         if (copts.fields.val()) {
-            field_map = QoreSelectFieldsProcessor::parseFieldSpec(copts.fields);
+            field_map = QoreSelectFieldsProcessor::parseFieldSpec(
+                AbstractDataProvider::getFieldListOption(options, copts, "fields"));
         }
     }
 

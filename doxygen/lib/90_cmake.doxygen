@@ -196,6 +196,11 @@
       qo-link map, manifest).
     - \c qore_write_if_changed() / \c qore_content_digest_target() — write a generated file
       only when its content changes, so downstream \c qcc steps re-run only on real changes.
+    - \c qore_install_qmod_atomic(<built qmod> <install dir> <installed name> <component>) — install a
+      built \c .qmod by staging it beside its destination and renaming it into place, so a running process
+      that has the old module loaded keeps it intact; an installed module that is byte-identical to the
+      built one is left alone, keeping its modification time.  The installed module is listed in
+      \c install_manifest.txt either way.
 
     For the artifact formats these produce, see the object-file and module artifact
     contract in the Qore language reference and design docs.

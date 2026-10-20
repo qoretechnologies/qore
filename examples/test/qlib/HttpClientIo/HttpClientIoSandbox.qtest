@@ -1,0 +1,245 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Util
+%requires Mime
+%requires Logger
+%requires HttpServerUtil
+%requires HttpServer
+%requires HttpClientIo
+%requires RestClientIo
+%requires ../../TestCertificates.qm
+
+%exec-class HttpClientIoSandboxTest
+
+#! Makes a request for a sandboxed Program as module code does: this function runs in an unsandboxed Program
+auto sub sandbox_request(RecordingManager mgr, string url, string path, string api) {
+    switch (api) {
+        case "REST": {
+            RestClientIo rest({"url": url, "data": "text"}, mgr);
+            on_exit rest.close();
+            return rest.restGet(path).body;
+        }
+        case "REST async": {
+            RestClientIo rest({"url": url, "data": "text"}, mgr);
+            on_exit rest.close();
+            return rest.restGetAsync(path).get(60s).body;
+        }
+        case "HTTP":
+            return mgr.request(url, "GET", path).body;
+        case "HTTP async":
+            return mgr.requestAsync(url, "GET", path).get(60s).body;
+    }
+    throw "TEST-ERROR", sprintf("unknown API %y", api);
+}
+
+#! Records the connections a connection manager makes and the origins they are made to
+/** Every new connection, of a forced protocol or of either protocol of a race between HTTP/3 and HTTP/2, is
+    submitted to the I/O controller; a connection that wins a race is submitted again, so each connection is recorded
+    once
+*/
+class RecordingManager inherits HttpClientIo::HttpClientConnectionManager {
+    private {
+        Mutex m();
+        #! the connections made, in the order they were started: "key" (the origin) and "conn"
+        list<hash<auto>> records();
+        #! the IDs of the connections recorded
+        hash<string, bool> ids();
+    }
+
+    constructor(hash<HttpClientIo::HttpClientConnectionManagerOptions> opts)
+            : HttpClientIo::HttpClientConnectionManager(opts) {
+    }
+
+    #! Returns the protocols of the connections made to the given origin, in the order they were started
+    list<string> getProtocols(string key) {
+        AutoLock al(m);
+        return map $1.conn.getProtocol(), records, $1.key == key;
+    }
+
+    private submitConnectionToController(string key, HttpClientIo::HttpClientConnection conn, bool initial = True) {
+        {
+            AutoLock al(m);
+            string id = conn.getConnectionId().toString();
+            if (!ids{id}) {
+                ids{id} = True;
+                records += {"key": key, "conn": conn};
+            }
+        }
+        HttpClientIo::HttpClientConnectionManager::submitConnectionToController(key, conn, initial);
+    }
+}
+
+#! Redirects "/redirect" to the location set and counts the requests for "/target"
+class TestHandler inherits AbstractHttpRequestHandler {
+    public {
+        #! the target of "/redirect"
+        string location;
+        #! the number of requests for "/target"
+        Counter targets();
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        # the path of the request URI without the leading slash
+        if (cx.url.path == "redirect") {
+            return makeResponse(302, "", {"Location": location});
+        }
+        if (cx.url.path == "target") {
+            targets.inc();
+        }
+        return makeResponse(200, "reached", {"Content-Type": MimeTypeText});
+    }
+}
+
+#! The connections of a request made by sandboxed code are subject to its sandbox, whatever thread makes them
+/** A synchronous request makes its connections in the calling thread, an asynchronous one makes every connection
+    after its first one in an I/O worker: to follow a redirect to another origin or to retry a failed connection.
+*/
+public class HttpClientIoSandboxTest inherits QUnit::Test {
+    public {
+        #! the client APIs tested
+        const Apis = ("REST", "REST async", "HTTP", "HTTP async");
+        #! the protocols tested
+        const Protocols = ("h1", "h2", "h3", "auto");
+    }
+
+    private {
+        HttpServer server;
+        TestHandler handler();
+        #! TLS listeners that also receive HTTP/3 on their ports
+        int port_a;
+        int port_b;
+    }
+
+    constructor() : Test("HttpClientIoSandboxTest", "1.0") {
+        addTestCase("a redirect to an origin the sandbox denies", \redirectTest());
+        addTestCase("the retry of a connection the sandbox denies", \retryTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        server = new HttpServer(<HttpServerOptionInfo>{"logger": new Logger("http-client-io-sandbox",
+            LoggerLevel::getLevelInfo())});
+        server.setDefaultHandler("test", handler);
+        server.waitForAsyncIo();
+        foreach string l in (("a", "b")) {
+            int port = server.addListener(<HttpListenerOptionInfo>{
+                "node": "127.0.0.1",
+                "service": 0,
+                "cert": new SSLCertificate(TestCertificates::CertPem),
+                "key": new SSLPrivateKey(TestCertificates::KeyPem),
+            }).port;
+            if (l == "a") {
+                port_a = port;
+            } else {
+                port_b = port;
+            }
+        }
+        server.waitForAsyncIo();
+        handler.location = sprintf("https://127.0.0.1:%d/target", port_b);
+    }
+
+    globalTearDown() {
+        if (server) {
+            server.stop();
+        }
+    }
+
+    #! The sandbox allows connections to the port of server A only; a redirect to server B is refused
+    redirectTest() {
+        SandboxManager sm();
+        sm.setNetworkDefaultPolicy(True);
+        sm.addNetworkAllowedPort(port_a);
+        Program p = sandboxedProgram(sm, "redirect");
+        string url = sprintf("https://127.0.0.1:%d", port_a);
+        int targets = handler.targets.getCount();
+        foreach hash<auto> t in (requestCases()) {
+            string msg = sprintf("%s %s", t.protocol, t.api);
+            {
+                RecordingManager mgr = getManager(t.protocol, 1);
+                on_exit mgr.closeAll();
+                assertDenied(\p.callFunction(), ("run", mgr, url, "/redirect", t.api), msg);
+                assertNotRetried(mgr, msg);
+            }
+            # without the sandbox, the redirect is followed
+            RecordingManager mgr = getManager(t.protocol, 1);
+            on_exit mgr.closeAll();
+            assertEq("reached", sandbox_request(mgr, url, "/redirect", t.api), msg);
+            assertEq(++targets, handler.targets.getCount(), msg + ": only the unsandboxed request reached B");
+        }
+    }
+
+    #! The sandbox denies connections to the server's port: the denial is not retried as a connection error
+    retryTest() {
+        SandboxManager sm();
+        sm.setNetworkDefaultPolicy(True);
+        sm.addNetworkAllowedPort(port_a);
+        Program p = sandboxedProgram(sm, "retry");
+        string url = sprintf("https://127.0.0.1:%d", port_b);
+        int targets = handler.targets.getCount();
+        foreach hash<auto> t in (requestCases()) {
+            string msg = sprintf("%s %s", t.protocol, t.api);
+            RecordingManager mgr = getManager(t.protocol, 1);
+            on_exit mgr.closeAll();
+            assertDenied(\p.callFunction(), ("run", mgr, url, "/target", t.api), msg);
+            assertEq(targets, handler.targets.getCount(), msg + ": the server was never reached");
+            assertNotRetried(mgr, msg);
+        }
+    }
+
+    #! Returns the protocols and APIs tested
+    private list<hash<auto>> requestCases() {
+        list<hash<auto>> rv = ();
+        foreach string protocol in (Protocols) {
+            rv += map ("protocol": protocol, "api": $1), Apis;
+        }
+        return rv;
+    }
+
+    #! Returns a Program with the given sandbox that makes requests with sandbox_request()
+    private Program sandboxedProgram(SandboxManager sm, string label) {
+        Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+        p.setSandboxManager(sm);
+        p.importFunction("sandbox_request");
+        p.parse("%modern\nauto sub run(object mgr, string url, string path, string api) { "
+            "return sandbox_request(mgr, url, path, api); }", "http-client-io-sandbox-" + label);
+        return p;
+    }
+
+    #! Returns a connection manager that allows one retry of a failed connection
+    private RecordingManager getManager(string protocol, int retries) {
+        return new RecordingManager(cast<hash<HttpClientIo::HttpClientConnectionManagerOptions>>({
+            "protocol": protocol,
+            "enable_http3": True,
+            "accept_all_certs": True,
+            "connect_timeout": 30s,
+            "request_timeout": 60s,
+            "max_request_retries": retries,
+        }));
+    }
+
+    #! Asserts that the call fails because the sandbox denies the connection: the denial is raised as it is
+    private assertDenied(code c, list<auto> args, string msg) {
+        try {
+            call_function_args(c, args);
+            fail(msg + ": no exception raised");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("NETWORK-ACCESS-DENIED", ex.err, msg + ": " + ex.err + ": " + ex.desc);
+            assertRegex(sprintf("port %d", port_b), ex.desc, msg);
+            # the argument is the error of the connection
+            assertEq("NETWORK-ACCESS-DENIED", ex.arg.err, msg);
+        }
+    }
+
+    #! Asserts that no connection to server B was made again after the denial: one connection per protocol at most
+    private assertNotRetried(RecordingManager mgr, string msg) {
+        list<string> protocols = mgr.getProtocols(sprintf("127.0.0.1:%d", port_b));
+        assertTrue(protocols.size() > 0, msg + ": a connection to B was made");
+        assertEq(protocols.size(), (map {$1: True}, protocols).size(), msg + ": " + protocols.join(", "));
+    }
+}

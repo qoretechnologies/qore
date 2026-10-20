@@ -1,0 +1,312 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# The references between Logger objects and the objects they use are visible to the deterministic garbage collector,
+# so that a cycle through them is collected, and an event keeps the logger that created it.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Logger
+
+%exec-class LoggerReferenceCyclesTest
+
+#! an appender that counts its live instances and keeps the events posted to it
+class CountedAppender inherits LoggerAppenderWithLayout {
+    public {
+        #! any value, to make a cycle through the appender
+        auto ref;
+        #! the events posted
+        list<auto> events = ();
+    }
+
+    private {
+        Counter live;
+    }
+
+    constructor(Counter live) : LoggerAppenderWithLayout("counted", new LoggerLayoutPattern("%m")) {
+        self.live = live;
+        live.inc();
+    }
+
+    destructor() {
+        live.dec();
+    }
+
+    processEventImpl(int type, auto params) {
+    }
+
+    post(LoggerEvent event) {
+        events += event;
+    }
+}
+
+#! a counted object that can reference anything, to make a cycle
+class Counted {
+    public {
+        auto ref;
+    }
+
+    private {
+        Counter live;
+    }
+
+    constructor(Counter live) {
+        self.live = live;
+        live.inc();
+    }
+
+    destructor() {
+        live.dec();
+    }
+}
+
+#! a layout that can reference anything, to make a cycle
+class RefLayout inherits LoggerLayoutPattern {
+    public {
+        auto ref;
+    }
+
+    constructor() : LoggerLayoutPattern("%m") {
+    }
+}
+
+#! a filter that can reference anything, to make a cycle
+class RefFilter inherits LoggerFilter {
+    public {
+        auto ref;
+    }
+
+    int eval(LoggerEvent event) {
+        return LoggerFilter::NEUTRAL;
+    }
+}
+
+#! a counted level that can reference anything, to make a cycle
+class RefLevel inherits LoggerLevel {
+    public {
+        auto ref;
+    }
+
+    private {
+        Counter live;
+    }
+
+    constructor(Counter live) : LoggerLevel(LoggerLevel::INFO, "INFO") {
+        self.live = live;
+        live.inc();
+    }
+
+    destructor() {
+        live.dec();
+    }
+}
+
+#! an appender that records the messages it processes
+class ListAppender inherits LoggerAppenderWithLayout {
+    public {
+        list<auto> out = ();
+    }
+
+    constructor() : LoggerAppenderWithLayout("list", new LoggerLayoutPattern("%m")) {
+    }
+
+    processEventImpl(int type, auto params) {
+        if (type == EVENT_LOG) {
+            out += params;
+        }
+    }
+}
+
+class LoggerReferenceCyclesTest inherits QUnit::Test {
+    constructor() : QUnit::Test("Logger reference cycles", "1.0", \ARGV) {
+        addTestCase("a cycle through a logger's appender is collected", \testAppenderCycle());
+        addTestCase("removed appenders are released", \testRemoveAppenders());
+        addTestCase("an event keeps the logger that created it", \testEventLogger());
+        addTestCase("a deleted logger keeps its appenders for its child loggers", \testDeletedLogger());
+        addTestCase("a cycle through an appender's layout is collected", \testLayoutCycle());
+        addTestCase("a cycle through an appender's filter is collected", \testFilterCycle());
+        addTestCase("removed filters are released", \testRemoveFilters());
+        addTestCase("a cycle through an event's level is collected", \testEventLevelCycle());
+        addTestCase("a cycle through an event's arguments is collected", \testEventArgsCycle());
+        addTestCase("a cycle through an event's exception is collected", \testEventThrowableCycle());
+        addTestCase("a deleted appender keeps its filters and layout for its logger", \testDeletedAppender());
+        set_return_value(main());
+    }
+
+    testAppenderCycle() {
+        Counter live();
+        {
+            Logger logger("cycle", LoggerLevel::INFO);
+            CountedAppender appender(live);
+            # the appender references the logger, which references the appender
+            appender.ref = logger;
+            logger.addAppender(appender);
+            assertEq(1, logger.getAppenders().size());
+        }
+        assertEq(0, live.getCount(), "the cycle is collected");
+    }
+
+    testRemoveAppenders() {
+        Counter live();
+        Logger logger("remove", LoggerLevel::INFO);
+        logger.addAppender(new CountedAppender(live));
+        logger.addAppender(new CountedAppender(live));
+        CountedAppender kept(live);
+        logger.addAppender(kept);
+        assertEq(3, live.getCount());
+        logger.removeAppender(logger.getAppenders()[0]);
+        assertEq(2, live.getCount(), "a removed appender is released");
+        assertEq(2, logger.getAppenders().size());
+        logger.removeAllAppenders();
+        assertEq(1, live.getCount(), "the removed appenders are released, except one referenced elsewhere");
+        assertEq((), logger.getAppenders());
+    }
+
+    testEventLogger() {
+        Counter live();
+        {
+            CountedAppender appender(live);
+            {
+                Logger logger("short-lived", LoggerLevel::INFO);
+                logger.addAppender(appender);
+                appender.open();
+                logger.info("event");
+            }
+            # the logger is out of scope; the event kept by the appender still references it
+            assertEq(1, appender.events.size());
+            assertEq("short-lived", appender.events[0].getLogger().getName(), "the event's logger is alive");
+            # the appender keeps the event, which keeps the logger, which keeps the appender
+        }
+        assertEq(0, live.getCount(), "the cycle through the event is collected");
+    }
+
+    testDeletedLogger() {
+        Counter live();
+        Logger parent("parent", LoggerLevel::INFO);
+        CountedAppender appender(live);
+        parent.addAppender(appender);
+        appender.open();
+        Logger child("child", LoggerLevel::INFO);
+        child.setParent(parent);
+        child.info("before");
+        assertEq(1, appender.events.size(), "the parent's appender gets the child's event");
+        delete parent;
+        # the child still references the deleted parent, which still forwards the child's events to its appenders
+        child.info("after");
+        assertEq(2, appender.events.size(), "the deleted logger's appender gets the child's event");
+        remove appender;
+        remove child;
+        assertEq(0, live.getCount(), "the appender is released with the child");
+    }
+
+    testLayoutCycle() {
+        Counter live();
+        {
+            RefLayout layout();
+            CountedAppender appender(live);
+            appender.setLayout(layout);
+            # the layout references the appender, which references the layout
+            layout.ref = appender;
+            assertEq(layout, appender.getLayout());
+        }
+        assertEq(0, live.getCount(), "the cycle is collected");
+    }
+
+    testFilterCycle() {
+        Counter live();
+        {
+            CountedAppender appender(live);
+            RefFilter filter();
+            # the filter references the appender, which references the filter
+            filter.ref = appender;
+            appender.addFilter(filter);
+            assertEq((filter,), appender.getFilters());
+        }
+        assertEq(0, live.getCount(), "the cycle is collected");
+    }
+
+    testRemoveFilters() {
+        Counter live();
+        CountedAppender appender(live);
+        Counted c1(live);
+        Counted c2(live);
+        RefFilter f1();
+        RefFilter f2();
+        f1.ref = c1;
+        f2.ref = c2;
+        appender.addFilter(f1);
+        appender.addFilter(f2, True);
+        assertEq((f2, f1), appender.getFilters(), "a filter is added at the top");
+        remove c1;
+        remove c2;
+        remove f1;
+        assertEq(3, live.getCount());
+        appender.removeFilter(appender.getFilters()[1]);
+        assertEq(2, live.getCount(), "a removed filter is released");
+        remove f2;
+        appender.removeAllFilters();
+        assertEq(1, live.getCount(), "the removed filters are released");
+        assertEq((), appender.getFilters());
+    }
+
+    testEventLevelCycle() {
+        Counter live();
+        {
+            RefLevel level(live);
+            LoggerEvent event("fqcn", "category", level, "message");
+            # the level references the event, which references the level
+            level.ref = event;
+            assertEq(level, event.getLevel());
+        }
+        assertEq(0, live.getCount(), "the cycle is collected");
+    }
+
+    testEventArgsCycle() {
+        Counter live();
+        {
+            Counted c(live);
+            LoggerEvent event("fqcn", "category", LoggerLevel::getLevelInfo(), "message %y", (c,));
+            # the argument references the event, which references the argument
+            c.ref = event;
+            assertTrue(event.getMessage() =~ /^message .*Counted/, "the message is rendered with the argument");
+        }
+        assertEq(0, live.getCount(), "the cycle is collected");
+    }
+
+    testEventThrowableCycle() {
+        Counter live();
+        {
+            Counted c(live);
+            hash<ExceptionInfo> ex;
+            try {
+                throw "ERR", "desc", c;
+            } catch (hash<ExceptionInfo> e) {
+                ex = e;
+            }
+            LoggerEvent event("fqcn", "category", LoggerLevel::getLevelInfo(), "message", NOTHING, NOTHING, NOTHING,
+                NOTHING, ex);
+            # the exception's argument references the event, which references the exception
+            c.ref = event;
+            assertEq("ERR", event.getThrowableInfo().err);
+        }
+        assertEq(0, live.getCount(), "the cycle is collected");
+    }
+
+    testDeletedAppender() {
+        Logger logger("deleted-appender", LoggerLevel::INFO);
+        ListAppender appender();
+        appender.addFilter(new RefFilter());
+        logger.addAppender(appender);
+        appender.open();
+        logger.info("one");
+        assertEq(("one",), appender.out);
+        delete appender;
+        # the logger still posts to the deleted appender's private data, which still has its filter and layout; the
+        # call of the deleted object's method fails as before
+        assertThrows("OBJECT-ALREADY-DELETED", \logger.info(), "two");
+    }
+}

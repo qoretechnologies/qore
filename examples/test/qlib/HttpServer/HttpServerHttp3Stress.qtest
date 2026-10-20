@@ -155,14 +155,6 @@ l50Xb2GWQesIt9k5jF5IOw==
     }
 
     constructor() : Test("HttpServerHttp3StressTest", "1.0") {
-        # Set up SIGUSR1 handler to dump thread stacks for debugging hangs
-        @debug {
-            set_signal_handler(SIGUSR1, sub (int sig) {
-                printf("=== SIGUSR1 Thread Stacks ===\n%Y\n=== End Thread Stacks ===\n",
-                    get_all_thread_call_stacks());
-            });
-        }
-
         # Group 1: Throughput
         addTestCase("sustained throughput", \testSustainedThroughput());
         addTestCase("large body throughput", \testLargeBodyThroughput());

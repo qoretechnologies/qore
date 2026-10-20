@@ -252,14 +252,6 @@ l50Xb2GWQesIt9k5jF5IOw==
     }
 
     constructor() : Test("HttpServerHttp3IntegrationTest", "1.0") {
-        # Set up SIGUSR1 handler to dump thread stacks for debugging hangs
-        @debug {
-            set_signal_handler(SIGUSR1, sub (int sig) {
-                printf("=== SIGUSR1 Thread Stacks ===\n%Y\n=== End Thread Stacks ===\n",
-                    get_all_thread_call_stacks());
-            });
-        }
-
         # Group 1: Basic Round-Trip
         addTestCase("simple GET", \testSimpleGet());
         addTestCase("POST echo", \testPostEcho());
@@ -1471,6 +1463,7 @@ l50Xb2GWQesIt9k5jF5IOw==
         HttpServer server = setup.server;
         on_exit delete server;
 
+        int proxy_port = getUnusedPort();
         HttpClientIo::HttpClientConnectionManager mgr(
             <HttpClientIo::HttpClientConnectionManagerOptions>{
                 "protocol": "auto",
@@ -1478,8 +1471,8 @@ l50Xb2GWQesIt9k5jF5IOw==
                 "logger": mLogger,
                 "request_timeout": 15s,
                 "connect_timeout": 10s,
-                # Set a fake proxy — QUIC cannot tunnel through HTTP proxies
-                "proxy_url": "http://127.0.0.1:9999",
+                # Set a fake proxy — QUIC cannot tunnel through HTTP proxies; nothing listens on its port
+                "proxy_url": sprintf("http://127.0.0.1:%d", proxy_port),
             },
         );
         on_exit delete mgr;
@@ -1493,14 +1486,21 @@ l50Xb2GWQesIt9k5jF5IOw==
         assertEq(0, stats.total_connections, "proxy: no connections before request");
 
         # Verify resolveProtocol would return "h2" not "h3" by making a
-        # request that fails (proxy unreachable) and checking the error
+        # request that fails (proxy unreachable) and checking the error: with
+        # HTTP/3 the request would bypass the proxy and reach the server.  The
+        # exception is caught only around the request, so that a request that
+        # does not fail is reported
+        *hash<ExceptionInfo> err;
         try {
             mgr.request(sprintf("https://127.0.0.1:%d", setup.port), "GET", "/test");
-            fail("proxy: request should fail (fake proxy)");
         } catch (hash<ExceptionInfo> ex) {
-            # Expected: connection error because the proxy doesn't exist
-            assertTrue(True, "proxy: request fails through fake proxy as expected");
+            err = ex;
         }
+        assertTrue(exists err, "proxy: request should fail (fake proxy)");
+        # the connection that failed is the one to the proxy
+        assertEq("HTTPCLIENT-CONNECT-ERROR", err.err, "proxy: request fails connecting");
+        assertRegex(sprintf("127\\.0\\.0\\.1:%d\\b", proxy_port), err.desc ?? "",
+            "proxy: the failed connection is the one to the proxy");
     }
 
     #! Test: cross-origin Alt-Svc is ignored (host mismatch per RFC 7838 §2.1)
@@ -1683,5 +1683,17 @@ l50Xb2GWQesIt9k5jF5IOw==
         assertTrue(dt3_ms < 5000,
             sprintf("third request via localhost took %d ms (expected <5000)",
                 dt3_ms));
+    }
+
+    #! returns a port on 127.0.0.1 that no socket is bound to at the time of the call
+    /** binds a socket to port 0, so that the system assigns a free port, and closes it again; a fixed port can be in
+        use on the host, for example by a listener of another test run at the same time
+    */
+    private static int getUnusedPort() {
+        Socket s();
+        s.bindINET("127.0.0.1", "0", False, AF_INET);
+        int port = s.getSocketInfo().port;
+        s.close();
+        return port;
     }
 }

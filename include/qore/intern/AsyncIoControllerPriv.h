@@ -156,13 +156,16 @@ struct AsyncIoDeferredRelease {
     QoreHashNode* poll_info = nullptr;               //!< Poll info hash (referenced, or nullptr)
     QoreHashNode* other = nullptr;                   //!< Free-form data (referenced, or nullptr)
     Queue* queue = nullptr;                          //!< Result queue (referenced, or nullptr)
+    QoreObject* queue_obj = nullptr;                 //!< Result queue object (referenced, or nullptr)
+    Queue* state_queue = nullptr;                    //!< State event queue (referenced, or nullptr)
+    QoreObject* state_queue_obj = nullptr;           //!< State event queue object (referenced, or nullptr)
     SocketPollOperationBase* spop_base = nullptr;    //!< C++ poll operation (referenced, or nullptr)
     QoreValue udata;                                 //!< Timer user data, e.g. a callback (referenced)
 
     //! Returns True if no references are held
     DLLLOCAL bool empty() const {
-        return !sock_obj && !sock && !spop_obj && !poll_info && !other && !queue && !spop_base
-            && !udata.hasNode();
+        return !sock_obj && !sock && !spop_obj && !poll_info && !other && !queue && !queue_obj && !state_queue
+            && !state_queue_obj && !spop_base && !udata.hasNode();
     }
 
     //! Returns the program the released objects belong to, if known
@@ -204,6 +207,15 @@ public:
 DLLLOCAL bool qore_set_async_io_thread_for_test(bool value);
 #endif
 
+class QoreSandboxContext;
+
+//! The sandbox context of the thread that submitted a poll operation
+/** Captured by AsyncIoControllerPriv::submit() and applied with QoreSandboxContextHelper around every step of the
+    operation that runs on a callback worker, so that the operation, and any connection it makes there, is governed by
+    the sandbox of the code that submitted it and not by the context of the worker; empty if no sandbox applies.
+*/
+typedef std::shared_ptr<const QoreSandboxContext> AsyncIoSandboxContext;
+
 class QoreCallDispatcher {
 public:
     //! Dispatch type for async work items
@@ -239,6 +251,13 @@ public:
         AsyncIoDeferredRelease* release = nullptr; //!< For DT_RELEASE: owned references to release (or nullptr)
         AsyncIoNativeTask* native_task = nullptr; //!< For DT_NATIVE_TASK: owned task (or nullptr)
         bool sent = false;                   //!< For DT_STREAM_SEND_RESULT_NOTIFY: the transmission result
+        //! The sandbox context of the poll operation's submitter, applied while the item runs; see
+        //! AsyncIoSandboxContext
+        AsyncIoSandboxContext sandbox_ctx;
+        //! For DT_CONTINUE_POLL: read the operation's state after continuePoll() for its state events
+        bool read_state = false;
+        //! For DT_CONTINUE_POLL: the ID of the operation in the I/O thread's cache; see OpCache
+        uint64_t op_id = 0;
     };
 
     //! Creates the dispatcher
@@ -255,7 +274,7 @@ public:
         @param owner optional owner identifier for per-owner flush tracking
     */
     DLLLOCAL void dispatchAbortAsync(QoreObject* spop_obj,
-        const std::string& owner = std::string());
+        const std::string& owner = std::string(), AsyncIoSandboxContext sandbox_ctx = AsyncIoSandboxContext());
 
     //! Dispatch an onComplete(result) call asynchronously (fire-and-forget)
     /** @param spop_obj the AbstractPollOperation object (referenced — ownership transferred)
@@ -263,7 +282,7 @@ public:
         @param owner optional owner identifier for per-owner flush tracking
     */
     DLLLOCAL void dispatchOnCompleteAsync(QoreObject* spop_obj, QoreHashNode* result,
-        const std::string& owner = std::string());
+        const std::string& owner = std::string(), AsyncIoSandboxContext sandbox_ctx = AsyncIoSandboxContext());
 
     //! Dispatch a code callback asynchronously (for timer events)
     /** @param callback the callback code (referenced — ownership transferred)
@@ -276,14 +295,19 @@ public:
     //! Dispatch continuePoll() asynchronously with result delivery back to I/O thread
     /** @param spop_obj the AbstractPollOperation object (referenced — ownership transferred)
         @param controller the AsyncIoControllerPriv to deliver the result to (referenced)
-        @param key the operation key for result correlation
+        @param key the operation key
+        @param op_id the operation's ID in the cache of its I/O thread, which identifies the result; another
+        operation can take over the key while the step is in flight
         @param thread_idx the index of the I/O thread whose cache holds the operation; the result is delivered to
         this thread
         @param owner optional owner identifier for per-owner flush tracking
+        @param read_state if true, the worker reads the operation's state with getState() after continuePoll() and
+        sends it back with the result, for the operation's state events
     */
     DLLLOCAL void dispatchContinuePollAsync(QoreObject* spop_obj,
-        AsyncIoControllerPriv* controller, const std::string& key, int thread_idx,
-        const std::string& owner = std::string());
+        AsyncIoControllerPriv* controller, const std::string& key, uint64_t op_id, int thread_idx,
+        const std::string& owner = std::string(), AsyncIoSandboxContext sandbox_ctx = AsyncIoSandboxContext(),
+        bool read_state = false);
 
     //! Dispatch onStreamData(stream_key) asynchronously (fire-and-forget)
     /** Called by the I/O thread after stream data arrives.
@@ -295,7 +319,7 @@ public:
         @param owner optional owner identifier for per-owner flush tracking
     */
     DLLLOCAL void dispatchStreamDataAsync(QoreObject* spop_obj, const std::string& stream_key,
-        const std::string& owner = std::string());
+        const std::string& owner = std::string(), AsyncIoSandboxContext sandbox_ctx = AsyncIoSandboxContext());
 
     //! Dispatch onStreamSendResult(stream_key, sent) asynchronously (fire-and-forget)
     /** Called by the I/O thread with the transmission result of a response whose stream is watched by an HTTP/2
@@ -307,7 +331,7 @@ public:
         @param owner optional owner identifier for per-owner flush tracking
     */
     DLLLOCAL void dispatchStreamSendResultAsync(QoreObject* spop_obj, const std::string& stream_key, bool sent,
-        const std::string& owner = std::string());
+        const std::string& owner = std::string(), AsyncIoSandboxContext sandbox_ctx = AsyncIoSandboxContext());
 
     //! Dispatch onPollComplete() asynchronously (fire-and-forget)
     /** Called by the I/O thread after WebSocketClientPollOperationBase::continuePoll()
@@ -318,7 +342,7 @@ public:
         @param owner optional owner identifier for per-owner flush tracking
     */
     DLLLOCAL void dispatchPollCompleteAsync(QoreObject* spop_obj,
-        const std::string& owner = std::string());
+        const std::string& owner = std::string(), AsyncIoSandboxContext sandbox_ctx = AsyncIoSandboxContext());
 
     //! Runs a native task on a callback worker (fire-and-forget)
     /** The item is not owner-tracked.  When it cannot be queued, the task is discarded instead of run.
@@ -515,10 +539,24 @@ class AsyncIoControllerPriv : public AbstractPrivateData {
 #ifdef DEBUG
     friend class AsyncIoCloseTest;
     friend class AsyncIoOpCacheTest;
+    friend class AsyncIoAbandonedSubmitTest;
+    friend class AsyncIoStoppingThreadTest;
 #endif
     friend class QoreCallDispatcher;  // for enqueueContinuePollResult from worker thread
 
 public:
+    //! Makes the I/O threads of the controller external-lifecycle threads; called for the global controller
+    /** The cleanup at process exit stops the global controller and then waits for the external-lifecycle threads
+        only, so every I/O thread of the global controller must be one: also a thread that it starts during the
+        cleanup, as stop() does to deliver its quit command when an I/O thread has stopped while another one runs.
+        That the controller is the global one cannot tell this then, as the cleanup gives up the global controller
+        before it stops it.
+    */
+    DLLLOCAL void setExternalLifecycleThreads() {
+        AutoLocker al(m);
+        external_lifecycle_threads = true;
+    }
+
     //! Default I/O operation timeout (30 seconds)
     static constexpr int64 DEFAULT_IO_TIMEOUT_US = 30000000LL;
 
@@ -927,6 +965,15 @@ private:
         QoreHashNode* continue_poll_result = nullptr;  //!< For ContinuePollResult: new poll info (or nullptr)
         QoreHashNode* continue_poll_ex = nullptr;      //!< For ContinuePollResult: exception (or nullptr)
         bool continue_poll_completed = false;           //!< For ContinuePollResult: true if completed
+        //! For ContinuePollResult: true if the worker read the operation's state for its state events
+        bool continue_poll_has_state = false;
+        //! For ContinuePollResult: the operation's state after the step, if continue_poll_has_state
+        std::string continue_poll_state;
+        //! For ContinuePollResult: the ID of the operation that made the step
+        /** The result is applied to the operation with this ID only: the entry with the same key can belong to
+            another operation by the time the result arrives (see OpCache).
+        */
+        uint64_t continue_poll_op_id = 0;
         std::string sock_hash;          //!< For WakeSocket/CancelSocket/CloseSocket: socket hash
         AbstractPollableIoObjectBase* close_sock = nullptr; //!< For CloseSocket: referenced I/O object
         bool submit_replace = false;    //!< For SubmitOp: replace existing operation with same key
@@ -946,12 +993,17 @@ private:
         QoreHashNode* submit_poll_info = nullptr;        //!< Referenced initial poll info (or nullptr)
         QoreHashNode* submit_other = nullptr;            //!< Referenced other data (or nullptr)
         Queue* submit_queue = nullptr;                   //!< Referenced result queue (or nullptr)
+        QoreObject* submit_queue_obj = nullptr;          //!< Referenced result queue object (or nullptr)
+        Queue* submit_state_queue = nullptr;             //!< Referenced state event queue (or nullptr)
+        QoreObject* submit_state_queue_obj = nullptr;    //!< Referenced state event queue object (or nullptr)
+        std::vector<std::string> submit_notify_states;   //!< The states to report; empty = all
         int64 submit_timeout_us = 0;                     //!< Timeout in microseconds
         bool submit_has_qore_abort = false;              //!< True if abort() is overridden in Qore
         bool submit_has_qore_on_complete = false;        //!< True if onComplete() is overridden in Qore
         bool submit_socket_async_io = false;             //!< True if SubmitOp owns a Socket async I/O claim
         std::string submit_route_sock_hash;              //!< Submit-time wake route/object mapping, if published
         int submit_route_thread_idx = -1;                //!< I/O thread for submit_route_sock_hash
+        AsyncIoSandboxContext submit_sandbox_ctx;        //!< For SubmitOp: the submitter's sandbox context
     };
 
     //! Internal poll info (mirrors Qore Priv::PollInfo)
@@ -970,6 +1022,20 @@ private:
         std::string inherited_owner;
         QoreHashNode* other;            //!< Free-form data (referenced, or nullptr)
         Queue* queue;                   //!< Result queue (referenced, or nullptr)
+        //! The object of \c queue (referenced, or nullptr); results are pushed with it, see deliverResult()
+        QoreObject* queue_obj = nullptr;
+        //! State event queue (referenced, or nullptr); see noteOperationState() and deliverStateEnd()
+        Queue* state_queue = nullptr;
+        //! The object of \c state_queue (referenced, or nullptr); events are pushed with it, see pushStateEvent()
+        QoreObject* state_queue_obj = nullptr;
+        //! The states to report on \c state_queue; empty = every change
+        std::vector<std::string> notify_states;
+        //! The state read after the operation's last step, if \c state_seen
+        std::string last_state;
+        //! True once the operation's state has been read after a step
+        bool state_seen = false;
+        //! True once the last state event (\c done) has been pushed; it is pushed exactly once
+        bool state_end_delivered = false;
         SocketPollOperationBase* spop_base; //!< C++ poll operation (referenced, or nullptr)
         bool has_qore_abort;            //!< True if abort() is overridden in Qore
         bool has_qore_on_complete;      //!< True if onComplete() is overridden in Qore
@@ -1013,6 +1079,8 @@ private:
         uint64_t last_queued_gen = 0;   //!< Phase 1 generation when last queued (duplicate prevention)
         //! The ID the operation cache gave this operation; see OpCache
         uint64_t op_id = 0;
+        //! The sandbox context of the submitter, applied to the operation's steps on callback workers
+        AsyncIoSandboxContext sandbox_ctx;
         //! Back-ref to the owning controller (not ref'd; outlives pinfo).
         //! Used by cleanup() to erase the submit-time obj_to_sock_hash entry
         //! before deref'ing sock_obj — without this the map can accumulate
@@ -1143,10 +1211,12 @@ private:
     struct DeferredDelivery {
         std::string key;
         Queue* queue;                      //!< Referenced or nullptr
+        QoreObject* queue_obj = nullptr;   //!< The object of queue; referenced or nullptr
         QoreObject* spop_obj;              //!< Referenced or nullptr (for onComplete dispatch)
         bool has_on_complete;              //!< True if spop has onComplete() override
         QoreHashNode* result;              //!< Referenced
         std::string owner;                 //!< Owner identifier for per-owner flush tracking
+        AsyncIoSandboxContext sandbox_ctx; //!< The submitter's sandbox context, for onComplete()
     };
 
     //! Timer info stored under lock
@@ -1254,6 +1324,25 @@ private:
         int tid = 0;                       //!< Thread ID (0 if not running)
         int thread_idx = 0;                //!< Index in io_threads vector
         int64 autostop_idle_since = 0;     //!< Timestamp when cache first became empty
+        //! True from this thread's decision to stop until it has stopped (guarded by the controller's lock)
+        /** Per thread: with several I/O threads, one thread stops while the others run or stop themselves; a stopping
+            thread cannot be started again before it has stopped (see startIntern()).
+        */
+        bool exiting = false;
+        //! True once this stopping thread has drained its command queue for the last time, until it is started again
+        /** Guarded by the controller's lock.  The thread has then canceled the operations in its cache and processes no
+            more commands: a command pushed to it would never be processed, and a caller waiting for it would wait
+            forever, so the fan-outs skip it (see readsCommands()).
+        */
+        bool commands_closed = false;
+#ifdef DEBUG
+        //! Test hook: when set, the thread waits on \c dbg_cond after its last command drain until it is cleared
+        bool dbg_hold_after_drain = false;
+        //! Test hook: true while the thread waits after its last command drain
+        bool dbg_held = false;
+        //! Test hook: signaled when \c dbg_held is set, and to release the thread
+        QoreCondition dbg_cond;
+#endif
 
         QoreEventLoop* loop = nullptr;
         QoreEventNotifier* notifier = nullptr;
@@ -1371,10 +1460,11 @@ private:
             @c close_internal(), avoiding the OpenSSL context corruption
             seen in CI job 170659 (SIGSEGV in @c EVP_CIPHER_get_mode).
 
-            I/O-thread-only.  Key: op key.  Value: the PollInfo copy whose
-            cleanup is still pending.
+            I/O-thread-only.  Key: operation ID (an operation with the same
+            key can have taken over the cache entry).  Value: the PollInfo
+            copy whose cleanup is still pending.
          */
-        std::unordered_map<std::string, PollInfo> pending_aborts;
+        std::unordered_map<uint64_t, PollInfo> pending_aborts;
 
         //! Socket-level cancel completions waiting on deferred aborts
         /** When @ref IoCommand::CancelSocket removes an operation whose
@@ -1389,8 +1479,8 @@ private:
         };
         std::unordered_map<std::string, PendingSocketCancel> pending_socket_cancels;
 
-        //! Maps pending-abort operation keys back to their socket-cancel barrier
-        std::unordered_map<std::string, std::string> pending_abort_cancel_hash;
+        //! Maps pending-abort operation IDs back to their socket-cancel barrier
+        std::unordered_map<uint64_t, std::string> pending_abort_cancel_hash;
     };
 
     //! Get the I/O thread index for a route key (hash-based affinity)
@@ -1461,6 +1551,35 @@ private:
         return false;
     }
 
+    //! Returns true if any I/O thread is stopping; the caller holds \c m
+    DLLLOCAL bool anyThreadExiting() const {
+        for (auto& tp : io_threads) {
+            if (tp->exiting) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    //! Returns true if any I/O thread runs and is not stopping; the caller holds \c m
+    DLLLOCAL bool anyThreadActive() const {
+        for (auto& tp : io_threads) {
+            if (tp->tid && !tp->exiting) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    //! Returns true if the I/O thread processes the commands pushed to it; the caller holds \c m
+    /** A thread processes commands from its start until its last command drain when it stops; a stopping thread
+        that has not drained its queue yet still processes the commands pushed to it then (cancellations and the like
+        are completed by its exit cleanup).
+    */
+    DLLLOCAL static bool readsCommands(const IoThreadContext& t) {
+        return t.tid && !t.commands_closed;
+    }
+
     //! Per-key cancel cond with refcount.  The cond is deleted only when the
     //! LAST holder (map entry + any active waiters) drops its ref — destroying
     //! it earlier is UB on macOS if a waiter is still inside pthread_cond_wait
@@ -1520,11 +1639,12 @@ private:
     // --- Mutex-protected state (rare paths: startup, shutdown, cancel wait) ---
     mutable QoreThreadLock m;
     bool autostop_flag;
+    //! True if the I/O threads are external-lifecycle threads; see setExternalLifecycleThreads()
+    bool external_lifecycle_threads = false;
     bool shutting_down;
     std::unordered_map<std::string, CancelCond*> cancel_cond_map;
     QoreCondition io_cond;
     bool io_waiting;
-    bool io_exiting;
     bool ready_flag;
     std::atomic<int> submit_seq;          //!< Incremented on each submit() call (global; per-thread tracking lives on IoThreadContext)
     QoreCondition processed_cond;         //!< Signaled when any thread's processed_seq advances
@@ -1595,7 +1715,7 @@ private:
         AsyncOpCompletion*& completion, ExceptionSink* xsink);
 
     //! Complete any socket-level cancel waiting on a deferred abort key
-    DLLLOCAL void completePendingSocketCancel(IoThreadContext& t, const std::string& key,
+    DLLLOCAL void completePendingSocketCancel(IoThreadContext& t, uint64_t op_id,
         ExceptionSink* xsink);
 
     //! Cancel all operations associated with a socket hash
@@ -1777,13 +1897,15 @@ private:
     //! Call continuePoll on an AbstractPollOperation object
     //! Enqueue a continuePoll result from a worker thread back to the I/O thread
     /** @param key the operation key
+        @param op_id the ID of the operation that made the step, which the result is applied to (see OpCache)
         @param thread_idx the index of the I/O thread that dispatched the continuePoll() and holds the operation
         @param new_poll_info the new poll info (referenced, ownership transferred) or nullptr
         @param ex_hash the exception hash (referenced, ownership transferred) or nullptr
         @param completed true if the operation completed
+        @param state the operation's state after the step, read for its state events, or nullptr
     */
-    DLLLOCAL void enqueueContinuePollResult(const std::string& key, int thread_idx, QoreHashNode* new_poll_info,
-        QoreHashNode* ex_hash, bool completed);
+    DLLLOCAL void enqueueContinuePollResult(const std::string& key, uint64_t op_id, int thread_idx,
+        QoreHashNode* new_poll_info, QoreHashNode* ex_hash, bool completed, const std::string* state = nullptr);
 
     //! Dispatch a stream-data-ready notification from a worker thread
     /** Called by the DT_CONTINUE_POLL worker after getAndClearDataReadyStreams() to
@@ -1794,7 +1916,7 @@ private:
         @param stream_key the stream identifier to pass to onStreamData()
     */
     DLLLOCAL void enqueueStreamDataDispatch(QoreObject* spop_obj, const std::string& stream_key,
-        const std::string& owner = std::string());
+        const std::string& owner = std::string(), AsyncIoSandboxContext sandbox_ctx = AsyncIoSandboxContext());
 
     //! Call abort on an AbstractPollOperation object
     DLLLOCAL static void callAbort(QoreObject* spop_obj, ExceptionSink* xsink);
@@ -1818,8 +1940,45 @@ private:
     DLLLOCAL void logAndClearStrayException(const char* phase, ExceptionSink* xsink) const;
 
     //! Deliver a result via onComplete or queue (dispatches onComplete to worker thread)
-    DLLLOCAL void deliverResult(Queue* queue, QoreObject* spop_obj, bool has_on_complete,
-        QoreHashNode* result, ExceptionSink* xsink, const std::string& owner = std::string());
+    /** The result is pushed with the queue's object, as Queue::push() does, so that the deterministic garbage
+        collector sees the references the result holds: a result queue reachable from the operation with its result
+        left in it is part of a cycle that is collected.
+
+        @param queue the result queue (not referenced by the call), or nullptr
+        @param queue_obj the object of \a queue (not referenced by the call), or nullptr
+    */
+    DLLLOCAL void deliverResult(Queue* queue, QoreObject* queue_obj, QoreObject* spop_obj, bool has_on_complete,
+        QoreHashNode* result, ExceptionSink* xsink, const std::string& owner = std::string(),
+        AsyncIoSandboxContext sandbox_ctx = AsyncIoSandboxContext());
+
+    //! Notes the state an operation with a state queue has after a step, and reports it if it changed
+    /** Called on the I/O thread with the state read after each step: the first state read is always reported,
+        later ones when they differ from the state read after the step before; with notify states, only changes
+        into one of them are reported.
+
+        @param pinfo the operation; must have a state queue
+        @param state the state, as returned by getStateImpl() (nullptr is the empty string, as getState() returns)
+    */
+    DLLLOCAL void noteOperationState(PollInfo& pinfo, const char* state);
+
+    //! Pushes the last state event (\c done) of an operation with a state queue, exactly once
+    /** Called on every path that ends an operation, before its result is delivered, so that all its events
+        precede its result.  It only pushes to the state queue, which has its own lock, so it can be called whether
+        or not the controller mutex is held.
+    */
+    DLLLOCAL void deliverStateEnd(PollInfo& pinfo);
+
+    //! Pushes a state event to a state queue
+    /** The queue never has a maximum size (see submit()), so the push never waits.  The event is pushed with the
+        queue's object, as Queue::push() does, so that the deterministic garbage collector sees the references the
+        event holds: a queue reachable from the operation (a member, a callback's closure) with events left in it
+        is part of a cycle that is collected.  A failure to build or push the event is logged; it cannot affect the
+        operation.
+
+        @param state the state, or nullptr for an event without a state
+    */
+    DLLLOCAL void pushStateEvent(Queue* state_queue, QoreObject* state_queue_obj, QoreObject* sock_obj,
+        QoreObject* spop_obj, const std::string* state, bool done, QoreHashNode* other, const std::string& owner);
 
     //! Shared call dispatcher for async callback/abort delivery (lazily created, atomic for lock-free check)
     std::atomic<QoreCallDispatcher*> call_dispatcher{nullptr};
@@ -1858,8 +2017,5 @@ DLLLOCAL void qore_async_io_controller_cleanup();
 //! in qore_async_io_controller_cleanup() afterward, so the controller can keep
 //! serving cancelByProgram() callbacks during module teardown.
 DLLLOCAL void qore_async_io_controller_pre_cleanup();
-
-//! Returns true if the given controller is the global singleton
-DLLLOCAL bool qore_is_async_io_controller_singleton(AsyncIoControllerPriv* ctrl);
 
 #endif // _QORE_ASYNCIOCONTROLLERPRIV_H

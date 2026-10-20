@@ -76,6 +76,7 @@ class DataProviderExpressionsTest inherits QUnit::Test {
         addTestCase("between fix tests", \betweenFixTests());
         addTestCase("findIn fix tests", \findInFixTests());
         addTestCase("findIn: the same results as Qorus", \findInQorusTests());
+        addTestCase("findIn: location escapes as in a field path", \findInLocationEscapeTests());
         addTestCase("duration function tests", \durationTests());
         addTestCase("date extraction tests", \dateExtractionTests());
         addTestCase("null handling tests", \nullHandlingTests());
@@ -565,6 +566,62 @@ class DataProviderExpressionsTest inherits QUnit::Test {
         # without dot-path, returns the value itself
         assertEq(2, eval_expr("findIn", (2, (1, 2, 3))));
         assertEq(NOTHING, eval_expr("findIn", (99, (1, 2, 3))));
+    }
+
+    #! A findIn location escapes as a field path does: "\." is a dot and "\\" a backslash of a step, so a step ending
+    #! with a backslash can be followed by another; "\ " is a space
+    findInLocationEscapeTests() {
+        # a step ending with a backslash, followed by another
+        assertEq({"a\\": {"b": 2}}, eval_expr("findIn", (2, ({"a\\": {"b": 2}},), "a\\\\.b")));
+        # an escaped backslash is one backslash; any other backslash is itself
+        assertEq({"p\\q": 1}, eval_expr("findIn", (1, ({"p\\q": 1},), "p\\\\q")));
+        assertEq({"p\\q": 1}, eval_expr("findIn", (1, ({"p\\q": 1},), "p\\q")));
+        # an escaped dot is part of a step, and an escaped space a space
+        assertEq({"a.b": 2}, eval_expr("findIn", (2, ({"a.b": 2},), "a\\.b")));
+        assertEq({"a b": 1}, eval_expr("findIn", (1, ({"a b": 1},), "a\\ b")));
+        # a backslash and a space: the escaped backslash, then the escaped space
+        assertEq({"a\\ b": 1}, eval_expr("findIn", (1, ({"a\\ b": 1},), "a\\\\\\ b")));
+        # a backslash that ends the location escapes nothing and is itself, the last character of the last step
+        assertEq({"a\\": 1}, eval_expr("findIn", (1, ({"a\\": 1},), "a\\")));
+        assertEq({"x": {"a\\": 1}}, eval_expr("findIn", (1, ({"x": {"a\\": 1}},), "x.a\\")));
+        # offsets are read as before
+        assertEq({"tags": ("x", "y")}, eval_expr("findIn", ("y", ({"tags": ("x", "y")},), "tags[1]")));
+        # an escaped bracket is a bracket of a key, not an offset
+        assertEq({"tags[0]": 1}, eval_expr("findIn", (1, ({"tags[0]": 1},), "tags\\[0]")));
+        assertEq({"tags[0]": 1}, eval_expr("findIn", (1, ({"tags[0]": 1},), "tags[0\\]")));
+        assertEq({"m[1]": {"b": 2}}, eval_expr("findIn", (2, ({"m[1]": {"b": 2}},), "m\\[1].b")));
+        assertEq({"tags[-1]": "x"}, eval_expr("findIn", ("x", ({"tags[-1]": "x"},), "tags\\[-1\\]")));
+        # an escaped backslash before an offset is a backslash of the key, and the offset is an offset
+        assertEq({"a\\": ("x", "y")}, eval_expr("findIn", ("y", ({"a\\": ("x", "y")},), "a\\\\[1]")));
+
+        # any keys, escaped as field path keys and joined with dots, are read back as the keys
+        list<string> alphabet = ("a", ".", "\\", "x", " ");
+        list<string> all_keys = ();
+        list<string> last = ("",);
+        for (int len = 1; len <= 3; ++len) {
+            list<string> next = ();
+            foreach string prefix in (last) {
+                foreach string ch in (alphabet) {
+                    push next, prefix + ch;
+                }
+            }
+            all_keys += next;
+            last = next;
+        }
+        int checked = 0;
+        for (int i = 0; i < all_keys.size(); ++i) {
+            foreach int n in (1, 2) {
+                list<string> key_list = map all_keys[(i + $1 * 31) % all_keys.size()], xrange(n);
+                string loc = (map AbstractDataProvider::escapeFieldPathKey($1), key_list).join(".");
+                auto rec = 1;
+                foreach string key in (reverse(key_list)) {
+                    rec = {key: rec};
+                }
+                assertEq(rec, eval_expr("findIn", (1, (rec,), loc)), sprintf("%y", key_list));
+                ++checked;
+            }
+        }
+        assertGt(200, checked);
     }
 
     #! findIn gives the results that Qorus's findIn gives: the location grammar of Qorus (dots with "\." escapes, a

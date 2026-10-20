@@ -141,20 +141,30 @@ public class Http3ClientPollOperation inherits Http3ClientPollOperationBase, Htt
         @param connection owning HTTP client connection
         @param ssl_ca_file optional file containing trusted CA certificates
         @param ssl_ca_path optional directory containing trusted CA certificates
-        @param address_family optional socket address family for DNS resolution
+        @param address_family the address family to connect in; if not set, the host name is resolved in all
+        families and the family of the first address is used (see \a avoid_families)
+        @param avoid_families address families not to connect in if the host name also resolves to an address in
+        another family
+
+        Nothing that can block runs while the operation is created: the UDP socket is created unbound, and the
+        operation resolves the host name and binds the socket in the family of the remote address once it is
+        submitted to the I/O controller, so a connection can also be created on an async I/O thread (see
+        @ref Qore::Http3ClientPollOperationBase::constructor() "Http3ClientPollOperationBase::constructor()")
     */
     constructor(hash<auto> url_info, timeout connect_timeout = DefaultConnectTimeout, *LoggerInterface logger,
             *int ssl_verify_mode, bool accept_all_certs = False,
             *SSLCertificate client_cert, *SSLPrivateKey client_pk,
-            HttpClientConnection connection, *string ssl_ca_file, *string ssl_ca_path, *int address_family) :
+            HttpClientConnection connection, *string ssl_ca_file, *string ssl_ca_path, *int address_family,
+            *list<int> avoid_families) :
             Http3ClientPollOperationBase(
-                Http3ClientPollOperation::createAndConfigureSocket(url_info, ssl_verify_mode,
-                    accept_all_certs, client_cert, client_pk, ssl_ca_file, ssl_ca_path, address_family),
+                Http3ClientPollOperation::createAndConfigureSocket(ssl_verify_mode, accept_all_certs, client_cert,
+                    client_pk, ssl_ca_file, ssl_ca_path),
                 url_info.host,
                 url_info.port,
                 connection,
-                AF_UNSPEC,
-                connect_timeout) {
+                address_family ?? AF_UNSPEC,
+                connect_timeout,
+                avoid_families) {
         h3_url_info = url_info;
         h3_logger = logger;
         # Store connection in Qore data hash for DGC cycle detection
@@ -577,12 +587,12 @@ public class Http3ClientPollOperation inherits Http3ClientPollOperationBase, Htt
         self.setMigrationPending();
     }
 
-    #! Internal: creates and configures a UDP socket for QUIC
-    /** Called from the constructor initializer list before the C++ base constructor.
+    #! Internal: creates and configures the UDP socket of a QUIC connection
+    /** Called from the constructor initializer list before the C++ base constructor.  The socket is not bound: the
+        operation binds it once the remote address is resolved (see the constructor).
     */
-    private static Socket createAndConfigureSocket(hash<auto> url_info, *int ssl_verify_mode,
-            bool accept_all_certs, *SSLCertificate client_cert, *SSLPrivateKey client_pk, *string ssl_ca_file,
-            *string ssl_ca_path, *int address_family) {
+    private static Socket createAndConfigureSocket(*int ssl_verify_mode, bool accept_all_certs,
+            *SSLCertificate client_cert, *SSLPrivateKey client_pk, *string ssl_ca_file, *string ssl_ca_path) {
         Socket sock();
 
         # Apply SSL verification settings before connect
@@ -603,40 +613,7 @@ public class Http3ClientPollOperation inherits Http3ClientPollOperationBase, Htt
             sock.setSslCaLocations(ssl_ca_file, ssl_ca_path);
         }
 
-        # the connection manager selects the family, so an origin that is not reachable in one family can be reached
-        # in another
-        int family = address_family ?? Http3ClientPollOperation::selectLocalBindFamily(url_info.host);
-        string bind_addr = family == AF_INET6 ? "::" : "0.0.0.0";
-        # QUIC client sockets need a unique local UDP 4-tuple.  SO_REUSEADDR
-        # with port 0 can let concurrent clients autobind the same ephemeral
-        # port on Linux, which makes server replies ambiguous.
-        sock.bindINET(bind_addr, "0", False, family, SOCK_DGRAM);
-
         return sock;
-    }
-
-    #! Internal: selects the local bind family matching the target's first resolved address
-    private static int selectLocalBindFamily(string host) {
-        if (host =~ /^\[.*\]$/) {
-            return AF_INET6;
-        }
-        if (host =~ /:/) {
-            return AF_INET6;
-        }
-        try {
-            list<hash<auto>> addrs = getaddrinfo(host, NOTHING, AF_UNSPEC, 0);
-            if (addrs) {
-                int family = addrs[0].family;
-                if (family == AF_INET || family == AF_INET6) {
-                    return family;
-                }
-            }
-        } catch () {
-            # Keep the previous IPv4 fallback if the synchronous family lookup
-            # fails; the async QUIC resolver will report the authoritative
-            # connection error.
-        }
-        return AF_INET;
     }
 
     #! Internal: logging helper

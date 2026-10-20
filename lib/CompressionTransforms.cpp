@@ -752,6 +752,11 @@ private:
 };
 
 Transform *CompressionTransforms::getCompressor(const QoreStringNode *alg, int64 level, ExceptionSink *xsink) {
+    // the name is compared as a C string, which would be cut at a NUL character
+    if (q_check_no_nul(alg->c_str(), alg->size(), "compression algorithm name", "compression algorithm names",
+            "COMPRESS-ERROR", xsink)) {
+        return nullptr;
+    }
     if (*alg == ALG_ZLIB) {
         return new ZlibDeflateTransform(level, xsink, false);
     } else if (*alg == ALG_GZIP) {
@@ -770,6 +775,11 @@ Transform *CompressionTransforms::getCompressor(const QoreStringNode *alg, int64
 }
 
 static Transform *get_unlimited_decompressor(const QoreStringNode *alg, ExceptionSink *xsink) {
+    // the name is compared as a C string, which would be cut at a NUL character
+    if (q_check_no_nul(alg->c_str(), alg->size(), "compression algorithm name", "compression algorithm names",
+            "COMPRESS-ERROR", xsink)) {
+        return nullptr;
+    }
     if (*alg == CompressionTransforms::ALG_ZLIB) {
         return new ZlibInflateTransform(xsink, false);
     } else if (*alg == CompressionTransforms::ALG_GZIP) {

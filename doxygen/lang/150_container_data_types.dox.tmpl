@@ -477,6 +477,9 @@ ColumnarResult again = df.toColumnarResult();
     provide <i>O(ln(n))</i> complexity to execute; in the best case finding a particular key in a hash is executed in
     constant time (ie <i>O(1)</i> complexity).\n\n
 
+    A hash key cannot contain a NUL character: a key with one raises a \c HASH-KEY-ERROR exception, when the code
+    is parsed for a constant key of a hash literal and when the key is used otherwise.\n\n
+
     Hashes are specified using the following syntax:\n
     @code{.py}
 hash h = {

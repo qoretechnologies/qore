@@ -23,6 +23,7 @@
 #include <shared_mutex>
 #include <string>
 #include <vector>
+#include <unordered_map>
 #include <unordered_set>
 
 namespace QoreTokenizer {
@@ -97,25 +98,53 @@ public:
         const QoreListNode* text_pairs, const QoreHashNode* options, ExceptionSink* xsink);
 
     //! Returns the pad token ID (or -1 if no pad token)
-    int getPadTokenId() const { return pad_token_id; }
+    int getPadTokenId() const {
+        // loadConfig() sets it under the exclusive lock
+        std::shared_lock<std::shared_mutex> lock(rw_mutex);
+        return pad_token_id;
+    }
 
     //! Returns the EOS token ID (or -1 if not found)
-    int getEosTokenId() const { return eos_token_id; }
+    int getEosTokenId() const {
+        // loadConfig() sets it under the exclusive lock
+        std::shared_lock<std::shared_mutex> lock(rw_mutex);
+        return eos_token_id;
+    }
 
     //! Returns the BOS token ID (or -1 if not found)
-    int getBosTokenId() const { return bos_token_id; }
+    int getBosTokenId() const {
+        // loadConfig() sets it under the exclusive lock
+        std::shared_lock<std::shared_mutex> lock(rw_mutex);
+        return bos_token_id;
+    }
 
     //! Returns the CLS token ID (or -1 if not found)
-    int getClsTokenId() const { return cls_token_id; }
+    int getClsTokenId() const {
+        // loadConfig() sets it under the exclusive lock
+        std::shared_lock<std::shared_mutex> lock(rw_mutex);
+        return cls_token_id;
+    }
 
     //! Returns the SEP token ID (or -1 if not found)
-    int getSepTokenId() const { return sep_token_id; }
+    int getSepTokenId() const {
+        // loadConfig() sets it under the exclusive lock
+        std::shared_lock<std::shared_mutex> lock(rw_mutex);
+        return sep_token_id;
+    }
 
     //! Returns the UNK token ID (or -1 if not found)
-    int getUnkTokenId() const { return unk_token_id; }
+    int getUnkTokenId() const {
+        // loadConfig() sets it under the exclusive lock
+        std::shared_lock<std::shared_mutex> lock(rw_mutex);
+        return unk_token_id;
+    }
 
     //! Returns the model maximum sequence length (or -1 if not set)
-    int getModelMaxLength() const { return model_max_length; }
+    int getModelMaxLength() const {
+        // loadConfig() sets it under the exclusive lock
+        std::shared_lock<std::shared_mutex> lock(rw_mutex);
+        return model_max_length;
+    }
 
     //! Decodes a batch of token ID sequences
     /** @param batch list of token ID lists
@@ -170,6 +199,31 @@ private:
         bool single_word;
     };
     std::vector<AddedToken> added_tokens;
+    //! Added token ID -> index in added_tokens; the first added token with an ID is used
+    std::unordered_map<int, size_t> added_token_index;
+    //! Added token content -> index in added_tokens; the first added token with a content is used
+    std::unordered_map<std::string, size_t> added_token_by_content;
+
+    //! Adds an added token, which is matched before the model, and indexes its ID
+    void addAddedToken(AddedToken&& tok);
+
+    //! Returns the token string of an ID: the content of the added token with the ID, else the model's token
+    /** As in Hugging Face tokenizers, added tokens are looked up before the model vocabulary.  The model does not
+        know the IDs of added tokens, so every conversion of an ID given to the tokenizer (decoding, idToToken(), the
+        special token IDs) must use this function; only a token the model makes while encoding has the model's token
+        string.
+
+        @return the token string, or an empty string if the ID is not known
+    */
+    std::string tokenForId(int id) const;
+
+    //! Returns the ID of a token: the ID of the added token with the content, else the model's ID
+    /** As in Hugging Face tokenizers, added tokens are looked up before the model vocabulary; every lookup of a
+        token string must use this function.
+
+        @return the ID, or -1 if the token is not known
+    */
+    int idForToken(const std::string& token) const;
 
     //! Pad token ID (-1 if no pad token found)
     int pad_token_id = -1;

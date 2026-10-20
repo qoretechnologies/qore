@@ -344,6 +344,60 @@ char* qore_history_provider_search_cb(const char* pattern, int direction, void* 
 }
 
 // Module lifecycle functions
+// takes the callback if it belongs to the Program
+static void linenoise_take_program_call(ResolvedCallReferenceNode*& call, const QoreProgram* pgm,
+        std::vector<ResolvedCallReferenceNode*>& calls) {
+    if (call && call->getProgram() == pgm) {
+        calls.push_back(call);
+        call = nullptr;
+    }
+}
+
+// the callbacks, the key bindings and the history provider of a Program end with it, while it can still run their
+// destructors; kept after the Program is destroyed, they could not be called or destroyed
+static void linenoise_program_cleanup(QoreProgram* pgm) {
+    std::vector<ResolvedCallReferenceNode*> calls;
+    QoreObject* provider_obj = nullptr;
+    HistoryProviderPriv* provider_priv = nullptr;
+    {
+        AutoLocker al(lock);
+        for (std::map<int, ResolvedCallReferenceNode*>::iterator i = keyBindingCallbacks.begin();
+                i != keyBindingCallbacks.end();) {
+            if (i->second && i->second->getProgram() == pgm) {
+                linenoiseUnbindKey(i->first);
+                calls.push_back(i->second);
+                i = keyBindingCallbacks.erase(i);
+            } else {
+                ++i;
+            }
+        }
+        linenoise_take_program_call(callbackNode, pgm, calls);
+        linenoise_take_program_call(hintsCallbackNode, pgm, calls);
+        linenoise_take_program_call(syntaxCallbackNode, pgm, calls);
+        if (historyProviderObj && historyProviderObj->getProgram() == pgm) {
+            linenoiseSetHistoryProvider(NULL, NULL, NULL, NULL, NULL);
+            provider_obj = historyProviderObj;
+            provider_priv = historyProviderPriv;
+            historyProviderObj = nullptr;
+            historyProviderPriv = nullptr;
+        }
+    }
+    if (calls.empty() && !provider_obj) {
+        return;
+    }
+    // released outside the lock, as a destructor runs Qore code
+    ExceptionSink xsink;
+    for (ResolvedCallReferenceNode* call : calls) {
+        call->deref(&xsink);
+    }
+    if (provider_priv) {
+        provider_priv->deref(&xsink);
+    }
+    if (provider_obj) {
+        provider_obj->deref(&xsink);
+    }
+}
+
 static void linenoise_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
     LinenoiseNS.addSystemClass(initAbstractHistoryProviderClass(LinenoiseNS));
     init_linenoise_functions(LinenoiseNS);
@@ -353,6 +407,8 @@ static void linenoise_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsi
     linenoiseSetFreeHintsCallback(qore_linenoise_free_hints_cb);
     linenoiseSetSyntaxCallback(qore_linenoise_syntax_cb);
     linenoiseSetUserKeyCallback(qore_linenoise_user_key_cb);
+
+    qore_register_program_cleanup_callback(linenoise_program_cleanup);
 }
 
 static void linenoise_module_ns_init(QoreNamespace* rns, QoreNamespace* qns, ExceptionSink& xsink) {
@@ -360,6 +416,7 @@ static void linenoise_module_ns_init(QoreNamespace* rns, QoreNamespace* qns, Exc
 }
 
 static void linenoise_module_delete() {
+    qore_deregister_program_cleanup_callback(linenoise_program_cleanup);
     ExceptionSink xsink;
     if (callbackNode) {
         callbackNode->deref(&xsink);

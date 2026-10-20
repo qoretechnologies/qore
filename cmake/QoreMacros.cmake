@@ -2282,34 +2282,95 @@ MACRO (QORE_BINARY_MODULE_INTERN2 _module_name _version _install_suffix _mod_suf
     endif (DOXYGEN_FOUND)
 ENDMACRO (QORE_BINARY_MODULE_INTERN2)
 
-MACRO (QORE_AOT_APPEND_INSTALL_REMOVE_PATH _out_var _base_dir _relative_path)
+# Sets _out_var to install-time code giving the installed path of _relative_path below _base_dir, without
+# $ENV{DESTDIR}; _base_dir is absolute or relative to CMAKE_INSTALL_PREFIX.  This is the path file(INSTALL) lists in
+# the install manifest.
+MACRO (QORE_AOT_INSTALLED_PATH _out_var _base_dir _relative_path)
     if (IS_ABSOLUTE "${_base_dir}")
-        set(_qore_aot_remove_path "\$ENV{DESTDIR}${_base_dir}/${_relative_path}")
+        set(${_out_var} "${_base_dir}/${_relative_path}")
     else()
-        set(_qore_aot_remove_path
-            "\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/${_base_dir}/${_relative_path}")
+        set(${_out_var} "\${CMAKE_INSTALL_PREFIX}/${_base_dir}/${_relative_path}")
     endif()
-    string(APPEND ${_out_var} "  \"${_qore_aot_remove_path}\"\n")
+ENDMACRO (QORE_AOT_INSTALLED_PATH)
+
+MACRO (QORE_AOT_APPEND_INSTALL_REMOVE_PATH _out_var _base_dir _relative_path)
+    QORE_AOT_INSTALLED_PATH(_qore_aot_remove_path "${_base_dir}" "${_relative_path}")
+    string(APPEND ${_out_var} "  \"\$ENV{DESTDIR}${_qore_aot_remove_path}\"\n")
 ENDMACRO (QORE_AOT_APPEND_INSTALL_REMOVE_PATH)
 
+# Sets _out_var to TRUE when user modules are AOT-compiled, i.e. when QORE_USER_MODULE() and
+# QORE_EXTERNAL_USER_MODULE() emit QORE_USER_MODULE_AOT_RULES() for them, and to FALSE otherwise
+FUNCTION (QORE_USER_MODULE_AOT_ENABLED _out_var)
+    if (QORE_BUILD_AOT_MODULES AND (TARGET qcc OR DEFINED QORE_QCC_EXECUTABLE))
+        set(${_out_var} TRUE PARENT_SCOPE)
+    else()
+        set(${_out_var} FALSE PARENT_SCOPE)
+    endif()
+ENDFUNCTION (QORE_USER_MODULE_AOT_ENABLED)
+
+# Sets _out_var to the directory QORE_USER_MODULE_AOT_RULES() installs user module .qmods into, absolute or
+# relative to CMAKE_INSTALL_PREFIX
+FUNCTION (QORE_AOT_QMOD_INSTALL_DIR _out_var)
+    if (DEFINED QORE_AOT_MODULES_DIR)
+        set(${_out_var} "${QORE_AOT_MODULES_DIR}" PARENT_SCOPE)
+    elseif (DEFINED QORE_MODULES_DIR)
+        set(${_out_var} "${QORE_MODULES_DIR}" PARENT_SCOPE)
+    else()
+        set(${_out_var} "${QORE_USER_MODULES_DIR}" PARENT_SCOPE)
+    endif()
+ENDFUNCTION (QORE_AOT_QMOD_INSTALL_DIR)
+
+# Removes installed .qmods that would be loaded instead of the module sources installed with them
+#
+# Installing a module's sources removes any .qmod of the module below _base_dir, since an installed .qmod is loaded
+# in preference to the sources beside it and could be older than them (from an earlier AOT build, an older layout,
+# or a build that no longer compiles the module).
+#
+# The .qmod the module's own AOT rule publishes is the exception when the same install also runs that rule: then
+# QORE_INSTALL_QMOD_ATOMIC() replaces it if it changed and leaves it alone if it did not, and removing it here first
+# would rewrite every installed .qmod on every install.  It is removed here only by an install of a single component
+# other than the qmod install component (QORE_QMOD_INSTALL_COMPONENT), which installs the sources without their
+# .qmod.
 FUNCTION (QORE_AOT_REMOVE_STALE_SOURCE_QMOD_INSTALL_RULES _name _is_dir _base_dir)
     set(_qore_aot_remove_component_args "")
     if (ARGC GREATER 3 AND NOT "${ARGV3}" STREQUAL "")
         set(_qore_aot_remove_component_args COMPONENT ${ARGV3})
     endif()
-    set(_qore_aot_stale_source_qmods "")
-    QORE_AOT_APPEND_INSTALL_REMOVE_PATH(
-        _qore_aot_stale_source_qmods "${_base_dir}" "${_name}.qmod")
-    QORE_AOT_APPEND_INSTALL_REMOVE_PATH(
-        _qore_aot_stale_source_qmods "${_base_dir}" "${_name}.qmod.d")
-    if (${_is_dir})
-        QORE_AOT_APPEND_INSTALL_REMOVE_PATH(
-            _qore_aot_stale_source_qmods "${_base_dir}" "${_name}/${_name}.qmod")
-        QORE_AOT_APPEND_INSTALL_REMOVE_PATH(
-            _qore_aot_stale_source_qmods "${_base_dir}" "${_name}/${_name}.qmod.d")
+    # the installed path of the .qmod the module's AOT rule publishes, if it has one
+    set(_qore_aot_published_qmod "")
+    QORE_USER_MODULE_AOT_ENABLED(_qore_aot_enabled)
+    if (_qore_aot_enabled)
+        QORE_AOT_QMOD_INSTALL_DIR(_qore_aot_qmod_dir)
+        if (${_is_dir})
+            set(_qore_aot_published_qmod "${_qore_aot_qmod_dir}/${_name}/${_name}.qmod")
+        else()
+            set(_qore_aot_published_qmod "${_qore_aot_qmod_dir}/${_name}.qmod")
+        endif()
     endif()
+    set(_qore_aot_candidates "${_name}.qmod" "${_name}.qmod.d")
+    if (${_is_dir})
+        list(APPEND _qore_aot_candidates "${_name}/${_name}.qmod" "${_name}/${_name}.qmod.d")
+    endif()
+    set(_qore_aot_stale_source_qmods "")
+    set(_qore_aot_published_source_qmods "")
+    foreach (_qore_aot_candidate IN LISTS _qore_aot_candidates)
+        if ("${_base_dir}/${_qore_aot_candidate}" STREQUAL "${_qore_aot_published_qmod}")
+            QORE_AOT_APPEND_INSTALL_REMOVE_PATH(
+                _qore_aot_published_source_qmods "${_base_dir}" "${_qore_aot_candidate}")
+        else()
+            QORE_AOT_APPEND_INSTALL_REMOVE_PATH(
+                _qore_aot_stale_source_qmods "${_base_dir}" "${_qore_aot_candidate}")
+        endif()
+    endforeach()
     install(CODE "file(REMOVE\n${_qore_aot_stale_source_qmods})"
         ${_qore_aot_remove_component_args})
+    if (NOT "${_qore_aot_published_source_qmods}" STREQUAL "")
+        install(CODE "if (CMAKE_INSTALL_COMPONENT
+        AND NOT CMAKE_INSTALL_COMPONENT STREQUAL \"${QORE_QMOD_INSTALL_COMPONENT}\")
+    file(REMOVE\n${_qore_aot_published_source_qmods})
+endif()"
+            ${_qore_aot_remove_component_args})
+    endif()
 ENDFUNCTION (QORE_AOT_REMOVE_STALE_SOURCE_QMOD_INSTALL_RULES)
 
 MACRO (QORE_AOT_REMOVE_INSTALLED_QMODS_FOR_SOURCE_INSTALL _name _is_dir)
@@ -2321,6 +2382,52 @@ MACRO (QORE_AOT_REMOVE_INSTALLED_QMODS_FOR_SOURCE_INSTALL _name _is_dir)
             ${_name} ${_is_dir} "${QORE_AOT_MODULES_DIR}" ${QORE_QM_SOURCE_INSTALL_COMPONENT})
     endif()
 ENDMACRO (QORE_AOT_REMOVE_INSTALLED_QMODS_FOR_SOURCE_INSTALL)
+
+# Sets _installing_var and _up_to_date_var to install-time code reporting the
+# path given by the install-time expression _path the way CMake's own install
+# rules report what they install: "Installing:" for a path that is written and
+# "Up-to-date:" for one that is left alone.  CMAKE_INSTALL_MESSAGE is followed
+# as by install(): ALWAYS (the default) reports both, LAZY reports only what is
+# written, and NEVER reports nothing.
+FUNCTION (QORE_INSTALL_REPORT_CODE _installing_var _up_to_date_var _path)
+    set(_qore_report_installing "message(STATUS \"Installing: ${_path}\")")
+    set(_qore_report_up_to_date "message(STATUS \"Up-to-date: ${_path}\")")
+    if ("${CMAKE_INSTALL_MESSAGE}" STREQUAL "NEVER")
+        set(_qore_report_installing "")
+        set(_qore_report_up_to_date "")
+    elseif ("${CMAKE_INSTALL_MESSAGE}" STREQUAL "LAZY")
+        set(_qore_report_up_to_date "")
+    endif()
+    set(${_installing_var} "${_qore_report_installing}" PARENT_SCOPE)
+    set(${_up_to_date_var} "${_qore_report_up_to_date}" PARENT_SCOPE)
+ENDFUNCTION (QORE_INSTALL_REPORT_CODE)
+
+# Sets _out_var to install-time code making _link_name in the installed directory _link_dir a relative symbolic link to
+# the installed directory _target_dir; _link_dir and _target_dir are install-time path expressions without
+# $ENV{DESTDIR} (see QORE_AOT_INSTALLED_PATH), so the link survives DESTDIR staging and prefix relocation.
+#
+# A link that already points there is left alone, like an unchanged file is by install(), and reported as
+# "Up-to-date:"; anything else in its place is replaced and reported as "Installing:" (see QORE_INSTALL_REPORT_CODE).
+# Either way the link is listed in the install manifest, as install() lists the links it installs.
+FUNCTION (QORE_INSTALL_DIR_LINK_CODE _out_var _link_dir _link_name _target_dir)
+    QORE_INSTALL_REPORT_CODE(_qore_link_installing _qore_link_up_to_date "\${_qore_link}")
+    set(${_out_var} "set(_qore_link_dir \"${_link_dir}\")
+file(RELATIVE_PATH _qore_link_rel \"\${_qore_link_dir}\" \"${_target_dir}\")
+set(_qore_link \"\$ENV{DESTDIR}\${_qore_link_dir}/${_link_name}\")
+list(APPEND CMAKE_INSTALL_MANIFEST_FILES \"\${_qore_link_dir}/${_link_name}\")
+set(_qore_link_current \"\")
+if (IS_SYMLINK \"\${_qore_link}\")
+    file(READ_SYMLINK \"\${_qore_link}\" _qore_link_current)
+endif()
+if (\"\${_qore_link_current}\" STREQUAL \"\${_qore_link_rel}\")
+    ${_qore_link_up_to_date}
+else()
+    ${_qore_link_installing}
+    file(MAKE_DIRECTORY \"\$ENV{DESTDIR}\${_qore_link_dir}\")
+    file(REMOVE_RECURSE \"\${_qore_link}\")
+    file(CREATE_LINK \"\${_qore_link_rel}\" \"\${_qore_link}\" SYMBOLIC)
+endif()" PARENT_SCOPE)
+ENDFUNCTION (QORE_INSTALL_DIR_LINK_CODE)
 
 # Atomically publish a built AOT .qmod into its install location.
 #
@@ -2347,38 +2454,59 @@ ENDMACRO (QORE_AOT_REMOVE_INSTALLED_QMODS_FOR_SOURCE_INSTALL)
 # This only matters for development installs over a live tree (production
 # installs modules before starting the process), so the extra copy is cheap.
 #
+# An installed .qmod that is byte-identical to the built one is left alone: no
+# copy and no rename, so its inode and modification time are unchanged and
+# anything that decides from file times whether a module changed (such as a
+# provider index built from the installed modules) sees no change.  CMake's own
+# install(FILES) skips a file by its modification time instead, which the copy
+# here does not preserve.  A symbolic link at the destination is replaced by the
+# module, like a file whose content differs.
+#
+# Either way the .qmod is listed in the install manifest (install_manifest.txt)
+# as file(INSTALL) lists what it installs, without DESTDIR, so `make uninstall`
+# removes it, and it is reported as "Installing:" or "Up-to-date:" following
+# CMAKE_INSTALL_MESSAGE.
+#
 # _src        absolute path of the built .qmod in the build tree
 # _dest_dir   install directory (absolute, or relative to CMAKE_INSTALL_PREFIX)
 # _dest_name  installed file name (e.g. <name>.qmod)
 # _component  install component (may be empty)
 FUNCTION (QORE_INSTALL_QMOD_ATOMIC _src _dest_dir _dest_name _component)
-    if (IS_ABSOLUTE "${_dest_dir}")
-        set(_qore_qmod_dest "\$ENV{DESTDIR}${_dest_dir}")
-    else()
-        set(_qore_qmod_dest "\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/${_dest_dir}")
-    endif()
+    QORE_AOT_INSTALLED_PATH(_qore_qmod_file "${_dest_dir}" "${_dest_name}")
     set(_qore_qmod_component_args "")
     if (NOT "${_component}" STREQUAL "")
         set(_qore_qmod_component_args COMPONENT ${_component})
     endif()
+    QORE_INSTALL_REPORT_CODE(_qore_qmod_installing _qore_qmod_up_to_date "\${_qore_qmod_dst}")
     install(CODE "
-set(_qore_qmod_dir \"${_qore_qmod_dest}\")
-set(_qore_qmod_dst \"\${_qore_qmod_dir}/${_dest_name}\")
+set(_qore_qmod_dst \"\$ENV{DESTDIR}${_qore_qmod_file}\")
 set(_qore_qmod_tmp \"\${_qore_qmod_dst}.inst.tmp\")
-file(MAKE_DIRECTORY \"\${_qore_qmod_dir}\")
+list(APPEND CMAKE_INSTALL_MANIFEST_FILES \"${_qore_qmod_file}\")
 file(REMOVE \"\${_qore_qmod_tmp}\")
-# Stage the new bytes into a fresh inode in the destination directory, then
-# atomically rename(2) it onto the final name.  cmake -E copy (rather than
-# file(COPY_FILE), which needs CMake 3.21) keeps this working at the declared
-# 3.14 floor.  Staging in the same directory keeps src and dst on one
-# filesystem so the rename is a single atomic inode swap.
-execute_process(COMMAND \"\${CMAKE_COMMAND}\" -E copy \"${_src}\" \"\${_qore_qmod_tmp}\"
-    RESULT_VARIABLE _qore_qmod_rc)
-if (NOT _qore_qmod_rc EQUAL 0)
-    message(FATAL_ERROR \"failed to stage AOT qmod '${_src}' -> '\${_qore_qmod_tmp}': \${_qore_qmod_rc}\")
+set(_qore_qmod_rc 1)
+if (EXISTS \"\${_qore_qmod_dst}\" AND NOT IS_SYMLINK \"\${_qore_qmod_dst}\"
+        AND NOT IS_DIRECTORY \"\${_qore_qmod_dst}\")
+    execute_process(COMMAND \"\${CMAKE_COMMAND}\" -E compare_files \"${_src}\" \"\${_qore_qmod_dst}\"
+        RESULT_VARIABLE _qore_qmod_rc OUTPUT_QUIET ERROR_QUIET)
 endif()
-file(RENAME \"\${_qore_qmod_tmp}\" \"\${_qore_qmod_dst}\")
-message(STATUS \"Atomically installed: \${_qore_qmod_dst}\")
+if (_qore_qmod_rc EQUAL 0)
+    ${_qore_qmod_up_to_date}
+else()
+    ${_qore_qmod_installing}
+    get_filename_component(_qore_qmod_dir \"\${_qore_qmod_dst}\" DIRECTORY)
+    file(MAKE_DIRECTORY \"\${_qore_qmod_dir}\")
+    # Stage the new bytes into a fresh inode in the destination directory, then
+    # atomically rename(2) it onto the final name.  cmake -E copy (rather than
+    # file(COPY_FILE), which needs CMake 3.21) keeps this working at the declared
+    # 3.14 floor.  Staging in the same directory keeps src and dst on one
+    # filesystem so the rename is a single atomic inode swap.
+    execute_process(COMMAND \"\${CMAKE_COMMAND}\" -E copy \"${_src}\" \"\${_qore_qmod_tmp}\"
+        RESULT_VARIABLE _qore_qmod_rc)
+    if (NOT _qore_qmod_rc EQUAL 0)
+        message(FATAL_ERROR \"failed to stage AOT qmod '${_src}' -> '\${_qore_qmod_tmp}': \${_qore_qmod_rc}\")
+    endif()
+    file(RENAME \"\${_qore_qmod_tmp}\" \"\${_qore_qmod_dst}\")
+endif()
 " ${_qore_qmod_component_args})
 ENDFUNCTION (QORE_INSTALL_QMOD_ATOMIC)
 
@@ -2515,13 +2643,7 @@ MACRO (QORE_USER_MODULE_AOT_RULES _name _is_dir _source_root)
         # AOT module load times ~20x; develop has always defaulted this ON.)
         set(QORE_AOT_LINK_SOURCE_MODULES ON)
     endif()
-    if (DEFINED QORE_AOT_MODULES_DIR)
-        set(_qmod_install_dir ${QORE_AOT_MODULES_DIR})
-    elseif (DEFINED QORE_MODULES_DIR)
-        set(_qmod_install_dir ${QORE_MODULES_DIR})
-    else()
-        set(_qmod_install_dir ${QORE_USER_MODULES_DIR})
-    endif()
+    QORE_AOT_QMOD_INSTALL_DIR(_qmod_install_dir)
 
     # Split-dir modules emit `build/qlib-qmod/<name>/<name>.qmod` and copy
     # sibling resources (logo SVGs, asyncapi YAMLs, etc.) into the same
@@ -2773,17 +2895,26 @@ MACRO (QORE_USER_MODULE_AOT_RULES _name _is_dir _source_root)
     # Install qmods into an arch-specific module directory.  Split-dir module
     # qmods keep their resources beside the qmod so get_script_dir() resolves
     # the same way it does in the build tree.
+    #
+    # The path the .qmod is published to is never among the stale paths removed
+    # first: when the qmods are installed beside the sources, the share-installed
+    # .qmod is the published one, and removing it would rewrite it on every
+    # install although QORE_INSTALL_QMOD_ATOMIC leaves an unchanged .qmod alone.
     set(_qmod_stale_install_paths "")
-    QORE_AOT_APPEND_INSTALL_REMOVE_PATH(
-        _qmod_stale_install_paths "${QORE_USER_MODULES_DIR}" "${_name}.qmod")
+    if (${_is_dir} OR NOT "${_qmod_install_dir}" STREQUAL "${QORE_USER_MODULES_DIR}")
+        QORE_AOT_APPEND_INSTALL_REMOVE_PATH(
+            _qmod_stale_install_paths "${QORE_USER_MODULES_DIR}" "${_name}.qmod")
+    endif()
     QORE_AOT_APPEND_INSTALL_REMOVE_PATH(
         _qmod_stale_install_paths "${QORE_USER_MODULES_DIR}" "${_name}.qmod.d")
     if (${_is_dir})
         # Remove stale artifacts from older layouts.  Flat qmods shadow split
         # qmods within one module path entry, and old share-installed qmods can
         # be loaded when AOT is later disabled or an installed qmod is missing.
-        QORE_AOT_APPEND_INSTALL_REMOVE_PATH(
-            _qmod_stale_install_paths "${QORE_USER_MODULES_DIR}" "${_name}/${_name}.qmod")
+        if (NOT "${_qmod_install_dir}" STREQUAL "${QORE_USER_MODULES_DIR}")
+            QORE_AOT_APPEND_INSTALL_REMOVE_PATH(
+                _qmod_stale_install_paths "${QORE_USER_MODULES_DIR}" "${_name}/${_name}.qmod")
+        endif()
         QORE_AOT_APPEND_INSTALL_REMOVE_PATH(
             _qmod_stale_install_paths "${QORE_USER_MODULES_DIR}" "${_name}/${_name}.qmod.d")
         QORE_AOT_APPEND_INSTALL_REMOVE_PATH(
@@ -2815,19 +2946,15 @@ MACRO (QORE_USER_MODULE_AOT_RULES _name _is_dir _source_root)
         # qore-dataprovider-*.jar is generated during the build (and is
         # gitignored), so it is absent when cmake first configures.  Falls back
         # to a real copy on Windows.  Cross-module deps resolve because the
-        # referenced module installs its own jar/ link by the same rule.
+        # referenced module installs its own jar/ link by the same rule.  A link
+        # that is already correct is left alone (see QORE_INSTALL_DIR_LINK_CODE).
         if (NOT WIN32 AND NOT "${_qmod_install_dir}" STREQUAL "${QORE_USER_MODULES_DIR}")
-            file(RELATIVE_PATH _qmod_jar_rel
-                "${_qmod_install_dir}/${_name}"
-                "${QORE_USER_MODULES_DIR}/${_name}/jar")
+            QORE_AOT_INSTALLED_PATH(_qmod_jar_target "${QORE_USER_MODULES_DIR}" "${_name}/jar")
+            QORE_AOT_INSTALLED_PATH(_qmod_link_dir "${_qmod_install_dir}" "${_name}")
+            QORE_INSTALL_DIR_LINK_CODE(_qmod_jar_link_code "${_qmod_link_dir}" jar "${_qmod_jar_target}")
             install(CODE
-"set(_src_jar_dir \"\$ENV{DESTDIR}${QORE_USER_MODULES_DIR}/${_name}/jar\")
-if (EXISTS \"\${_src_jar_dir}\")
-    set(_aot_mod_dir \"\$ENV{DESTDIR}${_qmod_install_dir}/${_name}\")
-    file(MAKE_DIRECTORY \"\${_aot_mod_dir}\")
-    file(REMOVE_RECURSE \"\${_aot_mod_dir}/jar\")
-    file(CREATE_LINK \"${_qmod_jar_rel}\" \"\${_aot_mod_dir}/jar\" SYMBOLIC)
-    message(STATUS \"AOT jar dir symlink: \${_aot_mod_dir}/jar -> ${_qmod_jar_rel}\")
+"if (EXISTS \"\$ENV{DESTDIR}${_qmod_jar_target}\")
+${_qmod_jar_link_code}
 endif()"
                 COMPONENT ${QORE_QMOD_INSTALL_COMPONENT})
         else()
@@ -2839,7 +2966,9 @@ endif()"
         # Resource subdirectories are made available beside the AOT .qmod like jar/: a relative link to the copy
         # installed beside the .qm sources, so large data is not duplicated.  If that copy is not installed (a
         # packaging that installs only the qmod component), the directory is copied from the source tree instead.
-        # When the qmods are installed beside the sources, the source install already put them there.
+        # When the qmods are installed beside the sources, the source install already put them there.  A link that
+        # is already correct is left alone (see QORE_INSTALL_DIR_LINK_CODE); a copy is made again on every install,
+        # so files removed from the source directory do not survive in it.
         if (NOT "${_qmod_install_dir}" STREQUAL "${QORE_USER_MODULES_DIR}")
             foreach(_res_dir ${_qmod_resource_dirs})
                 if (WIN32)
@@ -2847,18 +2976,17 @@ endif()"
                         DESTINATION ${_qmod_install_dir}/${_name}
                         COMPONENT ${QORE_QMOD_INSTALL_COMPONENT})
                 else()
-                    file(RELATIVE_PATH _qmod_res_rel
-                        "${_qmod_install_dir}/${_name}"
-                        "${QORE_USER_MODULES_DIR}/${_name}/${_res_dir}")
+                    QORE_AOT_INSTALLED_PATH(_qmod_res_target "${QORE_USER_MODULES_DIR}" "${_name}/${_res_dir}")
+                    QORE_AOT_INSTALLED_PATH(_qmod_link_dir "${_qmod_install_dir}" "${_name}")
+                    QORE_INSTALL_DIR_LINK_CODE(_qmod_res_link_code "${_qmod_link_dir}" "${_res_dir}"
+                        "${_qmod_res_target}")
                     install(CODE
-"set(_src_res_dir \"\$ENV{DESTDIR}${QORE_USER_MODULES_DIR}/${_name}/${_res_dir}\")
-set(_aot_mod_dir \"\$ENV{DESTDIR}${_qmod_install_dir}/${_name}\")
-file(MAKE_DIRECTORY \"\${_aot_mod_dir}\")
-file(REMOVE_RECURSE \"\${_aot_mod_dir}/${_res_dir}\")
-if (EXISTS \"\${_src_res_dir}\")
-    file(CREATE_LINK \"${_qmod_res_rel}\" \"\${_aot_mod_dir}/${_res_dir}\" SYMBOLIC)
-    message(STATUS \"AOT resource dir symlink: \${_aot_mod_dir}/${_res_dir} -> ${_qmod_res_rel}\")
+"if (EXISTS \"\$ENV{DESTDIR}${_qmod_res_target}\")
+${_qmod_res_link_code}
 else()
+    set(_aot_mod_dir \"\$ENV{DESTDIR}${_qmod_link_dir}\")
+    file(MAKE_DIRECTORY \"\${_aot_mod_dir}\")
+    file(REMOVE_RECURSE \"\${_aot_mod_dir}/${_res_dir}\")
     file(COPY \"${_source_root}/${_res_dir}\" DESTINATION \"\${_aot_mod_dir}\")
     message(STATUS \"AOT resource dir copy: \${_aot_mod_dir}/${_res_dir}\")
 endif()"
@@ -3419,7 +3547,8 @@ MACRO (QORE_USER_MODULE _module_file)
     endif()
 
     # AOT: build a .qmod alongside the .qm source when enabled
-    if (QORE_BUILD_AOT_MODULES AND (TARGET qcc OR DEFINED QORE_QCC_EXECUTABLE))
+    QORE_USER_MODULE_AOT_ENABLED(_qore_user_module_aot)
+    if (_qore_user_module_aot)
         if (IS_DIRECTORY ${CMAKE_SOURCE_DIR}/qlib/${f})
             QORE_USER_MODULE_AOT_RULES(${f} 1
                 ${CMAKE_SOURCE_DIR}/qlib/${f} ${_mod_targets})
@@ -3821,7 +3950,8 @@ MACRO (QORE_EXTERNAL_USER_MODULE _module_file _mod_deps)
     endif()
 
     # AOT: build a .qmod alongside the .qm source when enabled
-    if (QORE_BUILD_AOT_MODULES AND (TARGET qcc OR DEFINED QORE_QCC_EXECUTABLE))
+    QORE_USER_MODULE_AOT_ENABLED(_qore_user_module_aot)
+    if (_qore_user_module_aot)
         if (IS_DIRECTORY ${CMAKE_SOURCE_DIR}/qlib/${f})
             QORE_USER_MODULE_AOT_RULES(${f} 1
                 ${CMAKE_SOURCE_DIR}/qlib/${f} ${_mod_targets})

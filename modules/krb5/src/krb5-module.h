@@ -102,6 +102,10 @@ DLLLOCAL bool decode_hex(const char* str, std::vector<unsigned char>& out, Excep
     const char* err, const char* context);
 DLLLOCAL QoreStringNode* encode_hex(const unsigned char* ptr, size_t len, ExceptionSink* xsink,
     const char* context);
+// checks that a string has no NUL character: a string passed to the Kerberos or GSSAPI libraries, or decoded from
+// hex, is used as a C string, which would be cut at a NUL character; a secret is not shown in the exception
+DLLLOCAL int krb5_check_no_nul(const QoreString* str, const char* what, const char* what_plural, const char* err,
+    bool secret, ExceptionSink* xsink);
 DLLLOCAL bool krb5_is_empty_cache_error(krb5_error_code rc);
 DLLLOCAL QoreStringNode* krb5_unparse_principal(krb5_context ctx, krb5_const_principal principal, ExceptionSink* xsink,
     const char* err, const char* context);

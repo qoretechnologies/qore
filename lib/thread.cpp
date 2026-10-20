@@ -823,8 +823,12 @@ void ThreadEntry::activate(int tid, pthread_t n_ptid, QoreProgram* p, bool forei
     assert(status == QTS_NA || status == QTS_RESERVED);
     // a QTS_RESERVED entry is reactivated without passing through cleanup(), so a cancellation
     // request delivered during the previous activation would otherwise leak into the new thread and
-    // cancel it at its first check point with a stale reason
-    clearCancelState();
+    // cancel it at its first check point with a stale reason; a QTS_NA entry was allocated with no
+    // request (cleanup() clears it), so a request it has now was made for this thread after it was
+    // started and before it began running (see QoreThreadList::cancelThread()), and is kept
+    if (status == QTS_RESERVED) {
+        clearCancelState();
+    }
     ptid = n_ptid;
     // The native reaper owns external-lifecycle threads until pthread_join() completes.
     // Set this on activation, before the thread can release/reuse its Qore TID.
@@ -1046,7 +1050,83 @@ bool ThreadProgramData::isActiveProgram(QoreProgram* pgm) const {
     return td->current_pgm == pgm;
 }
 
+QoreHashNode* ThreadProgramData::getThreadDataRef(qore_program_private* root, bool create, bool& final, bool ref) {
+    AutoLocker al(pslock);
+    tld_map_t::iterator i = tld_map.lower_bound(root);
+    if (i != tld_map.end() && i->first == root) {
+        if (ref) {
+            i->second->ref();
+        }
+        return i->second;
+    }
+    if (!create) {
+        return nullptr;
+    }
+    // the root is valid: the calling thread runs code of a Program of the family, which keeps the root valid
+    if (root->registerThreadData(this)) {
+        final = true;
+        return nullptr;
+    }
+    QoreHashNode* h = new QoreHashNode(autoTypeInfo);
+    tld_map.insert(i, tld_map_t::value_type(root, h));
+    if (ref) {
+        h->ref();
+    }
+    return h;
+}
+
+QoreHashNode* ThreadProgramData::getOrphanThreadDataRef(bool ref) {
+    AutoLocker al(pslock);
+    tld_map_t::iterator i = tld_map.find(nullptr);
+    if (i == tld_map.end()) {
+        i = tld_map.insert(tld_map_t::value_type(nullptr, new QoreHashNode(autoTypeInfo))).first;
+    }
+    if (ref) {
+        i->second->ref();
+    }
+    return i->second;
+}
+
+QoreHashNode* ThreadProgramData::detachThreadData(qore_program_private* root) {
+    AutoLocker al(pslock);
+    tld_map_t::iterator i = tld_map.find(root);
+    if (i == tld_map.end()) {
+        return nullptr;
+    }
+    QoreHashNode* h = i->second;
+    tld_map.erase(i);
+    return h;
+}
+
+void ThreadProgramData::freeAllThreadData(ExceptionSink* xsink) {
+    while (true) {
+        tld_map_t m;
+        {
+            AutoLocker al(pslock);
+            if (tld_map.empty()) {
+                break;
+            }
+            m.swap(tld_map);
+            // while this thread holds its pslock and has data in a family, the family's root cannot be freed: the
+            // root's teardown needs this lock to free this thread's data
+            for (auto& i : m) {
+                if (i.first) {
+                    i.first->unregisterThreadData(this);
+                }
+            }
+        }
+        // no lock is held here: dereferencing a hash can run destructors, which can save thread-local data again;
+        // the loop frees that too
+        for (auto& i : m) {
+            i.second->deref(xsink);
+        }
+    }
+}
+
 void ThreadProgramData::del(ExceptionSink* xsink) {
+    // free the thread's thread-local data in all Program families first, as the old per-Program finalization did
+    freeAllThreadData(xsink);
+
     // first purge all data
     {
         SafeDerefHelper sdh(xsink);
@@ -1090,6 +1170,9 @@ void ThreadProgramData::del(ExceptionSink* xsink) {
             deref();
         }
     }
+
+    // the destructors run above can have saved thread-local data again
+    freeAllThreadData(xsink);
 }
 
 #ifdef DEBUG
@@ -1238,8 +1321,6 @@ public:
     DLLLOCAL void startThread(ExceptionSink& xsink) {
         // register the new tid
         qore_program_private::registerNewThread(*pgm, tid);
-        // create thread-local data in the program object
-        qore_program_private::startThread(*pgm, xsink);
         started = true;
         //printd(5, "BGThreadParams::startThread() this: %p pgm: %p\n", this, pgm);
         pgm->depRef();
@@ -4547,6 +4628,9 @@ QoreValue do_op_background(RuntimeConfig& rc, const QoreValue left, ExceptionSin
 }
 
 int q_start_thread(ExceptionSink* xsink, q_thread_t f, void* arg) {
+    // the cleanup at process exit waits for the threads that thread_counter counts before it sets qore_shutdown and
+    // never again, so a thread started after that must be an external-lifecycle thread, which it waits for at its end
+    assert(!qore_shutdown.load(std::memory_order_relaxed));
     int tid = get_thread_entry();
     //printd(2, "got %d()\n", tid);
 
@@ -4606,6 +4690,9 @@ size_t q_thread_stack_tls_size() {
 }
 
 int q_start_thread(ExceptionSink* xsink, q_thread_t f, void* arg, size_t stack_size, int flags) {
+    // the cleanup at process exit waits for the threads that thread_counter counts before it sets qore_shutdown and
+    // never again, so a thread started after that must be an external-lifecycle thread, which it waits for at its end
+    assert(!qore_shutdown.load(std::memory_order_relaxed) || (flags & QTF_EXTERNAL_LIFECYCLE));
     if ((flags & QTF_EXTERNAL_LIFECYCLE) && external_thread_reaper.ensureStarted(xsink)) {
         return -1;
     }
@@ -4652,6 +4739,9 @@ int q_start_thread(ExceptionSink* xsink, q_thread_t f, void* arg, size_t stack_s
 }
 
 int q_start_thread(ExceptionSink* xsink, q_thread_t f, void* arg, int flags) {
+    // the cleanup at process exit waits for the threads that thread_counter counts before it sets qore_shutdown and
+    // never again, so a thread started after that must be an external-lifecycle thread, which it waits for at its end
+    assert(!qore_shutdown.load(std::memory_order_relaxed) || (flags & QTF_EXTERNAL_LIFECYCLE));
     if ((flags & QTF_EXTERNAL_LIFECYCLE) && external_thread_reaper.ensureStarted(xsink)) {
         return -1;
     }
@@ -4900,9 +4990,19 @@ QoreNamespace* get_thread_ns(QoreNamespace &qorens) {
 }
 
 void ThreadProgramData::clearAllProgramThreadData(ExceptionSink* xsink) {
-    AutoLocker al(pslock);
-    for (auto& i : pgm_set) {
-        qore_program_private::clearThreadData(*i, xsink);
+    std::vector<QoreHashNode*> hashes;
+    {
+        AutoLocker al(pslock);
+        hashes.reserve(tld_map.size());
+        for (auto& i : tld_map) {
+            i.second->ref();
+            hashes.push_back(i.second);
+        }
+    }
+    // no lock is held here: clearing a hash can run destructors, which can use thread-local data and enter Programs
+    for (QoreHashNode* h : hashes) {
+        qore_hash_private::get(*h)->clear(xsink, false);
+        h->deref(xsink);
     }
 }
 
@@ -5310,7 +5410,10 @@ int QoreThreadList::cancelThread(int tid, const char* reason, unsigned scope_pgm
     if (tid <= 0 || tid >= MAX_QORE_THREADS) {
         return -1;
     }
-    if (!entry[tid].active()) {
+    // a thread that has been started but is not running yet (the TID returned by background or q_start_thread()
+    // before the new thread registers itself) keeps the request; ThreadEntry::activate() leaves it in place, so it
+    // takes effect at the thread's first cancellation check point instead of being dropped
+    if (!entry[tid].active() && entry[tid].status != QTS_NA) {
         return -1;
     }
     if (reason) {

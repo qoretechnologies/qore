@@ -5,7 +5,7 @@
 #
 # Qore mongodb module test script
 #
-# Copyright (C) 2025 Qore Technologies, s.r.o.
+# Copyright (C) 2025 - 2026 Qore Technologies, s.r.o.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a
 # copy of this software and associated documentation files (the "Software"),
@@ -25,12 +25,12 @@
 # FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
 
-%require-types
-%enable-all-warnings
-%new-style
-%strict-args
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 
+%requires Util
 %requires QUnit
+%requires FsUtil
 %requires mongodb
 
 %exec-class MongoDbTest
@@ -39,7 +39,11 @@ public class MongoDbTest inherits QUnit::Test {
     private {
         *string mongodb_url;
         *MongoClient client;
-        string test_db = "qore_test_db";
+        #! the database the test creates its collections in
+        /** unique for every run, so that runs against the same server at the same time never use each other's
+            collections; the database is dropped when the test ends
+        */
+        string test_db = sprintf("qore_test_db_%d_%s", getpid(), get_random_string(8));
         string test_coll = "qore_test_collection";
     }
 
@@ -49,6 +53,7 @@ public class MongoDbTest inherits QUnit::Test {
         addTestCase("ObjectId edge cases", \objectIdEdgeCaseTests());
         addTestCase("Connection tests", \connectionTests());
         addTestCase("Connection negative tests", \connectionNegativeTests());
+        addTestCase("NUL character tests", \nulCharacterTests());
         addTestCase("Database tests", \databaseTests());
         addTestCase("Insert result tests", \insertResultTests());
         addTestCase("CRUD tests", \crudTests());
@@ -65,7 +70,19 @@ public class MongoDbTest inherits QUnit::Test {
         addTestCase("Large data tests", \largeDataTests());
         addTestCase("Memory stress tests", \memoryStressTests());
         addTestCase("Interrupt test", \interruptTests());
+        addTestCase("TLS files respect the sandbox", \tlsFileSandboxTests());
         set_return_value(main());
+    }
+
+    globalTearDown() {
+        # drop only the database of this run
+        if (client) {
+            try {
+                client.getDatabase(test_db).drop();
+            } catch (hash<ExceptionInfo> ex) {
+                # the server may not be available
+            }
+        }
     }
 
     private bool ensureClient() {
@@ -188,6 +205,30 @@ public class MongoDbTest inherits QUnit::Test {
         # Test connection to non-existent host (should fail on operations, not connect)
         # MongoDB driver uses lazy connection, so creation may succeed
         # but operations should fail with proper timeout
+    }
+
+    #! a string passed to the driver as a C string would be cut at a NUL character; no server is needed
+    nulCharacterTests() {
+        # cut at the NUL character, the ObjectId would be valid
+        assertThrows("MONGODB-OBJECTID-ERROR", "ObjectId string .* contains a NUL character at byte offset 24",
+            sub() { ObjectId oid("507f1f77bcf86cd799439011\x00junk"); });
+        # the URI is not shown, as it can contain a password
+        try {
+            MongoClient c("mongodb://user:secretpw@127.0.0.1:1\x00.trusted.example/db");
+            fail("the MongoClient constructor did not raise an exception");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("MONGODB-CLIENT-ERROR", ex.err);
+            assertEq("the MongoDB URI contains a NUL character; URIs cannot contain NUL characters", ex.desc);
+        }
+        # the client connects only when an operation needs a server
+        MongoClient c("mongodb://127.0.0.1:1/?serverSelectionTimeoutMS=1");
+        assertThrows("MONGODB-CLIENT-ERROR", "database name .* contains a NUL character", \c.getDatabase(),
+            "admin\x00.other");
+        MongoDatabase db = c.getDatabase("test");
+        assertThrows("MONGODB-DATABASE-ERROR", "collection name .* contains a NUL character", \db.getCollection(),
+            "users\x00.other");
+        assertThrows("MONGODB-DATABASE-ERROR", "collection name .* contains a NUL character",
+            \db.createCollection(), "users\x00.other");
     }
 
     databaseTests() {
@@ -1228,5 +1269,77 @@ sub test_pre_interrupt() {
         # and complex to test reliably. The pre-interrupt test above verifies the core
         # interrupt mechanism works. Additional async interrupt testing can be added
         # in integration tests if needed.
+    }
+
+    tlsFileSandboxTests() {
+        string tmp_dir = make_tmp_dir("qore-mongodb-sandbox-");
+        on_exit remove_tree(tmp_dir);
+        string allowed_dir = tmp_dir + "/allowed";
+        string outside_dir = tmp_dir + "/outside";
+        mkdir(allowed_dir);
+        mkdir(outside_dir);
+        string allowed_ca = allowed_dir + "/ca.pem";
+        string outside_ca = outside_dir + "/ca.pem";
+        foreach string path in ((allowed_ca, outside_ca)) {
+            File f();
+            f.open2(path, O_CREAT | O_TRUNC | O_WRONLY);
+            f.write("not a certificate\n");
+            f.close();
+        }
+
+        string code = '
+%modern
+
+%requires mongodb
+
+# nothing listens on port 1, so a connection attempt fails at once
+const Url = "mongodb://127.0.0.1:1/?tls=true&serverSelectionTimeoutMS=1000&connectTimeoutMS=1000&tlsCAFile=";
+
+*hash<ExceptionInfo> sub ping_with_ca(string ca_file) {
+    try {
+        MongoClient client(Url + ca_file);
+        client.ping();
+    } catch (hash<ExceptionInfo> ex) {
+        return ex;
+    }
+}
+
+*hash<ExceptionInfo> sub ping_client(MongoClient client) {
+    try {
+        client.ping();
+    } catch (hash<ExceptionInfo> ex) {
+        return ex;
+    }
+}
+';
+        Program pgm(PO_NO_CHILD_PO_RESTRICTIONS);
+        pgm.parse(code, "tls_file_sandbox_test");
+
+        SandboxManager sm();
+        sm.setFilesystemSandboxRoot(allowed_dir);
+        sm.addNetworkAllowedHost("127.0.0.1");
+        sm.addNetworkAllowedPort(1);
+        pgm.setSandboxManager(sm);
+
+        # libmongoc reads the CA file when the client is created: a CA file outside the sandbox root is refused then
+        *hash<ExceptionInfo> ex = pgm.callFunction("ping_with_ca", outside_ca);
+        assertEq("FILESYSTEM-ACCESS-DENIED", ex.err, "a client with a CA file outside the sandbox root is refused");
+
+        # a CA file inside the sandbox root passes the check; the connection itself then fails
+        ex = pgm.callFunction("ping_with_ca", allowed_ca);
+        assertTrue(exists ex, "a ping without a server fails");
+        assertNeq("FILESYSTEM-ACCESS-DENIED", ex.err, "a client with a CA file inside the sandbox root is allowed");
+        assertFalse(ex.desc =~ /FILESYSTEM-ACCESS-DENIED/, "a connection with a CA file inside the sandbox root is "
+            "allowed");
+
+        # libmongoc also reads the CA file for each connection: a client made without a sandbox and used by sandboxed
+        # code cannot connect with a CA file outside the sandbox root
+        MongoClient client("mongodb://127.0.0.1:1/?tls=true&serverSelectionTimeoutMS=1000&connectTimeoutMS=1000"
+            "&tlsCAFile=" + outside_ca);
+        ex = pgm.callFunction("ping_client", client);
+        assertTrue(exists ex, "a ping without a server fails");
+        assertRegex("FILESYSTEM-ACCESS-DENIED", ex.desc, "a connection of sandboxed code with a CA file outside the "
+            "sandbox root is denied");
+        assertRegex("tlscafile", ex.desc.lwr(), "the error names the TLS option whose file is denied");
     }
 }

@@ -3,7 +3,7 @@
 /*
     Qore Programming Language
 
-    Copyright (C) 2003 - 2025 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -34,16 +34,29 @@
 
 #include <vector>
 
+//! an appender of a Logger
+/** While the Logger object exists, the reference to the appender object is held by its \c appenders internal member,
+    where the deterministic garbage collector can follow it (see design/dgc.md, Pattern A), so that a cycle through an
+    appender referencing its logger is collected; when the Logger object is destroyed, its private data, which can be
+    referenced longer (by a child logger), takes over the reference
+*/
 struct AppenderInfo {
+    //! the appender object; referenced only after the Logger object is destroyed, see above
     QoreObject* app;
+    //! the appender's private data for optimized calls, if any; referenced
     QoreLoggerAppender* a;
 
     DLLLOCAL AppenderInfo(QoreObject* app, QoreLoggerAppender* a) : app(app), a(a) {
     }
 
-    DLLLOCAL void deref(ExceptionSink* xsink) {
+    //! releases the references held
+    /** @param owns_app true if the reference to the appender object is held here
+    */
+    DLLLOCAL void deref(ExceptionSink* xsink, bool owns_app) {
         assert(app);
-        app->deref(xsink);
+        if (owns_app) {
+            app->deref(xsink);
+        }
 #ifdef DEBUG
         app = nullptr;
 #endif
@@ -121,11 +134,17 @@ public:
                 parent->deref(xsink);
             }
             for (auto& i : appenders) {
-                i.deref(xsink);
+                i.deref(xsink, owns_apps);
             }
             delete this;
         }
     }
+
+    //! Called when the Logger object is destroyed; takes over the references to the appender objects
+    /** The \c appenders internal member that references the appender objects is released with the object, but the
+        private data can be referenced longer (by a child logger) and keeps using the appenders
+    */
+    DLLLOCAL void destructor(ExceptionSink* xsink);
 
     DLLLOCAL QoreStringNode* getName() const;
 
@@ -172,6 +191,9 @@ public:
 
     DLLLOCAL static QoreHashNode* getLocation();
 
+    //! Returns a new LoggerEvent object for the given event created by this logger
+    DLLLOCAL QoreObject* newEventObject(QoreLoggerEvent* ev, ExceptionSink* xsink);
+
 protected:
     //! Pointer to the current object
     QoreObject* self;
@@ -182,9 +204,15 @@ protected:
     //! The parent logger. Unassigned if this is the root logger.
     QoreLogger* parent = nullptr;
 
-    //! Appender list
+    //! Appender list; the appender objects are referenced by the \c appenders internal member, see AppenderInfo
     typedef std::vector<AppenderInfo> app_vec_t;
     app_vec_t appenders;
+
+    //! True if the references to the appender objects are held by the list (after the Logger object is destroyed)
+    bool owns_apps = false;
+
+    //! Sets the \c appenders internal member to the appender objects in the list; must be called with the lock held
+    DLLLOCAL void setAppenderMember(ExceptionSink* xsink);
 
     //! The lock to protect object manipulation
     QoreRWLock lock;

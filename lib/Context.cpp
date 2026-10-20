@@ -3,7 +3,7 @@
 
     Qore programming language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -87,7 +87,6 @@ static int in_list(QoreValue val, node_row_list_s* nlist, int max, int row, Exce
  * (for now)
  */
 
-#pragma GCC diagnostic ignored "-Wclass-memaccess"
 Context::Context(char* nme, ExceptionSink* xsink, QoreValue exp, QoreValue cond,
                  int sort_type, QoreValue sort, QoreValue summary,
                  int ignore_key) {
@@ -190,11 +189,15 @@ Context::Context(char* nme, ExceptionSink* xsink, QoreValue exp, QoreValue cond,
             }
         if (max_pos != pos) {
             max_pos = pos;
-            if (max_pos)
-                row_list = (int*)realloc(row_list, sizeof(int) * max_pos);
-            else {
+            if (max_pos) {
+                // a smaller block; if it cannot be had, the larger one is kept
+                int* nrl = static_cast<int*>(realloc(row_list, sizeof(int) * max_pos));
+                if (nrl) {
+                    row_list = nrl;
+                }
+            } else {
                 free(row_list);
-                row_list = 0;
+                row_list = nullptr;
             }
         }
         if (master_row_list) {
@@ -233,12 +236,16 @@ Context::Context(char* nme, ExceptionSink* xsink, QoreValue exp, QoreValue cond,
             if (*xsink) {
                 break;
             }
-            // resize array if necessary
+            // resize array if necessary; a node_row_list_s holds a QoreValue, which is moved as raw memory
             if (max_group_pos == allocated) {
+                void* ngv = realloc(static_cast<void*>(group_values),
+                    sizeof(struct node_row_list_s) * (allocated + ROW_BLOCK));
+                if (!ngv) {
+                    xsink->outOfMemory();
+                    return;
+                }
+                group_values = static_cast<struct node_row_list_s*>(ngv);
                 allocated += ROW_BLOCK;
-                group_values = (struct node_row_list_s*)
-                realloc(group_values,
-                        sizeof(struct node_row_list_s) * allocated);
             }
             // insert new value in list
             group_values[max_group_pos].val = val.takeReferencedValue();
@@ -258,11 +265,13 @@ Context::Context(char* nme, ExceptionSink* xsink, QoreValue exp, QoreValue cond,
                     master_row_list[pos], max_group_pos);
             max_group_pos++;
         }
-        // resize array to final size if necessary
-        if (max_group_pos != allocated)
-            group_values = (struct node_row_list_s*)
-                realloc(group_values,
-                        sizeof(struct node_row_list_s) * max_group_pos);
+        // resize array to final size if necessary; if a smaller block cannot be had, the larger one is kept
+        if (max_group_pos && max_group_pos != allocated) {
+            void* ngv = realloc(static_cast<void*>(group_values), sizeof(struct node_row_list_s) * max_group_pos);
+            if (ngv) {
+                group_values = static_cast<struct node_row_list_s*>(ngv);
+            }
+        }
         // prepare first context
         if (max_group_pos) {
             row_list = group_values[0].row_list;
@@ -272,7 +281,6 @@ Context::Context(char* nme, ExceptionSink* xsink, QoreValue exp, QoreValue cond,
     pos = 0;
     printd(5, "Context::Context() max_pos = %d\n", max_pos);
 }
-#pragma GCC diagnostic pop
 
 Context::~Context() {
     QORE_TRACE("Context::~Context()");

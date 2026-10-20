@@ -150,7 +150,9 @@ public class QoreImputerProcessor inherits AbstractDataProviderMLProcessor {
     #! Creates the object with the given options
     constructor(hash<auto> options) {
         *hash<auto> copts = checkOptions("CONSTRUCTOR-ERROR", ConstructorOptions, options);
-        fields = DataProvider::AbstractDataProvider::parseFieldList(copts.fields);
+        checkFieldPathOptions(options, copts);
+        fields = DataProvider::AbstractDataProvider::parseFieldList(
+            DataProvider::AbstractDataProvider::getFieldListOption(options, copts, "fields"));
         if (!fields) {
             throw "CONSTRUCTOR-ERROR", "no valid field names provided in 'fields' option";
         }
@@ -257,8 +259,8 @@ public class QoreImputerProcessor inherits AbstractDataProviderMLProcessor {
             for (int j = 0; j < fields.lsize(); ++j) {
                 string f = fields[j];
                 auto orig = DataProvider::AbstractDataProvider::getFieldValue(records[i], f);
-                record_values{f} = orig;
-                imputed_values{f} = imputed[i][j];
+                record_values{AbstractDataProviderMLProcessor::getDerivedFieldName(f)} = orig;
+                imputed_values{AbstractDataProviderMLProcessor::getDerivedFieldName(f)} = imputed[i][j];
                 if (!exists orig) {
                     ++missing_count;
                 }
@@ -385,8 +387,8 @@ public class QoreImputerProcessor inherits AbstractDataProviderMLProcessor {
                 string field = fields[j];
                 list<auto> values = field_values{field};
                 auto orig = values[offset + i];
-                record_values{field} = orig;
-                imputed_values{field} = imputed[i][j];
+                record_values{AbstractDataProviderMLProcessor::getDerivedFieldName(field)} = orig;
+                imputed_values{AbstractDataProviderMLProcessor::getDerivedFieldName(field)} = imputed[i][j];
                 if (!exists orig) {
                     ++missing_count;
                 }

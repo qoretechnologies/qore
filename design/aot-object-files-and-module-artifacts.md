@@ -24,6 +24,17 @@ Relevant code:
 | `.qo` | `qcc -c file.qr` / `file.qc` / `file.qm` | Relocatable object containing native code and AOT metadata |
 | `.qoa` | `qcc -a --context=DIR *.qo` | Static archive exposing `qore_qoa_register_all()` |
 
+`qcc -a` writes a `.qoa` with LLVM's archive writer, in the host linker's
+format (Darwin on Apple platforms, the big archive format on AIX, GNU
+elsewhere) and with a symbol table; the members are the glue object and the
+given objects, named after their files, in that order. The archive is
+deterministic: member headers record no modification time, owner or group and
+mode 644, so the same objects give the same archive however long after they
+were built and by whom. The system `ar` is not used, because what it records
+differs between implementations: GNU `ar` records each member's time, owner,
+group and mode unless given `D`, and Apple's `ar` zeroes only the times, and
+only when `ZERO_AR_DATE` is set.
+
 `.qo` is both object code and declaration carrier. It contains compiled native
 functions plus enough AOT metadata for later compile/link stages to preload
 cross-file declarations.
@@ -731,3 +742,52 @@ The manifest skip check intentionally runs before Qore initialization when the
 output and sidecars are current. This makes no-op delta builds cheap and keeps
 the correctness decision close to the compiler state that can affect generated
 artifacts.
+
+### Installing AOT Modules
+
+`QORE_INSTALL_QMOD_ATOMIC()` publishes each built `.qmod`; the standard
+user-module rules use it, and so can projects that drive `qcc` themselves. It
+stages the module as `<name>.qmod.inst.tmp` in the destination directory and
+renames it over the installed file. A plain `install(FILES)` can rewrite the
+installed inode in place (notably on overlayfs), which tears the mapping of a
+process that has the old module loaded and makes it crash; after a rename the
+process keeps the old inode and a concurrent load never sees a partial file.
+
+An installed `.qmod` that is byte-identical to the built one is left alone: no
+copy and no rename, so its inode and modification time are unchanged. CMake's
+own `install()` skips a file whose modification time matches the source, which
+the staged copy does not preserve, so without the comparison every install gave
+every installed module a new modification time. Anything that decides from file
+times whether a module changed, such as Qorus's provider index, then rebuilt
+for nothing after every install. A symbolic link in the module's place is
+replaced like a file with other content. Either way the module is listed in
+`install_manifest.txt` the way `file(INSTALL)` lists files, without `DESTDIR`,
+so `make uninstall` removes it, and it is reported as `Installing:` or
+`Up-to-date:` following `CMAKE_INSTALL_MESSAGE`.
+
+Two other install rules would undo that:
+
+- Installing a module's sources removes any installed `.qmod` of the module
+  beside them or in the AOT module directory, because it is loaded in
+  preference to the sources and can be older than them (an earlier AOT build, an
+  older layout, or a build with AOT disabled). The `.qmod` the module's own AOT
+  rule publishes is not removed when the same install runs that rule; it is
+  removed only by an install of a single component other than
+  `QORE_QMOD_INSTALL_COMPONENT`, which installs the sources without it.
+- The stale-layout paths the AOT rule removes before publishing never include
+  the path it publishes to, which matters when `.qmod`s are installed beside
+  their sources.
+
+The `jar/` and resource-directory links beside a split module's `.qmod` (see
+`qore-module-structure.md`) are left alone when they already point at the copy
+installed beside the sources, and are listed in the install manifest. The link
+target is computed at install time, so the module directories may be absolute
+or relative to `CMAKE_INSTALL_PREFIX`. A resource directory copied because the
+sources are not installed (a qmod-only component install) is copied again on
+every install, so files removed from the source do not survive in it.
+
+Binary modules are installed by `install(TARGETS)`, which writes a new inode
+when it installs and leaves a module whose modification time matches the built
+one alone, so they need no special rule. The i18n catalog manifest is likewise
+left alone when its content is unchanged (see
+`catalog-install-reconciliation.md`).

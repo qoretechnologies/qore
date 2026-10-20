@@ -308,15 +308,20 @@ public class ImapCommandPollOperation inherits Qore::PollPipeline {
         @param command the command text without the tag or trailing CRLF
         @param max_size the maximum accepted response size in bytes
 
-        @throw IMAP-SERVER-ERROR the server returned a \c NO or \c BAD completion
+        @throw IMAP-SERVER-ERROR the server returned a \c NO or \c BAD completion, or the tag or the command
+        contains a NUL, CR or LF character, which would end the command line and start another command
     */
     constructor(Socket sock, string tag, string command, int max_size = DefaultMaxResponseSize)
             : PollPipeline(sock) {
         self.tag = tag;
         goal = "command";
 
+        # every command of ImapClient is sent here: a line break in an argument that is not quoted (a message set,
+        # a flag, search criteria or a command given to ImapClient::sendCommand()) would start another command
+        string line = sprintf("%s %s", tag, command);
+        check_line_text(line, "IMAP command", "IMAP-SERVER-ERROR");
         addSetContextValue("tag", tag);
-        addSetContextBinary("cmd", sprintf("%s %s\r\n", tag, command));
+        addSetContextBinary("cmd", line + "\r\n");
         addSendFromContext("cmd");
         addRecvImapResponse("tag", "response", "IMAP-SERVER-ERROR", max_size);
     }
@@ -367,9 +372,11 @@ public class ImapIdleStartPollOperation inherits Qore::PollPipeline {
     /** @param sock the connected, authenticated socket
         @param tag the command tag
 
-        @throw IMAP-IDLE-ERROR the server did not grant the continuation request
+        @throw IMAP-IDLE-ERROR the server did not grant the continuation request, or the tag contains a NUL, CR
+        or LF character
     */
     constructor(Socket sock, string tag) : PollPipeline(sock) {
+        check_line_text(tag, "IMAP tag", "IMAP-IDLE-ERROR");
         goal = "idle-start";
         addSetContextBinary("idle_cmd", sprintf("%s IDLE\r\n", tag));
         addSendFromContext("idle_cmd");
@@ -556,7 +563,8 @@ public class ImapAppendPollOperation inherits Qore::PollPipeline {
         @param literal_plus if True, use a non-synchronizing literal (requires the \c LITERAL+ capability)
         @param max_size the maximum accepted response size in bytes
 
-        @throw IMAP-SERVER-ERROR the server returned a \c NO or \c BAD completion
+        @throw IMAP-SERVER-ERROR the server returned a \c NO or \c BAD completion, or the tag, the mailbox name or a
+        flag contains a NUL, CR or LF character, which would end the command line and start another command
     */
     constructor(Socket sock, string tag, string mailbox, binary message, *list<string> flags,
             *date internal_date, bool literal_plus = False, int max_size = DefaultMaxResponseSize)
@@ -571,6 +579,9 @@ public class ImapAppendPollOperation inherits Qore::PollPipeline {
         if (internal_date) {
             args += sprintf(" \"%s\"", ImapClient::formatInternalDate(internal_date));
         }
+        # the command line before the literal cannot contain a line break; the message is sent as a literal of its
+        # size, so it can
+        check_line_text(args, "IMAP command", "IMAP-SERVER-ERROR");
         args += sprintf(" {%d%s}\r\n", message.size(), literal_plus ? "+" : "");
 
         addSetContextValue("tag", tag);

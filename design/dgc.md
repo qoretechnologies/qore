@@ -248,9 +248,49 @@ only by values or references pushed into Queues are collected (`queue-cycle`, `q
 members into a set while others release it (`concurrent marks`).
 
 A dereference also saves its triggering reference count as `ref_copy`. Another thread can change the live
-count while that dereference waits for a scan. `RSet::canDelete()` rejects superseded snapshots before
-examining the set: a newer reference keeps the object alive or provides its own collection opportunity when
-released. This applies to object and captured-variable dereferences alike.
+count while that dereference waits for a scan. `RSet::canDelete()` does not decide with a snapshot that a newer
+reference has superseded: a newer reference that is still held keeps the object alive, and its release finds the set
+and decides then. A snapshot superseded by releases is replaced by the current count, as the next section explains.
+This applies to object and captured-variable dereferences alike.
+
+### A count superseded by a release that decided nothing
+
+A release does not always decide collection. The lock-free release (`RObject::tryFastDeref()`) and the locking path's
+"nothing to do" return (`qore_object_private::customDeref()`, `ClosureVarValue::deref()`) decide nothing when the
+object has no recursive set and no scan due. That is right when no cycle runs through the object, and it is how they
+see an object whose cycle another dereference is scanning: that dereference took the scan due when it took its count,
+and the set is only assigned when the scan commits. A release made during the scan supersedes the count of the
+dereference making it; that dereference used to leave the decision to the release that superseded it, which had
+decided nothing, so the scan found the cycle and the cycle was never collected. The async I/O controller releases
+its references to a result Queue on two callback workers, which stranded a poll operation that keeps its own result
+Queue with the result in it.
+
+`RSet::canDelete()` therefore decides with the count as it is now when releases have superseded a dereference's
+count (`refs < ref_copy`), and only declines when a reference taken since is still held (`refs > ref_copy`), or none
+is left. Nothing on the release paths changes: no lock or atomic operation is added to them.
+
+Two dereferences can then decide for the same object at the same time: the one with the superseded count, and one
+whose release in the locking path superseded it. Each decides from the set and the counts as they are, so they reach
+the same verdict, and the set lets only one of them collect it (`RSet::canDelete()` invalidates the set under its
+write lock); the other finds the set invalidated and rescans, and the object can still be intact when it does:
+
+- An **object** is deleted by the dereference that marks it as being destroyed under its lock (`in_destructor` in
+  `qore_object_private::customDeref()`); a second one hands the deletion off
+  (`robject_dereference_helper::finalDeref()`).
+- A **closure-bound variable** had no such mark: two dereferences that both decided deleted its value at the same
+  time, one waiting in `RObject::derefDone()` for the other's dereference to finish, which then deleted it too
+  (an assertion in `derefDone()` in debug builds, a double release of the value in release builds).
+  `RObject::claimCollection()` is the mark: the dereference that decides to collect the variable takes it with an
+  atomic exchange, on the collect path only, and only the one that takes it deletes the variable. The flag
+  (`RObject::collection_claimed`) is in the padding after `needs_is_valid`, so no member of `RObject` or of
+  `ClosureVarValue` moves.
+
+`ut_superseded_snapshot_lock_free_release` in the C++ unit tests (`asyncio_unit_tests.qtest`) releases another
+holder's reference with no lock while a dereference scans (a debug hook in `customDeref()` before the scan,
+`RObject::dbg_before_deref_scan`); `examples/test/qore/misc/dgc-closure-var-collect-race.qtest` holds one
+dereference of a closure-bound variable before it decides (`dbg_hold_closure_var_deref()`), lets another one collect
+the variable, and counts the dereferences that collect it (`dbg_count_closure_var_collections()`);
+`examples/test/qore/classes/AsyncIoController/asyncio_queue_gc.qtest` is the controller's case.
 
 ## When a scan is triggered — and when it may be skipped
 
@@ -704,11 +744,12 @@ Taking and releasing the reference that a method call holds on a shared object i
 atomic increment and one atomic decrement of its reference count (two of each for a real reference) and a few plain
 loads.
 
-This is safe because the r-section never ordered a dereference against a scan that starts *after* it, only
-against one already in progress. A dereference that took the r-section first saw the same null set that the
-lock-free load sees, and the scan committed its set afterwards either way. The error in the other direction
-cannot happen: a stale *non-null* read only costs one unnecessary upgrade, and the slow path re-reads
-everything under the r-section. The fast path may only ever decline to skip, never skip wrongly.
+A release that skips the decision this way can supersede the count of a dereference that is scanning the object,
+whose scan has not committed the set yet: the r-section does not order the two. That dereference decides with the
+current count after its scan instead of leaving the decision to the release; see "A count superseded by a release
+that decided nothing". The error in the other direction cannot happen: a stale *non-null* read only costs one
+unnecessary upgrade, and the slow path re-reads everything under the r-section. The fast path may only ever decline
+to skip, never skip wrongly.
 
 Debug builds count the r-section acquisitions made by dereferences per thread
 (`dbg_get_deref_rsection_count()`);
@@ -855,7 +896,7 @@ if (scan_private_data) {
 }
 ```
 
-**When you introduce a new C++ container class that can hold `QoreValue` and be stored as private data, you must add a `scanMembers` method and register it in this dispatcher**, and the enclosing object must set `scan_private_data = true` (or override `needsScan` to return true when appropriate).
+**When you introduce a new C++ container class in libqore that can hold `QoreValue` and be stored as private data, you must add a `scanMembers` method and register it in this dispatcher**, and the enclosing object must set `scan_private_data = true` (or override `needsScan` to return true when appropriate). A module cannot add itself to the dispatcher; it uses the public API below.
 
 **Every time such a container stores a value that needs a scan (`needs_scan()`), it must call
 `qore_dgc_value_stored(holder, value)`** with the object whose private data it is. No scan follows the store, so
@@ -870,6 +911,58 @@ see "Values handed out by a container" below. `TreeMapData::put()`, `qore_queue_
 **Look the private data up with `getScanPrivateData()`, never with a raising lookup such as `getReferencedPrivateData(key, xsink)`.** Most scanned objects do not have the data being probed for, so a raising lookup creates and discards an exception for nearly every object. Creating an exception captures the call stack, and call stack capture calls external language stack location helpers: the Python helper acquires the GIL. The scan holds r-sections at that point, so a thread that holds the GIL and waits for one of those objects (for example a Python thread whose Qore thread initialization dereferences an object) deadlocks with the scan. Nothing in a scan may raise an exception or call into user or foreign-language code.
 
 Failing to do this produces exactly the symptom that motivated this document: a cycle with an "invisible" edge through a C++ container; DGC sees `rcount < references` on some member, calls `canDelete` → returns 0, and the cycle leaks forever.
+
+### Pattern B for modules: `AbstractScannablePrivateData`
+
+A module's private data reports its values through the public API in `include/qore/AbstractPrivateData.h` and
+`include/qore/QoreObject.h`:
+
+- The private data class derives from `AbstractScannablePrivateData` and implements
+  `scanValues(QorePrivateDataScanner&)`, which calls `QorePrivateDataScanner::scan()` for each value it holds (the
+  scanner wraps `RObject::scanCheck()` and skips opaque values as `scanMembersIntern()` does).
+  `AbstractScannablePrivateData::needsScan()` is `needs_scan()`.
+- Registration is opt-in per class ID: the private data calls `QoreObject::addPrivateDataScan(cid)` when it starts
+  holding a value that needs a scan and `removePrivateDataScan(cid)` when it stops, under its own lock, as Queue
+  changes `scan_private_data`. The object keeps the registered class IDs in `qore_object_private::private_data_scans`,
+  allocated by the first registration and changed under `rlck`; each registration also counts in
+  `scan_private_data`.
+- The dispatcher (`qore_object_private::scanRegisteredPrivateData()`, called last in the private data branch of
+  `scanMembers()`, inside the same `RSetHeldEdgeHelper`) copies the class IDs under `rlck`, then looks each one up
+  with `getScanPrivateData()` and calls `scanValues()` without `rlck`, as scanning a value can need it.
+- `QoreObject::privateDataValueStored(value)` is `qore_dgc_value_stored()` and
+  `QoreObject::privateDataValuesRemoved()` is `RObject::edgesRemoved()`, with the same rules as for libqore's
+  containers: mark a stored value after it is stored and while it is still referenced, mark a value given up before
+  it can be released or handed out with the container's reference, both under the container's lock.
+- `_QORE_HAS_SCANNABLE_PRIVATE_DATA` is defined when the API is available.
+
+The rules for `scanValues()` are the scanner rules: it tries the container's lock and returns false if the lock is
+held, it raises no exception and calls no Qore or foreign-language code, and it releases no reference. A container
+lock that is held while the module releases values or runs Qore code can be tried by a scan on the same thread, so
+the lock that `scanValues()` tries should only be held while the container itself is changed, with the values it
+gives up released after the lock.
+
+**The virtual is on a subclass, not on `AbstractPrivateData`.** A new virtual function on `AbstractPrivateData`
+would move the vtable slots of every public subclass that has virtual functions of its own (`InputStream::read()`,
+the output streams, `AbstractPollableIoObjectBase`, ...), so a module built against the earlier header would call
+the wrong function, and the module API version does not stop such a module from loading. The registration by
+class ID means the dispatcher only calls `scanValues()` on private data that a module built with this API has
+registered.
+
+**Each value is reported by one object.** The scanner counts each report as a reference: a value that two objects
+report but that is referenced once has an `rcount` above its references, so `RSet::canDelete()` sees no
+reference from outside the set, and deletes the value while it is still held. A C++ container shared between the
+private data of several objects (copy on write, for example) must therefore have one reporter, or each holder must
+have its own references to the values, in a copy of the container. A Qore list or hash shared by reference
+counting is not such a container: each holder has its own reference to the node, so each can report it.
+
+The dataframe module shares a column between DataFrames (`select()`, `withColumn()`, `join()`, a GroupedDataFrame
+and its DataFrame). A column with values that need a scan is reported by the one DataFrame or GroupedDataFrame that
+claimed it (`ColumnData::claimScan()`), and another one that becomes the private data of an object gets its own
+copy of the column, which references each value again; columns without such values stay shared. A DataFrame's
+`scanValues()` tries a separate leaf lock, which is only held while its list of columns changes, never while values
+are released or Qore code runs. `dgcSharedColumnTest` in `modules/dataframe/test/dataframe.qtest` holds a value of
+a shared column from outside while the DataFrames sharing it are released; with both DataFrames reporting the
+column, the value is deleted while it is held.
 
 ### Values handed out by a container
 
@@ -1085,6 +1178,10 @@ Debug builds add `dbg_hold_object_lock()` and `dbg_scan_wait_notify()`, which ma
 - `lib/QoreObject.cpp` — `scanMembers`, `scanMembersIntern`, `customDeref`, the dispatcher that calls private-data scanners.
 - `lib/QoreQueue.cpp` — `qore_queue_private::scanMembers` (Pattern B reference implementation).
 - `lib/QC_TreeMap.qpp` — TreeMap custom scanner (Pattern B).
+- `include/qore/AbstractPrivateData.h` — `AbstractScannablePrivateData` and `QorePrivateDataScanner`, Pattern B for
+  modules; `QoreObject::addPrivateDataScan()` and the marks are in `include/qore/QoreObject.h`.
+- `modules/dataframe/src/DataFrame.cpp`, `GroupedDataFrame.cpp` — Pattern B in a module, with one reporter for
+  each shared column.
 - `lib/QC_StreamReader.qpp` — `internal_members` + `setValueIntern` (Pattern A reference implementation).
 - `include/qore/QoreObject.h` — `realRef`/`realDeref`, `QoreObjectRealRefHelper`.
 - `lib/Variable.cpp`, `lib/thread.cpp`, `lib/FunctionCallNode.cpp` — `realRef` call sites showing legitimate uses.

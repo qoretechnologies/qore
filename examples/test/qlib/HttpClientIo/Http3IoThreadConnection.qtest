@@ -1,0 +1,277 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Util
+%requires Mime
+%requires Logger
+%requires HttpServerUtil
+%requires HttpServer
+%requires HttpClientIo
+%requires RestClientIo
+%requires ../../TestCertificates.qm
+
+%exec-class Http3IoThreadConnectionTest
+
+#! Makes an HTTP/3 request for a sandboxed Program as module code does: this function runs in an unsandboxed Program
+auto sub sandbox_h3_request(string url, string api) {
+    HttpClientIo::HttpClientConnectionManager mgr(<HttpClientIo::HttpClientConnectionManagerOptions>{
+        "protocol": "h3",
+        "accept_all_certs": True,
+        "connect_timeout": 30s,
+        "max_request_retries": 0,
+    });
+    on_exit mgr.closeAll();
+    return api == "HTTP" ? mgr.request(url, "GET", "/").body : mgr.requestAsync(url, "GET", "/").get(60s).body;
+}
+
+#! Answers "reached", or redirects "/redirect" to the location set
+class TestHandler inherits AbstractHttpRequestHandler {
+    public {
+        #! the target of "/redirect"
+        string location;
+        #! the number of requests answered
+        Counter requests();
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        requests.inc();
+        # the path of the request URI without the leading slash
+        if (cx.url.path == "redirect") {
+            return makeResponse(302, "", {"Location": location});
+        }
+        return makeResponse(200, "reached", {"Content-Type": MimeTypeText});
+    }
+}
+
+#! Records the connections a connection manager makes and the origins they are made to
+/** Every new connection, of a forced protocol or of either protocol of a race between HTTP/3 and HTTP/2, is
+    submitted to the I/O controller; a connection that wins a race is submitted again, so each connection is recorded
+    once
+*/
+class RecordingManager inherits HttpClientIo::HttpClientConnectionManager {
+    private {
+        Mutex m();
+        #! the connections made, in the order they were started: "key" (the origin) and "conn"
+        list<hash<auto>> records();
+        #! the IDs of the connections recorded
+        hash<string, bool> ids();
+    }
+
+    constructor(hash<HttpClientIo::HttpClientConnectionManagerOptions> opts)
+            : HttpClientIo::HttpClientConnectionManager(opts) {
+    }
+
+    #! Returns the connections made to the given origin, or to any origin, in the order they were started
+    list<HttpClientIo::HttpClientConnection> getConnections(*string key) {
+        AutoLock al(m);
+        return map $1.conn, records, !key || $1.key == key;
+    }
+
+    private submitConnectionToController(string key, HttpClientIo::HttpClientConnection conn, bool initial = True) {
+        {
+            AutoLock al(m);
+            string id = conn.getConnectionId().toString();
+            if (!ids{id}) {
+                ids{id} = True;
+                records += {"key": key, "conn": conn};
+            }
+        }
+        HttpClientIo::HttpClientConnectionManager::submitConnectionToController(key, conn, initial);
+    }
+}
+
+#! HTTP/3 connections made in an async I/O worker
+/** An asynchronous request makes every connection after its first one in an I/O worker: to retry a failed
+    connection, to try another address family, and for a redirect to another origin.  Nothing that can block may run
+    there, so an HTTP/3 connection resolves the host name and binds its UDP socket in its poll operation.
+*/
+public class Http3IoThreadConnectionTest inherits QUnit::Test {
+    public {
+        #! the client APIs tested
+        const Apis = ("REST", "REST async", "HTTP", "HTTP async");
+    }
+
+    private {
+        HttpServer server;
+        TestHandler handler();
+        #! a QUIC listener on IPv4 only
+        int quic_port;
+        #! TLS listeners that also receive HTTP/3 on their ports
+        int port_a;
+        int port_b;
+    }
+
+    constructor() : Test("Http3IoThreadConnectionTest", "1.0") {
+        addTestCase("an asynchronous request retries an HTTP/3 connection", \retryTest());
+        addTestCase("an asynchronous request tries another address family", \familyFallbackTest());
+        addTestCase("a race of HTTP/3 and HTTP/2 made in an I/O worker keeps HTTP/3", \raceInWorkerTest());
+        addTestCase("the bind of an HTTP/3 socket is subject to the sandbox", \sandboxBindTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        server = new HttpServer(<HttpServerOptionInfo>{"logger": new Logger("h3-io-thread",
+            LoggerLevel::getLevelInfo())});
+        server.setDefaultHandler("test", handler);
+        server.waitForAsyncIo();
+        quic_port = server.addQuicListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
+            "cert": new SSLCertificate(TestCertificates::CertPem),
+            "key": new SSLPrivateKey(TestCertificates::KeyPem),
+        }).port;
+        foreach string l in (("a", "b")) {
+            int port = server.addListener(<HttpListenerOptionInfo>{
+                "node": "127.0.0.1",
+                "service": 0,
+                "cert": new SSLCertificate(TestCertificates::CertPem),
+                "key": new SSLPrivateKey(TestCertificates::KeyPem),
+            }).port;
+            if (l == "a") {
+                port_a = port;
+            } else {
+                port_b = port;
+            }
+        }
+        server.waitForAsyncIo();
+        handler.location = sprintf("https://127.0.0.1:%d/target", port_b);
+    }
+
+    globalTearDown() {
+        if (server) {
+            server.stop();
+        }
+    }
+
+    #! A failed HTTP/3 connection is retried, in the family of the address
+    retryTest() {
+        # nothing receives datagrams on this port
+        string url = sprintf("https://127.0.0.1:%d", get_free_port("127.0.0.1"));
+        foreach string api in (Apis) {
+            RecordingManager mgr = getManager({"protocol": "h3", "max_request_retries": 1});
+            on_exit mgr.closeAll();
+            try {
+                get(mgr, url, api);
+                fail(api + ": no exception raised");
+            } catch (hash<ExceptionInfo> ex) {
+                assertEq("HTTPCLIENT-CONNECT-ERROR", ex.err, api + ": " + ex.desc);
+                assertRegex("^QUIC-", ex.arg.err, api);
+            }
+            list<HttpClientIo::HttpClientConnection> conns = mgr.getConnections();
+            assertEq((AF_INET, AF_INET), map cast<HttpClientIo::Http3ClientConnection>($1).getAddressFamily(),
+                conns, api + ": one retry");
+        }
+    }
+
+    #! A host name that resolves to IPv6 first: the connection in IPv6 does not reach the server, the next one is made
+    #! in IPv4
+    familyFallbackTest() {
+        if (!checkDualStack()) {
+            return;
+        }
+        string url = sprintf("https://localhost:%d", quic_port);
+        foreach string api in (Apis) {
+            RecordingManager mgr = getManager({"protocol": "h3", "max_request_retries": 2});
+            on_exit mgr.closeAll();
+            assertEq("reached", get(mgr, url, api), api);
+            list<HttpClientIo::HttpClientConnection> conns = mgr.getConnections();
+            assertEq((AF_INET6, AF_INET), map cast<HttpClientIo::Http3ClientConnection>($1).getAddressFamily(),
+                conns, api);
+        }
+    }
+
+    #! A redirect to another origin is followed with a race of HTTP/3 and HTTP/2 for that origin; an asynchronous
+    #! request makes it in an I/O worker, where the HTTP/3 connection must not be dropped for HTTP/2 alone
+    raceInWorkerTest() {
+        string url = sprintf("https://127.0.0.1:%d", port_a);
+        string key_b = sprintf("127.0.0.1:%d", port_b);
+        foreach string api in (Apis) {
+            RecordingManager mgr = getManager({"protocol": "auto", "enable_http3": True});
+            on_exit mgr.closeAll();
+            int requests = handler.requests.getCount();
+            assertEq("reached", get(mgr, url, api, "/redirect"), api);
+            # the redirect and its target
+            assertEq(requests + 2, handler.requests.getCount(), api);
+            assertTrue(inlist("h3", map $1.getProtocol(), mgr.getConnections(key_b)),
+                api + ": an HTTP/3 connection to the redirect target");
+        }
+    }
+
+    #! The UDP socket of an HTTP/3 connection is bound by its poll operation, subject to the network policy of the
+    #! sandbox of the code that makes the request
+    sandboxBindTest() {
+        # connections to the loopback address are allowed; a bind to the IPv4 wildcard address is denied
+        SandboxManager sm();
+        sm.setNetworkDefaultPolicy(True);
+        sm.addNetworkDeniedIPRange("0.0.0.0/32");
+        Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+        p.setSandboxManager(sm);
+        p.importFunction("sandbox_h3_request");
+        p.parse("%modern\nauto sub run(string url, string api) { return sandbox_h3_request(url, api); }",
+            "h3-sandbox-bind");
+        string url = sprintf("https://127.0.0.1:%d", quic_port);
+        int requests = handler.requests.getCount();
+        foreach string api in (("HTTP", "HTTP async")) {
+            try {
+                p.callFunction("run", url, api);
+                fail(api + ": no exception raised");
+            } catch (hash<ExceptionInfo> ex) {
+                # the denial of the bind is raised as it is, with the connection's error as the argument
+                assertEq("NETWORK-ACCESS-DENIED", ex.err, api + ": " + ex.err + ": " + ex.desc);
+                assertRegex("Binding to 0\\.0\\.0\\.0", ex.desc, api);
+                assertEq("NETWORK-ACCESS-DENIED", ex.arg.err, api);
+            }
+        }
+        assertEq(requests, handler.requests.getCount(), "the server was never reached");
+        # without the sandbox, the request is made
+        assertEq("reached", sandbox_h3_request(url, "HTTP async"));
+    }
+
+    #! returns True if "localhost" resolves to an IPv6 address first, which the test needs
+    private bool checkDualStack() {
+        list<hash<auto>> addrs = getaddrinfo("localhost", NOTHING, AF_UNSPEC, 0);
+        hash<string, bool> families = map {$1.family: True}, addrs;
+        if (addrs[0].family != AF_INET6 || !families{AF_INET}) {
+            testSkip("\"localhost\" does not resolve to an IPv6 address and then to an IPv4 address here");
+            return False;
+        }
+        return True;
+    }
+
+    #! Returns a connection manager that accepts the test certificate
+    /** The timeouts are long enough for a slow host, such as under valgrind: a connection to a port where nothing
+        receives datagrams fails when the host refuses them, not by the timeout
+    */
+    private RecordingManager getManager(hash<auto> opts) {
+        return new RecordingManager(cast<hash<HttpClientIo::HttpClientConnectionManagerOptions>>({
+            "accept_all_certs": True,
+            "connect_timeout": 30s,
+            "request_timeout": 60s,
+        } + opts));
+    }
+
+    #! Makes a GET request with the given API and returns the response body
+    private auto get(RecordingManager mgr, string url, string api, string path = "/") {
+        switch (api) {
+            case "REST": {
+                RestClientIo rest({"url": url, "data": "text"}, mgr);
+                on_exit rest.close();
+                return rest.restGet(path).body;
+            }
+            case "REST async": {
+                RestClientIo rest({"url": url, "data": "text"}, mgr);
+                on_exit rest.close();
+                return rest.restGetAsync(path).get(60s).body;
+            }
+            case "HTTP":
+                return mgr.request(url, "GET", path).body;
+            case "HTTP async":
+                return mgr.requestAsync(url, "GET", path).get(60s).body;
+        }
+        throw "TEST-ERROR", sprintf("unknown API %y", api);
+    }
+}

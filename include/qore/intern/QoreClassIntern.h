@@ -401,7 +401,7 @@ public:
     // the following defines the pure virtual functions that are common to all user variants
     COMMON_USER_VARIANT_FUNCTIONS
 
-    DLLLOCAL virtual int parseInit(QoreFunction* f) {
+    DLLLOCAL virtual int parseInit(QoreFunction* f) override {
         source_qf = f;
         MethodFunctionBase* mf = static_cast<MethodFunctionBase*>(f);
 
@@ -430,7 +430,7 @@ public:
         return err;
     }
 
-    DLLLOCAL virtual QoreValue evalMethod(QoreObject* self, CodeEvaluationHelper& ceh, ExceptionSink* xsink) const;
+    DLLLOCAL virtual QoreValue evalMethod(QoreObject* self, CodeEvaluationHelper& ceh, ExceptionSink* xsink) const override;
 };
 
 #define UMV(f) (reinterpret_cast<UserMethodVariant*>(f))
@@ -456,14 +456,14 @@ public:
     // the following defines the pure virtual functions that are common to all user variants
     COMMON_USER_VARIANT_FUNCTIONS
 
-    DLLLOCAL virtual const BCAList* getBaseClassArgumentList() const {
+    DLLLOCAL virtual const BCAList* getBaseClassArgumentList() const override {
         return bcal;
     }
 
     DLLLOCAL virtual void evalConstructor(const QoreClass& thisclass, QoreObject* self, CodeEvaluationHelper& ceh,
-        BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const;
+        BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const override;
 
-    DLLLOCAL virtual int parseInit(QoreFunction* f);
+    DLLLOCAL virtual int parseInit(QoreFunction* f) override;
 
     //! Move BCAList from another constructor variant (for AOT fallback transplanting)
     /** Takes ownership of the source's BCAList, leaving the source with nullptr.
@@ -495,7 +495,7 @@ public:
     // the following defines the pure virtual functions that are common to all user variants
     COMMON_USER_VARIANT_FUNCTIONS
 
-    DLLLOCAL virtual int parseInit(QoreFunction* f) {
+    DLLLOCAL virtual int parseInit(QoreFunction* f) override {
         source_qf = f;
         MethodFunctionBase* mf = static_cast<MethodFunctionBase*>(f);
 
@@ -517,7 +517,7 @@ public:
     }
 
     DLLLOCAL virtual void evalDestructor(const QoreClass &thisclass, QoreObject* self, RuntimeConfig& rc,
-            ExceptionSink* xsink) const {
+            ExceptionSink* xsink) const override {
         // there cannot be any params
         assert(!signature.numParams());
         assert(!signature.getReturnTypeInfo() || signature.getReturnTypeInfo() == nothingTypeInfo);
@@ -537,9 +537,9 @@ public:
    // the following defines the pure virtual functions that are common to all user variants
    COMMON_USER_VARIANT_FUNCTIONS
 
-   DLLLOCAL virtual int parseInit(QoreFunction* f);
+   DLLLOCAL virtual int parseInit(QoreFunction* f) override;
 
-   DLLLOCAL virtual void evalCopy(const QoreClass &thisclass, QoreObject* self, QoreObject* old, CodeEvaluationHelper& ceh, BCList* scl, ExceptionSink* xsink) const;
+   DLLLOCAL virtual void evalCopy(const QoreClass &thisclass, QoreObject* self, QoreObject* old, CodeEvaluationHelper& ceh, BCList* scl, ExceptionSink* xsink) const override;
 };
 
 #define UCOPYV(f) (reinterpret_cast<UserCopyVariant*>(f))

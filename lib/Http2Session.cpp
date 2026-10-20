@@ -154,7 +154,8 @@ private:
         if (sock->buflen) {
             return true;
         }
-        return sock->ssl && sock->ssl->pending() > 0;
+        qore_socket_private::SslRef ssl = sock->getSsl();
+        return ssl && ssl->pending() > 0;
     }
 
     qore_socket_private* sock;
@@ -1143,7 +1144,8 @@ int Http2Session::sendPendingData(int timeout_ms, ExceptionSink* xsink) {
 
     // Send buffered data using proper async I/O pattern (like SocketSendPollState::continuePoll)
     if (send_offset < send_buffer.size()) {
-        printd(5, "sendPendingData() sending %zu bytes to socket (ssl=%p)\n", pending, sock->ssl);
+        printd(5, "sendPendingData() sending %zu bytes to socket (ssl=%p)\n", pending,
+            sock->ssl.load(std::memory_order_relaxed));
         {
             size_t off = send_offset;
             int count = 0;
@@ -1167,6 +1169,8 @@ int Http2Session::sendPendingData(int timeout_ms, ExceptionSink* xsink) {
             }
         }
 
+        // the descriptor and the TLS connection stay valid while another thread closes the socket
+        qore_socket_private::IoUseHelper io_use(*sock);
         // Always use non-blocking mode for async I/O
         OptionalNonBlockingHelper nbh(*sock, true, xsink);
         if (*xsink) {
@@ -1177,12 +1181,12 @@ int Http2Session::sendPendingData(int timeout_ms, ExceptionSink* xsink) {
         while (send_offset < send_buffer.size()) {
             ssize_t rc;
             size_t to_send = send_buffer.size() - send_offset;
-            if (sock->ssl) {
+            if (SSLSocketHelper* ssl = io_use.getSsl()) {
                 // Use doNonBlockingIo for proper async SSL I/O
                 // Returns: SOCK_POLLIN/SOCK_POLLOUT if need to poll, 0 if done, < 0 on error
                 size_t real_io = 0;
                 printd(5, "sendPendingData() calling doNonBlockingIo to_send=%zu\n", to_send);
-                rc = sock->ssl->doNonBlockingIo(xsink, "sendPendingData",
+                rc = ssl->doNonBlockingIo(xsink, "sendPendingData",
                     const_cast<char*>(reinterpret_cast<const char*>(send_buffer.data() + send_offset)),
                     to_send, SslAction::WRITE, real_io);
                 printd(5, "sendPendingData() doNonBlockingIo rc=%zd real_io=%zu xsink=%d\n", rc, real_io, (int)*xsink);
@@ -1213,7 +1217,7 @@ int Http2Session::sendPendingData(int timeout_ms, ExceptionSink* xsink) {
                 break;
             } else {
                 // Non-SSL: use regular send
-                rc = ::send(sock->sock, send_buffer.data() + send_offset, to_send, 0);
+                rc = ::send(io_use.getDescriptor(), send_buffer.data() + send_offset, to_send, 0);
                 printd(5, "sendPendingData() send rc=%zd errno=%d\n", rc, errno);
                 if (rc >= 0) {
                     // Advance offset past sent data
@@ -1285,7 +1289,7 @@ int Http2Session::receiveData(int timeout_ms, ExceptionSink* xsink) {
     //
     // Socket receive does not touch nghttp2_session state; only
     // nghttp2_session_mem_recv below does, and we reacquire m for that.
-    printd(5, "receiveData() ENTRY fd=%d isServer=%d timeout_ms=%d\n", sock->sock, is_server, timeout_ms);
+    printd(5, "receiveData() ENTRY fd=%d isServer=%d timeout_ms=%d\n", sock->sock.load(), is_server, timeout_ms);
 
     bool timed_out = false;
     SimpleRefHolder<BinaryNode> data(qore_on_async_io_thread()
@@ -1311,7 +1315,8 @@ int Http2Session::receiveData(int timeout_ms, ExceptionSink* xsink) {
     }
 
     ssize_t len = static_cast<ssize_t>(data->size());
-    printd(5, "receiveData() recv len=%zd fd=%d isServer=%d xsink=%d\n", len, sock->sock, is_server, (int)*xsink);
+    printd(5, "receiveData() recv len=%zd fd=%d isServer=%d xsink=%d\n", len, sock->sock.load(), is_server,
+        static_cast<int>(*xsink));
     if (len == 0) {
         // EOF received - connection was closed by peer
         printd(5, "receiveData() len=0 (connection closed by peer)\n");
@@ -1374,7 +1379,11 @@ bool Http2Session::hasPendingBodyData(int32_t stream_id) const {
 }
 
 bool Http2Session::hasSocketBufferedData() const {
-    return sock->buflen > 0 || (sock->ssl && sock->ssl->pending() > 0);
+    if (sock->buflen > 0) {
+        return true;
+    }
+    qore_socket_private::SslRef ssl = sock->getSsl();
+    return ssl && ssl->pending() > 0;
 }
 
 Http2StreamInfo* Http2Session::getStream(int32_t stream_id) {
@@ -1776,7 +1785,7 @@ int Http2Session::onFrameSendCallback(nghttp2_session* session,
     uint32_t remote_max = h2 ? h2->remote_settings.max_frame_size : 0;
     uint32_t local_max = h2 ? h2->local_settings.max_frame_size : 0;
     int is_server = h2 ? h2->is_server : 0;
-    int fd = h2 ? h2->sock->sock : -1;
+    int fd = h2 ? h2->sock->sock.load() : -1;
     printd(5, "onFrameSendCallback type=%d stream_id=%d flags=%d len=%d remote_max_frame=%u local_max_frame=%u "
         "isServer=%d fd=%d\n",
         frame->hd.type, frame->hd.stream_id, frame->hd.flags, (int)frame->hd.length, remote_max, local_max,
@@ -1911,7 +1920,8 @@ int Http2Session::onFrameRecvCallback(nghttp2_session* session,
             (int)frame->hd.length, h2->local_settings.max_frame_size);
     }
     printd(5, "onFrameRecvCallback type=%d stream_id=%d flags=%d len=%d isServer=%d fd=%d\n",
-        frame->hd.type, frame->hd.stream_id, frame->hd.flags, (int)frame->hd.length, h2->is_server, h2->sock->sock);
+        frame->hd.type, frame->hd.stream_id, frame->hd.flags, static_cast<int>(frame->hd.length), h2->is_server,
+        h2->sock->sock.load());
     if (frame->hd.type == NGHTTP2_GOAWAY) {
         printd(5, "onFrameRecvCallback GOAWAY: last_stream_id=%d error_code=%u\n",
             frame->goaway.last_stream_id, frame->goaway.error_code);
@@ -3224,7 +3234,7 @@ void Http2Session::handleAsyncReadCompletion(int32_t stream_id, const char* data
 }
 
 int Http2Session::getSocketFd() const {
-    return sock ? sock->sock : -1;
+    return sock ? sock->sock.load() : -1;
 }
 #endif
 

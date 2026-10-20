@@ -83,7 +83,8 @@ static inline bool qore_pcre2_expected_match_error(int rc) {
     retried with the interpreter, which uses heap frames bounded by PCRE2's heap limit instead.
 
     Setting QORE_PCRE2_NO_JIT=1 before the first regex operation forces the interpreter for
-    memory-checking runs. This process setting is read once and does not affect Qore's LLVM JIT.
+    memory-checking runs (see qore_pcre2_jit_enabled()). This process setting is read once and does not affect
+    Qore's LLVM JIT.
 
     @param code the compiled pattern
     @param subject the subject string

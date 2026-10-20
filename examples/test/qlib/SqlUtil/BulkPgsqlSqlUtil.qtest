@@ -15,6 +15,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}"
 %requires BulkSqlUtilTestBase
+%requires ./PgsqlTestIsolation.qm
 #/;
 %try-module pgsql
 %define NoPgsql
@@ -209,6 +210,12 @@ class PgsqlTest inherits SqlTestBase {
         set_return_value(main());
     }
 
+    globalTearDown() {
+        SqlTestBase::globalTearDown();
+        # drops the run's schema with everything left in it
+        PgsqlRunSchema::teardown();
+    }
+
     private usageIntern() {
         TestReporter::usageIntern(OptionColumn);
         printOption("-c,--conn=ARG", "set DB connection argument (ex: \"pgsql:user/pass@db\")", OptionColumn);
@@ -217,6 +224,8 @@ class PgsqlTest inherits SqlTestBase {
     Datasource getDatasource() {
         if (!m_options.connstr)
             m_options.connstr = ENV.QORE_DB_CONNSTR_PGSQL;
+        # every connection of this run uses the run's own schema
+        PgsqlRunSchema::setup(m_options.connstr, "BulkPgsqlSqlUtil");
         Datasource ds(m_options.connstr);
         if (ds.getDriverName() != "pgsql")
             throw "PGSQL-ERROR", sprintf("cannot execute the pgsql tests on a connection using driver %y", ds.getDriverName());

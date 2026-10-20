@@ -119,11 +119,6 @@ class HttpServerQuicLifecycleTest inherits QUnit::Test {
     }
 
     constructor() : Test("HttpServerQuicLifecycleTest", "1.0") {
-        @debug {
-            set_signal_handler(SIGUSR1, sub (int sig) {
-                printf("=== SIGUSR1 Thread Stacks ===\n%Y\n", get_all_thread_call_stacks());
-            });
-        }
         Logger logger("test", LoggerLevel::getLevelInfo());
         if (m_options.verbose > 2) {
             logger.addAppender(new StdoutAppender());

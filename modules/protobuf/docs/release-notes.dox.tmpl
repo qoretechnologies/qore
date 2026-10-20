@@ -6,4 +6,6 @@
 
     @section protobuf_3_0 protobuf Module Version 3.0
     - initial release
+    - the filesystem sandbox check made when a schema is loaded from a \c .proto file honors a policy barrier
+      established with \c SandboxManager::callWithSystemPolicy(), as core file access does
 */

@@ -1,0 +1,66 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+#
+# a string value was serialized to JSON as a C string, so a string with a NUL character was cut at the NUL character
+# ("a\x00b" was written as "a"); the whole string is now written, with the NUL character escaped as \u0000, and the
+# message of a JSON-RPC 1.1 error is serialized as a JSON string, so that a control character in it is escaped
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires json
+
+# make_jsonrpc11_error() is deprecated, but it is tested
+%disable-warning deprecated
+
+%exec-class JsonNulTest
+
+class JsonNulTest inherits QUnit::Test {
+    constructor() : Test("JsonNulTest", "1.0") {
+        addTestCase("make_json() and parse_json()", \makeParse());
+        addTestCase("JSON-RPC messages", \jsonRpc());
+        addTestCase("JsonStreamWriter", \streamWriter());
+        set_return_value(main());
+    }
+
+    makeParse() {
+        string v = "a\x00b";
+        assertEq("\"a\\u0000b\"", make_json(v));
+        assertEq(v, parse_json(make_json(v)));
+        assertEq(3, parse_json(make_json(v)).size());
+        hash<auto> h = {"key": v, "list": (v, "\x00", "x\x00")};
+        assertEq(h, parse_json(make_json(h)));
+        assertEq(h, parse_json(make_json(h, JGF_ADD_FORMATTING)));
+        # a string in another encoding
+        string iso = convert_encoding("café\x00x", "ISO-8859-1");
+        assertEq(convert_encoding(iso, "UTF-8"), parse_json(make_json(iso)));
+    }
+
+    jsonRpc() {
+        string msg = "line 1\nline 2\x00tail \"quoted\"";
+        hash<auto> err = parse_json(make_jsonrpc11_error(500, msg, 1, NOTHING));
+        assertEq(msg, err.error.message);
+        assertEq(500, err.error.code);
+        err = parse_json(make_jsonrpc11_error(500, msg, 1, NOTHING, JGF_ADD_FORMATTING));
+        assertEq(msg, err.error.message);
+        hash<auto> req = parse_json(make_jsonrpc_request("method", "2.0", 1, {"text": "a\x00b"}));
+        assertEq("a\x00b", req.params.text);
+        hash<auto> resp = parse_json(make_jsonrpc_response("2.0", 1, "a\x00b"));
+        assertEq("a\x00b", resp.result);
+    }
+
+    streamWriter() {
+        # the stream writer wrote the whole string before
+        StringOutputStream out();
+        JsonStreamWriter w(out);
+        w.startArray();
+        w.stringValue("a\x00b");
+        w.endArray();
+        w.flush();
+        string json = out.getData();
+        assertEq(("a\x00b",), parse_json(json));
+    }
+}

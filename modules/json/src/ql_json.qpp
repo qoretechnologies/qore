@@ -394,6 +394,18 @@ static QoreHashNode* jwt_extract_claims(const QoreHashNode* payload, ExceptionSi
 }
 
 
+// writes the version key with the version serialized as a JSON string, and the method key; the version was written
+// with sprintf() inside quotes, so that a double quote in it ended the string and the rest was written as JSON
+static int write_jsonrpc_version(QoreString& str, const std::string& version, ExceptionSink* xsink) {
+    str.sprintf("{\"%s\":", version[0] == '1' ? "version" : "jsonrpc");
+    SimpleRefHolder<QoreStringNode> vstr(new QoreStringNode(version.data(), version.size(), QCS_UTF8));
+    if (json_serialize_value(str, *vstr, -1, xsink)) {
+        return -1;
+    }
+    str.concat(",\"method\":");
+    return 0;
+}
+
 QoreStringNode* make_jsonrpc_request_args(const std::string& version, const QoreListNode* args, QoreValue id,
         unsigned offset, ExceptionSink* xsink) {
     const QoreValue p0 = get_param_value(args, offset);
@@ -403,8 +415,8 @@ QoreStringNode* make_jsonrpc_request_args(const std::string& version, const Qore
     // write version key first
     if (version == "1.0") {
         str->concat("{\"method\": ");
-    } else {
-        str->sprintf("{\"%s\":\"%s\",\"method\":", version[0] == '1' ? "version" : "jsonrpc", version.c_str());
+    } else if (write_jsonrpc_version(**str, version, xsink)) {
+        return 0;
     }
     if (json_serialize_value(**str, p0, -1, xsink)) {
         return 0;
@@ -441,8 +453,8 @@ QoreStringNode* make_jsonrpc_request(const std::string& version, const QoreListN
     // write version key first
     if (version == "1.0") {
         str->concat("{\"method\":");
-    } else {
-        str->sprintf("{\"%s\":\"%s\",\"method\":", version[0] == '1' ? "version" : "jsonrpc", version.c_str());
+    } else if (write_jsonrpc_version(**str, version, xsink)) {
+        return 0;
     }
     if (json_serialize_value(**str, p0, -1, xsink)) {
         return 0;
@@ -473,17 +485,18 @@ QoreStringNode* make_jsonrpc_request(const std::string& version, const QoreListN
 }
 
 
-// for JSON-RPC 1.1, version_name = "version"; for 2.0, version_name = "jsonrpc"
+// for JSON-RPC 1.1, version_name = "version"; for 2.0, version_name = "jsonrpc"; the version is written whole: it was
+// passed as a C string and cut at a NUL character
 static QoreStringNode* make_jsonrpc_request(const QoreStringNode* method_name, const char* version_name,
-        const char* version, QoreValue id, QoreValue request_msg, int format, ExceptionSink* xsink) {
+        const QoreString* version, QoreValue id, QoreValue request_msg, int format, ExceptionSink* xsink) {
     QoreStringNodeHolder str(new QoreStringNode(QCS_UTF8));
 
     bool fmt = format & JGF_ADD_FORMATTING;
 
     // write version key first if present
-    if (version && *version) {
+    if (version && !version->empty()) {
         str->sprintf("{%s\"%s\":", fmt ? "\n  " : "", version_name);
-        SimpleRefHolder<QoreStringNode> vstr(new QoreStringNode(version, QCS_UTF8));
+        SimpleRefHolder<QoreStringNode> vstr(new QoreStringNode(*version));
         if (json_serialize_value(**str, *vstr, fmt ? 2 : -1, xsink)) {
             return nullptr;
         }
@@ -504,7 +517,9 @@ static QoreStringNode* make_jsonrpc_request(const QoreStringNode* method_name, c
         }
     }
 
-    if (!request_msg.isNullOrNothing() || (strcmp(version, "2.0"))) {
+    // there is no version for JSON-RPC 1.0, which always has a params key; strcmp() was called with a null version
+    // for it, which crashed when there were no params
+    if (!request_msg.isNullOrNothing() || !version || *version != "2.0") {
         // params key should come last
         str->sprintf(",%s\"params\":", fmt ? "\n  " : "");
         if (json_serialize_value(**str, request_msg, fmt ? 2 : -1, xsink)) {
@@ -516,17 +531,18 @@ static QoreStringNode* make_jsonrpc_request(const QoreStringNode* method_name, c
     return str.release();
 }
 
-// for JSON-RPC 1.1, version_name = "version"; for 2.0, version_name = "jsonrpc"
-static QoreStringNode* make_jsonrpc_response(ExceptionSink* xsink, const char* version_name, const char* version,
-        QoreValue id, QoreValue msg, const char* type = "result", int format = 0) {
+// for JSON-RPC 1.1, version_name = "version"; for 2.0, version_name = "jsonrpc"; the version is written whole: it was
+// passed as a C string and cut at a NUL character
+static QoreStringNode* make_jsonrpc_response(ExceptionSink* xsink, const char* version_name,
+        const QoreString* version, QoreValue id, QoreValue msg, const char* type = "result", int format = 0) {
     QoreStringNodeHolder str(new QoreStringNode(QCS_UTF8));
 
     bool fmt = format & JGF_ADD_FORMATTING;
 
     // write version key first if present
-    if (version && *version) {
+    if (version && !version->empty()) {
         str->sprintf("{%s\"%s\":", fmt ? "\n  " : "", version_name);
-        SimpleRefHolder<QoreStringNode> vstr(new QoreStringNode(version, QCS_UTF8));
+        SimpleRefHolder<QoreStringNode> vstr(new QoreStringNode(*version));
         if (json_serialize_value(**str, *vstr, fmt ? 2 : -1, xsink)) {
             return nullptr;
         }
@@ -583,17 +599,16 @@ static QoreStringNode* make_jsonrpc11_error(int64 code, const QoreStringNode* er
     }
 
     if (fmt) {
-        str->sprintf("\"error\":\n  {\n    \"name\": \"JSONRPCError\",\n    \"code\": %d,\n    \"message\": \"",
-            (int)code);
+        str->sprintf("\"error\":\n  {\n    \"name\": \"JSONRPCError\",\n    \"code\": %d,\n    \"message\": ",
+            static_cast<int>(code));
     } else {
-        str->sprintf("\"error\":{\"name\":\"JSONRPCError\",\"code\":%d,\"message\":\"", (int)code);
+        str->sprintf("\"error\":{\"name\":\"JSONRPCError\",\"code\":%d,\"message\":", static_cast<int>(code));
     }
-    // concat here so character encodings can be automatically converted if necessary
-    str->concatEscape(error, '"', '\\', xsink);
-    if (*xsink)
+    // the message is serialized as a JSON string: only double quotes and backslashes were escaped, so a control
+    // character such as a line break was written as it is, which is not valid in a JSON string
+    if (json_serialize_value(**str, error, fmt ? 4 : -1, xsink)) {
         return nullptr;
-
-    str->concat('\"');
+    }
 
     // get optional "error" value
     if (!error_msg.isNullOrNothing()) {
@@ -693,6 +708,7 @@ string makeFormattedJSONString(auto data, *string encoding) [flags=RET_VALUE_ONL
 
     @throw JSON-PARSE-ERROR syntax error parsing JSON string
     @throw STACK-LIMIT-EXCEEDED the data is nested too deeply for the thread's stack
+    @throw HASH-KEY-ERROR a key has a NUL character, which a hash key cannot contain
 
     @par Example:
     @code auto data = parse_json(json); @endcode
@@ -763,7 +779,7 @@ string make_jsonrpc_request(string method_name, auto version, auto id, auto requ
         if (*xsink)
             return QoreValue();
         if (**vstr != "1.0")
-            return make_jsonrpc_request(method_name, (**vstr)[0] == '1' ? "version" : "jsonrpc", vstr->c_str(), id,
+            return make_jsonrpc_request(method_name, (**vstr)[0] == '1' ? "version" : "jsonrpc", *vstr, id,
                 request_msg, format, xsink);
     }
 
@@ -796,7 +812,7 @@ string makeJSONRPCRequestString(string method_name, auto version, auto id, auto 
             return QoreValue();
 
         if (**vstr != "1.0")
-            return make_jsonrpc_request(method_name, (**vstr)[0] == '1' ? "version" : "jsonrpc", vstr->c_str(), id, request_msg, JGF_NONE, xsink);
+            return make_jsonrpc_request(method_name, (**vstr)[0] == '1' ? "version" : "jsonrpc", *vstr, id, request_msg, JGF_NONE, xsink);
     }
 
     return make_jsonrpc_request(method_name, nullptr, nullptr, id, request_msg, JGF_NONE, xsink);
@@ -828,7 +844,7 @@ string makeFormattedJSONRPCRequestString(string method_name, auto version, auto 
             return QoreValue();
 
         if (**vstr != "1.0")
-            return make_jsonrpc_request(method_name, (**vstr)[0] == '1' ? "version" : "jsonrpc", vstr->c_str(), id, request_msg, JGF_ADD_FORMATTING, xsink);
+            return make_jsonrpc_request(method_name, (**vstr)[0] == '1' ? "version" : "jsonrpc", *vstr, id, request_msg, JGF_ADD_FORMATTING, xsink);
     }
 
     return make_jsonrpc_request(method_name, nullptr, nullptr, id, request_msg, JGF_ADD_FORMATTING, xsink);
@@ -864,7 +880,7 @@ string make_jsonrpc_response(auto version, auto id, auto response_msg, *int form
             return QoreValue();
 
         if (**vstr != "1.0")
-            return make_jsonrpc_response(xsink, (**vstr)[0] == '1' ? "version" : "jsonrpc", vstr->c_str(), id, response_msg, "result", format);
+            return make_jsonrpc_response(xsink, (**vstr)[0] == '1' ? "version" : "jsonrpc", *vstr, id, response_msg, "result", format);
     }
 
     return make_jsonrpc_response(xsink, nullptr, nullptr, id, response_msg, "result", format);
@@ -894,7 +910,7 @@ string makeJSONRPCResponseString(auto version, auto id, auto response_msg) [flag
             return QoreValue();
 
         if (**vstr != "1.0")
-            return make_jsonrpc_response(xsink, (**vstr)[0] == '1' ? "version" : "jsonrpc", vstr->c_str(), id, response_msg, "result", 0);
+            return make_jsonrpc_response(xsink, (**vstr)[0] == '1' ? "version" : "jsonrpc", *vstr, id, response_msg, "result", 0);
     }
 
     return make_jsonrpc_response(xsink, nullptr, nullptr, id, response_msg, "result", 0);
@@ -924,7 +940,7 @@ string makeFormattedJSONRPCResponseString(auto version, auto id, auto response_m
             return QoreValue();
 
         if (**vstr != "1.0")
-            return make_jsonrpc_response(xsink, (**vstr)[0] == '1' ? "version" : "jsonrpc", vstr->c_str(), id, response_msg, "result", JGF_ADD_FORMATTING);
+            return make_jsonrpc_response(xsink, (**vstr)[0] == '1' ? "version" : "jsonrpc", *vstr, id, response_msg, "result", JGF_ADD_FORMATTING);
     }
 
     return make_jsonrpc_response(xsink, nullptr, nullptr, id, response_msg, "result", JGF_ADD_FORMATTING);
@@ -960,7 +976,7 @@ string make_jsonrpc_error(auto version, auto id, auto error_msg, *int format) [f
             return QoreValue();
 
         if (**vstr != "1.0")
-            return make_jsonrpc_response(xsink, (**vstr)[0] == '1' ? "version" : "jsonrpc", vstr->c_str(), id, error_msg, "error", format);
+            return make_jsonrpc_response(xsink, (**vstr)[0] == '1' ? "version" : "jsonrpc", *vstr, id, error_msg, "error", format);
     }
 
     return make_jsonrpc_response(xsink, nullptr, nullptr, id, error_msg, "error", format);
@@ -990,7 +1006,7 @@ string makeJSONRPCErrorString(auto version, auto id, auto error_msg) [flags=RET_
             return QoreValue();
 
         if (**vstr != "1.0")
-            return make_jsonrpc_response(xsink, (**vstr)[0] == '1' ? "version" : "jsonrpc", vstr->c_str(), id, error_msg, "error", 0);
+            return make_jsonrpc_response(xsink, (**vstr)[0] == '1' ? "version" : "jsonrpc", *vstr, id, error_msg, "error", 0);
     }
 
     return make_jsonrpc_response(xsink, nullptr, nullptr, id, error_msg, "error", 0);
@@ -1020,7 +1036,7 @@ string makeFormattedJSONRPCErrorString(auto version, auto id, auto error_msg) [f
             return QoreValue();
 
         if (**vstr != "1.0")
-            return make_jsonrpc_response(xsink, (**vstr)[0] == '1' ? "version" : "jsonrpc", vstr->c_str(), id, error_msg, "error", JGF_ADD_FORMATTING);
+            return make_jsonrpc_response(xsink, (**vstr)[0] == '1' ? "version" : "jsonrpc", *vstr, id, error_msg, "error", JGF_ADD_FORMATTING);
     }
 
     return make_jsonrpc_response(xsink, nullptr, nullptr, id, error_msg, "error", JGF_ADD_FORMATTING);
@@ -1114,7 +1130,7 @@ namespace Qore::Json;
 
     @return the value at the specified location, or NOTHING if not found
 
-    @throw JSON-POINTER-ERROR invalid pointer format or array index
+    @throw JSON-POINTER-ERROR invalid pointer format or array index, or the pointer has a NUL character
 
     @note This function follows RFC 6901 for JSON Pointer syntax:
     - Pointers must start with "/" or be empty (empty returns the root)
@@ -1130,6 +1146,12 @@ auto json_pointer_get(auto data, string pointer) [flags=RET_VALUE_ONLY,NAMED_ARG
     }
 
     const char* p = pointer->c_str();
+    // the pointer is read as a C string; a NUL character would end it and name another value
+    if (strlen(p) != pointer->size()) {
+        xsink->raiseException("JSON-POINTER-ERROR", "JSON Pointer has a NUL character at byte offset %zu; a hash "
+            "key cannot contain a NUL character", strlen(p));
+        return QoreValue();
+    }
     if (*p != '/') {
         xsink->raiseException("JSON-POINTER-ERROR", "JSON Pointer must start with '/' or be empty; got: %s",
             pointer->c_str());
@@ -1208,7 +1230,7 @@ auto json_pointer_get(auto data, string pointer) [flags=RET_VALUE_ONLY,NAMED_ARG
 
     @return True if a value exists at the location (even if the value is NOTHING), False otherwise
 
-    @throw JSON-POINTER-ERROR invalid pointer format
+    @throw JSON-POINTER-ERROR invalid pointer format, or the pointer has a NUL character
 
     @since json 1.10
 */
@@ -1218,6 +1240,12 @@ bool json_pointer_exists(auto data, string pointer) [flags=RET_VALUE_ONLY,NAMED_
     }
 
     const char* p = pointer->c_str();
+    // the pointer is read as a C string; a NUL character would end it and name another value
+    if (strlen(p) != pointer->size()) {
+        xsink->raiseException("JSON-POINTER-ERROR", "JSON Pointer has a NUL character at byte offset %zu; a hash "
+            "key cannot contain a NUL character", strlen(p));
+        return QoreValue();
+    }
     if (*p != '/') {
         xsink->raiseException("JSON-POINTER-ERROR", "JSON Pointer must start with '/' or be empty; got: %s",
             pointer->c_str());

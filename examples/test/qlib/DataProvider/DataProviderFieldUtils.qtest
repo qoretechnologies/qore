@@ -40,6 +40,7 @@ class DataProviderFieldUtilsTest inherits QUnit::Test {
         addTestCase("parseFieldList - comma-separated string", \parseFieldListString());
         addTestCase("parseFieldList - list of strings", \parseFieldListList());
         addTestCase("parseFieldList - mixed list with commas", \parseFieldListMixed());
+        addTestCase("getFieldListOption - the string given or the checked value", \getFieldListOptionTest());
         addTestCase("parseFieldList - empty/whitespace handling", \parseFieldListEmpty());
         addTestCase("parseFieldList - single value", \parseFieldListSingle());
         addTestCase("parseFieldList - non-string input", \parseFieldListNonString());
@@ -76,6 +77,8 @@ class DataProviderFieldUtilsTest inherits QUnit::Test {
         addTestCase("select-fields - output names of field paths", \selectFieldsOutputNamesTest());
         addTestCase("group-by - output names of field paths", \groupByOutputNamesTest());
         addTestCase("field options - wildcards are refused", \fieldOptionWildcardTest());
+        addTestCase("pushdown split - field references the provider names", \pushdownFieldReferenceTest());
+        addTestCase("getFieldPathName - a path in a query language", \fieldPathNameTest());
 
         # Processor backward compatibility tests
         addTestCase("RemoveFieldsProcessor - string compat", \removeFieldsStringCompat());
@@ -93,6 +96,7 @@ class DataProviderFieldUtilsTest inherits QUnit::Test {
 
         # Analytics processor tests
         addTestCase("AbstractAnalyticsProcessor - list fields", \analyticsListFields());
+        addTestCase("analytics events - fields are named by their paths as given", \analyticsEventFieldPaths());
 
         set_return_value(main());
     }
@@ -110,9 +114,43 @@ class DataProviderFieldUtilsTest inherits QUnit::Test {
     }
 
     parseFieldListMixed() {
-        # list elements can themselves contain commas
-        list<string> result = AbstractDataProvider::parseFieldList(("a,b", "c"));
-        assertEq(("a", "b", "c"), result);
+        # each list element is one field, as it is given: a field name can have a comma
+        assertEq(("a,b", "c"), AbstractDataProvider::parseFieldList(("a,b", "c")));
+        assertEq(("Price, USD", "id"), AbstractDataProvider::parseFieldList(("Price, USD", "id")));
+        assertEq((" padded ",), AbstractDataProvider::parseFieldList((" padded ",)));
+        # empty elements and elements that are not strings are skipped
+        assertEq(("a",), AbstractDataProvider::parseFieldList(("", "a", 1)));
+        # a single string is still a comma-separated list
+        assertEq(("Price", "USD"), AbstractDataProvider::parseFieldList("Price, USD"));
+
+        # the processors read such a field as one key
+        hash<auto> rec = {"Price, USD": 2.5, "id": 1};
+        QoreRemoveFieldsProcessor rem({"fields": ("Price, USD",)});
+        assertEq({"id": 1}, rem.processRecord(rec));
+        QoreSelectFieldsProcessor sel({"fields": ("Price, USD",)});
+        assertEq({"Price, USD": 2.5}, sel.processRecord(rec));
+        QoreGroupByProcessor grp({"group_by": ("Price, USD",), "aggregates": "count()"});
+        grp.processRecord(rec);
+        assertEq(({"Price, USD": 2.5, "count": 1},), grp.flushRecords());
+    }
+
+    getFieldListOptionTest() {
+        # a single string is returned as it was given, not as the list of one string that the option type makes it
+        assertEq("Price, USD", AbstractDataProvider::getFieldListOption({"fields": "Price, USD"},
+            {"fields": ("Price, USD",)}, "fields"));
+        assertEq(("Price", "USD"), AbstractDataProvider::parseFieldList(
+            AbstractDataProvider::getFieldListOption({"fields": "Price, USD"}, {"fields": ("Price, USD",)}, "fields")));
+        # a list is returned as it was checked, and each element is one field
+        assertEq(("Price, USD",), AbstractDataProvider::getFieldListOption({"fields": ("Price, USD",)},
+            {"fields": ("Price, USD",)}, "fields"));
+        assertEq(("Price, USD",), AbstractDataProvider::parseFieldList(
+            AbstractDataProvider::getFieldListOption({"fields": ("Price, USD",)}, {"fields": ("Price, USD",)},
+                "fields")));
+        # an option that was not given is its checked value, such as its default
+        assertEq(("id",), AbstractDataProvider::getFieldListOption({"other": "x"}, {"fields": ("id",)}, "fields"));
+        # no options give no value
+        assertEq(NOTHING, AbstractDataProvider::getFieldListOption(NOTHING, NOTHING, "fields"));
+        assertEq(NOTHING, AbstractDataProvider::getFieldListOption({"fields": "a"}, NOTHING, "other"));
     }
 
     parseFieldListEmpty() {
@@ -562,6 +600,87 @@ class DataProviderFieldUtilsTest inherits QUnit::Test {
             "give the output field \"sum_Unit.Price\"", sub () {
                 new QoreGroupByProcessor({"aggregates": "sum(Unit\\.Price),sum(Unit.Price)"});
             });
+    }
+
+    #! A field path is written with the separator of a query language, never as its escaped text
+    fieldPathNameTest() {
+        # one key is the key itself, without the escapes of the path
+        assertEq("price", AbstractDataProvider::getFieldPathName("price"));
+        assertEq("a\\b", AbstractDataProvider::getFieldPathName("a\\\\b"));
+        # the keys of a path are joined with the separator of the language
+        assertEq("order.id", AbstractDataProvider::getFieldPathName("order.id"));
+        assertEq("order/id", AbstractDataProvider::getFieldPathName("order.id", "/"));
+        assertEq("order/Unit.Price", AbstractDataProvider::getFieldPathName("order.Unit\\.Price", "/"));
+        # a key with the separator cannot be written in the language
+        assertNothing(AbstractDataProvider::getFieldPathName("Unit\\.Price"));
+        assertNothing(AbstractDataProvider::getFieldPathName("order.Unit\\.Price"));
+        assertNothing(AbstractDataProvider::getFieldPathName("a/b.c", "/"));
+        # the keys already read are used as they are
+        assertEq("x.y", AbstractDataProvider::getFieldPathName("ignored", ".", ("x", "y")));
+        assertNothing(AbstractDataProvider::getFieldPathName("ignored", ".", ("x.y",)));
+        # every key of a path round-trips through its escaped form
+        list<list<string>> paths = (("a.b", "c"), ("a\\", "b"), ("\\.", "x"), ("p", "q\\r"));
+        foreach list<string> path in (paths) {
+            string field = (foldl $1 + "." + $2, (map AbstractDataProvider::escapeFieldPathKey($1), path));
+            assertEq(path.join("/"), AbstractDataProvider::getFieldPathName(field, "/"), field);
+        }
+    }
+
+    #! A provider names the field references it can push down; an expression with any other is evaluated client-side
+    pushdownFieldReferenceTest() {
+        hash<auto> expmap = {
+            DP_SEARCH_OP_EQ: {"code": sub () {}},
+            DP_SEARCH_OP_GT: {"code": sub () {}},
+            DP_OP_AND: {"code": sub () {}},
+        };
+        # one key without a dot is pushed down, as the key
+        code column = *hash<DataProviderFieldReference> sub (hash<DataProviderFieldReference> ref) {
+            list<string> path = AbstractDataProvider::getFieldPath(ref.field);
+            return path.size() == 1 && path[0].find(".") < 0
+                ? <DataProviderFieldReference>{"field": path[0]}
+                : NOTHING;
+        };
+        hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression('@"p\\\\q" == 1 && @a.b > 2 && @x > 1');
+        hash<auto> split = AbstractDataProvider::splitPushdownableExpression(exp, expmap, column);
+        assertEq(("p\\q", "x"), (map $1.args[0].field, split.pushdown.args));
+        assertEq("a.b", split.client.args[0].field);
+        # without the closure, everything is pushed down as it is
+        split = AbstractDataProvider::splitPushdownableExpression(exp, expmap);
+        assertEq(exp, split.pushdown);
+        assertNothing(split.client);
+
+        # a field reference that is the only condition of a part is kept in an expression, so that the part is never
+        # read as a provider's own where hash ({"field": "flag"} would be the column "field" with the value "flag")
+        split = AbstractDataProvider::splitPushdownableExpression(
+            DataProvider::parseDpqlExpression('@flag && @a.b > 2'), expmap, column);
+        assertEq(<DataProviderExpression>{"exp": DP_OP_AND, "args": (<DataProviderFieldReference>{"field": "flag"},)},
+            split.pushdown);
+        assertEq(DP_SEARCH_OP_GT, split.client.exp);
+        split = AbstractDataProvider::splitPushdownableExpression(
+            DataProvider::parseDpqlExpression('@a.b && @x > 1'), expmap, column);
+        assertEq(DP_SEARCH_OP_GT, split.pushdown.exp);
+        assertEq(<DataProviderExpression>{"exp": DP_OP_AND, "args": (<DataProviderFieldReference>{"field": "a.b"},)},
+            split.client);
+        # a part of one condition that is an expression is given as it is
+        split = AbstractDataProvider::splitPushdownableExpression(
+            DataProvider::parseDpqlExpression('@x > 1 && @a.b > 2'), expmap, column);
+        assertEq(DP_SEARCH_OP_GT, split.pushdown.exp);
+        assertEq("a.b", split.client.args[0].field);
+
+        # the field references of an expression are replaced
+        hash<DataProviderExpression> translated = AbstractDataProvider::translateFieldReferences(
+            DataProvider::parseDpqlExpression('@"Unit\.Price" > 1 && (@"p\\\\q" == 2)'),
+            hash<DataProviderFieldReference> sub (hash<DataProviderFieldReference> ref) {
+                return <DataProviderFieldReference>{"field": AbstractDataProvider::getFieldPath(ref.field)[0]};
+            });
+        assertEq("Unit.Price", translated.args[0].args[0].field);
+        assertEq("p\\q", translated.args[1].args[0].field);
+
+        # a closure that gives no field reference is an error, not an expression with no field
+        assertThrows("FIELD-REFERENCE-ERROR", "no field reference was given for the field \"a.b\"", sub () {
+            AbstractDataProvider::translateFieldReferences(DataProvider::parseDpqlExpression('@x == 1 && @a.b == 2'),
+                column);
+        });
     }
 
     #! A field option names one field by its path; a DPQL wildcard in it is refused when the processor is created
@@ -1014,5 +1133,63 @@ class DataProviderFieldUtilsTest inherits QUnit::Test {
         # should get 2 events (one per field)
         assertEq(2, results.lsize());
         assertEq("statistics", results[0].event_type);
+    }
+
+    analyticsEventFieldPaths() {
+        # the key "Unit.Price" and the key "id" of the key "order"
+        list<hash<auto>> recs = (
+            {"Unit.Price": 1.5, "order": {"id": 10.0}},
+            {"Unit.Price": 2.5, "order": {"id": 30.0}},
+            {"Unit.Price": 4.5, "order": {"id": 20.0}},
+        );
+
+        # an analytics event names its field by the path given in the "fields" option, escaped as written
+        QoreRunningStatsProcessor stats({"fields": ("Unit\\.Price", "order.id"), "window_size": 2});
+        list<auto> events;
+        foreach hash<auto> rec in (recs[0..1]) {
+            DataProviderFieldUtilsTest::collectResult(\events, stats.processRecord(rec));
+        }
+        assertEq(("Unit\\.Price", "order.id"), (map $1.field, events));
+        # the values were read at the paths
+        assertEq((2.0, 20.0), (map $1.avg, events));
+        # the path given back reads the same field, and its display name is its keys joined with dots
+        assertEq(2.5, AbstractDataProvider::getFieldValue(recs[1], events[0].field));
+        assertEq(30.0, AbstractDataProvider::getFieldValue(recs[1], events[1].field));
+        assertEq(("Unit.Price", "order.id"), (map AbstractDataProvider::getFieldPathDisplayName($1.field), events));
+        QoreRunningStatsProcessor again({"fields": (map $1.field, events), "window_size": 2});
+        list<auto> again_events;
+        foreach hash<auto> rec in (recs[0..1]) {
+            DataProviderFieldUtilsTest::collectResult(\again_events, again.processRecord(rec));
+        }
+        assertEq(("Unit\\.Price", "order.id"), (map $1.field, again_events));
+        assertEq((2.0, 20.0), (map $1.avg, again_events));
+
+        # correlation: the pairs and both levels of the matrix are keyed by the paths as given
+        QoreCorrelationProcessor corr({"fields": ("Unit\\.Price", "order.id"), "window_size": 3});
+        list<auto> corr_events;
+        foreach hash<auto> rec in (recs) {
+            DataProviderFieldUtilsTest::collectResult(\corr_events, corr.processRecord(rec));
+        }
+        assertEq(1, corr_events.lsize());
+        hash<auto> ev = corr_events[0];
+        assertEq(3, ev.count);
+        assertEq(("Unit\\.Price_order.id",), keys ev.correlations);
+        assertEq(("Unit\\.Price", "order.id"), keys ev.matrix);
+        assertEq(("Unit\\.Price", "order.id"), keys ev.matrix{"order.id"});
+        assertEq(1.0, ev.matrix{"Unit\\.Price"}{"Unit\\.Price"});
+        assertEq(ev.correlations{"Unit\\.Price_order.id"}, ev.matrix{"Unit\\.Price"}{"order.id"});
+        # 1.5, 2.5, 4.5 against 10, 30, 20: the values were read at the paths
+        assertEq(True, abs(ev.matrix{"Unit\\.Price"}{"order.id"} - 0.3273268353539886) < 0.000001);
+
+        # cross-correlation: field_x and field_y are the paths given in those options
+        QoreCrossCorrelationProcessor xcorr({"field_x": "Unit\\.Price", "field_y": "order.id", "window_size": 3});
+        list<auto> xcorr_events;
+        foreach hash<auto> rec in (recs) {
+            DataProviderFieldUtilsTest::collectResult(\xcorr_events, xcorr.processRecord(rec));
+        }
+        assertEq(1, xcorr_events.lsize());
+        assertEq("Unit\\.Price", xcorr_events[0].field_x);
+        assertEq("order.id", xcorr_events[0].field_y);
+        assertEq(3, xcorr_events[0].count);
     }
 }

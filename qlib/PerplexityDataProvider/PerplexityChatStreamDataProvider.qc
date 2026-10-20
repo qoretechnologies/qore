@@ -22,9 +22,6 @@
     DEALINGS IN THE SOFTWARE.
 */
 
-# for parsing stream events
-%requires json
-
 #! contains all public definitions in the PerplexityDataProvider module
 public namespace PerplexityDataProvider {
 #! Chat stream event constant

@@ -90,6 +90,25 @@ module MysqlSqlUtil {
     where a trigger will set a default value for a column when a NULL is inserted, MySQL will raise an error if there is a NOT NULL
     constraint on the column.
 
+    @subsection mysql_alignment_limits Table Alignment Limits on MySQL
+
+    MySQL needs an index on the columns of every foreign constraint, and creates one, with the name of the
+    foreign constraint, for a foreign constraint whose columns have none.  Table alignment
+    (@ref SqlUtil::AbstractTable::getAlignSql() "AbstractTable::getAlignSql()") keeps such an index as the index of
+    its foreign constraint, and drops any other index that the template does not have, with these consequences:
+    - an index with another name than its foreign constraint that the template does not have is dropped, and MySQL
+      refuses to drop it while it is the only index on the columns of a foreign constraint that the template keeps
+      (error 1553: <em>Cannot drop index '...': needed in a foreign key constraint</em>); add the index to the
+      template, or give the template another index on the columns of the foreign constraint
+    - MySQL does not drop the index that it created for a foreign constraint when the foreign constraint is dropped:
+      the alignment that drops a foreign constraint that the template does not have keeps its index, and the next
+      alignment drops it as an index that the template does not have
+    - MySQL cannot rename a foreign constraint: a foreign constraint with the definition of the template's under
+      another name is kept under its name, as the template's, and is never dropped and added again (see
+      @ref SqlUtil::AbstractConstraint::supportsRename() "AbstractConstraint::supportsRename()")
+    - an index and a unique constraint, which is a unique index in MySQL, are renamed with \c RENAME \c INDEX, which
+      needs MySQL 5.7 or MariaDB 10.5.2 or later
+
     @subsection mysql_partitioning_select Partition Support in Selects
 
     %MysqlSqlUtil advertises @ref SqlUtil::AbstractTable::supportsPartitionRead() "supportsPartitionRead()" and
@@ -108,6 +127,21 @@ module MysqlSqlUtil {
       @ref SqlUtil::AbstractDatabase::createTempTable() "AbstractDatabase::createTempTable()"
     - fixed numeric column comparison; an assignment was used in place of a comparison, so comparing two numeric
       columns overwrote the \c unsigned attribute of the column being compared and returned the wrong result
+    - fixed the first value of an emulated sequence (see @ref SqlUtil::AbstractDatabase::getNextSequenceValue()
+      "AbstractDatabase::getNextSequenceValue()"), which was its start value plus 1; it is now its start value, as with
+      a database sequence; a sequence that exists continues from its current value
+    - fixed table alignment of a unique index with other columns, which dropped the index, dropped it again, created
+      it and added its unique constraint, an index of the same name, again, so the alignment failed: a unique
+      constraint is its index on MySQL, so the index is now dropped once and created once, and only the foreign
+      constraints that reference it are dropped and added again around it
+    - fixed renaming a unique constraint or an index, which dropped it and added it under the new name, so that a
+      unique constraint that a foreign constraint references could not be renamed: both are renamed with
+      \c RENAME \c INDEX, which needs MySQL 5.7 or MariaDB 10.5.2 or later; MySQL cannot rename a foreign
+      constraint, which was dropped and added again, so table alignment keeps a foreign constraint with the
+      definition of the template's under another name under its name (see
+      @ref SqlUtil::AbstractConstraint::supportsRename() "AbstractConstraint::supportsRename()")
+    - fixed renaming a trigger, which gave \c ALTER \c TRIGGER, which MySQL does not have: MySQL cannot rename a
+      trigger, so it is dropped and created under the new name
 
     @subsection mysqlsqlutilv15 MysqlSqlUtil v1.5
     - fixed case-sensitive regular-expression matching on MySQL 8.0.22+ and current MySQL releases by using an
@@ -277,9 +311,11 @@ public namespace MysqlSqlUtil {
             return t1 == t2;
         }
 
-        #! returns a string that can be used to rename the index in the database; hwoever mysql does not support renaming indexes, so the index is dropped and recreated :(
-        string getRenameSql(string table_name, string new_name) {
-            return sprintf("alter table %s drop index %s, add %sindex %s (%s)", table_name, name, unique ? "unique " : "", new_name, (foldl $1 + ", " + $2, columns.getSqlColumnNameIterator()));
+        #! returns the SQL statement that renames the index in the database
+        /** The index is renamed with \c RENAME \c INDEX, which needs MySQL 5.7 or MariaDB 10.5.2 or later
+        */
+        softlist<string> getRenameSql(string table_name, string new_name) {
+            return sprintf("alter table %s rename index %s to %s", table_name, name, new_name);
         }
 
         #! returns a string that can be used to drop the index from the table
@@ -297,9 +333,22 @@ public namespace MysqlSqlUtil {
             return getCreateSql(name, table_name, opt);
         }
 
-        #! returns a string that drops the constraint and re-adds it, since MySQL does not support renaming constraints
+        #! returns no SQL: MySQL cannot rename a foreign constraint
+        /** A foreign constraint is never dropped and added again under another name; see @ref supportsRename()
+        */
         softlist getRenameSql(string table_name, string new_name) {
-            return getDropSql(table_name) + ", " + getAddSql(new_name, table_name);
+            return ();
+        }
+
+        #! returns @ref False "False": MySQL cannot rename a foreign constraint
+        /** Table alignment takes a foreign constraint with the definition of the template's under another name for
+            the template's, and keeps it under its name in the database; see
+            @ref SqlUtil::AbstractConstraint::supportsRename() "AbstractConstraint::supportsRename()"
+
+            @since MysqlSqlUtil 1.6
+        */
+        bool supportsRename() {
+            return False;
         }
 
         string getCreateSql(string name, string table_name, *hash opt) {
@@ -540,12 +589,12 @@ auto v = c.name;
             return getCreateSql(name, table_name, opts);
         }
 
+        #! returns the SQL that renames the constraint
+        /** A unique constraint in MySQL is its unique index, which is renamed with \c RENAME \c INDEX, which needs
+            MySQL 5.7 or MariaDB 10.5.2 or later, so that the foreign constraints that reference it are kept
+        */
         list getRenameSql(string table_name, string new_name) {
-            # the following is only valid with MySQL 9.2+
-            #return sprintf("alter table %s rename constraint %s to %s", table_name, name, new_name);
-            list l += getDropSql(table_name);
-            l += getCreateSql(new_name, table_name);
-            return l;
+            return (sprintf("alter table %s rename index %s to %s", table_name, name, new_name),);
         }
 
         string getCreateSql(string name, string table_name, *hash opts) {
@@ -557,6 +606,25 @@ auto v = c.name;
         #! returns a string that can be used to drop the constraint from the database
         string getDropSql(string table_name) {
             return sprintf("alter table %s drop index %s", table_name, name);
+        }
+
+        #! returns the SQL that disables and re-enables the foreign constraints that reference the constraint
+        /** A unique constraint in MySQL is its unique index, so recreating the index recreates the constraint: the
+            constraint is not dropped and added again around the recreation of its index, which dropped the index a
+            second time and added it again after it was created; only the foreign constraints that reference it are
+            disabled and re-enabled
+
+            @param ds the datasource of the tables of the foreign constraints
+            @param table_name this argument is ignored
+            @param opts options for the SQL that re-enables the foreign constraints
+
+            @return a hash with a \c disable key, giving a list of SQL strings that disable the foreign constraints
+            that reference this constraint, and an \c enable key, giving a list of SQL strings that re-enable them
+
+            @since MysqlSqlUtil 1.6
+        */
+        hash<auto> getDisableReenableSql(AbstractDatasource ds, string table_name, *hash<auto> opts) {
+            return getSourceConstraintDisableReenableSql(ds, opts);
         }
     }
 
@@ -633,9 +701,17 @@ auto v = c.name;
             return True;
         }
 
-        #! returns a string that can be used to rename the trigger in the database
+        #! returns the SQL that renames the trigger: MySQL cannot rename a trigger, so it is dropped and created under the
+        #! new name
+        /** A trigger is only its definition, which is created again unchanged under the new name
+
+            @param table_name the name of the table
+            @param new_name the new name of the trigger
+
+            @return the SQL statements that drop the trigger and create it under the new name
+        */
         softlist getRenameSql(string table_name, string new_name) {
-            return sprintf("alter trigger %s on %s rename to %s", name, table_name, new_name);
+            return (getDropSql(table_name)[0], sprintf("create trigger %s %s", new_name, src));
         }
     }
 
@@ -684,8 +760,12 @@ auto v = c.name;
         }
 
         #! returns a string that can be used to create the sequence in the database
+        /** The sequence table holds the last value issued for each sequence, and the sequence function adds 1 to it
+            and returns the result, so a new sequence holds the value before its start value: its first value is its
+            start value, as with a database sequence
+        */
         string getCreateSql(*hash opt) {
-            return sprintf("insert into %s (name, id) values ('%s', %d)", table_name, name, start);
+            return sprintf("insert into %s (name, id) values ('%s', %d)", table_name, name, start - 1);
         }
 
         #! returns a string that can be used to rename the sequence in the database

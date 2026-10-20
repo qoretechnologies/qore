@@ -36,7 +36,7 @@ public class QdpShutdownTest inherits QUnit::Test {
     }
 
     private string getQoreBinary() {
-        return getenv("QORE_BINARY") ?? "qore";
+        return ENV.QORE_EXECUTABLE ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
     }
 
     #! Runs qdp with the marker module loaded and returns the return code and whether the marker was written

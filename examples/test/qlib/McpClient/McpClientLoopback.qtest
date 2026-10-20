@@ -15,6 +15,20 @@
 %requires McpClient
 %exec-class McpClientLoopbackTest
 
+#! Gives access to the result cache of the client
+class CacheProbeClient inherits McpClient::McpClient {
+    constructor(string url) : McpClient(url) {
+    }
+
+    cache(string method, *hash<auto> params, hash<auto> result) {
+        cacheResult(method, params, result);
+    }
+
+    *hash<auto> cached(string method, *hash<auto> params) {
+        return getCachedResult(method, params);
+    }
+}
+
 class LoopbackHandler inherits McpServerHandler {
     public {
         #! The user interface document served for "ui://loopback/panel"
@@ -620,6 +634,15 @@ public class McpClientLoopbackTest inherits QUnit::Test {
         list<auto> first = c.listTools();
         list<auto> second = c.listTools();
         assertEq(first, second, "a cached list result matches the original");
+
+        # each request is cached by its parameters as well as by its method
+        CacheProbeClient probe(dual_url);
+        on_exit probe.close();
+        probe.cache("tools/list", {"cursor": "a"}, {"tools": ("a",), "ttlMs": 60000});
+        assertEq(("a",), probe.cached("tools/list", {"cursor": "a"}).tools);
+        assertNothing(probe.cached("tools/list", {"cursor": "b"}),
+            "a result cached for other parameters is not returned");
+        assertNothing(probe.cached("tools/list"), "a result cached with parameters is not returned without them");
 
         # a cache is only useful if it can be dropped when a listChanged notification arrives
         c.clearResultCache();

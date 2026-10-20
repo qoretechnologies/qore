@@ -4,7 +4,7 @@
 
   Qore Programming Language
 
-  Copyright (C) 2016 - 2024 Qore Technologies, s.r.o.
+  Copyright (C) 2016 - 2026 Qore Technologies, s.r.o.
 
   Permission is hereby granted, free of charge, to any person obtaining a
   copy of this software and associated documentation files (the "Software"),
@@ -46,6 +46,10 @@ class FileInputStream : public InputStream {
 public:
     DLLLOCAL FileInputStream(const QoreStringNode* fileName, int64 timeout, int flags, ExceptionSink* xsink)
             : timeout(timeout) {
+        // a path with a NUL character would be cut at the NUL character by the operating system
+        if (q_check_path(*fileName, "FILE-OPEN2-ERROR", xsink)) {
+            return;
+        }
         f.open2(xsink, fileName->c_str(), O_RDONLY | flags);
     }
 

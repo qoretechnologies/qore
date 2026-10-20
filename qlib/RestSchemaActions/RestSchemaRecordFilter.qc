@@ -281,7 +281,12 @@ public class RestSchemaRecordFilter {
                 || c.args[1] instanceof hash<DataProviderFieldReference>) {
                 return;
             }
-            found{cast<hash<DataProviderFieldReference>>(c.args[0]).field} = c.args[1];
+            # the identity fields are named as paths of keys joined with dots
+            *string name = RestSchemaRecordFilter::getFieldName(cast<hash<DataProviderFieldReference>>(c.args[0]));
+            if (!exists name) {
+                return;
+            }
+            found{name} = c.args[1];
         }
         # "auto!" because a composite identity is a mix of names and numbers, and a hash narrowed to the
         # type of its first part would reject the rest
@@ -305,7 +310,10 @@ public class RestSchemaRecordFilter {
         if (!(c.args[0] instanceof hash<DataProviderFieldReference>)) {
             return;
         }
-        string field = cast<hash<DataProviderFieldReference>>(c.args[0]).field;
+        *string field = RestSchemaRecordFilter::getFieldName(cast<hash<DataProviderFieldReference>>(c.args[0]));
+        if (!exists field) {
+            return;
+        }
         *hash<RestSchemaRecordFilterInfo> rule = rules{RestSchemaRecordFilter::ruleKey(field, c.exp)};
         if (!rule || used{rule.option}) {
             return;
@@ -349,6 +357,30 @@ public class RestSchemaRecordFilter {
         return {"option": {rule.option: value}, "exact": rule.exact};
     }
 
+    #! Returns the name of the field of a field reference in a query language, or @ref nothing
+    /** The field is a field path (@ref DataProvider::AbstractDataProvider::getFieldPath()
+        "AbstractDataProvider::getFieldPath()"); its keys are joined with dots, as the query languages of REST APIs
+        write a nested field (\c owner.uuid).  A key that has a dot (the field reference <tt>\@"Unit\\.Price"</tt>)
+        cannot be written so, and gives @ref nothing.
+
+        @param ref the field reference
+
+        @return the name of the field, or @ref nothing
+
+        @par Example:
+        @code{.py}
+# "owner.uuid": the key uuid of the key owner, as a REST query language writes it
+*string name = RestSchemaRecordFilter::getFieldName(<DataProviderFieldReference>{"field": "owner.uuid"});
+        @endcode
+
+        @see @ref restschemaquerysyntax_fields
+
+        @since RestSchemaActions 1.0
+    */
+    static *string getFieldName(hash<DataProviderFieldReference> ref) {
+        return AbstractDataProvider::getFieldPathName(ref.field, ".", ref.field_path);
+    }
+
     #! Returns @ref True if the whole expression can be rendered into the table's query language
     /** @param c the expression
     */
@@ -384,8 +416,16 @@ public class RestSchemaRecordFilter {
         if (!(c.args[0] instanceof hash<DataProviderFieldReference>)) {
             return False;
         }
-        string field = cast<hash<DataProviderFieldReference>>(c.args[0]).field;
+        # a path with a key that has a dot cannot be named in a query language that writes a nested field with a dot;
+        # only a renderer of the table's own (render_query) can read such a path
+        *string field = RestSchemaRecordFilter::getFieldName(cast<hash<DataProviderFieldReference>>(c.args[0]));
+        if (!exists field && !syn.render_query) {
+            return False;
+        }
         if (exists table.query.field_ops) {
+            if (!exists field) {
+                return False;
+            }
             # the finer matrix: this API indexes a field for some comparisons and not others, and answers a
             # filter using one it does not allow on that field with an error rather than with records
             *hash<string, bool> allowed = table.query.field_ops{field};
@@ -393,7 +433,7 @@ public class RestSchemaRecordFilter {
                 && !(c.exp == DP_SEARCH_OP_IN && allowed{DP_SEARCH_OP_EQ})) {
                 return False;
             }
-        } else if (exists table.query.fields && !table.query.fields{field}) {
+        } else if (exists table.query.fields && (!exists field || !table.query.fields{field})) {
             return False;
         }
         for (int j = 1; j < c.args.size(); ++j) {
@@ -514,7 +554,8 @@ public class RestSchemaRecordFilter {
                 return syn.not_op + " " + renderExp(cast<hash<DataProviderExpression>>(c.args[0]));
             }
         }
-        string field = cast<hash<DataProviderFieldReference>>(c.args[0]).field;
+        # canRender() accepted the field, so it has a name
+        string field = RestSchemaRecordFilter::getFieldName(cast<hash<DataProviderFieldReference>>(c.args[0]));
         string wire_field = table.query.field_map{field} ?? field;
         if (syn.render_field) {
             wire_field = syn.render_field(wire_field);

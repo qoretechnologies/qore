@@ -41,9 +41,6 @@ public class Http3ClientConnection inherits HttpClientConnection {
     private {
         #! Poll operation for this connection
         Http3ClientPollOperation poll_op;
-
-        #! The address family of the connection's socket
-        int address_family = AF_UNSPEC;
     }
 
     #! Creates a new HTTP/3 client connection
@@ -58,22 +55,26 @@ public class Http3ClientConnection inherits HttpClientConnection {
         @param ssl_ca_file a PEM file with the CA certificates to verify the server with instead of the default CAs
         @param ssl_ca_path a directory with the CA certificates to verify the server with instead of the default CAs
         @param address_family the address family to connect in; if not set, the family of the first address of the
-            host is used
+            host is used, unless it is in \a avoid_families
+        @param avoid_families address families not to connect in if the host also has an address in another family
+
+        Creating the connection runs nothing that can block, so it can also be created on an async I/O thread: the
+        host name is resolved and the UDP socket is bound by the connection's poll operation once it is submitted to
+        the I/O controller (see @ref getAddressFamily())
     */
     constructor(hash<auto> url_info, timeout connect_timeout = DefaultConnectTimeout,
             *LoggerInterface logger, int max_streams = DefaultMaxStreamsPerConnection,
             *int ssl_verify_mode, bool accept_all_certs = False,
             *SSLCertificate client_cert, *SSLPrivateKey client_pk, *string ssl_ca_file, *string ssl_ca_path,
-            *int address_family)
+            *int address_family, *list<int> avoid_families)
             : HttpClientConnection(url_info, connect_timeout, logger, max_streams) {
 
         log(LoggerLevel::DEBUG, "creating QUIC connection to %s:%d (max_streams=%d)",
             url_info.host, url_info.port, max_streams);
 
         poll_op = new Http3ClientPollOperation(url_info, connect_timeout, logger, ssl_verify_mode,
-            accept_all_certs, client_cert, client_pk, self, ssl_ca_file, ssl_ca_path, address_family);
-        # the socket is bound in its family when the poll operation is created
-        self.address_family = poll_op.getSocket().getSocketInfo().family;
+            accept_all_certs, client_cert, client_pk, self, ssl_ca_file, ssl_ca_path, address_family,
+            avoid_families);
     }
 
     #! Copying is not supported
@@ -82,8 +83,13 @@ public class Http3ClientConnection inherits HttpClientConnection {
     }
 
     #! Returns the address family of the connection (@ref Qore::AF_INET or @ref Qore::AF_INET6)
-    int getAddressFamily() {
-        return address_family;
+    /** Does not block
+
+        @return the address family the connection is made in, or @ref nothing if the host name has not been resolved
+        yet
+    */
+    *int getAddressFamily() {
+        return poll_op.getAddressFamily();
     }
 
     #! Returns the protocol identifier

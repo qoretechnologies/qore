@@ -3,7 +3,7 @@
 /*
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -77,7 +77,7 @@ public:
     DLLLOCAL QoreHashNode* getLocationInfo() const;
 
     //! Returns the level of this event
-    DLLLOCAL QoreObject* getLevel();
+    DLLLOCAL QoreObject* getLevel(ExceptionSink* xsink);
 
     //! Returns the logger level object for this event
     DLLLOCAL const QoreLoggerLevel* getLoggerLevel() const;
@@ -97,21 +97,39 @@ public:
             if (lvl) {
                 lvl->deref(xsink);
             }
-            if (level) {
-                level->deref(xsink);
-            }
-            if (messageArgs) {
-                messageArgs->deref(xsink);
+            // the level, the arguments and the throwable are referenced by the object's internal members while it is
+            // bound to one, see bind()
+            if (owns_refs) {
+                if (level) {
+                    level->deref(xsink);
+                }
+                if (messageArgs) {
+                    messageArgs->deref(xsink);
+                }
+                if (throwableInfo) {
+                    throwableInfo->deref(xsink);
+                }
             }
             if (locationInfo) {
                 locationInfo->deref(xsink);
             }
-            if (throwableInfo) {
-                throwableInfo->deref(xsink);
-            }
             delete this;
         }
     }
+
+    //! Binds the event to its LoggerEvent object
+    /** Hands the references to the level, the arguments and the throwable over to the object's internal members,
+        where the garbage collector can follow them (see design/dgc.md, Pattern A); must be called right after the
+        private data is set in the object
+
+        @return 0 for OK, -1 if an exception was raised
+    */
+    DLLLOCAL int bind(QoreObject* obj, ExceptionSink* xsink);
+
+    //! Called when the LoggerEvent object is destroyed; takes over the references to the values in its members
+    /** The members are released with the object, but the private data can be referenced longer
+    */
+    DLLLOCAL void destructor(ExceptionSink* xsink);
 
     //! Returns the event timestamp as an @ref absolute_dates "absolute date/time value"
     DLLLOCAL DateTimeNode* getTimeStamp() const;
@@ -185,6 +203,12 @@ protected:
 
     //! Atomicity lock for internal changes
     mutable QoreThreadLock m0;
+
+    //! The object the event is bound to, see bind(); not referenced, as the object owns the private data
+    QoreObject* self = nullptr;
+
+    //! True if the references to level, messageArgs and throwableInfo are held by the private data
+    bool owns_refs = true;
 
     //! unique id generator
     static Sequence sequence;

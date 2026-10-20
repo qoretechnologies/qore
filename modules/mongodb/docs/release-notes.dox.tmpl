@@ -17,4 +17,7 @@
     - converting a deeply nested hash or list to BSON, or a deeply nested BSON document to a hash, raises a
       \c STACK-LIMIT-EXCEEDED exception instead of overflowing the thread's stack: each level of nesting was
       converted recursively without checking the stack
+    - the files named by the \c tlsCAFile and \c tlsCertificateKeyFile options of a connection string are subject to
+      the filesystem sandbox of the calling program; a file the sandbox does not allow to be read fails the
+      connection before it is made, with the \c FILESYSTEM-ACCESS-DENIED error in its description
 */

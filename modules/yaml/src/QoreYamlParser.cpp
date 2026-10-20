@@ -162,6 +162,11 @@ QoreHashNode* QoreYamlParser::parseMap() {
         if (*xsink)
             return nullptr;
 
+        // a key with a NUL character cannot be a hash key
+        if (QoreHashNode::checkKey(str->c_str(), str->size(), xsink)) {
+            return nullptr;
+        }
+
         // get value
         if (getEvent())
             return nullptr;

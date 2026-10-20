@@ -42,7 +42,7 @@ hash<auto> result = p.predictMatrix(X_test);
     @endcode
 
 */
-qclass MLPipeline [arg=QoreMLPipeline* pipeline; ns=Qore::ML; vparent=AbstractMLModel];
+qclass MLPipeline [arg=QoreMLPipeline* pipeline; ns=Qore::ML; vparent=AbstractMLModel; internal_members=*list steps];
 
 //! Creates an empty MLPipeline
 /** Create a pipeline and add steps with addStandardScaler(), addMinMaxScaler(),
@@ -56,7 +56,20 @@ p.addLinearRegression("model", new LinearRegression({"fit_intercept": True}));
     @endcode
 */
 MLPipeline::constructor() {
-    self->setPrivate(CID_MLPIPELINE, new QoreMLPipeline());
+    ReferenceHolder<QoreMLPipeline> pipeline(new QoreMLPipeline(), xsink);
+    // the steps internal member references the step objects, where the garbage collector can follow them
+    if (pipeline->attach(self, xsink)) {
+        return;
+    }
+    self->setPrivate(CID_MLPIPELINE, pipeline.release());
+}
+
+//! Destroys the MLPipeline
+/** The private data of the pipeline, which a method still running can reference, keeps its steps
+*/
+MLPipeline::destructor() {
+    pipeline->destructor(xsink);
+    pipeline->deref(xsink);
 }
 
 //! Creates a copy of the MLPipeline instance
@@ -85,8 +98,8 @@ nothing MLPipeline::addStandardScaler(string name, object obj) {
         return QoreValue();
     }
     s->deref(xsink);
-    pipeline->addStep(name->c_str(), PipelineStepType::STANDARD_SCALER,
-        const_cast<QoreObject*>(obj));
+    pipeline->addStep(mlStdString(*name), PipelineStepType::STANDARD_SCALER,
+        const_cast<QoreObject*>(obj), self, xsink);
 }
 
 //! Adds a MinMaxScaler step to the pipeline
@@ -102,8 +115,8 @@ nothing MLPipeline::addMinMaxScaler(string name, object obj) {
         return QoreValue();
     }
     s->deref(xsink);
-    pipeline->addStep(name->c_str(), PipelineStepType::MINMAX_SCALER,
-        const_cast<QoreObject*>(obj));
+    pipeline->addStep(mlStdString(*name), PipelineStepType::MINMAX_SCALER,
+        const_cast<QoreObject*>(obj), self, xsink);
 }
 
 //! Adds an Imputer step to the pipeline
@@ -119,8 +132,8 @@ nothing MLPipeline::addImputer(string name, object obj) {
         return QoreValue();
     }
     s->deref(xsink);
-    pipeline->addStep(name->c_str(), PipelineStepType::IMPUTER,
-        const_cast<QoreObject*>(obj));
+    pipeline->addStep(mlStdString(*name), PipelineStepType::IMPUTER,
+        const_cast<QoreObject*>(obj), self, xsink);
 }
 
 //! Adds a PCA transformer step to the pipeline
@@ -136,8 +149,8 @@ nothing MLPipeline::addPCA(string name, object obj) {
         return QoreValue();
     }
     s->deref(xsink);
-    pipeline->addStep(name->c_str(), PipelineStepType::PCA,
-        const_cast<QoreObject*>(obj));
+    pipeline->addStep(mlStdString(*name), PipelineStepType::PCA,
+        const_cast<QoreObject*>(obj), self, xsink);
 }
 
 //! Adds a LinearRegression estimator (must be the last step)
@@ -153,8 +166,8 @@ nothing MLPipeline::addLinearRegression(string name, object obj) {
         return QoreValue();
     }
     s->deref(xsink);
-    pipeline->addStep(name->c_str(), PipelineStepType::LINEAR_REGRESSION,
-        const_cast<QoreObject*>(obj));
+    pipeline->addStep(mlStdString(*name), PipelineStepType::LINEAR_REGRESSION,
+        const_cast<QoreObject*>(obj), self, xsink);
 }
 
 //! Adds a KMeans estimator (must be the last step)
@@ -170,8 +183,8 @@ nothing MLPipeline::addKMeans(string name, object obj) {
         return QoreValue();
     }
     s->deref(xsink);
-    pipeline->addStep(name->c_str(), PipelineStepType::KMEANS,
-        const_cast<QoreObject*>(obj));
+    pipeline->addStep(mlStdString(*name), PipelineStepType::KMEANS,
+        const_cast<QoreObject*>(obj), self, xsink);
 }
 
 //! Adds an IsolationForest estimator (must be the last step)
@@ -187,8 +200,8 @@ nothing MLPipeline::addIsolationForest(string name, object obj) {
         return QoreValue();
     }
     s->deref(xsink);
-    pipeline->addStep(name->c_str(), PipelineStepType::ISOLATION_FOREST,
-        const_cast<QoreObject*>(obj));
+    pipeline->addStep(mlStdString(*name), PipelineStepType::ISOLATION_FOREST,
+        const_cast<QoreObject*>(obj), self, xsink);
 }
 
 //! Adds an LOF estimator (must be the last step)
@@ -204,8 +217,8 @@ nothing MLPipeline::addLOF(string name, object obj) {
         return QoreValue();
     }
     s->deref(xsink);
-    pipeline->addStep(name->c_str(), PipelineStepType::LOF,
-        const_cast<QoreObject*>(obj));
+    pipeline->addStep(mlStdString(*name), PipelineStepType::LOF,
+        const_cast<QoreObject*>(obj), self, xsink);
 }
 
 //! Adds a GMM estimator (must be the last step)
@@ -221,8 +234,8 @@ nothing MLPipeline::addGMM(string name, object obj) {
         return QoreValue();
     }
     s->deref(xsink);
-    pipeline->addStep(name->c_str(), PipelineStepType::GMM,
-        const_cast<QoreObject*>(obj));
+    pipeline->addStep(mlStdString(*name), PipelineStepType::GMM,
+        const_cast<QoreObject*>(obj), self, xsink);
 }
 
 //! Adds a LogisticRegression estimator (must be the last step)
@@ -238,8 +251,8 @@ nothing MLPipeline::addLogisticRegression(string name, object obj) {
         return QoreValue();
     }
     s->deref(xsink);
-    pipeline->addStep(name->c_str(), PipelineStepType::LOGISTIC_REGRESSION,
-        const_cast<QoreObject*>(obj));
+    pipeline->addStep(mlStdString(*name), PipelineStepType::LOGISTIC_REGRESSION,
+        const_cast<QoreObject*>(obj), self, xsink);
 }
 
 //! Adds a KNN classification estimator (must be the last step)
@@ -255,8 +268,8 @@ nothing MLPipeline::addKNNClassification(string name, object obj) {
         return QoreValue();
     }
     s->deref(xsink);
-    pipeline->addStep(name->c_str(), PipelineStepType::KNN_CLASSIFICATION,
-        const_cast<QoreObject*>(obj));
+    pipeline->addStep(mlStdString(*name), PipelineStepType::KNN_CLASSIFICATION,
+        const_cast<QoreObject*>(obj), self, xsink);
 }
 
 //! Fits the pipeline on a numeric matrix (no target vector)

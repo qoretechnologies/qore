@@ -37,6 +37,7 @@
 
 #include <cassert>
 #include <cstddef>
+#include <cstring>
 #include <memory>
 #include <string>
 
@@ -49,8 +50,13 @@
     whose bytes are all ASCII are used as they are, without conversion or allocation; any other string is converted.
     Other values use their string representation.
 
-    Stack only; it may not be dynamically allocated. If an encoding conversion fails or the ASCII scan is
-    cancelled, a Qore-language exception is raised in the ExceptionSink given, and the key is empty.
+    A key is a NUL-terminated string, so a key with a NUL character would be cut at the NUL and name another key;
+    such a key raises a \c HASH-KEY-ERROR exception (see QoreHashNode::checkKey()).  The check compares the length
+    of the string with the length of the key as a C string, so it costs no more than the length of the key.
+
+    Stack only; it may not be dynamically allocated. If an encoding conversion fails, the key has a NUL character
+    or the ASCII scan is cancelled, a Qore-language exception is raised in the ExceptionSink given, and the key is
+    empty.
 
     @code
     QoreHashKeyHelper key(key_val, xsink);
@@ -64,7 +70,8 @@ class QoreHashKeyHelper {
 public:
     //! sets up the key for the given value
     /** @param n the key value
-        @param xsink receives encoding-conversion errors and cancellation during ASCII scanning
+        @param xsink receives encoding-conversion errors, a \c HASH-KEY-ERROR for a key with a NUL character and
+        cancellation during ASCII scanning
     */
     DLLLOCAL QoreHashKeyHelper(const QoreValue& n, ExceptionSink* xsink) {
         assert(xsink);
@@ -74,6 +81,7 @@ public:
                 n.getShortString(buf);
                 key = buf;
                 len = n.shortStringLen();
+                checkNul(xsink);
                 return;
             }
         } else if (n.isPointer()) {
@@ -83,6 +91,7 @@ public:
                 if (usableAsIs(*str, xsink)) {
                     key = str->c_str();
                     len = str->size();
+                    checkNul(xsink);
                     return;
                 }
             }
@@ -96,13 +105,15 @@ public:
 
     //! sets up the key for the given string
     /** @param str the key string
-        @param xsink receives encoding-conversion errors and cancellation during ASCII scanning
+        @param xsink receives encoding-conversion errors, a \c HASH-KEY-ERROR for a key with a NUL character and
+        cancellation during ASCII scanning
     */
     DLLLOCAL QoreHashKeyHelper(const QoreString& str, ExceptionSink* xsink) {
         assert(xsink);
         if (usableAsIs(str, xsink)) {
             key = str.c_str();
             len = str.size();
+            checkNul(xsink);
             return;
         }
         if (*xsink) {
@@ -165,10 +176,23 @@ public:
     /** @param n the constant key value
         @param name set to the key in the default encoding
 
-        @return 0 for OK, -1 if the value cannot be converted to the default encoding; then the caller must evaluate
-        the key at runtime, where the conversion error is raised
+        @return 0 for OK, -1 if the value cannot be converted to the default encoding or has a NUL character; then
+        the caller must evaluate the key at runtime, where the error is raised
     */
     DLLLOCAL static int getConstKey(const QoreValue& n, std::string& name);
+
+    //! returns the description of the \c HASH-KEY-ERROR of a constant string key with a NUL character
+    /** @param n the constant key value
+
+        @return the description of the error, or nullptr if the value is not a string with a NUL character
+    */
+    DLLLOCAL static QoreStringNode* getConstKeyNulError(const QoreValue& n);
+
+    //! returns the description of the \c HASH-KEY-ERROR of a key with a NUL character
+    /** @param key the key string, which need not be NUL-terminated
+        @param len the byte length of the key string, which has a NUL character before \a len
+    */
+    DLLLOCAL static QoreStringNode* getNulKeyDesc(const char* key, size_t len);
 
 private:
     //! the key in the default encoding
@@ -181,6 +205,17 @@ private:
     bool valid = true;
     //! storage for an inline short string
     char buf[8];
+
+    //! raises \c HASH-KEY-ERROR and makes the key empty and invalid if the key has a NUL character
+    DLLLOCAL void checkNul(ExceptionSink* xsink) {
+        if (strlen(key) != len) {
+            QoreHashNode::checkKey(key, len, xsink);
+            key = "";
+            len = 0;
+            tmp.reset();
+            valid = false;
+        }
+    }
 
     //! converts the value to a key string in the default encoding
     DLLLOCAL void setupSlow(const QoreValue& n, ExceptionSink* xsink);

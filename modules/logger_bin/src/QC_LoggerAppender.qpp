@@ -3,7 +3,7 @@
 /*
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -37,7 +37,15 @@
 //! Abstract class that defines the interface for logger appenders
 /** Event data (@ref LoggerEvent) are formatted before the record is passed to the target
 */
-qclass LoggerAppender [ns=Qore::Logger; arg=QoreLoggerAppender* a; internal_members=LoggerAppenderQueue q];
+qclass LoggerAppender [ns=Qore::Logger; arg=QoreLoggerAppender* a; internal_members=LoggerAppenderQueue q,auto filters];
+
+//! Destroys the appender
+/** The private data of the appender, which a Logger can still reference, keeps its filters, queue and layout
+*/
+LoggerAppender::destructor() {
+    a->destructor(xsink);
+    a->deref(xsink);
+}
 
 //! Creates the object
 /**

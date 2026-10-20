@@ -39,6 +39,8 @@
 #include "qore/QoreQueue.h"
 #include "qore/WebSocketFrameCodec.h"
 
+#include <atomic>
+
 //! C++ private data for WebSocketClientPollOperationBase
 /** Core WebSocket CLIENT frame I/O state machine in pure C++, enabling the
     AsyncIoController I/O thread to drive the poll without Qore interpreter
@@ -130,7 +132,13 @@ public:
     }
 
     //! Returns the current state as a string
+    /** A close requested with requestClose() is reported as \c "closing" from the call on, although the thread that
+        drives the operation only starts it in the operation's next step.
+    */
     DLLLOCAL const char* getWsState() const {
+        if (ws_state == WsState::CONNECTED && close_requested.load(std::memory_order_acquire)) {
+            return "closing";
+        }
         switch (ws_state) {
             case WsState::CONNECTED: return "connected";
             case WsState::CLOSING:   return "closing";
@@ -188,8 +196,24 @@ public:
     */
     DLLLOCAL void queueSendRaw(BinaryNode* frame_data, ExceptionSink* xsink);
 
-    //! Initiates the close handshake with client masking (thread-safe)
-    /** @param code the close code
+    //! Requests the close handshake from any thread (thread-safe)
+    /** The request is queued with the frames to send: the thread that drives the operation starts the close
+        handshake when it reaches the request in its next step, so the close frame follows the frames queued before
+        it.  The close code and reason, the close frame and the \c CLOSING state are set by that thread only, as the
+        operation's step reads and changes them without a lock.
+
+        A request made when the operation is already closing or closed is ignored.
+
+        @param code the close code
+        @param reason the close reason string
+        @param xsink exception sink
+    */
+    DLLLOCAL void requestClose(uint16_t code, const char* reason, ExceptionSink* xsink);
+
+    //! Starts the close handshake with client masking from the thread that drives the operation
+    /** Only called from the operation's step (continuePoll()); other threads use requestClose().
+
+        @param code the close code
         @param reason the close reason string
         @param xsink exception sink
     */
@@ -285,6 +309,8 @@ private:
     SocketRecvDataPollOperation* recv_op = nullptr;
 
     WsState ws_state = WsState::CONNECTED;
+    //! True once requestClose() has queued a close request; read without a lock by getWsState()
+    std::atomic<bool> close_requested{false};
     uint16_t close_code = 1000;
     std::string close_reason;
     bool close_initiated = false;           //!< true if we initiated the close handshake
@@ -331,6 +357,14 @@ private:
         Multiple queued frames are concatenated to reduce syscalls.
     */
     SimpleRefHolder<BinaryNode> pending_send;
+
+    //! Starts the close handshake requested by a close request taken from the send queue
+    /** The request is ignored when the operation is already closing or closed.
+
+        @param request the close request queued by requestClose()
+        @param xsink exception sink
+    */
+    DLLLOCAL void applyCloseRequest(const QoreHashNode* request, ExceptionSink* xsink);
 
     //! Process all complete frames in the decoder buffer
     /** Decodes frames, handles control frames (ping/pong/close),

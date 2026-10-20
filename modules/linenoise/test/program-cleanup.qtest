@@ -1,0 +1,166 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# The callbacks, key bindings and history provider of a Program end when the Program is destroyed, while it can still
+# run the destructors of their objects.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+
+%requires linenoise
+%requires QUnit
+%requires FsUtil
+
+%exec-class LinenoiseProgramCleanupTest
+
+class MainKeyHandler {
+    public {
+        static int destroyed = 0;
+    }
+
+    *hash<auto> handle(hash<auto> info) {
+        return;
+    }
+
+    destructor() {
+        ++destroyed;
+    }
+}
+
+class LinenoiseProgramCleanupTest inherits QUnit::Test {
+    public {
+        #! the code of a Program setting each callback and the history provider; a destructor reports to the queue
+        const ProgramCode = "
+our Queue q;
+
+class Handler {
+    private {
+        string name;
+    }
+
+    constructor(string name) {
+        self.name = name;
+    }
+
+    auto call(auto arg) {
+        return;
+    }
+
+    destructor() {
+        q.push(name);
+    }
+}
+
+class History inherits AbstractHistoryProvider {
+    *string prev(string prefix) {
+        return;
+    }
+
+    *string next(string prefix) {
+        return;
+    }
+
+    reset() {
+    }
+
+    destructor() {
+        q.push(\"history provider\");
+    }
+}
+
+sub setup() {
+    Handler key(\"key binding\");
+    Linenoise::bind_key(\"ctrl-x\", auto sub (hash<auto> info) { return key.call(info); });
+    Handler completion(\"completion callback\");
+    Linenoise::set_callback(auto sub (string input) { return completion.call(input); });
+    Handler hints(\"hints callback\");
+    Linenoise::set_hints_callback(auto sub (string input) { return hints.call(input); });
+    Handler syntax(\"syntax callback\");
+    Linenoise::set_syntax_callback(auto sub (string input) { return syntax.call(input); });
+    Linenoise::set_history_provider(new History());
+}
+";
+
+        #! a script binding a key and ending
+        const ScriptCode = "%modern
+%requires linenoise
+
+class Handler {
+    *hash<auto> handle(hash<auto> info) {
+        return;
+    }
+
+    destructor() {
+        stdout.print(\"destroyed\\n\");
+    }
+}
+
+sub bind() {
+    Handler h();
+    Linenoise::bind_key(\"ctrl-x\", auto sub (hash<auto> info) { return h.handle(info); });
+}
+
+bind();
+";
+    }
+
+    constructor() : QUnit::Test("linenoise callbacks of a Program", "1.0", \ARGV) {
+        addTestCase("Program deleted", \testProgramDeleted());
+        addTestCase("script ending", \testScriptEnd());
+        set_return_value(main());
+    }
+
+    #! binds a key to a handler referenced only by the binding
+    static bindMain() {
+        MainKeyHandler h();
+        Linenoise::bind_key("ctrl-y", auto sub (hash<auto> info) { return h.handle(info); });
+    }
+
+    testProgramDeleted() {
+        # a binding of this Program is kept when another Program is deleted
+        LinenoiseProgramCleanupTest::bindMain();
+
+        Queue q();
+        {
+            Program p(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES | PO_STRONG_ENCAPSULATION);
+            p.loadModule("linenoise");
+            p.parse(ProgramCode, "callbacks");
+            p.setGlobalVarValue("q", q);
+            p.callFunction("setup");
+            assertEq(0, q.size(), "no object is destroyed while its Program exists");
+        }
+
+        list<string> destroyed = ();
+        while (q.size()) {
+            destroyed += q.get();
+        }
+        assertEq(("completion callback", "hints callback", "history provider", "key binding", "syntax callback"),
+            sort(destroyed), "the objects of the Program are destroyed with it");
+        assertEq(0, MainKeyHandler::destroyed, "the key binding of this Program is kept");
+        Linenoise::unbind_key("ctrl-y");
+        assertEq(1, MainKeyHandler::destroyed, "unbinding the key releases its handler");
+    }
+
+    testScriptEnd() {
+        TmpDir dir("linenoise-program-cleanup-");
+        string script = join_paths(dir.path, "binding.q");
+        File f();
+        f.open2(script, O_CREAT | O_TRUNC | O_WRONLY);
+        f.write(ScriptCode);
+        f.close();
+
+        string qore = ENV.QORE_BIN ?? QORE_ARGV[0];
+        int rc;
+        string output = backquote(LinenoiseProgramCleanupTest::quote(qore) + " "
+            + LinenoiseProgramCleanupTest::quote(script) + " < /dev/null 2>&1", \rc);
+        assertEq(0, rc, "the script ends normally");
+        assertEq("destroyed\n", output, "the key binding is released with the Program of the script");
+    }
+
+    #! returns the string quoted for the shell
+    static string quote(string str) {
+        return "'" + replace(str, "'", "'\\''") + "'";
+    }
+}

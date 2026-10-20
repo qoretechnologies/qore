@@ -32,6 +32,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <string>
 #include <vector>
 
 DLLEXPORT extern qore_classid_t CID_TENSOR;
@@ -120,14 +121,14 @@ DLLLOCAL QoreObject* qore_ml_tensor_to_object(QoreTensor* tensor, QoreProgram* p
 //! Testing/diagnostic helper: returns a copy of host tagged as residing on the
 //! named device, with a host-copy-back callback (no real accelerator required).
 DLLLOCAL QoreTensor* qore_ml_make_mock_device_tensor(const QoreTensor* host,
-    const char* device_kind, int64_t device_id, ExceptionSink* xsink);
+    const std::string& device_kind, int64_t device_id, ExceptionSink* xsink);
 
 //! Uploads a host tensor's data to accelerator device memory (CUDA in v1) and returns
 //! a device-backed tensor with a real device->host copy-back callback.  Raises
 //! ML-TENSOR-DEVICE-ERROR when the device kind is unsupported, the build has no device
 //! runtime, or a device allocation/copy fails.
 DLLLOCAL QoreTensor* qore_ml_make_device_tensor(const QoreTensor* host,
-    const char* device_kind, int64_t device_id, ExceptionSink* xsink);
+    const std::string& device_kind, int64_t device_id, ExceptionSink* xsink);
 
 //! Returns a copy of host backed by page-locked (pinned) host memory for faster
 //! host<->device DMA; raises ML-TENSOR-DEVICE-ERROR when the build has no device runtime

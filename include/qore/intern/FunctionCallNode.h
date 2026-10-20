@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -699,18 +699,18 @@ public:
     DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const;
     DLLLOCAL virtual QoreValue evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const;
 
-    using AbstractFunctionCallNode::deref;
-    DLLLOCAL virtual void deref(ExceptionSink* xsink) {
-        assert(self);
-        if (deref_self) {
-            self->deref(xsink);
-        }
-    }
-
 protected:
     QoreObject* self;
     const qore_class_private* cls;
+    //! true until the reference to \a self is released: by evalImpl() after the call, or by derefImpl()
     mutable bool deref_self = true;
+
+    //! releases the reference to \a self if the call was not made
+    /** A background copy whose thread cannot be created, or that is released for any other reason without being
+        evaluated, still holds the reference that the constructor took; this is called when the last reference to the
+        node is released, however the node is released
+    */
+    DLLLOCAL virtual bool derefImpl(ExceptionSink* xsink);
 };
 
 class StaticMethodCallNode : public AbstractFunctionCallNode {

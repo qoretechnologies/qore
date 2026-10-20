@@ -348,6 +348,20 @@ public:
 
     DLLLOCAL const AbstractQoreZoneInfo* findLoadRegion(const char* name, ExceptionSink* xsink);
     DLLLOCAL const AbstractQoreZoneInfo* findLoadRegionFromPath(const char* name, ExceptionSink* xsink);
+
+    //! checks a region name or zoneinfo file path given as a string before it is passed to findLoadRegion*()
+    /** A region or path with a NUL character would be cut at the NUL character and load another zoneinfo file; a
+        region (a name under the zoneinfo directory, as opposed to a path) with a \c ".." or empty path component or
+        a backslash could name a file outside of the zoneinfo directory; raises \c TZINFO-ERROR in these cases
+
+        @param region the region name or path
+        @param is_path true if \a region is loaded as a path (findLoadRegionFromPath()), false if it is loaded as a
+        region under the zoneinfo directory (findLoadRegion())
+        @param xsink the exception is raised here
+
+        @return 0 if the region can be loaded, -1 if an exception was raised
+    */
+    DLLLOCAL static int checkRegion(const QoreString& region, bool is_path, ExceptionSink* xsink);
 };
 
 DLLLOCAL extern QoreTimeZoneManager QTZM;

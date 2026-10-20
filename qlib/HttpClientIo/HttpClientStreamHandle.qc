@@ -269,11 +269,18 @@ public class HttpClientStreamHandle {
 
         @throw HTTPCLIENT-CONNECT-ERROR the connection failed with a transport-level
         error
+        @throw SOCKET-SSL-ERROR the server certificate was refused; raised as it is (see
+        @ref HttpClientConnection::waitForReady())
+        @throw NETWORK-ACCESS-DENIED the @ref sandboxing "sandbox" denies the connection; raised as it is
+        @throw FILESYSTEM-ACCESS-DENIED the @ref sandboxing "sandbox" denies the file of a UNIX domain socket
         @throw HTTPCLIENT-TIMEOUT no transport error was recorded; the readiness wait
         genuinely timed out
     */
     private throwConnectNotReady() {
         *hash<auto> err = conn.getPollOperation().getError();
+        if (http_is_terminal_connection_error(err)) {
+            throw err.err, err.desc, err;
+        }
         if (err) {
             throw "HTTPCLIENT-CONNECT-ERROR",
                 sprintf("connection closed: %s: %s", err.err ?? "UNKNOWN", err.desc ?? "unknown"), err;

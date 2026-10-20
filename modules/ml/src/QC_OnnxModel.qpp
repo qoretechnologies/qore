@@ -55,6 +55,8 @@ qclass OnnxRunOptions [arg=QoreOnnxRunOptions* options; ns=Qore::ML; flags=final
     - \c config: hash of string config entries passed to ONNX Runtime
 
     @throw ML-ONNX-RUN-OPTIONS-ERROR if the options hash is invalid
+    @throw ML-ONNX-RUN-OPTIONS-ERROR with a sandbox, if a run config entry is not an ONNX Runtime run option that names
+    no file; see @ref ml_onnx_sandbox
 */
 OnnxRunOptions::constructor(*hash<auto> options) [flags=NAMED_ARGS] {
 #ifdef HAVE_ONNXRUNTIME
@@ -138,9 +140,14 @@ OnnxIoBinding::copy() {
     @param value tensor data; accepts the same values as OnnxModel::run(),
         including nested lists, dense \c buffer<T>, and @ref ML::Tensor values
 
-    @throw ML-ONNX-BINDING-ERROR if the input name is unknown or the value is invalid
+    @throw ML-ONNX-BINDING-ERROR if the input name is unknown or has a NUL character, or the value is invalid
 */
 nothing OnnxIoBinding::bindInput(string name, auto value) [flags=NAMED_ARGS] {
+    // ONNX Runtime names a tensor by a NUL-terminated string
+    if (q_check_no_nul(name->c_str(), name->size(), "ONNX input tensor name", "ONNX tensor names",
+            "ML-ONNX-BINDING-ERROR", xsink)) {
+        return QoreValue();
+    }
     binding->bindInput(name->c_str(), value, xsink);
 }
 
@@ -156,8 +163,15 @@ nothing OnnxIoBinding::bindInputs(hash<auto> inputs) [flags=NAMED_ARGS] {
 
 //! Binds one output to ONNX Runtime-managed CPU memory
 /** @param name model output tensor name
+
+    @throw ML-ONNX-BINDING-ERROR if the output name is unknown or has a NUL character
 */
 nothing OnnxIoBinding::bindOutput(string name) [flags=NAMED_ARGS] {
+    // ONNX Runtime names a tensor by a NUL-terminated string
+    if (q_check_no_nul(name->c_str(), name->size(), "ONNX output tensor name", "ONNX tensor names",
+            "ML-ONNX-BINDING-ERROR", xsink)) {
+        return QoreValue();
+    }
     binding->bindOutput(name->c_str(), xsink);
 }
 
@@ -183,6 +197,7 @@ nothing OnnxIoBinding::bindOutputs() {
     @throw ML-ONNX-DEVICE-UNAVAILABLE a device output was requested but no device
         provider is active and host fallback is not allowed
     @throw ML-ONNX-DEVICE-BINDING-ERROR the requested device is unknown or invalid
+    @throw ML-ONNX-BINDING-ERROR if the output name is unknown or has a NUL character
 
     @note This method binds accelerator device memory and is in the
         \c QDOM_UNCONTROLLED_API functional domain, so it is unavailable to programs
@@ -191,6 +206,11 @@ nothing OnnxIoBinding::bindOutputs() {
     @since %ML 2.6
 */
 nothing OnnxIoBinding::bindOutputDevice(string name, *hash<auto> device) [flags=NAMED_ARGS; dom=UNCONTROLLED_API] {
+    // ONNX Runtime names a tensor by a NUL-terminated string
+    if (q_check_no_nul(name->c_str(), name->size(), "ONNX output tensor name", "ONNX tensor names",
+            "ML-ONNX-BINDING-ERROR", xsink)) {
+        return QoreValue();
+    }
     binding->bindOutputDevice(name->c_str(), device, xsink);
 }
 
@@ -218,8 +238,16 @@ nothing OnnxIoBinding::bindOutputsDevice(*hash<auto> device) [flags=NAMED_ARGS; 
     Preallocated output binding is supported for fixed-width numeric output
     tensors whose buffer layout matches ONNX Runtime. Bool and string outputs
     should use bindOutput() so ONNX Runtime can allocate the output.
+
+    @throw ML-ONNX-BINDING-ERROR if the output name is unknown or has a NUL character, or the tensor does not match
+    the output
 */
 nothing OnnxIoBinding::bindOutputTensor(string name, Tensor output) [flags=NAMED_ARGS] {
+    // ONNX Runtime names a tensor by a NUL-terminated string
+    if (q_check_no_nul(name->c_str(), name->size(), "ONNX output tensor name", "ONNX tensor names",
+            "ML-ONNX-BINDING-ERROR", xsink)) {
+        return QoreValue();
+    }
     binding->bindOutputTensor(name->c_str(), output, xsink);
 }
 
@@ -306,10 +334,19 @@ qclass OnnxModel [arg=QoreOnnxModel* model; ns=Qore::ML; flags=final; dom=FILESY
 OnnxModel model("/path/to/model.onnx");
     @endcode
 
-    @throw ML-ONNX-ERROR if the model cannot be loaded
+    @throw ML-ONNX-ERROR if the model cannot be loaded or the model path has a NUL character
+    @throw FILESYSTEM-ACCESS-DENIED if the sandbox of the calling program does not allow a file to be read or written;
+    see @ref ml_onnx_sandbox
+    @throw SANDBOX-PATH-ERROR if the sandbox of the calling program cannot resolve a path
+    @throw ML-ONNX-CONTENT-IDENTITY-ERROR with a sandbox, if the model has external data that ONNX Runtime would read
+    by itself; see @ref ml_onnx_sandbox
 */
 OnnxModel::constructor(string model_path) {
 #ifdef HAVE_ONNXRUNTIME
+    // the model file is opened by its NUL-terminated path
+    if (q_check_path(*model_path, "ML-ONNX-ERROR", xsink)) {
+        return;
+    }
     ReferenceHolder<QoreOnnxModel> model_holder(
         new QoreOnnxModel(model_path->c_str(), xsink), xsink);
     if (*xsink) {
@@ -341,12 +378,25 @@ hash<OnnxSessionConfig> config = <OnnxSessionConfig>{
 OnnxModel model("/path/to/model.onnx", config);
     @endcode
 
-    @throw ML-ONNX-ERROR if the model cannot be loaded or config is invalid
+    @throw ML-ONNX-ERROR if the model cannot be loaded, config is invalid, or the model path has a NUL character
     @throw ML-ONNX-PROVIDER-ERROR if an execution provider cannot be initialized
 
+    @throw FILESYSTEM-ACCESS-DENIED if the sandbox of the calling program does not allow a file to be read or written;
+    see @ref ml_onnx_sandbox
+    @throw SANDBOX-PATH-ERROR if the sandbox of the calling program cannot resolve a path
+    @throw ML-ONNX-CONTENT-IDENTITY-ERROR with a sandbox, if the model has external data that ONNX Runtime would read
+    by itself; see @ref ml_onnx_sandbox
+    @throw ML-ONNX-ERROR with a sandbox, if a session config entry names a file the sandbox cannot check; see
+    @ref ml_onnx_sandbox
+    @throw ML-ONNX-PROVIDER-ERROR with a sandbox, if an execution provider option is not one listed by
+    @ref Qore::ML::ml_get_onnx_provider_options() "ml_get_onnx_provider_options()"
 */
 OnnxModel::constructor(string model_path, hash<OnnxSessionConfig> options) {
 #ifdef HAVE_ONNXRUNTIME
+    // the model file is opened by its NUL-terminated path
+    if (q_check_path(*model_path, "ML-ONNX-ERROR", xsink)) {
+        return;
+    }
     ReferenceHolder<QoreOnnxModel> model_holder(
         new QoreOnnxModel(model_path->c_str(), options, xsink), xsink);
     if (*xsink) {
@@ -378,6 +428,11 @@ OnnxModel model(bytes);
     @endcode
 
     @throw ML-ONNX-ERROR if the model bytes cannot be parsed
+    @throw FILESYSTEM-ACCESS-DENIED if the sandbox of the calling program does not allow a file to be read or written;
+    see @ref ml_onnx_sandbox
+    @throw SANDBOX-PATH-ERROR if the sandbox of the calling program cannot resolve a path
+    @throw ML-ONNX-CONTENT-IDENTITY-ERROR with a sandbox, if the model has external data that ONNX Runtime would read
+    by itself; see @ref ml_onnx_sandbox
 */
 OnnxModel::constructor(binary model_data) {
 #ifdef HAVE_ONNXRUNTIME
@@ -414,6 +469,15 @@ OnnxModel model(bytes, config);
 
     @throw ML-ONNX-ERROR if the model bytes cannot be parsed or config is invalid
     @throw ML-ONNX-PROVIDER-ERROR if an execution provider cannot be initialized
+    @throw FILESYSTEM-ACCESS-DENIED if the sandbox of the calling program does not allow a file to be read or written;
+    see @ref ml_onnx_sandbox
+    @throw SANDBOX-PATH-ERROR if the sandbox of the calling program cannot resolve a path
+    @throw ML-ONNX-CONTENT-IDENTITY-ERROR with a sandbox, if the model has external data that ONNX Runtime would read
+    by itself; see @ref ml_onnx_sandbox
+    @throw ML-ONNX-ERROR with a sandbox, if a session config entry names a file the sandbox cannot check; see
+    @ref ml_onnx_sandbox
+    @throw ML-ONNX-PROVIDER-ERROR with a sandbox, if an execution provider option is not one listed by
+    @ref Qore::ML::ml_get_onnx_provider_options() "ml_get_onnx_provider_options()"
 */
 OnnxModel::constructor(binary model_data, hash<OnnxSessionConfig> options) {
 #ifdef HAVE_ONNXRUNTIME
@@ -509,12 +573,19 @@ OnnxModel optimized("/models/customer-score.ort",
     <OnnxSessionConfig>{"providers": (), "load_model_format": "ORT"});
     @endcode
 
-    @throw ML-ONNX-ERROR if the optimized artifact cannot be written
+    @throw ML-ONNX-ERROR if the optimized artifact cannot be written or the output path has a NUL character
     @throw ML-ONNX-PROVIDER-ERROR if an execution provider cannot be initialized
+    @throw FILESYSTEM-ACCESS-DENIED if the sandbox of the calling program does not allow a file to be read or written;
+    see @ref ml_onnx_sandbox
+    @throw SANDBOX-PATH-ERROR if the sandbox of the calling program cannot resolve a path
 */
 hash<auto> OnnxModel::saveOptimized(string output_path,
         *hash<OnnxSessionConfig> options, bool ort_format = False)
         [flags=NAMED_ARGS] {
+    // the optimized model is written to its NUL-terminated path
+    if (q_check_path(*output_path, "ML-ONNX-ERROR", xsink)) {
+        return QoreValue();
+    }
     return model->saveOptimized(output_path->c_str(), options, ort_format, xsink);
 }
 
@@ -774,6 +845,88 @@ hash<auto> OnnxModel::getEffectiveProviderReport() [flags=RET_VALUE_ONLY] {
     return model->getEffectiveProviderReport(xsink);
 }
 
+//! A session of an @ref OnnxSessionPool held by the caller until it is released
+/** An OnnxSessionLease holds one session of an @ref OnnxSessionPool from @ref OnnxSessionPool::acquireSession()
+    until release() is called or the object is destroyed (deleted, or its last reference goes out of scope).
+
+    While it is held, the session counts against the pool's capacity (\c max_sessions and
+    \c max_concurrent_runs) exactly like a running inference: other callers of the pool's \c run*() methods and of
+    @ref OnnxSessionPool::acquireSession() "acquireSession()" wait for a session within \c queue_depth and
+    \c timeout_ms, or are rejected with \c ML-ONNX-POOL-BACKPRESSURE or \c ML-ONNX-POOL-TIMEOUT.  A lease does not
+    count as a run in the pool's statistics, but it is included in \c active_runs while it is held.
+
+    Use a lease to take capacity out of service for a time, for example to quiesce a pool before maintenance, or to
+    make the pool's backpressure and timeout behavior deterministic in tests.
+
+    @par Thread Safety
+    A lease can be released from any thread, and release() can be called any number of times; only the first call
+    returns the session to the pool.  The lease references its pool, so the pool's sessions remain valid while a
+    lease exists, even if the @ref OnnxSessionPool object itself is deleted first.
+
+    @par Example:
+    @code{.py}
+ML::OnnxSessionPool pool("/models/customer-score.onnx", <ML::OnnxSessionConfig>{"providers": ()},
+    {"max_sessions": 1, "queue_depth": 0});
+
+ML::OnnxSessionLease lease = pool.acquireSession();
+# the only session is held, so other callers are rejected with ML-ONNX-POOL-BACKPRESSURE
+try {
+    pool.run({"X": ((42.0,),)});
+} catch (hash<ExceptionInfo> ex) {
+    printf("%s: %s\n", ex.err, ex.desc);
+}
+lease.release();
+# the session is available again
+hash<auto> out = pool.run({"X": ((42.0,),)});
+    @endcode
+
+    @since ml 3.0
+*/
+qclass OnnxSessionLease [arg=QoreOnnxSessionLease* lease; ns=Qore::ML; flags=final];
+
+//! Throws an exception; leases are created with OnnxSessionPool::acquireSession()
+/** @throw ML-ONNX-POOL-ERROR OnnxSessionLease objects must be created with OnnxSessionPool::acquireSession()
+*/
+OnnxSessionLease::constructor() {
+    xsink->raiseException("ML-ONNX-POOL-ERROR",
+        "OnnxSessionLease objects must be created with OnnxSessionPool::acquireSession()");
+}
+
+//! Throws an exception; leases cannot be copied
+/** @throw COPY-ERROR OnnxSessionLease objects cannot be copied
+*/
+OnnxSessionLease::copy() {
+    xsink->raiseException("COPY-ERROR", "OnnxSessionLease objects cannot be copied");
+}
+
+//! Returns the session to its pool
+/** After the first call, the lease no longer holds a session and later calls do nothing.  Destroying the lease
+    object also returns the session.
+
+    @par Example:
+    @code{.py}
+ML::OnnxSessionLease lease = pool.acquireSession();
+on_exit lease.release();
+    @endcode
+*/
+nothing OnnxSessionLease::release() {
+    lease->release();
+}
+
+//! Returns @ref True if the lease still holds its session
+/** @return @ref True until release() is called
+
+    @par Example:
+    @code{.py}
+if (lease.isHeld()) {
+    lease.release();
+}
+    @endcode
+*/
+bool OnnxSessionLease::isHeld() [flags=CONSTANT] {
+    return lease->isHeld();
+}
+
 //! Bounded pool of immutable ONNX Runtime sessions
 /** OnnxSessionPool keeps multiple @ref OnnxModel sessions ready for concurrent
     inference. It is intended for service workloads where requests arrive from
@@ -792,6 +945,20 @@ hash<auto> OnnxModel::getEffectiveProviderReport() [flags=RET_VALUE_ONLY] {
     - \c dynamic_batch_wait_ms: maximum time runAsync() waits for other callers
       so requests can be coalesced into one ordered batch; \c 0 disables
       cross-caller coalescing
+
+    acquireSession() holds a session for the caller in an @ref OnnxSessionLease until it is released; a held
+    session counts against the pool's capacity.
+
+    When dynamic batching is configured, one leader thread collects the requests of runAsync() into batches; its TID
+    is reported by getPoolStats() as \c async_leader_tid.  If the leader is cancelled with
+    @ref Qore::cancel_thread() "cancel_thread()", every request it has taken and every request still queued is
+    rejected with its \c THREAD-CANCELLED exception, and the next request starts a new leader.
+
+    @note The threads that run the requests of runAsync(), runTensorsAsync() and runBatchAsync() are started without
+    the calling @ref Qore::Program "Program", so an interrupt requested with
+    @ref Qore::SandboxManager::requestInterrupt() "SandboxManager::requestInterrupt()" for a sandboxed program does
+    not reach them: requests it has already submitted run to completion.  This is a current limitation; such a
+    request can be ended by cancelling its thread with @ref Qore::cancel_thread() "cancel_thread()".
 
     @par Example:
     @code{.py}
@@ -812,11 +979,24 @@ qclass OnnxSessionPool [arg=QoreOnnxSessionPool* pool; ns=Qore::ML; flags=final;
     @param pool_options optional pool sizing and queueing options
 
     @throw ML-ONNX-POOL-ERROR if pool options are invalid
-    @throw ML-ONNX-ERROR if any session cannot be created
+    @throw ML-ONNX-ERROR if any session cannot be created or the model path has a NUL character
+    @throw FILESYSTEM-ACCESS-DENIED if the sandbox of the calling program does not allow a file to be read or written;
+    see @ref ml_onnx_sandbox
+    @throw SANDBOX-PATH-ERROR if the sandbox of the calling program cannot resolve a path
+    @throw ML-ONNX-CONTENT-IDENTITY-ERROR with a sandbox, if the model has external data that ONNX Runtime would read
+    by itself; see @ref ml_onnx_sandbox
+    @throw ML-ONNX-ERROR with a sandbox, if a session config entry names a file the sandbox cannot check; see
+    @ref ml_onnx_sandbox
+    @throw ML-ONNX-PROVIDER-ERROR with a sandbox, if an execution provider option is not one listed by
+    @ref Qore::ML::ml_get_onnx_provider_options() "ml_get_onnx_provider_options()"
 */
 OnnxSessionPool::constructor(string model_path, *hash<OnnxSessionConfig> session_config,
         *hash<auto> pool_options) [flags=NAMED_ARGS] {
 #ifdef HAVE_ONNXRUNTIME
+    // the model file is opened by its NUL-terminated path
+    if (q_check_path(*model_path, "ML-ONNX-ERROR", xsink)) {
+        return;
+    }
     ReferenceHolder<QoreOnnxSessionPool> holder(
         new QoreOnnxSessionPool(model_path->c_str(), session_config, pool_options, xsink), xsink);
     if (*xsink) {
@@ -857,6 +1037,33 @@ OnnxSessionPool::copy() {
     xsink->raiseException("COPY-ERROR", "OnnxSessionPool objects cannot be copied");
 }
 
+//! Acquires a session of the pool and holds it until the returned lease is released
+/** The session is acquired under the same rules as run(): if no session is free, the caller waits for one while
+    fewer than \c queue_depth callers are waiting, for at most \c timeout_ms (with no fixed deadline when it is
+    \c 0), and is rejected otherwise.  The session counts against the pool's capacity until
+    @ref OnnxSessionLease::release() is called or the lease object is destroyed.
+
+    @return an @ref OnnxSessionLease holding the session
+
+    @par Example:
+    @code{.py}
+# keep the pool's only session idle while another component uses the accelerator exclusively
+ML::OnnxSessionLease lease = pool.acquireSession();
+on_exit lease.release();
+runExclusiveAcceleratorJob();
+    @endcode
+
+    @throw ML-ONNX-POOL-BACKPRESSURE if no session is free and \c queue_depth callers are already waiting (always
+    when \c queue_depth is 0)
+    @throw ML-ONNX-POOL-TIMEOUT if no session became free within \c timeout_ms
+    @throw ML-ONNX-POOL-ERROR if the pool has no loaded sessions
+
+    @since ml 3.0
+*/
+OnnxSessionLease OnnxSessionPool::acquireSession() {
+    return pool->acquireSession(getProgram(), xsink);
+}
+
 //! Runs inference with named input tensors through an acquired session
 /** @param inputs hash where keys are input tensor names
     @param output_names optional output tensor names to materialize; when omitted,
@@ -891,6 +1098,11 @@ ML::OnnxSessionPool pool("/models/customer-score.onnx",
     Future<hash<auto>> f = pool.runAsync({"X": ((42.0,),)}, ("score",));
 hash<auto> out = f.get(5s);
     @endcode
+
+    With dynamic batching, the request is run by the pool's leader thread (see getPoolStats(),
+    \c async_leader_tid); if the leader is cancelled, the Future is rejected with its \c THREAD-CANCELLED exception.
+
+    @note A sandbox interrupt does not reach the thread that runs the request; see @ref OnnxSessionPool
 
     @throw THREAD-CREATION-FAILURE if the async worker thread cannot be created
     @throw ML-ONNX-POOL-BACKPRESSURE if the async coalescing queue is full
@@ -953,7 +1165,11 @@ Future<list<hash<auto>>> OnnxSessionPool::runBatchAsync(list<auto> batch, *list<
 
 //! Returns current pool counters and configuration
 /** @return hash with configured limits, active/waiting counts, run counters,
-    timeout/rejection counters, and dynamic batching settings
+    timeout/rejection counters, and dynamic batching settings, including:
+    - \c async_leader_tid: the TID of the thread that batches the requests of runAsync() when dynamic batching is
+      configured, or 0 if it is not running; the thread is started by the runAsync() call that finds no request
+      queued, and its TID is set before that call returns, so the thread can be monitored or cancelled with
+      @ref Qore::cancel_thread() "cancel_thread()"
 
     @note After an inference future returns its result or inference error,
     its completion or error counter is visible here. Cancelling a future does

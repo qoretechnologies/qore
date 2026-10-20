@@ -52,12 +52,15 @@ AstTree::constructor() {
 
     @throw FILESYSTEM-ACCESS-DENIED the sandbox of the calling program does not allow the file to be created or
     written
-    @throw FILE-OPEN-ERROR the file cannot be opened for writing
+    @throw FILE-OPEN-ERROR the file cannot be opened for writing, or its name contains a NUL character
     @throw FILE-WRITE-ERROR the tree cannot be written to the file
     @throw THREAD-CANCELLED the current thread was cancelled
     @throw PROGRAM-INTERRUPTED the current program was interrupted
  */
 AstTree::printTree(string file) [dom=FILESYSTEM] {
+    if (q_check_path(*file, "FILE-OPEN-ERROR", xsink)) {
+        return QoreValue();
+    }
     QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
     if (smh && !smh->checkFilesystemAccess(file->c_str(), QSEC_WRITE | QSEC_CREATE, xsink)) {
         return QoreValue();

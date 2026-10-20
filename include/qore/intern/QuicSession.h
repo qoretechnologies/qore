@@ -1327,6 +1327,16 @@ private:
     DLLLOCAL int readPacketLocked(const uint8_t* data, size_t len,
                                   const ngtcp2_path& path, ExceptionSink* xsink);
 
+    //! Raises the error for a packet that ngtcp2_conn_read_pkt() could not process (caller must hold mtx_)
+    /** A certificate refused by the verification raises \c SOCKET-SSL-ERROR, as for a TLS connection over TCP, with
+        the verification result in the \c ssl_verify_error key of the exception argument; any other failure raises
+        \c QUIC-READ-ERROR.  Consumes the OpenSSL error queue.
+
+        @param rv the return value of ngtcp2_conn_read_pkt()
+        @param xsink for the exception raised
+    */
+    DLLLOCAL void raiseReadErrorLocked(int rv, ExceptionSink* xsink);
+
     //! Get or create a stream info entry
     DLLLOCAL QuicStreamInfo* getOrCreateStream(int64_t stream_id);
 
@@ -1439,6 +1449,13 @@ private:
 
     //! TLS new session ticket callback (for caching 0-RTT session tickets)
     DLLLOCAL static int newSessionTicketCallback(SSL* ssl, SSL_SESSION* session);
+
+    //! Verify callback of a client that verifies the server certificate
+    /** Records why the certificate failed verification in @ref verify_error_, as the verify callback of a TLS
+        connection over TCP does, so that the error raised for the refused handshake describes it; the result of the
+        verification is not changed.  Called by OpenSSL: no C++ exception propagates from it.
+    */
+    DLLLOCAL static int clientVerifyCallback(int preverify_ok, X509_STORE_CTX* x509_ctx);
 
     //! TLS early data rejected callback (for 0-RTT rejection handling)
     DLLLOCAL static int earlyDataRejectedCallback(ngtcp2_conn* conn, void* user_data);
@@ -1681,6 +1698,9 @@ private:
     std::atomic<uint64_t> migration_gen_{0};
     int64_t goaway_max_stream_id_{-1};               //!< max stream ID from received GOAWAY; protected by mtx_
     std::string host_;                               //!< server hostname for :authority fallback
+    //! why the server certificate failed verification (see clientVerifyCallback()); protected by mtx_
+    /** written by OpenSSL's certificate verification, which runs in ngtcp2_conn_read_pkt() under mtx_ */
+    std::string verify_error_;
     //! the key of this client's session tickets in QuicSessionTicketCache: the origin and the trust configuration
     /** a resumed TLS session is not verified again, so a ticket obtained with one trust configuration (for example
         with all certificates accepted) must never be used by a client with another one

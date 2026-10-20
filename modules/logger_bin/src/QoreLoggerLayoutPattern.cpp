@@ -3,7 +3,7 @@
 /*
     Qore Programming Language
 
-    Copyright (C) 2003 - 2025 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -154,7 +154,7 @@ QoreValue QoreLoggerLayoutPattern::resolveField(QoreObject* event, QoreLoggerEve
         case 'p': {
             ValueHolder v(xsink);
             if (ev) {
-                v = ev->getLevel();
+                v = ev->getLevel(xsink);
             } else {
                 v = event->evalMethod(*event->getClass()->findMethod("getLevel"), nullptr, xsink);
             }

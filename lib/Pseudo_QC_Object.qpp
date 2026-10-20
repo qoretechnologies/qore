@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -266,8 +266,15 @@ bool b = obj.hasCallableMethod("getStatus");
     - this pseudo-method will also return @ref True "True" if the given method exists and is accessible in an inherited class
 
     @since %Qore 0.8.8
+
+    @note since %Qore 3.0 a name with a NUL character names nothing, and @ref Qore::errno() "errno()"
+    returns \c EINVAL
  */
 bool <object>::hasCallableMethod(string method) [const;flags=CONSTANT,NAMED_ARGS] {
+    // the name is looked up as a C string, which would be cut at a NUL character and name something else
+    if (q_check_no_nul(method->c_str(), method->size())) {
+        return false;
+    }
     return qore_class_private::runtimeHasCallableMethod(*(obj->getClass()), method->getBuffer());
 }
 
@@ -291,8 +298,15 @@ bool b = obj.hasCallableNormalMethod("getStatus");
     - this pseudo-method will also return @ref True "True" if the given method exists and is accessible in an inherited class
 
     @since %Qore 0.8.8
+
+    @note since %Qore 3.0 a name with a NUL character names nothing, and @ref Qore::errno() "errno()"
+    returns \c EINVAL
  */
 bool <object>::hasCallableNormalMethod(string method) [const;flags=CONSTANT,NAMED_ARGS] {
+    // the name is looked up as a C string, which would be cut at a NUL character and name something else
+    if (q_check_no_nul(method->c_str(), method->size())) {
+        return false;
+    }
     return qore_class_private::runtimeHasCallableNormalMethod(*(obj->getClass()), method->getBuffer());
 }
 
@@ -315,8 +329,15 @@ bool b = obj.hasCallableStaticMethod("getStatus");
     - this pseudo-method will also return @ref True "True" if the given static method exists and is accessible in an inherited class
 
     @since %Qore 0.8.8
+
+    @note since %Qore 3.0 a name with a NUL character names nothing, and @ref Qore::errno() "errno()"
+    returns \c EINVAL
  */
 bool <object>::hasCallableStaticMethod(string method) [const;flags=CONSTANT,NAMED_ARGS] {
+    // the name is looked up as a C string, which would be cut at a NUL character and name something else
+    if (q_check_no_nul(method->c_str(), method->size())) {
+        return false;
+    }
     return qore_class_private::runtimeHasCallableStaticMethod(*(obj->getClass()), method->getBuffer());
 }
 
@@ -351,7 +372,7 @@ string <object>::uniqueHash() [const;flags=CONSTANT] {
     - if not found, then a function lookup is made
     - if not found, an \c CALL-REFERENCE-ERROR exception is thrown
 
-    @throw CALL-REFERENCE-ERROR cannot resolve call reference; method not accessible in the calling context
+    @throw CALL-REFERENCE-ERROR cannot resolve call reference; method not accessible in the calling context, or the identifier contains a NUL character (since %Qore 3.0)
 
     @note
     - Pseudo-methods run with the class context of the caller, which enables this method to access any accessible

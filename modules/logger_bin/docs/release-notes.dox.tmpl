@@ -8,6 +8,19 @@
 
     @section logger_bin_3_0 logger_bin Module Version 3.0
 
+    @ref Qore::Logger::LoggerAppenderFile "LoggerAppenderFile" raises \c FILE-OPEN2-ERROR when it opens a file name
+    with a NUL character instead of opening the file named by the name cut at the NUL character, and raises only
+    \c APPENDER-OPEN-ERROR when the file name is not a string.
+
     Logger interface deserialization restores its native callback adapter. Logger wrappers and
     schema objects inheriting the interface can be serialized repeatedly after restoration.
+
+    A @ref Qore::Logger::Logger "Logger" references its appenders where the garbage collector can follow the
+    references, so a cycle through an appender that references its logger is collected instead of being leaked with
+    the classes of its objects.  An event created by a logger references the logger:
+    @ref Qore::Logger::LoggerEvent::getLogger() "LoggerEvent::getLogger()" read freed memory for an event kept after
+    its logger was destroyed.
+
+    An appender references its layout and filters, and an event its level, arguments and exception information, where
+    the garbage collector can follow the references, so a cycle through any of them is collected.
 */

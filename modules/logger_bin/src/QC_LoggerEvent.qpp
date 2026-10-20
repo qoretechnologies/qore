@@ -3,7 +3,7 @@
 /*
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -37,7 +37,16 @@
 //! Abstract class that defines the interface for logger events
 /** Event data (@ref LoggerEvent) are formatted before the record is passed to the target
 */
-qclass LoggerEvent [ns=Qore::Logger; arg=QoreLoggerEvent* event; internal_members=*Logger logger];
+qclass LoggerEvent [ns=Qore::Logger; arg=QoreLoggerEvent* event; internal_members=*Logger logger,*LoggerLevel level,auto messageArgs,auto throwableInfo];
+
+//! Destroys the event
+/** The private data of the event, which can be referenced longer than the object, keeps its level, arguments and
+    throwable
+*/
+LoggerEvent::destructor() {
+    event->destructor(xsink);
+    event->deref(xsink);
+}
 
 //! Instantiates a LoggingEvent from the supplied parameters.
 /**
@@ -74,8 +83,12 @@ LoggerEvent::constructor(object logger, LoggerLevel[QoreLoggerLevel] level, stri
     assert(v->getType() == NT_STRING);
 
     QoreStringNodeValueHelper category(*v);
-    self->setPrivate(CID_LOGGEREVENT, new QoreLoggerEvent(logger, *category, obj_level, *level,
-        message, msg_args, 0, location_info, thread_id, time_stamp ? time_stamp : *ts, throwable));
+    QoreLoggerEvent* ev = new QoreLoggerEvent(logger, *category, obj_level, *level, message, msg_args, 0,
+        location_info, thread_id, time_stamp ? time_stamp : *ts, throwable);
+    self->setPrivate(CID_LOGGEREVENT, ev);
+    if (ev->bind(self, xsink)) {
+        return;
+    }
 
     self->setValue("logger", logger->objectRefSelf(), nullptr);
 }
@@ -104,8 +117,10 @@ LoggerEvent::constructor(string fqcn, softstring category, LoggerLevel[QoreLogge
         ts = DateTimeNode::makeNow();
     }
 
-    self->setPrivate(CID_LOGGEREVENT, new QoreLoggerEvent(fqcn->stringRefSelf(), category, obj_level, *level, message,
-        msg_args, 0, location_info, thread_id, time_stamp ? time_stamp : *ts, throwable));
+    QoreLoggerEvent* ev = new QoreLoggerEvent(fqcn->stringRefSelf(), category, obj_level, *level, message,
+        msg_args, 0, location_info, thread_id, time_stamp ? time_stamp : *ts, throwable);
+    self->setPrivate(CID_LOGGEREVENT, ev);
+    ev->bind(self, xsink);
 }
 
 //! Returns the full qualified classname
@@ -126,7 +141,7 @@ string LoggerEvent::getFullQualifiedClassname() {
 /**
 */
 LoggerLevel LoggerEvent::getLevel() {
-    return event->getLevel();
+    return event->getLevel(xsink);
 }
 
 //! Returns the logger which created the event

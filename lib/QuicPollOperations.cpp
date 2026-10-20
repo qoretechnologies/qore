@@ -39,6 +39,8 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <algorithm>
+#include <cassert>
 #include <cerrno>
 #include <set>
 #include <cstring>
@@ -427,14 +429,19 @@ SocketQuicClientPollOperation::SocketQuicClientPollOperation(
     ExceptionSink* xsink, QoreSocketObject* sock,
     const char* host, uint16_t port, int family,
     int64_t handshake_timeout_ns,
-    int64_t not_before_ns_abs)
+    int64_t not_before_ns_abs, bool bind_unbound, std::vector<int> avoid_families)
     : SocketPollSocketOperationBase(sock), host(host), service(std::to_string(port)),
       handshake_timeout_ns_(handshake_timeout_ns), port_(port), family_(q_get_af(family)),
+      bind_unbound_(bind_unbound), avoid_families_(std::move(avoid_families)),
       not_before_ns_(not_before_ns_abs), sandbox_manager_(qore_socket_ref_policy_sandbox_manager()) {
     AutoLocker al(sock->priv->m);
 
-    // Validate socket
-    if (sock->priv->checkOpen(xsink)) {
+    // Validate socket; an unbound socket is bound once the remote address is resolved (see initializeResolved())
+    if (bind_unbound_) {
+        if (sock->priv->checkValid(xsink) || !sock->priv->socket->priv->isOpen()) {
+            return;
+        }
+    } else if (sock->priv->checkOpen(xsink)) {
         return;
     }
     if (sock->priv->socket->priv->stype != SOCK_DGRAM) {
@@ -466,7 +473,7 @@ QoreHashNode* SocketQuicClientPollOperation::continueResolve(ExceptionSink* xsin
         int family = family_;
         if (family == AF_UNSPEC) {
             AutoLocker al(sock->priv->m);
-            if (sock->priv->socket) {
+            if (sock->priv->socket && sock->priv->socket->priv->isOpen()) {
                 int sfamily = sock->priv->socket->priv->sfamily;
                 if (sfamily == AF_INET || sfamily == AF_INET6) {
                     family = sfamily;
@@ -498,7 +505,7 @@ int SocketQuicClientPollOperation::initializeResolved(ExceptionSink* xsink) {
         return -1;
     }
 
-    const SocketResolvedAddrInfo& ai = addrs.front();
+    const SocketResolvedAddrInfo& ai = selectAddress(addrs);
     // the remote address is checked after resolution, so a name resolving to a blocked network is denied; a
     // connection migration later only changes the local address
     if (sandbox_manager_ && !sandbox_manager_->checkNetworkAccess(host.c_str(),
@@ -507,9 +514,17 @@ int SocketQuicClientPollOperation::initializeResolved(ExceptionSink* xsink) {
     }
     memcpy(&remote_addr_, &ai.addr, ai.addrlen);
     remote_addrlen_ = ai.addrlen;
+    int family = ai.family;
     resolver.reset();
+    address_family_.store(family, std::memory_order_release);
 
     AutoLocker al(sock->priv->m);
+    if (sock->priv->checkValid(xsink)) {
+        return -1;
+    }
+    if (bind_unbound_ && !sock->priv->socket->priv->isOpen() && bindUnboundLocked(family, xsink)) {
+        return -1;
+    }
     if (sock->priv->checkOpen(xsink)) {
         return -1;
     }
@@ -600,6 +615,48 @@ int SocketQuicClientPollOperation::initializeResolved(ExceptionSink* xsink) {
     }
 
     qcs_state = QCS::HANDSHAKE_SEND;
+    return 0;
+}
+
+const SocketResolvedAddrInfo& SocketQuicClientPollOperation::selectAddress(
+        const std::vector<SocketResolvedAddrInfo>& addrs) const {
+    assert(!addrs.empty());
+    // the first address is used, unless it is in a family to avoid and the host has an address in another family
+    for (const SocketResolvedAddrInfo& ai : addrs) {
+        if (std::find(avoid_families_.begin(), avoid_families_.end(), ai.family) == avoid_families_.end()) {
+            return ai;
+        }
+    }
+    return addrs.front();
+}
+
+int SocketQuicClientPollOperation::bindUnboundLocked(int family, ExceptionSink* xsink) {
+    struct sockaddr_storage addr{};
+    int size;
+    if (family == AF_INET6) {
+        struct sockaddr_in6* in6 = reinterpret_cast<struct sockaddr_in6*>(&addr);
+        in6->sin6_family = AF_INET6;
+        in6->sin6_addr = in6addr_any;
+        size = static_cast<int>(sizeof(*in6));
+    } else {
+        struct sockaddr_in* in4 = reinterpret_cast<struct sockaddr_in*>(&addr);
+        in4->sin_family = AF_INET;
+        in4->sin_addr.s_addr = htonl(INADDR_ANY);
+        size = static_cast<int>(sizeof(*in4));
+    }
+    // a numeric bind with the network policy check of any bind; it neither resolves nor waits, so it can run on the
+    // I/O thread.  QUIC client sockets need a unique local UDP 4-tuple: without SO_REUSEADDR, the system assigns a
+    // port of their own; with it, concurrent clients can be bound to the same ephemeral port on Linux, which makes
+    // server replies ambiguous
+    if (qore_socket_bind_family_sockaddr_direct(sock->priv->socket, family,
+            reinterpret_cast<const struct sockaddr*>(&addr), size, SOCK_DGRAM, 0, *sandbox_manager_, xsink)) {
+        if (!*xsink) {
+            qore_socket_error_intern(errno, xsink, "SOCKET-BIND-ERROR",
+                "error binding the UDP socket of the QUIC connection", nullptr, host.c_str(), service.c_str(),
+                reinterpret_cast<const struct sockaddr*>(&addr));
+        }
+        return -1;
+    }
     return 0;
 }
 

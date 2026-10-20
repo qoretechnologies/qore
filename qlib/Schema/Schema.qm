@@ -263,7 +263,7 @@ module Schema {
           id: {type: int, notnull: true}
           name: {type: varchar, size: 200, notnull: true}
 
-          # Copy from another column
+          # Copy from another column (a field path of one key: the column of that name)
           display_name:
             type: varchar
             size: 240
@@ -296,6 +296,14 @@ module Schema {
                 pgsql: "digest(name, 'sha256')"
                 oracle: "DBMS_CRYPTO.HASH(UTL_RAW.CAST_TO_RAW(name), 4)"
     @endcode
+
+    A \c populate column is populated only when it is added to a table that is already in the database.  When the
+    alignment creates the table, as on a first install, the table has no rows, so the column is created as it is
+    declared, \c NOT \c NULL included.  A \c notnull column added to an existing table is made \c NOT \c NULL
+    after it is populated, with the DDL of the database's SqlUtil driver
+    (@ref SqlUtil::AbstractColumn::getModifySql() "AbstractColumn::getModifySql()"); SQLite can do this only from
+    SQLite 3.53.0 (see "Changing Columns" in the Sqlite3SqlUtil module), so with an older SQLite the alignment
+    raises \c UNSUPPORTED and is rolled back
 
     @par Example: Insert-only tables with auto-triggers
     @code{.yaml}
@@ -900,11 +908,21 @@ module Schema {
     - added @ref Schema::AbstractSchema::alignWithInfoInTransaction()
       for alignment with caller-controlled commit or rollback; DataSchema
       rejects migration actions that commit independently in this mode
+    - a \c populate expression binds its values: a value in the expression, such as the \c 1 of
+      <tt>{exp: "+", args: [{field: amount}, 1]}</tt>, was not bound, and the column was filled with \c NULL
+    - \c populate names the column it fills, and a column it reads, as the database requires: a reserved word such as
+      \c order or \c group is quoted; the \c field of a \c populate field reference, also in a \c populate
+      expression, is a field path of one key, the column of that name; a path of more than one key, or a key with a
+      dot, is refused with \c POPULATE-ERROR
     - the top level of a data schema, a table, its \c auto_triggers, reference data, and shorthand columns no
       longer ignore unknown keys: they are rejected with an error that names the key and, where it belongs
       elsewhere, where it belongs (e.g. \c sequence_columns on a table instead of under \c auto_triggers, which
       previously lost the sequence binding silently, or a top-level \c constraints or \c auto_triggers, which
       are declared per table)
+    - the alignment of a data schema keeps the indexes that its \c reconcile_table migrations created: the unique
+      index on the canonical key of a table that keeps its legacy primary key and the reviewed indexes of the
+      contract are added to the description of the table once the migration has created them, as table alignment
+      drops an index that the description of its table does not have (SqlUtil 3.11.0)
 
     @subsection schema_v1_8_0 Schema Module v1.8.0
     - added shared \c columns and \c indexes definitions at the top level of a data schema: a
@@ -922,7 +940,9 @@ module Schema {
 
     @subsection schema_v1_6_0 Schema Module v1.6.0
     - added \c populate attribute on column definitions for automatic backfill when adding new
-      columns to non-empty tables — automates the add-nullable → UPDATE → SET NOT NULL pattern;
+      columns to non-empty tables — automates the add-nullable → UPDATE → SET NOT NULL pattern, with the
+      \c NOT \c NULL DDL of the database's SqlUtil driver (SQLite: from 3.53.0); a populate column of a table that
+      the alignment creates is created as it is declared, since the table has no rows to populate;
       supports field references (\c {field: name}), literal values, DPQL expressions rendered
       to SQL via the driver's expression map, and per-driver raw SQL escape hatches
     - added \c text and \c float column type shorthands to @ref Schema::ColumnTypeMap

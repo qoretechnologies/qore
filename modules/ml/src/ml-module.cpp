@@ -149,6 +149,16 @@ QoreObject* makeMLModelObject(const std::string& algorithm, AbstractPrivateData*
     };
     for (const Entry& e : table) {
         if (algorithm == e.name) {
+            if (*e.cid == CID_MLPIPELINE) {
+                // the object's steps internal member takes over the references to the restored step objects
+                ReferenceHolder<QoreMLPipeline> pipeline(static_cast<QoreMLPipeline*>(priv), xsink);
+                ReferenceHolder<QoreObject> obj(new QoreObject(*e.cls, pgm), xsink);
+                if (pipeline->attach(*obj, xsink)) {
+                    return nullptr;
+                }
+                obj->setPrivate(*e.cid, pipeline.release());
+                return obj.release();
+            }
             QoreObject* obj = new QoreObject(*e.cls, pgm);
             obj->setPrivate(*e.cid, priv);
             return obj;
@@ -285,6 +295,7 @@ static void ml_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
     preinitOnnxRunOptionsClass();
     preinitOnnxIoBindingClass();
     preinitOnnxModelClass();
+    preinitOnnxSessionLeaseClass();
     preinitOnnxSessionPoolClass();
     preinitStandardScalerClass();
     preinitMinMaxScalerClass();
@@ -387,6 +398,7 @@ static void ml_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
     MLNS.addSystemClass(initOnnxRunOptionsClass(MLNS));
     MLNS.addSystemClass(initOnnxIoBindingClass(MLNS));
     MLNS.addSystemClass(initOnnxModelClass(MLNS));
+    MLNS.addSystemClass(initOnnxSessionLeaseClass(MLNS));
     MLNS.addSystemClass(initOnnxSessionPoolClass(MLNS));
     MLNS.addSystemClass(initStandardScalerClass(MLNS));
     MLNS.addSystemClass(initMinMaxScalerClass(MLNS));

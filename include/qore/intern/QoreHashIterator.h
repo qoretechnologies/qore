@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -106,7 +106,7 @@ public:
     }
 
     using AbstractPrivateData::deref;
-    DLLLOCAL virtual void deref(ExceptionSink* xsink) {
+    DLLLOCAL virtual void deref(ExceptionSink* xsink) override {
         if (ROdereference()) {
             if (h) {
                 const_cast<QoreHashNode*>(h)->deref(xsink);
@@ -183,9 +183,9 @@ public:
         return ConstHashIterator::prev();
     }
 
-    DLLLOCAL virtual const char* getName() const { return "HashIterator"; }
+    DLLLOCAL virtual const char* getName() const override { return "HashIterator"; }
 
-    DLLLOCAL virtual const QoreTypeInfo* getElementType() const {
+    DLLLOCAL virtual const QoreTypeInfo* getElementType() const override {
         switch (view) {
             case VIEW_KEY:
                 return stringTypeInfo;
@@ -244,7 +244,7 @@ public:
     DLLLOCAL QoreHashReverseIterator(const QoreHashReverseIterator& old) : QoreHashIterator(old) {
     }
 
-    DLLLOCAL virtual const char* getName() const {
+    DLLLOCAL virtual const char* getName() const override {
         return "HashReverseIterator";
     }
 

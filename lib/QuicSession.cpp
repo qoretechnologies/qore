@@ -687,7 +687,7 @@ int QuicSession::setupClientSslCtx(const char* host, int ssl_verify_mode, Except
     }
 
     // Enable certificate verification if requested; with accept_all_certs, any certificate is accepted
-    SSL_CTX_set_verify(ssl_ctx_, ssl_verify_mode, accept_all ? quic_client_accept_all_verify_cb : nullptr);
+    SSL_CTX_set_verify(ssl_ctx_, ssl_verify_mode, accept_all ? quic_client_accept_all_verify_cb : clientVerifyCallback);
 
     // Load client certificate and private key for mTLS (mutual TLS)
     if (client_cert && client_pk) {
@@ -1480,6 +1480,10 @@ int QuicSession::readPacketLocked(const uint8_t* data, size_t len,
         sock_->markDataReceived();
     }
     last_rx_ts_ = nowLocked();
+    // the TLS handshake runs in ngtcp2_conn_read_pkt(): the error queue must only hold the errors it raises, so that
+    // raiseReadErrorLocked() can tell why it failed (the queue is per thread, and this thread drives other
+    // connections too)
+    ERR_clear_error();
     int rv = ngtcp2_conn_read_pkt(conn_, &path, &pi, data, len, last_rx_ts_);
     if (rv != 0) {
         // Handle specific error codes
@@ -1502,19 +1506,7 @@ int QuicSession::readPacketLocked(const uint8_t* data, size_t len,
                 ngtcp2_strerror(rv));
             return -1;
         }
-        // Get more detailed error info from ngtcp2 and OpenSSL
-        const ngtcp2_ccerr* ccerr = ngtcp2_conn_get_ccerr(conn_);
-        int tls_error = ngtcp2_conn_get_tls_error(conn_);
-        unsigned long ssl_err = ERR_peek_last_error();
-        char ssl_err_buf[256];
-        ERR_error_string_n(ssl_err, ssl_err_buf, sizeof(ssl_err_buf));
-        int ssl_get_err = ssl_ ? SSL_get_error(ssl_, 0) : -1;
-        xsink->raiseException("QUIC-READ-ERROR",
-            "ngtcp2_conn_read_pkt failed: %s (rv=%d); ccerr: type=%d error_code=0x%llx; "
-            "tls_error=%d; ssl_err: %s; SSL_get_error=%d",
-            ngtcp2_strerror(rv), rv,
-            (int)ccerr->type, (long long)ccerr->error_code,
-            tls_error, ssl_err_buf, ssl_get_err);
+        raiseReadErrorLocked(rv, xsink);
         return -1;
     }
 
@@ -1525,6 +1517,70 @@ int QuicSession::readPacketLocked(const uint8_t* data, size_t len,
     pending_write_.store(true, std::memory_order_release);
 
     return 0;
+}
+
+void QuicSession::raiseReadErrorLocked(int rv, ExceptionSink* xsink) {
+    // the last OpenSSL error is reported for a failure that is not a refused certificate
+    unsigned long ssl_err = ERR_peek_last_error();
+    // OpenSSL reports a handshake aborted by the certificate verification with this reason; the queue was cleared
+    // before the packet was read (see readPacketLocked()), so it refers to this connection's handshake
+    bool verify_failed = false;
+    while (unsigned long e = ERR_get_error()) {
+        if (ERR_GET_LIB(e) == ERR_LIB_SSL && ERR_GET_REASON(e) == SSL_R_CERTIFICATE_VERIFY_FAILED) {
+            verify_failed = true;
+        }
+    }
+
+    char ssl_err_buf[256];
+    ERR_error_string_n(ssl_err, ssl_err_buf, sizeof(ssl_err_buf));
+
+    if (verify_failed && ssl_) {
+        // As for a TLS connection over TCP (see SSLSocketHelper::handleErrorIntern()): callers must tell a refused
+        // certificate apart from a failed connection, which can be retried, without parsing the description
+        long verify_result = SSL_get_verify_result(ssl_);
+        SimpleRefHolder<QoreStringNode> desc(new QoreStringNodeMaker("QUIC TLS handshake failed: %s",
+            ssl_err_buf));
+        if (!verify_error_.empty()) {
+            desc->concat(": ");
+            desc->concat(verify_error_);
+        } else {
+            // no verify callback recorded the reason: a server verifying a client certificate
+            desc->sprintf(": verify error %ld: %s", verify_result, X509_verify_cert_error_string(verify_result));
+        }
+        ReferenceHolder<QoreHashNode> arg(new QoreHashNode(autoTypeInfo), xsink);
+        arg->setKeyValue("ssl_verify_error", static_cast<int64>(verify_result), xsink);
+        xsink->raiseExceptionArg("SOCKET-SSL-ERROR", arg.release(), desc.release());
+        return;
+    }
+
+    // Get more detailed error info from ngtcp2 and OpenSSL
+    const ngtcp2_ccerr* ccerr = ngtcp2_conn_get_ccerr(conn_);
+    int tls_error = ngtcp2_conn_get_tls_error(conn_);
+    int ssl_get_err = ssl_ ? SSL_get_error(ssl_, 0) : -1;
+    xsink->raiseException("QUIC-READ-ERROR",
+        "ngtcp2_conn_read_pkt failed: %s (rv=%d); ccerr: type=%d error_code=0x%llx; "
+        "tls_error=%d; ssl_err: %s; SSL_get_error=%d",
+        ngtcp2_strerror(rv), rv,
+        static_cast<int>(ccerr->type), static_cast<long long>(ccerr->error_code),
+        tls_error, ssl_err_buf, ssl_get_err);
+}
+
+int QuicSession::clientVerifyCallback(int preverify_ok, X509_STORE_CTX* x509_ctx) {
+    if (preverify_ok) {
+        return preverify_ok;
+    }
+    // NOTE: called from OpenSSL (C code): C++ exceptions must not propagate
+    try {
+        SSL* ssl = static_cast<SSL*>(X509_STORE_CTX_get_ex_data(x509_ctx, SSL_get_ex_data_X509_STORE_CTX_idx()));
+        auto* conn_ref = ssl ? static_cast<ngtcp2_crypto_conn_ref*>(SSL_get_app_data(ssl)) : nullptr;
+        if (conn_ref && conn_ref->user_data) {
+            SimpleRefHolder<QoreStringNode> desc(q_ssl_get_verify_error_desc(x509_ctx));
+            static_cast<QuicSession*>(conn_ref->user_data)->verify_error_ = desc->c_str();
+        }
+    } catch (...) {
+        // the reason is optional: the error raised for the refused handshake still has the verification result
+    }
+    return preverify_ok;
 }
 
 int QuicSession::readPacket(const uint8_t* data, size_t len,

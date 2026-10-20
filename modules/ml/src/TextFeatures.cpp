@@ -90,7 +90,7 @@ void QoreTextFeatures::fit(const QoreListNode* documents, ExceptionSink* xsink) 
             return;
         }
         QoreStringValueHelper str(v);
-        std::vector<std::string> tokens = tokenize(str->c_str());
+        std::vector<std::string> tokens = tokenize(mlStdString(**str));
 
         // Count unique terms in this document
         std::unordered_map<std::string, bool> seen;
@@ -187,7 +187,7 @@ QoreListNode* QoreTextFeatures::transform(const QoreListNode* documents,
             return nullptr;
         }
         QoreStringValueHelper str(v);
-        std::vector<std::string> tokens = tokenize(str->c_str());
+        std::vector<std::string> tokens = tokenize(mlStdString(**str));
 
         // Count term frequencies
         std::unordered_map<std::string, int> tf_counts;

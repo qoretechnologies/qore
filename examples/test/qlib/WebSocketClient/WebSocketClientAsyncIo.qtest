@@ -84,15 +84,7 @@ public class WebSocketClientAsyncIoTest inherits QUnit::Test {
         Logger logger;
     }
 
-    static sigusr1Handler(int sig) {
-        printf("=== SIGUSR1 Thread Stacks ===\n%Y\n=== End Thread Stacks ===\n",
-            get_all_thread_call_stacks());
-    }
-
     constructor() : Test("WebSocketClientAsyncIoTest", "1.0") {
-%ifndef PO_NO_PROCESS_CONTROL
-        set_signal_handler(SIGUSR1, \sigusr1Handler());
-%endif
         addTestCase("basic async_io text send/receive", \basicTextTest());
         addTestCase("async_io binary send/receive", \binaryTest());
         addTestCase("async_io multiple messages", \multipleMessagesTest());

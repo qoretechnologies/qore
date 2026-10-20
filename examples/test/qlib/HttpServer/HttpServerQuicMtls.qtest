@@ -122,14 +122,6 @@ l50Xb2GWQesIt9k5jF5IOw==
     }
 
     constructor() : Test("HttpServerQuicMtlsTest", "1.0") {
-        # Set up SIGUSR1 handler to dump thread stacks for debugging hangs
-        @debug {
-            set_signal_handler(SIGUSR1, sub (int sig) {
-                printf("=== SIGUSR1 Thread Stacks ===\n%Y\n=== End Thread Stacks ===\n",
-                    get_all_thread_call_stacks());
-            });
-        }
-
         addTestCase("mTLS with client cert", \testMtlsWithClientCert());
         addTestCase("get_remote_certs without client cert", \testGetRemoteCertsNoClientCert());
         addTestCase("SSL_VERIFY_FAIL_IF_NO_PEER_CERT rejects", \testVerifyFailIfNoPeerCert());

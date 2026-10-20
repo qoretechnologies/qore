@@ -1,0 +1,72 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+#
+# Anthropic's chat and completion requests honour the request's own timeout (LlmRequestOptions::timeout_ms), not
+# only the client's (LlmBackendConfig::timeout_ms, 120 s by default): a long requirement decomposition with a
+# 900 s request timeout was cut off after 120 s.  A local server accepts the connection and never answers.
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires json
+%requires QUnit
+%requires QoreLlmTypes
+%requires QoreLlmUtils
+%requires AnthropicRestClient
+%exec-class AnthropicRequestTimeoutTest
+
+public class AnthropicRequestTimeoutTest inherits QUnit::Test {
+    private {
+        Socket server();
+        int port;
+        Counter stop(1);
+        list<Socket> accepted = ();
+    }
+
+    constructor() : Test("AnthropicRequestTimeoutTest", "1.0") {
+        server.bind("127.0.0.1:0", True);
+        server.listen();
+        port = server.getSocketInfo().port;
+        # accept and hold every connection without answering
+        background sub () {
+            while (stop.getCount()) {
+                *Socket s = server.accept(100ms);
+                if (s) {
+                    accepted += s;
+                }
+            }
+        }();
+        addTestCase("chat honours the request timeout", \chatTest());
+        addTestCase("complete honours the request timeout", \completeTest());
+        set_return_value(main());
+        stop.dec();
+    }
+
+    private AnthropicRestClient::AnthropicLlmProvider provider() {
+        return new AnthropicRestClient::AnthropicLlmProvider(<QoreLlmUtils::LlmBackendConfig>{
+            "mode": "anthropic",
+            "url": sprintf("http://127.0.0.1:%d", port),
+            "model": "claude-opus-4-8",
+            "api_key": "test",
+            "max_retries": 0,
+        });
+    }
+
+    chatTest() {
+        AnthropicRestClient::AnthropicLlmProvider p = provider();
+        date start = now_us();
+        assertThrows("LLM-ERROR", \p.chat(),
+            ((<QoreLlmUtils::ChatMessage>{"role": "user", "content": "go"},), NOTHING,
+            <QoreLlmUtils::LlmRequestOptions>{"timeout_ms": 500, "max_retries": 0}));
+        assertLt(30s, now_us() - start, "the 500 ms request timeout ends the request, not the client's 120 s");
+    }
+
+    completeTest() {
+        AnthropicRestClient::AnthropicLlmProvider p = provider();
+        date start = now_us();
+        assertThrows("LLM-ERROR", \p.complete(), ("rules", "go", NOTHING,
+            <QoreLlmUtils::LlmRequestOptions>{"timeout_ms": 500, "max_retries": 0}));
+        assertLt(30s, now_us() - start, "the 500 ms request timeout ends the request, not the client's 120 s");
+    }
+}

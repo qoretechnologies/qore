@@ -502,7 +502,8 @@ public class IntercomRecordTables {
                 };
             }
         }
-        string field = cast<hash<DataProviderFieldReference>>(exp.args[0]).field;
+        # the table declares its fields (field_ops), so canRender() accepted a field that has a name
+        string field = RestSchemaRecordFilter::getFieldName(cast<hash<DataProviderFieldReference>>(exp.args[0]));
         if (exp.exp == DP_SEARCH_OP_IN) {
             # the values arrive either as one list or as separate arguments, and both mean the same set
             list<auto> values = ();

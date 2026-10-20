@@ -3,7 +3,7 @@
 /*
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -46,15 +46,14 @@ QoreLoggerAppenderWithLayout::QoreLoggerAppenderWithLayout(QoreObject* self, con
 //! Assigns a layout to the appender
 void QoreLoggerAppenderWithLayout::setLayout(ExceptionSink* xsink, const QoreObject* layout) {
     QoreAutoRWWriteLocker awl(lock);
-    if (this->layout) {
-        if (llp) {
-            llp->deref(xsink);
-            llp = nullptr;
-        }
-        this->layout->deref(xsink);
+    assert(!owns_refs);
+    if (llp) {
+        llp->deref(xsink);
+        llp = nullptr;
     }
-    assert(!llp);
-    this->layout = layout->objectRefSelf();
+    // the reference to the layout is held by the layout internal member, where the garbage collector can follow it
+    this->layout = const_cast<QoreObject*>(layout);
+    self->setMemberValue("layout", QC_LOGGERAPPENDERWITHLAYOUT, layout->objectRefSelf(), xsink);
 
     const QoreClass* cls = layout->getClass();
     if (cls->isEqual(*QC_LOGGERLAYOUTPATTERN)) {
@@ -86,10 +85,11 @@ QoreValue QoreLoggerAppenderWithLayout::serializeImpl(ExceptionSink* xsink, cons
 }
 
 void QoreLoggerAppenderWithLayout::derefIntern(ExceptionSink* xsink) {
-    if (layout) {
-        if (llp) {
-            llp->deref(xsink);
-        }
+    if (llp) {
+        llp->deref(xsink);
+    }
+    // the layout is referenced here only after the object is destroyed, see QoreLoggerAppender::destructor()
+    if (layout && owns_refs) {
         layout->deref(xsink);
     }
     QoreLoggerAppender::derefIntern(xsink);

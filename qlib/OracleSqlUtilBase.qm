@@ -780,8 +780,8 @@ public class OracleIndex inherits SqlUtil::AbstractIndex, OraclePartitionScopeSu
     }
 
 
-    #! returns a string that can be used to rename the index in the database
-    string getRenameSql(string table_name, string new_name) {
+    #! returns the SQL statement that renames the index in the database
+    softlist<string> getRenameSql(string table_name, string new_name) {
         return sprintf("alter index %s rename to %s", name, new_name);
     }
 }

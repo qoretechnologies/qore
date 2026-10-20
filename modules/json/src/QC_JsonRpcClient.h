@@ -55,8 +55,12 @@ public:
         // set json-rpc version if possible
         QoreValue vstr = opts->getKeyValue("version");
         if (vstr.getType() == NT_STRING) {
-            QoreStringValueHelper str(vstr);
-            jsonrpc_version = str->c_str();
+            QoreStringValueHelper str(vstr, QCS_UTF8, xsink);
+            if (*xsink) {
+                return;
+            }
+            // the whole version is kept: it was cut at a NUL character
+            jsonrpc_version.assign(str->c_str(), str->size());
         }
 
         // set HTTPClient options
@@ -72,12 +76,12 @@ public:
 
     DLLLOCAL void getVersion(QoreString& str) const {
         AutoLocker al(m);
-        str.concat(jsonrpc_version);
+        str.concat(jsonrpc_version.data(), jsonrpc_version.size());
     }
 
-    DLLLOCAL void setVersion(const char* str) {
+    DLLLOCAL void setVersion(const char* str, size_t len) {
         AutoLocker al(m);
-        jsonrpc_version = str;
+        jsonrpc_version.assign(str, len);
     }
 
     DLLLOCAL const std::string& getVersionStr() const {

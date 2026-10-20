@@ -955,6 +955,10 @@ class I18nTest inherits QUnit::Test {
         assertThrows("I18N-CATALOG-JSON-ERROR", auto sub() {
             return I18n::parse_native_catalog_json("[1, 2, 3]");
         });
+        # a key with a NUL character cannot be a hash key; it was cut at the NUL character
+        assertThrows("HASH-KEY-ERROR", "key \"a\\\\x00b\" contains a NUL character at byte offset 1", auto sub() {
+            return I18n::parse_native_catalog_json('{"a": 1, "a\u0000b": 2}');
+        });
         hash<auto> parsed = I18n::parse_native_catalog_json("{\"schema_version\":1,\"score\":0.8,\"small\":1e-2}");
         assertEq(0.8, parsed.score);
         assertEq(0.01, parsed.small);

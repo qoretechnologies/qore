@@ -77,7 +77,8 @@ class FhirR4ArtifactGeneratorTest inherits QUnit::Test {
     }
 
     private generateResourceCatalogTest() {
-        string tmp_dir = tmp_location();
+        string tmp_dir = createRunDir();
+        on_exit removeTree(tmp_dir);
         string zip_path = tmp_dir + "/definitions.json.zip";
         string out_dir = tmp_dir + "/FhirRestDataProvider";
         createDefinitionsZip(zip_path, ("Patient", "Observation", "Bundle"));
@@ -136,7 +137,8 @@ class FhirR4ArtifactGeneratorTest inherits QUnit::Test {
     }
 
     private checksumMismatchTest() {
-        string tmp_dir = tmp_location();
+        string tmp_dir = createRunDir();
+        on_exit removeTree(tmp_dir);
         string zip_path = tmp_dir + "/definitions.json.zip";
         createDefinitionsZip(zip_path, ("Patient",));
 
@@ -150,7 +152,8 @@ class FhirR4ArtifactGeneratorTest inherits QUnit::Test {
     }
 
     private unsupportedVersionTest() {
-        string tmp_dir = tmp_location();
+        string tmp_dir = createRunDir();
+        on_exit removeTree(tmp_dir);
         string zip_path = tmp_dir + "/definitions.json.zip";
         createDefinitionsZip(zip_path, ("Patient",), "4.3.0");
 
@@ -163,7 +166,8 @@ class FhirR4ArtifactGeneratorTest inherits QUnit::Test {
     }
 
     private invalidResourceTypeTest() {
-        string tmp_dir = tmp_location();
+        string tmp_dir = createRunDir();
+        on_exit removeTree(tmp_dir);
         string zip_path = tmp_dir + "/definitions.json.zip";
         createDefinitionsZip(zip_path, ("1Bad",));
 
@@ -176,7 +180,8 @@ class FhirR4ArtifactGeneratorTest inherits QUnit::Test {
     }
 
     private missingEntryTest() {
-        string tmp_dir = tmp_location();
+        string tmp_dir = createRunDir();
+        on_exit removeTree(tmp_dir);
         string zip_path = tmp_dir + "/definitions.json.zip";
         Zip::ZipFile zip = new Zip::ZipFile(zip_path, "w");
         zip.addText("version.info", getVersionInfo());
@@ -191,7 +196,8 @@ class FhirR4ArtifactGeneratorTest inherits QUnit::Test {
     }
 
     private missingBundleEntryListTest() {
-        string tmp_dir = tmp_location();
+        string tmp_dir = createRunDir();
+        on_exit removeTree(tmp_dir);
         string zip_path = tmp_dir + "/definitions.json.zip";
         Zip::ZipFile zip = new Zip::ZipFile(zip_path, "w");
         zip.addText("version.info", getVersionInfo());
@@ -208,6 +214,36 @@ class FhirR4ArtifactGeneratorTest inherits QUnit::Test {
                 "output_dir": tmp_dir + "/out",
             });
         });
+    }
+
+    #! creates a directory in the temporary directory for the files of a test case and returns its path
+    /** the name is unique for every run, so that runs on the same host, at the same time or after a run that left
+        files behind, never use each other's files
+    */
+    private static string createRunDir() {
+        string dir = tmp_location() + DirSep + sprintf("qore_fhir_r4_artifact_generator_test_%d_%s", getpid(),
+            get_random_string(8));
+        mkdir_ex(dir, 0700);
+        return dir;
+    }
+
+    #! removes the file or directory with everything in it; symbolic links are removed, not followed
+    private static removeTree(string path) {
+        *hash<StatInfo> info = hlstat(path);
+        if (!info) {
+            return;
+        }
+        if (info.type == "DIRECTORY") {
+            Dir dir();
+            if (dir.chdir(path)) {
+                foreach string name in (dir.list()) {
+                    removeTree(path + DirSep + name);
+                }
+            }
+            rmdir(path);
+        } else {
+            unlink(path);
+        }
     }
 
     private createDefinitionsZip(string zip_path, list<string> resource_types, string fhir_version = "4.0.1") {

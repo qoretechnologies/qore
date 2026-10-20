@@ -4,7 +4,7 @@
 
     Qore mongodb module - MongoDatabase class definition
 
-    Copyright (C) 2025 Qore Technologies, s.r.o.
+    Copyright (C) 2025 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -91,6 +91,11 @@ MongoCollection coll = db.getCollection("users");
     @endcode
 */
 MongoCollection MongoDatabase::getCollection(string name) {
+    // the name is passed to the driver as a C string, which would be cut at a NUL character
+    if (q_check_no_nul(name->c_str(), name->size(), "collection name", "collection names", "MONGODB-DATABASE-ERROR",
+            xsink)) {
+        return QoreValue();
+    }
     mongoc_collection_t* coll = database->getCollection(name->c_str());
     if (!coll) {
         xsink->raiseException("MONGODB-DATABASE-ERROR", "failed to get collection '%s'", name->c_str());
@@ -112,6 +117,11 @@ MongoCollection coll = db.createCollection("newcollection");
     @throw MONGODB-DATABASE-ERROR failed to create collection
 */
 MongoCollection MongoDatabase::createCollection(string name) {
+    // the name is passed to the driver as a C string, which would be cut at a NUL character
+    if (q_check_no_nul(name->c_str(), name->size(), "collection name", "collection names", "MONGODB-DATABASE-ERROR",
+            xsink)) {
+        return QoreValue();
+    }
     mongoc_collection_t* coll = database->createCollection(name->c_str(), xsink);
     if (*xsink) {
         return QoreValue();

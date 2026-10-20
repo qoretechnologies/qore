@@ -86,6 +86,13 @@ to their public `HTTPCLIENT-TIMEOUT` error. Explicit Future cancellation still p
     `processed_cond` is broadcast.  This allows `waitForProcessing()` to block until the I/O
     thread has captured all previously submitted operations in its poll set.
 
+  - The I/O threads of the global controller are external-lifecycle threads (`QTF_EXTERNAL_LIFECYCLE`, set by
+    `setExternalLifecycleThreads()` when the global controller is created): the cleanup at process exit waits for
+    those after it stops the controller, and only for those, as it waits for the other threads before it starts.
+    This includes a thread that the controller starts during the cleanup, as `stop()` does to deliver its quit
+    command when an I/O thread has stopped while another one runs; a debug-build assertion in `q_start_thread()`
+    checks that no other thread is started after the cleanup has started.
+
 - **Worker threads**
   - Submit operations via `submit()` or `exec()`.
   - Callback dispatcher workers execute Qore callbacks; Queue waiters receive results through the result Queue.
@@ -197,14 +204,68 @@ Submits an operation to the controller. The `SocketPollOperationInfo` hashdecl:
 | `to`          | `date`                     | Timeout (default: 30s). Negative = no timeout.          |
 | `owner`       | `string`                   | Required. Owner ID for `cancelByOwner()`.               |
 | `other`       | `*hash<auto>`              | Free-form data returned with the result.                |
-| `resultQueue` | `*Queue`                   | Optional shared result Queue.                           |
-| `callback`    | `*code`                    | Optional completion callback (mutually exclusive with `resultQueue`). |
+| `resultQueue` | `*Queue`                   | Optional shared result Queue; must not have a maximum size. |
+| `stateQueue`  | `*Queue<hash<SocketPollStateInfo>>` | Optional Queue for the operation's state events (see [State Events](#state-events)); must not have a maximum size. |
+| `notifyStates`| `*softlist<string>`        | The states to report on `stateQueue` (default: every change); requires `stateQueue`. |
 | `key`         | `*string`                  | Optional custom cache key (default: `sock.uniqueHash()`). |
 | `thread_key`  | `*string`                  | Accepted for source compatibility and ignored: an operation always runs on the I/O thread of its `sock` (see [I/O Thread Routing](#io-thread-routing)). |
+| `has_on_complete` | `bool`                 | Forces `onComplete()` dispatch when the override cannot be detected. |
 
-When `callback` is provided, results are delivered by the callback dispatcher worker pool.
-When `resultQueue` is provided, results are pushed to that Queue. Otherwise a new Queue is
-created and returned.
+When the operation's class overrides `AbstractPollOperation::onComplete()`, the result is passed to it on a callback
+dispatcher worker.  When `resultQueue` is provided, results are pushed to that Queue (as well).  Otherwise a new
+Queue is created and returned.
+
+No queue the controller pushes to may have a maximum size: `submit()` raises `ASYNC-IO-ERROR` for a `resultQueue`
+or `stateQueue` created with one, as a push to a full Queue would block the I/O thread.
+
+### State Events
+
+A caller that has to wait for an operation to reach a state (for example a QUIC client that is ready for a request
+once its handshake and HTTP/3 setup are done) must not poll `getState()`: that is a wait bounded by wall-clock time,
+and it reads a field that the I/O thread writes without synchronization (`SocketQuicClientPollOperation::qcs_state`
+is a plain enum).  It submits the operation with a `stateQueue` and blocks on that Queue instead; the events are
+`hash<SocketPollStateInfo>` (`sock`, `spop`, `state`, `done`, `other`).
+
+- **Where the state is read.**  After each `continuePoll()` call (a *step*), whatever its outcome (more polling,
+  completion or an exception), on the thread that ran the step: the I/O thread reads `getStateImpl()` in Phase 2 for
+  pure C++ operations; for Qore operations and C++ operations that need a worker (`needsWorkerDispatch()`), the
+  `DT_CONTINUE_POLL` worker calls `getState()` right after `continuePoll()`, under the same
+  `qore_continue_poll_lock`, and sends the string back in the `ContinuePollResult` command.  The state is therefore
+  read on the thread that writes it, with no new lock and no change in the operation classes.  A field an operation
+  also writes from another thread is read by its own `continuePoll()` on the I/O thread anyway, so this read adds no
+  race of its own.
+- **What is reported.**  The I/O thread keeps the state read after the previous step in the operation's `PollInfo`
+  (`last_state`, `state_seen`): the first state read is always reported, a later one when it differs
+  (`noteOperationState()`).  Changes within one step are merged into one.  With `notifyStates`, only changes into one
+  of the given states are pushed; the comparison is with the last state *read*, so a state left and entered again is
+  reported again.
+- **The last event.**  Every submission ends with exactly one event with `done` set and the last state read (none if
+  the operation ended before its first step): `deliverStateEnd()` is called by `doCancelIntern()` before it delivers
+  the canceled result, and by `PollInfo::cleanup()` before the deliver-exactly-once backstop; `PollInfo::cleanup()`
+  runs in Phase 3 and in the `ContinuePollResult` handler before the deferred result delivery.  An abandoned
+  `SubmitOp` (`cleanupAbandonedCommand()`) pushes it before its canceled result.  `state_end_delivered` makes it
+  exactly once.
+- **Ordering.**  An operation's events are pushed by the I/O thread in step order, and all of them, the last one
+  included, before its result is pushed or dispatched to `onComplete()`: the state of a step is noted in Phase 2 or
+  in the `ContinuePollResult` handler before the result of that step is delivered, and the last event precedes the
+  result on every path above.  A caller that received the result can drain the state Queue without blocking; a caller
+  that received the last event gets the result from the result Queue.
+- **Cost.**  Without a `stateQueue` the controller does not read the state at all (one null check per step).
+- **References.**  An event references the operation, its pollable object and its `other` data.  The controller
+  keeps the Queue's object as well as its private data and pushes each event with it, as `Queue::push()` does from
+  Qore code, so the deterministic garbage collector sees the references held by the queued events: an operation that
+  references its own state Queue (a member, or a callback's closure) and leaves events in it is part of a cycle
+  that is collected once nothing outside the cycle references it.  Results are pushed to the result Queue the same
+  way (`deliverResult()` with the Queue's object, which `PollInfo::queue_obj` holds next to the Queue): a result left
+  in a Queue the operation references is collected likewise.
+- **Constraints.**  The push never waits (the Queue has no maximum size).  An exception from a Qore `getState()` ends
+  the operation with that exception.  An operation whose `continuePoll()` runs in C++ on the I/O thread cannot have a
+  `getState()` implemented in Qore (a Qore subclass override, or a `DelegatingPollOperation` around such an
+  operation): `submit()` rejects it with a `stateQueue`, as Qore code does not run on the I/O thread.  A
+  `DelegatingPollOperation` around a C++ operation reads the inner state with `getStateImpl()`, without a Qore
+  method call.
+- **Resubmission.**  A new submission of the same operation object has a new `PollInfo` and reports its first step
+  again; a submission replaced by another one with the same key ends with its last event.
 
 The `replace` flag allows replacing an existing operation on the same key (used for connection
 re-polling patterns like HTTP/2 persistent connections).  Keys are looked up in the cache of the operation's I/O
@@ -350,6 +411,18 @@ for diagnostics (`getInfo()`, traces).
   them like the Cancel commands do.
 - `OpCache::erase()` finds the ID of an entry by its node, so an entry whose `PollInfo` was reset before it is removed
   (as several removal paths do) leaves no stale index entry.
+- **A step run on a callback worker is identified by its operation's ID**: the `DT_CONTINUE_POLL` item and the
+  `ContinuePollResult` command carry the ID, and the result is applied to the operation with that ID, or delivers the
+  deferred cancellation in `pending_aborts` (keyed by ID).  It was found by its key, so an operation that replaced
+  another one while the replaced one's step was in flight received the replaced one's result (a completion it never
+  reached, or another operation's poll info).
+- **An operation replaced while its step is in flight is canceled when the step returns**, as a Cancel does: a
+  different poll operation submitted for the key moves the replaced one to `pending_aborts` instead of calling its
+  `abort()` concurrently with its `continuePoll()`, and gets a new ID (the direct submit on the I/O thread too, which
+  otherwise keeps the replaced ID).  The same poll operation submitted again while its step is in flight keeps its ID
+  and is marked in flight, so no second step of it is dispatched before the first one returns; the step's result is
+  the new submission's.  `asyncio_replace_in_flight.qtest` replaces an operation whose step blocks until the test
+  releases it.
 
 ### Poll Info Reuse
 
@@ -374,6 +447,63 @@ deadlock, and every socket on a waiting thread stalls meanwhile.  When `cancelBy
 operations are canceled directly and the other threads get their commands without a waiter, so the returned count
 only includes the calling thread's operations.  A close from an I/O thread is queued to the socket's thread after
 those commands (`closeSocketOnController()`), so it runs after the cancellation on that thread.
+
+### Stopping I/O threads
+
+I/O threads stop independently (autostop when idle, or a `Quit` command), so one thread stops while others run or
+stop themselves.  The stop state is therefore per thread (`IoThreadContext`, guarded by `m`); nothing a stopping
+thread does may change another thread's state:
+
+- `exiting` is set when the thread decides to stop and cleared when it has stopped (`tid = 0`).  `startIntern()` waits
+  until no thread is stopping before it starts the stopped ones; a submit or timer for a stopping thread restarts it
+  that way.
+- `commands_closed` is set when the stopping thread has drained its command queue for the last time and moved its
+  cache to the operations it cancels on exit, and cleared when it is started again.  A command pushed from then on
+  would never be processed, and a caller waiting for it would wait forever.
+- The fan-outs (`cancelByOwner()`, `cancelByProgram()`, `cancelByKey()`, `cancelSocket()`, `getInfo()`,
+  `cancelTimer()` and the `Quit` of `stop()`) send their command to the threads that read commands
+  (`readsCommands()`: `tid && !commands_closed`) and walk the cache of the others under `m` (empty for a closed
+  thread, whose operations its exit cleanup cancels).  A stopping thread that has not drained its queue yet still
+  completes the commands pushed to it then.
+- A stopped thread resets its own sequence counters only, and `ready_flag` is cleared only when the last thread stops.
+
+These used to be controller-wide: a single `io_exiting` flag gated every fan-out, so while one thread stopped,
+`cancelByOwner()` canceled nothing on the running threads; and the thread that finished stopping cleared it and reset
+every thread's sequence counters, so a fan-out then sent its command to another thread past its last drain, where it
+stayed forever, with `cancelByOwner()` waiting for it (a hung `quic_comprehensive_test` on canoe).
+`AsyncIoStoppingThreadTest` in the C++ unit tests holds a thread after its last drain with a debug hook
+(`dbg_hold_after_drain`) to check both cases.
+
+### A socket closed while an I/O call uses it
+
+Not every close of a socket is ordered with its I/O calls.  The `abort()` of a poll operation closes the socket on
+the thread that calls it, which can be a callback worker running %Qore code (`Http2PollOperation::abort()` in
+HttpServerAsyncIo, for example) while the socket's I/O thread sends HTTP/2 frames for another operation; an HTTP/2
+client abort on the I/O thread and a close by an application thread do the same.  `close_m` serializes the closers
+with each other, not with the I/O calls, so a close can happen at any point of an I/O call on another thread:
+
+- every I/O call takes a `qore_socket_private::IoUseHelper` before it uses the socket's descriptor or its TLS
+  connection, and uses them only through it (`getDescriptor()`, `getSsl()`).  It is taken with `close_m` held, so it
+  has the descriptor and the TLS connection of one open connection, or neither if the socket was closed;
+- the close shuts the descriptor down at once, which makes the I/O call fail, but the descriptor is closed by the
+  last I/O call using it (`SharedDescriptor`): the system gives the lowest free number to the next socket or file
+  opened by any thread, so a call still using a closed descriptor's number could read from or write to another
+  connection;
+- the TLS connection (`SSLSocketHelper`) is reference counted with an atomic count, and the I/O call holds a
+  reference, so it is freed by its last holder.  The close calls `SSL_shutdown()` only when no other thread holds the
+  connection, as the calls of one SSL object must not run concurrently; the descriptor is already shut down, so the
+  close notification could not be sent anyway;
+- other uses of the TLS connection (the cipher, ALPN, `pending()` in `hasPendingData()`) take a reference with
+  `qore_socket_private::getSsl()`;
+- the descriptor number itself (`qore_socket_private::sock`) is atomic: it is read without a lock, for example by
+  `Socket::isOpen()`, while the close sets it with `close_m` held.
+
+Before this, the I/O call read the connection before taking its reference and the count was not atomic, so a close
+could free the connection under the call (an assertion failure in `SSLSocketHelper::sslError()` in debug builds, a
+use-after-free in release builds).  The debug-only `dbg_close_socket_at_next_ssl_io()` builtin closes a socket from
+another thread at the start of its next SSL I/O call; see
+`examples/test/qore/classes/Socket/ssl-close-during-io.qtest` and the `ut_socket_close_during_io_keeps_descriptor`
+unit test in `lib/ql_debug.cpp`.
 
 ### Periodic work owned by a Qore object
 

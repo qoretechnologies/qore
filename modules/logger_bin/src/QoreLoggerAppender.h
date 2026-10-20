@@ -3,7 +3,7 @@
 /*
     Qore Programming Language
 
-    Copyright (C) 2003 - 2025 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -97,6 +97,13 @@ public:
     //! Processes the event to the physical target
     DLLLOCAL void processEvent(int type, const QoreValue params, ExceptionSink* xsink);
 
+    //! Called when the appender object is destroyed; takes over the references to the objects it uses
+    /** While the appender object exists, the references to its filters, queue and layout are held by its internal
+        members, where the garbage collector can follow them; the members are released with the object, but the
+        private data can be referenced longer (by a Logger) and keeps using them
+    */
+    DLLLOCAL void destructor(ExceptionSink* xsink);
+
 protected:
     //! The owning object
     QoreObject* self;
@@ -121,11 +128,22 @@ protected:
     //! An inactive appender won't accept any logging request
     bool active = false;
 
-    //! Filter chain
+    //! Filter chain; referenced by the filters internal member, or here after the object is destroyed (owns_refs)
     QoreListNode* filters = nullptr;
 
-    //! Async queue (LoggerAppenderQueue object)
+    //! Async queue (LoggerAppenderQueue object); referenced by the q internal member, or here after the object is
+    //! destroyed (owns_refs)
     QoreObject* queue = nullptr;
+
+    //! True if the references to filters, queue and layout are held by the private data
+    bool owns_refs = false;
+
+    //! Takes over the references held by the internal members of the subclasses; called with the lock held
+    DLLLOCAL virtual void takeRefsLocked() {
+    }
+
+    //! Sets the filters internal member to the given list and points to it; called with the lock held
+    DLLLOCAL void setFiltersLocked(ExceptionSink* xsink, QoreListNode* l);
     QoreLoggerAppenderQueue* qqueue = nullptr;
 
     // Native implementation for the serializeImpl() call

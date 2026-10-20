@@ -113,6 +113,20 @@ module MssqlSqlUtilBase {
     @ref SqlUtil::AbstractTable::ColumnDescOptions "column description option" with the native Mssql type name
     instead (under the \c "driver" and \c "Mssql" keys for schemas supporting multiple databases).
 
+    @subsection mssql_unique_indexes Unique Indexes and Unique Constraints
+
+    A unique index of a table description on SQL Server also gets a unique constraint of the same name in the
+    description, which is the index, as on MySQL: the driver reports that a unique index creates a unique constraint.
+    SQL Server's <tt>CREATE UNIQUE INDEX</tt> creates no constraint, however, so a unique index read from the
+    database has none, and table alignment creates, recreates and drops a unique index of a template as an index
+    only: the constraint is never dropped or added around it (see
+    @ref MssqlSqlUtilBase::MssqlUniqueConstraint::getDisableReenableSql() "MssqlUniqueConstraint::getDisableReenableSql()").
+    A unique constraint added with <tt>ALTER TABLE ... ADD CONSTRAINT ... UNIQUE</tt> creates an index of its name,
+    which is read from the database as the constraint, not as an index.  A foreign constraint can reference the
+    columns of either; one that references a unique index is described with its referenced columns, and a unique
+    index that a foreign constraint references is dropped or recreated after the foreign constraint is dropped in a
+    schema alignment.
+
     @subsection MssqlSqlUtilBasev11 MssqlSqlUtilBase v1.1
     - added the size of the default schema of the connection's user (\c SCHEMA_NAME(); see
       @ref SqlUtil::AbstractDatabase::getCurrentSchemaPhysicalSize() "AbstractDatabase::getCurrentSchemaPhysicalSize()")
@@ -126,6 +140,24 @@ module MssqlSqlUtilBase {
       run
     - fixed changing the default value of a column: the existing default constraint is dropped by its name in the
       database before the new one is added; adding it failed with "Column already has a DEFAULT bound to it"
+    - fixed dropping an index, as table alignment does to recreate an index whose columns change: SQL Server
+      refused the \c DROP \c INDEX statement, which had no table name
+    - fixed describing the foreign constraints of a table, which found none, so that table alignment added the
+      foreign constraints of the template again, which SQL Server refused; a foreign constraint that references a
+      unique index is also described
+    - fixed table alignment of a unique index with other columns, which dropped a unique constraint of the same
+      name, dropped the index, created it and added the constraint again, so that the alignment failed: the index is
+      now dropped once and created once, and only the foreign constraints that reference it are dropped and added
+      again around it
+    - fixed renaming a primary key, as table alignment does for a primary key with the template's columns under
+      another name, which SQL Server refused, as \c sp_rename was given the name of the table and of the key, and
+      renaming a unique constraint, which dropped the constraint and added it under the new name, and which SQL
+      Server refused for a constraint that a foreign constraint references: both are renamed with \c sp_rename by
+      the name of their schema and their own name
+    - fixed renaming a foreign or check constraint, which dropped it and added it under the new name: it is renamed
+      with \c sp_rename as a unique constraint is
+    - fixed renaming a trigger, which named it without its schema: it is renamed with \c sp_rename by the name of
+      its schema and its own name
 
     @subsection MssqlSqlUtilBasev10 MssqlSqlUtilBase v1.0
     - initial release
@@ -153,6 +185,24 @@ sub parse_schema_name(string nname, reference<string> schema, reference<string> 
         schema = default_schema;
         name = nname;
     }
+}
+
+#! returns the SQL statement that renames an object of a table, a constraint with its index or a trigger, with sp_rename
+/** \c sp_rename names such an object by its schema and name, not by its table: the schema is the one of the table's
+    name, and an object of a table without a schema in its name is found in the default schema of the connection
+
+    @param table_name the name of the table, with its schema, as given by
+    @ref SqlUtil::AbstractTable::getSqlName() "AbstractTable::getSqlName()"
+    @param name the name of the object
+    @param new_name the new name of the object
+
+    @return the SQL statement that renames the object
+
+    @since MssqlSqlUtilBase 1.1
+*/
+string sub mssql_object_rename_sql(string table_name, string name, string new_name) {
+    *string schema = (table_name =~ x/^(.+)\.[^.]+$/)[0];
+    return sprintf("exec sp_rename '%s%s', '%s', 'OBJECT'", schema ? schema + "." : "", name, new_name);
 }
 
 #! returns the SQL Server major version year, or 0 for non-SQL Server / unknown version strings
@@ -278,9 +328,22 @@ public class MssqlIndex inherits SqlUtil::AbstractIndex {
     }
 
 
-    #! returns a string that can be used to rename the index in the database
-    string getRenameSql(string table_name, string new_name) {
+    #! returns the SQL statement that renames the index in the database
+    softlist<string> getRenameSql(string table_name, string new_name) {
         return sprintf("exec sp_rename '%s.%s', '%s', 'INDEX'", table_name, name, new_name);
+    }
+
+    #! returns the SQL statement that drops the index from its table
+    /** SQL Server drops an index by its name and the name of its table
+
+        @param table_name the name of the table
+
+        @return the SQL statement that drops the index from its table
+
+        @since MssqlSqlUtilBase 1.1
+    */
+    string getDropSql(string table_name) {
+        return sprintf("drop index %s on %s", name, table_name);
     }
 }
 
@@ -295,12 +358,9 @@ public class MssqlForeignConstraint inherits SqlUtil::AbstractForeignConstraint 
         return getCreateSql(name, table_name, opt);
     }
 
+    #! returns the SQL that renames the constraint with sp_rename, so that it is never dropped and added again
     softlist getRenameSql(string table_name, string new_name) {
-        # the following is only valid with Mssql 9.2+
-        #return sprintf("alter table %s rename constraint %s to %s", table_name, name, new_name);
-        list l += getDropSql(table_name);
-        l += getCreateSql(new_name, table_name);
-        return l;
+        return mssql_object_rename_sql(table_name, name, new_name);
     }
 
     #! returns a string that can be used to create the constraint in the database
@@ -322,12 +382,9 @@ public class MssqlCheckConstraint inherits SqlUtil::AbstractCheckConstraint {
         return getCreateSql(name, table_name, opt);
     }
 
+    #! returns the SQL that renames the constraint with sp_rename, so that it is never dropped and added again
     list getRenameSql(string table_name, string new_name) {
-        # the following is only valid with Mssql 9.2+
-        #return sprintf("alter table %s rename constraint %s to %s", table_name, name, new_name);
-        list l += getDropSql(table_name);
-        l += getCreateSql(new_name, table_name);
-        return l;
+        return (mssql_object_rename_sql(table_name, name, new_name),);
     }
 
     #! returns a string that can be used to create the constraint in the database
@@ -511,6 +568,23 @@ public class MssqlUniqueConstraintCommon inherits SqlUtil::AbstractUniqueConstra
         delete index;
     }
 
+    #! returns the SQL statement that renames the constraint and its index
+    /** \c sp_rename names a constraint by its schema and name, not by its table: the schema is the one of the
+        table's name, and a constraint of a table without a schema in its name is found in the default schema of the
+        connection
+
+        @param table_name the name of the table, with its schema, as given by
+        @ref SqlUtil::AbstractTable::getSqlName() "AbstractTable::getSqlName()"
+        @param new_name the new name of the constraint
+
+        @return the SQL statement that renames the constraint and its index
+
+        @since MssqlSqlUtilBase 1.1
+    */
+    private string getSpRenameSql(string table_name, string new_name) {
+        return mssql_object_rename_sql(table_name, name, new_name);
+    }
+
     #! adds index options onto the sql creation string
     getIndexSql(reference<string> sql, string name, *hash opts) {
         sql += sprintf(" (%s)", (foldl $1 + ", " + $2, getSqlColumnNameIterator()));
@@ -575,15 +649,20 @@ auto v = c.name;
         return getCreateSql(name, table_name, opts);
     }
 
+    #! returns the SQL that renames the constraint
+    /** The constraint and its index are renamed with \c sp_rename, so that the foreign constraints that reference
+        it are kept
+
+        @param table_name the name of the table
+        @param new_name the new name of the constraint
+
+        @return a list with the SQL statement that renames the constraint
+    */
     list getRenameSql(string table_name, string new_name) {
-        # the following is only valid with Mssql 9.2+
-        #return sprintf("alter table %s rename constraint %s to %s", table_name, name, new_name);
-        list l += getDropSql(table_name);
-        l += getCreateSql(new_name, table_name);
-        return l;
+        return (getSpRenameSql(table_name, new_name),);
     }
 
-    #! returns a string that can be used to rename the constraint
+    #! returns a string that can be used to create the constraint with the given name
     string getCreateSql(string name, string table_name, *hash opts) {
         string sql = sprintf("alter table %s add constraint %s unique ", table_name, name);
         getIndexSql(\sql, name, opts);
@@ -593,6 +672,25 @@ auto v = c.name;
     #! returns @ref True "True" if the constraint is enabled, @ref False "False" if not
     bool isEnabled() {
         return enabled;
+    }
+
+    #! returns the SQL that disables and re-enables the foreign constraints that reference the constraint
+    /** The unique constraint that a unique index of a table description has is the index, so recreating the index
+        recreates the constraint: the constraint is not dropped and added again around the recreation of its index,
+        which SQL Server refused, as the index is not a constraint, and which created the index a second time; only
+        the foreign constraints that reference it are disabled and re-enabled
+
+        @param ds the datasource of the tables of the foreign constraints
+        @param table_name this argument is ignored
+        @param opts options for the SQL that re-enables the foreign constraints
+
+        @return a hash with a \c disable key, giving a list of SQL strings that disable the foreign constraints
+        that reference this constraint, and an \c enable key, giving a list of SQL strings that re-enable them
+
+        @since MssqlSqlUtilBase 1.1
+    */
+    hash<auto> getDisableReenableSql(AbstractDatasource ds, string table_name, *hash<auto> opts) {
+        return getSourceConstraintDisableReenableSql(ds, opts);
     }
 }
 
@@ -642,9 +740,17 @@ auto v = c.name;
         return sql;
     }
 
-    #! returns a string that can be used to rename the constraint
+    #! returns the SQL that renames the primary key
+    /** The primary key and its index are renamed with \c sp_rename, so that the foreign constraints that reference
+        it are kept
+
+        @param table_name the name of the table
+        @param new_name the new name of the primary key
+
+        @return the SQL statement that renames the primary key
+    */
     softlist getRenameSql(string table_name, string new_name) {
-        return sprintf("sp_rename '%s.%s', '%s', 'OBJECT'", table_name, name, new_name);
+        return getSpRenameSql(table_name, new_name);
     }
 }
 
@@ -723,10 +829,18 @@ public class MssqlTrigger inherits SqlUtil::AbstractTrigger {
         return True;
     }
 
-    #! returns a string that can be used to rename the trigger in the database
+    #! returns the SQL that renames the trigger with sp_rename
+    /** The trigger is renamed by its schema, the one of the table's name, and its name; the definition of the trigger
+        that SQL Server keeps (\c OBJECT_DEFINITION()) still has its old name, as for every object renamed with
+        \c sp_rename
+
+        @param table_name the name of the table, with its schema
+        @param new_name the new name of the trigger
+
+        @return the SQL statement that renames the trigger
+    */
     softlist getRenameSql(string table_name, string new_name) {
-        # no idea if this will work
-        return sprintf("sp_rename '%s', '%s', 'OBJECT'", name, new_name);
+        return mssql_object_rename_sql(table_name, name, new_name);
     }
 }
 
@@ -2442,42 +2556,48 @@ and s.name = %v and t.name = %v order by i.name, ic.key_ordinal", schema, name);
     }
 
     private ForeignConstraints getForeignConstraintsImpl(*hash opts) {
-        return is_sybase ? getForeignConstraintsSybaseImpl() : getForeignConstraintsMssqlImpl();
+        return is_sybase ? getForeignConstraintsSybaseImpl() : getForeignConstraintsMssqlImpl(opts);
     }
 
     private ForeignConstraints getForeignConstraintsSybaseImpl() {
         return new ForeignConstraints();
     }
 
-    private ForeignConstraints getForeignConstraintsMssqlImpl() {
-        hash rv;
+    #! describes the foreign constraints of the table from the SQL Server catalog
+    /** The catalog views give the referenced columns of every foreign constraint, also of one that references a
+        unique index, which is not a constraint and has no rows in \c information_schema.key_column_usage
+
+        @param opts the options of the description; its \c table_cache key, if any, gives the descriptions of the
+        referenced tables
+    */
+    private ForeignConstraints getForeignConstraintsMssqlImpl(*hash<auto> opts) {
+        hash<auto> rv;
         # get foreign referential constraints
-        *hash qh = ds.select("select tc.constraint_name, c1.column_name source_column,
-    c2.column_name target_column
+        *hash<auto> qh = ds.select("select fk.name constraint_name, sc.name source_column, rs.name target_schema,
+    rt.name target_table, tc.name target_column
 from
-    information_schema.table_constraints tc,
-    information_schema.referential_constraints rc,
-    information_schema.key_column_usage c1,
-    information_schema.key_column_usage c2
+    sys.foreign_keys fk
+    join sys.tables t on (t.object_id = fk.parent_object_id)
+    join sys.schemas s on (s.schema_id = t.schema_id)
+    join sys.foreign_key_columns fkc on (fkc.constraint_object_id = fk.object_id)
+    join sys.columns sc on (sc.object_id = fkc.parent_object_id and sc.column_id = fkc.parent_column_id)
+    join sys.tables rt on (rt.object_id = fkc.referenced_object_id)
+    join sys.schemas rs on (rs.schema_id = rt.schema_id)
+    join sys.columns tc on (tc.object_id = fkc.referenced_object_id and tc.column_id = fkc.referenced_column_id)
 where
-    tc.table_schema = %v and tc.table_name = %v and tc.constraint_type = 'FOREIGN KEY'
-    and tc.constraint_catalog = rc.constraint_catalog and tc.constraint_name = rc.constraint_name
-    and rc.constraint_catalog = c1.constraint_catalog and rc.constraint_schema = c1.constraint_schema
-        and rc.constraint_name = c1.constraint_name
-    and rc.unique_constraint_catalog = c2.constraint_catalog and rc.unique_constraint_schema = c2.constraint_schema
-        and rc.unique_constraint_name = c2.constraint_name
-    and c2.ordinal_position = c1.ordinal_position
+    s.name = %v and t.name = %v
 order by
-    rc.constraint_name, c1.ordinal_position",
-                                name, schema);
+    fk.name, fkc.constraint_column_id", schema, name);
         if (qh.constraint_name) {
-            hash ch;
+            hash<auto> ch;
             foreach hash<auto> row in (qh.contextIterator()) {
-                reference<hash> c = \ch.(row.constraint_name.lwr());
-                row.source_column = row.source_column.lwr();
-                c.columns.(row.source_column) = columns{row.source_column};
-                c.target.table = row.target_table.lwr();
-                c.target.columns.(row.target_column.lwr()) = True;
+                reference<hash<auto>> c = \ch{row.constraint_name.lwr()};
+                string source_column = row.source_column.lwr();
+                c.columns{source_column} = columns{source_column};
+                # a table in another schema is referenced with its schema
+                c.target.table = (row.target_schema.lwr() == schema.lwr() ? "" : row.target_schema.lwr() + ".")
+                    + row.target_table.lwr();
+                c.target.columns{row.target_column.lwr()} = True;
             }
 
             foreach hash<auto> c in (ch.pairIterator()) {
@@ -2485,7 +2605,7 @@ order by
                 Columns targ_columns = getReferencedTableColumnsUnlocked(c.value.target.table, opts.table_cache);
                 ForeignConstraintTarget fct(c.value.target.table,
                     targ_columns.subset(c.value.target.columns.keys()));
-                rv.(c.key) = new MssqlForeignConstraint(c.key, new Columns(c.value.columns), fct);
+                rv{c.key} = new MssqlForeignConstraint(c.key, new Columns(c.value.columns), fct);
             }
         }
 

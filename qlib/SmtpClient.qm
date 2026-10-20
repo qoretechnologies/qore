@@ -25,13 +25,13 @@
 */
 
 # minimum qore version
-%requires qore >= 2.0
+%requires qore >= 3.0
 
 # need mime definitions
-%requires Mime >= 1.4
+%requires Mime >= 1.9
 
 # need MailMessage classes
-%requires MailMessage >= 1.3
+%requires MailMessage >= 1.5.1
 
 %requires(reexport) ConnectionProvider >= 1.4
 %requires(reexport) DataProvider
@@ -205,6 +205,25 @@ smtp.sendMessage(msg);@endcode
       - Added \c "content-id" field to the send email attachment type
       - Inline attachments are used for embedding images in HTML emails (referenced as \c "cid:content-id")
     - Fixed \c SmtpPingPollOperation to set \c goal_reached on successful completion
+    - A message is now always sent with SMTP transparency
+      (<a href="https://datatracker.ietf.org/doc/html/rfc5321#section-4.5.2">RFC 5321</a> section 4.5.2),
+      whatever its SMTP mode: every CR or LF character that is not part of a CRLF line break is sent as CRLF, and
+      a \c "." is added at the start of every line that starts with \c "."; a message created with SMTP mode off
+      was sent with no added \c ".", so that a line with only \c "." ended the data and the lines after it were
+      read as SMTP commands, and a bare LF before such a line was sent as it was, which a server that accepts a
+      bare LF as a line ending took the same way (SMTP smuggling); see
+      @ref SmtpClient::SmtpSendPollOperation::getData() "SmtpSendPollOperation::getData()"
+    - The end-of-data line follows the last line break of the message; an empty line was added at the end of
+      every message
+    - A sender or recipient address with a NUL, CR or LF character, which would end the \c MAIL \c FROM or
+      \c RCPT \c TO command and start another one, raises \c MESSAGE-ERROR before anything is sent; the sender
+      address of a parsed message was its whole decoded \c From header, which could contain a line break (fixed
+      in MailMessage 1.5.1)
+    - A credential with a character that separates the fields of the SASL message raises
+      \c SMTPCLIENT-INVALID-AUTHENTICATION before anything is sent: a NUL character in the user name or password
+      for \c PLAIN, or a NUL or \c ^A character in the user name or token for \c XOAUTH2 and \c OAUTHBEARER; a
+      \c "=" or \c "," in the user name is written as \c "=3D" or \c "=2C" in the \c OAUTHBEARER message, as
+      RFC 7628 requires
 
     @subsection smtpclient_v2_1 SmtpClient 2.1
     - added support for the data provider action catalog API
@@ -935,9 +954,19 @@ smtp.setToken(new_access_token);
         - \c MSGID: return structure after the send; generally contains message id
         - \c QUIT: the server response of the disconnect command
 
-        @note This method is subject to thread serialization
+        @note
+        - This method is subject to thread serialization
+        - The message is sent with SMTP transparency, whatever the SMTP mode of the message: every CR or LF
+          character that is not part of a CRLF line break is sent as CRLF, and a \c "." is added at the start of
+          every line that starts with \c "."; see @ref SmtpClient::SmtpSendPollOperation::getData()
+          "SmtpSendPollOperation::getData()"
 
-        @throw MESSAGE-ERROR the message is incomplete and cannot be sent
+        @throw MESSAGE-ERROR the message is incomplete and cannot be sent, or the sender or a recipient address
+        contains a NUL, CR or LF character
+        @throw HEADER-ERROR a message header name contains a NUL, CR or LF character
+        @throw PART-ERROR an attachment header name or value contains a NUL, CR or LF character
+        @throw SMTPCLIENT-INVALID-AUTHENTICATION a credential contains a character that separates the fields of the
+        SASL message (see @ref SmtpClient::SmtpClient::getAuthInfo() "SmtpClient::getAuthInfo()")
     */
     hash<auto> sendMessage(MailMessage::Message message) {
         if (log_debug)
@@ -1119,13 +1148,18 @@ smtp.setEventQueue();
         @return the authentication setup to drive the poll operation pipelines
 
         @throw SMTPCLIENT-INVALID-AUTHENTICATION a bearer mechanism was forced without a token, or
-        @ref AuthMechanismPlain was forced with a token
+        @ref AuthMechanismPlain was forced with a token, or a credential contains a character that separates the
+        fields of the SASL message: a NUL character in the user name or password for \c PLAIN, or a NUL or \c ^A
+        (\c "\x01") character in the user name or token for \c XOAUTH2 and \c OAUTHBEARER; the credential is not
+        shown in the exception
 
         @note
         - When no mechanism is forced and a token is set, both the \c XOAUTH2 and \c OAUTHBEARER commands
           are built so the pipeline can pick one from the server's advertised capability list; the
           selection is never made from the hostname
         - Called on the application thread while building a pipeline, never on the I/O thread
+        - A \c "=" or \c "," in the user name is written as \c "=3D" or \c "=2C" in the \c OAUTHBEARER GS2
+          header, as RFC 7628 and RFC 5801 require, since \c "," ends the authorization identity
 
         @since %SmtpClient 2.2
     */
@@ -1149,16 +1183,29 @@ smtp.setEventQueue();
         }
 
         if (info.token.val()) {
+            # a ^A character ends a field of the XOAUTH2 and OAUTHBEARER messages and would let the rest of the
+            # value be read as another field; a NUL character can end the message for the server
+            if (info.user =~ /[\x00\x01]/) {
+                throw "SMTPCLIENT-INVALID-AUTHENTICATION", "the user name for a bearer-token login contains a NUL "
+                    "or ^A character, which would end its field of the SASL message";
+            }
+            if (info.token =~ /[\x00\x01]/) {
+                throw "SMTPCLIENT-INVALID-AUTHENTICATION", "the OAuth2 bearer token contains a NUL or ^A character, "
+                    "which would end its field of the SASL message";
+            }
+
             rv.do_auth = True;
             rv.use_bearer = True;
             rv.mechanism = mech == AuthMechanismAuto ? AuthMechanismXoauth2 : mech;
 
             string xoauth2 = sprintf("AUTH XOAUTH2 %s\r\n",
                 sprintf("user=%s%sauth=Bearer %s%s%s", info.user, CtrlA, info.token, CtrlA, CtrlA).toBase64());
-            # RFC 7628 GS2 header + host/port channel information
+            # RFC 7628 GS2 header + host/port channel information; "=" and "," in the authorization identity are
+            # written as "=3D" and "=2C" (RFC 5801 section 4), since "," ends it
+            string saslname = replace(replace(info.user, "=", "=3D"), ",", "=2C");
             (*string host, *string port) = SmtpClient::splitTarget(info.target);
             string oauthbearer = sprintf("AUTH OAUTHBEARER %s\r\n",
-                sprintf("n,a=%s,%shost=%s%sport=%s%sauth=Bearer %s%s%s", info.user, CtrlA, host, CtrlA, port,
+                sprintf("n,a=%s,%shost=%s%sport=%s%sauth=Bearer %s%s%s", saslname, CtrlA, host, CtrlA, port,
                     CtrlA, info.token, CtrlA, CtrlA).toBase64());
 
             if (mech == AuthMechanismXoauth2) {
@@ -1175,6 +1222,16 @@ smtp.setEventQueue();
         }
 
         if (info.pass.val()) {
+            # a NUL character separates the fields of the PLAIN message (RFC 4616) and would let the rest of the
+            # value be read as another field
+            if (info.user =~ /\x00/) {
+                throw "SMTPCLIENT-INVALID-AUTHENTICATION", "the user name contains a NUL character, which would end "
+                    "its field of the SASL PLAIN message";
+            }
+            if (info.pass =~ /\x00/) {
+                throw "SMTPCLIENT-INVALID-AUTHENTICATION", "the password contains a NUL character, which would end "
+                    "its field of the SASL PLAIN message";
+            }
             rv.do_auth = True;
             rv.mechanism = AuthMechanismPlain;
             rv.plain_cmd = sprintf("AUTH PLAIN %s\r\n", make_base64_string(
@@ -1568,7 +1625,7 @@ public class SmtpPingPollOperation inherits Qore::PollPipeline {
 #! SMTP send poll operation - sends an email asynchronously via PollPipeline
 /** Builds on the same connect + auth sequence as @ref SmtpPingPollOperation,
     then appends MAIL FROM, RCPT TO (unrolled per recipient), DATA, message
-    body (serialized + dot-terminated), and QUIT steps.
+    body (serialized with SMTP transparency + the end-of-data line), and QUIT steps.
 
     The recipient list is statically unrolled at construction time - each
     recipient gets its own SEND + RECV step pair. This avoids needing loop
@@ -1581,7 +1638,7 @@ public class SmtpPingPollOperation inherits Qore::PollPipeline {
     - Steps 22..R-1: unrolled RCPT TO (2 steps per recipient)
     - Step R: SEND "DATA"
     - Step R+1: read DATA reply
-    - Step R+2: SEND serialized message body + "\\r\\n.\\r\\n"
+    - Step R+2: SEND the message text from getData() + ".\\r\\n"
     - Step R+3: read message accept reply
     - Step R+4: SEND "QUIT"
     - Step R+5: read QUIT reply
@@ -1603,7 +1660,12 @@ public class SmtpSendPollOperation inherits Qore::PollPipeline {
         @param message the email message to send
 
         @throw SMTP-SEND-ERROR if the SMTP server returns an error response
-        @throw MESSAGE-ERROR if the message cannot be serialized (no sender, no recipients)
+        @throw MESSAGE-ERROR if the message cannot be serialized (no sender, no recipients), or the sender or a
+        recipient address contains a NUL, CR or LF character
+        @throw HEADER-ERROR a message header name contains a NUL, CR or LF character
+        @throw PART-ERROR an attachment header name or value contains a NUL, CR or LF character
+        @throw SMTPCLIENT-INVALID-AUTHENTICATION a credential contains a character that separates the fields of
+        the SASL message
     */
     constructor(SmtpClient smtp, MailMessage::Message message) : PollPipeline(smtp.createSocket()) {
         hash<auto> info = smtp.getInfo();
@@ -1618,9 +1680,10 @@ public class SmtpSendPollOperation inherits Qore::PollPipeline {
         if (!recipients) {
             throw "MESSAGE-ERROR", "message has no recipients";
         }
+        SmtpSendPollOperation::checkEnvelope(sender, recipients);
 
-        # Serialize the message body upfront (MIME encoding)
-        string mstr = message.serialize();
+        # Serialize the message body upfront (MIME encoding) with SMTP transparency
+        string mstr = SmtpSendPollOperation::getData(message);
 
         string hostname = gethostname();
         hash<SmtpAuthInfo> ai = SmtpClient::getAuthInfo(info);
@@ -1695,8 +1758,8 @@ public class SmtpSendPollOperation inherits Qore::PollPipeline {
         addSend("DATA\r\n");
         addRecvLineResponse("data_code", "data_text", "SMTP-SEND-ERROR");
 
-        # --- Send message body (serialized + dot-terminated) ---
-        addSend(binary(mstr + "\r\n.\r\n"));
+        # --- Send message body (serialized with SMTP transparency + the end-of-data line) ---
+        addSend(binary(mstr + ".\r\n"));
 
         # --- Read message accept reply (250 OK with message ID) ---
         addRecvLineResponse("msgid_code", "msgid_text", "SMTP-SEND-ERROR");
@@ -1718,7 +1781,12 @@ public class SmtpSendPollOperation inherits Qore::PollPipeline {
         client configuration, since no \c EHLO capability list is available on an already-connected socket
 
         @throw SMTP-SEND-ERROR if the SMTP server returns an error response
-        @throw MESSAGE-ERROR if the message cannot be serialized (no sender, no recipients)
+        @throw MESSAGE-ERROR if the message cannot be serialized (no sender, no recipients), or the sender or a
+        recipient address contains a NUL, CR or LF character
+        @throw HEADER-ERROR a message header name contains a NUL, CR or LF character
+        @throw PART-ERROR an attachment header name or value contains a NUL, CR or LF character
+        @throw SMTPCLIENT-INVALID-AUTHENTICATION a credential contains a character that separates the fields of
+        the SASL message
     */
     constructor(SmtpClient smtp, Socket sock, MailMessage::Message message, hash<auto> hello_reply, bool do_auth)
             : PollPipeline(sock) {
@@ -1735,8 +1803,10 @@ public class SmtpSendPollOperation inherits Qore::PollPipeline {
         if (!recipients) {
             throw "MESSAGE-ERROR", "message has no recipients";
         }
+        SmtpSendPollOperation::checkEnvelope(sender, recipients);
 
-        string mstr = message.serialize();
+        # Serialize the message body upfront (MIME encoding) with SMTP transparency
+        string mstr = SmtpSendPollOperation::getData(message);
 
         if (do_auth) {
             # no EHLO reply is available on an already-connected socket, so the mechanism comes from
@@ -1760,7 +1830,7 @@ public class SmtpSendPollOperation inherits Qore::PollPipeline {
 
         addSend("DATA\r\n");
         addRecvLineResponse("data_code", "data_text", "SMTP-SEND-ERROR");
-        addSend(binary(mstr + "\r\n.\r\n"));
+        addSend(binary(mstr + ".\r\n"));
         addRecvLineResponse("msgid_code", "msgid_text", "SMTP-SEND-ERROR");
         addSend("QUIT\r\n");
         addRecvLineResponse("quit_code", "quit_text", "SMTP-SEND-ERROR");
@@ -1771,6 +1841,42 @@ public class SmtpSendPollOperation inherits Qore::PollPipeline {
     */
     string getGoal() {
         return "send";
+    }
+
+    #! Returns the message text to send after the \c DATA command, without the end-of-data line
+    /** The message is serialized with @ref MailMessage::Message::serializeRaw() "Message::serializeRaw()" and given
+        SMTP transparency with @ref MailMessage::Message::encodeSmtpData() "Message::encodeSmtpData()" whatever the
+        SMTP mode of the message: every CR or LF character that is not part of a CRLF line break is sent as CRLF,
+        and a \c "." is added at the start of every line that starts with \c ".", so that no line of the message
+        can end the data and be followed by commands (SMTP smuggling)
+
+        @param message the message to send
+
+        @return the message text, ending with CRLF
+
+        @throw MESSAGE-ERROR the message is incomplete and cannot be sent
+        @throw HEADER-ERROR a header name contains a NUL, CR or LF character
+
+        @since %SmtpClient 2.2
+    */
+    static string getData(MailMessage::Message message) {
+        return MailMessage::Message::encodeSmtpData(message.serializeRaw());
+    }
+
+    #! Raises \c MESSAGE-ERROR if the sender or a recipient address contains a NUL, CR or LF character
+    /** The addresses are written to the \c MAIL \c FROM and \c RCPT \c TO command lines, so a line break in an
+        address would end the command and start another one
+
+        @param sender the sender address
+        @param recipients the recipient addresses
+
+        @throw MESSAGE-ERROR the sender or a recipient address contains a NUL, CR or LF character
+
+        @since %SmtpClient 2.2
+    */
+    static checkEnvelope(string sender, list<string> recipients) {
+        check_line_text(sender, "SMTP sender address", "MESSAGE-ERROR");
+        map check_line_text($1, "SMTP recipient address", "MESSAGE-ERROR"), recipients;
     }
 
     #! Returns the current state as a string

@@ -33,13 +33,21 @@ inline const QoreListNode* safeGetList(QoreValue v) {
     return v.get<const QoreListNode>();
 }
 
-//! Safely gets a string value from a QoreValue.
+//! Returns a copy of all bytes of a Qore string, including any NUL characters; an empty string for nullptr
+/** A NUL character is valid text, so a Qore string is always copied with its length, never as a C string, which
+    would cut it at the first NUL character.
+*/
+inline std::string qoreStdString(const QoreString* s) {
+    return s ? std::string(s->c_str(), s->size()) : std::string();
+}
+
+//! Safely gets a string value from a QoreValue, including any NUL characters.
 inline std::string safeGetStdString(QoreValue v) {
     if (v.isNullOrNothing() || v.getType() != NT_STRING) {
         return {};
     }
     QoreStringValueHelper s(v);
-    return s->c_str();
+    return qoreStdString(*s);
 }
 
 //! Safely gets a string from a hash key (returns empty string if not found or not a string)

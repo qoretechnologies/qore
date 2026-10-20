@@ -131,6 +131,11 @@ class SshUtilRegistryData : public AbstractPrivateData {
 class SshUtilRegistry {
 public:
     DLLLOCAL static void clear(ExceptionSink* xsink);
+    //! deregisters and releases the objects that belong to the Program, which is being destroyed
+    /** called by the Program cleanup callback of the module, while the Program can still run the destructors of its
+        objects; an object kept after its Program is destroyed could not be used or destroyed
+    */
+    DLLLOCAL static void releaseProgram(QoreProgram* pgm);
     DLLLOCAL static void registerClientIdentityProvider(const char* name, const QoreObject* provider, bool replace,
             ExceptionSink* xsink);
     DLLLOCAL static QoreObject* deregisterClientIdentityProvider(const char* name);

@@ -652,8 +652,15 @@ h";
 
         # diff_files: roundtrip with temp files
         {
-            string tmp1 = tmp_location() + "/diff_test_old.txt";
-            string tmp2 = tmp_location() + "/diff_test_new.txt";
+            # unique for every run, so that runs on the same host, at the same time or after a run that left the
+            # files behind, never use each other's files
+            string unique_name = sprintf("qore_diff_test_%d_%s", getpid(), get_random_string(8));
+            string tmp1 = tmp_location() + DirSep + unique_name + "-old.txt";
+            string tmp2 = tmp_location() + DirSep + unique_name + "-new.txt";
+            on_exit {
+                unlink(tmp1);
+                unlink(tmp2);
+            }
             {
                 File f1();
                 f1.open(tmp1, O_WRONLY | O_CREAT | O_TRUNC);
@@ -663,10 +670,6 @@ h";
                 File f2();
                 f2.open(tmp2, O_WRONLY | O_CREAT | O_TRUNC);
                 f2.write("line1\nchanged\nline3\nnew\n");
-            }
-            on_exit {
-                unlink(tmp1);
-                unlink(tmp2);
             }
 
             string r = diff_files(tmp1, tmp2);

@@ -5,6 +5,8 @@
 %requires QUnit
 %requires SqlUtil
 %requires PgsqlSqlUtilBase
+%prepend-module-path "${SCRIPT_DIR}"
+%requires ./PgsqlTestIsolation.qm
 %try-module pgsql
 %define NoPgsql
 %endtry
@@ -19,13 +21,19 @@ class PartitionCatalogPagingTest inherits Test {
         addTestCase("cursor rejects another or recreated parent", \stale());
         set_return_value(main());
     }
+    globalTearDown() {
+        PgsqlRunSchema::teardown();
+    }
     private hash<auto> fixture() {
 %ifdef NoPgsql
         testSkip("pgsql module unavailable");
 %endif
         if (!ENV.QORE_DB_CONNSTR_PGSQL) { testSkip("set QORE_DB_CONNSTR_PGSQL to a disposable database"); }
+        # the run's own schema, before the first PostgreSQL connection is opened
+        PgsqlRunSchema::setup(ENV.QORE_DB_CONNSTR_PGSQL, "PgsqlPartitionCatalogPaging");
         Datasource ds(ENV.QORE_DB_CONNSTR_PGSQL);
-        string schema = sprintf("catalog_page_%d_%d", getpid(), ++serial);
+        # a schema of the run, so a concurrent run of this test has its own
+        string schema = PgsqlRunSchema::getAuxName(sprintf("case%d", ++serial));
         ds.execRaw("create schema " + schema);
         ds.execRaw("create table " + schema + ".parent (id int) partition by range(id)");
         ds.execRaw("create table " + schema + ".other (id int) partition by range(id)");

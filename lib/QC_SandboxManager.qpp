@@ -381,8 +381,13 @@ sm.addFilesystemAllowedPath(path: "/data/uploads", access_modes: QSEC_READ | QSE
 
     @throw SANDBOX-PATH-ERROR the path cannot be canonicalized
     @throw SANDBOX-CONFIG-ERROR the path lies outside the sandbox root
+    @throw SANDBOX-PATH-ERROR the path contains a NUL character; see @ref path_nul_characters
 */
 nothing SandboxManager::addFilesystemAllowedPath(string path, int access_modes) [flags=NAMED_ARGS] {
+    // a path cut at a NUL character would name a shorter path, so the rule would cover more than given
+    if (q_check_path(*path, "SANDBOX-PATH-ERROR", xsink)) {
+        return QoreValue();
+    }
     sm->filesystem().addAllowedPath(path->c_str(), access_modes, xsink);
 }
 
@@ -395,8 +400,13 @@ nothing SandboxManager::addFilesystemAllowedPath(string path, int access_modes) 
     @note The path is canonicalized before it is stored; it does not have to exist yet.
 
     @throw SANDBOX-PATH-ERROR the path cannot be canonicalized
+    @throw SANDBOX-PATH-ERROR the path contains a NUL character; see @ref path_nul_characters
 */
 nothing SandboxManager::addFilesystemDeniedPath(string path) [flags=NAMED_ARGS] {
+    // a path cut at a NUL character would name a shorter path, so the rule would cover more than given
+    if (q_check_path(*path, "SANDBOX-PATH-ERROR", xsink)) {
+        return QoreValue();
+    }
     sm->filesystem().addDeniedPath(path->c_str(), xsink);
 }
 
@@ -417,8 +427,13 @@ sm.setFilesystemSandboxRoot(path: "/home/user/sandbox");
     @note The path is canonicalized before it is stored; it does not have to exist yet.
 
     @throw SANDBOX-PATH-ERROR the path cannot be canonicalized
+    @throw SANDBOX-PATH-ERROR the path contains a NUL character; see @ref path_nul_characters
 */
 nothing SandboxManager::setFilesystemSandboxRoot(string path) [flags=NAMED_ARGS] {
+    // a path cut at a NUL character would name a shorter path, so the rule would cover more than given
+    if (q_check_path(*path, "SANDBOX-PATH-ERROR", xsink)) {
+        return QoreValue();
+    }
     sm->filesystem().setSandboxRoot(path->c_str(), xsink);
 }
 

@@ -505,14 +505,19 @@ hashdecl Qore::ML::OnnxSessionConfig {
     //! whether to enable ONNX Runtime profiling for this session
     *bool enable_profiling;
     //! profile file prefix passed to ONNX Runtime; setting this also enables profiling
+    /** With a sandbox, the sandbox must allow the profile to be written; see @ref ml_onnx_sandbox */
     *string profile_file_prefix;
     //! path where ONNX Runtime should save the optimized model while creating the session
+    /** With a sandbox, the sandbox must allow the file to be written; see @ref ml_onnx_sandbox */
     *string optimized_model_filepath;
     //! input model format for memory buffers or ambiguous paths: "ONNX" or "ORT"
     *string load_model_format;
     //! optimized model output format when optimized_model_filepath is set: "ONNX" or "ORT"
     *string save_model_format;
     //! raw ONNX Runtime session config entries; values are converted to strings
+    /** With a sandbox, only the entries that name no file may be set, and the files that entries name are checked;
+        see @ref ml_onnx_sandbox
+    */
     *hash<auto> config;
     //! device-buffer binding policy for GPU/accelerator execution providers
     *hash<OnnxDeviceBindingConfig> device_binding;
@@ -528,6 +533,10 @@ hashdecl Qore::ML::OnnxSessionConfig {
 
         Capturing content identity holds the model graph and all external tensor data in memory for
         the lifetime of the session, so it is disabled by default.
+
+        With a filesystem sandbox, capture is always \c "required", whatever this value is, so that ONNX Runtime
+        only reads model and external data bytes that the sandbox allowed; see @ref ml_onnx_sandbox.  The content
+        of an ORT format model is its bytes, as an ORT format model cannot have external data.
 
         @see @ref Qore::ML::OnnxModel::getContentIdentity()
     */
@@ -1021,11 +1030,24 @@ OnnxModel model("/models/customer-score.ort",
     <OnnxSessionConfig>{"providers": (), "load_model_format": "ORT"});
     @endcode
 
-    @throw ML-ONNX-ERROR if the model cannot be optimized
+    @throw ML-ONNX-ERROR if the model cannot be optimized or a path has a NUL character
     @throw ML-ONNX-PROVIDER-ERROR if an execution provider cannot be initialized
+    @throw FILESYSTEM-ACCESS-DENIED if the sandbox of the calling program does not allow a file to be read or written;
+    see @ref ml_onnx_sandbox
+    @throw SANDBOX-PATH-ERROR if the sandbox of the calling program cannot resolve a path
+    @throw ML-ONNX-CONTENT-IDENTITY-ERROR with a sandbox, if the model has external data that ONNX Runtime would read
+    by itself; see @ref ml_onnx_sandbox
+    @throw ML-ONNX-ERROR with a sandbox, if a session config entry names a file the sandbox cannot check; see
+    @ref ml_onnx_sandbox
+    @throw ML-ONNX-PROVIDER-ERROR with a sandbox, if an execution provider option is not one listed by
+    @ref Qore::ML::ml_get_onnx_provider_options() "ml_get_onnx_provider_options()"
 */
 hash<auto> onnx_optimize_model(string input_path, string output_path, *hash<auto> options, bool ort_format = False) [dom=FILESYSTEM; flags=NAMED_ARGS] {
 #ifdef HAVE_ONNXRUNTIME
+    // the model files are opened by their NUL-terminated paths
+    if (q_check_path(*input_path, "ML-ONNX-ERROR", xsink) || q_check_path(*output_path, "ML-ONNX-ERROR", xsink)) {
+        return QoreValue();
+    }
     return qore_ml_onnx_optimize_model(input_path->c_str(), output_path->c_str(),
         options, ort_format, xsink);
 #else
@@ -1334,7 +1356,8 @@ ml_save_model(km, "/tmp/model.qml");
     @endcode
 
     @throw ML-SERIALIZE-ERROR if the model is not fitted
-    @throw FILE-ERROR if the file cannot be written
+    @throw FILE-OPEN2-ERROR if the file cannot be opened or the path has a NUL character
+    @throw FILE-WRITE-ERROR if the file cannot be written
 */
 nothing ml_save_model(AbstractMLModel[QoreMLModel] model, string path, *hash<auto> options) [dom=FILESYSTEM] {
     // Reserved in the public signature; the current native format has no configurable options.
@@ -1351,6 +1374,10 @@ nothing ml_save_model(AbstractMLModel[QoreMLModel] model, string path, *hash<aut
         return QoreValue();
     }
 
+    // the file is opened by its NUL-terminated path
+    if (q_check_path(*path, "FILE-OPEN2-ERROR", xsink)) {
+        return QoreValue();
+    }
     QoreFile f;
     if (f.open2(xsink, path->c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644)) {
         return QoreValue();
@@ -1373,9 +1400,14 @@ KMeans model = cast<KMeans>(ml_load_model("/tmp/model.qml"));
 
     @throw ML-DESERIALIZE-ERROR if the data is invalid, corrupted, or the algorithm tag
     is not registered
-    @throw FILE-ERROR if the file cannot be read
+    @throw FILE-OPEN2-ERROR if the file cannot be opened or the path has a NUL character
+    @throw FILE-READ-ERROR if the file cannot be read
 */
 AbstractMLModel ml_load_model(string path) [dom=FILESYSTEM] {
+    // the file is opened by its NUL-terminated path
+    if (q_check_path(*path, "FILE-OPEN2-ERROR", xsink)) {
+        return QoreValue();
+    }
     QoreFile f;
     if (f.open2(xsink, path->c_str(), O_RDONLY)) {
         return QoreValue();

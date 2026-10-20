@@ -1,0 +1,70 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# Credential cache names, keytab names and initial credential option values with a NUL character are refused instead
+# of being cut at the NUL character, which would name another cache, keytab or file.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+
+%requires Util
+%requires QUnit
+%requires krb5
+
+%exec-class Krb5PathNulTest
+
+class Krb5PathNulTest inherits QUnit::Test {
+    constructor() : QUnit::Test("krb5 path NUL characters", "1.0", \ARGV) {
+        addTestCase("credential caches and keytabs", \testNames());
+        addTestCase("initial credential options", \testOptions());
+        set_return_value(main());
+    }
+
+    #! asserts that the code raises the given error for a string with a NUL character at the given byte offset
+    /** @param what what the string is in the description, ex: \c "path"
+    */
+    assertNul(string err, string what, int offset, code c, string label) {
+        try {
+            c();
+            assertTrue(False, label + ": an exception is raised");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq(err, ex.err, label + ": error code");
+            assertEq(0, ex.desc.find(what + " \""), label + ": the description names the " + what);
+            assertTrue(ex.desc.find(sprintf("\" contains a NUL character at byte offset %d; ", offset)) > 0,
+                label + ": the description gives the offset of the NUL character");
+            assertEq(EINVAL, ex.arg, label + ": the argument is EINVAL");
+        }
+    }
+
+    testNames() {
+        Qore::Krb5::Krb5Context ctx();
+        string cache = "FILE:/tmp/krb5cc_path_nul_" + get_random_string(8);
+        assertNul("KRB5-CACHE-ERROR", "credential cache name", cache.size(),
+            auto sub () { return ctx.openCredentialCache(cache + "\x00.txt"); }, "openCredentialCache()");
+        string keytab = "FILE:/tmp/krb5kt_path_nul_" + get_random_string(8);
+        assertNul("KRB5-KEYTAB-ERROR", "keytab name", keytab.size(),
+            auto sub () { return ctx.openKeytab(keytab + "\x00.txt"); }, "openKeytab()");
+        # a MEMORY cache name is process-wide, so a name cut at the NUL character would name another cache
+        Qore::Krb5::Krb5Principal client("alice@EXAMPLE.COM");
+        assertNul("KRB5-CACHE-ERROR", "credential cache name", 8,
+            auto sub () { return ctx.createMemoryCredentialCache(client, "path-nul\x00-other"); },
+            "createMemoryCredentialCache()");
+        # without the NUL character
+        assertTrue(exists ctx.openKeytab(keytab), "openKeytab() without the NUL character");
+    }
+
+    testOptions() {
+        Qore::Krb5::Krb5Context ctx();
+        Qore::Krb5::Krb5Principal client("alice@EXAMPLE.COM");
+        string cache = "FILE:/tmp/krb5cc_path_nul_" + get_random_string(8);
+        foreach string key in ("fast_ccache_name", "in_ccache_name", "out_ccache_name", "service") {
+            hash<Qore::Krb5::Krb5InitialCredentialsOptions> opts();
+            opts{key} = cache + "\x00.txt";
+            assertNul("KRB5-INIT-CREDS-ERROR", "option '" + key + "'", cache.size(),
+                auto sub () { return ctx.acquireCredentialsWithPassword(client, "password", opts); },
+                "acquireCredentialsWithPassword() option " + key);
+        }
+    }
+}

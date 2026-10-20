@@ -504,6 +504,11 @@ DLLEXPORT extern const TypedHashDecl* hashdeclHttpRedirectInfo;
 */
 DLLEXPORT extern const TypedHashDecl* hashdeclSocketPollResultInfo;
 
+//! SocketPollStateInfo hashdecl
+/** @since %Qore 3.0
+*/
+DLLEXPORT extern const TypedHashDecl* hashdeclSocketPollStateInfo;
+
 //! EventPollInfo hashdecl
 /** @since %Qore 3.0
 */

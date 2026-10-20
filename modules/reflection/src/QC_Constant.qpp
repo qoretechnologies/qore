@@ -3,7 +3,7 @@
 /*
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -75,7 +75,7 @@ Constant con("::ARGV");
 
     @param path the constant name or namespace-justified path as a string
 
-    @throw UNKNOWN-CONSTANT cannot find a constant with the given name or path
+    @throw UNKNOWN-CONSTANT cannot find a constant with the given name or path, or the constant name contains a NUL character (since %Qore 3.0)
     @throw ENCODING-CONVERSION-ERROR this exception could be thrown if the string argument is not in the @ref default_encoding "default character encoding" and an error occurs during encoding conversion
 
     @note searches namespace constants only; does not search class constants
@@ -83,6 +83,10 @@ Constant con("::ARGV");
     @see forName()
  */
 Constant::constructor(string path) {
+    // the name is looked up as a C string, which would be cut at a NUL character and name another constant
+    if (q_check_no_nul(path->c_str(), path->size(), "constant name", "constant names", "UNKNOWN-CONSTANT", xsink)) {
+        return;
+    }
     TempEncodingHelper npath(path, QCS_DEFAULT, xsink);
     if (*xsink) {
         return;
@@ -119,12 +123,16 @@ Constant con = Constant::forName("Option::HAVE_FORK");
 
     @return a constant object corresponding to the name or namespace-justified path provided as an argument
 
-    @throw UNKNOWN-CONSTANT cannot find a constant with the given name or path
+    @throw UNKNOWN-CONSTANT cannot find a constant with the given name or path, or the constant name contains a NUL character (since %Qore 3.0)
     @throw ENCODING-CONVERSION-ERROR this exception could be thrown if the string argument is not in the @ref default_encoding "default character encoding" and an error occurs during encoding conversion
 
     @note searches namespace constants only; does not search class constants
  */
 static Constant Constant::forName(string path) [flags=RET_VALUE_ONLY] {
+    // the name is looked up as a C string, which would be cut at a NUL character and name another constant
+    if (q_check_no_nul(path->c_str(), path->size(), "constant name", "constant names", "UNKNOWN-CONSTANT", xsink)) {
+        return QoreValue();
+    }
     TempEncodingHelper npath(path, QCS_DEFAULT, xsink);
     if (*xsink) {
         return QoreValue();
@@ -151,12 +159,16 @@ Constant con = Constant::forName(pgm, "Option::HAVE_FORK");
 
     @return a constant object corresponding to the name or namespace-justified path provided as an argument
 
-    @throw UNKNOWN-CONSTANT cannot find a constant with the given name or path
+    @throw UNKNOWN-CONSTANT cannot find a constant with the given name or path, or the constant name contains a NUL character (since %Qore 3.0)
     @throw ENCODING-CONVERSION-ERROR this exception could be thrown if the string argument is not in the @ref default_encoding "default character encoding" and an error occurs during encoding conversion
 
     @note searches namespace constants only; does not search class constants
  */
 static Constant Constant::forName(Program[QoreProgram] pgm, string path) [flags=RET_VALUE_ONLY] {
+    // the name is looked up as a C string, which would be cut at a NUL character and name another constant
+    if (q_check_no_nul(path->c_str(), path->size(), "constant name", "constant names", "UNKNOWN-CONSTANT", xsink)) {
+        return QoreValue();
+    }
     TempEncodingHelper npath(path, QCS_DEFAULT, xsink);
     if (*xsink) {
         return QoreValue();

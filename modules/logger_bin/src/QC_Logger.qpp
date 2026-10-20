@@ -144,7 +144,15 @@ static void Logger_deserializer(QoreObject& self, const QoreHashNode* sdata,
 //! This is the base class for logger levels
 /** This class stores the integer and string log level values
 */
-qclass Logger [ns=Qore::Logger; arg=QoreLogger* l; vparent=LoggerInterface; serializer=reinterpret_cast<q_serializer_t>(Logger_serializer); deserializer=Logger_deserializer; internal_members=*Logger parent,LoggerLevel currentLevel];
+qclass Logger [ns=Qore::Logger; arg=QoreLogger* l; vparent=LoggerInterface; serializer=reinterpret_cast<q_serializer_t>(Logger_serializer); deserializer=Logger_deserializer; internal_members=*Logger parent,LoggerLevel currentLevel,*list appenders];
+
+//! Destroys the Logger
+/** The private data of the Logger, which a child logger can still reference, keeps its appenders
+*/
+Logger::destructor() {
+    l->destructor(xsink);
+    l->deref(xsink);
+}
 
 //! Creates the Logger
 /**

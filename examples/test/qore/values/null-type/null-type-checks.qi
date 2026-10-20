@@ -1,0 +1,169 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file null-type-checks.qi checks that NULL has the type NULL in hashes, lists and their copies
+
+/*  Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+/** The IR and JIT engines hold NULL in the value itself, and the AST interpreter mostly as the NULL node; both are
+    the same value of type NULL.  A hash or list literal with NULL and values of another type has no common value
+    type, so it is a hash<auto> or list<auto> holding NULL, and every way of reading the NULL back gives NULL: the
+    member or element, a copy, and an iterator.  When the type of an inline NULL was taken as "nothing", the IR and
+    JIT engines folded such literals into hash<string, *int> or list<*int> holding a NULL, which read back as NOTHING
+    from the hash but as NULL from a copy (the failure of DataProvider.qtest in the test-tiered-ubuntu-amd64 CI job).
+
+    The checks are run in each execution mode by null-type-worker.q, which includes this file in its main program
+    (code in a user module loaded from source does not take the execution mode given on the command line), and as a
+    compiled (AOT) module by NullTypeChecks.qm, which includes it as well.
+*/
+public namespace NullTypeChecks {
+#! collects the result of each check as a line: "ok <label>" or "FAIL <label>: ..."
+class Checker {
+    private {
+        list<string> results = ();
+    }
+
+    #! records whether the value is the expected one, comparing types and values (===)
+    chk(string label, auto actual, auto expected) {
+        if (actual === expected) {
+            push results, "ok " + label;
+        } else {
+            push results, sprintf("FAIL %s: expected %y, got %y", label, expected, actual);
+        }
+    }
+
+    list<string> getResults() {
+        return results;
+    }
+}
+
+#! the type of the hash and of its member "a", read in every way
+hash<string, string> sub member_types(auto value) {
+    hash<auto> copy = {};
+    copy += value;
+    string key = "a";
+    hash<string, string> rv = {
+        "fullType": value.fullType(),
+        "member": value.a.type(),
+        "brace": value{"a"}.type(),
+        "key": value{key}.type(),
+        "copy": copy.a.type(),
+    };
+    foreach hash<auto> kv in (value.pairIterator()) {
+        if (kv.key == "a") {
+            rv.iter = kv.value.type();
+        }
+    }
+    return rv;
+}
+
+#! the type of the list and of its element at the given offset, read in every way
+hash<string, string> sub element_types(auto value, int offset) {
+    list<auto> copy = ();
+    copy += value;
+    hash<string, string> rv = {
+        "fullType": value.fullType(),
+        "element": value[offset].type(),
+        "copy": copy[offset].type(),
+    };
+    int i = 0;
+    foreach auto v in (value) {
+        if (i++ == offset) {
+            rv.iter = v.type();
+        }
+    }
+    return rv;
+}
+
+#! the check of a NULL opacity in RgbColorDataTypeBase::acceptsValue() of DataProvider 3.9 (a208824c71)
+/** A NULL opacity is removed so that it takes the default, as a missing one does; the type of the opacity that the
+    rest of acceptsValue() sees is returned
+*/
+string sub opacity_after_null_check(auto value) {
+    if (value.typeCode() == NT_HASH && value.a.typeCode() == NT_NULL) {
+        value -= "a";
+    }
+    hash<auto> copy = {};
+    copy += value;
+    return copy.a.type();
+}
+
+#! a function with two variants, neither of which takes NULL
+string sub overloaded(int i) {
+    return "int";
+}
+
+#! a function with two variants, neither of which takes NULL
+string sub overloaded(string s) {
+    return "string";
+}
+
+#! returns the call that an overload error names when the function is called with NULL at run time
+string sub overload_error_call() {
+    auto arg = NULL;
+    try {
+        call_function("NullTypeChecks::overloaded", arg);
+    } catch (hash<ExceptionInfo> ex) {
+        *list<*string> call = (ex.desc =~ x/no variant matching '([^']*)'/);
+        return sprintf("%s: %s", ex.err, call ? call[0] : ex.desc);
+    }
+    return "no error";
+}
+
+#! runs every check and returns the results
+public list<string> sub get_results() {
+    Checker c();
+    auto n = NULL;
+    int one = 1;
+    hash<string, string> null_member = {
+        "fullType": "hash<auto>",
+        "member": "NULL",
+        "brace": "NULL",
+        "key": "NULL",
+        "copy": "NULL",
+        "iter": "NULL",
+    };
+    hash<string, string> null_element = {
+        "fullType": "list<auto>",
+        "element": "NULL",
+        "copy": "NULL",
+        "iter": "NULL",
+    };
+    # each check runs three times, as the first call of a function can take another path than the following calls
+    for (int call = 1; call <= 3; ++call) {
+        string p = sprintf("call %d: ", call);
+        c.chk(p + "hash literal with NULL after ints", member_types({"r": 1, "g": 2, "b": 3, "a": NULL}),
+            null_member);
+        c.chk(p + "hash literal with NULL before an int", member_types({"a": NULL, "r": 1}), null_member);
+        c.chk(p + "hash literal with NULL after a string", member_types({"r": "x", "a": NULL}), null_member);
+        c.chk(p + "hash with NULL from a variable", member_types({"r": one, "a": n}), null_member);
+        c.chk(p + "list literal with NULL after ints", element_types((1, 2, NULL), 2), null_element);
+        c.chk(p + "list literal with NULL before an int", element_types((NULL, 1), 0), null_element);
+        c.chk(p + "list with NULL from a variable", element_types((one, n), 1), null_element);
+        c.chk(p + "a NULL opacity is removed (literal)",
+            opacity_after_null_check({"r": 1, "g": 2, "b": 3, "a": NULL}), "nothing");
+        c.chk(p + "a NULL opacity is removed (variable)",
+            opacity_after_null_check({"r": one, "g": 2, "b": 3, "a": n}), "nothing");
+        c.chk(p + "an overload error names the type of a NULL argument", overload_error_call(),
+            "RUNTIME-OVERLOAD-ERROR: overloaded(NULL)");
+    }
+    return c.getResults();
+}
+}

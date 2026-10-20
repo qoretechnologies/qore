@@ -22,9 +22,6 @@
     DEALINGS IN THE SOFTWARE.
 */
 
-# assume local var scope, do not use "$" for vars, members, and method calls
-%modern
-
 class CsvHelper {
     private {
         const int C_OPT1 = 0x1;

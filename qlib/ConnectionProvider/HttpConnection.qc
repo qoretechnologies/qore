@@ -22,8 +22,6 @@
     DEALINGS IN THE SOFTWARE.
 */
 
-%modern
-
 #! The ConnectionProvider namespace
 /** All public declarations in the %ConnectionProvider module are defined in this namespace
 */

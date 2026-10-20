@@ -978,6 +978,16 @@ QoreValue SetSelfFunctionCallNode::evalImpl(RuntimeConfig& rc, bool& needs_deref
     return rv;
 }
 
+bool SetSelfFunctionCallNode::derefImpl(ExceptionSink* xsink) {
+    // a node that was not evaluated, such as the copy of a background call whose thread could not be created, still
+    // holds the reference to the object; otherwise the object, and the Program that it belongs to, are never freed
+    if (deref_self) {
+        deref_self = false;
+        self->deref(xsink);
+    }
+    return SelfFunctionCallNode::derefImpl(xsink);
+}
+
 /* get string representation (for %n and %N), foff is for multi-line formatting offset, -1 = no line breaks
    the ExceptionSink is only needed for QoreObject where a method may be executed
    use the QoreNodeAsStringHelper class (defined in QoreStringNode.h) instead of using these functions directly
@@ -1041,17 +1051,30 @@ int FunctionCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_cont
     assert(c_str);
 
     bool abr = parse_check_parse_option(PO_ALLOW_BARE_REFS);
+    // in a class, a top-level local variable has global scope (it is in effect a global thread-local variable), so it
+    // is only found after the class's own members, constants, static variables and methods, like a global variable
+    const bool in_class = parse_context.oflag || parse_get_class_priv();
+
+    // calls the code in a local variable with the function's name; returns false if there is no such variable
+    auto call_lvar = [&](bool include_top_level, int& rc) -> bool {
+        bool in_closure;
+        LocalVar* id = find_local_var(c_str, in_closure, include_top_level);
+        if (!id) {
+            return false;
+        }
+        VarRefNode* vrn = new VarRefNode(loc, takeName(), id, in_closure);
+        val = new CallReferenceCallNode(loc, vrn, takeParseArgs());
+        deref();
+        rc = parse_init_value(val, parse_context);
+        return true;
+    };
 
     // try to resolve bare reference if allowed
     if (abr) {
         // check for a local variable with the same name
-        bool in_closure;
-        LocalVar* id = find_local_var(c_str, in_closure);
-        if (id) {
-            VarRefNode* vrn = new VarRefNode(loc, takeName(), id, in_closure);
-            val = new CallReferenceCallNode(loc, vrn, takeParseArgs());
-            deref();
-            return parse_init_value(val, parse_context);
+        int rc;
+        if (call_lvar(!in_class, rc)) {
+            return rc;
         }
     }
 
@@ -1132,6 +1155,14 @@ int FunctionCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_cont
                 deref();
                 return parse_init_value(val, parse_context);
             }
+        }
+    }
+
+    // now check for a top-level local variable
+    if (abr && in_class) {
+        int rc;
+        if (call_lvar(true, rc)) {
+            return rc;
         }
     }
 

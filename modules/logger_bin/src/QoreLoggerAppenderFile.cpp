@@ -3,7 +3,7 @@
 /*
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -113,9 +113,14 @@ void QoreLoggerAppenderFile::openFile(ExceptionSink* xsink) {
     if (fn->getType() != NT_STRING) {
         xsink->raiseException("APPENDER-OPEN-ERROR", new QoreStringNodeMaker("\"FileName\" has type \"%s\"; "
             "expecting \"string\"", fn->getFullTypeName()));
+        return;
     }
 
-    QoreStringValueHelper filename(*fn);
+    const QoreStringNode* filename = fn->get<const QoreStringNode>();
+    // a path with a NUL character would be cut at the NUL character
+    if (q_check_path(*filename, "FILE-OPEN2-ERROR", xsink)) {
+        return;
+    }
     f->open2(xsink, filename->c_str(), (int)DEFAULT_OPEN_FLAGS, 0644, f->getEncoding());
 }
 

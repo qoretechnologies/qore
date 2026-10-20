@@ -336,7 +336,10 @@
       \c QORE_PREFIX, \c QORE_MODULE_VERSION) and, as a fallback, the process
       environment. Unknown macros / unset env vars raise a parse error — there is no
       silent empty-string substitution. \c \\$ escapes a literal \c $. Macros win over
-      env vars on conflict.
+      env vars on conflict.  As with @ref prepend-module-path "%prepend-module-path", the
+      path is stored as given after expansion, so a relative path is resolved against the
+      current working directory, not against the directory of the script; start the path
+      with <tt>${SCRIPT_DIR}</tt> to resolve it relative to the script.
 
     In the effective search-path precedence (highest → lowest):
     -# Per-Program @ref prepend-module-path "%prepend-module-path" paths
@@ -351,6 +354,9 @@
 
 # new form — per-Program, quoted, single path, macro expansion
 %append-module-path "${HOME}/.qore-modules-fallback"
+
+# new form, relative to the directory of this script, whatever the current working directory
+%append-module-path "${SCRIPT_DIR}/fallback-modules"
     @endcode
 
     @since %Qore 0.8.6 (legacy form); new quoted form since %Qore 3.0
@@ -403,6 +409,20 @@
     \c ${SCRIPT_*} macros require the directive to appear in an on-disk file; code parsed
     from an in-memory buffer (e.g. <tt>Program::parse(string)</tt>) raises a parse error
     unless @ref Qore::Program::setScriptPath() "setScriptPath()" was called first.
+
+    @par Relative paths:
+    The path is stored as given after expansion, so a relative path is resolved against the
+    current working directory of the process, not against the directory of the script that
+    contains the directive: <tt>%%prepend-module-path &quot;qlib&quot;</tt> finds modules
+    only when the script is run from its own directory.  Tests and scripts that load
+    modules from a directory relative to themselves should start the path with
+    <tt>${SCRIPT_DIR}</tt>, which expands to the absolute directory of the file containing
+    the directive:
+    @code{.py}
+# the qlib directory two levels above this script, whatever the current working directory
+%prepend-module-path "${SCRIPT_DIR}/../../qlib"
+%requires MyModule
+    @endcode
 
     Subprograms inherit their parent's prepend/append lists (see
     @ref Qore::Program "Program" inheritance semantics).

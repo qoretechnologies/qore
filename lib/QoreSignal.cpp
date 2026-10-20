@@ -448,12 +448,8 @@ void QoreSignalManager::signal_handler_thread() {
             // unlock to run handler code
             sl.unlock();
 
-            // create thread-local storage if possible
-            // FIXME: set thread-local storage
+            // the handler's thread-local data in the Program's family is created when the handler first saves data
             QoreProgram* pgm = handlers[sig].getProgram();
-            if (pgm) {
-                qore_program_private::startThread(*pgm, xsink);
-            }
 
             {
                 ProgramThreadCountContextHelper tch(&xsink, pgm, true);

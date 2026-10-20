@@ -314,6 +314,7 @@ public class QoreEmbedTextProcessor inherits AbstractDataProviderMLProcessor {
     #! Creates the object with the given options
     constructor(hash<auto> options) {
         *hash<auto> copts = checkOptions("CONSTRUCTOR-ERROR", ConstructorOptions, options);
+        checkFieldPathOptions(options, copts);
         text_field = copts.text_field;
         if (!text_field.val()) {
             throw "CONSTRUCTOR-ERROR", "text_field option is required";
@@ -360,7 +361,8 @@ public class QoreEmbedTextProcessor inherits AbstractDataProviderMLProcessor {
         max_tokens = copts.max_tokens ?? 512;
         pooling_strategy = copts.pooling_strategy ?? "mean";
         if (exists copts.output_names) {
-            output_names = DataProvider::AbstractDataProvider::parseFieldList(copts.output_names);
+            output_names = DataProvider::AbstractDataProvider::parseFieldList(
+                DataProvider::AbstractDataProvider::getFieldListOption(options, copts, "output_names"));
             if (!output_names) {
                 throw "CONSTRUCTOR-ERROR",
                     "output_names must contain at least one ONNX output tensor name; "

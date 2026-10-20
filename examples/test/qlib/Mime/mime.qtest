@@ -101,6 +101,7 @@ aωb\r
         addTestCase("part header case variants", \partHeaderCaseTest());
         addTestCase("MIME parameter value quoting", \quoteParameterValueTest());
         addTestCase("RFC 2387 multipart/related header", \multiPartRelatedHeaderTest());
+        addTestCase("header line breaks and encoded words", \headerLineBreakTest());
 
         # Return for compatibility with test harness that checks return value.
         set_return_value(main());
@@ -1043,5 +1044,71 @@ aωb\r
         # no file name
         assertEq(NOTHING, mime_get_content_disposition_filename("inline"));
         assertEq(NOTHING, mime_get_content_disposition_filename("attachment; filename*=UTF-8''%ZZ"));
+    }
+
+    headerLineBreakTest() {
+        # a CR or LF is encoded in an encoded word, so that it cannot end the header line
+        assertEq("=?UTF-8?Q?a=0D=0ABcc:_x@example.com?=", mime_encode_header_word_q("a\r\nBcc: x@example.com"));
+        assertEq("a=0Ab", mime_encode_quoted_printable("a\nb", True));
+        assertEq("a\r\nb", mime_decode_header(mime_encode_header_word_q("a\r\nb")));
+        # the body rules are unchanged: a line break is a line break
+        assertEq("a\r\nb", mime_encode_quoted_printable("a\nb"));
+
+        # a long string: encoded words of at most 75 characters, each with the encoding label, on folded lines, split
+        # between characters
+        string str = (map sprintf("äöü%d", $1), xrange(20)).join(" ");
+        string enc = mime_encode_header_word_q(str);
+        list<string> words = enc.split("\r\n ");
+        assertTrue(words.size() > 1);
+        foreach string word in (words) {
+            assertRegex("^=\\?UTF-8\\?Q\\?[^ ?\r\n]+\\?=$", word);
+            assertTrue(word.size() <= 75);
+            # every word is decodable on its own: it holds whole characters, so its text is valid UTF-8, which
+            # converts to UTF-16 and back
+            string text = mime_decode_header(word);
+            assertEq(text, convert_encoding(convert_encoding(text, "UTF-16LE"), "UTF-8"));
+        }
+        assertEq(str, mime_decode_header(enc));
+        # the text of the words carries the label of the string or the one given
+        assertRegex("\\?=\r\n =\\?UTF-8\\?Q\\?", mime_encode_quoted_printable(str, True));
+        assertRegex("\\?=\r\n =\\?X-TEST\\?Q\\?", mime_encode_quoted_printable(str, True, "X-TEST"));
+
+        # "B" encoding: a long string is split into encoded words on folded lines
+        enc = mime_encode_header_word_b(str);
+        words = enc.split("\r\n ");
+        assertTrue(words.size() > 1);
+        foreach string word in (words) {
+            assertRegex("^=\\?UTF-8\\?B\\?[A-Za-z0-9+/=]+\\?=$", word);
+            assertTrue(word.size() <= 75);
+        }
+        assertEq(str, mime_decode_header(enc));
+        assertEq(headerWordBEncoded, mime_encode_header_word_b(testString));
+
+        # decoding: white space between two encoded words is dropped, and only there
+        assertEq("ab", mime_decode_header("=?UTF-8?Q?a?= \r\n\t=?UTF-8?Q?b?="));
+        assertEq("a b c d", mime_decode_header("=?UTF-8?Q?a?= b =?UTF-8?Q?c?= d"));
+        assertEq("xx", mime_decode_header("=?UTF-8?Q?x?= =?UTF-8?Q?x?="));
+        assertEq("pre x y post", mime_decode_header("pre =?UTF-8?Q?x?= y post"));
+
+        # a part header name or value with a NUL, CR or LF character is refused when the part is added
+        MultiPartMixedMessage mpm();
+        assertThrows("PART-ERROR", "MIME header \"X-Test\" value \"a\\\\x0d\\\\x0aX-Injected: 1\" contains a line "
+            "break", \mpm.addPart(), ("data", MimeTypeText, "inline", {"X-Test": "a\r\nX-Injected: 1"}));
+        assertThrows("PART-ERROR", "MIME header name .* contains a line break", \mpm.addPart(),
+            ("data", MimeTypeText, "inline", {"X-Test\nX-Injected": "1"}));
+        assertThrows("PART-ERROR", "contains a NUL character", \mpm.addPart(),
+            ("data", MimeTypeText, "inline", {"X-Test": "a\x00b"}));
+        assertEq(0, mpm.size());
+        # an HTTP form-data field name with a line break
+        MultiPartFormDataMessage fd();
+        assertThrows("PART-ERROR", "contains a line break", \fd.addPart(), ("data", "field\r\nX-Injected: 1"));
+        # and in serializeHeaders()
+        assertThrows("PART-ERROR", "contains a line break", \MultiPartMessage::serializeHeaders(),
+            {"X-Test": "a\nb"});
+        # a list value is a repeated header field
+        assertEq(binary("X-Test: a\r\nX-Test: b\r\nX-Other: c\r\n\r\n"),
+            MultiPartMessage::serializeHeaders({"X-Test": ("a", "b"), "X-Other": "c"}));
+        assertThrows("PART-ERROR", "contains a line break", \MultiPartMessage::serializeHeaders(),
+            {"X-Test": ("a", "b\r\nX-Injected: 1")});
     }
 }

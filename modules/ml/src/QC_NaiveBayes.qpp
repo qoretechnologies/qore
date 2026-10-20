@@ -67,7 +67,7 @@ nothing NaiveBayes::fit(list<hash<auto>> data, string target_field) {
     std::vector<std::string> field_names;
     MatrixXd matrix = qoreListOfHashesToMatrix(data, field_names, xsink);
     if (*xsink) { return QoreValue(); }
-    std::string target = target_field->c_str();
+    std::string target = mlStdString(*target_field);
     int target_idx = -1;
     for (size_t i = 0; i < field_names.size(); ++i) {
         if (field_names[i] == target) { target_idx = (int)i; break; }

@@ -50,6 +50,18 @@ hash<auto> person = schema.decode("example.Person", data);
 # person = {"name": "Alice", "age": 30, "emails": ("alice@example.com", "alice@work.com")}
     @endcode
 
+    Content loaded with the constructor is named \c "input.proto"; to give it another file name, for example to
+    combine the descriptors of several schemas loaded from strings, use
+    @ref Qore::Protobuf::ProtobufSchema::fromContent() "ProtobufSchema::fromContent()".  A constructor with two
+    strings loads a \c .proto file from the filesystem instead:
+
+    @code{.py}
+%requires protobuf
+
+ProtobufSchema people = ProtobufSchema::fromContent(proto, "people.proto");
+list<binary> descriptors = people.serializeFileDescriptorByName("people.proto");
+    @endcode
+
     @section protobufexprog Programmatic Schema Definition
 
     Define schemas entirely from Qore data structures — no \c .proto files needed:

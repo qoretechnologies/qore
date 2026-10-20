@@ -3,6 +3,7 @@
 
 /* Copyright (C) 2026 Qore Technologies, s.r.o. */
 
+%requires ../../../qlib/Util.qm
 %requires ../../../qlib/QUnit.qm
 %requires krb5
 %requires ../../../qlib/Krb5Util/Krb5Util.qm
@@ -34,6 +35,14 @@ class CaptureLogAppender inherits Qore::Logger::LoggerAppender {
 }
 
 public class Krb5ModuleTest inherits QUnit::Test {
+    private {
+        #! the base name of the credential cache and keytab files the test creates in /tmp
+        /** unique for every run, so that runs on the same host, at the same time or after a run that left files
+            behind, never use each other's files; the files are in /tmp, as the sandbox cases allow /tmp
+        */
+        string unique_name = sprintf("module-krb5-%d-%s", getpid(), get_random_string(8));
+    }
+
     constructor() : Test("Krb5ModuleTest", "1.0") {
         addTestCase("utility module helpers", \testUtilityModuleHelpers());
         addTestCase("utility find HTTP Negotiate header",
@@ -273,16 +282,17 @@ public class Krb5ModuleTest inherits QUnit::Test {
         addTestCase("keytab remove entry non existent", \testKeytabRemoveEntryNonExistent());
         addTestCase("keytab remove entry sandbox deny", \testKeytabRemoveEntrySandboxDeny());
         addTestCase("keytab remove then has content", \testKeytabRemoveThenHasContent());
+        addTestCase("strings with NUL characters are refused", \testNulCharacters());
 
         set_return_value(main());
     }
 
     private string getSandboxCachePath(string suffix) {
-        return sprintf("/tmp/module-krb5-%s.ccache", suffix);
+        return sprintf("/tmp/%s-%s.ccache", unique_name, suffix);
     }
 
     private string getSandboxKeytabPath(string suffix) {
-        return sprintf("/tmp/module-krb5-%s.keytab", suffix);
+        return sprintf("/tmp/%s-%s.keytab", unique_name, suffix);
     }
 
     private cleanupSandboxCache(string path) {
@@ -896,6 +906,67 @@ Krb5Util::createImpersonatedClientContext(\"HTTP/backend.example.com@EXAMPLE.COM
         assertEq("HTTP/qorus.example.com@EXAMPLE.COM", creds.getServerPrincipal().toString());
     }
 
+    #! a string passed to the Kerberos or GSSAPI libraries, or decoded from hex, would be cut at a NUL character
+    private testNulCharacters() {
+        # cut at the NUL character, the principal would be alice@EXAMPLE.COM
+        assertThrows("KRB5-PRINCIPAL-ERROR", "principal \"alice@EXAMPLE\\.COM\\\\x00\\.evil\" contains a NUL "
+            "character at byte offset 17", sub () { Qore::Krb5::Krb5Principal p("alice@EXAMPLE.COM\x00.evil"); });
+        assertThrows("KRB5-PRINCIPAL-ERROR", "principal .* contains a NUL character",
+            \Qore::Krb5::Krb5Principal::parseEnterprise(), "alice@corp.example@EXAMPLE.COM\x00.evil");
+        assertThrows("KRB5-GSS-ARG-ERROR", "service principal .* contains a NUL character",
+            sub () { Qore::Krb5::GssClientContext ctx("HTTP/qorus.example.com@EXAMPLE.COM\x00.evil"); });
+        # a hex string with a NUL character is not valid hex; it is not shown, as it can be a key or a message
+        Qore::Krb5::Krb5Principal client("alice@EXAMPLE.COM");
+        Qore::Krb5::Krb5Principal server("HTTP/qorus.example.com@EXAMPLE.COM");
+        try {
+            Qore::Krb5::Krb5Credentials bad(client, server, getTestKeyHex1() + "\x00ff",
+                Qore::Krb5::ENCTYPE_AES256_CTS_HMAC_SHA1_96, 1000, 2000);
+            fail("the Krb5Credentials constructor did not raise an exception");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("KRB5-CREDENTIALS-ERROR", ex.err);
+            assertEq("session_key_hex contains a NUL character; hex strings cannot contain NUL characters", ex.desc);
+        }
+        assertThrows("KRB5-CREDENTIALS-ERROR", "ticket_hex contains a NUL character", sub () {
+            Qore::Krb5::Krb5Credentials bad(client, server, getTestKeyHex1(),
+                Qore::Krb5::ENCTYPE_AES256_CTS_HMAC_SHA1_96, 1000, 2000, 0, 0, "00\x0000");
+        });
+        Qore::Krb5::GssClientContext ctx("HTTP/qorus.example.com@EXAMPLE.COM");
+        assertThrows("KRB5-TOKEN-ERROR", "token_hex contains a NUL character", \ctx.step(), "6082\x00ff");
+        assertThrows("KRB5-TOKEN-ERROR", "message_hex contains a NUL character", \ctx.wrap(), "6162\x00ff");
+        assertThrows("KRB5-TOKEN-ERROR", "token_hex contains a NUL character", \ctx.unwrap(), "6162\x00ff");
+        assertThrows("KRB5-TOKEN-ERROR", "message_hex contains a NUL character", \ctx.getMic(), "6162\x00ff");
+        assertThrows("KRB5-TOKEN-ERROR", "mic_hex contains a NUL character", \ctx.verifyMic(), ("6162", "00\x00ff"));
+        assertThrows("KRB5-GSS-ARG-ERROR", "option 'channel_binding_application_data_hex' contains a NUL character",
+            sub () {
+                hash<Qore::Krb5::GssClientContextOptions> opts({"channel_binding_application_data_hex": "6162\x00ff"});
+                Qore::Krb5::GssClientContext c("HTTP/qorus.example.com@EXAMPLE.COM", opts);
+            });
+        # the mechanism and name type are compared as C strings: cut at the NUL character, they are valid values
+        assertThrows("KRB5-GSS-ARG-ERROR", "GSSAPI mechanism \"kerberos\\\\x00x\" contains a NUL character",
+            sub () {
+                hash<Qore::Krb5::GssClientContextOptions> opts({"mechanism": "kerberos\x00x"});
+                Qore::Krb5::GssClientContext c("HTTP/qorus.example.com@EXAMPLE.COM", opts);
+            });
+        assertThrows("KRB5-GSS-ARG-ERROR", "GSSAPI name type .* contains a NUL character",
+            sub () {
+                hash<Qore::Krb5::GssClientContextOptions> opts({"name_type": "krb5-principal\x00x"});
+                Qore::Krb5::GssClientContext c("HTTP/qorus.example.com@EXAMPLE.COM", opts);
+            });
+
+        Qore::Krb5::Krb5Context kctx();
+        assertThrows("KRB5-CACHE-ERROR", "credential cache name .* contains a NUL character",
+            \kctx.openCredentialCache(), "MEMORY:nul-test\x00.other");
+        assertThrows("KRB5-CACHE-ERROR", "credential cache name .* contains a NUL character",
+            \kctx.createMemoryCredentialCache(), (client, "nul-test\x00.other"));
+        assertThrows("KRB5-KEYTAB-ERROR", "keytab name .* contains a NUL character", \kctx.openKeytab(),
+            "MEMORY:nul-test\x00.other");
+        assertThrows("KRB5-INIT-CREDS-ERROR", "^password contains a NUL character",
+            \kctx.acquireCredentialsWithPassword(), (client, "secret\x00pw"));
+        auto kt = kctx.openKeytab("MEMORY:module-krb5-nul-test");
+        assertThrows("KRB5-KEYTAB-ERROR", "key_hex contains a NUL character", \kt.addEntry(),
+            (client, getTestKeyHex1() + "\x00ff", Qore::Krb5::ENCTYPE_AES256_CTS_HMAC_SHA1_96, 1));
+    }
+
     private testCredentialsInvalidKeyHexRejected() {
         Qore::Krb5::Krb5Principal client("alice@EXAMPLE.COM");
         Qore::Krb5::Krb5Principal server("HTTP/qorus.example.com@EXAMPLE.COM");
@@ -1018,7 +1089,7 @@ Krb5Util::createImpersonatedClientContext(\"HTTP/backend.example.com@EXAMPLE.COM
 
     private testFileCacheSandboxAllow() {
         string cachePath = getSandboxCachePath("sandbox-allow");
-        cleanupSandboxCache(cachePath);
+        on_exit cleanupSandboxCache(cachePath);
 
         Program p(PO_MODERN);
         p.loadModule("krb5");
@@ -1038,7 +1109,6 @@ Krb5Util::createImpersonatedClientContext(\"HTTP/backend.example.com@EXAMPLE.COM
 
         string principal = p.callFunction("test_allowed_cache");
         assertEq("service/qorus.example.com@EXAMPLE.COM", principal);
-        cleanupSandboxCache(cachePath);
     }
 
     private testMemoryKeytabRoundtrip() {
@@ -1118,7 +1188,7 @@ Krb5Util::createImpersonatedClientContext(\"HTTP/backend.example.com@EXAMPLE.COM
 
     private testFileKeytabSandboxAllow() {
         string keytabPath = getSandboxKeytabPath("sandbox-allow");
-        cleanupSandboxKeytab(keytabPath);
+        on_exit cleanupSandboxKeytab(keytabPath);
 
         Program p(PO_MODERN);
         p.loadModule("krb5");
@@ -1140,7 +1210,6 @@ Krb5Util::createImpersonatedClientContext(\"HTTP/backend.example.com@EXAMPLE.COM
 
         string principal = p.callFunction("test_allowed_keytab");
         assertEq("HTTP/qorus.example.com@EXAMPLE.COM", principal);
-        cleanupSandboxKeytab(keytabPath);
     }
 
     private testPrincipalParsing() {
@@ -1955,7 +2024,7 @@ Krb5Util::createImpersonatedClientContext(\"HTTP/backend.example.com@EXAMPLE.COM
 
     private testListCredentialCachesSandboxRedaction() {
         string cachePath = getSandboxCachePath("collection-redaction");
-        cleanupSandboxCache(cachePath);
+        on_exit cleanupSandboxCache(cachePath);
 
         Qore::Krb5::Krb5Context ctx();
         Qore::Krb5::Krb5Principal principal("service/qorus.example.com@EXAMPLE.COM");
@@ -1970,7 +2039,6 @@ Krb5Util::createImpersonatedClientContext(\"HTTP/backend.example.com@EXAMPLE.COM
             } else {
                 unsetenv("KRB5CCNAME");
             }
-            cleanupSandboxCache(cachePath);
         }
 
         Program p(PO_MODERN);
@@ -2004,8 +2072,6 @@ Krb5Util::createImpersonatedClientContext(\"HTTP/backend.example.com@EXAMPLE.COM
             }
         }
         assertTrue(foundRedacted);
-
-        cleanupSandboxCache(cachePath);
     }
 
     private testInitialCredentialsBooleanOptionsAccepted() {

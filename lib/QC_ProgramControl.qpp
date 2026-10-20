@@ -140,8 +140,15 @@ TimeZone ProgramControl::getTimeZone() {
 /** @param parse_define the @ref conditional_parsing "parse define" name to check
 
     @see Qore::Program::isDefined "Program::isDefined()"
+
+    @note since %Qore 3.0 a name with a NUL character names nothing, and @ref Qore::errno() "errno()"
+    returns \c EINVAL
  */
 bool ProgramControl::isDefined(string parse_define) [flags=NAMED_ARGS] {
+    // the name is looked up as a C string, which would be cut at a NUL character and name something else
+    if (q_check_no_nul(parse_define->c_str(), parse_define->size())) {
+        return false;
+    }
    TempEncodingHelper t(parse_define, QCS_DEFAULT, xsink);
    return t ? qore_program_private::runTimeIsDefined(p, t->getBuffer()) : false;
 }
@@ -150,8 +157,15 @@ bool ProgramControl::isDefined(string parse_define) [flags=NAMED_ARGS] {
 /** @param parse_define the @ref conditional_parsing "parse define" name to get
 
     @see Qore::Program::getDefine "Program::getDefine()"
+
+    @note since %Qore 3.0 a name with a NUL character names nothing, and @ref Qore::errno() "errno()"
+    returns \c EINVAL
  */
 auto ProgramControl::getDefine(string parse_define) [flags=NAMED_ARGS] {
+    // the name is looked up as a C string, which would be cut at a NUL character and name something else
+    if (q_check_no_nul(parse_define->c_str(), parse_define->size())) {
+        return QoreValue();
+    }
    TempEncodingHelper t(parse_define, QCS_DEFAULT, xsink);
    return t ? qore_program_private::runTimeGetDefine(p, t->c_str()) : QoreValue();
 }
@@ -215,8 +229,15 @@ list<int> ProgramControl::getThreadList() [flags=CONSTANT] {
 /** @param function_name the function name to check
 
     @see Qore::Program::existsFunction "Program::existsFunction()"
+
+    @note since %Qore 3.0 a name with a NUL character names nothing, and @ref Qore::errno() "errno()"
+    returns \c EINVAL
  */
 bool ProgramControl::existsFunction(string function_name) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    // the name is looked up as a C string, which would be cut at a NUL character and name something else
+    if (q_check_no_nul(function_name->c_str(), function_name->size())) {
+        return false;
+    }
    if (!p->checkAllowDebugging(xsink))
       return false;
    TempEncodingHelper tmp(function_name, QCS_DEFAULT, xsink);
@@ -230,6 +251,9 @@ bool ProgramControl::existsFunction(string function_name) [flags=RET_VALUE_ONLY,
     @param found optional reference assigned @ref True if the global variable exists, @ref False if not
 
     @see Qore::Program::getGlobalVariable "Program::getGlobalVariable()"
+
+    @note since %Qore 3.0 a name with a NUL character names nothing, and @ref Qore::errno() "errno()"
+    returns \c EINVAL
  */
 auto ProgramControl::getGlobalVariable(string variable_name, *reference<bool> found) [flags=NAMED_ARGS] {
     if (!p->checkAllowDebugging(xsink))
@@ -238,8 +262,13 @@ auto ProgramControl::getGlobalVariable(string variable_name, *reference<bool> fo
     if (!t)
         return QoreValue();
 
-    bool is_found;
-    ValueHolder rv(p->getGlobalVariableValue(t->c_str(), is_found), xsink);
+    // the name is looked up as a C string, which would be cut at a NUL character and name another variable; a name
+    // with a NUL character names no variable, and errno is set to EINVAL
+    bool is_found = false;
+    ValueHolder rv(xsink);
+    if (!q_check_no_nul(variable_name->c_str(), variable_name->size())) {
+        rv = p->getGlobalVariableValue(t->c_str(), is_found);
+    }
 
     if (found) {
         QoreTypeSafeReferenceHelper r(found, xsink);
@@ -267,8 +296,15 @@ hash<auto> ProgramControl::getGlobalVars() [flags=CONSTANT] {
     @param value the value to assign
 
     @see Qore::Program::setGlobalVars "Program::setGlobalVars()"
+
+
+    @throw UNKNOWN-VARIABLE the variable name contains a NUL character (since %Qore 3.0)
  */
 nothing ProgramControl::setGlobalVarValue(string variable_name, auto value) [flags=NAMED_ARGS] {
+    // the name is looked up as a C string, which would be cut at a NUL character and name another variable
+    if (q_check_no_nul(variable_name->c_str(), variable_name->size(), "variable name", "variable names", "UNKNOWN-VARIABLE", xsink)) {
+        return QoreValue();
+    }
    if (!p->checkAllowDebugging(xsink))
       return QoreValue();
    p->setGlobalVarValue(variable_name->c_str(), value.refSelf(), xsink);
@@ -369,8 +405,14 @@ list<int> ProgramControl::getStatementIds() {
    @see
       @ref Qore::ProgramControl::findFunctionStatementId "ProgramControl::findFunctionStatementId()"
 
+    @throw PROGRAM-STATEMENT-ERROR the source label contains a NUL character (since %Qore 3.0)
 */
 int ProgramControl::findStatementId(string file, int line) [flags=NAMED_ARGS] {
+    // the label is looked up as a C string, which would be cut at a NUL character and name another source
+    if (q_check_no_nul(file->c_str(), file->size(), "source label", "source labels", "PROGRAM-STATEMENT-ERROR",
+            xsink)) {
+        return QoreValue();
+    }
     if (!p->checkAllowDebugging(xsink))
         return 0;
     AbstractStatement* s = p->findStatement(file->c_str(), line);
@@ -387,8 +429,15 @@ int ProgramControl::findStatementId(string file, int line) [flags=NAMED_ARGS] {
 
    @see
       @ref Qore::ProgramControl::findStatementId "ProgramControl::findStatementId()"
+
+
+    @throw PROGRAM-STATEMENT-ERROR the function name contains a NUL character (since %Qore 3.0)
 */
 int ProgramControl::findFunctionStatementId(string function_name, *list params) [flags=NAMED_ARGS] {
+    // the name is looked up as a C string, which would be cut at a NUL character and name another function
+    if (q_check_no_nul(function_name->c_str(), function_name->size(), "function name", "function names", "PROGRAM-STATEMENT-ERROR", xsink)) {
+        return QoreValue();
+    }
     if (!p->checkAllowDebugging(xsink))
         return 0;
     AbstractStatement* s = p->findFunctionStatement(function_name->c_str(), params, xsink);
@@ -408,8 +457,15 @@ int ProgramControl::findFunctionStatementId(string function_name, *list params) 
     @return a list of hashes or nothing if the name cannot be resolved; when matched, each hash element has the following keys:
     - \c desc: a string description of the call which includes the name and the full text call signature
     - \c params: a list object that gives the params in a format that can be used by @ref findFunctionStatementId
+
+
+    @throw PROGRAM-ERROR the function name contains a NUL character (since %Qore 3.0)
 */
 list<hash<auto>> ProgramControl::findFunctionVariants(string function_name) [flags=NAMED_ARGS] {
+    // the name is looked up as a C string, which would be cut at a NUL character and name another function
+    if (q_check_no_nul(function_name->c_str(), function_name->size(), "function name", "function names", "PROGRAM-ERROR", xsink)) {
+        return QoreValue();
+    }
     if (!p->checkAllowDebugging(xsink))
         return QoreValue();
     ReferenceHolder<QoreListNode> vl(p->runtimeFindCallVariants(function_name->c_str(), xsink), xsink);

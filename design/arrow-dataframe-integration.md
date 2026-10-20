@@ -192,7 +192,19 @@ where an API exposes conversion details.
   local-driver coverage remains dependent on an available driver fixture.
 - docs fast targets for qore, dataframe, grpc, and jni.
 - valgrind DataFrame/Parquet/Arrow tests with `ARROW_DEFAULT_MEMORY_POOL=system`
-  when the packaged Arrow build uses mimalloc.
+  when the packaged Arrow build uses mimalloc or jemalloc: valgrind cannot track
+  the memory of those allocators and reports Arrow's own frees as
+  `Invalid free()` inside libarrow/libparquet.
+- valgrind on musl (Alpine) gives wrong decimal digits for floats: valgrind
+  emulates the x87 `long double` with 64-bit precision, and musl formats floats
+  with `long double` arithmetic.  A test that compares the digits of a float
+  with a number, such as the "float columns compared with numbers" case of
+  `ColumnarExpressionFilter.qtest` (`1.19 == 1.19n`), fails only under valgrind
+  on musl; it passes natively on musl and under valgrind on glibc.  Measured with
+  valgrind 3.25.1 on Alpine 3.23 and the script
+  `float f = 1.19; printf("%s\n", sprintf("%.17g", f));`, which prints
+  `1.1899999999999999` natively on musl and on glibc, with or without valgrind,
+  and `1.1900000000000545` under valgrind on musl.
 - Benchmarks cover DataFrame construction, DataFrame-to-ColumnarResult export,
   Parquet round trips, Arrow IPC round trips, Arrow Flight columnar reads,
   DataProvider columnar pipeline paths, SQL read/write, and optional JDBC

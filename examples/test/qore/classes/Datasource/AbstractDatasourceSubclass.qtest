@@ -1,0 +1,198 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  AbstractDatasourceSubclass.qtest Copyright 2026 Qore Technologies, s.r.o.
+    MIT License
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires SqlUtil
+
+%exec-class AbstractDatasourceSubclassTest
+
+#! a subclass of AbstractDatasource implemented in Qore, implementing only the abstract methods
+class MinimalDatasource inherits AbstractDatasource {
+    nothing commit() {
+    }
+
+    nothing rollback() {
+    }
+
+    auto exec(string sql, ...) {
+    }
+
+    auto vexec(string sql, *softlist<auto> args) {
+    }
+
+    auto execRaw(string sql) {
+    }
+
+    auto select(string sql, ...) {
+    }
+
+    auto selectTyped(string sql, ...) {
+    }
+
+    auto selectRow(string sql, ...) {
+    }
+
+    auto selectRows(string sql, ...) {
+    }
+
+    auto selectRowsTyped(string sql, ...) {
+    }
+
+    auto vselect(string sql, *softlist<auto> args) {
+        return {"id": (1, 2), "name": ("a", "b")};
+    }
+
+    auto vselectTyped(string sql, *softlist<auto> args) {
+    }
+
+    auto vselectRow(string sql, *softlist<auto> args) {
+    }
+
+    auto vselectRows(string sql, *softlist<auto> args) {
+    }
+
+    auto vselectRowsTyped(string sql, *softlist<auto> args) {
+    }
+
+    nothing beginTransaction() {
+    }
+
+    *string getUserName() {
+    }
+
+    *string getPassword() {
+    }
+
+    *string getDBName() {
+        return "test";
+    }
+
+    *string getDBEncoding() {
+    }
+
+    *string getOSEncoding() {
+    }
+
+    *string getHostName() {
+    }
+
+    *int getPort() {
+    }
+
+    string getDriverName() {
+        return "sqlite3";
+    }
+
+    auto getServerVersion() {
+    }
+
+    auto getClientVersion() {
+    }
+
+    bool inTransaction() {
+        return False;
+    }
+
+    hash<auto> getConfigHash() {
+        return {"type": "sqlite3", "db": "test"};
+    }
+
+    string getConfigString() {
+        return "sqlite3:test";
+    }
+}
+
+#! a subclass with a constructor of its own
+class ConstructedDatasource inherits MinimalDatasource {
+    public {
+        string label;
+    }
+
+    constructor(string label) {
+        self.label = label;
+    }
+}
+
+class AbstractDatasourceSubclassTest inherits QUnit::Test {
+    constructor() : QUnit::Test("AbstractDatasource subclass test", "1.0") {
+        addTestCase("the methods implemented by AbstractDatasource", \methodTest());
+        addTestCase("the mutation methods implemented by AbstractDatasource", \mutationTest());
+        addTestCase("SqlUtil with a subclass", \sqlUtilTest());
+        addTestCase("copies and subclasses with constructors", \copyTest());
+        set_return_value(main());
+    }
+
+    # each method implemented by AbstractDatasource behaves as documented on a subclass implemented in Qore
+    methodTest() {
+        AbstractDatasource ds = new MinimalDatasource();
+        assertEq("sqlite3", ds.getDriverRealName(), "getDriverRealName() returns getDriverName()");
+        assertEq(0, ds.getCapabilities(), "getCapabilities() returns no capabilities");
+        assertEq({}, ds.getOptionHash(), "getOptionHash() returns an empty hash");
+        assertThrows("DBI-OPTION-ERROR", \ds.getOption(), ("x",), "getOption() raises DBI-OPTION-ERROR");
+        assertThrows("ABSTRACT-DATASOURCE-ERROR", \ds.currentThreadInTransaction(), NOTHING,
+            "currentThreadInTransaction() must be implemented by the subclass");
+        assertThrows("ABSTRACT-DATASOURCE-ERROR", \ds.getSQLStatement(), NOTHING,
+            "getSQLStatement() must be implemented by the subclass");
+        assertThrows("ABSTRACT-DATASOURCE-ERROR", \ds.bulkLoadBegin(), ("t", ("a",)),
+            "bulkLoadBegin() must be implemented by the subclass");
+        assertThrows("ABSTRACT-DATASOURCE-ERROR", \ds.bulkLoadRows(), ({"a": (1,)},),
+            "bulkLoadRows() must be implemented by the subclass");
+        assertThrows("ABSTRACT-DATASOURCE-ERROR", \ds.bulkLoadEnd(), (True,),
+            "bulkLoadEnd() must be implemented by the subclass");
+
+        # the columnar selects call vselect() of the subclass
+        ColumnarResult result = ds.selectColumnar("select id, name from t");
+        assertEq(("id", "name"), result.columnNames(), "selectColumnar() calls vselect() of the subclass");
+        assertEq((1, 2), result.getColumn("id").toList(), "selectColumnar() returns the selected values");
+        assertEq(("a", "b"), ds.vselectColumnar("select id, name from t").getColumn("name").toList(),
+            "vselectColumnar() calls vselect() of the subclass");
+    }
+
+    # the mutation observer methods implemented by AbstractDatasource behave as documented on a subclass
+    mutationTest() {
+        AbstractDatasource ds = new MinimalDatasource();
+        assertFalse(ds.hasMutationObserver(), "hasMutationObserver() returns False");
+        assertEq(NOTHING, ds.getMutationDeclaration(), "getMutationDeclaration() returns nothing");
+        assertThrows("ABSTRACT-DATASOURCE-ERROR", \ds.setMutationObserver(),
+            (sub (hash<SqlMutationEventInfo> event) {},), "setMutationObserver() must be implemented by the subclass");
+        assertThrows("ABSTRACT-DATASOURCE-ERROR", \ds.clearMutationObserver(), NOTHING,
+            "clearMutationObserver() must be implemented by the subclass");
+        assertThrows("ABSTRACT-DATASOURCE-ERROR", \ds.pushMutationDeclaration(), (<SqlMutationInfo>{},),
+            "pushMutationDeclaration() must be implemented by the subclass");
+        assertThrows("ABSTRACT-DATASOURCE-ERROR", \ds.popMutationDeclaration(), NOTHING,
+            "popMutationDeclaration() must be implemented by the subclass");
+        assertThrows("ABSTRACT-DATASOURCE-ERROR", \ds.reportMutationStreamBegin(), NOTHING,
+            "reportMutationStreamBegin() must be implemented by the subclass");
+        assertThrows("ABSTRACT-DATASOURCE-ERROR", \ds.reportMutationStreamProgress(), (1,),
+            "reportMutationStreamProgress() must be implemented by the subclass");
+        assertThrows("ABSTRACT-DATASOURCE-ERROR", \ds.reportMutationStreamEnd(), (1,),
+            "reportMutationStreamEnd() must be implemented by the subclass");
+    }
+
+    # SqlUtil finds the driver of a subclass with getDriverRealName() implemented by AbstractDatasource
+    sqlUtilTest() {
+        MinimalDatasource ds();
+        AbstractTable table = AbstractTable::getTable(ds, "t");
+        assertEq("Sqlite3Table", table.className(), "SqlUtil returns the table of the driver of the subclass");
+        AbstractDatabase db = AbstractDatabase::getDatabase(ds);
+        assertEq("Sqlite3Database", db.className(), "SqlUtil returns the database of the driver of the subclass");
+    }
+
+    # a copy, and a subclass with a constructor of its own, have the private data of AbstractDatasource
+    copyTest() {
+        MinimalDatasource ds();
+        MinimalDatasource copy = ds.copy();
+        assertEq("sqlite3", copy.getDriverRealName(), "a copy can call the methods implemented by AbstractDatasource");
+        ConstructedDatasource constructed("x");
+        assertEq("x", constructed.label, "the constructor of the subclass is run");
+        assertEq(0, constructed.getCapabilities(),
+            "a subclass with a constructor can call the methods implemented by AbstractDatasource");
+    }
+}

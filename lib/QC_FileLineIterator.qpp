@@ -3,7 +3,7 @@
 /*
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -71,6 +71,7 @@ qclass FileLineIterator [arg=FileLineIterator* i; ns=Qore; vparent=AbstractLineI
 
     @throw ENCODING-CONVERSION-ERROR this exception could be thrown if the \a line_separator argument has a different @ref character_encoding "character encoding" from the File's and an error occurs during encoding conversion
     @throw ILLEGAL-EXPRESSION FileLineIterator::constructor() cannot be called with a TTY target when @ref no-terminal-io "%no-terminal-io" is set
+    @throw FILE-OPEN2-ERROR the path contains a NUL character; see @ref path_nul_characters
 
     @since %Qore 0.9.3 added the \a nonblocking_open flag
  */

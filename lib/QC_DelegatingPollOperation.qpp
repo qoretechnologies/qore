@@ -45,13 +45,17 @@ public:
     QoreObject* counter_obj;
     bool inner_has_abort;
     bool inner_has_get_output;
+    //! True if the inner operation is implemented in C++ and its getState() is the builtin one
+    /** Its state is then read with getStateImpl(), without a Qore method call; see getStateImpl()
+    */
+    bool inner_native_state;
 
     DLLLOCAL DelegatingPollOperationPriv(QoreObject* self, QoreObject* inner_obj,
             SocketPollOperationBase* inner_base, ResolvedCallReferenceNode* on_complete_code,
-            QoreObject* counter_obj, bool inner_has_abort, bool inner_has_get_output)
+            QoreObject* counter_obj, bool inner_has_abort, bool inner_has_get_output, bool inner_native_state)
         : SocketPollOperationBase(self), inner_obj(inner_obj), inner_base(inner_base),
           on_complete_code(on_complete_code), counter_obj(counter_obj), inner_has_abort(inner_has_abort),
-          inner_has_get_output(inner_has_get_output) {
+          inner_has_get_output(inner_has_get_output), inner_native_state(inner_native_state) {
         inner_obj->ref();
         if (inner_base) {
             inner_base->ref();
@@ -200,6 +204,11 @@ protected:
     mutable std::string cached_state;
 
     DLLLOCAL const char* getStateImpl() const override {
+        // the state of an inner C++ operation without a getState() in Qore is read without a Qore method call, so
+        // it can be read on the async I/O thread, which drives such an operation
+        if (inner_base && inner_native_state) {
+            return inner_base->getStateImpl();
+        }
         // Get state from inner object via Qore method call
         if (inner_obj) {
             ExceptionSink xsink;
@@ -217,6 +226,13 @@ protected:
 static bool qore_delegating_poll_op_has_override(const QoreClass* cls, const char* method) {
     const QoreMethod* meth = cls->findMethod(method);
     return meth && meth->getClass()->getID() != CID_ABSTRACTPOLLOPERATION;
+}
+
+bool qore_delegating_poll_op_reads_state_natively(const SocketPollOperationBase* op) {
+    const DelegatingPollOperationPriv* dop = dynamic_cast<const DelegatingPollOperationPriv*>(op);
+    // the inner operation of a delegating operation that runs on the I/O thread is implemented in C++ (see
+    // needsWorkerDispatch()), but its getState() can still be implemented in Qore
+    return !dop || !dop->inner_base || dop->inner_native_state;
 }
 
 // DGC dispatch entry point — see QC_DelegatingPollOperation.h.
@@ -295,10 +311,14 @@ DelegatingPollOperation::constructor(AbstractPollOperation<?> operation, *code o
         xsink->clear();
     }
 
+    // the state of an inner C++ operation can be read without a Qore call unless a Qore subclass overrides getState()
+    const QoreMethod* get_state_meth = inner_cls->findMethod("getState");
+    bool inner_native_state = inner_base && (!get_state_meth || get_state_meth->isBuiltin());
+
     self->setPrivate(CID_DELEGATINGPOLLOPERATION,
         new DelegatingPollOperationPriv(self, inner_obj, inner_base, on_complete_ref, counter_obj,
             qore_delegating_poll_op_has_override(inner_cls, "abort"),
-            qore_delegating_poll_op_has_override(inner_cls, "getOutput")));
+            qore_delegating_poll_op_has_override(inner_cls, "getOutput"), inner_native_state));
 
     // DGC custom scanner gate — the priv holds ref'd inner_obj /
     // counter_obj / on_complete_code in raw C++ pointers that the

@@ -1,0 +1,60 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires SqlUtil
+%requires MysqlSqlUtil
+%requires OracleSqlUtilBase
+%requires PgsqlSqlUtilBase
+%requires MssqlSqlUtilBase
+%requires XdbcFirebirdSqlUtilBase
+%requires Sqlite3SqlUtil
+%requires QUnit
+
+%exec-class IndexRenameSqlTest
+
+#! The SQL that renames an index is a list of statements on every database
+/** A database that cannot rename an index gives no SQL: an index is never dropped and created again under another
+    name; the index keeps its name in the database, by which it is dropped
+*/
+class IndexRenameSqlTest inherits QUnit::Test {
+    constructor() : Test("IndexRenameSqlTest", "1.0", \ARGV) {
+        addTestCase("the rename SQL of an index is a list of statements", \renameSql());
+        set_return_value(main());
+    }
+
+    private renameSql() {
+        hash<auto> cols = {"code": {}, "id": {}};
+
+        # renamed in place
+        assertEq(("alter index ix_old rename to ix_new",),
+            (new PgsqlIndex("ix_old", True, cols)).getRenameSql("orders", "ix_new"));
+        assertEq(("alter index ix_old rename to ix_new",),
+            (new OracleIndex("ix_old", True, cols, "UNIQUE")).getRenameSql("orders", "ix_new"));
+        assertEq(("exec sp_rename 'orders.ix_old', 'ix_new', 'INDEX'",),
+            (new MssqlIndex("ix_old", True, cols)).getRenameSql("orders", "ix_new"));
+        assertEq(("alter table orders rename index ix_old to ix_new",),
+            (new MysqlIndex("ix_old", True, cols)).getRenameSql("orders", "ix_new"));
+
+        # Firebird and SQLite cannot rename an index: no SQL, and the index keeps its name in the database, by which
+        # it is dropped
+        foreach AbstractIndex ix in ((new XdbcFirebirdIndex("ix_old", True, cols),
+                new Sqlite3Index("ix_old", True, cols, {"code": "nocase"}))) {
+            assertFalse(ix.supportsRename(), ix.className());
+            assertEq((), ix.getRenameSql("orders", "ix_new"), ix.className());
+            ix.rename("ix_new");
+            assertEq("ix_new", ix.getName(), ix.className());
+            assertEq("ix_old", ix.getDbName(), ix.className());
+            assertEq("drop index ix_old", ix.getDropSql("orders"), ix.className());
+        }
+        # an index that the database can rename has its new name in the database
+        PgsqlIndex pg("ix_old", True, cols);
+        pg.rename("ix_new");
+        assertEq("ix_new", pg.getDbName());
+    }
+}

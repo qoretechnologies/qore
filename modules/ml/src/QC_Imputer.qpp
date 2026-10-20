@@ -56,14 +56,14 @@ qclass Imputer [arg=QoreImputer* imputer; ns=Qore::ML; vparent=AbstractMLTransfo
     @throw ML-IMPUTER-ERROR invalid strategy
 */
 Imputer::constructor(*hash<auto> options) {
-    const char* strategy = "mean";
+    std::string strategy = "mean";
     double constant_value = 0.0;
 
     if (options) {
         QoreValue v = options->getKeyValue("strategy");
         if (!v.isNullOrNothing() && v.getType() == NT_STRING) {
             QoreStringValueHelper strategy_str(v);
-            strategy = strategy_str->c_str();
+            strategy = mlStdString(**strategy_str);
         }
         v = options->getKeyValue("constant_value");
         if (!v.isNullOrNothing()) {
@@ -71,11 +71,11 @@ Imputer::constructor(*hash<auto> options) {
         }
     }
 
-    if (strcmp(strategy, "mean") != 0 && strcmp(strategy, "median") != 0
-            && strcmp(strategy, "most_frequent") != 0 && strcmp(strategy, "constant") != 0) {
+    if (strategy != "mean" && strategy != "median"
+            && strategy != "most_frequent" && strategy != "constant") {
         xsink->raiseException("ML-IMPUTER-ERROR",
             "invalid strategy '%s': must be 'mean', 'median', 'most_frequent', or 'constant'",
-            strategy);
+            strategy.c_str());
         return;
     }
 
@@ -124,12 +124,17 @@ nothing Imputer::fitMatrix(list<list<*float>> matrix) {
     @return a hash with missing values replaced
 
     @throw ML-IMPUTER-ERROR imputer not fitted or dimension mismatch
+    @throw HASH-KEY-ERROR if a field name of a restored model has a NUL character, so it cannot be a key of the result
 */
 hash<auto> Imputer::transform(hash<auto> record) {
     const std::vector<std::string>& field_names = imputer->getFieldNames();
     if (field_names.empty()) {
         xsink->raiseException("ML-IMPUTER-ERROR",
             "imputer was fitted with fitMatrix(); use transformMatrix() or fit() with hash records");
+        return QoreValue();
+    }
+    // the result is a hash keyed by the field names, and a field name with a NUL character cannot be a key
+    if (mlCheckFieldKeys(field_names, xsink)) {
         return QoreValue();
     }
     RowVectorXd point = qoreHashToRowVector(record, field_names, xsink);

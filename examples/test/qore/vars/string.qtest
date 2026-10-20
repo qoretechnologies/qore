@@ -1344,6 +1344,20 @@ class StringTest inherits QUnit::Test {
 
         assertEq("%22hello%22", encode_url("\"hello\""));
         assertEq("%22hello%22", encode_uri_request("\"hello\""));
+
+        # a UTF-8 string that ends in the middle of a character cannot be URL-encoded; its bytes were read past the
+        # end of the string
+        {
+            string incomplete = binary_to_string(<41c3>, "UTF-8");
+            assertThrows("INVALID-ENCODING", \encode_url(), incomplete);
+            assertThrows("INVALID-ENCODING", \encode_uri_request(), incomplete);
+            string incomplete3 = binary_to_string(<41e282>, "UTF-8");
+            assertThrows("INVALID-ENCODING", \encode_url(), incomplete3);
+            assertThrows("INVALID-ENCODING", \encode_uri_request(), incomplete3);
+            # a complete multi-byte character at the end of the string is encoded
+            assertEq("A%E2%82%AC", encode_url(binary_to_string(<41e282ac>, "UTF-8")));
+            assertEq("A%E2%82%AC", encode_uri_request(binary_to_string(<41e282ac>, "UTF-8")));
+        }
     }
 
     testASCIIUTF8Equality() {

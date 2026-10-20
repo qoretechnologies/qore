@@ -45,8 +45,9 @@ public:
                                        bool skip_empty, int max_docs,
                                        ExceptionSink* xsink);
 
-    // Constructor for stream input
-    DLLLOCAL QoreYamlDocumentIterator(QoreObject* stream, const QoreEncoding* encoding,
+    // Constructor for stream input; the stream and reader internal members of the iterator object (self) hold the
+    // references to the stream and to the StreamReader the iterator reads text in another encoding with
+    DLLLOCAL QoreYamlDocumentIterator(QoreObject* self, QoreObject* stream, const QoreEncoding* encoding,
                                        bool skip_empty, int max_docs,
                                        ExceptionSink* xsink);
 

@@ -1060,7 +1060,8 @@ public hashdecl DataProviderFieldReference {
         of a key is escaped with a backslash, and so is a backslash: \c "order.id" is the key \c id of the key
         \c order, and <tt>"Unit\\\\.Price"</tt> (the text <tt>Unit\\.Price</tt>) the key \c Unit.Price
         (@ref AbstractDataProvider::getFieldPath(), @ref AbstractDataProvider::escapeFieldPathKey(),
-        @ref dpql_field_paths)
+        @ref dpql_field_paths).  A query language names it by its keys, never by this text
+        (@ref AbstractDataProvider::getFieldPathName())
     */
     string field;
 
@@ -6041,7 +6042,7 @@ hash<GeneratedDataInfo> output = prov.finishCreate();
         key =~ s/:.*//g;
         hash<DataProviderExpression> rv;
         if (value.typeCode() == NT_HASH && value.op && value.hasKey("arg")) {
-            hash<DataProviderExpressionInfo> expinfo = getExpression(role, value.op, info.expressions);
+            hash<DataProviderExpressionInfo> op_info = getExpression(role, value.op, info.expressions);
             auto args;
             args[0] = <DataProviderFieldReference>{"field": key};
             if (value.arg.op && value.arg.arg) {
@@ -6066,7 +6067,7 @@ hash<GeneratedDataInfo> output = prov.finishCreate();
                 push args, value.arg;
             }
             rv = <DataProviderExpression>{
-                "exp": expinfo.name,
+                "exp": op_info.name,
                 "args": args,
             };
         } else {
@@ -6263,16 +6264,41 @@ hash<GeneratedDataInfo> output = prov.finishCreate();
         pushdownable conjuncts go into the SQL where clause and only the
         non-pushdownable conjuncts are applied as a row filter.
 
+        With @a field_reference, the field references are given to the provider by the names it uses: the closure
+        returns the field reference that the provider reads for a field reference of the expression, or @ref nothing
+        if the provider cannot name the field (for example a field path of more than one key for a database table),
+        in which case the expression that has it is evaluated client-side.  The pushdown part has the field
+        references the closure returns.
+
+        Each part is an expression: a field reference or a value that is the only conjunct of a part is kept in an
+        \c "and" expression of one argument, so that a part is never read as a provider's own where hash.
+
+        @par Example:
+        @code{.py}
+# a database table can name a column only by a field path of one key; any other field is read client-side
+hash<auto> split = AbstractDataProvider::splitPushdownableExpression(
+    DataProvider::parseDpqlExpression('@status == "open" && @customer.region == "EU"'), table.getExpressionMap(),
+    *hash<DataProviderFieldReference> sub (hash<DataProviderFieldReference> ref) {
+        list<string> path = AbstractDataProvider::getFieldPath(ref.field);
+        return path.size() == 1 ? <DataProviderFieldReference>{"field": path[0]} : NOTHING;
+    });
+# split.pushdown: @status == "open"; split.client: @customer.region == "EU"
+        @endcode
+
         @param cond the where-clause expression to split (or NOTHING)
         @param expmap the data provider's expression map
+        @param field_reference an optional closure taking a field reference of the expression and returning the field
+        reference the provider reads, or @ref nothing if the field cannot be pushed down
         @return a hash with two keys:
-        - @c pushdown: the sub-expression that can be pushed down (or NOTHING)
-        - @c client: the sub-expression to evaluate client-side (or NOTHING)
+        - @c pushdown: the expression that can be pushed down (or NOTHING)
+        - @c client: the expression to evaluate client-side (or NOTHING)
 
         @since DataProvider 3.4
+        @since DataProvider 3.11 the \c field_reference parameter
     */
     static hash<auto> splitPushdownableExpression(*hash<DataProviderExpression> cond,
-            hash<auto> expmap) {
+            hash<auto> expmap,
+            *code<*hash<DataProviderFieldReference>(hash<DataProviderFieldReference>)> field_reference) {
         if (!cond) {
             return {"pushdown": NOTHING, "client": NOTHING};
         }
@@ -6283,7 +6309,13 @@ hash<GeneratedDataInfo> output = prov.finishCreate();
                 hash<auto> sub_split;
                 if (arg instanceof hash<DataProviderExpression>) {
                     sub_split = AbstractDataProvider::splitPushdownableExpression(
-                        cast<hash<DataProviderExpression>>(arg), expmap);
+                        cast<hash<DataProviderExpression>>(arg), expmap, field_reference);
+                } else if (field_reference && arg instanceof hash<DataProviderFieldReference>) {
+                    # a field reference alone, as a boolean condition
+                    *hash<DataProviderFieldReference> provider_ref = field_reference(arg);
+                    sub_split = exists provider_ref
+                        ? {"pushdown": provider_ref, "client": NOTHING}
+                        : {"pushdown": NOTHING, "client": arg};
                 } else {
                     # non-expression conjunct (e.g. literal True): treat as pushdownable
                     sub_split = {"pushdown": arg, "client": NOTHING};
@@ -6296,20 +6328,17 @@ hash<GeneratedDataInfo> output = prov.finishCreate();
                 }
             }
             return {
-                "pushdown": push_args.size() == 0
-                    ? NOTHING
-                    : (push_args.size() == 1
-                        ? push_args[0]
-                        : <DataProviderExpression>{"exp": DP_OP_AND, "args": push_args}),
-                "client": client_args.size() == 0
-                    ? NOTHING
-                    : (client_args.size() == 1
-                        ? client_args[0]
-                        : <DataProviderExpression>{"exp": DP_OP_AND, "args": client_args}),
+                "pushdown": AbstractDataProvider::getConjunction(push_args),
+                "client": AbstractDataProvider::getConjunction(client_args),
             };
         }
-        if (AbstractDataProvider::expressionPushdownable(cond, expmap)) {
-            return {"pushdown": cond, "client": NOTHING};
+        if (AbstractDataProvider::expressionPushdownable(cond, expmap, field_reference)) {
+            return {
+                "pushdown": field_reference
+                    ? AbstractDataProvider::translateFieldReferences(cond, field_reference)
+                    : cond,
+                "client": NOTHING,
+            };
         }
         return {"pushdown": NOTHING, "client": cond};
     }
@@ -6318,11 +6347,14 @@ hash<GeneratedDataInfo> output = prov.finishCreate();
     #! down to a provider with the given expression map.
     /** An expression is pushdownable when its operator resolves in the map (directly
         or via @ref OperatorAliasMap) to an entry with a non-NOTHING @c "code" field,
-        and every sub-expression argument is also pushdownable.
+        and every sub-expression argument is also pushdownable.  With @a field_reference, each field reference
+        argument must be one that the provider can name (see @ref splitPushdownableExpression()).
 
         @since DataProvider 3.4
+        @since DataProvider 3.11 the \c field_reference parameter
     */
-    static bool expressionPushdownable(hash<DataProviderExpression> cond, hash<auto> expmap) {
+    static bool expressionPushdownable(hash<DataProviderExpression> cond, hash<auto> expmap,
+            *code<*hash<DataProviderFieldReference>(hash<DataProviderFieldReference>)> field_reference) {
         *hash<auto> entry = expmap{cond.exp} ?? expmap{OperatorAliasMap{cond.exp}};
         if (!entry || !exists entry.code) {
             return False;
@@ -6330,12 +6362,79 @@ hash<GeneratedDataInfo> output = prov.finishCreate();
         foreach auto arg in (cond.args) {
             if (arg instanceof hash<DataProviderExpression>) {
                 if (!AbstractDataProvider::expressionPushdownable(
-                        cast<hash<DataProviderExpression>>(arg), expmap)) {
+                        cast<hash<DataProviderExpression>>(arg), expmap, field_reference)) {
                     return False;
                 }
+            } else if (field_reference && arg instanceof hash<DataProviderFieldReference>
+                    && !exists field_reference(arg)) {
+                return False;
             }
         }
         return True;
+    }
+
+    #! Returns an expression with its field references replaced by those a closure returns
+    /** The field references in the arguments of the expression and of its sub-expressions are replaced; any other
+        argument is kept
+
+        @par Example:
+        @code{.py}
+# a query language that reads a nested field as keys joined with "/"
+hash<DataProviderExpression> exp = AbstractDataProvider::translateFieldReferences(
+    DataProvider::parseDpqlExpression('@customer.name == "Acme"'),
+    hash<DataProviderFieldReference> sub (hash<DataProviderFieldReference> ref) {
+        return <DataProviderFieldReference>{"field": join("/", AbstractDataProvider::getFieldPath(ref.field))};
+    });
+# exp: @"customer/name" == "Acme"
+        @endcode
+
+        @param cond the expression
+        @param field_reference a closure taking a field reference and returning the field reference to use; it may
+        throw an exception if the field cannot be used
+
+        @return the expression with the field references replaced
+
+        @throw FIELD-REFERENCE-ERROR the closure returned no field reference
+
+        @since DataProvider 3.11
+    */
+    static hash<DataProviderExpression> translateFieldReferences(hash<DataProviderExpression> cond,
+            code<*hash<DataProviderFieldReference>(hash<DataProviderFieldReference>)> field_reference) {
+        hash<DataProviderExpression> rv = cond;
+        rv.args = map AbstractDataProvider::translateFieldReferenceArg($1, field_reference), cond.args;
+        return rv;
+    }
+
+    #! Returns the conjunction of conditions as an expression, or @ref nothing if there are none
+    /** A single condition that is an expression is returned as it is; any other single condition (a field reference
+        or a value) is kept in an \c "and" expression of one argument, so that the result is always an expression
+    */
+    private static *hash<DataProviderExpression> getConjunction(list<auto> conds) {
+        if (!conds) {
+            return;
+        }
+        if (conds.size() == 1 && conds[0] instanceof hash<DataProviderExpression>) {
+            return cast<hash<DataProviderExpression>>(conds[0]);
+        }
+        return <DataProviderExpression>{"exp": DP_OP_AND, "args": conds};
+    }
+
+    #! Returns an argument of an expression with its field references replaced
+    private static auto translateFieldReferenceArg(auto arg,
+            code<*hash<DataProviderFieldReference>(hash<DataProviderFieldReference>)> field_reference) {
+        if (arg instanceof hash<DataProviderFieldReference>) {
+            *hash<DataProviderFieldReference> rv = field_reference(arg);
+            if (!rv) {
+                throw "FIELD-REFERENCE-ERROR", sprintf("no field reference was given for the field \"%s\"",
+                    arg.field);
+            }
+            return rv;
+        }
+        if (arg instanceof hash<DataProviderExpression>) {
+            return AbstractDataProvider::translateFieldReferences(cast<hash<DataProviderExpression>>(arg),
+                field_reference);
+        }
+        return arg;
     }
 
     #! Returns the interactions of an option with other options
@@ -6459,6 +6558,37 @@ string path = "order." + AbstractDataProvider::escapeFieldPathKey("Unit.Price");
     */
     static string escapeFieldPathKey(string key) {
         return replace(replace(key, "\\", "\\\\"), ".", "\\.");
+    }
+
+    #! Returns the keys of a field path joined with the separator of a query language, or @ref nothing
+    /** A query language that writes a nested field with a separator (\c "." in SOQL, ServiceNow, Qdrant and most REST
+        query languages, \c "/" in OData) writes the path of a field reference with it: \c order.id is \c order.id, or
+        \c order/id in OData, and the escaped key <tt>p\\\\q</tt> is <tt>p\\q</tt>.  A key that has the separator
+        (<tt>Unit\\.Price</tt>, the key \c Unit.Price) cannot be written in such a language, so @ref nothing is
+        returned; the escaped text of the path is never a name in the language.
+
+        @param field the field path
+        @param separator the separator of the nested fields in the query language
+        @param field_path the keys of the path, if already read (the \c field_path of a
+        @ref DataProviderFieldReference)
+
+        @return the keys joined with the separator, or @ref nothing if a key has the separator
+
+        @par Example:
+        @code{.py}
+*string name = AbstractDataProvider::getFieldPathName(ref.field, ".", ref.field_path);
+        @endcode
+
+        @since DataProvider 3.11
+    */
+    static *string getFieldPathName(string field, string separator = ".", *list<string> field_path) {
+        list<string> path = field_path ?? AbstractDataProvider::getFieldPath(field);
+        foreach string key in (path) {
+            if (key.find(separator) >= 0) {
+                return;
+            }
+        }
+        return path.join(separator);
     }
 
     #! Returns @ref True if a field path is one key, read as it is written
@@ -7197,52 +7327,52 @@ AbstractDataProvider::checkFieldPathOption("CONSTRUCTOR-ERROR", "fields", fields
                 continue;
             }
             # process value
-            bool ok;
-            string err;
+            bool accepted;
+            string type_error;
             foreach AbstractDataProviderType type in (i.value.type) {
                 try {
                     options{i.key} = type.acceptsValue(options{i.key});
-                    ok = True;
+                    accepted = True;
                     break;
                 } catch (hash<ExceptionInfo> ex) {
                     if (ex.err == "RUNTIME-TYPE-ERROR") {
-                        err = sprintf("option %y of type %y cannot be assigned a value of type %y (value %y): %s: %s",
-                            i.key, type.getName(), options{i.key}.type(), options{i.key}, ex.err, ex.desc);
+                        type_error = sprintf("option %y of type %y cannot be assigned a value of type %y (value %y): "
+                            "%s: %s", i.key, type.getName(), options{i.key}.type(), options{i.key}, ex.err, ex.desc);
                         continue;
                     }
                     rethrow;
                 }
             }
-            if (!ok) {
-                if (err) {
-                    error("RUNTIME-TYPE-ERROR", err);
+            if (!accepted) {
+                if (type_error) {
+                    error("RUNTIME-TYPE-ERROR", type_error);
                 }
                 error("RUNTIME-TYPE-ERROR", "no type information available for option %y", i.key);
             }
             # check allowed values
             if (i.value.allowed_values && !i.value.allowed_values_creatable) {
-                bool ok = False;
+                bool allowed = False;
                 foreach auto v in (i.value.allowed_values) {
                     if (options{i.key} == v.value) {
-                        ok = True;
+                        allowed = True;
                         break;
                     }
                 }
-                if (!ok) {
+                if (!allowed) {
                     error("OPTION-VALUE-ERROR", sprintf("option %y does not accept value %y; possible values: %y",
                         i.key, options{i.key}, (map $1.value, i.value.allowed_values)));
                 }
             }
             if (i.value.element_allowed_values && !i.value.element_allowed_values_creatable) {
                 foreach auto opt in (options{i.key}) {
-                    bool ok = False;
+                    bool allowed = False;
                     foreach auto v in (i.value.element_allowed_values) {
                         if (opt == v.value) {
-                            ok = True;
+                            allowed = True;
                             break;
                         }
                     }
-                    if (!ok) {
+                    if (!allowed) {
                         error("OPTION-VALUE-ERROR", sprintf("Option %y does not accept element value %y; possible "
                             "element values: %y", i.key, opt, (map $1.value, i.value.element_allowed_values)));
                     }
@@ -9229,27 +9359,50 @@ hash<auto> rec = AbstractDataProvider::removeFieldValue({"order": {"id": 1, "Uni
         return rv;
     }
 
+    #! Returns the value given for a list option of fields, as it was given if it was a single string
+    /** A list option (such as a \c softlist<string> option) makes a single string given for it a list of one string
+        when the options are checked.  @ref parseFieldList() reads a single string as a comma-separated list of fields,
+        and each element of a list as one field, so the string is passed as it was given.
+
+        @param options the options as they were given
+        @param copts the options as they were checked
+        @param opt the name of the option
+
+        @return the single string given for the option, or its checked value
+
+        @par Example:
+        @code{.py}
+list<string> fields = AbstractDataProvider::parseFieldList(
+    AbstractDataProvider::getFieldListOption(options, copts, "fields"));
+        @endcode
+
+        @since DataProvider 3.11
+    */
+    static auto getFieldListOption(*hash<auto> options, *hash<auto> copts, string opt) {
+        auto given = options{opt};
+        return given.typeCode() == NT_STRING ? given : copts{opt};
+    }
+
     #! Parses a field list from either a comma-separated string or a list of strings
-    /** Provides backward compatibility for the transition from string to softlist\<string\> field options.
+    /** Provides backward compatibility for the transition from string to softlist\<string\> field options: a single
+        string is a comma-separated list of fields, each trimmed.  Each element of a list is one field, as it is
+        given, so that a field whose name has a comma (\c "Price, USD") can be given; empty elements and elements that
+        are not strings are skipped.
 
         @param fields a string with comma-separated field names or a list of strings
 
-        @return a list of trimmed, non-empty field name strings
+        @return a list of non-empty field name strings
 
         @since %DataProvider 3.4
+        @since %DataProvider 3.11 the elements of a list are not split on commas or trimmed
     */
     static list<string> parseFieldList(auto fields) {
         list<string> result = ();
         if (fields.typeCode() == NT_LIST) {
             foreach auto elem in (fields) {
-                if (elem.typeCode() == NT_STRING) {
-                    # split each element on commas for backward compat with comma-separated strings
-                    foreach string part in (elem.split(",")) {
-                        string trimmed = trim(part);
-                        if (trimmed.val()) {
-                            push result, trimmed;
-                        }
-                    }
+                # each element is one field, as it is given
+                if (elem.typeCode() == NT_STRING && elem != "") {
+                    push result, elem;
                 }
             }
         } else if (fields.typeCode() == NT_STRING) {

@@ -28,6 +28,9 @@
 
 %requires WebSocketHandler >= 2.0
 
+# HttpServerUtil for the WebSocket handler's request handling
+%requires HttpServerUtil
+
 # Linenoise support for line editing and history
 %requires linenoise
 
@@ -192,6 +195,11 @@ result = repl.eval("File::readTextFile('/etc/passwd')");
     All other REPL commands continue to work normally in sandboxed mode, including
     introspection commands (/vars, /functions, /classes, etc.) and session commands
     (/help, /reset, /history, etc.).
+
+    Code completion offers only the classes and functions that the parse options allow, by the same rule as the
+    parser: for example, @ref Qore::File "File" is not offered with @ref Qore::PO_NO_FILESYSTEM, and
+    @ref Qore::DebugProgram "DebugProgram", in a functional domain that a Program has to allow explicitly, is offered
+    only with @ref Qore::PO_ALLOW_DEBUGGER.
 
     @subsection qorerepl_websocket_sandbox Sandboxed WebSocket Server
 

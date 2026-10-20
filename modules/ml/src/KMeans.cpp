@@ -472,7 +472,7 @@ QoreKMeans* QoreKMeans::deserializeState(const uint8_t* data, size_t len,
     if (*xsink) { return nullptr; }
 
     std::unique_ptr<QoreKMeans> obj(new QoreKMeans(k, max_iterations, tolerance, 1,
-        init_method.c_str()));
+        init_method));
     obj->centroids = std::move(centroids);
     obj->centroid_counts = std::move(centroid_counts);
     obj->n_features = n_features;

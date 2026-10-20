@@ -79,6 +79,19 @@ public:
         }
     }
 
+    // parses a URL given with its length: a URL with a NUL character is invalid, since it would be parsed cut at the
+    // NUL character, and an exception is raised for it if there is an ExceptionSink; the URL is not shown in the
+    // exception, as it can contain a password
+    DLLLOCAL int parse(const char* url, size_t len, int options, ExceptionSink* xsink) {
+        if (xsink ? q_check_secret_no_nul(url, len, "URL", "URLs", "PARSE-URL-ERROR", xsink)
+                : q_check_no_nul(url, len)) {
+            reset();
+            zero();
+            return -1;
+        }
+        return parse(url, options, xsink);
+    }
+
     DLLLOCAL int parse(const char* url, int options = 0, ExceptionSink* xsink = nullptr) {
         reset();
         zero();
@@ -399,11 +412,16 @@ private:
 };
 
 std::string q_mask_url_password(const char* url) {
-    std::string str(url ? url : "");
+    return q_mask_url_password(std::string(url ? url : ""));
+}
+
+std::string q_mask_url_password(const std::string& url) {
+    std::string str(url);
     size_t start = str.find("://");
     start = start == std::string::npos ? 0 : start + 3;
-    // a URL that can be parsed: the password that the parser finds is masked where it appears
-    {
+    // a URL that can be parsed: the password that the parser finds is masked where it appears; a string with a NUL
+    // character cannot be parsed, as the parser would only see the part before the NUL character
+    if (str.find('\0') == std::string::npos) {
         qore_url_private url_priv;
         url_priv.parse(str.c_str());
         if (url_priv.isValid()) {
@@ -446,7 +464,7 @@ QoreURL::QoreURL(const char* url) : priv(new qore_url_private) {
 }
 
 QoreURL::QoreURL(const QoreString* url) : priv(new qore_url_private) {
-    parse(url->c_str());
+    parse(url);
 }
 
 QoreURL::QoreURL(const char* url, bool keep_brackets) : priv(new qore_url_private) {
@@ -454,7 +472,7 @@ QoreURL::QoreURL(const char* url, bool keep_brackets) : priv(new qore_url_privat
 }
 
 QoreURL::QoreURL(const QoreString* url, bool keep_brackets) : priv(new qore_url_private) {
-    parse(url->c_str(), keep_brackets ? QURL_KEEP_BRACKETS : 0);
+    parse(url, keep_brackets);
 }
 
 QoreURL::QoreURL(const QoreString* url, bool keep_brackets, ExceptionSink* xsink) : priv(new qore_url_private) {
@@ -494,7 +512,7 @@ int QoreURL::parse(const char* url) {
 }
 
 int QoreURL::parse(const QoreString* url) {
-    return priv->parse(url->c_str());
+    return priv->parse(url->c_str(), url->size(), 0, nullptr);
 }
 
 int QoreURL::parse(const char* url, bool keep_brackets) {
@@ -502,7 +520,7 @@ int QoreURL::parse(const char* url, bool keep_brackets) {
 }
 
 int QoreURL::parse(const QoreString* url, bool keep_brackets) {
-    return priv->parse(url->c_str(), keep_brackets);
+    return priv->parse(url->c_str(), url->size(), keep_brackets ? QURL_KEEP_BRACKETS : 0, nullptr);
 }
 
 int QoreURL::parse(const QoreString* url, bool keep_brackets, ExceptionSink* xsink) {
@@ -510,7 +528,7 @@ int QoreURL::parse(const QoreString* url, bool keep_brackets, ExceptionSink* xsi
     if (*xsink) {
         return -1;
     }
-    return priv->parse(tmp->c_str(), keep_brackets, xsink);
+    return priv->parse(tmp->c_str(), tmp->size(), keep_brackets ? QURL_KEEP_BRACKETS : 0, xsink);
 }
 
 int QoreURL::parse(const char* url, int options) {
@@ -518,11 +536,11 @@ int QoreURL::parse(const char* url, int options) {
 }
 
 int QoreURL::parse(const QoreString& url, int options) {
-    return priv->parse(url.c_str(), options);
+    return priv->parse(url.c_str(), url.size(), options, nullptr);
 }
 
 int QoreURL::parse(const std::string& url, int options) {
-    return priv->parse(url.c_str(), options);
+    return priv->parse(url.c_str(), url.size(), options, nullptr);
 }
 
 int QoreURL::parse(ExceptionSink* xsink, const char* url, int options) {
@@ -534,7 +552,7 @@ int QoreURL::parse(ExceptionSink* xsink, const QoreString& url, int options) {
     if (*xsink) {
         return -1;
     }
-    return priv->parse(tmp->c_str(), options, xsink);
+    return priv->parse(tmp->c_str(), tmp->size(), options, xsink);
 }
 
 int QoreURL::parse(ExceptionSink* xsink, const std::string& url, int options) {
@@ -542,7 +560,7 @@ int QoreURL::parse(ExceptionSink* xsink, const std::string& url, int options) {
     if (*xsink) {
         return -1;
     }
-    return priv->parse(tmp->c_str(), options, xsink);
+    return priv->parse(tmp->c_str(), tmp->size(), options, xsink);
 }
 
 bool QoreURL::isValid() const {

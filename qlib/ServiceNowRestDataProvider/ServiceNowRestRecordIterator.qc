@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore ServiceNowRestRecordIterator class definition
 
-/** ServiceNowRestRecordIterator.qc Copyright 2023 - 2024 Qore Technologies, s.r.o.
+/** ServiceNowRestRecordIterator.qc Copyright 2023 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -293,7 +293,14 @@ public class ServiceNowRestRecordIterator inherits AbstractDataProviderRecordIte
             throw "WHERE-ERROR", sprintf("the first argument to expression %y must be a field reference",
                 exp.exp);
         }
-        string column = cast<hash<DataProviderFieldReference>>(exp.args[0]).field;
+        hash<DataProviderFieldReference> field_ref = cast<hash<DataProviderFieldReference>>(exp.args[0]);
+        # the field is a field path, written with the nesting syntax of ServiceNow; a key with the separator cannot
+        # be written in it
+        *string column = AbstractDataProvider::getFieldPathName(field_ref.field, ".", field_ref.field_path);
+        if (!exists column) {
+            throw "WHERE-ERROR", sprintf("the field \"%s\" has a key with a dot, which ServiceNow cannot name",
+                field_ref.field);
+        }
 
         # Build args for the impl function
         list<auto> args = (column,);

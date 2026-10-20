@@ -1604,6 +1604,45 @@ int QoreTimeZoneManager::readAll(ExceptionSink* xsink) {
     return 0;
 }
 
+int QoreTimeZoneManager::checkRegion(const QoreString& region, bool is_path, ExceptionSink* xsink) {
+    if (q_check_no_nul(region.c_str(), region.size(), "time zone region or path", "time zone regions and paths",
+            "TZINFO-ERROR", xsink)) {
+        return -1;
+    }
+    if (is_path || region.empty()) {
+        return 0;
+    }
+    // a region names a file under the zoneinfo directory, so it cannot have a component that leaves the directory;
+    // no region has a ".." or empty path component or a backslash
+    const char* str = region.c_str();
+    if (strchr(str, '\\')) {
+        xsink->raiseException("TZINFO-ERROR", "time zone region \"%s\" contains a backslash; a time zone region "
+            "cannot contain a backslash", str);
+        return -1;
+    }
+    // a leading '/' is accepted for an absolute path under the zoneinfo directory
+    const char* p = (*str == '/') ? str + 1 : str;
+    while (true) {
+        const char* end = strchr(p, '/');
+        size_t len = end ? static_cast<size_t>(end - p) : strlen(p);
+        if (!len) {
+            xsink->raiseException("TZINFO-ERROR", "time zone region \"%s\" contains an empty path component; a "
+                "time zone region cannot contain an empty path component", str);
+            return -1;
+        }
+        if (len == 2 && p[0] == '.' && p[1] == '.') {
+            xsink->raiseException("TZINFO-ERROR", "time zone region \"%s\" contains a \"..\" path component; a "
+                "time zone region cannot name a file outside of the zoneinfo directory", str);
+            return -1;
+        }
+        if (!end) {
+            break;
+        }
+        p = end + 1;
+    }
+    return 0;
+}
+
 const AbstractQoreZoneInfo* QoreTimeZoneManager::findLoadRegion(const char* name, ExceptionSink* xsink) {
     QoreAutoRWWriteLocker al(rwl);
     // find or load region

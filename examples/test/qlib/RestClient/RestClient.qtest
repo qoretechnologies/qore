@@ -267,12 +267,6 @@ public class Main inherits QUnit::Test {
         addTestCase("custom and declared credential headers are redacted from errors",
             \testCustomCredentialRedaction());
 
-        @debug {
-            set_signal_handler(SIGUSR1, sub (int sig) {
-                printf("%Y\n", get_all_thread_call_stacks());
-            });
-        }
-
         # Return for compatibility with test harness that checks return value.
         set_return_value(main());
     }

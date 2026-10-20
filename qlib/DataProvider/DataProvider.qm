@@ -977,6 +977,13 @@ class MyDebugCollector inherits AbstractDebugInfoCollector {
     @ref DataProvider::DpqlSerializer::fieldReferenceForKey() "DpqlSerializer::fieldReferenceForKey()" writes the
     field reference to one key, such as the name of a field of a record type.
 
+    A provider that searches on its server names a field in its query language by the keys of the path, never by
+    the escaped text of the path:
+    @ref DataProvider::AbstractDataProvider::getFieldPathName() "AbstractDataProvider::getFieldPathName()" joins
+    them with the separator of the language (\c order.id, or \c order/id in OData).  A key that has the separator
+    cannot be named in that language (<tt>\@\"Unit\\.Price\"</tt> in SOQL): depending on the provider, a
+    predicate on it is evaluated on the client or raises \c WHERE-ERROR.
+
     @par Comparison Operators
     These are standard DPQL operators; individual data providers can expose additional or different operators.
     DPQL is translated to native server-side queries whenever possible to ensure maximum performance.
@@ -1526,6 +1533,56 @@ fetch
     @section dataprovider_relnotes Release Notes
 
     @subsection dataprovider_v3_11 DataProvider v3.11
+    - DPQL field completion follows field paths: after \c @ and a path of keys (<tt>\@create.</tt>,
+      <tt>\@create.it</tt>), it offers the keys of the type the path reaches, each inserted as the field reference to
+      its path as the serializer writes it (<tt>\@create.items</tt>, <tt>\@"create.order-id"</tt>); after accessors and
+      a dot (<tt>\@create.items[*].</tt>, <tt>\@stats{*}.</tt>), it offers the keys of the value the accessors give,
+      each inserted as the member after the dot (\c id, <tt>\@"Unit.Price"</tt>), also after a member written so
+      (<tt>\@create.items[*].order-id.</tt>, <tt>\@create.items[*].\@"Unit.Price".</tt>) and after a quoted field
+      reference (<tt>\@"create.unit price".</tt>); in an open quoted field reference (<tt>\@"create.</tt>,
+      <tt>\@"create.order-</tt>), it offers the keys of the path typed in the quotes, read as the parser reads it (an
+      escaped dot is part of a key), each inserted as the field reference to its path, and in an open quoted member
+      (<tt>\@create.items[*].\@"Unit.</tt>) the keys that start with the text typed; as a key of a list is the key
+      of each of its items at run time, a key accessor or a member after a list (<tt>\@items{</tt>,
+      <tt>\@items{product}.</tt>, <tt>\@items[0..1]{</tt>) offers the keys of its items, through nested lists;
+      quoted text in an accessor does not end it (<tt>\@spec{"a}b"}.</tt>); inside an accessor that has been
+      opened, it offers the wildcard \c * in <tt>[</tt> after a list and in <tt>{</tt> after a hash; after a slice of
+      a list (<tt>\@orders[0..1]</tt>) or a key of a list (<tt>\@items{product}</tt>), which give a list, it offers
+      \c [*] and not \c {*}.  A type without known fields offers no keys.  The new
+      @ref DataProvider::DpqlSerializer::fieldReferenceForPath() "DpqlSerializer::fieldReferenceForPath()" and
+      @ref DataProvider::DpqlSerializer::memberNameForKey() "DpqlSerializer::memberNameForKey()" give these forms
+    - the \c INVALID-EXPRESSION error of
+      @ref DataProvider::DataProvider::renderExpression() "DataProvider::renderExpression()" names the expression
+      that is not in the expression map also when it is an argument of another expression, where it named none
+    - @ref DataProvider::DataProvider::renderExpression() "DataProvider::renderExpression()" describes a field
+      reference, and the accessors and wildcards on it, as the DPQL serializer writes them: \c @pos,
+      <tt>\@"create.order-id"</tt>, <tt>\@"Unit\\.Price"</tt>, <tt>\@orders[*].id</tt>, where it wrote \c {pos} and
+      the accessors as calls, so that the description and the DPQL of an expression read the same; template
+      references are written as before (<tt>$static:{x}</tt>); the new
+      @ref DataProvider::DpqlSerializer::fieldReference() "DpqlSerializer::fieldReference()" and
+      @ref DataProvider::DpqlSerializer::accessorForm() "DpqlSerializer::accessorForm()" give these forms
+    - each element of a list given for a list option of fields is one field, as it is given: a field whose name has
+      a comma (\c "Price, USD") can be given in a list; a single string is still a comma-separated list
+      (@ref DataProvider::AbstractDataProvider::parseFieldList() "AbstractDataProvider::parseFieldList()"); the
+      processors read the string given for such an option with the new
+      @ref DataProvider::AbstractDataProvider::getFieldListOption() "AbstractDataProvider::getFieldListOption()",
+      as the option type makes a single string a list of one string
+    - each part that @ref DataProvider::AbstractDataProvider::splitPushdownableExpression()
+      "AbstractDataProvider::splitPushdownableExpression()" gives is an expression: a field reference that was the only
+      condition of a part was given alone, and a database table read it as a where hash, so that
+      <tt>\@active && \@name =~ /x/</tt> searched for the rows whose column \c field held \c "active"
+    - @ref DataProvider::AbstractDataProvider::splitPushdownableExpression()
+      "AbstractDataProvider::splitPushdownableExpression()" and
+      @ref DataProvider::AbstractDataProvider::expressionPushdownable()
+      "AbstractDataProvider::expressionPushdownable()" take an optional closure that gives the field reference a
+      provider reads for a field reference of the expression, or no value if the provider cannot name the field, whose
+      expression is then evaluated client-side; the pushdown part has the field references the closure gives; added
+      @ref DataProvider::AbstractDataProvider::translateFieldReferences()
+      "AbstractDataProvider::translateFieldReferences()"
+    - added @ref DataProvider::AbstractDataProvider::getFieldPathName() "AbstractDataProvider::getFieldPathName()",
+      which gives the keys of a field path joined with the separator of a query language (\c order.id, or
+      \c order/id in OData), or no value for a key that has the separator, so that a query is never sent the
+      escaped text of a field path
     - added the private method \c readLocationGrid() to
       @ref DataProvider::AbstractTabularProfileDataProvider "AbstractTabularProfileDataProvider", which a profile
       provider whose reader streams its input overrides to read a location as a stream, so that the content of a
@@ -1571,6 +1628,13 @@ fetch
          <tt>findIn(2, (1, 2, 3), "id")</tt> is \c 2; it was no value
       -# an escaped dot is part of a key: <tt>findIn(2, ({"a.b": 2},), "a\\.b")</tt> finds the element; a location
          with \c "\\." found nothing unless a key ended with a backslash
+      -# an escaped backslash is one backslash of a key, as in a field path (@ref dpql_field_paths), so a key ending
+         with a backslash can be followed by another: <tt>findIn(2, ({"a\\": {"b": 2}},), "a\\\\.b")</tt> finds the
+         element; a location joined from keys escaped with
+         @ref DataProvider::AbstractDataProvider::escapeFieldPathKey() "AbstractDataProvider::escapeFieldPathKey()"
+         reads them back; an escaped bracket is a bracket of a key and not an offset:
+         <tt>findIn(1, ({"tags[0]": 1},), "tags\\[0]")</tt> finds the element; it read the key \c "tags\\" and the
+         offset \c 0
       -# <tt>[n]</tt> or <tt>[-n]</tt> after a key reads an element of a list: <tt>findIn("y", ({"tags": ("x", "y")},),
          "tags[-1]")</tt> finds the element; it read a key named \c "tags[-1]"
       -# a key in quotes, or with \c "\\ " for a space, is the key without the quotes or with the space:
@@ -1642,6 +1706,11 @@ fetch
       \c group-by, \c correlation, \c cross-correlation and the analytics processors) refuse a field with a DPQL
       wildcard (<tt>[*]</tt> or <tt>{*}</tt>) when they are created; it was read as a key with the wildcard in its
       name, which matched nothing
+    - the \c correlation processor refuses fields that would give two pairs the same key of the
+      @ref DataProvider::CorrelationEventInfo "correlations" of its events when it is created, naming both pairs: the
+      key of a pair is its two fields joined with \c _, so \c a with \c b_c and \c a_b with \c c both gave
+      \c a_b_c, and one correlation replaced the other; a field given more than once is one field, where its values
+      were read once for each time it was given, which made the correlations of the window wrong
     - fixed @ref DataProvider::DataProviderActionCatalog::getActionOptionFromFields() "getActionOptionFromFields()"
       dropping the \c input_field_names marker, so the options of the registered processor actions that take field
       names of the input (such as \c group_by of \c group-by and \c fields of \c select-fields) did not have it, and

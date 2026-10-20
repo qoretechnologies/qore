@@ -10,11 +10,15 @@
 %requires PgsqlSqlUtilBase
 %requires DbDataProvider
 
+%prepend-module-path "${SCRIPT_DIR}"
+%requires ./PgsqlTestIsolation.qm
+
 %exec-class PgsqlListTablesTest
 
 #! Tests that PostgreSQL object listing is scoped to the connection's search_path
-/** Every object is created in scratch schemas created and dropped by the test; the connection's search_path is
-    only changed for the test's own connection.
+/** Every object is created in scratch schemas of the run (PgsqlRunSchema::getAuxName()), created and dropped by
+    the test, and dropped with the run's schema; the connection's search_path is only changed for the test's own
+    connection.
 
     The connection string is taken from the \c -c / \c --conn option or the \c QORE_DB_CONNSTR_PGSQL environment
     variable; all tests are skipped if no PostgreSQL connection can be made.
@@ -45,6 +49,8 @@ class PgsqlListTablesTest inherits QUnit::Test {
         try {
             *string connstr = m_options.connstr ?? ENV.QORE_DB_CONNSTR_PGSQL;
             if (connstr) {
+                # the run's own schema, before any PostgreSQL connection is opened
+                PgsqlRunSchema::setup(connstr, "PgsqlListTables");
                 Datasource nds(connstr);
                 if (nds.getDriverName() != "pgsql") {
                     skip_reason = sprintf("connection uses driver %y, not pgsql", nds.getDriverName());
@@ -59,15 +65,17 @@ class PgsqlListTablesTest inherits QUnit::Test {
             skip_reason = sprintf("cannot connect to PostgreSQL: %s: %s", ex.err, ex.desc);
         }
 
-        string suffix = get_random_string(10).lwr();
-        cur = "qore_plt_cur_" + suffix;
-        second = "qore_plt_sec_" + suffix;
-        outside = "qore_plt_out_" + suffix;
-
-        on_exit if (ds) {
-            dropSchemas();
+        on_exit {
+            if (ds) {
+                dropSchemas();
+            }
+            PgsqlRunSchema::teardown();
         }
         if (ds) {
+            # the scratch schemas belong to the run, so a concurrent run of this test has its own
+            cur = PgsqlRunSchema::getAuxName("cur");
+            second = PgsqlRunSchema::getAuxName("sec");
+            outside = PgsqlRunSchema::getAuxName("out");
             setupSchemas();
         }
 
@@ -133,7 +141,8 @@ class PgsqlListTablesTest inherits QUnit::Test {
             }
         }
         try {
-            setSearchPath("\"$user\", public");
+            # the run's search_path
+            setSearchPath(PgsqlRunSchema::getName() + ", public");
         } catch (hash<ExceptionInfo> ex) {
             printf("WARNING: cannot reset search_path: %s: %s\n", ex.err, ex.desc);
         }
@@ -157,9 +166,14 @@ class PgsqlListTablesTest inherits QUnit::Test {
         return map {$1: True}, l;
     }
 
+    #! returns True if the name is qualified with a scratch schema of the run
+    private bool isScratchQualified(string name) {
+        return name.find(PgsqlRunSchema::getName() + "_") == 0;
+    }
+
     #! returns only the names in the scratch schemas, as the database may hold other objects
     private list<string> scratchNames(list<string> l) {
-        return select l, $1 =~ /^qore_plt_/ || !($1 =~ /\./);
+        return select l, isScratchQualified($1) || !($1 =~ /\./);
     }
 
     #! returns the listed names without the test's views, which getTable() does not acquire
@@ -247,7 +261,7 @@ class PgsqlListTablesTest inherits QUnit::Test {
         list<string> public_unqualified = select tables, !($1 =~ /\./) && !inlist($1,
             ("ci_child", "ci_parent", "cur_only", "dup", "part", "v_dup"));
         assertEq((), public_unqualified, "no public table is listed unqualified when public is not current_schema()");
-        list<string> scratch_qualified = select tables, $1 =~ /^qore_plt_/;
+        list<string> scratch_qualified = select tables, isScratchQualified($1);
         assertEq((), scratch_qualified, "no scratch schema is listed qualified");
 
         # with public as current_schema() the scratch schema's tables are listed qualified instead
@@ -348,7 +362,7 @@ class PgsqlListTablesTest inherits QUnit::Test {
     private emptySearchPathTest() {
         checkConnection();
 
-        foreach string path in (("''", "qore_plt_nonexistent_schema")) {
+        foreach string path in (("''", PgsqlRunSchema::getAuxName("none"))) {
             setSearchPath(path);
             # an SQL NULL; "??" treats it like NOTHING
             assertEq("<none>", ds.selectRow("select current_schema() as s").s ?? "<none>",

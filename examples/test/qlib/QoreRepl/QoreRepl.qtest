@@ -167,6 +167,10 @@ public class QoreReplTest inherits QUnit::Test {
             \testParseOptionsNoThreadControl());
         addTestCase("Parse options: modern filters runtime-noop functions",
             \testParseOptionsModernFilterNoop());
+        addTestCase("Parse options: the debugger domain is offered where it is allowed",
+            \testParseOptionsAllowDebugger());
+        addTestCase("Parse options: the debugger domain is not offered where it is not allowed",
+            \testParseOptionsNoDebugger());
 
         set_return_value(main());
     }
@@ -2680,6 +2684,32 @@ printf('OK');
             }
         }
         assertTrue(has_file, "'File' should appear with PO_MODERN (no filesystem restriction)");
+    }
+
+    #! The DEBUGGER domain must be allowed explicitly, unlike a domain that parse options restrict
+    /** The class DebugProgram and the function get_local_vars() are in the DEBUGGER domain; completion offers them
+        where the parse options allow the domain, as the parser accepts them there
+    */
+    testParseOptionsAllowDebugger() {
+        QoreRepl::QoreRepl repl({"parse_options": PO_NEW_STYLE | PO_ALLOW_DEBUGGER});
+        assertNeq(0, repl.getProgram().getParseOptions() & PO_ALLOW_DEBUGGER);
+        assertEq(("new DebugProgram(",), repl.getCompletions("new DebugProgr"));
+        assertEq(("get_local_vars(",), repl.getCompletions("get_local_va"));
+        # the parser accepts the function where completion offers it
+        assertEq(True, repl.eval("get_local_vars(0).typeCode() == NT_HASH").value);
+    }
+
+    #! Without PO_ALLOW_DEBUGGER, completion does not offer the DEBUGGER domain, as the parser refuses it
+    testParseOptionsNoDebugger() {
+        QoreRepl::QoreRepl repl({"parse_options": PO_NEW_STYLE});
+        assertEq(0, repl.getProgram().getParseOptions() & PO_ALLOW_DEBUGGER);
+        assertEq((), repl.getCompletions("new DebugProgr"));
+        assertEq((), repl.getCompletions("get_local_va"));
+        # the parser refuses the function where completion does not offer it
+        *hash<auto> refused = repl.eval("get_local_vars(0).typeCode() == NT_HASH");
+        assertEq("PARSE-EXCEPTION", refused.error.err);
+        assertRegex("parse options do not allow access to builtin function 'get_local_vars\\(\\)'",
+            refused.error.desc);
     }
 }
 

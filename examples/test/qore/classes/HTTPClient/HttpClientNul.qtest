@@ -1,0 +1,209 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+#
+# an HTTPClient request whose method, path, URL or a header value contains a NUL character is refused before
+# anything is sent, since the string would be cut at the NUL character in the request; a local server records every
+# request that it receives, so that the test shows that none was sent
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class HttpClientNulTest
+
+#! records the request line and headers of every HTTP request received until a request for /done
+class RecordingHttpServer {
+    private {
+        Socket listener();
+        Queue requests();
+        Counter done(1);
+    }
+
+    constructor() {
+        listener.bindINET("127.0.0.1", 0, True, AF_INET);
+        listener.listen();
+        background run();
+    }
+
+    int getPort() {
+        return listener.getPort();
+    }
+
+    #! returns the requests received, after the client has requested /done
+    list<hash<auto>> getRequests() {
+        done.waitForZero();
+        list<hash<auto>> rv = ();
+        while (requests.size()) {
+            rv += requests.get();
+        }
+        return rv;
+    }
+
+    #! ends the server if the client has not requested /done, for example when an assertion fails
+    /** the client must be disconnected first, since the server reads requests from one connection at a time
+    */
+    stop() {
+        if (done.getCount()) {
+            Socket s();
+            s.connectINET("127.0.0.1", getPort());
+            s.sendHTTPMessage("GET", "/done", "1.1", {}, "");
+            s.readHTTPHeader();
+            done.waitForZero();
+        }
+    }
+
+    private run() {
+        on_exit done.dec();
+        while (True) {
+            Socket ns = listener.accept();
+            while (True) {
+                hash<auto> req;
+                try {
+                    req = ns.readHTTPHeader();
+                } catch (hash<ExceptionInfo> ex) {
+                    # the client closed the connection
+                    break;
+                }
+                if (!req.method) {
+                    break;
+                }
+                if (req."content-length") {
+                    ns.recvBinary(req."content-length".toInt());
+                }
+                requests.push(req);
+                ns.sendHTTPResponse(200, "OK", "1.1", {"Connection": "keep-alive"}, "");
+                if (req.path == "/done") {
+                    return;
+                }
+            }
+        }
+    }
+}
+
+class HttpClientNulTest inherits QUnit::Test {
+    constructor() : Test("HttpClientNulTest", "1.0") {
+        addTestCase("requests", \requests());
+        addTestCase("client settings", \settings());
+        set_return_value(main());
+    }
+
+    requests() {
+        RecordingHttpServer server();
+        string url = "http://127.0.0.1:" + server.getPort();
+        HTTPClient hc({"url": url});
+        on_exit {
+            hc.disconnect();
+            server.stop();
+        }
+
+        # the request path cut at the NUL character would request /public
+        try {
+            hc.get("/public\x00/../admin?token=secret");
+            fail("HTTPClient::get() did not raise an exception");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("HTTP-CLIENT-URL-ERROR", ex.err);
+            assertEq("HTTP request target contains a NUL character; HTTP request targets cannot contain NUL "
+                "characters", ex.desc);
+            assertEq(Err::EINVAL, ex.arg);
+        }
+        assertThrows("HTTP-CLIENT-URL-ERROR", "HTTP request target contains a NUL character", \hc.send(),
+            ("", "GET", "/public\x00/../admin"));
+        assertThrows("HTTP-CLIENT-URL-ERROR", "HTTP request target contains a NUL character", \hc.head(),
+            "/public\x00/x");
+        assertThrows("HTTP-CLIENT-URL-ERROR", "HTTP request target contains a NUL character", \hc.post(),
+            ("/public\x00/x", "body"));
+        assertThrows("HTTP-CLIENT-URL-ERROR", "HTTP request target contains a NUL character",
+            \hc.startPollSendRecv(), ("GET", "/public\x00/x", ""));
+        assertThrows("HTTP-CLIENT-URL-ERROR", "HTTP request target contains a NUL character",
+            \hc.sendHttp2Connect(), ("/ws\x00x", NOTHING, "websocket"));
+        # the method cut at the NUL character would be GET
+        assertThrows("HTTP-CLIENT-METHOD-ERROR", "HTTP method \"GET\\\\x00DELETE\" contains a NUL character at byte "
+            "offset 3", \hc.send(), ("", "GET\x00DELETE", "/x"));
+        # a header value cut at the NUL character; it is not shown, as it can be a credential
+        try {
+            hc.get("/x", {"Authorization": "Bearer abc\x00def"});
+            fail("HTTPClient::get() did not raise an exception");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("HTTP-CLIENT-HEADER-ERROR", ex.err);
+            assertEq("HTTP header 'Authorization' value contains a NUL character; HTTP header values cannot contain "
+                "NUL characters", ex.desc);
+        }
+        assertThrows("HTTP-CLIENT-HEADER-ERROR", "HTTP header 'X-List' value contains a NUL character",
+            \hc.send(), ("", "GET", "/x", {"X-List": ("a", "b\x00c")}));
+        # a URL with a NUL character; the URL is not shown, as it can contain a password
+        try {
+            hc.sendUrl("", "GET", url + "/public\x00/../admin");
+            fail("HTTPClient::sendUrl() did not raise an exception");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("HTTP-CLIENT-URL-ERROR", ex.err);
+            assertEq("URL contains a NUL character; URLs cannot contain NUL characters", ex.desc);
+        }
+
+        hc.get("/done", {"X-Token": "abc"});
+        list<hash<auto>> l = server.getRequests();
+        # only the last request was sent
+        assertEq(1, l.size());
+        assertEq("GET", l[0].method);
+        assertEq("/done", l[0].path);
+        assertEq("abc", l[0]."x-token");
+    }
+
+    settings() {
+        HTTPClient hc();
+        string secret_url = "http://user:secretpw@127.0.0.1\x00.trusted.example:8080/path";
+        try {
+            hc.setURL(secret_url);
+            fail("HTTPClient::setURL() did not raise an exception");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("HTTP-CLIENT-URL-ERROR", ex.err);
+            assertEq("URL contains a NUL character; URLs cannot contain NUL characters", ex.desc);
+            assertFalse(ex.desc =~ /secretpw/);
+        }
+        assertNothing(hc.getURL());
+        assertThrows("HTTP-CLIENT-URL-ERROR", "proxy URL contains a NUL character", \hc.setProxyURL(),
+            secret_url);
+        assertNothing(hc.getProxyURL());
+        assertThrows("HTTP-CLIENT-URL-ERROR", "URL contains a NUL character",
+            sub () { HTTPClient c({"url": secret_url}); });
+        assertThrows("HTTP-CLIENT-URL-ERROR", "proxy URL contains a NUL character",
+            sub () { HTTPClient c({"url": "http://127.0.0.1:8080", "proxy": secret_url}); });
+
+        assertThrows("HTTP-CLIENT-URL-ERROR", "user name \"user\\\\x00x\" contains a NUL character",
+            \hc.setUserPassword(), ("user\x00x", "pw"));
+        try {
+            hc.setUserPassword("user", "secret\x00pw");
+            fail("HTTPClient::setUserPassword() did not raise an exception");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("HTTP-CLIENT-URL-ERROR", ex.err);
+            assertEq("password contains a NUL character; passwords cannot contain NUL characters", ex.desc);
+        }
+        assertThrows("HTTP-CLIENT-URL-ERROR", "proxy password contains a NUL character",
+            \hc.setProxyUserPassword(), ("user", "secret\x00pw"));
+        assertThrows("HTTP-CLIENT-OPTION-ERROR", "password contains a NUL character",
+            sub () { HTTPClient c({"url": "http://127.0.0.1:8080", "username": "u", "password": "p\x00w"}); });
+
+        assertThrows("HTTP-CLIENT-URL-ERROR", "HTTP request target contains a NUL character", \hc.setDefaultPath(),
+            "/base\x00/x");
+        assertThrows("HTTP-CLIENT-OPTION-ERROR", "default path contains a NUL character",
+            sub () { HTTPClient c({"url": "http://127.0.0.1:8080", "default_path": "/base\x00/x"}); });
+        assertThrows("HTTP-CLIENT-OPTION-ERROR", "HTTP version .* contains a NUL character", \hc.setHTTPVersion(),
+            "1.1\x00x");
+        assertThrows("HTTP-CLIENT-OPTION-ERROR", "HTTP version .* contains a NUL character",
+            sub () { HTTPClient c({"url": "http://127.0.0.1:8080", "http_version": "1.1\x00x"}); });
+
+        assertThrows("HTTP-CLIENT-OPTION-ERROR", "HTTP header 'X-Key' value contains a NUL character",
+            \hc.addDefaultHeaders(), {"X-Key": "k\x00ey"});
+        assertThrows("HTTP-CLIENT-OPTION-ERROR", "HTTP header 'X-Key' value contains a NUL character",
+            sub () { HTTPClient c({"url": "http://127.0.0.1:8080", "headers": {"X-Key": "k\x00ey"}}); });
+        assertNothing(hc.getDefaultHeaders()."X-Key");
+
+        # values without NUL characters are accepted
+        hc.setURL("http://user:pw@127.0.0.1:8080/path");
+        assertEq("127.0.0.1", parse_url(hc.getURL()).host);
+        hc.setDefaultPath("/base");
+        assertEq("/base", hc.getDefaultPath());
+    }
+}

@@ -498,6 +498,10 @@ private:
             xsink->raiseException("CBOR-PARSE-ERROR", "CBOR key outside of an object");
             return abort();
         }
+        // a key with a NUL character cannot be a hash key
+        if (QoreHashNode::checkKey(name.data(), name.size(), xsink)) {
+            return abort();
+        }
         stack.back().pending_key.assign(name.data(), name.size());
         stack.back().has_key = true;
         return true;
@@ -708,6 +712,7 @@ binary make_cbor(auto data) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     @return the Qore data structure corresponding to the input binary data
 
     @throw CBOR-PARSE-ERROR error parsing CBOR data, or maximum nesting depth exceeded
+    @throw HASH-KEY-ERROR a key has a NUL character, which a hash key cannot contain
 
     @note
     - CBOR tag 0 (datetime string) is deserialized to a Qore \c date value

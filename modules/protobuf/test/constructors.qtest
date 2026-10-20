@@ -1,0 +1,78 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# Each way of creating a ProtobufSchema is reachable: content and a path with a file name are no longer taken by
+# constructors with the same signature.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+
+%requires QUnit
+%requires FsUtil
+%requires protobuf
+
+%exec-class ProtobufConstructorsTest
+
+class ProtobufConstructorsTest inherits QUnit::Test {
+    public {
+        const Proto = "syntax = \"proto3\";\npackage test;\nmessage Point { double x = 1; }\n";
+    }
+
+    constructor() : QUnit::Test("ProtobufSchema constructors", "1.0", \ARGV) {
+        addTestCase("content", \testContent());
+        addTestCase("content with a file name", \testFromContent());
+        addTestCase("path and file name", \testPath());
+        addTestCase("descriptors and definition", \testOthers());
+        set_return_value(main());
+    }
+
+    #! asserts that the schema encodes and decodes a Point
+    assertPoint(ProtobufSchema schema, string label) {
+        assertEq({"x": 1.5}, schema.decode("test.Point", schema.encode("test.Point", {"x": 1.5})), label);
+    }
+
+    testContent() {
+        ProtobufSchema schema(Proto);
+        assertPoint(schema, "the content is loaded");
+        assertEq(1, schema.serializeFileDescriptorByName("input.proto").size(), "the content is named input.proto");
+    }
+
+    testFromContent() {
+        ProtobufSchema schema = ProtobufSchema::fromContent(Proto, "point.proto");
+        assertPoint(schema, "the content is loaded");
+        assertEq(1, schema.serializeFileDescriptorByName("point.proto").size(), "the content has the file name");
+        assertThrows("PROTOBUF-FILE-NOT-FOUND", \schema.serializeFileDescriptorByName(), "input.proto");
+
+        schema = ProtobufSchema::fromContent(Proto);
+        assertEq(1, schema.serializeFileDescriptorByName("input.proto").size(),
+            "without a file name, the content is named input.proto");
+
+        assertThrows("PROTOBUF-SCHEMA-ERROR",
+            auto sub () { return ProtobufSchema::fromContent("syntax = \"proto3\";\nmessage {\n"); });
+    }
+
+    testPath() {
+        TmpDir dir("protobuf-constructors-");
+        File f();
+        f.open2(join_paths(dir.path, "point.proto"), O_CREAT | O_TRUNC | O_WRONLY);
+        f.write(Proto);
+        f.close();
+
+        # two strings are a path and a file name, not content and its file name
+        ProtobufSchema schema(dir.path, "point.proto");
+        assertPoint(schema, "the file is loaded");
+        assertEq(1, schema.serializeFileDescriptorByName("point.proto").size(), "the schema has the file");
+        assertThrows("PROTOBUF-SCHEMA-ERROR", sub () { ProtobufSchema s(Proto, "point.proto"); });
+    }
+
+    testOthers() {
+        ProtobufSchema schema(Proto);
+        assertPoint(new ProtobufSchema(schema.serializeFileDescriptors()), "a schema from descriptors");
+        assertPoint(new ProtobufSchema({
+            "package": "test",
+            "messages": {"Point": {"fields": ({"name": "x", "type": "double", "number": 1},)}},
+        }), "a schema from a definition");
+    }
+}

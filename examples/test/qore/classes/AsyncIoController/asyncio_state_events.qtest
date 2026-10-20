@@ -1,0 +1,664 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class AsyncIoStateEventsTest
+
+#! The bound on every blocking Queue::get() in this test: a hang guard only, never a timing assertion
+const HangGuard = 60s;
+
+#! A poll operation implemented in %Qore that moves to its next state each time its notifier is signaled
+/** The first continuePoll() call moves the operation to its first state; each following call, made by the controller
+    when the notifier is signaled, moves it to the next one.  The operation reaches its goal in its last state.  The
+    number of each completed call is pushed onto \c steps, so a test can wait for a step that changes nothing it could
+    observe otherwise.
+*/
+class SteppedPollOperation inherits AbstractPollOperation<auto> {
+    public {
+        #! the number of each continuePoll() call, pushed when the call returns
+        Queue<int> steps();
+    }
+
+    private {
+        EventNotifier notifier;
+        list<string> states;
+        int step = -1;
+        #! continuePoll() raises STEP-ERROR in this step
+        *int fail_step;
+        #! getState() raises STATE-ERROR while the operation is in this step
+        *int state_fail_step;
+        #! the number of getState() calls
+        int state_reads = 0;
+    }
+
+    constructor(EventNotifier notifier, list<string> states, *int fail_step, *int state_fail_step) {
+        self.notifier = notifier;
+        self.states = states;
+        self.fail_step = fail_step;
+        self.state_fail_step = state_fail_step;
+    }
+
+    string getGoal() {
+        return "stepped";
+    }
+
+    string getState() {
+        ++state_reads;
+        if (exists state_fail_step && step == state_fail_step) {
+            throw "STATE-ERROR", sprintf("getState() fails in step %d", step);
+        }
+        return step < 0 ? "pending" : states[step];
+    }
+
+    bool goalReached() {
+        return step == states.size() - 1;
+    }
+
+    *hash<SocketPollInfo> continuePoll() {
+        on_exit {
+            steps.push(step);
+        }
+        if (step >= 0) {
+            notifier.acknowledge();
+        }
+        ++step;
+        if (exists fail_step && step == fail_step) {
+            throw "STEP-ERROR", sprintf("continuePoll() fails in step %d", step);
+        }
+        if (goalReached()) {
+            return NOTHING;
+        }
+        return <SocketPollInfo>{
+            "events": SOCK_POLLIN,
+            "socket": notifier,
+        };
+    }
+
+    #! Returns the number of getState() calls
+    int getStateReads() {
+        return state_reads;
+    }
+
+    #! Starts again from the first state, for a new submission of the same operation
+    reset() {
+        step = -1;
+    }
+}
+
+#! A stepped operation that reports the events on its state Queue when its result is passed to onComplete()
+class CompletingPollOperation inherits SteppedPollOperation {
+    public {
+        #! the events on the state Queue when onComplete() is called
+        Queue<list<hash<SocketPollStateInfo>>> seen();
+    }
+
+    private {
+        Queue<hash<SocketPollStateInfo>> state_queue;
+    }
+
+    constructor(EventNotifier notifier, list<string> states, Queue<hash<SocketPollStateInfo>> state_queue)
+            : SteppedPollOperation(notifier, states) {
+        self.state_queue = state_queue;
+    }
+
+    onComplete(hash<SocketPollResultInfo> result) {
+        list<hash<SocketPollStateInfo>> events = ();
+        while (*hash<QueueTryResult<hash<SocketPollStateInfo>>> h = state_queue.tryGet()) {
+            events += h.value;
+        }
+        seen.push(events);
+    }
+}
+
+#! A stepped operation that keeps its own state Queue: events left in the Queue make a reference cycle
+/** operation -> state Queue -> event -> operation
+*/
+class SelfQueueingPollOperation inherits SteppedPollOperation {
+    public {
+        #! the operation's own state Queue
+        Queue<hash<SocketPollStateInfo>> state_queue();
+    }
+
+    private {
+        #! decremented when the operation is destroyed
+        Counter destroyed;
+    }
+
+    constructor(EventNotifier notifier, list<string> states, Counter destroyed)
+            : SteppedPollOperation(notifier, states) {
+        self.destroyed = destroyed;
+    }
+
+    destructor() {
+        destroyed.dec();
+    }
+}
+
+#! A pipeline whose getState() is implemented in %Qore while its continuePoll() runs in C++ on the I/O thread
+class QoreStatePipeline inherits PollPipeline {
+    constructor(Socket sock) : PollPipeline(sock) {
+    }
+
+    string getState() {
+        return "qore-state";
+    }
+}
+
+class AsyncIoStateEventsTest inherits QUnit::Test {
+    private {
+        int owner_seq = 0;
+    }
+
+    constructor() : Test("AsyncIoStateEventsTest", "1.0") {
+        addTestCase("each state change is reported once, in order, before the result", \testOrderedEvents());
+        addTestCase("a step that keeps the state reports nothing", \testUnchangedState());
+        addTestCase("notifyStates reports changes into the given states only", \testNotifyStates());
+        addTestCase("no state is read without a state Queue", \testNoStateQueue());
+        addTestCase("a canceled operation ends with its last state", \testCancel());
+        addTestCase("an operation that times out ends with its last state", \testTimeout());
+        addTestCase("a step that raises an exception reports its state", \testContinuePollException());
+        addTestCase("an exception from getState() ends the operation", \testGetStateException());
+        addTestCase("operations sharing a state Queue keep their own order", \testSharedQueue());
+        addTestCase("a new submission of the same operation reports its first step again", \testResubmit());
+        addTestCase("a replaced operation ends with its last state", \testReplaced());
+        addTestCase("all events are on the state Queue when onComplete() is called", \testOnComplete());
+        addTestCase("exec() delivers the events before its result", \testExec());
+        addTestCase("a C++ operation reports its state from the I/O thread", \testNativeOperation());
+        addTestCase("a delegating operation reports its inner operation's state", \testDelegating());
+        addTestCase("invalid submissions are rejected", \testValidation());
+        addTestCase("an operation that keeps its own state Queue is collected", \testCycleCollected());
+        set_return_value(main());
+    }
+
+    private string getOwner() {
+        return sprintf("state-events-%d-%d", getpid(), ++owner_seq);
+    }
+
+    #! Returns the events of an operation as strings: the state, or "done:" and the state for the last event
+    private list<string> describe(list<hash<SocketPollStateInfo>> events) {
+        return map ($1.done ? "done:" : "") + ($1.state ?? "<none>"), events;
+    }
+
+    #! Returns all events on the Queue without blocking
+    private list<hash<SocketPollStateInfo>> drain(Queue<hash<SocketPollStateInfo>> sq) {
+        list<hash<SocketPollStateInfo>> rv = ();
+        while (*hash<QueueTryResult<hash<SocketPollStateInfo>>> h = sq.tryGet()) {
+            rv += h.value;
+        }
+        return rv;
+    }
+
+    #! Waits for the given step of the operation to complete
+    private waitForStep(SteppedPollOperation op, int step) {
+        assertEq(step, op.steps.get(HangGuard), sprintf("step %d completes", step));
+    }
+
+    #! Signals the operation's notifier and waits for the step that follows
+    private advance(EventNotifier n, SteppedPollOperation op, int step) {
+        n.notify();
+        waitForStep(op, step);
+    }
+
+    #! Submits a stepped operation with a state Queue to the controller
+    private *Queue<hash<SocketPollResultInfo>> submit(AbstractPollableIoObjectBase sock, AbstractPollOperation op,
+            Queue<hash<SocketPollStateInfo>> sq, string owner, *softlist<string> notify_states, *hash<auto> other,
+            *Queue<hash<SocketPollResultInfo>> result_queue) {
+        hash<SocketPollOperationInfo> info = <SocketPollOperationInfo>{
+            "sock": sock,
+            "spop": op,
+            "owner": owner,
+            "to": -1s,
+            "stateQueue": sq,
+            "other": other,
+            "resultQueue": result_queue,
+        };
+        if (notify_states) {
+            info.notifyStates = notify_states;
+        }
+        return AsyncIoController::submit(info);
+    }
+
+    testOrderedEvents() {
+        string owner = getOwner();
+        on_exit AsyncIoController::cancelByOwner(owner);
+        EventNotifier n();
+        SteppedPollOperation op(n, ("s1", "s2", "s3", "s4"));
+        Queue<hash<SocketPollStateInfo>> sq();
+        Queue<hash<SocketPollResultInfo>> rq = submit(n, op, sq, owner, NOTHING, {"id": "ordered"});
+
+        # each change arrives while the operation runs
+        hash<SocketPollStateInfo> ev = sq.get(HangGuard);
+        assertEq("s1", ev.state, "the first step is reported");
+        assertFalse(ev.done);
+        assertEq(n, ev.sock, "the event has the submission's pollable object");
+        assertEq(op, ev.spop, "the event has the submission's operation");
+        assertEq({"id": "ordered"}, ev.other, "the event has the submission's free-form data");
+        n.notify();
+        assertEq("s2", sq.get(HangGuard).state, "the second state is reported");
+        n.notify();
+        assertEq("s3", sq.get(HangGuard).state, "the third state is reported");
+        n.notify();
+
+        # the result is delivered after every event of the operation: they are all on the Queue already
+        hash<SocketPollResultInfo> result = rq.get(HangGuard);
+        assertEq(op, result.spop);
+        assertNothing(result.ex, "the operation reaches its goal");
+        assertEq(("s4", "done:s4"), describe(drain(sq)), "the last state and the end precede the result");
+        assertEq(4, op.getStateReads(), "the state is read once per step");
+    }
+
+    testUnchangedState() {
+        string owner = getOwner();
+        on_exit AsyncIoController::cancelByOwner(owner);
+        EventNotifier n();
+        SteppedPollOperation op(n, ("a", "a", "b"));
+        Queue<hash<SocketPollStateInfo>> sq();
+        Queue<hash<SocketPollResultInfo>> rq = submit(n, op, sq, owner);
+        waitForStep(op, 0);
+        advance(n, op, 1);
+        n.notify();
+        hash<SocketPollResultInfo> result = rq.get(HangGuard);
+        assertNothing(result.ex);
+        assertEq(("a", "b", "done:b"), describe(drain(sq)), "a step that keeps the state reports nothing");
+    }
+
+    testNotifyStates() {
+        {
+            string owner = getOwner();
+            on_exit AsyncIoController::cancelByOwner(owner);
+            EventNotifier n();
+            SteppedPollOperation op(n, ("a", "b", "a", "c"));
+            Queue<hash<SocketPollStateInfo>> sq();
+            Queue<hash<SocketPollResultInfo>> rq = submit(n, op, sq, owner, ("a",));
+            waitForStep(op, 0);
+            advance(n, op, 1);
+            advance(n, op, 2);
+            n.notify();
+            assertNothing(rq.get(HangGuard).ex);
+            # "a" is reported again: the operation left it in between; the end is always reported
+            assertEq(("a", "a", "done:c"), describe(drain(sq)), "only changes into the given states are reported");
+        }
+        {
+            string owner = getOwner();
+            on_exit AsyncIoController::cancelByOwner(owner);
+            EventNotifier n();
+            SteppedPollOperation op(n, ("x", "y", "z"));
+            Queue<hash<SocketPollStateInfo>> sq();
+            # a single state is accepted as well
+            Queue<hash<SocketPollResultInfo>> rq = submit(n, op, sq, owner, "y");
+            waitForStep(op, 0);
+            n.notify();
+            assertEq("y", sq.get(HangGuard).state, "a change into the single given state is reported");
+            n.notify();
+            assertNothing(rq.get(HangGuard).ex);
+            assertEq(("done:z",), describe(drain(sq)), "a change into another state is not reported");
+        }
+        {
+            string owner = getOwner();
+            on_exit AsyncIoController::cancelByOwner(owner);
+            EventNotifier n();
+            SteppedPollOperation op(n, ("x", "y"));
+            Queue<hash<SocketPollStateInfo>> sq();
+            # a state the operation never reaches: only the end is reported
+            Queue<hash<SocketPollResultInfo>> rq = submit(n, op, sq, owner, "never");
+            waitForStep(op, 0);
+            n.notify();
+            assertNothing(rq.get(HangGuard).ex);
+            assertEq(("done:y",), describe(drain(sq)), "the end is reported for a state that is never reached");
+        }
+    }
+
+    testNoStateQueue() {
+        string owner = getOwner();
+        on_exit AsyncIoController::cancelByOwner(owner);
+        EventNotifier n();
+        SteppedPollOperation op(n, ("s1", "s2"));
+        Queue<hash<SocketPollResultInfo>> rq = AsyncIoController::submit(<SocketPollOperationInfo>{
+            "sock": n,
+            "spop": op,
+            "owner": owner,
+            "to": -1s,
+        });
+        waitForStep(op, 0);
+        n.notify();
+        assertNothing(rq.get(HangGuard).ex);
+        assertEq(0, op.getStateReads(), "the controller does not read the state without a state Queue");
+    }
+
+    testCancel() {
+        string owner = getOwner();
+        on_exit AsyncIoController::cancelByOwner(owner);
+        EventNotifier n();
+        SteppedPollOperation op(n, ("s1", "s2", "s3"));
+        Queue<hash<SocketPollStateInfo>> sq();
+        Queue<hash<SocketPollResultInfo>> rq = submit(n, op, sq, owner);
+        assertEq("s1", sq.get(HangGuard).state);
+        n.notify();
+        assertEq("s2", sq.get(HangGuard).state);
+        assertEq(1, AsyncIoController::cancelByOwner(owner), "the operation is canceled");
+        hash<SocketPollResultInfo> result = rq.get(HangGuard);
+        assertTrue(result.canceled, "the result reports the cancellation");
+        assertEq(("done:s2",), describe(drain(sq)), "the end has the last state and precedes the result");
+    }
+
+    testTimeout() {
+        string owner = getOwner();
+        on_exit AsyncIoController::cancelByOwner(owner);
+        EventNotifier n();
+        SteppedPollOperation op(n, ("s1", "s2"));
+        Queue<hash<SocketPollStateInfo>> sq();
+        # the operation is never signaled after its first step; its timeout ends it
+        Queue<hash<SocketPollResultInfo>> rq = AsyncIoController::submit(<SocketPollOperationInfo>{
+            "sock": n,
+            "spop": op,
+            "owner": owner,
+            "to": 10ms,
+            "stateQueue": sq,
+        });
+        hash<SocketPollResultInfo> result = rq.get(HangGuard);
+        assertEq("SOCKET-TIMEOUT", result.ex.err, "the operation times out");
+        assertEq(("s1", "done:s1"), describe(drain(sq)), "the end has the last state and precedes the result");
+    }
+
+    testContinuePollException() {
+        string owner = getOwner();
+        on_exit AsyncIoController::cancelByOwner(owner);
+        EventNotifier n();
+        SteppedPollOperation op(n, ("s1", "s2", "s3"), 1);
+        Queue<hash<SocketPollStateInfo>> sq();
+        Queue<hash<SocketPollResultInfo>> rq = submit(n, op, sq, owner);
+        assertEq("s1", sq.get(HangGuard).state);
+        n.notify();
+        hash<SocketPollResultInfo> result = rq.get(HangGuard);
+        assertEq("STEP-ERROR", result.ex.err, "the step's exception is the operation's error");
+        assertEq(("s2", "done:s2"), describe(drain(sq)), "the state the failed step left is reported");
+    }
+
+    testGetStateException() {
+        string owner = getOwner();
+        on_exit AsyncIoController::cancelByOwner(owner);
+        EventNotifier n();
+        SteppedPollOperation op(n, ("s1", "s2", "s3"), NOTHING, 1);
+        Queue<hash<SocketPollStateInfo>> sq();
+        Queue<hash<SocketPollResultInfo>> rq = submit(n, op, sq, owner);
+        assertEq("s1", sq.get(HangGuard).state);
+        n.notify();
+        hash<SocketPollResultInfo> result = rq.get(HangGuard);
+        assertEq("STATE-ERROR", result.ex.err, "the exception from getState() is the operation's error");
+        assertEq(("done:s1",), describe(drain(sq)), "the end has the last state that could be read");
+    }
+
+    testSharedQueue() {
+        string owner = getOwner();
+        on_exit AsyncIoController::cancelByOwner(owner);
+        EventNotifier na();
+        EventNotifier nb();
+        SteppedPollOperation opa(na, ("a1", "a2", "a3"));
+        SteppedPollOperation opb(nb, ("b1", "b2", "b3"));
+        Queue<hash<SocketPollStateInfo>> sq();
+        Queue<hash<SocketPollResultInfo>> rq = submit(na, opa, sq, owner, NOTHING, {"id": "a"});
+        Queue<hash<SocketPollResultInfo>> rqb = submit(nb, opb, sq, owner, NOTHING, {"id": "b"});
+        waitForStep(opa, 0);
+        waitForStep(opb, 0);
+        advance(nb, opb, 1);
+        advance(na, opa, 1);
+        nb.notify();
+        na.notify();
+        assertNothing(rq.get(HangGuard).ex);
+        assertNothing(rqb.get(HangGuard).ex);
+        list<hash<SocketPollStateInfo>> events = drain(sq);
+        assertEq(8, events.size(), "both operations report all their events on the shared Queue");
+        assertEq(("a1", "a2", "a3", "done:a3"), describe(select events, $1.other.id == "a"),
+            "the first operation's events are in order");
+        assertEq(("b1", "b2", "b3", "done:b3"), describe(select events, $1.other.id == "b"),
+            "the second operation's events are in order");
+        foreach hash<SocketPollStateInfo> e in (events) {
+            assertEq(e.other.id == "a" ? opa : opb, e.spop, "each event has its own operation");
+        }
+    }
+
+    testResubmit() {
+        string owner = getOwner();
+        on_exit AsyncIoController::cancelByOwner(owner);
+        EventNotifier n();
+        SteppedPollOperation op(n, ("r1", "r2"));
+        Queue<hash<SocketPollStateInfo>> sq();
+        for (int i = 0; i < 2; ++i) {
+            Queue<hash<SocketPollResultInfo>> rq = submit(n, op, sq, owner);
+            waitForStep(op, 0);
+            advance(n, op, 1);
+            assertNothing(rq.get(HangGuard).ex);
+            assertEq(("r1", "r2", "done:r2"), describe(drain(sq)),
+                sprintf("submission %d reports its first step", i + 1));
+            op.reset();
+        }
+    }
+
+    testReplaced() {
+        string owner = getOwner();
+        on_exit AsyncIoController::cancelByOwner(owner);
+        EventNotifier n1();
+        EventNotifier n2();
+        SteppedPollOperation op1(n1, ("s1", "s2"));
+        SteppedPollOperation op2(n2, ("t1", "t2"));
+        Queue<hash<SocketPollStateInfo>> sq1();
+        Queue<hash<SocketPollStateInfo>> sq2();
+        string key = owner + "-key";
+        Queue<hash<SocketPollResultInfo>> rq1 = AsyncIoController::submit(<SocketPollOperationInfo>{
+            "sock": n1,
+            "spop": op1,
+            "owner": owner,
+            "to": -1s,
+            "key": key,
+            "stateQueue": sq1,
+        });
+        assertEq("s1", sq1.get(HangGuard).state);
+        # a key identifies an operation on the I/O thread of its pollable object: the replacement is submitted for
+        # the same object, and polls its own notifier
+        Queue<hash<SocketPollResultInfo>> rq2 = AsyncIoController::submit(<SocketPollOperationInfo>{
+            "sock": n1,
+            "spop": op2,
+            "owner": owner,
+            "to": -1s,
+            "key": key,
+            "stateQueue": sq2,
+        }, True);
+        hash<SocketPollResultInfo> result = rq1.get(HangGuard);
+        assertTrue(result.canceled, "the replaced operation is canceled");
+        assertEq(("done:s1",), describe(drain(sq1)), "the replaced operation ends with its last state");
+        assertEq("t1", sq2.get(HangGuard).state, "the replacing operation reports its first step");
+        AsyncIoController::cancelByOwner(owner);
+        assertTrue(rq2.get(HangGuard).canceled);
+        assertEq(("done:t1",), describe(drain(sq2)));
+    }
+
+    testOnComplete() {
+        string owner = getOwner();
+        on_exit AsyncIoController::cancelByOwner(owner);
+        EventNotifier n();
+        Queue<hash<SocketPollStateInfo>> sq();
+        CompletingPollOperation op(n, ("c1", "c2"), sq);
+        *Queue<hash<SocketPollResultInfo>> rq = submit(n, op, sq, owner);
+        assertNothing(rq, "an operation with onComplete() gets no result Queue");
+        waitForStep(op, 0);
+        n.notify();
+        assertEq(("c1", "c2", "done:c2"), describe(op.seen.get(HangGuard)),
+            "the events are on the state Queue when the result is passed to onComplete()");
+    }
+
+    testExec() {
+        string owner = getOwner();
+        on_exit AsyncIoController::cancelByOwner(owner);
+        EventNotifier n();
+        # a single state: the operation reaches its goal in its first step
+        SteppedPollOperation op(n, ("only",));
+        Queue<hash<SocketPollStateInfo>> sq();
+        hash<SocketPollResultInfo> result = AsyncIoController::exec(<SocketPollOperationInfo>{
+            "sock": n,
+            "spop": op,
+            "owner": owner,
+            "to": -1s,
+            "stateQueue": sq,
+        });
+        assertNothing(result.ex);
+        assertEq(("only", "done:only"), describe(drain(sq)), "exec() returns after the events are delivered");
+    }
+
+    #! Returns a connected client and server socket pair
+    private list<Socket> getSocketPair() {
+        Socket listener();
+        listener.bindINET("127.0.0.1", "0", True);
+        listener.listen();
+        int port = listener.getSocketInfo().port;
+        Socket client();
+        client.connect("127.0.0.1:" + port);
+        Socket server = listener.accept();
+        listener.close();
+        return (client, server);
+    }
+
+    testNativeOperation() {
+        string owner = getOwner();
+        on_exit AsyncIoController::cancelByOwner(owner);
+        list<Socket> pair = getSocketPair();
+        Socket client = pair[0];
+        Socket server = pair[1];
+        PollPipeline pipeline(client);
+        pipeline.addRecvExact(5, True);
+        pipeline.addSend("ok");
+        Queue<hash<SocketPollStateInfo>> sq();
+        Queue<hash<SocketPollResultInfo>> rq = AsyncIoController::submit(<SocketPollOperationInfo>{
+            "sock": client,
+            "spop": pipeline,
+            "owner": owner,
+            "to": -1s,
+            "stateQueue": sq,
+        });
+        # nothing has been sent to the client: its first step waits for the data
+        assertEq("recv-exact", sq.get(HangGuard).state, "the first step of a C++ operation is reported");
+        server.send("hello");
+        hash<SocketPollResultInfo> result = rq.get(HangGuard);
+        assertNothing(result.ex, "the pipeline completes");
+        list<string> rest = describe(drain(sq));
+        assertEq("done:completed", rest.last(), "the end has the operation's final state");
+        assertEq("completed", rest[rest.size() - 2], "the final state is reported before the end");
+        # the send can complete in the same step as the receive
+        assertTrue(rest.size() == 2 || (rest.size() == 3 && rest[0] == "sending"),
+            sprintf("the pipeline reports its states in order: %y", rest));
+        assertEq("ok", server.recv(2, HangGuard), "the pipeline's last step was performed");
+    }
+
+    testDelegating() {
+        {
+            # an inner operation implemented in Qore: its state is read on a callback worker
+            string owner = getOwner();
+            on_exit AsyncIoController::cancelByOwner(owner);
+            EventNotifier n();
+            SteppedPollOperation inner(n, ("d1", "d2"));
+            DelegatingPollOperation op(inner);
+            Queue<hash<SocketPollStateInfo>> sq();
+            # a delegating operation has an onComplete() method: its result goes to a result Queue only when given one
+            Queue<hash<SocketPollResultInfo>> rq();
+            submit(n, op, sq, owner, NOTHING, NOTHING, rq);
+            assertEq("d1", sq.get(HangGuard).state, "the inner operation's first state is reported");
+            n.notify();
+            assertNothing(rq.get(HangGuard).ex);
+            assertEq(("d2", "done:d2"), describe(drain(sq)));
+        }
+        {
+            # an inner operation implemented in C++: its state is read on the I/O thread
+            string owner = getOwner();
+            on_exit AsyncIoController::cancelByOwner(owner);
+            list<Socket> pair = getSocketPair();
+            PollPipeline pipeline(pair[0]);
+            pipeline.addRecvExact(2, True);
+            DelegatingPollOperation op(pipeline);
+            Queue<hash<SocketPollStateInfo>> sq();
+            Queue<hash<SocketPollResultInfo>> rq();
+            submit(pair[0], op, sq, owner, NOTHING, NOTHING, rq);
+            assertEq("recv-exact", sq.get(HangGuard).state, "the inner C++ operation's first state is reported");
+            pair[1].send("hi");
+            assertNothing(rq.get(HangGuard).ex);
+            assertEq(("completed", "done:completed"), describe(drain(sq)));
+        }
+    }
+
+    testCycleCollected() {
+        string owner = getOwner();
+        on_exit AsyncIoController::cancelByOwner(owner);
+        Counter destroyed(1);
+        {
+            EventNotifier n();
+            SelfQueueingPollOperation op(n, ("only",), destroyed);
+            Queue<hash<SocketPollResultInfo>> rq = submit(n, op, op.state_queue, owner);
+            hash<SocketPollResultInfo> result = rq.get(HangGuard);
+            assertNothing(result.ex);
+            # both events (the state and the end) stay on the operation's own Queue
+            assertEq(2, op.state_queue.size(), "the events are left on the operation's own state Queue");
+        }
+        # the controller releases its references to the operation on a callback worker; once the last reference
+        # from outside the cycle is gone, the collector destroys the operation with the events left in its Queue
+        assertEq(0, destroyed.waitForZero(HangGuard), "the operation and its state Queue are collected");
+    }
+
+    testValidation() {
+        string owner = getOwner();
+        on_exit AsyncIoController::cancelByOwner(owner);
+        EventNotifier n();
+        SteppedPollOperation op(n, ("s1", "s2"));
+
+        Queue<hash<SocketPollStateInfo>> bounded(5);
+        assertThrows("ASYNC-IO-ERROR", "maximum size", sub () {
+            submit(n, op, bounded, owner);
+        });
+
+        assertThrows("ASYNC-IO-ERROR", "notifyStates", sub () {
+            AsyncIoController::submit(<SocketPollOperationInfo>{
+                "sock": n,
+                "spop": op,
+                "owner": owner,
+                "notifyStates": ("s1",),
+            });
+        });
+
+        Queue<hash<SocketPollResultInfo>> bounded_result(5);
+        assertThrows("ASYNC-IO-ERROR", "maximum size", sub () {
+            AsyncIoController::submit(<SocketPollOperationInfo>{
+                "sock": n,
+                "spop": op,
+                "owner": owner,
+                "resultQueue": bounded_result,
+            });
+        });
+        assertEq(0, op.getStateReads(), "a rejected operation is not started");
+        assertEq("pending", op.getState());
+
+        list<Socket> pair = getSocketPair();
+        QoreStatePipeline pipeline(pair[0]);
+        pipeline.addRecvExact(1);
+        Queue<hash<SocketPollStateInfo>> sq();
+        assertThrows("ASYNC-IO-ERROR", "getState", sub () {
+            AsyncIoController::submit(<SocketPollOperationInfo>{
+                "sock": pair[0],
+                "spop": pipeline,
+                "owner": owner,
+                "stateQueue": sq,
+            });
+        });
+        # without a state Queue, the same operation is accepted
+        Queue<hash<SocketPollResultInfo>> rq = AsyncIoController::submit(<SocketPollOperationInfo>{
+            "sock": pair[0],
+            "spop": pipeline,
+            "owner": owner,
+            "to": -1s,
+        });
+        pair[1].send("x");
+        assertNothing(rq.get(HangGuard).ex, "an operation with a getState() in Qore runs without a state Queue");
+        assertEq(0, sq.size(), "the rejected submission delivers no events");
+    }
+}

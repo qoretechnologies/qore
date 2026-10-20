@@ -235,12 +235,6 @@ public class AsyncSocketIoTest inherits QUnit::Test {
         addTestCase("cancelByOwner cascades into nested continuePoll op", \nestedContinuePollInheritedCancelTest());
         addTestCase("flushCallbacks ignores in-flight continuePoll", \flushCallbacksIgnoresBlockedContinuePollTest());
         addTestCase("blocked continuePoll exception cleanup", \blockedContinuePollExceptionCleanupTest());
-        @debug {
-            set_signal_handler(SIGUSR1, sub (int sig) {
-                printf("%Y\n", get_all_thread_call_stacks());
-            });
-        }
-
         # Return for compatibility with a test harness that checks the return value
         set_return_value(main());
     }

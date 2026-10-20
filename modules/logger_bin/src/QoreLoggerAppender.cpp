@@ -150,28 +150,46 @@ bool QoreLoggerAppender::isOpen() const {
 void QoreLoggerAppender::addFilter(ExceptionSink* xsink, const QoreObject* filter, bool top) {
     ReferenceHolder<QoreObject> filt(filter->objectRefSelf(), xsink);
     QoreAutoRWWriteLocker awl(lock);
-    if (!filters) {
-        filters = new QoreListNode(QC_LOGGERFILTER->getTypeInfo());
-        filters->push(filt.release(), xsink);
-        return;
-    }
-    ConstListIterator i(filters);
-    while (i.next()) {
-        if (i.getValue().get<const QoreObject>() == filter) {
-            xsink->raiseException("LOGGER-ERROR", "Filter already exists in list");
-            return;
+    if (filters) {
+        ConstListIterator i(filters);
+        while (i.next()) {
+            if (i.getValue().get<const QoreObject>() == filter) {
+                xsink->raiseException("LOGGER-ERROR", "Filter already exists in list");
+                return;
+            }
         }
     }
-    if (!filters->is_unique()) {
-        ReferenceHolder<QoreListNode> holder(filters, xsink);
-        filters = filters->copy();
-    }
+    // the filters internal member is set to a new list, so that the garbage collector sees the change
+    ReferenceHolder<QoreListNode> l(filters ? filters->copy() : new QoreListNode(QC_LOGGERFILTER->getTypeInfo()),
+        xsink);
     if (top) {
-        filters->insert(filt.release(), xsink);
+        l->insert(filt.release(), xsink);
     } else {
-        filters->push(filt.release(), xsink);
+        l->push(filt.release(), xsink);
     }
     assert(!*xsink);
+    setFiltersLocked(xsink, l.release());
+}
+
+void QoreLoggerAppender::setFiltersLocked(ExceptionSink* xsink, QoreListNode* l) {
+    assert(!owns_refs);
+    filters = l;
+    self->setMemberValue("filters", QC_LOGGERAPPENDER, l, xsink);
+}
+
+void QoreLoggerAppender::destructor(ExceptionSink* xsink) {
+    QoreAutoRWWriteLocker awl(lock);
+    if (owns_refs) {
+        return;
+    }
+    if (filters) {
+        filters->ref();
+    }
+    if (queue) {
+        queue->ref();
+    }
+    takeRefsLocked();
+    owns_refs = true;
 }
 
 //! Removes the given filter from the filter chain.
@@ -179,16 +197,20 @@ void QoreLoggerAppender::addFilter(ExceptionSink* xsink, const QoreObject* filte
     @param filter the filter to remove
 */
 void QoreLoggerAppender::removeFilter(ExceptionSink* xsink, const QoreObject* filter) {
+    // the removed filter is released after the lock, so that its destructor, if it runs, does not run with the lock
+    // held
+    ReferenceHolder<QoreListNode> removed(xsink);
     QoreAutoRWWriteLocker awl(lock);
+    if (!filters) {
+        return;
+    }
     ConstListIterator i(filters);
     while (i.next()) {
         if (i.getValue().get<const QoreObject>() == filter) {
-            if (!filters->is_unique()) {
-                ReferenceHolder<QoreListNode> holder(filters, xsink);
-                filters = filters->copy();
-            }
-            // remove the filter from the list
-            ReferenceHolder<QoreListNode> holder(filters->extract(i.index(), 1), xsink);
+            // the filters internal member is set to a new list, so that the garbage collector sees the change
+            ReferenceHolder<QoreListNode> l(filters->copy(), xsink);
+            removed = l->extract(i.index(), 1);
+            setFiltersLocked(xsink, l.release());
             return;
         }
     }
@@ -196,10 +218,14 @@ void QoreLoggerAppender::removeFilter(ExceptionSink* xsink, const QoreObject* fi
 
 //! Clears the filter chain by removing all filters
 void QoreLoggerAppender::removeAllFilters(ExceptionSink* xsink) {
+    // the removed filters are released after the lock, so that their destructors, if they run, do not run with the
+    // lock held
+    ReferenceHolder<QoreListNode> removed(xsink);
     QoreAutoRWWriteLocker awl(lock);
     if (filters) {
-        filters->deref(xsink);
+        removed = filters->listRefSelf();
         filters = nullptr;
+        self->setMemberValue("filters", QC_LOGGERAPPENDER, QoreValue(), xsink);
     }
 }
 
@@ -371,8 +397,14 @@ void QoreLoggerAppender::processEvent(int type, const QoreValue params, Exceptio
 }
 
 void QoreLoggerAppender::derefIntern(ExceptionSink* xsink) {
-    if (filters) {
-        filters->deref(xsink);
+    // the filters and the queue are referenced here only after the object is destroyed, see destructor()
+    if (owns_refs) {
+        if (filters) {
+            filters->deref(xsink);
+        }
+        if (queue) {
+            queue->deref(xsink);
+        }
     }
     if (qqueue) {
         qqueue->deref(xsink);

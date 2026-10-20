@@ -4,6 +4,8 @@
 %modern
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%prepend-module-path "${SCRIPT_DIR}"
+%requires ./PgsqlTestIsolation.qm
 %requires Util
 %requires DataProvider
 %requires SqlUtil
@@ -125,6 +127,14 @@ class SqlUtilSelectGenerationTest inherits QUnit::Test {
             map $1.dropCommit(), (mem, errs), exists $1;
             ds.rollback();
         }
+        # drops the run's schema with everything left in it, if the connection is a PostgreSQL connection
+        PgsqlRunSchema::teardown();
+    }
+
+    #! returns the name in the run's schema on PostgreSQL, so that it can never resolve to a table in another schema
+    private static string q(string name) {
+        *string schema = PgsqlRunSchema::getName();
+        return schema ? schema + "." + name : name;
     }
 
     private CountingDatasource getDatasource() {
@@ -133,6 +143,8 @@ class SqlUtilSelectGenerationTest inherits QUnit::Test {
         if (!connstr.val()) {
             testSkip("no DB connection; set QORE_DB_CONNSTR");
         }
+        # a run on PostgreSQL uses its own schema
+        PgsqlRunSchema::setup(connstr, "SqlUtilSelectGeneration");
         CountingDatasource ds(connstr);
         ds.open();
         return ds;
@@ -268,7 +280,7 @@ class SqlUtilSelectGenerationTest inherits QUnit::Test {
         assertNeq("", mem.getSelectSql(sh, \args));
 
         # change the table's definition outside of any SqlUtil table object
-        ds.execRaw("alter table " + tmp_table + " add column extra integer");
+        ds.execRaw("alter table " + q(tmp_table) + " add column extra integer");
         ds.commit();
 
         # generation must see the new column without anything being cleared

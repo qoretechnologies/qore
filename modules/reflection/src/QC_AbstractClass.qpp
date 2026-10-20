@@ -26,6 +26,7 @@
     Note that the Qore library is released under a choice of three open-source
     licenses: MIT (as above), LGPL 2+, or GPL 2+; see README-LICENSE for more
     information.
+
 */
 
 #include <qore_reflection.h>
@@ -180,6 +181,10 @@ QoreObject* find_variant(const QoreReflectionClass* c, const char* name, unsigne
 }
 
 QoreObject* find_variant(const QoreReflectionClass* c, const QoreStringNode* name, unsigned which, const QoreListNode* args, size_t offset, ExceptionSink* xsink) {
+    // the name is looked up as a C string, which would be cut at a NUL character and name another method
+    if (q_check_no_nul(name->c_str(), name->size(), "method name", "method names", "METHOD-ERROR", xsink)) {
+        return nullptr;
+    }
     TempEncodingHelper nname(name, QCS_DEFAULT, xsink);
     if (*xsink) {
         return nullptr;
@@ -762,7 +767,7 @@ AbstractMethodVariant m = cls.getVariant(name, IntType, StringType);
 
     @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the class has been destroyed
     @throw GETVARIANT-ERROR invalid argument to method
-    @throw METHOD-ERROR unknown method
+    @throw METHOD-ERROR unknown method, or the method name contains a NUL character (since %Qore 3.0)
     @throw VARIANT-MATCH-ERROR no variant van be found matching the given argument types
     @throw ENCODING-CONVERSION-ERROR this exception could be thrown if the string argument is not in the @ref default_encoding "default character encoding" and an error occurs during encoding conversion
 
@@ -791,7 +796,7 @@ AbstractMethodVariant m = cls.getVariantArgs(name, (IntType, StringType));
 
     @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the class has been destroyed
     @throw GETVARIANT-ERROR invalid argument to method
-    @throw METHOD-ERROR unknown method
+    @throw METHOD-ERROR unknown method, or the method name contains a NUL character (since %Qore 3.0)
     @throw VARIANT-MATCH-ERROR no variant van be found matching the given argument types
     @throw ENCODING-CONVERSION-ERROR this exception could be thrown if the string argument is not in the @ref default_encoding "default character encoding" and an error occurs during encoding conversion
 
@@ -819,6 +824,7 @@ AbstractMethod m = cls.getMethod(name);
     @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the class has been destroyed
     @throw METHOD-ERROR unknown method
     @throw ENCODING-CONVERSION-ERROR this exception could be thrown if the string argument is not in the
+    @throw UNKNOWN-METHOD the method name contains a NUL character (since %Qore 3.0)
     @ref default_encoding "default character encoding" and an error occurs during encoding conversion
 
     @note Methods group variants with the same name; see @ref getVariant() for a method that will return a method
@@ -828,6 +834,10 @@ AbstractMethod m = cls.getMethod(name);
     hierarchy instead of just the local class
 */
 AbstractMethod AbstractClass::getMethod(string name) [flags=RET_VALUE_ONLY] {
+    // the name is looked up as a C string, which would be cut at a NUL character and name another method
+    if (q_check_no_nul(name->c_str(), name->size(), "method name", "method names", "UNKNOWN-METHOD", xsink)) {
+        return QoreValue();
+    }
     TempEncodingHelper nname(name, QCS_DEFAULT, xsink);
     if (*xsink) {
         return QoreValue();

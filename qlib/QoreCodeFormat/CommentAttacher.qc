@@ -22,8 +22,6 @@
     DEALINGS IN THE SOFTWARE.
 */
 
-%modern
-
 #! Main QoreCodeFormat namespace
 public namespace QoreCodeFormat {
 

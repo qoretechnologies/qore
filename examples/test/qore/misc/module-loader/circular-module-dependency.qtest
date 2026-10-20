@@ -51,7 +51,7 @@ class CircularModuleDependencyTest inherits QUnit::Test {
         }
         # run the driver against the local (in-development) qore/libqore under test, with the fixture
         # modules (absolute) prepended to the inherited module path
-        string qore_bin = ENV.QORE_BINARY ?? "qore";
+        string qore_bin = ENV.QORE_EXECUTABLE ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
         string modpath = dir + (ENV.QORE_MODULE_DIR ? ":" + ENV.QORE_MODULE_DIR : "");
 
         bool saw_cycle = False;

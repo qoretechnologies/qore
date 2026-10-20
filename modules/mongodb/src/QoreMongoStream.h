@@ -53,6 +53,17 @@ DLLLOCAL mongoc_stream_t* qore_mongo_stream_initiator(
     void* user_data,
     bson_error_t* error);
 
+//! Checks that the sandbox of the calling program allows the files named by the TLS options of a URI to be read
+/** libmongoc reads the CA file and the client certificate key file itself, when a client is created and for each
+    connection, so the sandbox check is made before either.
+
+    @param uri the parsed MongoDB URI
+    @param xsink the \c FILESYSTEM-ACCESS-DENIED or \c SANDBOX-PATH-ERROR exception of a denied file is raised here
+
+    @return the URI option whose file is denied, or nullptr if every file is allowed or no sandbox is active
+*/
+DLLLOCAL const char* qore_mongo_check_uri_tls_files(const mongoc_uri_t* uri, ExceptionSink* xsink);
+
 //! Configure libmongoc logging for the Qore MongoDB module
 DLLLOCAL void qore_mongo_set_log_handler();
 

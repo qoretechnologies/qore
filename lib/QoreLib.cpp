@@ -50,6 +50,7 @@
 #include "qore/intern/QoreQuestionMarkOperatorNode.h"
 #include "qore/intern/QoreAsciiCompatStringHelper.h"
 
+#include <algorithm>
 #include <atomic>
 #include <cctype>
 #include <cerrno>
@@ -61,6 +62,7 @@
 #include <map>
 #include <sstream>
 #include <string>
+#include <string_view>
 
 #include <strings.h>
 #include <sys/param.h>
@@ -534,10 +536,12 @@ bool q_get_option_constant_value(const char* opt) {
     return false;
 }
 
+// reads a field width or a precision; a number larger than INT_MAX is INT_MAX
 static int get_number(char** param) {
     int num = 0;
     while (isdigit(**param)) {
-        num = num*10 + (**param - '0');
+        int digit = **param - '0';
+        num = num > (INT_MAX - digit) / 10 ? INT_MAX : num * 10 + digit;
         ++(*param);
     }
     //printd(5, "get_number(%x: %s) num: %d\n", *param, *param, num);
@@ -578,11 +582,11 @@ thread_local unsigned parse_init_depth = 0;
 //! Records the node whose parse initialization is made for its scope; see qore_parse_init_entry
 class ParseInitEntryHelper {
 public:
-    DLLLOCAL explicit ParseInitEntryHelper(const AbstractQoreNode* n) : old(qore_parse_init_entry) {
+    explicit ParseInitEntryHelper(const AbstractQoreNode* n) : old(qore_parse_init_entry) {
         qore_parse_init_entry = n;
     }
 
-    DLLLOCAL ~ParseInitEntryHelper() {
+    ~ParseInitEntryHelper() {
         qore_parse_init_entry = old;
     }
 
@@ -594,15 +598,15 @@ private:
 //! Counts a level of nesting of parse initialization for its scope
 class ParseInitDepthHelper {
 public:
-    DLLLOCAL ParseInitDepthHelper() : depth(++parse_init_depth) {
+    ParseInitDepthHelper() : depth(++parse_init_depth) {
     }
 
-    DLLLOCAL ~ParseInitDepthHelper() {
+    ~ParseInitDepthHelper() {
         --parse_init_depth;
     }
 
     //! Returns the nesting depth of this level
-    DLLLOCAL unsigned get() const {
+    unsigned get() const {
         return depth;
     }
 
@@ -773,13 +777,45 @@ static void process_opt_string(QoreString& tbuf, QoreValue qv, int type, int opt
 }
 
 // if type = 0 then field widths are soft limits, otherwise they are hard
+// the largest field width and precision of a conversion: an integer or floating-point conversion with no larger one
+// has an output shorter than INT_MAX bytes (a double adds at most 311 characters to its precision), which every C
+// library formats; the C libraries differ for longer outputs (glibc formats one of INT_MAX bytes, macOS fails), so the
+// limit is checked before any is used
+static constexpr int QORE_SPRINTF_MAX_FIELD = INT_MAX - 1024;
+
+// the conversions whose field width or precision is checked against QORE_SPRINTF_MAX_FIELD
+static const char QORE_SPRINTF_LIMITED_CONVERSIONS[] = "swpdoxXaAeEfFgG";
+
+// raises an exception for a conversion with a field width or precision larger than QORE_SPRINTF_MAX_FIELD
+static void process_opt_limit_error(const char* str, const char* param, ExceptionSink* xsink) {
+    xsink->raiseException("SPRINTF-ERROR", "the format conversion \"%.*s\" has a field width or precision larger "
+        "than %d", static_cast<int>(param - str + 1), str, QORE_SPRINTF_MAX_FIELD);
+}
+
+// raises an exception for a conversion whose output cannot be formatted, as it would be longer than INT_MAX characters
+static void process_opt_format_error(const char* str, const char* param, ExceptionSink* xsink) {
+    xsink->raiseException("SPRINTF-ERROR", "the output of the format conversion \"%.*s\" cannot be formatted, as "
+        "it would be longer than %d characters", static_cast<int>(param - str + 1), str, INT_MAX);
+}
+
+// appends a field width or a precision to the C format of a conversion
+static char* process_opt_append_number(char* f, const char* end, int num) {
+    int rc = snprintf(f, end - f, "%d", num);
+    // the format buffer is sized for the longest int
+    assert(rc > 0 && rc < end - f);
+    return f + rc;
+}
+
 static int process_opt(QoreString *cstr, char* param, QoreValue qv, int type, bool& arg_used, ExceptionSink* xsink) {
     assert(arg_used == true);
     char* str = param;
     int opts = 0;
     int width = -1;
     int decimals = -1;
-    char fmt[20], *f;
+    // the C format of the conversion: '%', at most three flags, the width, '.' and the precision (each an int of at
+    // most 11 characters), the length modifier ("ll", "I64" or MPFR's 'R'), the conversion and the terminator
+    char fmt[1 + 3 + 11 + 1 + 11 + 3 + 1 + 1], *f;
+    const char* fmt_end = fmt + sizeof(fmt);
     QoreString tbuf(cstr->getEncoding());
 
     printd(5, "process_opt(): param: %s type: %d qv->getType(): %s refs: %d\n",
@@ -817,6 +853,12 @@ static int process_opt(QoreString *cstr, char* param, QoreValue qv, int type, bo
         decimals = -1;
     }
 
+    if ((width > QORE_SPRINTF_MAX_FIELD || decimals > QORE_SPRINTF_MAX_FIELD) && *param
+            && strchr(QORE_SPRINTF_LIMITED_CONVERSIONS, *param)) {
+        process_opt_limit_error(str, param, xsink);
+        return static_cast<int>(param - str);
+    }
+
     char p = *param;
     switch (*param) {
         case 's': {
@@ -848,7 +890,7 @@ static int process_opt(QoreString *cstr, char* param, QoreValue qv, int type, bo
                 } else if (opts & P_ZERO_FILL) {
                     *(f++) = '0';
                 }
-                f += sprintf(f, "%d", width);
+                f = process_opt_append_number(f, fmt_end, width);
             }
 #ifdef _Q_WINDOWS
             *(f++) = 'I';
@@ -860,8 +902,12 @@ static int process_opt(QoreString *cstr, char* param, QoreValue qv, int type, bo
 #endif
             *(f++) = p; // 'd', etc;
             *f = '\0';
+            assert(f < fmt_end);
             int64 val = qv.getAsBigInt();
-            tbuf.sprintf(fmt, val);
+            if (qore_string_private::get(tbuf)->sprintfChecked(fmt, val)) {
+                process_opt_format_error(str, param, xsink);
+                return static_cast<int>(param - str);
+            }
             if (type && (width != -1)) {
                 tbuf.terminate(width);
             }
@@ -890,23 +936,32 @@ static int process_opt(QoreString *cstr, char* param, QoreValue qv, int type, bo
                 } else if (opts & P_ZERO_FILL) {
                     *(f++) = '0';
                 }
-                f += sprintf(f, "%d", width);
+                f = process_opt_append_number(f, fmt_end, width);
             }
             if (decimals != -1) {
                 *(f++) = '.';
-                f += sprintf(f, "%d", decimals);
+                f = process_opt_append_number(f, fmt_end, decimals);
             }
             if (t == NT_NUMBER) {
                 *(f++) = QORE_MPFR_SPRINTF_ARG;
                 *(f++) = *param; // a|A|e|E|f|F|g|G
                 *f = '\0';
-                qore_number_private::sprintf(*qv.get<const QoreNumberNode>(), tbuf, fmt);
+                assert(f < fmt_end);
+                // the integer part of a number can be long enough to make the output longer than INT_MAX characters
+                if (qore_number_private::sprintf(*qv.get<const QoreNumberNode>(), tbuf, fmt)) {
+                    process_opt_format_error(str, param, xsink);
+                    return static_cast<int>(param - str);
+                }
             } else {
                 *(f++) = *param; // a|A|e|E|f|F|g|G
                 *f = '\0';
+                assert(f < fmt_end);
                 double val = qv.getAsFloat();
                 size_t offset = tbuf.size();
-                tbuf.sprintf(fmt, val);
+                if (qore_string_private::get(tbuf)->sprintfChecked(fmt, val)) {
+                    process_opt_format_error(str, param, xsink);
+                    return static_cast<int>(param - str);
+                }
                 // issue 1556: external modules that call setlocale() can change
                 // the decimal point character used here from '.' to ','
                 q_fix_decimal(&tbuf, offset);
@@ -1438,6 +1493,12 @@ static QoreValue do_method_intern(QoreObject* self, const QoreMethod* meth, Clas
 }
 
 QoreValue get_call_reference_intern(QoreObject* self, const QoreStringNode* identifier, ExceptionSink* xsink) {
+    // the identifier is resolved as a C string, which would be cut at a NUL character and name another function or
+    // method
+    if (q_check_no_nul(identifier->c_str(), identifier->size(), "identifier", "identifiers", "CALL-REFERENCE-ERROR",
+            xsink)) {
+        return QoreValue();
+    }
     TempEncodingHelper name(identifier, QCS_DEFAULT, xsink);
     if (*xsink) {
         return QoreValue();
@@ -1845,6 +1906,19 @@ const char* q_find_last_path_sep(const char* path) {
 #endif
 }
 
+size_t q_find_last_path_sep(const QoreString& path) {
+#ifdef _Q_WINDOWS
+    // on windows we have to find either '\\' (standard directory separator character) or '/' (UNIX-style, also
+    // accepted on Windows)
+    static constexpr const char* seps = "/\\";
+#else
+    static constexpr const char* seps = QORE_DIR_SEP_STR;
+#endif
+    // the whole string is searched, including any part after a NUL character
+    size_t pos = std::string_view(path.c_str(), path.size()).find_last_of(seps);
+    return pos == std::string_view::npos ? (size_t)-1 : pos;
+}
+
 // thread-safe basename function (resulting pointer must be free()ed)
 char* q_basename(const char* path) {
    const char* p = q_find_last_path_sep(path);
@@ -2141,20 +2215,164 @@ QoreParseListNode* make_args(const QoreProgramLocation* loc, QoreValue arg) {
 }
 
 bool check_hash_key(const QoreHashNode* h, const char* key, const char* err, std::string& value,
-        ExceptionSink* xsink) {
-   value.clear();
-   QoreValue p = h->getKeyValue(key);
-   if (p.isNothing()) {
-      return false;
-   }
+        ExceptionSink* xsink, bool secret) {
+    value.clear();
+    QoreValue p = h->getKeyValue(key);
+    if (p.isNothing()) {
+        return false;
+    }
 
-   if (p.getType() != NT_STRING) {
-      xsink->raiseException(err, "'%s' key is not type 'string' but is type '%s'", key, p.getTypeName());
-      return false;
-   }
-   QoreStringValueHelper str(p);
-   value = str->c_str();
-   return true;
+    if (p.getType() != NT_STRING) {
+        xsink->raiseException(err, "'%s' key is not type 'string' but is type '%s'", key, p.getTypeName());
+        return false;
+    }
+    QoreStringValueHelper str(p);
+    // the value is passed on as a C string, which would be cut at a NUL character
+    QoreStringMaker what("'%s' value", key);
+    if (secret ? q_check_secret_no_nul(str->c_str(), str->size(), what.c_str(), "datasource values", err, xsink)
+            : q_check_no_nul(str->c_str(), str->size(), what.c_str(), "datasource values", err, xsink)) {
+        return false;
+    }
+    value.assign(str->c_str(), str->size());
+    return true;
+}
+
+int q_check_secret_no_nul(const char* str, size_t len, const char* what, const char* what_plural,
+        const char* err, ExceptionSink* xsink) {
+    assert(str || !len);
+    assert(xsink);
+    if (!len || !memchr(str, '\0', len)) {
+        return 0;
+    }
+    xsink->raiseExceptionArg(err, EINVAL, new QoreStringNodeMaker("%s contains a NUL character; %s cannot contain "
+        "NUL characters", what, what_plural));
+    return -1;
+}
+
+int q_check_http_header_values(const QoreHashNode* headers, const char* err, ExceptionSink* xsink) {
+    if (!headers) {
+        return 0;
+    }
+    // a header value is sent cut at a NUL character, or written to the message with it, which corrupts the message;
+    // a CR or LF would end the header and start another one
+    auto check = [&](const char* name, const QoreValue& v) -> int {
+        if (v.getType() != NT_STRING) {
+            return 0;
+        }
+        // a string can be held in inline short string storage, which has no QoreStringNode
+        QoreStringDataHelper str(v);
+        QoreStringMaker what("HTTP header '%s' value", name);
+        return q_check_http_text(str.c_str(), str.size(), what.c_str(), "HTTP header values", err, true, xsink);
+    };
+    ConstHashIterator hi(headers);
+    while (hi.next()) {
+        // the name is a hash key, which has no NUL character; a CR or LF in it would start another header
+        const char* key = hi.getKey();
+        if (q_check_http_text(key, strlen(key), "HTTP header name", "HTTP header names", err, false, xsink)) {
+            return -1;
+        }
+        const QoreValue v = hi.get();
+        if (v.getType() == NT_LIST) {
+            ConstListIterator li(v.get<const QoreListNode>());
+            while (li.next()) {
+                if (check(hi.getKey(), li.getValue())) {
+                    return -1;
+                }
+            }
+        } else if (check(hi.getKey(), v)) {
+            return -1;
+        }
+    }
+    return 0;
+}
+
+int q_check_http_request(const QoreString* method, const QoreString* path, const QoreHashNode* headers,
+        const char* method_err, const char* path_err, const char* header_err, ExceptionSink* xsink,
+        bool path_sent_as_is) {
+    // the method and request target are written to the request line or HTTP/2 and HTTP/3 pseudo-headers as C strings,
+    // which would be cut at a NUL character, and a CR or LF would end the request line and start a header or another
+    // request
+    if (method && q_check_http_text(method->c_str(), method->size(), "HTTP method", "HTTP methods", method_err, false,
+            xsink)) {
+        return -1;
+    }
+    if (path && (path_sent_as_is
+            ? q_check_http_text(path->c_str(), path->size(), "HTTP request target", "HTTP request targets", path_err,
+                true, xsink)
+            : q_check_secret_no_nul(path->c_str(), path->size(), "HTTP request target", "HTTP request targets",
+                path_err, xsink))) {
+        return -1;
+    }
+    return q_check_http_header_values(headers, header_err, xsink);
+}
+
+int q_check_host_service(const QoreString* host, const QoreString* service, const char* err,
+        ExceptionSink* xsink) {
+    // a host name would be resolved, and a service name looked up, cut at the NUL character
+    if (host && q_check_no_nul(host->c_str(), host->size(), "hostname", "hostnames", err, xsink)) {
+        return -1;
+    }
+    if (service && q_check_no_nul(service->c_str(), service->size(), "service name", "service names", err, xsink)) {
+        return -1;
+    }
+    return 0;
+}
+
+// raises err for the character at offset in a string that cannot hold it; a secret is not shown in the exception
+static int q_raise_bad_char(const char* str, size_t len, size_t offset, const char* what, const char* what_plural,
+        const char* char_desc, const char* rule, const char* err, bool secret, ExceptionSink* xsink) {
+    if (secret) {
+        xsink->raiseExceptionArg(err, EINVAL, new QoreStringNodeMaker("%s contains %s; %s cannot contain %s", what,
+            char_desc, what_plural, rule));
+        return -1;
+    }
+    QoreStringNode* desc = new QoreStringNodeMaker("%s \"", what);
+    q_append_escaped(*desc, str, len);
+    desc->sprintf("\" contains %s (\\x%02x) at byte offset %zu; %s cannot contain %s", char_desc,
+        static_cast<unsigned>(static_cast<unsigned char>(str[offset])), offset, what_plural, rule);
+    xsink->raiseExceptionArg(err, EINVAL, desc);
+    return -1;
+}
+
+int q_check_http_text(const char* str, size_t len, const char* what, const char* what_plural, const char* err,
+        bool secret, ExceptionSink* xsink) {
+    assert(str || !len);
+    // a NUL character is reported as for every other string passed on as a C string
+    if (secret ? q_check_secret_no_nul(str, len, what, what_plural, err, xsink)
+            : q_check_no_nul(str, len, what, what_plural, err, xsink)) {
+        return -1;
+    }
+    // CR and LF would end the line or field and start another one in the message (request splitting, header
+    // injection); no other control character than horizontal tab can be in a line or field either (RFC 9110 section
+    // 5.5, RFC 9112 sections 3 and 4)
+    const char* end = str + len;
+    const char* p = std::find_if(str, end, [](char ch) {
+        unsigned char c = static_cast<unsigned char>(ch);
+        return (c < 0x20 && c != '\t') || c == 0x7f;
+    });
+    if (p == end) {
+        return 0;
+    }
+    return q_raise_bad_char(str, len, p - str, what, what_plural, "a control character",
+        "control characters other than horizontal tab", err, secret, xsink);
+}
+
+int q_check_line_text(const char* str, size_t len, const char* what, const char* what_plural, const char* err,
+        bool secret, ExceptionSink* xsink) {
+    assert(str || !len);
+    // a NUL character is reported as for every other string passed on as a C string
+    if (secret ? q_check_secret_no_nul(str, len, what, what_plural, err, xsink)
+            : q_check_no_nul(str, len, what, what_plural, err, xsink)) {
+        return -1;
+    }
+    // CR or LF would end the command line and start another command
+    const char* end = str + len;
+    const char* p = std::find_if(str, end, [](char c) { return c == '\r' || c == '\n'; });
+    if (p == end) {
+        return 0;
+    }
+    return q_raise_bad_char(str, len, p - str, what, what_plural, "a line break", "CR or LF characters", err,
+        secret, xsink);
 }
 
 // Handle GNU strerror_r() which returns char*
@@ -2977,7 +3195,80 @@ int q_get_mode(const QoreString& path) {
     return sbuf.st_mode;
 }
 
+void q_append_escaped(QoreString& desc, const char* str, size_t len) {
+    // the string is shown with at most its first 64 characters, with control characters, quotes and backslashes
+    // escaped, so that a NUL or other control character and where it is can be seen; a string that is not valid in
+    // the default encoding is shown with at most its first 64 bytes, with the bytes that are not ASCII escaped as
+    // well, so that the description is valid in the default encoding
+    static constexpr size_t max_chars = 64;
+    bool invalid = false;
+    size_t show = QCS_DEFAULT->getByteLen(str, str + len, max_chars, invalid);
+    if (invalid || show > len) {
+        invalid = true;
+        show = len < max_chars ? len : max_chars;
+    }
+    for (size_t i = 0; i < show; ++i) {
+        unsigned char c = static_cast<unsigned char>(str[i]);
+        if (c < 0x20 || c == 0x7f || (invalid && c >= 0x80)) {
+            desc.sprintf("\\x%02x", c);
+        } else if (c == '"' || c == '\\') {
+            desc.concat('\\');
+            desc.concat(static_cast<char>(c));
+        } else {
+            desc.concat(static_cast<char>(c));
+        }
+    }
+    if (show < len) {
+        desc.concat("...");
+    }
+}
+
+int q_check_no_nul(const char* str, size_t len, const char* what, const char* what_plural, const char* err,
+        ExceptionSink* xsink) {
+    assert(str || !len);
+    assert(what);
+    assert(what_plural);
+    assert(err);
+    assert(xsink);
+    const char* nul = len ? static_cast<const char*>(memchr(str, '\0', len)) : nullptr;
+    if (!nul) {
+        return 0;
+    }
+    size_t offset = nul - str;
+    QoreStringNode* desc = new QoreStringNodeMaker("%s \"", what);
+    q_append_escaped(*desc, str, len);
+    desc->sprintf("\" contains a NUL character at byte offset %zu; %s cannot contain NUL characters", offset,
+        what_plural);
+    xsink->raiseExceptionArg(err, EINVAL, desc);
+    return -1;
+}
+
+int q_check_path(const char* path, size_t len, const char* err, ExceptionSink* xsink) {
+    return q_check_no_nul(path, len, "path", "paths", err, xsink);
+}
+
+int q_check_path(const QoreString& path, const char* err, ExceptionSink* xsink) {
+    return q_check_path(path.c_str(), path.size(), err, xsink);
+}
+
+int q_check_no_nul(const char* str, size_t len) {
+    assert(str || !len);
+    if (len && memchr(str, '\0', len)) {
+        errno = EINVAL;
+        return -1;
+    }
+    return 0;
+}
+
+int q_check_path(const QoreString& path) {
+    return q_check_no_nul(path.c_str(), path.size());
+}
+
 int q_realpath(const QoreString& path, QoreString& rv, ExceptionSink* xsink) {
+    // a path with a NUL character would be cut at the NUL character by realpath()
+    if (xsink ? q_check_path(path, "REALPATH-ERROR", xsink) : q_check_path(path)) {
+        return -1;
+    }
 #ifdef HAVE_REALPATH
 #if defined(SOLARIS) || (defined(__NetBSD_Version__) && (__NetBSD_Version__ < 601000000))
     char buf[PATH_MAX];

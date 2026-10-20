@@ -70,10 +70,10 @@ namespace {
 //! RAII wrapper for an OpenSSL digest context
 class DigestContext {
 public:
-    DLLLOCAL DigestContext() : ctx(EVP_MD_CTX_new()) {
+    DigestContext() : ctx(EVP_MD_CTX_new()) {
     }
 
-    DLLLOCAL ~DigestContext() {
+    ~DigestContext() {
         if (ctx) {
             EVP_MD_CTX_free(ctx);
         }
@@ -82,7 +82,7 @@ public:
     DigestContext(const DigestContext&) = delete;
     DigestContext& operator=(const DigestContext&) = delete;
 
-    DLLLOCAL bool init(ExceptionSink* xsink) {
+    bool init(ExceptionSink* xsink) {
         if (!ctx || !EVP_DigestInit_ex(ctx, EVP_sha256(), nullptr)) {
             xsink->raiseException(ML_ONNX_CONTENT_IDENTITY_ERROR,
                 "failed to initialize the %s digest context", QORE_ONNX_CONTENT_IDENTITY_ALGORITHM);
@@ -91,7 +91,7 @@ public:
         return true;
     }
 
-    DLLLOCAL bool update(const void* data, size_t len, ExceptionSink* xsink) {
+    bool update(const void* data, size_t len, ExceptionSink* xsink) {
         if (!len) {
             return true;
         }
@@ -103,7 +103,7 @@ public:
         return true;
     }
 
-    DLLLOCAL bool final(std::string& hex, ExceptionSink* xsink) {
+    bool final(std::string& hex, ExceptionSink* xsink) {
         unsigned char md[EVP_MAX_MD_SIZE];
         unsigned int md_len = 0;
         if (!EVP_DigestFinal_ex(ctx, md, &md_len)) {
@@ -128,19 +128,19 @@ private:
 //! RAII wrapper for a file descriptor
 class ScopedFd {
 public:
-    DLLLOCAL ScopedFd() = default;
+    ScopedFd() = default;
 
-    DLLLOCAL explicit ScopedFd(int fd) : fd(fd) {
+    explicit ScopedFd(int fd) : fd(fd) {
     }
 
-    DLLLOCAL ~ScopedFd() {
+    ~ScopedFd() {
         reset();
     }
 
     ScopedFd(const ScopedFd&) = delete;
     ScopedFd& operator=(const ScopedFd&) = delete;
 
-    DLLLOCAL void reset(int new_fd = -1) {
+    void reset(int new_fd = -1) {
         if (fd >= 0) {
             while (::close(fd) && errno == EINTR) {
                 // retry interrupted close
@@ -149,11 +149,11 @@ public:
         fd = new_fd;
     }
 
-    DLLLOCAL int get() const {
+    int get() const {
         return fd;
     }
 
-    DLLLOCAL bool valid() const {
+    bool valid() const {
         return fd >= 0;
     }
 
@@ -164,16 +164,16 @@ private:
 //! Bounds-checked protobuf wire-format reader
 class WireReader {
 public:
-    DLLLOCAL WireReader(const char* data, size_t len)
+    WireReader(const char* data, size_t len)
         : pos(reinterpret_cast<const uint8_t*>(data)),
           end(reinterpret_cast<const uint8_t*>(data) + len) {
     }
 
-    DLLLOCAL bool atEnd() const {
+    bool atEnd() const {
         return pos >= end;
     }
 
-    DLLLOCAL bool readVarint(uint64_t& out) {
+    bool readVarint(uint64_t& out) {
         out = 0;
         unsigned shift = 0;
         while (pos < end) {
@@ -190,7 +190,7 @@ public:
         return false;
     }
 
-    DLLLOCAL bool readTag(uint32_t& field, uint32_t& wire) {
+    bool readTag(uint32_t& field, uint32_t& wire) {
         uint64_t tag;
         if (!readVarint(tag)) {
             return false;
@@ -204,7 +204,7 @@ public:
         return true;
     }
 
-    DLLLOCAL bool readLengthDelimited(const char*& out, size_t& out_len) {
+    bool readLengthDelimited(const char*& out, size_t& out_len) {
         uint64_t len;
         if (!readVarint(len)) {
             return false;
@@ -219,7 +219,7 @@ public:
     }
 
     //! Skips a field of the given wire type; returns false on malformed input
-    DLLLOCAL bool skipField(uint32_t wire) {
+    bool skipField(uint32_t wire) {
         switch (wire) {
             case WIRE_VARINT: {
                 uint64_t ignored;
@@ -264,7 +264,7 @@ struct ScanContext {
     bool cancelled = false;
 
     //! Accounts for one scanned message and performs periodic cancellation checks
-    DLLLOCAL bool step() {
+    bool step() {
         if (++messages > ONNX_SCAN_MAX_MESSAGES) {
             xsink->raiseException(ML_ONNX_CONTENT_IDENTITY_ERROR,
                 "the ONNX model declares more than %llu protobuf messages; refusing to scan it for "
@@ -281,7 +281,7 @@ struct ScanContext {
     }
 
     //! Records a dependency class that cannot be enumerated from the model
-    DLLLOCAL void markUnsupported(const char* reason) {
+    void markUnsupported(const char* reason) {
         if (unsupported->empty()) {
             *unsupported = reason;
         }
@@ -354,7 +354,8 @@ bool parseExternalInt(const std::string& key, const std::string& value, int64_t&
     errno = 0;
     char* endptr = nullptr;
     const long long v = strtoll(value.c_str(), &endptr, 10);
-    if (errno || !endptr || *endptr || v < 0) {
+    // the whole value must be the number; a NUL character in the value would otherwise end it early
+    if (errno || !endptr || endptr != value.c_str() + value.size() || v < 0) {
         xsink->raiseException(ML_ONNX_CONTENT_IDENTITY_ERROR,
             "the ONNX model declares an invalid %s value '%s' for an external tensor data reference",
             key.c_str(), value.c_str());
@@ -732,7 +733,8 @@ bool readAllBytes(int fd, size_t size, const char* what, const std::string& disp
 */
 bool readWholeFile(const char* path, const char* what, const std::string& display,
         std::vector<char>& out, ExceptionSink* xsink) {
-    QoreSandboxManagerHelper smh;
+    // a policy check honors an active policy barrier
+    QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
     if (smh) {
         if (!smh->checkFilesystemAccess(path, QSEC_READ, xsink)) {
             return false;
@@ -840,10 +842,13 @@ bool applyCaptureFailure(OnnxContentIdentityMode mode, OnnxContentIdentity& iden
     if (*xsink) {
         const QoreValue err = xsink->getExceptionErr();
         const QoreValue desc = xsink->getExceptionDesc();
+        // the reason is copied with its length, so that it is not cut at a NUL character
         if (desc.getType() == NT_STRING) {
-            reason = desc.get<const QoreStringNode>()->c_str();
+            const QoreStringNode* str = desc.get<const QoreStringNode>();
+            reason.assign(str->c_str(), str->size());
         } else if (err.getType() == NT_STRING) {
-            reason = err.get<const QoreStringNode>()->c_str();
+            const QoreStringNode* str = err.get<const QoreStringNode>();
+            reason.assign(str->c_str(), str->size());
         }
         xsink->clear();
     }
@@ -853,6 +858,32 @@ bool applyCaptureFailure(OnnxContentIdentityMode mode, OnnxContentIdentity& iden
     // discard the partial capture so the model loads exactly as it would without capture
     identity.discardCapture(reason);
     return true;
+}
+
+//! Completes a capture whose content has all been captured
+bool completeCapture(OnnxContentIdentityMode mode, OnnxContentIdentity& identity, ExceptionSink* xsink) {
+    identity.complete = true;
+    identity.finalize();
+    if (identity.getDigest().empty()) {
+        // finalize() could not compute the manifest digest
+        identity.complete = false;
+        if (mode == OnnxContentIdentityMode::Required) {
+            xsink->raiseException(ML_ONNX_CONTENT_IDENTITY_ERROR,
+                "a complete ONNX content identity was required but the identity manifest digest "
+                "could not be computed");
+            return false;
+        }
+        identity.discardCapture("the identity manifest digest could not be computed");
+    }
+    return true;
+}
+
+//! Returns true if model bytes are an ORT format model, as ONNX Runtime decides for bytes with no explicit format
+/** This is fbs::utils::IsOrtFormatModelBytes(): more than 8 bytes, with the flatbuffer file identifier \c "ORTM" at
+    offset 4.
+*/
+bool isOrtFormatModelBytes(const std::vector<char>& bytes) {
+    return bytes.size() > 8 && !memcmp(bytes.data() + 4, "ORTM", 4);
 }
 
 //! Captures model content identity from model bytes and a resolution base directory
@@ -867,6 +898,15 @@ bool captureFromBytes(std::vector<char>&& model_bytes, const std::string& base_d
     if (!digestBytes(identity.model_bytes.data(), identity.model_bytes.size(),
             identity.model_digest, xsink)) {
         return applyCaptureFailure(mode, identity, xsink);
+    }
+
+    // an ORT format model cannot reference external data: ONNX Runtime loads its initializers without an external
+    // data reader and fails to load a tensor with external data (LoadInitializerOrtFormat() as called from
+    // onnxruntime/core/graph/graph.cc), so its bytes are all of its content; the session is loaded in the format
+    // decided here, so that ONNX Runtime reads the bytes as they were captured
+    if (isOrtFormatModelBytes(identity.model_bytes)) {
+        identity.ort_format = true;
+        return completeCapture(mode, identity, xsink);
     }
 
     std::vector<OnnxExternalTensorRef> refs;
@@ -983,20 +1023,7 @@ bool captureFromBytes(std::vector<char>&& model_bytes, const std::string& base_d
         return true;
     }
 
-    identity.complete = true;
-    identity.finalize();
-    if (identity.getDigest().empty()) {
-        // finalize() could not compute the manifest digest
-        identity.complete = false;
-        if (mode == OnnxContentIdentityMode::Required) {
-            xsink->raiseException(ML_ONNX_CONTENT_IDENTITY_ERROR,
-                "a complete ONNX content identity was required but the identity manifest digest "
-                "could not be computed");
-            return false;
-        }
-        identity.discardCapture("the identity manifest digest could not be computed");
-    }
-    return true;
+    return completeCapture(mode, identity, xsink);
 }
 }  // anonymous namespace
 
@@ -1008,6 +1035,7 @@ void OnnxContentIdentity::setUnknown(const std::string& reason) {
 
 void OnnxContentIdentity::discardCapture(const std::string& reason) {
     captured = false;
+    ort_format = false;
     model_bytes.clear();
     model_bytes.shrink_to_fit();
     model_digest.clear();
@@ -1127,22 +1155,28 @@ bool parseOnnxContentIdentityMode(const QoreHashNode* config, OnnxContentIdentit
         return true;
     }
     QoreStringValueHelper str(val);
-    const char* value = str->c_str();
-    if (!strcmp(value, "disabled")) {
+    // the value is compared with its length, so that a NUL character cannot end it early
+    const std::string value(str->c_str(), str->size());
+    // the error message names the value as a C string, which would hide a NUL character
+    if (q_check_no_nul(value.data(), value.size(), "content_identity", "content_identity values",
+            ML_ONNX_CONTENT_IDENTITY_ERROR, xsink)) {
+        return false;
+    }
+    if (value == "disabled") {
         mode = OnnxContentIdentityMode::Disabled;
         return true;
     }
-    if (!strcmp(value, "best_effort")) {
+    if (value == "best_effort") {
         mode = OnnxContentIdentityMode::BestEffort;
         return true;
     }
-    if (!strcmp(value, "required")) {
+    if (value == "required") {
         mode = OnnxContentIdentityMode::Required;
         return true;
     }
     xsink->raiseException(ML_ONNX_CONTENT_IDENTITY_ERROR,
         "invalid content_identity value '%s'; expected \"disabled\", \"best_effort\" or "
-        "\"required\"", value);
+        "\"required\"", value.c_str());
     return false;
 }
 

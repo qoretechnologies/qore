@@ -3,6 +3,7 @@
 %requires linenoise
 
 %modern
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 
 %requires QUnit
 %requires Util
@@ -39,6 +40,8 @@ class LinenoiseTest inherits Test {
         addTestCase("history_save() error handling", \testHistorySaveError());
         addTestCase("history_load() error handling", \testHistoryLoadError());
         addTestCase("history_load() non-existent file", \testHistoryLoadNonExistent());
+        addTestCase("history_save() and history_load() respect the sandbox", \testHistorySandbox());
+        addTestCase("history_save() and history_load() refuse a path with a NUL character", \testHistoryNulPath());
 
         # UTF-8 tests
         addTestCase("UTF-8 history add and retrieve", \testUTF8History());
@@ -343,6 +346,81 @@ class LinenoiseTest inherits Test {
         assertThrows("LINENOISE-HISTORY-LOAD-ERROR", sub() {
             Linenoise::history_load(nonexistent);
         });
+    }
+
+    testHistorySandbox() {
+        resetHistory();
+        string allowed_dir = tmp_dir + "/sandbox-allowed";
+        string outside_dir = tmp_dir + "/sandbox-outside";
+        mkdir(allowed_dir);
+        mkdir(outside_dir);
+
+        # a history file outside the sandbox that a sandboxed program must not be able to read
+        string outside_file = outside_dir + "/history.txt";
+        File f();
+        f.open2(outside_file, O_CREAT | O_TRUNC | O_WRONLY);
+        f.write("outside-secret\n");
+        f.close();
+
+        Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+        p.parse("
+%modern
+%requires linenoise
+
+sub save_history(string path) {
+    Linenoise::history_save(path);
+}
+
+sub load_history(string path) {
+    Linenoise::history_load(path);
+}
+        ", "linenoise_sandbox_history");
+
+        SandboxManager sm();
+        sm.setFilesystemSandboxRoot(allowed_dir);
+        p.setSandboxManager(sm);
+
+        Linenoise::history_add("inside-line");
+
+        # a file inside the sandbox root can be written and read back
+        string allowed_file = allowed_dir + "/history.txt";
+        p.callFunction("save_history", allowed_file);
+        assertTrue(is_file(allowed_file), "history_save() writes a file inside the sandbox root");
+        Linenoise::history_free();
+        p.callFunction("load_history", allowed_file);
+        assertEq(("inside-line",), Linenoise::history(), "history_load() reads a file inside the sandbox root");
+
+        # writing outside the sandbox root is denied, and no file is created
+        string denied_file = outside_dir + "/written.txt";
+        assertThrows("FILESYSTEM-ACCESS-DENIED", sub () {
+            p.callFunction("save_history", denied_file);
+        }, NOTHING, "history_save() cannot write outside the sandbox root");
+        assertFalse(is_file(denied_file), "a denied history_save() creates no file");
+
+        # reading outside the sandbox root is denied, and the history is unchanged
+        assertThrows("FILESYSTEM-ACCESS-DENIED", sub () {
+            p.callFunction("load_history", outside_file);
+        }, NOTHING, "history_load() cannot read outside the sandbox root");
+        assertEq(("inside-line",), Linenoise::history(), "a denied history_load() loads no lines");
+    }
+
+    testHistoryNulPath() {
+        resetHistory();
+        Linenoise::history_add("nul-line");
+        # the path before the NUL character must not be written or read
+        string file = tmp_dir + "/nul-history.txt";
+        assertThrows("LINENOISE-HISTORY-SAVE-ERROR", "NUL", sub () {
+            Linenoise::history_save(file + "\x00.txt");
+        }, NOTHING, "history_save() refuses a path with a NUL character");
+        assertFalse(is_file(file), "a refused history_save() writes no file");
+
+        Linenoise::history_save(file);
+        Linenoise::history_free();
+        assertThrows("LINENOISE-HISTORY-LOAD-ERROR", "NUL", sub () {
+            Linenoise::history_load(file + "\x00.txt");
+        }, NOTHING, "history_load() refuses a path with a NUL character");
+        assertEq((), Linenoise::history(), "a refused history_load() loads no lines");
+        unlink(file);
     }
 
     # ==================== UTF-8 Tests ====================

@@ -340,7 +340,7 @@ QoreHoltWinters* QoreHoltWinters::deserializeState(const uint8_t* data, size_t l
     if (*xsink) { return nullptr; }
 
     std::unique_ptr<QoreHoltWinters> obj(new QoreHoltWinters(
-        period, alpha, beta, gamma, seasonal_type.c_str(), damped, phi));
+        period, alpha, beta, gamma, seasonal_type, damped, phi));
     obj->level = hw_level;
     obj->trend = hw_trend;
     obj->seasonal = std::move(seasonal);

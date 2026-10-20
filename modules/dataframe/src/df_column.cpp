@@ -106,6 +106,9 @@ ColumnData::ColumnData(ColumnData&& old) noexcept
 
 ColumnData& ColumnData::operator=(const ColumnData& old) {
     if (this != &old) {
+        // the values of a column that a holder reports to the garbage collector do not change
+        assert(!scan_claimed.load(std::memory_order_relaxed));
+        scan_state.store(-1, std::memory_order_relaxed);
         std::vector<QoreValue> new_auto_data = refAutoData(old.auto_data);
         if (old.dense_buffer) {
             old.dense_buffer->ref();
@@ -137,6 +140,9 @@ ColumnData& ColumnData::operator=(const ColumnData& old) {
 
 ColumnData& ColumnData::operator=(ColumnData&& old) noexcept {
     if (this != &old) {
+        // the values of a column that a holder reports to the garbage collector do not change
+        assert(!scan_claimed.load(std::memory_order_relaxed));
+        scan_state.store(-1, std::memory_order_relaxed);
         ExceptionSink xsink;
         if (dense_buffer) {
             dense_buffer->deref(&xsink);
@@ -200,6 +206,14 @@ void ColumnData::clearExternalColumnRef() {
     external_column_owner.reset();
 }
 
+std::shared_ptr<ColumnData> ColumnData::copyForUpdate() const {
+    auto rv = std::make_shared<ColumnData>(*this);
+    // the preserved storage holds the values of this column, not the changed values of the copy
+    rv->setDenseBufferRef(nullptr);
+    rv->clearExternalColumnRef();
+    return rv;
+}
+
 QoreBufferNode* ColumnData::refDenseBuffer() const {
     if (!dense_buffer) {
         return nullptr;
@@ -210,12 +224,150 @@ QoreBufferNode* ColumnData::refDenseBuffer() const {
 
 void ColumnData::setAutoValue(int64_t i, QoreValue value, ExceptionSink* xsink) {
     assert(i >= 0 && i < static_cast<int64_t>(auto_data.size()));
+    // the values do not change once needsScan() has been computed
+    assert(scan_state.load(std::memory_order_relaxed) < 0);
     auto_data[i].discard(xsink);
     auto_data[i] = value.refSelf();
 }
 
 void ColumnData::appendAutoValue(QoreValue value) {
+    // the values do not change once needsScan() has been computed
+    assert(scan_state.load(std::memory_order_relaxed) < 0);
     auto_data.push_back(value.refSelf());
+}
+
+std::string dataFrameValueKey(const ColumnData& cd, int64_t row) {
+    if (cd.isNull(row)) {
+        return std::string("\xffnull", 5);
+    }
+
+    std::string key;
+    switch (cd.type) {
+        case ColumnType::FLOAT64: {
+            double value = cd.float_data(row);
+            if (value == 0.0) {
+                value = 0.0;  // Normalize -0.0 to match numeric equality.
+            }
+            uint64_t bits;
+            std::memcpy(&bits, &value, sizeof(bits));
+            key.assign("f", 1);
+            key.append(reinterpret_cast<const char*>(&bits), sizeof(bits));
+            return key;
+        }
+        case ColumnType::INT64: {
+            int64_t value = cd.int_data[row];
+            key.assign("i", 1);
+            key.append(reinterpret_cast<const char*>(&value), sizeof(value));
+            return key;
+        }
+        case ColumnType::STRING:
+            key.assign("s", 1);
+            key.append(cd.str_data[row]);
+            return key;
+        case ColumnType::BOOL:
+            return cd.bool_data[row] ? std::string("b1", 2) : std::string("b0", 2);
+        case ColumnType::DATE: {
+            int64_t value = cd.date_data[row];
+            key.assign("d", 1);
+            key.append(reinterpret_cast<const char*>(&value), sizeof(value));
+            return key;
+        }
+        case ColumnType::AUTO: {
+            QoreStringValueHelper sh(cd.auto_data[row]);
+            key.assign("a", 1);
+            key.append(sh->c_str(), sh->size());
+            return key;
+        }
+        default:
+            return {};
+    }
+}
+
+bool ColumnData::needsScan() const {
+    int state = scan_state.load(std::memory_order_acquire);
+    if (state < 0) {
+        // threads computing it at the same time compute the same answer
+        state = 0;
+        for (const QoreValue& v : auto_data) {
+            if (AbstractScannablePrivateData::needsScan(v)) {
+                state = 1;
+                break;
+            }
+        }
+        scan_state.store(state, std::memory_order_release);
+    }
+    return state != 0;
+}
+
+size_t claimScanColumns(std::vector<Column>& columns, std::vector<std::shared_ptr<ColumnData>>& replaced) {
+    size_t count = 0;
+    try {
+        for (Column& col : columns) {
+            if (!col.data->needsScan()) {
+                continue;
+            }
+            if (!col.data->claimScan()) {
+                // the values are reported by another holder, or by this one for an earlier column: this one gets
+                // its own references to them
+                std::shared_ptr<ColumnData> copy = std::make_shared<ColumnData>(*col.data);
+                bool claimed = copy->claimScan();
+                assert(claimed);
+                static_cast<void>(claimed);
+                replaced.reserve(replaced.size() + 1);
+                replaced.push_back(std::move(col.data));
+                col.data = std::move(copy);
+            }
+            ++count;
+        }
+    } catch (...) {
+        // the claims made are released, so that the holder claims no column unless it reports them all
+        for (Column& col : columns) {
+            if (!count) {
+                break;
+            }
+            if (col.data->needsScan()) {
+                col.data->releaseScan();
+                --count;
+            }
+        }
+        throw;
+    }
+    return count;
+}
+
+void releaseScanColumns(const std::vector<Column>& columns) {
+    for (const Column& col : columns) {
+        if (col.data->needsScan()) {
+            col.data->releaseScan();
+        }
+    }
+}
+
+void markScanColumnValuesStored(QoreObject& self, const std::vector<Column>& columns) {
+    for (const Column& col : columns) {
+        if (!col.data->needsScan()) {
+            continue;
+        }
+        for (const QoreValue& v : col.data->auto_data) {
+            if (AbstractScannablePrivateData::needsScan(v)) {
+                self.privateDataValueStored(v);
+            }
+        }
+    }
+}
+
+bool scanColumnValues(const std::vector<Column>& columns, QorePrivateDataScanner& scanner) {
+    for (const Column& col : columns) {
+        if (!col.data->needsScan()) {
+            continue;
+        }
+        for (const QoreValue& v : col.data->auto_data) {
+            if (scanner.scan(v)) {
+                return true;
+            }
+        }
+    }
+    return false;
 }
 
 const char* columnTypeName(ColumnType type) {
@@ -388,7 +540,7 @@ std::shared_ptr<ColumnData> buildColumnData(const QoreListNode* values,
                     col->null_mask[i] = 1;
                 } else {
                     QoreStringValueHelper str(v);
-                    col->str_data[i] = str->c_str();
+                    col->str_data[i] = dataFrameStdString(*str);
                 }
             }
             break;
@@ -569,7 +721,7 @@ std::shared_ptr<ColumnData> buildColumnDataAuto(const QoreListNode* values,
                     return buildColumnData(values, ColumnType::STRING, xsink);
                 }
                 QoreStringValueHelper str(v);
-                col->str_data[i] = str->c_str();
+                col->str_data[i] = dataFrameStdString(*str);
                 break;
             }
 

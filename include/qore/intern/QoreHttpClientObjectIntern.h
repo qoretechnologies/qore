@@ -106,6 +106,12 @@ struct con_info {
             port_set = true;
         }
 
+        // a host with a NUL character (ex: decoded from "socket=%2Ftmp%2Fa.sock%00.b") would be cut at the NUL
+        // character and name another UNIX socket path or host name
+        if (url.getHost() && q_check_no_nul(url.getHost()->c_str(), url.getHost()->size(), "URL host",
+                "URL hosts", "HTTP-CLIENT-URL-ERROR", xsink)) {
+            return -1;
+        }
         host = url.getHost() ? url.getHost()->c_str() : "";
 
         // check if hostname is really a local port number (for a URL string like: "8080")

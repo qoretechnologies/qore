@@ -1,0 +1,106 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+#
+# an algorithm, mode or encoding name given as a string is looked up or compared as a C string, so a name with a NUL
+# character was cut at the NUL character and selected the algorithm, mode or encoding named before it, after any
+# check made by Qore code on the whole name; such a name is now refused with the error that the API raises for an
+# unknown name, and an encoding name with a NUL character is the name of an encoding that Qore does not know
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class KeywordNulTest
+
+class KeywordNulTest inherits QUnit::Test {
+    constructor() : Test("KeywordNulTest", "1.0") {
+        addTestCase("encoding names", \encodings());
+        addTestCase("digest names", \digests());
+        addTestCase("cipher names", \ciphers());
+        addTestCase("compression algorithm names", \compression());
+        addTestCase("HTTP modes", \httpModes());
+        set_return_value(main());
+    }
+
+    encodings() {
+        # cut at the NUL character, the name was ISO-8859-1, and the conversion succeeded
+        assertThrows("ENCODING-CONVERSION-ERROR", \convert_encoding(), ("café", "ISO-8859-1\x00x"));
+        assertThrows("ENCODING-CONVERSION-ERROR", \string(), ("café", "ISO-8859-1\x00x"));
+        # the encoding is named by the whole name, with the NUL character escaped
+        string str = force_encoding("abc", "UTF-8\x00x");
+        assertEq("UTF-8\\x00x", get_encoding(str));
+        # a backslash in such a name is doubled, so the name of another name with a NUL character is distinct
+        assertEq("UTF-8\\\\x00\\x00y", get_encoding(force_encoding("abc", "UTF-8\\x00\x00y")));
+        assertEq("UTF-8\\x00y", get_encoding(force_encoding("abc", "UTF-8\x00y")));
+        assertEq("\\x00UTF-8", get_encoding(force_encoding("abc", "\x00UTF-8")));
+        # the same name is the same encoding
+        assertEq(get_encoding(str), get_encoding(force_encoding("def", "UTF-8\x00x")));
+        assertThrows("ENCODING-CONVERSION-ERROR", sub () { string s = convert_encoding(str, "UTF-16"); });
+        # the names themselves
+        assertEq("ISO-8859-1", get_encoding(convert_encoding("café", "ISO-8859-1")));
+        assertEq("UTF-8", get_encoding(force_encoding("abc", "UTF-8")));
+    }
+
+    digests() {
+        # cut at the NUL character, the name was sha256
+        assertThrows("DIGEST-ERROR", "digest name \"sha256\\\\x00x\" contains a NUL character at byte offset 6",
+            \digest(), ("sha256\x00x", "data"));
+        assertThrows("DIGEST-ERROR", "contains a NUL character", \hmac(), ("sha256\x00x", "data", "key"));
+        assertThrows("DIGEST-ERROR", "contains a NUL character", \pbkdf2(), ("sha256\x00x", "pw", "salt", 1, 32));
+        assertThrows("DIGEST-ERROR", "contains a NUL character", sub () { Digest d("sha256\x00x"); });
+        assertFalse(has_digest("sha256\x00x"));
+        assertEq(Err::EINVAL, errno());
+        # the names themselves
+        assertEq(32, digest("sha256", "data").size());
+        assertTrue(has_digest("sha256"));
+    }
+
+    ciphers() {
+        binary key = binary(strmul("k", 32));
+        binary iv = binary(strmul("i", 16));
+        string alg = "aes-256-cbc";
+        assertThrows("ENCRYPT-ERROR", "encryption algorithm \"aes-256-cbc\\\\x00x\" contains a NUL character",
+            \encrypt(), (alg + "\x00x", "data", key, iv));
+        assertThrows("ENCRYPT-ERROR", "contains a NUL character", \get_encryptor(), (alg + "\x00x", key, iv));
+        binary enc = encrypt(alg, "data", key, iv);
+        assertThrows("DECRYPT-ERROR", "decryption algorithm .* contains a NUL character", \decrypt_to_binary(),
+            (alg + "\x00x", enc, key, iv));
+        assertThrows("DECRYPT-ERROR", "contains a NUL character", \decrypt_to_string(), (alg + "\x00x", enc, key, iv));
+        assertThrows("DECRYPT-ERROR", "contains a NUL character", \get_decryptor(), (alg + "\x00x", key, iv));
+        assertNothing(get_cipher_info(alg + "\x00x"));
+        assertEq(Err::EINVAL, errno());
+        # the names themselves
+        assertEq("data", decrypt_to_string(alg, enc, key, iv));
+        assertEq(32, get_cipher_info(alg).key_len);
+    }
+
+    compression() {
+        assertThrows("COMPRESS-ERROR", "compression algorithm name \"zlib\\\\x00x\" contains a NUL character",
+            \get_compressor(), "zlib\x00x");
+        assertThrows("COMPRESS-ERROR", "contains a NUL character", \get_decompressor(), "zlib\x00x");
+        # the names themselves
+        get_compressor(COMPRESSION_ALG_ZLIB);
+        get_decompressor(COMPRESSION_ALG_ZLIB);
+    }
+
+    httpModes() {
+        HTTPClient hc();
+        string mode = hc.getHttp2Mode();
+        assertThrows("HTTP2-MODE-ERROR", "HTTP/2 mode \"disabled\\\\x00x\" contains a NUL character",
+            \hc.setHttp2Mode(), "disabled\x00x");
+        assertEq(mode, hc.getHttp2Mode());
+        mode = hc.getHttp3Mode();
+        assertThrows("HTTP3-MODE-ERROR", "HTTP/3 mode .* contains a NUL character", \hc.setHttp3Mode(),
+            "required\x00x");
+        assertEq(mode, hc.getHttp3Mode());
+        assertThrows("HTTP-CLIENT-OPTION-ERROR", "HTTP/3 mode .* contains a NUL character",
+            sub () { HTTPClient h({"http3_mode": "required\x00x"}); });
+        mode = get_global_http2_mode();
+        assertThrows("SET-GLOBAL-HTTP2-MODE-ERROR", "HTTP/2 mode .* contains a NUL character",
+            \set_global_http2_mode(), "disabled\x00x");
+        assertEq(mode, get_global_http2_mode());
+    }
+}

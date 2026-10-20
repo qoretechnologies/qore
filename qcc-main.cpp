@@ -594,8 +594,9 @@ static bool write_depfile_list(const char* path, const std::string& output,
 // Program options
 static const char* output_path = nullptr;
 static int opt_level = 3;
-// Parallel backend codegen across N threads (split-after-opt). 0 = unset (single-object
-// codegen, the reference path). Propagated to libqore via the QCC_JOBS env var.
+// Maximum number of threads that compile the parts of a split module at once (split-after-opt).
+// 0 = unset (the CPU count). Propagated to libqore via the QCC_JOBS env var; it never changes the
+// output, as a module at or above the split threshold is always split into the same parts.
 static int aot_jobs = 0;
 static const char* target_triple = nullptr;
 static bool static_link = false;
@@ -681,7 +682,7 @@ static const char* qolink_map_path = nullptr;
 // design/aot-object-files-and-module-artifacts.md.
 static bool from_objects = false;
 // -a / --archive mode.  Combined with --context=DIR
-// + positional .qo inputs, produces a `.qoa` static archive (ar rcs)
+// + positional .qo inputs, produces a `.qoa` static archive (deterministic)
 // exposing `qore_qoa_register_all(QoreProgram*)`.  Target use case:
 // static linkage into a C++ host (e.g. qorus-core).
 static bool archive_mode = false;
@@ -1254,7 +1255,7 @@ static void print_usage(const char* prog) {
            "                         standard .qmod by linking the .qo's + fresh glue\n");
     printf("  -a, --archive          Archive mode: positional args are per-file .qo inputs;\n"
            "                         requires --context=DIR; produces a .qoa static archive\n"
-           "                         (ar rcs) exposing qore_qoa_register_all() for a C++ host\n");
+           "                         exposing qore_qoa_register_all() for a C++ host\n");
     printf("  -S, --static           Link single-source executables statically against libqore\n");
     printf("  -t, --target=TRIPLE    Target triple for cross-compilation\n");
     printf("      --show-targets     Show supported target architectures and quit\n");
@@ -1276,9 +1277,9 @@ static void print_usage(const char* prog) {
     printf("      --big-fn-threshold=N  Mark functions >= N IR blocks as OptimizeNone+NoInline\n");
     printf("                         (trades ~1-7%% runtime for up to 46x compile speedup;\n");
     printf("                         default: 200; 0 = off)\n");
-    printf("      --jobs=N           Parallel backend codegen threads, split-after-opt\n");
-    printf("                         (default: CPU count; throttled by the make jobserver;\n");
-    printf("                         1 = single-object codegen)\n");
+    printf("      --jobs=N           Parallel backend codegen threads for the parts of a\n");
+    printf("                         split module (default: CPU count; throttled by the make\n");
+    printf("                         jobserver; does not change the output)\n");
     printf("  -e, --entry=FN         Qore function the emitted C++ main() calls after\n"
            "                         registering script objects (default: main).\n"
            "                         Applies to one-shot multi-source mode and\n"
@@ -1858,6 +1859,7 @@ static const char* aot_section_type_name(uint16_t type) {
         case QoreAOTSectionType::TOPLEVEL: return "TOPLEVEL";
         case QoreAOTSectionType::FUNC_SOURCES: return "FUNC_SOURCES";
         case QoreAOTSectionType::DEPENDENCIES: return "DEPENDENCIES";
+        case QoreAOTSectionType::IMPORT_DEPENDENCIES: return "IMPORT_DEPENDENCIES";
         case QoreAOTSectionType::REEXPORT_MODULES: return "REEXPORT_MODULES";
         case QoreAOTSectionType::PROGRAM_METADATA: return "PROGRAM_METADATA";
         case QoreAOTSectionType::INIT_FUNCS: return "INIT_FUNCS";
@@ -2526,6 +2528,16 @@ static bool dump_skip_expr_payload(const QoreAOTBinaryReader& reader,
         case AOTExprKind::LOG_OR:
         case AOTExprKind::RANGE:
         case AOTExprKind::ASSIGN:
+        case AOTExprKind::PLUS_EQ:
+        case AOTExprKind::MINUS_EQ:
+        case AOTExprKind::MULTIPLY_EQ:
+        case AOTExprKind::DIVIDE_EQ:
+        case AOTExprKind::MODULO_EQ:
+        case AOTExprKind::AND_EQ:
+        case AOTExprKind::OR_EQ:
+        case AOTExprKind::XOR_EQ:
+        case AOTExprKind::SHL_EQ:
+        case AOTExprKind::SHR_EQ:
             return dump_skip_inline_expr(reader, p, end, summary, func_name, child_ctx)
                 && dump_skip_inline_expr(reader, p, end, summary, func_name, child_ctx);
 
@@ -2543,7 +2555,27 @@ static bool dump_skip_expr_payload(const QoreAOTBinaryReader& reader,
 
         case AOTExprKind::EXISTS:
         case AOTExprKind::KEYS:
+        case AOTExprKind::ITERATE:
             return dump_skip_inline_expr(reader, p, end, summary, func_name, child_ctx);
+
+        case AOTExprKind::STREAMING:
+            // the streaming operator kind, the predicate and the source
+            return dump_skip_bytes(p, end, 1)
+                && dump_skip_inline_expr(reader, p, end, summary, func_name, child_ctx)
+                && dump_skip_inline_expr(reader, p, end, summary, func_name, child_ctx);
+
+        case AOTExprKind::DEFERRED_STATIC_METHOD_REF:
+            // the class path and the method name
+            return dump_skip_string_ref(reader, p, end)
+                && dump_skip_string_ref(reader, p, end);
+
+        case AOTExprKind::DEFERRED_FUNCTION_REF:
+            // the function path
+            return dump_skip_string_ref(reader, p, end);
+
+        case AOTExprKind::UNSUPPORTED:
+            // a compile-time marker that is never written: a payload with it is malformed
+            return false;
 
         case AOTExprKind::IMPLICIT_ARG:
             return dump_skip_bytes(p, end, 8);
@@ -2581,6 +2613,8 @@ static bool dump_skip_expr_payload(const QoreAOTBinaryReader& reader,
 
         case AOTExprKind::LOG_EQ:
         case AOTExprKind::LOG_NE:
+        case AOTExprKind::LOG_AEQ:
+        case AOTExprKind::LOG_ANE:
         case AOTExprKind::LOG_LT:
         case AOTExprKind::LOG_GT:
         case AOTExprKind::LOG_LE:

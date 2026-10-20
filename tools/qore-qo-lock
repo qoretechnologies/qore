@@ -47,6 +47,11 @@
     came to do: the holder it waited for may have published exactly that.  The
     answer comes from a non-blocking attempt made before blocking, so it reports
     contention rather than inferring it from elapsed time.
+
+    With \c QORE_QO_LOCK_TRACE set in the environment, the helper writes a line to stderr before it blocks on a
+    contended lock (<tt>qore-qo-lock: waiting for LOCKFILE</tt>) and when it holds the lock
+    (<tt>qore-qo-lock: locked LOCKFILE pid PID</tt>), so that another process can tell when a waiter is blocked and
+    which process holds the lock without timing either.
 */
 %exec-class QoreQoLock
 
@@ -66,7 +71,9 @@ class QoreQoLock {
                 "Runs COMMAND while holding an exclusive lock on LOCKFILE and exits with\n"
                 "COMMAND's status.  The lock is released when this process exits, whatever\n"
                 "ends it.  QORE_QO_LOCK_WAITED is 1 in COMMAND's environment when the lock\n"
-                "was contended and 0 when it was free.\n", get_script_name());
+                "was contended and 0 when it was free.  With QORE_QO_LOCK_TRACE set, a line is\n"
+                "written to stderr before waiting for a contended lock and when the lock is held.\n",
+                get_script_name());
             exit(ExitLockError);
         }
         if (!Option::HAVE_FILE_LOCKING) {
@@ -87,11 +94,15 @@ class QoreQoLock {
             exit(ExitLockError);
         }
 
+        bool trace = boolean(ENV.QORE_QO_LOCK_TRACE);
         bool waited = False;
         try {
             # Ask first, so "did I wait" is observed rather than timed.
             if (f.lock(F_WRLCK)) {
                 waited = True;
+                if (trace) {
+                    stderr.printf("qore-qo-lock: waiting for %s\n", lock_file);
+                }
                 f.lockBlocking(F_WRLCK);
             }
         } catch (hash<ExceptionInfo> ex) {
@@ -105,6 +116,9 @@ class QoreQoLock {
         if (setenv("QORE_QO_LOCK_WAITED", waited ? "1" : "0")) {
             stderr.printf("%s: cannot export QORE_QO_LOCK_WAITED\n", get_script_name());
             exit(ExitLockError);
+        }
+        if (trace) {
+            stderr.printf("qore-qo-lock: locked %s pid %d\n", lock_file, getpid());
         }
         exit(system(shellCommand(ARGV)));
     }

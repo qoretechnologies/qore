@@ -4,10 +4,16 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires Schema
 %requires SqlUtil
+%requires Sqlite3SqlUtil
+%requires Util
 %requires QUnit
 %try-module sqlite3
 %define NO_SQLITE3
 %endtry
+%try-module pgsql
+%define NO_PGSQL
+%endtry
+%requires ../SqlUtil/PgsqlTestIsolation.qm
 %exec-class AlignmentTransactionTest
 
 class AlignmentTransactionTest inherits QUnit::Test {
@@ -15,15 +21,31 @@ class AlignmentTransactionTest inherits QUnit::Test {
         addTestCase("caller can roll back DDL and additional writes", \rollbackAlignment());
         addTestCase("caller can commit alignment", \commitAlignment());
         addTestCase("default alignment still commits", \defaultCommit());
+        addTestCase("populate expressions bind their values", \populateExpressionValues());
         addTestCase("independently committing migrations are rejected before mutation", \rejectCommittingMigrations());
         addTestCase("caller retains ownership after alignment failure", \failureOwnership());
+        addTestCase("populate names its columns as the database requires", \populateColumnNames());
+        addTestCase("a populate NOT NULL column of a table created on a first install is NOT NULL",
+            \populateNotNullFirstInstall());
+        addTestCase("a populate NOT NULL column of a table created on an upgrade is NOT NULL",
+            \populateNotNullNewTable());
+        addTestCase("a populate NOT NULL column added to a SQLite table is NOT NULL from SQLite 3.53.0",
+            \populateNotNullExistingTable());
+        addTestCase("a populate NOT NULL column added to a PostgreSQL table is made NOT NULL",
+            \populateNotNullPgsql());
+        addTestCase("a SQLite table is created with its primary key, and an upgrade keeps it", \primaryKeyUpgrade());
+        addTestCase("a SQLite table is created with its foreign constraints, and an upgrade keeps them",
+            \foreignConstraintUpgrade());
+        addTestCase("a SQLite table is created with its unique constraints, and an upgrade keeps them",
+            \uniqueConstraintUpgrade());
         set_return_value(main());
     }
-    private Datasource datasource() {
+    #! Returns an in-memory SQLite datasource; with a version, the datasource reports it as the SQLite version
+    private AbstractDatasource datasource(*string version) {
 %ifdef NO_SQLITE3
         testSkip("sqlite3 module unavailable");
 %endif
-        return new Datasource("sqlite3:@:memory:");
+        return version ? new VersionedDatasource("sqlite3:@:memory:", version) : new Datasource("sqlite3:@:memory:");
     }
     private hash<auto> definition() {
         return Schema::DataSchemaLoader::loadHash({
@@ -34,11 +56,437 @@ class AlignmentTransactionTest inherits QUnit::Test {
                 "inventory": {"columns": {"id": {"type": "int"}, "name": {"type": "text"}}}},
         });
     }
+    private hash<auto> populateDefinition(string version, hash<auto> extra_columns) {
+        return Schema::DataSchemaLoader::loadHash({
+            "schema": {"name": "inventory", "version": version, "version_table": "inventory_version",
+                "version_column": "version", "version_where": {"name": "inventory"}},
+            "tables": {"inventory_version": {"columns": {
+                "name": {"type": "text"}, "version": {"type": "text"}}},
+                "inventory": {"columns": {"id": {"type": "int"}, "order": {"type": "text"}} + extra_columns}},
+        });
+    }
+
+    #! A populate expression binds its values, which were not bound and filled the column with NULL; a field whose
+    #! key has a dot cannot be named as a column
+    private populateExpressionValues() {
+        AbstractDatasource ds = datasource();
+        on_exit ds.rollback();
+        hash<auto> columns();
+        columns.amount = {"type": "int"};
+        columns.label = {"type": "text"};
+        Schema::DataSchema v1(ds, populateDefinition("1.0", columns));
+        v1.alignWithInfo(True, -1, False);
+        new SqlUtil::Table(ds, "inventory").insert({"id": 1, "order": "first", "amount": 5, "label": "x"});
+        ds.commit();
+
+        # the 1 of "@amount + 1" and the "-y" of the concatenation are bound
+        columns += {
+            "next": {"type": "int", "populate": {"exp": "+", "args": ({"field": "amount"}, 1)}},
+            "tagged": {"type": "text", "populate": {"exp": "concat", "args": ({"field": "label"}, "-y")}},
+        };
+        Schema::DataSchema v2(ds, populateDefinition("2.0", columns));
+        v2.alignWithInfo(True, -1, False);
+        hash<auto> row = new SqlUtil::Table(ds, "inventory").selectRow();
+        assertEq(6, row.next);
+        assertEq("x-y", row.tagged);
+
+        # a key with a dot would be read as a table and a column
+        columns.next -= "populate";
+        columns.tagged -= "populate";
+        Schema::DataSchema v3(ds, populateDefinition("3.0", columns + {"other": {"type": "text",
+            "populate": {"field": "unit\\.price"}}}));
+        assertThrows("POPULATE-ERROR", "the populate field \"unit\\\\.price\" cannot be named as a column",
+            \v3.alignWithInfo(), (True, -1, False));
+    }
+
+    #! A populated column, and the column it is populated from, are named as the database requires them: reserved
+    #! words are quoted; the field of the populate expression is a field path, and a path of more than one key is
+    #! refused
+    private populateColumnNames() {
+        AbstractDatasource ds = datasource();
+        on_exit ds.rollback();
+        Schema::DataSchema v1(ds, populateDefinition("1.0", {}));
+        v1.alignWithInfo(True, -1, False);
+        new SqlUtil::Table(ds, "inventory").insert({"id": 1, "order": "first"});
+        ds.commit();
+
+        # the new column "group" is populated from "order": both are reserved words
+        # (nullable: a SQLite older than 3.53.0 cannot make a column of an existing table NOT NULL; see
+        # populateNotNullExistingTable())
+        Schema::DataSchema v2(ds, populateDefinition("2.0", {"group": {"type": "text",
+            "populate": {"field": "order"}}}));
+        v2.alignWithInfo(True, -1, False);
+        assertEq("first", new SqlUtil::Table(ds, "inventory").selectRow().group);
+
+        # a field path of more than one key is not a column
+        Schema::DataSchema v3(ds, populateDefinition("3.0", {"group": {"type": "text"},
+            "other": {"type": "text", "populate": {"field": "a.b"}}}));
+        assertThrows("POPULATE-ERROR", "the populate field \"a.b\" is not a column", \v3.alignWithInfo(),
+            (True, -1, False));
+    }
+
+    #! A table created by the alignment has no rows to populate: its populate NOT NULL columns are created NOT NULL
+    private populateNotNullFirstInstall() {
+        AbstractDatasource ds = datasource();
+        on_exit ds.rollback();
+        Schema::DataSchema v1(ds, populateDefinition("1.0", {"code": {"type": "text", "notnull": True,
+            "populate": {"field": "order"}}}));
+        v1.alignWithInfo(True, -1, False);
+        assertFalse(new SqlUtil::Table(ds, "inventory").describe().code.nullable);
+        assertThrows("SQLITE3-EXEC", "NOT NULL constraint failed: inventory.code", sub () {
+            new SqlUtil::Table(ds, "inventory").insert({"id": 1, "order": "first"});
+        });
+    }
+
+    #! An upgrade that adds a table creates its populate NOT NULL columns NOT NULL; it does not change a column of
+    #! the new table, which a SQLite older than 3.53.0 cannot do
+    private populateNotNullNewTable() {
+        foreach *string version in ((NOTHING, "3.52.0")) {
+            AbstractDatasource ds = datasource(version);
+            on_exit ds.rollback();
+            Schema::DataSchema v1(ds, populateDefinition("1.0", {}));
+            v1.alignWithInfo(True, -1, False);
+            new SqlUtil::Table(ds, "inventory").insert({"id": 1, "order": "first"});
+            ds.commit();
+
+            hash<auto> data = populateDefinition("2.0", {});
+            data.tables.inventory_audit = Schema::DataSchemaLoader::loadHash({
+                "schema": {"name": "audit", "version": "2.0"},
+                "tables": {"inventory_audit": {"columns": {"id": {"type": "int"},
+                    "code": {"type": "text", "notnull": True, "populate": "none"}}}},
+            }).tables.inventory_audit;
+            Schema::DataSchema v2(ds, data);
+            v2.alignWithInfo(True, -1, False);
+            assertFalse(new SqlUtil::Table(ds, "inventory_audit").describe().code.nullable,
+                sprintf("SQLite %s", ds.getServerVersion()));
+        }
+    }
+
+    #! A populate NOT NULL column added to a table with rows is made NOT NULL after it is populated, as SQLite 3.53.0
+    #! and later can do; an older SQLite cannot, so the alignment raises UNSUPPORTED and its transaction is rolled
+    #! back
+    private populateNotNullExistingTable() {
+        # the SQLite library's own version, then an older one
+        foreach *string version in ((NOTHING, "3.52.0")) {
+            AbstractDatasource ds = datasource(version);
+            on_exit ds.rollback();
+            Schema::DataSchema v1(ds, populateDefinition("1.0", {}));
+            v1.alignWithInfo(True, -1, False);
+            new SqlUtil::Table(ds, "inventory").insert({"id": 1, "order": "first"});
+            ds.commit();
+
+            Schema::DataSchema v2(ds, populateDefinition("2.0", {"code": {"type": "text", "notnull": True,
+                "populate": {"field": "order"}}}));
+            string server_version = ds.getServerVersion();
+            if (compare_version(server_version, SQLITE_ALTER_COLUMN_NOT_NULL_VERSION) >= 0) {
+                v2.alignWithInfo(True, -1, False);
+                AbstractTable t = new SqlUtil::Table(ds, "inventory").getTable();
+                assertFalse(t.describe().code.nullable, sprintf("SQLite %s", server_version));
+                assertEq("first", t.selectRow().code);
+                continue;
+            }
+            assertThrows("UNSUPPORTED", sprintf("cannot set the NOT NULL constraint of column \"code\" of table "
+                "\"inventory\": SQLite %s cannot change a column of an existing table; SQLite 3.53.0 or later is "
+                "required", server_version), \v2.alignWithInfo(), (True, -1, False));
+            assertEq(("id", "order"), new SqlUtil::Table(ds, "inventory").describe().keys(),
+                "the column added by the failed alignment is rolled back");
+        }
+    }
+
+    #! A table with a primary key is created with it on SQLite, which cannot add one later, so an upgrade that
+    #! changes nothing, or adds an unrelated column, leaves the key as it is
+    private primaryKeyUpgrade() {
+        AbstractDatasource ds = datasource();
+        on_exit ds.rollback();
+        code definition = hash<auto> sub (string version, hash<auto> extra_columns) {
+            return Schema::DataSchemaLoader::loadHash({
+                "schema": {"name": "inventory", "version": version, "version_table": "inventory_version",
+                    "version_column": "version", "version_where": {"name": "inventory"}},
+                "tables": {
+                    # the version is recorded by an upsert, which needs the table's key
+                    "inventory_version": {
+                        "columns": {"name": {"type": "text"}, "version": {"type": "text"}},
+                        "primary_key": {"name": "pk_inventory_version", "columns": ("name",)},
+                    },
+                    "inventory": {
+                        "columns": {"id": {"type": "int"}, "order": {"type": "text"}} + extra_columns,
+                        "primary_key": {"name": "pk_inventory", "columns": ("id",)},
+                    },
+                    # a composite key in another order than its columns, one of them a reserved word
+                    "inventory_item": {
+                        "columns": {"id": {"type": "int"}, "group": {"type": "text"}, "qty": {"type": "int"}},
+                        "primary_key": {"name": "pk_inventory_item", "columns": ("group", "id")},
+                    },
+                },
+                "reference_data": {"normal": {"inventory_version": {"columns": ("name", "version"),
+                    "rows": (("inventory", version),)}}},
+            });
+        };
+        code get_version = string sub () {
+            return new SqlUtil::Table(ds, "inventory_version").selectRow({"where": {"name": "inventory"}}).version;
+        };
+
+        Schema::DataSchema v1(ds, definition("1.0", {}));
+        v1.alignWithInfo(True, -1, False);
+        assertEq(("id",), new SqlUtil::Table(ds, "inventory").getPrimaryKey().keys());
+        assertEq(("group", "id"), new SqlUtil::Table(ds, "inventory_item").getPrimaryKey().keys());
+        assertEq("1.0", get_version());
+        new SqlUtil::Table(ds, "inventory").insert({"id": 1, "order": "first"});
+        ds.commit();
+
+        # the same schema again: nothing is changed, so a key that SQLite cannot add is not added
+        Schema::DataSchema same(ds, definition("1.0", {}));
+        hash<SchemaAlignmentInfo> info = same.alignWithInfo(True, -1, False);
+        assertEq(("unchanged",), keys info.change_map, sprintf("%y", info.change_map));
+
+        # an unrelated column is added, and the key is kept
+        Schema::DataSchema v2(ds, definition("2.0", {"note": {"type": "text"}}));
+        info = v2.alignWithInfo(True, -1, False);
+        # the one change is the new column
+        assertEq(("add", "unchanged"), sort(keys info.change_map), sprintf("%y", info.change_map));
+        assertEq(1, info.change_map.add, sprintf("%y", info.change_map));
+        ds.commit();
+        assertEq("2.0", get_version());
+        AbstractTable t = new SqlUtil::Table(ds, "inventory").getTable();
+        assertEq(("id", "order", "note"), t.describe().keys());
+        assertEq(("id",), t.getPrimaryKey().keys());
+        assertEq("first", t.selectRow({"where": {"id": 1}}).order);
+        # the key is enforced
+        try {
+            t.insert({"id": 1, "order": "again"});
+            fail("a row with a duplicate key was inserted");
+        } catch (hash<ExceptionInfo> ex) {
+            assertTrue(t.isDuplicateRowError(ex), get_exception_string(ex));
+        }
+    }
+
+    #! A table with foreign constraints is created with them on SQLite, which cannot add one later; an upgrade that
+    #! changes nothing, or adds an unrelated column, leaves them as they are, and changing one is refused
+    private foreignConstraintUpgrade() {
+        AbstractDatasource ds = datasource();
+        on_exit ds.rollback();
+        code definition = hash<auto> sub (string version, hash<auto> extra_columns, *hash<auto> line_fks) {
+            return Schema::DataSchemaLoader::loadHash({
+                "schema": {"name": "orders", "version": version, "version_table": "orders_version",
+                    "version_column": "version", "version_where": {"name": "orders"}},
+                "tables": {
+                    "orders_version": {
+                        "columns": {"name": {"type": "text"}, "version": {"type": "text"}},
+                        "primary_key": {"name": "pk_orders_version", "columns": ("name",)},
+                    },
+                    # the table with the foreign constraints comes before the tables it references
+                    "order_line": {
+                        "columns": {"id": {"type": "int"}, "order_id": {"type": "int"},
+                            "item_group": {"type": "text"}, "item_id": {"type": "int"}} + extra_columns,
+                        "primary_key": {"name": "pk_order_line", "columns": ("id",)},
+                        "foreign_constraints": line_fks ?? {
+                            "fk_order_line_order": {"columns": ("order_id",), "table": "orders",
+                                "target_columns": ("id",)},
+                            # a composite key in another order than its columns, with a reserved word
+                            "fk_order_line_item": {"columns": ("item_group", "item_id"), "table": "item",
+                                "target_columns": ("group", "id")},
+                        },
+                    },
+                    "orders": {
+                        "columns": {"id": {"type": "int"}, "customer": {"type": "text"}},
+                        "primary_key": {"name": "pk_orders", "columns": ("id",)},
+                    },
+                    "item": {
+                        "columns": {"id": {"type": "int"}, "group": {"type": "text"}},
+                        "primary_key": {"name": "pk_item", "columns": ("group", "id")},
+                    },
+                },
+                "reference_data": {"normal": {"orders_version": {"columns": ("name", "version"),
+                    "rows": (("orders", version),)}}},
+            });
+        };
+        code get_version = string sub () {
+            return new SqlUtil::Table(ds, "orders_version").selectRow({"where": {"name": "orders"}}).version;
+        };
+        code get_fks = list<hash<auto>> sub () {
+            *hash<auto> fks = new SqlUtil::Table(ds, "order_line").getTable().getDescriptionHash()
+                .foreign_constraints;
+            return sort(fks.values(), int sub (hash<auto> l, hash<auto> r) { return l.table <=> r.table; });
+        };
+        list<hash<auto>> expected_fks = (
+            {"table": "item", "columns": ("item_group", "item_id"), "target_columns": ("group", "id")},
+            {"table": "orders", "columns": ("order_id",), "target_columns": ("id",)},
+        );
+
+        # a first install
+        Schema::DataSchema v1(ds, definition("1.0", {}));
+        v1.alignWithInfo(True, -1, False);
+        assertEq("1.0", get_version());
+        assertEq(expected_fks, get_fks());
+        new SqlUtil::Table(ds, "orders").insert({"id": 1, "customer": "a"});
+        new SqlUtil::Table(ds, "order_line").insert({"id": 1, "order_id": 1});
+        ds.commit();
+
+        # the same schema again: nothing is changed
+        Schema::DataSchema same(ds, definition("1.0", {}));
+        hash<SchemaAlignmentInfo> info = same.alignWithInfo(True, -1, False);
+        assertEq(("unchanged",), keys info.change_map, sprintf("%y", info.change_map));
+
+        # an unrelated column is added, and the foreign constraints are kept
+        Schema::DataSchema v2(ds, definition("2.0", {"note": {"type": "text"}}));
+        info = v2.alignWithInfo(True, -1, False);
+        assertEq(("add", "unchanged"), sort(keys info.change_map), sprintf("%y", info.change_map));
+        assertEq(1, info.change_map.add, sprintf("%y", info.change_map));
+        ds.commit();
+        assertEq("2.0", get_version());
+        assertEq(expected_fks, get_fks());
+        assertEq(1, new SqlUtil::Table(ds, "order_line").selectRow({"where": {"id": 1}}).order_id);
+
+        # a foreign constraint that changes cannot be changed in an existing table: the alignment is refused and
+        # rolled back
+        Schema::DataSchema v3(ds, definition("3.0", {"note": {"type": "text"}}, {
+            "fk_order_line_order": {"columns": ("order_id",), "table": "orders", "target_columns": ("id",)},
+        }));
+        assertThrows("UNSUPPORTED", "cannot drop the foreign constraint \\(item_group, item_id\\) referencing item "
+            "\\(group, id\\) of table \"order_line\": SQLite cannot drop a foreign constraint of an existing table",
+            \v3.alignWithInfo(), (True, -1, False));
+        assertEq("2.0", get_version());
+        assertEq(expected_fks, get_fks());
+    }
+
+    #! A table with a unique constraint is created with it on SQLite, which cannot add one to an existing table with
+    #! ALTER TABLE: an upgrade that changes nothing leaves it as it is, an upgrade that adds a unique constraint adds
+    #! a unique index, and one that drops the constraint that the table was created with is refused
+    private uniqueConstraintUpgrade() {
+        AbstractDatasource ds = datasource();
+        on_exit ds.rollback();
+        code definition = hash<auto> sub (string version, hash<auto> unique_constraints) {
+            return Schema::DataSchemaLoader::loadHash({
+                "schema": {"name": "accounts", "version": version, "version_table": "accounts_version",
+                    "version_column": "version", "version_where": {"name": "accounts"}},
+                "tables": {
+                    "accounts_version": {
+                        "columns": {"name": {"type": "text"}, "version": {"type": "text"}},
+                        "primary_key": {"name": "pk_accounts_version", "columns": ("name",)},
+                    },
+                    "account": {
+                        "columns": {"id": {"type": "int"}, "group": {"type": "text"}, "code": {"type": "text"},
+                            "email": {"type": "text"}},
+                        "primary_key": {"name": "pk_account", "columns": ("id",)},
+                        "unique_constraints": unique_constraints,
+                    },
+                },
+                "reference_data": {"normal": {"accounts_version": {"columns": ("name", "version"),
+                    "rows": (("accounts", version),)}}},
+            });
+        };
+        code get_version = string sub () {
+            return new SqlUtil::Table(ds, "accounts_version").selectRow({"where": {"name": "accounts"}}).version;
+        };
+        # the unique constraints, with the name of the one that the table was created with, which SQLite does not
+        # report, replaced by "created"
+        code get_uks = hash<auto> sub () {
+            hash<auto> rv;
+            foreach hash<auto> i in (new SqlUtil::Table(ds, "account").getTable().getDescriptionHash()
+                    .unique_constraints.pairIterator()) {
+                rv{i.key =~ /^sqlite_autoindex_account_[0-9]+$/ ? "created" : i.key} = i.value;
+            }
+            return rv;
+        };
+        # a composite constraint, with a reserved word
+        hash<auto> code_uk = {"uk_account_code": {"columns": ("group", "code")}};
+        hash<auto> email_uk = {"uk_account_email": {"columns": ("email",)}};
+
+        # a first install creates the table with its constraint, which SQLite reports under its own name
+        Schema::DataSchema v1(ds, definition("1.0", code_uk));
+        v1.alignWithInfo(True, -1, False);
+        assertEq("1.0", get_version());
+        assertEq({"created": {"columns": ("group", "code")}}, get_uks());
+        new SqlUtil::Table(ds, "account").insert({"id": 1, "group": "a", "code": "x", "email": "a@x"});
+        ds.commit();
+
+        # the same schema again: nothing is changed
+        Schema::DataSchema same(ds, definition("1.0", code_uk));
+        hash<SchemaAlignmentInfo> info = same.alignWithInfo(True, -1, False);
+        assertEq(("unchanged",), keys info.change_map, sprintf("%y", info.change_map));
+
+        # an upgrade adds a unique constraint, as a unique index
+        Schema::DataSchema v2(ds, definition("2.0", code_uk + email_uk));
+        info = v2.alignWithInfo(True, -1, False);
+        assertEq(("add", "unchanged"), sort(keys info.change_map), sprintf("%y", info.change_map));
+        assertEq(1, info.change_map.add, sprintf("%y", info.change_map));
+        ds.commit();
+        assertEq("2.0", get_version());
+        assertEq({"created": {"columns": ("group", "code")}, "uk_account_email": {"columns": ("email",)}},
+            get_uks());
+        # which is enforced
+        assertThrows("SQLITE3-EXEC", "UNIQUE constraint failed: account.email", sub () {
+            new SqlUtil::Table(ds, "account").insert({"id": 2, "group": "b", "code": "y", "email": "a@x"});
+        });
+
+        # and the upgraded schema again changes nothing
+        Schema::DataSchema same2(ds, definition("2.0", code_uk + email_uk));
+        info = same2.alignWithInfo(True, -1, False);
+        assertEq(("unchanged",), keys info.change_map, sprintf("%y", info.change_map));
+
+        # the constraint that the table was created with cannot be dropped: the alignment is refused and rolled back
+        Schema::DataSchema v3(ds, definition("3.0", email_uk));
+        assertThrows("UNSUPPORTED", "cannot drop the unique constraint \\(group, code\\) of table \"account\": SQLite "
+            "cannot drop a unique constraint that a table was created with", \v3.alignWithInfo(), (True, -1, False));
+        assertEq("2.0", get_version());
+        assertEq({"created": {"columns": ("group", "code")}, "uk_account_email": {"columns": ("email",)}},
+            get_uks());
+    }
+
+    #! PostgreSQL makes the populated column NOT NULL with its own DDL, and keeps the column's default
+    private populateNotNullPgsql() {
+%ifdef NO_PGSQL
+        testSkip("pgsql module unavailable");
+%endif
+        *string connstr = ENV.QORE_DB_CONNSTR_PGSQL;
+        if (!connstr) {
+            testSkip("QORE_DB_CONNSTR_PGSQL is not configured");
+        }
+        # the tables are created in this run's own schema, so another run of this test never sees them
+        PgsqlRunSchema::setup(connstr, "AlignmentTransaction");
+        # dropped after the transaction below is rolled back
+        on_exit PgsqlRunSchema::teardown();
+        Datasource ds(connstr);
+        # the alignments run in the caller's transaction, and PostgreSQL DDL is transactional: nothing is left
+        on_exit ds.rollback();
+        assertEq(PgsqlRunSchema::getName(), ds.selectRow("select current_schema() as schema").schema);
+        string table = sprintf("qtest_populate_%d", getpid());
+        string version_table = table + "_version";
+        code definition = hash<auto> sub (string version, hash<auto> extra_columns) {
+            return Schema::DataSchemaLoader::loadHash({
+                "schema": {"name": table, "version": version, "version_table": version_table,
+                    "version_column": "version", "version_where": {"name": table}},
+                "tables": {
+                    version_table: {"columns": {"name": {"type": "text"}, "version": {"type": "text"}}},
+                    table: {"columns": {"id": {"type": "int"}, "order": {"type": "text"}} + extra_columns},
+                },
+            });
+        };
+
+        Schema::DataSchema v1(ds, definition("1.0", {}));
+        v1.alignWithInfoInTransaction(True, -1, False);
+        new SqlUtil::Table(ds, table).insert({"id": 1, "order": "first"});
+
+        Schema::DataSchema v2(ds, definition("2.0", {
+            "code": {"type": "text", "notnull": True, "populate": {"field": "order"}},
+            "label": {"type": "text", "notnull": True, "default_value": "none", "populate": "unused"},
+        }));
+        v2.alignWithInfoInTransaction(True, -1, False);
+        AbstractTable t = new SqlUtil::Table(ds, table).getTable();
+        assertFalse(t.describe().code.nullable);
+        assertFalse(t.describe().label.nullable);
+        assertEq({"code": "first", "label": "none"}, t.selectRow({"columns": ("code", "label"),
+            "where": {"id": 1}}));
+        # the default is the column's own: a row inserted without a label gets it
+        t.insert({"id": 2, "order": "second", "code": "c"});
+        assertEq("none", t.selectRow({"columns": "label", "where": {"id": 2}}).label);
+    }
+
     private bool existsTable(AbstractDatasource ds) {
         return new SqlUtil::Table(ds, "inventory").checkExistence();
     }
     private rollbackAlignment() {
-        Datasource ds = datasource(); on_exit ds.rollback();
+        AbstractDatasource ds = datasource(); on_exit ds.rollback();
         Schema::DataSchema schema(ds, definition());
         hash<auto> info = schema.alignWithInfoInTransaction(True, -1, False);
         assertTrue(info.val());
@@ -49,7 +497,7 @@ class AlignmentTransactionTest inherits QUnit::Test {
         assertFalse(existsTable(ds), "DDL and additional writes disappear on caller rollback");
     }
     private commitAlignment() {
-        Datasource ds = datasource(); on_exit ds.rollback();
+        AbstractDatasource ds = datasource(); on_exit ds.rollback();
         Schema::DataSchema schema(ds, definition());
         schema.alignWithInfoInTransaction(True, -1, False);
         new SqlUtil::Table(ds, "inventory").insert({"id": 1, "name": "Widget"});
@@ -58,7 +506,7 @@ class AlignmentTransactionTest inherits QUnit::Test {
         assertEq("Widget", new SqlUtil::Table(ds, "inventory").selectRow().name);
     }
     private defaultCommit() {
-        Datasource ds = datasource(); on_exit ds.rollback();
+        AbstractDatasource ds = datasource(); on_exit ds.rollback();
         Schema::DataSchema schema(ds, definition());
         schema.alignWithInfo(True, -1, False);
         ds.rollback();
@@ -67,7 +515,7 @@ class AlignmentTransactionTest inherits QUnit::Test {
     }
     private failureOwnership() {
         foreach bool managed in ((False, True)) {
-            Datasource ds = datasource(); on_exit ds.rollback();
+            AbstractDatasource ds = datasource(); on_exit ds.rollback();
             FailingTransactionSchema schema(ds, definition());
             if (managed) {
                 assertThrows("EXPECTED-ALIGNMENT-FAILURE", \schema.alignWithInfo(), (True, -1, False));
@@ -82,7 +530,7 @@ class AlignmentTransactionTest inherits QUnit::Test {
     private rejectCommittingMigrations() {
         foreach string action in (("sql", "script", "reconcile_table")) {
             foreach string phase in (("pre_align", "post_align")) {
-                Datasource ds = datasource(); on_exit ds.rollback();
+                AbstractDatasource ds = datasource(); on_exit ds.rollback();
                 hash<auto!> data = definition();
                 data.migrations = ({"version": "2.0", phase: ({"action": action},)},);
                 Schema::DataSchema schema(ds, data);
@@ -90,6 +538,21 @@ class AlignmentTransactionTest inherits QUnit::Test {
                 assertFalse(existsTable(ds), "unsafe migration is rejected before any alignment DDL");
             }
         }
+    }
+}
+
+#! A datasource that reports a given server version, as a different SQLite library would
+class VersionedDatasource inherits Datasource {
+    private {
+        string version;
+    }
+
+    constructor(string connstr, string version) : Datasource(connstr) {
+        self.version = version;
+    }
+
+    auto getServerVersion() {
+        return version;
     }
 }
 

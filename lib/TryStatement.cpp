@@ -47,6 +47,18 @@ TryStatement::~TryStatement() {
     delete parseTypeInfo;
 }
 
+bool qore_catch_thread_exit(ExceptionSink* xsink) {
+    if (!xsink || !xsink->isThreadExit()) {
+        return false;
+    }
+    // the catch block would not run while the thread is exiting (StatementBlock::execIntern()), so the exception is
+    // only caught and deleted, as execImpl() below does
+    if (xsink->isException()) {
+        xsink->catchException()->del(xsink);
+    }
+    return true;
+}
+
 int TryStatement::execImpl(QoreValue& return_value, ExceptionSink *xsink) {
     ValueHolder trv(xsink);
 

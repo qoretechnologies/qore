@@ -26,6 +26,12 @@ static void fail(const char* msg, ExceptionSink& xsink) {
     std::exit(1);
 }
 
+// returns an integer element of a buffer; the referenced entry is released, as a large integer is a node
+static int64 buffer_int(const QoreBufferNode* buffer, size_t index, ExceptionSink& xsink) {
+    ValueHolder value(buffer->getReferencedEntry(index, &xsink), &xsink);
+    return value->getAsBigInt();
+}
+
 static void test_arrow_schema_release(ArrowSchema* schema) {
     if (schema) {
         schema->release = nullptr;
@@ -82,7 +88,9 @@ static QoreHashNode* make_attrs(const char* segment, const char* tier, Exception
 }
 
 int main() {
-    qore_init(QL_GPL, "UTF-8", true);
+    // the test needs no signal handling; without the signal thread, it runs under valgrind on musl as qore -b does,
+    // where valgrind's own signal emulation otherwise aborts
+    qore_init(QL_GPL, "UTF-8", true, QLO_DISABLE_SIGNAL_HANDLING);
     ExceptionSink xsink;
 
     ReferenceHolder<QoreListNode> ids_list(new QoreListNode(autoTypeInfo), &xsink);
@@ -345,7 +353,7 @@ int main() {
     const QoreBufferNode* id_buf = imported_id->get<const QoreBufferNode>();
     const QoreBufferNode* name_buf = imported_name->get<const QoreBufferNode>();
     const QoreBufferNode* amount_buf = imported_amount->get<const QoreBufferNode>();
-    if (!id_buf->hasExternalStorage() || id_buf->getReferencedEntry(1, &xsink).getAsBigInt() != 20) {
+    if (!id_buf->hasExternalStorage() || buffer_int(id_buf, 1, xsink) != 20) {
         fail("imported fixed-width column was not zero-copy or has bad values", xsink);
     }
     if (!name_buf->isElementNull(1)) {
@@ -417,9 +425,9 @@ int main() {
 
     const QoreBufferNode* ts_buf = imported_ts->get<const QoreBufferNode>();
     if (!ts_buf->hasExternalStorage() || ts_buf->getElementType() != QoreBufferElementType::Int64
-            || ts_buf->getReferencedEntry(0, &xsink).getAsBigInt() != 1700000000123456LL
+            || buffer_int(ts_buf, 0, xsink) != 1700000000123456LL
             || !ts_buf->isElementNull(1)
-            || ts_buf->getReferencedEntry(2, &xsink).getAsBigInt() != 1700000002000042LL) {
+            || buffer_int(ts_buf, 2, xsink) != 1700000002000042LL) {
         fail("imported timestamp values were not preserved", xsink);
     }
 
@@ -465,8 +473,8 @@ int main() {
     }
     ValueHolder sliced_id(sliced_import->getColumnValue("id", &xsink), &xsink);
     const QoreBufferNode* sliced_id_buf = sliced_id->get<const QoreBufferNode>();
-    if (!sliced_id_buf || sliced_id_buf->getReferencedEntry(0, &xsink).getAsBigInt() != 20
-            || sliced_id_buf->getReferencedEntry(1, &xsink).getAsBigInt() != 30) {
+    if (!sliced_id_buf || buffer_int(sliced_id_buf, 0, xsink) != 20
+            || buffer_int(sliced_id_buf, 1, xsink) != 30) {
         fail("Arrow C Data top-level offset did not slice fixed-width values", xsink);
     }
     ValueHolder sliced_pair(sliced_import->getColumnValue("pair", &xsink), &xsink);
@@ -502,7 +510,7 @@ int main() {
     ValueHolder sliced_ts(sliced_import->getColumnValue("ts", &xsink), &xsink);
     const QoreBufferNode* sliced_ts_buf = sliced_ts->get<const QoreBufferNode>();
     if (!sliced_ts_buf || !sliced_ts_buf->isElementNull(0)
-            || sliced_ts_buf->getReferencedEntry(1, &xsink).getAsBigInt() != 1700000002000042LL) {
+            || buffer_int(sliced_ts_buf, 1, xsink) != 1700000002000042LL) {
         fail("Arrow C Data top-level offset did not slice timestamp values", xsink);
     }
 
@@ -621,12 +629,12 @@ int main() {
     const QoreBufferNode* manual_duration_buf = manual_duration->get<const QoreBufferNode>();
     const QoreBufferNode* manual_amount_buf = manual_amount->get<const QoreBufferNode>();
     if (manual_ts_buf->getElementType() != QoreBufferElementType::Int64
-            || manual_ts_buf->getReferencedEntry(0, &xsink).getAsBigInt() != 1700000000000000LL
+            || buffer_int(manual_ts_buf, 0, xsink) != 1700000000000000LL
             || !manual_ts_buf->isElementNull(1)
-            || manual_ts_buf->getReferencedEntry(2, &xsink).getAsBigInt() != 1700000002000000LL
+            || buffer_int(manual_ts_buf, 2, xsink) != 1700000002000000LL
             || manual_duration_buf->getElementType() != QoreBufferElementType::Int64
-            || manual_duration_buf->getReferencedEntry(0, &xsink).getAsBigInt() != 2000000LL
-            || manual_duration_buf->getReferencedEntry(2, &xsink).getAsBigInt() != 60000000LL
+            || buffer_int(manual_duration_buf, 0, xsink) != 2000000LL
+            || buffer_int(manual_duration_buf, 2, xsink) != 60000000LL
             || manual_amount_buf->getElementType() != QoreBufferElementType::Decimal128
             || manual_amount_buf->getDecimalPrecision() != 12 || manual_amount_buf->getDecimalScale() != 2
             || !manual_amount_buf->isElementNull(1)) {
@@ -657,6 +665,109 @@ int main() {
             || manual_amount_schema_hash->getKeyValue("precision").getAsBigInt() != 12
             || manual_amount_schema_hash->getKeyValue("scale").getAsBigInt() != 2) {
         fail("manual addColumn schema metadata is invalid", xsink);
+    }
+
+    // a map whose keys are "k\0x" and "k": the key with a NUL character cannot be a hash key, so it raises
+    // HASH-KEY-ERROR instead of being cut to "k" and replacing the value of the other key
+    int32_t nul_key_offsets[] = {0, 3, 4};
+    const char nul_key_bytes[] = {'k', '\0', 'x', 'k'};
+    const void* nul_key_buffers[] = {nullptr, nul_key_offsets, nul_key_bytes};
+    ArrowSchema nul_key_schema = {};
+    nul_key_schema.format = "u";
+    nul_key_schema.name = "key";
+    nul_key_schema.release = test_arrow_schema_release;
+    ArrowArray nul_key_array = {};
+    nul_key_array.length = 2;
+    nul_key_array.n_buffers = 3;
+    nul_key_array.buffers = nul_key_buffers;
+    nul_key_array.release = test_arrow_array_release;
+
+    int64_t nul_value_data[] = {1, 2};
+    const void* nul_value_buffers[] = {nullptr, nul_value_data};
+    ArrowSchema nul_value_schema = {};
+    nul_value_schema.format = "l";
+    nul_value_schema.name = "value";
+    nul_value_schema.release = test_arrow_schema_release;
+    ArrowArray nul_value_array = {};
+    nul_value_array.length = 2;
+    nul_value_array.n_buffers = 2;
+    nul_value_array.buffers = nul_value_buffers;
+    nul_value_array.release = test_arrow_array_release;
+
+    ArrowSchema* nul_entry_children[] = {&nul_key_schema, &nul_value_schema};
+    ArrowArray* nul_entry_arrays[] = {&nul_key_array, &nul_value_array};
+    const void* nul_entry_buffers[] = {nullptr};
+    ArrowSchema nul_entries_schema = {};
+    nul_entries_schema.format = "+s";
+    nul_entries_schema.name = "entries";
+    nul_entries_schema.n_children = 2;
+    nul_entries_schema.children = nul_entry_children;
+    nul_entries_schema.release = test_arrow_schema_release;
+    ArrowArray nul_entries_array = {};
+    nul_entries_array.length = 2;
+    nul_entries_array.n_buffers = 1;
+    nul_entries_array.buffers = nul_entry_buffers;
+    nul_entries_array.n_children = 2;
+    nul_entries_array.children = nul_entry_arrays;
+    nul_entries_array.release = test_arrow_array_release;
+
+    int32_t nul_map_offsets[] = {0, 2};
+    const void* nul_map_buffers[] = {nullptr, nul_map_offsets};
+    ArrowSchema* nul_map_children[] = {&nul_entries_schema};
+    ArrowArray* nul_map_arrays[] = {&nul_entries_array};
+    ArrowSchema nul_map_schema = {};
+    nul_map_schema.format = "+m";
+    nul_map_schema.name = "attrs";
+    nul_map_schema.n_children = 1;
+    nul_map_schema.children = nul_map_children;
+    nul_map_schema.release = test_arrow_schema_release;
+    ArrowArray nul_map_array = {};
+    nul_map_array.length = 1;
+    nul_map_array.n_buffers = 2;
+    nul_map_array.buffers = nul_map_buffers;
+    nul_map_array.n_children = 1;
+    nul_map_array.children = nul_map_arrays;
+    nul_map_array.release = test_arrow_array_release;
+
+    ArrowSchema* nul_root_children[] = {&nul_map_schema};
+    ArrowArray* nul_root_arrays[] = {&nul_map_array};
+    const void* nul_root_buffers[] = {nullptr};
+    ArrowSchema nul_root_schema = {};
+    nul_root_schema.format = "+s";
+    nul_root_schema.n_children = 1;
+    nul_root_schema.children = nul_root_children;
+    nul_root_schema.release = test_arrow_schema_release;
+    ArrowArray nul_root_array = {};
+    nul_root_array.length = 1;
+    nul_root_array.n_buffers = 1;
+    nul_root_array.buffers = nul_root_buffers;
+    nul_root_array.n_children = 1;
+    nul_root_array.children = nul_root_arrays;
+    nul_root_array.release = test_arrow_array_release;
+
+    {
+        ExceptionSink nul_xsink;
+        ReferenceHolder<QoreColumnarResult> nul_import(
+            qore_columnar_result_import_arrow_c_data(&nul_root_schema, &nul_root_array, &nul_xsink), &nul_xsink);
+        if (!nul_xsink) {
+            ValueHolder nul_attrs(nul_import->getColumnValue("attrs", &nul_xsink), &nul_xsink);
+            if (!nul_xsink) {
+                std::fprintf(stderr, "an Arrow map key with a NUL character was imported as: %s\n",
+                    nul_attrs->getFullTypeName());
+                const QoreListNode* nul_rows = nul_attrs->get<const QoreListNode>();
+                if (nul_rows && nul_rows->size() == 1 && nul_rows->retrieveEntry(0).getType() == NT_HASH) {
+                    const QoreHashNode* nul_row = nul_rows->retrieveEntry(0).get<const QoreHashNode>();
+                    std::fprintf(stderr, "  %zu keys; key \"k\" = " QLLD "\n", nul_row->size(),
+                        nul_row->getKeyValue("k").getAsBigInt());
+                }
+                fail("an Arrow map key with a NUL character did not raise HASH-KEY-ERROR", nul_xsink);
+            }
+        }
+        QoreStringValueHelper nul_err(nul_xsink.getExceptionErr());
+        if (std::strcmp(nul_err->c_str(), "HASH-KEY-ERROR")) {
+            fail("an Arrow map key with a NUL character raised another error", nul_xsink);
+        }
+        nul_xsink.clear();
     }
 
     qore_cleanup();

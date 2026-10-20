@@ -1,0 +1,63 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# A key with a NUL character used with a hash or an object in each way a key is given at run time; each case prints
+# its result or the exception it raises
+
+%modern
+
+hashdecl NulKeyDecl {
+    int a = 1;
+}
+
+class NulKeyObject {
+    public {
+        int a = 1;
+    }
+}
+
+#! runs a case and prints its result or the exception it raises
+sub check(string label, code c) {
+    try {
+        auto v = c();
+        printf("%s: %y\n", label, v);
+    } catch (hash<ExceptionInfo> ex) {
+        printf("%s: %s: %s\n", label, ex.err, ex.desc);
+    }
+}
+
+string k = "a\x00b";
+string k2 = "order\x00id";
+hash<auto> h = {"a": 1, "order": 2};
+NulKeyObject o();
+
+check("assign", auto sub () { hash<auto> t = h; t{k} = 3; return t; });
+check("assign nested", auto sub () { hash<auto> t; t{k}.x = 3; return t; });
+check("read", auto sub () { return h{k}; });
+check("read offset", auto sub () { return h{k2}; });
+check("read constant", auto sub () { return h."a\x00b"; });
+check("exists", auto sub () { return exists h{k}; });
+check("delete", auto sub () { hash<auto> t = h; delete t{k}; return t; });
+check("remove", auto sub () { hash<auto> t = h; return remove t{k}; });
+check("plus", auto sub () { hash<auto> t = h; t += {k: 3}; return t; });
+check("literal", auto sub () { return {k: 3}; });
+check("literal second key", auto sub () { return {"a": 1, k2: 3}; });
+check("hash list", auto sub () { return hash((k, 1)); });
+check("hash lists", auto sub () { return hash((k,), (1,)); });
+check("has_key", auto sub () { return has_key(h, k); });
+check("hasKey", auto sub () { return h.hasKey(k); });
+check("map", auto sub () { return map {$1: 1}, (k,); });
+check("slice", auto sub () { return h{("a", k)}; });
+check("hashdecl", auto sub () { hash<NulKeyDecl> t(); t{k} = 2; return t; });
+check("member assign", auto sub () { o{k} = 2; return o.a; });
+check("member read", auto sub () { return o{k}; });
+check("object slice", auto sub () { return o{("a", k)}; });
+check("save_thread_data", auto sub () { save_thread_data(k, 1); return get_thread_data("a"); });
+check("get_thread_data", auto sub () { save_thread_data("a", 1); return get_thread_data(k); });
+check("remove_thread_data", auto sub () { return remove_thread_data(k); });
+check("delete_thread_data", auto sub () { delete_thread_data(k); return get_thread_data("a"); });
+check("long key", auto sub () { return h{strmul("x", 70) + "\x00"}; });
+check("escaped", auto sub () { return h{"\"\\\x00"}; });
+check("unchanged", auto sub () { return h; });
+check("keys without NUL", auto sub () { hash<auto> t = h; t{"b"} = 3; return t; });

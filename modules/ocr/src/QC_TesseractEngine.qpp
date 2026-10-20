@@ -27,19 +27,38 @@ using namespace QoreOcr;
     @endcode
 
     @note Thread-safe: concurrent calls to extractText() are serialized internally.
+    @note The class can be used without filesystem access rights when the system data directory is used: only an
+    explicit data directory given to the constructor needs them
 
     @since ocr 1.0
 */
-qclass TesseractEngine [arg=QoreTesseractEngine* te; ns=Qore::Ocr; dom=FILESYSTEM];
+qclass TesseractEngine [arg=QoreTesseractEngine* te; ns=Qore::Ocr];
 
 //! Creates a new TesseractEngine
 /** @param datapath path to the tessdata directory containing trained models;
         pass an empty string to use the default system path
     @param language Tesseract language code(s); use \c "+" to combine
-        (e.g., \c "eng+fra" for English and French)
+        (e.g., \c "eng+fra" for English and French); each code may only contain ASCII letters, digits, \c "_" and
+        \c "-", since it names the file <tt>\<code\>.traineddata</tt> in the data directory
 
     @throw OCR-INIT-ERROR if Tesseract initialization fails (e.g., missing
-        trained data for the requested language)
+        trained data for the requested language), if a language code is empty or contains a character other than an
+        ASCII letter, a digit, \c "_" or \c "-", or if \a datapath contains a NUL character; with a sandbox and an
+        explicit \a datapath, also if a trained data file is not valid trained data or its language configuration
+        sets a parameter that a sandboxed program may not load
+    @throw ILLEGAL-FILESYSTEM-ACCESS if \a datapath is given and the calling program has the
+        \c PO_NO_FILESYSTEM sandboxing restriction
+    @throw FILESYSTEM-ACCESS-DENIED if \a datapath is given and the sandbox of the calling program does not allow a
+        trained data file to be read
+    @throw SANDBOX-PATH-ERROR if \a datapath is given and the sandbox of the calling program cannot resolve a path
+
+    @note The trained data in an explicit \a datapath is read on behalf of the calling program, so it needs
+    filesystem access rights and is subject to the program's filesystem sandbox; the system data directory used
+    when \a datapath is empty is a system resource and needs neither.  With a sandbox, every trained data file is
+    checked before Tesseract loads it, including the sub-languages that a trained data file loads, and its
+    language configuration may only set the layout, segmentation and recognition parameters that the official
+    trained data sets: a parameter that names a file or produces output, such as \c user_words_file or
+    \c tessedit_write_params_to_file, is refused
 */
 TesseractEngine::constructor(string datapath = "", string language = "eng") {
     self->setPrivate(CID_TESSERACTENGINE,
@@ -52,7 +71,7 @@ TesseractEngine::constructor(string datapath = "", string language = "eng") {
 
     @throw OCR-ERROR if the image cannot be decoded or OCR fails
 */
-string TesseractEngine::extractText(binary image_data) [dom=FILESYSTEM] {
+string TesseractEngine::extractText(binary image_data) {
     return te->extractText(image_data, xsink);
 }
 
@@ -66,7 +85,7 @@ string TesseractEngine::extractText(binary image_data) [dom=FILESYSTEM] {
 
     @throw OCR-ERROR if the image cannot be decoded or OCR fails
 */
-hash<auto> TesseractEngine::extractTextWithMetadata(binary image_data) [dom=FILESYSTEM] {
+hash<auto> TesseractEngine::extractTextWithMetadata(binary image_data) {
     return te->extractTextWithMetadata(image_data, xsink);
 }
 

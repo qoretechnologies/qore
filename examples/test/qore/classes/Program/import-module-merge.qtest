@@ -84,6 +84,14 @@ public class ConflictClass {
     }
 
     private {
+        #! the directory in the temporary directory that the test writes its module files to
+        /** unique for every run, so that runs on the same host, at the same time or after a run that left files
+            behind, never use each other's files; the files keep their names, as a module file is named for the
+            module it declares
+        */
+        string mod_dir = tmp_location() + DirSep + sprintf("qore_import_module_merge_test_%d_%s", getpid(),
+            get_random_string(8));
+
         string mod_path;
         string hd_mod_path;
         string true_dup_mod_path;
@@ -96,8 +104,16 @@ public class ConflictClass {
         set_return_value(main());
     }
 
+    globalSetUp() {
+        mkdir_ex(mod_dir, 0700);
+    }
+
+    globalTearDown() {
+        rmdir(mod_dir);
+    }
+
     setUp() {
-        string dir = tmp_location() + DirSep;
+        string dir = mod_dir + DirSep;
 
         mod_path = dir + "ImportMergeTestMod.qm";
         {

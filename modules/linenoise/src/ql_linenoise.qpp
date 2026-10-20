@@ -21,6 +21,8 @@
 
 #include "linenoise-module.h"
 
+#include <qore/QoreSandboxManager.h>
+
 #include <errno.h>
 #include <memory>
 
@@ -103,9 +105,22 @@ int history_get_max_len() {
 
     @param filename a filename with relative or full path
 
+    @throw FILESYSTEM-ACCESS-DENIED the sandbox of the calling program does not allow the file to be written
+    @throw SANDBOX-PATH-ERROR the sandbox of the calling program cannot resolve the path
     @throw LINENOISE-HISTORY-SAVE-ERROR
  */
 nothing history_save(string filename) [dom=FILESYSTEM] {
+    // a path with a NUL character would name the file before the NUL character
+    if (q_check_path(*filename, "LINENOISE-HISTORY-SAVE-ERROR", xsink)) {
+        return QoreValue();
+    }
+
+    // the history file is written on behalf of the calling program, so its sandbox must allow it
+    QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
+    if (smh && !smh->checkFilesystemAccess(filename->c_str(), QSEC_WRITE | QSEC_CREATE, xsink)) {
+        return QoreValue();
+    }
+
     AutoLocker al(lock);
 
     if (linenoiseHistorySave(filename->c_str())) {
@@ -120,9 +135,22 @@ nothing history_save(string filename) [dom=FILESYSTEM] {
 
     @param filename a filename with relative or full path
 
+    @throw FILESYSTEM-ACCESS-DENIED the sandbox of the calling program does not allow the file to be read
+    @throw SANDBOX-PATH-ERROR the sandbox of the calling program cannot resolve the path
     @throw LINENOISE-HISTORY-LOAD-ERROR
  */
 nothing history_load(string filename) [dom=FILESYSTEM] {
+    // a path with a NUL character would name the file before the NUL character
+    if (q_check_path(*filename, "LINENOISE-HISTORY-LOAD-ERROR", xsink)) {
+        return QoreValue();
+    }
+
+    // the history file is read on behalf of the calling program, so its sandbox must allow it
+    QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
+    if (smh && !smh->checkFilesystemAccess(filename->c_str(), QSEC_READ, xsink)) {
+        return QoreValue();
+    }
+
     AutoLocker al(lock);
 
     if (linenoiseHistoryLoad(filename->c_str())) {

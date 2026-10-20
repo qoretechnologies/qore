@@ -45,8 +45,10 @@
 
 class QoreEventNotifier;
 
+#include <atomic>
 #include <deque>
 #include <string>
+#include <vector>
 
 //! Max single QUIC UDP datagram receive buffer (1500 typical MTU + headroom for jumbo frames)
 //! @note Assumes GSO/GRO is not used; if Generic Segmentation Offload is enabled in the future,
@@ -58,7 +60,7 @@ public:
     DLLLOCAL SocketUpgradeServerSslPollOperation(ExceptionSink* xsink, QoreSocketObject* sock);
     DLLLOCAL SocketUpgradeServerSslPollOperation(ExceptionSink* xsink, QoreSocketObject* sock, bool defer_init);
 
-    DLLLOCAL void deref(ExceptionSink* xsink) {
+    DLLLOCAL void deref(ExceptionSink* xsink) override {
         if (ROdereference()) {
             if (set_non_block) {
                 sock->clearNonBlock();
@@ -69,15 +71,15 @@ public:
         }
     }
 
-    DLLLOCAL virtual bool goalReached() const {
+    DLLLOCAL virtual bool goalReached() const override {
         return done;
     }
 
-    DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink);
+    DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink) override;
 
     DLLLOCAL virtual QoreValue getOutput() const override;
 
-    DLLLOCAL virtual const char* getStateImpl() const {
+    DLLLOCAL virtual const char* getStateImpl() const override {
         return "accepting-ssl";
     }
 
@@ -96,7 +98,7 @@ public:
     DLLLOCAL SocketShutdownSslPollOperation(ExceptionSink* xsink, QoreSocketObject* sock);
     DLLLOCAL SocketShutdownSslPollOperation(ExceptionSink* xsink, QoreSocketObject* sock, bool defer_init);
 
-    DLLLOCAL void deref(ExceptionSink* xsink) {
+    DLLLOCAL void deref(ExceptionSink* xsink) override {
         if (ROdereference()) {
             if (set_non_block) {
                 sock->clearNonBlock();
@@ -146,7 +148,7 @@ class SocketLingeringClosePollOperation : public SocketPollSocketOperationBase {
 public:
     DLLLOCAL SocketLingeringClosePollOperation(ExceptionSink* xsink, QoreSocketObject* sock, int64 max_discard);
 
-    DLLLOCAL void deref(ExceptionSink* xsink) {
+    DLLLOCAL void deref(ExceptionSink* xsink) override {
         if (ROdereference()) {
             if (set_non_block) {
                 sock->clearNonBlock();
@@ -206,7 +208,7 @@ class SocketShutdownPollOperation : public SocketPollSocketOperationBase {
 public:
     DLLLOCAL SocketShutdownPollOperation(QoreSocketObject* sock);
 
-    DLLLOCAL void deref(ExceptionSink* xsink) {
+    DLLLOCAL void deref(ExceptionSink* xsink) override {
         if (ROdereference()) {
             poll_state.reset();
             sock->deref(xsink);
@@ -301,7 +303,7 @@ public:
         int64 value = 0);
     DLLLOCAL ~SocketSetupPollOperation() override;
 
-    DLLLOCAL void deref(ExceptionSink* xsink) {
+    DLLLOCAL void deref(ExceptionSink* xsink) override {
         if (ROdereference()) {
             if (set_non_block) {
                 sock->clearNonBlock();
@@ -385,7 +387,7 @@ public:
     DLLLOCAL SocketDataAvailablePollOperation(ExceptionSink* xsink, QoreSocketObject* sock);
     DLLLOCAL SocketDataAvailablePollOperation(ExceptionSink* xsink, QoreSocketObject* sock, bool defer_init);
 
-    DLLLOCAL void deref(ExceptionSink* xsink);
+    DLLLOCAL void deref(ExceptionSink* xsink) override;
 
     DLLLOCAL virtual bool goalReached() const override {
         return ready;
@@ -468,7 +470,7 @@ public:
     DLLLOCAL SocketAcceptPollOperation(ExceptionSink* xsink, QoreSocketObject* sock, bool ssl,
             SocketSource* source, bool defer_init);
 
-    DLLLOCAL void deref(ExceptionSink* xsink) {
+    DLLLOCAL void deref(ExceptionSink* xsink) override {
         if (ROdereference()) {
             if (set_non_block_accept) {
                 AutoLocker al(sock->priv->m);
@@ -631,7 +633,7 @@ public:
 
     DLLLOCAL ~SocketHttp2ServerPollOperation();
 
-    DLLLOCAL void deref(ExceptionSink* xsink) {
+    DLLLOCAL void deref(ExceptionSink* xsink) override {
         if (ROdereference()) {
             if (set_non_block) {
                 sock->clearNonBlock();
@@ -730,7 +732,7 @@ public:
 
     DLLLOCAL ~SocketHttp2SendResponsePollOperation();
 
-    DLLLOCAL void deref(ExceptionSink* xsink) {
+    DLLLOCAL void deref(ExceptionSink* xsink) override {
         if (ROdereference()) {
             if (set_non_block) {
                 sock->clearNonBlock();
@@ -800,7 +802,7 @@ public:
 
     DLLLOCAL ~SocketHttp2SendStreamingResponsePollOperation();
 
-    DLLLOCAL void deref(ExceptionSink* xsink) {
+    DLLLOCAL void deref(ExceptionSink* xsink) override {
         if (ROdereference()) {
             if (set_non_block) {
                 sock->clearNonBlock();
@@ -905,7 +907,7 @@ public:
 
     DLLLOCAL int initLocked(ExceptionSink* xsink);
 
-    DLLLOCAL void deref(ExceptionSink* xsink) {
+    DLLLOCAL void deref(ExceptionSink* xsink) override {
         if (ROdereference()) {
             if (set_non_block) {
                 sock->clearNonBlock();
@@ -960,7 +962,7 @@ public:
     DLLLOCAL SocketSendAndReadHeaderPollOperation(ExceptionSink* xsink, BinaryNode* response_data,
         QoreSocketObject* sock, int64 idle_timeout_ms);
 
-    DLLLOCAL void deref(ExceptionSink* xsink) {
+    DLLLOCAL void deref(ExceptionSink* xsink) override {
         if (ROdereference()) {
             if (set_non_block) {
                 sock->clearNonBlock();
@@ -1019,7 +1021,7 @@ public:
         InputStream* input_stream, QoreObject* input_stream_obj, int64 size, int timeout_ms,
         bool emit_data_events, bool defer_init);
 
-    DLLLOCAL void deref(ExceptionSink* xsink) {
+    DLLLOCAL void deref(ExceptionSink* xsink) override {
         if (ROdereference()) {
             if (set_non_block) {
                 sock->clearNonBlock(NB_SEND);
@@ -1115,7 +1117,7 @@ public:
         InputStream* input_stream, QoreObject* input_stream_obj, size_t max_chunk_size, int timeout_ms,
         bool send_terminal_chunk, int source, bool defer_init);
 
-    DLLLOCAL void deref(ExceptionSink* xsink) {
+    DLLLOCAL void deref(ExceptionSink* xsink) override {
         if (ROdereference()) {
             if (set_non_block) {
                 sock->clearNonBlock(NB_SEND);
@@ -1213,7 +1215,7 @@ public:
         OutputStream* output_stream, QoreObject* output_stream_obj, int64 size, int timeout_ms,
         bool emit_data_events, bool defer_init);
 
-    DLLLOCAL void deref(ExceptionSink* xsink) {
+    DLLLOCAL void deref(ExceptionSink* xsink) override {
         if (ROdereference()) {
             if (set_non_block) {
                 sock->clearNonBlock(NB_RECV);
@@ -1305,7 +1307,7 @@ public:
     DLLLOCAL SocketWriteOutputStreamPollOperation(ExceptionSink* xsink, QoreSocketObject* sock,
         OutputStream* output_stream, QoreObject* output_stream_obj, BinaryNode* data, int timeout_ms);
 
-    DLLLOCAL void deref(ExceptionSink* xsink) {
+    DLLLOCAL void deref(ExceptionSink* xsink) override {
         if (ROdereference()) {
             if (output_stream && !need_reassign) {
                 output_stream->unassignThread(xsink);
@@ -1383,7 +1385,7 @@ public:
         QoreSocketObject* sock, InputStream* input_stream, QoreObject* input_stream_obj,
         int64 content_length, int64 idle_timeout_ms, bool fused, bool chunked = false);
 
-    DLLLOCAL void deref(ExceptionSink* xsink) {
+    DLLLOCAL void deref(ExceptionSink* xsink) override {
         if (ROdereference()) {
             if (set_non_block) {
                 sock->clearNonBlock();
@@ -1489,7 +1491,7 @@ public:
 
     DLLLOCAL ~SocketHttp2ClientMultiplexPollOperation();
 
-    DLLLOCAL void deref(ExceptionSink* xsink) {
+    DLLLOCAL void deref(ExceptionSink* xsink) override {
         if (ROdereference()) {
             if (set_non_block) {
                 sock->clearNonBlock();
@@ -1602,7 +1604,7 @@ class SocketRecvFromPollOperation : public SocketPollSocketOperationBase {
 public:
     DLLLOCAL SocketRecvFromPollOperation(ExceptionSink* xsink, size_t max_size, QoreSocketObject* sock);
 
-    DLLLOCAL void deref(ExceptionSink* xsink) {
+    DLLLOCAL void deref(ExceptionSink* xsink) override {
         if (ROdereference()) {
             if (set_non_block) {
                 sock->clearNonBlock();
@@ -1654,7 +1656,7 @@ public:
         BinaryNode* data, QoreSocketObject* sock);
     DLLLOCAL ~SocketSendToPollOperation() override;
 
-    DLLLOCAL void deref(ExceptionSink* xsink) {
+    DLLLOCAL void deref(ExceptionSink* xsink) override {
         if (ROdereference()) {
             cleanup(xsink);
             delete this;
@@ -1727,13 +1729,21 @@ public:
     //!     which sendPendingPackets() must not emit any UDP datagrams; 0 =
     //!     disabled.  Used by the HTTP/3 client's happy-eyeballs stagger to
     //!     hold back secondary address-family attempts per RFC 8305 §8.
+    //! @param bind_unbound if true, the socket does not have to be open: an unbound socket is bound by the
+    //!     operation, once the remote address is resolved, to the wildcard address of the remote address's family,
+    //!     with the network policy check of a bind; nothing that can block runs in the thread that creates the
+    //!     operation.  If false, the socket must be an open UDP socket.
+    //! @param avoid_families address families (AF_INET, AF_INET6) not to connect in if the remote host has an
+    //!     address in another family; used only when no family is given and the socket is not bound
     DLLLOCAL SocketQuicClientPollOperation(ExceptionSink* xsink, QoreSocketObject* sock,
                                            const char* host, uint16_t port, int family,
                                            int64_t handshake_timeout_ns = 0,
-                                           int64_t not_before_ns_abs = 0);
+                                           int64_t not_before_ns_abs = 0,
+                                           bool bind_unbound = false,
+                                           std::vector<int> avoid_families = std::vector<int>());
     DLLLOCAL ~SocketQuicClientPollOperation() override;
 
-    DLLLOCAL void deref(ExceptionSink* xsink) {
+    DLLLOCAL void deref(ExceptionSink* xsink) override {
         if (ROdereference()) {
             if (set_non_block) {
                 AutoLocker al(sock->priv->m);
@@ -1846,6 +1856,11 @@ public:
     //! Check if connection is still open
     DLLLOCAL bool isOpen() const { return qcs_state != QCS::CLOSED && quic_session && !quic_session->isClosed(); }
 
+    //! Returns the address family of the remote address, or AF_UNSPEC if it has not been resolved yet
+    /** Can be called from any thread
+    */
+    DLLLOCAL int getAddressFamily() const { return address_family_.load(std::memory_order_acquire); }
+
     //! Migrate the QUIC connection to a new socket (client-side active migration)
     /** Creates a new connected UDP socket, calls QuicSession::initiateMigration(),
         and swaps the fd on the underlying socket object.
@@ -1885,6 +1900,12 @@ private:
     int64_t handshake_timeout_ns_ = 0;
     uint16_t port_ = 0;
     int family_ = AF_UNSPEC;
+    //! if true, an unbound socket is bound once the remote address is resolved (see the constructor)
+    bool bind_unbound_ = false;
+    //! address families not to connect in if the remote host has an address in another family
+    std::vector<int> avoid_families_;
+    //! the address family of the remote address once resolved; read from other threads
+    std::atomic<int> address_family_{AF_UNSPEC};
 
     //! Soft deadline (ngtcp2 timestamp, ns) after which a handshake that has
     //! seen at least one ICMP port-unreachable (ECONNREFUSED on a connected
@@ -1917,8 +1938,15 @@ private:
     //! head start on the handshake.
     int64_t not_before_ns_ = 0;
 
-    //! The sandbox that governs the remote address, resolved on the thread that creates the operation
+    //! The sandbox that governs the remote address and the bind of an unbound socket, resolved on the thread that
+    //! creates the operation
     SimpleRefHolder<QoreSandboxManager> sandbox_manager_;
+
+    //! Selects the resolved address to connect to (see @ref avoid_families_)
+    DLLLOCAL const SocketResolvedAddrInfo& selectAddress(const std::vector<SocketResolvedAddrInfo>& addrs) const;
+
+    //! Binds the unbound socket to the wildcard address of the given family; the socket's lock must be held
+    DLLLOCAL int bindUnboundLocked(int family, ExceptionSink* xsink);
 
     //! Coalesced timer + write + send pending QUIC packets via UDP
     /** @param next_expiry output: next timer expiry for poll timeout
@@ -1970,7 +1998,7 @@ class SocketQuicServerPollOperation : public SocketPollSocketOperationBase {
 public:
     DLLLOCAL SocketQuicServerPollOperation(ExceptionSink* xsink, QoreSocketObject* sock);
 
-    DLLLOCAL void deref(ExceptionSink* xsink) {
+    DLLLOCAL void deref(ExceptionSink* xsink) override {
         if (ROdereference()) {
             if (set_non_block) {
                 AutoLocker al(sock->priv->m);
@@ -2193,7 +2221,7 @@ public:
                                                   const QoreHashNode* headers,
                                                   const AbstractQoreNode* body);
 
-    DLLLOCAL void deref(ExceptionSink* xsink) {
+    DLLLOCAL void deref(ExceptionSink* xsink) override {
         if (ROdereference()) {
             if (set_non_block) {
                 AutoLocker al(sock->priv->m);
@@ -2308,7 +2336,7 @@ public:
                                                            QoreObject* input_stream_obj,
                                                            int64 chunk_size = 16384);
 
-    DLLLOCAL void deref(ExceptionSink* xsink) {
+    DLLLOCAL void deref(ExceptionSink* xsink) override {
         if (ROdereference()) {
             poll_state.reset();
             if (input_stream && !need_reassign) {

@@ -35,7 +35,6 @@
 
 #include <cmath>
 #include <memory>
-using namespace std;
 
 // the number of consecutive trailing 0 or 9 digits that will be rounded in string output
 #define QORE_MPFR_ROUND_THRESHOLD 9
@@ -67,15 +66,40 @@ typedef mp_exp_t mpfr_exp_t;
 #define QORE_MPFR_SPRINTF_ARG 'L'
 #endif
 
-// some compilers (sun/oracle pro c notably) do not support arrays with a variable size
-// if not, we can't use the stack for the temporary variable and have to use a dynamically-allocated one
-// also MPFR_DECL_INIT is compiled incorrectly on g 5.2 on Solaris SPARC with all optimization levels
-// for some unknown reason (https://github.com/qorelanguage/qore/issues/958)
-#if defined(HAVE_LOCAL_VARIADIC_ARRAYS) && !(defined(SPARC) && defined(SOLARIS) && defined(__GNUC__))
-#define MPFR_TMP_VAR(x, p) MPFR_DECL_INIT(x, (p))
-#else
-#define MPFR_TMP_VAR(x, p) qore_number_private tmp_x((mpfr_prec_t)p); mpfr_t& x = tmp_x.num
-#endif
+//! A temporary MPFR number for one operation
+/** Its significand is on the stack for a precision up to QORE_MAX_PREC, which is the precision of every number, and
+    on the heap above it; it is made with MPFR's custom interface, so it is not cleared, and its precision is not
+    changed.  MPFR_DECL_INIT() is not used, as it declares a variable-length array, which is not standard C++.
+*/
+class QoreMpfrTmp {
+public:
+    DLLLOCAL explicit QoreMpfrTmp(mpfr_prec_t prec) {
+        size_t size = mpfr_custom_get_size(prec);
+        void* significand;
+        if (size <= sizeof(local)) {
+            significand = local;
+        } else {
+            heap.reset(new mp_limb_t[(size + sizeof(mp_limb_t) - 1) / sizeof(mp_limb_t)]);
+            significand = heap.get();
+        }
+        mpfr_custom_init(significand, prec);
+        mpfr_custom_init_set(num, MPFR_NAN_KIND, 0, prec, significand);
+    }
+
+    QoreMpfrTmp(const QoreMpfrTmp&) = delete;
+    QoreMpfrTmp& operator=(const QoreMpfrTmp&) = delete;
+
+    //! the number
+    mpfr_t num;
+
+private:
+    //! the significand of a number with a precision up to QORE_MAX_PREC
+    mp_limb_t local[(QORE_MAX_PREC + GMP_NUMB_BITS - 1) / GMP_NUMB_BITS];
+    //! the significand of a number with a higher precision
+    std::unique_ptr<mp_limb_t[]> heap;
+};
+
+#define MPFR_TMP_VAR(x, p) QoreMpfrTmp tmp_##x((mpfr_prec_t)(p)); mpfr_t& x = tmp_##x.num
 
 // for binary operations on MPFR data
 typedef int (*q_mpfr_binary_func_t)(mpfr_t, const mpfr_t, const mpfr_t, mpfr_rnd_t);
@@ -108,8 +132,13 @@ struct qore_number_private_intern {
         } else {
             prec = QORE_MAX(mpfr_get_prec(num), mpfr_get_prec(r)) + 1;
         }
-        if (prec > mpfr_get_prec(num))
+        // as for the result of any other operation, the precision is at most QORE_MAX_PREC
+        if (prec > QORE_MAX_PREC) {
+            prec = QORE_MAX_PREC;
+        }
+        if (prec > mpfr_get_prec(num)) {
             mpfr_prec_round(num, prec, QORE_MPFR_RND);
+        }
     }
 
     DLLLOCAL void setPrec(mpfr_prec_t prec) {
@@ -161,10 +190,14 @@ struct qore_number_private : public qore_number_private_intern {
         // see if number has an exponent and increase the number's precision if necessary
         const char* p = strchrs(str, "eE");
         if (p) {
-            int exp = abs(atoi(p + 1));
-            mpfr_prec_t np = exp * 5;
-            if (np > getPrec())
+            // the precision is at most QORE_MAX_PREC; the exponent is read without overflowing
+            long long exp = strtoll(p + 1, nullptr, 10);
+            mpfr_prec_t np = (exp > QORE_MAX_PREC / 5 || exp < -QORE_MAX_PREC / 5)
+                ? QORE_MAX_PREC
+                : static_cast<mpfr_prec_t>(QORE_MAX(exp, -exp) * 5);
+            if (np > getPrec()) {
                 setPrec(np);
+            }
         }
         if (!str[0])
             mpfr_set_sj(num, 0, QORE_MPFR_RND);
@@ -219,15 +252,19 @@ struct qore_number_private : public qore_number_private_intern {
         return mpfr_sgn(num);
     }
 
-    DLLLOCAL void sprintf(QoreString& str, const char* fmt) const {
+    //! appends the number formatted with a printf() format
+    /** @return 0 if the number was appended, -1 if its output cannot be formatted (it is then not appended), as it
+        would be longer than INT_MAX characters
+    */
+    DLLLOCAL int sprintf(QoreString& str, const char* fmt) const {
 #ifdef HAVE_MPFR_SPRINTF
         //printd(5, "qore_number_private::sprintf() fmt: '%s'\n", fmt);
         int len = mpfr_snprintf(0, 0, fmt, num);
-        if (!len)
-            return;
         if (len < 0) {
-            numError(str);
-            return;
+            return -1;
+        }
+        if (!len) {
+            return 0;
         }
         str.allocate(str.size() + len + 1);
         mpfr_sprintf((char*)(str.getBuffer() + str.size()), fmt, num);
@@ -236,19 +273,28 @@ struct qore_number_private : public qore_number_private_intern {
         // if there is no mpfr_sprintf, then we convert to a long double and output the number
         long double ld = mpfr_get_ld(num, QORE_MPFR_RND);
         int len = ::snprintf(0, 0, fmt, ld);
-        if (len <= 0)
-            return;
+        if (len < 0) {
+            return -1;
+        }
+        if (!len) {
+            return 0;
+        }
         str.allocate(str.size() + len + 1);
-        ::sprintf((char*)(str.getBuffer() + str.size()), fmt, ld);
+        ::snprintf((char*)(str.getBuffer() + str.size()), len + 1, fmt, ld);
         str.terminate(str.size() + len);
 #endif
+        return 0;
     }
 
     DLLLOCAL void getScientificString(QoreString& str, bool round = true) const {
 #ifdef HAVE_MPFR_SPRINTF
-        sprintf(str, "%Re");
+        if (sprintf(str, "%Re")) {
+            numError(str);
+        }
 #else
-        sprintf(str, "%Le");
+        if (sprintf(str, "%Le")) {
+            numError(str);
+        }
 #endif
 
         if (round) {
@@ -455,7 +501,7 @@ struct qore_number_private : public qore_number_private_intern {
 
     // for round functions: round(), ceil(), floor()
     DLLLOCAL qore_number_private* doRoundNR(q_mpfr_unary_nr_func_t func, int prec = 0, ExceptionSink* xsink = NULL) const {
-        unique_ptr<qore_number_private> p0(new qore_number_private(*this));
+        std::unique_ptr<qore_number_private> p0(new qore_number_private(*this));
 
         if (prec == 0) {
             func(p0 -> num, num);
@@ -469,13 +515,13 @@ struct qore_number_private : public qore_number_private_intern {
         qore_number_private* p2;
 
         if (prec > 0) {
-            unique_ptr<qore_number_private> c(new qore_number_private(pow(10, prec)));
-            unique_ptr<qore_number_private> p1(p0 -> doMultiply(*c));
+            std::unique_ptr<qore_number_private> c(new qore_number_private(pow(10, prec)));
+            std::unique_ptr<qore_number_private> p1(p0 -> doMultiply(*c));
             func(p1 -> num, p1 -> num);
             p2 = p1 -> doDivideBy(*c, xsink);
         } else {
-            unique_ptr<qore_number_private> c(new qore_number_private(pow(10, -prec)));
-            unique_ptr<qore_number_private> p1(p0 -> doDivideBy(*c, xsink));
+            std::unique_ptr<qore_number_private> c(new qore_number_private(pow(10, -prec)));
+            std::unique_ptr<qore_number_private> p1(p0 -> doDivideBy(*c, xsink));
             func(p1 -> num, p1 -> num);
             p2 = p1 -> doMultiply(*c);
         }
@@ -578,8 +624,9 @@ public:
     DLLLOCAL static int roundUp(QoreString& str, qore_offset_t pos);
 
     // static accessor methods
-    DLLLOCAL static void sprintf(const QoreNumberNode& n, QoreString& str, const char* fmt) {
-        n.priv->sprintf(str, fmt);
+    //! appends a number formatted with a printf() format; returns -1 if its output cannot be formatted, 0 otherwise
+    DLLLOCAL static int sprintf(const QoreNumberNode& n, QoreString& str, const char* fmt) {
+        return n.priv->sprintf(str, fmt);
     }
 
     DLLLOCAL static void inc(QoreNumberNode& n) {

@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -147,6 +147,48 @@ protected:
         return dirname.empty() ? -1 : verifyDirectory(dirname);
     }
 
+    // returns the directories of the path in dirname that do not exist, from the top of the path down, and the
+    // number of leading UNC path components skipped on Windows (always 0 on other platforms)
+    // unlocked
+    DLLLOCAL int getMissingDirsIntern(name_vec_t& missing) const {
+        assert(!dirname.empty());
+        int skipped = 0;
+#ifdef _Q_WINDOWS
+        // flag UNC paths for special processing, because the first two components of UNC paths designate the server
+        // location and cannot be created with mkdir()
+        bool unc = (dirname[0] == '/' || dirname[0] == '\\')
+            && (dirname[1] == '/' || dirname[1] == '\\')
+            && (dirname[2] != '/' && dirname[2] != '\\');
+        // issue #2529: we have to use q_absolute_path_windows() here and not in the loop
+        bool abs = q_absolute_path_windows(dirname.c_str());
+#endif
+
+        // split the directory in its subdirectories tree
+        name_vec_t dirs;
+        tokenize(dirname, dirs);
+
+        std::string path;
+        for (name_vec_t::iterator it = dirs.begin(); it < dirs.end(); it++) {
+#ifdef _Q_WINDOWS
+            if (it == dirs.begin() && abs)
+                path += *it;
+            else
+#endif
+            path += QORE_DIR_SEP_STR + (*it); // the actual path
+#ifdef _Q_WINDOWS
+            // ignore the first two components of UNC paths
+            if (unc && skipped < 2) {
+                ++skipped;
+                continue;
+            }
+#endif
+            if (verifyDirectory(path)) { // not existing
+                missing.push_back(path);
+            }
+        }
+        return skipped;
+    }
+
 public:
     DLLLOCAL qore_qd_private(ExceptionSink* xsink, const QoreEncoding* cs, const char* dir) : enc(cs) {
         if (dir) {
@@ -257,7 +299,9 @@ public:
         return 0;
     }
 
-    DLLLOCAL QoreListNode* list(ExceptionSink* xsink, int stat_filter, const QoreString* regex, int regex_options, bool full) const;
+    // omit_unreadable: leave out the entries that the sandbox policy, if any, does not allow to be read
+    DLLLOCAL QoreListNode* list(ExceptionSink* xsink, int stat_filter, const QoreString* regex, int regex_options,
+            bool full, bool omit_unreadable) const;
 
     DLLLOCAL int create(int mode, ExceptionSink* xsink = nullptr) const {
         AutoLocker al(m);
@@ -269,54 +313,29 @@ public:
             return -1;
         }
 
-#ifdef _Q_WINDOWS
-        // flag UNC paths for special processing, because the first two components of UNC paths designate the server location and cannot be created with mkdir()
-        bool unc = (dirname[0] == '/' || dirname[0] == '\\')
-            && (dirname[1] == '/' || dirname[1] == '\\')
-            && (dirname[2] != '/' && dirname[2] != '\\');
-#endif
-
-        // split the directory in its subdirectories tree
-        name_vec_t dirs;
-        tokenize(dirname, dirs);
-
-        // iterate through all directories and try to create them if
-        // they do not exist (should happen only on the first level)
-        name_vec_t::iterator it;
-        std::string path;
-        int cnt = 0;
-
-#ifdef _Q_WINDOWS
-        // issue #2529: we have to use q_absolute_path_windows() here and not in the loop
-        bool abs = q_absolute_path_windows(dirname.c_str());
-#endif
-
-        for (it = dirs.begin(); it < dirs.end(); it++) {
-#ifdef _Q_WINDOWS
-            if (it == dirs.begin() && abs)
-                path += *it;
-            else
-#endif
-            path += QORE_DIR_SEP_STR + (*it); // the actual path
-#ifdef _Q_WINDOWS
-            // ignore the first two components of UNC paths
-            if (unc && cnt < 2) {
-                ++cnt;
-                continue;
-            }
-#endif
-            if (verifyDirectory(path)) { // not existing
-                if (::mkdir(path.c_str(), mode)) { // failed
-                    if (xsink) {
-                        xsink->raiseErrnoException("DIR-CREATE-FAILURE", errno, "cannot mkdir '%s'", path.c_str());
-                    }
-                    return -1;
+        // create all the directories of the path that do not exist; the skipped UNC path components are counted as
+        // before
+        name_vec_t missing;
+        int cnt = getMissingDirsIntern(missing);
+        for (const std::string& path : missing) {
+            if (::mkdir(path.c_str(), mode)) { // failed
+                if (xsink) {
+                    xsink->raiseErrnoException("DIR-CREATE-FAILURE", errno, "cannot mkdir '%s'", path.c_str());
                 }
-                cnt++;
+                return -1;
             }
+            cnt++;
         }
 
         return cnt;
+    }
+
+    //! returns the directories that create() would create, from the top of the path down
+    DLLLOCAL void getMissingDirs(name_vec_t& missing) const {
+        AutoLocker al(m);
+        if (!dirname.empty()) {
+            getMissingDirsIntern(missing);
+        }
     }
 
     DLLLOCAL int chmod(int mode, ExceptionSink* xsink) const {

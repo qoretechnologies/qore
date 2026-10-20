@@ -300,6 +300,10 @@ public:
     std::atomic_bool deferred_scan;
     // do we need to call isValidImpl()?  set at construction and never written again
     bool needs_is_valid;
+    //! set by the dereference that collects a closure-bound variable with its recursive set; see claimCollection()
+    /** In the padding after needs_is_valid, so that no member of RObject or of its subclasses moves.
+    */
+    std::atomic_bool collection_claimed{false};
     // the number of rset invalidations in progress; written under rlck
     /** A count rather than a flag: a scan deferred while the object has real references invalidates the recursive
         set recorded for it, and more than one thread can be doing that at once, so the real references may only
@@ -367,6 +371,10 @@ public:
     //! Test hook run by tryFastDeref() between releasing a real reference and releasing the reference itself
     typedef void (*dbg_after_fast_real_release_t)(RObject* o);
     DLLLOCAL static std::atomic<dbg_after_fast_real_release_t> dbg_after_fast_real_release;
+
+    //! Test hook run by qore_object_private::customDeref() between releasing the reference and scanning
+    typedef void (*dbg_before_deref_scan_t)(RObject* o);
+    DLLLOCAL static std::atomic<dbg_before_deref_scan_t> dbg_before_deref_scan;
 #endif
 
     // wait_only=true means: we do not claim deleter status (so the "deleter vs. waiter" invariant
@@ -492,6 +500,19 @@ public:
     // check if we should defer the scan, marks the object for a deferred scan if necessary
     // returns 0 if the scan can be made now, -1 if deferred
     DLLLOCAL int checkDeferScan();
+
+    //! Claims the collection of a closure-bound variable that a dereference has decided to collect with its set
+    /** Two dereferences of the variable can decide to collect it at the same time: RSet::canDelete() decides with
+        the count as it is now when releases have superseded a dereference's count, and the dereference that made
+        the last of those releases decides as well.  Only the one that claims the collection deletes the
+        variable.  An object needs no claim: its deletion is decided under its lock (in_destructor; see
+        qore_object_private::customDeref()).
+
+        @return true if the caller claimed the collection, false if another dereference had claimed it
+    */
+    DLLLOCAL bool claimCollection() {
+        return !collection_claimed.exchange(true, std::memory_order_acq_rel);
+    }
 
     DLLLOCAL void removeInvalidateRSet();
 

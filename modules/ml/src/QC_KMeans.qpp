@@ -60,7 +60,7 @@ KMeans::constructor(hash<auto> options) {
     int64 max_iterations = 100;
     double tolerance = 1e-4;
     int64 seed = 0;
-    const char* init_method = "kmeans++";
+    std::string init_method = "kmeans++";
 
     QoreValue v = options->getKeyValue("k");
     if (v.isNullOrNothing()) {
@@ -85,7 +85,7 @@ KMeans::constructor(hash<auto> options) {
     v = options->getKeyValue("init");
     if (!v.isNullOrNothing() && v.getType() == NT_STRING) {
         QoreStringValueHelper init(v);
-        init_method = init->c_str();
+        init_method = mlStdString(**init);
     }
 
     if (k < 1) {
@@ -94,9 +94,9 @@ KMeans::constructor(hash<auto> options) {
         return;
     }
 
-    if (strcmp(init_method, "kmeans++") != 0 && strcmp(init_method, "random") != 0) {
+    if (init_method != "kmeans++" && init_method != "random") {
         xsink->raiseException("ML-KMEANS-ERROR",
-            "init must be 'kmeans++' or 'random'; got '%s'", init_method);
+            "init must be 'kmeans++' or 'random'; got '%s'", init_method.c_str());
         return;
     }
 

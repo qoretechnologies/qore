@@ -3,7 +3,7 @@
 /*
     Qore Programming Language
 
-    Copyright (C) 2016 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2016 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -55,12 +55,40 @@ static AbstractPrivateData* get_line_terminator_source(const QoreObject* self, Q
     return nullptr;
 }
 
+// the private data of AbstractLineIterator; it has no state, as the methods implemented by AbstractLineIterator only
+// use the object, but a builtin method can only be called on an object with the private data of its class.  The
+// builtin line iterators provide their own private data for this class; a subclass implemented in Qore gets an object
+// of this class from the constructor
+class DLLLOCAL AbstractLineIteratorPrivate : public AbstractPrivateData {
+};
+
 //! This class defines an abstract interface for line iterators.
 /** Classes inheriting this class can be used to iterate lines from various sources.
 
     @since %Qore 0.8.13
  */
-qclass AbstractLineIterator [arg=void* i; ns=Qore; vparent=AbstractIterator<string>];
+qclass AbstractLineIterator [arg=AbstractLineIteratorPrivate* i; ns=Qore; vparent=AbstractIterator<string>];
+
+//! Creates the object
+/** This constructor is run for each subclass implemented in %Qore; it gives the object the private data of this
+    class, without which the methods implemented by this class could not be called on it.  It performs no other
+    action.
+
+    @since %Qore 3.0
+*/
+AbstractLineIterator::constructor() {
+    self->setPrivate(CID_ABSTRACTLINEITERATOR, new AbstractLineIteratorPrivate);
+}
+
+//! Copies the object
+/** This method is run when an object of a subclass implemented in %Qore is copied; it gives the copy the private
+    data of this class.  It performs no other action.
+
+    @since %Qore 3.0
+*/
+AbstractLineIterator::copy() {
+    self->setPrivate(CID_ABSTRACTLINEITERATOR, new AbstractLineIteratorPrivate);
+}
 
 //! Moves the current position to the next line; returns @ref False if there are no more lines to read.
 /** This method will return @ref True again after it returns @ref False once if data is not empty, otherwise it will always return @ref False.

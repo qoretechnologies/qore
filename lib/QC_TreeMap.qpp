@@ -94,7 +94,11 @@ TreeMap::copy() {
     @param path the path to which \c value will be mapped
     @param value the value to put into the TreeMap
 
+    @throw HASH-KEY-ERROR the path has a NUL character
+
     @see TreeMap::remove()
+
+    @since %Qore 3.0 a path with a NUL character raises \c HASH-KEY-ERROR instead of being cut at the NUL character
  */
 nothing TreeMap::put(string path, V value) [flags=NAMED_ARGS] {
     tm->put(self, path, value, xsink);
@@ -126,7 +130,11 @@ v = tm.get("def/g/hi/five", \h.unmatched);  # returns "5" and h.unmatched is "fi
 
     @return the value pointed to by the longest prefix of \c path or @ref nothing if no such mapping exists
 
-    @since %Qore 0.8.13
+    @throw HASH-KEY-ERROR the path has a NUL character
+
+    @since
+    - %Qore 0.8.13
+    - %Qore 3.0 a path with a NUL character raises \c HASH-KEY-ERROR instead of being cut at the NUL character
  */
 *V TreeMap::get(string path, *reference<*string> unmatched) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     return tm->get(path, unmatched, xsink);
@@ -139,7 +147,11 @@ v = tm.get("def/g/hi/five", \h.unmatched);  # returns "5" and h.unmatched is "fi
 
     @return the value removed from the TreeMap or @ref nothing if no exact match was found
 
+    @throw HASH-KEY-ERROR the path has a NUL character
+
     @see TreeMap::put()
+
+    @since %Qore 3.0 a path with a NUL character raises \c HASH-KEY-ERROR instead of being cut at the NUL character
 */
 *V TreeMap::take(string path) [flags=NAMED_ARGS] {
     return tm->take(self, path, xsink);
@@ -164,6 +176,10 @@ void TreeMapData::destructor(ExceptionSink* xsink) {
 void TreeMapData::put(QoreObject* self, const QoreStringNode* key, const QoreValue value, ExceptionSink* xsink) {
     TempEncodingHelper keyStr(key, QCS_DEFAULT, xsink);
     if (!keyStr) {
+        return;
+    }
+    // the paths are the keys of the hash getAll() returns; a path with a NUL character cannot be a hash key
+    if (QoreHashNode::checkKey(keyStr->c_str(), keyStr->size(), xsink)) {
         return;
     }
 
@@ -216,6 +232,10 @@ void TreeMapData::put(QoreObject* self, const QoreStringNode* key, const QoreVal
 QoreValue TreeMapData::take(QoreObject* self, const QoreStringNode* key, ExceptionSink* xsink) {
     TempEncodingHelper keyStr(key, QCS_DEFAULT, xsink);
     if (!keyStr) {
+        return QoreValue();
+    }
+    // a path with a NUL character cannot be a key of the map
+    if (QoreHashNode::checkKey(keyStr->c_str(), keyStr->size(), xsink)) {
         return QoreValue();
     }
 

@@ -162,6 +162,10 @@ Krb5CredentialCache Krb5Context::openDefaultCredentialCache() {
     @throw KRB5-CACHE-ERROR if the cache name is empty or cannot be resolved
 */
 Krb5CredentialCache Krb5Context::openCredentialCache(string cache_name) {
+    if (krb5_check_no_nul(cache_name, "credential cache name", "credential cache names", "KRB5-CACHE-ERROR", false,
+            xsink)) {
+        return QoreValue();
+    }
     SimpleRefHolder<QoreKrb5CredentialCache> cache(ctx->openCredentialCache(cache_name->c_str(), xsink));
     if (*xsink) {
         return QoreValue();
@@ -195,6 +199,9 @@ Krb5Keytab Krb5Context::openDefaultKeytab() {
     @throw KRB5-KEYTAB-ERROR if the keytab name is empty or cannot be resolved
 */
 Krb5Keytab Krb5Context::openKeytab(string keytab_name) {
+    if (krb5_check_no_nul(keytab_name, "keytab name", "keytab names", "KRB5-KEYTAB-ERROR", false, xsink)) {
+        return QoreValue();
+    }
     SimpleRefHolder<QoreKrb5Keytab> keytab(ctx->openKeytab(keytab_name->c_str(), xsink));
     if (*xsink) {
         return QoreValue();
@@ -220,6 +227,10 @@ Krb5Keytab Krb5Context::openKeytab(string keytab_name) {
 */
 Krb5CredentialCache Krb5Context::createMemoryCredentialCache(Krb5Principal[QoreKrb5Principal] principal,
         string cache_name) {
+    if (krb5_check_no_nul(cache_name, "credential cache name", "credential cache names", "KRB5-CACHE-ERROR", false,
+            xsink)) {
+        return QoreValue();
+    }
     SimpleRefHolder<QoreKrb5CredentialCache> cache(ctx->createMemoryCredentialCache(**principal, cache_name->c_str(), xsink));
     if (*xsink) {
         return QoreValue();
@@ -249,6 +260,9 @@ Krb5CredentialCache Krb5Context::createMemoryCredentialCache(Krb5Principal[QoreK
 */
 Krb5Credentials Krb5Context::acquireCredentialsWithPassword(Krb5Principal[QoreKrb5Principal] principal,
         string password, *hash<Krb5InitialCredentialsOptions> opts) [dom=NETWORK] {
+    if (krb5_check_no_nul(password, "password", "passwords", "KRB5-INIT-CREDS-ERROR", true, xsink)) {
+        return QoreValue();
+    }
     SimpleRefHolder<QoreKrb5Credentials> creds(ctx->acquireCredentialsWithPassword(**principal, password->c_str(),
         opts, xsink));
     if (*xsink) {

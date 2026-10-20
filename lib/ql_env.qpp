@@ -4,7 +4,7 @@
 
   Qore Programming Language
 
-  Copyright (C) 2003 - 2023 David Nichols
+  Copyright (C) 2003 - 2026 David Nichols
 
   Permission is hereby granted, free of charge, to any person obtaining a
   copy of this software and associated documentation files (the "Software"),
@@ -43,16 +43,23 @@
 /**
     @param name the name of the environment variable
 
-    @return the value of an environment variable or @ref nothing if the variable is not set
+    @return the value of an environment variable or @ref nothing if the variable is not set or if \a name contains a
+    NUL character, in which case @ref Qore::errno() "errno()" returns \c EINVAL
 
     @par Example:
     @code{.py}
 *string v = getenv("PATH");
     @endcode
 
-    @since %Qore 0.8.4 tagged with PO_NO_EXTERNAL_INFO
+    @since
+    - %Qore 0.8.4 tagged with PO_NO_EXTERNAL_INFO
+    - %Qore 3.0 a name with a NUL character returns @ref nothing; previously the name was cut at the NUL character
  */
 *string getenv(string name) [flags=CONSTANT,NAMED_ARGS;dom=EXTERNAL_INFO] {
+   // the name is passed to the operating system as a C string, which would be cut at a NUL character
+   if (q_check_no_nul(name->c_str(), name->size())) {
+      return QoreValue();
+   }
    return SysEnv.getAsStringNode(name->getBuffer());
 }
 
@@ -67,7 +74,7 @@ nothing getenv() [flags=NOOP;dom=EXTERNAL_INFO] {
     @param name the name of the environment variable
     @param value the new value of the environment variable
 
-    @return -1 for error or 0 for success; if an error occurs, errno() and/or strerror() can be used to get the error code or message
+    @return -1 for error or 0 for success; if an error occurs, errno() and/or strerror() can be used to get the error code or message; if \a name or \a value contains a NUL character, -1 is returned and the error code is \c EINVAL
 
     @par Example:
     @code{.py}
@@ -77,9 +84,16 @@ if (setenv("PATH", "/bin:/usr/bin"))
 
     @see unsetenv() to unset or clear an environment variable
 
-    @since %Qore 0.8.4 tagged with PO_NO_PROCESS
+    @since
+    - %Qore 0.8.4 tagged with PO_NO_PROCESS
+    - %Qore 3.0 a name or value with a NUL character returns -1 with error code \c EINVAL; previously they were cut
+      at the NUL character
  */
 int setenv(string name, softstring value) [flags=NAMED_ARGS;dom=PROCESS] {
+   // the name and value are passed to the operating system as C strings, which would be cut at a NUL character
+   if (q_check_no_nul(name->c_str(), name->size()) || q_check_no_nul(value->c_str(), value->size())) {
+      return -1;
+   }
    return SysEnv.set(name->getBuffer(), value->getBuffer());
 }
 
@@ -93,7 +107,7 @@ nothing setenv() [flags=NOOP;dom=PROCESS] {
 /**
     @param name the name of the environment variable to unset
 
-    @return -1 for error or 0 for success; if an error occurs, errno() and/or strerror() can be used to get the error code or message
+    @return -1 for error or 0 for success; if an error occurs, errno() and/or strerror() can be used to get the error code or message; if \a name contains a NUL character, -1 is returned and the error code is \c EINVAL
 
     @par Example:
     @code{.py}
@@ -103,9 +117,16 @@ if (unsetenv("PATH"))
 
     @see setenv() to set an environment variable to a value
 
-    @since %Qore 0.8.4 tagged with PO_NO_PROCESS
+    @since
+    - %Qore 0.8.4 tagged with PO_NO_PROCESS
+    - %Qore 3.0 a name with a NUL character returns -1 with error code \c EINVAL; previously the name was cut at the
+      NUL character
  */
 int unsetenv(string name) [flags=NAMED_ARGS;dom=PROCESS] {
+   // the name is passed to the operating system as a C string, which would be cut at a NUL character
+   if (q_check_no_nul(name->c_str(), name->size())) {
+      return -1;
+   }
    return SysEnv.unset(name->getBuffer());
 }
 

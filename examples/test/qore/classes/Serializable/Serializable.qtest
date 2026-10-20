@@ -285,6 +285,7 @@ class SerializableTest inherits QUnit::Test {
         addTestCase("hashdecl test", \hashdeclTest());
         addTestCase("generic object type test", \genericObjectTypeTest());
         addTestCase("call stack test", \callStackTest());
+        addTestCase("hash keys with a NUL character", \nulKeyTest());
 
         set_return_value(main());
     }
@@ -684,6 +685,18 @@ class SerializableTest inherits QUnit::Test {
         hash<SerializationInfo> bad = h;
         bad._index."0"._object_type = "object<Test>";
         assertThrows("DESERIALIZATION-ERROR", \Serializable::deserialize(), bad);
+    }
+
+    #! A key with a NUL character in serialized data cannot be a hash key; it was cut at the NUL character
+    nulKeyTest() {
+        # serialized data with the key "aXb" changed to "a\x00b"
+        string hex = make_hex_string(Serializable::serialize({"aXb": 1}));
+        assertEq(1, (hex =~ x/(615862)/g).size(), "the key appears once in the serialized data");
+        binary data = parse_hex_string(replace(hex, "615862", "610062"));
+        assertThrows("HASH-KEY-ERROR", "key \"a\\\\x00b\" contains a NUL character at byte offset 1",
+            \Serializable::deserialize(), data);
+        # a value keeps its NUL character
+        assertEq({"a": "x\x00y"}, Serializable::deserialize(Serializable::serialize({"a": "x\x00y"})));
     }
 
     callStackTest() {

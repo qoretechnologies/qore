@@ -19,7 +19,9 @@ public class FileStreamTest inherits QUnit::Test {
     }
 
     basic() {
-        string file = tmp_location() + "/test";
+        # unique for every run, so that runs on the same host, at the same time or after a run that left the file
+        # behind, never use each other's file
+        string file = tmp_location() + DirSep + sprintf("qore_file_stream_test_%d_%s", getpid(), get_random_string(8));
 
         on_exit
             unlink(file);

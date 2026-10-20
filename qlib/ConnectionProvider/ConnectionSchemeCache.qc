@@ -22,8 +22,6 @@
     DEALINGS IN THE SOFTWARE.
 */
 
-%requires reflection
-
 #! Contains all public definitions in the ConnectionProvider module
 public namespace ConnectionProvider {
 #! Connection provider information

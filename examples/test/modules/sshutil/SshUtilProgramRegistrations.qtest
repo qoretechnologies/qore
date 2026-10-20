@@ -1,0 +1,162 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# A registration ends when the Program that created the registered object is destroyed, while the Program can still
+# run the destructor of the object.
+
+%modern
+
+%requires sshutil
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class SshUtilProgramRegistrationsTest
+
+class MainStore inherits SshUtil::AbstractSshHostKeyStore {
+    hash<SshUtil::SshHostKeyDecisionInfo> verifyHostKey(hash<auto> ctxt, hash<auto> observed_key) {
+        throw "UNEXPECTED";
+    }
+
+    hash<SshUtil::SshHostKeyDecisionInfo> acceptHostKeyIfAbsent(hash<auto> ctxt, hash<auto> observed_key) {
+        throw "UNEXPECTED";
+    }
+
+    hash<SshUtil::SshHostKeyDecisionInfo> approveHostKey(hash<auto> ctxt, hash<auto> expected_observed_key,
+            hash<auto> record) {
+        throw "UNEXPECTED";
+    }
+}
+
+class SshUtilProgramRegistrationsTest inherits QUnit::Test {
+    public {
+        #! the code of a Program registering an object of each kind; a destructor reports to the queue
+        const ProgramCode = "
+our Queue q;
+
+class ClientProvider inherits AbstractSshClientIdentityProvider {
+    list<hash<SshClientIdentityCandidate>> getClientIdentityCandidates(hash<auto> ctxt) {
+        return ();
+    }
+
+    destructor() {
+        q.push(\"client identity provider\");
+    }
+}
+
+class ServerProvider inherits AbstractSshServerHostKeyProvider {
+    list<hash<SshPrivateKeyMaterial>> getServerHostKeyMaterial(hash<auto> ctxt) {
+        return ();
+    }
+
+    destructor() {
+        q.push(\"server host-key provider\");
+    }
+}
+
+class Store inherits AbstractSshHostKeyStore {
+    hash<SshHostKeyDecisionInfo> verifyHostKey(hash<auto> ctxt, hash<auto> observed_key) {
+        throw \"UNEXPECTED\";
+    }
+
+    hash<SshHostKeyDecisionInfo> acceptHostKeyIfAbsent(hash<auto> ctxt, hash<auto> observed_key) {
+        throw \"UNEXPECTED\";
+    }
+
+    hash<SshHostKeyDecisionInfo> approveHostKey(hash<auto> ctxt, hash<auto> expected_observed_key,
+            hash<auto> record) {
+        throw \"UNEXPECTED\";
+    }
+
+    destructor() {
+        q.push(\"host-key store\");
+    }
+}
+
+sub register() {
+    SshUtilRegistry::registerClientIdentityProvider(\"pgm-client\", new ClientProvider());
+    SshUtilRegistry::registerClientIdentityProvider(\"pgm-filesystem\", new FilesystemSshClientIdentityProvider());
+    SshUtilRegistry::registerServerHostKeyProvider(\"pgm-server\", new ServerProvider());
+    SshUtilRegistry::registerHostKeyStore(\"pgm-store\", new Store());
+}
+";
+
+        #! a script registering a provider and ending
+        const ScriptCode = "%modern
+%requires sshutil
+
+class ClientProvider inherits AbstractSshClientIdentityProvider {
+    list<hash<SshClientIdentityCandidate>> getClientIdentityCandidates(hash<auto> ctxt) {
+        return ();
+    }
+
+    destructor() {
+        stdout.print(\"destroyed\\n\");
+    }
+}
+
+SshUtilRegistry::registerClientIdentityProvider(\"script\", new ClientProvider());
+";
+    }
+
+    constructor() : QUnit::Test("sshutil registrations of a Program", "1.0", \ARGV) {
+        addTestCase("Program deleted", \testProgramDeleted());
+        addTestCase("script ending", \testScriptEnd());
+        set_return_value(main());
+    }
+
+    testProgramDeleted() {
+        SshUtilRegistry::registerHostKeyStore("main-store", new MainStore());
+        on_exit SshUtilRegistry::deregisterHostKeyStore("main-store");
+
+        Queue q();
+        {
+            Program p(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES | PO_STRONG_ENCAPSULATION);
+            p.loadModule("sshutil");
+            p.parse(ProgramCode, "registrations");
+            p.setGlobalVarValue("q", q);
+            p.callFunction("register");
+            assertEq(("pgm-client", "pgm-filesystem"), sort(SshUtilRegistry::listClientIdentityProviders()),
+                "the client identity providers are registered");
+            assertEq(("pgm-server",), SshUtilRegistry::listServerHostKeyProviders(),
+                "the server host-key provider is registered");
+            assertEq(("main-store", "pgm-store"), sort(SshUtilRegistry::listHostKeyStores()),
+                "the host-key stores are registered");
+            assertEq(0, q.size(), "no registered object is destroyed while its Program exists");
+        }
+
+        list<string> destroyed = ();
+        while (q.size()) {
+            destroyed += q.get();
+        }
+        assertEq(("client identity provider", "host-key store", "server host-key provider"), sort(destroyed),
+            "the objects of the Program are destroyed with it");
+        assertEq((), SshUtilRegistry::listClientIdentityProviders(), "the client identity providers are deregistered");
+        assertEq((), SshUtilRegistry::listServerHostKeyProviders(), "the server host-key provider is deregistered");
+        assertEq(("main-store",), SshUtilRegistry::listHostKeyStores(),
+            "only the host-key store of the deleted Program is deregistered");
+        assertNothing(SshUtilRegistry::getClientIdentityProvider("pgm-client"), "a deregistered provider is not found");
+    }
+
+    testScriptEnd() {
+        TmpDir dir("sshutil-program-registrations-");
+        string script = join_paths(dir.path, "registration.q");
+        File f();
+        f.open2(script, O_CREAT | O_TRUNC | O_WRONLY);
+        f.write(ScriptCode);
+        f.close();
+
+        string qore = ENV.QORE_BIN ?? QORE_ARGV[0];
+        int rc;
+        string output = backquote(SshUtilProgramRegistrationsTest::quote(qore) + " "
+            + SshUtilProgramRegistrationsTest::quote(script) + " 2>&1", \rc);
+        assertEq(0, rc, "the script ends normally");
+        assertEq("destroyed\n", output, "the provider is destroyed with the Program of the script");
+    }
+
+    #! returns the string quoted for the shell
+    static string quote(string str) {
+        return "'" + replace(str, "'", "'\\''") + "'";
+    }
+}

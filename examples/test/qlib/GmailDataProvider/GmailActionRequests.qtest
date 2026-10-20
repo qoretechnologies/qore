@@ -152,6 +152,7 @@ public class GmailActionRequestsTest inherits QUnit::Test {
 
     constructor() : Test("GmailActionRequestsTest", "1.0") {
         addTestCase("MIME threading headers", \mimeThreadingTest());
+        addTestCase("raw message lines that start with a dot", \rawMessageDotTest());
         addTestCase("send-message request shape", \sendMessageRequestTest());
         addTestCase("create-draft request shape", \createDraftRequestTest());
         addTestCase("modify-message-labels request shape", \modifyMessageLabelsRequestTest());
@@ -211,6 +212,19 @@ public class GmailActionRequestsTest inherits QUnit::Test {
                 "body": {"size": 0},
             },
         };
+    }
+
+    #! The message is uploaded as it is: a line that starts with "." is not given another "." as for SMTP
+    rawMessageDotTest() {
+        hash<auto> body = GmailMessageSendDataProvider::makeMessageBody({
+            "to": ("someone@example.com",),
+            "subject": "dots",
+            "body": ".hello\r\n.\r\nbye",
+            "body-encoding": "none",
+        });
+        string mime = getMime(body);
+        assertRegex("\r\n\r\n\\.hello\r\n\\.\r\nbye\r\n$", mime);
+        assertFalse(regex(mime, "\\.\\."));
     }
 
     #! A reply must carry In-Reply-To and References and name its thread; a fresh message must carry neither

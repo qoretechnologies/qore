@@ -10,6 +10,8 @@
 
 #include "QC_DataFrame.h"
 
+#include <qore/QoreSandboxManager.h>
+
 #include <arrow/api.h>
 #include <arrow/io/api.h>
 #include <arrow/ipc/api.h>
@@ -172,7 +174,7 @@ static std::string qoreParquetLower(std::string value) {
 
 static std::string qoreParquetStringValue(QoreValue value) {
     QoreStringValueHelper str(value);
-    return str->c_str();
+    return dataFrameStdString(*str);
 }
 
 static bool qoreParquetReadStringListOption(const QoreHashNode* options, const char* key,
@@ -726,7 +728,8 @@ static bool qoreParquetDecimalFilterValue(QoreValue value, int32_t scale, arrow:
     arrow::Decimal128 dec_val;
     int32_t precision = 0;
     int32_t value_scale = 0;
-    auto status = arrow::Decimal128::FromString(std::string(str->c_str()), &dec_val, &precision, &value_scale);
+    // the whole string is parsed, so a value with a NUL character is not a decimal number
+    auto status = arrow::Decimal128::FromString(dataFrameStdString(*str), &dec_val, &precision, &value_scale);
     if (!status.ok()) {
         return false;
     }
@@ -926,7 +929,7 @@ static bool qoreParquetStatsMayMatch(const parquet::ColumnDescriptor* column,
                 return true;
             }
             QoreStringValueHelper str(filter.value);
-            return qoreParquetStringStatsMayMatch(stats, filter, str->c_str());
+            return qoreParquetStringStatsMayMatch(stats, filter, dataFrameStdString(*str));
         }
         default:
             return true;
@@ -1618,7 +1621,11 @@ static QoreValue arrowScalarToQore(const std::shared_ptr<arrow::Array>& array,
                 if (*xsink) {
                     return QoreValue();
                 }
-                hash->setKeyValue(struct_type->field(i)->name(), child_val, xsink);
+                // the field name is converted to a QoreString key, which raises HASH-KEY-ERROR for a name with a NUL
+                // character
+                if (hash->setKeyValue(struct_type->field(i)->name(), child_val, xsink)) {
+                    return QoreValue();
+                }
             }
             return hash.release();
         }
@@ -1692,6 +1699,10 @@ static QoreValue arrowScalarToQore(const std::shared_ptr<arrow::Array>& array,
                     return QoreValue();
                 }
                 QoreStringValueHelper key_str(*key_val);
+                // a map key with a NUL character cannot be a hash key
+                if (QoreHashNode::checkKey(key_str->c_str(), key_str->size(), xsink)) {
+                    return QoreValue();
+                }
                 QoreValue item_val = arrowScalarToQore(items, start + i, xsink);
                 if (*xsink) {
                     return QoreValue();
@@ -1897,7 +1908,8 @@ static bool appendToArrowBuilder(arrow::ArrayBuilder* builder,
             arrow::Decimal128 dec_val;
             int32_t out_precision = 0;
             int32_t out_scale = 0;
-            auto parse_status = arrow::Decimal128::FromString(std::string(str->c_str()), &dec_val, &out_precision,
+            // the whole string is parsed, so a value with a NUL character is not a decimal number
+            auto parse_status = arrow::Decimal128::FromString(dataFrameStdString(*str), &dec_val, &out_precision,
                 &out_scale);
             if (!parse_status.ok()) {
                 xsink->raiseException("DATAFRAME-IO-ERROR",
@@ -1935,8 +1947,14 @@ static bool appendToArrowBuilder(arrow::ArrayBuilder* builder,
                     return false;
                 }
                 auto child_field = struct_type->field(i);
+                // the value of a field is the value of the key of the field name in the hash; a field name with a NUL
+                // character cannot be a key, and would otherwise select the value of another key
+                const std::string& field_name = child_field->name();
+                if (QoreHashNode::checkKey(field_name.data(), field_name.size(), xsink)) {
+                    return false;
+                }
                 if (!appendToArrowBuilder(struct_builder->child_builder(i).get(), child_field->type(),
-                        hash->getKeyValue(child_field->name().c_str()), xsink)) {
+                        hash->getKeyValue(field_name.c_str()), xsink)) {
                     return false;
                 }
             }
@@ -2664,6 +2682,12 @@ QoreDataFrame* QoreDataFrame::readParquet(const std::string& path,
         return nullptr;
     }
 
+    // the file is read on behalf of the calling program, so its sandbox must allow it
+    QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
+    if (smh && !smh->checkFilesystemAccess(path.c_str(), QSEC_READ, xsink)) {
+        return nullptr;
+    }
+
     // Open file
     auto maybe_infile = arrow::io::ReadableFile::Open(path, pool);
     if (!maybe_infile.ok()) {
@@ -2982,6 +3006,13 @@ void QoreDataFrame::writeParquet(const std::string& path, const QoreHashNode* op
     arrow::MemoryPool* pool = arrow::system_memory_pool();
     QoreParquetWriteOptions write_options;
     if (!qoreParquetWriteOptions(options, write_options, xsink)) {
+        return;
+    }
+
+    // the file is written on behalf of the calling program, so its sandbox must allow it; this is checked before the
+    // data is converted
+    QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
+    if (smh && !smh->checkFilesystemAccess(path.c_str(), QSEC_WRITE | QSEC_CREATE, xsink)) {
         return;
     }
 

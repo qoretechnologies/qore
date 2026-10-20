@@ -58,7 +58,7 @@ public:
         const QoreListNode* args, ExceptionSink* xsink) override;
     DLLLOCAL virtual bool isEnabledFor(int level) const override;
 
-    DLLLOCAL virtual void deref(ExceptionSink* xsink);
+    DLLLOCAL virtual void deref(ExceptionSink* xsink) override;
 
     //! Returns the wrapped Qore object (not referenced)
     DLLLOCAL QoreObject* getObject() const { return logger_obj; }

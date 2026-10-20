@@ -496,6 +496,28 @@ static void qore_mongo_apply_uri_tls_opts(const mongoc_uri_t* uri, mongoc_ssl_op
         || mongoc_uri_get_option_as_bool(uri, MONGOC_URI_TLSALLOWINVALIDHOSTNAMES, false);
 }
 
+const char* qore_mongo_check_uri_tls_files(const mongoc_uri_t* uri, ExceptionSink* xsink) {
+    // a policy check honors an active policy barrier
+    QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
+    if (!smh) {
+        return nullptr;
+    }
+    // the deprecated ssl* names are given as well, in case the URI parser keeps them as given
+    static const char* const tls_file_options[] = {
+        MONGOC_URI_TLSCAFILE,
+        MONGOC_URI_TLSCERTIFICATEKEYFILE,
+        MONGOC_URI_SSLCERTIFICATEAUTHORITYFILE,
+        MONGOC_URI_SSLCLIENTCERTIFICATEKEYFILE,
+    };
+    for (const char* option : tls_file_options) {
+        const char* path = mongoc_uri_get_option_as_utf8(uri, option, nullptr);
+        if (path && !smh->checkFilesystemAccess(path, QSEC_READ, xsink)) {
+            return option;
+        }
+    }
+    return nullptr;
+}
+
 mongoc_stream_t* qore_mongo_stream_initiator(
     const mongoc_uri_t* uri,
     const mongoc_host_list_t* host,
@@ -511,6 +533,25 @@ mongoc_stream_t* qore_mongo_stream_initiator(
 
     // a policy check honors an active policy barrier
     QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
+
+    // the TLS files the connection string names are read for each connection on behalf of the calling program, so its
+    // sandbox must allow them; they are checked before anything else is done for the connection
+    {
+        ExceptionSink access_xsink;
+        if (const char* option = qore_mongo_check_uri_tls_files(uri, &access_xsink)) {
+            // note: bson_set_error() is a varargs function, so the descriptions must be held in named
+            // std::strings and passed as const char*
+            std::string access_desc = qore_mongo_exception_desc(access_xsink, "filesystem access denied");
+            QoreStringDataHelper access_err(access_xsink.getExceptionErr());
+            std::string access_err_str = access_err
+                ? std::string(access_err.c_str(), access_err.size()) : std::string("FILESYSTEM-ACCESS-DENIED");
+            access_xsink.clear();
+            bson_set_error(error, MONGOC_ERROR_STREAM, MONGOC_ERROR_STREAM_CONNECT,
+                "MongoDB connection denied by sandbox: TLS option '%s': %s: %s", option, access_err_str.c_str(),
+                access_desc.c_str());
+            return nullptr;
+        }
+    }
 
     // Resolve the hostname
     char port_str[8];

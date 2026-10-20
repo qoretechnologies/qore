@@ -98,6 +98,7 @@ public class QoreGuardrailTransformProcessor inherits AbstractDataProviderMLProc
     #! Creates the object with the given options
     constructor(hash<auto> options) {
         *hash<auto> copts = checkOptions("CONSTRUCTOR-ERROR", ConstructorOptions, options);
+        checkFieldPathOptions(options, copts);
         text_field = copts.text_field;
         if (!text_field.val()) {
             throw "CONSTRUCTOR-ERROR", "text_field option is required";
@@ -154,9 +155,9 @@ public class QoreGuardrailTransformProcessor inherits AbstractDataProviderMLProc
         result._guardrail_passed = gr.passed;
         result._guardrail_violations = gr.violations;
 
-        # If text was modified (e.g., PII redacted), update the text field
+        # If text was modified (e.g., PII redacted), update the text field where it was read
         if (gr.modified_text.val()) {
-            result{text_field} = gr.modified_text;
+            result = DataProvider::AbstractDataProvider::setFieldValue(result, text_field, gr.modified_text);
         }
 
         return result;

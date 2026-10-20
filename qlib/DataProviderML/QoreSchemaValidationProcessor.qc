@@ -123,6 +123,7 @@ public class QoreSchemaValidationProcessor inherits AbstractDataProviderMLProces
     #! Creates the object with the given options
     constructor(hash<auto> options) {
         *hash<auto> copts = checkOptions("CONSTRUCTOR-ERROR", ConstructorOptions, options);
+        checkFieldPathOptions(options, copts);
         schema = copts.schema;
         if (!schema) {
             throw "CONSTRUCTOR-ERROR", "schema must be a non-empty hash";

@@ -68,6 +68,7 @@ class CdsRestDataProviderTest inherits QUnit::Test {
         addTestCase("Factory tests", \factoryTests());
         addTestCase("App registration tests", \appRegistrationTests());
         addTestCase("Expression support tests", \expressionSupportTests());
+        addTestCase("OData field paths", \odataFieldPathTests());
         addTestCase("Child provider summary info tests", \childProviderSummaryInfoTests());
         addTestCase("action data dependent options", \testActionDataDependentOptions());
 
@@ -425,6 +426,50 @@ class CdsRestDataProviderTest inherits QUnit::Test {
         # Test that app names are defined
         assertEq("Dynamics", CdsRestDataProvider::DynamicsAppName);
         assertEq("BusinessCentral", CdsRestDataProvider::BusinessCentralAppName);
+    }
+
+    #! The field of an expression is a field path, written with the OData path separator
+    odataFieldPathTests() {
+        # a failed request carries the query it was sent with
+        code<string(hash<auto>)> get_query = string sub (hash<auto> where_cond) {
+            MockCdsRestClientWithError rest("QUERY", "the query was sent");
+            try {
+                ODataRecordIterator i(rest, "accounts", <ODataRecordInfo>{"entity_name": "accounts"}, where_cond);
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err == "QUERY") {
+                    return ex.arg.query;
+                }
+                rethrow;
+            }
+            throw "NO-REQUEST", "the iterator sent no request";
+        };
+
+        # a path of two keys is a navigation property and its property, written with a slash
+        assertEq("$filter=primarycontactid/fullname eq 'Smith'", get_query(<DataProviderExpression>{
+            "exp": DP_SEARCH_OP_EQ,
+            "args": (<DataProviderFieldReference>{"field": "primarycontactid.fullname"}, "Smith"),
+        }));
+        # one key is the property, without the escapes of the field path
+        assertEq("$filter=name eq 'Smith'", get_query(<DataProviderExpression>{
+            "exp": DP_SEARCH_OP_EQ,
+            "args": (<DataProviderFieldReference>{"field": "name"}, "Smith"),
+        }));
+        # a key with a slash or a dot cannot be named in OData, where a dot in a property path is a cast to a type
+        assertThrows("WHERE-ERROR", "the key \"a/b\", which OData cannot name", get_query, <DataProviderExpression>{
+            "exp": DP_SEARCH_OP_EQ,
+            "args": (<DataProviderFieldReference>{"field": "a/b.c"}, "Smith"),
+        });
+        assertThrows("WHERE-ERROR", "the key \"Unit.Price\", which OData cannot name", get_query,
+            <DataProviderExpression>{
+                "exp": DP_SEARCH_OP_EQ,
+                "args": (<DataProviderFieldReference>{"field": "Unit\\.Price"}, 1),
+            });
+
+        # a key of a search hash is a field path, too
+        assertEq("$filter=primarycontactid/fullname eq 'Smith'",
+            get_query({"primarycontactid.fullname": "Smith"}));
+        assertThrows("WHERE-ERROR", "the key \"Unit.Price\", which OData cannot name", get_query,
+            {"Unit\\.Price": 1});
     }
 
     #! Test DataProvider expression support

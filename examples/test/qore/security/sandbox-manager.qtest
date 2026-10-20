@@ -2095,8 +2095,15 @@ nothing sub noop() {}
     }
 
     testDataProviderLogoInitialization() {
+        # this case initializes the AOT-compiled DataProvider module: the build links every qmod that it compiles
+        # into qlib/ beside its source, and run_tests.sh can point QORE_TEST_QMOD_DIR at them instead
         string qmod_dir = getenv("QORE_TEST_QMOD_DIR") ?? (get_script_dir() + "/../../../../qlib");
         string data_provider = normalize_dir(qmod_dir + "/DataProvider/DataProvider.qmod");
+        # a build configured with QORE_BUILD_AOT_MODULES=OFF compiles no qmod at all, so the case cannot run there;
+        # in a build that compiles qmods (Util is compiled in every such build), the DataProvider qmod must be there
+        if (!is_file(data_provider) && !is_file(normalize_dir(qmod_dir + "/Util.qmod"))) {
+            testSkip("no AOT qmods were built (QORE_BUILD_AOT_MODULES=OFF); this case needs the DataProvider qmod");
+        }
         assertTrue(is_file(data_provider), "local DataProvider qmod is available for the sandbox regression");
 
         SandboxManager sm = SandboxManager::createLockdown();

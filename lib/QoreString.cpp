@@ -705,8 +705,10 @@ int qore_string_private::concatDecodeUriIntern(ExceptionSink* xsink, const qore_
 
     bool in_query = false;
 
+    // the whole string is decoded, including any part after a NUL character
     const char* url = str.effective_buf();
-    while (*url) {
+    const char* end = url + str.len;
+    while (url < end) {
         int x1 = getHex(url);
         if (x1 >= 0) {
             // see if a multi-byte char is starting
@@ -835,21 +837,25 @@ int qore_string_private::concatEncodeUriRequest(ExceptionSink* xsink, const qore
 
     int state = QUS_PATH;
 
-    const unsigned char* p = (const unsigned char*)str.buf;
-    while (*p) {
+    // the whole string is encoded, including any part after a NUL character
+    const unsigned char* p = (const unsigned char*)str.effective_buf();
+    const unsigned char* end = p + str.len;
+    while (p < end) {
         if ((*p) == '%') {
             concat("%25");
         } else if (*p == '"') {
             concat("%22");
         } else if (*p > 127) {
-            size_t len = q_UTF8_get_char_len((const char*)p, str.len - ((const char*)p - str.buf));
+            // a negative length means an incomplete character at the end of the string
+            qore_offset_t len = q_UTF8_get_char_len((const char*)p, end - p);
             if (len <= 0) {
-                xsink->raiseException("INVALID-ENCODING", "invalid UTF-8 getEncoding() found in string");
+                xsink->raiseException("INVALID-ENCODING", "invalid UTF-8 encoding found in string");
                 return -1;
             }
             // add UTF-8 percent-encoded characters
-            for (size_t i = 0; i < len; ++i)
+            for (qore_offset_t i = 0; i < len; ++i) {
                 sprintf("%%%X", (unsigned)p[i]);
+            }
             p += len;
             continue;
         } else if (state == QUS_PATH) {
@@ -2208,7 +2214,7 @@ namespace {
 class StatefulCompareHelper {
 public:
     //! converts both strings to UTF-8; if \a xsink is nullptr, an invalid text leaves the helper invalid
-    DLLLOCAL StatefulCompareHelper(const QoreString& a, const QoreString& b, ExceptionSink* xsink) {
+    StatefulCompareHelper(const QoreString& a, const QoreString& b, ExceptionSink* xsink) {
         ExceptionSink local_xsink;
         ExceptionSink* xs = xsink ? xsink : &local_xsink;
         if (!ua.set(&a, QCS_UTF8, xs) || !ub.set(&b, QCS_UTF8, xs)) {
@@ -2221,14 +2227,14 @@ public:
     }
 
     //! returns true if both strings were converted
-    DLLLOCAL explicit operator bool() const {
+    explicit operator bool() const {
         return ok;
     }
 
     //! compares the text: < 0, 0, or > 0 as the text of the first string is before, the same as, or after the second
     /** UTF-8 text in byte order is in the order of its code points
     */
-    DLLLOCAL int compare() const {
+    int compare() const {
         size_t al = a_utf8->size();
         size_t bl = b_utf8->size();
         int rc = memcmp(a_utf8->c_str(), b_utf8->c_str(), QORE_MIN(al, bl));
@@ -2239,12 +2245,12 @@ public:
     }
 
     //! returns true if the text of the first string starts with the text of the second
-    DLLLOCAL bool startsWith() const {
+    bool startsWith() const {
         return a_utf8->size() >= b_utf8->size() && !memcmp(a_utf8->c_str(), b_utf8->c_str(), b_utf8->size());
     }
 
     //! returns true if the text of the first string ends with the text of the second
-    DLLLOCAL bool endsWith() const {
+    bool endsWith() const {
         return a_utf8->size() >= b_utf8->size() && !memcmp(a_utf8->c_str() + a_utf8->size() - b_utf8->size(), b_utf8->c_str(), b_utf8->size());
     }
 
@@ -3252,8 +3258,10 @@ int QoreString::concatEncodeUrl(ExceptionSink* xsink, const QoreString& url, boo
     if (*xsink)
         return -1;
 
+    // the whole string is encoded, including any part after a NUL character, which is encoded as a control character
     const unsigned char* p = (const unsigned char*)str->c_str();
-    while (*p) {
+    const unsigned char* end = p + str->size();
+    while (p < end) {
         if ((*p) == '%') {
             concat("%25");
         } else if ((*p) == ' ') {
@@ -3261,13 +3269,14 @@ int QoreString::concatEncodeUrl(ExceptionSink* xsink, const QoreString& url, boo
         } else if ((*p) == '"') {
             concat("%22");
         } else if (*p > 127) {
-            size_t len = q_UTF8_get_char_len((const char*)p, str->size() - ((const char*)p - str->c_str()));
+            // a negative length means an incomplete character at the end of the string
+            qore_offset_t len = q_UTF8_get_char_len((const char*)p, end - p);
             if (len <= 0) {
                 xsink->raiseException("INVALID-ENCODING", "invalid UTF-8 encoding found in string");
                 return -1;
             }
             // add UTF-8 percent-encoded characters
-            for (size_t i = 0; i < len; ++i) {
+            for (qore_offset_t i = 0; i < len; ++i) {
                 sprintf("%%%X", (unsigned)p[i]);
             }
             p += len;
@@ -3545,7 +3554,23 @@ void QoreString::concatEscape(const QoreString* str, char c, char esc_char, Exce
         // if priv->buffer needs to be resized
         priv->check_char(cstr->priv->len + priv->len);
 
-        concatEscape(cstr->priv->effective_buf(), c, esc_char);
+        // the whole string is escaped: the variant for a C string stops at the first NUL character, so a string with
+        // a NUL character was cut there (ex: when serialized as a JSON string or formatted with "%y")
+        const char* p = cstr->priv->effective_buf();
+        for (size_t i = 0, e = cstr->priv->len; i < e; ++i) {
+            if (p[i] == c || p[i] == esc_char) {
+                // check for space in priv->buffer
+                priv->check_char(priv->len + 1);
+                priv->buf[priv->len++] = esc_char;
+            } else {
+                priv->check_char(priv->len);
+            }
+            priv->buf[priv->len++] = p[i];
+        }
+        // see if priv->buffer needs to be resized for '\0'
+        priv->check_char(priv->len);
+        // terminate string
+        priv->buf[priv->len] = '\0';
     }
 }
 
@@ -4181,11 +4206,14 @@ bool QoreString::operator==(const std::string& other) const {
 }
 
 bool QoreString::operator==(const char* other) const {
-   // NOTE: does not work with UTF-16 or other non-ASCII-compatible multi-byte encodings
-   if (!priv->len) {
-      return !other || !other[0];
-   }
-   return !strcmp(other, priv->effective_buf());
+    // NOTE: does not work with UTF-16 or other non-ASCII-compatible multi-byte encodings
+    if (!other) {
+        return !priv->len;
+    }
+    // the whole string is compared: with strcmp(), a string with a NUL character was equal to the C string that ends
+    // at its first NUL character, so a keyword given as "connect\0x" matched "connect"
+    size_t len = ::strlen(other);
+    return len == priv->len && (!len || !memcmp(other, priv->effective_buf(), len));
 }
 
 QoreString& QoreString::operator+=(const char* str) {

@@ -1,0 +1,125 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class HttpClientPollGoalTest
+
+#! The bound on every blocking wait in this test: a hang guard only, never a timing assertion
+const HangGuard = 60s;
+
+#! A server for one connection: it answers the request, closes the connection at once, or keeps it open unanswered
+class OneShotServer {
+    public {
+        int port;
+    }
+
+    private {
+        Socket listener();
+        Counter done(1);
+        #! the server closes the connection when an item is pushed, for the "silent" mode
+        Queue release();
+    }
+
+    constructor(string mode) {
+        listener.bindINET("127.0.0.1", "0", True);
+        listener.listen();
+        port = listener.getSocketInfo().port;
+        background serve(mode);
+    }
+
+    #! Stops the server; the background thread holds a reference to the object, so this is not a destructor
+    stop() {
+        release.push(True);
+        # closing the listener ends an accept() that no client connects to
+        listener.close();
+        done.waitForZero(HangGuard);
+    }
+
+    private serve(string mode) {
+        on_exit done.dec();
+        try {
+            Socket conn = listener.accept();
+            if (mode == "close") {
+                conn.close();
+                return;
+            }
+            if (mode == "ok") {
+                conn.readHTTPHeader(HangGuard);
+                conn.sendHTTPResponse(200, "OK", "1.1", {"Content-Type": "text/plain", "Connection": "close"},
+                    "answered");
+                return;
+            }
+            # silent: the connection is kept open and the request is never read or answered
+            release.get(HangGuard);
+            conn.close();
+        } catch (hash<ExceptionInfo> ex) {
+            # the client went away first
+        }
+    }
+}
+
+class HttpClientPollGoalTest inherits QUnit::Test {
+    constructor() : Test("HttpClientPollGoalTest", "1.0") {
+        addTestCase("an aborted request has not reached its goal", \testAbort());
+        addTestCase("a request that times out has not reached its goal", \testTimeout());
+        addTestCase("a request that fails has not reached its goal", \testError());
+        addTestCase("an answered request has reached its goal", \testSuccess());
+        set_return_value(main());
+    }
+
+    private hash<SocketPollResultInfo> exec(HTTPClient hc, AbstractPollOperation spop, timeout to) {
+        return AsyncIoController::exec(<SocketPollOperationInfo>{
+            "sock": hc,
+            "spop": spop,
+            "owner": sprintf("http-client-poll-goal-%d", getpid()),
+            "to": to,
+        });
+    }
+
+    testAbort() {
+        OneShotServer srv("silent");
+        on_exit srv.stop();
+        HTTPClient hc({"url": "http://127.0.0.1:" + srv.port});
+        AbstractPollOperation spop = hc.startPollSendRecv("GET", "/abort");
+        spop.abort();
+        assertFalse(spop.goalReached(), "an aborted request has not reached its goal");
+        assertNothing(spop.getOutput(), "an aborted request has no output");
+    }
+
+    testTimeout() {
+        OneShotServer srv("silent");
+        on_exit srv.stop();
+        HTTPClient hc({"url": "http://127.0.0.1:" + srv.port});
+        AbstractPollOperation spop = hc.startPollSendRecv("GET", "/timeout");
+        # the operation's timeout in the controller ends the request the server never answers
+        hash<SocketPollResultInfo> result = exec(hc, spop, 200ms);
+        assertEq("SOCKET-TIMEOUT", result.ex.err, "the request times out");
+        assertFalse(spop.goalReached(), "a request that timed out has not reached its goal");
+    }
+
+    testError() {
+        OneShotServer srv("close");
+        on_exit srv.stop();
+        HTTPClient hc({"url": "http://127.0.0.1:" + srv.port});
+        AbstractPollOperation spop = hc.startPollSendRecv("GET", "/error");
+        hash<SocketPollResultInfo> result = exec(hc, spop, HangGuard);
+        assertTrue(exists result.ex, "the request fails");
+        assertFalse(spop.goalReached(), sprintf("a request that failed (%s) has not reached its goal", result.ex.err));
+    }
+
+    testSuccess() {
+        OneShotServer srv("ok");
+        on_exit srv.stop();
+        HTTPClient hc({"url": "http://127.0.0.1:" + srv.port});
+        AbstractPollOperation spop = hc.startPollSendRecv("GET", "/ok");
+        hash<SocketPollResultInfo> result = exec(hc, spop, HangGuard);
+        assertNothing(result.ex, "the request succeeds");
+        assertTrue(spop.goalReached(), "an answered request has reached its goal");
+        assertEq(200, spop.getOutput().code, "the output has the response status code");
+    }
+}

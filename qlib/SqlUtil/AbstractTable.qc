@@ -155,6 +155,9 @@ public class AbstractTable inherits AbstractSqlUtilBase {
             - \c trigger_map: (@ref hash_type) a hash for automatically renaming triggers; if the source name (key) exists and the target name (value) does not exist, then the source trigger is automatically renamed
             - \c db_table_cache: (@ref SqlUtil::Tables "Tables") an optional table cache for maintaining tables in the database and foreign key relationships between tables
             - \c force: (\c bool_type) if @ref True "True" and supported by the driver and object, any objects dropped will be dropped with \c FORCE or \c CASCADE options
+            - \c foreign_constraint_alignment: (@ref SqlUtil::SchemaForeignConstraintAlignment
+              "SchemaForeignConstraintAlignment") the foreign constraints of the tables of a schema alignment; set by
+              @ref SqlUtil::AbstractDatabase::getAlignSql() "AbstractDatabase::getAlignSql()"
         */
         const AlignTableOptions = TableCreationOptions + {
             "column_map": Type::Hash,
@@ -163,6 +166,7 @@ public class AbstractTable inherits AbstractSqlUtilBase {
             "trigger_map": Type::Hash,
             "db_table_cache": "Tables",
             "force": Type::Boolean,
+            "foreign_constraint_alignment": "SchemaForeignConstraintAlignment",
         };
 
         #! Table description options
@@ -630,6 +634,36 @@ public class AbstractTable inherits AbstractSqlUtilBase {
         }
         partitionStrategyLoaded = old.partitionStrategyLoaded;
         partitionsLoaded = old.partitionsLoaded;
+
+        # the copied indexes support the copied constraints, not those of the table that was copied, so that a
+        # constraint renamed or dropped with its index in the copy is the one that the index supports
+        if (indexes) {
+            foreach AbstractIndex ix in (indexes.iterator()) {
+                *AbstractColumnSupportingConstraint c = ix.getSupportingConstraint();
+                if (c) {
+                    if (old.primaryKey && c == old.primaryKey) {
+                        ix.setSupportingConstraint(primaryKey);
+                    } else if (old.constraints) {
+                        foreach hash<auto> i in (old.constraints.getHash().pairIterator()) {
+                            if (i.value == c) {
+                                ix.setSupportingConstraint(cast<AbstractColumnSupportingConstraint>(
+                                    constraints{i.key}));
+                                break;
+                            }
+                        }
+                    }
+                }
+                *AbstractForeignConstraint fk = ix.getForeignConstraint();
+                if (fk && old.foreignConstraints) {
+                    foreach hash<auto> i in (old.foreignConstraints.getHash().pairIterator()) {
+                        if (i.value == fk) {
+                            ix.setSupportingConstraint(cast<AbstractForeignConstraint>(foreignConstraints{i.key}));
+                            break;
+                        }
+                    }
+                }
+            }
+        }
 
         copyImpl(old);
     }
@@ -1547,8 +1581,9 @@ bool b = table.empty();
     }
 
     #! creates the object from a table description hash
-    /** Primary-key metadata is validated without generating SQL to add the key to an existing table. This also
-        permits descriptions of keys on databases that do not support adding primary keys with \c ALTER \c TABLE.
+    /** Primary-key and foreign-constraint metadata is validated without generating SQL to add the key or the
+        constraint to an existing table. This also permits descriptions of keys and foreign constraints on databases
+        that do not support adding them with \c ALTER \c TABLE, such as SQLite.
 
         @par Example:
         @code{.py}
@@ -1726,7 +1761,13 @@ list<auto> changes = source_table.getAlignSql(target);
             if (constraints.hasKey(un))
                 continue;
             hash<auto> uk_opt = opt.(getConstraintOptions().keys()) + (ch - "columns");
-            addUniqueConstraintUnlocked(un, ch.columns, uk_opt);
+            # a description constructs metadata only: drivers such as SQLite cannot add a unique constraint to an
+            # existing table with ALTER TABLE, so do not request the SQL that adds it here
+            AbstractUniqueConstraint uk = addUniqueConstraintUnlockedIntern(un, ch.columns, uk_opt, NOTHING, False);
+            if (!constraints) {
+                constraints @= new Constraints();
+            }
+            constraints.add(un, uk);
         }
 
         if (partitionStrategy && partitionUniqueKeysRequireAllColumnsImpl()) {
@@ -1763,8 +1804,10 @@ list<auto> changes = source_table.getAlignSql(target);
             try {
                 hash<auto> fk_opt = opt.(getForeignConstraintOptions().keys())
                     + (ch - ("columns", "table", "target_columns"));
-                addForeignConstraintUnlocked(cn, ch.columns, ch.table, ch.target_columns,
-                    fk_opt);
+                # a description constructs metadata only: drivers such as SQLite cannot add a foreign constraint to
+                # an existing table, so do not request ALTER TABLE SQL here
+                setForeignConstraintUnlocked(cn, addForeignConstraintUnlockedIntern(cn, ch.columns, ch.table,
+                    ch.target_columns, fk_opt, NOTHING, False), fk_opt);
             } catch (hash<ExceptionInfo> ex) {
                 rethrow ex.err, sprintf("error setting up %s: %s", getDesc(), ex.desc), ex.arg;
             }
@@ -2289,11 +2332,17 @@ list l = table.getDropAllConstraintsAndIndexesOnColumnSql("status");
             on_success if (opt.sql_callback_executed)
                 remove primaryKey;
 
+            # in a schema alignment, the foreign constraints that reference the key are dropped first
+            lst += getDropReferencingForeignConstraintsSqlUnlocked(primaryKey.keys(), opt);
             lst += AbstractDatabase::doCallback(opt, primaryKey.getDropSql(getSqlName()), AbstractDatabase::AC_Drop, "primary key", primaryKey.getName(), getSqlName());
         }
 
         foreach AbstractConstraint c in (constraints.iterator()) {
             if (c.hasColumn(cname)) {
+                if (c instanceof AbstractUniqueConstraint) {
+                    lst += getDropReferencingForeignConstraintsSqlUnlocked(cast<AbstractUniqueConstraint>(c).keys(),
+                        opt);
+                }
                 on_success if (opt.sql_callback_executed) {
                     constraints.take(c.getName());
                     # if it's a unique constraint, remove any index with the same name if it exists
@@ -2323,6 +2372,7 @@ list l = table.getDropAllConstraintsAndIndexesOnColumnSql("status");
                 on_success if (opt.sql_callback_executed)
                     indexes.take(ix.name);
 
+                lst += getDropReferencingForeignConstraintsSqlUnlocked(ix.columns.keys(), opt);
                 lst += AbstractDatabase::doCallback(opt, ix.getDropSql(getSqlName()), AbstractDatabase::AC_Drop, "index", ix.name, getSqlName());
             }
         }
@@ -2483,7 +2533,8 @@ printf("%s;\n", sql);
         return uk;
     }
 
-    private AbstractUniqueConstraint addUniqueConstraintUnlockedIntern(string cname, softlist cols, *hash<auto> opt, *reference<string> sql) {
+    private AbstractUniqueConstraint addUniqueConstraintUnlockedIntern(string cname, softlist cols, *hash<auto> opt,
+            *reference<string> sql, bool generate_sql = True) {
         getColumnsUnlocked();
         if (!manual)
             getIndexesUnlocked();
@@ -2513,11 +2564,12 @@ printf("%s;\n", sql);
         # find matching index for unique constraint
         c.findMatchingIndex(indexes);
 
-        # add foreign constraint to table in the DB if the table already exists in the DB
-        if (opt.partition_aligned) {
-            prepareCreateSqlOptionsImpl(\opt);
+        if (generate_sql) {
+            if (opt.partition_aligned) {
+                prepareCreateSqlOptionsImpl(\opt);
+            }
+            sql = c.getCreateSql(getSqlName(), opt);
         }
-        sql = c.getCreateSql(getSqlName(), opt);
 
         # return the new constraint
         return c;
@@ -2598,8 +2650,8 @@ printf("%s;\n", sql);
         if (ix.unique && uniqueIndexCreatesConstraintImpl()) {
             getConstraintsUnlocked();
             if (!constraints.hasKey(ix.name)) {
-                string csql;
-                AbstractUniqueConstraint uk = addUniqueConstraintUnlockedIntern(iname, cols, opt, \csql);
+                # the index is the constraint, so there is no SQL for the constraint
+                AbstractUniqueConstraint uk = addUniqueConstraintUnlockedIntern(iname, cols, opt, NOTHING, False);
                 uk.setIndexBase(ix.name);
                 if (!constraints)
                     constraints @= new Constraints();
@@ -2667,12 +2719,17 @@ AbstractIndex ix = table.renameIndex("uk_table_name", "unique_table_name");
 
         @param old_name the current name of the index
         @param new_name the new name for the index
-        @param sql an optional reference to a string to retrieve the SQL used to modify the table (only executed if the table is already in the database)
+        @param sql an optional reference to a list of strings to retrieve the SQL used to modify the table (only
+        executed if the table is already in the database); an index that the database cannot rename
+        (@ref SqlUtil::AbstractIndex::supportsRename() "AbstractIndex::supportsRename()") is renamed in the table's
+        description only, and keeps its name in the database, and the list is empty
         @return the index object that was updated
 
         @throw INDEX-ERROR if the old index does not exist in the table or if the new index name already exists
+
+        @since SqlUtil 3.11.0 the SQL is returned in a list of strings instead of one string
     */
-    AbstractIndex renameIndex(string old_name, string new_name, reference<string> sql) {
+    AbstractIndex renameIndex(string old_name, string new_name, *reference<softlist<string>> sql) {
         l.lock();
         on_exit l.unlock();
         getIndexesUnlocked();
@@ -2687,10 +2744,13 @@ AbstractIndex ix = table.renameIndex("uk_table_name", "unique_table_name");
         ix = indexes{old_name};
         rename = sub () { indexes.renameKey(old_name, new_name); };
 
-        # rename index in table if the table already exists in the DB
-        execSql(sql = ix.getRenameSql(getSqlName(), new_name));
+        # rename index in table if the table already exists in the DB; an index that the database cannot rename is
+        # renamed in the description of the table only, and keeps its name in the database
+        softlist<string> rename_sql = ix.supportsRename() ? ix.getRenameSql(getSqlName(), new_name) : ();
+        sql = rename_sql;
+        execSql(rename_sql);
 
-        ix.name = new_name;
+        ix.rename(new_name);
 
         # rename index in container structure
         rename();
@@ -2861,7 +2921,12 @@ printf("%s;\n", sql);
     private AbstractForeignConstraint addForeignConstraintUnlocked(string cname, softlist cols, string table, *softlist tcols, *hash<auto> opt, *reference<string> sql) {
         AbstractForeignConstraint fk = addForeignConstraintUnlockedIntern(cname, cols, table, tcols, opt, \sql);
         execSql(sql);
+        setForeignConstraintUnlocked(cname, fk, opt);
+        return fk;
+    }
 
+    #! sets a foreign constraint of the table and records it as a source constraint of the cached target table
+    private setForeignConstraintUnlocked(string cname, AbstractForeignConstraint fk, *hash<auto> opt) {
         # update cached tables with foreign constraint source info
         if (opt.table_cache.hasKey(fk.target.table))
             opt.table_cache{fk.target.table}.addSourceConstraint(getSqlName(), fk);
@@ -2870,10 +2935,10 @@ printf("%s;\n", sql);
         if (!foreignConstraints)
             foreignConstraints @= new ForeignConstraints();
         foreignConstraints.add(cname, fk);
-        return fk;
     }
 
-    private AbstractForeignConstraint addForeignConstraintUnlockedIntern(string cname, softlist cols, string table, *softlist tcols, *hash<auto> opt, *reference<string> sql) {
+    private AbstractForeignConstraint addForeignConstraintUnlockedIntern(string cname, softlist cols, string table,
+            *softlist tcols, *hash<auto> opt, *reference<string> sql, bool generate_sql = True) {
         getColumnsUnlocked();
         # load constraints if needed, verify unique constraint name, validate/process options
         checkUniqueConstraintNameValidateOptions("FOREIGN-CONSTRAINT-ERROR", cname, getForeignConstraintOptions(), \opt);
@@ -2918,7 +2983,9 @@ printf("%s;\n", sql);
         # get the new foreign constraint object
         AbstractForeignConstraint fk = addForeignConstraintImpl(cname, ch, table, tch, opt);
 
-        sql = fk.getCreateSql(getSqlName());
+        if (generate_sql) {
+            sql = fk.getCreateSql(getSqlName());
+        }
 
         # return the new foreign constraint
         return fk;
@@ -3090,6 +3157,10 @@ AbstractConstraint con = table.renameConstraint("pk_table_name", "pkey_table_nam
         @param lsql an optional reference to a list of strings to retrieve the SQL used to modify the constraint (only executed if the table is already in the database)
         @return the constraint object that was updated
 
+        @note a constraint that the database cannot rename
+        (@ref SqlUtil::AbstractConstraint::supportsRename() "AbstractConstraint::supportsRename()") is renamed in the
+        table's description only, and \a lsql is an empty list
+
         @throw CONSTRAINT-ERROR if the old constraint does not exist in the table or if the new constraint name already exists
     */
     AbstractConstraint renameConstraint(string old_name, string new_name, reference lsql) {
@@ -3132,8 +3203,13 @@ AbstractConstraint con = table.renameConstraint("pk_table_name", "pkey_table_nam
             throw "CONSTRAINT-ERROR", sprintf("%s: has no constraint %y; valid constraints: %y", getDesc(), old_name, cl);
         }
 
-        # rename foreign constraint in table if the table already exists in the DB
-        execSql(lsql = c.getRenameSql(getSqlName(), new_name));
+        # rename foreign constraint in table if the table already exists in the DB; a constraint that the database
+        # cannot rename is renamed in the description of the table only
+        if (c.supportsRename()) {
+            execSql(lsql = c.getRenameSql(getSqlName(), new_name));
+        } else {
+            lsql = ();
+        }
 
         c.rename(new_name);
 
@@ -9714,6 +9790,8 @@ printf("%s\n", table.getCreateSql());
         @return an SQL string that could be used to create the table and all known properties of the table
     */
     string getCreateSqlString(*hash<auto> opt) {
+        # other values are set in the options
+        opt = AbstractTable::getAnyValueOptions(opt);
         # convert table alignment omission options to a hash and check
         if (opt.omit) opt.omit = getCheckOmissionOptions(opt.omit, "CREATE-TABLE-ERROR");
 
@@ -9737,6 +9815,8 @@ map printf("$1;\n", $1), table.getCreateSql();
         @return a list of SQL strings that could be used to create the table and all known properties of the table
     */
     list<auto> getCreateSql(*hash<auto> opt) {
+        # other values are set in the options
+        opt = AbstractTable::getAnyValueOptions(opt);
         # convert table alignment omission options to a hash and check
         if (opt.omit) opt.omit = getCheckOmissionOptions(opt.omit, "CREATE-TABLE-ERROR");
 
@@ -9758,12 +9838,14 @@ string sql = table.getCreateTableSql();
         @return an SQL string that could be used to create the basic table structure without indexes and constraints
 
         @throw OPTION-ERROR invalid or unsupported option passed
+        @throw CREATE-TABLE-ERROR an unknown omission given in the \c omit option
     */
     string getCreateTableSql(*hash<auto> opt) {
+        # the options are validated as they are given, before the omission options are converted to a hash
+        validateOptionsIntern("OPTION-ERROR", getTableCreationOptions(), \opt);
+
         # convert table alignment omission options to a hash and check
         if (opt.omit) opt.omit = getCheckOmissionOptions(opt.omit, "CREATE-TABLE-ERROR");
-
-        validateOptionsIntern("OPTION-ERROR", getTableCreationOptions(), \opt);
         l.lock();
         on_exit l.unlock();
         return getCreateTableSqlUnlocked(opt);
@@ -10935,6 +11017,12 @@ string sql = table.getCreateTableSql();
     #! returns a list of SQL strings required to align the table to the table given as an argument
     /** if the tables are identical then an empty list is returned
 
+        The table keeps only what its template has: a column, index, constraint or trigger of the table that the
+        template does not have is dropped, unless the \c omit option leaves out its kind.  An index or constraint
+        with the definition of one of the template under another name is renamed instead, and the index of a primary
+        key, unique constraint or foreign constraint, such as the index that MySQL creates for a foreign constraint,
+        is kept or dropped with its constraint.
+
         @par Example:
         @code{.py}
 list<auto> l = table.getAlignSql(table2);
@@ -11074,8 +11162,11 @@ list<auto> l = table.getAlignSql(table2);
             if (indexes.hasKey(key)) {
                 AbstractIndex ix = indexes{key};
                 string value = i.getValue();
-                l += AbstractDatabase::doCallback(opt, ix.getRenameSql(getSqlName(), value),
-                    AbstractDatabase::AC_Rename, "index", ix.name, name, value);
+                # an index that the database cannot rename keeps its name in the database
+                if (ix.supportsRename()) {
+                    l += AbstractDatabase::doCallback(opt, ix.getRenameSql(getSqlName(), value),
+                        AbstractDatabase::AC_Rename, "index", ix.name, name, value);
+                }
                 renameIndexUnlocked(ix, value);
             }
         }
@@ -11087,9 +11178,12 @@ list<auto> l = table.getAlignSql(table2);
                     && t.indexes
                     && (*AbstractIndex other = t.indexes.findEqual(ix))
                     && !indexes.hasKey(other.name)) {
-                    # rename index
-                    l += AbstractDatabase::doCallback(opt, ix.getRenameSql(getSqlName(), other.name),
-                        AbstractDatabase::AC_Rename, "index", ix.name, name, other.name);
+                    # rename index; one that the database cannot rename is the template's index under its name in
+                    # the database
+                    if (ix.supportsRename()) {
+                        l += AbstractDatabase::doCallback(opt, ix.getRenameSql(getSqlName(), other.name),
+                            AbstractDatabase::AC_Rename, "index", ix.name, name, other.name);
+                    }
                     renameIndexUnlocked(ix, other.name);
                 }
             }
@@ -11118,34 +11212,42 @@ list<auto> l = table.getAlignSql(table2);
                         if (supporting_constraint) {
                             continue;
                         }
+                        # a foreign constraint with the same name and columns that the alignment of another table of
+                        # the schema dropped first, because the key that it references changes, is the table's, as
+                        # when the table is aligned first
+                        *SchemaForeignConstraintAlignment fka = opt.foreign_constraint_alignment;
+                        if (fka) {
+                            *AbstractForeignConstraint fk = fka.getDroppedForeignConstraint(name, ix.name);
+                            if (fk && fk.matchKeys(ix.columns)) {
+                                continue;
+                            }
+                        }
                     }
-                    # see if the index is supporting a constraint that has to be dropped first
-                    foreach AbstractColumnConstraint csc in (ix.getAllSupportingConstraints()) {
-                        if (constraintsLinkedToIndexesImpl()) {
+                    # the foreign constraints that reference a unique index are dropped before it
+                    if (ix.unique) {
+                        l += getDropReferencingForeignConstraintsSqlUnlocked(ix.columns.keys(), opt);
+                    }
+                    # on a database that links constraints to indexes, the constraints that the index supports are
+                    # dropped, and a unique constraint or primary key is dropped with its index; otherwise, and for
+                    # an index that supports no constraint, the index is dropped
+                    bool dropped;
+                    if (constraintsLinkedToIndexesImpl()) {
+                        foreach AbstractColumnConstraint csc in (ix.getAllSupportingConstraints()) {
                             code rmv;
                             AbstractConstraint c = findDropConstraintUnlocked(csc.getName(), \rmv);
 
                             l += AbstractDatabase::doCallback(opt, c.getDropSql(getSqlName()),
                                 AbstractDatabase::AC_Drop, "constraint", c.getName(), name);
                             rmv();
-                        } else {
-                            l += AbstractDatabase::doCallback(opt, ix.getDropSql(getSqlName()),
-                                AbstractDatabase::AC_Drop, "index", ix.name, name);
+                            if (csc instanceof AbstractColumnSupportingConstraint) {
+                                dropped = True;
+                            }
                         }
                     }
-                    /*
-                    *AbstractColumnSupportingConstraint csc = ix.getSupportingConstraint();
-                    if (csc && constraintsLinkedToIndexesImpl()) {
-                        code rmv;
-                        AbstractConstraint c = findDropConstraintUnlocked(csc.getName(), \rmv);
-
-                        l += AbstractDatabase::doCallback(opt, c.getDropSql(getSqlName()), AbstractDatabase::AC_Drop,
-                            "constraint", c.getName(), name);
-                        rmv();
-                    } else
-                        l += AbstractDatabase::doCallback(opt, ix.getDropSql(getSqlName()), AbstractDatabase::AC_Drop,
-                            "index", ix.name, name);
-                    */
+                    if (!dropped) {
+                        l += AbstractDatabase::doCallback(opt, ix.getDropSql(getSqlName()),
+                            AbstractDatabase::AC_Drop, "index", ix.name, name);
+                    }
                     if (uixc) {
                         *AbstractUniqueConstraint c = ix.getSupportingConstraint();
                         if (c && constraints.hasKey(c.getName()))
@@ -11174,8 +11276,11 @@ list<auto> l = table.getAlignSql(table2);
                 c = primaryKey;
 
             if (c) {
-                l += AbstractDatabase::doCallback(opt, c.getRenameSql(getSqlName(), value),
-                    AbstractDatabase::AC_Rename, "constraint", c.getName(), name, value);
+                # a constraint that the database cannot rename keeps its name in the database
+                if (c.supportsRename()) {
+                    l += AbstractDatabase::doCallback(opt, c.getRenameSql(getSqlName(), value),
+                        AbstractDatabase::AC_Rename, "constraint", c.getName(), name, value);
+                }
                 c.rename(value);
             }
         }
@@ -11189,9 +11294,12 @@ list<auto> l = table.getAlignSql(table2);
                 && t.constraints
                 && (*AbstractUniqueConstraint other = t.constraints.findEqualUniqueConstraint(uk))
                 && !constraints.hasKey(other.getName())) {
-                # rename constraint
-                l += AbstractDatabase::doCallback(opt, uk.getRenameSql(getSqlName(), other.getName()),
-                    AbstractDatabase::AC_Rename, "constraint", uk.getName(), name, other.getName());
+                # rename constraint; one that the database cannot rename is the template's constraint under its name
+                # in the database
+                if (uk.supportsRename()) {
+                    l += AbstractDatabase::doCallback(opt, uk.getRenameSql(getSqlName(), other.getName()),
+                        AbstractDatabase::AC_Rename, "constraint", uk.getName(), name, other.getName());
+                }
                 constraints.renameKey(uk.getName(), other.getName());
                 uk.rename(other.getName());
             }
@@ -11204,9 +11312,12 @@ list<auto> l = table.getAlignSql(table2);
                     && t.foreignConstraints
                     && (*AbstractForeignConstraint other = t.foreignConstraints.findEqual(fk))
                     && !foreignConstraints.hasKey(other.getName())) {
-                    # rename constraint
-                    l += AbstractDatabase::doCallback(opt, fk.getRenameSql(getSqlName(), other.getName()),
-                        AbstractDatabase::AC_Rename, "constraint", fk.getName(), name, other.getName());
+                    # rename constraint; one that the database cannot rename is the template's constraint under its
+                    # name in the database
+                    if (fk.supportsRename()) {
+                        l += AbstractDatabase::doCallback(opt, fk.getRenameSql(getSqlName(), other.getName()),
+                            AbstractDatabase::AC_Rename, "constraint", fk.getName(), name, other.getName());
+                    }
                     foreignConstraints.renameKey(fk.getName(), other.getName());
                     fk.rename(other.getName());
                 }
@@ -11225,9 +11336,19 @@ list<auto> l = table.getAlignSql(table2);
         # check for other constraints not in the template and drop them
         foreach AbstractConstraint c in (constraints.iterator()) {
             if (!t.constraints.hasKey(c.getName())) {
+                if (c instanceof AbstractUniqueConstraint) {
+                    l += getDropReferencingForeignConstraintsSqlUnlocked(cast<AbstractUniqueConstraint>(c).keys(),
+                        opt);
+                }
                 l += AbstractDatabase::doCallback(opt, c.getDropSql(getSqlName()), AbstractDatabase::AC_Drop,
                     "constraint", c.getName(), name);
                 constraints.take(c.getName());
+                # dropping a unique constraint drops the index of the same name that it is linked to, so the index
+                # is not the table's anymore: a template index with its name is created, not recreated
+                if (c instanceof AbstractUniqueConstraint && constraintsLinkedToIndexesImpl()
+                    && indexes.hasKey(c.getName())) {
+                    indexes.take(c.getName());
+                }
             }
         }
 
@@ -11235,9 +11356,10 @@ list<auto> l = table.getAlignSql(table2);
         if (!t.primaryKey.empty()) {
             if (!primaryKey.empty()) {
                 if (!primaryKey.equal(t.primaryKey)) {
-                    # see if pk has the same definition but a different name; if so, it will be renamed later
-                    if (primaryKey.getName() == t.primaryKey.getName() || primaryKey.matchKeys(t.primaryKey)) {
-                        #printf("pk1: %Y\nXXXXXXX\npk2: %Y\n", primaryKey, t.primaryKey);
+                    # a key with the template's columns under another name is renamed later, never dropped: a drop
+                    # cascades to the foreign constraints that reference the key on some databases
+                    if (primaryKey.keys() != t.primaryKey.keys()) {
+                        l += getDropReferencingForeignConstraintsSqlUnlocked(primaryKey.keys(), opt);
                         l += AbstractDatabase::doCallback(opt, primaryKey.getDropSql(getSqlName()),
                             AbstractDatabase::AC_Drop, "primary key", t.primaryKey.getName(), name);
                         # clear supporting constraint from index in the template since we've dropped the PK constraint
@@ -11259,10 +11381,15 @@ list<auto> l = table.getAlignSql(table2);
                     t.primaryKey.clearIndex();
             }
         } else if (!primaryKey.empty()) {
+            l += getDropReferencingForeignConstraintsSqlUnlocked(primaryKey.keys(), opt);
             l += AbstractDatabase::doCallback(opt, primaryKey.getDropSql(getSqlName()), AbstractDatabase::AC_Drop,
                 "primary key", primaryKey.getName(), name);
             delete primaryKey;
         }
+
+        # the driver refuses the changes that its database cannot make with any version before a column is aligned,
+        # so that a column change that only some versions of the database cannot make does not hide them
+        checkAlignChangesImpl(t, opt);
 
         # check for columns in the template that are not present or different in the current table
         foreach AbstractColumn c in (t.columns.iterator()) {
@@ -11303,8 +11430,12 @@ list<auto> l = table.getAlignSql(table2);
                     l += AbstractDatabase::doCallback(opt, ix.getCreateSql(getSqlName(), opt),
                         AbstractDatabase::AC_Add, "index", ix.name, name);
                 } else if (!indexesEqualImpl(ix, indexes{ix.name}, index_expressions_available)) {
-                    l += AbstractDatabase::doCallback(opt, ix.getRecreateSql(ds, getSqlName(), opt),
-                        AbstractDatabase::AC_Recreate, "index", ix.name, name);
+                    l += getDropReferencingForeignConstraintsSqlUnlocked(indexes{ix.name}.columns.keys(), opt);
+                    # an index that has another name in the database is dropped by that name
+                    AbstractIndex current = indexes{ix.name};
+                    l += AbstractDatabase::doCallback(opt, ix.getRecreateSql(ds, getSqlName(), opt,
+                        current.getDbName() != ix.name ? current : NOTHING), AbstractDatabase::AC_Recreate, "index",
+                        ix.name, name);
                 } else
                     AbstractDatabase::doOkCallback(opt, AbstractDatabase::AC_Unchanged, "index", ix.name, name);
             }
@@ -11313,12 +11444,14 @@ list<auto> l = table.getAlignSql(table2);
         # check for primary key differences
         if (!t.primaryKey.empty()) {
             if (!primaryKey.empty()) {
-                # we know the 2 primary key definitions have equal column definitions as it's checked above
-                # see if pk has a different name
+                # the 2 primary keys have the same columns, as a key with other columns has been dropped above; a key
+                # with another name is renamed, unless the database has no name for a primary key
                 if (primaryKey.getName() != t.primaryKey.getName()) {
-                    l += AbstractDatabase::doCallback(opt, primaryKey.getRenameSql(getSqlName(),
-                        t.primaryKey.getName()), AbstractDatabase::AC_Rename, "constraint", primaryKey.getName(),
-                        name, t.primaryKey.getName());
+                    if (primaryKey.supportsName() && t.primaryKey.supportsName()) {
+                        l += AbstractDatabase::doCallback(opt, primaryKey.getRenameSql(getSqlName(),
+                            t.primaryKey.getName()), AbstractDatabase::AC_Rename, "constraint", primaryKey.getName(),
+                            name, t.primaryKey.getName());
+                    }
                     primaryKey.rename(t.primaryKey.getName());
                 }
             } else {
@@ -11331,16 +11464,23 @@ list<auto> l = table.getAlignSql(table2);
             # check for foreign constraints in the template that are not present or different in the current table
             foreach AbstractForeignConstraint c in (t.foreignConstraints.iterator()) {
                 if (!foreignConstraints.hasKey(c.getName())) {
-                    # add constraint to table
-                    l += AbstractDatabase::doCallback(opt, c.getCreateSql(getSqlName(), opt),
-                        AbstractDatabase::AC_Add, "foreign constraint", c.getName(), name);
+                    # add constraint to table, after the table that it references is aligned in a schema alignment
+                    if (!opt.foreign_constraint_alignment
+                        || !opt.foreign_constraint_alignment.deferAdd(name, getSqlName(), c)) {
+                        l += AbstractDatabase::doCallback(opt, c.getCreateSql(getSqlName(), opt),
+                            AbstractDatabase::AC_Add, "foreign constraint", c.getName(), name);
+                    }
                 } else if (!c.equal(foreignConstraints{c.getName()})) {
                     # drop current constraint
                     l += AbstractDatabase::doCallback(opt, foreignConstraints{c.getName()}.getDropSql(getSqlName()),
                         AbstractDatabase::AC_Drop, "foreign constraint", c.getName(), name);
-                    # add new constraint to table
-                    l += AbstractDatabase::doCallback(opt, c.getCreateSql(getSqlName(), opt),
-                        AbstractDatabase::AC_Add, "foreign constraint", c.getName(), name);
+                    # add new constraint to table, after the table that it references is aligned in a schema
+                    # alignment
+                    if (!opt.foreign_constraint_alignment
+                        || !opt.foreign_constraint_alignment.deferAdd(name, getSqlName(), c)) {
+                        l += AbstractDatabase::doCallback(opt, c.getCreateSql(getSqlName(), opt),
+                            AbstractDatabase::AC_Add, "foreign constraint", c.getName(), name);
+                    }
                 } else {
                     AbstractDatabase::doOkCallback(opt, AbstractDatabase::AC_Unchanged, "foreign constraint",
                         c.getName(), name);
@@ -11350,18 +11490,21 @@ list<auto> l = table.getAlignSql(table2);
 
         # check for other constraints in the template that are not present or different in the current table
         foreach AbstractConstraint c in (t.constraints.iterator()) {
+            # a unique constraint that a unique index of the template creates is added, recreated and dropped with
+            # the index above
+            if (uixc && t.isUniqueIndexConstraintUnlocked(c)) {
+                continue;
+            }
             if (!constraints.hasKey(c.getName())) {
-                # make sure the constraint wasn't implicitly added with a unique index
-                if (uixc && (c instanceof AbstractUniqueConstraint)) {
-                    AbstractUniqueConstraint uk = c;
-                    if (t.indexes.hasKey(uk.getName()) && uk.matchKeys(t.indexes{uk.getName()}.columns.getHash()))
-                        continue;
-                }
                 # add constraint to table
                 l += AbstractDatabase::doCallback(opt, c.getCreateSql(getSqlName(), opt), AbstractDatabase::AC_Add,
                     "constraint", c.getName(), name);
             } else if (!c.equal(constraints{c.getName()})) {
-                    # drop current constraint
+                if (constraints{c.getName()} instanceof AbstractUniqueConstraint) {
+                    l += getDropReferencingForeignConstraintsSqlUnlocked(
+                        cast<AbstractUniqueConstraint>(constraints{c.getName()}).keys(), opt);
+                }
+                # drop current constraint
                 l += AbstractDatabase::doCallback(opt, constraints{c.getName()}.getDropSql(getSqlName()),
                     AbstractDatabase::AC_Drop, "constraint", c.getName(), name);
                 if (constraints{c.getName()} instanceof AbstractUniqueConstraint && constraintsLinkedToIndexesImpl()
@@ -11413,6 +11556,75 @@ list<auto> l = table.getAlignSql(table2);
         return l;
     }
 
+    #! returns @ref True "True" if the constraint is the unique constraint of an index of the table
+    /** On a database whose unique indexes are unique constraints
+        (@ref uniqueIndexCreatesConstraintImpl() "uniqueIndexCreatesConstraintImpl()"), a unique index of a table
+        description creates a unique constraint with the index's name and columns, which is the index
+
+        @param c the constraint of the table to check
+
+        @return @ref True "True" if \a c is a unique constraint with the name and the columns of an index of the table
+
+        @note the table lock must be held when calling this method
+
+        @since SqlUtil 3.11.0
+    */
+    private bool isUniqueIndexConstraintUnlocked(AbstractConstraint c) {
+        if (!(c instanceof AbstractUniqueConstraint)) {
+            return False;
+        }
+        AbstractUniqueConstraint uk = cast<AbstractUniqueConstraint>(c);
+        string uk_name = uk.getName();
+        return indexes.hasKey(uk_name) && uk.matchKeys(indexes{uk_name}.columns.getHash());
+    }
+
+    #! returns the SQL that drops the foreign constraints that reference a key or index of the table
+    /** Called before a key or index of the table is dropped or recreated in a schema alignment
+        (@ref SqlUtil::SchemaForeignConstraintAlignment "SchemaForeignConstraintAlignment"): a database that refuses
+        to drop a key or index that a foreign constraint references
+        (@ref foreignConstraintsDependOnKeysImpl() "foreignConstraintsDependOnKeysImpl()") gets the foreign
+        constraints of the tables of the schema, including the table itself, that reference its columns dropped
+        first; the alignment of their tables adds them again
+
+        @param columns the columns of the key or index
+        @param opt the alignment options
+
+        @return the SQL that drops the foreign constraints; an empty list outside a schema alignment
+
+        @note the table lock must be held when calling this method
+
+        @since SqlUtil 3.11.0
+    */
+    private list<auto> getDropReferencingForeignConstraintsSqlUnlocked(list<string> columns, *hash<auto> opt) {
+        *SchemaForeignConstraintAlignment fka = opt.foreign_constraint_alignment;
+        if (!fka || !foreignConstraintsDependOnKeysImpl()) {
+            return ();
+        }
+        list<auto> l = ();
+        # the table's own foreign constraints that reference the key or index: its alignment adds them again
+        if (foreignConstraints) {
+            list<string> names = map $1.getName(), foreignConstraints.iterator(),
+                SchemaForeignConstraintAlignment::references($1, name, columns);
+            foreach string fk_name in (names) {
+                l += AbstractDatabase::doCallback(opt, foreignConstraints{fk_name}.getDropSql(getSqlName()),
+                    AbstractDatabase::AC_Drop, "foreign constraint", fk_name, name);
+                foreignConstraints.take(fk_name);
+            }
+        }
+        l += fka.getDropReferencingSql(name, columns, opt);
+        return l;
+    }
+
+    #! returns @ref True "True" if the database refuses to drop a key or index that a foreign constraint references
+    /** A schema alignment drops the foreign constraints that reference a key or index before it drops or recreates
+        it on such a database; the default implementation returns @ref True "True"
+
+        @since SqlUtil 3.11.0
+    */
+    private bool foreignConstraintsDependOnKeysImpl() {
+        return True;
+    }
+
     private *AbstractColumnSupportingConstraint getSupportingConstraint(string ixname) {
         if (constraints.hasKey(ixname) && constraints{ixname} instanceof AbstractColumnSupportingConstraint)
             return constraints{ixname};
@@ -11432,7 +11644,8 @@ list<auto> l = table.getAlignSql(table2);
     private renameIndexUnlocked(AbstractIndex ix, string new_name) {
         string old_name = ix.name;
         indexes.renameKey(old_name, new_name);
-        ix.name = new_name;
+        # an index that the database cannot rename keeps its name in the database
+        ix.rename(new_name);
 
         # if constraints are linked to indexes, then rename any matching constraint as well
         if (constraintsLinkedToIndexesImpl()) {
@@ -12294,7 +12507,16 @@ on_exit printf("SQL> %s\n", sql);
             getForeignConstraintsUnlocked(opt);
         if (foreignConstraints.empty())
             return;
-        return map AbstractDatabase::doCallback(opt, $1.getCreateSql(name, opt), AbstractDatabase::AC_Add, "foreign constraint", $1.getName(), name), foreignConstraints.iterator();
+        list<auto> l = ();
+        foreach AbstractForeignConstraint fk in (foreignConstraints.iterator()) {
+            # in a schema alignment, a foreign constraint is added after the table that it references is aligned
+            if (opt.foreign_constraint_alignment && opt.foreign_constraint_alignment.deferAdd(name, name, fk)) {
+                continue;
+            }
+            l += AbstractDatabase::doCallback(opt, fk.getCreateSql(name, opt), AbstractDatabase::AC_Add,
+                "foreign constraint", fk.getName(), name);
+        }
+        return l;
     }
 
     private *list<auto> getCreateMiscSqlUnlocked(*hash<auto> opt, bool cache = True) {
@@ -12330,6 +12552,21 @@ on_exit printf("SQL> %s\n", sql);
                 "partition", pi.name, name);
         }
         return l;
+    }
+
+    #! returns the options in a hash that takes values of any type
+    /** An option hash given as a hash literal is typed by its values: <tt>{"omit": "indexes"}</tt> is a
+        <tt>hash<string, string></tt>, so a value of another type, such as the hash of omissions or a flag, cannot be
+        set in it.  A method that sets values in the options it is given sets them in the hash this returns.
+
+        @param opt the options as they are given
+
+        @return the options in a <tt>hash<auto></tt>, or @ref nothing if none are given
+
+        @since %SqlUtil 3.11.0
+    */
+    private static *hash<auto> getAnyValueOptions(*hash<auto> opt) {
+        return exists opt ? {} + opt : NOTHING;
     }
 
     private list<auto> getCreateSqlUnlocked(*hash<auto> opt, bool cache = True) {
@@ -12981,6 +13218,26 @@ on_exit printf("SQL> %s\n", sql);
     */
     private *hash<auto> getPartitionDescriptionDriverOptionsImpl(hash<PartitionInfo> info) {
         return;
+    }
+
+    #! refuses the changes of a table alignment that the database cannot make with any version
+    /** Called by @ref SqlUtil::AbstractTable::getAlignSql() "AbstractTable::getAlignSql()" after the table, its
+        columns, indexes and constraints are renamed and the indexes and constraints that are not in the template are
+        dropped, before the columns are aligned and the indexes and constraints of the template are added.
+
+        A driver whose database cannot make some changes to an existing table with any version, but can make a
+        column change only from a version on, raises the exception for the former here, so that an alignment reports
+        the same refusal with every version of the database; otherwise the column change, which is aligned first,
+        would be refused first by an older version.  The default implementation does nothing.
+
+        @param t the template table that the current table is aligned to
+        @param opt the alignment options; see @ref SqlUtil::AbstractTable::AlignTableOptions
+
+        @note the locks of both tables are held when this method is called
+
+        @since SqlUtil 3.11.0
+    */
+    private checkAlignChangesImpl(AbstractTable t, *hash<auto> opt) {
     }
 
     #! Reimplement in subclasses to provide driver-specific create-as-select SQL

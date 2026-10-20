@@ -199,6 +199,13 @@ QoreValue QoreStreamingOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* 
                 return true;
             case Count:
                 return (int64)0;
+            case Take:
+            case Drop:
+            case TakeWhile:
+            case TakeUntil:
+                // a non-terminal operator returned its list above
+                assert(false);
+                return QoreValue();
         }
     }
 
@@ -249,6 +256,13 @@ QoreValue QoreStreamingOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* 
                     ++count;
                 }
                 break;
+            case Take:
+            case Drop:
+            case TakeWhile:
+            case TakeUntil:
+                // a non-terminal operator returned its list above
+                assert(false);
+                return QoreValue();
         }
         ++index;
     }
@@ -262,6 +276,13 @@ QoreValue QoreStreamingOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* 
             return true;
         case Count:
             return count;
+        case Take:
+        case Drop:
+        case TakeWhile:
+        case TakeUntil:
+            // a non-terminal operator returned its list above
+            assert(false);
+            break;
     }
     return QoreValue();
 }

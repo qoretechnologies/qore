@@ -461,7 +461,7 @@ public *hash<auto> sub get_mod_connections() {
     private string getQgetCommand(string dir, string args, *string extra_env) {
         # qget runs in the given directory, so paths the test runner passes relative to the current directory
         # must be resolved first, or the child would run a different qore binary or libqore
-        string qore = getenv("QORE_BINARY") ?? "qore";
+        string qore = ENV.QORE_EXECUTABLE ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
         if (qore =~ /\//) {
             qore = normalize_dir(qore);
         }

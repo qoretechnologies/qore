@@ -86,7 +86,7 @@ qclass AvroFileWriter [arg=QoreAvroFileWriter* writer; ns=Qore::Avro];
     - \c sync: (\c binary) a 16-byte sync marker; a random one is generated if not given, so set
       this when byte-for-byte reproducible output is needed
 
-    @throw FILE-OPEN2-ERROR the file cannot be created
+    @throw FILE-OPEN2-ERROR the file cannot be created, or the path contains a NUL character
     @throw AVRO-CODEC-ERROR the \c codec option names a codec this module does not implement
     @throw AVRO-FILE-ERROR an option is invalid, or a metadata key uses the reserved prefix
 
@@ -96,6 +96,10 @@ qclass AvroFileWriter [arg=QoreAvroFileWriter* writer; ns=Qore::Avro];
 */
 AvroFileWriter::constructor(string path, AvroSchema[QoreAvroSchema] schema,
         *hash<auto> opts) [dom=FILESYSTEM] {
+    // a path with a NUL character would be cut at the NUL character
+    if (q_check_path(*path, "FILE-OPEN2-ERROR", xsink)) {
+        return;
+    }
     avro_setup_writer(self, avro_sink_from_file(path->c_str(), xsink), *schema, opts, xsink);
 }
 

@@ -44,6 +44,8 @@
 %endtry
 
 %requires Schema
+# a run on PostgreSQL has its own schema
+%requires ../SqlUtil/PgsqlTestIsolation.qm
 
 
 %exec-class ModelRegistryTest
@@ -1809,6 +1811,10 @@ class ModelRegistryTest inherits QUnit::Test {
         if (!dsn) {
             testSkip("QORE_DB_CONNSTR_PGSQL not set");
         }
+        # the registry's tables and sequences are created in this run's own schema
+        PgsqlRunSchema::setup(dsn, "QoreModelRegistry");
+        # dropped after the connection below is closed
+        on_exit PgsqlRunSchema::teardown();
         Datasource ds(dsn);
         try {
             ds.open();

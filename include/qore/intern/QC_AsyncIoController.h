@@ -38,5 +38,6 @@ DLLLOCAL QoreClass* initAsyncIoControllerClass(QoreNamespace& ns);
 
 DLLLOCAL TypedHashDecl* init_hashdecl_SocketPollOperationInfo(QoreNamespace& ns);
 DLLLOCAL TypedHashDecl* init_hashdecl_SocketPollResultInfo(QoreNamespace& ns);
+DLLLOCAL TypedHashDecl* init_hashdecl_SocketPollStateInfo(QoreNamespace& ns);
 
 #endif // _QORE_CLASS_ASYNCIOCONTROLLER_H

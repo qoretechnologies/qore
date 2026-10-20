@@ -38,11 +38,35 @@ namespace QoreDataFrameNS {
 /** Thread-safe: concurrent read operations after construction are safe.
     Mutation operations (addColumn, dropColumn, renameColumn) are serialized.
     Query operations (select, filter, etc.) return new DataFrames.
+
+    The DataFrame of an object reports the values of its columns that can be part of a cycle to the garbage
+    collector (Pattern B in design/dgc.md); see attach().
 */
-class QoreDataFrame : public AbstractPrivateData {
+class QoreDataFrame : public AbstractScannablePrivateData {
 public:
     //! Empty constructor
     DLLLOCAL QoreDataFrame();
+
+    //! Releases the columns that the DataFrame reports to the garbage collector if destructor() was not called
+    DLLLOCAL ~QoreDataFrame() override;
+
+    // --- Garbage collection ---
+
+    //! Called once, after the DataFrame has become the private data of the object
+    /** From now on the DataFrame reports the values of its columns that need a scan to the garbage collector.  It
+        must be the only one that reports them: a column whose values are reported by another DataFrame or
+        GroupedDataFrame already is replaced by a copy (see claimScanColumns()).
+    */
+    DLLLOCAL void attach(QoreObject& self);
+
+    //! Called by the object's destructor: releases the columns
+    /** The DataFrame has no columns afterwards, so that private data that is still referenced after its object is
+        gone holds no values that the collector cannot see.
+    */
+    DLLLOCAL void destructor(QoreObject& self, ExceptionSink* xsink);
+
+    //! Reports the values of the columns that need a scan; see AbstractScannablePrivateData::scanValues()
+    DLLLOCAL bool scanValues(QorePrivateDataScanner& scanner) override;
 
     //! Construct from a list of records (list<hash>)
     DLLLOCAL static QoreDataFrame* fromRecords(const QoreListNode* records,
@@ -247,9 +271,11 @@ public:
 
     // --- Mutation (in-place, under lock) ---
 
-    DLLLOCAL void addColumn(const std::string& name, const QoreListNode* data,
+    //! @param self the object of the DataFrame
+    DLLLOCAL void addColumn(QoreObject& self, const std::string& name, const QoreListNode* data,
         ExceptionSink* xsink);
-    DLLLOCAL void dropColumn(const std::string& name, ExceptionSink* xsink);
+    //! @param self the object of the DataFrame
+    DLLLOCAL void dropColumn(QoreObject& self, const std::string& name, ExceptionSink* xsink);
     DLLLOCAL void renameColumn(const std::string& old_name,
         const std::string& new_name, ExceptionSink* xsink);
 
@@ -261,6 +287,16 @@ private:
     int64_t n_rows = 0;
     mutable std::mutex mtx;
 
+    //! Held while columns, attached and scan_columns are changed, and by the garbage collector's scan
+    /** A leaf lock, taken after mtx: no value is released and no Qore code runs while it is held, so the scan, which
+        only tries it, never finds it held by its own thread.
+    */
+    mutable std::mutex scan_mtx;
+    //! True from attach() until destructor(): the DataFrame reports its values to the collector
+    bool attached = false;
+    //! The number of columns whose values the DataFrame reports while attached
+    size_t scan_columns = 0;
+
     //! Get column index by name, or raise exception
     DLLLOCAL int getColIdx(const std::string& name, ExceptionSink* xsink) const;
 
@@ -271,6 +307,12 @@ private:
     //! Rebuild col_index from columns vector
     DLLLOCAL void rebuildIndex();
 };
+
+//! Makes a DataFrame the private data of an object; takes the reference of \a df
+/** Every DataFrame object gets its DataFrame here, so that it reports its values to the garbage collector (see
+    QoreDataFrame::attach()).
+*/
+DLLLOCAL void setDataFramePrivate(QoreObject& obj, QoreDataFrame* df);
 
 } // namespace QoreDataFrameNS
 

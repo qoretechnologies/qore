@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2016 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2016 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -35,6 +35,8 @@
 #include "qore/OutputStream.h"
 #include "qore/Transform.h"
 
+#include <memory>
+
 class TransformOutputStream : public OutputStream {
 public:
     DLLLOCAL TransformOutputStream(OutputStream* os, Transform* t)
@@ -54,16 +56,17 @@ public:
     }
 
     DLLLOCAL void close(ExceptionSink* xsink) override {
-        char buf[bufsize];
+        // the transform's output buffer size can be large, so the buffer is not on the stack
+        std::unique_ptr<char[]> buf(new char[bufsize]);
         while (true) {
-            std::pair<int64, int64> r = t->apply(nullptr, 0, buf, sizeof(buf), xsink);
+            std::pair<int64, int64> r = t->apply(nullptr, 0, buf.get(), bufsize, xsink);
             if (*xsink) {
                 break;
             }
             if (!r.second) {
                 break;
             }
-            os->write(buf, r.second, xsink);
+            os->write(buf.get(), r.second, xsink);
             if (*xsink) {
                 break;
             }
@@ -77,14 +80,15 @@ public:
             return;
         }
         const char *src = static_cast<const char*>(ptr);
-        char buf[bufsize];
+        // the transform's output buffer size can be large, so the buffer is not on the stack
+        std::unique_ptr<char[]> buf(new char[bufsize]);
         while (true) {
-            std::pair<int64, int64> r = t->apply(src, len, buf, sizeof(buf), xsink);
+            std::pair<int64, int64> r = t->apply(src, len, buf.get(), bufsize, xsink);
             if (*xsink) {
                 return;
             }
             if (r.second) {
-                os->write(buf, r.second, xsink);
+                os->write(buf.get(), r.second, xsink);
                 if (*xsink) {
                     return;
                 }
@@ -94,7 +98,7 @@ public:
             // once all input is consumed, a full output buffer means that the transform can hold more output for
             // the input written; it is drained with empty input, so that a decompressor that expands its input
             // does not hold data back until the next write
-            if (!len && r.second < static_cast<int64>(sizeof(buf))) {
+            if (!len && r.second < static_cast<int64>(bufsize)) {
                 break;
             }
         }

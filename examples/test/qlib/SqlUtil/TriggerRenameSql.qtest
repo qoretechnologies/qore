@@ -1,0 +1,183 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires SqlUtil
+%requires PgsqlSqlUtilBase
+%requires OracleSqlUtilBase
+%requires MysqlSqlUtil
+%requires MssqlSqlUtilBase
+%requires FreetdsSqlUtil
+%requires XdbcFirebirdSqlUtilBase
+%requires Sqlite3SqlUtil
+%prepend-module-path "${SCRIPT_DIR}"
+%requires ./PgsqlTestIsolation.qm
+
+%try-module pgsql
+%define NO_PGSQL
+%endtry
+
+%try-module mysql
+%define NO_MYSQL
+%endtry
+
+%try-module freetds
+%define NO_FREETDS
+%endtry
+
+%try-module sqlite3
+%define NO_SQLITE3
+%endtry
+
+%exec-class TriggerRenameSqlTest
+
+#! The SQL that renames a trigger is valid on every database
+/** PostgreSQL and Oracle rename a trigger in place and SQL Server with \c sp_rename; MySQL, Firebird and SQLite cannot
+    rename a trigger, which is only its definition, so it is dropped and created under the new name.  The exact SQL
+    is checked on every database, and it is run on SQLite and on the PostgreSQL, MySQL and SQL Server databases given
+    by \c QORE_DB_CONNSTR_PGSQL, \c QORE_DB_CONNSTR_MYSQL and \c QORE_DB_CONNSTR_FREETDS
+*/
+class TriggerRenameSqlTest inherits QUnit::Test {
+    private {
+        #! the source of the SQLite test trigger
+        const SqliteSource = "after insert on trg_t begin update trg_t set x = 1 where x is null; end";
+
+        #! the source of the MySQL test trigger
+        const MysqlSource = "before insert on trg_t for each row set new.x = 1";
+
+        #! the source of the PostgreSQL test trigger
+        const PgsqlSource = "before insert on trg_t for each row execute function trg_f()";
+
+        #! the source of the SQL Server test trigger
+        const MssqlSource = "on dbo.trg_t after insert as begin set nocount on; update dbo.trg_t set x = 1 "
+            "where x is null; end";
+    }
+
+    constructor() : Test("TriggerRenameSqlTest", "1.0", \ARGV) {
+        addTestCase("the SQL that renames a trigger", \renameSql());
+        addTestCase("SQLite renames a trigger", \sqlite());
+        addTestCase("PostgreSQL renames a trigger", \pgsql());
+        addTestCase("MySQL renames a trigger", \mysql());
+        addTestCase("SQL Server renames a trigger", \mssql());
+        set_return_value(main());
+    }
+
+    globalTearDown() {
+        PgsqlRunSchema::teardown();
+    }
+
+    #! The exact SQL on every database
+    renameSql() {
+        assertEq(("alter trigger trg_old on trg_t rename to trg_new",),
+            (new PgsqlTrigger("trg_old", PgsqlSource)).getRenameSql("trg_t", "trg_new"));
+        assertEq(("alter trigger trg_old rename to trg_new",),
+            (new OracleTrigger("trg_old", "before insert on trg_t for each row begin :new.x := 1; end;"))
+                .getRenameSql("trg_t", "trg_new"));
+        assertEq(("exec sp_rename 'dbo.trg_old', 'trg_new', 'OBJECT'",),
+            (new MssqlTrigger("trg_old", MssqlSource)).getRenameSql("dbo.trg_t", "trg_new"));
+        assertEq(("drop trigger trg_old", "create trigger trg_new " + MysqlSource),
+            (new MysqlTrigger("trg_old", MysqlSource)).getRenameSql("trg_t", "trg_new"));
+        string firebird_source = "for trg_t active before insert position 0 as begin new.x = 1; end";
+        assertEq(("drop trigger trg_old", "create trigger trg_new " + firebird_source),
+            (new XdbcFirebirdTrigger("trg_old", firebird_source)).getRenameSql("trg_t", "trg_new"));
+        assertEq(("drop trigger trg_old", "create trigger trg_new " + SqliteSource),
+            (new Sqlite3Trigger("trg_old", SqliteSource)).getRenameSql("trg_t", "trg_new"));
+    }
+
+    sqlite() {
+%ifdef NO_SQLITE3
+        testSkip("sqlite3 module unavailable");
+%endif
+        Datasource ds("sqlite3:@:memory:");
+        checkDatabase(ds, new Sqlite3Trigger("trg_old", SqliteSource), "create table trg_t (id integer, x integer)",
+            "select name from sqlite_master where type = 'trigger' and tbl_name = 'trg_t'");
+    }
+
+    pgsql() {
+%ifdef NO_PGSQL
+        testSkip("pgsql module unavailable");
+%endif
+        if (!ENV.QORE_DB_CONNSTR_PGSQL) {
+            testSkip("QORE_DB_CONNSTR_PGSQL is not set");
+        }
+        PgsqlRunSchema::setup(ENV.QORE_DB_CONNSTR_PGSQL, "TriggerRenameSql");
+        Datasource ds(ENV.QORE_DB_CONNSTR_PGSQL);
+        on_exit {
+            ds.execRaw("drop function if exists trg_f()");
+            ds.commit();
+        }
+        ds.execRaw("create or replace function trg_f() returns trigger language plpgsql as $$ begin new.x := 1; "
+            "return new; end $$");
+        ds.commit();
+        checkDatabase(ds, new PgsqlTrigger("trg_old", PgsqlSource), "create table trg_t (id integer, x integer)",
+            "select tgname as name from pg_trigger where tgrelid = 'trg_t'::regclass and not tgisinternal");
+    }
+
+    mysql() {
+%ifdef NO_MYSQL
+        testSkip("mysql module unavailable");
+%endif
+        if (!ENV.QORE_DB_CONNSTR_MYSQL) {
+            testSkip("QORE_DB_CONNSTR_MYSQL is not set");
+        }
+        Datasource ds(ENV.QORE_DB_CONNSTR_MYSQL);
+        checkDatabase(ds, new MysqlTrigger("trg_old", MysqlSource), "create table trg_t (id int, x int)",
+            "select trigger_name as name from information_schema.triggers where event_object_table = 'trg_t' "
+            "and trigger_schema = database()");
+    }
+
+    mssql() {
+%ifdef NO_FREETDS
+        testSkip("freetds module unavailable");
+%endif
+        if (!ENV.QORE_DB_CONNSTR_FREETDS) {
+            testSkip("QORE_DB_CONNSTR_FREETDS is not set");
+        }
+        Datasource ds(ENV.QORE_DB_CONNSTR_FREETDS);
+        if (MssqlDatabase::isSybase(ds)) {
+            testSkip("the database is Sybase, not SQL Server");
+        }
+        checkDatabase(ds, new MssqlTrigger("trg_old", MssqlSource), "create table dbo.trg_t (id int, x int)",
+            "select name from sys.triggers where parent_id = object_id('dbo.trg_t')");
+    }
+
+    #! Drops the test table if it exists
+    private static dropTable(AbstractDatasource ds) {
+        on_success ds.commit();
+        on_error ds.rollback();
+        (new Database(ds)).dropTableIfExists("trg_t");
+    }
+
+    #! Creates the table and its trigger, renames the trigger with its SQL, and checks that the trigger has the new
+    #! name only and still sets the column of a new row
+    private checkDatabase(AbstractDatasource ds, AbstractTrigger trigger, string create_table, string names_sql) {
+        on_exit dropTable(ds);
+        dropTable(ds);
+        {
+            on_success ds.commit();
+            on_error ds.rollback();
+            ds.execRaw(create_table);
+        }
+        string table = (new Table(ds, "trg_t")).getSqlName();
+        {
+            on_success ds.commit();
+            on_error ds.rollback();
+            map ds.execRaw($1), trigger.getCreateSql(table);
+        }
+        {
+            on_success ds.commit();
+            on_error ds.rollback();
+            map ds.execRaw($1), trigger.getRenameSql(table, "trg_new");
+        }
+        assertEq(("trg_new",), map $1.lwr(), ds.select(names_sql).name);
+        Table t(ds, "trg_t");
+        t.insert({"id": 1});
+        ds.commit();
+        assertEq(1, t.selectRow({"where": {"id": 1}}).x);
+    }
+}

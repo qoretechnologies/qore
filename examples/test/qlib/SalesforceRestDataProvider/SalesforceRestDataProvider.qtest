@@ -7,13 +7,61 @@
 %requires QUnit
 
 %requires DataProvider
+%requires SalesforceRestClient
 %requires SalesforceRestDataProvider
 
 %exec-class SalesforceRestDataProviderTest
 
+#! An API client that describes a Contact object and records the SOQL query of a search
+class QueryCaptureRestClientIo inherits SalesforceRestClientIo {
+    public {
+        #! the SOQL query of the last search
+        string last_query;
+    }
+
+    constructor() : SalesforceRestClientIo({
+        "oauth2_client_id": "id",
+        "oauth2_client_secret": "secret",
+        "oauth2_redirect_url": "https://localhost/callback",
+        "token": "an-access-token",
+        "url": "https://acme.my.salesforce.com",
+    }) {
+    }
+
+    #! This client is rooted at the API base already
+    SalesforceRestClientIo getApiClient() {
+        return self;
+    }
+
+    hash<RestClient::RestResponseInfo> restGet(string path, *hash<auto> hdr) {
+        if (path == "sobjects/Contact/describe") {
+            return <RestClient::RestResponseInfo>{
+                "status_code": 200,
+                "headers": {},
+                "body": {"fields": (
+                    {"name": "Id", "label": "Contact ID", "type": "id"},
+                    {"name": "LastName", "label": "Last Name", "type": "string", "nillable": True},
+                    {"name": "AccountId", "label": "Account ID", "type": "reference", "nillable": True,
+                        "relationshipName": "Account"},
+                )},
+            };
+        }
+        if (path =~ /^query\?q=/) {
+            last_query = decode_url(path.substr(8));
+            return <RestClient::RestResponseInfo>{
+                "status_code": 200,
+                "headers": {},
+                "body": {"records": ()},
+            };
+        }
+        throw "UNEXPECTED-REQUEST", sprintf("unexpected GET %y", path);
+    }
+}
+
 public class SalesforceRestDataProviderTest inherits QUnit::Test {
     constructor() : Test("SalesforceRestDataProvider test", "1.0") {
         addTestCase("action data dependent options", \testActionDataDependentOptions());
+        addTestCase("SOQL field paths", \testSoqlFieldPaths());
 
         set_return_value(main());
     }
@@ -35,5 +83,26 @@ public class SalesforceRestDataProviderTest inherits QUnit::Test {
             assertTrue(action_map{action_name}.data_dependent_options,
                 sprintf("action %y has data_dependent_options", action_name));
         }
+    }
+
+    #! The field of an expression is a field path, written with the relationship syntax of SOQL
+    testSoqlFieldPaths() {
+        QueryCaptureRestClientIo rest();
+        SalesforceRestObjectDataProvider contact(rest, "Contact", {"queryable": True});
+        code<string(string)> get_query = string sub (string field) {
+            map $1, contact.searchRecords(<DataProviderExpression>{
+                "exp": DP_SEARCH_OP_EQ,
+                "args": (<DataProviderFieldReference>{"field": field}, "Acme"),
+            });
+            return rest.last_query;
+        };
+
+        # a path of two keys is a relationship and its field
+        assertEq("select Id,LastName,AccountId from Contact where Account.Name = 'Acme'",
+            get_query("Account.Name"));
+        # one key is the field
+        assertEq("select Id,LastName,AccountId from Contact where LastName = 'Acme'", get_query("LastName"));
+        # a key with a dot cannot be written in SOQL, so it is never sent as its escaped text
+        assertThrows("WHERE-ERROR", "has a key with a dot", get_query, "Unit\\.Price");
     }
 }

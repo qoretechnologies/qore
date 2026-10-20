@@ -40,6 +40,9 @@ qclass FilesystemSshServerHostKeyProvider [arg=FilesystemSshServerHostKeyProvide
 /** @param key_paths private-key paths to expose as ordered server host-key material descriptors
     @param passphrase_ref optional non-secret passphrase reference for encrypted keys
 
+    @throw SSHUTIL-SERVER-HOST-KEY-PROVIDER-ERROR a path or the passphrase reference contains a NUL character,
+    which would cut it
+
     @since sshutil 1.0
 */
 FilesystemSshServerHostKeyProvider::constructor(list<string> key_paths, *string passphrase_ref) {

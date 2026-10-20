@@ -172,6 +172,14 @@ manager.closeAll();
       When both legs lose and HTTP/2 was refused via ALPN, the endpoint speaks
       neither HTTP/3 nor HTTP/2 and the race falls back to HTTP/1.1 instead of
       failing; the result is cached per host and re-probed periodically.
+      The race ends early only when a leg connects: when one leg fails, the other
+      leg's own outcome, bounded by its connect timeout, is awaited, so a server
+      that receives HTTP/3 only is reached whatever the head start of HTTP/3.
+      A denial of the @ref sandboxing "sandbox" or a server certificate refused by
+      either leg ends the race with that leg's error (\c NETWORK-ACCESS-DENIED,
+      \c SOCKET-SSL-ERROR), as for a single protocol, and is not retried, even if
+      the other leg failed for another reason; see
+      @ref HttpClientIo::HttpClientConnectionManager::isTerminalConnectionError()
       Alt-Svc advertisements supply the UDP port for future races without
       overriding the negotiated protocol or draining working connections.
       Fresh automatic H3 connections and expired fallback entries race both
@@ -190,6 +198,11 @@ manager.closeAll();
     - Connection pooling with configurable limits, HTTP-proxy support,
       configurable automatic request retry, and QUIC connection migration for
       HTTP/3
+    - HTTP/3 connections are created without blocking: their poll operation resolves the host name and binds the
+      UDP socket in the I/O controller, so asynchronous requests can retry them, try another address family, and
+      race them against HTTP/2 for a redirect in an I/O worker; an address family in which a connection did not
+      reach the server is avoided for new connections to the origin for
+      @ref HttpClientIo::HttpClientConnectionManager::H3FamilyFailureTtl "H3FamilyFailureTtl"
     - Sync and async (\c Future / \c EventNotifier) request APIs
     - Response bodies decoded once, by the rules shared by all HTTP clients, after any content encoding is
       decompressed; a request can receive a text body as octets instead (the \c decode_text argument of the
@@ -940,6 +953,35 @@ HttpClientConnectionManager mgr(<HttpClientConnectionManagerOptions>{
             throw "HTTPCLIENT-REQUEST-BODY-ERROR",
                 "GET requests cannot have a request body or enable request-body streaming; use NOTHING for the body";
         }
+    }
+
+    #! Returns True if the given connection error is a refused server certificate
+    /** A refused certificate is \c SOCKET-SSL-ERROR with the OpenSSL verification result in \c ssl_verify_error of
+        the exception argument, over TCP and QUIC alike.  It is never retried as a failed connection: a retry could only
+        be refused again, or its timeout could hide the reason of the refusal.
+
+        @param err the error of a connection (see @ref HttpClientIo::HttpClientPollOperation::getError())
+    */
+    bool sub http_is_certificate_refusal(*hash<auto> err) {
+        return err.err == "SOCKET-SSL-ERROR" && err.arg.typeCode() == NT_HASH && err.arg.ssl_verify_error;
+    }
+
+    #! Returns True if the given connection error is a denial of the sandbox
+    /** A connection, or the bind of its socket, that the network or filesystem policy of the
+        @ref sandboxing "sandbox" denies would be denied again; it is never retried as a failed connection.
+
+        @param err the error of a connection (see @ref HttpClientIo::HttpClientPollOperation::getError())
+    */
+    bool sub http_is_sandbox_denial(*hash<auto> err) {
+        return err.err == "NETWORK-ACCESS-DENIED" || err.err == "FILESYSTEM-ACCESS-DENIED";
+    }
+
+    #! Returns True if the given connection error ends a request: a refused certificate or a denial of the sandbox
+    /** Such an error is raised as it is, and the connection is not retried (see
+        @ref HttpClientIo::HttpClientConnectionManager::isTerminalConnectionError())
+    */
+    bool sub http_is_terminal_connection_error(*hash<auto> err) {
+        return http_is_sandbox_denial(err) || http_is_certificate_refusal(err);
     }
 
     #! Returns True if the given octet is a hexadecimal digit

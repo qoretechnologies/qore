@@ -1,0 +1,324 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires SqlUtil
+%requires MssqlSqlUtilBase
+%requires FreetdsSqlUtil
+
+%try-module freetds
+%define NO_FREETDS
+%endtry
+
+%exec-class MssqlKeyAlignmentTest
+
+#! Aligning the indexes and keys of SQL Server tables
+/** Each change is checked twice: its exact SQL, with tables described in memory and a datasource that does not
+    connect, and on the database given by \c QORE_DB_CONNSTR_FREETDS, where the SQL is run and the next alignment
+    needs none
+*/
+class MssqlKeyAlignmentTest inherits QUnit::Test {
+    private {
+        #! the columns of the test tables
+        const Columns = {
+            "id": {"native_type": "int", "notnull": True},
+            "a": {"native_type": "int"},
+            "b": {"native_type": "varchar", "size": 10},
+        };
+    }
+
+    constructor() : Test("MssqlKeyAlignmentTest", "1.0", \ARGV) {
+        addTestCase("the SQL of an index with other columns", \indexColumnChangeSql());
+        addTestCase("an index with other columns is dropped and created", \indexColumnChange());
+        addTestCase("the foreign constraints of a table are described", \foreignConstraintDescription());
+        addTestCase("the SQL of a unique index with other columns", \uniqueIndexColumnChangeSql());
+        addTestCase("a unique index with other columns is dropped and created once", \uniqueIndexColumnChange());
+        addTestCase("a referenced unique index changes with the foreign constraint that references it",
+            \referencedUniqueIndexChange());
+        addTestCase("the SQL of a primary key and a unique constraint under other names", \keyRenameSql());
+        addTestCase("a referenced primary key and unique constraint are renamed", \keyRenames());
+        set_return_value(main());
+    }
+
+    #! Returns a datasource that does not connect, to get SQL without a database
+    private OfflineDatasource offlineDatasource() {
+%ifdef NO_FREETDS
+        testSkip("freetds module unavailable");
+%endif
+        return new OfflineDatasource("freetds:user/pass@db", "Microsoft SQL Server 2022 (RTM) - 16.0.1000.6",
+            "mssql");
+    }
+
+    #! Returns a datasource to the database given by QORE_DB_CONNSTR_FREETDS
+    private Datasource datasource() {
+%ifdef NO_FREETDS
+        testSkip("freetds module unavailable");
+%endif
+        if (!ENV.QORE_DB_CONNSTR_FREETDS) {
+            testSkip("QORE_DB_CONNSTR_FREETDS is not set");
+        }
+        Datasource ds(ENV.QORE_DB_CONNSTR_FREETDS);
+        if (MssqlDatabase::isSybase(ds)) {
+            testSkip("the database is Sybase, not SQL Server");
+        }
+        return ds;
+    }
+
+    #! Returns the alignment SQL of a table described with \a current to a template described with \a template
+    private list<auto> alignSql(AbstractDatasource ds, string table, hash<auto> current, hash<auto> template) {
+        MssqlTable live(ds, table);
+        live.setupTable(current);
+        MssqlTable target(ds, table);
+        target.setupTable(template);
+        return live.getAlignSql(target);
+    }
+
+    #! Aligns the table in the database to a template with the description, runs the SQL and returns it
+    private list<auto> alignTable(AbstractDatasource ds, string table, hash<auto> desc) {
+        MssqlTable template(ds, table);
+        template.setupTable(desc);
+        MssqlTable current(ds, table);
+        list<auto> sql = current.getAlignSql(template);
+        on_success ds.commit();
+        on_error ds.rollback();
+        map ds.execRaw($1), sql;
+        return sql;
+    }
+
+    #! Drops the tables if they exist
+    private static dropTables(AbstractDatasource ds, softlist<string> tables) {
+        on_success ds.commit();
+        on_error ds.rollback();
+        foreach string table in (tables) {
+            ds.execRaw(sprintf("if object_id('dbo.%s', 'U') is not null drop table dbo.%s", table, table));
+        }
+    }
+
+    #! An index with other columns is dropped from its table and created
+    indexColumnChangeSql() {
+        OfflineDatasource ds = offlineDatasource();
+        assertEq(("drop index ix_mka on dbo.mka_t", "create index ix_mka on dbo.mka_t (a, b)"),
+            alignSql(ds, "mka_t", {"columns": Columns, "indexes": {"ix_mka": {"columns": ("a",)}}},
+                {"columns": Columns, "indexes": {"ix_mka": {"columns": ("a", "b")}}}));
+    }
+
+    #! The same change on the database
+    indexColumnChange() {
+        Datasource ds = datasource();
+        on_exit dropTables(ds, "mka_ix");
+        dropTables(ds, "mka_ix");
+        ds.execRaw("create table dbo.mka_ix (id int not null, a int, b varchar(10))");
+        ds.execRaw("create index ix_mka_ix on dbo.mka_ix (a)");
+        ds.commit();
+
+        hash<auto> desc = {"columns": Columns, "indexes": {"ix_mka_ix": {"columns": ("a", "b")}}};
+        assertEq(("drop index ix_mka_ix on dbo.mka_ix", "create index ix_mka_ix on dbo.mka_ix (a, b)"),
+            alignTable(ds, "mka_ix", desc));
+        assertEq(("a", "b"), (new MssqlTable(ds, "mka_ix")).getIndexes().ix_mka_ix.columns.keys());
+        assertEq((), alignTable(ds, "mka_ix", desc));
+    }
+
+    #! The foreign constraints of a table are described, those that reference a unique constraint and those that
+    #! reference a unique index, and a table with the foreign constraints of its template needs no SQL
+    foreignConstraintDescription() {
+        Datasource ds = datasource();
+        on_exit dropTables(ds, ("mka_fc", "mka_fp"));
+        dropTables(ds, ("mka_fc", "mka_fp"));
+        ds.execRaw("create table dbo.mka_fp (id int not null, a int, b varchar(10), "
+            "constraint pk_mka_fp primary key (id), constraint uk_mka_fp unique (b))");
+        ds.execRaw("create unique index uix_mka_fp on dbo.mka_fp (a)");
+        ds.execRaw("create table dbo.mka_fc (id int not null, a int, b varchar(10), "
+            "constraint fk_mka_fc_a foreign key (a) references dbo.mka_fp (a), "
+            "constraint fk_mka_fc_b foreign key (b) references dbo.mka_fp (b))");
+        ds.commit();
+
+        *hash<auto> fks = (new MssqlTable(ds, "mka_fc")).getForeignConstraints().getHash();
+        assertEq(("fk_mka_fc_a", "fk_mka_fc_b"), keys fks);
+        foreach string column in (("a", "b")) {
+            AbstractForeignConstraint fk = fks{"fk_mka_fc_" + column};
+            assertEq((column,), fk.keys(), column);
+            assertEq("mka_fp", fk.target.table, column);
+            assertEq((column,), fk.target.columns.keys(), column);
+        }
+
+        assertEq((), alignTable(ds, "mka_fc", {
+            "columns": Columns,
+            "foreign_constraints": {
+                "fk_mka_fc_a": {"columns": ("a",), "table": "mka_fp", "target_columns": ("a",)},
+                "fk_mka_fc_b": {"columns": ("b",), "table": "mka_fp", "target_columns": ("b",)},
+            },
+        }));
+    }
+
+    #! A unique index with other columns is dropped and created once: its unique constraint, which is the index, is
+    #! not dropped and added around it
+    uniqueIndexColumnChangeSql() {
+        OfflineDatasource ds = offlineDatasource();
+        assertEq(("drop index uix_mka on dbo.mka_t", "create unique index uix_mka on dbo.mka_t (b, a)"),
+            alignSql(ds, "mka_t", {"columns": Columns, "indexes": {"uix_mka": {"columns": ("b",), "unique": True}}},
+                {"columns": Columns, "indexes": {"uix_mka": {"columns": ("b", "a"), "unique": True}}}));
+    }
+
+    #! The same change on the database
+    uniqueIndexColumnChange() {
+        Datasource ds = datasource();
+        on_exit dropTables(ds, "mka_ui");
+        dropTables(ds, "mka_ui");
+        ds.execRaw("create table dbo.mka_ui (id int not null, a int, b varchar(10))");
+        ds.execRaw("create unique index uix_mka_ui on dbo.mka_ui (b)");
+        ds.commit();
+
+        hash<auto> desc = {"columns": Columns, "indexes": {"uix_mka_ui": {"columns": ("b", "a"), "unique": True}}};
+        assertEq(("drop index uix_mka_ui on dbo.mka_ui", "create unique index uix_mka_ui on dbo.mka_ui (b, a)"),
+            alignTable(ds, "mka_ui", desc));
+        AbstractIndex ix = (new MssqlTable(ds, "mka_ui")).getIndexes().uix_mka_ui;
+        assertTrue(ix.unique);
+        assertEq(("b", "a"), ix.columns.keys());
+        assertEq((), alignTable(ds, "mka_ui", desc));
+    }
+
+    #! Returns the schema of a parent table with a unique index and of a child table with a foreign constraint that
+    #! references it, in the given order, with the given columns of the index and of the foreign constraint
+    private static hash<auto> keySchema(bool child_first, list<string> columns) {
+        hash<auto> parent = {
+            "columns": Columns,
+            "primary_key": {"name": "pk_mka_kp", "columns": ("id",)},
+            "indexes": {"ui_mka_kp": {"columns": columns, "unique": True}},
+        };
+        hash<auto> child = {
+            "columns": Columns,
+            "primary_key": {"name": "pk_mka_kc", "columns": ("id",)},
+            "foreign_constraints": {"fk_mka_kc": {"columns": columns, "table": "mka_kp", "target_columns": columns}},
+        };
+        return {"tables": child_first
+            ? {"mka_kc": child, "mka_kp": parent}
+            : {"mka_kp": parent, "mka_kc": child}};
+    }
+
+    #! Aligns the schema, runs the SQL and returns it
+    private static list<auto> alignSchema(AbstractDatasource ds, hash<auto> schema) {
+        list<auto> sql = (new Database(ds)).getAlignSql(schema);
+        on_success ds.commit();
+        on_error ds.rollback();
+        map ds.execRaw($1), sql;
+        return sql;
+    }
+
+    #! A unique index that a foreign constraint references, changed with the foreign constraint, is dropped and
+    #! created once in a schema alignment, in either order of the tables: the foreign constraint is dropped first and
+    #! added after it
+    referencedUniqueIndexChange() {
+        Datasource ds = datasource();
+        on_exit dropTables(ds, ("mka_kc", "mka_kp"));
+        foreach bool child_first in ((True, False)) {
+            string order = sprintf("child first: %y", child_first);
+            dropTables(ds, ("mka_kc", "mka_kp"));
+            ds.execRaw("create table dbo.mka_kp (id int not null, a int, b varchar(10), "
+                "constraint pk_mka_kp primary key (id))");
+            ds.execRaw("create unique index ui_mka_kp on dbo.mka_kp (b)");
+            ds.execRaw("create table dbo.mka_kc (id int not null, a int, b varchar(10), "
+                "constraint pk_mka_kc primary key (id), "
+                "constraint fk_mka_kc foreign key (b) references dbo.mka_kp (b))");
+            ds.commit();
+
+            hash<auto> schema = keySchema(child_first, ("b", "a"));
+            assertEq((
+                "alter table dbo.mka_kc drop constraint fk_mka_kc",
+                "drop index ui_mka_kp on dbo.mka_kp",
+                "create unique index ui_mka_kp on dbo.mka_kp (b, a)",
+                "alter table dbo.mka_kc add constraint fk_mka_kc foreign key (b, a) references mka_kp (b, a)",
+            ), map regex_subst($1, "  +", " ", RE_Global), alignSchema(ds, schema), order);
+            assertEq((), alignSchema(ds, schema), order);
+        }
+    }
+
+    #! A primary key and a unique constraint with the template's columns under other names are renamed with
+    #! sp_rename by the name of their schema and their own name
+    keyRenameSql() {
+        OfflineDatasource ds = offlineDatasource();
+        assertEq((
+            "exec sp_rename 'dbo.uk_mka_old', 'uk_mka_new', 'OBJECT'",
+            "exec sp_rename 'dbo.pk_mka_old', 'pk_mka_new', 'OBJECT'",
+        ), alignSql(ds, "mka_t", {
+            "columns": Columns,
+            "primary_key": {"name": "pk_mka_old", "columns": ("id",)},
+            "unique_constraints": {"uk_mka_old": {"columns": ("b",)}},
+        }, {
+            "columns": Columns,
+            "primary_key": {"name": "pk_mka_new", "columns": ("id",)},
+            "unique_constraints": {"uk_mka_new": {"columns": ("b",)}},
+        }));
+    }
+
+    #! The same change on the database, where foreign constraints of another table reference the keys: the keys are
+    #! renamed and the foreign constraints are kept; a key that is dropped and added again cannot be dropped while a
+    #! foreign constraint references it
+    keyRenames() {
+        Datasource ds = datasource();
+        on_exit dropTables(ds, ("mka_rc", "mka_rp"));
+        dropTables(ds, ("mka_rc", "mka_rp"));
+        ds.execRaw("create table dbo.mka_rp (id int not null, a int, b varchar(10), "
+            "constraint pk_mka_rp_old primary key (id), constraint uk_mka_rp_old unique (b))");
+        ds.execRaw("create table dbo.mka_rc (id int not null, a int, b varchar(10), "
+            "constraint pk_mka_rc primary key (id), "
+            "constraint fk_mka_rc_a foreign key (a) references dbo.mka_rp (id), "
+            "constraint fk_mka_rc_b foreign key (b) references dbo.mka_rp (b))");
+        ds.commit();
+
+        hash<auto> desc = {
+            "columns": Columns,
+            "primary_key": {"name": "pk_mka_rp_new", "columns": ("id",)},
+            "unique_constraints": {"uk_mka_rp_new": {"columns": ("b",)}},
+        };
+        assertEq((
+            "exec sp_rename 'dbo.uk_mka_rp_old', 'uk_mka_rp_new', 'OBJECT'",
+            "exec sp_rename 'dbo.pk_mka_rp_old', 'pk_mka_rp_new', 'OBJECT'",
+        ), alignTable(ds, "mka_rp", desc));
+        MssqlTable parent(ds, "mka_rp");
+        assertEq("pk_mka_rp_new", parent.getPrimaryKey().getName());
+        assertEq(("uk_mka_rp_new",), keys parent.getConstraints().getHash());
+        assertEq(("fk_mka_rc_a", "fk_mka_rc_b"), keys (new MssqlTable(ds, "mka_rc")).getForeignConstraints()
+            .getHash());
+        assertEq((), alignTable(ds, "mka_rp", desc));
+    }
+}
+
+#! A datasource that does not connect: it reports a server version and driver, and its catalog queries return no
+#! rows
+class OfflineDatasource inherits Datasource {
+    private {
+        string version;
+        string real_driver;
+    }
+
+    constructor(string connstr, string version, string real_driver) : Datasource(connstr) {
+        self.version = version;
+        self.real_driver = real_driver;
+    }
+
+    auto getServerVersion() {
+        return version;
+    }
+
+    string getDriverRealName() {
+        return real_driver;
+    }
+
+    auto select(string sql, ...) {
+        return {};
+    }
+
+    auto selectRow(string sql, ...) {
+        # the default schema of SQL Server
+        return {"schema": "dbo"};
+    }
+
+    auto selectRows(string sql, ...) {
+        return ();
+    }
+}

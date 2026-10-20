@@ -1,0 +1,189 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+#
+# a datasource string, connection value, driver name or driver option with a NUL character is refused, since the
+# driver would use it cut at the NUL character: an SQLite database file name cut at the NUL character names another
+# file; passwords and datasource strings are not shown in the exception
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires Util
+%requires FsUtil
+%requires QUnit
+
+%try-module sqlite3
+%define NoSqlite3
+%endtry
+
+%exec-class DatasourceNulTest
+
+class DatasourceNulTest inherits QUnit::Test {
+    constructor() : Test("DatasourceNulTest", "1.0") {
+        addTestCase("datasource strings", \datasourceStrings());
+        addTestCase("connection values", \connectionValues());
+        addTestCase("setters", \setters());
+        addTestCase("driver options", \driverOptions());
+        addTestCase("driver lookups", \driverLookups());
+        addTestCase("SQLite database file names", \sqlite3Files());
+        set_return_value(main());
+    }
+
+    datasourceStrings() {
+        string str = "dbitest:user/secretpw@db\x00.other%host";
+        try {
+            parse_datasource(str);
+            fail("parse_datasource() did not raise an exception");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("DATASOURCE-PARSE-ERROR", ex.err);
+            assertEq("datasource string contains a NUL character; datasource strings cannot contain NUL characters",
+                ex.desc);
+            assertEq(Err::EINVAL, ex.arg);
+        }
+        assertThrows("DATASOURCE-PARSE-ERROR", "datasource string contains a NUL character",
+            sub () { Datasource d(str); });
+        assertThrows("DATASOURCE-PARSE-ERROR", "datasource string contains a NUL character",
+            sub () { DatasourcePool p(str); });
+        # the driver argument of the constructors can be a datasource string
+        assertThrows("DATASOURCE-PARSE-ERROR", "datasource string contains a NUL character",
+            sub () { Datasource d("dbitest:user/secretpw@db\x00.other"); });
+        assertThrows("DATASOURCE-PARSE-ERROR", "datasource string contains a NUL character",
+            sub () { DatasourcePool p("dbitest:user/secretpw@db\x00.other"); });
+
+        assertEq("db", parse_datasource("dbitest:user/secretpw@db%host").db);
+    }
+
+    connectionValues() {
+        assertThrows("DATASOURCE-CONSTRUCTOR-ERROR", "database name \"db\\\\x00\\.other\" contains a NUL character at "
+            "byte offset 2", sub () { Datasource d("dbitest", "user", "pass", "db\x00.other"); });
+        assertThrows("DATASOURCE-CONSTRUCTOR-ERROR", "user name .* contains a NUL character",
+            sub () { Datasource d("dbitest", "admin\x00.guest", "pass", "db"); });
+        assertThrows("DATASOURCE-CONSTRUCTOR-ERROR", "hostname .* contains a NUL character",
+            sub () { Datasource d("dbitest", "user", "pass", "db", NOTHING, "localhost\x00.other"); });
+        assertThrows("DATASOURCE-CONSTRUCTOR-ERROR", "encoding .* contains a NUL character",
+            sub () { Datasource d("dbitest", "user", "pass", "db", "utf8\x00x"); });
+        try {
+            Datasource d("dbitest", "user", "secret\x00pw", "db");
+            fail("the Datasource constructor did not raise an exception");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("DATASOURCE-CONSTRUCTOR-ERROR", ex.err);
+            assertEq("password contains a NUL character; datasource values cannot contain NUL characters", ex.desc);
+        }
+        assertThrows("DATASOURCE-UNSUPPORTED-DATABASE", "datasource string contains a NUL character",
+            sub () { Datasource d("dbitest\x00.other", "user", "pass", "db"); });
+
+        assertThrows("DATASOURCE-CONSTRUCTOR-ERROR", "'db' value \"db\\\\x00\\.other\" contains a NUL character",
+            sub () { Datasource d({"type": "dbitest", "db": "db\x00.other"}); });
+        assertThrows("DATASOURCE-CONSTRUCTOR-ERROR", "'type' value .* contains a NUL character",
+            sub () { Datasource d({"type": "dbitest\x00.other", "db": "db"}); });
+        try {
+            Datasource d({"type": "dbitest", "db": "db", "pass": "secret\x00pw"});
+            fail("the Datasource constructor did not raise an exception");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("DATASOURCE-CONSTRUCTOR-ERROR", ex.err);
+            assertEq("'pass' value contains a NUL character; datasource values cannot contain NUL characters",
+                ex.desc);
+        }
+
+        assertThrows("DATASOURCEPOOL-CONSTRUCTOR-ERROR", "database name .* contains a NUL character",
+            sub () { DatasourcePool p("dbitest", "user", "pass", "db\x00.other"); });
+        assertThrows("DATASOURCEPOOL-CONSTRUCTOR-ERROR", "^password contains a NUL character",
+            sub () { DatasourcePool p("dbitest", "user", "secret\x00pw", "db"); });
+        assertThrows("DATASOURCEPOOL-UNSUPPORTED-DATABASE", "datasource string contains a NUL character",
+            sub () { DatasourcePool p("dbitest\x00.other", "user", "pass", "db"); });
+        assertThrows("DATASOURCEPOOL-CONSTRUCTOR-ERROR", "'db' value .* contains a NUL character",
+            sub () { DatasourcePool p({"type": "dbitest", "db": "db\x00.other"}); });
+        assertThrows("DATASOURCEPOOL-CONSTRUCTOR-ERROR", "^'pass' value contains a NUL character",
+            sub () { DatasourcePool p({"type": "dbitest", "db": "db", "pass": "secret\x00pw"}); });
+    }
+
+    setters() {
+        Datasource d("dbitest:user/pass@db%host");
+        assertThrows("DATASOURCE-ERROR", "database name .* contains a NUL character", \d.setDBName(),
+            "other\x00.db");
+        assertThrows("DATASOURCE-ERROR", "user name .* contains a NUL character", \d.setUserName(),
+            "admin\x00.guest");
+        assertThrows("DATASOURCE-ERROR", "^password contains a NUL character", \d.setPassword(), "secret\x00pw");
+        assertThrows("DATASOURCE-ERROR", "hostname .* contains a NUL character", \d.setHostName(),
+            "other\x00.host");
+        assertThrows("DATASOURCE-ERROR", "encoding .* contains a NUL character", \d.setDBEncoding(), "utf8\x00x");
+        assertThrows("DATASOURCE-ERROR", "encoding .* contains a NUL character", \d.setDBCharset(), "utf8\x00x");
+        # the values were not changed
+        assertEq("db", d.getDBName());
+        assertEq("user", d.getUserName());
+        assertEq("pass", d.getPassword());
+        assertEq("host", d.getHostName());
+        d.setDBName("other");
+        assertEq("other", d.getDBName());
+    }
+
+    driverOptions() {
+        Datasource d("dbitest:user/pass@db");
+        d.open();
+        on_exit d.close();
+        string fault = d.getOption("fault");
+        # the value cut at the NUL character would inject a fault; option values are not shown in the exception
+        try {
+            d.setOption("fault", "select\x00.none");
+            fail("Datasource::setOption() did not raise an exception");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("DBI-OPTION-ERROR", ex.err);
+            assertEq("driver 'dbitest' option 'fault' value contains a NUL character; DBI option values cannot "
+                "contain NUL characters", ex.desc);
+        }
+        assertEq(fault, d.getOption("fault"));
+        # the option name cut at the NUL character would name an option of the driver
+        assertThrows("DBI-OPTION-ERROR", "option name \"fault\\\\x00x\" contains a NUL character",
+            \d.setOption(), ("fault\x00x", "select"));
+        assertThrows("DBI-OPTION-ERROR", "option name .* contains a NUL character", \d.getOption(),
+            "fault\x00x");
+        assertEq(fault, d.getOption("fault"));
+
+        assertThrows("DBI-OPTION-ERROR", "option 'fault' value contains a NUL character",
+            sub () { Datasource ds({"type": "dbitest", "db": "db", "options": {"fault": "select\x00.none"}}); });
+
+        DatasourcePool p("dbitest:user/pass@db{min=1,max=1}");
+        assertThrows("DBI-OPTION-ERROR", "option name .* contains a NUL character", \p.getOption(), "fault\x00x");
+    }
+
+    driverLookups() {
+        # the driver is loaded
+        Datasource d("dbitest:user/pass@db");
+        assertGt(0, dbi_get_driver_capabilities("dbitest"));
+        assertEq(0, dbi_get_driver_capabilities("dbitest\x00.other"));
+        assertEq(Err::EINVAL, errno());
+        assertNothing(dbi_get_driver_capability_list("dbitest\x00.other"));
+        assertEq(Err::EINVAL, errno());
+        assertNothing(dbi_get_driver_options("dbitest\x00.other"));
+        assertEq(Err::EINVAL, errno());
+    }
+
+    sqlite3Files() {
+%ifdef NoSqlite3
+        testSkip("the sqlite3 module is not available");
+%endif
+        TmpDir tmp("qore-ds-nul-");
+        # cut at the NUL character, the name names x.db in the temporary directory
+        string name = tmp.path + DirSep + "x.db";
+        assertThrows("DATASOURCE-CONSTRUCTOR-ERROR", "database name .* contains a NUL character",
+            sub () { Datasource d("sqlite3", NOTHING, NOTHING, name + "\x00.other"); });
+        assertThrows("DATASOURCEPOOL-CONSTRUCTOR-ERROR", "database name .* contains a NUL character",
+            sub () { DatasourcePool p("sqlite3", NOTHING, NOTHING, name + "\x00.other", NOTHING, NOTHING, 1, 1); });
+        assertThrows("DATASOURCE-CONSTRUCTOR-ERROR", "'db' value .* contains a NUL character",
+            sub () { Datasource d({"type": "sqlite3", "db": name + "\x00.other"}); });
+
+        string ok = tmp.path + DirSep + "y.db";
+        Datasource d("sqlite3", NOTHING, NOTHING, ok);
+        assertThrows("DATASOURCE-ERROR", "database name .* contains a NUL character", \d.setDBName(),
+            name + "\x00.other");
+        d.open();
+        d.exec("create table t (a int)");
+        d.commit();
+        d.close();
+        assertTrue(is_file(ok));
+        # no database was created with the name cut at the NUL character
+        assertFalse(is_file(name));
+    }
+}

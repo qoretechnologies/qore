@@ -4,7 +4,7 @@
 
   Qore Programming Language
 
-  Copyright (C) 2016 - 2024 Qore Technologies, s.r.o.
+  Copyright (C) 2016 - 2026 Qore Technologies, s.r.o.
 
   Permission is hereby granted, free of charge, to any person obtaining a
   copy of this software and associated documentation files (the "Software"),
@@ -46,11 +46,18 @@ class FileOutputStream : public OutputStream {
 
 public:
    DLLLOCAL FileOutputStream(const QoreStringNode *fileName, bool append, int mode, const QoreEncoding* encoding, ExceptionSink *xsink) {
+      // a path with a NUL character would be cut at the NUL character by the operating system
+      if (q_check_path(*fileName, "FILE-OPEN2-ERROR", xsink)) {
+         return;
+      }
       f.open2(xsink, fileName->getBuffer(), O_WRONLY | (append ? O_APPEND : O_TRUNC) | O_CREAT, mode, encoding);
    }
 
    DLLLOCAL FileOutputStream(const QoreStringNode *fileName, int flags, int mode, const QoreEncoding* encoding,
          ExceptionSink *xsink) {
+      if (q_check_path(*fileName, "FILE-OPEN2-ERROR", xsink)) {
+         return;
+      }
       f.open2(xsink, fileName->getBuffer(), flags, mode, encoding);
    }
 

@@ -7,6 +7,8 @@
 %requires PgsqlSqlUtilBase
 %requires Schema
 %requires SchemaReverse
+%prepend-module-path "${SCRIPT_DIR}"
+%requires ./PgsqlTestIsolation.qm
 %try-module pgsql
 %define NO_PGSQL
 %endtry
@@ -20,7 +22,13 @@ class PgsqlIndexFeaturesTest inherits QUnit::Test {
         addTestCase("DataSchema option validation", \schemaOptions());
         addTestCase("catalog and DDL round trip", \roundTrip());
         addTestCase("fresh DataSchema install and repeated alignment", \freshInstall());
+        addTestCase("an index is renamed, and a unique index or constraint changed, with one statement each",
+            \renameAndUniqueChanges());
         set_return_value(main());
+    }
+
+    globalTearDown() {
+        PgsqlRunSchema::teardown();
     }
 
     private PgsqlIndex index(*hash<auto> options) {
@@ -96,6 +104,8 @@ class PgsqlIndexFeaturesTest inherits QUnit::Test {
         if (!ENV.QORE_DB_CONNSTR_PGSQL) {
             testSkip("QORE_DB_CONNSTR_PGSQL is not set");
         }
+        # the run's own schema, before the first PostgreSQL connection is opened
+        PgsqlRunSchema::setup(ENV.QORE_DB_CONNSTR_PGSQL, "PgsqlIndexFeatures");
         Datasource ds(ENV.QORE_DB_CONNSTR_PGSQL);
         if (ds.getServerVersion() < 150000) {
             ds.rollback();
@@ -107,7 +117,8 @@ class PgsqlIndexFeaturesTest inherits QUnit::Test {
     private roundTrip() {
         Datasource ds = datasource();
         on_exit ds.rollback();
-        string ns = "qore_idx_features_" + getpid();
+        # a schema of the run, so a concurrent run of this test has its own
+        string ns = PgsqlRunSchema::getAuxName("roundtrip");
         ds.execRaw("create schema " + ns);
         ds.execRaw("set local search_path = " + ns);
         ds.execRaw("create table probe (id int not null, a varchar(10), b int, c int, state varchar(10), \"order\" int)");
@@ -155,6 +166,60 @@ class PgsqlIndexFeaturesTest inherits QUnit::Test {
         rejected(ds, "insert into cloned (id, a, b, c, state) values (4, 'z', 14, 23, 'active')");
     }
 
+    #! Aligns the table to a template with the description, runs the SQL in the database and returns it
+    private list<auto> alignTable(Datasource ds, string table, hash<auto> desc) {
+        PgsqlTable template(ds, table);
+        template.setupTable(desc);
+        PgsqlTable current(ds, table);
+        list<auto> sql = current.getAlignSql(template);
+        map ds.execRaw($1), sql;
+        return sql;
+    }
+
+    #! The rename SQL of an index is a list of one statement here, and a unique index or constraint with other
+    #! columns is dropped once and created once
+    private renameAndUniqueChanges() {
+        Datasource ds = datasource();
+        on_exit ds.rollback();
+        string ns = PgsqlRunSchema::getAuxName("unique");
+        ds.execRaw("create schema " + ns);
+        ds.execRaw("set local search_path = " + ns);
+        ds.execRaw("create table ui_probe (x int, y varchar(10))");
+        ds.execRaw("create unique index ui_probe_old on ui_probe (y)");
+        ds.execRaw("create table uk_probe (x int, y varchar(10), constraint uk_probe_y unique (y))");
+        hash<auto> columns = {"x": {"native_type": "integer"}, "y": {"native_type": "varchar", "size": 10}};
+        string ui_table = (new PgsqlTable(ds, "ui_probe")).getSqlName();
+        string uk_table = (new PgsqlTable(ds, "uk_probe")).getSqlName();
+
+        # renamed in place
+        hash<auto> ui_desc = {"columns": columns, "indexes": {"ui_probe_y": {"columns": ("y",), "unique": True}}};
+        assertEq(("alter index ui_probe_old rename to ui_probe_y",), alignTable(ds, "ui_probe", ui_desc));
+        assertEq((), alignTable(ds, "ui_probe", ui_desc));
+
+        # a unique index with other columns
+        hash<auto> ui_columns = ui_desc;
+        ui_columns.indexes.ui_probe_y.columns = ("y", "x");
+        assertEq(("drop index if exists ui_probe_y", sprintf("create unique index ui_probe_y on %s (y, x)", ui_table)),
+            alignTable(ds, "ui_probe", ui_columns));
+        assertEq((), alignTable(ds, "ui_probe", ui_columns));
+
+        # a unique constraint with other columns
+        hash<auto> uk_desc = {"columns": columns, "unique_constraints": {"uk_probe_y": {"columns": ("y", "x")}}};
+        assertEq((sprintf("alter table %s drop constraint uk_probe_y cascade", uk_table),
+            sprintf("alter table %s add constraint uk_probe_y unique  (y, x)", uk_table)),
+            alignTable(ds, "uk_probe", uk_desc));
+        assertEq((), alignTable(ds, "uk_probe", uk_desc));
+
+        # renameIndex() gives the statement in a list; it commits, which ends the transaction's search_path, so it
+        # comes last
+        PgsqlTable renamed(ds, "ui_probe");
+        softlist<string> sql;
+        renamed.renameIndex("ui_probe_y", "ui_probe_yy", \sql);
+        assertEq(("alter index ui_probe_y rename to ui_probe_yy",), sql);
+        assertEq(1, ds.selectRow("select count(*) as n from pg_indexes where schemaname = %v and indexname = %v",
+            ns, "ui_probe_yy").n.toInt());
+    }
+
     private rejected(Datasource ds, string sql) {
         ds.execRaw("savepoint rejected_row");
         *string sqlstate;
@@ -170,7 +235,8 @@ class PgsqlIndexFeaturesTest inherits QUnit::Test {
     private freshInstall() {
         Datasource ds = datasource();
         on_exit ds.rollback();
-        string ns = "qore_idx_install_" + getpid();
+        # a schema of the run, so a concurrent run of this test has its own
+        string ns = PgsqlRunSchema::getAuxName("install");
         ds.execRaw("create schema " + ns);
         ds.execRaw("set local search_path = " + ns);
         hash<auto> definition = Schema::DataSchemaLoader::loadHash({
@@ -206,12 +272,11 @@ class PgsqlIndexFeaturesTest inherits QUnit::Test {
         assertEq((), live.getAlignSql(expected), "server-rewritten NOT IN predicate aligns unchanged");
         auto oid = ds.selectRow("select 'idx_active'::regclass::oid as oid").oid;
         ds.execRaw("create index idx_undeclared on orders (state)");
-        auto extra_oid = ds.selectRow("select 'idx_undeclared'::regclass::oid as oid").oid;
         new Schema::DataSchema(ds, definition).alignWithInfoInTransaction(True, -1, False);
         assertEq(oid, ds.selectRow("select 'idx_active'::regclass::oid as oid").oid,
             "repeated alignment preserves the same physical index");
-        assertEq(extra_oid, ds.selectRow("select 'idx_undeclared'::regclass::oid as oid").oid,
-            "schema alignment preserves undeclared indexes");
+        assertTrue(ds.selectRow("select to_regclass('idx_undeclared') is null as dropped").dropped,
+            "schema alignment drops an index that the schema does not declare");
         hash<auto> changed = definition.tables.orders;
         changed.indexes.idx_active.where = "state <> 'failed'";
         PgsqlTable changed_table(ds, "orders");

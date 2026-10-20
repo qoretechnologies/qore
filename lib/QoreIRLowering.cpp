@@ -3459,6 +3459,27 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         // execute on_error/on_exit handlers for scopes entered within the try body
         builder.createLandingPad(try_scope_depth, try_scope_id, stmt->loc);
         QoreIRInstruction* catch_inst = builder.createCatchException(stmt->loc);
+        // A thread_exit unwinds through the try block like an exception, but the catch block is not
+        // entered (TryStatement::execImpl() catches only an exception, and does not run the catch block
+        // while the thread is exiting).  CatchException branches to its exception target when the sink
+        // holds a thread_exit, after deleting any exception pending with it (qore_catch_thread_exit()),
+        // and that block keeps unwinding to the enclosing handler, or out of the function, as a synthetic
+        // rethrow, which propagates what is on the sink without touching td->catchException.  It is
+        // created here, at the try statement, so that it carries the statement's temp scope.
+        QoreIRBasicBlock* propagate_block = createBlock("try.propagate");
+        if (!propagate_block) {
+            error = "IR builder failed to create the thread_exit propagation block for try";
+            return false;
+        }
+        catch_inst->exception_target = propagate_block;
+        {
+            QoreIRBasicBlock* catch_entry_block = builder.getBlock();
+            builder.setBlock(propagate_block);
+            QoreIRBasicBlock* outer_handler = exception_stack.empty() ? nullptr : exception_stack.back();
+            auto* rethrow_inst = builder.createRethrow(outer_handler, stmt->loc);
+            rethrow_inst->synthetic = true;
+            builder.setBlock(catch_entry_block);
+        }
         LocalVar* catch_var = try_stmt->getCatchVar();
         if (catch_var) {
             maybeInsertNotNothingGuard(catch_inst->result, nullptr, catch_inst->loc, catch_var->getTypeInfo());
@@ -3510,6 +3531,9 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         // AFTER all invoke.cont blocks created during the try body lowering.
         // LLVM lowering processes blocks in list order — emitInvokeCleanup in
         // ReturnNothing must see all trackResultForCleanup allocas from the body.
+        // The thread_exit propagation block leaves the function when there is no
+        // enclosing handler, so it goes after them as well.
+        builder.getFunction()->moveBlockToEnd(propagate_block);
         builder.getFunction()->moveBlockToEnd(merge_block);
         builder.setBlock(merge_block);
         return true;

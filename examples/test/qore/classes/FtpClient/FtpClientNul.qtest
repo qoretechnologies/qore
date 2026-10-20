@@ -1,0 +1,213 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+#
+# an FTP command, remote path, host, user name, password or URL with a NUL character is refused before anything is
+# sent, since the command would be cut at the NUL character; a local FTP server records every command that it
+# receives, so that the test shows that none was sent
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class FtpClientNulTest
+
+#! a minimal FTP server that records every command received on one control connection
+class RecordingFtpServer {
+    private {
+        Socket listener();
+        Queue commands();
+        Counter done(1);
+    }
+
+    constructor() {
+        listener.bindINET("127.0.0.1", 0, True, AF_INET);
+        listener.listen();
+        background run();
+    }
+
+    int getPort() {
+        return listener.getPort();
+    }
+
+    #! returns the commands received, after the client has disconnected
+    list<string> getCommands() {
+        done.waitForZero();
+        list<string> rv = ();
+        while (commands.size()) {
+            rv += commands.get();
+        }
+        return rv;
+    }
+
+    #! ends the server if the client has not sent QUIT, for example when an assertion fails
+    /** the client must be disconnected first, since the server serves only one connection
+    */
+    stop() {
+        if (done.getCount()) {
+            Socket s();
+            s.connectINET("127.0.0.1", getPort());
+            s.send("QUIT\r\n");
+            done.waitForZero();
+        }
+    }
+
+    private string readCommand(Socket ns) {
+        string line;
+        while (True) {
+            string c;
+            try {
+                c = ns.recv(1);
+            } catch (hash<ExceptionInfo> ex) {
+                # the client closed the connection
+                return "";
+            }
+            if (c == "") {
+                return "";
+            }
+            if (c == "\n") {
+                break;
+            }
+            line += c;
+        }
+        trim line;
+        return line;
+    }
+
+    #! serves one connection, until it is closed or the client sends QUIT
+    private run() {
+        on_exit done.dec();
+        Socket ns = listener.accept();
+        ns.send("220 ready\r\n");
+        while (True) {
+            string cmd = readCommand(ns);
+            if (cmd == "") {
+                return;
+            }
+            commands.push(cmd);
+            if (cmd =~ /^USER /) {
+                ns.send("331 password required\r\n");
+            } else if (cmd =~ /^PASS /) {
+                ns.send("230 logged in\r\n");
+            } else if (cmd =~ /^QUIT/) {
+                ns.send("221 bye\r\n");
+                return;
+            } else if (cmd =~ /^(EPSV|PASV|PORT|EPRT)/) {
+                ns.send("500 no data connections\r\n");
+            } else if (cmd =~ /^SIZE /) {
+                ns.send("213 0\r\n");
+            } else if (cmd =~ /^MKD /) {
+                ns.send("257 \"/created\"\r\n");
+            } else if (cmd =~ /^RNFR /) {
+                ns.send("350 ready for RNTO\r\n");
+            } else {
+                ns.send("250 OK\r\n");
+            }
+        }
+    }
+}
+
+class FtpClientNulTest inherits QUnit::Test {
+    constructor() : Test("FtpClientNulTest", "1.0") {
+        addTestCase("commands and remote paths", \commands());
+        addTestCase("connection settings", \settings());
+        addTestCase("poll operations", \pollOperations());
+        set_return_value(main());
+    }
+
+    commands() {
+        RecordingFtpServer server();
+        FtpClient ftp("ftp://user:pass@127.0.0.1:" + server.getPort());
+        on_exit {
+            ftp.disconnect();
+            server.stop();
+        }
+        ftp.connect();
+
+        # each command would be sent cut at the NUL character
+        assertThrows("FTP-DELETE-ERROR", "remote path \"keep\\.txt\\\\x00/\\.\\./secret\" contains a NUL character "
+            "at byte offset 8", \ftp.del(), "keep.txt\x00/../secret");
+        assertThrows("FTP-CWD-ERROR", "remote path .* contains a NUL character", \ftp.cwd(), "/safe\x00/../root");
+        assertThrows("FTP-MKDIR-ERROR", "remote path .* contains a NUL character", \ftp.mkdir(), "/safe\x00x");
+        assertThrows("FTP-RMDIR-ERROR", "remote path .* contains a NUL character", \ftp.rmdir(), "/safe\x00x");
+        assertThrows("FTP-RENAME-ERROR", "remote path .* contains a NUL character", \ftp.rename(),
+            ("a\x00x", "b"));
+        assertThrows("FTP-RENAME-ERROR", "remote path .* contains a NUL character", \ftp.rename(),
+            ("a", "b\x00x"));
+        assertThrows("FTP-SIZE-ERROR", "remote path .* contains a NUL character", \ftp.size(), "a\x00x");
+        assertThrows("FTP-LIST-ERROR", "remote path .* contains a NUL character", \ftp.list(), "/dir\x00x");
+        assertThrows("FTP-LIST-ERROR", "remote path .* contains a NUL character", \ftp.nlst(), "/dir\x00x");
+        assertThrows("FTP-GET-ERROR", "remote path .* contains a NUL character", \ftp.getAsString(), "r\x00x");
+        assertThrows("FTP-GET-ERROR", "remote path .* contains a NUL character", \ftp.getAsBinary(), "r\x00x");
+        assertThrows("FTP-GET-ERROR", "remote path .* contains a NUL character", \ftp.get(),
+            ("r\x00x", new StringOutputStream()));
+        assertThrows("FTP-PUT-ERROR", "remote path .* contains a NUL character", \ftp.putData(),
+            ("data", "r\x00x"));
+        assertThrows("FTP-PUT-ERROR", "remote path .* contains a NUL character", \ftp.put(),
+            (new StringInputStream("data"), "r\x00x"));
+        assertThrows("FTP-COMMAND-ERROR", "FTP command argument .* contains a NUL character",
+            \ftp.sendControlMessage(), ("SITE", "CHMOD 600 file\x00.public"));
+        assertThrows("FTP-COMMAND-ERROR", "FTP command \"NOOP\\\\x00DELE\" contains a NUL character",
+            \ftp.sendControlMessage(), ("NOOP\x00DELE", "x"));
+
+        # the same commands without the NUL character are sent
+        ftp.del("done");
+        ftp.disconnect();
+        list<string> l = server.getCommands();
+        # commands that the client may send when it connects and disconnects are not checked
+        assertEq(("USER user", "PASS pass", "DELE done"), (select l, $1 !~ /^(TYPE|OPTS|FEAT|PWD|SYST|QUIT)/));
+    }
+
+    settings() {
+        FtpClient ftp();
+        assertThrows("FTP-URL-ERROR", "hostname .* contains a NUL character at byte offset 9", \ftp.setHostName(),
+            "127.0.0.1\x00.trusted.example");
+        assertNothing(ftp.getHostName());
+        assertThrows("FTP-URL-ERROR", "user name .* contains a NUL character", \ftp.setUserName(), "admin\x00.guest");
+        assertNothing(ftp.getUserName());
+        try {
+            ftp.setPassword("secret\x00pw");
+            fail("FtpClient::setPassword() did not raise an exception");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("FTP-URL-ERROR", ex.err);
+            assertEq("password contains a NUL character; passwords cannot contain NUL characters", ex.desc);
+        }
+        string url = "ftp://user:secretpw@127.0.0.1\x00.trusted.example:21";
+        try {
+            ftp.setURL(url);
+            fail("FtpClient::setURL() did not raise an exception");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("FTP-URL-ERROR", ex.err);
+            assertEq("URL contains a NUL character; URLs cannot contain NUL characters", ex.desc);
+        }
+        assertNothing(ftp.getHostName());
+        assertThrows("FTP-URL-ERROR", "URL contains a NUL character", sub () { FtpClient f(url); });
+
+        # values without NUL characters are set
+        ftp.setURL("ftp://user:pw@127.0.0.1:2121");
+        assertEq("127.0.0.1", ftp.getHostName());
+        assertEq("user", ftp.getUserName());
+    }
+
+    pollOperations() {
+        assertThrows("SOCKET-CONNECT-ERROR", "hostname .* contains a NUL character",
+            sub () { FtpControlPollOperation op("127.0.0.1\x00.x", 21); });
+        assertThrows("FTP-LOGIN-ERROR", "user name .* contains a NUL character",
+            sub () { FtpControlPollOperation op("127.0.0.1", 21, False, False, "admin\x00.guest", "pw"); });
+        assertThrows("FTP-LOGIN-ERROR", "^password contains a NUL character",
+            sub () { FtpControlPollOperation op("127.0.0.1", 21, False, False, "user", "secret\x00pw"); });
+        assertThrows("SOCKET-CONNECT-ERROR", "hostname .* contains a NUL character",
+            sub () { FtpDataPollOperation op("127.0.0.1\x00.x", 2000); });
+        assertThrows("SOCKET-CONNECT-ERROR", "hostname .* contains a NUL character",
+            sub () { FtpDataPollOperation op("127.0.0.1\x00.x", 2000, <00>); });
+
+        # the operation is not polled, so it does not connect
+        FtpControlPollOperation op("127.0.0.1", 21);
+        assertThrows("FTP-COMMAND-ERROR", "FTP command .* contains a NUL character", \op.submitCommand(),
+            ("DELE\x00X", "x"));
+        assertThrows("FTP-COMMAND-ERROR", "FTP command argument .* contains a NUL character", \op.submitCommand(),
+            ("DELE", "keep\x00x"));
+    }
+}

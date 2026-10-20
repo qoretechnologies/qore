@@ -29,6 +29,18 @@
 
 #include <limits>
 
+int mlCheckFieldKeys(const std::vector<std::string>& field_names, ExceptionSink* xsink) {
+    for (size_t i = 0; i < field_names.size(); ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "checking field names")) {
+            return -1;
+        }
+        if (QoreHashNode::checkKey(field_names[i].data(), field_names[i].size(), xsink)) {
+            return -1;
+        }
+    }
+    return 0;
+}
+
 MatrixXd qoreListOfHashesToMatrix(const QoreListNode* data,
     std::vector<std::string>& field_names, ExceptionSink* xsink) {
 
@@ -191,10 +203,16 @@ QoreBufferNode* qoreFloat64BufferFilled(size_t length, double value, ExceptionSi
 }
 
 QoreHashNode* eigenRowToQoreHash(const MatrixXd& matrix, Eigen::Index row,
-    const std::vector<std::string>& field_names) {
-    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), nullptr);
+    const std::vector<std::string>& field_names, ExceptionSink* xsink) {
+    if (mlCheckFieldKeys(field_names, xsink)) {
+        return nullptr;
+    }
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
     for (size_t j = 0; j < field_names.size(); ++j) {
-        rv->setKeyValue(field_names[j].c_str(), matrix(row, j), nullptr);
+        rv->setKeyValue(field_names[j].c_str(), matrix(row, j), xsink);
+        if (*xsink) {
+            return nullptr;
+        }
     }
     return rv.release();
 }
@@ -203,7 +221,7 @@ RowVectorXd qoreHashToRowVector(const QoreHashNode* hash,
     const std::vector<std::string>& field_names, ExceptionSink* xsink) {
     RowVectorXd row(field_names.size());
     for (size_t j = 0; j < field_names.size(); ++j) {
-        QoreValue v = hash->getKeyValue(field_names[j].c_str());
+        QoreValue v = mlRecordField(hash, field_names[j]);
         if (v.isNullOrNothing()) {
             row(j) = std::numeric_limits<double>::quiet_NaN();
         } else {

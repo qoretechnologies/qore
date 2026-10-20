@@ -156,12 +156,18 @@ public class RestSchemaTablesDataProvider inherits DataProvider::AbstractDataPro
         }
     }
 
-    #! Checks that everything a table declares about its records names a column the records have
+    #! Checks that everything a table declares about its records names a field the records have
     /** A filter, a filterable query field and an identity are all <b>predicates or references on a record</b>,
-        so each has to name a column of the record type.  One that does not is dead on arrival and fails in a
+        so each has to name a field of the record type.  One that does not is dead on arrival and fails in a
         way that does not point at the declaration: the framework rejects a search on an unknown field before
         the table is reached, so a filter on a column that is not there is simply never used, and an identity
         that is not there produces a table that reads correctly and cannot write.
+
+        Each is named by the keys of its path joined with dots (@ref restschemaquerysyntax_fields), as the filter
+        matches it, and is resolved so by
+        @ref RestSchemaActions::RestSchemaTableDataProvider::hasRecordField() "RestSchemaTableDataProvider::hasRecordField()":
+        \c owner.uuid is the field \c uuid of the column \c owner.  So a column whose key has a dot, which no
+        query language can name, is not a field a table can declare.
 
         This is checked here rather than in
         @ref RestSchemaActions::RestSchemaTableDataProvider::check() "check()" because it needs the record
@@ -175,30 +181,34 @@ public class RestSchemaTablesDataProvider inherits DataProvider::AbstractDataPro
         @param table the table declaration
         @param rt the table's record type
 
-        @throw REST-SCHEMA-RECORD-ERROR something declared is not a column
+        @throw REST-SCHEMA-RECORD-ERROR something declared is not a field of the record type
     */
     static checkTableFields(hash<RestSchemaRecordTableInfo> table, *hash<string, AbstractDataField> rt) {
         list<string> bad = ();
         foreach hash<RestSchemaRecordFilterInfo> f in (table.filters) {
-            if (!rt{f.field}) {
+            if (!RestSchemaTableDataProvider::hasRecordField(rt, f.field)) {
                 bad += sprintf("filter on %y (%s)", f.field, f.operator);
             }
         }
         foreach string f in (keys table.query.fields) {
-            if (!rt{f}) {
+            if (!RestSchemaTableDataProvider::hasRecordField(rt, f)) {
                 bad += sprintf("filterable query field %y", f);
+            }
+        }
+        foreach string f in (keys table.query.field_ops) {
+            if (!RestSchemaTableDataProvider::hasRecordField(rt, f)) {
+                bad += sprintf("filterable query field %y in field_ops", f);
             }
         }
         if (table.get_action.val() || table.update_action.val() || table.delete_action.val()) {
             foreach hash<auto> i in (RestSchemaTableDataProvider::getIdParts(table).pairIterator()) {
-                # an identity part may name a field nested in the record, so only the root has to be a column
-                if (!rt{i.value.split(".")[0]}) {
+                if (!RestSchemaTableDataProvider::hasRecordField(rt, i.value)) {
                     bad += sprintf("identity %y for option %y", i.value, i.key);
                 }
             }
         }
         if (bad) {
-            throw "REST-SCHEMA-RECORD-ERROR", sprintf("table %y declares %y, which %s not a column of its "
+            throw "REST-SCHEMA-RECORD-ERROR", sprintf("table %y declares %y, which %s not a field of its "
                 "record type; columns: %y", table.name, bad, bad.size() == 1 ? "is" : "are", keys rt);
         }
     }

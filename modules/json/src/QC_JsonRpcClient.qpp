@@ -470,7 +470,8 @@ nothing JsonRpcClient::setEventQueue(Queue[Queue] queue) {
 nothing JsonRpcClient::setVersion(string version) {
     TempEncodingHelper tstr(version, QCS_UTF8, xsink);
     if (tstr) {
-        client->setVersion(tstr->c_str());
+        // the whole version is kept: it was cut at a NUL character
+        client->setVersion(tstr->c_str(), tstr->size());
     }
 }
 

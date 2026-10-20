@@ -14,6 +14,80 @@
 
 %exec-class RedisDataProviderTest
 
+#! A local server that answers each expected RESP request with a fixed reply, on one connection
+class FakeRespServer {
+    public {
+        #! the port the server listens on
+        int port;
+    }
+
+    private {
+        #! the listening socket
+        Socket listener();
+
+        #! the expected requests and the replies to them, in order
+        list<hash<auto>> exchanges;
+
+        #! the requests received
+        list<string> received = ();
+
+        #! the error that stopped the server, if any
+        *hash<ExceptionInfo> error;
+
+        #! counted down when the server thread exits
+        Counter done(1);
+    }
+
+    #! Starts the server
+    /** @param exchanges a list of hashes with a \c request key (the RESP request expected) and a \c reply key
+        (the RESP data to send in reply)
+    */
+    constructor(list<hash<auto>> exchanges) {
+        self.exchanges = exchanges;
+        listener.bind("127.0.0.1:0", True);
+        listener.listen(1);
+        port = listener.getSocketInfo().port;
+        background serve();
+    }
+
+    #! Waits for the server thread to exit and returns the requests received
+    /** @throw the exception that stopped the server, if any
+    */
+    list<string> wait() {
+        if (done.waitForZero(30s)) {
+            throw "FAKE-RESP-SERVER-ERROR", "the server did not exit";
+        }
+        if (error) {
+            throw error.err, error.desc, error.arg;
+        }
+        return received;
+    }
+
+    #! Reads each expected request and answers it, in order
+    private serve() {
+        on_exit done.dec();
+        try {
+            *Socket conn = listener.accept(30s);
+            if (!conn) {
+                throw "FAKE-RESP-SERVER-ERROR", "no client connected";
+            }
+            foreach hash<auto> exchange in (exchanges) {
+                received += conn.recv(exchange.request.size(), 30s);
+                conn.send(exchange.reply);
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            error = ex;
+        }
+    }
+
+    #! Returns the RESP encoding of a command
+    static string request(list<string> args) {
+        string rv = sprintf("*%d\r\n", args.size());
+        map rv += sprintf("$%d\r\n%s\r\n", $1.size(), $1), args;
+        return rv;
+    }
+}
+
 public class RedisDataProviderTest inherits QUnit::Test {
     private {
         RedisClient redis;
@@ -41,6 +115,7 @@ public class RedisDataProviderTest inherits QUnit::Test {
         addTestCase("server operations test", \serverOpsTest());
         addTestCase("transaction operations test", \transactionOpsTest());
         addTestCase("action data dependent options", \testActionDataDependentOptions());
+        addTestCase("RESP replies from a local server", \respReplyTest());
 
         setupConnection();
 
@@ -425,4 +500,72 @@ public class RedisDataProviderTest inherits QUnit::Test {
                 sprintf("action %y has data_dependent_options", action_name));
         }
     }
+
+    #! Each command of a pipeline has one result, and array replies keep their elements
+    /** Uses a local server, so it runs without a Redis server.  An error reply raises an exception only after the
+        whole reply has been read, so the connection stays in step with the server.
+    */
+    respReplyTest() {
+        list<list<string>> pipeline1 = (
+            ("LRANGE", "list", "0", "-1"),
+            ("GET", "missing"),
+            ("EXEC",),
+            ("SET", "key", "value"),
+        );
+        list<list<string>> pipeline2 = (
+            ("GET", "a"),
+            ("BADCMD",),
+            ("GET", "b"),
+        );
+        list<hash<auto>> exchanges = (
+            # an array, a null bulk string, a nested array and a simple string
+            {"request": FakeRespServer::request(pipeline1[0]), "reply": "*2\r\n$1\r\na\r\n$1\r\nb\r\n"},
+            {"request": FakeRespServer::request(pipeline1[1]), "reply": "$-1\r\n"},
+            {"request": FakeRespServer::request(pipeline1[2]),
+                "reply": "*2\r\n*2\r\n$1\r\nx\r\n:1\r\n+OK\r\n"},
+            {"request": FakeRespServer::request(pipeline1[3]), "reply": "+OK\r\n"},
+            # an error reply in the middle of a pipeline
+            {"request": FakeRespServer::request(pipeline2[0]), "reply": "$1\r\nx\r\n"},
+            {"request": FakeRespServer::request(pipeline2[1]), "reply": "-ERR unknown command 'BADCMD'\r\n"},
+            {"request": FakeRespServer::request(pipeline2[2]), "reply": "$1\r\ny\r\n"},
+            {"request": FakeRespServer::request(("PING",)), "reply": "+PONG\r\n"},
+            # an array with a null element
+            {"request": FakeRespServer::request(("MGET", "k1", "missing", "k2")),
+                "reply": "*3\r\n$2\r\nv1\r\n$-1\r\n$2\r\nv2\r\n"},
+            # an array with an error element before the end
+            {"request": FakeRespServer::request(("EXEC",)), "reply": "*2\r\n-ERR wrong type\r\n+OK\r\n"},
+            {"request": FakeRespServer::request(("PING",)), "reply": "+PONG\r\n"},
+            # the data providers get nested replies: SCAN gives the cursor and a list of keys, XRANGE a list of entries
+            {"request": FakeRespServer::request(("SCAN", "0")),
+                "reply": "*2\r\n$1\r\n0\r\n*2\r\n$2\r\nk1\r\n$2\r\nk2\r\n"},
+            {"request": FakeRespServer::request(("XRANGE", "stream", "-", "+")),
+                "reply": "*1\r\n*2\r\n$3\r\n1-0\r\n*2\r\n$1\r\nf\r\n$1\r\nv\r\n"},
+        );
+        FakeRespServer server(exchanges);
+        {
+            RedisClient client({"host": "127.0.0.1", "port": server.port});
+            on_exit client.disconnect();
+
+            assertEq(((("a", "b")), NOTHING, (("x", 1), "OK"), "OK"), client.pipeline(pipeline1));
+
+            assertThrows("REDIS-ERROR", "ERR unknown command 'BADCMD'", \client.pipeline(), (pipeline2,));
+            # the replies after the error were read with it
+            assertEq("PONG", client.command("PING"));
+
+            assertEq(("v1", NOTHING, "v2"), client.command("MGET", "k1", "missing", "k2"));
+
+            assertThrows("REDIS-ERROR", "ERR wrong type", \client.command(), "EXEC");
+            # the elements after the error were read with it
+            assertEq("PONG", client.command("PING"));
+
+            RedisDataProvider rdp(client);
+            assertEq({"cursor": 0, "keys": ("k1", "k2")},
+                rdp.getChildProviderEx("keys").doRequest({"operation": "scan"}));
+            assertEq({"entries": ({"id": "1-0", "fields": {"f": "v"}},)},
+                rdp.getChildProviderEx("streams").doRequest({"operation": "xrange", "key": "stream"}));
+        }
+        list<string> requests = map $1.request, exchanges;
+        assertEq(requests, server.wait());
+    }
+
 }

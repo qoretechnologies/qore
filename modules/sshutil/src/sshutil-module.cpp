@@ -30,6 +30,7 @@
 static void sshutil_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink);
 static void sshutil_module_ns_init(QoreNamespace* rns, QoreNamespace* qns, ExceptionSink& xsink);
 static void sshutil_module_delete();
+static void sshutil_program_cleanup(QoreProgram* pgm);
 
 QoreNamespace SshUtilNS("Qore::SshUtil");
 
@@ -95,13 +96,21 @@ static void sshutil_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink
     SshUtilNS.addSystemClass(initFilesystemSshClientIdentityProviderClass(SshUtilNS));
     SshUtilNS.addSystemClass(initFilesystemSshServerHostKeyProviderClass(SshUtilNS));
     SshUtilNS.addSystemClass(initSshUtilRegistryClass(SshUtilNS));
+
+    qore_register_program_cleanup_callback(sshutil_program_cleanup);
 }
 
 static void sshutil_module_ns_init(QoreNamespace* rns, QoreNamespace* qns, ExceptionSink& xsink) {
     qns->addNamespace(SshUtilNS.copy());
 }
 
+// a registration ends with the Program of the registered object
+static void sshutil_program_cleanup(QoreProgram* pgm) {
+    SshUtilRegistry::releaseProgram(pgm);
+}
+
 static void sshutil_module_delete() {
+    qore_deregister_program_cleanup_callback(sshutil_program_cleanup);
     ExceptionSink xsink;
     SshUtilRegistry::clear(&xsink);
     SshUtilNS.clear(&xsink);

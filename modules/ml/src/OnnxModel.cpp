@@ -34,6 +34,8 @@
 
 #include <onnxruntime_session_options_config_keys.h>
 
+#include <qore/QoreSandboxManager.h>
+
 #ifdef HAVE_CUDART
 #include <cuda_runtime_api.h>
 #endif
@@ -413,13 +415,14 @@ int qoreValueToUInt64(QoreValue value, uint64_t max_value, const char* type_name
     if (value.getType() == NT_STRING) {
         QoreStringValueHelper str(value);
         const char* s = str->c_str();
-        if (!*s) {
+        if (!str->size()) {
             xsink->raiseException("ML-ONNX-INFERENCE-ERROR",
                 "%s tensor value is empty; expected an unsigned integer in the range 0..%llu",
                 type_name, static_cast<unsigned long long>(max_value));
             return -1;
         }
-        for (const char* p = s; *p; ++p) {
+        // every byte must be a digit; a NUL character would otherwise end the number early
+        for (const char* p = s, * e = s + str->size(); p < e; ++p) {
             if (*p < '0' || *p > '9') {
                 xsink->raiseException("ML-ONNX-INFERENCE-ERROR",
                     "%s tensor value '%s' is not an unsigned decimal integer in the range 0..%llu",
@@ -703,7 +706,6 @@ struct OnnxBoundOrtValue {
     std::unique_ptr<std::vector<uint64_t>> uint64s;
     std::unique_ptr<std::vector<uint8_t>> bool_bytes;
     std::unique_ptr<std::vector<std::string>> strings;
-    std::vector<const char*> string_ptrs;
 };
 
 QoreListNode* qore_ml_get_onnx_providers(ExceptionSink* xsink) {
@@ -770,9 +772,258 @@ static std::unordered_map<std::string, std::string> hashToStringMap(const QoreHa
             return {};
         }
         QoreStringValueHelper str(value);
+        // the value is passed to ONNX Runtime as a NUL-terminated string
+        if (q_check_no_nul(str->c_str(), str->size(),
+                (std::string(context) + " config entry '" + hi.getKey() + "' value").c_str(),
+                "ONNX Runtime config values", "ML-ONNX-RUN-OPTIONS-ERROR", xsink)) {
+            return {};
+        }
         rv[hi.getKey()] = str->c_str();
     }
     return rv;
+}
+
+//! Checks that the sandbox of the calling program allows ONNX Runtime to access a path on its behalf
+/** @return true if the access is allowed or no sandbox is active, false if an exception was raised
+*/
+static bool onnxCheckSandboxPath(const char* path, int mode, ExceptionSink* xsink) {
+    // a policy check honors an active policy barrier
+    QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
+    return !smh || smh->checkFilesystemAccess(path, mode, xsink);
+}
+
+//! Returns true if the calling program has a filesystem sandbox policy
+static bool onnxSandboxActive() {
+    QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
+    return static_cast<bool>(smh);
+}
+
+//! The ONNX Runtime session config entries a sandboxed program may set: none of them names a file or produces output
+/** These are the keys of \c onnxruntime_session_options_config_keys.h that only tune the session; the keys that
+    name files are in onnx_sandbox_session_config_paths or onnx_sandbox_session_config_flags, or are refused.
+*/
+static const std::unordered_set<std::string> onnx_sandbox_session_config_allowed = {
+    "session.disable_prepacking",
+    "session.use_env_allocators",
+    "session.load_model_format",
+    "session.save_model_format",
+    "session.set_denormal_as_zero",
+    "session.disable_quant_qdq",
+    "session.disable_double_qdq_remover",
+    "session.enable_quant_qdq_cleanup",
+    "optimization.enable_gelu_approximation",
+    "optimization.enable_cast_chain_elimination",
+    "session.disable_aot_function_inlining",
+    "optimization.enable_memory_probe_recompute_config",
+    "optimization.disable_specified_optimizers",
+    "session.graph_optimizations_loop_level",
+    "session.use_device_allocator_for_initializers",
+    "session.inter_op.allow_spinning",
+    "session.intra_op.allow_spinning",
+    "session.use_ort_model_bytes_directly",
+    "session.use_ort_model_bytes_for_initializers",
+    "session.qdqisint8allowed",
+    "session.x64quantprecision",
+    "optimization.minimal_build_optimizations",
+    "ep.nnapi.partitioning_stop_ops",
+    "session.dynamic_block_base",
+    "session.force_spinning_stop",
+    "session.strict_shape_type_inference",
+    "session.allow_released_opsets_only",
+    "session.intra_op_thread_affinities",
+    "session.disable_cpu_ep_fallback",
+    "session.optimized_model_external_initializers_min_size_in_bytes",
+    "ep.context_embed_mode",
+    "ep.context_node_name_prefix",
+    "ep.share_ep_contexts",
+    "ep.stop_share_ep_contexts",
+    "mlas.enable_gemm_fastmath_arm64_bfloat16",
+    "session.qdq_matmulnbits_accuracy_level",
+    "ep.dynamic.workload_type",
+    "session.disable_model_compile",
+    "session.fail_on_suboptimal_compiled_model",
+    "ep.dynamic.qnn_htp_performance_mode",
+};
+
+//! The ONNX Runtime session config entries that name a file, with the access ONNX Runtime needs to it
+static const std::unordered_map<std::string, int> onnx_sandbox_session_config_paths = {
+    {"ep.context_file_path", QSEC_WRITE | QSEC_CREATE},
+    {"session.collect_node_memory_stats_to_file", QSEC_WRITE | QSEC_CREATE},
+    {"session.node_partition_config_file", QSEC_READ},
+    {"optimization.memory_optimizer_config", QSEC_READ},
+    // file names in the directory of the optimized model and of the EP context model
+    {"session.optimized_model_external_initializers_file_name", QSEC_WRITE | QSEC_CREATE},
+    {"ep.context_model_external_initializers_file_name", QSEC_WRITE | QSEC_CREATE},
+};
+
+//! ONNX Runtime session config flags that write a file when they are set, with the entry that must name the file
+/** A flag without such an entry writes a file that the sandbox cannot check, so it may only be off. */
+static const std::unordered_map<std::string, const char*> onnx_sandbox_session_config_flags = {
+    // writes <model>_ctx.onnx next to the model when no file is named
+    {"ep.context_enable", "ep.context_file_path"},
+    // dumps models to post_layout_transform_step_<n>.onnx in the current directory
+    {"session.debug_layout_transformation", nullptr},
+    // writes the pre-packed initializers to an external data file
+    {"session.save_external_prepacked_constant_initializers", nullptr},
+};
+
+//! The ONNX Runtime run config entries a sandboxed program may set: none of them names a file
+static const std::unordered_set<std::string> onnx_sandbox_run_config_allowed = {
+    "memory.enable_memory_arena_shrinkage",
+    "disable_synchronize_execution_providers",
+    "qnn.htp_perf_mode",
+    "qnn.htp_perf_mode_post_run",
+    "qnn.rpc_control_latency",
+    "gpu_graph_id",
+};
+
+//! The execution provider options a sandboxed program may set, by canonical provider name
+/** These are the options documented by ML::ml_get_onnx_provider_options(); the TensorRT engine cache directory is
+    checked, and the engine cache may only be enabled when it names the directory.
+*/
+static const std::unordered_map<std::string, std::unordered_set<std::string>> onnx_sandbox_provider_options = {
+    {"CUDAExecutionProvider", {"device_id", "gpu_mem_limit", "arena_extend_strategy", "cudnn_conv_algo_search",
+        "do_copy_in_default_stream", "enable_cuda_graph"}},
+    {"TensorrtExecutionProvider", {"device_id", "trt_max_workspace_size", "trt_fp16_enable", "trt_int8_enable",
+        "trt_engine_cache_enable", "trt_engine_cache_path"}},
+    {"OpenVINOExecutionProvider", {"device_type", "precision"}},
+    {"DmlExecutionProvider", {"device_id"}},
+    {"ROCMExecutionProvider", {"device_id", "gpu_mem_limit"}},
+};
+
+//! Returns true if an ONNX Runtime flag value turns the flag off
+static bool onnxFlagIsOff(const std::string& value) {
+    std::string v = value;
+    std::transform(v.begin(), v.end(), v.begin(), [](unsigned char c) { return std::tolower(c); });
+    return v == "0" || v == "false";
+}
+
+//! Returns the directory of a file path, or "." for a file name without a directory
+static std::string onnxDirOf(const std::string& path) {
+    size_t slash = path.rfind('/');
+    if (slash == std::string::npos) {
+        return ".";
+    }
+    return slash ? path.substr(0, slash) : std::string("/");
+}
+
+//! Checks the ONNX Runtime session config entries of a sandboxed program
+/** @param entries the session config entries
+    @param optimized_path the optimized model path, or an empty string if there is none
+
+    @return true if the entries may be set, false if an exception was raised
+*/
+static bool onnxCheckSandboxSessionConfig(const std::unordered_map<std::string, std::string>& entries,
+        const std::string& optimized_path, ExceptionSink* xsink) {
+    size_t count = 0;
+    for (const auto& entry : entries) {
+        if (count && !(count % 100) && qore_check_cancel(xsink, "checking ONNX session config entries")) {
+            return false;
+        }
+        ++count;
+        const std::string& key = entry.first;
+        if (onnx_sandbox_session_config_allowed.find(key) != onnx_sandbox_session_config_allowed.end()) {
+            continue;
+        }
+        auto pi = onnx_sandbox_session_config_paths.find(key);
+        if (pi != onnx_sandbox_session_config_paths.end()) {
+            std::string path = entry.second;
+            // the external initializer file names are relative to the directory of the model that is written
+            // (ONNX Runtime refuses an absolute name, which is checked as it is given)
+            if (!path.empty() && path[0] != '/') {
+                if (key == "session.optimized_model_external_initializers_file_name") {
+                    path = onnxDirOf(optimized_path) + "/" + path;
+                } else if (key == "ep.context_model_external_initializers_file_name") {
+                    auto ci = entries.find("ep.context_file_path");
+                    path = onnxDirOf(ci == entries.end() ? std::string() : ci->second) + "/" + path;
+                }
+            }
+            if (!onnxCheckSandboxPath(path.c_str(), pi->second, xsink)) {
+                return false;
+            }
+            continue;
+        }
+        auto fi = onnx_sandbox_session_config_flags.find(key);
+        if (fi != onnx_sandbox_session_config_flags.end()) {
+            if (onnxFlagIsOff(entry.second) || (fi->second && entries.find(fi->second) != entries.end())) {
+                continue;
+            }
+            xsink->raiseException("ML-ONNX-ERROR", "ONNX session config entry '%s' cannot be enabled by a "
+                "sandboxed program%s%s%s: it makes ONNX Runtime write a file that the sandbox cannot check",
+                key.c_str(), fi->second ? " unless '" : "", fi->second ? fi->second : "",
+                fi->second ? "' names the file" : "");
+            return false;
+        }
+        xsink->raiseException("ML-ONNX-ERROR", "ONNX session config entry '%s' cannot be set by a sandboxed program: "
+            "only the ONNX Runtime options that do not name files, or whose files are checked, may be set",
+            key.c_str());
+        return false;
+    }
+    return true;
+}
+
+//! Checks the ONNX Runtime run config entries of a sandboxed program
+/** @return true if the entries may be set, false if an exception was raised
+*/
+static bool onnxCheckSandboxRunConfig(const std::unordered_map<std::string, std::string>& entries,
+        ExceptionSink* xsink) {
+    size_t count = 0;
+    for (const auto& entry : entries) {
+        if (count && !(count % 100) && qore_check_cancel(xsink, "checking ONNX run config entries")) {
+            return false;
+        }
+        ++count;
+        if (onnx_sandbox_run_config_allowed.find(entry.first) == onnx_sandbox_run_config_allowed.end()) {
+            xsink->raiseException("ML-ONNX-RUN-OPTIONS-ERROR", "ONNX run config entry '%s' cannot be set by a "
+                "sandboxed program: only the ONNX Runtime run options that do not name files may be set",
+                entry.first.c_str());
+            return false;
+        }
+    }
+    return true;
+}
+
+//! Checks the execution provider options of a sandboxed program
+/** @return true if the options may be set, false if an exception was raised
+*/
+static bool onnxCheckSandboxProviderOptions(const std::string& provider,
+        const std::unordered_map<std::string, std::string>& options, ExceptionSink* xsink) {
+    auto pi = onnx_sandbox_provider_options.find(provider);
+    size_t count = 0;
+    for (const auto& opt : options) {
+        if (count && !(count % 100) && qore_check_cancel(xsink, "checking ONNX execution provider options")) {
+            return false;
+        }
+        ++count;
+        if (pi == onnx_sandbox_provider_options.end() || pi->second.find(opt.first) == pi->second.end()) {
+            xsink->raiseException("ML-ONNX-PROVIDER-ERROR", "execution provider option '%s' of provider '%s' cannot "
+                "be set by a sandboxed program: only the options listed by ML::ml_get_onnx_provider_options() may be "
+                "set", opt.first.c_str(), provider.c_str());
+            return false;
+        }
+        if (opt.first == "trt_engine_cache_path") {
+            if (!onnxCheckSandboxPath(opt.second.c_str(), QSEC_READ | QSEC_WRITE | QSEC_CREATE, xsink)) {
+                return false;
+            }
+        } else if (opt.first == "trt_engine_cache_enable" && !onnxFlagIsOff(opt.second)
+                && options.find("trt_engine_cache_path") == options.end()) {
+            xsink->raiseException("ML-ONNX-PROVIDER-ERROR", "execution provider option 'trt_engine_cache_enable' "
+                "cannot be enabled by a sandboxed program unless 'trt_engine_cache_path' names the cache directory");
+            return false;
+        }
+    }
+    return true;
+}
+
+//! Makes content identity capture required when the calling program has a filesystem sandbox policy
+/** Content identity capture reads the model and its external data through the sandbox check and gives ONNX Runtime
+    the bytes it read; required capture refuses a model whose data ONNX Runtime would read by itself, so with a
+    sandbox, ONNX Runtime never reads a file that the sandbox did not allow.
+*/
+static void onnxSandboxIdentityMode(OnnxContentIdentityMode& mode) {
+    if (onnxSandboxActive()) {
+        mode = OnnxContentIdentityMode::Required;
+    }
 }
 
 static bool hasOrtSuffix(const char* path) {
@@ -792,7 +1043,7 @@ static std::string getConfigStringValue(const QoreHashNode* config, const char* 
         return {};
     }
     QoreStringValueHelper str(val);
-    return str->c_str();
+    return mlStdString(**str);
 }
 
 static bool configValueIsOrt(const QoreHashNode* config, const char* key) {
@@ -859,6 +1110,11 @@ QoreOnnxRunOptions::QoreOnnxRunOptions(const QoreHashNode* opts, ExceptionSink* 
     QoreValue tag_val = opts->getKeyValue("run_tag");
     if (!tag_val.isNullOrNothing()) {
         QoreStringValueHelper tag(tag_val);
+        // the run tag is passed to ONNX Runtime as a NUL-terminated string
+        if (q_check_no_nul(tag->c_str(), tag->size(), "run_tag", "ONNX Runtime run tags",
+                "ML-ONNX-RUN-OPTIONS-ERROR", xsink)) {
+            return;
+        }
         run_tag = tag->c_str();
         try {
             options.SetRunTag(run_tag.c_str());
@@ -902,6 +1158,9 @@ QoreOnnxRunOptions::QoreOnnxRunOptions(const QoreHashNode* opts, ExceptionSink* 
         }
         config_entries = hashToStringMap(config_val.get<const QoreHashNode>(), "run options", xsink);
         if (*xsink) {
+            return;
+        }
+        if (onnxSandboxActive() && !onnxCheckSandboxRunConfig(config_entries, xsink)) {
             return;
         }
         try {
@@ -972,12 +1231,21 @@ QoreHashNode* QoreOnnxRunOptions::getInfo(ExceptionSink* xsink) const {
 QoreOnnxModel::QoreOnnxModel(const char* model_path, ExceptionSink* xsink)
     : active_provider("CPUExecutionProvider") {
     source_model_path = model_path;
+    // the model is read on behalf of the calling program, so its sandbox must allow it
+    if (!onnxCheckSandboxPath(model_path, QSEC_READ, xsink)) {
+        return;
+    }
+    onnxSandboxIdentityMode(content_identity_mode);
     try {
         available_providers = getAvailableOnnxProviders();
         env = std::make_unique<Ort::Env>(ORT_LOGGING_LEVEL_WARNING, "qore-ml");
         Ort::SessionOptions session_options;
         session_options.SetIntraOpNumThreads(1);
         autoDetectProvider(session_options);
+        if (!captureContentIdentity(model_path, nullptr, 0, xsink)) {
+            return;
+        }
+        applyCapturedExternalInitializers(session_options);
         createSession(makeSessionSource(model_path, nullptr, 0), session_options, nullptr, xsink);
         if (*xsink) {
             return;
@@ -992,10 +1260,15 @@ QoreOnnxModel::QoreOnnxModel(const char* model_path, ExceptionSink* xsink)
 QoreOnnxModel::QoreOnnxModel(const char* model_path, const QoreHashNode* config,
     ExceptionSink* xsink) : active_provider("CPUExecutionProvider") {
     source_model_path = model_path;
+    // the model is read on behalf of the calling program, so its sandbox must allow it
+    if (!onnxCheckSandboxPath(model_path, QSEC_READ, xsink)) {
+        return;
+    }
     source_load_model_format = getConfigStringValue(config, "load_model_format");
     if (!parseOnnxContentIdentityMode(config, content_identity_mode, xsink)) {
         return;
     }
+    onnxSandboxIdentityMode(content_identity_mode);
     try {
         available_providers = getAvailableOnnxProviders();
         Ort::SessionOptions session_options;
@@ -1021,12 +1294,17 @@ QoreOnnxModel::QoreOnnxModel(const void* model_data, size_t model_data_len,
     ExceptionSink* xsink) : active_provider("CPUExecutionProvider") {
     const char* data = static_cast<const char*>(model_data);
     source_model_data.assign(data, data + model_data_len);
+    onnxSandboxIdentityMode(content_identity_mode);
     try {
         available_providers = getAvailableOnnxProviders();
         env = std::make_unique<Ort::Env>(ORT_LOGGING_LEVEL_WARNING, "qore-ml");
         Ort::SessionOptions session_options;
         session_options.SetIntraOpNumThreads(1);
         autoDetectProvider(session_options);
+        if (!captureContentIdentity(nullptr, model_data, model_data_len, xsink)) {
+            return;
+        }
+        applyCapturedExternalInitializers(session_options);
         // Ort::Session copies the buffer, so the caller's memory lifetime doesn't matter
         createSession(makeSessionSource(nullptr, model_data, model_data_len), session_options,
             nullptr, xsink);
@@ -1049,6 +1327,7 @@ QoreOnnxModel::QoreOnnxModel(const void* model_data, size_t model_data_len,
     if (!parseOnnxContentIdentityMode(config, content_identity_mode, xsink)) {
         return;
     }
+    onnxSandboxIdentityMode(content_identity_mode);
     try {
         available_providers = getAvailableOnnxProviders();
         Ort::SessionOptions session_options;
@@ -1182,7 +1461,15 @@ void QoreOnnxModel::configureBaseSessionOptions(Ort::SessionOptions& opts,
                     "invalid profile_file_prefix; expected a non-empty path prefix");
                 return;
             }
+            // the prefix of the profile file path is passed to ONNX Runtime as a NUL-terminated string
+            if (q_check_path(**profile_prefix, "ML-ONNX-ERROR", xsink)) {
+                return;
+            }
             prefix = profile_prefix->c_str();
+        }
+        // ONNX Runtime writes the profile to a file named by the prefix and a time stamp
+        if (!onnxCheckSandboxPath(prefix.c_str(), QSEC_WRITE | QSEC_CREATE, xsink)) {
+            return;
         }
         try {
             opts.EnableProfiling(prefix.c_str());
@@ -1199,6 +1486,7 @@ void QoreOnnxModel::configureBaseSessionOptions(Ort::SessionOptions& opts,
         }
     }
 
+    std::string optimized_path_str;
     QoreValue optimized_path_val = config->getKeyValue("optimized_model_filepath");
     if (!optimized_path_val.isNullOrNothing()) {
         QoreStringValueHelper optimized_path(optimized_path_val);
@@ -1207,7 +1495,16 @@ void QoreOnnxModel::configureBaseSessionOptions(Ort::SessionOptions& opts,
                 "invalid optimized_model_filepath; expected a non-empty output path");
             return;
         }
+        // the path is passed to ONNX Runtime as a NUL-terminated string
+        if (q_check_path(**optimized_path, "ML-ONNX-ERROR", xsink)) {
+            return;
+        }
+        // ONNX Runtime writes the optimized model on behalf of the calling program
+        if (!onnxCheckSandboxPath(optimized_path->c_str(), QSEC_WRITE | QSEC_CREATE, xsink)) {
+            return;
+        }
         opts.SetOptimizedModelFilePath(optimized_path->c_str());
+        optimized_path_str = optimized_path->c_str();
     }
 
     std::unordered_map<std::string, std::string> session_config_entries;
@@ -1227,26 +1524,43 @@ void QoreOnnxModel::configureBaseSessionOptions(Ort::SessionOptions& opts,
 
     QoreValue load_format_val = config->getKeyValue("load_model_format");
     if (!load_format_val.isNullOrNothing()) {
-        QoreStringValueHelper load_format(load_format_val);
-        if (!strcmp(load_format->c_str(), "ORT") || !strcmp(load_format->c_str(), "ort")) {
+        QoreStringValueHelper load_format_str(load_format_val);
+        const std::string load_format = mlStdString(**load_format_str);
+        // the format is compared whole, but the error message names it as a C string, which would hide the NUL
+        if (q_check_no_nul(load_format.data(), load_format.size(), "load_model_format", "ONNX model formats",
+                "ML-ONNX-ERROR", xsink)) {
+            return;
+        }
+        if (load_format == "ORT" || load_format == "ort") {
             session_config_entries[kOrtSessionOptionsConfigLoadModelFormat] = "ORT";
-        } else if (strcmp(load_format->c_str(), "ONNX") && strcmp(load_format->c_str(), "onnx")) {
+        } else if (load_format != "ONNX" && load_format != "onnx") {
             xsink->raiseException("ML-ONNX-ERROR",
-                "invalid load_model_format '%s'; expected 'ONNX' or 'ORT'", load_format->c_str());
+                "invalid load_model_format '%s'; expected 'ONNX' or 'ORT'", load_format.c_str());
             return;
         }
     }
 
     QoreValue save_format_val = config->getKeyValue("save_model_format");
     if (!save_format_val.isNullOrNothing()) {
-        QoreStringValueHelper save_format(save_format_val);
-        if (!strcmp(save_format->c_str(), "ORT") || !strcmp(save_format->c_str(), "ort")) {
-            session_config_entries[kOrtSessionOptionsConfigSaveModelFormat] = "ORT";
-        } else if (strcmp(save_format->c_str(), "ONNX") && strcmp(save_format->c_str(), "onnx")) {
-            xsink->raiseException("ML-ONNX-ERROR",
-                "invalid save_model_format '%s'; expected 'ONNX' or 'ORT'", save_format->c_str());
+        QoreStringValueHelper save_format_str(save_format_val);
+        const std::string save_format = mlStdString(**save_format_str);
+        // the format is compared whole, but the error message names it as a C string, which would hide the NUL
+        if (q_check_no_nul(save_format.data(), save_format.size(), "save_model_format", "ONNX model formats",
+                "ML-ONNX-ERROR", xsink)) {
             return;
         }
+        if (save_format == "ORT" || save_format == "ort") {
+            session_config_entries[kOrtSessionOptionsConfigSaveModelFormat] = "ORT";
+        } else if (save_format != "ONNX" && save_format != "onnx") {
+            xsink->raiseException("ML-ONNX-ERROR",
+                "invalid save_model_format '%s'; expected 'ONNX' or 'ORT'", save_format.c_str());
+            return;
+        }
+    }
+
+    // ONNX Runtime accesses the files that session config entries name on behalf of the calling program
+    if (onnxSandboxActive() && !onnxCheckSandboxSessionConfig(session_config_entries, optimized_path_str, xsink)) {
+        return;
     }
 
     size_t count = 0;
@@ -1371,6 +1685,11 @@ void QoreOnnxModel::configureProviderPolicy(const QoreHashNode* config, Exceptio
         const QoreListNode* required = required_val.get<const QoreListNode>();
         for (size_t i = 0; i < required->size(); ++i) {
             QoreStringValueHelper name(required->retrieveEntry(i));
+            // a provider is registered with ONNX Runtime by its NUL-terminated name
+            if (q_check_no_nul(name->c_str(), name->size(), "execution provider name", "execution provider names",
+                    "ML-ONNX-PROVIDER-ERROR", xsink)) {
+                return;
+            }
             std::string normalized = normalizeProviderName(name->c_str());
             required_providers.push_back(normalized);
             OnnxProviderDiagnostic& diag = providerDiagnostic(normalized);
@@ -1434,6 +1753,11 @@ void QoreOnnxModel::configureDeviceBinding(const QoreHashNode* config, Exception
     QoreValue out_dev_val = db->getKeyValue("default_output_device");
     if (!out_dev_val.isNullOrNothing()) {
         QoreStringValueHelper out_dev(out_dev_val);
+        // the device names a provider, which is registered with ONNX Runtime by its NUL-terminated name
+        if (q_check_no_nul(out_dev->c_str(), out_dev->size(), "output device", "output devices",
+                "ML-ONNX-DEVICE-BINDING-ERROR", xsink)) {
+            return;
+        }
         std::string spec = out_dev->c_str();
         // optional ":<device_id>" suffix on an explicit provider/device name
         std::string name = spec;
@@ -1516,6 +1840,11 @@ bool QoreOnnxModel::resolveOutputDeviceInfo(const QoreHashNode* device,
             return false;
         }
         QoreStringValueHelper kind(kind_val);
+        // the device kind names an ONNX Runtime memory device by its NUL-terminated name
+        if (q_check_no_nul(kind->c_str(), kind->size(), "device kind", "device kinds", "ML-ONNX-DEVICE-BINDING-ERROR",
+                xsink)) {
+            return false;
+        }
         out.kind = deviceKindFromName(kind->c_str());
         if (out.kind == QoreBufferDeviceKind::Unknown) {
             xsink->raiseException("ML-ONNX-DEVICE-BINDING-ERROR",
@@ -1713,6 +2042,15 @@ OnnxSessionSource QoreOnnxModel::makeSessionSource(const char* model_path, const
 }
 
 void QoreOnnxModel::applyCapturedExternalInitializers(Ort::SessionOptions& opts) {
+    // the session reads the captured bytes in the format in which the capture read them; without an explicit format,
+    // ONNX Runtime would decide the format from the bytes, and an explicit format given by the caller could differ
+    if (content_identity.hasModelBytes()) {
+        const char* format = content_identity.isOrtFormat() ? "ORT" : "ONNX";
+        // ONNX Runtime logs a warning when an entry is replaced
+        if (opts.GetConfigEntryOrDefault(kOrtSessionOptionsConfigLoadModelFormat, "") != format) {
+            opts.AddConfigEntry(kOrtSessionOptionsConfigLoadModelFormat, format);
+        }
+    }
     if (content_identity.files.empty()) {
         return;
     }
@@ -1769,6 +2107,11 @@ void QoreOnnxModel::configureSession(Ort::SessionOptions& opts, const QoreHashNo
                 return;
             }
             QoreStringValueHelper name_str(name_val);
+            // a provider is registered with ONNX Runtime by its NUL-terminated name
+            if (q_check_no_nul(name_str->c_str(), name_str->size(), "execution provider name",
+                    "execution provider names", "ML-ONNX-PROVIDER-ERROR", xsink)) {
+                return;
+            }
             std::string provider_name = normalizeProviderName(name_str->c_str());
             requested_providers.push_back(provider_name);
             OnnxProviderDiagnostic& diag = providerDiagnostic(provider_name);
@@ -1782,10 +2125,19 @@ void QoreOnnxModel::configureSession(Ort::SessionOptions& opts, const QoreHashNo
                 ConstHashIterator hi(opts_hash);
                 while (hi.next()) {
                     QoreStringValueHelper key_str(hi.get());
+                    // the option value is passed to ONNX Runtime as a NUL-terminated string
+                    if (q_check_no_nul(key_str->c_str(), key_str->size(),
+                            (std::string("execution provider option '") + hi.getKey() + "' value").c_str(),
+                            "execution provider option values", "ML-ONNX-PROVIDER-ERROR", xsink)) {
+                        return;
+                    }
                     provider_opts[hi.getKey()] = key_str->c_str();
                 }
             }
             diag.options = provider_opts;
+            if (onnxSandboxActive() && !onnxCheckSandboxProviderOptions(provider_name, provider_opts, xsink)) {
+                return;
+            }
 
             if (!isProviderAvailable(provider_name)) {
                 xsink->raiseException("ML-ONNX-PROVIDER-ERROR",
@@ -2458,6 +2810,35 @@ void QoreOnnxModel::flattenToBools(const QoreValue& val, std::vector<uint8_t>& o
     }
 }
 
+//! Creates a string tensor with the given elements, which may contain NUL characters
+/** Ort::Value::FillStringTensor() takes NUL-terminated strings and would cut each element at its first NUL
+    character, so each element is sized to its string and its bytes are copied.
+
+    @return 0 for OK, -1 if an exception was raised
+*/
+static int makeOrtStringTensor(OrtAllocator* allocator, const std::vector<int64_t>& shape,
+        const std::vector<std::string>& strings, const std::string& tensor_name, Ort::Value& value,
+        ExceptionSink* xsink) {
+    try {
+        value = Ort::Value::CreateTensor(allocator, shape.data(), shape.size(), ONNX_TENSOR_ELEMENT_DATA_TYPE_STRING);
+        for (size_t i = 0; i < strings.size(); ++i) {
+            if (i && !(i % 100) && qore_check_cancel(xsink, "filling string tensor input")) {
+                return -1;
+            }
+            const std::string& str = strings[i];
+            char* buf = value.GetResizedStringTensorElementBuffer(i, str.size());
+            if (!str.empty()) {
+                memcpy(buf, str.data(), str.size());
+            }
+        }
+    } catch (const Ort::Exception& e) {
+        xsink->raiseException("ML-ONNX-INFERENCE-ERROR", "input tensor '%s': cannot create the string tensor: %s",
+            tensor_name.c_str(), e.what());
+        return -1;
+    }
+    return 0;
+}
+
 void QoreOnnxModel::flattenToStrings(const QoreValue& val, std::vector<std::string>& out,
         ExceptionSink* xsink) {
     if (val.getType() == NT_LIST) {
@@ -2473,7 +2854,7 @@ void QoreOnnxModel::flattenToStrings(const QoreValue& val, std::vector<std::stri
         }
     } else if (val.getType() == NT_STRING) {
         QoreStringValueHelper str(val);
-        out.push_back(str->c_str());
+        out.push_back(mlStdString(**str));
     } else {
         xsink->raiseException("ML-ONNX-INFERENCE-ERROR",
             "string tensor value has type '%s'; expected string", val.getFullTypeName());
@@ -2578,6 +2959,11 @@ std::vector<const TensorMeta*> QoreOnnxModel::selectOutputMeta(const QoreListNod
             return {};
         }
         QoreStringValueHelper name(output_names->retrieveEntry(i));
+        // ONNX Runtime names an output by a NUL-terminated string
+        if (q_check_no_nul(name->c_str(), name->size(), "ONNX output name", "ONNX tensor names",
+                "ML-ONNX-INFERENCE-ERROR", xsink)) {
+            return {};
+        }
         const TensorMeta* meta = findOutputMeta(name->c_str());
         if (!meta) {
             std::string available;
@@ -2903,7 +3289,6 @@ std::unique_ptr<OnnxBoundOrtValue> QoreOnnxModel::prepareInputValue(const Tensor
             case ONNX_TENSOR_ELEMENT_DATA_TYPE_STRING: {
                 bound->strings = std::make_unique<std::vector<std::string>>();
                 bound->strings->reserve(direct_buffer->size());
-                bound->string_ptrs.reserve(direct_buffer->size());
                 for (size_t i = 0; i < direct_buffer->size(); ++i) {
                     if (i && !(i % 100) && qore_check_cancel(xsink, "converting string tensor input")) {
                         return nullptr;
@@ -2919,17 +3304,11 @@ std::unique_ptr<OnnxBoundOrtValue> QoreOnnxModel::prepareInputValue(const Tensor
                         return nullptr;
                     }
                     QoreStringValueHelper str(*entry);
-                    bound->strings->push_back(str->c_str());
+                    bound->strings->push_back(mlStdString(**str));
                 }
-                for (size_t i = 0; i < bound->strings->size(); ++i) {
-                    if (i && !(i % 100) && qore_check_cancel(xsink, "preparing string tensor input")) {
-                        return nullptr;
-                    }
-                    bound->string_ptrs.push_back((*bound->strings)[i].c_str());
+                if (makeOrtStringTensor(allocator, bound->shape, *bound->strings, meta.name, bound->value, xsink)) {
+                    return nullptr;
                 }
-                bound->value = Ort::Value::CreateTensor(allocator, bound->shape.data(),
-                    bound->shape.size(), ONNX_TENSOR_ELEMENT_DATA_TYPE_STRING);
-                bound->value.FillStringTensor(bound->string_ptrs.data(), bound->string_ptrs.size());
                 return bound;
             }
             default:
@@ -3155,16 +3534,9 @@ std::unique_ptr<OnnxBoundOrtValue> QoreOnnxModel::prepareInputValue(const Tensor
                     meta.name.c_str(), total_elements, bound->strings->size());
                 return nullptr;
             }
-            bound->string_ptrs.reserve(bound->strings->size());
-            for (size_t i = 0; i < bound->strings->size(); ++i) {
-                if (i && !(i % 100) && qore_check_cancel(xsink, "preparing string tensor input")) {
-                    return nullptr;
-                }
-                bound->string_ptrs.push_back((*bound->strings)[i].c_str());
+            if (makeOrtStringTensor(allocator, bound->shape, *bound->strings, meta.name, bound->value, xsink)) {
+                return nullptr;
             }
-            bound->value = Ort::Value::CreateTensor(allocator, bound->shape.data(),
-                bound->shape.size(), ONNX_TENSOR_ELEMENT_DATA_TYPE_STRING);
-            bound->value.FillStringTensor(bound->string_ptrs.data(), bound->string_ptrs.size());
             return bound;
         default:
             xsink->raiseException("ML-ONNX-INFERENCE-ERROR",
@@ -4561,8 +4933,6 @@ QoreHashNode* QoreOnnxModel::runImpl(const QoreHashNode* inputs, bool return_ten
                 case ONNX_TENSOR_ELEMENT_DATA_TYPE_STRING: {
                     std::vector<std::string> strings;
                     strings.reserve(direct_buffer->size());
-                    std::vector<const char*> raw;
-                    raw.reserve(direct_buffer->size());
                     for (size_t i = 0; i < direct_buffer->size(); ++i) {
                         if (i && !(i % 100) && qore_check_cancel(xsink, "converting string tensor input")) {
                             return nullptr;
@@ -4578,14 +4948,12 @@ QoreHashNode* QoreOnnxModel::runImpl(const QoreHashNode* inputs, bool return_ten
                             return nullptr;
                         }
                         QoreStringValueHelper str(*entry);
-                        strings.push_back(str->c_str());
+                        strings.push_back(mlStdString(**str));
                     }
-                    for (const auto& str : strings) {
-                        raw.push_back(str.c_str());
+                    Ort::Value string_tensor{nullptr};
+                    if (makeOrtStringTensor(allocator, direct_shape, strings, meta.name, string_tensor, xsink)) {
+                        return nullptr;
                     }
-                    Ort::Value string_tensor = Ort::Value::CreateTensor(allocator, direct_shape.data(),
-                        direct_shape.size(), ONNX_TENSOR_ELEMENT_DATA_TYPE_STRING);
-                    string_tensor.FillStringTensor(raw.data(), raw.size());
                     input_tensors.push_back(std::move(string_tensor));
                     break;
                 }
@@ -4893,14 +5261,10 @@ QoreHashNode* QoreOnnxModel::runImpl(const QoreHashNode* inputs, bool return_ten
                         meta.name.c_str(), (long long)total_elements, strings.size());
                     return nullptr;
                 }
-                std::vector<const char*> raw;
-                raw.reserve(strings.size());
-                for (const auto& str : strings) {
-                    raw.push_back(str.c_str());
+                Ort::Value string_tensor{nullptr};
+                if (makeOrtStringTensor(allocator, shape, strings, meta.name, string_tensor, xsink)) {
+                    return nullptr;
                 }
-                Ort::Value string_tensor = Ort::Value::CreateTensor(allocator, shape.data(),
-                    shape.size(), ONNX_TENSOR_ELEMENT_DATA_TYPE_STRING);
-                string_tensor.FillStringTensor(raw.data(), raw.size());
                 input_tensors.push_back(std::move(string_tensor));
                 break;
             }
@@ -5284,6 +5648,18 @@ void QoreOnnxSessionPool::release(size_t index) {
     cv.notify_one();
 }
 
+QoreObject* QoreOnnxSessionPool::acquireSession(QoreProgram* pgm, ExceptionSink* xsink) {
+    std::unique_ptr<Lease> lease = acquire(xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    // the lease object references the pool, and returns the session when it is released or destroyed
+    ReferenceHolder<QoreOnnxSessionLease> holder(new QoreOnnxSessionLease(this, std::move(lease)), xsink);
+    QoreObject* obj = new QoreObject(QC_ONNXSESSIONLEASE, pgm);
+    obj->setPrivate(CID_ONNXSESSIONLEASE, holder.release());
+    return obj;
+}
+
 void QoreOnnxSessionPool::recordRun(size_t batch_items) {
     std::lock_guard<std::mutex> lock(mutex);
     ++total_runs;
@@ -5413,6 +5789,17 @@ void QoreOnnxSessionPool::resolveAsyncRequest(QorePromise* promise, QoreValue va
     }
 }
 
+void QoreOnnxSessionPool::takeQueuedAsyncRequests(std::vector<std::unique_ptr<AsyncRequest>>& requests) {
+    std::lock_guard<std::mutex> lock(async_mutex);
+    requests.reserve(requests.size() + async_requests.size());
+    for (auto& request : async_requests) {
+        requests.push_back(std::move(request));
+    }
+    async_requests.clear();
+    // the leader exits with these requests; a request submitted from now on starts a new leader
+    clearAsyncLeaderUnlocked();
+}
+
 void QoreOnnxSessionPool::rejectAsyncBatch(std::vector<std::unique_ptr<AsyncRequest>>& batch,
         ExceptionSink& err) {
     std::string code = "ML-ONNX-ASYNC-ERROR";
@@ -5481,7 +5868,17 @@ void QoreOnnxSessionPool::singleAsyncThread(ExceptionSink* xsink, void* arg) {
 void QoreOnnxSessionPool::dynamicRunAsyncThread(ExceptionSink* xsink, void* arg) {
     QoreOnnxSessionPool* pool = static_cast<QoreOnnxSessionPool*>(arg);
     pool->processDynamicRunQueue(xsink);
+    {
+        // the leader is no longer running, unless a newer leader was started in the meantime
+        std::lock_guard<std::mutex> lock(pool->async_mutex);
+        pool->clearAsyncLeaderUnlocked();
+    }
     pool->deref(xsink);
+}
+
+void QoreOnnxSessionPool::clearAsyncLeaderUnlocked() {
+    int tid = q_gettid();
+    async_leader_tid.compare_exchange_strong(tid, 0);
 }
 
 void QoreOnnxSessionPool::processDynamicRunQueue(ExceptionSink* xsink) {
@@ -5490,6 +5887,8 @@ void QoreOnnxSessionPool::processDynamicRunQueue(ExceptionSink* xsink) {
         {
             std::unique_lock<std::mutex> lock(async_mutex);
             if (async_requests.empty()) {
+                // the leader exits; a request submitted from now on starts a new leader
+                clearAsyncLeaderUnlocked();
                 return;
             }
 
@@ -5540,6 +5939,7 @@ void QoreOnnxSessionPool::processDynamicRunQueue(ExceptionSink* xsink) {
         if (qore_check_cancel(xsink, "OnnxSessionPool dynamic async batching")) {
             ExceptionSink err;
             err.assimilate(*xsink);
+            takeQueuedAsyncRequests(batch);
             rejectAsyncBatch(batch, err);
             return;
         }
@@ -5550,16 +5950,21 @@ void QoreOnnxSessionPool::processDynamicRunQueue(ExceptionSink* xsink) {
                     && qore_check_cancel(xsink, "OnnxSessionPool dynamic async batch input assembly")) {
                 ExceptionSink err;
                 err.assimilate(*xsink);
+                takeQueuedAsyncRequests(batch);
                 rejectAsyncBatch(batch, err);
                 return;
             }
             inputs->push(batch[i]->payload.refSelf(), xsink);
             if (*xsink) {
-                ExceptionSink err;
-                err.assimilate(*xsink);
-                rejectAsyncBatch(batch, err);
-                return;
+                break;
             }
+        }
+        if (*xsink) {
+            // only this batch fails; the leader goes on with the requests still queued, as after a failed run
+            ExceptionSink err;
+            err.assimilate(*xsink);
+            rejectAsyncBatch(batch, err);
+            continue;
         }
 
         const QoreListNode* output_names = batch.front()->output_names.get<const QoreListNode>();
@@ -5593,6 +5998,7 @@ void QoreOnnxSessionPool::processDynamicRunQueue(ExceptionSink* xsink) {
                 for (size_t j = i; j < batch.size(); ++j) {
                     remaining.push_back(std::move(batch[j]));
                 }
+                takeQueuedAsyncRequests(remaining);
                 rejectAsyncBatch(remaining, err);
                 return;
             }
@@ -5663,6 +6069,7 @@ QoreObject* QoreOnnxSessionPool::submitDynamicRunAsync(const QoreHashNode* input
                 deref(xsink);
                 return nullptr;
             }
+            async_leader_tid = tid;
         } else {
             async_cv.notify_one();
         }
@@ -5731,6 +6138,7 @@ QoreHashNode* QoreOnnxSessionPool::getPoolStats(ExceptionSink* xsink) const {
     rv->setKeyValue("max_active_runs_observed", static_cast<int64_t>(max_active_runs_observed), xsink);
     rv->setKeyValue("max_waiting_callers_observed", static_cast<int64_t>(max_waiting_callers_observed), xsink);
     rv->setKeyValue("async_submitted", static_cast<int64_t>(async_submitted.load()), xsink);
+    rv->setKeyValue("async_leader_tid", static_cast<int64_t>(async_leader_tid.load()), xsink);
     rv->setKeyValue("async_completed", static_cast<int64_t>(async_completed.load()), xsink);
     rv->setKeyValue("async_errors", static_cast<int64_t>(async_errors.load()), xsink);
     rv->setKeyValue("async_batches", static_cast<int64_t>(async_batches.load()), xsink);

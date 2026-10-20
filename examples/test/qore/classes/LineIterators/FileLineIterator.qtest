@@ -64,7 +64,10 @@ class FileLineIteratorTest inherits QUnit::Test {
     }
 
     globalSetUp() {
-        TestFileName = tmp_location() + DirSep + "qore_filelineiterator_test_1f7h8u25f6v2n1sda8w7.txt";
+        # unique for every run, so that runs on the same host, at the same time or after a run that left the file
+        # behind, never use each other's file
+        TestFileName = tmp_location() + DirSep + sprintf("qore_filelineiterator_test_%d_%s.txt", getpid(),
+            get_random_string(8));
     }
 
     globalTearDown() {

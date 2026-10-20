@@ -17,7 +17,11 @@ print_usage () {
   echo "  QORE_TEST_DIRS           Space-separated test directories (as found in $BASE_TEST_PATH) to run when no"
   echo "                           -d option is given (e.g., 'qore/misc qore/vars'); default: all tests."
   echo "  TEST_TIMEOUT             Seconds a single test may run before it is killed (default: 300); a test"
-  echo "                           declares its own budget with a '# test-timeout: <seconds>' comment."
+  echo "                           declares its own budget with a '# test-timeout: <seconds>' comment.  A test"
+  echo "                           that exceeds it is first sent SIGUSR1 (QUnit tests print the call stacks of"
+  echo "                           their threads), unless QORE_TEST_OPTS disables signal handling (-b)."
+  echo "  QORE_TEST_STACK_DUMP_WAIT"
+  echo "                           Seconds to wait for those stacks before the test is ended (default: 30)."
   echo "  CI_NODE_INDEX            Shard index (1-based) for parallel test execution."
   echo "  CI_NODE_TOTAL            Total number of shards for parallel test execution."
   echo "  QORE_EXCLUDE_PERF_TESTS  Set to '1' to exclude performance tests (same as -E)."
@@ -25,7 +29,10 @@ print_usage () {
   echo "  QORE_TEST_QMOD_DIR       Directory with AOT qmods to prefer before ./qlib."
   echo "  QORE_TEST_SOURCE_MODULES Set to '1' to ignore the default build qmod directory."
   echo "  QORE_TEST_PRESERVE_PROVIDER_ENV"
-  echo "                           Set to '1' to preserve external provider discovery env vars."
+  echo "                           Set to '1' to keep the QORE_MODULE_DIR, QORE_DATA_PROVIDERS and"
+  echo "                           QORE_PROVIDER_INDEX_DIR that the environment sets; by default they are ignored,"
+  echo "                           so that modules from outside the tree (e.g. a Qorus instance's module copies)"
+  echo "                           do not change what the tests see; an ignored QORE_MODULE_DIR is reported."
 }
 
 err_multiple_format_opts() {
@@ -243,10 +250,17 @@ if [ -n "$BUILD_MODULE_DIRS" ]; then
         TEST_MODULE_DIRS="$BUILD_MODULE_DIRS"
     fi
 fi
+# Keep qore tests hermetic by default: a module directory that the developer's shell sets (e.g. a Qorus instance's
+# module copies) is searched by the module loader and by data provider discovery, so its modules can change what the
+# tests see
+if [ "${QORE_TEST_PRESERVE_PROVIDER_ENV}" != "1" ] && [ -n "$QORE_MODULE_DIR" ]; then
+    echo "run_tests.sh: ignoring the inherited QORE_MODULE_DIR; set QORE_TEST_PRESERVE_PROVIDER_ENV=1 to keep it"
+    QORE_MODULE_DIR=""
+fi
 if [ -n "$TEST_MODULE_DIRS" ]; then
-    export QORE_MODULE_DIR=$TEST_MODULE_DIRS:$QORE_SOURCE_DIR/qlib:$QORE_MODULE_DIR
+    export QORE_MODULE_DIR=$TEST_MODULE_DIRS:$QORE_SOURCE_DIR/qlib${QORE_MODULE_DIR:+:$QORE_MODULE_DIR}
 else
-    export QORE_MODULE_DIR=$QORE_SOURCE_DIR/qlib:$QORE_MODULE_DIR
+    export QORE_MODULE_DIR=$QORE_SOURCE_DIR/qlib${QORE_MODULE_DIR:+:$QORE_MODULE_DIR}
 fi
 # Export build qore binary path so that tests spawning sub-processes (via backquote, etc.)
 # use the same build binary rather than the system-installed qore.
@@ -254,7 +268,8 @@ export QORE_EXECUTABLE="$QORE"
 
 # Keep qore tests hermetic by default. Developer shells often have Qorus or
 # application provider discovery configured, which can make negative provider
-# lookup tests print unrelated module-load diagnostics.
+# lookup tests print unrelated module-load diagnostics; the inherited
+# QORE_MODULE_DIR is handled above.
 if [ "${QORE_TEST_PRESERVE_PROVIDER_ENV}" != "1" ]; then
     unset QORE_DATA_PROVIDERS
     unset QORE_PROVIDER_INDEX_DIR
@@ -508,7 +523,79 @@ fi
 
 # A separate marker per runner also permits concurrent test shards.
 TEST_START_MARKER=$(mktemp "$CORE_DIR_ABS/test-start.XXXXXX") || exit 1
-trap 'rm -f "$TEST_START_MARKER"' 0
+# the FIFO through which a test and run_tests.sh report events to the watchdog of the test (see run_with_watchdog())
+TEST_EVENT_FIFO="$CORE_DIR_ABS/test-events.$$"
+trap 'rm -f "$TEST_START_MARKER" "$TEST_EVENT_FIFO"' 0
+
+# A test that exceeds its time limit is first sent SIGUSR1, unless signal handling is disabled (where SIGUSR1 would
+# end it without a core dump): a QUnit test then prints the call stacks of all its threads and reports it through
+# the event FIFO.  Once it has reported it, has ended, or QORE_TEST_STACK_DUMP_WAIT seconds (default 30) have
+# passed, the test is sent the signal that ends a hung test as before (SIGABRT with GNU timeout, so that it dumps
+# core, SIGTERM otherwise), and SIGKILL 60 seconds later.
+TEST_STACK_DUMP_WAIT=${QORE_TEST_STACK_DUMP_WAIT:-30}
+TEST_TIMEOUT_SIGNAL=TERM
+if [ -n "$TIMEOUT_SIGNAL_OPTS" ]; then
+    TEST_TIMEOUT_SIGNAL=ABRT
+fi
+TEST_SIGNALS_ENABLED=1
+for opt in $QORE_TEST_OPTS; do
+    case "$opt" in
+        -b|--disable-signals) TEST_SIGNALS_ENABLED=0 ;;
+    esac
+done
+
+# Prints the next event from the event FIFO (open on fd 4) if one arrives within the given number of seconds
+read_test_event() {
+    $TIMEOUT_CMD "$1" sh -c 'IFS= read -r event && echo "$event"' <&4 2>/dev/null
+}
+
+# Runs a test (the arguments after the time limit) with its time limit; returns the test's exit code, or 124 if it
+# exceeded its time limit
+run_with_watchdog() {
+    limit=$1
+    shift
+    rm -f "$TEST_EVENT_FIFO"
+    if ! mkfifo "$TEST_EVENT_FIFO"; then
+        $TIMEOUT_CMD $TIMEOUT_SIGNAL_OPTS $limit "$@"
+        return $?
+    fi
+    # opened for reading and writing, so that neither the writes below nor the test's block
+    exec 4<>"$TEST_EVENT_FIFO"
+    QORE_TEST_EVENT_FIFO="$TEST_EVENT_FIFO" "$@" 4>&- &
+    test_pid=$!
+    (
+        event=`read_test_event $limit`
+        if [ "$event" = exit ]; then
+            exit 0
+        fi
+        if [ $TEST_SIGNALS_ENABLED -eq 1 ]; then
+            echo "*** the test exceeded its ${limit}s limit: SIGUSR1 sent for the call stacks of its threads ***"
+            kill -USR1 $test_pid 2>/dev/null
+            event=`read_test_event $TEST_STACK_DUMP_WAIT`
+            if [ "$event" = exit ]; then
+                exit 1
+            fi
+        fi
+        kill -$TEST_TIMEOUT_SIGNAL $test_pid 2>/dev/null
+        event=`read_test_event 60`
+        if [ "$event" != exit ]; then
+            kill -KILL $test_pid 2>/dev/null
+        fi
+        exit 1
+    ) &
+    watchdog_pid=$!
+    wait $test_pid
+    test_rc=$?
+    echo exit >&4
+    wait $watchdog_pid
+    timed_out=$?
+    exec 4>&-
+    rm -f "$TEST_EVENT_FIFO"
+    if [ $timed_out -ne 0 ]; then
+        return 124
+    fi
+    return $test_rc
+}
 
 # Run tests.
 i=1
@@ -536,7 +623,7 @@ for test in $TESTS; do
         fi
     else
         if [ -n "$TIMEOUT_CMD" ]; then
-            $TIMEOUT_CMD $TIMEOUT_SIGNAL_OPTS $THIS_TEST_TIMEOUT $QORE $QORE_TEST_OPTS $test $TEST_OUTPUT_FORMAT
+            run_with_watchdog $THIS_TEST_TIMEOUT $QORE $QORE_TEST_OPTS $test $TEST_OUTPUT_FORMAT
         else
             $QORE $QORE_TEST_OPTS $test $TEST_OUTPUT_FORMAT
         fi

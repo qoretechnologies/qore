@@ -58,12 +58,16 @@ Enum e("::Color");
 
     @param path the enum name or namespace-justified path as a string
 
-    @throw UNKNOWN-ENUM cannot find an enum with the given name or path
+    @throw UNKNOWN-ENUM cannot find an enum with the given name or path, or the enum name contains a NUL character (since %Qore 3.0)
     @throw ENCODING-CONVERSION-ERROR this exception could be thrown if the string argument is not in the @ref default_encoding "default character encoding" and an error occurs during encoding conversion
 
     @see forName()
  */
 Enum::constructor(string path) {
+    // the name is looked up as a C string, which would be cut at a NUL character and name another enum
+    if (q_check_no_nul(path->c_str(), path->size(), "enum name", "enum names", "UNKNOWN-ENUM", xsink)) {
+        return;
+    }
     TempEncodingHelper npath(path, QCS_DEFAULT, xsink);
     if (*xsink) {
         return;
@@ -329,10 +333,14 @@ EnumMember m = e.getMember(name);
     @return the requested member or throws an exception if the member is not defined in the enum
 
     @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the enum has been destroyed
-    @throw UNKNOWN-MEMBER if the requested member is not defined in the enum
+    @throw UNKNOWN-MEMBER if the requested member is not defined in the enum, or the member name contains a NUL character (since %Qore 3.0)
     @throw ENCODING-CONVERSION-ERROR this exception could be thrown if the string argument is not in the @ref default_encoding "default character encoding" and an error occurs during encoding conversion
 */
 EnumMember Enum::getMember(string name) [flags=RET_VALUE_ONLY] {
+    // the name is looked up as a C string, which would be cut at a NUL character and name another member
+    if (q_check_no_nul(name->c_str(), name->size(), "member name", "member names", "UNKNOWN-MEMBER", xsink)) {
+        return QoreValue();
+    }
     TempEncodingHelper tname(name, QCS_DEFAULT, xsink);
     if (*xsink) {
         return QoreValue();
@@ -415,10 +423,14 @@ Enum e = Enum::forName("::Color");
 
     @return an Enum object corresponding to the name or namespace-justified path provided as an argument
 
-    @throw UNKNOWN-ENUM cannot find an enum with the given name or path
+    @throw UNKNOWN-ENUM cannot find an enum with the given name or path, or the enum name contains a NUL character (since %Qore 3.0)
     @throw ENCODING-CONVERSION-ERROR this exception could be thrown if the string argument is not in the @ref default_encoding "default character encoding" and an error occurs during encoding conversion
  */
 static Enum Enum::forName(string path) [flags=RET_VALUE_ONLY] {
+    // the name is looked up as a C string, which would be cut at a NUL character and name another enum
+    if (q_check_no_nul(path->c_str(), path->size(), "enum name", "enum names", "UNKNOWN-ENUM", xsink)) {
+        return QoreValue();
+    }
     TempEncodingHelper npath(path, QCS_DEFAULT, xsink);
     if (*xsink) {
         return QoreValue();
@@ -446,10 +458,14 @@ Enum e = Enum::forName(pgm, "::Color");
 
     @return an Enum object corresponding to the name or namespace-justified path provided as an argument
 
-    @throw UNKNOWN-ENUM cannot find an enum with the given name or path
+    @throw UNKNOWN-ENUM cannot find an enum with the given name or path, or the enum name contains a NUL character (since %Qore 3.0)
     @throw ENCODING-CONVERSION-ERROR this exception could be thrown if the string argument is not in the @ref default_encoding "default character encoding" and an error occurs during encoding conversion
  */
 static Enum Enum::forName(Program[QoreProgram] pgm, string path) [flags=RET_VALUE_ONLY] {
+    // the name is looked up as a C string, which would be cut at a NUL character and name another enum
+    if (q_check_no_nul(path->c_str(), path->size(), "enum name", "enum names", "UNKNOWN-ENUM", xsink)) {
+        return QoreValue();
+    }
     TempEncodingHelper npath(path, QCS_DEFAULT, xsink);
     if (*xsink) {
         return QoreValue();

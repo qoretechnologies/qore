@@ -1,0 +1,357 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires SqlUtil
+%requires PgsqlSqlUtilBase
+%requires OracleSqlUtilBase
+%requires MysqlSqlUtil
+%requires MssqlSqlUtilBase
+%requires FreetdsSqlUtil
+%requires XdbcFirebirdSqlUtilBase
+%requires Sqlite3SqlUtil
+%prepend-module-path "${SCRIPT_DIR}"
+%requires ./PgsqlTestIsolation.qm
+
+%try-module pgsql
+%define NO_PGSQL
+%endtry
+
+%try-module oracle
+%define NO_ORACLE
+%endtry
+
+%try-module mysql
+%define NO_MYSQL
+%endtry
+
+%try-module freetds
+%define NO_FREETDS
+%endtry
+
+%try-module odbc
+%define NO_ODBC
+%endtry
+
+%try-module sqlite3
+%define NO_SQLITE3
+%endtry
+
+%exec-class ConstraintRenameAlignmentTest
+
+#! A constraint is renamed, never dropped and added again under another name
+/** A database that can rename a constraint renames it; one that cannot keeps a constraint with the definition of the
+    template's under its name, and the next alignment needs no SQL.  The exact SQL is checked on every database with
+    tables described in memory; the alignment is run on SQLite and on the PostgreSQL, MySQL and SQL Server databases
+    given by \c QORE_DB_CONNSTR_PGSQL, \c QORE_DB_CONNSTR_MYSQL and \c QORE_DB_CONNSTR_FREETDS
+*/
+class ConstraintRenameAlignmentTest inherits QUnit::Test {
+    constructor() : Test("ConstraintRenameAlignmentTest", "1.0", \ARGV) {
+        addTestCase("the SQL that renames a unique or foreign constraint", \renameSql());
+        addTestCase("the SQL that renames a check constraint", \checkRenameSql());
+        addTestCase("SQLite keeps a constraint that it cannot rename", \sqlite());
+        addTestCase("PostgreSQL renames a unique, foreign and check constraint", \pgsql());
+        addTestCase("MySQL renames a unique constraint and keeps a foreign constraint", \mysql());
+        addTestCase("SQL Server renames a unique, foreign and check constraint", \mssql());
+        set_return_value(main());
+    }
+
+    globalTearDown() {
+        PgsqlRunSchema::teardown();
+    }
+
+    #! Returns the description of the parent table, whose primary key the foreign constraint references
+    private static hash<auto> parentDescription() {
+        return {
+            "columns": {"id": {"qore_type": "integer", "notnull": True}},
+            "primary_key": {"name": "pk_cra_p", "columns": ("id",)},
+        };
+    }
+
+    #! Returns the description of the table with a unique and a foreign constraint under the given names
+    private static hash<auto> description(string uk_name, string fk_name) {
+        return {
+            "columns": {
+                "id": {"qore_type": "integer", "notnull": True},
+                "b": {"qore_type": "integer"},
+                "pid": {"qore_type": "integer"},
+            },
+            "primary_key": {"name": "pk_cra_t", "columns": ("id",)},
+            "unique_constraints": {uk_name: {"columns": ("b",)}},
+            "foreign_constraints": {fk_name: {"columns": ("pid",), "table": "cra_p", "target_columns": ("id",)}},
+        };
+    }
+
+    #! Returns the alignment SQL of the table, described in memory under the old names, to its template with the
+    #! new names
+    private static list<auto> memoryAlignSql(code new_table) {
+        Tables cache();
+        AbstractTable parent = new_table("cra_p");
+        parent.setupTable(parentDescription(), {"table_cache": cache});
+        cache.add("cra_p", parent);
+        AbstractTable current = new_table("cra_t");
+        current.setupTable(description("uk_cra_old", "fk_cra_old"), {"table_cache": cache});
+        AbstractTable template = new_table("cra_t");
+        template.setupTable(description("uk_cra_new", "fk_cra_new"), {"table_cache": cache});
+        return current.getAlignSql(template);
+    }
+
+    #! A database that can rename a constraint renames it in place; one that cannot needs no SQL
+    renameSql() {
+%ifndef NO_PGSQL
+        {
+            OfflineDatasource ds("pgsql:user/pass@db", "PostgreSQL 16.4", "pgsql");
+            assertEq((
+                "alter table public.cra_t rename constraint uk_cra_old to uk_cra_new",
+                "alter table public.cra_t rename constraint fk_cra_old to fk_cra_new",
+            ), memoryAlignSql(AbstractTable sub (string t) { return new PgsqlTable(ds, t); }), "PostgreSQL");
+        }
+%endif
+%ifndef NO_ORACLE
+        {
+            OfflineDatasource ds("oracle:user/pass@db", "Oracle Database 19c Enterprise Edition Release "
+                "19.0.0.0.0", "oracle");
+            assertEq((
+                "alter table user.cra_t rename constraint uk_cra_old to uk_cra_new",
+                "alter table user.cra_t rename constraint fk_cra_old to fk_cra_new",
+            ), memoryAlignSql(AbstractTable sub (string t) { return new OracleTable(ds, t); }), "Oracle");
+        }
+%endif
+%ifndef NO_MYSQL
+        {
+            # MySQL cannot rename a foreign constraint
+            OfflineDatasource ds("mysql:user/pass@db%localhost:1", "11.4.2-MariaDB", "mysql");
+            assertEq(("alter table db.cra_t rename index uk_cra_old to uk_cra_new",),
+                memoryAlignSql(AbstractTable sub (string t) { return new MysqlTable(ds, t); }), "MySQL");
+        }
+%endif
+%ifndef NO_FREETDS
+        {
+            OfflineDatasource ds("freetds:user/pass@db", "Microsoft SQL Server 2022 (RTM) - 16.0.1000.6", "mssql");
+            assertEq((
+                "exec sp_rename 'dbo.uk_cra_old', 'uk_cra_new', 'OBJECT'",
+                "exec sp_rename 'dbo.fk_cra_old', 'fk_cra_new', 'OBJECT'",
+            ), memoryAlignSql(AbstractTable sub (string t) { return new FreetdsTable(ds, t); }), "SQL Server");
+        }
+%endif
+%ifndef NO_ODBC
+        {
+            # Firebird cannot rename a constraint
+            OfflineDatasource ds("odbc:user/pass@db", "WI-V3.0.10 Firebird 3.0", "firebird");
+            assertEq((), memoryAlignSql(AbstractTable sub (string t) { return new XdbcFirebirdTable(ds, t); }),
+                "Firebird");
+        }
+%endif
+%ifndef NO_SQLITE3
+        {
+            # SQLite cannot rename a constraint
+            Datasource ds("sqlite3:@:memory:");
+            assertEq((), memoryAlignSql(AbstractTable sub (string t) { return new Sqlite3Table(ds, t); }), "SQLite");
+        }
+%endif
+    }
+
+    #! A check constraint is renamed in place on PostgreSQL and SQL Server
+    checkRenameSql() {
+        assertEq(("alter table cra_t rename constraint ck_cra_old to ck_cra_new",),
+            (new PgsqlCheckConstraint("ck_cra_old", "b > 0")).getRenameSql("cra_t", "ck_cra_new"));
+        assertEq(("exec sp_rename 'dbo.ck_cra_old', 'ck_cra_new', 'OBJECT'",),
+            (new MssqlCheckConstraint("ck_cra_old", "b > 0")).getRenameSql("dbo.cra_t", "ck_cra_new"));
+        # a table name without a schema: the constraint is found in the default schema
+        assertEq(("exec sp_rename 'ck_cra_old', 'ck_cra_new', 'OBJECT'",),
+            (new MssqlCheckConstraint("ck_cra_old", "b > 0")).getRenameSql("cra_t", "ck_cra_new"));
+    }
+
+    sqlite() {
+%ifdef NO_SQLITE3
+        testSkip("sqlite3 module unavailable");
+%endif
+        checkDatabase(new Datasource("sqlite3:@:memory:"), False, False);
+    }
+
+    pgsql() {
+%ifdef NO_PGSQL
+        testSkip("pgsql module unavailable");
+%endif
+        if (!ENV.QORE_DB_CONNSTR_PGSQL) {
+            testSkip("QORE_DB_CONNSTR_PGSQL is not set");
+        }
+        PgsqlRunSchema::setup(ENV.QORE_DB_CONNSTR_PGSQL, "ConstraintRenameAlignment");
+        Datasource ds(ENV.QORE_DB_CONNSTR_PGSQL);
+        checkDatabase(ds, True, True);
+        checkCheckConstraint(ds, "alter table cra_t add constraint ck_cra_old check (b > 0)",
+            new PgsqlCheckConstraint("ck_cra_old", "b > 0"),
+            "select conname from pg_constraint where conrelid = 'cra_t'::regclass and contype = 'c'");
+    }
+
+    mysql() {
+%ifdef NO_MYSQL
+        testSkip("mysql module unavailable");
+%endif
+        if (!ENV.QORE_DB_CONNSTR_MYSQL) {
+            testSkip("QORE_DB_CONNSTR_MYSQL is not set");
+        }
+        Datasource ds(ENV.QORE_DB_CONNSTR_MYSQL);
+        checkDatabase(ds, True, False);
+
+        # an index with the definition of the template's under another name is renamed, not dropped and added
+        Database db(ds);
+        on_exit dropTables(ds);
+        dropTables(ds);
+        hash<auto> desc = {"columns": {"id": {"qore_type": "integer", "notnull": True}, "b": {"qore_type": "integer"}},
+            "primary_key": {"name": "pk_cra_t", "columns": ("id",)}};
+        {
+            on_success ds.commit();
+            on_error ds.rollback();
+            db.makeTable("cra_t", desc + {"indexes": {"ix_cra_old": {"columns": ("b",)}}}).create();
+        }
+        AbstractTable template = db.makeTable("cra_t", desc + {"indexes": {"ix_cra_new": {"columns": ("b",)}}});
+        AbstractTable live = db.getTable("cra_t");
+        list<auto> sql = live.getAlignSql(template);
+        assertEq((sprintf("alter table %s rename index ix_cra_old to ix_cra_new", live.getSqlName()),), sql);
+        {
+            on_success ds.commit();
+            on_error ds.rollback();
+            map ds.execRaw($1), sql;
+        }
+        assertEq(("ix_cra_new",), keys db.getTable("cra_t").getIndexes().getHash());
+        assertEq((), db.getTable("cra_t").getAlignSql(template));
+    }
+
+    mssql() {
+%ifdef NO_FREETDS
+        testSkip("freetds module unavailable");
+%endif
+        if (!ENV.QORE_DB_CONNSTR_FREETDS) {
+            testSkip("QORE_DB_CONNSTR_FREETDS is not set");
+        }
+        Datasource ds(ENV.QORE_DB_CONNSTR_FREETDS);
+        if (MssqlDatabase::isSybase(ds)) {
+            testSkip("the database is Sybase, not SQL Server");
+        }
+        checkDatabase(ds, True, True);
+        checkCheckConstraint(ds, "alter table dbo.cra_t add constraint ck_cra_old check (b > 0)",
+            new MssqlCheckConstraint("ck_cra_old", "b > 0"),
+            "select name conname from sys.check_constraints where parent_object_id = object_id('dbo.cra_t')");
+    }
+
+    #! Drops the test tables if they exist
+    private static dropTables(AbstractDatasource ds) {
+        on_success ds.commit();
+        on_error ds.rollback();
+        Database db(ds);
+        db.dropTableIfExists("cra_t");
+        db.dropTableIfExists("cra_p");
+    }
+
+    #! Returns the names of the unique constraints of the table, or of its unique indexes on SQLite, which keeps no
+    #! name for a unique constraint created with its table
+    private static list<string> uniqueConstraintNames(AbstractDatasource ds) {
+        return sort(keys (new Table(ds, "cra_t")).getConstraints().getHash()) ?? ();
+    }
+
+    #! Returns the names of the foreign constraints of the table
+    private static list<string> foreignConstraintNames(AbstractDatasource ds) {
+        return sort(keys (new Table(ds, "cra_t")).getForeignConstraints().getHash()) ?? ();
+    }
+
+    #! Creates the table with a unique and a foreign constraint under the old names, aligns it to the template with the
+    #! new names, runs the SQL, and checks the names in the database and that the next alignment needs no SQL
+    /** @param ds the datasource
+        @param rename_uk True if the database renames a unique constraint
+        @param rename_fk True if the database renames a foreign constraint
+    */
+    private checkDatabase(AbstractDatasource ds, bool rename_uk, bool rename_fk) {
+        Database db(ds);
+        on_exit dropTables(ds);
+        dropTables(ds);
+        {
+            on_success ds.commit();
+            on_error ds.rollback();
+            db.makeTable("cra_p", parentDescription()).create();
+            db.makeTable("cra_t", description("uk_cra_old", "fk_cra_old")).create();
+        }
+        list<string> uk_before = uniqueConstraintNames(ds);
+        list<string> fk_before = foreignConstraintNames(ds);
+
+        AbstractTable template = db.makeTable("cra_t", description("uk_cra_new", "fk_cra_new"));
+        list<auto> sql = db.getTable("cra_t").getAlignSql(template);
+        assertEq((rename_uk ? 1 : 0) + (rename_fk ? 1 : 0), sql.size(), sprintf("%y", sql));
+        {
+            on_success ds.commit();
+            on_error ds.rollback();
+            map ds.execRaw($1), sql;
+        }
+
+        # a constraint that the database cannot rename keeps its name in the database
+        assertEq(rename_uk ? ("uk_cra_new",) : uk_before, uniqueConstraintNames(ds));
+        assertEq(rename_fk ? ("fk_cra_new",) : fk_before, foreignConstraintNames(ds));
+        assertEq((), db.getTable("cra_t").getAlignSql(template));
+    }
+
+    #! Adds a check constraint to the table and renames it with the SQL of the constraint
+    private checkCheckConstraint(AbstractDatasource ds, string add_sql, AbstractCheckConstraint ck,
+            string names_sql) {
+        on_exit dropTables(ds);
+        {
+            on_success ds.commit();
+            on_error ds.rollback();
+            Database db(ds);
+            dropTables(ds);
+            db.makeTable("cra_p", parentDescription()).create();
+            db.makeTable("cra_t", description("uk_cra_old", "fk_cra_old")).create();
+            ds.execRaw(add_sql);
+        }
+        {
+            on_success ds.commit();
+            on_error ds.rollback();
+            map ds.execRaw($1), ck.getRenameSql((new Table(ds, "cra_t")).getSqlName(), "ck_cra_new");
+        }
+        assertEq(("ck_cra_new",), ds.select(names_sql).conname);
+    }
+}
+
+#! A datasource that does not connect: it reports a server version and driver, and its catalog queries return no
+#! rows
+class OfflineDatasource inherits Datasource {
+    private {
+        string version;
+        string real_driver;
+    }
+
+    constructor(string connstr, string version, string real_driver) : Datasource(connstr) {
+        self.version = version;
+        self.real_driver = real_driver;
+    }
+
+    auto getServerVersion() {
+        return version;
+    }
+
+    string getDriverRealName() {
+        return real_driver;
+    }
+
+    auto select(string sql, ...) {
+        return {};
+    }
+
+    auto selectRow(string sql, ...) {
+        # the default schema of SQL Server and of PostgreSQL
+        if (sql =~ /schema_name\(\)/) {
+            return {"schema": "dbo"};
+        }
+        if (sql =~ /current_schema\(\)/) {
+            return {"schema": "public"};
+        }
+    }
+
+    auto selectRows(string sql, ...) {
+        return ();
+    }
+}

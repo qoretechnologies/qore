@@ -2798,6 +2798,10 @@ struct qore_httpclient_priv {
     DLLLOCAL QoreHashNode* getRequestHeaders(ExceptionSink* xsink, const QoreHashNode* headers,
             const QoreEncoding* string_body_enc, bool msg_body, bool send_chunked, bool& keep_alive,
             bool& host_override, bool suppress_configured_origin_headers = false) {
+        // a header value would be sent cut at a NUL character, or corrupt the message
+        if (q_check_http_header_values(headers, "HTTP-CLIENT-HEADER-ERROR", xsink)) {
+            return nullptr;
+        }
         ReferenceHolder<QoreHashNode> nh(new QoreHashNode(autoTypeInfo), xsink);
         bool transfer_encoding = false;
         // issue #1824: find content-type header, if any
@@ -3635,7 +3639,10 @@ int QoreHttpClientObject::setOptions(const QoreHashNode* opts, ExceptionSink* xs
     n = opts->getKeyValue("proxy");
     if (n.getType() == NT_STRING) {
         QoreStringValueHelper str(n);
-        if (http_priv->setProxyUrlUnlocked(str->c_str(), xsink)) {
+        // a URL would be parsed cut at a NUL character, and its host is sent in the Host header, where a CR or LF
+        // would start another header; it is not shown, as it can contain a password
+        if (q_check_http_text(str->c_str(), str->size(), "proxy URL", "URLs", "HTTP-CLIENT-URL-ERROR", true, xsink)
+            || http_priv->setProxyUrlUnlocked(str->c_str(), xsink)) {
             return -1;
         }
     }
@@ -3644,7 +3651,10 @@ int QoreHttpClientObject::setOptions(const QoreHashNode* opts, ExceptionSink* xs
     n = opts->getKeyValue("url");
     if (n.getType() == NT_STRING) {
         QoreStringValueHelper str(n);
-        if (http_priv->setUrlUnlocked(str->c_str(), xsink)) {
+        // a URL would be parsed cut at a NUL character, and its host is sent in the Host header, where a CR or LF
+        // would start another header; it is not shown, as it can contain a password
+        if (q_check_http_text(str->c_str(), str->size(), "URL", "URLs", "HTTP-CLIENT-URL-ERROR", true, xsink)
+            || http_priv->setUrlUnlocked(str->c_str(), xsink)) {
             return -1;
         }
     }
@@ -3657,6 +3667,13 @@ int QoreHttpClientObject::setOptions(const QoreHashNode* opts, ExceptionSink* xs
             if (p.getType() == NT_STRING) {
                 QoreStringValueHelper user(n);
                 QoreStringValueHelper pass(p);
+                // they are sent as C strings, which would be cut at a NUL character; the password is not shown
+                if (q_check_no_nul(user->c_str(), user->size(), "user name", "user names", "HTTP-CLIENT-OPTION-ERROR",
+                        xsink)
+                    || q_check_secret_no_nul(pass->c_str(), pass->size(), "password", "passwords",
+                        "HTTP-CLIENT-OPTION-ERROR", xsink)) {
+                    return -1;
+                }
                 http_priv->setUserPassword(user->c_str(), pass->c_str());
             }
         }
@@ -3665,6 +3682,11 @@ int QoreHttpClientObject::setOptions(const QoreHashNode* opts, ExceptionSink* xs
     n = opts->getKeyValue("default_path");
     if (n.getType() == NT_STRING) {
         QoreStringValueHelper str(n);
+        // the path is sent as a C string, which would be cut at a NUL character
+        if (q_check_secret_no_nul(str->c_str(), str->size(), "default path", "HTTP request targets",
+                "HTTP-CLIENT-OPTION-ERROR", xsink)) {
+            return -1;
+        }
         http_priv->default_path = str->c_str();
     }
 
@@ -3682,7 +3704,10 @@ int QoreHttpClientObject::setOptions(const QoreHashNode* opts, ExceptionSink* xs
             return -1;
         }
         QoreStringValueHelper str(n);
-        if (setHTTPVersion(str->c_str(), xsink)) {
+        // the version is checked as a C string, which would be cut at a NUL character
+        if (q_check_no_nul(str->c_str(), str->size(), "HTTP version", "HTTP versions", "HTTP-CLIENT-OPTION-ERROR",
+                xsink)
+            || setHTTPVersion(str->c_str(), xsink)) {
             return -1;
         }
     }
@@ -3691,6 +3716,11 @@ int QoreHttpClientObject::setOptions(const QoreHashNode* opts, ExceptionSink* xs
     if (!n.isNothing()) {
         if (n.getType() == NT_STRING) {
             QoreStringValueHelper str(n);
+            // the mode is compared as a C string, which would be cut at a NUL character
+            if (q_check_no_nul(str->c_str(), str->size(), "HTTP/3 mode", "HTTP/3 modes", "HTTP-CLIENT-OPTION-ERROR",
+                    xsink)) {
+                return -1;
+            }
             int mode = parseHttp3ModeString(str->c_str());
             if (mode < 0) {
                 xsink->raiseException("HTTP-CLIENT-OPTION-ERROR", "invalid http3_mode value '%s'; "
@@ -3718,6 +3748,10 @@ int QoreHttpClientObject::setOptions(const QoreHashNode* opts, ExceptionSink* xs
         if (n.getType() != NT_HASH) {
             xsink->raiseException("HTTP-CLIENT-OPTION-ERROR", "expecting hash of headers as value for the "
                 "\"headers\" key in the options hash");
+            return -1;
+        }
+        // the values are sent as C strings, which would be cut at a NUL character
+        if (q_check_http_header_values(n.get<const QoreHashNode>(), "HTTP-CLIENT-OPTION-ERROR", xsink)) {
             return -1;
         }
         addDefaultHeaders(n.get<const QoreHashNode>());
@@ -3801,6 +3835,9 @@ int QoreHttpClientObject::setOptions(const QoreHashNode* opts, ExceptionSink* xs
                 return -1;
             }
             QoreStringValueHelper path(n);
+            if (q_check_path(**path, "HTTP-CLIENT-OPTION-ERROR", xsink)) {
+                return -1;
+            }
             if (runtime_check_parse_option(PO_NO_FILESYSTEM)) {
                 xsink->raiseException("ILLEGAL-FILESYSTEM-ACCESS", "cannot use the \"ssl_cert_path\" option = \"%s\" "
                     "when sandboxing restriction PO_NO_FILESYSTEM is set", path->c_str());
@@ -3874,6 +3911,9 @@ int QoreHttpClientObject::setOptions(const QoreHashNode* opts, ExceptionSink* xs
                 return -1;
             }
             QoreStringValueHelper path(n);
+            if (q_check_path(**path, "HTTP-CLIENT-OPTION-ERROR", xsink)) {
+                return -1;
+            }
             if (runtime_check_parse_option(PO_NO_FILESYSTEM)) {
                 xsink->raiseException("ILLEGAL-FILESYSTEM-ACCESS", "cannot use the \"ssl_key_path\" option = \"%s\" "
                     "when sandboxing restriction PO_NO_FILESYSTEM is set", path->c_str());
@@ -3915,6 +3955,9 @@ int QoreHttpClientObject::setOptions(const QoreHashNode* opts, ExceptionSink* xs
         if (n.getType() != NT_STRING) {
             xsink->raiseException("HTTP-CLIENT-OPTION-ERROR", "expecting a string value for the \"%s\" key in the "
                 "options hash; got type \"%s\" instead", key, n.getTypeName());
+            return -1;
+        }
+        if (q_check_path(*n.get<const QoreStringNode>(), "HTTP-CLIENT-OPTION-ERROR", xsink)) {
             return -1;
         }
         const char* path = n.get<const QoreStringNode>()->c_str();
@@ -7697,8 +7740,10 @@ public:
 
     bool goalReached() const override {
         AutoLocker al(op_lock);
+        // an operation that has ended reached its goal only if it ended with its result: it also ends with an
+        // error, a timeout or an abort()
         if (done) {
-            return true;
+            return goal;
         }
         if (phase != Phase::WAITING_RESPONSE || !future || !future->isDone()) {
             return false;
@@ -7987,6 +8032,8 @@ public:
             }
             done = true;
             phase = Phase::DONE;
+            // the response is the goal unless the request failed; an error is raised below
+            goal = !future->isError();
             if (notifier) {
                 notifier->acknowledge(xsink);
             }
@@ -8054,6 +8101,7 @@ public:
             }
             notifier->acknowledge(xsink);
             done = true;
+            goal = !*xsink;
             return nullptr;
         }
 
@@ -8116,6 +8164,8 @@ public:
 
         done = true;
         phase = Phase::DONE;
+        // connect mode: the established connection is the goal
+        goal = true;
         clearPendingUnlocked(xsink);
         return nullptr;
     }
@@ -8936,6 +8986,9 @@ private:
     QoreEventNotifier* notifier = nullptr;
     qore_httpclient_priv* priv_ref = nullptr;  // back-ref for user-disconnect detection
     mutable bool done = false;
+    //! True if the operation has ended by reaching its goal; done is set on every terminal path, errors and abort()
+    //! included
+    bool goal = false;
     bool connect_mode = false;
     bool connect_mode_pre_notified = false;
     bool connect_mode_wait_armed = false;

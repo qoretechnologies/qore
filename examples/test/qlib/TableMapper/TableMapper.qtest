@@ -17,6 +17,8 @@
 %requires Schema
 %requires Mapper
 %requires TableMapper
+# a run on PostgreSQL has its own schema
+%requires ../SqlUtil/PgsqlTestIsolation.qm
 
 public class TableMapperTestSchema inherits AbstractSchema {
     public {
@@ -376,8 +378,13 @@ public class TableMapperTest inherits QUnit::Test {
 
     globalTearDown() {
         # drop the test schema
-        if (schema)
+        if (schema) {
             schema.drop(False, m_options.verbose);
+            # end the transaction of the test's connection before the run's schema is dropped
+            schema.getDatasource().rollback();
+        }
+        # drop the run's schema on PostgreSQL
+        PgsqlRunSchema::teardown();
     }
 
     private usageIntern() {
@@ -815,7 +822,7 @@ public class TableMapperTest inherits QUnit::Test {
             *hash ret = mapper.queueData(Input3);
             if (!ret) { ret = mapper.flush(); }
             assertEq(OutputBulk3a, ret);
-            checkMap(table.selectRows(("orderby": "string")), Output3b);
+            checkMap(selectRowsByStringNullLast(), Output3b);
             assertEq(3, mapper.getCount());
 
             # issue #1849 test
@@ -1179,6 +1186,22 @@ public class TableMapperTest inherits QUnit::Test {
         assertEq(3, m.getCount());
     }
 
+    #! returns the rows of the test table ordered by their string, with a null string last
+    /** A database orders a null string by its own rule: PostgreSQL and Oracle put it last in ascending order, MySQL
+        first, so the rows are ordered here
+    */
+    private list<hash<auto>> selectRowsByStringNullLast() {
+        list<hash<auto>> rows = map $1, table.selectRows();
+        return sort(rows, int sub (hash<auto> l, hash<auto> r) {
+            bool l_null = l.string === NULL || !exists l.string;
+            bool r_null = r.string === NULL || !exists r.string;
+            if (l_null || r_null) {
+                return l_null == r_null ? 0 : (l_null ? 1 : -1);
+            }
+            return l.string <=> r.string;
+        });
+    }
+
     # FIXME this is very ad-hoc checking - 'ol' used only
     # when the actual value ('l') is present in mapped result.
     # No check if 'l' is empty, for example.
@@ -1198,6 +1221,8 @@ public class TableMapperTest inherits QUnit::Test {
                 printf("using connection string %y\n", m_options.connstr);
             }
         }
+        # on PostgreSQL, every connection of the run uses the run's own schema
+        PgsqlRunSchema::setup(m_options.connstr, "TableMapper");
         Datasource ds(m_options.connstr);
         ds.open();
         return ds;

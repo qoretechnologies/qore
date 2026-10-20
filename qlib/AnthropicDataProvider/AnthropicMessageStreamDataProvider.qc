@@ -22,9 +22,6 @@
     DEALINGS IN THE SOFTWARE.
 */
 
-# for parsing stream events
-%requires json
-
 #! contains all public definitions in the AnthropicDataProvider module
 public namespace AnthropicDataProvider {
 #! Anthropic message stream data provider using Server-Sent Events

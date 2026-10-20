@@ -192,6 +192,10 @@ FilesystemSshClientIdentityProviderData::FilesystemSshClientIdentityProviderData
             return;
         }
         QoreStringValueHelper str(i.getValue());
+        // a path with a NUL character would be cut at the NUL character
+        if (q_check_path(**str, "SSHUTIL-CLIENT-IDENTITY-PROVIDER-ERROR", xsink)) {
+            return;
+        }
         key_paths.emplace_back(str->c_str());
         ++count;
     }
@@ -237,10 +241,19 @@ FilesystemSshServerHostKeyProviderData::FilesystemSshServerHostKeyProviderData(c
             return;
         }
         QoreStringValueHelper str(i.getValue());
+        // a path with a NUL character would be cut at the NUL character
+        if (q_check_path(**str, "SSHUTIL-SERVER-HOST-KEY-PROVIDER-ERROR", xsink)) {
+            return;
+        }
         key_paths.emplace_back(str->c_str());
         ++count;
     }
     if (has_passphrase_ref) {
+        // a reference with a NUL character would be cut at the NUL character and name another passphrase
+        if (q_check_no_nul(passphrase_ref->c_str(), passphrase_ref->size(), "passphrase reference",
+                "passphrase references", "SSHUTIL-SERVER-HOST-KEY-PROVIDER-ERROR", xsink)) {
+            return;
+        }
         this->passphrase_ref = passphrase_ref->c_str();
     }
 }
@@ -264,6 +277,36 @@ QoreListNode* FilesystemSshServerHostKeyProviderData::getServerHostKeyMaterial(E
 
 FilesystemSshServerHostKeyProviderData* FilesystemSshServerHostKeyProviderData::copy() const {
     return new FilesystemSshServerHostKeyProviderData(*this);
+}
+
+// moves the objects of the map that belong to the Program to the list
+static void sshutil_take_program_objects(SshUtilObjectMap& m, const QoreProgram* pgm, std::vector<QoreObject*>& l) {
+    for (SshUtilObjectMap::iterator i = m.begin(); i != m.end();) {
+        if (i->second->getProgram() == pgm) {
+            l.push_back(i->second);
+            i = m.erase(i);
+        } else {
+            ++i;
+        }
+    }
+}
+
+void SshUtilRegistry::releaseProgram(QoreProgram* pgm) {
+    std::vector<QoreObject*> l;
+    {
+        AutoLocker al(sshutil_registry_lock);
+        sshutil_take_program_objects(client_identity_providers, pgm, l);
+        sshutil_take_program_objects(server_host_key_providers, pgm, l);
+        sshutil_take_program_objects(host_key_stores, pgm, l);
+    }
+    if (l.empty()) {
+        return;
+    }
+    // released outside the lock, as a destructor runs Qore code
+    ExceptionSink xsink;
+    for (QoreObject* obj : l) {
+        obj->deref(&xsink);
+    }
 }
 
 void SshUtilRegistry::clear(ExceptionSink* xsink) {
@@ -343,7 +386,8 @@ QoreValue sshutil_enum_value(const QoreEnumDecl* ed, const char* value, Exceptio
 }
 
 QoreStringNode* sshutil_normalize_ssh_host(const QoreStringNode* host) {
-    std::string rv(host->c_str());
+    // the whole string is normalized, including any part after a NUL character
+    std::string rv(host->c_str(), host->size());
     if (!rv.empty() && rv[rv.size() - 1] == '.') {
         rv.resize(rv.size() - 1);
     }
@@ -361,13 +405,13 @@ QoreStringNode* sshutil_format_known_hosts_host(const QoreStringNode* host, int6
     // note: safe; sshutil_normalize_ssh_host() always returns a heap QoreStringNode, so the value
     // is never held in inline short string storage
     QoreStringNode* normalized = normalized_holder->get<QoreStringNode>();
-    std::string rv(normalized->c_str());
+    std::string rv(normalized->c_str(), normalized->size());
     if (port == 22 && rv.find(':') == std::string::npos) {
         return normalized_holder.releaseAs<QoreStringNode>();
     }
 
     QoreStringNode* str = new QoreStringNode("[", host->getEncoding());
-    str->concat(rv.c_str());
+    str->concat(rv.c_str(), rv.size());
     str->sprintf("]:%lld", port);
     return str;
 }

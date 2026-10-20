@@ -39,7 +39,7 @@ DLLLOCAL QoreClass* initSeasonalDecompositionClass(QoreNamespace& ns);
 //! Seasonal decomposition implementation class
 class QoreSeasonalDecomposition : public AbstractPrivateData {
 public:
-    DLLLOCAL QoreSeasonalDecomposition(int period, const char* type)
+    DLLLOCAL QoreSeasonalDecomposition(int period, const std::string& type)
         : period(period), type(type) {
     }
 

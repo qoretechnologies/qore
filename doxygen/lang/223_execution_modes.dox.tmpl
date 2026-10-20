@@ -400,7 +400,7 @@ cmake -S . -B build -DQORE_BUILD_AOT_MODULES=OFF
     |\c -g|Emit DWARF debug info
     |\c --time-trace[=PATH]|Emit Chrome-format LLVM timing trace
     |\c --big-fn-threshold=N|Use \c OptimizeNone for functions with at least N IR blocks, default 200
-    |\c --jobs=N|Parallel backend-codegen threads (split-after-opt); default CPU count, throttled by the GNU make jobserver, \c 1 = single-object
+    |\c --jobs=N|Parallel backend-codegen threads for the parts of a split module (split-after-opt); default CPU count, throttled by the GNU make jobserver; does not change the output
     |\c -e, \c --entry=FN|Entry function for generated one-shot or link-mode \c main()
     |\c -r, \c --warnings-are-errors|Treat Qore parser warnings as fatal compile errors
     |\c --dump-info|Inspect embedded AOT metadata without executing code
@@ -411,15 +411,20 @@ cmake -S . -B build -DQORE_BUILD_AOT_MODULES=OFF
 
     \c qcc can parallelize LLVM backend codegen for a single compilation using a
     <i>split-after-opt</i> strategy: it optimizes the whole module once, then partitions
-    the optimized module along whole-function boundaries, runs codegen for the partitions
-    concurrently, and links the results back into one relocatable object that is
-    symbol-equivalent and byte-deterministic with respect to the single-object build.
+    the optimized module along whole-function boundaries into 4 parts, runs codegen for the
+    parts concurrently, and links the results back into one relocatable object that is
+    symbol-equivalent to the single-object build.
 
-    - \c --jobs=N sets the number of codegen threads (default: CPU count, capped at 32;
-      \c 1 selects the single-object reference path). The equivalent environment variable
-      is \c QCC_JOBS (see @ref environment_variables); an explicit \c --jobs flag wins.
     - Only modules at or above \c QCC_SPLIT_THRESHOLD optimized-IR instructions (default
       \c 50000) are split, so small modules keep the single-object path.
+    - A module that is split is always split into 4 parts, so the compiled module depends
+      only on its source and the compiler: identical source gives an identical compiled module
+      whatever the load of the build, the number of CPUs of the machine, or the number of
+      codegen threads.
+    - \c --jobs=N sets the maximum number of threads that compile the parts at once
+      (default: CPU count, capped at 32; with \c 1 the parts are compiled one after another).
+      The equivalent environment variable is \c QCC_JOBS (see @ref environment_variables); an
+      explicit \c --jobs flag wins.
 
     <b>GNU make jobserver integration.</b> When \c qcc runs as part of a parallel
     <tt>make -jN</tt> build (for example the CMake user-module build, or a module or host
@@ -430,12 +435,12 @@ cmake -S . -B build -DQORE_BUILD_AOT_MODULES=OFF
     reads \c MAKEFLAGS and supports both the make 4.4+ named-pipe form
     (<tt>--jobserver-auth=fifo:PATH</tt>) and the older inherited-file-descriptor form
     (<tt>--jobserver-auth=R,W</tt> / <tt>--jobserver-fds=R,W</tt>). Each qcc process owns
-    one implicit job slot; additional codegen concurrency is used only for as many extra
-    jobserver tokens as it can acquire non-blockingly <i>before</i> splitting. If no spare
-    tokens are available (a saturated build), \c qcc falls back to single-object codegen,
-    so parallel codegen is safe to leave enabled by default even under <tt>make -j</tt>.
-    Outside a jobserver-aware make (a bare \c qcc invocation), \c --jobs / \c QCC_JOBS
-    apply directly.
+    one implicit job slot; additional codegen threads are used only for as many extra
+    jobserver tokens as it can acquire non-blockingly. If no spare tokens are available (a
+    saturated build), \c qcc compiles the parts one after another on its own slot, so
+    parallel codegen is safe to leave enabled by default even under <tt>make -j</tt>, and the
+    output is the same either way. Outside a jobserver-aware make (a bare \c qcc
+    invocation), \c --jobs / \c QCC_JOBS apply directly.
 
     @subsection aot_builds Incremental and Parallel Object Builds
 

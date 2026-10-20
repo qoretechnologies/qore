@@ -38,7 +38,11 @@ class ReentrantLoggerAppender inherits LoggerAppenderWithLayout {
 class Test inherits QUnit::Test {
     private {
         Counter m_counter();
-        const UNIQUE_NAME = "qore_logger_test_765489wqhkofl";
+        #! the base name of the files and directories the test creates in the temporary directory
+        /** unique for every run, so that runs on the same host, at the same time or after a run that left files
+            behind, never use each other's files
+        */
+        string unique_name = sprintf("qore_logger_test_%d_%s", getpid(), get_random_string(8));
     }
     public {
     }
@@ -768,7 +772,7 @@ class Test inherits QUnit::Test {
     }
 
     testLoggerAppenderFile() {
-        string fn = tmp_location() + DirSep + UNIQUE_NAME + ".log";
+        string fn = tmp_location() + DirSep + unique_name + ".log";
         unlink(fn);
         LoggerAppenderFile la1("TEST1", new LoggerLayoutPattern("%m"), fn);
         LoggerAppenderFile la("TEST", new LoggerLayoutPattern("%m"), fn);
@@ -797,7 +801,7 @@ class Test inherits QUnit::Test {
     }
 
     testLoggerAppenderStdErr() {
-        string fn = tmp_location() + DirSep + UNIQUE_NAME + ".log";
+        string fn = tmp_location() + DirSep + unique_name + ".log";
         File f();
         f.open2(fn, O_CREAT|O_WRONLY|O_TRUNC);
         on_exit unlink(fn);
@@ -836,7 +840,7 @@ class Test inherits QUnit::Test {
             }
             unlink(la.getFileName());
         };
-        fn = tmp_location() + DirSep + UNIQUE_NAME + ".log";
+        fn = tmp_location() + DirSep + unique_name + ".log";
         la = new LoggerAppenderFileRotate("TEST", new LoggerLayoutPattern("%u"), fn, 3);
         do_clean(False);
         la.open();
@@ -858,7 +862,7 @@ class Test inherits QUnit::Test {
         do_clean(False);
 
         # test rotation in subdirectory
-        la = new LoggerAppenderFileRotate("TEST", new LoggerLayoutPattern("%u"), fn, 3, "%p"+UNIQUE_NAME+"-%i"+DirSep+"%f");
+        la = new LoggerAppenderFileRotate("TEST", new LoggerLayoutPattern("%u"), fn, 3, "%p"+unique_name+"-%i"+DirSep+"%f");
         do_clean(True);
         la.open();
         prev = ();
@@ -888,7 +892,7 @@ class Test inherits QUnit::Test {
         assertEq("LoggerAppenderFileRing-TEST-00-50.log", la.getFileName());
 
         int ringSize = 3;
-        fn = tmp_location() + DirSep + UNIQUE_NAME + ".log.%i";
+        fn = tmp_location() + DirSep + unique_name + ".log.%i";
         string fn2 = fn;
         fn2 =~ s/%i/%d/;
         for (int i = 0; i < ringSize; i++) {
@@ -933,7 +937,7 @@ class Test inherits QUnit::Test {
         LoggerAppenderFileArchive la("TEST", new LoggerLayoutPattern("%m"), "%c%s%C.log");
         assertEq("LoggerAppenderFileArchive"+DirSep+"TEST.log", la.getFileName());
 
-        string fn = tmp_location() + DirSep + UNIQUE_NAME + ".log";
+        string fn = tmp_location() + DirSep + unique_name + ".log";
         unlink(fn);
         # Use a fixed archive pattern (without date) to test "Target file already exists" error
         # The default pattern "%p%f.%d" includes a timestamp which changes between calls
@@ -968,12 +972,12 @@ class Test inherits QUnit::Test {
         unlink(afn);
 
         # multi-level subdir
-        afn = tmp_location() + DirSep + UNIQUE_NAME + DirSep + UNIQUE_NAME + DirSep + UNIQUE_NAME + ".log";
+        afn = tmp_location() + DirSep + unique_name + DirSep + unique_name + DirSep + unique_name + ".log";
         unlink(afn);
         rmdir(dirname(afn));
         rmdir(dirname(dirname(afn)));
         assertFalse(is_dir(dirname(dirname(afn))));
-        la = new LoggerAppenderFileArchive("TEST", new LoggerLayoutPattern("%m"), fn, "%p"+UNIQUE_NAME+"%s"+UNIQUE_NAME+"%s%f");
+        la = new LoggerAppenderFileArchive("TEST", new LoggerLayoutPattern("%m"), fn, "%p"+unique_name+"%s"+unique_name+"%s%f");
         afn = la.getArchiveFileName();
         assertEq(afn, la.getArchiveFileName());
         assertFalse(la.getFile().isOpen());
@@ -1021,7 +1025,7 @@ class Test inherits QUnit::Test {
         hash<auto> unavailable = LoggerSearchUtil::searchRenderedEvents(null_appender, {"text": "needle"});
         assertEq("unavailable", unavailable.status);
 
-        string fn = tmp_location() + DirSep + UNIQUE_NAME + "-search.log";
+        string fn = tmp_location() + DirSep + unique_name + "-search.log";
         unlink(fn);
         on_exit unlink(fn);
 
@@ -1091,7 +1095,7 @@ class Test inherits QUnit::Test {
         assertEq("partial", res.status);
         assertEq("max-scanned-bytes", res.reason);
 
-        string lfn = tmp_location() + DirSep + UNIQUE_NAME + "-search-level.log";
+        string lfn = tmp_location() + DirSep + unique_name + "-search-level.log";
         unlink(lfn);
         on_exit unlink(lfn);
 
@@ -1120,7 +1124,7 @@ class Test inherits QUnit::Test {
         assertEq("invalid", res.status);
         assertEq("invalid-level", res.reason);
 
-        string rfn = tmp_location() + DirSep + UNIQUE_NAME + "-search-rotate.log";
+        string rfn = tmp_location() + DirSep + unique_name + "-search-rotate.log";
         LoggerAppenderFileRotate rotate("SEARCHROT", new LoggerLayoutPattern("%m%n"), rfn, 2);
         unlink(rfn);
         for (int i = 1; i <= rotate.getCount(); ++i) {
@@ -1177,7 +1181,7 @@ class Test inherits QUnit::Test {
         assertEq("invalid", res.status);
         assertEq("stale-cursor", res.reason);
 
-        string crfn = tmp_location() + DirSep + UNIQUE_NAME + "-search-compressed-rotate.log";
+        string crfn = tmp_location() + DirSep + unique_name + "-search-compressed-rotate.log";
         LoggerAppenderFileRotate crotate("SEARCHCOMPROT", new LoggerLayoutPattern("%m%n"), crfn, 1);
         unlink(crfn);
         unlink(crotate.getArchiveFileName(1));
@@ -1224,7 +1228,7 @@ class Test inherits QUnit::Test {
         });
         assertTrue(any $1.compressed && $1.compression == "gzip", sources);
 
-        string ring_pattern = tmp_location() + DirSep + UNIQUE_NAME + "-search-ring-%i.log";
+        string ring_pattern = tmp_location() + DirSep + unique_name + "-search-ring-%i.log";
         LoggerAppenderFileRing ring("SEARCHRING", new LoggerLayoutPattern("%m%n"), ring_pattern, 1);
         unlink(ring.getFileNameForIndex(0));
         on_exit unlink(ring.getFileNameForIndex(0));
@@ -1248,8 +1252,8 @@ class Test inherits QUnit::Test {
         assertEq("invalid", res.status);
         assertEq("stale-cursor", res.reason);
 
-        string afn_search = tmp_location() + DirSep + UNIQUE_NAME + "-search-archive.log";
-        string archive_pattern = tmp_location() + DirSep + UNIQUE_NAME + "-search-archive.%d";
+        string afn_search = tmp_location() + DirSep + unique_name + "-search-archive.log";
+        string archive_pattern = tmp_location() + DirSep + unique_name + "-search-archive.%d";
         LoggerAppenderFileArchive archive("SEARCHARCH", new LoggerLayoutPattern("%m%n"), afn_search,
             archive_pattern);
         unlink(afn_search);
@@ -1433,7 +1437,7 @@ class Test inherits QUnit::Test {
     }
 
     testLifecycleMarkers() {
-        string fn = tmp_location() + DirSep + UNIQUE_NAME + "-lifecycle.log";
+        string fn = tmp_location() + DirSep + unique_name + "-lifecycle.log";
         unlink(fn);
         on_exit unlink(fn);
 
