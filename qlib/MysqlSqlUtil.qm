@@ -108,6 +108,10 @@ module MysqlSqlUtil {
       @ref SqlUtil::AbstractDatabase::createTempTable() "AbstractDatabase::createTempTable()"
     - fixed numeric column comparison; an assignment was used in place of a comparison, so comparing two numeric
       columns overwrote the \c unsigned attribute of the column being compared and returned the wrong result
+    - fixed table alignment of a unique index with other columns, which dropped the index, dropped it again, created
+      it and added its unique constraint, an index of the same name, again, so the alignment failed: a unique
+      constraint is its index on MySQL, so the index is now dropped once and created once, and only the foreign
+      constraints that reference it are dropped and added again around it
 
     @subsection mysqlsqlutilv15 MysqlSqlUtil v1.5
     - fixed case-sensitive regular-expression matching on MySQL 8.0.22+ and current MySQL releases by using an
@@ -559,6 +563,25 @@ auto v = c.name;
         #! returns a string that can be used to drop the constraint from the database
         string getDropSql(string table_name) {
             return sprintf("alter table %s drop index %s", table_name, name);
+        }
+
+        #! returns the SQL that disables and re-enables the foreign constraints that reference the constraint
+        /** A unique constraint in MySQL is its unique index, so recreating the index recreates the constraint: the
+            constraint is not dropped and added again around the recreation of its index, which dropped the index a
+            second time and added it again after it was created; only the foreign constraints that reference it are
+            disabled and re-enabled
+
+            @param ds the datasource of the tables of the foreign constraints
+            @param table_name this argument is ignored
+            @param opts options for the SQL that re-enables the foreign constraints
+
+            @return a hash with a \c disable key, giving a list of SQL strings that disable the foreign constraints
+            that reference this constraint, and an \c enable key, giving a list of SQL strings that re-enable them
+
+            @since MysqlSqlUtil 1.6
+        */
+        hash<auto> getDisableReenableSql(AbstractDatasource ds, string table_name, *hash<auto> opts) {
+            return getSourceConstraintDisableReenableSql(ds, opts);
         }
     }
 

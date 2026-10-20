@@ -213,7 +213,10 @@ class MysqlTest inherits SqlTestBase {
             addTestCase("test create table with auto increment - positive", \testCreateTableWithAutoIncrementPositive());
             addTestCase("range partition lifecycle", \rangePartitionLifecycleTest());
             addTestCase("list partition lifecycle", \listPartitionLifecycleTest());
+            addTestCase("a unique index or constraint with other columns is dropped and created once",
+                \uniqueColumnChanges());
         }
+        addTestCase("the SQL of a unique index or constraint with other columns", \uniqueColumnChangeSql());
 
         set_return_value(main());
     }
@@ -561,6 +564,84 @@ class MysqlTest inherits SqlTestBase {
             "MySQL list description regenerates partition DDL");
     }
 
+    #! Returns the alignment SQL of a table described with \a current to a template described with \a template
+    private list<auto> alignSql(AbstractDatasource ds, string name, hash<auto> current, hash<auto> template) {
+        MysqlTable table(ds, name);
+        table.setupTable(current);
+        MysqlTable target(ds, name);
+        target.setupTable(template);
+        return table.getAlignSql(target);
+    }
+
+    #! A unique constraint in MySQL is its unique index: a unique index or constraint with other columns is dropped
+    #! once and created once, as the SQL shows without a database
+    private uniqueColumnChangeSql() {
+%ifdef NoMysql
+        testSkip("no mysql module");
+%endif
+        OfflineDatasource ds("mysql:user/pass@db%localhost:1");
+        hash<auto> columns = {"columns": {"x": {"native_type": "int"}, "y": {"native_type": "varchar", "size": 10}}};
+        assertEq(("alter table db.t drop index ui", "create unique index ui on db.t (y, x)"),
+            alignSql(ds, "t", columns + {"indexes": {"ui": {"columns": ("y",), "unique": True}}},
+                columns + {"indexes": {"ui": {"columns": ("y", "x"), "unique": True}}}));
+        assertEq(("alter table db.t drop index uk", "alter table db.t add constraint uk unique (y, x)"),
+            alignSql(ds, "t", columns + {"unique_constraints": {"uk": {"columns": ("y",)}}},
+                columns + {"unique_constraints": {"uk": {"columns": ("y", "x")}}}));
+    }
+
+    #! The same changes on the database: the SQL is run, and the next alignment needs none
+    private uniqueColumnChanges() {
+        AbstractDatasource ds = table.getDatasource();
+        on_exit {
+            try {
+                ds.execRaw("drop table if exists mysql_ui_test");
+                ds.execRaw("drop table if exists mysql_uk_test");
+                ds.commit();
+            } catch (hash<ExceptionInfo> ex) {
+            }
+        }
+        ds.execRaw("drop table if exists mysql_ui_test");
+        ds.execRaw("drop table if exists mysql_uk_test");
+        ds.execRaw("create table mysql_ui_test (x int, y varchar(10))");
+        ds.execRaw("create unique index ui_mysql_ui_test on mysql_ui_test (y)");
+        ds.execRaw("create table mysql_uk_test (x int, y varchar(10), constraint uk_mysql_uk_test unique (y))");
+        ds.commit();
+        hash<auto> columns = {"columns": {"x": {"native_type": "int"}, "y": {"native_type": "varchar", "size": 10}}};
+
+        # a unique index with other columns
+        hash<auto> ui_desc = columns + {"indexes": {"ui_mysql_ui_test": {"columns": ("y", "x"), "unique": True}}};
+        MysqlTable ui_table(ds, "mysql_ui_test");
+        string ui_name = ui_table.getSqlName();
+        assertEq((sprintf("alter table %s drop index ui_mysql_ui_test", ui_name),
+            sprintf("create unique index ui_mysql_ui_test on %s (y, x)", ui_name)), alignTable(ds, "mysql_ui_test",
+            ui_desc));
+        assertEq((), alignTable(ds, "mysql_ui_test", ui_desc));
+        assertEq(("y", "x"), (new MysqlTable(ds, "mysql_ui_test")).getIndexes().ui_mysql_ui_test.columns.keys());
+
+        # a unique constraint with other columns
+        hash<auto> uk_desc = columns + {"unique_constraints": {"uk_mysql_uk_test": {"columns": ("y", "x")}}};
+        MysqlTable uk_table(ds, "mysql_uk_test");
+        string uk_name = uk_table.getSqlName();
+        assertEq((sprintf("alter table %s drop index uk_mysql_uk_test", uk_name),
+            sprintf("alter table %s add constraint uk_mysql_uk_test unique (y, x)", uk_name)),
+            alignTable(ds, "mysql_uk_test", uk_desc));
+        assertEq((), alignTable(ds, "mysql_uk_test", uk_desc));
+        assertEq(("y", "x"),
+            (new MysqlTable(ds, "mysql_uk_test")).getConstraints().uk_mysql_uk_test.keys());
+    }
+
+    #! Aligns the table to a template with the description, runs the SQL in the database and returns it
+    private list<auto> alignTable(AbstractDatasource ds, string name, hash<auto> desc) {
+        MysqlTable template(ds, name);
+        template.setupTable(desc);
+        MysqlTable current(ds, name);
+        list<auto> sql = current.getAlignSql(template);
+        on_success ds.commit();
+        on_error ds.rollback();
+        map ds.execRaw($1), sql;
+        return sql;
+    }
+
     private usageIntern() {
         TestReporter::usageIntern(OptionColumn);
         printOption("-c,--conn=ARG", "set DB connection argument (ex: \"mysql:user/pass@db\")", OptionColumn);
@@ -574,5 +655,15 @@ class MysqlTest inherits SqlTestBase {
             throw "MYSQL-ERROR", sprintf("cannot execute the mysql tests on a connection using driver %y", ds.getDriverName());
         ds.open();
         return ds;
+    }
+}
+
+#! A datasource that reports a server version without connecting, to get SQL without a database
+class OfflineDatasource inherits Datasource {
+    constructor(string connstr) : Datasource(connstr) {
+    }
+
+    auto getServerVersion() {
+        return 110400;
     }
 }

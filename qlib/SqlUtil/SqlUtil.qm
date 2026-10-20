@@ -9413,6 +9413,25 @@ AbstractConstraint ix = constraints.uk_jobs;
 
         #! returns lists of SQL strings to disable this constraint plus any dependent constraints and another list of SQL strings to reenable the same constraints; used when updating indexes that depend on constraints
         hash<auto> getDisableReenableSql(AbstractDatasource ds, string table_name, *hash<auto> opts) {
+            hash<auto> ch = getSourceConstraintDisableReenableSql(ds, opts);
+            ch.disable += getDisableSql(table_name);
+            unshift ch.enable, getEnableSql(table_name, opts);
+            return ch;
+        }
+
+        #! returns lists of SQL strings to disable and enable the foreign constraints that reference this constraint
+        /** A driver whose unique constraint is its index uses this method to recreate the index without disabling
+            the constraint itself, which is the index
+
+            @param ds the datasource of the tables of the foreign constraints
+            @param opts options for the SQL that re-enables the foreign constraints
+
+            @return a hash with a \c disable key, giving a list of SQL strings that disable the foreign constraints that
+            reference this constraint, and an \c enable key, giving a list of SQL strings that re-enable them
+
+            @since SqlUtil 3.11.0
+        */
+        private hash<auto> getSourceConstraintDisableReenableSql(AbstractDatasource ds, *hash<auto> opts) {
             hash<auto> ch = {
                 "disable": (),
                 "enable": (),
@@ -9430,9 +9449,6 @@ AbstractConstraint ix = constraints.uk_jobs;
                     unshift ch.enable, fk.getEnableSql(key, opts);
                 }
             }
-
-            ch.disable += getDisableSql(table_name);
-            unshift ch.enable, getEnableSql(table_name, opts);
 
             return ch;
         }
