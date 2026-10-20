@@ -68,6 +68,13 @@ refer to the following files/locations for specific information:
 
 ## Test Environment Notes
 
+`run_tests.sh` ignores the `QORE_MODULE_DIR`, `QORE_DATA_PROVIDERS` and
+`QORE_PROVIDER_INDEX_DIR` that the environment sets, so that modules from outside
+the tree, such as a Qorus instance's module copies, do not change what the tests
+see; it prints a line when it ignores `QORE_MODULE_DIR`.  Set
+`QORE_TEST_PRESERVE_PROVIDER_ENV=1` to keep them, for example to test against
+the build directory of a binary module.
+
 When running tests or tools that load the `jni` module in the same process as
 other native runtimes that use synchronous signals, such as V8 or Python, set up
 the JVM signal-chaining library in the environment before starting `qore`. On
