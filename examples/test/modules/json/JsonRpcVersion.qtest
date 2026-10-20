@@ -1,0 +1,130 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+#
+# a JSON-RPC 1.0 request with no params crashed make_jsonrpc_request(), and the version of a JsonRpcClient was
+# written into the request with sprintf() inside quotes, so that a double quote in it ended the JSON string and the
+# rest of the version was written as JSON members of the request; a local HTTP server records the requests
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires json
+
+%exec-class JsonRpcVersionTest
+
+#! an HTTP server that records the body of every request and answers it with a JSON-RPC result
+class JsonRpcRecorder {
+    private {
+        Socket listener();
+        Queue bodies();
+        Counter done(1);
+        const ReadTimeout = 10s;
+    }
+
+    constructor() {
+        listener.bindINET("127.0.0.1", 0, True, AF_INET);
+        listener.listen();
+        background run();
+    }
+
+    string getUrl() {
+        return sprintf("http://127.0.0.1:%d", listener.getPort());
+    }
+
+    #! returns the body of the next request
+    string getBody() {
+        return bodies.get(ReadTimeout);
+    }
+
+    #! ends the server: a request for /stop ends the accept loop
+    stop() {
+        Socket s();
+        s.connectINET("127.0.0.1", listener.getPort());
+        s.send("GET /stop HTTP/1.1\r\nContent-Length: 0\r\n\r\n");
+        done.waitForZero();
+        s.close();
+    }
+
+    private run() {
+        on_exit done.dec();
+        while (True) {
+            Socket s = listener.accept();
+            bool stop;
+            try {
+                hash<auto> req = s.readHTTPHeader(ReadTimeout);
+                if (req.path == "/stop") {
+                    stop = True;
+                } else {
+                    bodies.push(s.recv(req."content-length".toInt(), ReadTimeout));
+                    string resp = "{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":\"ok\"}";
+                    s.send(sprintf("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: %d\r\n"
+                        "Connection: close\r\n\r\n%s", resp.size(), resp));
+                }
+            } catch (hash<ExceptionInfo> ex) {
+            }
+            s.close();
+            if (stop) {
+                break;
+            }
+        }
+    }
+}
+
+class JsonRpcVersionTest inherits QUnit::Test {
+    constructor() : Test("JsonRpcVersionTest", "1.0") {
+        addTestCase("JSON-RPC 1.0 requests with no params", \noParams());
+        addTestCase("JsonRpcClient versions", \clientVersions());
+        set_return_value(main());
+    }
+
+    noParams() {
+        # JSON-RPC 1.0 has no version member and always has a params member
+        hash<auto> req = parse_json(make_jsonrpc_request("method", "1.0", 1, NOTHING));
+        assertEq({"method": "method", "id": 1, "params": NOTHING}, req);
+        req = parse_json(make_jsonrpc_request("method", NOTHING, 1, NOTHING));
+        assertEq({"method": "method", "id": 1, "params": NOTHING}, req);
+        req = parse_json(make_jsonrpc_request("method", "1.0", 1, NOTHING, JGF_ADD_FORMATTING));
+        assertEq({"method": "method", "id": 1, "params": NOTHING}, req);
+        # JSON-RPC 2.0 has no params member when there are no params
+        req = parse_json(make_jsonrpc_request("method", "2.0", 1, NOTHING));
+        assertEq({"jsonrpc": "2.0", "method": "method", "id": 1}, req);
+    }
+
+    clientVersions() {
+        JsonRpcRecorder server();
+        on_exit server.stop();
+
+        # a double quote in the version stays in the JSON string
+        string version = "2.0\",\"method\":\"other";
+        JsonRpcClient client({"url": server.getUrl(), "version": version}, True);
+        client.call("method", 1);
+        hash<auto> req = parse_json(server.getBody());
+        assertEq(version, req.jsonrpc);
+        assertEq("method", req.method);
+        client.callArgs("method", (1,));
+        req = parse_json(server.getBody());
+        assertEq(version, req.jsonrpc);
+        assertEq("method", req.method);
+        version = "1.1\"}";
+        client.setVersion(version);
+        client.call("method", 1);
+        req = parse_json(server.getBody());
+        assertEq(version, req.version);
+        assertEq("method", req.method);
+
+        # the versions themselves
+        client.setVersion("2.0");
+        client.call("method", 1);
+        req = parse_json(server.getBody());
+        assertEq({"jsonrpc": "2.0", "method": "method", "params": (1,)}, req - "id");
+        client.setVersion("1.0");
+        client.call("method", 1);
+        req = parse_json(server.getBody());
+        assertEq("method", req.method);
+        assertFalse(req.hasKey("version"));
+        assertFalse(req.hasKey("jsonrpc"));
+    }
+}

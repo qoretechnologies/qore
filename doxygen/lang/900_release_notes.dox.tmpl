@@ -4739,6 +4739,11 @@ while (*binary chunk = input.read(65536)) {
     - @ref Qore::qore_add_module_to_blacklist() "qore_add_module_to_blacklist()" and
       @ref Qore::qore_add_module_to_blacklist_ex() "qore_add_module_to_blacklist_ex()" raise \c BLACKLIST-ERROR for a
       module name with a NUL character instead of blacklisting the name cut at the NUL character
+    - Fixed a crash of \c make_jsonrpc_request() of the \c json module for a JSON-RPC 1.0 request (version
+      \c "1.0" or no version) with no params
+    - The JSON-RPC version of a \c JsonRpcClient object of the \c json module is written to the request as a JSON
+      string; it was written inside quotes as it is, so that a double quote in it ended the string and the rest of
+      the version was written as members of the request
     - Fixed a crash in @ref Qore::ReadOnlyFile::startPollRead() "ReadOnlyFile::startPollRead()" when the path could
       not be converted to the @ref default_encoding "default character encoding"; the \c ENCODING-CONVERSION-ERROR
       exception is now raised

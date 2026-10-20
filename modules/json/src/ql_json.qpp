@@ -394,6 +394,18 @@ static QoreHashNode* jwt_extract_claims(const QoreHashNode* payload, ExceptionSi
 }
 
 
+// writes the version key with the version serialized as a JSON string, and the method key; the version was written
+// with sprintf() inside quotes, so that a double quote in it ended the string and the rest was written as JSON
+static int write_jsonrpc_version(QoreString& str, const std::string& version, ExceptionSink* xsink) {
+    str.sprintf("{\"%s\":", version[0] == '1' ? "version" : "jsonrpc");
+    SimpleRefHolder<QoreStringNode> vstr(new QoreStringNode(version.data(), version.size(), QCS_UTF8));
+    if (json_serialize_value(str, *vstr, -1, xsink)) {
+        return -1;
+    }
+    str.concat(",\"method\":");
+    return 0;
+}
+
 QoreStringNode* make_jsonrpc_request_args(const std::string& version, const QoreListNode* args, QoreValue id,
         unsigned offset, ExceptionSink* xsink) {
     const QoreValue p0 = get_param_value(args, offset);
@@ -403,8 +415,8 @@ QoreStringNode* make_jsonrpc_request_args(const std::string& version, const Qore
     // write version key first
     if (version == "1.0") {
         str->concat("{\"method\": ");
-    } else {
-        str->sprintf("{\"%s\":\"%s\",\"method\":", version[0] == '1' ? "version" : "jsonrpc", version.c_str());
+    } else if (write_jsonrpc_version(**str, version, xsink)) {
+        return 0;
     }
     if (json_serialize_value(**str, p0, -1, xsink)) {
         return 0;
@@ -441,8 +453,8 @@ QoreStringNode* make_jsonrpc_request(const std::string& version, const QoreListN
     // write version key first
     if (version == "1.0") {
         str->concat("{\"method\":");
-    } else {
-        str->sprintf("{\"%s\":\"%s\",\"method\":", version[0] == '1' ? "version" : "jsonrpc", version.c_str());
+    } else if (write_jsonrpc_version(**str, version, xsink)) {
+        return 0;
     }
     if (json_serialize_value(**str, p0, -1, xsink)) {
         return 0;
@@ -504,7 +516,9 @@ static QoreStringNode* make_jsonrpc_request(const QoreStringNode* method_name, c
         }
     }
 
-    if (!request_msg.isNullOrNothing() || (strcmp(version, "2.0"))) {
+    // there is no version for JSON-RPC 1.0, which always has a params key; strcmp() was called with a null version
+    // for it, which crashed when there were no params
+    if (!request_msg.isNullOrNothing() || !version || strcmp(version, "2.0")) {
         // params key should come last
         str->sprintf(",%s\"params\":", fmt ? "\n  " : "");
         if (json_serialize_value(**str, request_msg, fmt ? 2 : -1, xsink)) {
