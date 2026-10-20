@@ -838,7 +838,7 @@ hash<HttpClientResponseInfo> resp = f.get(30s);
         *hash<auto> err = conn.getPollOperation().getError();
         # Certificate refusals are terminal, as in HttpClientConnection::waitForReady(). A retry must not replace
         # a certificate refusal with a timeout or another connection's error.
-        if (err.err == "SOCKET-SSL-ERROR" && err.arg.typeCode() == NT_HASH && err.arg.ssl_verify_error) {
+        if (http_is_certificate_refusal(err)) {
             throw err.err, err.desc, err;
         }
         # a proxy authentication challenge of a CONNECT request is answered once with a new connection

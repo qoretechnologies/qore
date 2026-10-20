@@ -23,33 +23,40 @@ class TlsVerifyHandler inherits AbstractHttpRequestHandler {
     }
 }
 
-#! Records the connections a connection manager creates, so that a test can tell whether a failed connection was retried
+#! Records the connections a connection manager makes, so that a test can tell whether a failed connection was retried
 /** A QUIC listener of HttpServer cannot report the handshakes it receives, so the connections are recorded where the
-    client creates them; every connection of a request with a forced protocol is created by
-    HttpClientConnectionManager::createConnection(), synchronous and asynchronous alike
+    client starts them: every new connection, of a forced protocol or of either protocol of a race between HTTP/3 and
+    HTTP/2, synchronous and asynchronous alike, is submitted to the I/O controller; a connection that wins a race is
+    submitted again, so each connection is recorded once
 */
 class RecordingManager inherits HttpClientIo::HttpClientConnectionManager {
     private {
         Mutex m();
         list<HttpClientIo::HttpClientConnection> connections();
+        #! the IDs of the connections recorded
+        hash<string, bool> ids();
     }
 
     constructor(hash<HttpClientIo::HttpClientConnectionManagerOptions> opts)
             : HttpClientIo::HttpClientConnectionManager(opts) {
     }
 
-    #! Returns the connections created, in the order they were created
+    #! Returns the connections made, in the order they were started
     list<HttpClientIo::HttpClientConnection> getConnections() {
         AutoLock al(m);
         return connections;
     }
 
-    private HttpClientIo::HttpClientConnection createConnection(hash<auto> url_info, string key, string protocol) {
-        HttpClientIo::HttpClientConnection conn = HttpClientIo::HttpClientConnectionManager::createConnection(url_info,
-            key, protocol);
-        AutoLock al(m);
-        connections += conn;
-        return conn;
+    private submitConnectionToController(string key, HttpClientIo::HttpClientConnection conn, bool initial = True) {
+        {
+            AutoLock al(m);
+            string id = conn.getConnectionId().toString();
+            if (!ids{id}) {
+                ids{id} = True;
+                connections += conn;
+            }
+        }
+        HttpClientIo::HttpClientConnectionManager::submitConnectionToController(key, conn, initial);
     }
 }
 
@@ -219,6 +226,7 @@ WKEuKQ7xuGuAiIESuSDBsSg=
         addTestCase("HTTP/3 certificate failures are not retried", \http3CertificateFailureTest());
         addTestCase("HTTP/3 with all certificates accepted", \http3AcceptAllTest());
         addTestCase("HTTP/3 connection failures are retried", \http3ConnectFailureTest());
+        addTestCase("HTTP/3 and HTTP/2 race: certificate failures are not retried", \raceCertificateFailureTest());
         addTestCase("HTTPClient option errors", \optionErrorTest());
         set_return_value(main());
     }
@@ -641,6 +649,64 @@ WKEuKQ7xuGuAiIESuSDBsSg=
                 assertRegex("^QUIC-", ex.arg.err, api);
             }
             assertEq(2, mgr.getConnections().size(), api + ": one retry");
+        }
+    }
+
+    #! With automatic protocol selection, a refused certificate ends the race of HTTP/3 and HTTP/2 without a retry
+    /** The TLS listeners also receive HTTP/3 on their ports.  With \c "localhost", the HTTP/3 connection can be made
+        to an address in another family than the listener's, where nothing receives datagrams; the certificate refusal
+        of HTTP/2 is reported all the same.
+    */
+    raceCertificateFailureTest() {
+        foreach bool trusted in (False, True) {
+            foreach string api in (Apis) {
+                foreach string host in ("localhost", "127.0.0.1") {
+                    singleRaceCertificateFailure(host, trusted ? wrong_port : good_port, trusted, api);
+                }
+                # nothing accepts TCP connections on the port of a QUIC listener: HTTP/2 fails with a connection
+                # error, and the certificate refusal of HTTP/3 is reported
+                singleRaceCertificateFailure("127.0.0.1", trusted ? quic_wrong_port : quic_good_port, trusted, api,
+                    "SOCKET-CONNECT-ERROR");
+            }
+        }
+    }
+
+    #! Tests a race of HTTP/3 and HTTP/2 to a server whose certificate is refused
+    /** @param host the host name of the server
+        @param port the port of the server
+        @param trusted if the test CA is trusted, so that the certificate is refused for another reason
+        @param api the client API to use
+        @param h2_err the error of the HTTP/2 connection if it does not reach the server
+    */
+    private singleRaceCertificateFailure(string host, int port, bool trusted, string api, *string h2_err) {
+        string msg = sprintf("auto %s:%d trusted=%y %s", host, port, trusted, api);
+        string url = sprintf("https://%s:%d", host, port);
+        RecordingManager mgr(cast<hash<HttpClientIo::HttpClientConnectionManagerOptions>>({
+            "protocol": "auto",
+            "enable_http3": True,
+            "ssl_verify_mode": SSL_VERIFY_PEER,
+            "connect_timeout": 10s,
+            "request_timeout": 20s,
+            "max_request_retries": 2,
+        } + (trusted ? {"ssl_ca_file": ca_file} : NOTHING)));
+        on_exit mgr.closeAll();
+        try {
+            http3Get(mgr, url, api);
+            fail(msg + ": no exception raised");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("SOCKET-SSL-ERROR", ex.err, msg + ": " + ex.desc);
+            assertEq("SOCKET-SSL-ERROR", ex.arg.err, msg);
+            assertEq(NT_INT, ex.arg.arg.ssl_verify_error.typeCode(), msg);
+            assertGt(0, ex.arg.arg.ssl_verify_error, msg);
+            assertRegex("certificate verify failed", ex.desc, msg);
+            assertRegex(trusted ? (host == "localhost" ? "hostname mismatch" : "IP address mismatch")
+                : "unable to get local issuer certificate", ex.desc, msg);
+        }
+        list<HttpClientIo::HttpClientConnection> conns = mgr.getConnections();
+        # each protocol was tried once: the race was not run again
+        assertEq(("h2", "h3"), sort(map $1.getProtocol(), conns), msg + ": one race");
+        if (h2_err) {
+            assertEq(h2_err, (select conns, $1.getProtocol() == "h2")[0].getPollOperation().getError().err, msg);
         }
     }
 

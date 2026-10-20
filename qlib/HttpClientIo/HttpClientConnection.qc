@@ -596,7 +596,7 @@ public class HttpClientConnection inherits HttpClientConnectionBase {
 
         if (self.isClosed()) {
             *hash<auto> err = getPollOperation().getError();
-            if (err.err == "SOCKET-SSL-ERROR" && err.arg.typeCode() == NT_HASH && err.arg.ssl_verify_error) {
+            if (http_is_certificate_refusal(err)) {
                 throw err.err, err.desc, err;
             }
             throw "HTTPCLIENT-CONNECT-ERROR",

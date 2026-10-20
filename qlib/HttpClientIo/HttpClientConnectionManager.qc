@@ -2763,10 +2763,18 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
         no longer surface the H3/QUIC handshake timeout while silently hiding that
         the H2/TCP attempt also failed.
 
+        A refused server certificate is reported as it is, as for a connection that
+        is not raced (see @ref HttpClientConnection::waitForReady()): a race in which
+        a protocol refused the certificate raises that protocol's
+        \c SOCKET-SSL-ERROR, whatever the other protocol's failure, so that the
+        refusal is neither retried nor hidden.
+
         @param h3conn the HTTP/3 candidate (closed here)
         @param h2conn the HTTP/2 candidate (closed here)
         @param key the host:port pool key
 
+        @throw SOCKET-SSL-ERROR a protocol refused the server certificate; the error of the HTTP/2 connection if both
+        refused it; the argument is the connection's error, with \c ssl_verify_error in its \c arg key
         @throw SOCKET-CONNECT-ERROR the underlying TCP-refused error (fast-fail)
         @throw HTTPCLIENT-CONNECT-ERROR neither protocol connected; the argument has the \c err and \c desc of the
         HTTP/2 connection's error, or of the HTTP/3 connection's if the HTTP/2 connection reported none, as for a
@@ -2778,6 +2786,14 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
         *hash<auto> h2_err = h2conn.getPollOperation().getError();
         try { h3conn.close(); } catch () {}
         try { h2conn.close(); } catch () {}
+
+        # a refused certificate is never retried and never hidden behind the other protocol's failure
+        if (http_is_certificate_refusal(h2_err)) {
+            throw h2_err.err, h2_err.desc, h2_err;
+        }
+        if (http_is_certificate_refusal(h3_err)) {
+            throw h3_err.err, h3_err.desc, h3_err;
+        }
 
         # Build a user-friendly error message reporting BOTH legs' underlying
         # failure reasons (see heBuildConnectErrorDesc()).  Reporting only one
@@ -2979,6 +2995,7 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
         @throw HTTPCLIENT-SHUTDOWN the manager is shutting down
         @throw SOCKET-CONNECT-ERROR TCP refused (fast-fail; identical to the
         synchronous race)
+        @throw SOCKET-SSL-ERROR a protocol refused the server certificate (see @ref heThrowConnectError())
         @throw HTTPCLIENT-CONNECT-ERROR neither protocol connected
 
         @note Winner / error / cache semantics are identical to the synchronous
@@ -3319,6 +3336,7 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
 
         @throw HTTPCLIENT-CONNECT-ERROR neither protocol connected
         @throw SOCKET-CONNECT-ERROR TCP was refused (fast-fail)
+        @throw SOCKET-SSL-ERROR a protocol refused the server certificate (see @ref heThrowConnectError())
 
         @note Caller holds async_race_lock.
     */

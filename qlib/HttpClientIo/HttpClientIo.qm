@@ -172,6 +172,9 @@ manager.closeAll();
       When both legs lose and HTTP/2 was refused via ALPN, the endpoint speaks
       neither HTTP/3 nor HTTP/2 and the race falls back to HTTP/1.1 instead of
       failing; the result is cached per host and re-probed periodically.
+      A server certificate refused by either leg ends the race with that leg's
+      \c SOCKET-SSL-ERROR, as for a single protocol, and is not retried, even if
+      the other leg failed for another reason.
       Alt-Svc advertisements supply the UDP port for future races without
       overriding the negotiated protocol or draining working connections.
       Fresh automatic H3 connections and expired fallback entries race both
@@ -940,6 +943,17 @@ HttpClientConnectionManager mgr(<HttpClientConnectionManagerOptions>{
             throw "HTTPCLIENT-REQUEST-BODY-ERROR",
                 "GET requests cannot have a request body or enable request-body streaming; use NOTHING for the body";
         }
+    }
+
+    #! Returns True if the given connection error is a refused server certificate
+    /** A refused certificate is \c SOCKET-SSL-ERROR with the OpenSSL verification result in \c ssl_verify_error of
+        the exception argument, over TCP and QUIC alike.  It is never retried as a failed connection: a retry could only
+        be refused again, or its timeout could hide the reason of the refusal.
+
+        @param err the error of a connection (see @ref HttpClientIo::HttpClientPollOperation::getError())
+    */
+    bool sub http_is_certificate_refusal(*hash<auto> err) {
+        return err.err == "SOCKET-SSL-ERROR" && err.arg.typeCode() == NT_HASH && err.arg.ssl_verify_error;
     }
 
     #! Returns True if the given octet is a hexadecimal digit
