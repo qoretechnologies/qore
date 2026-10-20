@@ -172,6 +172,9 @@ manager.closeAll();
       When both legs lose and HTTP/2 was refused via ALPN, the endpoint speaks
       neither HTTP/3 nor HTTP/2 and the race falls back to HTTP/1.1 instead of
       failing; the result is cached per host and re-probed periodically.
+      The race ends early only when a leg connects: when one leg fails, the other
+      leg's own outcome, bounded by its connect timeout, is awaited, so a server
+      that receives HTTP/3 only is reached whatever the head start of HTTP/3.
       A denial of the @ref sandboxing "sandbox" or a server certificate refused by
       either leg ends the race with that leg's error (\c NETWORK-ACCESS-DENIED,
       \c SOCKET-SSL-ERROR), as for a single protocol, and is not retried, even if

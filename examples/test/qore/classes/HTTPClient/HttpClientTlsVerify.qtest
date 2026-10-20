@@ -663,6 +663,11 @@ WKEuKQ7xuGuAiIESuSDBsSg=
                 foreach string host in ("localhost", "127.0.0.1") {
                     singleRaceCertificateFailure(host, trusted ? wrong_port : good_port, trusted, api);
                 }
+                # nothing accepts TCP connections on the port of a QUIC listener: HTTP/2 fails with a connection
+                # error, and the certificate refusal of HTTP/3 is reported, whichever fails first (the race waits for
+                # both protocols' outcomes)
+                singleRaceCertificateFailure("127.0.0.1", trusted ? quic_wrong_port : quic_good_port, trusted, api,
+                    "SOCKET-CONNECT-ERROR");
             }
         }
     }
@@ -672,8 +677,9 @@ WKEuKQ7xuGuAiIESuSDBsSg=
         @param port the port of the server
         @param trusted if the test CA is trusted, so that the certificate is refused for another reason
         @param api the client API to use
+        @param h2_err the error of the HTTP/2 connection if it does not reach the server
     */
-    private singleRaceCertificateFailure(string host, int port, bool trusted, string api) {
+    private singleRaceCertificateFailure(string host, int port, bool trusted, string api, *string h2_err) {
         string msg = sprintf("auto %s:%d trusted=%y %s", host, port, trusted, api);
         string url = sprintf("https://%s:%d", host, port);
         RecordingManager mgr(cast<hash<HttpClientIo::HttpClientConnectionManagerOptions>>({
@@ -697,8 +703,12 @@ WKEuKQ7xuGuAiIESuSDBsSg=
             assertRegex(trusted ? (host == "localhost" ? "hostname mismatch" : "IP address mismatch")
                 : "unable to get local issuer certificate", ex.desc, msg);
         }
+        list<HttpClientIo::HttpClientConnection> conns = mgr.getConnections();
         # each protocol was tried once: the race was not run again
-        assertEq(("h2", "h3"), sort(map $1.getProtocol(), mgr.getConnections()), msg + ": one race");
+        assertEq(("h2", "h3"), sort(map $1.getProtocol(), conns), msg + ": one race");
+        if (h2_err) {
+            assertEq(h2_err, (select conns, $1.getProtocol() == "h2")[0].getPollOperation().getError().err, msg);
+        }
     }
 
     #! Returns a connection manager that forces HTTP/3 and verifies the server certificate

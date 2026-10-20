@@ -63,9 +63,12 @@
     \c NETWORK-ACCESS-DENIED or \c FILESYSTEM-ACCESS-DENIED, instead of \c HTTPCLIENT-CONNECT-ERROR, and is not
     retried. This also applies to automatic protocol selection: when HTTP/3 and HTTP/2 are tried in parallel, a
     denial or a certificate refusal of either protocol is reported as it is, even if the other protocol failed for
-    another reason. Connections interrupted during the handshake can still be retried. An HTTP/3 (QUIC) connection that
-    refuses the server certificate raises \c SOCKET-SSL-ERROR with the same verification reason as a TLS connection
-    over TCP instead of \c QUIC-READ-ERROR, also with the @ref Qore::HTTPClient "HTTPClient" class.
+    another reason. The parallel attempt ends early only when a protocol connects: when one protocol fails, the
+    outcome of the other one is awaited, so a server that receives HTTP/3 only is reached even when the refusal of
+    the TCP connection comes first. Connections interrupted during the handshake can still be retried. An HTTP/3
+    (QUIC) connection that refuses the server certificate raises \c SOCKET-SSL-ERROR with the same verification
+    reason as a TLS connection over TCP instead of \c QUIC-READ-ERROR, also with the
+    @ref Qore::HTTPClient "HTTPClient" class.
 
     LLM streaming requests accept a @ref QoreLlmUtils::LlmCancellation "LlmCancellation" token in
     @ref QoreLlmUtils::LlmRequestOptions::cancellation "LlmRequestOptions::cancellation". Cancelling the token

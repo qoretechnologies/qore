@@ -434,8 +434,8 @@ class HttpClientIoTest inherits QUnit::Test {
         # V2 cancelable non-blocking happy-eyeballs (acquireConnectionAsync)
         addTestCase("async HE connects + caches h2", \testAsyncHeConnectsH2());
         addTestCase("async HE H3 wins within stagger", \testAsyncHeH3WinsStagger());
-        addTestCase("async HE SOCKET-CONNECT-ERROR fast-fail",
-            \testAsyncHeConnectRefusedFastFail());
+        addTestCase("async HE waits for HTTP/3 after a refused TCP connection",
+            \testAsyncHeConnectRefusedWaitsForH3());
         addTestCase("async HE non-blocking + sync unchanged",
             \testAsyncHeNonBlockingAndSyncParity());
         addTestCase("HE connect-error message reports both legs",
@@ -1838,11 +1838,13 @@ class HttpClientIoTest inherits QUnit::Test {
         }
     }
 
-    testAsyncHeConnectRefusedFastFail() {
+    testAsyncHeConnectRefusedWaitsForH3() {
         # A port nothing listens on → TCP RST (ECONNREFUSED).  The async race's
-        # H2 (TCP) attempt fails fast with SOCKET-CONNECT-ERROR; the shared
-        # heH2FastFail()/heThrowConnectError() must propagate it WITHOUT waiting
-        # connect_timeout (identical to the synchronous race's fast-fail).
+        # H2 (TCP) attempt fails at once with SOCKET-CONNECT-ERROR; the race does
+        # not end on that failure but waits for HTTP/3's own outcome (a server
+        # can receive HTTP/3 only), here its handshake timeout, and then reports
+        # the TCP refusal, which heThrowConnectError() propagates as it is, with
+        # the reasons of both protocols (identical to the synchronous race).
         #
         # Pick a free port, then hold ONLY a UDP socket on it for the duration of
         # the test.  Rationale (root cause of a macOS-only flake): simply closing
@@ -1854,11 +1856,11 @@ class HttpClientIoTest inherits QUnit::Test {
         # instead of failing — making the happy-eyeballs race resolve to a bogus
         # "ready" winner and the assertion below see no exception.  Holding the
         # UDP port closes that hole (H3 cannot self-bind/reuse it and our socket
-        # absorbs its datagrams) while leaving the TCP port truly closed so H2
-        # still gets an immediate RST → fast SOCKET-CONNECT-ERROR.  We must NOT
-        # hold a (bound, non-listening) TCP socket: macOS drops the SYN instead
-        # of sending RST, which turns the fast-fail into a ~8s SYN-retransmit
-        # timeout.
+        # absorbs its datagrams, so that HTTP/3 ends with its handshake timeout)
+        # while leaving the TCP port truly closed so H2 still gets an immediate
+        # RST → SOCKET-CONNECT-ERROR.  We must NOT hold a (bound, non-listening)
+        # TCP socket: macOS drops the SYN instead of sending RST, which turns the
+        # refusal into a ~8s SYN-retransmit timeout.
         # another process may already use the same port number for UDP, in which case another port is chosen
         const int MaxPortAttempts = 20;
         int bad_port;
@@ -1886,22 +1888,20 @@ class HttpClientIoTest inherits QUnit::Test {
             "accept_all_certs": True,
             "ssl_verify_mode": 0,
             "protocol": "auto",
-            "connect_timeout": 20s,
+            # HTTP/3's handshake timeout ends its attempt
+            "connect_timeout": 3s,
             "logger": mLogger,
         });
         on_exit delete mgr;
 
-        date t0 = now_us();
         try {
-            driveAsyncConnect(mgr, refused, 20s);
+            driveAsyncConnect(mgr, refused, 30s);
             assertTrue(False, "connect to refused port must throw");
         } catch (hash<ExceptionInfo> ex) {
-            date elapsed = now_us() - t0;
-            assertRegex("CONNECT-ERROR|SOCKET-CONNECT-ERROR", ex.err,
-                "async HE refused error type");
-            assertTrue(elapsed < 10s,
-                sprintf("async HE fast-fail took %y, expected << connect_timeout 20s",
-                    elapsed));
+            assertEq("SOCKET-CONNECT-ERROR", ex.err, "async HE refused error type: " + ex.desc);
+            # the race waited for HTTP/3: both protocols' reasons are reported
+            assertRegex("H3/QUIC: ", ex.desc, "HTTP/3 outcome awaited");
+            assertRegex("H2/TCP: ", ex.desc, "HTTP/2 refusal reported");
         }
     }
 

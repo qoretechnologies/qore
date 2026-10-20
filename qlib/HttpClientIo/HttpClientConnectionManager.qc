@@ -168,8 +168,8 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         /** Once H2 has joined the race, this bounds how long the nonblocking
             caller can wait before re-reading both candidates' authoritative
             state.  The connection notifiers remain the primary wakeup path; the
-            timer mirrors the synchronous path's bounded race wait and covers
-            fast H2 refusal while H3 remains pending.
+            timer mirrors the synchronous path's bounded race wait and covers an
+            outcome of a candidate that is not signaled.
         */
         const AsyncHappyEyeballsRaceRecheckMs = 250;
     }
@@ -2600,24 +2600,13 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
         }
     }
 
-    #! Internal: True if the H2 attempt failed fast with SOCKET-CONNECT-ERROR
-    /** TCP was refused at the kernel level (ECONNREFUSED or similar) so the
-        port is definitively closed; H3 over UDP cannot recover it.  The
-        happy-eyeballs race uses this to abandon immediately instead of waiting
-        out H3's own connect timeout.  Extracted from the synchronous race's
-        H2-TCP-refused-while-H3-pending fast-fail so the async race fast-fails
-        identically.
+    #! Internal: True if a race candidate has an outcome: it is no longer connecting
+    /** @param conn the candidate
 
-        @param h2conn the HTTP/2 candidate
-        @return @ref True if H2 is not ready and its poll op reported
-        \c SOCKET-CONNECT-ERROR
+        @return @ref True if the connection is ready, draining or closed
     */
-    private bool heH2FastFail(Http2ClientConnection h2conn) {
-        if (h2conn.isReady()) {
-            return False;
-        }
-        *hash<auto> h2_err = h2conn.getPollOperation().getError();
-        return h2_err.err == "SOCKET-CONNECT-ERROR";
+    private static bool heSettled(HttpClientConnection conn) {
+        return conn.getConnectionState() != HttpClientConnectionState::Connecting;
     }
 
     #! Internal: True if an H2 leg error is a definitive refusal of HTTP/2 over TLS
@@ -2720,8 +2709,8 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
 
         Each present leg contributes a labelled reason (its @c desc, falling back
         to its @c err, then to a placeholder).  A leg whose error is
-        @ref NOTHING — e.g. a still-pending H3 during the TCP-refused fast-fail —
-        is omitted rather than reported as a spurious failure.
+        @ref NOTHING — e.g. a still-pending candidate when the race's wait bound
+        expired — is omitted rather than reported as a spurious failure.
 
         @param h3_err the H3/QUIC poll-op error (may be @ref NOTHING)
         @param h2_err the H2/TCP poll-op error (may be @ref NOTHING)
@@ -2748,16 +2737,13 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
     #! Internal: builds and throws the happy-eyeballs connect error, closing both conns
     /** Exact behavior of the synchronous race's terminal error path: collect the
         underlying H3/H2 poll-op errors, close both connections, and throw a
-        user-friendly error.  If the H2 (TCP) attempt reported
-        \c SOCKET-CONNECT-ERROR the underlying error is propagated (it is
-        deliberately NOT in @ref isConnectionError(), so the request retry loop
-        fails fast); otherwise \c HTTPCLIENT-CONNECT-ERROR is thrown.
-
-        This single helper also covers the synchronous race's earlier
-        H2-fast-fail throw site: in that case @c h2_err.err is
-        \c SOCKET-CONNECT-ERROR and @c h2_err.desc is set, so the thrown error
-        code is unchanged and the message carries the labelled H2/TCP reason
-        (the still-pending H3 leg is omitted — see @ref heBuildConnectErrorDesc()).
+        user-friendly error.  It is reached when neither candidate connected:
+        the race does not end on one candidate's failure but waits for the other
+        one's own outcome, so the most specific error of both is reported.  If the
+        H2 (TCP) attempt reported \c SOCKET-CONNECT-ERROR, the underlying error is
+        propagated (it is deliberately NOT in @ref isConnectionError(), so the
+        request retry loop does not retry it); otherwise
+        \c HTTPCLIENT-CONNECT-ERROR is thrown.
 
         The description reports every failed leg (not just one), so a message can
         no longer surface the H3/QUIC handshake timeout while silently hiding that
@@ -2779,7 +2765,7 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
         @throw FILESYSTEM-ACCESS-DENIED the sandbox denied the file of a protocol's UNIX domain socket
         @throw SOCKET-SSL-ERROR a protocol refused the server certificate; the error of the HTTP/2 connection if both
         refused it; the argument is the connection's error, with \c ssl_verify_error in its \c arg key
-        @throw SOCKET-CONNECT-ERROR the underlying TCP-refused error (fast-fail)
+        @throw SOCKET-CONNECT-ERROR HTTP/2's TCP connection was refused and HTTP/3 did not connect either
         @throw HTTPCLIENT-CONNECT-ERROR neither protocol connected; the argument has the \c err and \c desc of the
         HTTP/2 connection's error, or of the HTTP/3 connection's if the HTTP/2 connection reported none, as for a
         connection that is not raced
@@ -2814,13 +2800,11 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
         # attempted (and lost) both protocols.
         string desc = heBuildConnectErrorDesc(h3_err, h2_err, key);
 
-        # Fail-fast path: if the H2 (TCP) attempt reported SOCKET-CONNECT-ERROR,
-        # the endpoint is definitively refused at the kernel level (ECONNREFUSED
-        # or similar).  H3 over UDP can't recover this because the remote host
-        # has rejected the port — retrying via the outer isConnectionError loop
-        # just wastes another connect_timeout per attempt.  Propagate the
-        # underlying SOCKET-CONNECT-ERROR, which is NOT in isConnectionError(),
-        # so the retry loop fails fast.
+        # If the H2 (TCP) attempt reported SOCKET-CONNECT-ERROR, the port is
+        # refused at the kernel level (ECONNREFUSED or similar), and HTTP/3 has
+        # failed as well — retrying via the outer isConnectionError loop would
+        # just repeat both.  Propagate the underlying SOCKET-CONNECT-ERROR, which
+        # is NOT in isConnectionError(), so the retry loop does not retry it.
         if (h2_err.err == "SOCKET-CONNECT-ERROR") {
             throw h2_err.err, desc;
         }
@@ -2831,7 +2815,12 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
     #! Internal: happy eyeballs parallel H3 + H2 connection race
     /** Tries H3 (QUIC/UDP) and H2 (TCP/TLS) in parallel. H3 starts first;
         if it doesn't connect within the stagger delay, H2 starts alongside.
-        The first connection to become ready wins; the loser is cancelled.
+        The first connection to become ready wins; the loser is cancelled.  The
+        race ends early only on a success: when one candidate fails, the other
+        one's own outcome, bounded by its own connect timeout, is awaited, so a
+        server that receives one protocol only is reached, and the most specific
+        error of both is reported when neither connects (see
+        @ref heThrowConnectError()).
 
         @param url_info parsed URL info
         @param key the host:port pool key
@@ -2910,60 +2899,37 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
         h2conn.setManagerContext(self, key);
         submitConnectionToController(key, h2conn);
 
-        # Race: register notifier and check if either already connected
+        # Race: register the notifier on both candidates; it is signaled when either of them settles
         EventNotifier race_notifier();
-        bool h3_pending = h3conn.registerReadyNotifier(notifier: race_notifier);
-        bool h2_pending = h2conn.registerReadyNotifier(notifier: race_notifier);
+        h3conn.registerReadyNotifier(notifier: race_notifier);
+        h2conn.registerReadyNotifier(notifier: race_notifier);
 
-        # If either already decided (ready or failed), check immediately
-        if (!h3_pending || !h2_pending) {
+        # The race ends early only on a success.  When one candidate fails, the other one's own outcome is awaited:
+        # a server can receive one protocol only (HTTP/3 only, with nothing accepting TCP connections, for example),
+        # and a certificate refusal or a sandbox denial of the other candidate must not be hidden behind a plain
+        # connection error (see heThrowConnectError()).  Each candidate is bounded by its own connect timeout; the
+        # wait is bounded too, in case an outcome is not signaled.
+        date deadline = now_us() + milliseconds(opts.connect_timeout + AsyncQueueSafetyGraceMs);
+        while (True) {
             *HttpClientConnection w = hePickReady(h3conn, h2conn);
             if (w) {
                 heCommitWinner(w, h3conn, h2conn, key);
                 return w;
             }
-            # Race: H2 setClosed() can fire between submit and registerReadyNotifier,
-            # so race_notifier gets queued only on H3.  If H2 failed with
-            # SOCKET-CONNECT-ERROR (TCP refused), the port is definitively closed
-            # — H3 over UDP won't recover.  Skip the poll (which would wait up to
-            # connect_timeout for H3's own timeout to expire) and fall straight
-            # through to error handling so asyncModeConnectionRefusedTest
-            # fast-fails in ~100ms instead of 10s.
-            if (!h2_pending && heH2FastFail(h2conn)) {
-                log(LoggerLevel::DEBUG,
-                    "happy eyeballs: H2 failed fast with SOCKET-CONNECT-ERROR for %s,"
-                    " aborting H3", key);
-                heThrowConnectError(h3conn, h2conn, key);
+            if (heSettled(h3conn) && heSettled(h2conn)) {
+                break;
             }
-        }
-
-        # If BOTH H3 and H2 already failed (neither pending, neither ready),
-        # skip the poll entirely — race_notifier will never fire, and blocking
-        # up to connect_timeout here would be wasted time.
-        bool both_already_closed = !h3_pending && !h2_pending
-            && !h3conn.isReady() && !h2conn.isReady();
-        if (!both_already_closed) {
-            timeout remaining = opts.connect_timeout - HappyEyeballsStaggerMs;
-            if (remaining <= 0ms) {
-                remaining = opts.connect_timeout;
+            int remaining = (deadline - now_us()).durationMilliseconds();
+            if (remaining <= 0) {
+                log(LoggerLevel::DEBUG, "happy eyeballs: no outcome of the race for %s in time", key);
+                break;
             }
             # Async wait via the I/O controller (replaces a handler-thread
             # Socket::poll syscall).  See the h3_notifier path above; the
             # explicit Queue-level safety bound is the same belt-and-suspenders
             # guard against a lost controller completion.
-            controller.waitForNotifier(race_notifier, remaining,
-                opts.connect_timeout + AsyncQueueSafetyGraceMs);
+            controller.waitForNotifier(race_notifier, remaining, remaining + AsyncQueueSafetyGraceMs);
             race_notifier.acknowledge();
-        } else {
-            log(LoggerLevel::DEBUG,
-                "happy eyeballs: both H3 and H2 already closed for %s, skipping poll", key);
-        }
-
-        # Determine winner
-        *HttpClientConnection w = hePickReady(h3conn, h2conn);
-        if (w) {
-            heCommitWinner(w, h3conn, h2conn, key);
-            return w;
         }
 
         # Neither H3 nor H2 connected.  If H2's failure was a definitive ALPN
@@ -3002,8 +2968,8 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
 
         @throw HTTPCLIENT-URL-ERROR the URL is invalid
         @throw HTTPCLIENT-SHUTDOWN the manager is shutting down
-        @throw SOCKET-CONNECT-ERROR TCP refused (fast-fail; identical to the
-        synchronous race)
+        @throw SOCKET-CONNECT-ERROR HTTP/2's TCP connection was refused and HTTP/3
+        did not connect either (identical to the synchronous race)
         @throw SOCKET-SSL-ERROR a protocol refused the server certificate (see @ref heThrowConnectError())
         @throw NETWORK-ACCESS-DENIED the sandbox denied a protocol's connection (see @ref heThrowConnectError())
         @throw HTTPCLIENT-CONNECT-ERROR neither protocol connected
@@ -3248,8 +3214,9 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
 
     #! Internal: advances an in-flight async happy-eyeballs race one step
     /** Re-entrant and authoritative: re-reads connection state on every call
-        (the notifier is only a wakeup).  Resolves the winner, fast-fails,
-        transitions stagger->race, or returns a fresh per-call notifier to poll.
+        (the notifier is only a wakeup).  Resolves the winner, ends the race
+        when neither candidate is connecting any more, transitions stagger->race,
+        or returns a fresh per-call notifier to poll.
         @note Caller holds async_race_lock.
     */
     private *EventNotifier advanceAsyncHE(string key,
@@ -3307,13 +3274,8 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
                 conn_out = w;
                 return;
             }
-            bool h3_closed = h3_state == HttpClientConnectionState::Closed;
-            bool h2_closed = h2_state == HttpClientConnectionState::Closed;
-            bool both_closed = h3_closed && h2_closed;
-            if (heH2FastFail(h2) || both_closed) {
-                conn_out = heAsyncTerminal(race, key);
-                return;
-            }
+            # the race ends early only on a success: a failed candidate waits for the other one's own outcome (see
+            # createConnectionHappyEyeballs())
             if (h3_state != HttpClientConnectionState::Connecting
                     && h2_state != HttpClientConnectionState::Connecting) {
                 conn_out = heAsyncTerminal(race, key);
@@ -3327,8 +3289,8 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
             }
             # A candidate settled while we were registering the per-call
             # notifier.  Loop and handle the ready/error/closed state now; this
-            # closes the lost-wakeup gap where H2 fast-fails while H3 remains
-            # pending until connect_timeout.
+            # closes the lost-wakeup gap where a candidate settles between the
+            # state check and the registration.
         }
     }
 
@@ -3345,7 +3307,7 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
         no-fallback path throws)
 
         @throw HTTPCLIENT-CONNECT-ERROR neither protocol connected
-        @throw SOCKET-CONNECT-ERROR TCP was refused (fast-fail)
+        @throw SOCKET-CONNECT-ERROR HTTP/2's TCP connection was refused and HTTP/3 did not connect either
         @throw SOCKET-SSL-ERROR a protocol refused the server certificate (see @ref heThrowConnectError())
         @throw NETWORK-ACCESS-DENIED the sandbox denied a protocol's connection (see @ref heThrowConnectError())
 
@@ -3453,8 +3415,8 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
     #! Internal: arms a bounded race-phase recheck timer
     /** The timer is deliberately separate from connection readiness
         notifiers.  It wakes the current re-entrant caller so
-        @ref advanceAsyncHE() can observe H2's poll-op error and fail fast even
-        if H3 is still connecting.  @note Caller holds async_race_lock.
+        @ref advanceAsyncHE() re-reads both candidates' state even if an outcome
+        is not signaled.  @note Caller holds async_race_lock.
     */
     private armAsyncRaceRecheckTimer(AsyncRace race) {
         heAbandonRaceRecheckTimer(race);
