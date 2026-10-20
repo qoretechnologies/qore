@@ -2424,48 +2424,39 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
         return url_info;
     }
 
-    #! Internal: returns the address family for a new HTTP/3 connection to the given host
-    /** The family of the first resolved address is used, unless an HTTP/3 connection to the origin in that family
-        recently failed without reaching a server and the host has an address in another family
+    #! Internal: returns the address families to avoid for a new HTTP/3 connection to the given origin
+    /** These are the families in which an HTTP/3 connection to the origin recently failed without reaching a server
+        (see @ref recordH3FamilyFailure()).  The connection is made to the first resolved address of the host that is
+        not in one of them, or to the first one if all of them are (see
+        @ref Qore::Http3ClientPollOperationBase::constructor() "Http3ClientPollOperationBase::constructor()"); the
+        host name is resolved by the connection's poll operation, so nothing is resolved here, and a connection can
+        be created on an async I/O thread.  Expired entries are removed.
 
-        @return the address family, or @ref NOTHING if the host name cannot be resolved here
+        @param key the origin pool key
+
+        @return the address families to avoid, or @ref NOTHING if there are none
     */
-    private *int selectH3Family(string host, string key) {
-        if (host =~ /^\[.*\]$/ || host =~ /:/) {
-            return AF_INET6;
-        }
-        list<int> families;
-        try {
-            families = map $1.family, getaddrinfo(host, NOTHING, AF_UNSPEC, 0), $1.family == AF_INET
-                || $1.family == AF_INET6;
-        } catch (hash<ExceptionInfo> ex) {
-            # the QUIC resolver reports the connection error
-            return;
-        }
-        if (!families) {
-            return;
-        }
+    private *list<int> getH3AvoidedFamilies(string key) {
         date now = now_us();
-        *hash<string, date> failed;
-        {
-            AutoWriteLock al(pool_lock);
-            # expired entries are removed
-            if (h3_failed_families{key}) {
-                h3_failed_families{key} = map {$1.key: $1.value}, h3_failed_families{key}.pairIterator(),
-                    $1.value > now;
-                if (!h3_failed_families{key}) {
-                    remove h3_failed_families{key};
-                }
-            }
-            failed = h3_failed_families{key};
-        }
-        foreach int family in (families) {
-            if (!failed{family}) {
-                return family;
+        AutoWriteLock al(pool_lock);
+        # A connection is closed, and the request waiting for it woken, before its failure is processed by
+        # handleConnectionResult(), which records the family and only then removes the connection from the pool; a
+        # failed connection still in the pool is recorded here, so that a new connection, such as the retry of that
+        # request, does not depend on the order of the two
+        foreach HttpClientConnection conn in (pool{key}) {
+            if (conn.getProtocol() == "h3" && conn.isClosed()) {
+                recordH3FamilyFailureLocked(key, conn, conn.getPollOperation().getError().err, now);
             }
         }
-        # every family failed: start again with the first one
-        return families[0];
+        if (!h3_failed_families{key}) {
+            return;
+        }
+        h3_failed_families{key} = map {$1.key: $1.value}, h3_failed_families{key}.pairIterator(), $1.value > now;
+        if (!h3_failed_families{key}) {
+            remove h3_failed_families{key};
+            return;
+        }
+        return map $1.toInt(), keys h3_failed_families{key};
     }
 
     #! Internal: records that an HTTP/3 connection failed without reaching a server
@@ -2474,6 +2465,17 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
         @param err the error code of the failure
     */
     private recordH3FamilyFailure(string key, HttpClientConnection conn, *string err) {
+        AutoWriteLock al(pool_lock);
+        recordH3FamilyFailureLocked(key, conn, err, now_us());
+    }
+
+    #! Internal: records that an HTTP/3 connection failed without reaching a server; @ref pool_lock must be held
+    /** @param key the origin pool key
+        @param conn the connection
+        @param err the error code of the failure
+        @param now the current time
+    */
+    private recordH3FamilyFailureLocked(string key, HttpClientConnection conn, *string err, date now) {
         if (conn.getProtocol() != "h3" || !H3UnreachedErrors{err}) {
             return;
         }
@@ -2483,8 +2485,7 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
         }
         log(LoggerLevel::DEBUG, "%s: HTTP/3 connection %d in address family %d failed without reaching a server "
             "(%s); trying another family for new connections", key, conn.getConnectionId(), family, err);
-        AutoWriteLock al(pool_lock);
-        h3_failed_families{key}{family} = now_us() + H3FamilyFailureTtl;
+        h3_failed_families{key}{family} = now + H3FamilyFailureTtl;
     }
 
     #! Internal: creates a connection for an explicitly selected or cached protocol
@@ -2507,7 +2508,7 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
             return new Http3ClientConnection(h3_url_info, opts.connect_timeout, logger,
                 opts.max_streams_per_connection, opts.ssl_verify_mode, opts.accept_all_certs,
                 opts.client_cert, opts.client_pk, opts.ssl_ca_file, opts.ssl_ca_path,
-                selectH3Family(url_info.host, key));
+                NOTHING, getH3AvoidedFamilies(key));
         }
 
         # Create H2 connection
@@ -2841,7 +2842,7 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
             h3conn = new Http3ClientConnection(h3_url_info, opts.connect_timeout, logger,
                 opts.max_streams_per_connection, opts.ssl_verify_mode, opts.accept_all_certs,
                 opts.client_cert, opts.client_pk, opts.ssl_ca_file, opts.ssl_ca_path,
-                selectH3Family(url_info.host, key));
+                NOTHING, getH3AvoidedFamilies(key));
             h3conn.setControllerRef(controller);
             h3conn.setManagerContext(self, key);
             submitConnectionToController(key, h3conn);
@@ -3151,7 +3152,7 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
             h3conn = new Http3ClientConnection(h3_url_info, opts.connect_timeout, logger,
                 opts.max_streams_per_connection, opts.ssl_verify_mode, opts.accept_all_certs,
                 opts.client_cert, opts.client_pk, opts.ssl_ca_file, opts.ssl_ca_path,
-                selectH3Family(url_info.host, key));
+                NOTHING, getH3AvoidedFamilies(key));
             h3conn.setControllerRef(controller);
             h3conn.setManagerContext(self, key);
             submitConnectionToController(key, h3conn);

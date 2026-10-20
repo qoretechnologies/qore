@@ -1294,24 +1294,59 @@ qclass Http3ClientPollOperationBase [
 ];
 
 //! Creates the HTTP/3 client poll operation base
-/** @param socket the UDP socket (must be bound via bindINET())
+/** Creating the operation runs nothing that can block, so it can be created on an async I/O thread or in a
+    \c continuePoll() worker: the host name is resolved by the operation once it is submitted to the I/O
+    controller.
+
+    The UDP socket of the connection can be given in two ways:
+    - <b>unbound</b> (a new @ref Qore::Socket "Socket"): once the host name is resolved, the operation binds the
+      socket to the wildcard address of the family of the remote address, with a port assigned by the system;
+      the bind is subject to the network policy of the @ref sandboxing "sandbox" of the code that creates the
+      operation, as for @ref Qore::Socket::bindINET() "Socket::bindINET()"
+    - <b>bound</b> (for example with @ref Qore::Socket::bindINET() "Socket::bindINET()"): the socket is used as it
+      is, and the host name is resolved in the socket's address family
+
+    @param socket the UDP socket, either unbound or bound (see above)
     @param host the remote hostname
     @param port the remote port (1-65535)
     @param connection owning HTTP client connection
-    @param family the address family (AF_INET or AF_INET6); default AF_UNSPEC
-        resolves from hostname
+    @param family the address family (AF_INET or AF_INET6) in which the host name is resolved; the default,
+        AF_UNSPEC, resolves it in all families, or, for a bound socket, in the family of the socket
     @param connect_timeout handshake deadline; \c 0 (default) disables the deadline.
         When \c >0, a QUIC handshake that has not reached SETUP_HTTP3 within this
         elapsed time raises \c QUIC-HANDSHAKE-TIMEOUT in \c continuePoll(), giving
         a diagnosable connect-phase error instead of waiting for the outer
         request_timeout (UDP has no OS-level connect-phase error like TCP).
+    @param avoid_families address families (AF_INET, AF_INET6) not to connect in, if the host name also resolves
+        to an address in another family; the connection is made to the first resolved address that is not in one of
+        these families, or to the first resolved address if all of them are.  Used for an unbound socket and the
+        default \a family only.  @ref getAddressFamily() returns the family the connection is made in.
+
+    @throw QUIC-ERROR the port is out of range, or an address family to avoid is not AF_INET or AF_INET6
+
+    @since %Qore 3.0 the socket can be unbound, and the \a avoid_families parameter was added
 */
 Http3ClientPollOperationBase::constructor(Socket[QoreSocketObject] socket, string host, int port,
         AbstractHttpPollConnection[AbstractHttpPollConnectionPriv] connection,
-        int family = AF_UNSPEC, timeout connect_timeout = 0) [flags=NAMED_ARGS] {
+        int family = AF_UNSPEC, timeout connect_timeout = 0, *softlist<softint> avoid_families)
+        [flags=NAMED_ARGS] {
     if (port < 1 || port > 65535) {
         xsink->raiseException("QUIC-ERROR", "port %d is out of range (1-65535)", (int)port);
         return;
+    }
+
+    std::vector<int> avoid;
+    if (avoid_families) {
+        ConstListIterator i(*avoid_families);
+        while (i.next()) {
+            int af = q_get_af(static_cast<int>(i.getValue().getAsBigInt()));
+            if (af != AF_INET && af != AF_INET6) {
+                xsink->raiseException("QUIC-ERROR", "address family %lld to avoid is not AF_INET (%d) or AF_INET6 "
+                    "(%d)", i.getValue().getAsBigInt(), AF_INET, AF_INET6);
+                return;
+            }
+            avoid.push_back(af);
+        }
     }
 
     QoreSocketObject* sock_ptr = *socket;
@@ -1322,12 +1357,12 @@ Http3ClientPollOperationBase::constructor(Socket[QoreSocketObject] socket, strin
         ? static_cast<int64_t>(connect_timeout) * 1000000LL
         : 0;
 
-    // Create the inner QUIC client poll operation directly
+    // Create the inner QUIC client poll operation directly; an unbound socket is bound by the operation
     sock_ptr->ref();
     ReferenceHolder<SocketQuicClientPollOperation> inner(
         new SocketQuicClientPollOperation(xsink, sock_ptr, host->c_str(),
             static_cast<uint16_t>(port), static_cast<int>(family),
-            handshake_timeout_ns),
+            handshake_timeout_ns, /* not_before_ns_abs */ 0, /* bind_unbound */ true, std::move(avoid)),
         xsink
     );
     if (*xsink) {
@@ -1483,6 +1518,18 @@ nothing Http3ClientPollOperationBase::setQuicStreamLimit(int stream_limit) [flag
 */
 nothing Http3ClientPollOperationBase::setMaxResponseBodySize(int max_size) [flags=NAMED_ARGS] {
     priv->setMaxResponseBodySize(max_size > 0 ? max_size : 0);
+}
+
+//! Returns the address family the connection is made in, once the host name has been resolved
+/** Does not block and can be called from any thread
+
+    @return @ref Qore::AF_INET or @ref Qore::AF_INET6, or @ref nothing if the host name has not been resolved yet
+
+    @since %Qore 3.0
+*/
+*int Http3ClientPollOperationBase::getAddressFamily() [flags=CONSTANT] {
+    int family = priv->getAddressFamily();
+    return family == AF_UNSPEC ? QoreValue() : QoreValue(static_cast<int64>(family));
 }
 
 //! Returns the QUIC session ID (0 = not yet connected)

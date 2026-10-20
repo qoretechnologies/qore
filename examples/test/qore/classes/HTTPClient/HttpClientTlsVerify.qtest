@@ -192,12 +192,6 @@ WKEuKQ7xuGuAiIESuSDBsSg=
 
         #! the client APIs whose connection failures are tested
         const Apis = ("REST", "REST async", "HTTP", "HTTP async");
-
-        #! the client APIs that make the next HTTP/3 connection of a request in the calling thread
-        /** an asynchronous request makes it in an I/O worker, where the synchronous bind of its UDP socket raises
-            \c SOCKET-SYNC-ON-IO-THREAD-ERROR
-        */
-        const SyncApis = ("REST", "HTTP");
     }
 
     private {
@@ -583,9 +577,7 @@ WKEuKQ7xuGuAiIESuSDBsSg=
     http3CertificateFailureTest() {
         foreach string host in ("localhost", "127.0.0.1") {
             foreach bool trusted in (False, True) {
-                # "localhost" can resolve first to an address in another family than the listener's, so that a
-                # request needs a second connection (see SyncApis)
-                foreach string api in (host == "localhost" ? SyncApis : Apis) {
+                foreach string api in (Apis) {
                     singleHttp3CertificateFailure(host, trusted, api);
                 }
             }
@@ -633,11 +625,10 @@ WKEuKQ7xuGuAiIESuSDBsSg=
     }
 
     #! An HTTP/3 connection failure that is not a TLS error remains a connection error that is retried
-    /** a retry needs a second connection (see SyncApis) */
     http3ConnectFailureTest() {
         # nothing receives datagrams on this port
         string url = sprintf("https://127.0.0.1:%d", get_free_port("127.0.0.1"));
-        foreach string api in (SyncApis) {
+        foreach string api in (Apis) {
             RecordingManager mgr = http3Manager({"accept_all_certs": True, "connect_timeout": 5s,
                 "max_request_retries": 1});
             on_exit mgr.closeAll();

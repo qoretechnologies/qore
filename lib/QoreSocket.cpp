@@ -602,8 +602,6 @@ static int qore_socket_bind_unix_direct(QoreSocket* s, const char* name, int soc
         QoreSandboxManager* sandbox_manager, ExceptionSink* xsink);
 static int qore_socket_bind_sockaddr_direct(QoreSocket* s, const struct sockaddr* addr, int size,
         QoreSandboxManager* sandbox_manager, ExceptionSink* xsink);
-static int qore_socket_bind_family_sockaddr_direct(QoreSocket* s, int family, const struct sockaddr* addr,
-        int size, int sock_type, int protocol, QoreSandboxManager* sandbox_manager, ExceptionSink* xsink);
 static int qore_socket_listen_direct(QoreSocket* s, int backlog);
 static int qore_socket_shutdown_direct(QoreSocket* s);
 static int qore_socket_set_no_delay_direct(QoreSocket* s, int nodelay);
@@ -12655,7 +12653,7 @@ static int qore_socket_bind_sockaddr_direct(QoreSocket* s, const struct sockaddr
     return 0;
 }
 
-static int qore_socket_bind_family_sockaddr_direct(QoreSocket* s, int family, const struct sockaddr* addr,
+int qore_socket_bind_family_sockaddr_direct(QoreSocket* s, int family, const struct sockaddr* addr,
         int size, int sock_type, int protocol, QoreSandboxManager* sandbox_manager, ExceptionSink* xsink) {
     qore_socket_private* priv = qore_socket_private::get(*s);
 

@@ -321,6 +321,15 @@ private:
     //! attempt is NOT yet submitted to the AsyncIoController — callers
     //! drive submission after the full list is built so lookups via
     //! @c poll_op_priv within submission callbacks see a consistent view.
+    //! The attempt's UDP socket is bound with the synchronous QoreSocketObject::bindINET(), which waits for the
+    //! async I/O controller.  That is only allowed because a connection of this class is only ever created by
+    //! HttpClientConnectionManagerBase::acquireConnection(), acquireConnectionForStreamingSend() and
+    //! acquireConnectionAsync(), which refuse to run on an async I/O execution path
+    //! (SocketSyncPoll::assertNotOnIoThread()); HTTPClient poll operations acquire the connection of a redirect in a
+    //! native task for that reason.  The candidate families come from resolveCandidateFamilies(), which resolves no
+    //! name.  A connection that could be created on an I/O path must instead give its poll operation an unbound
+    //! socket, which the operation binds once the target is resolved (the \c bind_unbound option of
+    //! SocketQuicClientPollOperation, used by Http3ClientPollOperationBase).
     //! @param family AF_INET or AF_INET6 target family
     //! @param not_before_ns_abs absolute ngtcp2 timestamp (0 = immediate)
     //! @param xsink exception sink

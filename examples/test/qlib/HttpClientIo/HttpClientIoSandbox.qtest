@@ -104,10 +104,8 @@ public class HttpClientIoSandboxTest inherits QUnit::Test {
     public {
         #! the client APIs tested
         const Apis = ("REST", "REST async", "HTTP", "HTTP async");
-        #! the synchronous client APIs
-        const SyncApis = ("REST", "HTTP");
-        #! the protocols tested with all APIs
-        const Protocols = ("h1", "h2", "auto");
+        #! the protocols tested
+        const Protocols = ("h1", "h2", "h3", "auto");
     }
 
     private {
@@ -200,8 +198,6 @@ public class HttpClientIoSandboxTest inherits QUnit::Test {
         foreach string protocol in (Protocols) {
             rv += map ("protocol": protocol, "api": $1), Apis;
         }
-        # an asynchronous HTTP/3 request cannot make a connection in an I/O worker yet
-        rv += map ("protocol": "h3", "api": $1), SyncApis;
         return rv;
     }
 

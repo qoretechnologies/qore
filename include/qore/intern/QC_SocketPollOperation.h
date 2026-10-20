@@ -45,8 +45,10 @@
 
 class QoreEventNotifier;
 
+#include <atomic>
 #include <deque>
 #include <string>
+#include <vector>
 
 //! Max single QUIC UDP datagram receive buffer (1500 typical MTU + headroom for jumbo frames)
 //! @note Assumes GSO/GRO is not used; if Generic Segmentation Offload is enabled in the future,
@@ -1727,10 +1729,18 @@ public:
     //!     which sendPendingPackets() must not emit any UDP datagrams; 0 =
     //!     disabled.  Used by the HTTP/3 client's happy-eyeballs stagger to
     //!     hold back secondary address-family attempts per RFC 8305 §8.
+    //! @param bind_unbound if true, the socket does not have to be open: an unbound socket is bound by the
+    //!     operation, once the remote address is resolved, to the wildcard address of the remote address's family,
+    //!     with the network policy check of a bind; nothing that can block runs in the thread that creates the
+    //!     operation.  If false, the socket must be an open UDP socket.
+    //! @param avoid_families address families (AF_INET, AF_INET6) not to connect in if the remote host has an
+    //!     address in another family; used only when no family is given and the socket is not bound
     DLLLOCAL SocketQuicClientPollOperation(ExceptionSink* xsink, QoreSocketObject* sock,
                                            const char* host, uint16_t port, int family,
                                            int64_t handshake_timeout_ns = 0,
-                                           int64_t not_before_ns_abs = 0);
+                                           int64_t not_before_ns_abs = 0,
+                                           bool bind_unbound = false,
+                                           std::vector<int> avoid_families = std::vector<int>());
     DLLLOCAL ~SocketQuicClientPollOperation() override;
 
     DLLLOCAL void deref(ExceptionSink* xsink) override {
@@ -1846,6 +1856,11 @@ public:
     //! Check if connection is still open
     DLLLOCAL bool isOpen() const { return qcs_state != QCS::CLOSED && quic_session && !quic_session->isClosed(); }
 
+    //! Returns the address family of the remote address, or AF_UNSPEC if it has not been resolved yet
+    /** Can be called from any thread
+    */
+    DLLLOCAL int getAddressFamily() const { return address_family_.load(std::memory_order_acquire); }
+
     //! Migrate the QUIC connection to a new socket (client-side active migration)
     /** Creates a new connected UDP socket, calls QuicSession::initiateMigration(),
         and swaps the fd on the underlying socket object.
@@ -1885,6 +1900,12 @@ private:
     int64_t handshake_timeout_ns_ = 0;
     uint16_t port_ = 0;
     int family_ = AF_UNSPEC;
+    //! if true, an unbound socket is bound once the remote address is resolved (see the constructor)
+    bool bind_unbound_ = false;
+    //! address families not to connect in if the remote host has an address in another family
+    std::vector<int> avoid_families_;
+    //! the address family of the remote address once resolved; read from other threads
+    std::atomic<int> address_family_{AF_UNSPEC};
 
     //! Soft deadline (ngtcp2 timestamp, ns) after which a handshake that has
     //! seen at least one ICMP port-unreachable (ECONNREFUSED on a connected
@@ -1917,8 +1938,15 @@ private:
     //! head start on the handshake.
     int64_t not_before_ns_ = 0;
 
-    //! The sandbox that governs the remote address, resolved on the thread that creates the operation
+    //! The sandbox that governs the remote address and the bind of an unbound socket, resolved on the thread that
+    //! creates the operation
     SimpleRefHolder<QoreSandboxManager> sandbox_manager_;
+
+    //! Selects the resolved address to connect to (see @ref avoid_families_)
+    DLLLOCAL const SocketResolvedAddrInfo& selectAddress(const std::vector<SocketResolvedAddrInfo>& addrs) const;
+
+    //! Binds the unbound socket to the wildcard address of the given family; the socket's lock must be held
+    DLLLOCAL int bindUnboundLocked(int family, ExceptionSink* xsink);
 
     //! Coalesced timer + write + send pending QUIC packets via UDP
     /** @param next_expiry output: next timer expiry for poll timeout

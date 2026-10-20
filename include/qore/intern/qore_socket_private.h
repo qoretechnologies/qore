@@ -135,6 +135,25 @@ class QoreSandboxManager;
     resolves the manager on the thread that creates it and keeps it for its checks.
 */
 DLLLOCAL QoreSandboxManager* qore_socket_ref_policy_sandbox_manager();
+//! Opens the socket in the given family and type if necessary and binds it to the given numeric address
+/** Runs no resolution and waits for nothing, so it can be called on an async I/O thread, by the operation that
+    drives the socket (with the lock of its socket object held, if it has one).  The bind is checked against the
+    network policy of the sandbox manager, if any.
+
+    @param s the socket
+    @param family the address family of the socket
+    @param addr the numeric address to bind to
+    @param size the size of \a addr
+    @param sock_type the socket type (ex: \c SOCK_DGRAM)
+    @param protocol the protocol of the socket
+    @param sandbox_manager the sandbox manager whose network policy governs the bind, if any
+    @param xsink raises \c NETWORK-ACCESS-DENIED if the policy denies the bind
+
+    @return 0 for success, -1 for error; a failed bind closes the socket and leaves its error number in errno without
+    raising an exception
+*/
+DLLLOCAL int qore_socket_bind_family_sockaddr_direct(QoreSocket* s, int family, const struct sockaddr* addr, int size,
+    int sock_type, int protocol, QoreSandboxManager* sandbox_manager, ExceptionSink* xsink);
 DLLLOCAL int sock_get_error();
 DLLLOCAL void sock_set_raw_error(int rc);
 DLLLOCAL QoreListNode* qore_socket_resolve_addrinfo_asyncio(ExceptionSink* xsink, const char* node,

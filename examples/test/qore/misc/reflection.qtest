@@ -1401,7 +1401,7 @@ class ReflectionTest inherits QUnit::Test {
         assertNamedClassMethodVariantCount("Http2ClientPollOperationBase", "installSseState",
             ("stream_id", "queue", "notifier", "initial_body"));
         assertNamedConstructorVariantCount("Http3ClientPollOperationBase",
-            ("socket", "host", "port", "connection", "family", "connect_timeout"));
+            ("socket", "host", "port", "connection", "family", "connect_timeout", "avoid_families"));
         assertNamedClassMethodVariantCount("Http3ClientPollOperationBase", "setQuicStreamLimit",
             ("stream_limit",));
         assertNamedClassMethodVariantCount("Http3ClientPollOperationBase", "checkCapacity",

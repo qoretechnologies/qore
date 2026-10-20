@@ -198,6 +198,11 @@ manager.closeAll();
     - Connection pooling with configurable limits, HTTP-proxy support,
       configurable automatic request retry, and QUIC connection migration for
       HTTP/3
+    - HTTP/3 connections are created without blocking: their poll operation resolves the host name and binds the
+      UDP socket in the I/O controller, so asynchronous requests can retry them, try another address family, and
+      race them against HTTP/2 for a redirect in an I/O worker; an address family in which a connection did not
+      reach the server is avoided for new connections to the origin for
+      @ref HttpClientIo::HttpClientConnectionManager::H3FamilyFailureTtl "H3FamilyFailureTtl"
     - Sync and async (\c Future / \c EventNotifier) request APIs
     - Response bodies decoded once, by the rules shared by all HTTP clients, after any content encoding is
       decompressed; a request can receive a text body as octets instead (the \c decode_text argument of the

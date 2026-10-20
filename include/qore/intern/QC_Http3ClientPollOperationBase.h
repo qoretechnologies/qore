@@ -310,6 +310,13 @@ public:
         return session_id.load(std::memory_order_acquire);
     }
 
+    //! Returns the address family of the connection once resolved, or AF_UNSPEC
+    /** Can be called from any thread
+    */
+    DLLLOCAL int getAddressFamily() const {
+        return inner_op ? inner_op->getAddressFamily() : AF_UNSPEC;
+    }
+
     DLLLOCAL bool isQuicSessionOpen() const {
         if (!inner_op) {
             return false;

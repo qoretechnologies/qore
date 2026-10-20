@@ -70,6 +70,16 @@
     reason as a TLS connection over TCP instead of \c QUIC-READ-ERROR, also with the
     @ref Qore::HTTPClient "HTTPClient" class.
 
+    HttpClientIo creates HTTP/3 connections without blocking: the connection's poll operation resolves the host name
+    and binds the UDP socket in the I/O controller, and the bind is subject to the network policy of the
+    @ref sandboxing "sandbox" of the code that makes the request.  Asynchronous requests, including those of
+    RestClientIo, can therefore retry an HTTP/3 connection, try another address family of the host, and race
+    HTTP/3 against HTTP/2 for a redirect to another origin, where these steps run in an I/O worker; they raised
+    \c SOCKET-SYNC-ON-IO-THREAD-ERROR, or used HTTP/2 only and remembered it for the host.
+    @ref Qore::Http3ClientPollOperationBase "Http3ClientPollOperationBase" accepts an unbound socket and the address
+    families to avoid, and reports the family of the connection with
+    @ref Qore::Http3ClientPollOperationBase::getAddressFamily() "getAddressFamily()".
+
     LLM streaming requests accept a @ref QoreLlmUtils::LlmCancellation "LlmCancellation" token in
     @ref QoreLlmUtils::LlmRequestOptions::cancellation "LlmRequestOptions::cancellation". Cancelling the token
     closes an in-flight OpenAI-compatible, Anthropic, Gemini/Vertex AI, or Bedrock stream without polling and
