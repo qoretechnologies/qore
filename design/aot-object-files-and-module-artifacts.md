@@ -731,3 +731,52 @@ The manifest skip check intentionally runs before Qore initialization when the
 output and sidecars are current. This makes no-op delta builds cheap and keeps
 the correctness decision close to the compiler state that can affect generated
 artifacts.
+
+### Installing AOT Modules
+
+`QORE_INSTALL_QMOD_ATOMIC()` publishes each built `.qmod`; the standard
+user-module rules use it, and so can projects that drive `qcc` themselves. It
+stages the module as `<name>.qmod.inst.tmp` in the destination directory and
+renames it over the installed file. A plain `install(FILES)` can rewrite the
+installed inode in place (notably on overlayfs), which tears the mapping of a
+process that has the old module loaded and makes it crash; after a rename the
+process keeps the old inode and a concurrent load never sees a partial file.
+
+An installed `.qmod` that is byte-identical to the built one is left alone: no
+copy and no rename, so its inode and modification time are unchanged. CMake's
+own `install()` skips a file whose modification time matches the source, which
+the staged copy does not preserve, so without the comparison every install gave
+every installed module a new modification time. Anything that decides from file
+times whether a module changed, such as Qorus's provider index, then rebuilt
+for nothing after every install. A symbolic link in the module's place is
+replaced like a file with other content. Either way the module is listed in
+`install_manifest.txt` the way `file(INSTALL)` lists files, without `DESTDIR`,
+so `make uninstall` removes it, and it is reported as `Installing:` or
+`Up-to-date:` following `CMAKE_INSTALL_MESSAGE`.
+
+Two other install rules would undo that:
+
+- Installing a module's sources removes any installed `.qmod` of the module
+  beside them or in the AOT module directory, because it is loaded in
+  preference to the sources and can be older than them (an earlier AOT build, an
+  older layout, or a build with AOT disabled). The `.qmod` the module's own AOT
+  rule publishes is not removed when the same install runs that rule; it is
+  removed only by an install of a single component other than
+  `QORE_QMOD_INSTALL_COMPONENT`, which installs the sources without it.
+- The stale-layout paths the AOT rule removes before publishing never include
+  the path it publishes to, which matters when `.qmod`s are installed beside
+  their sources.
+
+The `jar/` and resource-directory links beside a split module's `.qmod` (see
+`qore-module-structure.md`) are left alone when they already point at the copy
+installed beside the sources, and are listed in the install manifest. The link
+target is computed at install time, so the module directories may be absolute
+or relative to `CMAKE_INSTALL_PREFIX`. A resource directory copied because the
+sources are not installed (a qmod-only component install) is copied again on
+every install, so files removed from the source do not survive in it.
+
+Binary modules are installed by `install(TARGETS)`, which writes a new inode
+when it installs and leaves a module whose modification time matches the built
+one alone, so they need no special rule. The i18n catalog manifest is likewise
+left alone when its content is unchanged (see
+`catalog-install-reconciliation.md`).

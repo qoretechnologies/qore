@@ -114,7 +114,8 @@ generated manifest of the current generation. At install time it, in order:
 4. performs the flat-layout sweep described below, on the bootstrap generation
    only;
 5. prunes locale and domain directories the removals emptied;
-6. publishes the new manifest last, and atomically (staged copy + `rename`).
+6. publishes the new manifest last, and atomically (staged copy + `rename`),
+   unless the installed manifest already holds the same content.
 
 Step 3 runs on every install, not only the bootstrap generation: the invariant it
 rests on does not weaken over time, and running it always makes reconciliation
@@ -168,7 +169,8 @@ the catalog root, sorted. Relative paths keep a `DESTDIR`-staged install and a
 live install byte-identical, and let a relocated tree stay reconcilable.
 
 The content is a pure function of the recorded fragment set, so reinstalling an
-unchanged source tree removes nothing and rewrites the same bytes. The manifest
+unchanged source tree removes nothing and leaves the manifest as it is, with its
+inode and modification time. The manifest
 directory begins with a dot, so it is not a catalog domain and the sweep's
 `<root>/*/*.json` glob cannot reach it; discovery ignores it because it holds no
 `.json` files.

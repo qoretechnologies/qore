@@ -200,20 +200,30 @@ endif()
 # whose removal never ran would strand them permanently.  cmake -E copy plus
 # file(RENAME) keeps this working at the declared 3.14 floor (file(COPY_FILE)
 # needs 3.21), and staging in the destination directory keeps the rename on one
-# filesystem.
+# filesystem.  A manifest that already holds the new content is left alone, so
+# reinstalling an unchanged generation changes no file time.
 get_filename_component(_qore_catalog_manifest_dir "${QORE_CATALOG_MANIFEST}" DIRECTORY)
-file(MAKE_DIRECTORY "${_qore_catalog_manifest_dir}")
 set(_qore_catalog_manifest_tmp "${QORE_CATALOG_MANIFEST}.tmp")
 file(REMOVE "${_qore_catalog_manifest_tmp}")
-execute_process(COMMAND "${CMAKE_COMMAND}" -E copy
-        "${QORE_CATALOG_NEW_MANIFEST}" "${_qore_catalog_manifest_tmp}"
-    RESULT_VARIABLE _qore_catalog_copy_result)
-if (NOT _qore_catalog_copy_result EQUAL 0)
-    message(FATAL_ERROR
-        "failed to stage the i18n catalog manifest '${QORE_CATALOG_NEW_MANIFEST}' -> "
-        "'${_qore_catalog_manifest_tmp}': ${_qore_catalog_copy_result}")
+set(_qore_catalog_compare_result 1)
+if (EXISTS "${QORE_CATALOG_MANIFEST}" AND NOT IS_SYMLINK "${QORE_CATALOG_MANIFEST}"
+        AND NOT IS_DIRECTORY "${QORE_CATALOG_MANIFEST}")
+    execute_process(COMMAND "${CMAKE_COMMAND}" -E compare_files
+            "${QORE_CATALOG_NEW_MANIFEST}" "${QORE_CATALOG_MANIFEST}"
+        RESULT_VARIABLE _qore_catalog_compare_result OUTPUT_QUIET ERROR_QUIET)
 endif()
-file(RENAME "${_qore_catalog_manifest_tmp}" "${QORE_CATALOG_MANIFEST}")
+if (NOT _qore_catalog_compare_result EQUAL 0)
+    file(MAKE_DIRECTORY "${_qore_catalog_manifest_dir}")
+    execute_process(COMMAND "${CMAKE_COMMAND}" -E copy
+            "${QORE_CATALOG_NEW_MANIFEST}" "${_qore_catalog_manifest_tmp}"
+        RESULT_VARIABLE _qore_catalog_copy_result)
+    if (NOT _qore_catalog_copy_result EQUAL 0)
+        message(FATAL_ERROR
+            "failed to stage the i18n catalog manifest '${QORE_CATALOG_NEW_MANIFEST}' -> "
+            "'${_qore_catalog_manifest_tmp}': ${_qore_catalog_copy_result}")
+    endif()
+    file(RENAME "${_qore_catalog_manifest_tmp}" "${QORE_CATALOG_MANIFEST}")
+endif()
 
 list(LENGTH _qore_catalog_removed _qore_catalog_removed_count)
 if (_qore_catalog_removed_count GREATER 0)
