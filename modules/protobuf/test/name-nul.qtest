@@ -27,6 +27,7 @@ class ProtobufNameNulTest inherits QUnit::Test {
     constructor() : QUnit::Test("protobuf name NUL characters", "1.0", \ARGV) {
         addTestCase("message type names", \testMessageTypeNames());
         addTestCase("enum type, symbol and file names", \testOtherNames());
+        addTestCase("schema file name", \testSchemaFileName());
         addTestCase("schema definition strings", \testDefinitionStrings());
         addTestCase("schema definition syntax type", \testSyntaxType());
         addTestCase("string and bytes data", \testDataKeptWhole());
@@ -93,6 +94,14 @@ class ProtobufNameNulTest inherits QUnit::Test {
             "serializeFileDescriptorForSymbol() without the NUL character");
         assertEq(1, s.serializeFileDescriptorByName("input.proto").size(),
             "serializeFileDescriptorByName() without the NUL character");
+    }
+
+    testSchemaFileName() {
+        # cut at the NUL character, the content would be named colors.proto
+        assertNul("PROTOBUF-SCHEMA-ERROR", "file name", "file names", 12,
+            auto sub () { return ProtobufSchema::fromContent(Proto, "colors.proto\x00.txt"); }, "fromContent()");
+        ProtobufSchema s = ProtobufSchema::fromContent(Proto, "colors.proto");
+        assertEq(1, s.serializeFileDescriptorByName("colors.proto").size(), "the content has the file name");
     }
 
     #! returns a valid schema definition

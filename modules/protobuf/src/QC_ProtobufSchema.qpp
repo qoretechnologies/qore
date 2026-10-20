@@ -105,6 +105,9 @@ message Msg { string text = 1; int32 count = 2; }";
 ProtobufSchema schema(proto);
 binary data = schema.encode("Msg", {"text": "hello", "count": 42});
 hash<auto> result = schema.decode("Msg", data);
+
+# Name the content with ProtobufSchema::fromContent()
+ProtobufSchema named = ProtobufSchema::fromContent(proto, "msg.proto");
     @endcode
 
     @par Example: Programmatic schema definition
@@ -149,16 +152,51 @@ ProtobufSchema::constructor(string path, string proto_file) {
 }
 
 //! Creates a ProtobufSchema from a proto definition string
-/** @param proto_content the \c .proto file content as a string
-    @param filename optional filename for error messages (defaults to "input.proto")
+/** The content is named \c "input.proto"; use @ref fromContent() to give it another file name.
+
+    @param proto_content the \c .proto file content as a string
 
     @throw PROTOBUF-SCHEMA-ERROR if the content cannot be parsed
 
+    @note a constructor with two strings loads a \c .proto file from the filesystem
+
     @since %protobuf 1.0
 */
-ProtobufSchema::constructor(string proto_content, *string filename) {
-    self->setPrivate(CID_PROTOBUFSCHEMA,
-        new QoreProtobufSchema(*proto_content, filename ? filename->c_str() : nullptr, xsink));
+ProtobufSchema::constructor(string proto_content) {
+    self->setPrivate(CID_PROTOBUFSCHEMA, new QoreProtobufSchema(*proto_content, nullptr, xsink));
+}
+
+//! Creates a ProtobufSchema from a proto definition string with the given file name
+/** @param proto_content the \c .proto file content as a string
+    @param filename the file name of the content, used in error messages and as the name of its file descriptor
+    (ex: for @ref serializeFileDescriptorByName()); defaults to \c "input.proto"
+
+    @return the new schema
+
+    @throw PROTOBUF-SCHEMA-ERROR if the content cannot be parsed, or if \a filename contains a NUL character
+
+    @par Example:
+    @code{.py}
+ProtobufSchema schema = ProtobufSchema::fromContent(proto, "orders.proto");
+list<binary> descriptors = schema.serializeFileDescriptorByName("orders.proto");
+    @endcode
+
+    @note This is a static method rather than a constructor, as a constructor with two strings loads a \c .proto file
+    from the filesystem
+
+    @since %protobuf 1.0
+*/
+static ProtobufSchema ProtobufSchema::fromContent(string proto_content, *string filename) [flags=RET_VALUE_ONLY] {
+    // the file name names the content in the schema; the content itself is kept whole
+    if (filename && protobuf_check_name(filename, "file name", "file names", "PROTOBUF-SCHEMA-ERROR", xsink)) {
+        return QoreValue();
+    }
+    ReferenceHolder<QoreProtobufSchema> schema(new QoreProtobufSchema(*proto_content,
+        filename ? filename->c_str() : nullptr, xsink), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return new QoreObject(QC_PROTOBUFSCHEMA, getProgram(), schema.release());
 }
 
 //! Creates a ProtobufSchema from serialized \c FileDescriptorProto data
