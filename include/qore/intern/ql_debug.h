@@ -64,6 +64,17 @@ DLLLOCAL int64 qore_get_flag_violations();
 typedef void (*qore_dbg_constant_store_hook_t)(const char* name);
 DLLLOCAL extern std::atomic<qore_dbg_constant_store_hook_t> qore_dbg_constant_store_hook;
 
+//! called by qore_object_private::customDeref() when a dereference of an object that has a collection decision to
+//! make has taken its count, before it decides; called with no lock held; set by dbg_hold_deref_decide()
+typedef void (*qore_dbg_deref_decide_hook_t)(const char* class_name);
+DLLLOCAL extern std::atomic<qore_dbg_deref_decide_hook_t> qore_dbg_deref_decide_hook;
+
+//! called by qore_object_private::customDeref() when a dereference has marked the object as being destroyed and
+//! released the object's lock, before the dereference completes and deletes the object; called with no lock held;
+//! set by dbg_hold_deref_marked()
+typedef void (*qore_dbg_deref_marked_hook_t)(const char* class_name);
+DLLLOCAL extern std::atomic<qore_dbg_deref_marked_hook_t> qore_dbg_deref_marked_hook;
+
 //! called by qore_object_private::customDeref() when a dereference has decided to collect the object as part of a
 //! recursive set, before it takes the object's lock to start deleting it; set by dbg_hold_deref_collect()
 typedef void (*qore_dbg_deref_collect_hook_t)(const char* class_name);

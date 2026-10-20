@@ -7699,6 +7699,117 @@ static QoreValue f_dbg_hold_constant_store(const QoreListNode* params, RuntimeCo
 }
 
 namespace {
+//! an armed hold of a dereference at one point of qore_object_private::customDeref(); one at a time per point
+struct DerefPointHold {
+    std::mutex m;
+    std::string class_name;
+    Counter* held = nullptr;
+    Counter* release = nullptr;
+};
+
+//! the hold of dbg_hold_deref_decide()
+DerefPointHold deref_decide_hold;
+//! the hold of dbg_hold_deref_marked()
+DerefPointHold deref_marked_hold;
+
+//! runs in the dereferencing thread with no lock held; disarms the hook, so it holds that thread once
+template <typename T>
+void dbg_run_deref_point_hold(DerefPointHold& h, std::atomic<T>& hook, const char* class_name, const char* func) {
+    ExceptionSink xsink;
+    ReferenceHolder<Counter> held(&xsink);
+    ReferenceHolder<Counter> release(&xsink);
+    {
+        std::lock_guard<std::mutex> l(h.m);
+        if (!h.held || h.class_name != class_name) {
+            return;
+        }
+        held = h.held;
+        release = h.release;
+        h.held = nullptr;
+        h.release = nullptr;
+        hook.store(nullptr);
+    }
+    held->dec(&xsink);
+    if (!xsink) {
+        release->waitForZero(&xsink);
+    }
+    // the thread is dereferencing an object; a Counter deleted meanwhile is the test's error, not the dereference's
+    if (xsink) {
+        printd(0, "%s(): %s\n", func, xsink.getExceptionErr().getTypeName());
+        xsink.clear();
+    }
+}
+
+void dbg_hold_deref_decide_hook(const char* class_name) {
+    dbg_run_deref_point_hold(deref_decide_hold, qore_dbg_deref_decide_hook, class_name, "dbg_hold_deref_decide");
+}
+
+void dbg_hold_deref_marked_hook(const char* class_name) {
+    dbg_run_deref_point_hold(deref_marked_hold, qore_dbg_deref_marked_hook, class_name, "dbg_hold_deref_marked");
+}
+
+//! arms a hold of a dereference at one point of qore_object_private::customDeref()
+template <typename T>
+QoreValue dbg_arm_deref_point_hold(DerefPointHold& h, std::atomic<T>& hook, T func, const QoreListNode* params,
+        ExceptionSink* xsink) {
+    const QoreStringNode* class_name = get_param_value(params, 0).get<const QoreStringNode>();
+    ReferenceHolder<Counter> held(get_counter_arg(params, 1, xsink), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    ReferenceHolder<Counter> release(get_counter_arg(params, 2, xsink), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    std::lock_guard<std::mutex> l(h.m);
+    if (h.held) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "a hold is already armed for class '%s'",
+            h.class_name.c_str());
+        return QoreValue();
+    }
+    h.class_name = class_name->c_str();
+    h.held = held.release();
+    h.release = release.release();
+    hook.store(func);
+    return QoreValue();
+}
+}
+
+//! holds the next dereference of an object of the given class that has a collection decision to make
+/** The hold is taken once, in qore_object_private::customDeref(), after the dereference has taken its count of the
+    object's references and before it decides whether to collect the object with its recursive set; a release made
+    by another thread meanwhile supersedes the held dereference's count, and tests use the hold to make that
+    deterministic.
+
+    @param class_name the name of the object's class
+    @param held decremented once the dereferencing thread is held
+    @param release the dereferencing thread continues when this Counter reaches zero
+
+    @throw DBG-ARGUMENT-ERROR a hold is already armed
+*/
+static QoreValue f_dbg_hold_deref_decide(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    return dbg_arm_deref_point_hold(deref_decide_hold, qore_dbg_deref_decide_hook, dbg_hold_deref_decide_hook,
+        params, xsink);
+}
+
+//! holds the next dereference that marks an object of the given class as being destroyed
+/** The hold is taken once, in qore_object_private::customDeref(), after the dereference has marked the object as
+    being destroyed and released the object's lock, and before the dereference completes (RObject::derefDone()) and
+    deletes the object; another dereference of the object can find it being destroyed while this one is still in
+    progress, and tests use the hold to make that deterministic.
+
+    @param class_name the name of the object's class
+    @param held decremented once the dereferencing thread is held
+    @param release the dereferencing thread continues when this Counter reaches zero
+
+    @throw DBG-ARGUMENT-ERROR a hold is already armed
+*/
+static QoreValue f_dbg_hold_deref_marked(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    return dbg_arm_deref_point_hold(deref_marked_hold, qore_dbg_deref_marked_hook, dbg_hold_deref_marked_hook,
+        params, xsink);
+}
+
+namespace {
 //! the armed hold of dbg_hold_deref_collect(); one at a time
 struct DerefCollectHold {
     std::mutex m;
@@ -8234,6 +8345,14 @@ void init_debug_functions(QoreNamespace& qns) {
         "held", QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "release");
     qns.addBuiltinVariant("dbg_hold_constant_store", f_dbg_hold_constant_store,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 3, stringTypeInfo, QORE_PARAM_NO_ARG, "name",
+        QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "held", QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG,
+        "release");
+    qns.addBuiltinVariant("dbg_hold_deref_decide", f_dbg_hold_deref_decide,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 3, stringTypeInfo, QORE_PARAM_NO_ARG, "class_name",
+        QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "held", QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG,
+        "release");
+    qns.addBuiltinVariant("dbg_hold_deref_marked", f_dbg_hold_deref_marked,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 3, stringTypeInfo, QORE_PARAM_NO_ARG, "class_name",
         QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "held", QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG,
         "release");
     qns.addBuiltinVariant("dbg_hold_deref_collect", f_dbg_hold_deref_collect,

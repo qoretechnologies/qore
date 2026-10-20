@@ -1,0 +1,159 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class DgcCollectHandoffRaceTest
+
+/*  Two dereferences of an object in a recursive set decide to collect it at the same time.
+
+    The object references itself, and two threads hold its other two references.  The first thread releases its
+    reference and is held after it has taken its count, before it decides (dbg_hold_deref_decide()).  The second
+    thread releases the last reference from outside the set: its count is the current one, so it decides to collect
+    the object, and it is held before it takes the object's lock (dbg_hold_deref_collect()).  The first dereference's
+    count has been superseded by the second release, and RSet::canDelete() decides with the count as it is now when
+    releases have superseded a dereference's count: it decides to collect the object as well, marks the object as
+    being destroyed, and is held before its dereference completes (dbg_hold_deref_marked()); a dereference completes
+    in RObject::derefDone() and then deletes the object.  The second dereference then finds the object being
+    destroyed and hands the deletion off (finalDeref()).
+
+    References remained after the second one's release, so it has no reference of the object to release once the
+    first one is done, and it must not wait for it: a handed-off dereference that waited made the deleter complete
+    with a waiter left, which RObject::derefDone() asserts never happens ("ref_inprogress || !del").
+
+    The hooks are only in debug builds.
+*/
+
+#! An object that references itself
+class DgcHandoffRaceObject {
+    public {
+        #! the reference that closes the cycle
+        *DgcHandoffRaceObject self;
+
+        #! the threads that ran the destructor
+        static Queue destructor_tids();
+    }
+
+    destructor() {
+        DgcHandoffRaceObject::destructor_tids.push(gettid());
+    }
+}
+
+public class DgcCollectHandoffRaceTest inherits QUnit::Test {
+    public {
+        #! a wait that runs out means the interleaving was not reached; a failure, never a retry
+        const HoldTimeout = 30s;
+
+        #! the class of the object that the hooks act on
+        const ClassName = "DgcHandoffRaceObject";
+    }
+
+    constructor() : QUnit::Test("dgc-collect-handoff-race", "1.0") {
+        addTestCase("a dereference that hands off the collection that another one decided does not wait for it",
+            \handoffTest());
+        set_return_value(main());
+    }
+
+    #! Makes the object that references itself and pushes it to each Queue
+    /** No local variable of the caller holds the object.
+    */
+    static makeCycle(Queue first, Queue second) {
+        DgcHandoffRaceObject obj();
+        obj.self = obj;
+        first.push(obj);
+        second.push(obj);
+    }
+
+    handoffTest() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the hooks that order the dereferences are only in debug builds");
+        }
+        Queue first();
+        Queue second();
+        DgcCollectHandoffRaceTest::makeCycle(first, second);
+
+        Counter decide_held(1);
+        Counter decide_release(1);
+        Counter collect_held(1);
+        Counter collect_release(1);
+        Counter marked_held(1);
+        Counter marked_release(1);
+        list<Counter> releases = (decide_release, collect_release, marked_release);
+        # decremented when the second dereference starts waiting for the first one, or when it has finished
+        Counter second_progress(1);
+        # decremented when the second dereference has finished
+        Counter second_done(1);
+        Queue first_tid();
+        Counter done(2);
+
+        call_function("dbg_hold_deref_decide", ClassName, decide_held, decide_release);
+        # the first dereference: held after it has taken its count, before it decides
+        background sub () {
+            on_exit done.dec();
+            first_tid.push(gettid());
+            {
+                *DgcHandoffRaceObject obj = first.get();
+                remove obj;
+            }
+        }();
+        if (decide_held.waitForZero(HoldTimeout)) {
+            DgcCollectHandoffRaceTest::releaseAll(releases, done);
+            fail("the first dereference was not held before it decided");
+        }
+
+        # the second dereference releases the last reference from outside the set: its count is the current one, so
+        # it decides to collect the object, and is held before it takes the object's lock
+        call_function("dbg_hold_deref_collect", ClassName, collect_held, collect_release);
+        background sub () {
+            on_exit done.dec();
+            {
+                *DgcHandoffRaceObject obj = second.get();
+                remove obj;
+            }
+            second_done.dec();
+            second_progress.dec();
+        }();
+        if (collect_held.waitForZero(HoldTimeout)) {
+            DgcCollectHandoffRaceTest::releaseAll(releases, done);
+            fail("the second dereference did not decide to collect the object");
+        }
+
+        # the first dereference's count has been superseded: it decides to collect the object as well, marks it as
+        # being destroyed, and is held before its dereference completes
+        call_function("dbg_hold_deref_marked", ClassName, marked_held, marked_release);
+        decide_release.dec();
+        if (marked_held.waitForZero(HoldTimeout)) {
+            DgcCollectHandoffRaceTest::releaseAll(releases, done);
+            fail("the first dereference did not mark the object as being destroyed");
+        }
+
+        # the second dereference finds the object being destroyed and hands the deletion off; it either finishes or
+        # starts waiting for the first one
+        call_function("dbg_deref_wait_notify", ClassName, second_progress);
+        collect_release.dec();
+        int rc = second_progress.waitForZero(HoldTimeout);
+        bool second_finished = !second_done.getCount();
+        # the first dereference completes and deletes the object
+        marked_release.dec();
+        done.waitForZero(HoldTimeout);
+
+        assertEq(0, rc, "the second dereference makes progress");
+        assertTrue(second_finished,
+            "the dereference that hands the deletion off finishes while the deleter is in progress, without waiting");
+        list<int> tids = ();
+        while (DgcHandoffRaceObject::destructor_tids.size()) {
+            tids += DgcHandoffRaceObject::destructor_tids.get();
+        }
+        assertEq((first_tid.get(),), tids, "the first dereference destroys the object, once");
+    }
+
+    #! Lets every held thread continue, and waits for the two threads to finish
+    static releaseAll(list<Counter> releases, Counter done) {
+        map $1.dec(), releases, $1.getCount();
+        done.waitForZero(HoldTimeout);
+    }
+}

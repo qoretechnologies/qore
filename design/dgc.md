@@ -276,7 +276,13 @@ write lock); the other finds the set invalidated and rescans, and the object can
 
 - An **object** is deleted by the dereference that marks it as being destroyed under its lock (`in_destructor` in
   `qore_object_private::customDeref()`); a second one hands the deletion off
-  (`robject_dereference_helper::finalDeref()`).
+  (`robject_dereference_helper::finalDeref()`).  The dereference that marks the object completes
+  (`RObject::derefDone()`) right after the marking, and deletes the object after that.  A handed-off dereference
+  waits in `derefDone()` for the dereferences of other threads only when it released the last reference, since it
+  then releases the object's base weak reference afterwards; one that decided while references remained releases
+  nothing and does not wait.  It used to wait in either case, and when it started waiting before the deleter
+  completed, the deleter completed with a waiter left, which `derefDone()` asserts never happens
+  (`ref_inprogress || !del`).
 - A **closure-bound variable** had no such mark: two dereferences that both decided deleted its value at the same
   time, one waiting in `RObject::derefDone()` for the other's dereference to finish, which then deleted it too
   (an assertion in `derefDone()` in debug builds, a double release of the value in release builds).
@@ -290,6 +296,11 @@ holder's reference with no lock while a dereference scans (a debug hook in `cust
 `RObject::dbg_before_deref_scan`); `examples/test/qore/misc/dgc-closure-var-collect-race.qtest` holds one
 dereference of a closure-bound variable before it decides (`dbg_hold_closure_var_deref()`), lets another one collect
 the variable, and counts the dereferences that collect it (`dbg_count_closure_var_collections()`);
+`examples/test/qore/misc/dgc-collect-handoff-race.qtest` makes two dereferences decide to collect an object: it holds
+the first before it decides (`dbg_hold_deref_decide()`), lets the second decide with the current count and holds it
+before its lock (`dbg_hold_deref_collect()`), lets the first decide with its superseded count and holds it after it
+has marked the object (`dbg_hold_deref_marked()`), and checks that the second hands the deletion off without waiting
+(`dbg_deref_wait_notify()`);
 `examples/test/qore/classes/AsyncIoController/asyncio_queue_gc.qtest` is the controller's case.
 
 ## When a scan is triggered — and when it may be skipped

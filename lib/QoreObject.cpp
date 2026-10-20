@@ -1399,6 +1399,8 @@ void qore_object_private::unsetRealReference() {
 }
 
 #ifdef DEBUG
+std::atomic<qore_dbg_deref_decide_hook_t> qore_dbg_deref_decide_hook{nullptr};
+std::atomic<qore_dbg_deref_marked_hook_t> qore_dbg_deref_marked_hook{nullptr};
 std::atomic<qore_dbg_deref_collect_hook_t> qore_dbg_deref_collect_hook{nullptr};
 #endif
 
@@ -1480,6 +1482,14 @@ void qore_object_private::customDeref(ExceptionSink* xsink, bool real) {
             // this dereference has a decision to make; tests note it here, before the rsection can block it
             if (dbg_deref_decides_t hook = dbg_deref_decides.load(std::memory_order_acquire)) {
                 hook(this);
+            }
+#endif
+
+#ifdef DEBUG
+            // this dereference has taken its count and has a decision to make; tests hold it here, so that a release
+            // made by another thread supersedes its count and that thread decides first
+            if (qore_dbg_deref_decide_hook_t hook = qore_dbg_deref_decide_hook.load()) {
+                hook(status == OS_OK ? getClassName() : "<deleted>");
             }
 #endif
 
@@ -1612,7 +1622,17 @@ void qore_object_private::customDeref(ExceptionSink* xsink, bool real) {
         // mark status as in destructor
         status = q_gettid();
 
+        // released here and not at the end of the block, so that the hook below runs between the marking and the
+        // end of this dereference (RObject::derefDone() in the helper's destructor)
+        sl.unlock();
         //printd(5, "Object lock %p unlocked (safe)\n", &rml);
+#ifdef DEBUG
+        // this dereference has marked the object as being destroyed and completes before deleting it; tests hold it
+        // here, so that another dereference finds the object being destroyed while this one is still in progress
+        if (qore_dbg_deref_marked_hook_t hook = qore_dbg_deref_marked_hook.load()) {
+            hook(getClassName());
+        }
+#endif
     }
 
     deleteOrDefer(xsink, cycle_cleanup);
