@@ -28,14 +28,6 @@
 
 %modern
 
-# Set up SIGUSR1 handler to dump thread stacks for debugging
-@debug {
-    set_signal_handler(SIGUSR1, sub (int sig) {
-        printf("=== SIGUSR1 Thread Stacks ===\n%Y\n=== End Thread Stacks ===\n",
-            get_all_thread_call_stacks());
-    });
-}
-
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires Util
 %requires QUnit

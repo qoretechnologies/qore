@@ -27,14 +27,6 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
 %requires QUnit
 
-# Set up SIGUSR1 handler to dump thread stacks for debugging
-@debug {
-    set_signal_handler(SIGUSR1, sub (int sig) {
-        printf("=== SIGUSR1 Thread Stacks ===\n%Y\n=== End Thread Stacks ===\n",
-            get_all_thread_call_stacks());
-    });
-}
-
 %exec-class QuicFeatureTest
 
 #! Test that QUIC/HTTP/3 support is detected and available

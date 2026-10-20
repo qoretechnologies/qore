@@ -30,14 +30,6 @@
 %requires Logger
 %requires AsyncSocketIo
 
-# Set up SIGUSR1 handler to dump thread stacks for debugging
-@debug {
-    set_signal_handler(SIGUSR1, sub (int sig) {
-        printf("=== SIGUSR1 Thread Stacks ===\n%Y\n=== End Thread Stacks ===\n",
-            get_all_thread_call_stacks());
-    });
-}
-
 # Self-signed test certificate (RSA 2048-bit, CN=localhost, valid 10 years)
 const CertPem = "-----BEGIN CERTIFICATE-----
 MIIDCTCCAfGgAwIBAgIUahuuRGDlubXWYmiPhjVeT66vtNYwDQYJKoZIhvcNAQEL
