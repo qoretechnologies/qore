@@ -1117,6 +1117,21 @@
     \c tables option, must use a connection whose \c search_path names those schemas.
     @endparblock
 
+    @par Schema Alignment Drops Indexes That the Template Does Not Have
+    @parblock
+    Aligning a table or a schema with @ref sqlutilintro "SqlUtil"
+    (@ref SqlUtil::AbstractTable::getAlignSql() "AbstractTable::getAlignSql()",
+    @ref SqlUtil::AbstractDatabase::getAlignSql() "AbstractDatabase::getAlignSql()", and the
+    @ref schemaintro "Schema" module, including \c qschema \c align) drops an index of the table that the template
+    does not have again, on every database, as it did before SqlUtil 1.7.2: an index that was added to a table by
+    hand, or that is left from an older version of the schema, is dropped by the next alignment; since SqlUtil 1.7.2
+    such an index was kept.  An index with the definition of an index of the template under another name is renamed,
+    the index of a primary key, unique constraint or foreign constraint, such as the index that MySQL creates for a
+    foreign constraint, is kept or dropped with its constraint, and the indexes that a \c reconcile_table migration
+    of a data schema created are kept.  To keep an index, add it to the template, or leave the indexes out of the
+    alignment with the \c omit option (see @ref SqlUtil::AbstractTable::AlignTableOptions "AlignTableOptions").
+    @endparblock
+
     @par Stream Sockets Bound on All Interfaces Serve IPv4 and IPv6
     @parblock
     A stream socket bound on all interfaces with @ref Qore::Socket::bind() "Socket::bind()" with a port, or
@@ -3482,6 +3497,8 @@ while (*binary chunk = input.read(65536)) {
       - fixed the bulk update closure returned by
         @ref SqlUtil::AbstractTable::getBulkUpdateClosure() "AbstractTable::getBulkUpdateClosure()" executing an
         unrestricted \c select on the table in each call that updated more than one row row by row
+      - table and schema alignment drop an index that the template does not have again, as before SqlUtil 1.7.2;
+        see @ref qore_3_0_0_compatibility
 
     - @ref utilintro "Util" module
       - @ref Util::get_file_from_http() "get_file_from_http()" and @ref Util::get_file_from_url() "get_file_from_url()"
