@@ -186,13 +186,6 @@ l50Xb2GWQesIt9k5jF5IOw==
     }
 
     constructor() : Test("HttpServerQuicWsTest", "1.0") {
-        @debug {
-            set_signal_handler(SIGUSR1, sub (int sig) {
-                printf("=== SIGUSR1 Thread Stacks ===\n%Y\n=== End Thread Stacks ===\n",
-                    get_all_thread_call_stacks());
-            });
-        }
-
         addTestCase("WebSocket text echo over HTTP/3", \testH3WsTextEcho());
         addTestCase("WebSocket registered send over HTTP/3", \testH3WsRegisteredSend());
         addTestCase("WebSocket registered send coalesced with the CONNECT response over HTTP/3",

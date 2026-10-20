@@ -169,13 +169,6 @@ l50Xb2GWQesIt9k5jF5IOw==
     }
 
     constructor() : Test("HttpServerQuicSseTest", "1.0") {
-        @debug {
-            set_signal_handler(SIGUSR1, sub (int sig) {
-                printf("=== SIGUSR1 Thread Stacks ===\n%Y\n=== End Thread Stacks ===\n",
-                    get_all_thread_call_stacks());
-            });
-        }
-
         addTestCase("SSE events over HTTP/3", \testH3SseEvents());
 
         set_return_value(main());

@@ -113,14 +113,6 @@ l50Xb2GWQesIt9k5jF5IOw==
     }
 
     constructor() : Test("HttpServerQuic0RttTest", "1.0") {
-        # Set up SIGUSR1 handler to dump thread stacks for debugging hangs
-        @debug {
-            set_signal_handler(SIGUSR1, sub (int sig) {
-                printf("=== SIGUSR1 Thread Stacks ===\n%Y\n=== End Thread Stacks ===\n",
-                    get_all_thread_call_stacks());
-            });
-        }
-
         mLogger = new Logger("quic-0rtt-test", LoggerLevel::getLevelInfo());
         if (m_options.verbose > 2) {
             mLogger.addAppender(new StdoutAppender());

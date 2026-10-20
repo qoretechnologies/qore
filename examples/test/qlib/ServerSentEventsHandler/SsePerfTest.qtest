@@ -134,12 +134,6 @@ class SsePerfTest inherits QUnit::Test {
     }
 
     constructor() : Test("SsePerfTest", "1.0") {
-        # Install signal handler early to debug hangs
-        @debug {
-            set_signal_handler(SIGUSR1, sub (int sig) {
-                printf("=== SIGUSR1 Thread Stacks ===\n%Y\n", get_all_thread_call_stacks());
-            });
-        }
         addTestCase("single connection throughput", \singleConnectionThroughputTest());
         addTestCase("broadcast scalability", \broadcastScalabilityTest());
         addTestCase("large event payloads", \largeEventPayloadsTest());
@@ -153,16 +147,6 @@ class SsePerfTest inherits QUnit::Test {
         }
 
         set_return_value(main());
-    }
-
-    globalTearDown() {
-        @debug {
-            try {
-                remove_signal_handler(SIGUSR1);
-            } catch () {
-                # ignore cleanup errors
-            }
-        }
     }
 
     checkModule() {

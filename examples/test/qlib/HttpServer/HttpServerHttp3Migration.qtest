@@ -92,14 +92,6 @@ class HttpServerHttp3MigrationTest inherits Test {
     }
 
     constructor() : Test("HttpServerHttp3MigrationTest", "1.0") {
-        # Set up SIGUSR1 handler to dump thread stacks for debugging hangs
-        @debug {
-            set_signal_handler(SIGUSR1, sub (int sig) {
-                printf("=== SIGUSR1 Thread Stacks ===\n%Y\n=== End Thread Stacks ===\n",
-                    get_all_thread_call_stacks());
-            });
-        }
-
         # Group 1: Client Active Migration
         addTestCase("client active migration", \testClientActiveMigration());
         addTestCase("migration during streaming response", \testMigrationDuringStreaming());

@@ -375,13 +375,6 @@ class HttpClientIoTest inherits QUnit::Test {
     }
 
     constructor() : Test("HttpClientIoTest", "1.0") {
-        # Install signal handler early to debug hangs: `kill -USR1 <pid>` dumps
-        # all Qore thread call stacks to stdout.
-        @debug {
-            set_signal_handler(SIGUSR1, sub (int sig) {
-                printf("=== SIGUSR1 Thread Stacks ===\n%Y\n", get_all_thread_call_stacks());
-            });
-        }
         # Module and definition tests
         addTestCase("module load test", \testModuleLoad());
         addTestCase("unresolved happy-eyeballs race leg", \testUnresolvedRaceLeg());
@@ -539,12 +532,6 @@ class HttpClientIoTest inherits QUnit::Test {
         addTestCase("unresponsive first address falls back", \testHappyEyeballsBlackhole());
         addTestCase("connect_timeout bounds the connect phase",
             \testConnectTimeoutBoundsConnectPhase());
-
-        @debug {
-            set_signal_handler(SIGUSR1, sub (int sig) {
-                printf("%Y\n", get_all_thread_call_stacks());
-            });
-        }
 
         set_return_value(main());
     }

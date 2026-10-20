@@ -566,12 +566,6 @@ public class HttpServerTest inherits QUnit::Test {
     }
 
     constructor() : Test("HttpServerTest", "1.0") {
-        # Install signal handler early to debug hangs
-        @debug {
-            set_signal_handler(SIGUSR1, sub (int sig) {
-                printf("=== SIGUSR1 Thread Stacks ===\n%Y\n", get_all_thread_call_stacks());
-            });
-        }
         addTestCase("idle test", \idleTest());
         addTestCase("issue 4312", \issue4312());
         addTestCase("issue 3397", \issue3397());

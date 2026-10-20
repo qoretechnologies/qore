@@ -470,13 +470,6 @@ class RestClientIoTest inherits QUnit::Test {
     const KeyPem = TestCertificates::KeyPem;
 
     constructor() : Test("RestClientIoTest", "1.0") {
-        # Install SIGUSR1 handler early so we can dump Qore-language thread
-        # stacks when the process hangs on exit (send `kill -USR1 <pid>`)
-        @debug {
-            set_signal_handler(SIGUSR1, sub (int sig) {
-                printf("=== SIGUSR1 Thread Stacks ===\n%Y\n", get_all_thread_call_stacks());
-            });
-        }
         addTestCase("constructor options", \testConstructorOptions());
         addTestCase("AbstractRestClient conformance", \testAbstractRestClientConformance());
         addTestCase("restGet", \testRestGet());
@@ -2629,9 +2622,9 @@ class RestClientIoTest inherits QUnit::Test {
             undeclared.restGet("/notfound-echo", hdr);
             fail("a 404 response must throw");
         } catch (hash<ExceptionInfo> ex) {
-            hash<auto> sent = RestClientIoTest::lowerKeys(ex.arg.request_headers);
-            assertEq("service-key-value-3", sent."x-service-key");
-            assertEq("<redacted>", sent."qorus-token");
+            hash<auto> sent_undeclared = RestClientIoTest::lowerKeys(ex.arg.request_headers);
+            assertEq("service-key-value-3", sent_undeclared."x-service-key");
+            assertEq("<redacted>", sent_undeclared."qorus-token");
             assertEq(-1, sprintf("%N", ex).find("qorus-token-value-2"));
         }
 

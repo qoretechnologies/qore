@@ -160,9 +160,10 @@ public class MyTestClass inherits QUnit::DependencyInjectedTest {
     @section qunit_relnotes Release Notes
 
     @subsection qunit_v0_5_2 Version 0.5.2
-    - when run by \c run_tests.sh, a test prints the call stacks of all its threads when it receives
-      \c SIGUSR1, which \c run_tests.sh sends to a test that exceeds its time limit before ending it, so the
-      log shows where the test hangs; a test that installs its own \c SIGUSR1 handler keeps it
+    - a test prints the call stacks of all its threads when it receives \c SIGUSR1 (for example
+      <tt>kill -USR1 \<pid\></tt> on a test that hangs); \c run_tests.sh sends it to a test that exceeds its
+      time limit before ending it, so the log shows where the test hangs; a test that installs its own
+      \c SIGUSR1 handler keeps it
 
     @subsection qunit_v0_5_1 Version 0.5.1
     - added @ref QUnit::Test::isConnectionError() "Test::isConnectionError()", a shared predicate
@@ -245,16 +246,14 @@ namespace Priv {
     #! The environment variable naming the FIFO that \c run_tests.sh reads the test's events from
     const TestEventFifoVar = "QORE_TEST_EVENT_FIFO";
 
-    #! Installs the SIGUSR1 handler that prints the call stacks of all threads, when run by \c run_tests.sh
+    #! Installs the SIGUSR1 handler that prints the call stacks of all threads
     /** \c run_tests.sh sends \c SIGUSR1 to a test that exceeds its time limit, waits until the test reports that it
-        has printed its stacks, and then ends it.  The handler is installed when the module is loaded, so a test that
-        installs its own \c SIGUSR1 handler replaces it.  The functions are called by name, as a Program that loads
-        this module can be restricted from using them; it then has no handler.
+        has printed its stacks, and then ends it; a developer can send it to a test that hangs.  The handler is
+        installed when the module is loaded, so a test that installs its own \c SIGUSR1 handler replaces it.  The
+        functions are called by name, as a Program that loads this module can be restricted from using them; it then
+        has no handler.
     */
     sub installTimeoutStackDump() {
-        if (!ENV{TestEventFifoVar}) {
-            return;
-        }
         try {
             call_function("set_signal_handler", SIGUSR1, \QUnit::Priv::timeoutStackDump());
         } catch (hash<ExceptionInfo> ex) {
