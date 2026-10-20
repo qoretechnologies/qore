@@ -156,6 +156,7 @@ struct AsyncIoDeferredRelease {
     QoreHashNode* poll_info = nullptr;               //!< Poll info hash (referenced, or nullptr)
     QoreHashNode* other = nullptr;                   //!< Free-form data (referenced, or nullptr)
     Queue* queue = nullptr;                          //!< Result queue (referenced, or nullptr)
+    QoreObject* queue_obj = nullptr;                 //!< Result queue object (referenced, or nullptr)
     Queue* state_queue = nullptr;                    //!< State event queue (referenced, or nullptr)
     QoreObject* state_queue_obj = nullptr;           //!< State event queue object (referenced, or nullptr)
     SocketPollOperationBase* spop_base = nullptr;    //!< C++ poll operation (referenced, or nullptr)
@@ -163,8 +164,8 @@ struct AsyncIoDeferredRelease {
 
     //! Returns True if no references are held
     DLLLOCAL bool empty() const {
-        return !sock_obj && !sock && !spop_obj && !poll_info && !other && !queue && !state_queue && !state_queue_obj
-            && !spop_base && !udata.hasNode();
+        return !sock_obj && !sock && !spop_obj && !poll_info && !other && !queue && !queue_obj && !state_queue
+            && !state_queue_obj && !spop_base && !udata.hasNode();
     }
 
     //! Returns the program the released objects belong to, if known
@@ -992,6 +993,7 @@ private:
         QoreHashNode* submit_poll_info = nullptr;        //!< Referenced initial poll info (or nullptr)
         QoreHashNode* submit_other = nullptr;            //!< Referenced other data (or nullptr)
         Queue* submit_queue = nullptr;                   //!< Referenced result queue (or nullptr)
+        QoreObject* submit_queue_obj = nullptr;          //!< Referenced result queue object (or nullptr)
         Queue* submit_state_queue = nullptr;             //!< Referenced state event queue (or nullptr)
         QoreObject* submit_state_queue_obj = nullptr;    //!< Referenced state event queue object (or nullptr)
         std::vector<std::string> submit_notify_states;   //!< The states to report; empty = all
@@ -1020,6 +1022,8 @@ private:
         std::string inherited_owner;
         QoreHashNode* other;            //!< Free-form data (referenced, or nullptr)
         Queue* queue;                   //!< Result queue (referenced, or nullptr)
+        //! The object of \c queue (referenced, or nullptr); results are pushed with it, see deliverResult()
+        QoreObject* queue_obj = nullptr;
         //! State event queue (referenced, or nullptr); see noteOperationState() and deliverStateEnd()
         Queue* state_queue = nullptr;
         //! The object of \c state_queue (referenced, or nullptr); events are pushed with it, see pushStateEvent()
@@ -1207,6 +1211,7 @@ private:
     struct DeferredDelivery {
         std::string key;
         Queue* queue;                      //!< Referenced or nullptr
+        QoreObject* queue_obj = nullptr;   //!< The object of queue; referenced or nullptr
         QoreObject* spop_obj;              //!< Referenced or nullptr (for onComplete dispatch)
         bool has_on_complete;              //!< True if spop has onComplete() override
         QoreHashNode* result;              //!< Referenced
@@ -1935,7 +1940,14 @@ private:
     DLLLOCAL void logAndClearStrayException(const char* phase, ExceptionSink* xsink) const;
 
     //! Deliver a result via onComplete or queue (dispatches onComplete to worker thread)
-    DLLLOCAL void deliverResult(Queue* queue, QoreObject* spop_obj, bool has_on_complete,
+    /** The result is pushed with the queue's object, as Queue::push() does, so that the deterministic garbage
+        collector sees the references the result holds: a result queue reachable from the operation with its result
+        left in it is part of a cycle that is collected.
+
+        @param queue the result queue (not referenced by the call), or nullptr
+        @param queue_obj the object of \a queue (not referenced by the call), or nullptr
+    */
+    DLLLOCAL void deliverResult(Queue* queue, QoreObject* queue_obj, QoreObject* spop_obj, bool has_on_complete,
         QoreHashNode* result, ExceptionSink* xsink, const std::string& owner = std::string(),
         AsyncIoSandboxContext sandbox_ctx = AsyncIoSandboxContext());
 

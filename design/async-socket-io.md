@@ -255,8 +255,9 @@ is a plain enum).  It submits the operation with a `stateQueue` and blocks on th
   keeps the Queue's object as well as its private data and pushes each event with it, as `Queue::push()` does from
   Qore code, so the deterministic garbage collector sees the references held by the queued events: an operation that
   references its own state Queue (a member, or a callback's closure) and leaves events in it is part of a cycle
-  that is collected once nothing outside the cycle references it.  (The result Queue is pushed to without its
-  object, as before.)
+  that is collected once nothing outside the cycle references it.  Results are pushed to the result Queue the same
+  way (`deliverResult()` with the Queue's object, which `PollInfo::queue_obj` holds next to the Queue): a result left
+  in a Queue the operation references is collected likewise.
 - **Constraints.**  The push never waits (the Queue has no maximum size).  An exception from a Qore `getState()` ends
   the operation with that exception.  An operation whose `continuePoll()` runs in C++ on the I/O thread cannot have a
   `getState()` implemented in Qore (a Qore subclass override, or a `DelegatingPollOperation` around such an
