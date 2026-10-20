@@ -120,6 +120,10 @@ stream.close();
       requests for earlier models are unchanged
     - the provider factory reports which Claude models reject a forced tool choice
       (\c rejects_forced_tool_choice): Claude Opus 5.5, Claude Sonnet 5.5, Claude Fable 5.1 and Claude Mythos 5.1
+    - an OpenAI-shaped chat request with a JSON-schema \c response_format no longer fails with HTTP 400
+      ("response_format: Extra inputs are not permitted"): a schema that Anthropic's structured output can express
+      within its limits is sent as \c output_config.format, with the constraints it does not support moved into the
+      descriptions; any other schema is stated in a system instruction, and the caller validates the answer
 */
 
 %requires json
@@ -535,6 +539,13 @@ public class AnthropicSseStreamIo {
     Thread-safe: the REST client is lazy-initialized behind a mutex.
 */
 public class AnthropicLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
+    public {
+        #! The most optional parameters of a schema sent as Anthropic structured output; see addStructuredOutput()
+        const MaxStructuredOutputOptionalParameters = 8;
+        #! The most union-typed parameters of a schema sent as Anthropic structured output; see addStructuredOutput()
+        const MaxStructuredOutputUnionParameters = 8;
+    }
+
     #! Returns the default Anthropic chat model
     *string getDefaultModel() {
         return AnthropicRestClientBase::DefaultChatModel;
@@ -571,30 +582,7 @@ public class AnthropicLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
             *hash<QoreLlmUtils::LlmRequestOptions> opts) {
         ensureRestClient();
 
-        hash<auto> body = addReasoningControls({
-            "model": getRequestModel(opts),
-            "max_tokens": getRequestMaxOutputTokens(opts),
-            "system": system_prompt,
-            "messages": (
-                {"role": "user", "content": user_prompt},
-            ),
-        }, opts);
-
-        # When an output schema is provided, use tool-use extraction:
-        # define a synthetic tool whose input_schema matches the desired
-        # output and force the model to call it via tool_choice
-        if (output_schema) {
-            string tool_name = output_schema.name ?? "extract";
-            body.tools = (
-                {
-                    "name": tool_name,
-                    "description": "Extract structured data matching the schema",
-                    "input_schema": output_schema,
-                },
-            );
-            body.tool_choice = {"type": "tool", "name": tool_name};
-        }
-        body = mergeRequestBodyOptions(body, opts);
+        hash<auto> body = buildCompletionBody(system_prompt, user_prompt, output_schema, opts);
 
         hash<auto> resp;
         try {
@@ -1221,6 +1209,44 @@ bool rejects = AnthropicLlmProvider::rejectsForcedToolChoice("claude-sonnet-5-5"
         return body;
     }
 
+    #! Builds the request body of complete()
+    private hash<auto> buildCompletionBody(string system_prompt, string user_prompt, *hash<auto> output_schema,
+            *hash<QoreLlmUtils::LlmRequestOptions> opts) {
+        hash<auto> body = addReasoningControls({
+            "model": getRequestModel(opts),
+            "max_tokens": getRequestMaxOutputTokens(opts),
+            "system": system_prompt,
+            "messages": (
+                {"role": "user", "content": user_prompt},
+            ),
+        }, opts);
+
+        # When an output schema is provided, use tool-use extraction: define a synthetic tool whose input_schema
+        # matches the desired output and force the model to call it via tool_choice.  A model that rejects a forced
+        # tool choice, or a request that thinks (Anthropic refuses a forced tool with thinking), gets the schema as
+        # structured output or an instruction instead (addStructuredOutput())
+        bool forced_tool = output_schema && !rejectsForcedToolChoice(body.model ?? "")
+            && !inlist(body.thinking.type, ("enabled", "adaptive"));
+        if (forced_tool) {
+            string tool_name = output_schema.name ?? "extract";
+            body.tools = (
+                {
+                    "name": tool_name,
+                    "description": "Extract structured data matching the schema",
+                    "input_schema": output_schema,
+                },
+            );
+            body.tool_choice = {"type": "tool", "name": tool_name};
+        }
+        body = mergeRequestBodyOptions(body, opts);
+        if (output_schema && !forced_tool) {
+            hash<QoreLlmUtils::LlmRequestOptions> schema_opts = opts ?? <QoreLlmUtils::LlmRequestOptions>{};
+            schema_opts.output_schema = output_schema;
+            body = addStructuredOutput(body, schema_opts);
+        }
+        return body;
+    }
+
     private hash<auto> buildAnthropicBody(
             list<hash<QoreLlmUtils::ChatMessage>> messages,
             *list<hash<QoreLlmUtils::ToolDefinition>> tools,
@@ -1331,7 +1357,200 @@ bool rejects = AnthropicLlmProvider::rejectsForcedToolChoice("claude-sonnet-5-5"
             }
             body.tools = tool_defs;
         }
-        return mergeRequestBodyOptions(body, opts);
+        # the structured output goes in after the body options, so it is never lost to a merge
+        return addStructuredOutput(mergeRequestBodyOptions(body, opts), opts);
+    }
+
+    #! Routes an OpenAI \c response_format=json_schema to Anthropic's native structured output
+    /** Anthropic refuses an OpenAI \c response_format (HTTP 400 "response_format: Extra inputs are not
+        permitted"); its structured output is \c output_config.format.  The schema is carried in
+        @ref QoreLlmUtils::LlmRequestOptions::output_schema and written by @ref addStructuredOutput().
+    */
+    applyOpenAiResponseFormat(reference<hash<auto!>> body_options,
+            reference<hash<QoreLlmUtils::LlmRequestOptions>> options,
+            hash<auto> output_schema, *hash<auto> response_format) {
+        options.output_schema = output_schema;
+    }
+
+    #! Writes the request's output schema as Anthropic's structured output, or as an instruction
+    /** A small schema goes in \c output_config.format, Anthropic's structured output; the keys already in
+        \c output_config (the reasoning \c effort) are kept.  Anthropic compiles that schema to a grammar and refuses
+        one it finds too costly (HTTP 400), after up to minutes of compiling: measured on 2026-10-19 with
+        claude-opus-5-5, more than 24 optional parameters ("too many optional parameters") or 16 union-typed ones
+        ("too many parameters with union types") are refused at once, and 24 optional string parameters were refused
+        as "Schema is too complex" after several minutes.  So the format is used only well inside those limits
+        (@ref MaxStructuredOutputOptionalParameters, @ref MaxStructuredOutputUnionParameters), and only for a schema
+        it can express (@ref structuredOutputSchema()).
+
+        Any other schema is stated in a system instruction, as for a provider without structured output, and the
+        caller validates the answer against it.  The instruction is appended after the system prompt's blocks, so a
+        cached prefix stays cached.
+    */
+    private static hash<auto> addStructuredOutput(hash<auto> body, *hash<QoreLlmUtils::LlmRequestOptions> opts) {
+        if (!opts.output_schema) {
+            return body;
+        }
+        *hash<auto> schema = structuredOutputSchema(opts.output_schema);
+        if (schema) {
+            hash<string, int> counts = countStructuredOutputParameters(schema);
+            if (counts.optional <= MaxStructuredOutputOptionalParameters
+                    && counts.union <= MaxStructuredOutputUnionParameters) {
+                hash<auto!> output_config;
+                if (body.output_config.typeCode() == NT_HASH) {
+                    output_config += body.output_config;
+                }
+                output_config.format = {"type": "json_schema", "schema": schema};
+                body.output_config = output_config;
+                return body;
+            }
+        }
+        string instruction = "Return only a JSON object, with no other text, matching this JSON schema: "
+            + make_json(opts.output_schema);
+        switch (body.system.typeCode()) {
+            case NT_LIST:
+                body.system += ({"type": "text", "text": instruction},);
+                break;
+            case NT_STRING:
+                body.system = body.system.val() ? (body.system + "\n\n" + instruction) : instruction;
+                break;
+            default:
+                body.system = instruction;
+                break;
+        }
+        return body;
+    }
+
+    #! Counts a schema's optional and union-typed parameters, at any depth
+    /** These are the two counts Anthropic's structured output limits (see addStructuredOutput()).
+
+        @param node the JSON schema
+
+        @return \c optional: the properties not in their object's \c required; \c union: the properties typed with
+        \c anyOf, \c oneOf or a list of types
+    */
+    public static hash<string, int> countStructuredOutputParameters(auto node) {
+        hash<string, int> rv = {"optional": 0, "union": 0};
+        countSchemaParameters(node, \rv);
+        return rv;
+    }
+
+    private static countSchemaParameters(auto node, reference<hash<string, int>> rv) {
+        switch (node.typeCode()) {
+            case NT_LIST:
+                map countSchemaParameters($1, \rv), node;
+                return;
+            case NT_HASH:
+                break;
+            default:
+                return;
+        }
+        if (node.properties.typeCode() == NT_HASH) {
+            *hash<string, bool> required = map {$1: True}, node.required, $1.typeCode() == NT_STRING;
+            foreach hash<auto> i in (node.properties.pairIterator()) {
+                if (!required{i.key}) {
+                    ++rv.optional;
+                }
+                if (i.value.typeCode() == NT_HASH && (i.value.anyOf || i.value.oneOf
+                        || i.value.type.typeCode() == NT_LIST)) {
+                    ++rv.union;
+                }
+                countSchemaParameters(i.value, \rv);
+            }
+        }
+        foreach string key in (("items", "anyOf", "oneOf", "allOf", "$defs", "definitions")) {
+            if (exists node{key}) {
+                auto value = node{key};
+                countSchemaParameters(value.typeCode() == NT_HASH && (key == "$defs" || key == "definitions")
+                    ? value.values() : value, \rv);
+            }
+        }
+    }
+
+    #! Returns a JSON schema in the form Anthropic's structured output accepts, or NOTHING if it cannot be
+    /** Anthropic's structured output accepts a subset of JSON Schema and refuses a request with any other keyword
+        (HTTP 400).  The value constraints it refuses are removed and stated in the property's \c description, so
+        the model still reads them; the caller's own validation keeps enforcing them:
+        - \c minimum, \c maximum, \c exclusiveMinimum, \c exclusiveMaximum and \c multipleOf;
+        - \c maxItems and \c uniqueItems, and a \c minItems above 1 (lowered to 1);
+        - \c minProperties and \c maxProperties.
+
+        An object with \c additionalProperties other than \c false (a map), or with \c patternProperties,
+        cannot be expressed: forcing it closed would forbid every key the schema allows.
+
+        @param schema the JSON schema
+
+        @return the schema to send, or NOTHING when it cannot be expressed
+    */
+    public static *hash<auto> structuredOutputSchema(hash<auto> schema) {
+        bool ok = True;
+        hash<auto> rv = reduceSchemaNode(schema, \ok);
+        return ok ? rv : NOTHING;
+    }
+
+    private static auto reduceSchemaNode(auto node, reference<bool> ok) {
+        switch (node.typeCode()) {
+            case NT_LIST:
+                return map reduceSchemaNode($1, \ok), node;
+            case NT_HASH:
+                break;
+            default:
+                return node;
+        }
+        hash<auto!> rv = {};
+        list<string> dropped = ();
+        foreach hash<auto> i in (node.pairIterator()) {
+            switch (i.key) {
+                case "minimum":
+                case "maximum":
+                case "exclusiveMinimum":
+                case "exclusiveMaximum":
+                case "multipleOf":
+                case "maxItems":
+                case "uniqueItems":
+                case "minProperties":
+                case "maxProperties":
+                    dropped += sprintf("%s %y", i.key, i.value);
+                    continue;
+                case "minItems":
+                    if (i.value.typeCode() == NT_INT && i.value > 1) {
+                        dropped += sprintf("minItems %d", i.value);
+                        rv.minItems = 1;
+                        continue;
+                    }
+                    break;
+                case "additionalProperties":
+                    if (i.value !== False) {
+                        ok = False;
+                    }
+                    break;
+                case "patternProperties":
+                    ok = False;
+                    break;
+                case "properties":
+                case "$defs":
+                case "definitions":
+                    # a map of names to schemas
+                    if (i.value.typeCode() == NT_HASH) {
+                        rv{i.key} = map {$1.key: reduceSchemaNode($1.value, \ok)}, i.value.pairIterator();
+                        continue;
+                    }
+                    break;
+                case "enum":
+                case "const":
+                case "required":
+                case "default":
+                case "examples":
+                    # values, not schemas
+                    rv{i.key} = i.value;
+                    continue;
+            }
+            rv{i.key} = reduceSchemaNode(i.value, \ok);
+        }
+        if (dropped) {
+            string note = sprintf("(%s)", dropped.join(", "));
+            rv.description = rv.description.val() ? (rv.description + " " + note) : note;
+        }
+        return rv;
     }
 
     private static auto contentPartsToAnthropicSystem(

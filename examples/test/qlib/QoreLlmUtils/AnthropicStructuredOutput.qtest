@@ -1,0 +1,202 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+#
+# Anthropic structured output.  Anthropic refuses an OpenAI response_format (HTTP 400 "response_format: Extra
+# inputs are not permitted"), so every structured request of an OpenAI-shaped caller to Anthropic failed; its
+# structured output is output_config.format, and it refuses the JSON Schema keywords it does not support.  The
+# request body is built without a network call.
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires json
+%requires QUnit
+%requires QoreLlmTypes
+%requires QoreLlmUtils
+%requires AnthropicRestClient
+%exec-class AnthropicStructuredOutputTest
+
+#! builds request bodies with the provider's own builder
+class AnthropicBodyProbe inherits AnthropicRestClient::AnthropicLlmProvider {
+    constructor() : AnthropicLlmProvider(<QoreLlmUtils::LlmBackendConfig>{
+        "mode": "anthropic",
+        "url": "https://api.anthropic.com",
+        "model": "claude-opus-5-5",
+    }) {
+    }
+
+    hash<auto> body(*hash<QoreLlmUtils::LlmRequestOptions> opts) {
+        return buildAnthropicBody((<QoreLlmUtils::ChatMessage>{"role": "user", "content": "go"},), NOTHING, opts);
+    }
+
+    hash<auto> completionBody(string model, hash<auto> schema, *hash<QoreLlmUtils::LlmRequestOptions> opts) {
+        hash<QoreLlmUtils::LlmRequestOptions> request_opts = opts ?? <QoreLlmUtils::LlmRequestOptions>{};
+        request_opts.model = model;
+        return buildCompletionBody("rules", "go", schema, request_opts);
+    }
+
+    hash<auto> bodyWithSystem(list<hash<QoreLlmUtils::ContentPart>> parts, *hash<QoreLlmUtils::LlmRequestOptions> opts) {
+        return buildAnthropicBody((
+            <QoreLlmUtils::ChatMessage>{"role": "system", "content_parts": parts},
+            <QoreLlmUtils::ChatMessage>{"role": "user", "content": "go"},
+        ), NOTHING, opts);
+    }
+
+    hash<auto> bodyWithSystemText(string text, *hash<QoreLlmUtils::LlmRequestOptions> opts) {
+        return buildAnthropicBody((
+            <QoreLlmUtils::ChatMessage>{"role": "system", "content": text},
+            <QoreLlmUtils::ChatMessage>{"role": "user", "content": "go"},
+        ), NOTHING, opts);
+    }
+}
+
+public class AnthropicStructuredOutputTest inherits QUnit::Test {
+    public {
+        const Schema = {
+            "type": "object",
+            "properties": {
+                "name": {"type": "string", "minLength": 1},
+                "count": {"type": "integer", "minimum": 0, "maximum": 5, "description": "how many"},
+                "tags": {"type": "array", "items": {"type": "string"}, "minItems": 2, "maxItems": 4,
+                    "uniqueItems": True},
+                "kind": {"enum": ("minimum", "maximum")},
+                # a property whose name is a schema keyword is a property, not a keyword
+                "minimum": {"type": "number", "exclusiveMinimum": 1},
+                "either": {"anyOf": ({"type": "string"}, {"type": "number", "multipleOf": 2})},
+            },
+            "required": ("name", "count", "tags", "kind", "minimum", "either"),
+            "additionalProperties": False,
+        };
+    }
+
+    constructor() : Test("AnthropicStructuredOutputTest", "1.0") {
+        addTestCase("the schema is reduced to what Anthropic accepts", \reduceTest());
+        addTestCase("a schema Anthropic cannot express is not sent", \unexpressibleTest());
+        addTestCase("response_format becomes output_config.format, beside the reasoning effort", \bodyTest());
+        addTestCase("a schema beyond Anthropic's grammar limits is stated in the system prompt", \instructionTest());
+        addTestCase("complete() forces a tool only where the model and request allow it", \completionTest());
+        set_return_value(main());
+    }
+
+    reduceTest() {
+        hash<auto> rv = AnthropicRestClient::AnthropicLlmProvider::structuredOutputSchema(Schema);
+        hash<auto> p = rv.properties;
+        assertEq({"type": "string", "minLength": 1}, p.name, "a supported constraint is kept");
+        assertEq({"type": "integer", "description": "how many (minimum 0, maximum 5)"}, p.count,
+            "unsupported numeric constraints are moved into the description");
+        assertEq(1, p.tags.minItems, "minItems above 1 is lowered to 1");
+        assertFalse(p.tags.hasKey("maxItems") || p.tags.hasKey("uniqueItems"), "maxItems and uniqueItems go");
+        assertEq("(minItems 2, maxItems 4, uniqueItems True)", p.tags.description,
+            "the removed array constraints are stated");
+        assertEq(("minimum", "maximum"), p.kind{"enum"}, "enum values are values, not keywords");
+        assertEq({"type": "number", "description": "(exclusiveMinimum 1)"}, p.minimum,
+            "a property named like a keyword is kept and reduced");
+        assertEq({"type": "number", "description": "(multipleOf 2)"}, p.either.anyOf[1], "anyOf branches are reduced");
+        assertEq(Schema.required, rv.required);
+        assertEq(False, rv.additionalProperties);
+    }
+
+    unexpressibleTest() {
+        assertNothing(AnthropicRestClient::AnthropicLlmProvider::structuredOutputSchema({
+            "type": "object",
+            "additionalProperties": {"type": "string"},
+        }), "a map cannot be expressed");
+        assertNothing(AnthropicRestClient::AnthropicLlmProvider::structuredOutputSchema({
+            "type": "object",
+            "properties": {"inner": {"type": "object", "additionalProperties": True}},
+        }), "an open nested object cannot be expressed");
+        assertNothing(AnthropicRestClient::AnthropicLlmProvider::structuredOutputSchema({
+            "type": "object",
+            "patternProperties": {"^x": {"type": "string"}},
+        }), "patternProperties cannot be expressed");
+
+        # the request then carries no format, and no response_format
+        AnthropicBodyProbe probe();
+        hash<auto> body = probe.body(<QoreLlmUtils::LlmRequestOptions>{
+            "output_schema": {"type": "object", "additionalProperties": {"type": "string"}},
+        });
+        assertFalse(body.hasKey("output_config"));
+        assertFalse(body.hasKey("response_format"));
+    }
+
+    instructionTest() {
+        # nine optional parameters: more than MaxStructuredOutputOptionalParameters
+        hash<auto> large = {
+            "type": "object",
+            "properties": (map {"p" + $1: {"type": "string"}}, xrange(9)),
+            "additionalProperties": False,
+        };
+        assertEq({"optional": 9, "union": 0},
+            AnthropicRestClient::AnthropicLlmProvider::countStructuredOutputParameters(large));
+        assertEq({"optional": 0, "union": 1},
+            AnthropicRestClient::AnthropicLlmProvider::countStructuredOutputParameters(Schema),
+            "required properties are not optional; anyOf is a union");
+
+        AnthropicBodyProbe probe();
+        hash<QoreLlmUtils::LlmRequestOptions> opts = <QoreLlmUtils::LlmRequestOptions>{"output_schema": large};
+        hash<auto> body = probe.body(opts);
+        assertFalse(exists body.output_config.format, "no structured output");
+        assertFalse(body.hasKey("response_format"));
+        assertEq("Return only a JSON object, with no other text, matching this JSON schema: " + make_json(large),
+            body.system, "the schema is the system instruction");
+
+        # a system prompt of blocks keeps its blocks, cache markers included, and gets the instruction last
+        body = probe.bodyWithSystem((
+            <QoreLlmUtils::ContentPart>{"type": "text", "text": "rules", "cache_control": {"type": "ephemeral"}},
+        ), opts);
+        assertEq(2, body.system.size());
+        assertEq({"type": "text", "text": "rules", "cache_control": {"type": "ephemeral"}}, body.system[0]);
+        assertEq("text", body.system[1].type);
+        assertRegex("^Return only a JSON object", body.system[1].text);
+
+        # a system prompt string gets the instruction after it
+        body = probe.bodyWithSystemText("rules", opts);
+        assertRegex("^rules\n\nReturn only a JSON object", body.system);
+    }
+
+    completionTest() {
+        AnthropicBodyProbe probe();
+        hash<auto> small = {"type": "object", "properties": {"ok": {"type": "boolean"}}, "required": ("ok",),
+            "additionalProperties": False};
+        # a model that accepts a forced tool choice, with no thinking: the synthetic tool
+        hash<auto> body = probe.completionBody("claude-opus-4-8", small);
+        assertEq({"type": "tool", "name": "extract"}, body.tool_choice);
+        assertFalse(exists body.output_config.format);
+        # Claude Opus 5.5 rejects a forced tool choice: structured output instead
+        body = probe.completionBody("claude-opus-5-5", small);
+        assertFalse(body.hasKey("tool_choice") || body.hasKey("tools"));
+        assertEq("json_schema", body.output_config.format.type);
+        # a thinking request refuses a forced tool too
+        body = probe.completionBody("claude-opus-4-8", small,
+            <QoreLlmUtils::LlmRequestOptions>{"reasoning_effort": "high"});
+        assertFalse(body.hasKey("tool_choice"));
+        assertEq("json_schema", body.output_config.format.type);
+        assertEq("high", body.output_config.effort);
+    }
+
+    bodyTest() {
+        AnthropicBodyProbe probe();
+        hash<auto!> body_options = {};
+        hash<QoreLlmUtils::LlmRequestOptions> opts = <QoreLlmUtils::LlmRequestOptions>{"reasoning_effort": "high"};
+        hash<auto> response_format = {
+            "type": "json_schema",
+            "json_schema": {"name": "result", "schema": Schema, "strict": True},
+        };
+        probe.applyOpenAiResponseFormat(\body_options, \opts, Schema, response_format);
+        assertEq({}, body_options, "response_format is not passed through to the request body");
+        assertEq(Schema, opts.output_schema);
+
+        hash<auto> body = probe.body(opts);
+        assertFalse(body.hasKey("response_format"));
+        assertEq("json_schema", body.output_config.format.type);
+        assertEq(AnthropicRestClient::AnthropicLlmProvider::structuredOutputSchema(Schema), body.output_config.format.schema);
+        assertEq("high", body.output_config.effort, "the reasoning effort is kept beside the format");
+        assertEq("adaptive", body.thinking.type);
+
+        # body options are merged first, so they cannot replace the format
+        opts.body_options = {"output_config": {"effort": "low"}};
+        body = probe.body(opts);
+        assertEq("json_schema", body.output_config.format.type, "the format survives the body options");
+    }
+}
