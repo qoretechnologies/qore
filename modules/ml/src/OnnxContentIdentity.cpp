@@ -1133,6 +1133,11 @@ bool parseOnnxContentIdentityMode(const QoreHashNode* config, OnnxContentIdentit
     QoreStringValueHelper str(val);
     // the value is compared with its length, so that a NUL character cannot end it early
     const std::string value(str->c_str(), str->size());
+    // the error message names the value as a C string, which would hide a NUL character
+    if (q_check_no_nul(value.data(), value.size(), "content_identity", "content_identity values",
+            ML_ONNX_CONTENT_IDENTITY_ERROR, xsink)) {
+        return false;
+    }
     if (value == "disabled") {
         mode = OnnxContentIdentityMode::Disabled;
         return true;

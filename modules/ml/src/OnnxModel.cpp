@@ -1248,6 +1248,11 @@ void QoreOnnxModel::configureBaseSessionOptions(Ort::SessionOptions& opts,
     if (!load_format_val.isNullOrNothing()) {
         QoreStringValueHelper load_format_str(load_format_val);
         const std::string load_format = mlStdString(**load_format_str);
+        // the format is compared whole, but the error message names it as a C string, which would hide the NUL
+        if (q_check_no_nul(load_format.data(), load_format.size(), "load_model_format", "ONNX model formats",
+                "ML-ONNX-ERROR", xsink)) {
+            return;
+        }
         if (load_format == "ORT" || load_format == "ort") {
             session_config_entries[kOrtSessionOptionsConfigLoadModelFormat] = "ORT";
         } else if (load_format != "ONNX" && load_format != "onnx") {
@@ -1261,6 +1266,11 @@ void QoreOnnxModel::configureBaseSessionOptions(Ort::SessionOptions& opts,
     if (!save_format_val.isNullOrNothing()) {
         QoreStringValueHelper save_format_str(save_format_val);
         const std::string save_format = mlStdString(**save_format_str);
+        // the format is compared whole, but the error message names it as a C string, which would hide the NUL
+        if (q_check_no_nul(save_format.data(), save_format.size(), "save_model_format", "ONNX model formats",
+                "ML-ONNX-ERROR", xsink)) {
+            return;
+        }
         if (save_format == "ORT" || save_format == "ort") {
             session_config_entries[kOrtSessionOptionsConfigSaveModelFormat] = "ORT";
         } else if (save_format != "ONNX" && save_format != "onnx") {

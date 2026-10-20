@@ -9713,14 +9713,16 @@ public class MlTest inherits QUnit::Test {
         ciWrite(tmp.path + "/model.onnx", ciSelfContainedModel());
         hash<ML::OnnxSessionConfig> config = ciConfig();
         config.content_identity = "required\x00x";
-        assertThrows("ML-ONNX-CONTENT-IDENTITY-ERROR", "invalid content_identity value", \ciConstruct(),
+        assertThrows("ML-ONNX-CONTENT-IDENTITY-ERROR", "content_identity.*NUL character", \ciConstruct(),
             (tmp.path + "/model.onnx", config));
         config = ciConfig();
         config.load_model_format = "ONNX\x00x";
-        assertThrows("ML-ONNX-ERROR", "invalid load_model_format", \ciConstruct(), (tmp.path + "/model.onnx", config));
+        assertThrows("ML-ONNX-ERROR", "load_model_format.*NUL character", \ciConstruct(),
+            (tmp.path + "/model.onnx", config));
         config = ciConfig();
         config.save_model_format = "ONNX\x00x";
-        assertThrows("ML-ONNX-ERROR", "invalid save_model_format", \ciConstruct(), (tmp.path + "/model.onnx", config));
+        assertThrows("ML-ONNX-ERROR", "save_model_format.*NUL character", \ciConstruct(),
+            (tmp.path + "/model.onnx", config));
     }
 
     nulRestoredFieldNameTest() {
@@ -9840,9 +9842,11 @@ public class MlTest inherits QUnit::Test {
             nulConfig({"device_binding": <ML::OnnxDeviceBindingConfig>{
                 "enabled": True, "default_output_device": "cpu\x00x",
             }}),
+            nulConfig({"load_model_format": "ORT\x00x"}),
+            nulConfig({"save_model_format": "ORT\x00x"}),
         );
         list<string> errs = ("ML-ONNX-RUN-OPTIONS-ERROR", "ML-ONNX-PROVIDER-ERROR", "ML-ONNX-PROVIDER-ERROR",
-            "ML-ONNX-PROVIDER-ERROR", "ML-ONNX-DEVICE-BINDING-ERROR");
+            "ML-ONNX-PROVIDER-ERROR", "ML-ONNX-DEVICE-BINDING-ERROR", "ML-ONNX-ERROR", "ML-ONNX-ERROR");
         foreach hash<ML::OnnxSessionConfig> config in (configs) {
             assertThrows(errs[$#], "NUL character", \ciConstruct(), (getTestModelPath(), config),
                 sprintf("session config %d", $#));
