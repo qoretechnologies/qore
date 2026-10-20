@@ -248,9 +248,49 @@ only by values or references pushed into Queues are collected (`queue-cycle`, `q
 members into a set while others release it (`concurrent marks`).
 
 A dereference also saves its triggering reference count as `ref_copy`. Another thread can change the live
-count while that dereference waits for a scan. `RSet::canDelete()` rejects superseded snapshots before
-examining the set: a newer reference keeps the object alive or provides its own collection opportunity when
-released. This applies to object and captured-variable dereferences alike.
+count while that dereference waits for a scan. `RSet::canDelete()` does not decide with a snapshot that a newer
+reference has superseded: a newer reference that is still held keeps the object alive, and its release finds the set
+and decides then. A snapshot superseded by releases is replaced by the current count, as the next section explains.
+This applies to object and captured-variable dereferences alike.
+
+### A count superseded by a release that decided nothing
+
+A release does not always decide collection. The lock-free release (`RObject::tryFastDeref()`) and the locking path's
+"nothing to do" return (`qore_object_private::customDeref()`, `ClosureVarValue::deref()`) decide nothing when the
+object has no recursive set and no scan due. That is right when no cycle runs through the object, and it is how they
+see an object whose cycle another dereference is scanning: that dereference took the scan due when it took its count,
+and the set is only assigned when the scan commits. A release made during the scan supersedes the count of the
+dereference making it; that dereference used to leave the decision to the release that superseded it, which had
+decided nothing, so the scan found the cycle and the cycle was never collected. The async I/O controller releases
+its references to a result Queue on two callback workers, which stranded a poll operation that keeps its own result
+Queue with the result in it.
+
+`RSet::canDelete()` therefore decides with the count as it is now when releases have superseded a dereference's
+count (`refs < ref_copy`), and only declines when a reference taken since is still held (`refs > ref_copy`), or none
+is left. Nothing on the release paths changes: no lock or atomic operation is added to them.
+
+Two dereferences can then decide for the same object at the same time: the one with the superseded count, and one
+whose release in the locking path superseded it. Each decides from the set and the counts as they are, so they reach
+the same verdict, and the set lets only one of them collect it (`RSet::canDelete()` invalidates the set under its
+write lock); the other finds the set invalidated and rescans, and the object can still be intact when it does:
+
+- An **object** is deleted by the dereference that marks it as being destroyed under its lock (`in_destructor` in
+  `qore_object_private::customDeref()`); a second one hands the deletion off
+  (`robject_dereference_helper::finalDeref()`).
+- A **closure-bound variable** had no such mark: two dereferences that both decided deleted its value at the same
+  time, one waiting in `RObject::derefDone()` for the other's dereference to finish, which then deleted it too
+  (an assertion in `derefDone()` in debug builds, a double release of the value in release builds).
+  `RObject::claimCollection()` is the mark: the dereference that decides to collect the variable takes it with an
+  atomic exchange, on the collect path only, and only the one that takes it deletes the variable. The flag
+  (`RObject::collection_claimed`) is in the padding after `needs_is_valid`, so no member of `RObject` or of
+  `ClosureVarValue` moves.
+
+`ut_superseded_snapshot_lock_free_release` in the C++ unit tests (`asyncio_unit_tests.qtest`) releases another
+holder's reference with no lock while a dereference scans (a debug hook in `customDeref()` before the scan,
+`RObject::dbg_before_deref_scan`); `examples/test/qore/misc/dgc-closure-var-collect-race.qtest` holds one
+dereference of a closure-bound variable before it decides (`dbg_hold_closure_var_deref()`), lets another one collect
+the variable, and counts the dereferences that collect it (`dbg_count_closure_var_collections()`);
+`examples/test/qore/classes/AsyncIoController/asyncio_queue_gc.qtest` is the controller's case.
 
 ## When a scan is triggered — and when it may be skipped
 
@@ -704,11 +744,12 @@ Taking and releasing the reference that a method call holds on a shared object i
 atomic increment and one atomic decrement of its reference count (two of each for a real reference) and a few plain
 loads.
 
-This is safe because the r-section never ordered a dereference against a scan that starts *after* it, only
-against one already in progress. A dereference that took the r-section first saw the same null set that the
-lock-free load sees, and the scan committed its set afterwards either way. The error in the other direction
-cannot happen: a stale *non-null* read only costs one unnecessary upgrade, and the slow path re-reads
-everything under the r-section. The fast path may only ever decline to skip, never skip wrongly.
+A release that skips the decision this way can supersede the count of a dereference that is scanning the object,
+whose scan has not committed the set yet: the r-section does not order the two. That dereference decides with the
+current count after its scan instead of leaving the decision to the release; see "A count superseded by a release
+that decided nothing". The error in the other direction cannot happen: a stale *non-null* read only costs one
+unnecessary upgrade, and the slow path re-reads everything under the r-section. The fast path may only ever decline
+to skip, never skip wrongly.
 
 Debug builds count the r-section acquisitions made by dereferences per thread
 (`dbg_get_deref_rsection_count()`);

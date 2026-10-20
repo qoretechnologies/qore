@@ -1460,11 +1460,13 @@ void qore_object_private::customDeref(ExceptionSink* xsink, bool real) {
             // and whatever the method does, since the reference the call frame holds is released here.  See
             // design/dgc.md, "A dereference that has nothing to decide takes no lock".
             //
-            // A scan committing a set concurrently with this load is not a missed collection: the rsection
-            // orders this dereference against a scan already in progress, not against one that starts after
-            // it, so the locking path reaches the same conclusion whenever it wins that race.  The reverse
-            // error cannot happen -- a stale non-null read only costs one unnecessary upgrade, and the state
-            // is read again under the rsection there.
+            // A release made here while another dereference scans the object decides nothing, as one made in
+            // tryFastDeref() does: that dereference has taken the scan due, so this one finds no set and no scan
+            // due.  The rsection does not order the two, and the release supersedes the count of the dereference
+            // making the scan; RSet::canDelete() therefore decides with the count as it is after the scan when
+            // releases have superseded a dereference's count, so the collection is not lost.  The reverse error
+            // cannot happen -- a stale non-null read only costs one unnecessary upgrade, and the state is read
+            // again under the rsection there.
             if (!rset.load(std::memory_order_acquire) && !qodh.hasDeferredScan()) {
                 printd(QRO_LVL, "qore_object_private::customDeref() this: %p '%s' no rset, no deferred scan; "
                     "nothing to do\n", this, status == OS_OK ? getClassName() : "<deleted>");
@@ -1538,6 +1540,13 @@ void qore_object_private::customDeref(ExceptionSink* xsink, bool real) {
                 }
                 if (recalc) {
                     if (qodh.doScan()) {
+#ifdef DEBUG
+                        // this dereference has taken its count and is about to scan; tests release another
+                        // reference here, as another thread can while the scan runs
+                        if (dbg_before_deref_scan_t hook = dbg_before_deref_scan.load(std::memory_order_acquire)) {
+                            hook(this);
+                        }
+#endif
                         // recalculate rset immediately
                         {
                             RSetHelper rsh(*this, xsink);

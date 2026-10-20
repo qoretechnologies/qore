@@ -52,6 +52,7 @@
 #include "qore/intern/QoreLValue.h"
 #include "qore/intern/StaticClassVarRefNode.h"
 #include "qore/intern/qore_number_private.h"
+#include "qore/intern/ql_debug.h"
 #include "qore/intern/qore_list_private.h"
 #include "qore/intern/QoreHashNodeIntern.h"
 #include "qore/intern/qore_program_private.h"
@@ -3539,6 +3540,8 @@ void ClosureVarValue::ref() const {
 
 #ifdef DEBUG
 std::atomic<ClosureVarValue::dbg_after_rescan_t> ClosureVarValue::dbg_after_rescan{nullptr};
+std::atomic<qore_dbg_closure_var_decide_hook_t> qore_dbg_closure_var_decide_hook{nullptr};
+std::atomic<qore_dbg_closure_var_collect_hook_t> qore_dbg_closure_var_collect_hook{nullptr};
 #endif
 
 void ClosureVarValue::deref(ExceptionSink* xsink, bool real) {
@@ -3586,6 +3589,13 @@ void ClosureVarValue::deref(ExceptionSink* xsink, bool real) {
         // for this dereference, but a set can have been released since.  See design/dgc.md, "A dereference that
         // has nothing to decide takes no lock", and design/closure-bound-locals.md.
         else if (rset.load(std::memory_order_acquire) || qodh.hasDeferredScan()) {
+#ifdef DEBUG
+            // this dereference has taken its count and has a decision to make; tests hold it here, so that another
+            // thread decides first
+            if (qore_dbg_closure_var_decide_hook_t hook = qore_dbg_closure_var_decide_hook.load()) {
+                hook(getName());
+            }
+#endif
             // set once this dereference has rescanned; see RSet::keepNeedsRescan()
             bool rescanned = false;
             while (true) {
@@ -3604,9 +3614,19 @@ void ClosureVarValue::deref(ExceptionSink* xsink, bool real) {
                         }
                         int rc = rs->canDelete(ref_copy, rcount, rescanned, *this, cycle_cleanup);
                         if (rc == 1) {
-                            printd(QORE_DEBUG_OBJ_REFS, "ClosureVarValue::deref() this: %p found recursive "
-                                "reference; deleting value\n", this);
-                            do_del = true;
+                            // another dereference can have decided to collect the variable as well; only the one
+                            // that claims the collection deletes it (RObject::claimCollection())
+                            if (claimCollection()) {
+                                printd(QORE_DEBUG_OBJ_REFS, "ClosureVarValue::deref() this: %p found recursive "
+                                    "reference; deleting value\n", this);
+                                do_del = true;
+#ifdef DEBUG
+                                qore_dbg_closure_var_collect_hook_t hook = qore_dbg_closure_var_collect_hook.load();
+                                if (hook) {
+                                    hook(getName());
+                                }
+#endif
+                            }
                             break;
                         }
                         if (!rc) {

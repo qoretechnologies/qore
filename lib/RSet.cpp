@@ -701,6 +701,7 @@ void RObject::derefRealIntern() {
 
 #ifdef DEBUG
 std::atomic<RObject::dbg_after_fast_real_release_t> RObject::dbg_after_fast_real_release{nullptr};
+std::atomic<RObject::dbg_before_deref_scan_t> RObject::dbg_before_deref_scan{nullptr};
 #endif
 
 int RObject::tryFastDeref(bool real) {
@@ -1244,10 +1245,20 @@ int RSet::canDelete(int ref_copy, int rcount, bool rescanned, RObject& initiator
 
     // Another reference operation superseded this dereference's snapshot. A rescan records the current
     // reference count, so comparing it with the old ref_copy would request the same rescan forever.
-    // The newer reference either keeps the object alive or supplies its own collection opportunity when
-    // released. Only a dereference whose snapshot is still current may decide to collect the cycle.
-    if (ref_copy != initiator.refs()) {
-        return 0;
+    int refs = initiator.refs();
+    if (ref_copy != refs) {
+        // A reference taken since the snapshot is still held, and its release finds this set and decides then; with
+        // no reference left, the dereference that released the last one deletes the object.
+        if (refs > ref_copy || !refs) {
+            return 0;
+        }
+        // References released since the snapshot: a release made while the object had no set took the lock-free
+        // path and decided nothing (RObject::tryFastDeref()), so this dereference decides, with the count as it is
+        // now.  A release made in the locking path decides as well: the object is deleted by the dereference that
+        // marks it in its destructor (qore_object_private::customDeref()), and a closure-bound variable by the one
+        // that claims its collection (RObject::claimCollection()).  See design/dgc.md, "A count superseded by a
+        // release that decided nothing".
+        ref_copy = refs;
     }
 
     if (!valid)

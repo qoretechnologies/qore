@@ -1566,6 +1566,71 @@ static void ut_fast_real_deref_releases_last(UnitTestCounters& c) {
     xsink.clear();
     obj->tDeref();
 }
+
+namespace {
+//! the object whose other reference is released in ut_superseded_snapshot_lock_free_release()
+QoreObject* ut_scan_other_holder = nullptr;
+bool ut_scan_hook_ran = false;
+
+void ut_release_other_before_scan(RObject* o) {
+    if (!ut_scan_other_holder || o != qore_object_private::get(*ut_scan_other_holder)) {
+        return;
+    }
+    QoreObject* obj = ut_scan_other_holder;
+    ut_scan_other_holder = nullptr;
+    RObject::dbg_before_deref_scan.store(nullptr);
+    ut_scan_hook_ran = true;
+    // the object has no recursive set yet, and the dereference in progress has taken the scan due at it, so this
+    // release takes the lock-free path and decides nothing, as a release made by another thread during the scan does
+    ExceptionSink xsink;
+    obj->deref(&xsink);
+    xsink.clear();
+}
+}
+
+//! Tests that a cycle is collected when another holder releases its reference while a dereference scans
+/** A Queue that holds itself is a cycle that only the Queue's private data closes, and the push marks a scan due
+    at the object's next dereference.  Two holders release their references at the same time: the first takes its
+    count and the scan due, and makes the scan; the second finds no recursive set and no scan due, releases its
+    reference with no lock and decides nothing.  The scan then finds the cycle, but the first dereference's count
+    has been superseded, and RSet::canDelete() left the decision to the release that superseded it: the cycle was
+    never collected.  The async I/O controller releases its references to a result Queue on two callback workers,
+    which stranded a poll operation that keeps its own result Queue with the result in it.  RSet::canDelete() now
+    decides with the count as it is when releases have superseded the dereference's count.  The hook releases the
+    other reference at exactly that point.
+*/
+static void ut_superseded_snapshot_lock_free_release(UnitTestCounters& c) {
+    ExceptionSink xsink;
+    Queue* q = new Queue;
+    QoreObject* obj = new QoreObject(QC_QUEUE, getProgram(), q);
+    // a weak reference keeps the object allocated, so the test can see that it was collected
+    obj->tRef();
+    // the other holder's reference
+    obj->ref();
+    // the Queue holds itself
+    q->push(&xsink, obj, obj->refSelf());
+    UT_ASSERT(c, !xsink, "the Queue takes the value");
+
+    ut_scan_hook_ran = false;
+    ut_scan_other_holder = obj;
+    RObject::dbg_before_deref_scan.store(ut_release_other_before_scan);
+    // the reference returned by the constructor
+    obj->deref(&xsink);
+    RObject::dbg_before_deref_scan.store(nullptr);
+    ut_scan_other_holder = nullptr;
+
+    UT_ASSERT(c, ut_scan_hook_ran, "the other reference is released while the first dereference scans");
+    UT_ASSERT(c, !obj->isValid(), "the Queue that only holds itself is collected");
+    if (obj->isValid()) {
+        // a failure leaks nothing: the cycle is broken with a reference of the test's own, which then goes
+        obj->ref();
+        q->clear(&xsink, obj);
+        obj->deref(&xsink);
+    }
+    UT_ASSERT(c, !xsink, "releasing the Queue raises no exception");
+    xsink.clear();
+    obj->tDeref();
+}
 #endif
 
 namespace {
@@ -6695,6 +6760,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     ut_cond_wait_cancel_in_window(c);
     Http3ClientResponseRegistrationTest::run(c);
     ut_fast_real_deref_releases_last(c);
+    ut_superseded_snapshot_lock_free_release(c);
     AsyncIoOpCacheTest::run(c);
 #endif
     ut_program_family_thread_data(c);
@@ -7337,6 +7403,121 @@ static QoreValue f_dbg_deref_wait_notify(const QoreListNode* params, RuntimeConf
     return QoreValue();
 }
 
+namespace {
+//! the armed hold of dbg_hold_closure_var_deref(); one at a time
+struct ClosureVarDerefHold {
+    std::mutex m;
+    std::string name;
+    Counter* held = nullptr;
+    Counter* release = nullptr;
+};
+
+ClosureVarDerefHold closure_var_deref_hold;
+
+//! runs in the thread that dereferences the variable, with no lock held; disarms itself, so it holds that thread once
+void dbg_hold_closure_var_deref_hook(const char* name) {
+    ClosureVarDerefHold& h = closure_var_deref_hold;
+    ExceptionSink xsink;
+    ReferenceHolder<Counter> held(&xsink);
+    ReferenceHolder<Counter> release(&xsink);
+    {
+        std::lock_guard<std::mutex> l(h.m);
+        if (!h.held || h.name != name) {
+            return;
+        }
+        held = h.held;
+        release = h.release;
+        h.held = nullptr;
+        h.release = nullptr;
+        qore_dbg_closure_var_decide_hook.store(nullptr);
+    }
+    held->dec(&xsink);
+    if (!xsink) {
+        release->waitForZero(&xsink);
+    }
+    // the thread is dereferencing a variable; a Counter deleted meanwhile is the test's error, not the dereference's
+    if (xsink) {
+        printd(0, "dbg_hold_closure_var_deref(): %s\n", xsink.getExceptionErr().getTypeName());
+        xsink.clear();
+    }
+}
+
+//! the collections of closure-bound variables counted by dbg_count_closure_var_collections()
+struct ClosureVarCollections {
+    std::mutex m;
+    std::string name;
+    int64 count = 0;
+};
+
+ClosureVarCollections closure_var_collections;
+
+void dbg_count_closure_var_collections_hook(const char* name) {
+    ClosureVarCollections& h = closure_var_collections;
+    std::lock_guard<std::mutex> l(h.m);
+    if (h.name == name) {
+        ++h.count;
+    }
+}
+}
+
+//! holds the next thread that dereferences a closure-bound variable of the given name with a decision to make
+/** The hold is taken once, in ClosureVarValue::deref(), after the dereference has taken its count and before it
+    decides collection, with no lock held: another thread can then release a reference to the variable and decide
+    first.
+
+    @param name the name of the variable
+    @param held decremented once the dereferencing thread is held
+    @param release the dereferencing thread continues when this Counter reaches zero
+
+    @throw DBG-ARGUMENT-ERROR a hold is already armed
+*/
+static QoreValue f_dbg_hold_closure_var_deref(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    const QoreStringNode* name = get_param_value(params, 0).get<const QoreStringNode>();
+    ReferenceHolder<Counter> held(get_counter_arg(params, 1, xsink), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    ReferenceHolder<Counter> release(get_counter_arg(params, 2, xsink), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    ClosureVarDerefHold& h = closure_var_deref_hold;
+    std::lock_guard<std::mutex> l(h.m);
+    if (h.held) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "a hold is already armed for variable '%s'", h.name.c_str());
+        return QoreValue();
+    }
+    h.name = name->c_str();
+    h.held = held.release();
+    h.release = release.release();
+    qore_dbg_closure_var_decide_hook.store(dbg_hold_closure_var_deref_hook);
+    return QoreValue();
+}
+
+//! starts counting the dereferences that collect closure-bound variables of the given name with their sets
+/** @param name the name of the variable; replaces the name counted before, and the count starts at 0
+*/
+static QoreValue f_dbg_count_closure_var_collections(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    const QoreStringNode* name = get_param_value(params, 0).get<const QoreStringNode>();
+    ClosureVarCollections& h = closure_var_collections;
+    std::lock_guard<std::mutex> l(h.m);
+    h.name = name->c_str();
+    h.count = 0;
+    qore_dbg_closure_var_collect_hook.store(dbg_count_closure_var_collections_hook);
+    return QoreValue();
+}
+
+//! returns the number of collections counted since dbg_count_closure_var_collections(), and stops counting
+static QoreValue f_dbg_get_closure_var_collections(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    ClosureVarCollections& h = closure_var_collections;
+    std::lock_guard<std::mutex> l(h.m);
+    qore_dbg_closure_var_collect_hook.store(nullptr);
+    h.name.clear();
+    return h.count;
+}
+
 #ifdef DEBUG
 std::atomic<qore_dbg_http1_defer_close_hook_t> qore_dbg_http1_defer_close_hook{nullptr};
 #endif
@@ -7631,6 +7812,14 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_deref_wait_notify", f_dbg_deref_wait_notify,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 2, stringTypeInfo, QORE_PARAM_NO_ARG, "name",
         QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "waiting");
+    qns.addBuiltinVariant("dbg_hold_closure_var_deref", f_dbg_hold_closure_var_deref,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 3, stringTypeInfo, QORE_PARAM_NO_ARG, "name",
+        QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "held", QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG,
+        "release");
+    qns.addBuiltinVariant("dbg_count_closure_var_collections", f_dbg_count_closure_var_collections,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1, stringTypeInfo, QORE_PARAM_NO_ARG, "name");
+    qns.addBuiltinVariant("dbg_get_closure_var_collections", f_dbg_get_closure_var_collections,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntTypeInfo, 0);
     qns.addBuiltinVariant("dbg_defer_http1_connection_close", f_dbg_defer_http1_connection_close,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1, QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "deferred");
     qns.addBuiltinVariant("dbg_release_http1_connection_close", f_dbg_release_http1_connection_close,
