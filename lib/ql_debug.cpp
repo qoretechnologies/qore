@@ -59,6 +59,7 @@
 #include "qore/intern/QoreHttp2ClientConnection.h"
 #include "qore/intern/Http2Session.h"
 #include "qore/intern/qore_socket_private.h"
+#include "qore/intern/qore_program_private.h"
 #include "qore/intern/QoreHttp3ClientConnection.h"
 #include "qore/intern/QC_Http3ClientPollOperationBase.h"
 #include "qore/intern/NegotiatingConnectionPollOp.h"
@@ -1447,6 +1448,99 @@ void ut_fast_real_release_other(RObject* o) {
     never released the last reference, which aborted WebSocketPerfTest.qtest in debug builds, and did not delete the
     object in release builds.  The hook releases the other reference at exactly that point.
 */
+//! The shared state of the Program family thread-local data test
+struct UtFamilyThreadData {
+    QoreProgram* child = nullptr;
+    QoreThreadLock m;
+    QoreCondition cond;
+    //! the thread's data in the root's family, with a reference held by the test
+    QoreHashNode* h = nullptr;
+    //! the thread's data in the child's own family after the root's teardown, with a reference held by the test
+    QoreHashNode* h2 = nullptr;
+    //! 1: h saved; 2: root deleted; 3: h2 saved; 4: child deleted; 5: the thread is done
+    int step = 0;
+    //! the thread had no data in the child's own family after the root's teardown
+    bool none_after_teardown = false;
+
+    DLLLOCAL void set(int n) {
+        AutoLocker al(m);
+        step = n;
+        cond.broadcast();
+    }
+
+    DLLLOCAL void wait(int n) {
+        AutoLocker al(m);
+        while (step < n) {
+            cond.wait(m);
+        }
+    }
+};
+
+static void ut_family_thread_data_thread(ExceptionSink* xsink, void* arg) {
+    UtFamilyThreadData& t = *reinterpret_cast<UtFamilyThreadData*>(arg);
+    qore_program_private* cp = qore_program_private::get(*t.child);
+    // the thread gets data in the root's family through the child, without running code of either Program
+    QoreHashNode* h = cp->getThreadDataRef(true);
+    qore_hash_private::get(*h)->setKeyValue("k", 1, xsink);
+    t.h = h;
+    t.set(1);
+    t.wait(2);
+    // the root is gone: the child is the root of a family of its own, in which the thread has no data yet
+    QoreHashNode* none = cp->getThreadDataRef(false);
+    t.none_after_teardown = !none;
+    if (none) {
+        none->deref(xsink);
+    }
+    t.h2 = cp->getThreadDataRef(true);
+    t.set(3);
+    t.wait(4);
+    t.set(5);
+}
+
+//! A root Program's teardown frees the thread-local data of a thread that is still alive
+/** The thread gets thread-local data in the family of a root Program through a child Program and stays alive;
+    deleting the root frees the thread's data; the child, still alive, is then the root of a family of its own, and
+    its teardown frees the thread's data in it.  The test holds a reference to each hash, so freeing it shows as the
+    hash's reference count dropping to the test's own reference.
+*/
+static void ut_program_family_thread_data(UnitTestCounters& c) {
+    ExceptionSink xsink;
+    QoreProgram* root = new QoreProgram(QoreParseOptions(PO_DEFAULT));
+    UtFamilyThreadData t;
+    t.child = new QoreProgram(root, QoreParseOptions(PO_DEFAULT));
+    UT_ASSERT(c, qore_program_private::get(*t.child)->tld_root.load() == qore_program_private::get(*root),
+        "a child is in the family of its parent");
+    if (q_start_thread(&xsink, ut_family_thread_data_thread, &t) < 0) {
+        UT_ASSERT(c, false, "the thread starts");
+        xsink.clear();
+        t.child->deref(&xsink);
+        root->deref(&xsink);
+        xsink.clear();
+        return;
+    }
+    t.wait(1);
+    UT_ASSERT_EQ(c, 2, t.h->reference_count(), "the thread's map and the test reference the thread's data");
+    root->deref(&xsink);
+    UT_ASSERT(c, !xsink, "the root's teardown raises no exception");
+    UT_ASSERT_EQ(c, 1, t.h->reference_count(), "the root's teardown freed the data of the live thread");
+    UT_ASSERT(c, qore_program_private::get(*t.child)->tld_root.load() == qore_program_private::get(*t.child),
+        "the child outliving its root is the root of a family of its own");
+    t.set(2);
+    t.wait(3);
+    UT_ASSERT(c, t.none_after_teardown, "the thread had no data in the child's own family at first");
+    UT_ASSERT(c, t.h2 && t.h2 != t.h, "the thread got data in the child's own family");
+    UT_ASSERT_EQ(c, 2, t.h2->reference_count(), "the thread's map and the test reference the new data");
+    t.child->deref(&xsink);
+    UT_ASSERT(c, !xsink, "the child's teardown raises no exception");
+    UT_ASSERT_EQ(c, 1, t.h2->reference_count(), "the child's teardown freed the thread's data in its family");
+    t.set(4);
+    t.wait(5);
+    t.h->deref(&xsink);
+    t.h2->deref(&xsink);
+    UT_ASSERT(c, !xsink, "freeing the data raises no exception");
+    xsink.clear();
+}
+
 static void ut_fast_real_deref_releases_last(UnitTestCounters& c) {
     ExceptionSink xsink;
     QoreObject* obj = new QoreObject(QC_COUNTER, getProgram(), new Counter(0));
@@ -6097,6 +6191,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     ut_fast_real_deref_releases_last(c);
     AsyncIoOpCacheTest::run(c);
 #endif
+    ut_program_family_thread_data(c);
     ut_asyncio_autostop(c);
     ut_asyncio_start_stop(c);
     ut_asyncio_get_info(c);

@@ -75,6 +75,7 @@ class AbstractQoreFunctionVariant;
 class AbstractQoreZoneInfo;
 class ThreadProgramData;
 struct ThreadLocalProgramData;
+class qore_program_private;
 class QoreAbstractModule;
 class QoreRWLock;
 class LoopContext;
@@ -1450,22 +1451,59 @@ private:
    typedef std::set<QoreProgram*> pgm_set_t;
    pgm_set_t pgm_set;
 
-   // lock for pgm_set data structure (which is accessed from multiple threads when QorePrograms deregister themselves)
+   //! the thread's thread-local data in each Program family it has data in, by family root
+   /** The key nullptr holds the data used after a family's thread-local data has been freed for the last time, which
+       is a bug that debug builds assert on; see the thread-local data comment in qore_program_private_base
+   */
+   typedef std::map<qore_program_private*, QoreHashNode*> tld_map_t;
+   tld_map_t tld_map;
+
+   // lock for pgm_set and tld_map (which are accessed from multiple threads when QorePrograms deregister themselves
+   // or free the thread-local data of their family)
    QoreThreadLock pslock;
 
    ThreadData* td;
 
-   DLLLOCAL void ref() {
-      ROreference();
-   }
-
    DLLLOCAL ~ThreadProgramData() {
       assert(pgm_set.empty());
+      assert(tld_map.empty());
    }
 
 public:
    DLLLOCAL ThreadProgramData(ThreadData* n_td) : td(n_td) {
    }
+
+   DLLLOCAL void ref() {
+      ROreference();
+   }
+
+   //! Returns the thread's thread-local data in the family of the given root with a reference for the caller
+   /** Must be called in the thread itself.
+
+       @param root the root of the family
+       @param create if true, the hash is created and the thread registered with the root if the thread has no data
+       in the family
+       @param final set to true if \a create is true and the family's thread-local data has been freed for the last
+       time; nullptr is returned then
+       @param ref if false, no reference is added for the caller: the hash is valid until the thread ends or the
+       family's root frees the family's data; see QoreProgram::getThreadData()
+
+       @return the hash with a reference for the caller (unless \a ref is false), or nullptr
+   */
+   DLLLOCAL QoreHashNode* getThreadDataRef(qore_program_private* root, bool create, bool& final, bool ref = true);
+
+   //! Returns the hash used after a family's thread-local data has been freed for the last time
+   /** @param ref if true, a reference is added for the caller
+   */
+   DLLLOCAL QoreHashNode* getOrphanThreadDataRef(bool ref = true);
+
+   //! Removes the thread's thread-local data in the family of the given root and returns it with its reference
+   /** Called by the root while freeing the family's data; the root has already removed the thread from its registry.
+   */
+   DLLLOCAL QoreHashNode* detachThreadData(qore_program_private* root);
+
+   //! Frees all the thread's thread-local data; dereferences the hashes outside all locks, until none is left
+   DLLLOCAL void freeAllThreadData(ExceptionSink* xsink);
 
    DLLLOCAL void delProgram(QoreProgram* pgm);
    DLLLOCAL bool saveProgram(bool runtime, ExceptionSink* xsink);
@@ -1473,10 +1511,10 @@ public:
    DLLLOCAL bool canRunDebugCallbacks() const;
    DLLLOCAL bool isActiveProgram(QoreProgram* pgm) const;
 
-   //! Clears thread-local data in all referenced programs without unregistering the thread
-   /** Clears the thread-local hash (tld) for each program this thread has data in.
-       Unlike del(), this does not remove the thread from programs or destroy the
-       ThreadProgramData — the thread continues to be available for new tasks.
+   //! Clears the thread's thread-local data in all Program families without unregistering the thread
+   /** Clears the thread-local hash (tld) of each Program family this thread has data in.  Unlike del(), this does
+       not remove the thread from programs or destroy the ThreadProgramData — the thread continues to be available
+       for new tasks.  The hashes are cleared outside all locks, as clearing them can run destructors.
    */
    DLLLOCAL void clearAllProgramThreadData(ExceptionSink* xsink);
 

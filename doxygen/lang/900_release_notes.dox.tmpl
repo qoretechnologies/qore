@@ -594,6 +594,23 @@
 
     @subsection qore_3_0_0_compatibility Changes That Can Affect Backwards-Compatibility
 
+    @par Thread-Local Data Is Freed With the Program That Owns It
+    @parblock
+    The thread-local data that @ref Qore::save_thread_data() "save_thread_data()" saves is shared by a family of
+    @ref Qore::Program "Program" objects: a Program created without a parent (the main Program, or one created as an
+    independent Program), its root, and every Program created from it or from one of its members.  A thread's data in
+    a family is now freed when the family's root is destroyed, also for a thread that is still alive, such as an idle
+    @ref Qore::Thread::ThreadPool "ThreadPool" worker; it was freed only when the thread ended, and not at all for a
+    thread that had used the data only through a Program that no longer existed, such as a pool worker that had run
+    tasks of a child Program.  Once the root's teardown has started, data that a thread saves in the family is freed
+    by the end of the teardown; a child Program that is still alive when its root's teardown ends has thread-local
+    data of its own, empty at first.  Clearing or freeing the data, at the end of a pool task, a thread or a root's
+    teardown, no longer holds an internal lock while destructors run, so a destructor run then can use thread-local
+    data, enter another Program, or start a thread; a destructor that entered a Program the pool worker had not entered
+    deadlocked the worker.  For C++ modules, \c QoreProgram::getThreadData() never returns nullptr, and the hash it
+    returns is valid until the thread ends or the family's root is destroyed.
+    @endparblock
+
     @par A Bare Name in a Class Refers to the Class Before a Top-Level Local Variable
     With @ref allow-bare-refs "%allow-bare-refs" (set by @ref new-style "%new-style" and \c %%modern), a bare name in
     a method refers to the method's own local variables first, then to the class's members, constants, static

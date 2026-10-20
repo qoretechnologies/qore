@@ -1,0 +1,361 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+#
+# thread-local data (save_thread_data(), get_thread_data(), ...) belongs to a family of Program objects: a Program and
+# every child Program created from it share one hash per thread; these tests pin that contract and check that the data
+# of every thread is freed when the family's root Program is destroyed or when the thread ends
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class ThreadDataLifetimeTest
+
+#! counts its destruction in the Counter given; optionally runs a closure from its destructor
+class Tracked {
+    private {
+        Counter destroyed;
+        *code on_destroy;
+    }
+
+    constructor(Counter destroyed, *code on_destroy) {
+        self.destroyed = destroyed;
+        self.on_destroy = on_destroy;
+    }
+
+    destructor() {
+        if (on_destroy) {
+            on_destroy();
+        }
+        destroyed.dec();
+    }
+}
+
+#! the parse options of the Programs the tests create
+const ChildOptions = PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES;
+
+#! the code of the Programs the tests create
+const ProgramCode = "
+#! saves a value in the thread-local data
+sub save(string key, auto value) {
+    save_thread_data(key, value);
+}
+
+#! returns a value from the thread-local data
+auto sub get(string key) {
+    return get_thread_data(key);
+}
+
+#! saves a value in the thread-local data of a background thread started in this Program, which then waits for a
+#! value on the Queue given before it ends
+sub save_in_thread(string key, auto value, Counter saved, Queue release, Counter ended) {
+    background sub () {
+        on_exit ended.dec();
+        save_thread_data(key, value);
+        saved.dec();
+        release.get();
+    }();
+}
+
+#! saves a value in the thread-local data of the thread that destroys it
+class SaveOnDestroy {
+    private {
+        string key;
+        auto value;
+        *Counter destroyed;
+    }
+
+    constructor(string key, auto value, *Counter destroyed) {
+        self.key = key;
+        self.value = value;
+        self.destroyed = destroyed;
+    }
+
+    destructor() {
+        save_thread_data(key, value);
+        if (destroyed) {
+            destroyed.dec();
+        }
+    }
+}
+
+#! a global whose destructor runs in this Program's teardown
+our *SaveOnDestroy global_obj;
+
+#! sets the global to an object that saves the value given in the thread data of the thread that destroys it
+sub set_global(string key, auto value) {
+    global_obj = new SaveOnDestroy(key, value);
+}
+
+#! returns a pool task that saves an object in its thread-local data, which saves the value given in the thread data
+#! of the worker when the task's thread data is cleared at the end of the task
+code sub pool_task(string key, auto value, Counter cleared) {
+    return sub () {
+        save_thread_data(\"trigger\", new SaveOnDestroy(key, value, cleared));
+    };
+}
+
+#! returns a child Program of this Program
+Program sub child() {
+    Program p(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES);
+    p.parse(\"
+sub save(string key, auto value) { save_thread_data(key, value); }
+auto sub get(string key) { return get_thread_data(key); }
+Program sub child() {
+    Program p(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES);
+    p.parse('sub save(string key, auto value) { save_thread_data(key, value); }
+auto sub get(string key) { return get_thread_data(key); }', 'grandchild');
+    return p;
+}
+\", \"child\");
+    return p;
+}
+";
+
+public class ThreadDataLifetimeTest inherits QUnit::Test {
+    constructor() : Test("ThreadDataLifetimeTest", "1.0", \ARGV) {
+        addTestCase("a child Program shares the thread data of its parent", \sharing());
+        addTestCase("an independent Program has thread data of its own", \independent());
+        addTestCase("a root's teardown frees the thread data of a live thread", \rootTeardownFreesLiveThread());
+        addTestCase("destructors run by the teardown can use thread data and start threads",
+            \teardownDestructorUsesThreadData());
+        addTestCase("a pool worker's data in a family it entered through a child Program is freed",
+            \poolWorkerInChildFamily());
+        addTestCase("destructors run at a thread's end can use thread data and start threads",
+            \threadEndDestructorUsesThreadData());
+        addTestCase("a child Program used after its root's teardown has thread data of its own",
+            \childAfterRootTeardown());
+        addTestCase("thread data saved during a root's teardown does not outlive the teardown",
+            \dataSavedDuringTeardown());
+        addTestCase("the end of a pool task clears thread data outside the thread's locks", \poolTaskEndClear());
+        set_return_value(main());
+    }
+
+    #! a child Program sees the thread data of its parent, and the parent sees the child's
+    sharing() {
+        foreach int extra in ((0, PO_NO_CHILD_PO_RESTRICTIONS)) {
+            string label = extra ? "PO_NO_CHILD_PO_RESTRICTIONS" : "default";
+            save_thread_data("from_parent_" + label, label);
+            Program child(ChildOptions | extra);
+            child.parse(ProgramCode, "child");
+            assertEq(label, child.callFunction("get", "from_parent_" + label),
+                "the child sees the parent's thread data (" + label + ")");
+            child.callFunction("save", "from_child_" + label, label);
+            assertEq(label, get_thread_data("from_child_" + label),
+                "the parent sees the child's thread data (" + label + ")");
+
+            # a grandchild created by the child's code is in the same family
+            Program grandchild = child.callFunction("child");
+            assertEq(label, grandchild.callFunction("get", "from_parent_" + label),
+                "a grandchild sees the parent's thread data (" + label + ")");
+            grandchild.callFunction("save", "from_grandchild_" + label, label);
+            assertEq(label, get_thread_data("from_grandchild_" + label),
+                "the parent sees the grandchild's thread data (" + label + ")");
+            assertEq(label, child.callFunction("get", "from_grandchild_" + label),
+                "the child sees the grandchild's thread data (" + label + ")");
+            delete_thread_data("from_parent_" + label, "from_child_" + label, "from_grandchild_" + label);
+        }
+    }
+
+    #! an independent Program is the root of a family of its own
+    independent() {
+        save_thread_data("independent_key", "main");
+        Program root(ChildOptions, True);
+        root.parse(ProgramCode, "root");
+        assertNothing(root.callFunction("get", "independent_key"), "an independent Program does not see the main "
+            "Program's thread data");
+        root.callFunction("save", "independent_key", "root");
+        assertEq("main", get_thread_data("independent_key"), "the main Program does not see the independent "
+            "Program's thread data");
+        assertEq("root", root.callFunction("get", "independent_key"));
+        delete_thread_data("independent_key");
+    }
+
+    #! the thread data a live thread has in a family is freed when the family's root is destroyed
+    rootTeardownFreesLiveThread() {
+        Counter destroyed(1);
+        Counter saved(1);
+        Counter ended(1);
+        Queue release();
+        {
+            Program root(ChildOptions, True);
+            root.parse(ProgramCode, "root");
+            root.callFunction("save_in_thread", "tracked", new Tracked(destroyed), saved, release, ended);
+            saved.waitForZero();
+            # the thread is still alive; it waits for the release in the root's code, so the root's teardown,
+            # which waits for its threads, cannot run yet: let the thread leave the root's code first
+            release.push(True);
+            ended.waitForZero();
+        }
+        # the thread has ended; its data was freed at its end at the latest
+        assertEq(0, destroyed.getCount(), "the thread's data was freed");
+
+        # now a thread that stays alive outside the root's code: it saves in the root, then parks in this Program
+        destroyed = new Counter(1);
+        saved = new Counter(1);
+        Counter parked(1);
+        Queue release2();
+        Program root(ChildOptions, True);
+        root.parse(ProgramCode, "root");
+        background sub () {
+            root.callFunction("save", "tracked", new Tracked(destroyed));
+            saved.dec();
+            # park outside the root's code
+            parked.dec();
+            release2.get();
+        }();
+        saved.waitForZero();
+        parked.waitForZero();
+        assertEq(1, destroyed.getCount(), "the thread's data is alive while its root is");
+        delete root;
+        assertEq(0, destroyed.getCount(), "the root's teardown freed the data of the live thread");
+        release2.push(True);
+    }
+
+    #! a destructor run while a root's teardown frees thread data can use thread data and start a thread
+    teardownDestructorUsesThreadData() {
+        Counter destroyed(1);
+        Counter saved(1);
+        Counter parked(1);
+        Counter started(1);
+        Queue release();
+        hash<auto> seen;
+        code on_destroy = sub () {
+            # the thread data API works in the destructor; it is the tearing-down thread's own data
+            save_thread_data("from_destructor", True);
+            seen.value = get_thread_data("from_destructor");
+            background sub () { started.dec(); }();
+        };
+        Program root(ChildOptions, True);
+        root.parse(ProgramCode, "root");
+        background sub () {
+            root.callFunction("save", "tracked", new Tracked(destroyed, on_destroy));
+            saved.dec();
+            parked.dec();
+            release.get();
+        }();
+        saved.waitForZero();
+        parked.waitForZero();
+        delete root;
+        assertEq(0, destroyed.getCount(), "the teardown ran the destructor");
+        assertTrue(seen.value, "the destructor saved and read thread data");
+        assertEq(0, started.waitForZero(30s), "the thread the destructor started ran");
+        delete_thread_data("from_destructor");
+        release.push(True);
+    }
+
+    #! the end of a pool task clears the task's thread data outside the worker's locks, so a destructor run by that
+    #! can enter a Program the worker has not entered; the worker's data in a family it has entered only through a
+    #! child Program that is gone is freed when the worker ends at the latest
+    poolWorkerInChildFamily() {
+        Counter destroyed(1);
+        Counter cleared(1);
+        ThreadPool pool(1, 1);
+        {
+            Program child(ChildOptions);
+            child.parse(ProgramCode, "child");
+            # the object saved by the task saves a tracked object when the task's thread data is cleared; its
+            # destructor runs in the child, so the worker enters the child while the data is cleared
+            pool.submit(child.callFunction("pool_task", "tracked", new Tracked(destroyed), cleared));
+            # bounded only so that a regression fails instead of hanging
+            assertEq(0, cleared.waitForZero(30s), "the task's thread data was cleared at its end");
+        }
+        pool.stopWait();
+        # the tracked object was freed when the task's data was cleared or when the worker ended, which follows
+        # stopWait(); wait for the destructor, bounded only so that a regression fails instead of hanging
+        assertEq(0, destroyed.waitForZero(30s), "the worker's data in the family was freed");
+    }
+
+    #! a destructor run at a thread's end can use thread data and start a thread
+    threadEndDestructorUsesThreadData() {
+        Counter destroyed(1);
+        Counter started(1);
+        Counter used(1);
+        code on_destroy = sub () {
+            save_thread_data("from_end_destructor", True);
+            if (get_thread_data("from_end_destructor")) {
+                used.dec();
+            }
+            background sub () { started.dec(); }();
+        };
+        background sub () {
+            save_thread_data("tracked", new Tracked(destroyed, on_destroy));
+        }();
+        assertEq(0, destroyed.waitForZero(30s), "the thread's end ran the destructor");
+        assertEq(0, used.waitForZero(30s), "the destructor saved and read thread data");
+        assertEq(0, started.waitForZero(30s), "the thread the destructor started ran");
+    }
+
+    #! a child Program that outlives its root has thread data of its own, empty at first, after the root's teardown
+    childAfterRootTeardown() {
+        Program root(ChildOptions, True);
+        root.parse(ProgramCode, "root");
+        Program child = root.callFunction("child");
+        child.callFunction("save", "before", 1);
+        assertEq(1, root.callFunction("get", "before"), "the root sees its child's data");
+        delete root;
+        assertNothing(child.callFunction("get", "before"), "the data saved before the root's teardown is gone");
+        child.callFunction("save", "after", 2);
+        assertEq(2, child.callFunction("get", "after"), "the child has thread data of its own");
+        # a grandchild created now is in the child's family
+        Program grandchild = child.callFunction("child");
+        assertEq(2, grandchild.callFunction("get", "after"), "a new grandchild shares the child's thread data");
+        assertNothing(get_thread_data("after"), "the main Program does not see it");
+    }
+
+    #! thread data that destructors save during a root's teardown is freed at the end of the teardown, and the
+    #! thread data that a child Program's destructors save is the family's
+    dataSavedDuringTeardown() {
+        int n = 1000;
+        Counter destroyed(n);
+        for (int i = 0; i < n; ++i) {
+            Program root(ChildOptions, True);
+            root.parse(ProgramCode, "root");
+            # the root's global saves a tracked object in this thread's data in the root's family in the teardown
+            root.callFunction("set_global", "saved_during_teardown", new Tracked(destroyed));
+            delete root;
+            if (destroyed.getCount() != n - i - 1) {
+                assertEq(n - i - 1, destroyed.getCount(), sprintf("iteration %d: the data saved during the teardown "
+                    "was freed by the teardown", i));
+                break;
+            }
+        }
+        assertEq(0, destroyed.getCount(), "no data saved during a root's teardown outlived the teardown");
+
+        # a child's teardown saves in the family's data, which lives on: each child replaces the last one's value
+        int size = get_all_thread_data().size();
+        destroyed = new Counter(n);
+        for (int i = 0; i < n; ++i) {
+            Program child(ChildOptions);
+            child.parse(ProgramCode, "child");
+            child.callFunction("set_global", "saved_by_child", new Tracked(destroyed));
+            delete child;
+        }
+        assertEq(1, destroyed.getCount(), "only the last child's value is still in the family's data");
+        assertEq(size + 1, get_all_thread_data().size(), "the family's data has one key more");
+        delete_thread_data("saved_by_child");
+        assertEq(0, destroyed.getCount());
+    }
+
+    #! the end of a pool task clears the task's thread data, and a destructor run by that can use thread data
+    poolTaskEndClear() {
+        ThreadPool pool(1, 1);
+        on_exit pool.stopWait();
+        Counter destroyed(1);
+        Counter used(1);
+        code on_destroy = sub () {
+            save_thread_data("from_task_end", True);
+            if (get_thread_data("from_task_end")) {
+                used.dec();
+            }
+        };
+        pool.submit(sub () {
+            save_thread_data("tracked", new Tracked(destroyed, on_destroy));
+        });
+        assertEq(0, destroyed.waitForZero(30s), "the task's thread data was cleared at its end");
+        assertEq(0, used.waitForZero(30s), "the destructor saved and read thread data");
+    }
+}

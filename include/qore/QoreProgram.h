@@ -835,9 +835,25 @@ public:
     DLLEXPORT void depDeref();
 
     //! returns the thread-local data for the current thread and the Program object
-    /** will always be non-nullptr if the thread is registered
+    /** The thread-local data (as used by save_thread_data() and get_thread_data()) is shared by a family of Program
+        objects: a Program created without a parent, its root, and every Program created from the root or from one of
+        its members.  Each thread has one hash in each family it uses the data of; this call creates it if the thread
+        has none in the family yet.
+
+        The hash is freed when the thread ends or when the family's root is destroyed, whichever comes first.  Once the
+        root's teardown has started, data that a thread saves in the family is freed by the end of the teardown, and a
+        member of the family that is still alive when the teardown ends becomes the root of a family of its own, in
+        which each thread's data starts empty.
+
+        @return the thread-local data for the current thread in the Program object's family; never nullptr if the
+        thread is registered.  The caller does not get a reference: the pointer is valid until the thread ends or the
+        family's root is destroyed, so it must not be kept across a call that can destroy the root.  The hash has no
+        other reference, so the caller can change it.
 
         @since %Qore 0.9
+
+        @note since %Qore 3.0 the data is freed when the family's root is destroyed, also for a thread that is still
+        alive; before, it was not freed at all for a thread that had left every Program of the family
     */
     DLLEXPORT QoreHashNode* getThreadData();
 

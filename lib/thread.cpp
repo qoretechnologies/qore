@@ -1042,7 +1042,83 @@ bool ThreadProgramData::isActiveProgram(QoreProgram* pgm) const {
     return td->current_pgm == pgm;
 }
 
+QoreHashNode* ThreadProgramData::getThreadDataRef(qore_program_private* root, bool create, bool& final, bool ref) {
+    AutoLocker al(pslock);
+    tld_map_t::iterator i = tld_map.lower_bound(root);
+    if (i != tld_map.end() && i->first == root) {
+        if (ref) {
+            i->second->ref();
+        }
+        return i->second;
+    }
+    if (!create) {
+        return nullptr;
+    }
+    // the root is valid: the calling thread runs code of a Program of the family, which keeps the root valid
+    if (root->registerThreadData(this)) {
+        final = true;
+        return nullptr;
+    }
+    QoreHashNode* h = new QoreHashNode(autoTypeInfo);
+    tld_map.insert(i, tld_map_t::value_type(root, h));
+    if (ref) {
+        h->ref();
+    }
+    return h;
+}
+
+QoreHashNode* ThreadProgramData::getOrphanThreadDataRef(bool ref) {
+    AutoLocker al(pslock);
+    tld_map_t::iterator i = tld_map.find(nullptr);
+    if (i == tld_map.end()) {
+        i = tld_map.insert(tld_map_t::value_type(nullptr, new QoreHashNode(autoTypeInfo))).first;
+    }
+    if (ref) {
+        i->second->ref();
+    }
+    return i->second;
+}
+
+QoreHashNode* ThreadProgramData::detachThreadData(qore_program_private* root) {
+    AutoLocker al(pslock);
+    tld_map_t::iterator i = tld_map.find(root);
+    if (i == tld_map.end()) {
+        return nullptr;
+    }
+    QoreHashNode* h = i->second;
+    tld_map.erase(i);
+    return h;
+}
+
+void ThreadProgramData::freeAllThreadData(ExceptionSink* xsink) {
+    while (true) {
+        tld_map_t m;
+        {
+            AutoLocker al(pslock);
+            if (tld_map.empty()) {
+                break;
+            }
+            m.swap(tld_map);
+            // while this thread holds its pslock and has data in a family, the family's root cannot be freed: the
+            // root's teardown needs this lock to free this thread's data
+            for (auto& i : m) {
+                if (i.first) {
+                    i.first->unregisterThreadData(this);
+                }
+            }
+        }
+        // no lock is held here: dereferencing a hash can run destructors, which can save thread-local data again;
+        // the loop frees that too
+        for (auto& i : m) {
+            i.second->deref(xsink);
+        }
+    }
+}
+
 void ThreadProgramData::del(ExceptionSink* xsink) {
+    // free the thread's thread-local data in all Program families first, as the old per-Program finalization did
+    freeAllThreadData(xsink);
+
     // first purge all data
     {
         SafeDerefHelper sdh(xsink);
@@ -1086,6 +1162,9 @@ void ThreadProgramData::del(ExceptionSink* xsink) {
             deref();
         }
     }
+
+    // the destructors run above can have saved thread-local data again
+    freeAllThreadData(xsink);
 }
 
 #ifdef DEBUG
@@ -1234,8 +1313,6 @@ public:
     DLLLOCAL void startThread(ExceptionSink& xsink) {
         // register the new tid
         qore_program_private::registerNewThread(*pgm, tid);
-        // create thread-local data in the program object
-        qore_program_private::startThread(*pgm, xsink);
         started = true;
         //printd(5, "BGThreadParams::startThread() this: %p pgm: %p\n", this, pgm);
         pgm->depRef();
@@ -4475,9 +4552,19 @@ QoreNamespace* get_thread_ns(QoreNamespace &qorens) {
 }
 
 void ThreadProgramData::clearAllProgramThreadData(ExceptionSink* xsink) {
-    AutoLocker al(pslock);
-    for (auto& i : pgm_set) {
-        qore_program_private::clearThreadData(*i, xsink);
+    std::vector<QoreHashNode*> hashes;
+    {
+        AutoLocker al(pslock);
+        hashes.reserve(tld_map.size());
+        for (auto& i : tld_map) {
+            i.second->ref();
+            hashes.push_back(i.second);
+        }
+    }
+    // no lock is held here: clearing a hash can run destructors, which can use thread-local data and enter Programs
+    for (QoreHashNode* h : hashes) {
+        qore_hash_private::get(*h)->clear(xsink, false);
+        h->deref(xsink);
     }
 }
 

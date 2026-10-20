@@ -135,6 +135,15 @@ x=null@endverbatim
     @ref Qore::save_thread_data() "save_thread_data()" and @ref Qore::get_thread_data() "get_thread_data()" functions
     (documented in @ref threading_functions).
 
+    @anchor thread_local_data_family
+    The thread-local data that these functions use is shared by a family of @ref Qore::Program "Program" objects: a
+    Program created without a parent (the main Program, or one created as an independent Program) and every Program
+    created from it or from one of its members, so code in a child Program sees the data that its parent saves in the
+    same thread, and the other way around.  A thread's data is freed when the thread ends or when the family's root
+    Program is destroyed, whichever comes first.  Data that a thread saves while the root is being destroyed is freed
+    by the end of the root's destruction, and a child Program that is still alive then has thread-local data of its
+    own, empty at first.
+
     @section thread_synchronization Thread Management and Inter-Thread Communication
 
     @anchor synchronized

@@ -114,11 +114,23 @@ static void call_async_thread(ExceptionSink* xsink, void* arg) {
 
 extern QoreClass* QC_TIMEZONE;
 
+// returns the calling thread's thread-local data in the current Program's family with a reference for the caller;
+// if create is true, the hash is created if the thread has none; if false, nullptr is returned then; the caller uses
+// the hash without holding any lock, so destructors run by changing it can use thread-local data; the reference
+// keeps the hash valid if the family's root frees the family's data meanwhile, so the hash is changed through
+// qore_hash_private, as QoreHashNode's own changing methods require a unique reference
+static QoreHashNode* get_thread_data_ref(bool create) {
+    return qore_program_private::get(*getProgram())->getThreadDataRef(create);
+}
+
 static void delete_thread_data_intern(const QoreListNode* args, ExceptionSink* xsink) {
     assert(xsink);
     assert(args);
-    // get thread data hash
-    QoreHashNode *data = getProgram()->getThreadData();
+    // get thread data hash, if the thread has one
+    ReferenceHolder<QoreHashNode> data(get_thread_data_ref(false), xsink);
+    if (!data) {
+        return;
+    }
 
     // iterate through arguments and delete each key
     for (unsigned i = 0; i < args->size(); i++) {
@@ -127,13 +139,16 @@ static void delete_thread_data_intern(const QoreListNode* args, ExceptionSink* x
         }
         QoreValue p = args->retrieveEntry(i);
         if (!p.isNothing()) {
-            QoreStringValueHelper t(p, QCS_DEFAULT, xsink);
-            if (*xsink)
+            // the key in the default encoding; a key with a NUL character raises HASH-KEY-ERROR
+            QoreHashKeyHelper key(p, xsink);
+            if (*xsink) {
                 break;
+            }
 
-            data->deleteKey(*t, xsink);
-            if (*xsink)
+            qore_hash_private::get(**data)->deleteKey(key.c_str(), xsink);
+            if (*xsink) {
                 break;
+            }
         }
     }
 }
@@ -141,9 +156,9 @@ static void delete_thread_data_intern(const QoreListNode* args, ExceptionSink* x
 static QoreHashNode* remove_thread_data_intern(const QoreListNode* args, ExceptionSink* xsink) {
     assert(xsink);
     assert(args);
-    // get thread data hash
-    QoreHashNode* data = getProgram()->getThreadData();
-    qore_hash_private* dh = qore_hash_private::get(*data);
+    // get thread data hash, if the thread has one
+    ReferenceHolder<QoreHashNode> data(get_thread_data_ref(false), xsink);
+    qore_hash_private* dh = data ? qore_hash_private::get(**data) : nullptr;
 
     ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
 
@@ -160,7 +175,7 @@ static QoreHashNode* remove_thread_data_intern(const QoreListNode* args, Excepti
                 return nullptr;
             }
 
-            rv->setKeyValue(key.c_str(), dh->takeKeyValueIntern(key.c_str()), xsink);
+            rv->setKeyValue(key.c_str(), dh ? dh->takeKeyValueIntern(key.c_str()) : QoreValue(), xsink);
             assert(!*xsink);
         }
     }
@@ -269,8 +284,8 @@ save_thread_data(h);
     could throw an exception in its destructor
 */
 nothing save_thread_data(hash<auto> data) [flags=NAMED_ARGS;dom=THREAD_CONTROL] {
-    QoreHashNode* thread_data = getProgram()->getThreadData();
-    thread_data->merge(data, xsink);
+    ReferenceHolder<QoreHashNode> thread_data(get_thread_data_ref(true), xsink);
+    qore_hash_private::get(**thread_data)->merge(*qore_hash_private::get(*data), xsink);
 }
 
 //! Saves the data passed against the key passed as an argument in thread-local storage
@@ -289,8 +304,13 @@ save_thread_data("key1", value);
     @throw HASH-KEY-ERROR a key has a NUL character, which a hash key cannot contain
 */
 nothing save_thread_data(string key, auto value) [flags=NAMED_ARGS;dom=THREAD_CONTROL] {
-    QoreHashNode* data = getProgram()->getThreadData();
-    data->setKeyValue(key, value.refSelf(), xsink);
+    // the key in the default encoding; a key with a NUL character raises HASH-KEY-ERROR
+    QoreHashKeyHelper tmp(*key, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    ReferenceHolder<QoreHashNode> data(get_thread_data_ref(true), xsink);
+    qore_hash_private::get(**data)->setKeyValue(tmp.c_str(), value.refSelf(), xsink);
 }
 
 //! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments
@@ -394,7 +414,7 @@ delete_all_thread_data();
     @note This function does not throw any exceptions, however if an object is deleted from the thread-local data hash, then it could throw an exception in its destructor
 */
 nothing delete_all_thread_data() [dom=THREAD_CONTROL] {
-    qore_program_private::clearThreadData(*getProgram(), xsink);
+    qore_program_private::get(*getProgram())->clearThreadData(xsink);
 }
 
 //! Returns the value of the thread-local data attached to the key passed
@@ -414,8 +434,8 @@ auto get_thread_data(string key) [flags=RET_VALUE_ONLY,NAMED_ARGS;dom=THREAD_CON
     if (*xsink) {
         return QoreValue();
     }
-    const QoreHashNode* h = getProgram()->getThreadData();
-    return qore_hash_private::get(*h)->getReferencedKeyValueIntern(tmp.c_str());
+    ReferenceHolder<QoreHashNode> h(get_thread_data_ref(false), xsink);
+    return h ? qore_hash_private::get(**h)->getReferencedKeyValueIntern(tmp.c_str()) : QoreValue();
 }
 
 //! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments
@@ -436,8 +456,8 @@ hash<auto> th = get_all_thread_data();
     @note this function is not flagged with @ref CONSTANT since its value could change at runtime
 */
 hash<auto> get_all_thread_data() [flags=RET_VALUE_ONLY;dom=THREAD_CONTROL,THREAD_INFO] {
-    const QoreHashNode* h = getProgram()->getThreadData();
-    return h->copy();
+    ReferenceHolder<QoreHashNode> h(get_thread_data_ref(false), xsink);
+    return h ? h->copy() : new QoreHashNode(autoTypeInfo);
 }
 
 //! Returns a hash of lists of @ref CallStackInfo hashes keyed by TID (thread ID)

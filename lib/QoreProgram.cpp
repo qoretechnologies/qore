@@ -473,6 +473,9 @@ qore_program_private::~qore_program_private() {
     assert(!warnSink);
     assert(!pendingParseSink);
     assert(pgm_data_map.empty());
+    assert(tld_registry.empty());
+    assert(tld_members.empty());
+    assert(!tld_parent_root);
     assert(!exec_class_rv);
     assert(!exec_class_inst);
     assert(!dpgm.load(std::memory_order_relaxed));
@@ -1076,11 +1079,6 @@ int qore_program_private_base::applyModulePathDirective(bool prepend, std::strin
     return 0;
 }
 
-void qore_program_private_base::startThread(ExceptionSink& xsink) {
-   if (!thread_local_storage->get())
-      thread_local_storage->set(new QoreHashNode(autoTypeInfo));
-}
-
 QoreHashNode* qore_program_private::runTimeGetAllDefines() {
     AutoLocker al(plock);
     QoreHashNode* h = new QoreHashNode(autoTypeInfo);
@@ -1131,16 +1129,9 @@ void qore_program_private_base::newProgram() {
     po_locked = false;
     exec_class = false;
 
-    // init thread local storage key
-    thread_local_storage = new qpgm_thread_local_storage_t;
-
-    // NOTE: the per-thread thread-local-storage hash is intentionally NOT created eagerly here.
-    // It is created lazily on first access (getThreadData()/startThread()) by the thread that
-    // actually runs code in this Program, which is also the point at which that thread is registered
-    // (ThreadProgramData::saveProgram) so that its data is finalized when the thread exits.  Creating
-    // it eagerly for the constructing thread leaks when that thread neither runs in the Program (e.g.
-    // an AOT module "shadow" Program with no init functions, constructed on a transient worker thread)
-    // nor is the thread that destroys it: the constructing thread's hash is then never finalized.
+    // a Program created without a parent is the root of a thread-local data family; the hash of each thread is
+    // created when the thread first saves data in the family (see qore_program_private::getThreadDataRef())
+    tld_root.store(pgm->priv, std::memory_order_release);
 
     //printd(5, "qore_program_private_base::newProgram() this: %p\n", this);
 
@@ -1221,8 +1212,8 @@ void qore_program_private_base::setParent(QoreProgram* p_pgm, const QoreParseOpt
         po_locked = !(n_parse_options & PO_NO_CHILD_PO_RESTRICTIONS);
     }
 
-    // inherit parent's thread local storage key
-    thread_local_storage = p_pgm->priv->thread_local_storage;
+    // share the thread-local data of the parent's family
+    joinThreadDataFamily(p_pgm);
 
     {
         // make sure no parsing is running in the parent while we copy namespaces
@@ -1452,10 +1443,9 @@ void qore_program_private::waitForTerminationAndClear(ExceptionSink* xsink) {
             }
         }
 
-        // clear thread data if base object
-        if (base_object) {
-            clearThreadData(xsink);
-        }
+        // free the thread-local data of every thread in this Program's family if it is a root; this is where the
+        // data of the tearing-down thread used to be cleared, so that destructors run above can still use it
+        freeFamilyThreadData(false, xsink);
 
         clearProgramThreadData(xsink);
 
@@ -2351,13 +2341,7 @@ void qore_program_private::del(ExceptionSink* xsink) {
     if (thr_init)
         thr_init->deref(xsink);
 
-    if (base_object) {
-        deleteThreadData(xsink);
-
-        // delete thread local storage key
-        delete thread_local_storage;
-        base_object = false;
-    }
+    base_object = false;
 
     // delete defines
     for (auto& i : dmap) {
@@ -2387,6 +2371,12 @@ void qore_program_private::del(ExceptionSink* xsink) {
 
     // delete the namespace and all data
     qore_root_ns_private::get(*RootNS)->deleteData(!ns_vars, xsink);
+
+    // no more code of this Program runs: free the thread-local data of the family for the last time if this
+    // Program is its root, including the data that the destructors run above have saved; the members of the family
+    // that are still alive become roots of families of their own
+    freeFamilyThreadData(true, xsink);
+
     delete RootNS;
     RootNS = nullptr;
 
@@ -2414,6 +2404,9 @@ void qore_program_private::del(ExceptionSink* xsink) {
         delete it->second;
     }
     statementByLabelIndex.clear();
+
+    // release the dependency reference on the root of the family last, as it can delete the root
+    leaveThreadDataFamily();
 }
 
 const QoreClass* qore_program_private::runtimeFindClass(const char* class_name, ExceptionSink* xsink) const {
@@ -2997,7 +2990,112 @@ void QoreProgram::replaceParseOptions(const QoreParseOptions& po, ExceptionSink*
 }
 
 QoreHashNode* QoreProgram::getThreadData() {
-    return priv->getThreadData();
+    // the thread's map holds the only reference, so the caller can change the hash
+    QoreHashNode* h = priv->getThreadDataRef(true, false);
+    assert(h);
+    return h;
+}
+
+void qore_program_private_base::joinThreadDataFamily(QoreProgram* p_pgm) {
+    qore_program_private* root = p_pgm->priv->tld_root.load(std::memory_order_acquire);
+    assert(root);
+    // the reference keeps the root valid while tld_root can point to it, including after the root has made this
+    // Program the root of a family of its own
+    root->depRef();
+    tld_parent_root = root;
+    bool member;
+    {
+        AutoLocker al(root->tld_lock);
+        member = !root->tld_final;
+        if (member) {
+            root->tld_members.insert(pgm->priv);
+        }
+    }
+    tld_root.store(member ? root : pgm->priv, std::memory_order_release);
+}
+
+void qore_program_private_base::leaveThreadDataFamily() {
+    qore_program_private* root = tld_parent_root;
+    if (!root) {
+        return;
+    }
+    tld_parent_root = nullptr;
+    {
+        AutoLocker al(root->tld_lock);
+        root->tld_members.erase(pgm->priv);
+    }
+    root->depDeref();
+}
+
+QoreHashNode* qore_program_private::getThreadDataRef(bool create, bool ref) {
+    ThreadProgramData* tpd = get_thread_program_data();
+    assert(tpd);
+    qore_program_private* root = tld_root.load(std::memory_order_acquire);
+    while (true) {
+        bool final = false;
+        QoreHashNode* h = tpd->getThreadDataRef(root, create, final, ref);
+        if (h || !final) {
+            return h;
+        }
+        // the family's thread-local data has been freed for the last time; if this Program has become the root of a
+        // family of its own meanwhile, its data is used
+        qore_program_private* new_root = tld_root.load(std::memory_order_acquire);
+        if (new_root != root) {
+            root = new_root;
+            continue;
+        }
+        // no code of the family runs after its root's teardown has freed the family's thread-local data for the last
+        // time; release builds give the thread a hash that no family shares, freed when the thread ends
+        assert(false);
+        return tpd->getOrphanThreadDataRef(ref);
+    }
+}
+
+void qore_program_private::clearThreadData(ExceptionSink* xsink) {
+    ReferenceHolder<QoreHashNode> h(getThreadDataRef(false), xsink);
+    printd(5, "qore_program_private::clearThreadData() this: %p h: %p (size: %d)\n", this, *h, h ? h->size() : 0);
+    if (h) {
+        // no lock is held here: clearing the hash can run destructors
+        qore_hash_private::get(**h)->clear(xsink, false);
+    }
+}
+
+void qore_program_private::freeFamilyThreadData(bool final, ExceptionSink* xsink) {
+    while (true) {
+        std::vector<ThreadProgramData*> threads;
+        {
+            AutoLocker al(tld_lock);
+            if (tld_registry.empty()) {
+                if (final && !tld_final) {
+                    tld_final = true;
+                    // the members still alive become roots of families of their own; each keeps its dependency
+                    // reference on this Program, so a thread that has just read its old root can still use it
+                    for (qore_program_private* member : tld_members) {
+                        member->tld_root.store(member, std::memory_order_release);
+                    }
+                    tld_members.clear();
+                }
+                break;
+            }
+            threads.reserve(tld_registry.size());
+            for (ThreadProgramData* tpd : tld_registry) {
+                // the reference keeps the thread's data valid until it has been processed here, even if the thread
+                // ends meanwhile
+                tpd->ref();
+                threads.push_back(tpd);
+            }
+            tld_registry.clear();
+        }
+        for (ThreadProgramData* tpd : threads) {
+            QoreHashNode* h = tpd->detachThreadData(this);
+            if (h) {
+                // no lock is held here: dereferencing the hash can run destructors, which can save thread-local data
+                // in the family again; the loop frees that too
+                h->deref(xsink);
+            }
+            tpd->deref();
+        }
+    }
 }
 
 QoreValue QoreProgram::run(ExceptionSink* xsink) {

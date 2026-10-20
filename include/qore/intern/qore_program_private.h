@@ -138,8 +138,6 @@ public:
     }
 };
 
-typedef QoreThreadLocalStorage<QoreHashNode> qpgm_thread_local_storage_t;
-
 #include "qore/intern/ThreadLocalVariableData.h"
 #include "qore/intern/ThreadClosureVariableStack.h"
 
@@ -401,6 +399,8 @@ struct pgmloc_vec_t : public std::vector<QoreProgramLocation*> {
         std::vector<QoreProgramLocation*>::clear();
     }
 };
+
+class qore_program_private;
 
 class qore_program_private_base {
     friend class QoreProgramAccessHelper;
@@ -770,8 +770,50 @@ public:
 
     std::string exec_class_name, script_dir, script_path, script_name, include_path;
 
-    // thread-local data (could be inherited from another program)
-    qpgm_thread_local_storage_t* thread_local_storage = nullptr;
+    /*  The thread-local data of a family of Programs (program_family_thread_data):
+        The thread-local data (save_thread_data(), get_thread_data(), ...) is shared by a family of Programs: a root
+        Program, created without a parent, and every Program created from it or from one of its members.  Each thread
+        has one hash in each family it uses the data of; the thread keeps it (ThreadProgramData::tld_map), and the root
+        keeps the set of threads that have one (tld_registry), so that the root's teardown can free the hash of every
+        thread, and a thread's end can free its hash in every family.
+
+        Locks: a thread's hashes are guarded by its ThreadProgramData::pslock, the root's sets by tld_lock; tld_lock is
+        a leaf lock, taken while holding a thread's pslock or alone, and neither is held while a hash is dereferenced,
+        as that can run destructors.  A thread touches a root only while it holds its own pslock and has a hash in the
+        root's family; the root's teardown can only finish freeing the hashes after taking the pslock of every thread
+        registered with it, so a root cannot be freed while a thread uses it this way.
+    */
+    //! the root of the family whose thread-local data this Program uses: this Program itself for a root
+    /** Changed only when the root's teardown ends while this Program is still alive: this Program then becomes the
+        root of a family of its own
+    */
+    std::atomic<qore_program_private*> tld_root{nullptr};
+
+    //! the root this Program holds a dependency reference on, so that @ref tld_root cannot dangle, or nullptr
+    qore_program_private* tld_parent_root = nullptr;
+
+    //! leaf lock for tld_registry, tld_members and tld_final
+    QoreThreadLock tld_lock;
+
+    //! the threads that have thread-local data in this Program's family; used when this Program is a root
+    std::set<ThreadProgramData*> tld_registry;
+
+    //! the live Programs of this Program's family other than itself; used when this Program is a root
+    std::set<qore_program_private*> tld_members;
+
+    //! set when the teardown has freed the thread-local data of the family for the last time
+    /** No thread can get thread-local data in the family afterwards; a member that is still alive becomes the root
+        of a family of its own
+    */
+    bool tld_final = false;
+
+    //! Makes this Program a member of the thread-local data family of its parent Program
+    /** If the parent's family has been freed for the last time, this Program is the root of a family of its own
+    */
+    DLLLOCAL void joinThreadDataFamily(QoreProgram* p_pgm);
+
+    //! Removes this Program from the family of its root and releases its dependency reference on the root
+    DLLLOCAL void leaveThreadDataFamily();
 
     mutable QoreThreadLock tlock;  // thread variable data lock, for accessing the thread variable data map and the thr_init variable
     mutable QoreCondition tcond;   // cond variable for tclear to become false, used only with tlock
@@ -926,8 +968,6 @@ public:
     DLLLOCAL const QoreProgramLocation* getLocation(const QoreProgramLocation&, int sline, int eline);
     DLLLOCAL const QoreProgramLocation* getLocation(const QoreProgramLocation&, int sline, int eline,
         int scol, int ecol);
-
-    DLLLOCAL void startThread(ExceptionSink& xsink);
 
     // apply parse-option bit implications that cannot be encoded in the int64 PO_* macros
     DLLLOCAL void applyParseOptionImplications() {
@@ -2028,40 +2068,52 @@ public:
 
     DLLLOCAL void del(ExceptionSink* xsink);
 
-    DLLLOCAL QoreHashNode* getThreadData() {
-        QoreHashNode* h = thread_local_storage->get();
-        if (!h) {
-            h = new QoreHashNode(autoTypeInfo);
-            thread_local_storage->set(h);
-        }
+    //! Returns the calling thread's thread-local data in this Program's family with a reference for the caller
+    /** @param create if true, the hash is created if the thread has none in the family; if false, nullptr is returned
+        in that case
 
-        return h;
+        @param ref if false, no reference is added for the caller (see QoreProgram::getThreadData())
+
+        @return the hash with a reference for the caller (unless \a ref is false), or nullptr if \a create is false
+        and the thread has no thread-local data in the family; never nullptr if \a create is true
+    */
+    DLLLOCAL QoreHashNode* getThreadDataRef(bool create, bool ref = true);
+
+    //! Clears the calling thread's thread-local data in this Program's family; destructors run outside all locks
+    DLLLOCAL void clearThreadData(ExceptionSink* xsink);
+
+    //! Registers a thread that is getting thread-local data in the family of this root
+    /** Called with the thread's pslock held.
+
+        @return 0 for OK, -1 if the family's thread-local data has been freed for the last time
+    */
+    DLLLOCAL int registerThreadData(ThreadProgramData* tpd) {
+        AutoLocker al(tld_lock);
+        if (tld_final) {
+            return -1;
+        }
+        tld_registry.insert(tpd);
+        return 0;
     }
 
-    DLLLOCAL QoreHashNode* clearThreadData(ExceptionSink* xsink) {
-        QoreHashNode* h = thread_local_storage->get();
-        printd(5, "QoreProgram::clearThreadData() this: %p h: %p (size: %d)\n", this, h, h ? h->size() : 0);
-        if (h) {
-            qore_hash_private::clear(*h, xsink);
-        }
-        return h;
+    //! Unregisters a thread that has freed its thread-local data in the family of this root
+    /** Called with the thread's pslock held.
+    */
+    DLLLOCAL void unregisterThreadData(ThreadProgramData* tpd) {
+        AutoLocker al(tld_lock);
+        tld_registry.erase(tpd);
     }
 
-    DLLLOCAL void deleteThreadData(ExceptionSink* xsink) {
-        QoreHashNode* h = clearThreadData(xsink);
-        if (h) {
-            h->deref(xsink);
-            thread_local_storage->set(nullptr);
-        }
-    }
+    //! Frees the thread-local data of every thread in the family of this root
+    /** Dereferences the hashes outside all locks; repeats until no thread has data in the family, as the
+        destructors can save data again.
+
+        @param final if true, no thread can get thread-local data in the family afterwards, and the members of the
+        family that are still alive become roots of families of their own
+    */
+    DLLLOCAL void freeFamilyThreadData(bool final, ExceptionSink* xsink);
 
     DLLLOCAL void finalizeThreadData(ThreadProgramData* td, SafeDerefHelper& sdh) {
-        QoreHashNode* h = thread_local_storage->get();
-        if (h) {
-            sdh.add(h);
-            thread_local_storage->set(nullptr);
-        }
-
         // delete all local variables for this thread
         AutoLocker al(tlock);
         if (tclear)
@@ -3007,10 +3059,6 @@ public:
         return pgm.priv->constructed;
     }
 
-    DLLLOCAL static void clearThreadData(QoreProgram& pgm, ExceptionSink* xsink) {
-        pgm.priv->clearThreadData(xsink);
-    }
-
     DLLLOCAL static void addStatement(QoreProgram& pgm, AbstractStatement* s) {
         pgm.priv->addStatement(s);
     }
@@ -3045,10 +3093,6 @@ public:
     DLLLOCAL static void delSignal(QoreProgram& pgm, int sig) {
         assert(pgm.priv->sigset.find(sig) != pgm.priv->sigset.end());
         pgm.priv->sigset.erase(sig);
-    }
-
-    DLLLOCAL static void startThread(QoreProgram& pgm, ExceptionSink& xsink) {
-        pgm.priv->qore_program_private_base::startThread(xsink);
     }
 
     DLLLOCAL static bool setThreadInit(QoreProgram& pgm, const ResolvedCallReferenceNode* n_thr_init,
