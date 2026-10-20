@@ -4810,6 +4810,9 @@ while (*binary chunk = input.read(65536)) {
       descriptor are released when it ends
     - Fixed a data race when @ref Qore::Socket::isOpen() "Socket::isOpen()" or another method that checks whether a
       socket is open was called while another thread closed the socket
+    - Fixed a rare crash at the end of a process that used asynchronous socket I/O: the end of the process could
+      start an I/O thread of the global async I/O controller that it then did not wait for, so the thread could
+      still be running while the process freed the data that the thread used
     - Fixed a crash of IR, JIT and tiered execution and of compiled (\c qcc) code when a
       @ref thread_exit "thread_exit statement" left a @ref try "try" block: the catch block was entered for the
       thread_exit, which is not an exception, and the thread crashed while making the exception information.  As in

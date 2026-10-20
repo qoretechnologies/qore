@@ -86,6 +86,13 @@ to their public `HTTPCLIENT-TIMEOUT` error. Explicit Future cancellation still p
     `processed_cond` is broadcast.  This allows `waitForProcessing()` to block until the I/O
     thread has captured all previously submitted operations in its poll set.
 
+  - The I/O threads of the global controller are external-lifecycle threads (`QTF_EXTERNAL_LIFECYCLE`, set by
+    `setExternalLifecycleThreads()` when the global controller is created): the cleanup at process exit waits for
+    those after it stops the controller, and only for those, as it waits for the other threads before it starts.
+    This includes a thread that the controller starts during the cleanup, as `stop()` does to deliver its quit
+    command when an I/O thread has stopped while another one runs; a debug-build assertion in `q_start_thread()`
+    checks that no other thread is started after the cleanup has started.
+
 - **Worker threads**
   - Submit operations via `submit()` or `exec()`.
   - Callback dispatcher workers execute Qore callbacks; Queue waiters receive results through the result Queue.

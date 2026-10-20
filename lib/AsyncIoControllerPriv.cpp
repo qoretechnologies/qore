@@ -139,6 +139,7 @@ QoreObject* qore_get_async_io_controller_obj(ExceptionSink* xsink) {
     if (*xsink) {
         return nullptr;
     }
+    holder->setExternalLifecycleThreads();
     aio_singleton = *holder;
     QoreObject* obj = new QoreObject(QC_ASYNCIOCONTROLLER, nullptr, holder.release());
     aio_singleton_obj = obj;
@@ -200,11 +201,6 @@ void qore_async_io_controller_cleanup() {
         ExceptionSink xsink;
         obj->deref(&xsink);
     }
-}
-
-bool qore_is_async_io_controller_singleton(AsyncIoControllerPriv* ctrl) {
-    AutoLocker al(aio_singleton_lock);
-    return ctrl == aio_singleton;
 }
 
 //! Thread-local flag: true when running on the async I/O thread.
@@ -4819,7 +4815,7 @@ void AsyncIoControllerPriv::startIntern(ExceptionSink* xsink) {
     ready_flag = false;
     io_exiting = false;
 
-    int thread_flags = qore_is_async_io_controller_singleton(this) ? QTF_EXTERNAL_LIFECYCLE : 0;
+    int thread_flags = external_lifecycle_threads ? QTF_EXTERNAL_LIFECYCLE : 0;
 
     // Start all I/O threads
     for (int i = 0; i < num_io_threads; ++i) {

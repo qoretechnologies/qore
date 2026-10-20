@@ -1,0 +1,79 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    Regression test for the end of a process whose global async I/O controller has an I/O thread that stopped while
+    another one runs.
+
+    Idle I/O threads stop on their own (autostop), one after the other, so a process can end with the first I/O
+    thread stopped and another one running.  The cleanup at exit stops the controller, which starts the stopped
+    thread only to deliver its quit command, and then waits for the threads of the controller, which it knows by
+    their external lifecycle.  The cleanup gives up the global controller before it stops it, and a thread started
+    after that was not started with the external lifecycle, so the cleanup did not wait for it: the thread was still
+    ending while the process destroyed its globals, a data race on the global thread counter (reported by
+    ThreadSanitizer) and a use of freed memory if the thread was late.  The test leaves the process in that state with
+    the debug-only dbg_async_io_quit_io_thread(); under ThreadSanitizer the end of the process must report nothing.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class AsyncIoExitStoppedIoThreadTest
+
+class AsyncIoExitStoppedIoThreadTest inherits QUnit::Test {
+    constructor() : Test("AsyncIoExitStoppedIoThreadTest", "1.0") {
+        addTestCase("the process ends with the first I/O thread stopped and another one running",
+            \exitWithStoppedIoThreadTest());
+        set_return_value(main());
+    }
+
+    private exitWithStoppedIoThreadTest() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("dbg_async_io_quit_io_thread() is only registered in a library-debug build");
+        }
+
+        # the I/O threads must not stop on their own while the test checks them
+        AsyncIoController::setAutostop(False);
+        AsyncIoController::setMaxIoThreads(2);
+        # a socket operation starts every I/O thread; the sockets are gone before the first I/O thread stops, as
+        # closing a socket would start it again
+        {
+            Socket listener();
+            listener.bindINET("127.0.0.1", "0", True, AF_INET);
+            listener.listen();
+            Socket client();
+            client.connect("127.0.0.1:" + listener.getSocketInfo().port);
+            client.close();
+            listener.close();
+        }
+        list<int> running = map $1.index, AsyncIoController::getInfo().threads;
+        assertEq((0, 1), running, "both I/O threads run");
+
+        # the first I/O thread stops, as an idle thread stops on its own before another one
+        call_function("dbg_async_io_quit_io_thread", 0);
+        running = map $1.index, AsyncIoController::getInfo().threads;
+        assertEq((1,), running, "only the second I/O thread runs when the process ends");
+    }
+}

@@ -519,6 +519,18 @@ class AsyncIoControllerPriv : public AbstractPrivateData {
     friend class QoreCallDispatcher;  // for enqueueContinuePollResult from worker thread
 
 public:
+    //! Makes the I/O threads of the controller external-lifecycle threads; called for the global controller
+    /** The cleanup at process exit stops the global controller and then waits for the external-lifecycle threads
+        only, so every I/O thread of the global controller must be one: also a thread that it starts during the
+        cleanup, as stop() does to deliver its quit command when an I/O thread has stopped while another one runs.
+        That the controller is the global one cannot tell this then, as the cleanup gives up the global controller
+        before it stops it.
+    */
+    DLLLOCAL void setExternalLifecycleThreads() {
+        AutoLocker al(m);
+        external_lifecycle_threads = true;
+    }
+
     //! Default I/O operation timeout (30 seconds)
     static constexpr int64 DEFAULT_IO_TIMEOUT_US = 30000000LL;
 
@@ -1520,6 +1532,8 @@ private:
     // --- Mutex-protected state (rare paths: startup, shutdown, cancel wait) ---
     mutable QoreThreadLock m;
     bool autostop_flag;
+    //! True if the I/O threads are external-lifecycle threads; see setExternalLifecycleThreads()
+    bool external_lifecycle_threads = false;
     bool shutting_down;
     std::unordered_map<std::string, CancelCond*> cancel_cond_map;
     QoreCondition io_cond;
@@ -1858,8 +1872,5 @@ DLLLOCAL void qore_async_io_controller_cleanup();
 //! in qore_async_io_controller_cleanup() afterward, so the controller can keep
 //! serving cancelByProgram() callbacks during module teardown.
 DLLLOCAL void qore_async_io_controller_pre_cleanup();
-
-//! Returns true if the given controller is the global singleton
-DLLLOCAL bool qore_is_async_io_controller_singleton(AsyncIoControllerPriv* ctrl);
 
 #endif // _QORE_ASYNCIOCONTROLLERPRIV_H

@@ -1820,6 +1820,28 @@ class AsyncIoCloseTest {
     };
 
 public:
+    //! Stops one I/O thread of a running controller, as autostop stops an idle thread, and waits until it has stopped
+    /** @return 0 if the thread stopped, -1 if the controller has no running I/O thread with the index
+    */
+    static int quitIoThread(AsyncIoControllerPriv& ctrl, int index) {
+        AutoLocker al(ctrl.m);
+        if (index < 0 || index >= static_cast<int>(ctrl.io_threads.size()) || !ctrl.io_threads[index]->tid) {
+            return -1;
+        }
+        AsyncIoControllerPriv::IoThreadContext& t = *ctrl.io_threads[index];
+        AsyncIoControllerPriv::Command cmd;
+        cmd.cmd = AsyncIoControllerPriv::IoCommand::Quit;
+        t.cmdq.push(std::move(cmd));
+        t.notifier->notify();
+        // a stopping I/O thread signals io_cond when io_waiting is set
+        while (t.tid) {
+            ctrl.io_waiting = true;
+            ctrl.io_cond.wait(ctrl.m);
+            ctrl.io_waiting = false;
+        }
+        return 0;
+    }
+
     static void resize(UnitTestCounters& c) {
         ExceptionSink xsink;
         ReferenceHolder<AsyncIoControllerPriv> ctrl(new AsyncIoControllerPriv(false, &xsink), &xsink);
@@ -5672,6 +5694,30 @@ static QoreValue f_dbg_close_socket_at_next_ssl_io(const QoreListNode* params, R
     return QoreValue();
 }
 
+//! Debug-only: stops one I/O thread of the global async I/O controller and waits until it has stopped
+/** Puts the controller in the state that autostop leaves it in when an idle I/O thread has stopped before another
+    one: a test then ends the process in that state, in which the cleanup at exit stopped the controller with an
+    I/O thread that it started only to deliver its quit command.  DEBUG builds only.
+*/
+static QoreValue f_dbg_async_io_quit_io_thread(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    int index = static_cast<int>(get_param_value(params, 0).getAsBigInt());
+    ReferenceHolder<QoreObject> ctl_obj(qore_get_async_io_controller_obj(xsink), xsink);
+    if (*xsink || !ctl_obj) {
+        return QoreValue();
+    }
+    ReferenceHolder<AsyncIoControllerPriv> ctrl(
+        static_cast<AsyncIoControllerPriv*>(ctl_obj->getReferencedPrivateData(CID_ASYNCIOCONTROLLER, xsink)), xsink);
+    if (*xsink || !ctrl) {
+        return QoreValue();
+    }
+    if (AsyncIoCloseTest::quitIoThread(**ctrl, index)) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "the async I/O controller has no running I/O thread %d",
+            index);
+    }
+    return QoreValue();
+}
+
 //! Debug-only: arm a one-shot fd-swap simulation on the next controller wait of @a sock.
 /** Tests use this to exercise the fd_generation re-verification path in
     controller-backed sync socket calls without racing an actual close()
@@ -6869,6 +6915,9 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_force_fd_swap_next_wait", f_dbg_force_fd_swap_next_wait,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
         QC_SOCKET->getTypeInfo(), QORE_PARAM_NO_ARG, "sock");
+    qns.addBuiltinVariant("dbg_async_io_quit_io_thread", f_dbg_async_io_quit_io_thread,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
+        bigIntTypeInfo, QORE_PARAM_NO_ARG, "index");
     qns.addBuiltinVariant("dbg_close_socket_at_next_ssl_io", f_dbg_close_socket_at_next_ssl_io,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
         QC_SOCKET->getTypeInfo(), QORE_PARAM_NO_ARG, "sock");

@@ -4113,6 +4113,9 @@ QoreValue do_op_background(RuntimeConfig& rc, const QoreValue left, ExceptionSin
 }
 
 int q_start_thread(ExceptionSink* xsink, q_thread_t f, void* arg) {
+    // the cleanup at process exit waits for the threads that thread_counter counts before it sets qore_shutdown and
+    // never again, so a thread started after that must be an external-lifecycle thread, which it waits for at its end
+    assert(!qore_shutdown.load(std::memory_order_relaxed));
     int tid = get_thread_entry();
     //printd(2, "got %d()\n", tid);
 
@@ -4172,6 +4175,9 @@ size_t q_thread_stack_tls_size() {
 }
 
 int q_start_thread(ExceptionSink* xsink, q_thread_t f, void* arg, size_t stack_size, int flags) {
+    // the cleanup at process exit waits for the threads that thread_counter counts before it sets qore_shutdown and
+    // never again, so a thread started after that must be an external-lifecycle thread, which it waits for at its end
+    assert(!qore_shutdown.load(std::memory_order_relaxed) || (flags & QTF_EXTERNAL_LIFECYCLE));
     if ((flags & QTF_EXTERNAL_LIFECYCLE) && external_thread_reaper.ensureStarted(xsink)) {
         return -1;
     }
@@ -4218,6 +4224,9 @@ int q_start_thread(ExceptionSink* xsink, q_thread_t f, void* arg, size_t stack_s
 }
 
 int q_start_thread(ExceptionSink* xsink, q_thread_t f, void* arg, int flags) {
+    // the cleanup at process exit waits for the threads that thread_counter counts before it sets qore_shutdown and
+    // never again, so a thread started after that must be an external-lifecycle thread, which it waits for at its end
+    assert(!qore_shutdown.load(std::memory_order_relaxed) || (flags & QTF_EXTERNAL_LIFECYCLE));
     if ((flags & QTF_EXTERNAL_LIFECYCLE) && external_thread_reaper.ensureStarted(xsink)) {
         return -1;
     }
