@@ -217,6 +217,13 @@ AsyncIoController::copy() {
 
     @throw ASYNC-IO-ERROR if the controller is shutting down or the info hash is invalid
 
+    @note The steps of the operation that run on callback workers, such as
+    @ref Qore::AbstractPollOperation::continuePoll() "continuePoll()" and
+    @ref Qore::AbstractPollOperation::onComplete() "onComplete()" of an operation implemented in %Qore, are
+    governed by the @ref sandboxing "sandbox" of the code that submits the operation, so that a connection made
+    there is subject to the same policy as one made by the submitting code; an operation submitted by such a step
+    is governed by the same sandbox
+
     @since %Qore 3.0
 */
 static *Queue<hash<SocketPollResultInfo>> AsyncIoController::submit(hash<SocketPollOperationInfo> operation_info,

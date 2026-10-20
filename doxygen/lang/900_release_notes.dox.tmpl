@@ -8,6 +8,13 @@
     result without an unused-result warning or a dummy local variable. It preserves evaluation, exceptions,
     and temporary-value cleanup in all execution modes and remains active when debugging is disabled.
 
+    <b>Security</b>: the steps of a poll operation that the async I/O controller runs on its callback workers,
+    such as \c continuePoll() and \c onComplete() of an operation implemented in %Qore, are governed by the
+    @ref sandboxing "sandbox" of the code that submitted the operation (see
+    @ref Qore::AsyncIoController::submit() "AsyncIoController::submit()").  They ran without it, so an asynchronous
+    @ref httpclientiointro "HttpClientIo" or @ref restclientiointro "RestClientIo" request made by sandboxed code
+    could follow a redirect to, or retry a connection to, an address its sandbox denies.
+
     <b>Security</b>: credential headers, including headers a client declares sensitive with the new
     \c sensitive_headers option or \c addSensitiveHeaders() and headers whose names contain \c token, \c secret,
     \c api-key, \c password or \c auth, are no longer exposed in the exception information, request information or

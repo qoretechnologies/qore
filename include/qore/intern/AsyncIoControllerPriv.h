@@ -204,6 +204,15 @@ public:
 DLLLOCAL bool qore_set_async_io_thread_for_test(bool value);
 #endif
 
+class QoreSandboxContext;
+
+//! The sandbox context of the thread that submitted a poll operation
+/** Captured by AsyncIoControllerPriv::submit() and applied with QoreSandboxContextHelper around every step of the
+    operation that runs on a callback worker, so that the operation, and any connection it makes there, is governed by
+    the sandbox of the code that submitted it and not by the context of the worker; empty if no sandbox applies.
+*/
+typedef std::shared_ptr<const QoreSandboxContext> AsyncIoSandboxContext;
+
 class QoreCallDispatcher {
 public:
     //! Dispatch type for async work items
@@ -239,6 +248,9 @@ public:
         AsyncIoDeferredRelease* release = nullptr; //!< For DT_RELEASE: owned references to release (or nullptr)
         AsyncIoNativeTask* native_task = nullptr; //!< For DT_NATIVE_TASK: owned task (or nullptr)
         bool sent = false;                   //!< For DT_STREAM_SEND_RESULT_NOTIFY: the transmission result
+        //! The sandbox context of the poll operation's submitter, applied while the item runs; see
+        //! AsyncIoSandboxContext
+        AsyncIoSandboxContext sandbox_ctx;
     };
 
     //! Creates the dispatcher
@@ -255,7 +267,7 @@ public:
         @param owner optional owner identifier for per-owner flush tracking
     */
     DLLLOCAL void dispatchAbortAsync(QoreObject* spop_obj,
-        const std::string& owner = std::string());
+        const std::string& owner = std::string(), AsyncIoSandboxContext sandbox_ctx = AsyncIoSandboxContext());
 
     //! Dispatch an onComplete(result) call asynchronously (fire-and-forget)
     /** @param spop_obj the AbstractPollOperation object (referenced — ownership transferred)
@@ -263,7 +275,7 @@ public:
         @param owner optional owner identifier for per-owner flush tracking
     */
     DLLLOCAL void dispatchOnCompleteAsync(QoreObject* spop_obj, QoreHashNode* result,
-        const std::string& owner = std::string());
+        const std::string& owner = std::string(), AsyncIoSandboxContext sandbox_ctx = AsyncIoSandboxContext());
 
     //! Dispatch a code callback asynchronously (for timer events)
     /** @param callback the callback code (referenced — ownership transferred)
@@ -283,7 +295,7 @@ public:
     */
     DLLLOCAL void dispatchContinuePollAsync(QoreObject* spop_obj,
         AsyncIoControllerPriv* controller, const std::string& key, int thread_idx,
-        const std::string& owner = std::string());
+        const std::string& owner = std::string(), AsyncIoSandboxContext sandbox_ctx = AsyncIoSandboxContext());
 
     //! Dispatch onStreamData(stream_key) asynchronously (fire-and-forget)
     /** Called by the I/O thread after stream data arrives.
@@ -295,7 +307,7 @@ public:
         @param owner optional owner identifier for per-owner flush tracking
     */
     DLLLOCAL void dispatchStreamDataAsync(QoreObject* spop_obj, const std::string& stream_key,
-        const std::string& owner = std::string());
+        const std::string& owner = std::string(), AsyncIoSandboxContext sandbox_ctx = AsyncIoSandboxContext());
 
     //! Dispatch onStreamSendResult(stream_key, sent) asynchronously (fire-and-forget)
     /** Called by the I/O thread with the transmission result of a response whose stream is watched by an HTTP/2
@@ -307,7 +319,7 @@ public:
         @param owner optional owner identifier for per-owner flush tracking
     */
     DLLLOCAL void dispatchStreamSendResultAsync(QoreObject* spop_obj, const std::string& stream_key, bool sent,
-        const std::string& owner = std::string());
+        const std::string& owner = std::string(), AsyncIoSandboxContext sandbox_ctx = AsyncIoSandboxContext());
 
     //! Dispatch onPollComplete() asynchronously (fire-and-forget)
     /** Called by the I/O thread after WebSocketClientPollOperationBase::continuePoll()
@@ -318,7 +330,7 @@ public:
         @param owner optional owner identifier for per-owner flush tracking
     */
     DLLLOCAL void dispatchPollCompleteAsync(QoreObject* spop_obj,
-        const std::string& owner = std::string());
+        const std::string& owner = std::string(), AsyncIoSandboxContext sandbox_ctx = AsyncIoSandboxContext());
 
     //! Runs a native task on a callback worker (fire-and-forget)
     /** The item is not owner-tracked.  When it cannot be queued, the task is discarded instead of run.
@@ -964,6 +976,7 @@ private:
         bool submit_socket_async_io = false;             //!< True if SubmitOp owns a Socket async I/O claim
         std::string submit_route_sock_hash;              //!< Submit-time wake route/object mapping, if published
         int submit_route_thread_idx = -1;                //!< I/O thread for submit_route_sock_hash
+        AsyncIoSandboxContext submit_sandbox_ctx;        //!< For SubmitOp: the submitter's sandbox context
     };
 
     //! Internal poll info (mirrors Qore Priv::PollInfo)
@@ -1025,6 +1038,8 @@ private:
         uint64_t last_queued_gen = 0;   //!< Phase 1 generation when last queued (duplicate prevention)
         //! The ID the operation cache gave this operation; see OpCache
         uint64_t op_id = 0;
+        //! The sandbox context of the submitter, applied to the operation's steps on callback workers
+        AsyncIoSandboxContext sandbox_ctx;
         //! Back-ref to the owning controller (not ref'd; outlives pinfo).
         //! Used by cleanup() to erase the submit-time obj_to_sock_hash entry
         //! before deref'ing sock_obj — without this the map can accumulate
@@ -1159,6 +1174,7 @@ private:
         bool has_on_complete;              //!< True if spop has onComplete() override
         QoreHashNode* result;              //!< Referenced
         std::string owner;                 //!< Owner identifier for per-owner flush tracking
+        AsyncIoSandboxContext sandbox_ctx; //!< The submitter's sandbox context, for onComplete()
     };
 
     //! Timer info stored under lock
@@ -1808,7 +1824,7 @@ private:
         @param stream_key the stream identifier to pass to onStreamData()
     */
     DLLLOCAL void enqueueStreamDataDispatch(QoreObject* spop_obj, const std::string& stream_key,
-        const std::string& owner = std::string());
+        const std::string& owner = std::string(), AsyncIoSandboxContext sandbox_ctx = AsyncIoSandboxContext());
 
     //! Call abort on an AbstractPollOperation object
     DLLLOCAL static void callAbort(QoreObject* spop_obj, ExceptionSink* xsink);
@@ -1833,7 +1849,8 @@ private:
 
     //! Deliver a result via onComplete or queue (dispatches onComplete to worker thread)
     DLLLOCAL void deliverResult(Queue* queue, QoreObject* spop_obj, bool has_on_complete,
-        QoreHashNode* result, ExceptionSink* xsink, const std::string& owner = std::string());
+        QoreHashNode* result, ExceptionSink* xsink, const std::string& owner = std::string(),
+        AsyncIoSandboxContext sandbox_ctx = AsyncIoSandboxContext());
 
     //! Shared call dispatcher for async callback/abort delivery (lazily created, atomic for lock-free check)
     std::atomic<QoreCallDispatcher*> call_dispatcher{nullptr};

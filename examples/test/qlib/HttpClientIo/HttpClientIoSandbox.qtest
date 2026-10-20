@@ -1,0 +1,192 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Util
+%requires Mime
+%requires Logger
+%requires HttpServerUtil
+%requires HttpServer
+%requires HttpClientIo
+%requires RestClientIo
+%requires ../../TestCertificates.qm
+
+%exec-class HttpClientIoSandboxTest
+
+#! Makes a request for a sandboxed Program as module code does: this function runs in an unsandboxed Program
+auto sub sandbox_request(string url, string path, string protocol, string api, int retries) {
+    HttpClientIo::HttpClientConnectionManager mgr(cast<hash<HttpClientIo::HttpClientConnectionManagerOptions>>({
+        "protocol": protocol,
+        "enable_http3": True,
+        "accept_all_certs": True,
+        "connect_timeout": 30s,
+        "request_timeout": 60s,
+        "max_request_retries": retries,
+    }));
+    on_exit mgr.closeAll();
+    switch (api) {
+        case "REST": {
+            RestClientIo rest({"url": url, "data": "text"}, mgr);
+            on_exit rest.close();
+            return rest.restGet(path).body;
+        }
+        case "REST async": {
+            RestClientIo rest({"url": url, "data": "text"}, mgr);
+            on_exit rest.close();
+            return rest.restGetAsync(path).get(60s).body;
+        }
+        case "HTTP":
+            return mgr.request(url, "GET", path).body;
+        case "HTTP async":
+            return mgr.requestAsync(url, "GET", path).get(60s).body;
+    }
+    throw "TEST-ERROR", sprintf("unknown API %y", api);
+}
+
+#! Redirects "/redirect" to the location set and counts the requests for "/target"
+class TestHandler inherits AbstractHttpRequestHandler {
+    public {
+        #! the target of "/redirect"
+        string location;
+        #! the number of requests for "/target"
+        Counter targets();
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        # the path of the request URI without the leading slash
+        if (cx.url.path == "redirect") {
+            return makeResponse(302, "", {"Location": location});
+        }
+        if (cx.url.path == "target") {
+            targets.inc();
+        }
+        return makeResponse(200, "reached", {"Content-Type": MimeTypeText});
+    }
+}
+
+#! The connections of a request made by sandboxed code are subject to its sandbox, whatever thread makes them
+/** A synchronous request makes its connections in the calling thread, an asynchronous one makes every connection
+    after its first one in an I/O worker: to follow a redirect to another origin or to retry a failed connection.
+*/
+public class HttpClientIoSandboxTest inherits QUnit::Test {
+    public {
+        #! the client APIs tested
+        const Apis = ("REST", "REST async", "HTTP", "HTTP async");
+        #! the synchronous client APIs
+        const SyncApis = ("REST", "HTTP");
+        #! the protocols tested with all APIs
+        const Protocols = ("h1", "h2", "auto");
+    }
+
+    private {
+        HttpServer server;
+        TestHandler handler();
+        #! TLS listeners that also receive HTTP/3 on their ports
+        int port_a;
+        int port_b;
+    }
+
+    constructor() : Test("HttpClientIoSandboxTest", "1.0") {
+        addTestCase("a redirect to an origin the sandbox denies", \redirectTest());
+        addTestCase("the retry of a connection the sandbox denies", \retryTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        server = new HttpServer(<HttpServerOptionInfo>{"logger": new Logger("http-client-io-sandbox",
+            LoggerLevel::getLevelInfo())});
+        server.setDefaultHandler("test", handler);
+        server.waitForAsyncIo();
+        foreach string l in (("a", "b")) {
+            int port = server.addListener(<HttpListenerOptionInfo>{
+                "node": "127.0.0.1",
+                "service": 0,
+                "cert": new SSLCertificate(TestCertificates::CertPem),
+                "key": new SSLPrivateKey(TestCertificates::KeyPem),
+            }).port;
+            if (l == "a") {
+                port_a = port;
+            } else {
+                port_b = port;
+            }
+        }
+        server.waitForAsyncIo();
+        handler.location = sprintf("https://127.0.0.1:%d/target", port_b);
+    }
+
+    globalTearDown() {
+        if (server) {
+            server.stop();
+        }
+    }
+
+    #! The sandbox allows connections to the port of server A only; a redirect to server B is refused
+    redirectTest() {
+        SandboxManager sm();
+        sm.setNetworkDefaultPolicy(True);
+        sm.addNetworkAllowedPort(port_a);
+        Program p = sandboxedProgram(sm, "redirect");
+        string url = sprintf("https://127.0.0.1:%d", port_a);
+        int targets = handler.targets.getCount();
+        foreach hash<auto> t in (requestCases()) {
+            string msg = sprintf("%s %s", t.protocol, t.api);
+            assertDenied(\p.callFunction(), ("run", url, "/redirect", t.protocol, t.api, 0), msg);
+            # without the sandbox, the redirect is followed
+            assertEq("reached", sandbox_request(url, "/redirect", t.protocol, t.api, 0), msg);
+            assertEq(++targets, handler.targets.getCount(), msg + ": only the unsandboxed request reached B");
+        }
+    }
+
+    #! The sandbox denies connections to the server's port; a connection error is retried, and the retry is refused
+    retryTest() {
+        SandboxManager sm();
+        sm.setNetworkDefaultPolicy(True);
+        sm.addNetworkAllowedPort(port_a);
+        Program p = sandboxedProgram(sm, "retry");
+        string url = sprintf("https://127.0.0.1:%d", port_b);
+        int targets = handler.targets.getCount();
+        foreach hash<auto> t in (requestCases()) {
+            string msg = sprintf("%s %s", t.protocol, t.api);
+            assertDenied(\p.callFunction(), ("run", url, "/target", t.protocol, t.api, 1), msg);
+            assertEq(targets, handler.targets.getCount(), msg + ": the server was never reached");
+        }
+    }
+
+    #! Returns the protocols and APIs tested
+    private list<hash<auto>> requestCases() {
+        list<hash<auto>> rv = ();
+        foreach string protocol in (Protocols) {
+            rv += map ("protocol": protocol, "api": $1), Apis;
+        }
+        # an asynchronous HTTP/3 request cannot make a connection in an I/O worker yet
+        rv += map ("protocol": "h3", "api": $1), SyncApis;
+        return rv;
+    }
+
+    #! Returns a Program with the given sandbox that makes requests with sandbox_request()
+    private Program sandboxedProgram(SandboxManager sm, string label) {
+        Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+        p.setSandboxManager(sm);
+        p.importFunction("sandbox_request");
+        p.parse("%modern\nauto sub run(string url, string path, string protocol, string api, int retries) { "
+            "return sandbox_request(url, path, protocol, api, retries); }", "http-client-io-sandbox-" + label);
+        return p;
+    }
+
+    #! Asserts that the call fails because the sandbox denies the connection
+    private assertDenied(code c, list<auto> args, string msg) {
+        try {
+            call_function_args(c, args);
+            fail(msg + ": no exception raised");
+        } catch (hash<ExceptionInfo> ex) {
+            # the denial is the error of the connection
+            assertEq("NETWORK-ACCESS-DENIED", ex.err == "NETWORK-ACCESS-DENIED" ? ex.err : ex.arg.err,
+                msg + ": " + ex.err + ": " + ex.desc);
+            assertRegex(sprintf("port %d", port_b), ex.desc, msg);
+        }
+    }
+}
