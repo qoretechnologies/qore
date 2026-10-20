@@ -8,6 +8,20 @@
 
 %exec-class ColumnarResultTest
 
+#! An object held by a ColumnarResult in the garbage collection tests
+class CrNode inherits Serializable {
+    public {
+        auto ref;
+
+        #! counts the destructions of CrNode objects
+        static Counter destroyed();
+    }
+
+    destructor() {
+        CrNode::destroyed.inc();
+    }
+}
+
 class ColumnarResultTest inherits QUnit::Test {
     constructor() : QUnit::Test("ColumnarResult", "1.0", \ARGV) {
         addTestCase("serializable inheritance", \serializableInheritance());
@@ -17,6 +31,7 @@ class ColumnarResultTest inherits QUnit::Test {
         addTestCase("scale-0 numeric narrowing", \scaleZeroNumericNarrowing());
         addTestCase("NUL characters in names and descriptions", \nulNames());
         addTestCase("NUL characters in strings passed on as C strings", \nulCStrings());
+        addTestCase("a cycle through an object in a ColumnarResult column is collected", \cycleCollection());
         set_return_value(main());
     }
 
@@ -211,5 +226,71 @@ class ColumnarResultTest inherits QUnit::Test {
         bad_type._index{data_index}._members.element_type = "int64\x00x";
         assertThrows("DESERIALIZATION-ERROR", "buffer element type", \Serializable::deserialize(), (bad_type,),
             "a serialized buffer element type with a NUL character is refused");
+    }
+
+    # an object in a column of a ColumnarResult that refers to the ColumnarResult
+    private crMakeCycle(string kind) {
+        CrNode n();
+        switch (kind) {
+            case "fromColumnHash":
+                n.ref = ColumnarResult::fromColumnHash({"x": (n,)});
+                break;
+            case "fromRows":
+                n.ref = ColumnarResult::fromRows(({"x": n},));
+                break;
+            case "nested":
+                n.ref = ColumnarResult::fromColumnHash({"k": (1,), "x": ({"node": n},)});
+                break;
+            case "filter":
+                n.ref = ColumnarResult::fromColumnHash({"x": (n, NOTHING)}).filter((True, False));
+                break;
+            case "take":
+                n.ref = ColumnarResult::fromColumnHash({"x": (NOTHING, n)}).take((1,));
+                break;
+            case "slice":
+                n.ref = ColumnarResult::fromColumnHash({"x": (NOTHING, n)}).slice(offset: 1, count: 1);
+                break;
+        }
+        auto first = n.ref.getColumn("x")[0];
+        if (kind == "nested") {
+            first = first.node;
+        }
+        assertEq(True, first == n, sprintf("the %s() result holds the object", kind));
+    }
+
+    # an object in a deserialized ColumnarResult that refers to it
+    private crMakeDeserializedCycle() {
+        CrNode n();
+        n.ref = ColumnarResult::fromColumnHash({"x": (n,)});
+        CrNode copy = Serializable::deserialize(n.serializeToData());
+        assertEq(True, copy != n, "the object is deserialized");
+        assertEq(True, copy.ref.getColumn("x")[0] == copy, "the deserialized ColumnarResult holds the copy");
+    }
+
+    private cycleCollection() {
+        int start = CrNode::destroyed.getCount();
+        int count = 0;
+        foreach string kind in ("fromColumnHash", "fromRows", "nested", "filter", "take", "slice") {
+            crMakeCycle(kind);
+            assertEq(++count, CrNode::destroyed.getCount() - start,
+                sprintf("a cycle through a %s() result is collected", kind));
+        }
+        crMakeDeserializedCycle();
+        assertEq(count + 2, CrNode::destroyed.getCount() - start,
+            "a cycle through a deserialized ColumnarResult is collected, as is the original");
+
+        # a ColumnarResult held from outside the cycle keeps it
+        ColumnarResult kept;
+        {
+            CrNode n();
+            kept = ColumnarResult::fromColumnHash({"x": (n,)});
+            n.ref = kept;
+        }
+        assertEq(count + 2, CrNode::destroyed.getCount() - start, "a cycle held from outside is not collected");
+        CrNode node = kept.getColumn("x")[0];
+        assertEq(True, node.ref == kept, "the object in the column still refers to the ColumnarResult");
+        remove node;
+        remove kept;
+        assertEq(count + 3, CrNode::destroyed.getCount() - start, "the cycle is collected when it is no longer held");
     }
 }

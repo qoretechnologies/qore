@@ -4789,13 +4789,43 @@ QoreValue QoreColumnarResult::getColumnValue(const char* name, ExceptionSink* xs
     return column->data.refSelf();
 }
 
+void QoreColumnarResult::attach(QoreObject& self) const {
+    bool registered = false;
+    for (const Column& column : columns) {
+        if (!needs_scan(column.data)) {
+            continue;
+        }
+        if (!registered) {
+            // the columns do not change, so the registration is kept for the life of the object
+            self.addPrivateDataScan(CID_COLUMNARRESULT);
+            registered = true;
+        }
+        // no scan follows the new edge
+        self.privateDataValueStored(column.data);
+    }
+}
+
+bool QoreColumnarResult::scanValues(QorePrivateDataScanner& scanner) {
+    // the columns do not change once the result is the private data of an object, and it is the private data of one
+    // object only, so each container is reported once and read without a lock
+    for (const Column& column : columns) {
+        if (scanner.scan(column.data)) {
+            return true;
+        }
+    }
+    return false;
+}
+
 QoreObject* qore_columnar_result_to_object(QoreColumnarResult* result, ExceptionSink* xsink) {
     if (!result) {
         return nullptr;
     }
+    // the result is given to one object: an object reports its column containers, which the result references once
+    assert(result->reference_count() == 1);
     ReferenceHolder<QoreColumnarResult> result_holder(result, xsink);
     ReferenceHolder<QoreObject> obj(new QoreObject(QC_COLUMNARRESULT, nullptr), xsink);
     obj->setPrivate(CID_COLUMNARRESULT, result_holder.release());
+    result->attach(**obj);
     return obj.release();
 }
 

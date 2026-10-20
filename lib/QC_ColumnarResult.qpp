@@ -72,7 +72,9 @@ static void ColumnarResult_deserializer(QoreObject& self, const QoreHashNode* sd
     ReferenceHolder<QoreColumnarResult> result(
         QoreColumnarResult::deserialize(payload->get<const QoreHashNode>(), xsink), xsink);
     if (!*xsink) {
-        self.setPrivate(CID_COLUMNARRESULT, result.release());
+        QoreColumnarResult* r = result.release();
+        self.setPrivate(CID_COLUMNARRESULT, r);
+        r->attach(self);
     }
 }
 
