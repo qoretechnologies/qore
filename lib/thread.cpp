@@ -815,8 +815,12 @@ void ThreadEntry::activate(int tid, pthread_t n_ptid, QoreProgram* p, bool forei
     assert(status == QTS_NA || status == QTS_RESERVED);
     // a QTS_RESERVED entry is reactivated without passing through cleanup(), so a cancellation
     // request delivered during the previous activation would otherwise leak into the new thread and
-    // cancel it at its first check point with a stale reason
-    clearCancelState();
+    // cancel it at its first check point with a stale reason; a QTS_NA entry was allocated with no
+    // request (cleanup() clears it), so a request it has now was made for this thread after it was
+    // started and before it began running (see QoreThreadList::cancelThread()), and is kept
+    if (status == QTS_RESERVED) {
+        clearCancelState();
+    }
     ptid = n_ptid;
     // The native reaper owns external-lifecycle threads until pthread_join() completes.
     // Set this on activation, before the thread can release/reuse its Qore TID.
@@ -4872,7 +4876,10 @@ int QoreThreadList::cancelThread(int tid, const char* reason, unsigned scope_pgm
     if (tid <= 0 || tid >= MAX_QORE_THREADS) {
         return -1;
     }
-    if (!entry[tid].active()) {
+    // a thread that has been started but is not running yet (the TID returned by background or q_start_thread()
+    // before the new thread registers itself) keeps the request; ThreadEntry::activate() leaves it in place, so it
+    // takes effect at the thread's first cancellation check point instead of being dropped
+    if (!entry[tid].active() && entry[tid].status != QTS_NA) {
         return -1;
     }
     if (reason) {

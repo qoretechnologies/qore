@@ -75,6 +75,7 @@ public class ThreadCancelTest inherits QUnit::Test {
         addTestCase("cancel_thread with reason string", \testCancelThreadReasonString());
         addTestCase("cancel_thread TID 0", \testCancelThreadTidZero());
         addTestCase("cancel_thread return value", \testCancelThreadReturnValue());
+        addTestCase("cancel_thread before the thread runs", \testCancelThreadBeforeItRuns());
         addTestCase("cancel already-cancelled thread", \testCancelAlreadyCancelled());
         addTestCase("clear_thread_cancel when not cancelled", \testClearWhenNotCancelled());
         addTestCase("cancel timed Queue::get", \testCancelTimedQueueGet());
@@ -1025,6 +1026,39 @@ bool sub do_cancel(int tid) {
         bool rv = cancel_thread(child_tid);
         assertTrue(rv, "cancel_thread should return True on success");
         done.waitForZero(5000);
+    }
+
+    testCancelThreadBeforeItRuns() {
+        # the TID returned by background names a thread that may not have started running yet; a request posted with
+        # it right away is kept and applied when the thread starts, so it is never dropped; each thread is cancelled
+        # immediately after it is created, which is before it runs in most iterations
+        for (int i = 0; i < 200; ++i) {
+            Counter release(1);
+            Counter done(1);
+            *hash<ExceptionInfo> ex_info;
+            int tid = background sub () {
+                on_exit done.dec();
+                try {
+                    # a cancellation check point that only the request or the release below can end
+                    release.waitForZero();
+                } catch (hash<ExceptionInfo> ex) {
+                    ex_info = ex;
+                }
+            }();
+            bool posted = cancel_thread(tid, "cancelled before it runs");
+            if (!posted) {
+                # lets the thread end, so that a dropped request fails the test instead of leaving a thread blocked
+                release.dec();
+            }
+            # the timeout is only a hang guard: the thread ends at once when the request reaches it
+            if (done.waitForZero(60s)) {
+                printf("thread %d did not end after its cancellation (iteration %d)\n", tid, i);
+                exit(1);
+            }
+            assertTrue(posted, sprintf("request delivered in iteration %d", i));
+            assertEq("THREAD-CANCELLED", ex_info.err, sprintf("thread cancelled in iteration %d", i));
+            assertRegex("cancelled before it runs", ex_info.desc);
+        }
     }
 
     testCancelAlreadyCancelled() {

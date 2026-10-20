@@ -1049,8 +1049,12 @@ bool active_exception() [dom=PROCESS] {
     return value of @ref True means the request was delivered, not that it was necessarily
     honored; an out-of-scope request is dropped by the target thread and has no effect.
 
+    A thread can be cancelled with the TID returned by the \c background operator as soon as it is returned, also
+    if the new thread has not begun running yet: the request is kept and takes effect at the thread's first
+    cancellation check point.
+
     @return @ref True if the cancellation request was delivered, @ref False if the thread
-    was not found or not active
+    was not found (it has not been started, or it has already finished)
 
     @throw THREAD-CANCEL-ERROR cannot cancel the current thread (use \c throw instead);
     thrown also when \a thread_id <= 0
