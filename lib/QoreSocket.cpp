@@ -10237,23 +10237,32 @@ int SSLSocketHelper::doNonBlockingIo(ExceptionSink* xsink, const char* mname, vo
 
         if (rc > 0) {
 #ifdef DEBUG
-            // Test-only hook to simulate SSL partial writes that require repeated polling.
-            static int force_count = 0;
-            static int force_max = 0;
+            // Test-only hook to simulate SSL partial writes that require repeated polling.  The counts are shared by
+            // every thread doing SSL I/O, so they are atomic, and they are only written while the hook is in use.
+            static std::atomic<int> force_count{0};
+            static std::atomic<int> force_max{0};
             const char* env = getenv("QORE_TEST_SSL_PARTIAL_WRITE");
             if (!env || !*env || *env == '0') {
-                force_count = 0;
-                force_max = 0;
-            } else if (action == WRITE && real_io) {
-                if (!force_max) {
-                    const char* lim = getenv("QORE_TEST_SSL_PARTIAL_WRITE_LIMIT");
-                    force_max = lim ? atoi(lim) : 4;
-                    if (force_max < 1) {
-                        force_max = 1;
-                    }
+                if (force_max.load(std::memory_order_relaxed)) {
+                    force_count.store(0, std::memory_order_relaxed);
+                    force_max.store(0, std::memory_order_relaxed);
                 }
-                if (force_count < force_max) {
-                    ++force_count;
+            } else if (action == WRITE && real_io) {
+                int max = force_max.load(std::memory_order_relaxed);
+                if (!max) {
+                    const char* lim = getenv("QORE_TEST_SSL_PARTIAL_WRITE_LIMIT");
+                    max = lim ? atoi(lim) : 4;
+                    if (max < 1) {
+                        max = 1;
+                    }
+                    force_max.store(max, std::memory_order_relaxed);
+                }
+                // the first max writes made while the hook is in use report that the socket must be polled
+                int count = force_count.load(std::memory_order_relaxed);
+                while (count < max && !force_count.compare_exchange_weak(count, count + 1,
+                        std::memory_order_relaxed)) {
+                }
+                if (count < max) {
                     rc = SOCK_POLLOUT;
                     break;
                 }
