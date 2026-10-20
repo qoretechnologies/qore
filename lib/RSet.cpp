@@ -1427,10 +1427,15 @@ robject_dereference_helper::~robject_dereference_helper() {
     deref_inprogress_pop(frame);
 
     // if finalDeref() handed off deletion, we do not claim deleter status (avoids the
-    // waiter-vs-deleter assertion in derefDone), but we still wait for other in-progress
-    // derefs to finish before the qo->tDeref() below, otherwise tDeref() can race with a
-    // concurrent deref and trigger deleteObject() while another thread is mid-access
-    o->derefDone(del && !handed_off, handed_off);
+    // waiter-vs-deleter assertion in derefDone), and we wait for other in-progress derefs to
+    // finish only if we make the qo->tDeref() below, otherwise tDeref() can race with a
+    // concurrent deref and trigger deleteObject() while another thread is mid-access.  A
+    // dereference that decided to collect the object while references remained (willDelete())
+    // and found another thread deleting it releases nothing here, so it does not wait: two
+    // dereferences can decide to collect the same object (RSet::canDelete()), and the one that
+    // deletes it reaches derefDone() only after the destructor; a waiting dereference that is
+    // not the deleter would then see the deleter finish last, which derefDone() asserts never happens
+    o->derefDone(del && !handed_off, handed_off && !refs);
 
     // A dereference that finds the object already deleted or being deleted releases the object's base weak
     // reference only if it released the last reference itself: that release is owed by exactly one dereference,
