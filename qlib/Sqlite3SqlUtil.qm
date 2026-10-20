@@ -99,7 +99,8 @@ module Sqlite3SqlUtil {
     to a template (@ref SqlUtil::AbstractTable::getAlignSql() "AbstractTable::getAlignSql()"):
     - a change of the \c NOT \c NULL constraint only is made with \c ALTER \c COLUMN when the SQLite library the
       sqlite3 module uses is 3.53.0 or later; making a column \c NOT \c NULL fails if a row holds \c NULL in it
-    - with an older SQLite library, the same change raises \c UNSUPPORTED
+    - with an older SQLite library, the same change raises \c UNSUPPORTED; an alignment raises it only if it makes
+      no change that SQLite cannot make with any version (see @ref sqlite3_alignment_refusals)
     - any other change, of the column's type, its default value, or whether it is an auto-increment or primary key
       column, raises \c UNSUPPORTED with every SQLite version
 
@@ -107,6 +108,22 @@ module Sqlite3SqlUtil {
     (@ref Qore::SQL::AbstractDatasource::getServerVersion() "AbstractDatasource::getServerVersion()"), not the
     version of the \c sqlite3 module.  A change that raises \c UNSUPPORTED can only be made by creating the table
     anew and copying its rows, which this module does not do.
+
+    @subsection sqlite3_alignment_refusals Changes That No SQLite Version Can Make
+
+    When an existing table is aligned to a template
+    (@ref SqlUtil::AbstractTable::getAlignSql() "AbstractTable::getAlignSql()"), these changes raise \c UNSUPPORTED
+    with every SQLite version:
+    - adding a primary key to the table, or dropping its primary key (see @ref sqlite3_primary_keys)
+    - adding a foreign constraint to the table, or dropping or changing one (see @ref sqlite3_foreign_constraints)
+    - changing a column's type, its default value, or whether it is an auto-increment or primary key column (see
+      @ref sqlite3_column_changes)
+
+    The alignment raises them before it changes a column, so a change of a column's \c NOT \c NULL constraint, which
+    an SQLite library older than 3.53.0 cannot make either, raises \c UNSUPPORTED only if the alignment makes none of
+    them, and an alignment reports the same change with every SQLite version.  For example, a template that adds a
+    primary key to a table and declares the key's column \c NOT \c NULL, where the table's column is nullable, raises
+    \c UNSUPPORTED for the primary key with every SQLite version, not for the column's \c NOT \c NULL constraint.
 
     @subsection sqlite3_primary_keys Primary Keys
 
@@ -118,7 +135,8 @@ module Sqlite3SqlUtil {
 
     SQLite has no name for a primary key, so the name given in a table description is not kept, and renaming a
     primary key needs no SQL.  SQLite cannot add a primary key to an existing table or drop the primary key of one,
-    so aligning an existing table to a template with another primary key raises \c UNSUPPORTED with a description;
+    so aligning an existing table to a template with another primary key raises \c UNSUPPORTED with a description,
+    with every SQLite version, also when the template changes a column too (see @ref sqlite3_alignment_refusals);
     such a table can only be created anew with the new key and its rows copied, which this module does not do.  A
     table created by Sqlite3SqlUtil 1.1 or earlier was created without its primary key, so aligning it to its
     template raises \c UNSUPPORTED in the same way.
@@ -141,9 +159,9 @@ module Sqlite3SqlUtil {
     unchanged and needs no SQL.  Do not name a foreign constraint <tt>sqlite_fk_</tt><em>n</em> yourself.
 
     SQLite cannot add a foreign constraint to an existing table or drop one, so aligning an existing table to a
-    template with other foreign constraints raises \c UNSUPPORTED with a description; a changed foreign constraint is
-    one dropped and another added.  Such a table can only be created anew and its rows copied, which this module does
-    not do.
+    template with other foreign constraints raises \c UNSUPPORTED with a description, with every SQLite version (see
+    @ref sqlite3_alignment_refusals); a changed foreign constraint is one dropped and another added.  Such a table can
+    only be created anew and its rows copied, which this module does not do.
 
     A foreign constraint description in SqlUtil has no referential actions (\c ON \c DELETE, \c ON \c UPDATE) on
     any database, so a foreign constraint is created without them and compared without them, and a foreign
@@ -179,6 +197,12 @@ module Sqlite3SqlUtil {
       adding a foreign constraint to an existing table or dropping one raises \c UNSUPPORTED with a description;
       foreign constraints are declared but not enforced through the \c sqlite3 driver; see
       @ref sqlite3_foreign_constraints
+    - fixed table alignment reporting a different refusal on an SQLite library older than 3.53.0 than on a newer
+      one: a template that made a change that no SQLite version can make, such as adding a primary key, and changed
+      a column's \c NOT \c NULL constraint, such as by declaring the key's column \c NOT \c NULL, raised
+      \c UNSUPPORTED for the \c NOT \c NULL constraint on the older library; the changes that no SQLite version can
+      make are now refused before a column is changed, so an alignment reports the same change with every SQLite
+      version; see @ref sqlite3_alignment_refusals
     - fixed describing indexes: a table with an automatic index (a composite primary key or a unique
       constraint) failed, a unique index created in lower case was reported as not unique, and quoted column
       names kept their quotes; indexes are now described from SQLite's index pragmas instead of their SQL
@@ -428,6 +452,42 @@ list l = col.getModifySql(t, newcol);
             \c NOT \c NULL constraint, and the SQLite library is older than 3.53.0
          */
         softlist<string> getModifySqlImpl(AbstractTable t, AbstractColumn col, *hash<auto> opt) {
+            checkModify(t, col);
+            Sqlite3Column c = cast<Sqlite3Column>(col);
+            if (nullable == c.nullable) {
+                return ();
+            }
+            string action = c.nullable ? "drop" : "set";
+            string version = t.getDatasource().getServerVersion();
+            if (compare_version(version, SQLITE_ALTER_COLUMN_NOT_NULL_VERSION) < 0) {
+                throw "UNSUPPORTED", sprintf("cannot %s the NOT NULL constraint of column %y of table %y: SQLite %s "
+                    "cannot change a column of an existing table; SQLite %s or later is required", action, name,
+                    t.getName(), version, SQLITE_ALTER_COLUMN_NOT_NULL_VERSION);
+            }
+            return sprintf("alter table %s alter column %s %s not null", t.getSqlName(), ddl_name, action);
+        }
+
+        #! raises an exception if the new definition changes what no SQLite version can change in a column
+        /** SQLite can change only the \c NOT \c NULL constraint of a column of an existing table, and only from
+            SQLite 3.53.0 (@ref SQLITE_ALTER_COLUMN_NOT_NULL_VERSION); this method checks the changes that SQLite
+            cannot make with any version, and not the \c NOT \c NULL constraint; see @ref sqlite3_column_changes
+
+            @par Example:
+            @code{.py}
+col.checkModify(t, newcol);
+            @endcode
+
+            The column names are assumed to be equal.
+
+            @param t the AbstractTable object to modify
+            @param col the new column definition
+
+            @throw UNSUPPORTED the new definition changes the column's type, default value, comment, or whether it
+            is an auto-increment or primary key column, which SQLite cannot change
+
+            @since Sqlite3SqlUtil 1.2
+         */
+        checkModify(AbstractTable t, AbstractColumn col) {
             Sqlite3Column c = cast<Sqlite3Column>(col);
             list<string> changes;
             if (native_type != c.native_type || size != c.size || (scale ?? 0) != (c.scale ?? 0)) {
@@ -453,17 +513,6 @@ list l = col.getModifySql(t, newcol);
                     "column of an existing table; it can change only its NOT NULL constraint", name, t.getName(),
                     what);
             }
-            if (nullable == c.nullable) {
-                return ();
-            }
-            string action = c.nullable ? "drop" : "set";
-            string version = t.getDatasource().getServerVersion();
-            if (compare_version(version, SQLITE_ALTER_COLUMN_NOT_NULL_VERSION) < 0) {
-                throw "UNSUPPORTED", sprintf("cannot %s the NOT NULL constraint of column %y of table %y: SQLite %s "
-                    "cannot change a column of an existing table; SQLite %s or later is required", action, name,
-                    t.getName(), version, SQLITE_ALTER_COLUMN_NOT_NULL_VERSION);
-            }
-            return sprintf("alter table %s alter column %s %s not null", t.getSqlName(), ddl_name, action);
         }
 
         #! returns a string that can be used to rename the column
@@ -1525,6 +1574,56 @@ string sql = pk.getTableConstraintSql();
         }
 
         private *list getAlignSqlImpl(AbstractTable table, *hash<auto> opt) {
+        }
+
+        #! refuses the changes of an alignment that SQLite cannot make with any version, before a column is aligned
+        /** SQLite cannot add a primary key or a foreign constraint to an existing table, and cannot change a column
+            of an existing table other than its \c NOT \c NULL constraint, with any version; it can change the
+            \c NOT \c NULL constraint from SQLite 3.53.0.  So these changes are refused here, before the columns are
+            aligned, and an alignment that makes one of them reports it with every SQLite version, not a \c NOT
+            \c NULL change that an older SQLite cannot make, such as the one that a new primary key implies for its
+            columns; see @ref sqlite3_alignment_refusals
+
+            A primary key that the template does not have, or has with other columns, and a foreign constraint that
+            the template does not have, have already been refused by the alignment, which drops them before this
+            method is called.
+
+            @param t the template table that the current table is aligned to
+            @param opt the alignment options
+
+            @throw UNSUPPORTED the alignment adds a primary key or a foreign constraint to the table, changes a foreign
+            constraint, or changes a column other than its \c NOT \c NULL constraint
+
+            @since Sqlite3SqlUtil 1.2
+        */
+        private checkAlignChangesImpl(AbstractTable t, *hash<auto> opt) {
+            string table_name = getSqlName();
+            # the SQL of each change is requested here only for the exception that the alignment would raise for it
+            # after the columns; a change that SQLite can make gives SQL, which the alignment requests again
+
+            # a primary key in SQLite has no name, so the alignment has refused to drop a key other than the
+            # template's: the table has the template's key, or none
+            @assert(primaryKey.empty() || primaryKey.equal(t.primaryKey));
+            if (primaryKey.empty() && !t.primaryKey.empty()) {
+                t.primaryKey.getCreateSql(table_name, opt);
+            }
+
+            if (!opt.omit.foreign_constraints) {
+                foreach AbstractForeignConstraint fk in (t.foreignConstraints.iterator()) {
+                    string fk_name = fk.getName();
+                    if (!foreignConstraints.hasKey(fk_name)) {
+                        fk.getCreateSql(table_name, opt);
+                    } else if (!fk.equal(foreignConstraints{fk_name})) {
+                        foreignConstraints{fk_name}.getDropSql(table_name);
+                    }
+                }
+            }
+
+            foreach AbstractColumn c in (t.columns.iterator()) {
+                if (columns.hasKey(c.name)) {
+                    cast<Sqlite3Column>(columns{c.name}).checkModify(self, c);
+                }
+            }
         }
 
         private string getCreateSqlImpl(list l) {

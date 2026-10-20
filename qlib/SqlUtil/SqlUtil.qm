@@ -147,6 +147,10 @@ module SqlUtil {
       of sequences or functions only; every section of the description is optional
     - fixed @ref SqlUtil::AbstractDatabase::getAlignSql() "AbstractDatabase::getAlignSql()" raising
       \c SCHEMA-DESCRIPTION-ERROR for any \c table_map, so that no table was renamed by it
+    - added a driver hook that @ref SqlUtil::AbstractTable::getAlignSql() "AbstractTable::getAlignSql()" calls
+      before it aligns the columns, so a driver refuses the changes that its database cannot make with any version
+      before a column change that only an older version of the database cannot make, and an alignment reports the
+      same refusal with every version of the database, as on SQLite
 
     @subsection sqlutilv3_10_0 SqlUtil v3.10.0
     - Added an offline table rewrite transaction that limits only lock waits, for single schema statements

@@ -28,6 +28,8 @@ class Sqlite3ColumnsTest inherits QUnit::Test {
         addTestCase("other column changes are refused with every SQLite version", \otherChanges());
         addTestCase("an unchanged column needs no SQL", \unchanged());
         addTestCase("table alignment changes a NOT NULL constraint", \alignment());
+        addTestCase("table alignment refuses another column change before a NOT NULL change",
+            \alignmentRefusalOrder());
         addTestCase("the SQLite library changes a NOT NULL constraint", \liveChange());
         set_return_value(main());
     }
@@ -127,6 +129,34 @@ class Sqlite3ColumnsTest inherits QUnit::Test {
         Sqlite3Table old_template(old_ds, "t");
         old_template.setupTable(desc);
         assertThrows("UNSUPPORTED", "SQLite 3.52.0 cannot change a column", \old_t.getAlignSql(), (old_template,));
+    }
+
+    #! A column change that no SQLite version can make is refused before a NOT NULL change of another column, which
+    #! only SQLite before 3.53.0 cannot make, so that an alignment reports the same change with every SQLite version
+    private alignmentRefusalOrder() {
+        hash<auto> desc = {
+            "columns": {
+                "id": {"native_type": "integer"},
+                # the NOT NULL change comes first in the template's columns
+                "code": {"native_type": "text", "notnull": True},
+                "label": {"native_type": "text", "notnull": True, "default_value": "'none'",
+                    "default_value_native": True},
+                # a type change
+                "order": {"native_type": "integer"},
+            },
+        };
+        # the SQLite library's own version, then one older and one newer than 3.53.0
+        foreach *string version in ((NOTHING, "3.46.1", "3.53.4")) {
+            AbstractDatasource ds = datasource(version);
+            on_exit ds.rollback();
+            string server_version = ds.getServerVersion();
+            Sqlite3Table t(ds, "t");
+            Sqlite3Table template(ds, "t");
+            template.setupTable(desc);
+            assertThrows("UNSUPPORTED", "^cannot modify column \"order\" of table \"t\": SQLite cannot change the type "
+                "of a column of an existing table; it can change only its NOT NULL constraint$", \t.getAlignSql(),
+                (template,), server_version);
+        }
     }
 
     private liveChange() {

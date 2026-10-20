@@ -34,6 +34,8 @@ class Sqlite3KeysTest inherits QUnit::Test {
         addTestCase("a table is created with its foreign constraints", \createdForeignConstraints());
         addTestCase("a foreign constraint of an existing table is not added or dropped",
             \existingForeignConstraintChanges());
+        addTestCase("a key change is refused before a column change with every SQLite version",
+            \keyChangesBeforeColumnChanges());
         addTestCase("automatic indexes are described", \automaticIndexes());
         addTestCase("upsert uses the key", \upsert());
         addTestCase("a select that locks rows is refused", \forUpdateRefused());
@@ -340,6 +342,98 @@ class Sqlite3KeysTest inherits QUnit::Test {
         assertEq((), fk.getRenameSql("fk_line", "fk_other"));
     }
 
+    #! Returns an in-memory database; with a version, the datasource reports it as the SQLite version
+    private AbstractDatasource versionedDatasource(*string version) {
+%ifdef NoSqlite3
+        testSkip("no sqlite3 module");
+%endif
+        return version
+            ? new VersionedDatasource("sqlite3:@:memory:", version)
+            : new Datasource("sqlite3:@:memory:");
+    }
+
+    #! Checks that a template's change of a column's NOT NULL constraint is refused only by SQLite before 3.53.0
+    private checkNotNullChange(AbstractDatasource ds, string table, string column, hash<auto> desc) {
+        string version = ds.getServerVersion();
+        Sqlite3Table template(ds, table);
+        template.setupTable(desc);
+        Sqlite3Table current(ds, table);
+        if (compare_version(version, SQLITE_ALTER_COLUMN_NOT_NULL_VERSION) < 0) {
+            assertThrows("UNSUPPORTED", sprintf("NOT NULL constraint of column \"%s\" of table \"%s\": SQLite %s "
+                "cannot change a column", column, table, version), \current.getAlignSql(), (template,), version);
+        } else {
+            list<auto> sql = current.getAlignSql(template);
+            assertEq(1, sql.size(), version);
+            assertRegex(sprintf("^alter table %s alter column %s (set|drop) not null$", table, column), sql[0],
+                version);
+        }
+    }
+
+    #! A key or foreign constraint that no SQLite version can add to or drop from an existing table is refused before
+    #! a change of a column's NOT NULL constraint, which only SQLite before 3.53.0 cannot make, so that an alignment
+    #! reports the same change with every SQLite version
+    keyChangesBeforeColumnChanges() {
+        # the SQLite library's own version, then one older and one newer than 3.53.0
+        foreach *string v in ((NOTHING, "3.46.1", "3.53.4")) {
+            AbstractDatasource ds = versionedDatasource(v);
+            on_exit ds.rollback();
+            string version = ds.getServerVersion();
+            ds.exec("create table no_pk (x integer)");
+            ds.exec("create table single_pk (id integer not null primary key, status varchar(100))");
+            ds.exec("create table fk_order (id integer not null primary key)");
+            ds.exec("create table fk_line (id integer not null primary key, order_id integer, item_id integer, "
+                "constraint fk_line_order foreign key (order_id) references fk_order (id))");
+
+            # adding a key: the template declares the key's column NOT NULL, as a key column is, and the table's
+            # column is nullable
+            hash<auto> with_key_desc = {"columns": {"x": {"native_type": "integer", "notnull": True}},
+                "primary_key": {"name": "pk_no_pk", "columns": ("x",)}};
+            checkNotNullChange(ds, "no_pk", "x", with_key_desc - "primary_key");
+            Sqlite3Table with_key(ds, "no_pk");
+            with_key.setupTable(with_key_desc);
+            Sqlite3Table no_pk(ds, "no_pk");
+            assertTrue(no_pk.describe().x.nullable, version);
+            assertFalse(with_key.describe().x.nullable, version);
+            assertThrows("UNSUPPORTED", "^cannot add the primary key \\(x\\) to table \"no_pk\": SQLite cannot add a "
+                "primary key to an existing table", \no_pk.getAlignSql(), (with_key,), version);
+
+            # dropping the key, and the NOT NULL constraint of its column
+            Sqlite3Table single_pk(ds, "single_pk");
+            hash<auto> nullable_key_desc = single_pk.getDescriptionHash();
+            nullable_key_desc.columns.id.notnull = False;
+            checkNotNullChange(ds, "single_pk", "id", nullable_key_desc);
+            Sqlite3Table without_key(ds, "single_pk");
+            without_key.setupTable(nullable_key_desc - "primary_key");
+            assertThrows("UNSUPPORTED", "^cannot drop the primary key \\(id\\) of table \"single_pk\": SQLite cannot "
+                "drop the primary key of an existing table", \single_pk.getAlignSql(), (without_key,), version);
+
+            # adding a foreign constraint on a column that the template declares NOT NULL
+            Sqlite3Table line(ds, "fk_line");
+            hash<auto> line_desc = line.getDescriptionHash();
+            line_desc.columns.item_id.notnull = True;
+            checkNotNullChange(ds, "fk_line", "item_id", line_desc);
+            hash<auto> added_fk_desc = line_desc;
+            added_fk_desc.foreign_constraints.fk_line_item = {"columns": ("item_id",), "table": "fk_order",
+                "target_columns": ("id",)};
+            Sqlite3Table added_fk(ds, "fk_line");
+            added_fk.setupTable(added_fk_desc);
+            assertThrows("UNSUPPORTED", "^cannot add the foreign constraint \"fk_line_item\" \\(item_id\\) "
+                "referencing fk_order \\(id\\) to table \"fk_line\": SQLite cannot add a foreign constraint to an "
+                "existing table", \line.getAlignSql(), (added_fk,), version);
+
+            # changing a foreign constraint of a description of the table, which has the name that SQLite gives it
+            hash<auto> changed_fk_desc = line_desc;
+            string fk_name = changed_fk_desc.foreign_constraints.firstKey();
+            assertRegex("^sqlite_fk_[0-9]+$", fk_name, version);
+            changed_fk_desc.foreign_constraints{fk_name}.columns = ("item_id",);
+            Sqlite3Table changed_fk(ds, "fk_line");
+            changed_fk.setupTable(changed_fk_desc);
+            assertThrows("UNSUPPORTED", "^cannot drop the foreign constraint \\(order_id\\) referencing fk_order "
+                "\\(id\\) of table \"fk_line\": SQLite cannot drop a foreign constraint of an existing table",
+                \line.getAlignSql(), (changed_fk,), version);
+        }
+    }
+
     forUpdateRefused() {
         Datasource ds = getDatasource();
         on_exit ds.rollback();
@@ -391,5 +485,20 @@ class Sqlite3KeysTest inherits QUnit::Test {
         } catch (hash<ExceptionInfo> ex) {
             assertTrue(single.isDuplicateRowError(ex), get_exception_string(ex));
         }
+    }
+}
+
+#! A datasource that reports a given server version, as a different SQLite library would
+class VersionedDatasource inherits Datasource {
+    private {
+        string version;
+    }
+
+    constructor(string connstr, string version) : Datasource(connstr) {
+        self.version = version;
+    }
+
+    auto getServerVersion() {
+        return version;
     }
 }

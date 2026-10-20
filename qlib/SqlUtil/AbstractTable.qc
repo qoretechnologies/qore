@@ -11280,6 +11280,10 @@ list<auto> l = table.getAlignSql(table2);
             delete primaryKey;
         }
 
+        # the driver refuses the changes that its database cannot make with any version before a column is aligned,
+        # so that a column change that only some versions of the database cannot make does not hide them
+        checkAlignChangesImpl(t, opt);
+
         # check for columns in the template that are not present or different in the current table
         foreach AbstractColumn c in (t.columns.iterator()) {
             if (!columns.hasKey(c.name)) {
@@ -13012,6 +13016,26 @@ on_exit printf("SQL> %s\n", sql);
     */
     private *hash<auto> getPartitionDescriptionDriverOptionsImpl(hash<PartitionInfo> info) {
         return;
+    }
+
+    #! refuses the changes of a table alignment that the database cannot make with any version
+    /** Called by @ref SqlUtil::AbstractTable::getAlignSql() "AbstractTable::getAlignSql()" after the table, its
+        columns, indexes and constraints are renamed and the indexes and constraints that are not in the template are
+        dropped, before the columns are aligned and the indexes and constraints of the template are added.
+
+        A driver whose database cannot make some changes to an existing table with any version, but can make a
+        column change only from a version on, raises the exception for the former here, so that an alignment reports
+        the same refusal with every version of the database; otherwise the column change, which is aligned first,
+        would be refused first by an older version.  The default implementation does nothing.
+
+        @param t the template table that the current table is aligned to
+        @param opt the alignment options; see @ref SqlUtil::AbstractTable::AlignTableOptions
+
+        @note the locks of both tables are held when this method is called
+
+        @since SqlUtil 3.11.0
+    */
+    private checkAlignChangesImpl(AbstractTable t, *hash<auto> opt) {
     }
 
     #! Reimplement in subclasses to provide driver-specific create-as-select SQL
