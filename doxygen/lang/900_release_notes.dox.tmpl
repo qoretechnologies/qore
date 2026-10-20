@@ -4782,6 +4782,10 @@ while (*binary chunk = input.read(65536)) {
       @ref Qore::SQL::AbstractDatasource::getDriverRealName() "AbstractDatasource::getDriverRealName()" failed, so
       the @ref sqlutilintro "SqlUtil" module could not be used with a datasource implemented in %Qore unless the
       datasource implemented the method itself
+    - Fixed the top-level code of a @ref Qore::Program "Program" being parsed in the class of the method that parses
+      it: with @ref Qore::Program::parse() "Program::parse()", a bare call to a static method of the
+      @ref Qore::Program "Program" class, such as \c hasParseOption(), called that method, and a function of the
+      parsed Program with the name of such a method was not called
     - Fixed a crash of IR, JIT and tiered execution and of compiled (\c qcc) code when a
       @ref thread_exit "thread_exit statement" left a @ref try "try" block: the catch block was entered for the
       thread_exit, which is not an exception, and the thread crashed while making the exception information.  As in

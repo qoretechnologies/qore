@@ -1,0 +1,80 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class ProgramParseClassContextTest
+
+#! Tests that the top-level code of a Program is not parsed in the class of the method that parses it
+/** The class of a running method is the thread's current class, which is also the class context of parsing, and
+    the top-level code of a Program was initialized with it.  So in a Program parsed with Program::parse(), whose
+    running method is of the builtin Program class, a bare call to a static method of that class (such as
+    hasParseOption()) called it, and a function of the Program with the name of such a method was not called.
+*/
+class ProgramParseClassContextTest inherits QUnit::Test {
+    constructor() : QUnit::Test("ProgramParseClassContextTest", "1.0") {
+        addTestCase("a bare static method name of the Program class is not found", \staticMethodTest());
+        addTestCase("a function of the parsed Program is called", \functionTest());
+        addTestCase("parsed from a method and from a closure of a class", \classMethodTest());
+        addTestCase("a class of the parsed Program has its own context", \childClassTest());
+        set_return_value(main());
+    }
+
+    staticMethodTest() {
+        assertThrows("PARSE-EXCEPTION", "function 'hasParseOption\\(\\)' cannot be found",
+            \parseAndRun(), "return hasParseOption(\"new-style\");");
+        assertThrows("PARSE-EXCEPTION", "function 'getCapabilityMask\\(\\)' cannot be found",
+            \parseAndRun(), "return getCapabilityMask();");
+        # the static methods can still be called with their class
+        assertEq(True, parseAndRun("return Program::hasParseOption(\"new-style\");"));
+        assertEq(Type::Int, parseAndRun("return Program::getCapabilityMask().type();"));
+    }
+
+    functionTest() {
+        assertEq("function", parseAndRun("string sub getCapabilityMask() { return \"function\"; } "
+            "return getCapabilityMask();"));
+        assertEq("function", parseAndRun("string sub hasParseOption(string opt) { return \"function\"; } "
+            "return hasParseOption(\"new-style\");"));
+    }
+
+    classMethodTest() {
+        Parser parser();
+        string code = "string sub getCapabilityMask() { return \"function\"; } return getCapabilityMask();";
+        assertEq("function", parser.parseInMethod(code));
+        assertEq("function", parser.parseInClosure(code));
+        assertThrows("PARSE-EXCEPTION", "function 'hasParseOption\\(\\)' cannot be found",
+            \parser.parseInMethod(), "return hasParseOption(\"new-style\");");
+    }
+
+    childClassTest() {
+        assertEq("child static method", parseAndRun("class Child {\n"
+            "    static string hasParseOption(string opt) { return \"child static method\"; }\n"
+            "    static string call() { return hasParseOption(\"new-style\"); }\n"
+            "}\n"
+            "return Child::call();"));
+    }
+
+    #! parses the code in a new Program and returns what it returns
+    static auto parseAndRun(string code) {
+        Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS);
+        p.parse(code, "child");
+        return p.run();
+    }
+}
+
+#! parses Programs from a method and from a closure
+class Parser {
+    auto parseInMethod(string code) {
+        return ProgramParseClassContextTest::parseAndRun(code);
+    }
+
+    auto parseInClosure(string code) {
+        code f = auto sub () { return ProgramParseClassContextTest::parseAndRun(code); };
+        return f();
+    }
+}

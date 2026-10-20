@@ -1668,6 +1668,10 @@ int qore_program_private::internParseCommit(bool standard_parse) {
         // if the first stage of parsing has already failed,
         // then don't go forward
         if (!parseSink->isEvent()) {
+            // the top-level code and the namespaces are not in a class (classes set their own context): the Program can
+            // be parsed while a method runs (ex: in Program::parse()), and the method's class is then the thread's class
+            ClassOnlySubstitutionHelper class_helper(nullptr);
+
             // initialize new statements second (for "our" and "my" declarations)
             // also initializes namespaces, constants, etc
             sb.parseInit();
