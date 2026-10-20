@@ -37,12 +37,15 @@ class ForeignConstraintKeyAlignmentTest inherits QUnit::Test {
         addTestCase("Oracle", \oracle());
         addTestCase("SQL Server", \mssql());
         addTestCase("Firebird", \firebird());
+        addTestCase("a referenced unique index of SQL Server is dropped and created once", \mssqlUniqueIndex());
+        addTestCase("a referenced unique index of Firebird is dropped and created once", \firebirdUniqueIndex());
         set_return_value(main());
     }
 
-    #! Returns the description of the parent table, with a unique constraint on the given columns, or of the child
-    #! table, with a foreign constraint on the given columns
-    private hash<auto> description(string table, list<string> columns) {
+    #! Returns the description of the parent table, with a unique constraint, or a unique index if \a unique_index
+    #! is @ref True "True", on the given columns, or of the child table, with a foreign constraint on the given
+    #! columns
+    private hash<auto> description(string table, list<string> columns, bool unique_index = False) {
         hash<auto> desc = {
             "columns": {
                 "id": {"qore_type": "integer", "notnull": True},
@@ -52,7 +55,11 @@ class ForeignConstraintKeyAlignmentTest inherits QUnit::Test {
             "primary_key": {"name": "pk_" + table, "columns": ("id",)},
         };
         if (table == "fk_key_parent") {
-            desc.unique_constraints = {"uk_fk_key_parent": {"columns": columns}};
+            if (unique_index) {
+                desc.indexes = {"ui_fk_key_parent": {"columns": columns, "unique": True}};
+            } else {
+                desc.unique_constraints = {"uk_fk_key_parent": {"columns": columns}};
+            }
         } else {
             desc.foreign_constraints = {"fk_key_child": {"columns": columns, "table": "fk_key_parent",
                 "target_columns": columns}};
@@ -62,17 +69,18 @@ class ForeignConstraintKeyAlignmentTest inherits QUnit::Test {
 
     #! Aligns the parent and child tables, described with a unique key and a foreign constraint on code, to templates
     #! with the given columns, in the given order, and returns the SQL
-    private list<auto> alignSql(code new_table, bool child_first, list<string> key_columns, list<string> fk_columns) {
+    private list<auto> alignSql(code new_table, bool child_first, list<string> key_columns, list<string> fk_columns,
+            bool unique_index = False) {
         Tables live_cache();
         Tables templates();
         hash<string, AbstractTable> live;
         foreach string table in (("fk_key_parent", "fk_key_child")) {
             AbstractTable current = new_table(table);
-            current.setupTable(description(table, ("code",)), {"table_cache": live_cache});
+            current.setupTable(description(table, ("code",), unique_index), {"table_cache": live_cache});
             live{table} = current;
             AbstractTable template = new_table(table);
-            template.setupTable(description(table, table == "fk_key_parent" ? key_columns : fk_columns),
-                {"table_cache": templates});
+            template.setupTable(description(table, table == "fk_key_parent" ? key_columns : fk_columns,
+                unique_index), {"table_cache": templates});
             templates.add(table, template);
         }
         SchemaForeignConstraintAlignment fka(templates, live);
@@ -133,6 +141,44 @@ class ForeignConstraintKeyAlignmentTest inherits QUnit::Test {
         OfflineDatasource ds("odbc:user/pass@db", "WI-V3.0.10 Firebird 3.0", "firebird");
         checkDriver(AbstractTable sub (string table) { return new XdbcFirebirdTable(ds, table); }, "fk_key_parent",
             "fk_key_child");
+    }
+
+    #! A unique index that a foreign constraint references, changed with the foreign constraint, is dropped and
+    #! created once, in either order of the tables: its unique constraint, which is the index, is not dropped and
+    #! added around it
+    private checkUniqueIndex(code new_table, list<string> expected) {
+        foreach bool child_first in ((True, False)) {
+            assertEq(expected, map regex_subst($1, "  +", " ", RE_Global), alignSql(new_table, child_first,
+                ("code", "x"), ("code", "x"), True), sprintf("child first: %y", child_first));
+        }
+    }
+
+    mssqlUniqueIndex() {
+%ifdef NO_FREETDS
+        testSkip("no freetds module");
+%endif
+        OfflineDatasource ds("freetds:user/pass@db", "Microsoft SQL Server 2019 (RTM) - 15.0.2000.5", "mssql");
+        checkUniqueIndex(AbstractTable sub (string table) { return new FreetdsTable(ds, table); }, (
+            "alter table dbo.fk_key_child drop constraint fk_key_child",
+            "drop index ui_fk_key_parent on dbo.fk_key_parent",
+            "create unique index ui_fk_key_parent on dbo.fk_key_parent (code, x)",
+            "alter table dbo.fk_key_child add constraint fk_key_child foreign key (code, x) references fk_key_parent "
+                "(code, x)",
+        ));
+    }
+
+    firebirdUniqueIndex() {
+%ifdef NO_ODBC
+        testSkip("no odbc module");
+%endif
+        OfflineDatasource ds("odbc:user/pass@db", "WI-V3.0.10 Firebird 3.0", "firebird");
+        checkUniqueIndex(AbstractTable sub (string table) { return new XdbcFirebirdTable(ds, table); }, (
+            "alter table fk_key_child drop constraint fk_key_child",
+            "drop index ui_fk_key_parent",
+            "create unique index ui_fk_key_parent on fk_key_parent (code, x)",
+            "alter table fk_key_child add constraint fk_key_child foreign key (code, x) references fk_key_parent "
+                "(code, x)",
+        ));
     }
 }
 

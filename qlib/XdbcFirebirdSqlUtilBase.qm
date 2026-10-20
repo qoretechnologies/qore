@@ -93,6 +93,9 @@ module XdbcFirebirdSqlUtilBase {
     - fixed renaming an index, as table alignment does for an index with the definition of the template's index
       under another name: the SQL that drops the index and creates it under the new name was two statements in one
       string; it is now two strings (see @ref SqlUtil::AbstractIndex::getRenameSql() "AbstractIndex::getRenameSql()")
+    - fixed table alignment of a unique index with other columns, which dropped a unique constraint of the same
+      name, dropped the index, created it and added the constraint again: the index is now dropped once and created
+      once, and only the foreign constraints that reference it are dropped and added again around it
 
     @subsection xdbcfirebirdsqlutilbasev_0_1 XdbcFirebirdSqlUtilBase Module v0.1
     - initial release
@@ -332,6 +335,25 @@ auto v = c.name;
         #! returns a string that can be used to drop the constraint from the database
         string getDropSql(string table_name) {
             return sprintf("alter table %s drop constraint %s", table_name, name);
+        }
+
+        #! returns the SQL that disables and re-enables the foreign constraints that reference the constraint
+        /** The unique constraint that a unique index of a table description has is the index, so recreating the
+            index recreates the constraint: the constraint is not dropped and added again around the recreation of
+            its index, which dropped a constraint that the index is not and created the index a second time; only the
+            foreign constraints that reference it are disabled and re-enabled
+
+            @param ds the datasource of the tables of the foreign constraints
+            @param table_name this argument is ignored
+            @param opts options for the SQL that re-enables the foreign constraints
+
+            @return a hash with a \c disable key, giving a list of SQL strings that disable the foreign constraints
+            that reference this constraint, and an \c enable key, giving a list of SQL strings that re-enable them
+
+            @since XdbcFirebirdSqlUtilBase 0.2
+        */
+        hash<auto> getDisableReenableSql(AbstractDatasource ds, string table_name, *hash<auto> opts) {
+            return getSourceConstraintDisableReenableSql(ds, opts);
         }
     }
 

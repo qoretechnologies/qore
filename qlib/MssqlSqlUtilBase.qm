@@ -131,6 +131,10 @@ module MssqlSqlUtilBase {
     - fixed describing the foreign constraints of a table, which found none, so that table alignment added the
       foreign constraints of the template again, which SQL Server refused; a foreign constraint that references a
       unique index is also described
+    - fixed table alignment of a unique index with other columns, which dropped a unique constraint of the same
+      name, dropped the index, created it and added the constraint again, so that the alignment failed: the index is
+      now dropped once and created once, and only the foreign constraints that reference it are dropped and added
+      again around it
 
     @subsection MssqlSqlUtilBasev10 MssqlSqlUtilBase v1.0
     - initial release
@@ -607,6 +611,25 @@ auto v = c.name;
     #! returns @ref True "True" if the constraint is enabled, @ref False "False" if not
     bool isEnabled() {
         return enabled;
+    }
+
+    #! returns the SQL that disables and re-enables the foreign constraints that reference the constraint
+    /** The unique constraint that a unique index of a table description has is the index, so recreating the index
+        recreates the constraint: the constraint is not dropped and added again around the recreation of its index,
+        which SQL Server refused, as the index is not a constraint, and which created the index a second time; only
+        the foreign constraints that reference it are disabled and re-enabled
+
+        @param ds the datasource of the tables of the foreign constraints
+        @param table_name this argument is ignored
+        @param opts options for the SQL that re-enables the foreign constraints
+
+        @return a hash with a \c disable key, giving a list of SQL strings that disable the foreign constraints
+        that reference this constraint, and an \c enable key, giving a list of SQL strings that re-enable them
+
+        @since MssqlSqlUtilBase 1.1
+    */
+    hash<auto> getDisableReenableSql(AbstractDatasource ds, string table_name, *hash<auto> opts) {
+        return getSourceConstraintDisableReenableSql(ds, opts);
     }
 }
 

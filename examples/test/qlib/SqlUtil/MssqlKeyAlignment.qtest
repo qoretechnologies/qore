@@ -36,6 +36,10 @@ class MssqlKeyAlignmentTest inherits QUnit::Test {
         addTestCase("the SQL of an index with other columns", \indexColumnChangeSql());
         addTestCase("an index with other columns is dropped and created", \indexColumnChange());
         addTestCase("the foreign constraints of a table are described", \foreignConstraintDescription());
+        addTestCase("the SQL of a unique index with other columns", \uniqueIndexColumnChangeSql());
+        addTestCase("a unique index with other columns is dropped and created once", \uniqueIndexColumnChange());
+        addTestCase("a referenced unique index changes with the foreign constraint that references it",
+            \referencedUniqueIndexChange());
         set_return_value(main());
     }
 
@@ -147,6 +151,88 @@ class MssqlKeyAlignmentTest inherits QUnit::Test {
                 "fk_mka_fc_b": {"columns": ("b",), "table": "mka_fp", "target_columns": ("b",)},
             },
         }));
+    }
+
+    #! A unique index with other columns is dropped and created once: its unique constraint, which is the index, is
+    #! not dropped and added around it
+    uniqueIndexColumnChangeSql() {
+        OfflineDatasource ds = offlineDatasource();
+        assertEq(("drop index uix_mka on dbo.mka_t", "create unique index uix_mka on dbo.mka_t (b, a)"),
+            alignSql(ds, "mka_t", {"columns": Columns, "indexes": {"uix_mka": {"columns": ("b",), "unique": True}}},
+                {"columns": Columns, "indexes": {"uix_mka": {"columns": ("b", "a"), "unique": True}}}));
+    }
+
+    #! The same change on the database
+    uniqueIndexColumnChange() {
+        Datasource ds = datasource();
+        on_exit dropTables(ds, "mka_ui");
+        dropTables(ds, "mka_ui");
+        ds.execRaw("create table dbo.mka_ui (id int not null, a int, b varchar(10))");
+        ds.execRaw("create unique index uix_mka_ui on dbo.mka_ui (b)");
+        ds.commit();
+
+        hash<auto> desc = {"columns": Columns, "indexes": {"uix_mka_ui": {"columns": ("b", "a"), "unique": True}}};
+        assertEq(("drop index uix_mka_ui on dbo.mka_ui", "create unique index uix_mka_ui on dbo.mka_ui (b, a)"),
+            alignTable(ds, "mka_ui", desc));
+        AbstractIndex ix = (new MssqlTable(ds, "mka_ui")).getIndexes().uix_mka_ui;
+        assertTrue(ix.unique);
+        assertEq(("b", "a"), ix.columns.keys());
+        assertEq((), alignTable(ds, "mka_ui", desc));
+    }
+
+    #! Returns the schema of a parent table with a unique index and of a child table with a foreign constraint that
+    #! references it, in the given order, with the given columns of the index and of the foreign constraint
+    private static hash<auto> keySchema(bool child_first, list<string> columns) {
+        hash<auto> parent = {
+            "columns": Columns,
+            "primary_key": {"name": "pk_mka_kp", "columns": ("id",)},
+            "indexes": {"ui_mka_kp": {"columns": columns, "unique": True}},
+        };
+        hash<auto> child = {
+            "columns": Columns,
+            "primary_key": {"name": "pk_mka_kc", "columns": ("id",)},
+            "foreign_constraints": {"fk_mka_kc": {"columns": columns, "table": "mka_kp", "target_columns": columns}},
+        };
+        return {"tables": child_first
+            ? {"mka_kc": child, "mka_kp": parent}
+            : {"mka_kp": parent, "mka_kc": child}};
+    }
+
+    #! Aligns the schema, runs the SQL and returns it
+    private static list<auto> alignSchema(AbstractDatasource ds, hash<auto> schema) {
+        list<auto> sql = (new Database(ds)).getAlignSql(schema);
+        on_success ds.commit();
+        on_error ds.rollback();
+        map ds.execRaw($1), sql;
+        return sql;
+    }
+
+    #! A unique index that a foreign constraint references, changed with the foreign constraint, is dropped and
+    #! created once in a schema alignment, in either order of the tables: the foreign constraint is dropped first and
+    #! added after it
+    referencedUniqueIndexChange() {
+        Datasource ds = datasource();
+        on_exit dropTables(ds, ("mka_kc", "mka_kp"));
+        foreach bool child_first in ((True, False)) {
+            string order = sprintf("child first: %y", child_first);
+            dropTables(ds, ("mka_kc", "mka_kp"));
+            ds.execRaw("create table dbo.mka_kp (id int not null, a int, b varchar(10), "
+                "constraint pk_mka_kp primary key (id))");
+            ds.execRaw("create unique index ui_mka_kp on dbo.mka_kp (b)");
+            ds.execRaw("create table dbo.mka_kc (id int not null, a int, b varchar(10), "
+                "constraint pk_mka_kc primary key (id), "
+                "constraint fk_mka_kc foreign key (b) references dbo.mka_kp (b))");
+            ds.commit();
+
+            hash<auto> schema = keySchema(child_first, ("b", "a"));
+            assertEq((
+                "alter table dbo.mka_kc drop constraint fk_mka_kc",
+                "drop index ui_mka_kp on dbo.mka_kp",
+                "create unique index ui_mka_kp on dbo.mka_kp (b, a)",
+                "alter table dbo.mka_kc add constraint fk_mka_kc foreign key (b, a) references mka_kp (b, a)",
+            ), map regex_subst($1, "  +", " ", RE_Global), alignSchema(ds, schema), order);
+            assertEq((), alignSchema(ds, schema), order);
+        }
     }
 }
 
