@@ -583,6 +583,63 @@ static bool qoreDataFrameAutoCellMatches(QoreValue cell, const std::string& op, 
 QoreDataFrame::QoreDataFrame() {
 }
 
+QoreDataFrame::~QoreDataFrame() {
+    // the object's destructor detaches the DataFrame; private data released without it still releases its claims
+    if (attached) {
+        releaseScanColumns(columns);
+    }
+}
+
+void QoreDataFrame::attach(QoreObject& self) {
+    // the columns replaced by copies are released after the locks
+    std::vector<std::shared_ptr<ColumnData>> replaced;
+    std::lock_guard<std::mutex> lk(mtx);
+    std::lock_guard<std::mutex> slk(scan_mtx);
+    assert(!attached);
+    scan_columns = claimScanColumns(columns, replaced);
+    attached = true;
+    if (scan_columns) {
+        // the object's count follows the DataFrame's under its lock (see AbstractScannablePrivateData)
+        self.addPrivateDataScan(CID_DATAFRAME);
+        markScanColumnValuesStored(self, columns);
+    }
+}
+
+void QoreDataFrame::destructor(QoreObject& self, ExceptionSink* xsink) {
+    // the columns are released after the locks: releasing a value can run a destructor that uses this DataFrame
+    std::vector<Column> old_columns;
+    std::lock_guard<std::mutex> lk(mtx);
+    std::lock_guard<std::mutex> slk(scan_mtx);
+    if (attached) {
+        if (scan_columns) {
+            // the values are given up; the object's recursive set counted their references as internal
+            self.privateDataValuesRemoved();
+            self.removePrivateDataScan(CID_DATAFRAME);
+            scan_columns = 0;
+        }
+        releaseScanColumns(columns);
+        attached = false;
+    }
+    old_columns.swap(columns);
+    col_index.clear();
+    n_rows = 0;
+}
+
+bool QoreDataFrame::scanValues(QorePrivateDataScanner& scanner) {
+    // the scan never blocks (see AbstractScannablePrivateData::scanValues())
+    std::unique_lock<std::mutex> slk(scan_mtx, std::try_to_lock);
+    if (!slk.owns_lock() || !scan_columns) {
+        return false;
+    }
+    return scanColumnValues(columns, scanner);
+}
+
+void setDataFramePrivate(QoreObject& obj, QoreDataFrame* df) {
+    assert(df);
+    obj.setPrivate(CID_DATAFRAME, df);
+    df->attach(obj);
+}
+
 QoreDataFrame* QoreDataFrame::fromRecords(const QoreListNode* records,
         ExceptionSink* xsink) {
     if (qore_check_cancel(xsink, "building DataFrame from records")) {
@@ -2816,7 +2873,7 @@ int64_t QoreDataFrame::nunique(const std::string& column, bool dropna,
 
 // --- Mutation ---
 
-void QoreDataFrame::addColumn(const std::string& name, const QoreListNode* data,
+void QoreDataFrame::addColumn(QoreObject& self, const std::string& name, const QoreListNode* data,
         ExceptionSink* xsink) {
     std::lock_guard<std::mutex> lk(mtx);
 
@@ -2846,10 +2903,28 @@ void QoreDataFrame::addColumn(const std::string& name, const QoreListNode* data,
     }
 
     col_index[name] = columns.size();
+    std::lock_guard<std::mutex> slk(scan_mtx);
+    // a new column, so no other holder reports its values
+    bool scan = attached && col.data->needsScan() && col.data->claimScan();
+    assert(!attached || !col.data->needsScan() || scan);
     columns.push_back(std::move(col));
+    if (scan) {
+        // the object's count follows the DataFrame's under its lock (see AbstractScannablePrivateData)
+        if (!scan_columns++) {
+            self.addPrivateDataScan(CID_DATAFRAME);
+        }
+        // no scan follows the new edges
+        for (const QoreValue& v : columns.back().data->auto_data) {
+            if (AbstractScannablePrivateData::needsScan(v)) {
+                self.privateDataValueStored(v);
+            }
+        }
+    }
 }
 
-void QoreDataFrame::dropColumn(const std::string& name, ExceptionSink* xsink) {
+void QoreDataFrame::dropColumn(QoreObject& self, const std::string& name, ExceptionSink* xsink) {
+    // the column is released after the locks: releasing a value can run a destructor that uses this DataFrame
+    std::shared_ptr<ColumnData> dropped;
     std::lock_guard<std::mutex> lk(mtx);
 
     int idx = getColIdx(name, xsink);
@@ -2857,7 +2932,20 @@ void QoreDataFrame::dropColumn(const std::string& name, ExceptionSink* xsink) {
         return;
     }
 
-    columns.erase(columns.begin() + idx);
+    {
+        std::lock_guard<std::mutex> slk(scan_mtx);
+        dropped = std::move(columns[idx].data);
+        columns.erase(columns.begin() + idx);
+        if (attached && dropped->needsScan()) {
+            // the values are given up; the object's recursive set counted their references as internal
+            self.privateDataValuesRemoved();
+            dropped->releaseScan();
+            assert(scan_columns > 0);
+            if (!--scan_columns) {
+                self.removePrivateDataScan(CID_DATAFRAME);
+            }
+        }
+    }
     rebuildIndex();
 }
 

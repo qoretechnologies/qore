@@ -236,7 +236,12 @@ uint64_t dataframeObjectResult(QoreClass* qc, qore_classid_t cid, AbstractPrivat
 }
 
 uint64_t dataframeObjectResult(QoreDataFrame* df, ExceptionSink* xsink) {
-    return dataframeObjectResult(QC_DATAFRAME, CID_DATAFRAME, df, xsink);
+    if (!df) {
+        return dataframeBitsFromValue(QoreValue());
+    }
+    ReferenceHolder<QoreObject> obj(new QoreObject(QC_DATAFRAME, nullptr), xsink);
+    setDataFramePrivate(**obj, df);
+    return dataframeBitsFromValue(QoreValue(obj.release()));
 }
 
 uint64_t dataframeObjectResult(QoreDataFrameRowMask* mask, ExceptionSink* xsink) {
@@ -500,7 +505,12 @@ static uint64_t dataframeColumnCompare(uint64_t lhs_bits, uint64_t rhs_bits, con
     if (*xsink || !col) {
         return dataframeBitsFromValue(QoreValue());
     }
-    return dataframeObjectResult(col->compare(op, rhs, xsink), xsink);
+    // the ColumnRef's object holds its DataFrame
+    ReferenceHolder<QoreDataFrame> df(getColumnRefDataFrame(*lhs.get<const QoreObject>(), xsink), xsink);
+    if (!df) {
+        return dataframeBitsFromValue(QoreValue());
+    }
+    return dataframeObjectResult(col->compare(**df, op, rhs, xsink), xsink);
 }
 
 static uint64_t dataframeRowMaskBinary(uint64_t lhs_bits, uint64_t rhs_bits,

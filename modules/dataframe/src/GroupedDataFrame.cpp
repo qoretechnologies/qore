@@ -17,6 +17,65 @@
 
 namespace QoreDataFrameNS {
 
+QoreGroupedDataFrame::~QoreGroupedDataFrame() {
+    // the object's destructor detaches the GroupedDataFrame; private data released without it still releases its
+    // claims
+    if (attached) {
+        releaseScanColumns(source_columns);
+    }
+}
+
+void QoreGroupedDataFrame::attach(QoreObject& self) {
+    // the columns replaced by copies are released after the locks
+    std::vector<std::shared_ptr<ColumnData>> replaced;
+    std::lock_guard<std::mutex> lk(mtx);
+    std::lock_guard<std::mutex> slk(scan_mtx);
+    assert(!attached);
+    scan_columns = claimScanColumns(source_columns, replaced);
+    attached = true;
+    if (scan_columns) {
+        // the object's count follows the GroupedDataFrame's under its lock (see AbstractScannablePrivateData)
+        self.addPrivateDataScan(CID_GROUPEDDATAFRAME);
+        markScanColumnValuesStored(self, source_columns);
+    }
+}
+
+void QoreGroupedDataFrame::destructor(QoreObject& self, ExceptionSink* xsink) {
+    // the columns are released after the locks: releasing a value can run a destructor that uses this object
+    std::vector<Column> old_columns;
+    std::lock_guard<std::mutex> lk(mtx);
+    std::lock_guard<std::mutex> slk(scan_mtx);
+    if (attached) {
+        if (scan_columns) {
+            // the values are given up; the object's recursive set counted their references as internal
+            self.privateDataValuesRemoved();
+            self.removePrivateDataScan(CID_GROUPEDDATAFRAME);
+            scan_columns = 0;
+        }
+        releaseScanColumns(source_columns);
+        attached = false;
+    }
+    old_columns.swap(source_columns);
+    source_col_index.clear();
+    groups.clear();
+    source_n_rows = 0;
+}
+
+bool QoreGroupedDataFrame::scanValues(QorePrivateDataScanner& scanner) {
+    // the scan never blocks (see AbstractScannablePrivateData::scanValues())
+    std::unique_lock<std::mutex> slk(scan_mtx, std::try_to_lock);
+    if (!slk.owns_lock() || !scan_columns) {
+        return false;
+    }
+    return scanColumnValues(source_columns, scanner);
+}
+
+void setGroupedDataFramePrivate(QoreObject& obj, QoreGroupedDataFrame* gdf) {
+    assert(gdf);
+    obj.setPrivate(CID_GROUPEDDATAFRAME, gdf);
+    gdf->attach(obj);
+}
+
 QoreGroupedDataFrame::QoreGroupedDataFrame(const QoreDataFrame* source,
         const std::vector<std::string>& group_cols, ExceptionSink* xsink) {
     group_col_names = group_cols;

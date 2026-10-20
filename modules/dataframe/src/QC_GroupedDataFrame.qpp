@@ -34,6 +34,14 @@ using namespace QoreDataFrameNS;
 */
 qclass GroupedDataFrame [arg=QoreGroupedDataFrame* gdf; ns=Qore::DataFrame; flags=final];
 
+//! Destroys the GroupedDataFrame
+/** Releases the values of the columns of its DataFrame that it holds.
+*/
+GroupedDataFrame::destructor() {
+    gdf->destructor(*self, xsink);
+    gdf->deref(xsink);
+}
+
 //! GroupedDataFrames cannot be copied
 /** @throw COPY-ERROR always thrown
 */
@@ -66,7 +74,7 @@ DataFrame GroupedDataFrame::agg(hash<auto> agg_spec) [flags=RET_VALUE_ONLY] {
         return QoreValue();
     }
     ReferenceHolder<QoreObject> obj(new QoreObject(QC_DATAFRAME, getProgram()), xsink);
-    obj->setPrivate(CID_DATAFRAME, result);
+    setDataFramePrivate(**obj, result);
     return obj.release();
 }
 
@@ -85,7 +93,7 @@ DataFrame GroupedDataFrame::count() [flags=RET_VALUE_ONLY] {
         return QoreValue();
     }
     ReferenceHolder<QoreObject> obj(new QoreObject(QC_DATAFRAME, getProgram()), xsink);
-    obj->setPrivate(CID_DATAFRAME, result);
+    setDataFramePrivate(**obj, result);
     return obj.release();
 }
 
@@ -99,7 +107,7 @@ DataFrame GroupedDataFrame::sum() [flags=RET_VALUE_ONLY] {
         return QoreValue();
     }
     ReferenceHolder<QoreObject> obj(new QoreObject(QC_DATAFRAME, getProgram()), xsink);
-    obj->setPrivate(CID_DATAFRAME, result);
+    setDataFramePrivate(**obj, result);
     return obj.release();
 }
 
@@ -113,7 +121,7 @@ DataFrame GroupedDataFrame::mean() [flags=RET_VALUE_ONLY] {
         return QoreValue();
     }
     ReferenceHolder<QoreObject> obj(new QoreObject(QC_DATAFRAME, getProgram()), xsink);
-    obj->setPrivate(CID_DATAFRAME, result);
+    setDataFramePrivate(**obj, result);
     return obj.release();
 }
 

@@ -914,6 +914,15 @@ private data of several objects (copy on write, for example) must therefore have
 have its own references to the values, in a copy of the container. A Qore list or hash shared by reference
 counting is not such a container: each holder has its own reference to the node, so each can report it.
 
+The dataframe module shares a column between DataFrames (`select()`, `withColumn()`, `join()`, a GroupedDataFrame
+and its DataFrame). A column with values that need a scan is reported by the one DataFrame or GroupedDataFrame that
+claimed it (`ColumnData::claimScan()`), and another one that becomes the private data of an object gets its own
+copy of the column, which references each value again; columns without such values stay shared. A DataFrame's
+`scanValues()` tries a separate leaf lock, which is only held while its list of columns changes, never while values
+are released or Qore code runs. `dgcSharedColumnTest` in `modules/dataframe/test/dataframe.qtest` holds a value of
+a shared column from outside while the DataFrames sharing it are released; with both DataFrames reporting the
+column, the value is deleted while it is held.
+
 ### Values handed out by a container
 
 A Pattern B container gives a value up in one of two ways. It can release it (`Queue::clear()`, a `TreeMap::put()`
@@ -1130,6 +1139,8 @@ Debug builds add `dbg_hold_object_lock()` and `dbg_scan_wait_notify()`, which ma
 - `lib/QC_TreeMap.qpp` — TreeMap custom scanner (Pattern B).
 - `include/qore/AbstractPrivateData.h` — `AbstractScannablePrivateData` and `QorePrivateDataScanner`, Pattern B for
   modules; `QoreObject::addPrivateDataScan()` and the marks are in `include/qore/QoreObject.h`.
+- `modules/dataframe/src/DataFrame.cpp`, `GroupedDataFrame.cpp` — Pattern B in a module, with one reporter for
+  each shared column.
 - `lib/QC_StreamReader.qpp` — `internal_members` + `setValueIntern` (Pattern A reference implementation).
 - `include/qore/QoreObject.h` — `realRef`/`realDeref`, `QoreObjectRealRefHelper`.
 - `lib/Variable.cpp`, `lib/thread.cpp`, `lib/FunctionCallNode.cpp` — `realRef` call sites showing legitimate uses.

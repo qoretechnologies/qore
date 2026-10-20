@@ -129,27 +129,35 @@ QoreDataFrameRowMask* QoreDataFrameRowMask::invert(ExceptionSink* xsink) const {
     return new QoreDataFrameRowMask(std::move(result));
 }
 
-QoreDataFrameColumnRef::QoreDataFrameColumnRef(QoreDataFrame* df, std::string column)
-        : df(df), column(std::move(column)) {
+QoreDataFrameColumnRef::QoreDataFrameColumnRef(std::string column) : column(std::move(column)) {
 }
 
-QoreDataFrameColumnRef::~QoreDataFrameColumnRef() {
-    if (df) {
-        df->deref(nullptr);
-    }
-}
-
-QoreDataFrameRowMask* QoreDataFrameColumnRef::compare(const std::string& op, QoreValue value,
-        ExceptionSink* xsink) const {
-    std::vector<uint8_t> mask = df->compareColumnMask(column, op, value, xsink);
+QoreDataFrameRowMask* QoreDataFrameColumnRef::compare(const QoreDataFrame& df, const std::string& op,
+        QoreValue value, ExceptionSink* xsink) const {
+    std::vector<uint8_t> mask = df.compareColumnMask(column, op, value, xsink);
     if (*xsink) {
         return nullptr;
     }
     return new QoreDataFrameRowMask(std::move(mask));
 }
 
-QoreListNode* QoreDataFrameColumnRef::values(ExceptionSink* xsink) const {
-    return df->getColumn(column, xsink);
+QoreListNode* QoreDataFrameColumnRef::values(const QoreDataFrame& df, ExceptionSink* xsink) const {
+    return df.getColumn(column, xsink);
+}
+
+QoreDataFrame* getColumnRefDataFrame(const QoreObject& colref, ExceptionSink* xsink) {
+    ValueHolder df_obj(colref.getReferencedMemberNoMethod("df", QC_COLUMNREF, xsink), xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    // set when the ColumnRef is created (DataFrame::column()), and the member's type is DataFrame
+    assert(df_obj->getType() == NT_OBJECT);
+    if (df_obj->getType() != NT_OBJECT) {
+        xsink->raiseException("DATAFRAME-ERROR", "the ColumnRef has no DataFrame");
+        return nullptr;
+    }
+    return static_cast<QoreDataFrame*>(
+        df_obj->get<const QoreObject>()->getReferencedPrivateData(CID_DATAFRAME, xsink));
 }
 
 } // namespace QoreDataFrameNS

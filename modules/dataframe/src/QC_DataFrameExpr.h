@@ -52,23 +52,33 @@ private:
     std::vector<uint8_t> mask;
 };
 
+//! The private data of a ColumnRef: the name of the column
+/** The DataFrame of a ColumnRef is held by the \c df internal member of its object, where the garbage collector
+    follows it (Pattern A in design/dgc.md); see getColumnRefDataFrame().
+*/
 class QoreDataFrameColumnRef : public AbstractPrivateData {
 public:
-    //! Takes ownership of one already-referenced DataFrame private-data pointer.
-    DLLLOCAL QoreDataFrameColumnRef(QoreDataFrame* df, std::string column);
-    DLLLOCAL ~QoreDataFrameColumnRef() override;
+    DLLLOCAL explicit QoreDataFrameColumnRef(std::string column);
 
     DLLLOCAL const std::string& getColumnName() const {
         return column;
     }
 
-    DLLLOCAL QoreDataFrameRowMask* compare(const std::string& op, QoreValue value, ExceptionSink* xsink) const;
-    DLLLOCAL QoreListNode* values(ExceptionSink* xsink) const;
+    //! @param df the DataFrame of the ColumnRef
+    DLLLOCAL QoreDataFrameRowMask* compare(const QoreDataFrame& df, const std::string& op, QoreValue value,
+            ExceptionSink* xsink) const;
+    //! @param df the DataFrame of the ColumnRef
+    DLLLOCAL QoreListNode* values(const QoreDataFrame& df, ExceptionSink* xsink) const;
 
 private:
-    QoreDataFrame* df = nullptr;
     std::string column;
 };
+
+//! Returns the DataFrame of a ColumnRef object with a reference for the caller
+/** @return the DataFrame, or nullptr if an exception was raised: \c OBJECT-ALREADY-DELETED if the DataFrame object
+    was deleted
+*/
+DLLLOCAL QoreDataFrame* getColumnRefDataFrame(const QoreObject& colref, ExceptionSink* xsink);
 
 } // namespace QoreDataFrameNS
 

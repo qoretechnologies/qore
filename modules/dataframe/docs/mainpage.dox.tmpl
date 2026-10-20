@@ -28,6 +28,14 @@
     @ref Qore::DataFrame::DataFrame::toRecords() "DataFrame::toRecords()") raise \c HASH-KEY-ERROR for one, and a
     file path with a NUL character, which would name another file, raises \c DATAFRAME-IO-ERROR.
 
+    A column of type \c auto can hold any %Qore value, objects included, and a reference cycle through such a value
+    (an object in a DataFrame cell that refers to the DataFrame, for example) is collected by the deterministic
+    garbage collector as one through the members of an object is.  A DataFrame returned by an operation shares the
+    columns of the DataFrame it was made from, except a column holding objects, closures or references (also in
+    lists or hashes), which it gets its own copy of.  A @ref Qore::DataFrame::ColumnRef "ColumnRef" holds its
+    DataFrame, and a @ref Qore::DataFrame::GroupedDataFrame "GroupedDataFrame" the columns of its DataFrame, where
+    the garbage collector follows them as well.
+
     To use this module, use \c "%requires dataframe" in your code.
 
     @section dataframeqlibmodules Qore User Modules

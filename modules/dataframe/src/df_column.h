@@ -16,6 +16,7 @@
 
 #include <Eigen/Dense>
 
+#include <atomic>
 #include <cassert>
 #include <cstdint>
 #include <memory>
@@ -171,6 +172,36 @@ struct ColumnData {
 
     //! Get a value as QoreValue at index i
     QoreValue getValueAt(int64_t i, ExceptionSink* xsink) const;
+
+    //! Returns true if the column has a value that can be part of a cycle
+    /** The values of a column do not change once it is part of a DataFrame (an operation that changes them works on
+        a copy: see copyForUpdate()), so the answer is computed once.
+    */
+    DLLLOCAL bool needsScan() const;
+
+    //! Makes the caller the one holder that reports the values of this column to the garbage collector
+    /** A column is shared between DataFrames, but its values are referenced once: if two objects reported them,
+        the collector would count two references and could delete a value that is still held from outside.
+
+        @return true if the caller reports the values, false if another holder does already: the caller must then
+        use a copy of the column, which references the values again
+    */
+    DLLLOCAL bool claimScan() {
+        bool expected = false;
+        return scan_claimed.compare_exchange_strong(expected, true, std::memory_order_acq_rel);
+    }
+
+    //! Called by the holder that claimed the column with claimScan() when it no longer reports its values
+    DLLLOCAL void releaseScan() {
+        assert(scan_claimed.load(std::memory_order_relaxed));
+        scan_claimed.store(false, std::memory_order_release);
+    }
+
+private:
+    //! -1 if needsScan() has not been computed yet, otherwise its result as 0 or 1
+    mutable std::atomic<int> scan_state{-1};
+    //! true while a holder reports the values to the garbage collector; see claimScan()
+    std::atomic<bool> scan_claimed{false};
 };
 
 //! A named column with shared data
@@ -202,6 +233,29 @@ static inline int checkDataFrameColumnKeys(const std::vector<Column>& columns, E
 }
 
 //! Infer the column type from a list of Qore values
+/** The holder of these columns becomes the one holder that reports the values of each column that needs a scan to
+    the garbage collector (see ColumnData::claimScan()); each column that another holder reports already, or that
+    appears twice in \a columns, is replaced by a copy.
+
+    @param columns the columns of the holder
+    @param replaced receives the columns that were replaced; the caller releases them after its locks, as their last
+    reference can be released with them
+
+    @return the number of columns whose values the holder reports
+*/
+DLLLOCAL size_t claimScanColumns(std::vector<Column>& columns, std::vector<std::shared_ptr<ColumnData>>& replaced);
+
+//! Releases the columns claimed by claimScanColumns()
+DLLLOCAL void releaseScanColumns(const std::vector<Column>& columns);
+
+//! Marks each value that needs a scan in the columns as stored in the private data of \a self
+DLLLOCAL void markScanColumnValuesStored(QoreObject& self, const std::vector<Column>& columns);
+
+//! Reports each value that needs a scan in the columns to the garbage collector
+/** @return true if the scan must end
+*/
+DLLLOCAL bool scanColumnValues(const std::vector<Column>& columns, QorePrivateDataScanner& scanner);
+
 DLLLOCAL ColumnType inferColumnType(const QoreListNode* values);
 
 //! Build a ColumnData from a list of Qore values with the given type

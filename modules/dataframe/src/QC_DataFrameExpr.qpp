@@ -26,6 +26,10 @@ static QoreValue makeRowMaskObject(QoreDataFrameRowMask* result, QoreProgram* pg
     registered plugin comparison operators. Comparing a ColumnRef with a scalar
     value returns a RowMask that can filter the same DataFrame.
 
+    A ColumnRef holds a reference to its DataFrame, so the DataFrame stays as long as the ColumnRef does, and a
+    change to the DataFrame is seen by the ColumnRef.  When the DataFrame object is deleted explicitly, the
+    ColumnRef can no longer be evaluated, and raises \c OBJECT-ALREADY-DELETED.
+
     @par Example:
     @code{.py}
     %requires dataframe
@@ -37,7 +41,7 @@ static QoreValue makeRowMaskObject(QoreDataFrameRowMask* result, QoreProgram* pg
 
     @since dataframe 1.0
 */
-qclass ColumnRef [arg=QoreDataFrameColumnRef* col; ns=Qore::DataFrame; flags=final];
+qclass ColumnRef [arg=QoreDataFrameColumnRef* col; ns=Qore::DataFrame; flags=final; internal_members=DataFrame df];
 
 //! ColumnRefs cannot be copied
 /** @throw COPY-ERROR always thrown
@@ -55,9 +59,16 @@ string ColumnRef::name() [flags=CONSTANT] {
 
 //! Returns the referenced column values as a list
 /** @return the referenced column values as a list
+
+    @throw DATAFRAME-COLUMN-ERROR the column does not exist in the DataFrame
+    @throw OBJECT-ALREADY-DELETED the DataFrame of the ColumnRef was deleted
 */
 list<auto> ColumnRef::values() [flags=RET_VALUE_ONLY] {
-    return col->values(xsink);
+    ReferenceHolder<QoreDataFrame> df(getColumnRefDataFrame(*self, xsink), xsink);
+    if (!df) {
+        return QoreValue();
+    }
+    return col->values(**df, xsink);
 }
 
 //! Compares the referenced column with a scalar value
@@ -73,9 +84,16 @@ list<auto> ColumnRef::values() [flags=RET_VALUE_ONLY] {
     @code{.py}
     RowMask selected = df.column("amount").compare(">=", 100.0);
     @endcode
+
+    @throw DATAFRAME-COLUMN-ERROR the column does not exist in the DataFrame
+    @throw OBJECT-ALREADY-DELETED the DataFrame of the ColumnRef was deleted
 */
 RowMask ColumnRef::compare(string op, auto value) [flags=RET_VALUE_ONLY] {
-    return makeRowMaskObject(col->compare(dataFrameStdString(op), value, xsink), getProgram(), xsink);
+    ReferenceHolder<QoreDataFrame> df(getColumnRefDataFrame(*self, xsink), xsink);
+    if (!df) {
+        return QoreValue();
+    }
+    return makeRowMaskObject(col->compare(**df, dataFrameStdString(op), value, xsink), getProgram(), xsink);
 }
 
 //! A bitmap mask selecting DataFrame rows

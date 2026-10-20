@@ -549,7 +549,7 @@ qclass DataFrame [arg=QoreDataFrame* df; ns=Qore::DataFrame; flags=final];
 /** Creates a DataFrame with no rows and no columns.
 */
 DataFrame::constructor() {
-    self->setPrivate(CID_DATAFRAME, new QoreDataFrame());
+    setDataFramePrivate(*self, new QoreDataFrame());
 }
 
 //! Creates a DataFrame from a list of record hashes
@@ -563,7 +563,7 @@ DataFrame::constructor(list<auto> records) {
     if (!dataframe) {
         return;
     }
-    self->setPrivate(CID_DATAFRAME, dataframe);
+    setDataFramePrivate(*self, dataframe);
 }
 
 //! Creates a DataFrame from a hash of column lists
@@ -577,7 +577,15 @@ DataFrame::constructor(hash<auto> columns) {
     if (!dataframe) {
         return;
     }
-    self->setPrivate(CID_DATAFRAME, dataframe);
+    setDataFramePrivate(*self, dataframe);
+}
+
+//! Destroys the DataFrame
+/** Releases the values of its columns.
+*/
+DataFrame::destructor() {
+    df->destructor(*self, xsink);
+    df->deref(xsink);
 }
 
 //! DataFrames cannot be copied
@@ -673,12 +681,12 @@ hash<auto> DataFrame::getRow(int index) [flags=RET_VALUE_ONLY] {
     @throw DATAFRAME-COLUMN-ERROR if the column does not exist when the predicate is evaluated
 */
 ColumnRef DataFrame::column(string name) [flags=RET_VALUE_ONLY] {
-    QoreDataFrame* referenced_df = static_cast<QoreDataFrame*>(self->getReferencedPrivateData(CID_DATAFRAME, xsink));
-    if (!referenced_df) {
+    ReferenceHolder<QoreObject> obj(new QoreObject(QC_COLUMNREF, getProgram()), xsink);
+    obj->setPrivate(CID_COLUMNREF, new QoreDataFrameColumnRef(dataFrameStdString(name)));
+    // the ColumnRef holds this DataFrame where the garbage collector follows it (Pattern A in design/dgc.md)
+    if (obj->setMemberValue("df", QC_COLUMNREF, self->objectRefSelf(), xsink)) {
         return QoreValue();
     }
-    ReferenceHolder<QoreObject> obj(new QoreObject(QC_COLUMNREF, getProgram()), xsink);
-    obj->setPrivate(CID_COLUMNREF, new QoreDataFrameColumnRef(referenced_df, dataFrameStdString(name)));
     return obj.release();
 }
 
@@ -700,7 +708,7 @@ DataFrame DataFrame::head(int n = 5) [flags=RET_VALUE_ONLY] {
     }
     // Wrap in a new Qore DataFrame object
     ReferenceHolder<QoreObject> obj(new QoreObject(QC_DATAFRAME, getProgram()), xsink);
-    obj->setPrivate(CID_DATAFRAME, result);
+    setDataFramePrivate(**obj, result);
     return obj.release();
 }
 
@@ -715,7 +723,7 @@ DataFrame DataFrame::tail(int n = 5) [flags=RET_VALUE_ONLY] {
         return QoreValue();
     }
     ReferenceHolder<QoreObject> obj(new QoreObject(QC_DATAFRAME, getProgram()), xsink);
-    obj->setPrivate(CID_DATAFRAME, result);
+    setDataFramePrivate(**obj, result);
     return obj.release();
 }
 
@@ -730,7 +738,7 @@ DataFrame DataFrame::slice(int start, int end) [flags=RET_VALUE_ONLY] {
         return QoreValue();
     }
     ReferenceHolder<QoreObject> obj(new QoreObject(QC_DATAFRAME, getProgram()), xsink);
-    obj->setPrivate(CID_DATAFRAME, result);
+    setDataFramePrivate(**obj, result);
     return obj.release();
 }
 
@@ -785,7 +793,7 @@ static DataFrame DataFrame::fromMatrix(list<auto> matrix, *list<string> column_n
         return QoreValue();
     }
     ReferenceHolder<QoreObject> obj(new QoreObject(QC_DATAFRAME, getProgram()), xsink);
-    obj->setPrivate(CID_DATAFRAME, result);
+    setDataFramePrivate(**obj, result);
     return obj.release();
 }
 
@@ -822,7 +830,7 @@ DataFrame DataFrame::join(DataFrame[QoreDataFrame] other, list<string> on, *stri
         return QoreValue();
     }
     ReferenceHolder<QoreObject> obj(new QoreObject(QC_DATAFRAME, getProgram()), xsink);
-    obj->setPrivate(CID_DATAFRAME, result);
+    setDataFramePrivate(**obj, result);
     return obj.release();
 }
 
@@ -857,7 +865,7 @@ GroupedDataFrame DataFrame::groupBy(list<string> columns) [flags=RET_VALUE_ONLY]
     }
     ReferenceHolder<QoreObject> obj(
         new QoreObject(QC_GROUPEDDATAFRAME, getProgram()), xsink);
-    obj->setPrivate(CID_GROUPEDDATAFRAME, gdf_result);
+    setGroupedDataFramePrivate(**obj, gdf_result);
     return obj.release();
 }
 
@@ -879,7 +887,7 @@ DataFrame DataFrame::select(list<string> columns) [flags=RET_VALUE_ONLY] {
         return QoreValue();
     }
     ReferenceHolder<QoreObject> obj(new QoreObject(QC_DATAFRAME, getProgram()), xsink);
-    obj->setPrivate(CID_DATAFRAME, result);
+    setDataFramePrivate(**obj, result);
     return obj.release();
 }
 
@@ -908,7 +916,7 @@ DataFrame DataFrame::filter(string column, string op, auto value) [flags=RET_VAL
         return QoreValue();
     }
     ReferenceHolder<QoreObject> obj(new QoreObject(QC_DATAFRAME, getProgram()), xsink);
-    obj->setPrivate(CID_DATAFRAME, result);
+    setDataFramePrivate(**obj, result);
     return obj.release();
 }
 
@@ -930,7 +938,7 @@ DataFrame DataFrame::filter(RowMask[QoreDataFrameRowMask] mask) [flags=RET_VALUE
         return QoreValue();
     }
     ReferenceHolder<QoreObject> obj(new QoreObject(QC_DATAFRAME, getProgram()), xsink);
-    obj->setPrivate(CID_DATAFRAME, result);
+    setDataFramePrivate(**obj, result);
     return obj.release();
 }
 
@@ -963,7 +971,7 @@ DataFrame DataFrame::takeRows(list<int> indices) [flags=RET_VALUE_ONLY] {
         return QoreValue();
     }
     ReferenceHolder<QoreObject> obj(new QoreObject(QC_DATAFRAME, getProgram()), xsink);
-    obj->setPrivate(CID_DATAFRAME, result);
+    setDataFramePrivate(**obj, result);
     return obj.release();
 }
 
@@ -989,7 +997,7 @@ DataFrame DataFrame::sortBy(list<string> columns, *list<auto> ascending) [flags=
         return QoreValue();
     }
     ReferenceHolder<QoreObject> obj(new QoreObject(QC_DATAFRAME, getProgram()), xsink);
-    obj->setPrivate(CID_DATAFRAME, result);
+    setDataFramePrivate(**obj, result);
     return obj.release();
 }
 
@@ -1017,7 +1025,7 @@ static DataFrame DataFrame::concat(list<DataFrame> dataframes, *int axis) [flags
         return QoreValue();
     }
     ReferenceHolder<QoreObject> obj(new QoreObject(QC_DATAFRAME, getProgram()), xsink);
-    obj->setPrivate(CID_DATAFRAME, result);
+    setDataFramePrivate(**obj, result);
     return obj.release();
 }
 
@@ -1038,7 +1046,7 @@ DataFrame DataFrame::fillna(auto value) [flags=RET_VALUE_ONLY] {
         return QoreValue();
     }
     ReferenceHolder<QoreObject> obj(new QoreObject(QC_DATAFRAME, getProgram()), xsink);
-    obj->setPrivate(CID_DATAFRAME, result);
+    setDataFramePrivate(**obj, result);
     return obj.release();
 }
 
@@ -1057,7 +1065,7 @@ DataFrame DataFrame::dropna() [flags=RET_VALUE_ONLY] {
         return QoreValue();
     }
     ReferenceHolder<QoreObject> obj(new QoreObject(QC_DATAFRAME, getProgram()), xsink);
-    obj->setPrivate(CID_DATAFRAME, result);
+    setDataFramePrivate(**obj, result);
     return obj.release();
 }
 
@@ -1085,7 +1093,7 @@ DataFrame DataFrame::valueCounts(string column, bool dropna = True, bool sort_de
         return QoreValue();
     }
     ReferenceHolder<QoreObject> obj(new QoreObject(QC_DATAFRAME, getProgram()), xsink);
-    obj->setPrivate(CID_DATAFRAME, result);
+    setDataFramePrivate(**obj, result);
     return obj.release();
 }
 
@@ -1200,7 +1208,7 @@ static DataFrame DataFrame::fromColumnarResult(auto result) [flags=RET_VALUE_ONL
         return QoreValue();
     }
     ReferenceHolder<QoreObject> obj(new QoreObject(QC_DATAFRAME, getProgram()), xsink);
-    obj->setPrivate(CID_DATAFRAME, dataframe);
+    setDataFramePrivate(**obj, dataframe);
     return obj.release();
 }
 
@@ -1225,7 +1233,7 @@ string DataFrame::toString(int max_rows = 10) [flags=RET_VALUE_ONLY] {
     @throw DATAFRAME-COLUMN-ERROR if column already exists or row count mismatch
 */
 nothing DataFrame::addColumn(string name, list<auto> data) {
-    df->addColumn(dataFrameStdString(name), data, xsink);
+    df->addColumn(*self, dataFrameStdString(name), data, xsink);
 }
 
 //! Removes a column from the DataFrame (in-place)
@@ -1233,7 +1241,7 @@ nothing DataFrame::addColumn(string name, list<auto> data) {
     @throw DATAFRAME-COLUMN-ERROR if column not found
 */
 nothing DataFrame::dropColumn(string name) {
-    df->dropColumn(dataFrameStdString(name), xsink);
+    df->dropColumn(*self, dataFrameStdString(name), xsink);
 }
 
 //! Renames a column (in-place)
@@ -1275,7 +1283,7 @@ static DataFrame DataFrame::readCSV(string path, *hash<CsvOptions> options) [dom
         return QoreValue();
     }
     ReferenceHolder<QoreObject> obj(new QoreObject(QC_DATAFRAME, getProgram()), xsink);
-    obj->setPrivate(CID_DATAFRAME, result);
+    setDataFramePrivate(**obj, result);
     return obj.release();
 }
 
@@ -1422,7 +1430,7 @@ static DataFrame DataFrame::fromQuery(object ds, string sql, *list<auto> bind_ar
         return QoreValue();
     }
     ReferenceHolder<QoreObject> obj(new QoreObject(QC_DATAFRAME, getProgram()), xsink);
-    obj->setPrivate(CID_DATAFRAME, df_result);
+    setDataFramePrivate(**obj, df_result);
     return obj.release();
 }
 
@@ -1460,7 +1468,7 @@ static DataFrame DataFrame::fromArrowIpc(binary data) [flags=RET_VALUE_ONLY] {
         return QoreValue();
     }
     ReferenceHolder<QoreObject> obj(new QoreObject(QC_DATAFRAME, getProgram()), xsink);
-    obj->setPrivate(CID_DATAFRAME, result);
+    setDataFramePrivate(**obj, result);
     return obj.release();
 }
 
@@ -1547,7 +1555,7 @@ static DataFrame DataFrame::readParquet(string path, *hash<ParquetReadOptions> o
         return QoreValue();
     }
     ReferenceHolder<QoreObject> obj(new QoreObject(QC_DATAFRAME, getProgram()), xsink);
-    obj->setPrivate(CID_DATAFRAME, result);
+    setDataFramePrivate(**obj, result);
     return obj.release();
 }
 
@@ -1731,7 +1739,7 @@ DataFrame DataFrame::withColumn(string name, list<auto> data) [flags=RET_VALUE_O
         return QoreValue();
     }
     ReferenceHolder<QoreObject> obj(new QoreObject(QC_DATAFRAME, getProgram()), xsink);
-    obj->setPrivate(CID_DATAFRAME, result);
+    setDataFramePrivate(**obj, result);
     return obj.release();
 }
 
@@ -1757,7 +1765,7 @@ DataFrame DataFrame::pivot(string index_col, string columns_col, string values_c
         return QoreValue();
     }
     ReferenceHolder<QoreObject> obj(new QoreObject(QC_DATAFRAME, getProgram()), xsink);
-    obj->setPrivate(CID_DATAFRAME, result);
+    setDataFramePrivate(**obj, result);
     return obj.release();
 }
 
@@ -1782,7 +1790,7 @@ DataFrame DataFrame::melt(list<string> id_vars, *list<string> value_vars, *strin
         return QoreValue();
     }
     ReferenceHolder<QoreObject> obj(new QoreObject(QC_DATAFRAME, getProgram()), xsink);
-    obj->setPrivate(CID_DATAFRAME, result);
+    setDataFramePrivate(**obj, result);
     return obj.release();
 }
 

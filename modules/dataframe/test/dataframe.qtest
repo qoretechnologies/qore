@@ -20,6 +20,36 @@
 
 %exec-class DataFrameTest
 
+#! An object held by a DataFrame in the garbage collection tests; it counts its destruction
+class DgcNode {
+    public {
+        auto ref;
+        auto ref2;
+    }
+
+    private {
+        Counter destroyed;
+    }
+
+    constructor(Counter destroyed) {
+        self.destroyed = destroyed;
+    }
+
+    destructor() {
+        destroyed.inc();
+    }
+}
+
+#! An object held by a DataFrame whose destructor uses the DataFrame in its \c ref member
+class DgcUserNode inherits DgcNode {
+    constructor(Counter destroyed) : DgcNode(destroyed) {
+    }
+
+    destructor() {
+        ref.numCols();
+    }
+}
+
 class MockDataFrameDatasource {
     private {
         bool native_columnar;
@@ -301,6 +331,14 @@ class DataFrameTest inherits QUnit::Test {
         addTestCase("toTable() names are plain SQL identifiers", \sqlIdentifierTest());
         addTestCase("toTable() needs SqlUtil", \sqlUtilRequiredTest());
         addTestCase("NUL characters in file paths", \nulPathTest());
+        addTestCase("a cycle through an object in a DataFrame cell is collected", \dgcCellTest());
+        addTestCase("a cycle through a ColumnRef is collected", \dgcColumnRefTest());
+        addTestCase("a cycle through a GroupedDataFrame is collected", \dgcGroupedTest());
+        addTestCase("a cycle through a DataFrame sharing columns is collected", \dgcSharedResultTest());
+        addTestCase("an object in a shared column held from outside is not collected", \dgcSharedColumnTest());
+        addTestCase("cycles made and broken by addColumn() and dropColumn() are collected", \dgcMutationTest());
+        addTestCase("cycles through DataFrames are collected in concurrent threads", \dgcConcurrentTest());
+        addTestCase("dropColumn() releases the values of the column after its lock", \dropColumnReleaseTest());
 
         set_return_value(main());
     }
@@ -3681,5 +3719,279 @@ sub invalid_dataframe_api() {
             "writeParquet() refuses a path with a NUL character");
         assertEq((1, 2), DataFrame::DataFrame::readCSV(real).getColumn("a"),
             "the file named by the part of the path before the NUL is unchanged");
+    }
+
+    # the DataFrame in a member of the object that one of its cells holds
+    private dgcMakeCellCycle(Counter destroyed) {
+        DgcNode n(destroyed);
+        n.ref = new DataFrame::DataFrame({"x": (n,)});
+    }
+
+    # the object in a hash in a cell, of a DataFrame made from records
+    private dgcMakeNestedCellCycle(Counter destroyed) {
+        DgcNode n(destroyed);
+        n.ref = new DataFrame::DataFrame(({"k": 1, "x": {"node": n}},));
+    }
+
+    # a closure in a cell that refers to the DataFrame through a closure-bound variable
+    private dgcMakeClosureCellCycle(Counter destroyed) {
+        DgcNode n(destroyed);
+        DataFrame::DataFrame df({"k": (1,)});
+        code c = list<auto> sub () { return (df, n); };
+        df.addColumn("c", (c,));
+    }
+
+    # an object in a cell of a DataFrame is collected with the DataFrame that refers to it in a cycle
+    dgcCellTest() {
+        Counter destroyed();
+        dgcMakeCellCycle(destroyed);
+        assertEq(1, destroyed.getCount(), "a cycle through a DataFrame cell is collected");
+        dgcMakeNestedCellCycle(destroyed);
+        assertEq(2, destroyed.getCount(), "a cycle through a hash in a DataFrame cell is collected");
+        dgcMakeClosureCellCycle(destroyed);
+        assertEq(3, destroyed.getCount(), "a cycle through a closure in a DataFrame cell is collected");
+
+        # a DataFrame held from outside the cycle keeps it, and the values of the DataFrame stay as they were
+        DataFrame::DataFrame kept;
+        {
+            DgcNode n(destroyed);
+            kept = new DataFrame::DataFrame({"x": (n,)});
+            n.ref = kept;
+        }
+        assertEq(3, destroyed.getCount(), "a cycle held from outside is not collected");
+        DgcNode first = kept.getColumn("x")[0];
+        assertEq(True, first.ref == kept, "the object in the cell still refers to the DataFrame");
+        remove first;
+        remove kept;
+        assertEq(4, destroyed.getCount(), "the cycle is collected when it is no longer held");
+
+        # an explicit delete releases the values
+        {
+            DgcNode n(destroyed);
+            DataFrame::DataFrame df({"x": (n,)});
+            n.ref = df;
+            delete df;
+        }
+        assertEq(5, destroyed.getCount(), "a deleted DataFrame releases its values");
+    }
+
+    # a ColumnRef holds its DataFrame where the garbage collector follows it
+    private dgcMakeColumnRefCycle(Counter destroyed) {
+        DgcNode n(destroyed);
+        DataFrame::DataFrame df({"x": (n,)});
+        n.ref = df.column("x");
+    }
+
+    dgcColumnRefTest() {
+        Counter destroyed();
+        dgcMakeColumnRefCycle(destroyed);
+        assertEq(1, destroyed.getCount(), "a cycle through a ColumnRef is collected");
+
+        # a ColumnRef keeps its DataFrame
+        DataFrame::ColumnRef col;
+        {
+            DataFrame::DataFrame df({"a": (1, 2, 3)});
+            col = df.column("a");
+        }
+        assertEq((1, 2, 3), col.values(), "a ColumnRef keeps its DataFrame");
+        assertEq((False, True, True), col.compare(">", 1).toList(), "a ColumnRef compares its column");
+        assertEq((False, True, True), (col > 1).toList(), "a ColumnRef comparison operator compares its column");
+
+        # a ColumnRef of a deleted DataFrame cannot be used
+        DataFrame::DataFrame df({"a": (1, 2, 3)});
+        col = df.column("a");
+        delete df;
+        assertThrows("OBJECT-ALREADY-DELETED", \col.values(), (), "a ColumnRef of a deleted DataFrame");
+        assertThrows("OBJECT-ALREADY-DELETED", \col.compare(), (">", 1),
+            "a ColumnRef of a deleted DataFrame cannot be compared");
+        assertEq("a", col.name(), "the name of a ColumnRef of a deleted DataFrame");
+    }
+
+    # a GroupedDataFrame holds the values of the columns of its DataFrame
+    private dgcMakeGroupedCycle(Counter destroyed) {
+        DgcNode n(destroyed);
+        DataFrame::DataFrame df({"k": (1,), "x": (n,)});
+        n.ref = df.groupBy(("k",));
+    }
+
+    dgcGroupedTest() {
+        Counter destroyed();
+        dgcMakeGroupedCycle(destroyed);
+        assertEq(1, destroyed.getCount(), "a cycle through a GroupedDataFrame is collected");
+
+        # the GroupedDataFrame keeps the values after its DataFrame is gone
+        DataFrame::GroupedDataFrame gdf;
+        {
+            DgcNode n(destroyed);
+            DataFrame::DataFrame df({"k": (1, 1, 2), "x": (n, n, n)});
+            gdf = df.groupBy(("k",));
+            delete df;
+        }
+        assertEq(1, destroyed.getCount(), "a GroupedDataFrame keeps the values after its DataFrame is gone");
+        DataFrame::DataFrame counts = gdf.count();
+        assertEq((1, 2), counts.getColumn("k"), "the groups of a GroupedDataFrame whose DataFrame is gone");
+        assertEq((2, 1), counts.getColumn("count"), "the counts of a GroupedDataFrame whose DataFrame is gone");
+        assertEq((2, 1), gdf.agg({"x": "count"}).getColumn("x"),
+            "the values of a GroupedDataFrame whose DataFrame is gone");
+        remove gdf;
+        assertEq(2, destroyed.getCount(), "the values are released with the GroupedDataFrame");
+    }
+
+    # a DataFrame that shares the columns of another one: the result of select(), withColumn() or concat()
+    private dgcMakeSharedResultCycle(Counter destroyed, string kind) {
+        DgcNode n(destroyed);
+        DataFrame::DataFrame df({"k": (1,), "x": (n,)});
+        switch (kind) {
+            case "select": n.ref = df.select(("x",)); break;
+            case "withColumn": n.ref = df.withColumn("y", (2,)); break;
+            case "concat": n.ref = DataFrame::DataFrame::concat((df, new DataFrame::DataFrame({"z": (3,)})), 1); break;
+            case "join": n.ref = df.join(new DataFrame::DataFrame({"k": (1,), "z": (3,)}), ("k",)); break;
+            case "same": df.addColumn("y", (n,)); n.ref = df.select(("x", "y", "x")); break;
+        }
+    }
+
+    dgcSharedResultTest() {
+        Counter destroyed();
+        int count = 0;
+        foreach string kind in ("select", "withColumn", "concat", "join", "same") {
+            dgcMakeSharedResultCycle(destroyed, kind);
+            assertEq(++count, destroyed.getCount(), sprintf("a cycle through a %s() result is collected", kind));
+        }
+    }
+
+    # the DataFrames sharing a column of objects are released while an object of the column is held from outside
+    private DgcNode dgcMakeSharedColumn(Counter destroyed) {
+        DgcNode n(destroyed);
+        DataFrame::DataFrame df({"x": (n,)});
+        n.ref = df;
+        n.ref2 = df.select(("x",));
+        return n;
+    }
+
+    dgcSharedColumnTest() {
+        Counter destroyed();
+        DgcNode n = dgcMakeSharedColumn(destroyed);
+        assertEq(0, destroyed.getCount(), "an object of a shared column held from outside is not collected");
+        assertEq(True, n.ref.getColumn("x")[0] == n, "the DataFrame still holds the object");
+        assertEq(True, n.ref2.getColumn("x")[0] == n, "the DataFrame sharing the column still holds the object");
+        remove n;
+        assertEq(1, destroyed.getCount(), "the cycle is collected when it is no longer held");
+    }
+
+    # a cycle made by addColumn() after the DataFrame is in a member of the object
+    private dgcMakeAddColumnCycle(Counter destroyed) {
+        DgcNode n(destroyed);
+        DataFrame::DataFrame df({"k": (1,)});
+        n.ref = df;
+        df.addColumn("x", (n,));
+    }
+
+    # a cycle broken by dropColumn() and renameColumn() keeping one
+    private dgcMakeDropColumnCycle(Counter destroyed, Counter dropped) {
+        DgcNode n(destroyed);
+        DgcNode other(dropped);
+        DataFrame::DataFrame df({"x": (n,), "y": (other,)});
+        n.ref = df;
+        other.ref = df;
+        df.dropColumn("y");
+        df.renameColumn("x", "z");
+    }
+
+    dgcMutationTest() {
+        Counter destroyed();
+        Counter dropped();
+        dgcMakeAddColumnCycle(destroyed);
+        assertEq(1, destroyed.getCount(), "a cycle made by addColumn() is collected");
+        dgcMakeDropColumnCycle(destroyed, dropped);
+        assertEq(1, dropped.getCount(), "an object whose column is dropped is released");
+        assertEq(2, destroyed.getCount(), "a cycle through a renamed column is collected");
+    }
+
+    # an object in a dropped column that uses the DataFrame in its destructor
+    private DataFrame::DataFrame dropColumnReleaseFrame(Counter destroyed) {
+        DgcUserNode n(destroyed);
+        DataFrame::DataFrame df({"k": (1,), "x": (n,)});
+        n.ref = df;
+        return df;
+    }
+
+    # dropColumn() releases the values of the column after the DataFrame's lock, so a destructor that a released value
+    # runs can use the DataFrame
+    dropColumnReleaseTest() {
+        Counter destroyed();
+        Counter done(1);
+        *int cols_after;
+        # in a background thread, so that a deadlock can be detected below
+        background sub () {
+            on_exit done.dec();
+            DataFrame::DataFrame df = dropColumnReleaseFrame(destroyed);
+            df.dropColumn("x");
+            cols_after = df.numCols();
+        }();
+        # a hang guard, not synchronization: the thread ends when dropColumn() returns, and the wait returns then; if
+        # dropColumn() deadlocks, the thread can never end, so the test fails and the process exits at once
+        if (done.waitForZero(60s)) {
+            stderr.print("FAILURE: dropColumn() did not return within 60 seconds: dropColumn() deadlocked\n");
+            exit(1);
+        }
+        assertEq(1, destroyed.getCount(), "the object in the dropped column is destroyed");
+        assertEq(1, cols_after, "the DataFrame has the other column");
+    }
+
+    # threads make and release cycles through DataFrames while others make DataFrames that share the columns of one
+    # that holds objects; returns the number of objects created
+    private int dgcRunConcurrent(Counter destroyed) {
+        DgcNode shared_node(destroyed);
+        DataFrame::DataFrame shared({"k": (1, 2), "x": (shared_node, shared_node)});
+        shared_node.ref = shared;
+
+        Counter done(4);
+        Counter failed();
+        code cycles = sub () {
+            on_exit done.dec();
+            try {
+                for (int i = 0; i < 200; ++i) {
+                    dgcMakeSharedResultCycle(destroyed, "select");
+                    dgcMakeColumnRefCycle(destroyed);
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                stderr.printf("%s\n", get_exception_string(ex));
+                failed.inc();
+            }
+        };
+        code derived = sub () {
+            on_exit done.dec();
+            try {
+                for (int i = 0; i < 200; ++i) {
+                    DgcNode n(destroyed);
+                    n.ref = shared.select(("x",));
+                    n.ref2 = shared.groupBy(("k",));
+                    if (n.ref.getColumn("x")[1] != shared_node) {
+                        failed.inc();
+                    }
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                stderr.printf("%s\n", get_exception_string(ex));
+                failed.inc();
+            }
+        };
+        background cycles();
+        background cycles();
+        background derived();
+        background derived();
+        # a hang guard, not synchronization: the threads end when their loops do, and the wait returns then
+        if (done.waitForZero(60s)) {
+            stderr.print("FAILURE: the DataFrame garbage collection threads did not finish within 60 seconds\n");
+            exit(1);
+        }
+        assertEq(0, failed.getCount(), "no thread failed");
+        assertEq(1200, destroyed.getCount(), "every cycle made by a thread is collected");
+        return 1201;
+    }
+
+    dgcConcurrentTest() {
+        Counter destroyed();
+        int created = dgcRunConcurrent(destroyed);
+        assertEq(created, destroyed.getCount(), "the shared DataFrame's cycle is collected after the threads");
     }
 }
