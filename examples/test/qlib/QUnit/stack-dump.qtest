@@ -1,0 +1,364 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires FsUtil
+%requires QUnit
+
+%exec-class StackDumpTest
+
+#! Tests QUnit's SIGUSR1 handler, which prints the call stacks of all threads, and the code new threads run first
+/** Each case that sends SIGUSR1 runs a script in a qore process of its own, so this test's handler is not involved;
+    the script waits on a FIFO for the handler that ran to report itself.
+*/
+public class StackDumpTest inherits QUnit::Test {
+    private {
+        #! the path of the QUnit module that this test loaded, source or binary, for the scripts
+        string qunit_path;
+
+        #! the directory of the scripts and the FIFO
+        FsUtil::TmpDir tmp_dir("qunit-stack-dump-");
+
+        #! the FIFO that the handlers report to
+        string fifo_path;
+
+        #! the line QUnit's handler prints first
+        const QUnitMarker = "=== QUnit: SIGUSR1: call stacks of all threads ===";
+
+        #! a test script whose test case sends itself SIGUSR1 and returns the line its handler reports
+        const StandaloneScript = "#!/usr/bin/env qore
+%modern
+%requires QUNIT_PATH
+%exec-class StandaloneTest
+class StandaloneTest inherits QUnit::Test {
+    constructor() : Test(\"StandaloneTest\", \"1.0\") {
+        addTestCase(\"signal\", \\signalSelf());
+        set_return_value(main());
+    }
+    signalSelf() {
+        # opened for reading and writing, so opening it does not wait for a writer
+        File fifo();
+        fifo.open2(ENV.QORE_TEST_EVENT_FIFO, O_RDWR);
+        kill(getpid(), SIGUSR1);
+        assertTrue(fifo.isDataAvailable(60s));
+        printf(\"handler reported: %s\\n\", fifo.readLine(False));
+    }
+}
+";
+
+        #! the same test with a SIGUSR1 handler of its own, installed in its constructor
+        const OwnHandlerScript = "#!/usr/bin/env qore
+%modern
+%requires QUNIT_PATH
+%exec-class OwnHandlerTest
+class OwnHandlerTest inherits QUnit::Test {
+    constructor() : Test(\"OwnHandlerTest\", \"1.0\") {
+        set_signal_handler(SIGUSR1, sub (int sig) {
+            File f();
+            f.open2(ENV.QORE_TEST_EVENT_FIFO, O_WRONLY | O_NONBLOCK);
+            f.write(\"own\\n\");
+        });
+        addTestCase(\"signal\", \\signalSelf());
+        set_return_value(main());
+    }
+    signalSelf() {
+        File fifo();
+        fifo.open2(ENV.QORE_TEST_EVENT_FIFO, O_RDWR);
+        kill(getpid(), SIGUSR1);
+        assertTrue(fifo.isDataAvailable(60s));
+        printf(\"handler reported: %s\\n\", fifo.readLine(False));
+    }
+}
+";
+
+        #! a module with a test base class, as a test framework built on QUnit provides
+        const BaseModule = "%new-style
+%require-types
+%strict-args
+%requires QUNIT_PATH
+module StackDumpTestBase {
+    version = \"1.0\";
+    desc = \"a test base class\";
+    author = \"Qore Technologies, s.r.o.\";
+    url = \"https://qore.org\";
+    license = \"MIT\";
+}
+public namespace StackDumpTestBase {
+    public class Base inherits QUnit::Test {
+        constructor(string name) : Test(name, \"1.0\") {
+        }
+    }
+}
+";
+
+        #! a test script whose class inherits the base class of a module
+        const ModuleBaseScript = "#!/usr/bin/env qore
+%modern
+%requires MODULE_PATH
+%exec-class ModuleBaseTest
+class ModuleBaseTest inherits StackDumpTestBase::Base {
+    constructor() : Base(\"ModuleBaseTest\") {
+        addTestCase(\"signal\", \\signalSelf());
+        set_return_value(main());
+    }
+    signalSelf() {
+        File fifo();
+        fifo.open2(ENV.QORE_TEST_EVENT_FIFO, O_RDWR);
+        kill(getpid(), SIGUSR1);
+        assertTrue(fifo.isDataAvailable(60s));
+        printf(\"handler reported: %s\\n\", fifo.readLine(False));
+    }
+}
+";
+
+        #! a test script that sends no signal
+        const QuietScript = "#!/usr/bin/env qore
+%modern
+%requires QUNIT_PATH
+%exec-class QuietTest
+class QuietTest inherits QUnit::Test {
+    constructor() : Test(\"QuietTest\", \"1.0\") {
+        addTestCase(\"runs\", \\runs());
+        set_return_value(main());
+    }
+    runs() {
+        assertEq(2, 1 + 1);
+    }
+}
+";
+
+        #! a host program with its own SIGUSR1 handler that runs a QUnit test in a Program of its own
+        /** argument 1: \"restricted\" for a Program that may not use process control, \"unrestricted\" otherwise;
+            argument 2: \"call\" when the host calls the test, \"thread\" when the test runs in a thread that its own
+            Program starts, \"delete\" when the host calls the test and deletes its Program before the signal
+        */
+        const HostScript = "#!/usr/bin/env qore
+%modern
+%requires QUNIT_PATH
+const ChildCode = \"%requires QUnit
+class ChildTest inherits QUnit::Test {
+    constructor() : Test(\\\"ChildTest\\\", \\\"1.0\\\", ()) {
+        addTestCase(\\\"runs\\\", \\\\runs());
+    }
+    runs() {
+        assertEq(2, 1 + 1);
+    }
+}
+int sub run_test() {
+    ChildTest t();
+    return t.main();
+}
+int sub run_test_in_thread() {
+    Queue q();
+    background sub () {
+        try {
+            q.push(run_test());
+        } catch (hash<ExceptionInfo> ex) {
+            q.push(-1);
+        }
+    }();
+    return q.get();
+}
+\";
+File fifo();
+fifo.open2(ENV.QORE_TEST_EVENT_FIFO, O_RDWR);
+set_signal_handler(SIGUSR1, sub (int sig) {
+    File f();
+    f.open2(ENV.QORE_TEST_EVENT_FIFO, O_WRONLY | O_NONBLOCK);
+    f.write(\"host\\n\");
+});
+*Program p = new Program(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES
+    | (ARGV[0] == \"restricted\" ? PO_NO_PROCESS_CONTROL : 0));
+p.parse(ChildCode, \"child\");
+printf(\"child test returned %d\\n\", p.callFunction(ARGV[1] == \"thread\" ? \"run_test_in_thread\" : \"run_test\"));
+if (ARGV[1] == \"delete\") {
+    delete p;
+}
+kill(getpid(), SIGUSR1);
+if (!fifo.isDataAvailable(60s)) {
+    printf(\"no handler reported\\n\");
+    exit(1);
+}
+printf(\"handler reported: %s\\n\", fifo.readLine(False));
+";
+    }
+
+    constructor() : Test("StackDumpTest", "1.0") {
+        qunit_path = get_module_hash().QUnit.filename;
+        fifo_path = tmp_dir.path + "/events";
+        mkfifo(fifo_path);
+
+        addTestCase("a test script prints its stacks on SIGUSR1", \standaloneTest());
+        addTestCase("a test's own SIGUSR1 handler replaces QUnit's", \ownHandlerTest());
+        addTestCase("a test class from a module's base class prints its stacks", \moduleBaseTest());
+        addTestCase("signal handling disabled", \signalsDisabledTest());
+        addTestCase("a host calls a test in a restricted Program", \hostRestrictedTest());
+        addTestCase("a host calls a test in its own Program", \hostUnrestrictedTest());
+        addTestCase("a test in a thread of a restricted Program", \hostRestrictedThreadTest());
+        addTestCase("a host deletes the Program of a test", \hostDeletedTest());
+        addTestCase("a thread started by a test case", \threadInTestCaseTest());
+        addTestCase("a thread after a test in a deleted Program", \threadAfterDeletedTest());
+        set_return_value(main());
+    }
+
+    #! runs this test's own assertions after all test cases; a thread started by a test case must not affect them
+    globalTearDown() {
+        assertEq(2, 1 + 1);
+    }
+
+    standaloneTest() {
+        hash<auto> rv = runScript("standalone.q", StandaloneScript);
+        assertEq(0, rv.rc, rv.out);
+        assertTrue(rv.out.find(QUnitMarker) >= 0, rv.out);
+        # the stack of the thread that sent the signal shows the test case
+        assertTrue(rv.out.find("StandaloneTest::signalSelf") >= 0, rv.out);
+        assertRegex("handler reported: dumped\n", rv.out);
+        assertRegex("Ran 1 test case, 1 succeeded", rv.out);
+    }
+
+    ownHandlerTest() {
+        hash<auto> rv = runScript("own-handler.q", OwnHandlerScript);
+        assertEq(0, rv.rc, rv.out);
+        assertEq(-1, rv.out.find(QUnitMarker), rv.out);
+        assertRegex("handler reported: own\n", rv.out);
+        assertRegex("Ran 1 test case, 1 succeeded", rv.out);
+    }
+
+    moduleBaseTest() {
+        string module_path = writeFile("StackDumpTestBase.qm", replace(BaseModule, "QUNIT_PATH", qunit_path));
+        hash<auto> rv = runScript("module-base.q", replace(ModuleBaseScript, "MODULE_PATH", module_path));
+        assertEq(0, rv.rc, rv.out);
+        assertTrue(rv.out.find(QUnitMarker) >= 0, rv.out);
+        assertRegex("handler reported: dumped\n", rv.out);
+        assertRegex("Ran 1 test case, 1 succeeded", rv.out);
+    }
+
+    signalsDisabledTest() {
+        foreach string opt in ("-b", "--disable-signals") {
+            hash<auto> rv = runScript("quiet.q", QuietScript, opt + " -W");
+            assertEq(0, rv.rc, opt + ": " + rv.out);
+            assertRegex("Ran 1 test case, 1 succeeded", rv.out, opt);
+            assertNRegex("(?i)warning", rv.out, opt);
+        }
+    }
+
+    hostRestrictedTest() {
+        checkHost("restricted call");
+    }
+
+    hostUnrestrictedTest() {
+        checkHost("unrestricted call");
+    }
+
+    hostRestrictedThreadTest() {
+        checkHost("restricted thread");
+    }
+
+    hostDeletedTest() {
+        checkHost("unrestricted delete");
+    }
+
+    threadInTestCaseTest() {
+        # the assertion in the thread is made for this test case; afterwards this thread's test case is unchanged,
+        # which globalTearDown() and the next test case's assertions check
+        Queue q();
+        background sub () {
+            try {
+                assertTrue(True);
+                q.push(True);
+            } catch (hash<ExceptionInfo> ex) {
+                q.push(sprintf("%s: %s", ex.err, ex.desc));
+            }
+        }();
+        assertEq(True, q.get());
+    }
+
+    threadAfterDeletedTest() {
+        # a test runs in a Program that is then deleted; a thread started afterwards runs a test of its own
+        string code = "%requires QUnit
+class ChildTest inherits QUnit::Test {
+    constructor() : Test(\"ChildTest\", \"1.0\", ()) {
+        addTestCase(\"runs\", \\runs());
+    }
+    runs() {
+        assertEq(2, 1 + 1);
+    }
+}
+int sub run_test() {
+    ChildTest t();
+    return t.main();
+}";
+        {
+            Program p(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES);
+            p.parse(code, "child");
+            assertEq(0, p.callFunction("run_test"));
+        }
+        Queue q();
+        background sub () {
+            try {
+                ThreadTest t();
+                q.push(t.main());
+            } catch (hash<ExceptionInfo> ex) {
+                q.push(sprintf("%s: %s", ex.err, ex.desc));
+            }
+        }();
+        assertEq(0, q.get());
+    }
+
+    #! runs the host script with the given arguments; the host's handler must be the one that runs
+    private checkHost(string args) {
+        hash<auto> rv = runScript("host.q", HostScript, NOTHING, args);
+        assertEq(0, rv.rc, args + ": " + rv.out);
+        assertRegex("child test returned 0\n", rv.out, args);
+        assertEq(-1, rv.out.find(QUnitMarker), args + ": " + rv.out);
+        assertRegex("handler reported: host\n", rv.out, args);
+    }
+
+    #! writes the script and runs it with this test's qore and libqore; returns its exit code and output
+    private hash<auto> runScript(string name, string script, *string opts, *string args) {
+        string path = writeFile(name, replace(script, "QUNIT_PATH", qunit_path));
+        string cmd;
+        # the library path is set again because a shell can remove it from its environment (macOS)
+        foreach string var in ("LD_LIBRARY_PATH", "DYLD_LIBRARY_PATH") {
+            if (ENV{var}) {
+                cmd += sprintf("%s=%s ", var, shellQuote(ENV{var}));
+            }
+        }
+        # the script's handler reports to this test's FIFO, not to run_tests.sh
+        cmd += sprintf("QORE_TEST_EVENT_FIFO=%s %s %s %s %s 2>&1", shellQuote(fifo_path), shellQuote(getQoreBinary()),
+            opts ?? "", shellQuote(path), args ?? "");
+        int rc;
+        string out = backquote(cmd, \rc);
+        return {"rc": rc, "out": out};
+    }
+
+    private string writeFile(string name, string content) {
+        string path = tmp_dir.path + "/" + name;
+        File f();
+        f.open2(path, O_CREAT | O_TRUNC | O_WRONLY);
+        f.write(content);
+        return path;
+    }
+
+    private static string shellQuote(string str) {
+        return "'" + replace(str, "'", "'\\''") + "'";
+    }
+
+    private static string getQoreBinary() {
+        return ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+    }
+}
+
+#! a test that a thread of StackDumpTest runs
+class ThreadTest inherits QUnit::Test {
+    constructor() : Test("ThreadTest", "1.0", ()) {
+        addTestCase("runs", \runs());
+    }
+
+    runs() {
+        assertEq(4, 2 + 2);
+    }
+}

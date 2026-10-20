@@ -42,7 +42,6 @@ module QUnit {
     author = "Zdenek Behan <zdenek.behan@qoretechnologies.com>";
     url = "http://qore.org";
     license = "MIT";
-    init = \QUnit::Priv::installTimeoutStackDump();
 }
 
 /** @mainpage QUnit Module
@@ -157,13 +156,34 @@ public class MyTestClass inherits QUnit::DependencyInjectedTest {
     - plaintext - human readable format, prints one statement per test
     - junit - machine readable format for further processing
 
+    @section qunit_stack_dump Call Stacks of a Test That Hangs
+
+    When a test object is created, a handler for \c SIGUSR1 is installed that prints the call stacks of all threads
+    of the process to standard output, so the stacks of a test that hangs can be printed with
+    <tt>kill -USR1 \<pid\></tt>.  \c run_tests.sh sends \c SIGUSR1 to a test that exceeds its time limit and ends
+    the test as soon as the handler reports, through the FIFO named by the \c QORE_TEST_EVENT_FIFO environment
+    variable, that the stacks have been printed.
+
+    - a test that installs its own \c SIGUSR1 handler, for example in its constructor, replaces this one
+    - when signal handling is disabled (<tt>qore -b</tt>), nothing is installed and \c SIGUSR1 has its default
+      action; \c run_tests.sh does not send it then
+    - the handler is installed only when the test is the program being run: the Program that creates the test
+      object is the one its thread started in, as for a test script run with \c qore, and no Program in the call
+      stack is restricted with @ref Qore::PO_NO_PROCESS_CONTROL "PO_NO_PROCESS_CONTROL"; a test that a host program
+      creates in a Program of its own, a sandbox for example, leaves the host's \c SIGUSR1 handling alone
+
     @section qunit_relnotes Release Notes
 
     @subsection qunit_v0_5_2 Version 0.5.2
     - a test prints the call stacks of all its threads when it receives \c SIGUSR1 (for example
       <tt>kill -USR1 \<pid\></tt> on a test that hangs); \c run_tests.sh sends it to a test that exceeds its
       time limit before ending it, so the log shows where the test hangs; a test that installs its own
-      \c SIGUSR1 handler keeps it
+      \c SIGUSR1 handler keeps it; see @ref qunit_stack_dump
+    - fixed assertions after a test case that starts a thread: the thread replaced the test case that the test
+      restored afterwards, so the assertions of later test cases could be counted for the wrong test case and those
+      in @ref QUnit::Test::globalTearDown() "Test::globalTearDown()" failed with \c TEST-ERROR
+    - fixed a thread that runs a test after a test that ran in a @ref Qore::Program "Program" object that has been
+      deleted: it failed with \c PROGRAM-ERROR
 
     @subsection qunit_v0_5_1 Version 0.5.1
     - added @ref QUnit::Test::isConnectionError() "Test::isConnectionError()", a shared predicate
@@ -246,26 +266,62 @@ namespace Priv {
     #! The environment variable naming the FIFO that \c run_tests.sh reads the test's events from
     const TestEventFifoVar = "QORE_TEST_EVENT_FIFO";
 
-    #! Installs the SIGUSR1 handler that prints the call stacks of all threads
-    /** \c run_tests.sh sends \c SIGUSR1 to a test that exceeds its time limit, waits until the test reports that it
-        has printed its stacks, and then ends it; a developer can send it to a test that hangs.  The handler is
-        installed when the module is loaded, so a test that installs its own \c SIGUSR1 handler replaces it.  The
-        functions are called by name, as a Program that loads this module can be restricted from using them; it then
-        has no handler.
+    #! Installs the SIGUSR1 handler that prints the call stacks of all threads; see @ref qunit_stack_dump
+    /** Called when a test object is created, before the constructor of the test's own class runs, so a test that
+        installs its own \c SIGUSR1 handler there replaces it.  Only a test that is the program being run gets the
+        handler; see testIsProgramBeingRun().
     */
     sub installTimeoutStackDump() {
-        try {
-            call_function("set_signal_handler", SIGUSR1, \QUnit::Priv::timeoutStackDump());
-        } catch (hash<ExceptionInfo> ex) {
-            # this Program cannot handle signals; run_tests.sh then ends the test without the stacks
+        if (!testIsProgramBeingRun()) {
+            return;
         }
+        try {
+            set_signal_handler(SIGUSR1, \QUnit::Priv::timeoutStackDump());
+        } catch (hash<ExceptionInfo> ex) {
+            # a module manages SIGUSR1 in this process; run_tests.sh then ends the test without the stacks
+        }
+    }
+
+    #! Returns @ref True if the test object being created belongs to the program being run
+    /** This is the case when the Program that creates the test object is the one its thread started in, as for a test
+        script run with \c qore, and every Program in the call stack may use process control (see
+        @ref Qore::PO_NO_PROCESS_CONTROL "PO_NO_PROCESS_CONTROL").  A test that a host program creates in a Program of
+        its own, a sandbox for example, returns @ref False, so that the host's \c SIGUSR1 handling is left alone.
+
+        Must be called by installTimeoutStackDump() from the constructor of @ref QUnit::Test "Test".
+    */
+    bool sub testIsProgramBeingRun() {
+        # newest frame first; a frame's programid is the Program of its call site
+        list<hash<CallStackInfo>> cs = get_thread_call_stack();
+        # the constructors of the test's classes are called one from the other; the call site of the outermost one is
+        # where the test object is created
+        int i = 0;
+        while (i < cs.size() && cs[i].function !~ /::constructor$/) {
+            ++i;
+        }
+        if (i == cs.size()) {
+            return False;
+        }
+        while ((i + 1) < cs.size() && cs[i + 1].function =~ /::constructor$/) {
+            ++i;
+        }
+        if (cs[i].programid != cs.last().programid) {
+            return False;
+        }
+        # frame n here is frame n of cs, as both calls are made from this function
+        for (int n = 0; n < cs.size(); ++n) {
+            if (Program::getCallerCapabilityMask(n) & PO_NO_PROCESS_CONTROL) {
+                return False;
+            }
+        }
+        return True;
     }
 
     #! Prints the call stacks of all threads and reports to \c run_tests.sh that they have been printed
     sub timeoutStackDump(int sig) {
         try {
             printf("=== QUnit: SIGUSR1: call stacks of all threads ===\n%N\n=== QUnit: end of call stacks ===\n",
-                call_function("get_all_thread_call_stacks"));
+                get_all_thread_call_stacks());
         } catch (hash<ExceptionInfo> ex) {
             printf("=== QUnit: SIGUSR1: the call stacks cannot be printed: %s: %s ===\n", ex.err, ex.desc);
         }
@@ -708,6 +764,26 @@ public class TestCase {
 
     restoreThread() {
         save_thread_data("tc", saved_tc);
+    }
+
+    #! makes this the test case of a thread that is started while it runs, so that the thread's assertions count for it
+    /** Unlike setupThread(), this does not change the test case that restoreThread() restores in the thread that
+        runs the test case
+
+        @since QUnit 0.5.2
+    */
+    setupNewThread() {
+        save_thread_data("tc", self);
+    }
+
+    #! returns code that calls setupNewThread() for use with @ref Qore::set_thread_init() "set_thread_init()"
+    /** The code is a closure of this object, which this module creates, so it can still run when the Program of the
+        test that this object belongs to has been deleted
+
+        @since QUnit 0.5.2
+    */
+    code<nothing()> getNewThreadInit() {
+        return sub () { setupNewThread(); };
     }
 
     #! renames the test case
@@ -1172,13 +1248,19 @@ public class Test inherits QUnit::TestReporter {
     }
 
     #! creates the object and sets the name of the test
+    /** Installs the \c SIGUSR1 handler that prints the call stacks of all threads; see @ref qunit_stack_dump
+    */
     constructor(string name, string version, reference<list<string>> p_argv, *hash<auto> opts)
             : QUnit::TestReporter(name, version, \p_argv, opts) {
+        QUnit::Priv::installTimeoutStackDump();
     }
 
     #! creates the object and sets the name of the test
+    /** Installs the \c SIGUSR1 handler that prints the call stacks of all threads; see @ref qunit_stack_dump
+    */
     constructor(string name, string version, *list<auto> p_argv, *hash<auto> opts)
             : QUnit::TestReporter(name, version, p_argv, opts) {
+        QUnit::Priv::installTimeoutStackDump();
     }
 
     #! global setup; will be called once before tests are run
@@ -2565,6 +2647,20 @@ fail("Unexpected code executed");
 
         printHeader();
 
+        # the test cases below set the code that new threads run first (set_thread_init()); when this method
+        # returns, new threads get the test case that was running when it was called (a nested test), or nothing, so
+        # that no thread, the signal handler thread included, runs code that refers to a test that has ended.  The
+        # code comes from TestCase::getNewThreadInit(): a closure created in this method would belong to the Program
+        # of the test object, which can be deleted before a later thread starts
+        *TestCase outer_tc = get_thread_data("tc");
+        on_exit {
+            if (outer_tc) {
+                set_thread_init(outer_tc.getNewThreadInit());
+            } else {
+                set_thread_init();
+            }
+        }
+
         # create initialization / shutdown test case
         TestCase gtc("globalSetUp", sub () {});
         gtc.setupThread();
@@ -2607,8 +2703,9 @@ fail("Unexpected code executed");
                 continue;
             }
 
-            code tinit = sub () {tc.setupThread();};
-            set_thread_init(tinit);
+            # a thread started by the test case runs its assertions; TestCase::setupThread() would also replace the
+            # test case that this thread restores when the test case ends
+            set_thread_init(tc.getNewThreadInit());
 
             # in verbose mode announce the test case before running it, so a
             # test that hangs before its first assertion is still identifiable
