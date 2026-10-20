@@ -1,0 +1,145 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class AsyncIoReplaceInFlightTest
+
+#! The bound on every blocking wait in this test: a hang guard only, never a timing assertion
+const HangGuard = 60s;
+
+#! A poll operation whose step blocks until the test releases it
+/** Its step runs on a callback worker, as the step of every operation implemented in %Qore; the test controls
+    when it returns, so it can replace the operation while the step is in flight.
+*/
+class BlockingStepOperation inherits AbstractPollOperation<auto> {
+    public {
+        #! decremented when the step has started
+        Counter entered(1);
+        #! the step returns when an item is pushed
+        Queue release();
+        #! True if abort() was called while the step was running
+        bool abort_during_step = False;
+    }
+
+    private {
+        bool in_step = False;
+        bool done = False;
+    }
+
+    string getGoal() {
+        return "blocking-step";
+    }
+
+    string getState() {
+        return done ? "done" : (in_step ? "stepping" : "pending");
+    }
+
+    bool goalReached() {
+        return done;
+    }
+
+    *hash<SocketPollInfo> continuePoll() {
+        in_step = True;
+        entered.dec();
+        release.get(HangGuard);
+        in_step = False;
+        done = True;
+        return NOTHING;
+    }
+
+    abort() {
+        if (in_step) {
+            abort_during_step = True;
+        }
+    }
+}
+
+#! A poll operation that waits for its notifier until it is canceled
+class WaitingOperation inherits AbstractPollOperation<auto> {
+    private {
+        EventNotifier notifier;
+    }
+
+    constructor(EventNotifier notifier) {
+        self.notifier = notifier;
+    }
+
+    string getGoal() {
+        return "waiting";
+    }
+
+    string getState() {
+        return "waiting";
+    }
+
+    bool goalReached() {
+        return False;
+    }
+
+    *hash<SocketPollInfo> continuePoll() {
+        return <SocketPollInfo>{
+            "events": SOCK_POLLIN,
+            "socket": notifier,
+        };
+    }
+}
+
+class AsyncIoReplaceInFlightTest inherits QUnit::Test {
+    constructor() : Test("AsyncIoReplaceInFlightTest", "1.0") {
+        addTestCase("an operation replaced while its step is in flight", \testReplaceInFlight());
+        set_return_value(main());
+    }
+
+    testReplaceInFlight() {
+        string owner = sprintf("replace-in-flight-%d", getpid());
+        on_exit AsyncIoController::cancelByOwner(owner);
+        string key = owner + "-key";
+        EventNotifier n1();
+        EventNotifier n2();
+
+        BlockingStepOperation op1();
+        Queue<hash<SocketPollResultInfo>> rq1 = AsyncIoController::submit(<SocketPollOperationInfo>{
+            "sock": n1,
+            "spop": op1,
+            "owner": owner,
+            "key": key,
+            "to": -1s,
+        });
+        on_exit op1.release.push(True);
+        assertEq(0, op1.entered.waitForZero(HangGuard), "the step of the first operation is in flight");
+
+        # the replacement is submitted for the same pollable object, so it has the same I/O thread and key
+        WaitingOperation op2(n2);
+        Queue<hash<SocketPollResultInfo>> rq2 = AsyncIoController::submit(<SocketPollOperationInfo>{
+            "sock": n1,
+            "spop": op2,
+            "owner": owner,
+            "key": key,
+            "to": -1s,
+        }, True);
+        assertTrue(AsyncIoController::waitForProcessing(HangGuard), "the replacing submission is processed");
+
+        # the replaced operation is only canceled once its step has returned: abort() must not run concurrently with
+        # its continuePoll()
+        assertEq(0, rq1.size(), "the replaced operation's cancellation waits for its step");
+
+        op1.release.push(True);
+        hash<SocketPollResultInfo> r1 = rq1.get(HangGuard);
+        assertTrue(r1.canceled, "the replaced operation is canceled after its step");
+        assertEq(op1, r1.spop);
+
+        # the step's result belonged to the replaced operation: the replacing operation still waits
+        assertEq(0, rq2.size(), "the step's result is not applied to the replacing operation");
+        assertFalse(op1.abort_during_step, "abort() did not run while the step was running");
+
+        assertEq(1, AsyncIoController::cancelByOwner(owner), "the replacing operation is still running");
+        hash<SocketPollResultInfo> r2 = rq2.get(HangGuard);
+        assertTrue(r2.canceled, "the replacing operation is canceled by the test");
+        assertEq(op2, r2.spop);
+    }
+}

@@ -1057,9 +1057,10 @@ void QoreCallDispatcher::dispatchAsync(ResolvedCallReferenceNode* callback, Qore
 }
 
 void QoreCallDispatcher::dispatchContinuePollAsync(QoreObject* spop_obj,
-        AsyncIoControllerPriv* controller, const std::string& key, int thread_idx, const std::string& owner,
-        AsyncIoSandboxContext sandbox_ctx, bool read_state) {
+        AsyncIoControllerPriv* controller, const std::string& key, uint64_t op_id, int thread_idx,
+        const std::string& owner, AsyncIoSandboxContext sandbox_ctx, bool read_state) {
     AsyncWorkItem item{spop_obj, nullptr, nullptr, nullptr, DT_CONTINUE_POLL, controller, key};
+    item.op_id = op_id;
     item.thread_idx = thread_idx;
     item.owner = owner;
     item.sandbox_ctx = std::move(sandbox_ctx);
@@ -1124,7 +1125,8 @@ void QoreCallDispatcher::releaseWorkItem(AsyncWorkItem& item, ExceptionSink* xsi
             // Tell the I/O thread the operation is done so it drops its cache entry;
             // otherwise the op stays registered with no worker left to complete it.
             // Mirrors workerLoop()'s owner/program shutdown branch.
-            item.controller->enqueueContinuePollResult(item.key, item.thread_idx, nullptr, nullptr, true);
+            item.controller->enqueueContinuePollResult(item.key, item.op_id, item.thread_idx, nullptr, nullptr,
+                true);
         }
         item.controller->deref(xsink);
         item.controller = nullptr;
@@ -1266,7 +1268,8 @@ void QoreCallDispatcher::enqueue(AsyncWorkItem&& item) {
             if (item.controller) {
                 if (item.type == DT_CONTINUE_POLL) {
                     // see releaseWorkItem()
-                    item.controller->enqueueContinuePollResult(item.key, item.thread_idx, nullptr, nullptr, true);
+                    item.controller->enqueueContinuePollResult(item.key, item.op_id, item.thread_idx, nullptr,
+                        nullptr, true);
                 }
                 item.controller->deref(&xsink);
                 item.controller = nullptr;
@@ -1690,7 +1693,7 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
                 // Tell the I/O thread this op is done (cache entry likely
                 // already removed by CancelByProgram, but this is safe)
                 async_item.controller->enqueueContinuePollResult(
-                    async_item.key, async_item.thread_idx, nullptr, nullptr, true);
+                    async_item.key, async_item.op_id, async_item.thread_idx, nullptr, nullptr, true);
                 async_item.controller->deref(&work_xsink);
                 async_item.controller = nullptr;
             }
@@ -1842,8 +1845,8 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
 
                     // Send result back to the I/O thread
                     async_item.controller->enqueueContinuePollResult(
-                        async_item.key, async_item.thread_idx, new_poll_info, ex_hash, completed,
-                        has_state ? &state : nullptr, async_item.spop_obj);
+                        async_item.key, async_item.op_id, async_item.thread_idx, new_poll_info, ex_hash, completed,
+                        has_state ? &state : nullptr);
                     async_item.controller->deref(&work_xsink);
                     async_item.controller = nullptr;
                     break;
@@ -2824,6 +2827,8 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
         }
         // the replacing operation keeps the ID of the replaced one: its event loop registrations are kept for it
         uint64_t replaced_id = 0;
+        // true if the same operation is submitted again while a step of it is in flight on a worker
+        bool step_in_flight = false;
         auto it = t.cache.find(uh);
         if (it != t.cache.end()) {
             if (!replace) {
@@ -2839,6 +2844,9 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
                 it->second = PollInfo();
                 t.cache.erase(it);
                 t.cache_size.fetch_sub(1, std::memory_order_relaxed);
+                // the new submission waits for the step: no second step of the operation may run meanwhile, and
+                // the step's result, for the same operation ID, is the new submission's
+                step_in_flight = old_pinfo.continue_poll_in_flight;
                 old_pinfo.cleanup(xsink);
             } else {
                 ASYNC_IO_TRACE("cache.erase SUBMIT_REPLACE_DIRECT key='%s' owner='%s'\n",
@@ -2847,14 +2855,24 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
                 it->second = PollInfo();
                 t.cache.erase(it);
                 t.cache_size.fetch_sub(1, std::memory_order_relaxed);
-                doCancelIntern(old_pinfo, xsink);
-                old_pinfo.cleanup(xsink);
+                if (old_pinfo.continue_poll_in_flight) {
+                    // a step of the replaced operation is still running on a worker: its cancellation (abort() and
+                    // the canceled result) waits for the step's result, as a Cancel does, and the replacing
+                    // operation takes a new ID, so the step's result is not applied to it
+                    replaced_id = 0;
+                    uint64_t old_id = old_pinfo.op_id;
+                    t.pending_aborts.emplace(old_id, std::move(old_pinfo));
+                } else {
+                    doCancelIntern(old_pinfo, xsink);
+                    old_pinfo.cleanup(xsink);
+                }
             }
         }
 
         // Direct cache insertion (I/O thread owns the cache)
         PollInfo& pinfo = t.cache.emplaceWithId(uh, replaced_id);
         t.cache_size.fetch_add(1, std::memory_order_relaxed);
+        pinfo.continue_poll_in_flight = step_in_flight;
         pinfo.sock_obj = sock_obj;
         sock_obj->ref();
         pinfo.sock = sock;
@@ -3162,9 +3180,10 @@ int AsyncIoControllerPriv::cancelSocketInContext(IoThreadContext& t,
         }
 
         if (in_flight) {
-            t.pending_aborts.emplace(key, std::move(pinfo_copy));
+            uint64_t op_id = pinfo_copy.op_id;
+            t.pending_aborts.emplace(op_id, std::move(pinfo_copy));
             if (completion) {
-                t.pending_abort_cancel_hash[key] = sock_hash;
+                t.pending_abort_cancel_hash[op_id] = sock_hash;
                 ++deferred_count;
             }
         } else {
@@ -3187,8 +3206,8 @@ int AsyncIoControllerPriv::cancelSocketInContext(IoThreadContext& t,
 }
 
 void AsyncIoControllerPriv::completePendingSocketCancel(IoThreadContext& t,
-        const std::string& key, ExceptionSink* xsink) {
-    auto hit = t.pending_abort_cancel_hash.find(key);
+        uint64_t op_id, ExceptionSink* xsink) {
+    auto hit = t.pending_abort_cancel_hash.find(op_id);
     if (hit == t.pending_abort_cancel_hash.end()) {
         return;
     }
@@ -4057,7 +4076,8 @@ void AsyncIoControllerPriv::cancelByProgram(QoreProgram* pgm, ExceptionSink* xsi
                         // a worker pops the item, not when it is enqueued, so
                         // a dispatched-but-not-yet-popped continuePoll would
                         // race with the caller's Phase-3 doCancelIntern.
-                        tp.pending_aborts.emplace(key, std::move(pinfo_copy));
+                        uint64_t op_id = pinfo_copy.op_id;
+                        tp.pending_aborts.emplace(op_id, std::move(pinfo_copy));
                     } else {
                         cancel_pinfos.push_back(std::move(pinfo_copy));
                     }
@@ -5532,7 +5552,7 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                     this->ref();
                     op.spop_obj->ref();
                     call_dispatcher.load(std::memory_order_acquire)->dispatchContinuePollAsync(
-                        op.spop_obj, this, node->first, t.thread_idx, node->second.owner,
+                        op.spop_obj, this, node->first, op.op_id, t.thread_idx, node->second.owner,
                         node->second.sandbox_ctx, node->second.state_queue != nullptr);
                     continue;  // do NOT add to poll_results
                 }
@@ -5709,7 +5729,7 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                 this->ref();  // keep controller alive until worker delivers result
                 op.spop_obj->ref();
                 call_dispatcher.load(std::memory_order_acquire)->dispatchContinuePollAsync(
-                    op.spop_obj, this, node->first, t.thread_idx, node->second.owner,
+                    op.spop_obj, this, node->first, op.op_id, t.thread_idx, node->second.owner,
                     node->second.sandbox_ctx, node->second.state_queue != nullptr);
                 continue;  // do NOT add to poll_results
             }
@@ -6867,7 +6887,8 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                             // will target this op; we just need to keep the
                             // PollInfo alive so we can call doCancelIntern()
                             // once the worker finishes.
-                            t.pending_aborts.emplace(cmd.key, std::move(pinfo_copy));
+                            uint64_t op_id = pinfo_copy.op_id;
+                            t.pending_aborts.emplace(op_id, std::move(pinfo_copy));
                         } else {
                             doCancelIntern(pinfo_copy, xsink);
                             pinfo_copy.cleanup(xsink);
@@ -6960,7 +6981,8 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                                 // Worker is currently running continuePoll() on
                                 // this op — defer the abort until ContinuePollResult
                                 // arrives (same rationale as IoCommand::Cancel).
-                                t.pending_aborts.emplace(key, std::move(pinfo_copy));
+                                uint64_t op_id = pinfo_copy.op_id;
+                                t.pending_aborts.emplace(op_id, std::move(pinfo_copy));
                             } else {
                                 doCancelIntern(pinfo_copy, xsink);
                                 pinfo_copy.cleanup(xsink);
@@ -7038,7 +7060,8 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                                 // that have been popped off the dispatcher
                                 // queue; queued-but-not-yet-popped items would
                                 // race with the caller's Phase-3 doCancelIntern.
-                                t.pending_aborts.emplace(key, std::move(pinfo_copy));
+                                uint64_t op_id = pinfo_copy.op_id;
+                                t.pending_aborts.emplace(op_id, std::move(pinfo_copy));
                             } else if (cmd.completion) {
                                 // Append to the completion's shared vector
                                 // (guarded by its own pinfos_lock).
@@ -7274,6 +7297,8 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                     // the same spop re-submitted keeps its ID: its event loop
                     // registrations are kept for it
                     uint64_t resubmitted_id = 0;
+                    // true if the same operation is submitted again while a step of it is in flight on a worker
+                    bool step_in_flight = false;
                     {
                         auto it = t.cache.find(cmd.key);
                         if (it != t.cache.end()) {
@@ -7287,6 +7312,10 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                                 it->second = PollInfo();
                                 t.cache.erase(it);
                                 t.cache_size.fetch_sub(1, std::memory_order_relaxed);
+                                // the new submission waits for the step: no second step of the operation may run
+                                // meanwhile, and the step's result, for the same operation ID, is the new
+                                // submission's
+                                step_in_flight = old_pinfo.continue_poll_in_flight;
                                 old_pinfo.cleanup(xsink);
                             } else {
                                 // Different spop on same key — cancel the
@@ -7300,13 +7329,23 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                                 it->second = PollInfo();
                                 t.cache.erase(it);
                                 t.cache_size.fetch_sub(1, std::memory_order_relaxed);
-                                doCancelIntern(old_pinfo, xsink);
-                                old_pinfo.cleanup(xsink);
+                                if (old_pinfo.continue_poll_in_flight) {
+                                    // a step of the replaced operation is still running on a worker: its
+                                    // cancellation (abort() and the canceled result) waits for the step's
+                                    // result, as a Cancel does; the replacing operation has a new ID, so the
+                                    // step's result is not applied to it
+                                    uint64_t old_id = old_pinfo.op_id;
+                                    t.pending_aborts.emplace(old_id, std::move(old_pinfo));
+                                } else {
+                                    doCancelIntern(old_pinfo, xsink);
+                                    old_pinfo.cleanup(xsink);
+                                }
                             }
                         }
                     }
                     PollInfo& pinfo = t.cache.emplaceWithId(cmd.key, resubmitted_id);
                     t.cache_size.fetch_add(1, std::memory_order_relaxed);
+                    pinfo.continue_poll_in_flight = step_in_flight;
                     pinfo.sock_obj = cmd.submit_sock_obj;       // ownership transferred
                     pinfo.sock = cmd.submit_sock;               // ownership transferred
                     pinfo.spop_obj = cmd.submit_spop_obj;       // ownership transferred
@@ -7361,9 +7400,11 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                     DeferredDelivery dd = {};
 
                     {
-                        auto it = t.cache.find(cmd.key);
-                        if (it == t.cache.end()) {
-                            // Operation was canceled while continuePoll was in flight
+                        // the step's operation is found by its ID, which no other operation takes over: another
+                        // operation can have taken over the key while the step was in flight (a replacing submit)
+                        OpCache::node_t* it = t.cache.findId(cmd.continue_poll_op_id);
+                        if (!it) {
+                            // Operation was canceled (or replaced) while continuePoll was in flight
                             if (cmd.continue_poll_result) {
                                 cmd.continue_poll_result->deref(xsink);
                             }
@@ -7375,19 +7416,18 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                             // now returned — run the deferred abort here so
                             // callAbort → socket close → SSL_shutdown cannot
                             // race with the worker's SSL operations.
-                            auto pit = t.pending_aborts.find(cmd.key);
+                            auto pit = t.pending_aborts.find(cmd.continue_poll_op_id);
                             if (pit != t.pending_aborts.end()) {
                                 PollInfo deferred = std::move(pit->second);
                                 t.pending_aborts.erase(pit);
                                 // the step that was in flight is reported before the cancellation ends the
                                 // operation
-                                if (cmd.continue_poll_has_state && deferred.state_queue
-                                        && deferred.spop_obj == cmd.continue_poll_spop) {
+                                if (cmd.continue_poll_has_state && deferred.state_queue) {
                                     noteOperationState(deferred, cmd.continue_poll_state.c_str());
                                 }
                                 doCancelIntern(deferred, xsink);
                                 deferred.cleanup(xsink);
-                                completePendingSocketCancel(t, cmd.key, xsink);
+                                completePendingSocketCancel(t, cmd.continue_poll_op_id, xsink);
                             }
                             break;
                         }
@@ -7397,8 +7437,7 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
 
                         // the state the worker read after the step; an event pushed now precedes the result that
                         // this command can deliver below
-                        if (cmd.continue_poll_has_state && pinfo.state_queue
-                                && pinfo.spop_obj == cmd.continue_poll_spop) {
+                        if (cmd.continue_poll_has_state && pinfo.state_queue) {
                             noteOperationState(pinfo, cmd.continue_poll_state.c_str());
                         }
 
@@ -7422,7 +7461,7 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
 
                             if (deliver_result) {
                                 deliver_finished = true;
-                                dd.key = cmd.key;
+                                dd.key = it->first;
                                 dd.queue = pinfo.queue;
                                 if (dd.queue) { dd.queue->ref(); }
                                 dd.spop_obj = pinfo.spop_obj;
@@ -7442,16 +7481,16 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
 
                             {
                                 AutoLocker al(m);
-                                signalCancelLocked(cmd.key);
+                                signalCancelLocked(it->first);
                             }
 
                             ASYNC_IO_TRACE("cache.erase IO_CMD_CONTINUE_POLL_RESULT key='%s' "
                                 "owner='%s' ex=%p completed=%d has_on_complete=%d queue=%p\n",
-                                cmd.key.c_str(), pinfo.owner.c_str(),
+                                it->first.c_str(), pinfo.owner.c_str(),
                                 (void*)cmd.continue_poll_ex, (int)cmd.continue_poll_completed,
                                 (int)pinfo.has_qore_on_complete, (void*)pinfo.queue);
                             pinfo.cleanup(xsink);
-                            t.cache.erase(it);
+                            t.cache.eraseId(cmd.continue_poll_op_id);
                             t.cache_size.fetch_sub(1, std::memory_order_relaxed);
                         } else {
                             // Still pending — target socket-backed Qore ops for
@@ -8428,9 +8467,8 @@ QoreObject* AsyncIoControllerPriv::getSocketFromPollInfo(QoreHashNode* poll_info
     return obj;
 }
 
-void AsyncIoControllerPriv::enqueueContinuePollResult(const std::string& key, int thread_idx,
-        QoreHashNode* new_poll_info, QoreHashNode* ex_hash, bool completed, const std::string* state,
-        const QoreObject* spop_obj) {
+void AsyncIoControllerPriv::enqueueContinuePollResult(const std::string& key, uint64_t op_id, int thread_idx,
+        QoreHashNode* new_poll_info, QoreHashNode* ex_hash, bool completed, const std::string* state) {
     // Route to the I/O thread that dispatched the continuePoll() and holds the operation; the operation key does not
     // identify it, since operations are routed by their socket
     bool do_signal = false;
@@ -8446,6 +8484,7 @@ void AsyncIoControllerPriv::enqueueContinuePollResult(const std::string& key, in
             Command c;
             c.cmd = IoCommand::ContinuePollResult;
             c.key = key;
+            c.continue_poll_op_id = op_id;
             c.continue_poll_result = new_poll_info;
             c.continue_poll_ex = ex_hash;
             c.continue_poll_completed = completed;
@@ -8453,7 +8492,6 @@ void AsyncIoControllerPriv::enqueueContinuePollResult(const std::string& key, in
                 c.continue_poll_has_state = true;
                 c.continue_poll_state = *state;
             }
-            c.continue_poll_spop = spop_obj;
             target->cmdq.push(std::move(c));
             do_signal = true;
             // notify() does not block; notifying under m keeps the context alive until it returns

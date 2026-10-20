@@ -410,6 +410,18 @@ for diagnostics (`getInfo()`, traces).
   them like the Cancel commands do.
 - `OpCache::erase()` finds the ID of an entry by its node, so an entry whose `PollInfo` was reset before it is removed
   (as several removal paths do) leaves no stale index entry.
+- **A step run on a callback worker is identified by its operation's ID**: the `DT_CONTINUE_POLL` item and the
+  `ContinuePollResult` command carry the ID, and the result is applied to the operation with that ID, or delivers the
+  deferred cancellation in `pending_aborts` (keyed by ID).  It was found by its key, so an operation that replaced
+  another one while the replaced one's step was in flight received the replaced one's result (a completion it never
+  reached, or another operation's poll info).
+- **An operation replaced while its step is in flight is canceled when the step returns**, as a Cancel does: a
+  different poll operation submitted for the key moves the replaced one to `pending_aborts` instead of calling its
+  `abort()` concurrently with its `continuePoll()`, and gets a new ID (the direct submit on the I/O thread too, which
+  otherwise keeps the replaced ID).  The same poll operation submitted again while its step is in flight keeps its ID
+  and is marked in flight, so no second step of it is dispatched before the first one returns; the step's result is
+  the new submission's.  `asyncio_replace_in_flight.qtest` replaces an operation whose step blocks until the test
+  releases it.
 
 ### Poll Info Reuse
 

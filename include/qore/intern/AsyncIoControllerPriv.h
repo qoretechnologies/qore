@@ -255,6 +255,8 @@ public:
         AsyncIoSandboxContext sandbox_ctx;
         //! For DT_CONTINUE_POLL: read the operation's state after continuePoll() for its state events
         bool read_state = false;
+        //! For DT_CONTINUE_POLL: the ID of the operation in the I/O thread's cache; see OpCache
+        uint64_t op_id = 0;
     };
 
     //! Creates the dispatcher
@@ -292,7 +294,9 @@ public:
     //! Dispatch continuePoll() asynchronously with result delivery back to I/O thread
     /** @param spop_obj the AbstractPollOperation object (referenced — ownership transferred)
         @param controller the AsyncIoControllerPriv to deliver the result to (referenced)
-        @param key the operation key for result correlation
+        @param key the operation key
+        @param op_id the operation's ID in the cache of its I/O thread, which identifies the result; another
+        operation can take over the key while the step is in flight
         @param thread_idx the index of the I/O thread whose cache holds the operation; the result is delivered to
         this thread
         @param owner optional owner identifier for per-owner flush tracking
@@ -300,7 +304,7 @@ public:
         sends it back with the result, for the operation's state events
     */
     DLLLOCAL void dispatchContinuePollAsync(QoreObject* spop_obj,
-        AsyncIoControllerPriv* controller, const std::string& key, int thread_idx,
+        AsyncIoControllerPriv* controller, const std::string& key, uint64_t op_id, int thread_idx,
         const std::string& owner = std::string(), AsyncIoSandboxContext sandbox_ctx = AsyncIoSandboxContext(),
         bool read_state = false);
 
@@ -964,11 +968,11 @@ private:
         bool continue_poll_has_state = false;
         //! For ContinuePollResult: the operation's state after the step, if continue_poll_has_state
         std::string continue_poll_state;
-        //! For ContinuePollResult: the poll operation that made the step; an identity only, not referenced
-        /** The state is only applied to the cache entry of this operation: an entry with the same key can belong to
-            another operation by the time the result arrives.
+        //! For ContinuePollResult: the ID of the operation that made the step
+        /** The result is applied to the operation with this ID only: the entry with the same key can belong to
+            another operation by the time the result arrives (see OpCache).
         */
-        const QoreObject* continue_poll_spop = nullptr;
+        uint64_t continue_poll_op_id = 0;
         std::string sock_hash;          //!< For WakeSocket/CancelSocket/CloseSocket: socket hash
         AbstractPollableIoObjectBase* close_sock = nullptr; //!< For CloseSocket: referenced I/O object
         bool submit_replace = false;    //!< For SubmitOp: replace existing operation with same key
@@ -1451,10 +1455,11 @@ private:
             @c close_internal(), avoiding the OpenSSL context corruption
             seen in CI job 170659 (SIGSEGV in @c EVP_CIPHER_get_mode).
 
-            I/O-thread-only.  Key: op key.  Value: the PollInfo copy whose
-            cleanup is still pending.
+            I/O-thread-only.  Key: operation ID (an operation with the same
+            key can have taken over the cache entry).  Value: the PollInfo
+            copy whose cleanup is still pending.
          */
-        std::unordered_map<std::string, PollInfo> pending_aborts;
+        std::unordered_map<uint64_t, PollInfo> pending_aborts;
 
         //! Socket-level cancel completions waiting on deferred aborts
         /** When @ref IoCommand::CancelSocket removes an operation whose
@@ -1469,8 +1474,8 @@ private:
         };
         std::unordered_map<std::string, PendingSocketCancel> pending_socket_cancels;
 
-        //! Maps pending-abort operation keys back to their socket-cancel barrier
-        std::unordered_map<std::string, std::string> pending_abort_cancel_hash;
+        //! Maps pending-abort operation IDs back to their socket-cancel barrier
+        std::unordered_map<uint64_t, std::string> pending_abort_cancel_hash;
     };
 
     //! Get the I/O thread index for a route key (hash-based affinity)
@@ -1705,7 +1710,7 @@ private:
         AsyncOpCompletion*& completion, ExceptionSink* xsink);
 
     //! Complete any socket-level cancel waiting on a deferred abort key
-    DLLLOCAL void completePendingSocketCancel(IoThreadContext& t, const std::string& key,
+    DLLLOCAL void completePendingSocketCancel(IoThreadContext& t, uint64_t op_id,
         ExceptionSink* xsink);
 
     //! Cancel all operations associated with a socket hash
@@ -1887,16 +1892,15 @@ private:
     //! Call continuePoll on an AbstractPollOperation object
     //! Enqueue a continuePoll result from a worker thread back to the I/O thread
     /** @param key the operation key
+        @param op_id the ID of the operation that made the step, which the result is applied to (see OpCache)
         @param thread_idx the index of the I/O thread that dispatched the continuePoll() and holds the operation
         @param new_poll_info the new poll info (referenced, ownership transferred) or nullptr
         @param ex_hash the exception hash (referenced, ownership transferred) or nullptr
         @param completed true if the operation completed
         @param state the operation's state after the step, read for its state events, or nullptr
-        @param spop_obj the poll operation that made the step; an identity only, not referenced
     */
-    DLLLOCAL void enqueueContinuePollResult(const std::string& key, int thread_idx, QoreHashNode* new_poll_info,
-        QoreHashNode* ex_hash, bool completed, const std::string* state = nullptr,
-        const QoreObject* spop_obj = nullptr);
+    DLLLOCAL void enqueueContinuePollResult(const std::string& key, uint64_t op_id, int thread_idx,
+        QoreHashNode* new_poll_info, QoreHashNode* ex_hash, bool completed, const std::string* state = nullptr);
 
     //! Dispatch a stream-data-ready notification from a worker thread
     /** Called by the DT_CONTINUE_POLL worker after getAndClearDataReadyStreams() to

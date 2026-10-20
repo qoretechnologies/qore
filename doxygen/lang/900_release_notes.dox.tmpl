@@ -341,7 +341,9 @@
     instead of by their key.  When an I/O thread stops while another one runs or stops,
     @ref Qore::AsyncIoController::cancelByOwner() "AsyncIoController::cancelByOwner()" and the other cancellations
     cancel the operations on the running threads, where they canceled nothing, and no longer wait forever for a
-    command left to a thread that was stopping.
+    command left to a thread that was stopping.  An operation that replaces another one with the same key while a step of
+    the replaced one runs on a callback worker no longer receives the result of that step, and the replaced operation
+    is canceled once its step has returned instead of while it runs.
 
     @ref Qore::Socket::getSSLCipherName() "Socket::getSSLCipherName()" and
     @ref Qore::Socket::getSSLCipherVersion() "Socket::getSSLCipherVersion()" read the cipher from the socket's I/O
