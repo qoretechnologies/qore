@@ -2357,7 +2357,7 @@ int AsyncIoControllerPriv::getDefaultIoThreadCount() {
 
 AsyncIoControllerPriv::AsyncIoControllerPriv(bool autostop, ExceptionSink* xsink)
     : num_io_threads(getDefaultIoThreadCount()), autostop_flag(autostop), shutting_down(false),
-      io_waiting(false), io_exiting(false), ready_flag(false),
+      io_waiting(false), ready_flag(false),
       submit_seq(0),
       logger(nullptr), timer_callback(nullptr) {
     // The QORE_IO_THREADS environment variable sets any positive I/O thread count
@@ -2805,7 +2805,7 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
             xsink->raiseException("ASYNC-IO-ERROR", "controller is shutting down");
             return nullptr;
         }
-        if (io_exiting || !target_t.tid) {
+        if (target_t.exiting || !target_t.tid) {
             startIntern(xsink);
             if (*xsink) {
                 return nullptr;
@@ -3004,7 +3004,7 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
         // thread (e.g., thread 0) being alive does not mean our target is.
         if (!target->running.load(std::memory_order_acquire)) {
             AutoLocker al(m);
-            if (io_exiting || !target->tid) {
+            if (target->exiting || !target->tid) {
                 startIntern(xsink);
                 if (*xsink) {
                     return nullptr;
@@ -3233,9 +3233,9 @@ int AsyncIoControllerPriv::cancelBySocketHash(const std::string& sock_hash,
         }
 
         AutoLocker al(m);
-        if (anyThreadRunning() && !io_exiting) {
+        if (anyThreadRunning()) {
             for (size_t i = 0; i < io_threads.size(); ++i) {
-                if ((int)i == my_idx || !io_threads[i]->tid) {
+                if (static_cast<int>(i) == my_idx || !readsCommands(*io_threads[i])) {
                     continue;
                 }
                 IoThreadContext& tp = *io_threads[i];
@@ -3260,9 +3260,9 @@ int AsyncIoControllerPriv::cancelBySocketHash(const std::string& sock_hash,
         std::vector<IoThreadContext*> live_targets;
         {
             AutoLocker al(m);
-            if (anyThreadRunning() && !io_exiting) {
+            if (anyThreadRunning()) {
                 for (auto& tp : io_threads) {
-                    if (!tp->tid) {
+                    if (!readsCommands(*tp)) {
                         continue;
                     }
                     Command cmd;
@@ -3285,9 +3285,9 @@ int AsyncIoControllerPriv::cancelBySocketHash(const std::string& sock_hash,
     AsyncOpCompletion* completion = nullptr;
     {
         AutoLocker al(m);
-        if (anyThreadRunning() && !io_exiting) {
+        if (anyThreadRunning()) {
             for (auto& tp : io_threads) {
-                if (tp->tid) {
+                if (readsCommands(*tp)) {
                     live_targets.push_back(tp.get());
                 }
             }
@@ -3390,7 +3390,7 @@ int AsyncIoControllerPriv::closeSocketOnController(AbstractPollableIoObjectBase*
 
             if (!do_direct_close) {
                 target = io_threads[target_idx].get();
-                if (!target->running.load(std::memory_order_acquire) || io_exiting || !target->tid) {
+                if (!target->running.load(std::memory_order_acquire) || target->exiting || !target->tid) {
                     startIntern(xsink);
                     if (*xsink) {
                         return -1;
@@ -3422,7 +3422,7 @@ int AsyncIoControllerPriv::closeSocketOnController(AbstractPollableIoObjectBase*
     {
         AutoLocker al(m);
         if (shutting_down || qore_shutdown.load(std::memory_order_relaxed)) {
-            while (io_exiting) {
+            while (anyThreadExiting()) {
                 io_waiting = true;
                 io_cond.wait(m);
                 io_waiting = false;
@@ -3430,7 +3430,7 @@ int AsyncIoControllerPriv::closeSocketOnController(AbstractPollableIoObjectBase*
             do_direct_close = true;
         } else {
             target = io_threads[target_idx].get();
-            if (!target->running.load(std::memory_order_acquire) || io_exiting || !target->tid) {
+            if (!target->running.load(std::memory_order_acquire) || target->exiting || !target->tid) {
                 startIntern(xsink);
                 if (*xsink) {
                     return -1;
@@ -3500,7 +3500,7 @@ bool AsyncIoControllerPriv::cancelByKey(const QoreStringNode* key, ExceptionSink
         // was actually found.
         AutoLocker al(m);
         target = &ctx();
-        if (anyThreadRunning() && !io_exiting) {
+        if (readsCommands(*target)) {
             auto it = cancel_cond_map.find(uh);
             if (it == cancel_cond_map.end()) {
                 // unique_ptr makes this exception-safe: if emplace throws
@@ -3585,13 +3585,13 @@ bool AsyncIoControllerPriv::cancelByKeyOnIoThread(const std::string& uh, int own
 
     {
         AutoLocker al(m);
-        if (!io_exiting) {
+        {
             for (size_t i = 0; i < io_threads.size(); ++i) {
                 if (((int)i == own_idx && !inside_continue_poll_batch) || (direct_cancel && (int)i != own_idx)) {
                     continue;
                 }
                 IoThreadContext& tp = *io_threads[i];
-                if (!tp.tid) {
+                if (!readsCommands(tp)) {
                     continue;
                 }
                 // found_count is not referenced from the cmd, because we return before the cmd is processed
@@ -3625,9 +3625,9 @@ bool AsyncIoControllerPriv::cancelByKeyOnAllThreads(const std::string& uh, Excep
     AsyncOpCompletion* completion = nullptr;
     {
         AutoLocker al(m);
-        if (anyThreadRunning() && !io_exiting) {
+        if (anyThreadRunning()) {
             for (auto& tp : io_threads) {
-                if (tp->tid) {
+                if (readsCommands(*tp)) {
                     live_targets.push_back(tp.get());
                 }
             }
@@ -3703,13 +3703,15 @@ int AsyncIoControllerPriv::cancelByOwner(const QoreStringNode* owner, ExceptionS
         bool wait_remote = false;
         {
             AutoLocker al(m);
-            if (anyThreadRunning() && !io_exiting) {
+            if (anyThreadRunning()) {
                 for (size_t i = 0; i < io_threads.size(); ++i) {
                     if ((int)i == my_idx) {
                         continue;
                     }
                     IoThreadContext& tp = *io_threads[i];
-                    if (tp.tid) {
+                    // a thread past its last command drain has canceled its operations and would never process the
+                    // command; its cache is walked like that of a stopped thread
+                    if (readsCommands(tp)) {
                         live_remote.push_back(&tp);
                     } else {
                         // Dead thread — walk its cache directly.
@@ -3826,9 +3828,11 @@ int AsyncIoControllerPriv::cancelByOwner(const QoreStringNode* owner, ExceptionS
         std::vector<IoThreadContext*> live_targets;
         {
             AutoLocker al(m);
-            if (anyThreadRunning() && !io_exiting) {
+            if (anyThreadRunning()) {
                 for (auto& tp : io_threads) {
-                    if (tp->tid) {
+                    // a thread past its last command drain has canceled its operations and would never process the
+                    // command; its cache is walked like that of a stopped thread
+                    if (readsCommands(*tp)) {
                         live_targets.push_back(tp.get());
                     } else {
                         // Dead thread — directly walk its cache while
@@ -3970,13 +3974,15 @@ void AsyncIoControllerPriv::cancelByProgram(QoreProgram* pgm, ExceptionSink* xsi
         bool wait_remote = false;
         {
             AutoLocker al(m);
-            if (anyThreadRunning() && !io_exiting) {
+            if (anyThreadRunning()) {
                 for (size_t i = 0; i < io_threads.size(); ++i) {
                     if ((int)i == my_idx) {
                         continue;
                     }
                     IoThreadContext& tp = *io_threads[i];
-                    if (tp.tid) {
+                    // a thread past its last command drain has canceled its operations and would never process the
+                    // command; its cache is walked like that of a stopped thread
+                    if (readsCommands(tp)) {
                         live_remote.push_back(&tp);
                     } else {
                         std::vector<std::string> keys;
@@ -4089,9 +4095,11 @@ void AsyncIoControllerPriv::cancelByProgram(QoreProgram* pgm, ExceptionSink* xsi
         std::vector<IoThreadContext*> live_targets;
         {
             AutoLocker al(m);
-            if (anyThreadRunning() && !io_exiting) {
+            if (anyThreadRunning()) {
                 for (auto& tp : io_threads) {
-                    if (tp->tid) {
+                    // a thread past its last command drain has canceled its operations and would never process the
+                    // command; its cache is walked like that of a stopped thread
+                    if (readsCommands(*tp)) {
                         live_targets.push_back(tp.get());
                     } else {
                         // Dead thread — scan its cache directly.  Safe while
@@ -4239,7 +4247,7 @@ void AsyncIoControllerPriv::wakeSocketAfterClose(const std::string& sock_hash) {
     // from its hash (see getRouteKey()); no I/O thread may retain a waiter on
     // the removed descriptor.
     AutoLocker al(m);
-    if (shutting_down || io_exiting) {
+    if (shutting_down) {
         return; // teardown already completes all outstanding operations
     }
     int tid = q_gettid();
@@ -4285,7 +4293,7 @@ void AsyncIoControllerPriv::wakeSocket(const std::string& sock_hash) {
             thread_idx = getThreadIndex(sock_hash);
         }
         IoThreadContext& target = *io_threads[thread_idx];
-        if (!target.running.load(std::memory_order_acquire) || io_exiting) {
+        if (!target.running.load(std::memory_order_acquire)) {
             return;
         }
         target.cmdq.push(std::move(cmd));
@@ -4407,7 +4415,7 @@ void AsyncIoControllerPriv::start(ExceptionSink* xsink) {
             break;
         }
     }
-    if (!all_running || io_exiting) {
+    if (!all_running || anyThreadExiting()) {
         startIntern(xsink);
     }
 }
@@ -4417,7 +4425,7 @@ void AsyncIoControllerPriv::stop(ExceptionSink* xsink) {
     {
         AutoLocker al(m);
         shutting_down = true;
-        if (anyThreadRunning() && !io_exiting) {
+        if (anyThreadRunning()) {
             do_signal = enqueueCmdLocked(IoCommand::Quit);
         }
     }
@@ -4471,7 +4479,7 @@ bool AsyncIoControllerPriv::waitReady(int timeout_ms, ExceptionSink* xsink) {
     if (ready_flag) {
         return true;
     }
-    while (!ready_flag && anyThreadRunning() && !io_exiting) {
+    while (!ready_flag && anyThreadRunning() && !anyThreadExiting()) {
         if (timeout_ms > 0) {
             int rc = io_cond.wait2(m, (int64)timeout_ms);
             if (rc) {
@@ -4630,7 +4638,7 @@ QoreHashNode* AsyncIoControllerPriv::getInfo(ExceptionSink* xsink) {
     ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
     {
         AutoLocker al(m);
-        rv->setKeyValue("running", anyThreadRunning() && !io_exiting, xsink);
+        rv->setKeyValue("running", anyThreadActive(), xsink);
         rv->setKeyValue("autostop", autostop_flag, xsink);
         rv->setKeyValue("shutting_down", shutting_down, xsink);
         rv->setKeyValue("tid", (int64)ctx().tid, xsink);
@@ -4667,16 +4675,16 @@ QoreHashNode* AsyncIoControllerPriv::getInfo(ExceptionSink* xsink) {
         bool do_signal = false;
         {
             AutoLocker al(m);
-            if (anyThreadRunning() && !io_exiting) {
+            if (anyThreadRunning()) {
                 int live_count = 0;
                 for (auto& tp : io_threads) {
-                    if (tp->tid) {
+                    if (readsCommands(*tp)) {
                         ++live_count;
                     }
                 }
                 completion = live_count ? new AsyncOpCompletion(live_count) : nullptr;
                 for (auto& tp : io_threads) {
-                    if (!tp->tid) {
+                    if (!readsCommands(*tp)) {
                         continue;
                     }
                     Command cmd;
@@ -4807,7 +4815,7 @@ int64_t AsyncIoControllerPriv::addTimer(const DateTimeNode* deadline, QoreValue 
         // Timers are spread over the I/O threads by ID; cancelTimer() finds the same thread (the thread count cannot
         // change while an I/O thread runs, and a stopped controller discards its timers)
         IoThreadContext& target = getThreadForTimer(id);
-        if (io_exiting || !target.tid) {
+        if (target.exiting || !target.tid) {
             startIntern(xsink);
             if (*xsink) {
                 return -1;
@@ -4852,7 +4860,7 @@ bool AsyncIoControllerPriv::cancelTimer(int64_t id, ExceptionSink* xsink) {
 
         // the timer's I/O thread removes it from its event loop; a stopped thread has already discarded it
         IoThreadContext& target = getThreadForTimer(id);
-        if (target.tid && !io_exiting) {
+        if (readsCommands(target)) {
             Command cmd;
             cmd.cmd = IoCommand::CancelTimer;
             cmd.timer_id = id;
@@ -4944,15 +4952,15 @@ struct IoThreadStartInfo {
 
 void AsyncIoControllerPriv::startIntern(ExceptionSink* xsink) {
     // Caller must hold lock
-    // Wait for any exiting thread to finish
-    while (io_exiting) {
+    // Wait for any exiting thread to finish: a stopping thread cannot be started again before it has stopped
+    while (anyThreadExiting()) {
         io_waiting = true;
         io_cond.wait(m);
         io_waiting = false;
     }
 
     // Another thread may have already restarted all I/O threads while we were waiting
-    // in the while(io_exiting) loop above (both threads released the lock via io_cond.wait,
+    // in the loop above (both threads released the lock via io_cond.wait,
     // and the first one to re-acquire it after the broadcast restarted the threads).
     bool all_threads_running = true;
     for (auto& tp : io_threads) {
@@ -4966,7 +4974,6 @@ void AsyncIoControllerPriv::startIntern(ExceptionSink* xsink) {
     }
 
     ready_flag = false;
-    io_exiting = false;
 
     int thread_flags = external_lifecycle_threads ? QTF_EXTERNAL_LIFECYCLE : 0;
 
@@ -4977,6 +4984,8 @@ void AsyncIoControllerPriv::startIntern(ExceptionSink* xsink) {
         if (t.tid) {
             continue;  // Already running
         }
+        // a thread that has stopped processes commands again once started
+        t.commands_closed = false;
 
         if (!t.loop || !t.loop->isValid()) {
             xsink->raiseException("ASYNC-IO-ERROR", "event loop %d is not valid", i);
@@ -6116,8 +6125,8 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                 if (timer_empty && do_autostop_check) {
                     if (is_shutting_down) {
                         AutoLocker al(m);
-                        io_exiting = true;
-                        // Set running=false atomically with io_exiting so that
+                        t.exiting = true;
+                        // Set running=false atomically with exiting so that
                         // concurrent submit() calls see the exit and take the
                         // lock path → startIntern() instead of pushing to the
                         // dying thread's cmdq where the op would be dropped.
@@ -6132,7 +6141,7 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                             t.autostop_idle_since = now_us;
                         } else if (now_us - t.autostop_idle_since >= AUTOSTOP_GRACE_US) {
                             AutoLocker al(m);
-                            io_exiting = true;
+                            t.exiting = true;
                             t.running.store(false, std::memory_order_release);
                             if (io_waiting) {
                                 io_cond.broadcast();
@@ -6181,7 +6190,7 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                 if (timer_empty && do_check) {
                     if (is_shutting_down) {
                         AutoLocker al(m);
-                        io_exiting = true;
+                        t.exiting = true;
                         t.running.store(false, std::memory_order_release);
                         if (io_waiting) {
                             io_cond.broadcast();
@@ -6193,7 +6202,7 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                             t.autostop_idle_since = now_us;
                         } else if (now_us - t.autostop_idle_since >= AUTOSTOP_GRACE_US) {
                             AutoLocker al(m);
-                            io_exiting = true;
+                            t.exiting = true;
                             t.running.store(false, std::memory_order_release);
                             if (io_waiting) {
                                 io_cond.broadcast();
@@ -6639,6 +6648,20 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                 signalCancelLocked(key);
             }
         }
+        // the queue has been drained for the last time and the cache emptied: a command pushed from now on would
+        // never be processed by this thread, so the fan-outs (cancelByOwner() & co.) skip it
+        t.commands_closed = true;
+#ifdef DEBUG
+        // test hook: holds the stopping thread after its last command drain, before it has stopped
+        if (t.dbg_hold_after_drain) {
+            t.dbg_held = true;
+            t.dbg_cond.broadcast();
+            while (t.dbg_hold_after_drain) {
+                t.dbg_cond.wait(m);
+            }
+            t.dbg_held = false;
+        }
+#endif
     }
 
     // Deliver cancel results to remaining cache entries outside the lock
@@ -6660,8 +6683,11 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
     {
         AutoLocker al(m);
         t.tid = 0;
-        io_exiting = false;
-        ready_flag = false;
+        // only this thread's state: the other I/O threads can be running or stopping themselves
+        t.exiting = false;
+        if (!anyThreadRunning()) {
+            ready_flag = false;
+        }
         t.autostop_idle_since = 0;
 
         bool restart_preserved_commands = false;
@@ -6675,10 +6701,12 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
         }
 
         if (!restart_preserved_commands) {
-            submit_seq = 0;
-            for (auto& tp : io_threads) {
-                tp->submit_seq.store(0, std::memory_order_relaxed);
-                tp->processed_seq.store(0, std::memory_order_relaxed);
+            // the counters of this thread only; another thread's counters are compared with the sequence numbers
+            // of the commands pushed to it and by waitForProcessing()
+            t.submit_seq.store(0, std::memory_order_relaxed);
+            t.processed_seq.store(0, std::memory_order_relaxed);
+            if (!anyThreadRunning()) {
+                submit_seq = 0;
             }
         }
         processed_cond.broadcast();
@@ -6742,7 +6770,7 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                             }
                         }
 
-                        io_exiting = true;
+                        t.exiting = true;
                         if (io_waiting) {
                             io_cond.broadcast();
                         }
@@ -8232,7 +8260,22 @@ void AsyncIoControllerPriv::releaseFdIfOwner(IoThreadContext& t, int old_fd,
 bool AsyncIoControllerPriv::enqueueCmdLocked(IoCommand cmd, const std::string& key,
         const std::string& owner) {
     // Caller must hold lock
-    if (io_exiting || !ctx().tid) {
+    if (cmd == IoCommand::Quit) {
+        // Quit goes to every thread that processes commands: a stopped thread has nothing to stop and a stopping one
+        // stops by itself; a Quit left in their queues would stop them as soon as they are started again
+        bool pushed = false;
+        for (auto& tp : io_threads) {
+            if (!readsCommands(*tp)) {
+                continue;
+            }
+            Command c;
+            c.cmd = cmd;
+            tp->cmdq.push(std::move(c));
+            pushed = true;
+        }
+        return pushed;
+    }
+    if (anyThreadExiting() || !ctx().tid) {
         // Need to restart
         ExceptionSink xsink;
         startIntern(&xsink);
@@ -8241,14 +8284,7 @@ bool AsyncIoControllerPriv::enqueueCmdLocked(IoCommand cmd, const std::string& k
             return false;
         }
     }
-    if (cmd == IoCommand::Quit) {
-        // Quit must be sent to ALL threads
-        for (auto& tp : io_threads) {
-            Command c;
-            c.cmd = cmd;
-            tp->cmdq.push(std::move(c));
-        }
-    } else {
+    {
         // Route to the target thread (Cancel/CancelOwner go to thread that owns the key)
         IoThreadContext& target = key.empty() ? ctx() : getThreadForKey(key);
         Command c;
@@ -8406,7 +8442,7 @@ void AsyncIoControllerPriv::enqueueContinuePollResult(const std::string& key, in
         if (thread_idx >= 0 && (size_t)thread_idx < io_threads.size()) {
             target = io_threads[thread_idx].get();
         }
-        if (target && target->running.load(std::memory_order_acquire) && !io_exiting) {
+        if (target && target->running.load(std::memory_order_acquire)) {
             Command c;
             c.cmd = IoCommand::ContinuePollResult;
             c.key = key;

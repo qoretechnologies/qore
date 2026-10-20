@@ -338,7 +338,10 @@
     deadlines of its operations take one entry per operation instead of one per event, a socket that is already
     non-blocking is not set again on every read or write, the poll info that a native poll operation returns for the
     next event reuses the previous one instead of being created anew, and operations are looked up by an integer ID
-    instead of by their key.
+    instead of by their key.  When an I/O thread stops while another one runs or stops,
+    @ref Qore::AsyncIoController::cancelByOwner() "AsyncIoController::cancelByOwner()" and the other cancellations
+    cancel the operations on the running threads, where they canceled nothing, and no longer wait forever for a
+    command left to a thread that was stopping.
 
     @ref Qore::Socket::getSSLCipherName() "Socket::getSSLCipherName()" and
     @ref Qore::Socket::getSSLCipherVersion() "Socket::getSSLCipherVersion()" read the cipher from the socket's I/O

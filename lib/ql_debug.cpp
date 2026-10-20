@@ -2155,6 +2155,274 @@ public:
     }
 };
 
+//! Commands sent to every I/O thread while one of them is stopping
+/** An I/O thread that stops (autostop, or a Quit command) drains its command queue for the last time and cancels the
+    operations in its cache, and only then clears its thread ID.  The fan-outs (cancelByOwner(), cancelByProgram(),
+    cancelByKey(), cancelSocket(), getInfo()) sent a command to every thread with a thread ID, unless the controller-
+    wide io_exiting flag was set: while one thread was stopping, they canceled nothing on the threads still running;
+    and once another thread had stopped and cleared io_exiting, a command pushed to a thread past its last drain was
+    never processed, and cancelByOwner() waited for it forever (seen as a hung quic_comprehensive_test).
+
+    The test holds thread 0 after its last command drain with a debug hook and checks, with thread 1 running and then
+    stopped, that cancelByOwner() cancels the operation of the owner on thread 1 and returns without thread 0.
+*/
+class AsyncIoStoppingThreadTest {
+    typedef AsyncIoControllerPriv Ctrl;
+
+    //! Stops an I/O thread with a Quit command; holds it after its last command drain if \a hold is set
+    /** Returns when the thread is held or has stopped; -1 if the thread is not running
+    */
+    static int quitThread(Ctrl& ctrl, int index, bool hold) {
+        AutoLocker al(ctrl.m);
+        Ctrl::IoThreadContext& t = *ctrl.io_threads[index];
+        if (!t.tid) {
+            return -1;
+        }
+        t.dbg_hold_after_drain = hold;
+        Ctrl::Command cmd;
+        cmd.cmd = Ctrl::IoCommand::Quit;
+        t.cmdq.push(std::move(cmd));
+        t.notifier->notify();
+        if (hold) {
+            while (!t.dbg_held) {
+                t.dbg_cond.wait(ctrl.m);
+            }
+        } else {
+            waitStoppedLocked(ctrl, t);
+        }
+        return 0;
+    }
+
+    //! Waits until the given thread has stopped; the caller holds the controller's lock
+    static void waitStoppedLocked(Ctrl& ctrl, Ctrl::IoThreadContext& t) {
+        while (t.tid) {
+            ctrl.io_waiting = true;
+            ctrl.io_cond.wait(ctrl.m);
+            ctrl.io_waiting = false;
+        }
+    }
+
+    //! Releases a held thread and waits until it has stopped
+    static void release(Ctrl& ctrl, int index) {
+        AutoLocker al(ctrl.m);
+        Ctrl::IoThreadContext& t = *ctrl.io_threads[index];
+        t.dbg_hold_after_drain = false;
+        t.dbg_cond.broadcast();
+        waitStoppedLocked(ctrl, t);
+    }
+
+    //! A cancelByOwner() call made on another thread, which the test waits for with a hang guard
+    struct CancelRun {
+        Ctrl* ctrl;
+        std::string owner;
+        QoreThreadLock l;
+        QoreCondition c;
+        bool done = false;
+        int rc = -1;
+
+        DLLLOCAL CancelRun(Ctrl* ctrl, const char* owner) : ctrl(ctrl), owner(owner) {
+        }
+
+        DLLLOCAL void run() {
+            ExceptionSink xsink;
+            SimpleRefHolder<QoreStringNode> o(new QoreStringNode(owner));
+            int count = ctrl->cancelByOwner(*o, &xsink);
+            xsink.clear();
+            AutoLocker al(l);
+            rc = count;
+            done = true;
+            c.broadcast();
+        }
+
+        //! Waits for the call to return, at most for the hang guard; returns true if it returned
+        DLLLOCAL bool wait(int guard_ms) {
+            AutoLocker al(l);
+            while (!done) {
+                if (c.wait2(l, guard_ms)) {
+                    break;
+                }
+            }
+            return done;
+        }
+    };
+
+    //! Submits an accept operation of the given owner on a new listener; returns the I/O thread it runs on, or -1
+    /** The listener and the operation's result Queue are returned referenced in \a sock_obj and \a queue_obj
+    */
+    static int submitAccept(Ctrl& ctrl, const char* owner, QoreObject*& sock_obj, QoreObject*& queue_obj,
+            ExceptionSink& xsink) {
+        sock_obj = nullptr;
+        queue_obj = nullptr;
+        QoreSocketObject* sock = new QoreSocketObject;
+        ReferenceHolder<QoreObject> sock_holder(new QoreObject(QC_SOCKET, getProgram(), sock), &xsink);
+        if (sock->bindINET("127.0.0.1", "0", true, AF_INET, SOCK_STREAM, 0, &xsink) || sock->listen(20)) {
+            return -1;
+        }
+        sock->ref();
+        SocketAcceptPollOperation* accept = new SocketAcceptPollOperation(&xsink, sock, false, true);
+        ReferenceHolder<QoreObject> op_obj(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), accept), &xsink);
+        if (xsink) {
+            return -1;
+        }
+        accept->setSelf(*op_obj);
+        op_obj->setValue("sock", sock_holder->objectRefSelf(), &xsink);
+        op_obj->setValue("goal", new QoreStringNode("accept"), &xsink);
+        ReferenceHolder<QoreHashNode> info(new QoreHashNode(hashdeclSocketPollOperationInfo, &xsink), &xsink);
+        info->setKeyValue("sock", sock_holder->objectRefSelf(), &xsink);
+        info->setKeyValue("spop", op_obj->objectRefSelf(), &xsink);
+        info->setKeyValue("owner", new QoreStringNode(owner), &xsink);
+        info->setKeyValue("to", -1, &xsink);
+        if (xsink) {
+            return -1;
+        }
+        int thread_idx = -1;
+        ReferenceHolder<QoreObject> queue_holder(ctrl.submit(nullptr, info.release(), false, &xsink, &thread_idx),
+            &xsink);
+        if (xsink || !queue_holder) {
+            return -1;
+        }
+        sock_obj = sock_holder.release();
+        queue_obj = queue_holder.release();
+        return thread_idx;
+    }
+
+    //! Returns true if the given I/O thread is held after its last command drain
+    static bool isHeld(Ctrl& ctrl, int index) {
+        AutoLocker al(ctrl.m);
+        return ctrl.io_threads[index]->dbg_held;
+    }
+
+public:
+    static void run(UnitTestCounters& c) {
+        ExceptionSink xsink;
+        ReferenceHolder<Ctrl> ctrl(new Ctrl(false, &xsink), &xsink);
+        UT_ASSERT(c, !xsink, "stopping-thread controller construction succeeds");
+        if (xsink) {
+            xsink.clear();
+            return;
+        }
+        // stops the controller on every exit path; a held thread is released first
+        struct Cleanup {
+            Ctrl* ctrl;
+            ExceptionSink& xsink;
+
+            ~Cleanup() {
+                {
+                    AutoLocker al(ctrl->m);
+                    for (auto& tp : ctrl->io_threads) {
+                        tp->dbg_hold_after_drain = false;
+                        tp->dbg_cond.broadcast();
+                    }
+                }
+                xsink.clear();
+                ctrl->stopClear(&xsink);
+                xsink.clear();
+            }
+        } cleanup{*ctrl, xsink};
+
+        ctrl->setMaxIoThreads(2, &xsink);
+        ctrl->start(&xsink);
+        bool ready = !xsink && ctrl->waitReady(5000, &xsink);
+        UT_ASSERT(c, ready && !xsink, "stopping-thread controller starts two I/O threads");
+        if (!ready || xsink) {
+            return;
+        }
+
+        // an operation of owner-a on thread 1: listeners are submitted until one is routed there; those routed to
+        // thread 0 are canceled when thread 0 stops
+        ReferenceHolder<QoreObject> sock_obj(&xsink);
+        ReferenceHolder<QoreObject> queue_obj(&xsink);
+        std::vector<QoreObject*> thread0_objs;
+        int idx = -1;
+        for (int i = 0; i < 64 && idx != 1; ++i) {
+            QoreObject* so;
+            QoreObject* qo;
+            idx = submitAccept(**ctrl, "owner-a", so, qo, xsink);
+            if (idx < 0) {
+                break;
+            }
+            if (idx == 1) {
+                sock_obj = so;
+                queue_obj = qo;
+            } else {
+                thread0_objs.push_back(so);
+                thread0_objs.push_back(qo);
+            }
+        }
+        // released at the end, after the operations on thread 0 have been canceled
+        struct ObjectsRelease {
+            std::vector<QoreObject*>& objs;
+            ExceptionSink& xsink;
+
+            ~ObjectsRelease() {
+                for (QoreObject* o : objs) {
+                    o->deref(&xsink);
+                }
+            }
+        } thread0_release{thread0_objs, xsink};
+        UT_ASSERT(c, idx == 1 && !xsink, "an operation of owner-a runs on I/O thread 1");
+        if (idx != 1 || xsink) {
+            return;
+        }
+        ReferenceHolder<Queue> queue(static_cast<Queue*>(queue_obj->getReferencedPrivateData(CID_QUEUE, &xsink)),
+            &xsink);
+        bool processed = ctrl->waitForProcessing(5000, &xsink);
+        UT_ASSERT(c, processed && !xsink, "the operations are submitted");
+
+        // thread 0 is stopping: held after its last command drain
+        UT_ASSERT_EQ(c, 0, quitThread(**ctrl, 0, true), "I/O thread 0 is held after its last command drain");
+
+        // the operation of owner-a on the running thread 1 is canceled
+        {
+            CancelRun cancel_run(*ctrl, "owner-a");
+            std::thread th([&cancel_run]() { cancel_run.run(); });
+            bool returned = cancel_run.wait(30000);
+            UT_ASSERT(c, returned, "cancelByOwner() returns while I/O thread 0 is stopping");
+            if (returned) {
+                UT_ASSERT_EQ(c, 1, cancel_run.rc, "cancelByOwner() cancels the operation on the running I/O thread 1");
+            } else {
+                // the command was sent to the held thread: restart it after its stop so that it processes it
+                release(**ctrl, 0);
+                ctrl->start(&xsink);
+                xsink.clear();
+            }
+            th.join();
+        }
+        if (queue) {
+            bool timed_out = false;
+            ValueHolder result(queue->shift(&xsink, 30000, &timed_out), &xsink);
+            UT_ASSERT(c, !timed_out && result->getType() == NT_HASH
+                && result->get<QoreHashNode>()->getKeyValue("canceled").getAsBool(),
+                "the canceled operation delivers a canceled result");
+            xsink.clear();
+        }
+
+        // thread 1 stops completely while thread 0 is still stopping: no thread processes commands now
+        if (!isHeld(**ctrl, 0)) {
+            UT_ASSERT_EQ(c, 0, quitThread(**ctrl, 0, true), "I/O thread 0 is held again");
+        }
+        UT_ASSERT_EQ(c, 0, quitThread(**ctrl, 1, false), "I/O thread 1 stops");
+        {
+            CancelRun cancel_run(*ctrl, "owner-b");
+            std::thread th([&cancel_run]() { cancel_run.run(); });
+            bool returned = cancel_run.wait(30000);
+            UT_ASSERT(c, returned, "cancelByOwner() returns when the only thread with an ID is past its last drain");
+            {
+                AutoLocker al(ctrl->m);
+                UT_ASSERT(c, ctrl->io_threads[0]->cmdq.empty(),
+                    "no command is left in the queue of the stopping thread");
+            }
+            release(**ctrl, 0);
+            if (!returned) {
+                // the command is stranded in the stopped thread's queue: a restart processes it
+                ctrl->start(&xsink);
+                xsink.clear();
+            }
+            th.join();
+        }
+    }
+};
+
 //! A submission that loses the race with the controller's shutdown releases its result Queue
 /** submit() packages an operation from a thread that is not its I/O thread into a SubmitOp command; when the
     controller starts shutting down before the command is pushed, cleanupAbandonedCommand() delivers a canceled
@@ -6423,6 +6691,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     AsyncIoCloseTest::resize(c);
     AsyncIoCloseTest::run(c);
     AsyncIoAbandonedSubmitTest::run(c);
+    AsyncIoStoppingThreadTest::run(c);
     ut_cond_wait_cancel_in_window(c);
     Http3ClientResponseRegistrationTest::run(c);
     ut_fast_real_deref_releases_last(c);

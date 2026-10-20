@@ -435,6 +435,32 @@ operations are canceled directly and the other threads get their commands withou
 only includes the calling thread's operations.  A close from an I/O thread is queued to the socket's thread after
 those commands (`closeSocketOnController()`), so it runs after the cancellation on that thread.
 
+### Stopping I/O threads
+
+I/O threads stop independently (autostop when idle, or a `Quit` command), so one thread stops while others run or
+stop themselves.  The stop state is therefore per thread (`IoThreadContext`, guarded by `m`); nothing a stopping
+thread does may change another thread's state:
+
+- `exiting` is set when the thread decides to stop and cleared when it has stopped (`tid = 0`).  `startIntern()` waits
+  until no thread is stopping before it starts the stopped ones; a submit or timer for a stopping thread restarts it
+  that way.
+- `commands_closed` is set when the stopping thread has drained its command queue for the last time and moved its
+  cache to the operations it cancels on exit, and cleared when it is started again.  A command pushed from then on
+  would never be processed, and a caller waiting for it would wait forever.
+- The fan-outs (`cancelByOwner()`, `cancelByProgram()`, `cancelByKey()`, `cancelSocket()`, `getInfo()`,
+  `cancelTimer()` and the `Quit` of `stop()`) send their command to the threads that read commands
+  (`readsCommands()`: `tid && !commands_closed`) and walk the cache of the others under `m` (empty for a closed
+  thread, whose operations its exit cleanup cancels).  A stopping thread that has not drained its queue yet still
+  completes the commands pushed to it then.
+- A stopped thread resets its own sequence counters only, and `ready_flag` is cleared only when the last thread stops.
+
+These used to be controller-wide: a single `io_exiting` flag gated every fan-out, so while one thread stopped,
+`cancelByOwner()` canceled nothing on the running threads; and the thread that finished stopping cleared it and reset
+every thread's sequence counters, so a fan-out then sent its command to another thread past its last drain, where it
+stayed forever, with `cancelByOwner()` waiting for it (a hung `quic_comprehensive_test` on canoe).
+`AsyncIoStoppingThreadTest` in the C++ unit tests holds a thread after its last drain with a debug hook
+(`dbg_hold_after_drain`) to check both cases.
+
 ### A socket closed while an I/O call uses it
 
 Not every close of a socket is ordered with its I/O calls.  The `abort()` of a poll operation closes the socket on

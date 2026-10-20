@@ -535,6 +535,7 @@ class AsyncIoControllerPriv : public AbstractPrivateData {
     friend class AsyncIoCloseTest;
     friend class AsyncIoOpCacheTest;
     friend class AsyncIoAbandonedSubmitTest;
+    friend class AsyncIoStoppingThreadTest;
 #endif
     friend class QoreCallDispatcher;  // for enqueueContinuePollResult from worker thread
 
@@ -1314,6 +1315,25 @@ private:
         int tid = 0;                       //!< Thread ID (0 if not running)
         int thread_idx = 0;                //!< Index in io_threads vector
         int64 autostop_idle_since = 0;     //!< Timestamp when cache first became empty
+        //! True from this thread's decision to stop until it has stopped (guarded by the controller's lock)
+        /** Per thread: with several I/O threads, one thread stops while the others run or stop themselves; a stopping
+            thread cannot be started again before it has stopped (see startIntern()).
+        */
+        bool exiting = false;
+        //! True once this stopping thread has drained its command queue for the last time, until it is started again
+        /** Guarded by the controller's lock.  The thread has then canceled the operations in its cache and processes no
+            more commands: a command pushed to it would never be processed, and a caller waiting for it would wait
+            forever, so the fan-outs skip it (see readsCommands()).
+        */
+        bool commands_closed = false;
+#ifdef DEBUG
+        //! Test hook: when set, the thread waits on \c dbg_cond after its last command drain until it is cleared
+        bool dbg_hold_after_drain = false;
+        //! Test hook: true while the thread waits after its last command drain
+        bool dbg_held = false;
+        //! Test hook: signaled when \c dbg_held is set, and to release the thread
+        QoreCondition dbg_cond;
+#endif
 
         QoreEventLoop* loop = nullptr;
         QoreEventNotifier* notifier = nullptr;
@@ -1521,6 +1541,35 @@ private:
         return false;
     }
 
+    //! Returns true if any I/O thread is stopping; the caller holds \c m
+    DLLLOCAL bool anyThreadExiting() const {
+        for (auto& tp : io_threads) {
+            if (tp->exiting) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    //! Returns true if any I/O thread runs and is not stopping; the caller holds \c m
+    DLLLOCAL bool anyThreadActive() const {
+        for (auto& tp : io_threads) {
+            if (tp->tid && !tp->exiting) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    //! Returns true if the I/O thread processes the commands pushed to it; the caller holds \c m
+    /** A thread processes commands from its start until its last command drain when it stops; a stopping thread
+        that has not drained its queue yet still processes the commands pushed to it then (cancellations and the like
+        are completed by its exit cleanup).
+    */
+    DLLLOCAL static bool readsCommands(const IoThreadContext& t) {
+        return t.tid && !t.commands_closed;
+    }
+
     //! Per-key cancel cond with refcount.  The cond is deleted only when the
     //! LAST holder (map entry + any active waiters) drops its ref — destroying
     //! it earlier is UB on macOS if a waiter is still inside pthread_cond_wait
@@ -1586,7 +1635,6 @@ private:
     std::unordered_map<std::string, CancelCond*> cancel_cond_map;
     QoreCondition io_cond;
     bool io_waiting;
-    bool io_exiting;
     bool ready_flag;
     std::atomic<int> submit_seq;          //!< Incremented on each submit() call (global; per-thread tracking lives on IoThreadContext)
     QoreCondition processed_cond;         //!< Signaled when any thread's processed_seq advances
