@@ -142,11 +142,13 @@ class PgsqlKeyAlignmentTest inherits QUnit::Test {
     }
 
     #! Returns the names of the constraints of the table, by type ("p", "u" or "f")
+    /** PostgreSQL 18 also records NOT NULL constraints in pg_constraint (type "n"); they are not listed
+    */
     private hash<auto> constraints(Datasource ds, string table) {
         hash<auto> rv;
         context (ds.select("select c.conname, c.contype from pg_constraint c join pg_class t on t.oid = c.conrelid "
                 "join pg_namespace n on n.oid = t.relnamespace where t.relname = %v and n.nspname = current_schema() "
-                "order by c.conname", table)) {
+                "and c.contype in ('p', 'u', 'f') order by c.conname", table)) {
             rv{%contype} += (%conname,);
         }
         return rv;
