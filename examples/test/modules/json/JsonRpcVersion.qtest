@@ -77,6 +77,7 @@ class JsonRpcVersionTest inherits QUnit::Test {
     constructor() : Test("JsonRpcVersionTest", "1.0") {
         addTestCase("JSON-RPC 1.0 requests with no params", \noParams());
         addTestCase("JsonRpcClient versions", \clientVersions());
+        addTestCase("versions with NUL characters", \nulVersions());
         set_return_value(main());
     }
 
@@ -126,5 +127,30 @@ class JsonRpcVersionTest inherits QUnit::Test {
         assertEq("method", req.method);
         assertFalse(req.hasKey("version"));
         assertFalse(req.hasKey("jsonrpc"));
+    }
+
+    nulVersions() {
+        # the version is written whole: it was cut at the NUL character
+        hash<auto> req = parse_json(make_jsonrpc_request("method", "1.0\x00x", 1, NOTHING));
+        assertEq("1.0\x00x", req.version);
+        req = parse_json(make_jsonrpc_request("method", "2.0\x00x", 1, NOTHING, JGF_ADD_FORMATTING));
+        assertEq("2.0\x00x", req.jsonrpc);
+        hash<auto> resp = parse_json(make_jsonrpc_response("2.0\x00x", 1, "ok"));
+        assertEq("2.0\x00x", resp.jsonrpc);
+        resp = parse_json(make_jsonrpc_error("1.1\x00x", 1, "error"));
+        assertEq("1.1\x00x", resp.version);
+
+        JsonRpcRecorder server();
+        on_exit server.stop();
+        JsonRpcClient client({"url": server.getUrl(), "version": "2.0\x00x"}, True);
+        assertEq("2.0\x00x", client.getVersion());
+        client.call("method", 1);
+        req = parse_json(server.getBody());
+        assertEq("2.0\x00x", req.jsonrpc);
+        client.setVersion("1.1\x00x");
+        assertEq("1.1\x00x", client.getVersion());
+        client.callArgs("method", (1,));
+        req = parse_json(server.getBody());
+        assertEq("1.1\x00x", req.version);
     }
 }

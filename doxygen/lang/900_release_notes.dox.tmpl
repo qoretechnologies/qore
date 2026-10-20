@@ -4748,7 +4748,8 @@ while (*binary chunk = input.read(65536)) {
       \c "1.0" or no version) with no params
     - The JSON-RPC version of a \c JsonRpcClient object of the \c json module is written to the request as a JSON
       string; it was written inside quotes as it is, so that a double quote in it ended the string and the rest of
-      the version was written as members of the request
+      the version was written as members of the request.  The JSON-RPC version given to \c JsonRpcClient and to the
+      JSON-RPC functions of the \c json module is written whole; a version with a NUL character was cut there
     - Fixed a crash in @ref Qore::ReadOnlyFile::startPollRead() "ReadOnlyFile::startPollRead()" when the path could
       not be converted to the @ref default_encoding "default character encoding"; the \c ENCODING-CONVERSION-ERROR
       exception is now raised
