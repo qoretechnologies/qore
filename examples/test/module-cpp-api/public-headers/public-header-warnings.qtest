@@ -1,0 +1,71 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# A module that includes <qore/Qore.h> and compiles with -Wall -Wextra gets no warnings from the public headers: with
+# C++17 and C++20, with and without NDEBUG, and with each C++ compiler available (CXX, or else g++ and clang++).
+# QoreValue.h, AbstractPrivateData.h and QoreIteratorBase.h named parameters that they never use (-Wunused-parameter;
+# in QoreValue.h also one that only an assertion uses).
+#
+# The headers are the ones of the source tree; the headers that the build generates come from the build directory
+# of the qore binary that runs the test (QORE_LIBDIR, or else the directory of QORE_BINARY), as with the other
+# tests that compile against libqore.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+
+%requires QUnit
+%requires FsUtil
+
+%exec-class PublicHeaderWarningsTest
+
+class PublicHeaderWarningsTest inherits QUnit::Test {
+    constructor() : QUnit::Test("public header warnings", "1.0", \ARGV) {
+        addTestCase("<qore/Qore.h> compiles without warnings", \testQoreHeaderWarnings());
+        set_return_value(main());
+    }
+
+    testQoreHeaderWarnings() {
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string generated_include = join_paths(ENV.QORE_LIBDIR ?? dirname(qore_bin), "include");
+        if (!is_file(join_paths(generated_include, "qore", "qore-version.h"))) {
+            testSkip(sprintf("the generated headers of the build are not in %y; the test runs with the qore of a "
+                "build directory", generated_include));
+        }
+        list<string> compilers = ENV.CXX
+            ? (ENV.CXX,)
+            : (select ("g++", "clang++"), !system(sprintf("command -v %s > /dev/null 2>&1", $1)));
+        if (!compilers) {
+            testSkip("no C++ compiler is available (CXX is not set, and neither g++ nor clang++ is in the path)");
+        }
+        string source_include = join_paths(get_script_dir(), "..", "..", "..", "..", "include");
+
+        string dir = make_tmp_dir("public-header-warnings");
+        on_exit remove_tree(dir);
+        string source = join_paths(dir, "qore-header.cpp");
+        File f();
+        f.open2(source, O_CREAT | O_TRUNC | O_WRONLY);
+        f.write("#include <qore/Qore.h>\n");
+        f.close();
+
+        foreach string cxx in (compilers) {
+            foreach string std in ("c++17", "c++20") {
+                foreach string defines in ("", "-DNDEBUG") {
+                    string cmd = sprintf("%s -std=%s -fsyntax-only -Wall -Wextra %s -I%s -I%s %s 2>&1", cxx, std,
+                        defines, shell_quote(source_include), shell_quote(generated_include), shell_quote(source));
+                    int rc;
+                    string out = backquote(cmd, \rc);
+                    string label = sprintf("%s -std=%s -Wall -Wextra%s", cxx, std, defines ? " " + defines : "");
+                    assertEq(0, rc, label + " compiles <qore/Qore.h>");
+                    assertEq("", out, label + " gives no warnings for <qore/Qore.h>");
+                }
+            }
+        }
+    }
+
+    #! returns the string quoted for the shell
+    private static string shell_quote(string str) {
+        return "'" + replace(str, "'", "'\\''") + "'";
+    }
+}

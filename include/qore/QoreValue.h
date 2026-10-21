@@ -173,7 +173,7 @@ namespace detail {
 
         //! used by QoreLValue::get() - takes type parameter for compatibility
         template<typename QV>
-        static Result cast(QV *qv, valtype_t type) {
+        static Result cast(QV *qv, [[maybe_unused]] valtype_t type) {
             assert(type == QV_Node);
             return reinterpret_cast<Result>(qv->v.n);
         }
@@ -190,7 +190,7 @@ namespace detail {
         }
 
         template<typename QV>
-        static bool cast(QV *qv, valtype_t type) {
+        static bool cast(QV *qv, valtype_t) {
             return qv->v.b;
         }
     };
@@ -206,7 +206,7 @@ namespace detail {
         }
 
         template<typename QV>
-        static double cast(QV *qv, valtype_t type) {
+        static double cast(QV *qv, valtype_t) {
             return qv->v.f;
         }
     };
@@ -222,7 +222,7 @@ namespace detail {
         }
 
         template<typename QV>
-        static int64 cast(QV *qv, valtype_t type) {
+        static int64 cast(QV *qv, valtype_t) {
             return qv->v.i;
         }
     };

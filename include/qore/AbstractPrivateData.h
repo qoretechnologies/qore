@@ -63,7 +63,7 @@ public:
     /**
         @param xsink any Qore-language exception information is stored here
     */
-    DLLLOCAL virtual void deref(ExceptionSink* xsink) {
+    DLLLOCAL virtual void deref([[maybe_unused]] ExceptionSink* xsink) {
         if (ROdereference())
             delete this;
     }
