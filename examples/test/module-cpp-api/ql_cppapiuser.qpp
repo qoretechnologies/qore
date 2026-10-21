@@ -777,6 +777,10 @@ int cpp_api_env_set_pair(string name1, string name2, string value) [dom=PROCESS]
 }
 
 //! returns the result of SystemEnvironment::isSet() for an environment variable
+/** @param name the name of the variable
+
+    @return True if the variable is set, even to an empty value
+*/
 bool cpp_api_env_is_set(string name) [dom=EXTERNAL_INFO] {
     return SystemEnvironment::isSet(name->c_str());
 }
