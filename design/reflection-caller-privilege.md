@@ -1,5 +1,7 @@
 # Reflection Caller-Privilege Model
 
+Copyright (C) 2026 Qore Technologies, s.r.o.
+
 ## Overview
 
 The `reflection` module (`modules/reflection`) lets Qore code call functions and methods, construct objects, read and

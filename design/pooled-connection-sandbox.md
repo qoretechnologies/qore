@@ -1,5 +1,7 @@
 # Pooled Connections and the Network Sandbox
 
+Copyright (C) 2026 Qore Technologies, s.r.o.
+
 ## Overview
 
 A network connection is checked against the network policy of the code that makes it: the asynchronous connect

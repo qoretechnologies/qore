@@ -1,6 +1,8 @@
 #
 # Qore Programming Languages cmake macros
 #
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+#
 
 include(CMakeParseArguments)
 

@@ -1,5 +1,7 @@
 # Readiness waits on named pipes
 
+Copyright (C) 2026 Qore Technologies, s.r.o.
+
 ## The platform difference
 
 On Darwin (macOS 26.6 measured), `poll(2)` and kqueue (`EVFILT_READ`, `EVFILT_WRITE`) report neither:

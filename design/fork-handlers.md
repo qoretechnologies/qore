@@ -1,5 +1,7 @@
 # Fork handlers: process-wide locks in a child created with fork()
 
+Copyright (C) 2026 Qore Technologies, s.r.o.
+
 A child process created with `fork()` runs only the thread that called `fork()`. Every lock that another thread
 held at that moment stays locked in the child, and every condition variable still counts the waiters of the
 parent. Before these handlers, a Qore `fork()` made while another thread started or exited waited forever in the

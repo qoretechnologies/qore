@@ -1,5 +1,7 @@
 # Thread Sandbox Inheritance
 
+Copyright (C) 2026 Qore Technologies, s.r.o.
+
 ## Overview
 
 A unit of work that a sandboxed Program causes to run must be governed by that Program's sandbox even when it runs
