@@ -503,6 +503,11 @@ public class TelnetClient {
     #! returns all data available as a string (which could be an empty string if no data is available in the timeout period) or NOTHING if the connection was closed by the remote end
     /** NOTHING is only returned if the remote end closed the connection
 
+        @throw TELNET-OPTION-ERROR the server asked for the terminal type, the X display location or the environment
+        (which holds the \c DISPLAY variable), and the value returned by getTerminalType() or getDisplay() contains a
+        NUL character; the subnegotiation is read in full and not answered, so the data after it is read by the next
+        call
+
         @note
         - This method could throw any exception that Socket::recvu1() could throw except SOCKET-CLOSED (in which case the exception is caught and NOTHING is returned)
         - This method is subject to thread serialization

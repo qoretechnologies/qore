@@ -285,5 +285,13 @@ public class TelnetClientWireTest inherits QUnit::Test {
         assertEq("OK2", client.getAvailableData(30s));
         client.sendData("|");
         assertEq({"data": binary()}, server.receive());
+
+        # the display location is also the DISPLAY variable of the environment
+        server.send(<fffa2701fff0> + binary("OK3"));
+        assertThrows("TELNET-OPTION-ERROR", "X display location \"host\\\\x00:0\" contains a NUL character",
+            \client.getAvailableData(), 30s);
+        assertEq("OK3", client.getAvailableData(30s));
+        client.sendData("|");
+        assertEq({"data": binary()}, server.receive());
     }
 }
