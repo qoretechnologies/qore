@@ -5146,6 +5146,12 @@ while (*binary chunk = input.read(65536)) {
       callback or event queue: the copy read them unsynchronized, and could keep the argument of a callback without
       the callback, which aborted a debug build when the copy was destroyed
 
+    - Fixed using an @ref Qore::SQL::SQLStatement "SQLStatement" of a @ref Qore::SQL::DatasourcePool "DatasourcePool"
+      in more than one thread: its SQL, status and driver data were changed and read without synchronization, and two
+      threads could both use the statement on their own connections; the actions on a statement are now serialized,
+      and an action in another thread than the one whose connection the statement uses still raises
+      \c SQLSTATEMENT-ERROR
+
     - The statements of a @ref Qore::SQL::Datasource "Datasource" are closed when it is closed: closing or resetting
       a datasource left the driver data of an @ref Qore::SQL::SQLStatement "SQLStatement" prepared on its connection
       in place, so that the statement outlived the connection it belonged to, and destroying the statement later

@@ -35,6 +35,7 @@ class DatasourceLockStateThreadsTest inherits QUnit::Test {
         addTestCase("the pool error timeout is set while other threads wait for a connection", \testSetPoolTimeout());
         addTestCase("the autocommit flag is read while another thread sets it", \testAutoCommit());
         addTestCase("a pool is copied while another thread changes its configuration", \testPoolCopy());
+        addTestCase("a pool statement is used in two threads", \testPoolStatement());
         set_return_value(main());
     }
 
@@ -226,6 +227,53 @@ class DatasourceLockStateThreadsTest inherits QUnit::Test {
         done.waitForZero();
 
         assertEq(0, bad, "every copy has the configuration of the pool");
+        checkLockUsers(errors);
+    }
+
+    #! one thread executes and commits a pool statement while another asks about it
+    /** the other thread's calls either answer or raise SQLSTATEMENT-ERROR while the statement uses the first thread's
+        connection; they never take a connection, and they never disturb the first thread
+    */
+    testPoolStatement() {
+        DatasourcePool pool(ConnStr + "{min=1,max=2}");
+        SQLStatement stmt(pool);
+        Counter start(1);
+        Counter done(1);
+        Queue errors();
+        background sub () {
+            on_exit done.dec();
+            try {
+                start.waitForZero();
+                for (int i = 0; i < Rounds; ++i) {
+                    stmt.prepare("insert into t values (%v)");
+                    stmt.exec(i);
+                    stmt.commit();
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                errors.push(sprintf("%s: %s", ex.err, ex.desc));
+            }
+        }();
+        start.dec();
+
+        int other = 0;
+        for (int i = 0; i < Rounds; ++i) {
+            try {
+                *string sql = stmt.getSQL();
+                if (exists sql && sql != "insert into t values (%v)") {
+                    ++other;
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err != "SQLSTATEMENT-ERROR") {
+                    ++other;
+                }
+            }
+            stmt.active();
+            stmt.valid();
+        }
+        done.waitForZero();
+
+        assertEq(0, other, "the SQL is answered or the statement is in use by the other thread");
+        assertFalse(pool.currentThreadInTransaction(), "this thread never took a connection");
         checkLockUsers(errors);
     }
 }

@@ -36,6 +36,8 @@
 
 #include "qore/intern/DatasourceStatementHelper.h"
 
+#include <atomic>
+
 #define STMT_IDLE      0
 #define STMT_PREPARED  1
 #define STMT_EXECED    2
@@ -58,12 +60,20 @@ protected:
     QoreString str;
     // copy of prepare args
     QoreListNode* prepare_args = nullptr;
-    // status
-    unsigned char status = STMT_IDLE;
+    // the lock of the datasource that the statement uses (sql_statement_private::ds)
+    /** The datasource that the statement uses is what makes the statement a thread's (issue #2334): a statement of a
+        DatasourcePool is used by the thread that holds that connection, and an action in another thread raises
+        SQLSTATEMENT-ERROR, while a Datasource serializes the actions with its transaction lock.  The datasource is set
+        and cleared, and read by an action of another thread, with this lock held; an action that uses no connection
+        holds it while it reads the statement.  It is a leaf lock: no other lock is taken while it is held.
+    */
+    QoreThreadLock stmt_lock;
+    // status; changed by the thread that uses the statement, and read by any thread with active(), so atomic
+    std::atomic<unsigned char> status{STMT_IDLE};
     // raw prepare flag
     bool raw = false;
-    // valid flag
-    bool validp = false;
+    // valid flag; changed by the thread that uses the statement, and read by any thread with valid(), so atomic
+    std::atomic<bool> validp{false};
 
     DLLLOCAL int checkStatus(ExceptionSink* xsink, DBActionHelper& dba, int stat, const char* action);
 

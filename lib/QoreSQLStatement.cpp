@@ -60,10 +60,13 @@ public:
     // true if no connection was made for the action because the statement holds none
     bool no_connection = false;
 
+    // the statement's lock, if it is held for an action that uses no connection
+    QoreThreadLock* held_stmt_lock = nullptr;
+
     /** @param connect if false, no connection is made for the action: a closed datasource is not opened (its
         transaction lock is held for the action, as for an open datasource), and a pool does not give the thread a
         connection if it holds none; the helper is then invalid with no exception raised, which noConnection()
-        reports
+        reports, and the statement's lock is held until the helper is destroyed
     */
     DLLLOCAL DBActionHelper(QoreSQLStatement& n_stmt, ExceptionSink* n_xsink, char n_cmd = DAH_NOCHANGE,
             bool connect = true) : stmt(n_stmt), xsink(n_xsink), cmd(n_cmd) {
@@ -71,10 +74,14 @@ public:
         Datasource* newds = connect
             ? stmt.dsh->helperStartAction(xsink, nt)
             : stmt.dsh->helperStartActionNoConnect(xsink, nt, connected);
+        // the statement's lock is a leaf lock: it is taken once the connection is available, and released before any
+        // other lock is taken
         if (!connected) {
             noconn_action = true;
+            stmt.stmt_lock.lock();
             // issue #2334: the statement uses a pool connection that another thread holds
             if (stmt.priv->ds && stmt.priv->ds != newds) {
+                stmt.stmt_lock.unlock();
                 assert(dynamic_cast<DatasourcePool*>(stmt.dsh));
                 xsink->raiseException("SQLSTATEMENT-ERROR", "cannot execute an action in another thread with an "
                     "allocated connection from a DatasourcePool");
@@ -83,11 +90,24 @@ public:
             // the statements of a datasource are closed when it is closed, and a pool statement holds driver data
             // only with its connection
             assert(!stmt.priv->data);
+            // the statement is not used by any thread now, and the lock is held while this thread reads it
+            held_stmt_lock = &stmt.stmt_lock;
             no_connection = true;
             return;
         }
-        // issue #2334
-        if (newds && stmt.priv->ds && newds != stmt.priv->ds) {
+        // issue #2334: the datasource that the statement uses makes it the thread's for the action
+        bool other_thread = false;
+        bool added = false;
+        {
+            AutoLocker al(stmt.stmt_lock);
+            if (newds && stmt.priv->ds && newds != stmt.priv->ds) {
+                other_thread = true;
+            } else if (newds) {
+                added = !stmt.priv->ds;
+                stmt.priv->ds = newds;
+            }
+        }
+        if (other_thread) {
             // can only happen with a DatasourcePool, otherwise the action above will block
             assert(dynamic_cast<DatasourcePool*>(stmt.dsh));
             // raise an exception if we are trying to execute something in another thread
@@ -97,29 +117,37 @@ public:
             valid = false;
             return;
         }
-        assert(!newds || !stmt.priv->ds || (newds == stmt.priv->ds));
         assert(newds || *xsink);
-        if (newds && !stmt.priv->ds)
+        if (added) {
             qore_ds_private::get(*newds)->addStatement(&n_stmt);
-        stmt.priv->ds = newds;
+        }
 
         //printd(5, "DBActionHelper::DBActionHelper() ds: %p new: %p cmd: %s nt: %d xs: %d stmt: %p\n", stmt.priv->ds, newds, DAH_TEXT(cmd), nt, (bool)*xsink, &stmt);
-        valid = (bool)stmt.priv->ds;
+        valid = (bool)newds;
     }
 
     DLLLOCAL ~DBActionHelper() {
         if (noconn_action) {
+            // the statement's lock is released first, as ending the action can take other locks
+            if (held_stmt_lock) {
+                held_stmt_lock->unlock();
+            }
             stmt.dsh->helperEndActionNoConnect(nt);
             return;
         }
 
         // if no datasource is currently assigned
-        if (!valid || !stmt.priv->ds)
+        if (!valid) {
             return;
+        }
+
+        // this thread set the statement's datasource, and only this thread changes it until the action ends
+        Datasource* ds = stmt.priv->ds;
+        assert(ds);
 
         if (close) {
             assert(cmd == DAH_ACQUIRE);
-            assert(stmt.priv->ds->isOpen());
+            assert(ds->isOpen());
             stmt.closeIntern(xsink);
         }
 
@@ -129,7 +157,7 @@ public:
             2) the Datasource was acquired for this call, and
                 the command was NOCHANGE, meaning, leave the Datasource in the same state it was before the call
         */
-        if (stmt.priv->ds->wasConnectionAborted() || !stmt.priv->ds->isOpen() || (nt && (cmd == DAH_NOCHANGE)))
+        if (ds->wasConnectionAborted() || !ds->isOpen() || (nt && (cmd == DAH_NOCHANGE)))
             cmd = DAH_RELEASE;
 
         //printd(5, "DBActionHelper::~DBActionHelper() ds: %p cmd: %s nt: %d xsink: %d stmt: %p status: %d data: %p\n", stmt.priv->ds, DAH_TEXT(cmd), nt, xsink->isEvent(), &stmt, stmt.status, stmt.priv->data);
@@ -137,16 +165,26 @@ public:
         // remove statement from Datasource if the connection is no longer allocated
         // must be executed in the Datasource allocation lock
         if (cmd == DAH_RELEASE) {
-            qore_ds_private* dspriv = qore_ds_private::get(*stmt.priv->ds);
+            // the statement gives up the connection before the connection is released, so that the thread that gets
+            // the connection next does not find the statement still using it
+            {
+                AutoLocker al(stmt.stmt_lock);
+                stmt.priv->ds = nullptr;
+            }
+            qore_ds_private* dspriv = qore_ds_private::get(*ds);
             //printd(5, "DBActionHelper::~DBActionHelper() old: %p ds: %p removing stmt %p\n", oldds, stmt.priv->ds, &stmt);
             dspriv->removeStatement(&stmt);
         }
 
         // call end action with the command
-        stmt.priv->ds = stmt.dsh->helperEndAction(cmd, nt, xsink);
+        Datasource* end_ds = stmt.dsh->helperEndAction(cmd, nt, xsink);
 
-        // we have to remove the datasource from the statement immediately if the Datasource is closed or committed
-        assert((cmd == DAH_RELEASE) || stmt.priv->ds);
+        // the statement keeps the connection unless it was released
+        assert((cmd == DAH_RELEASE) ? !end_ds : (end_ds == ds));
+        if (cmd != DAH_RELEASE && end_ds != ds) {
+            AutoLocker al(stmt.stmt_lock);
+            stmt.priv->ds = end_ds;
+        }
     }
 
     DLLLOCAL void markClose() {
@@ -242,10 +280,18 @@ void QoreSQLStatement::deref(ExceptionSink* xsink) {
     if (ROdereference()) {
         //char cmd = DAH_NOCHANGE;
         //printd(5, "QoreSQLStatement::deref() deleting this: %p cmd: %s\n", this, DAH_TEXT(cmd));
-        closeIntern(xsink);
 
-        if (priv->ds)
-            qore_ds_private::get(*priv->ds)->removeStatement(this);
+        // the statement is removed from its connection first: the connection closes the statements that it holds
+        // when its transaction ends, which can happen in another thread for a pool connection
+        Datasource* stmt_ds;
+        {
+            AutoLocker al(stmt_lock);
+            stmt_ds = priv->ds;
+        }
+        if (stmt_ds) {
+            qore_ds_private::get(*stmt_ds)->removeStatement(this);
+        }
+        closeIntern(xsink);
 
         dsh->helperDestructor(this, xsink);
 
@@ -258,6 +304,7 @@ void QoreSQLStatement::deref(ExceptionSink* xsink) {
 
 void QoreSQLStatement::transactionDone(bool clear, bool close, ExceptionSink* xsink) {
     //printd(5, "QoreSQLStatement::transactionDone() this: %p data: %p ds: %p clear: %d\n", this, priv->data, priv->ds, clear);
+    // called by the thread that holds the connection, which is the thread that uses the statement
     if (priv->data) {
         assert(priv->ds);
         // if "close" is set, then we delete the statement's local data
@@ -269,9 +316,11 @@ void QoreSQLStatement::transactionDone(bool clear, bool close, ExceptionSink* xs
         else // otherwise, any handles are freed but the local data stays in place
             qore_dbi_private::get(*priv->ds->getDriver())->stmt_free(this, xsink);
     }
-    // if "clear" is set, then we clear the datasource
-    if (clear && priv->ds)
+    // if "clear" is set, then we clear the datasource; another thread reads it with the statement's lock held
+    if (clear && priv->ds) {
+        AutoLocker al(stmt_lock);
         priv->ds = nullptr;
+    }
 }
 
 int QoreSQLStatement::closeIntern(ExceptionSink* xsink) {
@@ -528,7 +577,7 @@ bool QoreSQLStatement::next(ExceptionSink* xsink) {
 }
 
 bool QoreSQLStatement::valid() {
-    return validp;
+    return validp.load(std::memory_order_relaxed);
 }
 
 int QoreSQLStatement::define(ExceptionSink* xsink) {
@@ -605,7 +654,7 @@ QoreHashNode* QoreSQLStatement::describe(ExceptionSink* xsink) {
 }
 
 bool QoreSQLStatement::active() const {
-   return status != STMT_IDLE;
+    return status.load(std::memory_order_relaxed) != STMT_IDLE;
 }
 
 bool QoreSQLStatement::currentThreadInTransaction(ExceptionSink* xsink) {
