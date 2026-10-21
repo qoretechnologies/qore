@@ -20,6 +20,9 @@
 - `cmake --build build --target docs` builds documentation (requires doxygen).
 - `./run_tests.sh` runs Qore tests from `examples/test/` (expects a built `qore`/`libqore`).
 - `./run_tests.sh -d <subdir>` runs a subset of tests, e.g. `./run_tests.sh -d http`.
+- The tests of the binary modules (`modules/*/test/`) are not in `examples/test/`; run them by naming their
+  directories in `QORE_TEST_EXTRA_DIRS`, e.g. `QORE_TEST_EXTRA_DIRS="modules/ml/test" ./run_tests.sh -d qore/misc`.
+  CI runs every module's tests this way (`examples/test/docker_test/test-*.sh`).
 - **After editing any `qlib/` `.qm`/`.qc` source, rebuild that module's qmod target**
   (`cmake --build build --target <Module>-qmod`) before testing. Each `qlib/<Module>.qmod` is a
   symlink to the AOT-compiled `build/qlib-qmod/` output and is preferred over the `.qm`/`.qc`
@@ -37,7 +40,8 @@
   malformed tables fail the build (`QORE_DOX_TABLE_STRICT`, on by default in this repo).
 
 ## Testing Guidelines
-- Primary tests are Qore scripts under `examples/test/` with the `*.qtest` suffix.
+- Primary tests are Qore scripts under `examples/test/` with the `*.qtest` suffix; a binary module's own tests are in
+  `modules/<module>/test/`.
 - Prefer adding tests alongside similar modules and keep naming descriptive.
 - Use `QORE_TEST_OPTS` and database env vars (for example `QORE_DB_CONNSTR`) when tests need external services.
 

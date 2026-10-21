@@ -237,6 +237,22 @@ export TEST_TIMEOUT=600
 # tests that create many sockets (e.g. AsyncSocketIo scalability test needs ~430)
 ulimit -n 4096
 
+# The tests of the binary modules built with Qore are in their source directories (modules/*/test), which
+# run_tests.sh runs only when named; those of a module this build did not make (mongodb is built only when libmongoc
+# is found) are not run.  A job that runs a subset of the tests (QORE_TEST_DIRS) runs none of them.
+QORE_TEST_EXTRA_DIRS=""
+if [ -z "${QORE_TEST_DIRS:-}" ]; then
+    for dir in modules/*/test; do
+        mod=$(basename "$(dirname "${dir}")")
+        if ls "${BUILD_DIR}/modules/${mod}"/*.qmod > /dev/null 2>&1; then
+            QORE_TEST_EXTRA_DIRS="${QORE_TEST_EXTRA_DIRS} ${dir}"
+        else
+            echo "-- no ${mod} module was built; its tests in ${dir} are not run --"
+        fi
+    done
+fi
+export QORE_TEST_EXTRA_DIRS
+
 # Run the test suite (QORE_TEST_OPTS is read from the environment by run_tests.sh)
 ./run_tests.sh
 

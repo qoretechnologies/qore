@@ -16,6 +16,9 @@ print_usage () {
   echo "  QORE_TEST_OPTS           Additional options to pass to qore (e.g., '-penable-debug')."
   echo "  QORE_TEST_DIRS           Space-separated test directories (as found in $BASE_TEST_PATH) to run when no"
   echo "                           -d option is given (e.g., 'qore/misc qore/vars'); default: all tests."
+  echo "  QORE_TEST_EXTRA_DIRS     Space-separated directories outside $BASE_TEST_PATH (relative to the current"
+  echo "                           directory or absolute) whose tests are run as well (e.g., 'modules/ml/test');"
+  echo "                           the tests of the binary modules in ./modules are run only when named here."
   echo "  TEST_TIMEOUT             Seconds a single test may run before it is killed (default: 300); a test"
   echo "                           declares its own budget with a '# test-timeout: <seconds>' comment.  A test"
   echo "                           that exceeds it is first sent SIGUSR1 (QUnit tests print the call stacks of"
@@ -114,9 +117,18 @@ fi
 
 # If no test dirs were specified, run all the tests
 if [ -z "$TEST_DIRS" ]; then
-    #TEST_DIRS="$BASE_TEST_PATH ./modules"
     TEST_DIRS="$BASE_TEST_PATH"
 fi
+
+# Tests outside the test directory, such as those of the binary modules (modules/*/test), are run when named, so
+# that the default set of tests stays the same
+for dir in $QORE_TEST_EXTRA_DIRS; do
+    if [ ! -d "$dir" ]; then
+        echo "ERROR: QORE_TEST_EXTRA_DIRS entry '$dir' is not a directory" >&2
+        exit 1
+    fi
+    TEST_DIRS="$TEST_DIRS $dir"
+done
 
 QORE=""
 QR=""
