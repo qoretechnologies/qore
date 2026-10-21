@@ -229,20 +229,14 @@ if ! command -v gdb > /dev/null 2>&1; then
     fi
 fi
 
-# Enable core dumps before dropping to qore user (needs root for /proc/sys writes)
-# suid_dumpable=2 writes cores to the core_pattern location securely (needed for gosu)
-if [ -f /proc/sys/fs/suid_dumpable ]; then
-    echo 2 > /proc/sys/fs/suid_dumpable 2>/dev/null || true
-fi
-# Set core_pattern to write cores to crash-dumps/ (must be done as root)
+# Enable core dumps before dropping to qore user (needs root for /proc/sys writes): the pattern is the one every CI
+# job on the node sets, as the node has only one (see ci-core-capture.sh); cores are kept in crash-dumps/ (the job
+# artifact)
+. "${QORE_SRC_DIR}/test/docker_test/ci-core-capture.sh"
+qore_ci_setup_core_capture
 CORE_DIR="${QORE_SRC_DIR}/crash-dumps"
 mkdir -p "$CORE_DIR"
 chown qore:qore "$CORE_DIR"
-if [ -w /proc/sys/kernel/core_pattern ]; then
-    echo "$CORE_DIR/core.%e.%p" > /proc/sys/kernel/core_pattern
-elif command -v sysctl > /dev/null 2>&1; then
-    sysctl -w "kernel.core_pattern=$CORE_DIR/core.%e.%p" 2>/dev/null || true
-fi
 
 # own everything by the qore user
 chown -R qore:qore ${QORE_SRC_DIR}
@@ -309,6 +303,7 @@ if [ "$NEED_RELEASE_BUILD" = "1" ]; then
 else
     echo && echo "-- running tests with pre-built Debug Qore; performance tests excluded --"
 fi
+TEST_RC=0
 gosu qore:qore env \
     QORE_DEBUG_BINARY="${QORE_DEBUG_BINARY}" \
     QORE_RELEASE_BINARY="${QORE_RELEASE_BINARY}" \
@@ -321,7 +316,13 @@ gosu qore:qore env \
     QORE_TEST_EXTRA_DIRS="${QORE_TEST_EXTRA_DIRS}" \
     LIBQORE_BINARY="${LIBQORE_BINARY}" \
     LD_LIBRARY_PATH="${TEST_LD_LIBRARY_PATH}:${LD_LIBRARY_PATH}" \
-    ./run_tests.sh
+    ./run_tests.sh || TEST_RC=$?
+
+# the cores of the processes the tests started are kept with those of the tests
+qore_ci_collect_cores "$CORE_DIR"
+if [ "${TEST_RC}" != "0" ]; then
+    exit ${TEST_RC}
+fi
 
 if [ "${drop_pgsql_schema}" = "1" ]; then
     cleanup_postgres_on_host

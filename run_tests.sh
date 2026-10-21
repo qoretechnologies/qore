@@ -333,14 +333,17 @@ echo "Core dump ulimit: ${CORE_ULIMIT:-unknown}"
 CORE_DIR="${CORE_DIR:-./crash-dumps}"
 mkdir -p "$CORE_DIR" 2>/dev/null
 CORE_DIR_ABS=$(cd "$CORE_DIR" && pwd)
-# Try to set core pattern to write cores to our directory (may fail in containers)
+# Try to set core pattern to write cores to our directory (may fail in containers).  Not in a CI job: Linux has one
+# core pattern for the whole machine, which a CI job shares with the other jobs on its node, and a path in this tree
+# does not exist in their containers, so their cores would be lost; the CI scripts set the pattern every job on the
+# node sets (examples/test/docker_test/ci-core-capture.sh), and the cores are found below where it puts them.
 CORE_PATTERN_SET=0
-if [ -w /proc/sys/kernel/core_pattern ]; then
+if [ -z "$CI" ] && [ -w /proc/sys/kernel/core_pattern ]; then
     echo "$CORE_DIR_ABS/core.%e.%p" > /proc/sys/kernel/core_pattern
     CORE_PATTERN_SET=1
 fi
 # Also try sysctl (works on some systems where /proc write fails)
-if [ $CORE_PATTERN_SET -eq 0 ]; then
+if [ -z "$CI" ] && [ $CORE_PATTERN_SET -eq 0 ]; then
     sysctl -w "kernel.core_pattern=$CORE_DIR_ABS/core.%e.%p" 2>/dev/null && CORE_PATTERN_SET=1
 fi
 # macOS writes cores to kern.corefile (/cores/core.%P), which only root can write, so a crashing test left no
