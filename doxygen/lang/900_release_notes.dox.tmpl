@@ -2703,6 +2703,19 @@ DataFrame::DataFrame df = DataFrame::DataFrame::fromColumnarResult(selected);
     as a warning event.
     @endparblock
 
+    @par C++ API: Module Threads and Callbacks Run Under the Caller's Sandbox
+    @parblock
+    A binary module can run work for sandboxed code on its own threads without leaving the caller's
+    @ref sandboxing "sandbox".  A thread that a module starts for one caller with \c q_start_thread() inherits that
+    caller's sandbox, so such a module needs no change.  A thread that runs work for many callers, such as a worker
+    pool or a callback thread that a native library owns, is started with the new \c q_start_thread() flag
+    \c QTF_NO_SANDBOX_INHERIT, captures each caller's sandbox with the new \c QoreSandboxCapture class when the work
+    is submitted or the callback is registered, and runs the work under it with the new \c QoreSandboxCaptureHelper
+    class; both classes are declared in \c qore/QoreSandboxManager.h.  See
+    @ref interruptible_io_sandbox_threads "Carrying the Caller's Sandbox onto Another Thread" in
+    @ref interruptible_io_module_guide "Interruptible I/O in Binary Modules".
+    @endparblock
+
     @par Experimental Plugin-Type ABI
     @parblock
     Binary modules can now register experimental plugin-type descriptors with libqore through
