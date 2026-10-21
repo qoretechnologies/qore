@@ -47,11 +47,9 @@ public class ConditionSignalLossTest inherits QUnit::Test {
             threads_ready = 0;
 
             # start waiter threads
-            list<int> tids = ();
             Counter thread_counter(num_threads);
-            for (int i = 0; i < num_threads; ++i) {
-                tids += background waiterThread(iter, thread_counter);
-            }
+            list<int> tids = startWaiters(num_threads, thread_counter,
+                int sub () { return background waiterThread(iter, thread_counter); }, \releaseMutexWaiters());
 
             # wait for all threads to be ready (waiting on the condition)
             {
@@ -82,6 +80,50 @@ public class ConditionSignalLossTest inherits QUnit::Test {
                 break;
             }
         }
+    }
+
+    #! starts the waiter threads and returns their TIDs
+    /** If a thread cannot be started, the threads already started are released and waited for before the exception
+        is rethrown, so that the test fails instead of waiting for them forever
+
+        @param num_threads the number of threads to start
+        @param thread_counter the counter that each thread decrements when it ends, set to @p num_threads
+        @param start starts one thread and returns its TID
+        @param release makes the waiters' predicate true and wakes them
+    */
+    private list<int> startWaiters(int num_threads, Counter thread_counter, code<int()> start,
+            code<nothing()> release) {
+        list<int> tids = ();
+        try {
+            for (int i = 0; i < num_threads; ++i) {
+                tids += start();
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            # the threads that were not started do not decrement the counter
+            for (int i = tids.size(); i < num_threads; ++i) {
+                thread_counter.dec();
+            }
+            release();
+            thread_counter.waitForZero();
+            rethrow;
+        }
+        return tids;
+    }
+
+    #! makes the predicate of the Mutex waiters true and wakes them
+    private releaseMutexWaiters() {
+        m.lock();
+        on_exit m.unlock();
+        counter = 1;
+        cond.broadcast();
+    }
+
+    #! makes the predicate of the RWLock waiters true and wakes them
+    private releaseRWLockWaiters() {
+        rwl.writeLock();
+        on_exit rwl.writeUnlock();
+        rw_counter = 1;
+        rw_cond.broadcast();
     }
 
     private waiterThread(int iter, Counter thread_counter) {
@@ -161,11 +203,9 @@ public class ConditionSignalLossTest inherits QUnit::Test {
             counter = 0;
             threads_ready = 0;
 
-            list<int> tids = ();
             Counter thread_counter(num_threads);
-            for (int i = 0; i < num_threads; ++i) {
-                tids += background timedWaiterThread(iter, thread_counter);
-            }
+            list<int> tids = startWaiters(num_threads, thread_counter,
+                int sub () { return background timedWaiterThread(iter, thread_counter); }, \releaseMutexWaiters());
 
             # wait for all threads to be ready
             {
@@ -220,11 +260,9 @@ public class ConditionSignalLossTest inherits QUnit::Test {
             rw_counter = 0;
             rw_threads_ready = 0;
 
-            list<int> tids = ();
             Counter thread_counter(num_threads);
-            for (int i = 0; i < num_threads; ++i) {
-                tids += background rwlWaiterThread(iter, thread_counter);
-            }
+            list<int> tids = startWaiters(num_threads, thread_counter,
+                int sub () { return background rwlWaiterThread(iter, thread_counter); }, \releaseRWLockWaiters());
 
             # wait for all threads to be ready
             {
