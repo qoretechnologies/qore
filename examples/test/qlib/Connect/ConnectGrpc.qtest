@@ -31,6 +31,8 @@ class ConnectGrpcTest inherits QUnit::Test {
         # grpc-dependent tests
 %ifndef NoGrpc
         addTestCase("protobuf codec", \testProtobufCodec());
+        addTestCase("grpc-web status message", \testGrpcWebStatusMessage());
+        addTestCase("grpc-web request that cannot be decoded", \testGrpcWebBadRequest());
 %endif
         set_return_value(main());
     }
@@ -248,6 +250,53 @@ class ConnectGrpcTest inherits QUnit::Test {
     # ---- grpc-dependent tests ----
 
 %ifndef NoGrpc
+    #! returns the trailers of a gRPC-Web response body, which ends with a trailer frame
+    static list<string> getGrpcWebTrailers(binary body) {
+        list<hash<ConnectFrameInfo>> frames = Connect::ConnectHelper::unframeMessages(body);
+        hash<ConnectFrameInfo> trailer = frames[frames.size() - 1];
+        return trailer.data.toString("UTF-8").split("\r\n");
+    }
+
+    static hash<ConnectServerMethodInfo> getMethodInfo(code handler) {
+        return <ConnectServerMethodInfo>{
+            "service": "test.Svc",
+            "method": "Call",
+            "path": "/test.Svc/Call",
+            "handler": handler,
+            "rpc_type": CONNECT_RPC_UNARY,
+        };
+    }
+
+    #! the status message is percent-encoded as the gRPC protocol requires, so a line break in it cannot add a trailer
+    testGrpcWebStatusMessage() {
+        hash<ConnectServerMethodInfo> mi = ConnectGrpcTest::getMethodInfo(auto sub (auto request, hash<auto> md) {
+            throw "X-ERR", "bad\r\ngrpc-status: 0\r\n100% é\x00";
+        });
+        hash<HttpResponseInfo> resp = Connect::GrpcProtocolAdapter::handleGrpcWebRequest(new Socket(), {},
+            {"content-type": "application/grpc-web+json"}, NOTHING, mi, new JsonConnectCodec());
+        list<string> trailers = ConnectGrpcTest::getGrpcWebTrailers(resp.body);
+        # one status trailer and one message trailer, then the end of the last line
+        assertEq(("grpc-status: 13", "grpc-message: X-ERR: bad%0D%0Agrpc-status: 0%0D%0A100%25 %C3%A9%00"),
+            trailers);
+    }
+
+    #! a request that cannot be decoded is answered with a gRPC status, as an error in the handler is
+    testGrpcWebBadRequest() {
+        int calls = 0;
+        hash<ConnectServerMethodInfo> mi = ConnectGrpcTest::getMethodInfo(auto sub (auto request, hash<auto> md) {
+            ++calls;
+            return {};
+        });
+        # a frame that declares 255 bytes and has 1
+        hash<HttpResponseInfo> resp = Connect::GrpcProtocolAdapter::handleGrpcWebRequest(new Socket(), {},
+            {"content-type": "application/grpc-web+json"}, <00000000ff01>, mi, new JsonConnectCodec());
+        assertEq(200, resp.code);
+        list<string> trailers = ConnectGrpcTest::getGrpcWebTrailers(resp.body);
+        assertEq("grpc-status: 13", trailers[0]);
+        assertRegex("^grpc-message: CONNECT-FRAMING-ERROR: ", trailers[1]);
+        assertEq(0, calls);
+    }
+
     testProtobufCodec() {
         # Test that ProtobufConnectCodec can be instantiated with a schema
         # and that its name is "proto"

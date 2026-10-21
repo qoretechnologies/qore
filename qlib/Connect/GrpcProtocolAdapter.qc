@@ -129,26 +129,13 @@ public class GrpcProtocolAdapter {
             $1.key !~ /^:/ && $1.key != "content-type" && $1.key != "te"
                 && $1.key != "grpc-timeout";
 
-        # Unframe the gRPC request (always envelope-framed)
-        auto request;
-        if (body) {
-            binary body_bin;
-            if (body.typeCode() == NT_BINARY) {
-                body_bin = body;
-            } else {
-                body_bin = binary(body);
-            }
-            if (body_bin.size() >= 5) {
-                hash<ConnectFrameInfo> frame = ConnectHelper::unframeMessage(body_bin);
-                request = codec.deserialize(frame.data);
-            }
-        }
-
-        # Call handler
+        # Unframe the gRPC request (always envelope-framed), then call the handler; a request that cannot be decoded
+        # is answered with a gRPC status, like an error in the handler
         auto response;
         int grpc_status = 0;
         string grpc_message = "OK";
         try {
+            auto request = GrpcProtocolAdapter::decodeRequest(body, codec);
             response = method_info.handler(request, metadata);
         } catch (hash<ExceptionInfo> ex) {
             if (ex.err == "THREAD-CANCELLED" || ex.err == "PROGRAM-INTERRUPTED") {
@@ -187,7 +174,7 @@ public class GrpcProtocolAdapter {
 
         s.sendHttp2Trailers(stream_id, {
             "grpc-status": string(grpc_status),
-            "grpc-message": grpc_message,
+            "grpc-message": GrpcProtocolAdapter::encodeGrpcMessage(grpc_message),
         });
 
         if (io_wake) {
@@ -221,26 +208,13 @@ public class GrpcProtocolAdapter {
             hdr.pairIterator(),
             $1.key !~ /^:/ && $1.key != "content-type" && $1.key != "te";
 
-        # Unframe the gRPC request
-        auto request;
-        if (body) {
-            binary body_bin;
-            if (body.typeCode() == NT_BINARY) {
-                body_bin = body;
-            } else {
-                body_bin = binary(body);
-            }
-            if (body_bin.size() >= 5) {
-                hash<ConnectFrameInfo> frame = ConnectHelper::unframeMessage(body_bin);
-                request = codec.deserialize(frame.data);
-            }
-        }
-
-        # Call handler
+        # Unframe the gRPC request, then call the handler; a request that cannot be decoded is answered with a gRPC
+        # status, like an error in the handler
         auto response;
         int grpc_status = 0;
         string grpc_message = "OK";
         try {
+            auto request = GrpcProtocolAdapter::decodeRequest(body, codec);
             response = method_info.handler(request, metadata);
         } catch (hash<ExceptionInfo> ex) {
             if (ex.err == "THREAD-CANCELLED" || ex.err == "PROGRAM-INTERRUPTED") {
@@ -259,7 +233,7 @@ public class GrpcProtocolAdapter {
 
         # Append trailers as a base64-encoded trailer frame
         string trailers_str = sprintf("grpc-status: %d\r\ngrpc-message: %s\r\n",
-            grpc_status, grpc_message);
+            grpc_status, GrpcProtocolAdapter::encodeGrpcMessage(grpc_message));
         binary trailer_frame = ConnectHelper::frameMessage(binary(trailers_str),
             0x80);  # trailer flag for gRPC-Web
 
@@ -268,6 +242,56 @@ public class GrpcProtocolAdapter {
             "body": response_body + trailer_frame,
             "hdr": {"Content-Type": "application/grpc-web+proto"},
         };
+    }
+
+    #! Returns a status message encoded for the \c grpc-message trailer
+    /** The gRPC protocol carries the status message percent-encoded: the UTF-8 bytes of the message other than the
+        printable ASCII characters (space to \c "~") and the percent sign itself are written as \c "%XX".  A message
+        with a line break, such as an exception description, therefore cannot end the trailer and add another one,
+        such as a second \c grpc-status in gRPC-Web, and a NUL character in it is carried as \c "%00".
+
+        @param msg the status message
+
+        @return the message encoded for the \c grpc-message trailer
+
+        @par Example:
+        @code{.py}
+# "deadline exceeded%0Aafter 5s"
+string value = GrpcProtocolAdapter::encodeGrpcMessage("deadline exceeded\nafter 5s");
+        @endcode
+    */
+    static string encodeGrpcMessage(string msg) {
+        binary data = binary(convert_encoding(msg, "UTF-8"));
+        string rv = "";
+        for (int i = 0; i < data.size(); ++i) {
+            int c = data[i];
+            if (c >= 0x20 && c <= 0x7e && c != 0x25) {
+                rv += chr(c);
+            } else {
+                rv += sprintf("%%%02X", c);
+            }
+        }
+        return rv;
+    }
+
+    #! Returns the request message decoded from a gRPC request body
+    /** @param body the request body: one envelope-framed message, or no body for an empty request
+        @param codec the codec of the request
+
+        @return the decoded request, or no value for a request without a message
+
+        @throw CONNECT-FRAMING-ERROR the body is not a framed message
+    */
+    private static auto decodeRequest(*data body, AbstractConnectCodec codec) {
+        if (!body) {
+            return;
+        }
+        binary body_bin = body.typeCode() == NT_BINARY ? body : binary(body);
+        if (body_bin.size() < 5) {
+            return;
+        }
+        hash<ConnectFrameInfo> frame = ConnectHelper::unframeMessage(body_bin);
+        return codec.deserialize(frame.data);
     }
 }
 
