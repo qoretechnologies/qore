@@ -163,7 +163,9 @@ int FileInputStream::getPollableDescriptor() [flags=CONSTANT] {
 }
 
 //! Reads up to \a limit bytes with a timeout; returns \ref NOTHING if no data available
-/**
+/** A wait with a positive timeout ends at once when the thread is cancelled (see
+    @ref Qore::cancel_thread() "cancel_thread()") or its Program is interrupted.
+
     @param limit the maximum number of bytes to read
     @param timeout_ms timeout in milliseconds (-1 for blocking, 0 for non-blocking)
 
@@ -172,6 +174,8 @@ int FileInputStream::getPollableDescriptor() [flags=CONSTANT] {
     @throw INPUT-STREAM-ERROR \a limit is not positive
     @throw FILE-READ-ERROR if an I/O error occurs
     @throw STREAM-THREAD-ERROR this exception is thrown if this method is called from any thread other than the thread that created the object
+    @throw THREAD-CANCELLED the thread was cancelled during the wait
+    @throw PROGRAM-INTERRUPTED the thread's Program was interrupted during the wait
 
     @since %Qore 2.2
 */

@@ -1,0 +1,128 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+# the "cppapiuser" test module is built into the build tree by examples/test/module-cpp-api/CMakeLists.txt and is not
+# installed, so QORE_MODULE_DIR must include the build tree (run_tests.sh does this)
+%requires cppapiuser
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class StreamWaitsTest
+
+#! Tests the waits of the file streams: InputStream::readWithTimeout() and OutputStream::writeWithTimeout()
+/** A timed wait for a stream's descriptor ends at once when the thread is cancelled; it waited for its whole
+    timeout.  The streams' descriptors are named pipes, which can be left idle (a writer that does not write, a full
+    pipe that is not read).
+
+    A wait that is not cancelled never ends before its timeout of an hour, so these tests fail by hanging (the test
+    runner's time limit is the guard).
+*/
+class StreamWaitsTest inherits QUnit::Test {
+    public {
+        #! a timeout of an hour, for the waits that must end otherwise
+        const LongMs = 3600000;
+    }
+
+    private {
+        #! the directory with the pipes
+        string dir;
+
+        #! the number of pipes made
+        int pipes;
+    }
+
+    constructor() : QUnit::Test("StreamWaitsTest", "1.0", \ARGV) {
+        addTestCase("a timed stream read is cancelled", \testReadCancel());
+        addTestCase("a timed stream write is cancelled", \testWriteCancel());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        dir = make_tmp_dir("stream-waits");
+    }
+
+    globalTearDown() {
+        remove_tree(dir);
+    }
+
+    testReadCancel() {
+        string path = makeFifo();
+        # a writer that does not write
+        File w();
+        w.open2(path, O_RDWR);
+        for (int i = 0; i < 3; ++i) {
+            # a stream is used by the thread that creates it
+            FileInputStream is;
+            assertEq("THREAD-CANCELLED", cancelBlocked(sub () {
+                is = new FileInputStream(path);
+            }, sub () {
+                is.readWithTimeout(4096, LongMs);
+            }), "readWithTimeout()");
+        }
+        # the timeout still applies
+        FileInputStream is(path);
+        assertEq(NOTHING, is.readWithTimeout(4096, 50), "readWithTimeout() times out");
+    }
+
+    testWriteCancel() {
+        string path = makeFifo();
+        # a reader that does not read
+        File r();
+        r.open2(path, O_RDONLY | O_NONBLOCK);
+        binary chunk = binary(strmul("x", 4096));
+        for (int i = 0; i < 3; ++i) {
+            FileOutputStream os;
+            assertEq("THREAD-CANCELLED", cancelBlocked(sub () {
+                os = new FileOutputStream(path);
+                # writes that do not wait fill the pipe
+                while (cpp_api_output_stream_write_with_timeout(os, chunk, 0)) {
+                }
+            }, sub () {
+                cpp_api_output_stream_write_with_timeout(os, chunk, LongMs);
+            }), "writeWithTimeout()");
+            # the next round starts with an empty pipe
+            while (r.isDataAvailable(0)) {
+                r.readShortBinary(65536);
+            }
+        }
+    }
+
+    #! makes a named pipe and returns its path
+    private string makeFifo() {
+        string path = join_paths(dir, sprintf("fifo-%d", ++pipes));
+        if (mkfifo(path)) {
+            throw "MKFIFO-ERROR", sprintf("%s: %s", path, strerror());
+        }
+        return path;
+    }
+
+    #! runs the setup and then the call in a thread, cancels the thread once the setup is done, and returns the
+    #! error that ended the call
+    /** The cancellation is requested after the setup, so that only the call, a single wait, can deliver it
+    */
+    private static string cancelBlocked(code setup, code call) {
+        Queue started();
+        Queue done();
+        int tid = background sub () {
+            try {
+                setup();
+                started.push(True);
+                call();
+                done.push("NONE");
+            } catch (hash<ExceptionInfo> ex) {
+                started.push(False);
+                done.push(ex.err);
+            }
+        }();
+        if (!started.get()) {
+            # the setup failed
+            return done.get();
+        }
+        cancel_thread(tid, "stream wait test");
+        return done.get();
+    }
+}

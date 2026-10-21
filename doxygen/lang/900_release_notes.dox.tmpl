@@ -254,6 +254,11 @@
     cancelled or its @ref Qore::Program "Program" is interrupted; \c channel_select() with a timeout previously
     noticed the request only when the timeout expired.
 
+    Reads with a timeout with @ref Qore::InputStream::readWithTimeout() "InputStream::readWithTimeout()" and
+    @ref Qore::FileInputStream::readWithTimeout() "FileInputStream::readWithTimeout()", and writes with a timeout
+    with the C++ API's <tt>OutputStream::writeWithTimeout()</tt>, now end as soon as the thread is cancelled or its
+    @ref Qore::Program "Program" is interrupted; they waited for their whole timeout.
+
     @ref Qore::Thread::Mutex::lock() "Mutex::lock()", @ref Qore::Thread::RWLock "RWLock" read and write locks,
     @ref Qore::Thread::Gate::enter() "Gate::enter()", @ref Qore::Thread::Condition::wait() "Condition::wait()" and
     the @ref Qore::Thread::AutoLock "AutoLock", @ref Qore::Thread::AutoReadLock "AutoReadLock",

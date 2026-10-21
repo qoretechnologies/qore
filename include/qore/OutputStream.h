@@ -170,7 +170,9 @@ public:
     /**
       * @brief Write with timeout in milliseconds.
       *
-      * Default implementation uses getPollableDescriptor() + poll() + writeNonBlock().
+      * Default implementation uses getPollableDescriptor() + qore_cancellable_poll() + writeNonBlock(): the wait
+      * for a positive timeout ends at once with \c THREAD-CANCELLED or \c PROGRAM-INTERRUPTED when the thread is
+      * cancelled or its Program is interrupted (see qore_cancellable_poll()).
       * @param ptr the source buffer
       * @param count the number of bytes to write
       * @param timeout_ms timeout in milliseconds (-1 for blocking, 0 for non-blocking)
