@@ -1432,7 +1432,16 @@ private:
         std::unordered_map<uint64_t, int> key_events;
         //! The IDs of the operations registered for each socket
         std::unordered_map<std::string, std::unordered_set<uint64_t>> sock_hash_to_ops;
-        std::unordered_map<int, std::string> fd_to_sock_hash;
+        //! The key of the event loop registration of each socket's descriptor, by socket hash; see regKey()
+        /** One descriptor can be registered for several objects (a socket and a controller wrapper of it, a number
+            polled for a %Qore pollable, an extra fd): each registration has its own key, so the event loop reports
+            each one's events and removing one keeps the others (see QoreEventLoop::addRegistration())
+        */
+        std::unordered_map<std::string, uint64_t> reg_keys;
+        //! The socket hash of each registration key in @ref reg_keys
+        std::unordered_map<uint64_t, std::string> key_hashes;
+        //! The next key for a socket registration; never reused, as the event loop outlives the thread's runs
+        uint64_t next_reg_key = 1;
         //! The holds that keep the registered descriptors open, by the hash of the object registered with each
         /** A descriptor registered in the event loop cannot be closed by another thread, so its number cannot be
             given to another connection while the loop has it registered; see qore_socket_private::DescriptorHold.
@@ -1885,30 +1894,31 @@ private:
     */
     DLLLOCAL void unregisterExtraFds(IoThreadContext& t, uint64_t op_id, ExceptionSink* xsink);
 
-    //! Compute the event union for an extra fd, preserving primary socket events if the fd is also a socket fd
-    DLLLOCAL int computeExtraFdEventUnion(const IoThreadContext& t, int fd) const;
+    //! The bit that marks the event loop registration key of an operation's extra fd; see extraRegKey()
+    static constexpr uint64_t ExtraRegKeyBit = 1ULL << 63;
 
-    //! Remove one operation from an extra fd and return the remaining event union
-    DLLLOCAL int removeExtraFdKey(IoThreadContext& t, int fd, uint64_t op_id) const;
+    //! Returns the event loop registration key of the extra fds of the operation with the given ID
+    /** An operation lists a descriptor once, so the key is unique among the registrations of the descriptor; socket
+        registration keys (see regKey()) never have @ref ExtraRegKeyBit set
+    */
+    DLLLOCAL static uint64_t extraRegKey(uint64_t op_id) {
+        return op_id | ExtraRegKeyBit;
+    }
 
-    //! Remove one operation from an extra fd registration and either modify or release the fd
-    DLLLOCAL void removeExtraFdKeyRegistration(IoThreadContext& t, int fd, uint64_t op_id,
-        const std::string& expected_hash, ExceptionSink* xsink);
+    //! Returns the event loop registration key of the socket with the given hash, making one if it has none
+    DLLLOCAL uint64_t regKey(IoThreadContext& t, const std::string& sock_hash);
 
-    //! Release an old fd from event loop tracking, if still owned by expected_hash
-    /** Safely removes \c old_fd from the kqueue/epoll registration and erases
-        \c fd_to_sock_hash[old_fd], but only if the current owner of that fd is
-        still \c expected_hash.
+    //! Removes the registration of an operation's extra fd from the event loop
+    DLLLOCAL void removeExtraFdRegistration(IoThreadContext& t, int fd, uint64_t op_id, ExceptionSink* xsink);
 
-        This guards against the fd-recycling race: when a socket is closed and
-        its fd is later reused by a new socket, a late cleanup of the original
-        socket must not clobber the new owner's tracking or deregister its
-        kqueue filter.  If \c fd_to_sock_hash[old_fd] has moved to a different
-        hash, leave everything untouched.
+    //! Removes the event loop registration of the socket with the given hash for the given descriptor, if any
+    /** Only the socket's own registration is removed: another object's registration of the same descriptor, or of a
+        descriptor that got the number after the socket's was closed, is left as it is (see
+        QoreEventLoop::removeRegistration()).
 
         @param t the I/O thread context
-        @param old_fd the fd to release
-        @param expected_hash the sock_hash that should currently own \c old_fd
+        @param old_fd the descriptor registered for the socket
+        @param expected_hash the socket hash
         @param xsink exception sink
         @since %Qore 3.0
     */

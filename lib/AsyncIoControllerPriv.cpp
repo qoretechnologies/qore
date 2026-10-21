@@ -6594,34 +6594,31 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                             }
                         }
                         for (int afd : affected_fds) {
-                            auto fsh_it = t.fd_to_sock_hash.find(afd);
-                            if (fsh_it != t.fd_to_sock_hash.end()) {
-                                ready_socket_events[fsh_it->second] |= QORE_EV_READ;
-                            }
+                            // the sockets registered for the descriptor
+                            t.loop->forEachRegistration(afd, [&](uint64_t key, int) {
+                                if (key & ExtraRegKeyBit) {
+                                    return;
+                                }
+                                auto hit = t.key_hashes.find(key);
+                                if (hit != t.key_hashes.end()) {
+                                    ready_socket_events[hit->second] |= QORE_EV_READ;
+                                }
+                            });
                         }
                     }
 #endif
                 } else if (events[i].fd >= 0) {
-                    // O(1) fd → sock_hash lookup (I/O thread only, no lock)
-                    auto fsh_it = t.fd_to_sock_hash.find(events[i].fd);
-                    if (fsh_it != t.fd_to_sock_hash.end()) {
-                        int event_mask = events[i].events & (QORE_EV_READ | QORE_EV_WRITE);
-                        if (events[i].events & QORE_EV_ERROR) {
-                            event_mask |= QORE_EV_ERROR;
+                    // each event is for one registration of the descriptor (I/O thread only, no lock): an
+                    // operation's extra fd, or a socket
+                    int event_mask = events[i].events & (QORE_EV_READ | QORE_EV_WRITE | QORE_EV_ERROR);
+                    uint64_t key = events[i].key;
+                    if (key & ExtraRegKeyBit) {
+                        ready_key_events[key & ~ExtraRegKeyBit] |= event_mask;
+                    } else {
+                        auto hit = t.key_hashes.find(key);
+                        if (hit != t.key_hashes.end()) {
+                            ready_socket_events[hit->second] |= event_mask;
                         }
-                        auto xit = t.extra_fd_to_key_events.find(events[i].fd);
-                        if (xit != t.extra_fd_to_key_events.end()) {
-                            for (auto& [op_id, wanted_events] : xit->second) {
-                                int matched_events = wanted_events & event_mask;
-                                if (event_mask & QORE_EV_ERROR) {
-                                    matched_events |= QORE_EV_ERROR;
-                                }
-                                if (matched_events) {
-                                    ready_key_events[op_id] |= matched_events;
-                                }
-                            }
-                        }
-                        ready_socket_events[fsh_it->second] |= event_mask;
                     }
                 }
             }
@@ -6759,10 +6756,27 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                 sock_obj->deref(xsink);
             }
         }
+        // the event loop outlives this run of the thread: its registrations are removed (the descriptors are still
+        // held open), so a descriptor that stays open does not wake the next run with events nothing waits for
+        for (auto& [sock_hash, fd] : t.registered_fds) {
+            auto kit = t.reg_keys.find(sock_hash);
+            if (kit != t.reg_keys.end()) {
+                t.loop->removeRegistration(fd, kit->second, xsink);
+            }
+        }
+        for (auto& [op_id, fds] : t.key_extra_fds) {
+            for (int fd : fds) {
+                t.loop->removeRegistration(fd, extraRegKey(op_id), xsink);
+            }
+        }
+        if (*xsink) {
+            xsink->clear();
+        }
         t.registered_sockets.clear();
         t.registered_events.clear();
         t.registered_fds.clear();
-        t.fd_to_sock_hash.clear();
+        t.reg_keys.clear();
+        t.key_hashes.clear();
         // no descriptor is registered any more: the holds are released after the lock below (the last reference to a
         // socket can go with its hold), which closes the descriptors that other threads closed meanwhile
         exit_holds.swap(t.fd_holds);
@@ -8090,8 +8104,7 @@ void AsyncIoControllerPriv::updateEventLoopRegistration(IoThreadContext& t, uint
                 // The fd number can be reused after close(), especially in
                 // Happy Eyeballs fallback.  epoll/kqueue may have dropped the
                 // old registration even though the integer fd is unchanged.
-                t.loop->modify(curr_fd, union_events, xsink);
-                t.fd_to_sock_hash[curr_fd] = sock_hash;
+                t.loop->addRegistration(curr_fd, regKey(t, sock_hash), union_events, socket, xsink);
                 t.registered_events[sock_hash] = union_events;
                 fd_changed = true;
             }
@@ -8215,14 +8228,12 @@ void AsyncIoControllerPriv::unregisterFromEventLoop(IoThreadContext& t, uint64_t
         auto rit = t.socket_refcounts.find(prev_sock_hash);
         if (rit != t.socket_refcounts.end()) {
             if (rit->second <= 1) {
-                // Last reference - remove from EventLoop using the registered
-                // fd.  Use releaseFdIfOwner() to guard against fd-recycling:
-                // when a socket is closed its fd is released and may be
-                // recycled by a new socket that has since registered with the
-                // controller.  Calling remove() on a recycled fd would
-                // accidentally deregister the new socket from kqueue/epoll,
-                // and erasing fd_to_sock_hash[fd] would silently break
-                // dispatch for the new owner — exactly the bug that caused
+                // Last reference - remove the socket's own registration of the
+                // registered fd with releaseFdIfOwner(): when a socket is closed
+                // its fd is released and may be recycled by a new socket that has
+                // since registered with the controller, whose registration has
+                // another key and must stay — removing the descriptor itself
+                // deregistered the new socket, which caused
                 // HttpServerHttp3Migration.qtest to hang on macOS when the
                 // streaming-test client fd was recycled by the upload-test
                 // client's post-migration fd.
@@ -8287,7 +8298,7 @@ void AsyncIoControllerPriv::applyEventUnion(IoThreadContext& t, QoreObject* sock
                 // a registered descriptor is held open (see addSocketFd()), so it is the object's own descriptor
                 int fd = s->getPollableDescriptor();
                 if (fd_it != t.registered_fds.end() && fd_it->second == fd) {
-                    t.loop->modify(fd, union_events, xsink);
+                    t.loop->addRegistration(fd, regKey(t, sock_hash), union_events, socket, xsink);
                 } else {
                     if (fd_it != t.registered_fds.end()) {
                         // the registered descriptor is no longer the object's: it was closed or replaced
@@ -8305,32 +8316,20 @@ void AsyncIoControllerPriv::applyEventUnion(IoThreadContext& t, QoreObject* sock
     }
 }
 
-int AsyncIoControllerPriv::computeExtraFdEventUnion(const IoThreadContext& t, int fd) const {
-    int result = 0;
-
-    // If an extra fd is also the primary socket fd, preserve the primary
-    // socket event interest when modifying the shared event-loop registration.
-    auto fsh_it = t.fd_to_sock_hash.find(fd);
-    if (fsh_it != t.fd_to_sock_hash.end()) {
-        auto fd_it = t.registered_fds.find(fsh_it->second);
-        if (fd_it != t.registered_fds.end() && fd_it->second == fd) {
-            auto eit = t.registered_events.find(fsh_it->second);
-            if (eit != t.registered_events.end()) {
-                result |= eit->second;
-            }
-        }
+uint64_t AsyncIoControllerPriv::regKey(IoThreadContext& t, const std::string& sock_hash) {
+    auto it = t.reg_keys.find(sock_hash);
+    if (it != t.reg_keys.end()) {
+        return it->second;
     }
-
-    auto xit = t.extra_fd_to_key_events.find(fd);
-    if (xit != t.extra_fd_to_key_events.end()) {
-        for (auto& extra_event : xit->second) {
-            result |= extra_event.second;
-        }
-    }
-    return result;
+    uint64_t key = t.next_reg_key++;
+    assert(!(key & ExtraRegKeyBit));
+    t.reg_keys.emplace(sock_hash, key);
+    t.key_hashes.emplace(key, sock_hash);
+    return key;
 }
 
-int AsyncIoControllerPriv::removeExtraFdKey(IoThreadContext& t, int fd, uint64_t op_id) const {
+void AsyncIoControllerPriv::removeExtraFdRegistration(IoThreadContext& t, int fd, uint64_t op_id,
+        ExceptionSink* xsink) {
     auto xit = t.extra_fd_to_key_events.find(fd);
     if (xit != t.extra_fd_to_key_events.end()) {
         xit->second.erase(op_id);
@@ -8338,22 +8337,13 @@ int AsyncIoControllerPriv::removeExtraFdKey(IoThreadContext& t, int fd, uint64_t
             t.extra_fd_to_key_events.erase(xit);
         }
     }
-    return computeExtraFdEventUnion(t, fd);
-}
-
-void AsyncIoControllerPriv::removeExtraFdKeyRegistration(IoThreadContext& t, int fd,
-        uint64_t op_id, const std::string& expected_hash, ExceptionSink* xsink) {
-    int union_events = removeExtraFdKey(t, fd, op_id);
-    if (union_events) {
-        t.loop->modify(fd, union_events, xsink);
-        if (*xsink) {
-            printd(2, "removeExtraFdKeyRegistration() failed to modify fd %d event union; continuing\n", fd);
-            xsink->clear();
-        }
-        return;
+    // only the operation's own registration of the descriptor is removed; the descriptor stays registered for any
+    // other object or operation that waits for it
+    t.loop->removeRegistration(fd, extraRegKey(op_id), xsink);
+    if (*xsink) {
+        printd(2, "removeExtraFdRegistration() failed to remove fd %d; continuing\n", fd);
+        xsink->clear();
     }
-
-    releaseFdIfOwner(t, fd, expected_hash, xsink);
 }
 
 bool AsyncIoControllerPriv::extraFdsChanged(const IoThreadContext& t, uint64_t op_id,
@@ -8431,26 +8421,12 @@ void AsyncIoControllerPriv::updateExtraFds(IoThreadContext& t, uint64_t op_id,
         }
     }
 
-    // Get sock_hash for fd_to_sock_hash mapping
-    std::string sock_hash;
-    {
-        AbstractPollableIoObjectBase* s = static_cast<AbstractPollableIoObjectBase*>(
-            socket->getReferencedPrivateData(CID_ABSTRACTPOLLABLEIOOBJECTBASE, xsink));
-        if (s) {
-            sock_hash = getSocketHash(s);
-            s->deref(xsink);
-        }
-    }
-
     auto& prev_fds = t.key_extra_fds[op_id];
 
     // Remove stale fds (were registered before, not in new set)
     for (int fd : prev_fds) {
         if (!new_fd_events.count(fd)) {
-            // Guard against fd-recycling — if fd has been reassigned to a
-            // different sock_hash since we registered it, leave the new
-            // owner's state intact.
-            removeExtraFdKeyRegistration(t, fd, op_id, sock_hash, xsink);
+            removeExtraFdRegistration(t, fd, op_id, xsink);
         }
     }
 
@@ -8460,32 +8436,25 @@ void AsyncIoControllerPriv::updateExtraFds(IoThreadContext& t, uint64_t op_id,
         new_fds.insert(fd);
     }
 
-    // Add new fds (not previously registered)
-    // Use the Socket QoreObject* as udata so the event dispatch code
-    // marks the same socket hash as ready, waking up continuePoll()
-    // Collect fds that fail to add in a separate set to avoid erasing
-    // from new_fds during iteration (undefined behavior with unordered_set)
+    // Each extra fd of the operation is a registration of its own (see extraRegKey()), whose events are reported to
+    // the operation; the Socket QoreObject* is the registration's udata.  Collect fds that fail to add in a separate
+    // set to avoid erasing from new_fds during iteration (undefined behavior with unordered_set)
     std::vector<int> failed_fds;
     for (auto& [fd, ev_flags] : new_fd_events) {
-        bool had_extra_registration = t.extra_fd_to_key_events.find(fd) != t.extra_fd_to_key_events.end();
         t.extra_fd_to_key_events[fd][op_id] = ev_flags;
-        int union_events = computeExtraFdEventUnion(t, fd);
-        if (prev_fds.count(fd) || had_extra_registration) {
-            t.loop->modify(fd, union_events, xsink);
-        } else {
-            t.loop->add(fd, union_events, socket, xsink);
-        }
+        t.loop->addRegistration(fd, extraRegKey(op_id), ev_flags, socket, xsink);
         if (*xsink) {
             // Non-fatal: the fd might not be epoll-compatible (e.g. regular file on Linux)
             // The I/O loop still drives streaming via POLLOUT on the socket fd
             printd(2, "updateExtraFds() failed to update fd %d in event loop; skipping\n", fd);
             xsink->clear();
             failed_fds.push_back(fd);
-            removeExtraFdKey(t, fd, op_id);
-        } else if (!sock_hash.empty()) {
-            auto fsh_it = t.fd_to_sock_hash.find(fd);
-            if (fsh_it == t.fd_to_sock_hash.end()) {
-                t.fd_to_sock_hash[fd] = sock_hash;
+            auto xit = t.extra_fd_to_key_events.find(fd);
+            if (xit != t.extra_fd_to_key_events.end()) {
+                xit->second.erase(op_id);
+                if (xit->second.empty()) {
+                    t.extra_fd_to_key_events.erase(xit);
+                }
             }
         }
     }
@@ -8504,21 +8473,8 @@ void AsyncIoControllerPriv::unregisterExtraFds(IoThreadContext& t, uint64_t op_i
         ExceptionSink* xsink) {
     auto it = t.key_extra_fds.find(op_id);
     if (it != t.key_extra_fds.end()) {
-        // Determine which sock_hash owns these extra fds so we can guard
-        // against fd recycling — if the entry in fd_to_sock_hash no longer
-        // matches, the fd has been reused by a different socket.
-        auto rs_it = t.registered_sockets.find(op_id);
-        std::string key_sock_hash;
-        if (rs_it != t.registered_sockets.end()) {
-            AbstractPollableIoObjectBase* ps = static_cast<AbstractPollableIoObjectBase*>(
-                rs_it->second->getReferencedPrivateData(CID_ABSTRACTPOLLABLEIOOBJECTBASE, xsink));
-            if (ps) {
-                key_sock_hash = getSocketHash(ps);
-                ps->deref(xsink);
-            }
-        }
         for (int fd : it->second) {
-            removeExtraFdKeyRegistration(t, fd, op_id, key_sock_hash, xsink);
+            removeExtraFdRegistration(t, fd, op_id, xsink);
         }
         t.key_extra_fds.erase(it);
     }
@@ -8526,36 +8482,21 @@ void AsyncIoControllerPriv::unregisterExtraFds(IoThreadContext& t, uint64_t op_i
 
 void AsyncIoControllerPriv::releaseFdIfOwner(IoThreadContext& t, int old_fd,
         const std::string& expected_hash, ExceptionSink* xsink) {
-    // Guard against fd-recycling: if the current owner of old_fd in
-    // fd_to_sock_hash is NOT expected_hash, it means the fd was closed and
-    // the kernel has handed the same number to a different socket that has
-    // since been registered.  Removing its kqueue/epoll filter or erasing
-    // its fd_to_sock_hash entry would silently break that new socket.
+    // Only the socket's own registration (its key) is removed: if the descriptor was closed and the kernel has given
+    // its number to another object since, that object's registration has another key and stays as it is, and so do
+    // the registrations of other objects for the same descriptor.
     //
-    // If the entry is absent, old_fd has already been cleaned up — nothing
-    // to do here either.  Only when the fd still maps to expected_hash is
-    // it safe (and correct) to remove from the event loop and erase the
-    // mapping.
-    //
-    // Empty expected_hash means the caller could not determine ownership
-    // (e.g. the registered socket for a key has already been cleared); in
-    // that case we must not blindly remove, as the fd may now belong to a
-    // different socket.
+    // Empty expected_hash means the caller could not determine ownership (e.g. the registered socket for a key has
+    // already been cleared); nothing is removed then
     if (expected_hash.empty()) {
         return;
     }
-    auto fsh_it = t.fd_to_sock_hash.find(old_fd);
-    if (fsh_it == t.fd_to_sock_hash.end()) {
-        return;
-    }
-    if (fsh_it->second != expected_hash) {
-        // fd has been recycled by a different socket — leave new owner's
-        // state intact
+    auto kit = t.reg_keys.find(expected_hash);
+    if (kit == t.reg_keys.end() || !t.loop->hasRegistration(old_fd, kit->second)) {
         return;
     }
     ASYNC_IO_TRACE("releaseFdIfOwner[%d]: remove fd=%d sock='%s'\n", t.thread_idx, old_fd, expected_hash.c_str());
-    t.loop->remove(old_fd, xsink);
-    t.fd_to_sock_hash.erase(fsh_it);
+    t.loop->removeRegistration(old_fd, kit->second, xsink);
 }
 
 void AsyncIoControllerPriv::eraseRegisteredFd(IoThreadContext& t, const std::string& sock_hash) {
@@ -8565,6 +8506,12 @@ void AsyncIoControllerPriv::eraseRegisteredFd(IoThreadContext& t, const std::str
     // the descriptor is no longer registered for the object: a close made by another thread meanwhile closes it now,
     // unless another registration still holds it
     t.fd_holds.erase(sock_hash);
+    // the registration has been removed from the event loop: its key is no longer needed
+    auto kit = t.reg_keys.find(sock_hash);
+    if (kit != t.reg_keys.end()) {
+        t.key_hashes.erase(kit->second);
+        t.reg_keys.erase(kit);
+    }
 }
 
 int AsyncIoControllerPriv::addSocketFd(IoThreadContext& t, AbstractPollableIoObjectBase* s, QoreObject* socket,
@@ -8579,9 +8526,8 @@ int AsyncIoControllerPriv::addSocketFd(IoThreadContext& t, AbstractPollableIoObj
     }
     ASYNC_IO_TRACE("addSocketFd[%d]: add fd=%d sock='%s' hold=%d\n", t.thread_idx, fd, sock_hash.c_str(),
         hold ? 1 : 0);
-    t.loop->add(fd, events, socket, xsink);
+    t.loop->addRegistration(fd, regKey(t, sock_hash), events, socket, xsink);
     t.registered_fds[sock_hash] = fd;
-    t.fd_to_sock_hash[fd] = sock_hash;
     // the registration's own hold; an object that takes no hold (a pollable that Socket::poll() polls by number, a
     // File) has none, and the holds of other registrations of the same descriptor are not touched
     if (hold) {

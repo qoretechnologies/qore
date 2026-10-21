@@ -557,6 +557,18 @@ which the closing `abort()` held.  This is how `HttpAsyncRequestTest.qtest` hung
 `fp_close_and_unlock()` / `fileproc_drain()`).  Linux's `close()` does not wait for epoll, so it does not hang, but a
 descriptor number registered after its close can belong to another connection there as well.
 
+A descriptor can be registered for more than one object in one event loop: a socket and a controller wrapper of it
+have I/O identities of their own, `Socket::poll()` polls a pollable implemented in %Qore or an extra fd by number, and
+an operation's extra fd can be another object's descriptor.  The event loop therefore keeps each registration of a
+descriptor separately (`QoreEventLoop::addRegistration()`, by key): the descriptor is polled for the union of their
+events, `poll()` reports each registration's events with its key and user data, and removing a registration polls
+the descriptor for the events of the others, removing it from the system only with the last one.  The controller
+gives each socket hash its own key (`IoThreadContext::reg_keys`) and each operation's extra fd the key
+`op_id | ExtraRegKeyBit`, and delivers an event to the socket or the operation its key names.  Before, the loop kept
+one registration per descriptor: the second replaced the first, so one object got no events, and removing either
+removed the descriptor for both (`runSharedRegistration()` in `AsyncIoDescriptorHoldTest`).  An exiting I/O thread
+removes its registrations, as the loop outlives the thread's run.
+
 The I/O thread therefore holds a descriptor open for as long as it has it registered: `addSocketFd()` takes a hold
 with `AbstractPollableIoObjectBase::holdPollableDescriptor()` before it adds the descriptor to the event queue and keeps
 it in `IoThreadContext::fd_holds`, and `eraseRegisteredFd()` releases it after `releaseFdIfOwner()` has removed the

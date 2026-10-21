@@ -1387,6 +1387,77 @@ static void ut_dgc_scan_generation(UnitTestCounters& c) {
     there left it pending in the I/O thread's sink, where the next operation to check the sink
     reported it as its own failure and logged it from a thread with no program context.
 */
+//! Returns the events that the loop reports for each registration key, after a poll that does not wait
+static std::map<uint64_t, std::pair<int, void*>> ut_event_loop_poll_keys(QoreEventLoop& loop, int fd) {
+    ExceptionSink xsink;
+    std::vector<QoreEventInfo> events;
+    loop.poll(events, 0, &xsink);
+    std::map<uint64_t, std::pair<int, void*>> rv;
+    for (const QoreEventInfo& e : events) {
+        if (e.fd == fd) {
+            rv[e.key] = {e.events, e.udata};
+        }
+    }
+    return rv;
+}
+
+//! A descriptor with several registrations: each gets the events it waits for, and removing one keeps the others
+/** The loop kept one registration per descriptor, so a second one replaced the first, and removing either removed
+    the descriptor; see AsyncIoDescriptorHoldTest::runSharedRegistration() for the controller's side
+*/
+static void ut_event_loop_registrations(UnitTestCounters& c) {
+    ExceptionSink xsink;
+    QoreEventLoop loop(&xsink);
+    UT_ASSERT(c, !xsink && loop.isValid(), "registrations: the event loop is created");
+    int sv[2];
+    if (xsink || socketpair(AF_UNIX, SOCK_STREAM, 0, sv)) {
+        xsink.clear();
+        return;
+    }
+    int a = 0, b = 0;
+    UT_ASSERT_EQ(c, 0, loop.addRegistration(sv[0], 1, QORE_EV_READ, &a, &xsink), "a read registration is added");
+    UT_ASSERT_EQ(c, 0, loop.addRegistration(sv[0], 2, QORE_EV_WRITE, &b, &xsink), "a write registration is added");
+    UT_ASSERT_EQ(c, 1, static_cast<int>(loop.size()), "the descriptor is registered once with the system");
+
+    // writable, not readable: only the write registration gets an event
+    auto ev = ut_event_loop_poll_keys(loop, sv[0]);
+    UT_ASSERT_EQ(c, 1, static_cast<int>(ev.size()), "registrations: one registration gets an event");
+    UT_ASSERT(c, ev.count(2) && (ev[2].first & QORE_EV_WRITE) && ev[2].second == &b,
+        "the write registration gets its event with its user data");
+
+    UT_ASSERT(c, ::write(sv[1], "x", 1) == 1, "registrations: the peer writes");
+    ev = ut_event_loop_poll_keys(loop, sv[0]);
+    UT_ASSERT(c, ev.count(1) && (ev[1].first & QORE_EV_READ) && !(ev[1].first & QORE_EV_WRITE)
+        && ev[1].second == &a, "the read registration gets only the read event, with its user data");
+    UT_ASSERT(c, ev.count(2) && (ev[2].first & QORE_EV_WRITE) && !(ev[2].first & QORE_EV_READ),
+        "the write registration gets only the write event");
+
+    // removing one registration keeps the other
+    UT_ASSERT_EQ(c, 0, loop.removeRegistration(sv[0], 2, &xsink), "the write registration is removed");
+    UT_ASSERT(c, loop.hasRegistration(sv[0], 1) && !loop.hasRegistration(sv[0], 2),
+        "the read registration is kept");
+    ev = ut_event_loop_poll_keys(loop, sv[0]);
+    UT_ASSERT(c, ev.size() == 1 && ev.count(1) && (ev[1].first & QORE_EV_READ),
+        "the read registration still gets the read event");
+
+    // two registrations for the same events both get them
+    UT_ASSERT_EQ(c, 0, loop.addRegistration(sv[0], 3, QORE_EV_READ, &b, &xsink), "a second read registration is added");
+    ev = ut_event_loop_poll_keys(loop, sv[0]);
+    UT_ASSERT(c, ev.size() == 2 && ev.count(1) && ev.count(3) && ev[3].second == &b,
+        "both read registrations get the read event");
+
+    // the last registration removes the descriptor
+    loop.removeRegistration(sv[0], 1, &xsink);
+    UT_ASSERT_EQ(c, 1, static_cast<int>(loop.size()), "the descriptor stays registered for its last registration");
+    loop.removeRegistration(sv[0], 3, &xsink);
+    UT_ASSERT_EQ(c, 0, static_cast<int>(loop.size()), "the descriptor is removed with its last registration");
+    UT_ASSERT(c, ut_event_loop_poll_keys(loop, sv[0]).empty(), "no event is reported once the descriptor is removed");
+    UT_ASSERT(c, !xsink, "registrations: no error");
+    xsink.clear();
+    ::close(sv[0]);
+    ::close(sv[1]);
+}
+
 static void ut_event_loop_remove_recycled_fd(UnitTestCounters& c) {
     ExceptionSink xsink;
     QoreEventLoop loop(&xsink);
@@ -3465,7 +3536,212 @@ public:
         UT_ASSERT(c, !sock->isOpen(), "the socket has no descriptor after the failed connection");
     }
 
+    //! One descriptor registered for two objects in one event loop: each registration gets the descriptor's events,
+    //! and removing one keeps the other
+    /** A socket and a controller wrapper of it have I/O identities of their own, and Socket::poll() polls a pollable
+        implemented in %Qore, or an extra fd, by number; any of them can be registered while the descriptor is
+        registered for its owner.  The event loop kept one registration per descriptor: the second replaced the first,
+        so only one object got the descriptor's events, and removing either removed the descriptor for both.  Two
+        operations wait for data on the same descriptor through different objects; the peer sends data and both must
+        be continued; then one is canceled and the other must still get the next data.
+    */
+    static void runSharedRegistration(UnitTestCounters& c) {
+        for (int variant = 0; variant < 2; ++variant) {
+            const char* what = variant ? "by number" : "socket and wrapper";
+            ExceptionSink xsink;
+            ReferenceHolder<AsyncIoControllerPriv> ctrl(new AsyncIoControllerPriv(false, &xsink), &xsink);
+            UT_ASSERT(c, !xsink, "shared registration controller construction succeeds");
+            if (xsink) {
+                xsink.clear();
+                return;
+            }
+            struct Cleanup {
+                AsyncIoControllerPriv* ctrl;
+                ExceptionSink& xsink;
+                ~Cleanup() {
+                    xsink.clear();
+                    ctrl->stopClear(&xsink);
+                    xsink.clear();
+                }
+            } cleanup{*ctrl, xsink};
+            ctrl->setMaxIoThreads(1, &xsink);
+            ctrl->start(&xsink);
+            bool ready = !xsink && ctrl->waitReady(5000, &xsink);
+            UT_ASSERT(c, ready && !xsink, "shared registration controller starts");
+            if (!ready || xsink) {
+                return;
+            }
+
+            // a connected TCP pair: the client socket's descriptor is registered twice, the peer sends
+            QoreSocketObject* listener = new QoreSocketObject;
+            ReferenceHolder<QoreObject> listener_obj(new QoreObject(QC_SOCKET, getProgram(), listener), &xsink);
+            int rc = listener->bindINET("127.0.0.1", "0", true, AF_INET, SOCK_STREAM, 0, &xsink);
+            if (!rc && !xsink) {
+                rc = listener->listen(5);
+            }
+            UT_ASSERT(c, !rc && !xsink, "shared registration listener listens");
+            if (rc || xsink) {
+                return;
+            }
+            QoreSocketObject* client = new QoreSocketObject;
+            ReferenceHolder<QoreObject> client_obj(new QoreObject(QC_SOCKET, getProgram(), client), &xsink);
+            rc = client->connectINET("127.0.0.1", listener->getPort(), 5000, &xsink);
+            UT_ASSERT(c, !rc && !xsink, "shared registration client connects");
+            if (rc || xsink) {
+                return;
+            }
+            int peer = ::accept(listener->getSocket(), nullptr, nullptr);
+            UT_ASSERT(c, peer >= 0, "shared registration peer is accepted");
+            if (peer < 0) {
+                return;
+            }
+            struct PeerCloser {
+                int fd;
+                ~PeerCloser() {
+                    ::close(fd);
+                }
+            } peer_closer{peer};
+
+            const int fd = client->getSocket();
+            ReferenceHolder<QoreObject> other_obj(variant
+                ? new QoreObject(QC_ABSTRACTPOLLABLEIOOBJECTBASE, getProgram(), new NumberPollable(fd))
+                : qore_socket_dbg_new_controller_pollable(client->priv->socket), &xsink);
+
+            // two operations wait for data: one on the socket, one on the other object; each ends when it gets data
+            ReferenceHolder<QoreObject> q1(submitReadyOp(c, **ctrl, *client_obj, "shared-registration-1", xsink),
+                &xsink);
+            ReferenceHolder<QoreObject> q2(submitReadyOp(c, **ctrl, *other_obj, "shared-registration-2", xsink),
+                &xsink);
+            if (!q1 || !q2) {
+                return;
+            }
+            UT_ASSERT(c, ::send(peer, "a", 1, 0) == 1, "the peer sends data");
+            UT_ASSERT(c, gotResult(*q1, xsink), (std::string(what) + ": the socket's operation gets the data")
+                .c_str());
+            UT_ASSERT(c, gotResult(*q2, xsink), (std::string(what) + ": the other object's operation gets the data")
+                .c_str());
+
+            // again; then the second operation is canceled before the data arrives, and the first still gets it
+            char buf[4];
+            UT_ASSERT(c, ::recv(fd, buf, sizeof buf, 0) == 1, "the client reads the data");
+            ReferenceHolder<QoreObject> q3(submitReadyOp(c, **ctrl, *client_obj, "shared-registration-3", xsink),
+                &xsink);
+            ReferenceHolder<QoreObject> q4(submitReadyOp(c, **ctrl, *other_obj, "shared-registration-4", xsink),
+                &xsink);
+            if (!q3 || !q4) {
+                return;
+            }
+            SimpleRefHolder<QoreStringNode> owner4(new QoreStringNode("shared-registration-4"));
+            ctrl->cancelByOwner(*owner4, &xsink);
+            xsink.clear();
+            UT_ASSERT(c, ::send(peer, "b", 1, 0) == 1, "the peer sends more data");
+            UT_ASSERT(c, gotResult(*q3, xsink),
+                (std::string(what) + ": the socket's operation gets data after the other registration is removed")
+                .c_str());
+        }
+    }
+
 private:
+    //! Ends at the first continuePoll() after its first one, i.e. when its object is readable
+    class ReadyOp : public SocketPollOperationBase {
+    public:
+        DLLLOCAL ReadyOp(QoreObject* obj) : obj(obj) {
+        }
+
+        DLLLOCAL virtual bool goalReached() const override {
+            return calls > 1;
+        }
+
+        DLLLOCAL virtual void abort(ExceptionSink*) override {
+        }
+
+        DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink) override {
+            if (++calls > 1) {
+                return nullptr;
+            }
+            ReferenceHolder<QoreHashNode> info(new QoreHashNode(hashdeclSocketPollInfo, xsink), xsink);
+            info->setKeyValue("events", SOCK_POLLIN, xsink);
+            info->setKeyValue("socket", obj->objectRefSelf(), xsink);
+            return *xsink ? nullptr : info.release();
+        }
+
+        DLLLOCAL virtual const char* getStateImpl() const override {
+            return calls > 1 ? "ready" : "waiting";
+        }
+
+    private:
+        QoreObject* obj;
+        std::atomic<int> calls{0};
+    };
+
+    //! Submits a ReadyOp for the object and waits until it is registered; returns its result Queue (referenced)
+    //! Submits an operation that ends when \a obj is readable; returns its result queue's object, or null
+    /** The caller keeps the queue's object while it waits for the result: the controller releases its own reference
+        when it has delivered the result, and the last reference deletes the queue with the result in it.
+    */
+    static QoreObject* submitReadyOp(UnitTestCounters& c, AsyncIoControllerPriv& ctrl, QoreObject* obj,
+            const char* owner, ExceptionSink& xsink) {
+        ReadyOp* op = new ReadyOp(obj);
+        ReferenceHolder<QoreObject> op_obj(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), op), &xsink);
+        op->setSelf(*op_obj);
+        op_obj->setValue("sock", obj->objectRefSelf(), &xsink);
+        op_obj->setValue("goal", new QoreStringNode("ready"), &xsink);
+        ReferenceHolder<QoreHashNode> info(new QoreHashNode(hashdeclSocketPollOperationInfo, &xsink), &xsink);
+        info->setKeyValue("sock", obj->objectRefSelf(), &xsink);
+        info->setKeyValue("spop", op_obj->objectRefSelf(), &xsink);
+        info->setKeyValue("owner", new QoreStringNode(owner), &xsink);
+        info->setKeyValue("to", -1, &xsink);
+        ReferenceHolder<QoreObject> queue_obj(ctrl.submit(nullptr, info.release(), false, &xsink), &xsink);
+        bool processed = !xsink && queue_obj && ctrl.waitForProcessing(5000, &xsink);
+        ReferenceHolder<QoreHashNode> io_info(processed ? ctrl.getInfo(&xsink) : nullptr, &xsink);
+        UT_ASSERT(c, processed && !xsink, "the operation is registered");
+        if (!processed || xsink) {
+            xsink.clear();
+            return nullptr;
+        }
+        return queue_obj.release();
+    }
+
+    //! Returns true if the operation ended without an error within the hang guard; prints how it ended otherwise
+    /** @param queue_obj the object of the operation's result queue, which keeps the queue
+    */
+    static bool gotResult(QoreObject* queue_obj, ExceptionSink& xsink) {
+        ReferenceHolder<Queue> q(static_cast<Queue*>(queue_obj->getReferencedPrivateData(CID_QUEUE, &xsink)),
+            &xsink);
+        if (!q) {
+            printf("  result: no queue\n");
+            xsink.clear();
+            return false;
+        }
+        bool timed_out = false;
+        ValueHolder result(q->shift(&xsink, 10000, &timed_out), &xsink);
+        const QoreHashNode* h = !timed_out && !xsink && result->getType() == NT_HASH
+            ? result->get<QoreHashNode>()
+            : nullptr;
+        QoreValue ex = h ? h->getKeyValue("ex") : QoreValue();
+        bool canceled = h && h->getKeyValue("canceled").getAsBool();
+        bool ok = h && ex.isNothing() && !canceled;
+        if (!ok) {
+            if (timed_out) {
+                printf("  result: timed out\n");
+            } else if (xsink) {
+                QoreStringValueHelper err(xsink.getExceptionErr());
+                QoreStringValueHelper desc(xsink.getExceptionDesc());
+                printf("  result: %s: %s\n", err->c_str(), desc->c_str());
+            } else if (!h) {
+                printf("  result: no result hash\n");
+            } else if (ex.getType() == NT_HASH) {
+                QoreStringValueHelper err(ex.get<const QoreHashNode>()->getKeyValue("err"));
+                QoreStringValueHelper desc(ex.get<const QoreHashNode>()->getKeyValue("desc"));
+                printf("  result: %s: %s\n", err->c_str(), desc->c_str());
+            } else {
+                printf("  result: canceled\n");
+            }
+        }
+        xsink.clear();
+        return ok;
+    }
+
     //! A pollable that has a descriptor by number and takes no hold, like the ones Socket::poll() creates
     class NumberPollable : public AbstractPollableIoObjectBase {
     public:
@@ -9686,6 +9962,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     ut_debug_skips_foreign_thread_callbacks(c, rc.getProgram());
     ut_event_loop_remove_recycled_fd(c);
     ut_event_loop_sub_ms_timer_wakeups(c);
+    ut_event_loop_registrations(c);
     ut_socket_close_race_releases_descriptor_once(c);
     ut_socket_close_during_io_keeps_descriptor(c);
     ut_network_security_rules(c);
@@ -9700,6 +9977,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     AsyncIoDescriptorHoldTest::runSocketApi(c);
     AsyncIoDescriptorHoldTest::runSharedDescriptor(c);
     AsyncIoDescriptorHoldTest::runConnectFailure(c);
+    AsyncIoDescriptorHoldTest::runSharedRegistration(c);
     AsyncIoAbandonedSubmitTest::run(c);
     AsyncIoRegistrationCloseTest::run(c);
     AsyncIoZeroPollHintTest::run(c);

@@ -157,15 +157,155 @@ QoreEventLoop::~QoreEventLoop() {
 }
 
 int QoreEventLoop::add(int fd, int events, void* udata, ExceptionSink* xsink) {
-    // Store in our map
-    fd_map[fd] = {events, udata};
+    return addRegistration(fd, 0, events, udata, xsink);
+}
 
+int QoreEventLoop::modify(int fd, int events, ExceptionSink* xsink) {
+    auto it = fd_map.find(fd);
+    if (it == fd_map.end()) {
+        xsink->raiseException("EVENT-LOOP-ERROR", "fd %d is not registered", fd);
+        return -1;
+    }
+    auto rit = it->second.regs.find(0);
+    if (rit == it->second.regs.end()) {
+        xsink->raiseException("EVENT-LOOP-ERROR", "fd %d is not registered", fd);
+        return -1;
+    }
+    return addRegistration(fd, 0, events, rit->second.udata, xsink);
+}
+
+int QoreEventLoop::remove(int fd, ExceptionSink* xsink) {
+    return removeRegistration(fd, 0, xsink);
+}
+
+int QoreEventLoop::addRegistration(int fd, uint64_t key, int events, void* udata, ExceptionSink* xsink) {
+    auto it = fd_map.find(fd);
+    if (it == fd_map.end()) {
+#ifdef DEBUG
+        if (dbg_before_register) {
+            dbg_before_register(fd);
+        }
+#endif
+        if (kernelAdd(fd, events, udata, xsink)) {
+            return -1;
+        }
+        FdInfo& info = fd_map[fd];
+        info.events = events;
+        info.udata = udata;
+        info.regs[key] = {events, udata};
+        return 0;
+    }
+
+    FdInfo& info = it->second;
+    auto rit = info.regs.find(key);
+    const bool existed = rit != info.regs.end();
+    const Registration prev = existed ? rit->second : Registration{0, nullptr};
+    info.regs[key] = {events, udata};
+    int all = 0;
+    for (const auto& [k, reg] : info.regs) {
+        all |= reg.events;
+    }
 #ifdef DEBUG
     if (dbg_before_register) {
         dbg_before_register(fd);
     }
 #endif
+    // the system is given the union of the events again also when it is unchanged: the system drops a descriptor
+    // that is closed, and a registration without a hold of its descriptor can have outlived it (see kernelModify())
+    if (kernelModify(fd, all, info.udata, xsink)) {
+        if (existed) {
+            info.regs[key] = prev;
+        } else {
+            info.regs.erase(key);
+        }
+        return -1;
+    }
+    info.events = all;
+    return 0;
+}
 
+int QoreEventLoop::removeRegistration(int fd, uint64_t key, ExceptionSink* xsink) {
+    auto it = fd_map.find(fd);
+    if (it == fd_map.end()) {
+        // Not an error - fd might have been closed and auto-removed
+        return 0;
+    }
+    FdInfo& info = it->second;
+    auto rit = info.regs.find(key);
+    if (rit == info.regs.end()) {
+        return 0;
+    }
+    void* removed_udata = rit->second.udata;
+    info.regs.erase(rit);
+    if (info.regs.empty()) {
+        fd_map.erase(it);
+#ifdef DEBUG
+        if (dbg_before_remove) {
+            dbg_before_remove(fd);
+        }
+#endif
+        return kernelRemove(fd, xsink);
+    }
+
+    // the other registrations stay: the descriptor is polled for their events
+    if (info.udata == removed_udata) {
+        info.udata = info.regs.begin()->second.udata;
+    }
+    int all = 0;
+    for (const auto& [k, reg] : info.regs) {
+        all |= reg.events;
+    }
+    if (all == info.events) {
+        return 0;
+    }
+    info.events = all;
+    return kernelModify(fd, all, info.udata, xsink);
+}
+
+bool QoreEventLoop::hasRegistration(int fd, uint64_t key) const {
+    auto it = fd_map.find(fd);
+    return it != fd_map.end() && it->second.regs.count(key);
+}
+
+void QoreEventLoop::forEachRegistration(int fd, const std::function<void(uint64_t key, int events)>& f) const {
+    auto it = fd_map.find(fd);
+    if (it == fd_map.end()) {
+        return;
+    }
+    for (const auto& [key, reg] : it->second.regs) {
+        f(key, reg.events);
+    }
+}
+
+void QoreEventLoop::expandRegistrations(std::vector<QoreEventInfo>& events) {
+    expand_buf.clear();
+    for (const QoreEventInfo& e : events) {
+        if (e.fd < 0) {
+            // user events (EVFILT_USER) and io_uring completions are not descriptor registrations
+            expand_buf.push_back(e);
+            continue;
+        }
+        auto it = fd_map.find(e.fd);
+        if (it == fd_map.end()) {
+            // the descriptor was removed after the system reported it
+            continue;
+        }
+        for (const auto& [key, reg] : it->second.regs) {
+            int ev = e.events & (reg.events | QORE_EV_ERROR);
+            if (!ev) {
+                continue;
+            }
+            if (!(ev & (QORE_EV_READ | QORE_EV_WRITE))) {
+                // an error is reported with the events the registration waits for, so its operation runs and sees it
+                ev |= reg.events & (QORE_EV_READ | QORE_EV_WRITE);
+            }
+            expand_buf.emplace_back(e.fd, ev, reg.udata, 0, key);
+        }
+    }
+    events.swap(expand_buf);
+}
+
+int QoreEventLoop::kernelAdd(int fd, int events, void* udata, ExceptionSink* xsink) {
 #ifdef DARWIN
     // kqueue: register events using kevent()
     // We may need up to 2 events (read + write)
@@ -187,7 +327,6 @@ int QoreEventLoop::add(int fd, int events, void* udata, ExceptionSink* xsink) {
         struct timespec ts = {0, 0};
         int rc = kevent(event_fd, changes, nchanges, nullptr, 0, &ts);
         if (rc < 0) {
-            fd_map.erase(fd);
             xsink->raiseErrnoException("EVENT-LOOP-ERROR", errno, "kevent() failed to add fd %d", fd);
             return -1;
         }
@@ -213,14 +352,12 @@ int QoreEventLoop::add(int fd, int events, void* udata, ExceptionSink* xsink) {
             // unregister skipped the epoll_ctl(DEL) because the socket
             // appeared closed at that moment).  Fall back to MOD.
             if (epoll_ctl(event_fd, EPOLL_CTL_MOD, fd, &ev) < 0) {
-                fd_map.erase(fd);
                 xsink->raiseErrnoException("EVENT-LOOP-ERROR", errno,
                     "epoll_ctl(MOD after ADD EEXIST) failed for fd %d", fd);
                 return -1;
             }
             return 0;
         }
-        fd_map.erase(fd);
         xsink->raiseErrnoException("EVENT-LOOP-ERROR", errno, "epoll_ctl(ADD) failed for fd %d", fd);
         return -1;
     }
@@ -232,22 +369,7 @@ int QoreEventLoop::add(int fd, int events, void* udata, ExceptionSink* xsink) {
 #endif
 }
 
-int QoreEventLoop::modify(int fd, int events, ExceptionSink* xsink) {
-    auto it = fd_map.find(fd);
-    if (it == fd_map.end()) {
-        xsink->raiseException("EVENT-LOOP-ERROR", "fd %d is not registered", fd);
-        return -1;
-    }
-
-    void* udata = it->second.udata;
-    it->second.events = events;
-
-#ifdef DEBUG
-    if (dbg_before_register) {
-        dbg_before_register(fd);
-    }
-#endif
-
+int QoreEventLoop::kernelModify(int fd, int events, void* udata, ExceptionSink* xsink) {
 #ifdef DARWIN
     // kqueue: need to remove old events and add new ones
     // Use level-triggered mode (no EV_CLEAR)
@@ -318,19 +440,7 @@ int QoreEventLoop::modify(int fd, int events, ExceptionSink* xsink) {
 #endif
 }
 
-int QoreEventLoop::remove(int fd, ExceptionSink* xsink) {
-    auto it = fd_map.find(fd);
-    if (it == fd_map.end()) {
-        // Not an error - fd might have been closed and auto-removed
-        return 0;
-    }
-    fd_map.erase(it);
-#ifdef DEBUG
-    if (dbg_before_remove) {
-        dbg_before_remove(fd);
-    }
-#endif
-
+int QoreEventLoop::kernelRemove(int fd, ExceptionSink* xsink) {
 #ifdef DARWIN
     // kqueue: remove both filters (ignore errors if not registered)
     struct kevent changes[2];
@@ -567,6 +677,8 @@ int QoreEventLoop::poll(std::vector<QoreEventInfo>& events, int timeout_ms, Exce
         }
     }
 
+    // each registration of a descriptor gets the events it waits for
+    expandRegistrations(events);
     collectExpiredTimers(events);
     return static_cast<int>(events.size());
 
@@ -665,6 +777,8 @@ int QoreEventLoop::poll(std::vector<QoreEventInfo>& events, int timeout_ms, Exce
         events.push_back({fd, ev, udata});
     }
 
+    // each registration of a descriptor gets the events it waits for
+    expandRegistrations(events);
     collectExpiredTimers(events);
     return static_cast<int>(events.size());
 
@@ -750,6 +864,8 @@ int QoreEventLoop::poll(std::vector<QoreEventInfo>& events, int timeout_ms, Exce
         }
     }
 
+    // each registration of a descriptor gets the events it waits for
+    expandRegistrations(events);
     collectExpiredTimers(events);
     return static_cast<int>(events.size());
 #endif

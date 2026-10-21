@@ -8475,6 +8475,12 @@ void SocketConnectInetHappyEyeballsPollState::assignWinner(ExceptionSink* xsink)
         host.c_str(), q_af_to_str(wp.family));
 }
 
+#ifdef DEBUG
+QoreObject* qore_socket_dbg_new_controller_pollable(QoreSocket* s) {
+    return new QoreObject(QC_ABSTRACTPOLLABLEIOOBJECTBASE, getProgram(), new QoreSocketControllerPollable(s));
+}
+#endif
+
 void SocketConnectInetHappyEyeballsPollState::releasePrimaryFd(int fd, int next_fd) {
     bool close_old = false;
     if (sock->replaceDescriptor(fd, next_fd, close_old)) {

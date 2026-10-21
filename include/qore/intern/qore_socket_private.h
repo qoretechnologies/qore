@@ -4210,4 +4210,11 @@ struct qore_socket_private : public QoreReferenceCounter {
     DLLLOCAL static QoreListNode* poll(const QoreListNode* poll_list, int timeout_ms, ExceptionSink* xsink);
 };
 
+#ifdef DEBUG
+//! Debug builds: returns a new object for a controller wrapper of the socket, which has an I/O identity of its own
+/** For the C++ unit tests; the wrappers that the controller-backed socket methods make are of the same class
+*/
+DLLLOCAL QoreObject* qore_socket_dbg_new_controller_pollable(QoreSocket* s);
+#endif
+
 #endif
