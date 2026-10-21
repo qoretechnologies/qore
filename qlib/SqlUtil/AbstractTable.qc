@@ -6264,6 +6264,11 @@ string sql = table.getSelectSql(sh, \args);
             on_error rethrow $1.err, sprintf("%s (while processing expression %y)", $1.desc, arg.exp);
             AbstractDataProvider::verifyExpression(role, exp.exp, LC_All, expected_type,
                 cast<hash<DataProviderExpression>>(arg));
+            # an expression without SQL on this database, as in a column or an argument of another expression, is
+            # refused as in a where clause; before, calling its missing code raised PSEUDO-METHOD-DOES-NOT-EXIST
+            if (!exists exp.code) {
+                AbstractTable::throwNotPushdownable(arg.exp);
+            }
             return exp.code(\info, role, arg.args);
         }
 
@@ -6563,12 +6568,17 @@ string sql = table.getSelectSql(sh, \args);
             # can split the where clause via
             # @ref AbstractDataProvider::splitPushdownableExpression() before passing it
             # to the table.
-            throw "SQLUTIL-EXPRESSION-NOT-PUSHDOWNABLE",
-                sprintf("operator %y is declared in this provider's expression map but has no native SQL "
-                    "push-down on this backend; rewrite the predicate using ops the backend supports, or "
-                    "use a backend with native support for this op", cond.exp);
+            AbstractTable::throwNotPushdownable(cond.exp);
         }
         return exp.code(\info, role, cond.args);
+    }
+
+    #! throws \c SQLUTIL-EXPRESSION-NOT-PUSHDOWNABLE for an expression that has no SQL on this database
+    private static throwNotPushdownable(string exp) {
+        throw "SQLUTIL-EXPRESSION-NOT-PUSHDOWNABLE",
+            sprintf("operator %y is declared in this provider's expression map but has no native SQL "
+                "push-down on this backend; rewrite the predicate using ops the backend supports, or "
+                "use a backend with native support for this op", exp);
     }
 
     private *string getWhereClauseIntern(reference<hash<QueryInfo>> info, *auto cond, *string cprefix) {

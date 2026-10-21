@@ -1,0 +1,95 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires DataProvider
+%requires SqlUtil
+%requires XdbcFirebirdSqlUtilBase
+
+%exec-class SqlUtilExpressionNotPushdownableTest
+
+#! a datasource that gives SQL generation what it needs without a database server
+class PushdownOfflineDatasource inherits Qore::SQL::AbstractDatasource {
+    *string getPassword() {}
+    *string getOSEncoding() {}
+    *string getDBName() { return "pdtest"; }
+    *string getUserName() { return "pduser"; }
+    *string getHostName() {}
+    *int getPort() {}
+    *string getDBEncoding() {}
+    string getDriverName() { return "jni"; }
+    auto getServerVersion() {}
+    auto getClientVersion() {}
+    string getConfigString() { return ""; }
+    hash<auto> getConfigHash() { return {}; }
+    bool inTransaction() { return False; }
+    bool currentThreadInTransaction() { return False; }
+    nothing beginTransaction() {}
+    nothing commit() {}
+    nothing rollback() {}
+
+    auto exec(string sql, ...) { return 0; }
+    auto vexec(string sql, *softlist<auto> vargs) { return 0; }
+    auto execRaw(string sql) { return 0; }
+    auto select(string sql, ...) {}
+    auto vselect(string sql, *softlist<auto> vargs) {}
+    auto selectRow(string sql, ...) {}
+    auto vselectRow(string sql, *softlist<auto> vargs) {}
+    auto selectRows(string sql, ...) {}
+    auto vselectRows(string sql, *softlist<auto> vargs) {}
+    auto selectTyped(string sql, ...) {}
+    auto vselectTyped(string sql, *softlist<auto> vargs) {}
+    auto selectRowsTyped(string sql, ...) {}
+    auto vselectRowsTyped(string sql, *softlist<auto> vargs) {}
+}
+
+#! Tests an expression that has no SQL on a database
+/** An expression in the expression map of a database without SQL (without a \c code closure), such as a regular
+    expression on Firebird, is refused with \c SQLUTIL-EXPRESSION-NOT-PUSHDOWNABLE in a where clause; as a column or
+    an argument of another expression, its missing code was called, which raised \c PSEUDO-METHOD-DOES-NOT-EXIST
+*/
+class SqlUtilExpressionNotPushdownableTest inherits QUnit::Test {
+    constructor() : Test("SqlUtilExpressionNotPushdownable", "1.0", \ARGV) {
+        addTestCase("an expression without SQL is refused wherever it is", \notPushdownable());
+        set_return_value(main());
+    }
+
+    private static hash<DataProviderExpression> exp(string op, list<auto> args) {
+        return <DataProviderExpression>{"exp": op, "args": args};
+    }
+
+    private static hash<DataProviderFieldReference> fld(string name) {
+        return <DataProviderFieldReference>{"field": name};
+    }
+
+    notPushdownable() {
+        XdbcFirebirdTable t(new PushdownOfflineDatasource(), "pd_t");
+        t.setupTable({"columns": {"id": {"qore_type": "integer", "notnull": True}, "s": {"qore_type": "string",
+            "size": 20}}});
+        # the premise: Firebird has no SQL for these expressions
+        assertFalse(exists t.getExpressionMap(){DP_OP_REGEX_SUBST}.code);
+        assertFalse(exists t.getExpressionMap(){DP_OP_REGEX_MATCH}.code);
+
+        list<auto> args;
+        # in a where clause, as before
+        assertThrows("SQLUTIL-EXPRESSION-NOT-PUSHDOWNABLE", "regex-match", sub () {
+            t.getSelectSql({"where": exp(DP_OP_REGEX_MATCH, (fld("s"), "a"))}, \args);
+        });
+        # as a column
+        assertThrows("SQLUTIL-EXPRESSION-NOT-PUSHDOWNABLE", "regex-subst", sub () {
+            t.getSelectSql({"columns": (exp(DP_OP_REGEX_SUBST, (fld("s"), "a", "b")),)}, \args);
+        });
+        # as an argument of another expression
+        assertThrows("SQLUTIL-EXPRESSION-NOT-PUSHDOWNABLE", "regex-subst", sub () {
+            t.getSelectSql({"columns": (exp(COP_UPPER, (exp(DP_OP_REGEX_SUBST, (fld("s"), "a", "b")),)),)}, \args);
+        });
+        # and in a comparison of a where clause
+        assertThrows("SQLUTIL-EXPRESSION-NOT-PUSHDOWNABLE", "regex-subst", sub () {
+            t.getSelectSql({"where": exp(OP_EQ, (exp(DP_OP_REGEX_SUBST, (fld("s"), "a", "b")), "x"))}, \args);
+        });
+    }
+}
