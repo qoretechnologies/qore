@@ -1,0 +1,133 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/SqlUtil
+%requires ../../../../qlib/Sqlite3SqlUtil.qm
+%requires ../../../../qlib/PgsqlSqlUtilBase.qm
+%requires ../../../../qlib/QUnit.qm
+
+%prepend-module-path "${SCRIPT_DIR}"
+%requires ./PgsqlTestIsolation.qm
+
+%try-module sqlite3
+%define NoSqlite3
+%endtry
+
+%try-module pgsql
+%define NoPgsql
+%endtry
+
+%exec-class SqlUtilOrderByDirectionTest
+
+#! Tests that the direction of an order by entry is kept whatever SQL names its column
+/** The direction of an entry was looked up by the SQL that names its column, but recorded by the name it was given
+    with, so a descending order was lost for a quoted column (a reserved word or a name that is not an ordinary
+    identifier), for a column of a joined table, and with a limit or an offset on every database
+*/
+class SqlUtilOrderByDirectionTest inherits QUnit::Test {
+    private {
+        *Datasource sqlite;
+        bool pg_live = False;
+    }
+
+    constructor() : Test("SqlUtilOrderByDirection", "1.0", \ARGV) {
+        addTestCase("SQLite: a descending order is kept for quoted and joined columns", \sqliteSql());
+        addTestCase("SQLite: a descending order sorts the rows", \sqliteRows());
+        addTestCase("PostgreSQL: a descending order is kept for quoted and joined columns", \pgsqlSql());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+%ifndef NoSqlite3
+        sqlite = new Datasource("sqlite3:x@:memory:");
+        sqlite.exec("create table t (id integer not null primary key, \"order\" integer, \"my col\" integer)");
+        sqlite.exec("create table t2 (id integer not null primary key, t_id integer)");
+        map sqlite.vexec("insert into t (id, \"order\", \"my col\") values (%v, %v, %v)", ($1, $1 * 10, $1 * 100)),
+            (1, 2, 3);
+        sqlite.commit();
+%endif
+    }
+
+    globalTearDown() {
+        if (sqlite) {
+            sqlite.rollback();
+        }
+        if (pg_live) {
+            PgsqlRunSchema::teardown();
+        }
+    }
+
+    private Datasource getSqlite() {
+%ifdef NoSqlite3
+        testSkip("no sqlite3 module");
+%endif
+        return sqlite;
+    }
+
+    #! checks the SQL of the order by entries of a table, with and without a limit and an offset
+    private checkSql(AbstractTable t, string order_sql, string mycol_sql) {
+        list<auto> args;
+        foreach hash<auto> page in ({}, {"limit": 2}, {"limit": 2, "offset": 1}) {
+            string desc = sprintf("%y", page);
+            # a reserved word with a "-" prefix
+            string sql = t.getSelectSql({"columns": ("id",), "orderby": ("-order", "id")} + page, \args);
+            assertRegex(" order by " + order_sql + " desc, id", sql, "reserved word " + desc);
+            # a name that is not an ordinary identifier, as a qualifier hash
+            sql = t.getSelectSql({"columns": ("id",), "orderby": ({"column": "my col", "desc": True}, "id")} + page,
+                \args);
+            assertRegex(" order by " + mycol_sql + " desc, id", sql, "qualifier hash " + desc);
+            # a column given by its number in the select list, as a qualifier hash
+            sql = t.getSelectSql({"columns": ("order", "id"), "orderby": ({"column": 1, "desc": True},)} + page,
+                \args);
+            assertRegex(" order by " + order_sql + " desc", sql, "column number " + desc);
+        }
+    }
+
+    sqliteSql() {
+        Datasource ds = getSqlite();
+        Sqlite3Table t(ds, "t");
+        checkSql(t, "\"order\"", "\"my col\"");
+
+        # a column of the table in a join is named with the table, so its direction was lost even for an
+        # ordinary name
+        list<auto> args;
+        string sql = t.getSelectSql({"columns": ("id",), "join": join_inner(new Sqlite3Table(ds, "t2"), "t2",
+            {"id": "t_id"}), "orderby": ("-id",)}, \args);
+        assertRegex(" order by t\\.id desc", sql);
+    }
+
+    sqliteRows() {
+        Datasource ds = getSqlite();
+        Sqlite3Table t(ds, "t");
+        assertEq((3, 2, 1), t.select({"columns": ("id",), "orderby": "-order"}).id);
+        assertEq((3, 2), t.select({"columns": ("id",), "orderby": "-my col", "limit": 2}).id);
+        assertEq((2, 1), t.select({"columns": ("id",), "orderby": "-order", "limit": 2, "offset": 1}).id);
+    }
+
+    pgsqlSql() {
+%ifdef NoPgsql
+        testSkip("pgsql module unavailable");
+%endif
+        if (!ENV.QORE_DB_CONNSTR_PGSQL) {
+            testSkip("live disposable database required");
+        }
+        PgsqlRunSchema::setup(ENV.QORE_DB_CONNSTR_PGSQL, "SqlUtilOrderByDirection");
+        pg_live = True;
+        Datasource ds(ENV.QORE_DB_CONNSTR_PGSQL);
+        on_exit ds.rollback();
+        ds.execRaw("create table obd_t (id int not null primary key, \"order\" int, \"my col\" int)");
+        map ds.vexec("insert into obd_t (id, \"order\", \"my col\") values (%v, %v, %v)", ($1, $1 * 10, $1 * 100)),
+            (1, 2, 3);
+        ds.commit();
+        PgsqlTable t(ds, "obd_t");
+        checkSql(t, "\"order\"", "\"my col\"");
+        assertEq((3, 2), t.select({"columns": ("id",), "orderby": "-my col", "limit": 2}).id);
+        assertEq((2, 1), t.select({"columns": ("id",), "orderby": "-order", "limit": 2, "offset": 1}).id);
+    }
+}

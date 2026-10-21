@@ -6065,11 +6065,15 @@ string sql = table.getSelectSql(sh, \args);
 
         if (info.query_hash.orderby) {
             # process minuses and orderby qualifier hashes to generate
-            # "orderbydesc", "orderbydescidx", and "orderbynulls" keys
+            # "orderbydesc", "orderbydescidx", and "orderbynulls" keys; the direction of each entry is also
+            # recorded by its position in the list ("orderbydescidx"), as the SQL that an entry gives is not the
+            # name it was given with: a column that is quoted and a column with a table prefix in a join are named
+            # otherwise in SQL, so a direction looked up by the SQL was lost
             foreach auto k in (\info.query_hash.orderby) {
                 if (k.typeCode() == NT_STRING && k =~ /^-/) {
                     k = k.substr(1);
                     info.query_hash.orderbydesc{k} = True;
+                    info.query_hash.orderbydescidx{$#} = True;
                 } else if (k.typeCode() == NT_HASH && !k.hasKey("cop")) {
                     # orderby qualifier hash: {"column": ..., "desc": ..., "nulls": ...}
                     if (!k.hasKey("column")) {
@@ -6079,10 +6083,9 @@ string sql = table.getSelectSql(sh, \args);
                     if (k.desc) {
                         if (k.column.typeCode() == NT_STRING) {
                             info.query_hash.orderbydesc{k.column} = True;
-                        } else {
-                            # column operator — use position-based index
-                            info.query_hash.orderbydescidx{$#} = True;
                         }
+                        # a column or a column operator: the position in the list
+                        info.query_hash.orderbydescidx{$#} = True;
                     }
                     if (k.nulls) {
                         string nv = k.nulls.lwr();

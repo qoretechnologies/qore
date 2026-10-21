@@ -64,6 +64,7 @@ class OracleIdentifierQuotingTest inherits QUnit::Test {
         addTestCase("foreign constraint SQL", \foreignConstraintSql());
         addTestCase("sequence, view and trigger SQL", \objectSql());
         addTestCase("table SQL without a connection", \offlineTableSql());
+        addTestCase("a descending order is kept for quoted columns, on every limit path", \orderByDirection());
         addTestCase("column aliases", \aliasSql());
         addTestCase("live table with hostile names", \liveTest());
         set_return_value(main());
@@ -201,6 +202,33 @@ class OracleIdentifierQuotingTest inherits QUnit::Test {
         OfflineDatasource ds("oracle:omq/pass@db", "Oracle Database 19c Enterprise Edition Release 19.0.0.0.0",
             "oracle");
         return new OracleTable(ds, name);
+    }
+
+    #! the direction of an order by entry was looked up by the SQL that names its column, so it was lost for a quoted
+    #! column, also in the ROWNUM page of Oracle before 12c and in a locked page
+    orderByDirection() {
+        foreach string version in ("Oracle Database 19c Enterprise Edition Release 19.0.0.0.0",
+                "Oracle Database 11g Enterprise Edition Release 11.2.0.4.0") {
+            OfflineDatasource ds("oracle:omq/pass@db", version, "oracle");
+            OracleTable t(ds, "obd");
+            t.setupTable({
+                "columns": {
+                    "id": {"qore_type": "integer", "notnull": True},
+                    "order": {"qore_type": "integer"},
+                    "my col": {"qore_type": "integer"},
+                },
+                "primary_key": {"name": "pk_obd", "columns": ("id",)},
+            });
+            list<auto> args;
+            foreach hash<auto> page in ({}, {"limit": 2}, {"limit": 2, "offset": 1},
+                    {"limit": 2, "forupdate": True}) {
+                string desc = sprintf("%s %y", version, page);
+                assertRegex("order by \"order\" desc, id", t.getSelectSql({"columns": ("id",),
+                    "orderby": ("-order", "id")} + page, \args), "reserved word " + desc);
+                assertRegex("order by \"MY COL\" desc, id", t.getSelectSql({"columns": ("id",),
+                    "orderby": ({"column": "my col", "desc": True}, "id")} + page, \args), "qualifier " + desc);
+            }
+        }
     }
 
     offlineTableSql() {

@@ -172,6 +172,10 @@ module SqlUtil {
       \c cache as well; which parameters can be altered depends on the database, and the starting value is never
       changed, as that would reset the current value.  A new sequence is created with every parameter of its
       description (@ref SqlUtil::AbstractSequence::setDescription() "AbstractSequence::setDescription()")
+    - fixed a descending \c orderby entry (<tt>"-column"</tt> or a qualifier hash with \c desc) being sorted in
+      ascending order for a column that is quoted in SQL (a reserved word or a name that is not an ordinary
+      identifier) and for a column of the table in a join, with and without \c limit and \c offset, on every
+      database
     - fixed a descending sequence that starts below its maximum being refused with \c SEQUENCE-ERROR, and a
       sequence that starts above its maximum, or with a maximum of 0 below its start, being accepted, so that the
       database refused it when it was created; the starting value is checked against the maximum in both

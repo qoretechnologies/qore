@@ -50,6 +50,7 @@ class MssqlIdentifierQuotingTest inherits QUnit::Test {
         addTestCase("table names", \tableNames());
         addTestCase("DDL with hostile names", \ddlSql());
         addTestCase("DML with hostile names", \dmlSql());
+        addTestCase("a descending order is kept for quoted columns, with a limit and an offset", \orderByDirection());
         addTestCase("aliases", \aliasSql());
         addTestCase("sequences", \sequenceSql());
         addTestCase("maintenance and savepoints", \maintenanceSql());
@@ -75,6 +76,20 @@ class MssqlIdentifierQuotingTest inherits QUnit::Test {
             "indexes": {"ix [o]": {"columns": ("order", "order date")}},
         });
         return t;
+    }
+
+    #! the direction of an order by entry was looked up by the SQL that names its column, so it was lost for a quoted
+    #! column, with or without a limit and an offset
+    orderByDirection() {
+        MssqlTable t = table(recordingDatasource());
+        list<auto> args;
+        foreach hash<auto> page in ({}, {"limit": 2}, {"limit": 2, "offset": 1}) {
+            assertRegex("order by \\[order\\] desc, id", t.getSelectSql({"columns": ("id",),
+                "orderby": ("-order", "id")} + page, \args), sprintf("reserved word %y", page));
+            assertRegex("order by \\[order date\\] desc, id", t.getSelectSql({"columns": ("id",),
+                "orderby": ({"column": "order date", "desc": True}, "id")} + page, \args),
+                sprintf("qualifier %y", page));
+        }
     }
 
     ordinaryNames() {

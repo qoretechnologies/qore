@@ -74,6 +74,7 @@ class FirebirdIdentifierQuotingTest inherits QUnit::Test {
 
     constructor() : Test("FirebirdIdentifierQuotingTest", "1.0", \ARGV) {
         addTestCase("ordinary names are unchanged", \ordinaryNames());
+        addTestCase("a descending order is kept for quoted columns, with a limit and an offset", \orderByDirection());
         addTestCase("reserved words are quoted as before", \reservedWords());
         addTestCase("other names are quoted in upper case and escaped", \quotedNames());
         addTestCase("names that cannot be identifiers are refused", \refusedNames());
@@ -91,6 +92,24 @@ class FirebirdIdentifierQuotingTest inherits QUnit::Test {
         XdbcFirebirdTable t(ds, name);
         t.setupTable({"columns": columns} + desc);
         return t;
+    }
+
+    #! the direction of an order by entry was looked up by the SQL that names its column, so it was lost for a quoted
+    #! column, with or without a limit and an offset
+    orderByDirection() {
+        FirebirdRecordingDatasource ds();
+        XdbcFirebirdTable t = getTable(ds, "obd", {
+            "id": {"qore_type": "integer", "notnull": True},
+            "order": {"qore_type": "integer"},
+            "my col": {"qore_type": "integer"},
+        }, {"primary_key": {"name": "pk_obd", "columns": ("id",)}});
+        list<auto> args;
+        foreach hash<auto> page in ({}, {"limit": 2}, {"limit": 2, "offset": 1}) {
+            assertRegex("order by \"order\" desc, id", t.getSelectSql({"columns": ("id",),
+                "orderby": ("-order", "id")} + page, \args), sprintf("reserved word %y", page));
+            assertRegex("order by \"MY COL\" desc, id", t.getSelectSql({"columns": ("id",),
+                "orderby": ({"column": "my col", "desc": True}, "id")} + page, \args), sprintf("qualifier %y", page));
+        }
     }
 
     ordinaryNames() {
