@@ -127,6 +127,9 @@ public class Http2SseStream inherits AbstractSseConnection {
     }
 
     #! Queues a structured SSE event for sending
+    /** @throw SSE-EVENT-ERROR the event type or ID contains a NUL, CR or LF character, or the retry value is not a
+        non-negative integer; nothing is queued (see @ref HttpServerAsyncIo::SseEventFormat "SseEventFormat")
+    */
     queueEvent(*string event_type, string data, *string id, *int retry) {
         queueRawEvent({
             "type": event_type,
@@ -137,6 +140,9 @@ public class Http2SseStream inherits AbstractSseConnection {
     }
 
     #! Queues a raw SSE event hash for sending
+    /** @throw SSE-EVENT-ERROR the event type or ID contains a NUL, CR or LF character, or the retry value is not a
+        non-negative integer; nothing is queued (see @ref HttpServerAsyncIo::SseEventFormat "SseEventFormat")
+    */
     queueRawEvent(hash<auto> event) {
         queueRawString(formatSseEvent(event));
     }

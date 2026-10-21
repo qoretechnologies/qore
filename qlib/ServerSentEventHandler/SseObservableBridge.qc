@@ -209,6 +209,10 @@ public class SseObservableBridge inherits DataProvider::Observer {
 
         If @c event_id matches the configured @c terminate_on, the stream
         is closed after the chunk is enqueued.
+
+        @throw SSE-EVENT-ERROR @p event_id contains a NUL, CR or LF character,
+        which an event stream cannot carry; nothing is queued, and the
+        Observable reports the error after notifying its other observers
     */
     update(string event_id, hash<auto> data_) {
         if (event_filter && !event_filter.contains(event_id)) {
@@ -269,6 +273,10 @@ public class SseObservableBridge inherits DataProvider::Observer {
         through an Observable (e.g. mixing snapshot events and live events)
         can enqueue their own messages.  Most callers should never need
         this.
+
+        @throw SSE-EVENT-ERROR the event type or ID contains a NUL, CR or LF
+        character, which an event stream cannot carry, or the retry value is
+        negative; nothing is queued
     */
     pushMessage(hash<SseMessageInfo> msg) {
         msg = validateOutgoingEvent(msg);
