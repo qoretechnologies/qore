@@ -1,0 +1,242 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    A socket bound on all interfaces never shares its port with a socket that another program holds for IPv4 on
+    0.0.0.0 or 127.0.0.1, because an IPv4 client of such an address would reach the other socket instead.  Linux
+    refuses such a bind; macOS allowed it for the dual-stack IPv6 wildcard socket that a bind on all interfaces
+    opens, and for an IPv4 wildcard socket with SO_REUSEADDR, and its system-assigned ports for the IPv6 wildcard
+    address did not avoid ports held for IPv4.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class SocketWildcardBindTest
+
+class SocketWildcardBindTest inherits QUnit::Test {
+    public {
+        #! the number of consecutive ports held for the system-assigned port tests
+        const HeldPorts = 64;
+    }
+
+    constructor() : Test("SocketWildcardBindTest", "1.0") {
+        addTestCase("a given port that a listener holds on 127.0.0.1 is refused", \givenPortLoopbackTest());
+        addTestCase("a given port that a listener holds on 0.0.0.0 is refused", \givenPortWildcardTest());
+        addTestCase("a system-assigned port is one that no IPv4 listener holds", \systemPortTest());
+        addTestCase("a server restarted on its port while its connections are in TIME_WAIT binds the port",
+            \timeWaitTest());
+        addTestCase("a datagram socket on all interfaces is refused a port held for IPv4", \datagramTest());
+        addTestCase("a free given port is bound and serves IPv4 clients", \freePortTest());
+        set_return_value(main());
+    }
+
+    #! returns a listening TCP socket on the given IPv4 address and a system-assigned or given port
+    private static Socket listener(string address, int port = 0) {
+        Socket s();
+        s.bindINET(address, port, True, AF_INET);
+        s.listen();
+        return s;
+    }
+
+    #! returns a bound datagram socket on the given IPv4 address
+    private static Socket datagram(string address, int port = 0, bool reuse = False) {
+        Socket s();
+        s.bindINET(address, port, reuse, AF_INET, SOCK_DGRAM);
+        return s;
+    }
+
+    #! the binds on all interfaces of a given port, each returning the socket bound or throwing the bind's error
+    private static hash<string, code> wildcardBinds() {
+        return {
+            "bindINET() without an address": Socket sub (int port) {
+                Socket s();
+                s.bindINET(NOTHING, port, True);  # all-interfaces: tests the bind on all interfaces
+                return s;
+            },
+            "bindINET() on the IPv6 wildcard address": Socket sub (int port) {
+                Socket s();
+                s.bindINET("::", port, True, AF_INET6);  # all-interfaces: tests the bind on all interfaces
+                return s;
+            },
+            "bindINET() on the IPv4 wildcard address": Socket sub (int port) {
+                Socket s();
+                s.bindINET("0.0.0.0", port, True, AF_INET);  # all-interfaces: tests the bind on all interfaces
+                return s;
+            },
+            "bind() with a port": Socket sub (int port) {
+                Socket s();
+                if (s.bind(port, True)) {
+                    throw "SOCKET-BIND-ERROR", sprintf("bind(%d) failed: %s", port, strerror());
+                }
+                return s;
+            },
+        };
+    }
+
+    #! asserts that every bind on all interfaces of the port is refused with SOCKET-BIND-ERROR (EADDRINUSE)
+    private refusedEverywhere(int port, string holder, *list<string> skip) {
+        foreach hash<auto> i in (wildcardBinds().pairIterator()) {
+            if (inlist(i.key, skip)) {
+                continue;
+            }
+            string label = sprintf("%s of port %d held on %s", i.key, port, holder);
+            *Socket bound;
+            *hash<ExceptionInfo> error;
+            try {
+                bound = i.value(port);
+            } catch (hash<ExceptionInfo> ex) {
+                error = ex;
+            }
+            if (bound) {
+                bound.close();
+            }
+            assertEq("SOCKET-BIND-ERROR", error.err, label + ": refused");
+            assertRegex(strerror(EADDRINUSE), error.desc ?? "", label + ": the port is in use");
+        }
+    }
+
+    givenPortLoopbackTest() {
+        Socket other = listener("127.0.0.1");
+        on_exit other.close();
+        refusedEverywhere(other.getSocketInfo(False).port, "127.0.0.1");
+    }
+
+    givenPortWildcardTest() {
+        Socket other = listener("0.0.0.0");
+        on_exit other.close();
+        refusedEverywhere(other.getSocketInfo(False).port, "0.0.0.0");
+    }
+
+    systemPortTest() {
+        # hold the ports after the next system-assigned port, alternately on 127.0.0.1 and on 0.0.0.0; a system that
+        # assigns ports in sequence (macOS) would give the next bind one of them if it did not avoid them
+        hash<string, Socket> held();
+        on_exit map $1.close(), held.iterator();
+        int first;
+        {
+            Socket probe = listener("127.0.0.1");
+            first = probe.getSocketInfo(False).port;
+            held{first} = probe;
+        }
+        for (int port = first + 1; port <= first + HeldPorts && port < 65536; ++port) {
+            try {
+                held{port} = listener((port % 2) ? "127.0.0.1" : "0.0.0.0", port);
+            } catch (hash<ExceptionInfo> ex) {
+                # a port in use by another program cannot be held, and is not given to the bind either
+            }
+        }
+        assertGt(HeldPorts / 2, held.size(), "most of the ports after the next system-assigned port are held");
+        foreach hash<auto> i in (wildcardBinds().pairIterator()) {
+            Socket s = i.value(0);
+            on_exit s.close();
+            int port = s.getSocketInfo(False).port;
+            assertFalse(held.hasKey(port), sprintf("%s of port 0 got port %d, which no IPv4 listener holds",
+                i.key, port));
+            # an IPv4 client of the port reaches the socket
+            s.listen();
+            Socket client();
+            on_exit client.close();
+            client.connect(sprintf("127.0.0.1:%d", port), 5s);
+            *Socket accepted = s.accept(5s);
+            assertTrue(exists accepted, sprintf("%s: an IPv4 client of port %d reaches the socket", i.key, port));
+            if (accepted) {
+                accepted.close();
+            }
+        }
+    }
+
+    timeWaitTest() {
+        int port;
+        {
+            Socket server();
+            server.bindINET(NOTHING, 0, True);  # all-interfaces: tests the bind on all interfaces
+            server.listen();
+            port = server.getSocketInfo(False).port;
+            Socket client();
+            client.connect(sprintf("127.0.0.1:%d", port), 5s);
+            Socket accepted = server.accept(5s);
+            # the server closes first, so its end of the connection enters TIME_WAIT
+            accepted.close();
+            assertThrows("SOCKET-CLOSED", \client.recv(), (1, 5s), "the client reads the end of the connection");
+            client.close();
+            server.close();
+        }
+        # without SO_REUSEADDR the port cannot be bound while the closed connection holds it
+        {
+            Socket s();
+            on_exit s.close();
+            # all-interfaces: tests the bind on all interfaces
+            assertThrows("SOCKET-BIND-ERROR", \s.bindINET(), (NOTHING, port, False), "TIME_WAIT holds the port");
+        }
+        # the restarted server reuses the address and binds the port
+        Socket restarted();
+        on_exit restarted.close();
+        restarted.bindINET(NOTHING, port, True);  # all-interfaces: tests the bind on all interfaces
+        restarted.listen();
+        assertEq(port, restarted.getSocketInfo(False).port, "the restarted server binds its port");
+    }
+
+    datagramTest() {
+        foreach string holder in (("127.0.0.1", "0.0.0.0")) {
+            Socket other = datagram(holder);
+            on_exit other.close();
+            int port = other.getSocketInfo(False).port;
+            # the UDP socket of an HTTP/3 listener on all interfaces
+            Socket quic();
+            on_exit quic.close();
+            # all-interfaces: tests the bind on all interfaces
+            assertThrows("SOCKET-BIND-ERROR", \quic.bindINET(), ("::", port, False, AF_INET6, SOCK_DGRAM),
+                sprintf("an IPv6 wildcard datagram socket on port %d held on %s", port, holder));
+            if (holder == "127.0.0.1") {
+                # an IPv4 wildcard datagram socket that reuses the address
+                Socket any();
+                on_exit any.close();
+                # all-interfaces: tests the bind on all interfaces
+                assertThrows("SOCKET-BIND-ERROR", \any.bindINET(), (NOTHING, port, True, AF_UNSPEC, SOCK_DGRAM),
+                    sprintf("a datagram socket on all interfaces on port %d held on 127.0.0.1", port));
+            }
+        }
+    }
+
+    freePortTest() {
+        # a port that is free: take a system-assigned port and release it
+        int port;
+        {
+            Socket probe = listener("127.0.0.1");
+            port = probe.getSocketInfo(False).port;
+            probe.close();
+        }
+        Socket s();
+        on_exit s.close();
+        s.bindINET(NOTHING, port, True);  # all-interfaces: tests the bind on all interfaces
+        s.listen();
+        assertEq(port, s.getSocketInfo(False).port, "the given port is bound");
+        Socket client();
+        on_exit client.close();
+        client.connect(sprintf("127.0.0.1:%d", port), 5s);
+        assertTrue(exists s.accept(5s), "an IPv4 client reaches the socket");
+    }
+}

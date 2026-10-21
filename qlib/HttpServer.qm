@@ -1568,6 +1568,13 @@ server.setCompressionLevels({"br": 4, "zstd": 3});
 
         @note The listener listens on all interfaces with one dual-stack socket that serves both IPv4 and IPv6
         clients; see @ref Qore::Socket::bindINET() "Socket::bindINET()"
+
+        @note On macOS, a listener on all interfaces is refused a port that another program already uses for IPv4 on
+        \c 0.0.0.0 or \c 127.0.0.1 (\c SOCKET-BIND-ERROR), as Linux refuses it, and a port assigned by the system
+        (port \c 0) is one that no IPv4 socket uses.  A program of the same user that later binds a specific address
+        of the port with \c SO_REUSEADDR still receives the IPv4 clients of that address on macOS; a server whose
+        clients connect to one address, such as \c 127.0.0.1, listens on that address with a \c node to avoid it.
+        See @ref Qore::Socket::bindINET() "Socket::bindINET()"
      */
     hash<auto> addListener(int port) {
         hash<auto> rv = addListenerAsync(port).get();
@@ -1625,6 +1632,13 @@ server.setCompressionLevels({"br": 4, "zstd": 3});
         @note A listener with a \c service and no \c node or \c family listens on all interfaces with one
         dual-stack socket that serves both IPv4 and IPv6 clients; see @ref Qore::Socket::bindINET()
         "Socket::bindINET()"
+
+        @note On macOS, a listener on all interfaces is refused a port that another program already uses for IPv4 on
+        \c 0.0.0.0 or \c 127.0.0.1 (\c SOCKET-BIND-ERROR), as Linux refuses it, and a port assigned by the system
+        (port \c 0) is one that no IPv4 socket uses.  A program of the same user that later binds a specific address
+        of the port with \c SO_REUSEADDR still receives the IPv4 clients of that address on macOS; a server whose
+        clients connect to one address, such as \c 127.0.0.1, listens on that address with a \c node to avoid it.
+        See @ref Qore::Socket::bindINET() "Socket::bindINET()"
      */
     hash<auto> addListener(hash<HttpListenerOptionInfo> opts) {
         hash<auto> rv = addListenerAsync(opts).get();
@@ -1703,8 +1717,9 @@ server.setCompressionLevels({"br": 4, "zstd": 3});
         # IPv4 0.0.0.0 silently share a UDP port, after which the kernel delivers
         # IPv4 datagrams only to the IPv4 socket — the H3 listener bound on [::]
         # would then never receive any traffic from IPv4 clients.  With reuseaddr
-        # disabled the bind fails on conflict and the random-port retry path in
-        # addINETListenersInternResolved() picks a fresh port that actually works.
+        # disabled the bind fails on conflict (on macOS, Socket::bindINET() checks
+        # the port for IPv4 on 0.0.0.0 and 127.0.0.1 itself), and the random-port
+        # retry in addListenerIntern() picks a fresh port that actually works.
         udp_sock.bindINET(bind_addr, bind_port, False, family, SOCK_DGRAM);
 
         # Get the actual port that was bound

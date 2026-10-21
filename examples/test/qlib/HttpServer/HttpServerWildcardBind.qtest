@@ -1,0 +1,159 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    A listener on all interfaces never starts on a port that another program uses for IPv4 on 0.0.0.0 or
+    127.0.0.1, since that program, not the server, would receive the IPv4 clients of the port: a given port is
+    refused, and a system-assigned port is one that no IPv4 socket uses.  The UDP socket of an HTTP/3 listener on all
+    interfaces is refused such a port as well.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires HttpServerUtil
+%requires HttpServer
+%requires ../../TestCertificates.qm
+
+%exec-class HttpServerWildcardBindTest
+
+class WildcardBindHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
+            *data body) {
+        return <HttpResponseInfo>{"code": 200, "body": "server"};
+    }
+}
+
+class HttpServerWildcardBindTest inherits QUnit::Test {
+    public {
+        #! the number of consecutive ports held for the system-assigned port test
+        const HeldPorts = 64;
+
+        #! the test certificate and its key
+        const CertPem = TestCertificates::CertPem;
+        const KeyPem = TestCertificates::KeyPem;
+    }
+
+    constructor() : Test("HttpServerWildcardBindTest", "1.0") {
+        addTestCase("a given port that another listener holds for IPv4 is refused", \givenPortTest());
+        addTestCase("a system-assigned port is one that no IPv4 listener holds", \systemPortTest());
+        addTestCase("the HTTP/3 listener of a given port that a datagram socket holds for IPv4 is refused",
+            \http3Test());
+        set_return_value(main());
+    }
+
+    #! returns a listening TCP socket on the given IPv4 address and a system-assigned or given port
+    private static Socket listener(string address, int port = 0) {
+        Socket s();
+        s.bindINET(address, port, True, AF_INET);
+        s.listen();
+        return s;
+    }
+
+    #! returns the response body of a GET request from an IPv4 client of the port
+    private static string get(int port) {
+        Socket s();
+        on_exit s.close();
+        s.connect(sprintf("127.0.0.1:%d", port), 5s);
+        s.send(sprintf("GET / HTTP/1.1\r\nHost: 127.0.0.1:%d\r\nConnection: close\r\n\r\n", port));
+        hash<auto> hdr = s.readHTTPHeader(5s);
+        return s.recv(hdr."content-length".toInt(), 5s);
+    }
+
+    givenPortTest() {
+        foreach string holder in (("127.0.0.1", "0.0.0.0")) {
+            Socket other = listener(holder);
+            on_exit other.close();
+            int port = other.getSocketInfo(False).port;
+            HttpServer server();
+            on_exit server.stop();
+            server.setDefaultHandler("test", new WildcardBindHandler());
+            # all-interfaces: tests the bind on all interfaces
+            assertThrows("SOCKET-BIND-ERROR", strerror(EADDRINUSE), NOTHING, \server.addListener(), port,
+                sprintf("addListener(%d) with the port held on %s", port, holder));
+            # all-interfaces: tests the bind on all interfaces
+            assertThrows("SOCKET-BIND-ERROR", strerror(EADDRINUSE), NOTHING, \server.addListener(),
+                <HttpListenerOptionInfo>{"service": port},
+                sprintf("a listener without a node on port %d held on %s", port, holder));
+        }
+    }
+
+    systemPortTest() {
+        # hold the ports after the next system-assigned port, alternately on 127.0.0.1 and on 0.0.0.0; a system that
+        # assigns ports in sequence (macOS) would give the listener one of them if it did not avoid them
+        hash<string, Socket> held();
+        on_exit map $1.close(), held.iterator();
+        int first;
+        {
+            Socket probe = listener("127.0.0.1");
+            first = probe.getSocketInfo(False).port;
+            held{first} = probe;
+        }
+        for (int port = first + 1; port <= first + HeldPorts && port < 65536; ++port) {
+            try {
+                held{port} = listener((port % 2) ? "127.0.0.1" : "0.0.0.0", port);
+            } catch (hash<ExceptionInfo> ex) {
+                # a port in use by another program cannot be held, and is not given to the listener either
+            }
+        }
+        assertGt(HeldPorts / 2, held.size(), "most of the ports after the next system-assigned port are held");
+        HttpServer server();
+        on_exit server.stop();
+        server.setDefaultHandler("test", new WildcardBindHandler());
+        int port = server.addListener(0).port;  # all-interfaces: tests the bind on all interfaces
+        assertFalse(held.hasKey(port), sprintf("addListener(0) got port %d, which no IPv4 listener holds", port));
+        assertEq("server", get(port), "an IPv4 client of the port reaches the server");
+    }
+
+    http3Test() {
+        # a given port that is free for TCP and held for UDP on 0.0.0.0, the address that receives the IPv4
+        # datagrams of the port instead of the HTTP/3 listener on all interfaces
+        Socket udp();
+        on_exit udp.close();
+        int port;
+        for (int attempt = 0; attempt < 16 && !port; ++attempt) {
+            Socket probe = listener("127.0.0.1");
+            int candidate = probe.getSocketInfo(False).port;
+            probe.close();
+            try {
+                # all-interfaces: the other program's socket on all interfaces
+                udp.bindINET("0.0.0.0", candidate, False, AF_INET, SOCK_DGRAM);
+                port = candidate;
+            } catch (hash<ExceptionInfo> ex) {
+                # the port is in use for UDP; try another one
+            }
+        }
+        assertGt(0, port, "a TCP port is held for UDP");
+        HttpServer server();
+        on_exit server.stop();
+        server.setDefaultHandler("test", new WildcardBindHandler());
+        # all-interfaces: tests the bind on all interfaces
+        assertThrows("HTTPSERVER-H3-BIND-ERROR", \server.addListener(), <HttpListenerOptionInfo>{
+            "service": port,
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+            "enable_h3": True,
+        }, sprintf("an HTTP/3 listener on all interfaces on port %d held for UDP on 0.0.0.0", port));
+    }
+}

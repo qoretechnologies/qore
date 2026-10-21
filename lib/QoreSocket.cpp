@@ -12146,8 +12146,9 @@ static int qore_socket_bind_unix_direct(QoreSocket* s, const char* name, int soc
     lookup for it resolves only the IPv4 wildcard address.  A socket bound there cannot be reached over IPv6, not
     even over the loopback address \c ::1 that \c "localhost" resolves to first (RFC 6724), and an unrelated IPv6
     socket can hold the same port number, so a client may connect to a different service entirely.  A dual-stack
-    socket on the IPv6 wildcard address serves both address families, and when the port is assigned by the system,
-    the port is free in both.
+    socket on the IPv6 wildcard address serves both address families.  Linux refuses its bind if another socket uses
+    the port for IPv4, and assigns a port that is free in both families; macOS does neither, so on macOS the bind
+    checks the port for IPv4 itself; see qore_socket_bind_unshadowed().
 
     Datagram sockets keep the resolved IPv4 wildcard address, because the application addresses each datagram with
     the address family of the socket.
@@ -12188,6 +12189,141 @@ static bool qore_socket_ipv6_unavailable(int err) {
 
 //! The maximum number of ephemeral ports tried for a TCP socket bound to a name whose port is in use in another family
 static constexpr unsigned QORE_BIND_RESERVATION_MAX_PORTS = 64;
+
+#ifdef DARWIN
+//! Returns true if the sandbox, if any, allows a bind of the address
+static bool qore_socket_bind_check_allowed(QoreSandboxManager* sandbox_manager, const struct sockaddr_in& sin,
+        int socktype) {
+    if (!sandbox_manager) {
+        return true;
+    }
+    ExceptionSink check_xsink;
+    bool allowed = sandbox_manager->checkNetworkBind(reinterpret_cast<const struct sockaddr*>(&sin), sizeof(sin),
+        qore_socket_sandbox_proto(AF_INET, socktype), &check_xsink);
+    check_xsink.clear();
+    return allowed;
+}
+
+//! Returns an IPv4 socket address
+static struct sockaddr_in qore_socket_ipv4_addr(uint32_t address, int port) {
+    struct sockaddr_in sin;
+    memset(&sin, 0, sizeof(sin));
+    sin.sin_len = sizeof(sin);
+    sin.sin_family = AF_INET;
+    sin.sin_port = htons(static_cast<uint16_t>(port));
+    sin.sin_addr.s_addr = htonl(address);
+    return sin;
+}
+
+//! Returns true if a socket of the type uses the port on the IPv4 address
+/** The socket that probes the address reuses it, so a connection on the port, also one in \c TIME_WAIT, does not
+    refuse it, but a listening socket, or a bound datagram socket, on the address does.  An address that the sandbox
+    does not allow is not probed.
+*/
+static bool qore_socket_ipv4_port_used(int socktype, uint32_t address, int port,
+        QoreSandboxManager* sandbox_manager) {
+    struct sockaddr_in sin = qore_socket_ipv4_addr(address, port);
+    if (!qore_socket_bind_check_allowed(sandbox_manager, sin, socktype)) {
+        return false;
+    }
+    int fd = socket(AF_INET, socktype, 0);
+    if (fd == QORE_INVALID_SOCKET) {
+        return false;
+    }
+    int opt = 1;
+    setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, (SETSOCKOPT_ARG_4)&opt, sizeof(int));
+    bool used = ::bind(fd, reinterpret_cast<const struct sockaddr*>(&sin), sizeof(sin)) == QORE_SOCKET_ERROR
+        && sock_get_raw_error() == EADDRINUSE;
+    qore_socket_private::closeDescriptor(fd);
+    return used;
+}
+
+//! Returns true if a bind of the socket to the address serves IPv4 clients on all interfaces
+/** That is a bind of an IPv4 socket to 0.0.0.0, or of a dual-stack IPv6 socket to the IPv6 wildcard address.
+*/
+static bool qore_socket_bind_serves_ipv4_wildcard(int sock, const struct sockaddr* addr) {
+    if (addr->sa_family == AF_INET) {
+        return reinterpret_cast<const struct sockaddr_in*>(addr)->sin_addr.s_addr == htonl(INADDR_ANY);
+    }
+    if (addr->sa_family != AF_INET6
+        || !IN6_IS_ADDR_UNSPECIFIED(&reinterpret_cast<const struct sockaddr_in6*>(addr)->sin6_addr)) {
+        return false;
+    }
+    int v6only = 1;
+    socklen_t len = sizeof(v6only);
+    return !getsockopt(sock, IPPROTO_IPV6, IPV6_V6ONLY, &v6only, &len) && !v6only;
+}
+
+//! Binds a dual-stack IPv6 socket on the IPv6 wildcard address to a port that no IPv4 socket uses
+/** The system assigns the port to an IPv4 socket on 0.0.0.0, which keeps the port while the IPv6 socket binds it,
+    and the system assigns no port that an IPv4 socket uses on any address.  A port in use in IPv6 is replaced by
+    another, whose IPv4 socket also keeps the rejected port until the bind is done, so that the system does not
+    assign it again; after \c QORE_BIND_RESERVATION_MAX_PORTS ports, or if no IPv4 socket can be bound, the system
+    assigns the port of the IPv6 socket.
+*/
+static int qore_socket_bind_ipv4_free_port(int sock, const struct sockaddr* addr, size_t addrlen, int socktype,
+        QoreSandboxManager* sandbox_manager) {
+    struct sockaddr_in any = qore_socket_ipv4_addr(INADDR_ANY, 0);
+    if (!qore_socket_bind_check_allowed(sandbox_manager, any, socktype)) {
+        return ::bind(sock, addr, addrlen);
+    }
+    assert(addrlen <= sizeof(struct sockaddr_storage));
+    struct sockaddr_storage bind_addr;
+    memcpy(&bind_addr, addr, addrlen);
+
+    // the IPv4 sockets holding the ports tried; closing them keeps the error number of the bind
+    struct Holders {
+        std::vector<int> fds;
+        ~Holders() {
+            int err = sock_get_raw_error();
+            for (int fd : fds) {
+                qore_socket_private::closeDescriptor(fd);
+            }
+            sock_set_raw_error(err);
+        }
+    } holders;
+    for (unsigned n = 0; n < QORE_BIND_RESERVATION_MAX_PORTS; ++n) {
+        int fd = socket(AF_INET, socktype, 0);
+        if (fd == QORE_INVALID_SOCKET) {
+            break;
+        }
+        holders.fds.push_back(fd);
+        struct sockaddr_in held = any;
+        socklen_t len = sizeof(held);
+        if (::bind(fd, reinterpret_cast<const struct sockaddr*>(&any), sizeof(any)) == QORE_SOCKET_ERROR
+            || getsockname(fd, reinterpret_cast<struct sockaddr*>(&held), &len)) {
+            break;
+        }
+        reinterpret_cast<struct sockaddr_in6*>(&bind_addr)->sin6_port = held.sin_port;
+        if (::bind(sock, reinterpret_cast<const struct sockaddr*>(&bind_addr), addrlen) != QORE_SOCKET_ERROR) {
+            return 0;
+        }
+        if (sock_get_raw_error() != EADDRINUSE) {
+            return QORE_SOCKET_ERROR;
+        }
+    }
+    return ::bind(sock, addr, addrlen);
+}
+#endif
+
+int qore_socket_bind_unshadowed(int sock, const struct sockaddr* addr, size_t addrlen, int socktype,
+        QoreSandboxManager* sandbox_manager) {
+#ifdef DARWIN
+    if ((socktype == SOCK_STREAM || socktype == SOCK_DGRAM) && qore_socket_bind_serves_ipv4_wildcard(sock, addr)) {
+        int port = q_get_port_from_addr(addr);
+        if (port > 0) {
+            if (qore_socket_ipv4_port_used(socktype, INADDR_ANY, port, sandbox_manager)
+                || qore_socket_ipv4_port_used(socktype, INADDR_LOOPBACK, port, sandbox_manager)) {
+                sock_set_raw_error(EADDRINUSE);
+                return QORE_SOCKET_ERROR;
+            }
+        } else if (addr->sa_family == AF_INET6) {
+            return qore_socket_bind_ipv4_free_port(sock, addr, addrlen, socktype, sandbox_manager);
+        }
+    }
+#endif
+    return ::bind(sock, addr, addrlen);
+}
 
 //! Holds the port of a TCP socket bound to one address of a name on the name's addresses in other address families
 /** A client that connects to the name tries the name's addresses in turn (IPv6 first, RFC 8305), and a port number
@@ -12430,7 +12566,8 @@ static int qore_socket_bind_inet_resolved_direct(QoreSocket* s, const char* name
             continue;
         }
         int prt = q_get_port_from_addr(reinterpret_cast<const struct sockaddr*>(&ai.addr));
-        if (!priv->bindIntern(reinterpret_cast<struct sockaddr*>(&ai.addr), ai.addrlen, prt, reuseaddr)) {
+        if (!priv->bindIntern(reinterpret_cast<struct sockaddr*>(&ai.addr), ai.addrlen, prt, reuseaddr,
+                sandbox_manager)) {
             // an allowed address was bound; a denial of another address is not an error
             denied_xsink.clear();
             if (bound) {
@@ -12636,7 +12773,7 @@ static int qore_socket_bind_sockaddr_direct(QoreSocket* s, const struct sockaddr
     if (priv->sock == QORE_INVALID_SOCKET && priv->openINET())
         return -1;
 
-    if ((::bind(priv->sock, addr, size)) == QORE_SOCKET_ERROR) {
+    if (qore_socket_bind_unshadowed(priv->sock, addr, size, SOCK_STREAM, sandbox_manager) == QORE_SOCKET_ERROR) {
 #ifdef _Q_WINDOWS
         // set errno from windows error
         sock_get_error();
@@ -12673,7 +12810,7 @@ int qore_socket_bind_family_sockaddr_direct(QoreSocket* s, int family, const str
     if (priv->sock == QORE_INVALID_SOCKET && priv->openINET(family, sock_type, protocol))
         return -1;
 
-    if ((::bind(priv->sock, addr, size)) == -1) {
+    if (qore_socket_bind_unshadowed(priv->sock, addr, size, sock_type, sandbox_manager) == QORE_SOCKET_ERROR) {
 #ifdef _Q_WINDOWS
         // set errno from windows error
         sock_get_error();

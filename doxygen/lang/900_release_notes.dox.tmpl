@@ -1643,6 +1643,17 @@ val = "string";      # OK
     text is parsed or used as a hash key, as for UTF-16, and they cannot be used as the default encoding.
     @endparblock
 
+    @par On macOS, a Listener on All Interfaces Is Refused a Port That Another Program Uses for IPv4
+    @parblock
+    On macOS, a listener on all interfaces no longer starts on a port that another program already uses for IPv4 on
+    \c 0.0.0.0 or \c 127.0.0.1, whose IPv4 clients reached the other program instead of the server; the bind fails
+    with \c SOCKET-BIND-ERROR, as it does on Linux.  A port chosen by the system (port \c 0) is one that no IPv4
+    socket uses, and a server restarted on its port while connections of its earlier run are in \c TIME_WAIT still
+    starts.  This applies to binds of a @ref Qore::Socket "Socket" and to the listeners of
+    @ref httpserverintro "HttpServer", including the UDP socket of an HTTP/3 listener; see
+    @ref Qore::Socket::bindINET() "Socket::bindINET()".
+    @endparblock
+
     @subsection qore_3_0_0_new_features New Features in Qore
     @par LLVM-backed Execution Modes and AOT Compilation
     @parblock

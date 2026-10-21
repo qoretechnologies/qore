@@ -3889,7 +3889,7 @@ if (sock.bind(80, True))
 
     @note The socket is bound on all interfaces as described for @ref Qore::Socket::bindINET() "Socket::bindINET()"
     without an address or an address family: one dual-stack socket on the IPv6 wildcard address serves both IPv4 and
-    IPv6 clients
+    IPv6 clients, and a port that another socket uses for IPv4 is refused as described there
 
     @see Socket::bindINET() and Socket::bindUNIX()
 
@@ -3930,7 +3930,18 @@ nothing Socket::bindUNIX(string path, softint socket_type = SOCK_STREAM,
 
     Internally, bind addresses are resolved by the socket async I/O controller; internal bind() operations are tried in sequence for each address returned; as soon as a bind operation is successful, the method returns. If none of the addresses can be bound, then an exception is thrown.
 
-    A stream socket without a bind address and with @ref Qore::AF_UNSPEC "AF_UNSPEC" is bound on all interfaces with one dual-stack socket on the IPv6 wildcard address \c "::", which serves both IPv4 and IPv6 clients (RFC 3493 section 5.3), so a client reaches it through any address of the local host, including the IPv6 loopback address \c ::1 that \c "localhost" resolves to first; when the port is assigned by the system (port \c 0), the port is free in both address families.  If the port is in use in either address family, the bind fails.  Only on a system without IPv6 or without dual-stack sockets is the socket bound on the IPv4 wildcard address \c "0.0.0.0" instead.  A datagram socket without a bind address is bound on the IPv4 wildcard address, and an explicit address family binds the wildcard address of that family only.
+    A stream socket without a bind address and with @ref Qore::AF_UNSPEC "AF_UNSPEC" is bound on all interfaces with one dual-stack socket on the IPv6 wildcard address \c "::", which serves both IPv4 and IPv6 clients (RFC 3493 section 5.3), so a client reaches it through any address of the local host, including the IPv6 loopback address \c ::1 that \c "localhost" resolves to first; when the port is assigned by the system (port \c 0), the port is free in both address families.  If the port is in use in either address family, the bind fails, as described below.  Only on a system without IPv6 or without dual-stack sockets is the socket bound on the IPv4 wildcard address \c "0.0.0.0" instead.  A datagram socket without a bind address is bound on the IPv4 wildcard address, and an explicit address family binds the wildcard address of that family only.
+
+    A socket bound on all interfaces for IPv4, that is a stream or datagram socket on \c "0.0.0.0" or a dual-stack
+    socket on \c "::", never shares its port with another socket that uses the port for IPv4, because the IPv4
+    clients of that socket's address would reach it instead of this socket.  Linux refuses such a bind itself.  On
+    macOS, the bind fails with \c SOCKET-BIND-ERROR (\c EADDRINUSE) if another socket uses the port on \c "0.0.0.0"
+    or \c "127.0.0.1"; other addresses are not checked, and connections on the port, including connections in
+    \c TIME_WAIT from an earlier server on the port, do not make the bind fail.  A port assigned by the system (port
+    \c 0) to a stream socket is one that no IPv4 socket uses.  On macOS, a socket of the same user that later binds a specific address of
+    the port and reuses the address still receives the IPv4 clients of that address, which no bind on all interfaces
+    can prevent; a server whose clients connect to one address, such as \c "127.0.0.1" for local clients, binds that
+    address instead to avoid it.
 
     A stream socket bound to a host name, such as \c "localhost", whose addresses are in more than one address
     family, is bound on one address and holds its port on the name's addresses in the other address families with
@@ -3964,7 +3975,9 @@ sock.bindINET("fe80::21c:42ff:fe00:8", 1001, True); @endcode
 
     @see Socket::bind() and Socket::bindUNIX()
 
-    @since %Qore 3.0 a stream socket bound on all interfaces serves IPv6 clients as well as IPv4 clients
+    @since %Qore 3.0 a stream socket bound on all interfaces serves IPv6 clients as well as IPv4 clients, and on macOS a
+    socket bound on all interfaces is refused a port that another socket uses for IPv4 on \c "0.0.0.0" or
+    \c "127.0.0.1"
 */
 nothing Socket::bindINET(*string bind_address, *softstring service, softbool reuse_address = False,
         softint family = AF_UNSPEC, softint socket_type = SOCK_STREAM, softint protocol = 0) [flags=NAMED_ARGS] {

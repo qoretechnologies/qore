@@ -154,6 +154,38 @@ DLLLOCAL QoreSandboxManager* qore_socket_ref_policy_sandbox_manager();
 */
 DLLLOCAL int qore_socket_bind_family_sockaddr_direct(QoreSocket* s, int family, const struct sockaddr* addr, int size,
     int sock_type, int protocol, QoreSandboxManager* sandbox_manager, ExceptionSink* xsink);
+
+//! Binds a socket descriptor so that, on macOS, a socket on all interfaces never shares its port with an IPv4 socket
+/** A socket on all interfaces shares its port with any socket bound to a more specific address of the same port,
+    which receives the clients of that address instead.  Linux refuses a bind on all interfaces of a port that another
+    socket uses for IPv4, and a port that it assigns is free for IPv4.  macOS allows the bind of a dual-stack IPv6
+    socket on the IPv6 wildcard address, and of an IPv4 wildcard socket that reuses the address, over a port that a
+    socket uses on 127.0.0.1, and of the dual-stack socket over a port that an IPv4 wildcard socket uses, and the
+    ports that it assigns to IPv6 sockets are not free for IPv4.
+
+    On macOS, therefore, a bind of a socket that serves IPv4 clients on all interfaces (an IPv4 socket on 0.0.0.0, or
+    a dual-stack IPv6 socket on the IPv6 wildcard address), as a stream or datagram socket:
+    - to a given port fails with \c EADDRINUSE if a socket of the type uses the port on 0.0.0.0 or on 127.0.0.1, as
+      found by binds of sockets that reuse the address and are closed again: a connection on the port, including one
+      in \c TIME_WAIT from an earlier server on the port, does not refuse them, but a listening (or bound datagram)
+      socket on the address does
+    - of an IPv6 socket to port 0 gets the port that the system assigns to an IPv4 socket on 0.0.0.0, which no IPv4
+      socket uses on any address; a port in use in IPv6 is replaced, up to \c QORE_BIND_RESERVATION_MAX_PORTS times,
+      and then the system assigns the port
+
+    On other systems, and for other addresses, it is \c bind().
+
+    @param sock the socket descriptor
+    @param addr the address to bind
+    @param addrlen the size of the address
+    @param socktype the socket type
+    @param sandbox_manager the sandbox manager checking binds, if any; an address that it does not allow is not used
+    for a check
+
+    @return 0 for success, \c QORE_SOCKET_ERROR for an error, with the system error number set
+*/
+DLLLOCAL int qore_socket_bind_unshadowed(int sock, const struct sockaddr* addr, size_t addrlen, int socktype,
+    QoreSandboxManager* sandbox_manager);
 DLLLOCAL int sock_get_error();
 DLLLOCAL void sock_set_raw_error(int rc);
 DLLLOCAL QoreListNode* qore_socket_resolve_addrinfo_asyncio(ExceptionSink* xsink, const char* node,
@@ -2931,11 +2963,13 @@ struct qore_socket_private : public QoreReferenceCounter {
     }
 
     // the only place where xsink is optional; the caller checks the bind against the sandbox, with the manager it
-    // resolved on the thread that requested the bind
-    DLLLOCAL int bindIntern(struct sockaddr* ai_addr, size_t ai_addrlen, int prt, bool reuseaddr, ExceptionSink* xsink = 0) {
+    // resolved on the thread that requested the bind, which it also passes for the bind's own checks of the port; see
+    // qore_socket_bind_unshadowed()
+    DLLLOCAL int bindIntern(struct sockaddr* ai_addr, size_t ai_addrlen, int prt, bool reuseaddr,
+            QoreSandboxManager* sandbox_manager, ExceptionSink* xsink = nullptr) {
         reuse(reuseaddr);
 
-        if ((::bind(sock, ai_addr, ai_addrlen)) == QORE_SOCKET_ERROR) {
+        if (qore_socket_bind_unshadowed(sock, ai_addr, ai_addrlen, stype, sandbox_manager) == QORE_SOCKET_ERROR) {
             // capture the bind() errno before close(), which invokes ::shutdown()
             // on the not-yet-connected socket and clobbers errno with ENOTCONN —
             // hiding the real reason (EADDRINUSE, EACCES, EAFNOSUPPORT, ...) from
@@ -2990,8 +3024,10 @@ struct qore_socket_private : public QoreReferenceCounter {
         strncpy(addr.sun_path, name, sizeof(addr.sun_path) - 1);
         addr.sun_path[sizeof(addr.sun_path) - 1] = '\0';
 
-        if (bindIntern((sockaddr*)&addr, sizeof(struct sockaddr_un), -1, false, xsink))
+        if (bindIntern(reinterpret_cast<struct sockaddr*>(&addr), sizeof(struct sockaddr_un), -1, false, nullptr,
+                xsink)) {
             return -1;
+        }
 
         // save socket file name for deleting on close
         socketname = addr.sun_path;
