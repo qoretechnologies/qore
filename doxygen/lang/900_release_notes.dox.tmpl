@@ -5105,6 +5105,15 @@ while (*binary chunk = input.read(65536)) {
     - Fixed reference cycles in rare cases never being collected when references to two of their objects from outside
       the cycle were released by different threads at the same time
 
+    - Fixed an exception raised by a destructor, when a @ref background "background" thread releases the last
+      reference to an object that its expression held (a variable captured by a closure, an argument of the call, an
+      operand of an operator, or an element of a list or hash), being raised outside of the thread's exception
+      handling, which aborted a debug build of Qore
+
+    - Fixed a possible crash when the @ref background "background operator" raises an exception preparing a key of
+      a hash in its expression for the new thread, for example a key that calls a function with a closure created in
+      a destructor
+
     - Fixed threads with a small stack size on Linux with glibc having less stack for their code than the size set
       with @ref Qore::set_default_thread_stack_size() "set_default_thread_stack_size()": glibc takes the static
       thread-local storage of the process from each thread's stack, which left a thread set to 128KB too little stack
