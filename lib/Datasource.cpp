@@ -730,7 +730,7 @@ bool Datasource::activeTransaction() const {
 }
 
 bool Datasource::getAutoCommit() const {
-    return priv->autocommit;
+    return priv->getAutoCommit();
 }
 
 bool Datasource::isOpen() const {
@@ -746,7 +746,7 @@ void Datasource::setConnectionValues() {
 }
 
 void Datasource::setAutoCommit(bool ac) {
-    priv->autocommit = ac;
+    priv->setAutoCommit(ac);
 }
 
 QoreHashNode* qore_dbi_make_typed_select_result(Datasource* ds, const QoreHashNode* columns,
@@ -991,7 +991,7 @@ static void ds_mutation_read_post(qore_ds_private* priv, ExceptionSink* xsink) {
     // in autocommit mode the read is its own implicit transaction, which Datasource::autoCommit()
     // is about to close; no commit outcome is reported for a read, but the transaction identity
     // must not leak into the next operation
-    if (priv->autocommit) {
+    if (priv->getAutoCommit()) {
         priv->tx_id.clear();
         priv->tx_seq = 0;
     }
@@ -1113,7 +1113,7 @@ QoreValue Datasource::exec_internal(bool doBind, const QoreString* query_str, co
         }
     }
 
-    const bool tx_begin = !priv->autocommit && !priv->inTransaction();
+    const bool tx_begin = !priv->getAutoCommit() && !priv->inTransaction();
     if (tx_begin && beginImplicitTransaction(xsink))
         return QoreValue();
 
@@ -1126,7 +1126,7 @@ QoreValue Datasource::exec_internal(bool doBind, const QoreString* query_str, co
     QoreValue rv = doBind ? qore_dbi_private::get(*priv->dsl)->execSQL(this, query_str, args, xsink)
         : qore_dbi_private::get(*priv->dsl)->execRawSQL(this, query_str, xsink);;
     //printd(5, "Datasource::exec_internal() this=%p, autocommit=%d, in_transaction=%d, xsink=%d\n", this,
-    //    priv->autocommit, priv->inTransaction(), xsink->isException());
+    //    priv->getAutoCommit(), priv->inTransaction(), xsink->isException());
 
 #ifdef DEBUG
     // the statement has been executed and no commit has been attempted: this is the replay-safe
@@ -1163,7 +1163,7 @@ QoreValue Datasource::exec_internal(bool doBind, const QoreString* query_str, co
         priv->dispatchMutationEvent(ev, xsink);
     }
 
-    if (priv->autocommit) {
+    if (priv->getAutoCommit()) {
         if (priv->getMutationCtx()) {
             priv->commit_in_progress = true;
         }
@@ -1195,7 +1195,7 @@ QoreValue Datasource::exec_internal(bool doBind, const QoreString* query_str, co
 }
 
 int Datasource::autoCommit(ExceptionSink* xsink) {
-    if (priv->autocommit && !priv->connection_aborted)
+    if (priv->getAutoCommit() && !priv->connection_aborted)
         return qore_dbi_private::get(*priv->dsl)->autoCommit(this, xsink);
     return 0;
 }
@@ -1234,7 +1234,7 @@ int Datasource::bulkLoadBegin(const QoreString* table, const QoreListNode* colum
 
     // Match ordinary mutating operations: explicitly start a transaction when the driver requires
     // it, then keep the datasource allocated until the caller commits or rolls back.
-    const bool tx_begin = !priv->autocommit && !priv->inTransaction();
+    const bool tx_begin = !priv->getAutoCommit() && !priv->inTransaction();
     if (tx_begin && beginImplicitTransaction(xsink)) {
         return -1;
     }
@@ -1296,7 +1296,7 @@ int Datasource::bulkLoadEnd(bool success, ExceptionSink* xsink) {
             getDriverName());
         rc = -1;
     }
-    if (success && !rc && !*xsink && priv->autocommit) {
+    if (success && !rc && !*xsink && priv->getAutoCommit()) {
         autoCommit(xsink);
     }
     return *xsink ? -1 : rc;
@@ -1321,7 +1321,7 @@ QoreHashNode* Datasource::describe(const QoreString* query_str, const QoreListNo
 
 int Datasource::beginImplicitTransaction(ExceptionSink* xsink) {
     //printd(5, "Datasource::beginImplicitTransaction() autocommit=%s\n", autocommit ? "true" : "false");
-    if (priv->autocommit) {
+    if (priv->getAutoCommit()) {
         xsink->raiseException("AUTOCOMMIT-ERROR", "%s:%s@%s: transaction management is not available because "
             "autocommit is enabled for this Datasource", getDriverName(), priv->username.c_str(), priv->dbname.c_str());
         return -1;

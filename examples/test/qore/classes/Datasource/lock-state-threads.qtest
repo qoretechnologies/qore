@@ -33,6 +33,7 @@ class DatasourceLockStateThreadsTest inherits QUnit::Test {
         addTestCase("the lock state is read while another thread uses the lock", \testReadLockState());
         addTestCase("the lock timeout is set while another thread uses the lock", \testSetLockTimeout());
         addTestCase("the pool error timeout is set while other threads wait for a connection", \testSetPoolTimeout());
+        addTestCase("the autocommit flag is read while another thread sets it", \testAutoCommit());
         set_return_value(main());
     }
 
@@ -158,4 +159,30 @@ class DatasourceLockStateThreadsTest inherits QUnit::Test {
         assertEq(0, unexpected, "the timeout read is the one set by this thread, and this thread holds no connection");
         checkLockUsers(errors);
     }
+
+    testAutoCommit() {
+        Datasource ds(ConnStr);
+        Counter start(1);
+        Counter done(1);
+        Queue errors();
+        background sub () {
+            on_exit done.dec();
+            try {
+                start.waitForZero();
+                for (int i = 0; i < Rounds; ++i) {
+                    ds.setAutoCommit(!(i % 2));
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                errors.push(sprintf("%s: %s", ex.err, ex.desc));
+            }
+        }();
+        start.dec();
+
+        int on = 0;
+        for (int i = 0; i < Rounds; ++i) {
+            if (ds.getAutoCommit()) {
+                ++on;
+            }
+        }
+        done.waitForZero();
 }

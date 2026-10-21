@@ -62,7 +62,10 @@ struct qore_ds_private {
     std::atomic<bool> in_transaction{false};
     bool active_transaction = false;
     bool isopen = false;
-    bool autocommit = false;
+    // written with the Datasource's locks held (see ManagedDatasource::setAutoCommit()), but read by any thread: by
+    // Datasource::getAutoCommit() and before an action takes the transaction lock, so it is atomic; relaxed ordering
+    // is enough, as the value is an independent snapshot
+    std::atomic<bool> autocommit{false};
     bool connection_aborted = false;
     bool keep_lock = false;
     //! true while a driver commit call is in progress; used to derive commit ambiguity structurally
@@ -128,6 +131,16 @@ struct qore_ds_private {
     DatasourceStatementHelper* dsh;
     std::map<std::string, const TypedHashDecl*> typed_result_hashdecl_cache;
 
+    //! returns the autocommit flag; see autocommit
+    DLLLOCAL bool getAutoCommit() const {
+        return autocommit.load(std::memory_order_relaxed);
+    }
+
+    //! sets the autocommit flag; see autocommit
+    DLLLOCAL void setAutoCommit(bool b) {
+        autocommit.store(b, std::memory_order_relaxed);
+    }
+
     //! returns true if a transaction is in progress on the connection; see in_transaction
     DLLLOCAL bool inTransaction() const {
         return in_transaction.load(std::memory_order_relaxed);
@@ -143,7 +156,7 @@ struct qore_ds_private {
     }
 
     DLLLOCAL qore_ds_private(const qore_ds_private& old, Datasource* n_ds, DatasourceStatementHelper* dsh) :
-            ds(n_ds), autocommit(old.autocommit), dsl(old.dsl),
+            ds(n_ds), autocommit(old.getAutoCommit()), dsl(old.dsl),
             p_username(old.p_username), p_password(old.p_password),
             p_dbname(old.p_dbname), p_db_encoding(old.p_db_encoding),
             p_hostname(old.p_hostname), p_port(old.p_port),
@@ -183,7 +196,7 @@ struct qore_ds_private {
         p_dbname      = other->p_dbname;
         p_hostname    = other->p_hostname;
         p_db_encoding = other->p_db_encoding;
-        autocommit    = other->autocommit;
+        setAutoCommit(other->getAutoCommit());
         p_port        = other->p_port;
     }
 
@@ -295,7 +308,7 @@ struct qore_ds_private {
         ev.tx_id = tx_id.c_str();
         ev.tx_seq = ++tx_seq;
         ev.in_transaction = inTransaction();
-        ev.autocommit = autocommit;
+        ev.autocommit = getAutoCommit();
         int rc = ctx->dispatch(ev, *ds, xsink);
         if (rc && ev.isAdmission()) {
             dispatchMutationNotExecuted(ev, xsink);
