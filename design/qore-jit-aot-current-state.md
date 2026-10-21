@@ -3818,3 +3818,30 @@ retaining ordinary fallback, private-access ordering, raw/parameterized checks,
 live slot state and real-reference ownership. No new call optimization has been
 implemented or measured yet. See RESULTS.md and
 `results-aot-prepared-lvalue-refresh-rejected-macos-arm64.json`. Neither Java parity nor a global ceiling is established.
+
+## Rejected first-public-base acceptance (post-99e3268cb)
+
+The AOT pinned receiver prototype passes all four fixed 5% target gates. Broad
+confirmation reduces integer polymorphic-call time from 22.789 to 20.044 ns/item
+(12.048% versus before, 11.996% versus disabled), and float polymorphic calls
+from 22.816 to 20.909 (8.359%/9.652%). However, list building is 3.203%/3.010%
+slower than before in broad screen/confirmation, failing the repeated >=3%
+aggregate regression gate. The candidate is archived and removed, not retained.
+
+All 4896 runs / 14688 windows and adverse observations are preserved. New v4
+only substitutes the existing checked receiver initializer; ordinary private
+lookup ordering, raw/parameterized checks, live slot state and real ownership
+remain. The rebuilt runtime also changes v3 inlining despite unchanged v3 source.
+List-building time is nearly identical with the new compiler selector disabled,
+so runtime compilation/layout is the next diagnostic lead, not yet a proven cause.
+
+Candidate focused Release: eight fixtures/cases, 9816 assertions, no skips;
+Debug: 2119 per setting. Restored: eight/9634 and Debug 2024 per setting. The first
+native fixture failure (unset structural hashes) is retained with its correction.
+Indexed compound/weak-reference supplements pass and 125 Release aliases are
+restored. No full candidate retention qualification or fresh Java/develop ratio.
+
+Next diagnose frozen list-building code/profile differences and consider an
+isolated translation unit for a changed implementation; do not retry the same
+binary or waive the fixed regression gate. See RESULTS.md and
+`results-aot-first-public-base-rejected-macos-arm64.json`. Neither Java parity nor a global ceiling is established.

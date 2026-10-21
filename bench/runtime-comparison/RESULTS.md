@@ -19595,3 +19595,73 @@ No fresh Java/develop ratio, Java parity or global performance ceiling is claime
 
 All raw timing records, losses, qualification logs, recovery patch, drivers and
 62 audit items: [results-aot-prepared-lvalue-refresh-rejected-macos-arm64.json](results-aot-prepared-lvalue-refresh-rejected-macos-arm64.json).
+
+## Rejected AOT first-public-base acceptance (2026-10-21)
+
+The merged feature baseline is `99e3268cb`, including develop `e8add51ad`.
+The candidate added a versioned pinned receiver initializer. It retained live
+raw/parameterized-object rules, slot checks, access-order fallback and real
+reference ownership, but recognized exact self or first-public-base identity
+without generic class lookup. No class/object/access decision was cached.
+
+Optimized Release `-O3 -DNDEBUG`, `qcc -O3`, three fixed layouts, three warmups
+and three 300-ms samples per fork. Screens use three forks and confirmations
+five. Geometric layout means for the integer polymorphic-call workload:
+
+|!Phase|!Before ns/item|!Candidate ns/item|!Selector off ns/item|!Time reduction vs before|!Time reduction vs selector off
+|Targeted screen|22.620253|20.129421|22.002232|11.012%|8.512%
+|Targeted confirmation|22.752178|20.152931|22.568135|11.424%|10.702%
+|Broad 55-workload screen|22.693621|19.992880|22.786346|11.901%|12.259%
+|Broad 55-workload confirmation|22.789126|20.043574|22.775862|12.048%|11.996%
+
+All four target gates exceed the predeclared 5% minimum versus both controls,
+with every target layout improving. Broad confirmation also reduces floating
+polymorphic-call time from 22.816 to 20.909 ns/item (8.359% versus before;
+9.652% versus disabled). These are whole-workload measurements, not isolated
+call latency or a fresh Java/develop comparison.
+
+The candidate is nevertheless rejected by the unchanged regression gate.
+List-building geometric time is 3.203% slower than before in broad screen and
+3.010% slower in confirmation, meeting the repeated >=3% aggregate rule.
+Confirmation before/candidate/disabled: 27.035937/27.849839/27.818850 ns/item.
+The disabled control shows essentially the same slowdown, pointing to a runtime
+compilation/layout side effect rather than execution of the new acceptance path;
+this is an inference, not a completed diagnosis. No unchanged retry, relaxed
+threshold or runtime optimization is retained.
+
+All 4896 runs / 14688 timed windows and every adverse result are preserved.
+The targeted effect-loop/reverse slowdown did not repeat. Broad screen also
+flags object_short/shuffle487 versus disabled and two_read_short/shuffle487
+versus before; neither repeats. Broad confirmation has no disjoint-layout signal,
+but the aggregate list-building rejection applies regardless of range overlap.
+
+Only integer/float polymorphic receiver initializers change in benchmark LLVM:
+v3-to-v4 helper substitutions. Disabled LLVM matches before after verifying
+startup metadata length. The integer target retains 1228 ARM64 instructions,
+a 496-byte frame, 48 static decref sites and unchanged cancellation/preparation.
+The compiler also changes inlining inside unchanged-source v3 in the rebuilt
+runtime, which is why the same-runtime disabled control is retained. Both
+runtime helper disassemblies and the untimed profile are archived. Reference
+checks: 6507 targeted, 7047 broad. Probe/mixed LLVM bodies are unchanged.
+
+Candidate focused Release passes eight fixtures / eight cases / 9816 assertions,
+with no skips; direct Debug units pass 2119 in both settings. The first native
+test attempt failed nine expectations because fresh same-name class definitions
+had unset structural hashes and were not equivalent. Both old/new acceptance
+paths agreed. Initializing test-local empty-class hashes corrected the fixture;
+a fresh full focused rerun passed. That failed attempt is preserved, not omitted.
+
+The six production edits and existing-test change were archived and restored.
+Fresh restored qualification passes eight Release fixtures / eight cases /
+9634 assertions, plus 2024 Debug native assertions per setting. Indexed compound
+and 61 weak-reference assertions pass; all 125 owned Release qmod aliases are
+restored. These are focused gates, not full selected retention qualification.
+
+Next diagnose frozen list-building code/profile differences and investigate
+translation-unit isolation of the acceptance helper as a distinct implementation,
+with a new fixed plan before measurements. The measured call benefit does not
+justify ignoring the collateral regression. No Java parity or global ceiling
+has been established.
+
+All raw records, losses, qualification/failure logs, recovery patch, drivers and
+62 audit items: [results-aot-first-public-base-rejected-macos-arm64.json](results-aot-first-public-base-rejected-macos-arm64.json).
