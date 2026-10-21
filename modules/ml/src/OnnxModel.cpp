@@ -5881,6 +5881,21 @@ void QoreOnnxSessionPool::clearAsyncLeaderUnlocked() {
     async_leader_tid.compare_exchange_strong(tid, 0);
 }
 
+//! Returns true if the exception reports an error code
+static bool onnx_async_error_is(ExceptionSink& err, const char* code) {
+    QoreValue errv = err.getExceptionErr();
+    return errv.getType() == NT_STRING && !strcmp(errv.get<const QoreStringNode>()->c_str(), code);
+}
+
+bool QoreOnnxSessionPool::isThreadCancel(ExceptionSink& err) {
+    return onnx_async_error_is(err, "THREAD-CANCELLED");
+}
+
+bool QoreOnnxSessionPool::isInterruptOnly(ExceptionSink& err) {
+    // an interrupt of the sandbox that the current batch runs under; it ends that batch only
+    return onnx_async_error_is(err, "PROGRAM-INTERRUPTED");
+}
+
 void QoreOnnxSessionPool::processDynamicRunQueue(ExceptionSink* xsink) {
     while (true) {
         std::vector<std::unique_ptr<AsyncRequest>> batch;
@@ -5899,11 +5914,17 @@ void QoreOnnxSessionPool::processDynamicRunQueue(ExceptionSink* xsink) {
                 target_size = 1;
             }
 
-            const std::string output_signature = async_requests.front()->output_signature;
+            // a batch combines requests with the same outputs that were submitted under the same sandbox; the
+            // batch runs under that sandbox
+            const AsyncRequest& front = *async_requests.front();
+            const std::string output_signature = front.output_signature;
+            auto matches = [&](const AsyncRequest& request) {
+                return request.output_signature == output_signature && request.sandbox.sameSandbox(front.sandbox);
+            };
             auto matching_count = [&]() {
                 size_t count = 0;
                 for (const auto& request : async_requests) {
-                    if (request->output_signature == output_signature) {
+                    if (matches(*request)) {
                         ++count;
                     }
                 }
@@ -5923,7 +5944,7 @@ void QoreOnnxSessionPool::processDynamicRunQueue(ExceptionSink* xsink) {
             size_t count = std::min(target_size, matching_count());
             batch.reserve(count);
             for (auto i = async_requests.begin(); i != async_requests.end() && batch.size() < count;) {
-                if ((*i)->output_signature == output_signature) {
+                if (matches(**i)) {
                     batch.push_back(std::move(*i));
                     i = async_requests.erase(i);
                 } else {
@@ -5936,9 +5957,17 @@ void QoreOnnxSessionPool::processDynamicRunQueue(ExceptionSink* xsink) {
             continue;
         }
 
+        // the batch runs under the sandbox of the code that submitted its requests: an interrupt of that sandbox ends
+        // the batch, and the requests of other submitters go on
+        QoreSandboxCaptureHelper batch_sandbox(batch.front()->sandbox);
+
         if (qore_check_cancel(xsink, "OnnxSessionPool dynamic async batching")) {
             ExceptionSink err;
             err.assimilate(*xsink);
+            if (isInterruptOnly(err)) {
+                rejectAsyncBatch(batch, err);
+                continue;
+            }
             takeQueuedAsyncRequests(batch);
             rejectAsyncBatch(batch, err);
             return;
@@ -5948,11 +5977,7 @@ void QoreOnnxSessionPool::processDynamicRunQueue(ExceptionSink* xsink) {
         for (size_t i = 0; i < batch.size(); ++i) {
             if (i && (i % 100) == 0
                     && qore_check_cancel(xsink, "OnnxSessionPool dynamic async batch input assembly")) {
-                ExceptionSink err;
-                err.assimilate(*xsink);
-                takeQueuedAsyncRequests(batch);
-                rejectAsyncBatch(batch, err);
-                return;
+                break;
             }
             inputs->push(batch[i]->payload.refSelf(), xsink);
             if (*xsink) {
@@ -5960,9 +5985,15 @@ void QoreOnnxSessionPool::processDynamicRunQueue(ExceptionSink* xsink) {
             }
         }
         if (*xsink) {
-            // only this batch fails; the leader goes on with the requests still queued, as after a failed run
             ExceptionSink err;
             err.assimilate(*xsink);
+            if (isThreadCancel(err)) {
+                // the leader itself is cancelled: it exits with every request it has taken and every request queued
+                takeQueuedAsyncRequests(batch);
+                rejectAsyncBatch(batch, err);
+                return;
+            }
+            // only this batch fails; the leader goes on with the requests still queued, as after a failed run
             rejectAsyncBatch(batch, err);
             continue;
         }
@@ -5997,6 +6028,11 @@ void QoreOnnxSessionPool::processDynamicRunQueue(ExceptionSink* xsink) {
                 remaining.reserve(batch.size() - i);
                 for (size_t j = i; j < batch.size(); ++j) {
                     remaining.push_back(std::move(batch[j]));
+                }
+                if (isInterruptOnly(err)) {
+                    // the batch's sandbox was interrupted; the requests of other submitters go on
+                    rejectAsyncBatch(remaining, err);
+                    break;
                 }
                 takeQueuedAsyncRequests(remaining);
                 rejectAsyncBatch(remaining, err);
@@ -6062,7 +6098,9 @@ QoreObject* QoreOnnxSessionPool::submitDynamicRunAsync(const QoreHashNode* input
 
         if (start_leader) {
             ref();
-            int tid = q_start_thread(xsink, dynamicRunAsyncThread, this);
+            // the leader runs the requests of every submitter, each batch under its requests' sandbox, so it does
+            // not inherit the sandbox of the submitter that happens to start it
+            int tid = q_start_thread(xsink, dynamicRunAsyncThread, this, QTF_NO_SANDBOX_INHERIT);
             if (tid == -1) {
                 async_requests.pop_back();
                 --async_submitted;
