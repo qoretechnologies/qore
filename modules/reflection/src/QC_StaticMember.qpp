@@ -53,8 +53,17 @@ auto val = m.getValue();
     @return the value of the static member
 
     @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the class has been destroyed
+    @throw REFLECTION-ACCESS-ERROR the reflection object belongs to another Program whose values the calling code may not read or write, or the calling code's or the class's Program's sandboxing restrictions do not allow the class (see @ref reflection_caller_privilege)
 */
 auto StaticMember::getValue() [flags=RET_VALUE_ONLY] {
+    // the calling code's privileges apply (see @ref reflection_caller_privilege)
+    QoreReflectionCaller caller;
+    if (reflection_check_program_access(caller, m->pgm, "read or write the values of", xsink)) {
+        return QoreValue();
+    }
+    if (reflection_check_class_value_access(caller, m->cls, m->pgm, xsink)) {
+        return QoreValue();
+    }
     // get read access to program object
     QoreExternalProgramContextHelper tch(xsink, m->pgm);
     if (*xsink) {
@@ -74,8 +83,17 @@ m.setValue(val);
 
     @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the class has been destroyed
     @throw RUNTIME-TYPE-ERROR value type is not compatible with the assigned static member's type
+    @throw REFLECTION-ACCESS-ERROR the reflection object belongs to another Program whose values the calling code may not read or write, or the calling code's or the class's Program's sandboxing restrictions do not allow the class (see @ref reflection_caller_privilege)
 */
 nothing StaticMember::setValue(auto val) {
+    // the calling code's privileges apply (see @ref reflection_caller_privilege)
+    QoreReflectionCaller caller;
+    if (reflection_check_program_access(caller, m->pgm, "read or write the values of", xsink)) {
+        return QoreValue();
+    }
+    if (reflection_check_class_value_access(caller, m->cls, m->pgm, xsink)) {
+        return QoreValue();
+    }
     // get read access to program object
     QoreExternalProgramContextHelper tch(xsink, m->pgm);
     if (*xsink) {

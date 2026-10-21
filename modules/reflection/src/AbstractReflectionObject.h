@@ -57,6 +57,49 @@ enum qore_modifier_t {
 
 DLLLOCAL int get_access(ClassAccess access);
 
+//! Checks that the caller may navigate or read or write values in the Program of a reflection object
+/** See QoreReflectionCaller::checkProgramAccess() and design/reflection-caller-privilege.md
+
+    @return 0 if allowed, -1 if REFLECTION-ACCESS-ERROR was raised
+*/
+DLLLOCAL int reflection_check_program_access(const QoreReflectionCaller& caller, const QoreProgram* pgm,
+        const char* what, ExceptionSink* xsink);
+
+//! Checks the functional domain of a class for a method, constructor, copy method or destructor called through reflection
+/** The caller and the Program of the reflection object must both allow the class's domain.
+
+    @param create true to raise CREATE-OBJECT-ERROR (creating an object), false to raise INVALID-FUNCTION-ACCESS
+
+    @return 0 if allowed, -1 if an exception was raised
+*/
+DLLLOCAL int reflection_check_class_call(const QoreReflectionCaller& caller, const QoreClass* cls,
+        const QoreProgram* target, bool create, ExceptionSink* xsink);
+
+//! Checks the functional domain of a class whose members or constants are read or written through reflection
+/** @return 0 if allowed, -1 if REFLECTION-ACCESS-ERROR was raised
+*/
+DLLLOCAL int reflection_check_class_value_access(const QoreReflectionCaller& caller, const QoreClass* cls,
+        const QoreProgram* target, ExceptionSink* xsink);
+
+//! Checks the functional domain of a function or method variant called through reflection
+/** @param cname the class name for a method variant, or nullptr for a function variant
+    @param fname the function or method name
+
+    @return 0 if allowed, -1 if INVALID-FUNCTION-ACCESS was raised
+*/
+DLLLOCAL int reflection_check_variant_call(const QoreReflectionCaller& caller, const QoreExternalVariant* variant,
+        const char* cname, const char* fname, const QoreProgram* target, ExceptionSink* xsink);
+
+//! Returns the namespace in a reflection object's Program that corresponds to a namespace reached from a symbol
+/** A symbol declared in one Program and inherited by another keeps referring to the namespace where it was declared;
+    navigation from it stays in the reflection object's Program (see qore_program_find_namespace()).
+
+    @return the namespace in \a pgm, or nullptr if \a pgm has none with the namespace's path (UNKNOWN-NAMESPACE
+    is raised)
+*/
+DLLLOCAL const QoreNamespace* reflection_program_namespace(QoreProgram* pgm, const QoreNamespace* ns,
+        ExceptionSink* xsink);
+
 //! returns the Program used to resolve reflection lookups: the call's RuntimeConfig Program, else the current one
 DLLLOCAL static inline QoreProgram* get_reflection_lookup_program(RuntimeConfig& runtime_cfg) {
     QoreProgram* pgm = runtime_cfg.getProgram();

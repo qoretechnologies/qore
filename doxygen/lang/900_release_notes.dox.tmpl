@@ -18,6 +18,15 @@
     sandbox of the code that submitted that task.  @ref Qore::SandboxManager::setMaxThreads() "SandboxManager::setMaxThreads()"
     now limits the number of such threads running at once and raises \c THREAD-CREATION-FAILURE at the limit.
 
+    <b>Security</b>: @ref reflection "reflection" follows the privileges of the calling code.  Calling a function or
+    method, constructing an object, or reading or writing a member, constant or global variable through a reflection
+    object is checked against the sandboxing restrictions of the calling code and of the program the symbol belongs
+    to, by the same rule as code written directly; a @ref Qore::Reflection::AbstractVariant "variant" obtained from a
+    reflection object no longer skips that check.  Navigating namespaces, classes, functions, constants or values of
+    another program through a reflection object is allowed only from that program, from a program that created it, or
+    from code at least as privileged as it, so sandboxed code can no longer reach objects, constants, classes or
+    global variables outside its program by walking the namespace tree of a class it inherited.
+
     <b>Security</b>: the steps of a poll operation that the async I/O controller runs on its callback workers,
     such as \c continuePoll() and \c onComplete() of an operation implemented in %Qore, are governed by the
     @ref sandboxing "sandbox" of the code that submitted the operation (see

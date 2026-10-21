@@ -35,6 +35,8 @@
 #include "qore/intern/ConstantList.h"
 #include "qore/intern/QoreNamespaceIntern.h"
 #include "qore/intern/typed_hash_decl_private.h"
+#include "qore/intern/qore_program_private.h"
+#include "qore/QoreSandboxManager.h"
 
 const char* get_access_string(ClassAccess access) {
     switch (access) {
@@ -430,6 +432,27 @@ QoreValue QoreExternalFunction::evalFunction(const QoreExternalVariant* variant,
     );
 }
 
+QoreValue QoreExternalFunction::evalFunction(const QoreExternalVariant* variant, const QoreListNode* args,
+        QoreProgram* pgm, const QoreReflectionCaller& caller, ExceptionSink* xsink) const {
+    const QoreFunction* f = reinterpret_cast<const QoreFunction*>(this);
+    RuntimeConfig& rc = rc_get_current_ref();
+    // the call is deferred as a cross-Program call is (args evaluated in the caller's context, body under the
+    // Program's own options); the override forces the caller's restrictions on the domain check and the body
+    QoreReflectionCallCheckHelper call_check(caller, pgm);
+    if (variant) {
+        // a fixed variant is not re-checked by variant resolution, so check its domain against the override here
+        bool caller_refused = false;
+        if (!caller.allowsDomain(variant->getDomain(), pgm, &caller_refused)) {
+            xsink->raiseException("INVALID-FUNCTION-ACCESS", "%s do not allow access to function '%s(%s)'",
+                caller_refused ? "parse options" : "the parse options of the Program it was found in", getName(),
+                variant->getSignatureText());
+            return QoreValue();
+        }
+    }
+    return f->evalFunction(reinterpret_cast<const AbstractQoreFunctionVariant*>(variant), args, pgm, rc, xsink,
+        nullptr, true);
+}
+
 const QoreExternalVariant* QoreExternalFunction::getFirstVariant() const {
     return reinterpret_cast<const QoreExternalVariant*>(reinterpret_cast<const QoreFunction*>(this)->first());
 }
@@ -562,4 +585,128 @@ int QoreExternalGlobalVar::setValue(const QoreValue val, ExceptionSink* xsink) c
 
     lvh.assign(val.refSelf(), "<value arugment to GlobalVar::setValue()>");
     return *xsink ? -1 : 0;
+}
+
+bool qore_parse_options_allow_domain(const QoreParseOptions& po, int64 domain) {
+    // as at parse time (qore_program_private::parseAddDomain()): a restricting domain must not be set in the parse
+    // options, and a domain the code has to allow explicitly (e.g. DEBUGGER) must be set
+    QoreParseOptions dom(domain);
+    QoreParseOptions allow = dom & QoreParseOptions::POSITIVE_OPTIONS;
+    return !(dom & ~QoreParseOptions::POSITIVE_OPTIONS & po) && ((allow & po) == allow);
+}
+
+const QoreNamespace* qore_program_find_namespace(const QoreProgram& pgm, const QoreNamespace& ns) {
+    const RootQoreNamespace* root = pgm.getRootNS();
+    // a namespace in the Program's tree is its own
+    const QoreNamespace* top = &ns;
+    while (const QoreNamespace* parent = top->getParent()) {
+        top = parent;
+    }
+    if (top == root) {
+        return &ns;
+    }
+    // otherwise the namespace with the same path in the Program's tree, if any
+    if (!ns.getParent()) {
+        return root;
+    }
+    QoreString path(ns.getPath());
+    return pgm.findNamespace(path);
+}
+
+// the functional domains that a Program restricts, and the ones it must allow explicitly
+static const QoreParseOptions qore_restricting_domains(QoreParseOptions(QDOM_ALL) & ~QoreParseOptions::POSITIVE_OPTIONS);
+static const QoreParseOptions qore_positive_domains(QoreParseOptions(QDOM_ALL) & QoreParseOptions::POSITIVE_OPTIONS);
+
+QoreReflectionCaller::QoreReflectionCaller() : pgm(::getProgram()), po(runtime_get_parse_options()),
+        sm(qore_find_thread_sandbox_manager_ref()) {
+    if (!pgm) {
+        pgm = rc_get_current_ref().getProgram();
+    }
+    pgm_id = pgm ? pgm->getProgramId() : 0;
+}
+
+QoreReflectionCaller::~QoreReflectionCaller() {
+    if (sm) {
+        sm->deref(nullptr);
+    }
+}
+
+QoreProgram* QoreReflectionCaller::getProgram() const {
+    return pgm;
+}
+
+QoreParseOptions QoreReflectionCaller::getParseOptions() const {
+    return po;
+}
+
+bool QoreReflectionCaller::allowsDomain(int64 domain, const QoreProgram* target, bool* caller_refused) const {
+    if (!qore_parse_options_allow_domain(po, domain)) {
+        if (caller_refused) {
+            *caller_refused = true;
+        }
+        return false;
+    }
+    if (target && !qore_parse_options_allow_domain(target->getParseOptions(), domain)) {
+        if (caller_refused) {
+            *caller_refused = false;
+        }
+        return false;
+    }
+    return true;
+}
+
+void QoreReflectionCaller::getCallRestrictionOverride(QoreParseOptions& mask, QoreParseOptions& value) const {
+    // the restricting domains the caller sets (force them restricted) and the explicitly-allowed domains the caller
+    // lacks (force them unallowed)
+    QoreParseOptions restrict_bits = po & qore_restricting_domains;
+    QoreParseOptions missing_positive = qore_positive_domains & ~po;
+    mask = restrict_bits | missing_positive;
+    value = restrict_bits;
+}
+
+int QoreReflectionCaller::checkProgramAccess(const QoreProgram* target, const char* what,
+        ExceptionSink* xsink) const {
+    assert(xsink);
+    if (!target || target == pgm) {
+        return 0;
+    }
+    // a Program that created the target (directly or through Programs it created) controls it
+    if (pgm_id && qore_program_private::programCreatedBy(*target, pgm_id)) {
+        return 0;
+    }
+    // a caller at least as privileged as the target: it restricts no domain the target allows (PO_IN_MODULE only
+    // marks module code and is not a privilege), it allows every domain the target allows explicitly, and no sandbox
+    // other than the target's own governs it
+    QoreParseOptions tpo = target->getParseOptions();
+    QoreParseOptions compared = qore_restricting_domains & ~QoreParseOptions(QDOM_IN_MODULE);
+    bool privileged = !((po & compared) & ~tpo) && !((tpo & qore_positive_domains) & ~po);
+    if (privileged && sm) {
+        QoreSandboxManager* target_sm = qore_program_private::get(*const_cast<QoreProgram*>(target))
+            ->getSandboxManagerRef();
+        privileged = (target_sm == sm);
+        if (target_sm) {
+            target_sm->deref(nullptr);
+        }
+    }
+    if (privileged) {
+        return 0;
+    }
+    xsink->raiseException("REFLECTION-ACCESS-ERROR", "code in Program %u cannot %s Program %u: it is not that "
+        "Program, did not create it, and has fewer privileges than it", pgm_id, what, target->getProgramId());
+    return -1;
+}
+
+QoreReflectionCallCheckHelper::QoreReflectionCallCheckHelper(const QoreReflectionCaller& caller,
+        const QoreProgram* target) {
+    (void)target;
+    // force the caller's restrictions as a runtime override: apply_runtime_po_override re-applies it after the
+    // Program-context switch a method call makes, so the domain check and the call body see the caller's
+    // restrictions on top of the target Program's options
+    QoreParseOptions mask, value;
+    caller.getCallRestrictionOverride(mask, value);
+    priv = new RuntimeParseOptionsOverrideHelper(mask, value);
+}
+
+QoreReflectionCallCheckHelper::~QoreReflectionCallCheckHelper() {
+    delete static_cast<RuntimeParseOptionsOverrideHelper*>(priv);
 }

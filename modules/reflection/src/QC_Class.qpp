@@ -94,12 +94,11 @@ static void QoreReflectionClass_deserializer(QoreObject& self, const QoreHashNod
     xsink->raiseException("DESERIALIZATION-ERROR", "Missing serialization data for Class");
 }
 
-int check_constructor(const QoreClass* cls, ExceptionSink* xsink) {
-    // the current Program is the one the reflection object belongs to, which the caller has attached to; its
-    // sandboxing restrictions apply by the same rule as to a class named in source code
-    const QoreProgram* pgm = getProgram();
-    assert(pgm);
-    return pgm ? cls->runtimeCheckDomain(*pgm, xsink) : 0;
+int check_constructor(const QoreReflectionCaller& caller, const QoreClass* cls, const QoreProgram* target,
+        ExceptionSink* xsink) {
+    // the sandboxing restrictions of the calling code and of the Program the reflection object belongs to both apply,
+    // by the same rule as to a class named in source code
+    return reflection_check_class_call(caller, cls, target, true, xsink);
 }
 
 static QoreString get_type_parameter_names(const QoreClass* cls) {
@@ -1526,7 +1525,7 @@ object o = cls.newObject();
     @return an object if the current class based on the constructor arguments passed
 
     @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the class has been destroyed
-    @throw CREATE-OBJECT-ERROR class implements features restricted by current parse options / sandboxing restrictions
+    @throw CREATE-OBJECT-ERROR the calling code's or the class's Program's sandboxing restrictions do not allow the class (see @ref reflection_caller_privilege)
     @throw CONSTRUCTOR-IS-PRIVATE attempt to instantiate an object with a private constructor from outside the class
     @throw ABSTRACT-CLASS-ERROR thrown if the class has abstract methods
 
@@ -1539,6 +1538,8 @@ object o = cls.newObject();
     - create_object_args()
 */
 object Class::newObject(...) {
+    // the privileges of the calling code, captured before switching to the class's Program
+    QoreReflectionCaller caller;
     // get read access to program object
     QoreExternalProgramContextHelper tch(xsink, c->pgm);
     if (*xsink) {
@@ -1546,7 +1547,7 @@ object Class::newObject(...) {
     }
 
     // the class ptr must be valid
-    if (check_constructor(c->cls, xsink)) {
+    if (check_constructor(caller, c->cls, c->pgm, xsink)) {
         return QoreValue();
     }
 
@@ -1554,6 +1555,8 @@ object Class::newObject(...) {
         return QoreValue();
     }
 
+    // the constructor variant selected for the arguments must be allowed by the caller and the class's Program
+    QoreReflectionCallCheckHelper call_check(caller, c->pgm);
     return c->cls->execConstructor(args, xsink);
 }
 
@@ -1568,7 +1571,7 @@ object o = cls.newObjectArgs(args);
     @return an object if the current class based on the constructor arguments passed
 
     @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the class has been destroyed
-    @throw CREATE-OBJECT-ERROR class implements features restricted by current parse options / sandboxing restrictions
+    @throw CREATE-OBJECT-ERROR the calling code's or the class's Program's sandboxing restrictions do not allow the class (see @ref reflection_caller_privilege)
     @throw CONSTRUCTOR-IS-PRIVATE attempt to instantiate an object with a private constructor from outside the class
     @throw ABSTRACT-CLASS-ERROR thrown if the class has abstract methods
 
@@ -1581,6 +1584,8 @@ object o = cls.newObjectArgs(args);
     - create_object_args()
 */
 object Class::newObjectArgs(*softlist argv) {
+    // the privileges of the calling code, captured before switching to the class's Program
+    QoreReflectionCaller caller;
     // get read access to program object
     QoreExternalProgramContextHelper tch(xsink, c->pgm);
     if (*xsink) {
@@ -1588,7 +1593,7 @@ object Class::newObjectArgs(*softlist argv) {
     }
 
     // the class ptr must be valid
-    if (check_constructor(c->cls, xsink)) {
+    if (check_constructor(caller, c->cls, c->pgm, xsink)) {
         return QoreValue();
     }
 
@@ -1596,6 +1601,8 @@ object Class::newObjectArgs(*softlist argv) {
         return QoreValue();
     }
 
+    // the constructor variant selected for the arguments must be allowed by the caller and the class's Program
+    QoreReflectionCallCheckHelper call_check(caller, c->pgm);
     return c->cls->execConstructor(argv, xsink);
 }
 
@@ -1612,7 +1619,7 @@ object q = cls.callConstructor((), (IntType,));
     @return an object if the current class based on the constructor arguments passed
 
     @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the class has been destroyed
-    @throw CREATE-OBJECT-ERROR class implements features restricted by current parse options / sandboxing restrictions
+    @throw CREATE-OBJECT-ERROR the calling code's or the class's Program's sandboxing restrictions do not allow the class (see @ref reflection_caller_privilege)
     @throw CONSTRUCTOR-IS-PRIVATE attempt to instantiate an object with a private constructor from outside the class
     @throw ABSTRACT-CLASS-ERROR thrown if the class has abstract methods
     @throw MISSING-TYPE-ARGUMENTS thrown if the class is generic and explicit type arguments are required
@@ -1630,6 +1637,8 @@ object q = cls.callConstructor((), (IntType,));
     - create_object_args()
 */
 object Class::callConstructor(*softlist<auto> arguments, *softlist<Type> type_args) [flags=NAMED_ARGS] {
+    // the privileges of the calling code, captured before switching to the class's Program
+    QoreReflectionCaller caller;
     // get read access to program object
     QoreExternalProgramContextHelper tch(xsink, c->pgm);
     if (*xsink) {
@@ -1637,7 +1646,7 @@ object Class::callConstructor(*softlist<auto> arguments, *softlist<Type> type_ar
     }
 
     // the class ptr must be valid
-    if (check_constructor(c->cls, xsink)) {
+    if (check_constructor(caller, c->cls, c->pgm, xsink)) {
         return QoreValue();
     }
 
@@ -1650,6 +1659,8 @@ object Class::callConstructor(*softlist<auto> arguments, *softlist<Type> type_ar
         return QoreValue();
     }
 
+    // the constructor variant selected for the arguments must be allowed by the caller and the class's Program
+    QoreReflectionCallCheckHelper call_check(caller, c->pgm);
     return c->cls->execConstructor(arguments, object_type_info, xsink);
 }
 
@@ -2028,16 +2039,29 @@ Namespace ns = cls.getNamespace();
     @return the namespace for the class
 
     @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the class has been destroyed
+    @throw REFLECTION-ACCESS-ERROR the reflection object belongs to another Program that the calling code may not navigate the namespaces of (see @ref reflection_caller_privilege)
+    @throw UNKNOWN-NAMESPACE the namespace is not visible in the Program of the reflection object (see @ref reflection_caller_privilege)
  */
 Namespace Class::getNamespace() [flags=CONSTANT] {
+    // the calling code's privileges apply (see @ref reflection_caller_privilege)
+    QoreReflectionCaller caller;
+    if (reflection_check_program_access(caller, c->pgm, "navigate the namespaces of", xsink)) {
+        return QoreValue();
+    }
     // get read access to program object
     QoreExternalProgramContextHelper tch(xsink, c->pgm);
     if (*xsink) {
         return QoreValue();
     }
 
-    // the class ptr must be valid
-    return new QoreObject(QC_NAMESPACE, c->pgm, new QoreReflectionNamespace(c->pgm, c->cls->getNamespace()));
+    // the class ptr must be valid; a class inherited from or imported into another Program refers to the namespace
+    // it was declared in, which belongs to the declaring Program: navigation stays in the Program of the reflection
+    // object
+    const QoreNamespace* ns = reflection_program_namespace(c->pgm, c->cls->getNamespace(), xsink);
+    if (!ns) {
+        return QoreValue();
+    }
+    return new QoreObject(QC_NAMESPACE, c->pgm, new QoreReflectionNamespace(c->pgm, ns));
 }
 
 //! Returns the accessibility of the current class in the given object as an @ref access_constants "access value" or \c 0 if the object does not inherit the class at all
@@ -2151,8 +2175,14 @@ Class cls = Class::forName(pgm, "Thread::Mutex");
 
     @throw UNKNOWN-CLASS cannot find a class with the given name or path, or the class name contains a NUL character (since %Qore 3.0)
     @throw ENCODING-CONVERSION-ERROR this exception could be thrown if the string argument is not in the @ref default_encoding "default character encoding" and an error occurs during encoding conversion
+    @throw REFLECTION-ACCESS-ERROR the calling code may not look up symbols in the given Program (see @ref reflection_caller_privilege)
  */
 static Class Class::forName(Program[QoreProgram] pgm, string path) [flags=RET_VALUE_ONLY] {
+    // the calling code's privileges apply (see @ref reflection_caller_privilege)
+    QoreReflectionCaller caller;
+    if (reflection_check_program_access(caller, *pgm, "look up symbols in", xsink)) {
+        return QoreValue();
+    }
     // the name is looked up as a C string, which would be cut at a NUL character and name another class
     if (q_check_no_nul(path->c_str(), path->size(), "class name", "class names", "UNKNOWN-CLASS", xsink)) {
         return QoreValue();
@@ -2215,7 +2245,13 @@ list<Class> l = Class::findAllRegex(pgm, "^T");
     @param re_opts see @ref regex_constants for possible values
 
     @return a list of classes matching the regular expression pattern argument or an empty list if no classes match
+    @throw REFLECTION-ACCESS-ERROR the calling code may not look up symbols in the given Program (see @ref reflection_caller_privilege)
 */
 static list<Class> Class::findAllRegex(Program[QoreProgram] pgm, string pattern, *int re_opts) [flags=RET_VALUE_ONLY] {
+    // the calling code's privileges apply (see @ref reflection_caller_privilege)
+    QoreReflectionCaller caller;
+    if (reflection_check_program_access(caller, *pgm, "look up symbols in", xsink)) {
+        return QoreValue();
+    }
     return find_all_classes(*pattern, re_opts, *pgm, xsink);
 }

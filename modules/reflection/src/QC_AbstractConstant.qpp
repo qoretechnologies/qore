@@ -269,8 +269,20 @@ auto v = con.getValue();
     @return the value for the constant
 
     @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the constant has been destroyed
+    @throw REFLECTION-ACCESS-ERROR the reflection object belongs to another Program whose values the calling code may not read or write, or the calling code's or the class's Program's sandboxing restrictions do not allow the class (see @ref reflection_caller_privilege)
 */
 auto AbstractConstant::getValue() [flags=RET_VALUE_ONLY] {
+    // the calling code's privileges apply (see @ref reflection_caller_privilege)
+    QoreReflectionCaller caller;
+    if (reflection_check_program_access(caller, c->pgm, "read or write the values of", xsink)) {
+        return QoreValue();
+    }
+    // the constant of a class is read as the class would be named in source code
+    if (const QoreClass* cls = c->getClass()) {
+        if (reflection_check_class_value_access(caller, cls, c->pgm, xsink)) {
+            return QoreValue();
+        }
+    }
     // get read access to program object
     QoreExternalProgramContextHelper tch(xsink, c->pgm);
     if (*xsink) {

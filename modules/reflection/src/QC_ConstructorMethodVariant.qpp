@@ -61,11 +61,13 @@ object v = m.call(arg1, arg2);
 
     @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the class and method has been destroyed
     @throw METHOD-ERROR the object was not instantiated from the class implementing this method
-    @throw CREATE-OBJECT-ERROR class implements features restricted by current parse options / sandboxing restrictions
+    @throw CREATE-OBJECT-ERROR the calling code's or the class's Program's sandboxing restrictions do not allow the class (see @ref reflection_caller_privilege)
 
     @see callArgs()
 */
 object ConstructorMethodVariant::call(...) {
+    // the privileges of the calling code, captured before switching to the class's Program
+    QoreReflectionCaller caller;
     // get read access to program object
     QoreExternalProgramContextHelper tch(xsink, v->pgm);
     if (*xsink) {
@@ -74,10 +76,14 @@ object ConstructorMethodVariant::call(...) {
 
     const QoreExternalMethodVariant* mv = reinterpret_cast<const QoreExternalMethodVariant*>(v->variant);
     const QoreClass* cls = mv->getClass();
-    if (check_constructor(cls, xsink)) {
+    if (check_constructor(caller, cls, v->pgm, xsink)) {
         return QoreValue();
     }
 
+    // the constructor variant must be allowed by the caller and the class's Program
+    if (reflection_check_variant_call(caller, v->variant, cls->getName(), "constructor", v->pgm, xsink)) {
+        return QoreValue();
+    }
     return cls->execConstructorVariant(mv, args, xsink);
 }
 
@@ -93,11 +99,13 @@ object v = m.callArgs((arg1, arg2));
 
     @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the class and method has been destroyed
     @throw METHOD-ERROR the object was not instantiated from the class implementing this method
-    @throw CREATE-OBJECT-ERROR class implements features restricted by current parse options / sandboxing restrictions
+    @throw CREATE-OBJECT-ERROR the calling code's or the class's Program's sandboxing restrictions do not allow the class (see @ref reflection_caller_privilege)
 
     @see call()
 */
 object ConstructorMethodVariant::callArgs(*softlist argv) {
+    // the privileges of the calling code, captured before switching to the class's Program
+    QoreReflectionCaller caller;
     // get read access to program object
     QoreExternalProgramContextHelper tch(xsink, v->pgm);
     if (*xsink) {
@@ -106,9 +114,13 @@ object ConstructorMethodVariant::callArgs(*softlist argv) {
 
     const QoreExternalMethodVariant* mv = reinterpret_cast<const QoreExternalMethodVariant*>(v->variant);
     const QoreClass* cls = mv->getClass();
-    if (check_constructor(cls, xsink)) {
+    if (check_constructor(caller, cls, v->pgm, xsink)) {
         return QoreValue();
     }
 
+    // the constructor variant must be allowed by the caller and the class's Program
+    if (reflection_check_variant_call(caller, v->variant, cls->getName(), "constructor", v->pgm, xsink)) {
+        return QoreValue();
+    }
     return cls->execConstructorVariant(mv, argv, xsink);
 }

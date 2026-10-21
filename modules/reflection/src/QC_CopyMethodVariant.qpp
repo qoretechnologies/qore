@@ -32,6 +32,7 @@
 #include "QC_CopyMethodVariant.h"
 #include "QC_AbstractMethod.h"
 #include "QC_NormalMethodVariant.h"
+#include "QC_Class.h"
 
 //! The class for %Qore class copy method variants
 /**
@@ -62,8 +63,12 @@ auto v = m.call(obj);
 
     @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the class and method has been destroyed
     @throw METHOD-ERROR the object was not instantiated from the class implementing this method
+    @throw CREATE-OBJECT-ERROR the calling code's or the class's Program's sandboxing restrictions do not allow the class (see @ref reflection_caller_privilege)
+    @throw INVALID-FUNCTION-ACCESS the calling code's or the class's Program's sandboxing restrictions do not allow the variant (see @ref reflection_caller_privilege)
 */
 auto CopyMethodVariant::call(object obj) {
+    // the privileges of the calling code, captured before switching to the class's Program
+    QoreReflectionCaller caller;
     // get read access to program object
     QoreExternalProgramContextHelper tch(xsink, v->pgm);
     if (*xsink) {
@@ -79,5 +84,11 @@ auto CopyMethodVariant::call(object obj) {
     }
 
     const QoreClass* cls = m->getClass();
+    // copying creates an object of the class: the class and the variant must be allowed by the caller and the class's
+    // Program
+    if (check_constructor(caller, cls, v->pgm, xsink)
+        || reflection_check_variant_call(caller, v->variant, cls->getName(), "copy", v->pgm, xsink)) {
+        return QoreValue();
+    }
     return cls->execCopy(obj, xsink);
 }

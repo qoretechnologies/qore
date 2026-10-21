@@ -60,18 +60,21 @@ auto val = v.call(arg1, arg2);
 
     @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the function has been destroyed
     @throw RUNTIME-TYPE-ERROR invalid argument types passed to the variant
+    @throw INVALID-FUNCTION-ACCESS the calling code's or the function's Program's sandboxing restrictions do not allow the variant called (see @ref reflection_caller_privilege)
 
     @see callArgs()
 */
 auto FunctionVariant::call(...) {
+    // the privileges of the calling code, captured before switching to the function's Program
+    QoreReflectionCaller caller;
     // get read access to program object
     QoreExternalProgramContextHelper tch(xsink, v->pgm);
     if (*xsink) {
         return QoreValue();
     }
 
-    // the variant ptr must be valid
-    return v->f->evalFunction(v->variant, args, v->pgm, xsink);
+    // the variant ptr must be valid; the variant is checked against the caller and the function's Program
+    return v->f->evalFunction(v->variant, args, v->pgm, caller, xsink);
 }
 
 //! calls the given function variant and returns the value returned by the function
@@ -86,16 +89,19 @@ auto val = v.callArgs((arg1, arg2));
 
     @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the function has been destroyed
     @throw RUNTIME-TYPE-ERROR invalid argument types passed to the variant
+    @throw INVALID-FUNCTION-ACCESS the calling code's or the function's Program's sandboxing restrictions do not allow the variant called (see @ref reflection_caller_privilege)
 
     @see call()
 */
 auto FunctionVariant::callArgs(*softlist<auto> argv) {
+    // the privileges of the calling code, captured before switching to the function's Program
+    QoreReflectionCaller caller;
     // get read access to program object
     QoreExternalProgramContextHelper tch(xsink, v->pgm);
     if (*xsink) {
         return QoreValue();
     }
 
-    // the variant ptr must be valid
-    return v->f->evalFunction(v->variant, argv, v->pgm, xsink);
+    // the variant ptr must be valid; the variant is checked against the caller and the function's Program
+    return v->f->evalFunction(v->variant, argv, v->pgm, caller, xsink);
 }

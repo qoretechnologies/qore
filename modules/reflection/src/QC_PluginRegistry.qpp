@@ -43,8 +43,14 @@ PluginRegistry registry = PluginRegistry::get(pgm);
     @param pgm the Program object to inspect
 
     @return a Program-bound plugin registry view
+    @throw REFLECTION-ACCESS-ERROR the calling code may not look up symbols in the given Program (see @ref reflection_caller_privilege)
  */
 static PluginRegistry PluginRegistry::get(Program[QoreProgram] pgm) [flags=RET_VALUE_ONLY] {
+    // the calling code's privileges apply (see @ref reflection_caller_privilege)
+    QoreReflectionCaller caller;
+    if (reflection_check_program_access(caller, *pgm, "look up symbols in", xsink)) {
+        return QoreValue();
+    }
     return new QoreObject(QC_PLUGINREGISTRY, *pgm, new QoreReflectionPluginRegistry(false, *pgm));
 }
 

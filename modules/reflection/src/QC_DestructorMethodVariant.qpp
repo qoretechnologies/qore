@@ -60,8 +60,11 @@ auto v = m.call(obj, arg1, arg2);
 
     @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the class and method has been destroyed
     @throw METHOD-ERROR the object was not instantiated from the class implementing this method
+    @throw INVALID-FUNCTION-ACCESS the calling code's or the class's Program's sandboxing restrictions do not allow the class (see @ref reflection_caller_privilege)
 */
 nothing DestructorMethodVariant::call(object obj) {
+    // the privileges of the calling code, captured before switching to the class's Program
+    QoreReflectionCaller caller;
     // get read access to program object
     QoreExternalProgramContextHelper tch(xsink, v->pgm);
     if (*xsink) {
@@ -72,6 +75,11 @@ nothing DestructorMethodVariant::call(object obj) {
     const QoreExternalMethodVariant* mv = static_cast<const QoreExternalMethodVariant*>(v->variant);
     const QoreMethod* m = mv->getMethod();
     if (check_variant_call(mv, obj, *m, xsink)) {
+        return QoreValue();
+    }
+
+    // the variant (with its class's domain) must be allowed by the caller and the class's Program
+    if (reflection_check_variant_call(caller, v->variant, m->getClass()->getName(), "destructor", v->pgm, xsink)) {
         return QoreValue();
     }
 

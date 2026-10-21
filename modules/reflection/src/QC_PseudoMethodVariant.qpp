@@ -62,10 +62,13 @@ auto v = m.call(val, arg1, arg2);
 
     @throw METHOD-ERROR the value is not compatible with the class implementing this method
     @throw RUNTIME-TYPE-ERROR invalid argument types passed to the variant
+    @throw INVALID-FUNCTION-ACCESS the calling code's or the method's Program's sandboxing restrictions do not allow the variant called (see @ref reflection_caller_privilege)
 
     @see callArgs()
 */
 auto PseudoMethodVariant::call(auto val, ...) {
+    // the privileges of the calling code
+    QoreReflectionCaller caller;
     // we have to explictly test object compatibility here, otherwise QoreObject::evalMethod() will throw
     // a confusing exception
     const QoreExternalMethodVariant* mv = reinterpret_cast<const QoreExternalMethodVariant*>(v->variant);
@@ -82,6 +85,10 @@ auto PseudoMethodVariant::call(auto val, ...) {
         call_args = args->copyListFrom(1);
     }
 
+    // the variant must be allowed by the caller and the method's Program
+    if (reflection_check_variant_call(caller, v->variant, m->getClass()->getName(), m->getName(), v->pgm, xsink)) {
+        return QoreValue();
+    }
     // pseudo-classes and pseudo-methods are always valid
     return m->getClass()->evalPseudoMethod(m, mv, val, *call_args, xsink);
 }
@@ -99,10 +106,13 @@ auto v = m.callArgs(val, (arg1, arg2));
 
     @throw METHOD-ERROR the value is not compatible with the class implementing this method
     @throw RUNTIME-TYPE-ERROR invalid argument types passed to the variant
+    @throw INVALID-FUNCTION-ACCESS the calling code's or the method's Program's sandboxing restrictions do not allow the variant called (see @ref reflection_caller_privilege)
 
     @see call()
 */
 auto PseudoMethodVariant::callArgs(auto val, *softlist<auto> argv) {
+    // the privileges of the calling code
+    QoreReflectionCaller caller;
     // we have to explictly test object compatibility here, otherwise QoreObject::evalMethod() will throw
     // a confusing exception
     const QoreExternalMethodVariant* mv = reinterpret_cast<const QoreExternalMethodVariant*>(v->variant);
@@ -111,6 +121,10 @@ auto PseudoMethodVariant::callArgs(auto val, *softlist<auto> argv) {
         return QoreValue();
     }
 
+    // the variant must be allowed by the caller and the method's Program
+    if (reflection_check_variant_call(caller, v->variant, m->getClass()->getName(), m->getName(), v->pgm, xsink)) {
+        return QoreValue();
+    }
     // pseudo-classes and pseudo-methods are always valid
     return m->getClass()->evalPseudoMethod(m, mv, val, argv, xsink);
 }

@@ -110,11 +110,13 @@ auto v = m.call(arg1, arg2);
     @return the object created by the constructor
 
     @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the class and method has been destroyed
-    @throw CREATE-OBJECT-ERROR class implements features restricted by current parse options / sandboxing restrictions
+    @throw CREATE-OBJECT-ERROR the calling code's or the class's Program's sandboxing restrictions do not allow the class (see @ref reflection_caller_privilege)
 
     @see callArgs()
 */
 auto ConstructorMethod::call(...) {
+    // the privileges of the calling code, captured before switching to the class's Program
+    QoreReflectionCaller caller;
     // get read access to program object
     QoreExternalProgramContextHelper tch(xsink, m->pgm);
     if (*xsink) {
@@ -123,10 +125,12 @@ auto ConstructorMethod::call(...) {
 
     // the method ptr must be valid
     const QoreClass* cls = m->m->getClass();
-    if (check_constructor(cls, xsink)) {
+    if (check_constructor(caller, cls, m->pgm, xsink)) {
         return QoreValue();
     }
 
+    // the constructor variant selected for the arguments must be allowed by the caller and the class's Program
+    QoreReflectionCallCheckHelper call_check(caller, m->pgm);
     return cls->execConstructor(args, xsink);
 }
 
@@ -141,11 +145,13 @@ auto v = m.callArgs(argv);
     @return the object created by the constructor
 
     @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the class and method has been destroyed
-    @throw CREATE-OBJECT-ERROR class implements features restricted by current parse options / sandboxing restrictions
+    @throw CREATE-OBJECT-ERROR the calling code's or the class's Program's sandboxing restrictions do not allow the class (see @ref reflection_caller_privilege)
 
     @see call()
 */
 auto ConstructorMethod::callArgs(*softlist<auto> argv) {
+    // the privileges of the calling code, captured before switching to the class's Program
+    QoreReflectionCaller caller;
     // get read access to program object
     QoreExternalProgramContextHelper tch(xsink, m->pgm);
     if (*xsink) {
@@ -154,9 +160,11 @@ auto ConstructorMethod::callArgs(*softlist<auto> argv) {
 
     // the method ptr must be valid
     const QoreClass* cls = m->m->getClass();
-    if (check_constructor(cls, xsink)) {
+    if (check_constructor(caller, cls, m->pgm, xsink)) {
         return QoreValue();
     }
 
+    // the constructor variant selected for the arguments must be allowed by the caller and the class's Program
+    QoreReflectionCallCheckHelper call_check(caller, m->pgm);
     return cls->execConstructor(argv, xsink);
 }

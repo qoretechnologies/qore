@@ -1197,6 +1197,11 @@ void qore_program_private_base::setParent(QoreProgram* p_pgm, const QoreParseOpt
 
     TZ = p_pgm->currentTZ();
 
+    // the creator chain: the parent first, then the Programs that created it
+    creator_ids.reserve(p_pgm->priv->creator_ids.size() + 1);
+    creator_ids.push_back(p_pgm->priv->getProgramId());
+    creator_ids.insert(creator_ids.end(), p_pgm->priv->creator_ids.begin(), p_pgm->priv->creator_ids.end());
+
     // if children inherit restrictions, then set all child restrictions
     if (!(p_pgm->priv->pwo.parse_options & PO_NO_CHILD_PO_RESTRICTIONS)) {
         // lock child parse options

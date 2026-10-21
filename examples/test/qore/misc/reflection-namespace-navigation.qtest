@@ -1,0 +1,190 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# Reflection navigation stays inside the Program of the reflection object, and reaching another Program's objects,
+# constants, classes or values through a reflection handle is allowed only from that Program, from a Program that
+# created it (transitively), or from a caller at least as privileged as it.  So a restricted child cannot navigate
+# from an inherited class to its parent's namespace tree and read or overwrite the parent's globals, constants,
+# classes or functions; a sandboxed Program cannot navigate another Program it is handed a reflection object for;
+# but trusted, fully-privileged code that builds objects by class name in another Program keeps working, and the
+# creator of a Program can inspect it.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%prepend-module-path "${SCRIPT_DIR}/../../../../build/modules/reflection"
+%requires QUnit
+%requires reflection
+
+%exec-class ReflectionNamespaceNavigationTest
+
+class ReflectionNamespaceNavigationTest inherits QUnit::Test {
+    public {
+        #! a parent Program with private symbols a child must not reach by navigation; it creates its own child and
+        #! runs a probe in it
+        const ParentSource = "%new-style
+%require-types
+%strict-args
+%requires reflection
+
+our string parent_secret = \"parent-secret-value\";
+const PARENT_CONST = \"parent-constant\";
+class ParentOnly { static string hello() { return \"parent-only\"; } }
+string sub parent_func() { return \"parent-func\"; }
+
+# a public class the child inherits
+public namespace Shared {
+    public class SharedClass {
+        static string hello() { return \"shared\"; }
+    }
+}
+
+# the child probe: walk from the inherited public class to the root namespace
+const ChildProbe = \"%new-style
+%require-types
+%strict-args
+%requires reflection
+hash<auto> sub probe() {
+    hash<auto> rv = {};
+    try {
+        Class c = Class::forName('Shared::SharedClass');
+        Namespace ns = c.getNamespace();
+        Namespace root = ns;
+        while (*Namespace pn = root.getParentNamespace()) {
+            root = pn;
+        }
+        rv.reached_root = root.getPathName();
+        rv.globals = (map \\$1.getName(), root.getGlobalVars());
+    } catch (hash<ExceptionInfo> ex) {
+        rv.nav = ex.err;
+    }
+    return rv;
+}
+hash<auto> sub probe_own() {
+    Namespace root('::');
+    hash<auto> rv = {};
+    rv.globals = (map \\$1.getName(), root.getGlobalVars());
+    try {
+        rv.secret = root.getGlobalVar('parent_secret').getValue();
+    } catch (hash<ExceptionInfo> ex) {
+        rv.secret = ex.err;
+    }
+    try {
+        rv.const = root.getConstant('PARENT_CONST').getValue();
+    } catch (hash<ExceptionInfo> ex) {
+        rv.const = ex.err;
+    }
+    return rv;
+}
+\";
+
+# creates a child with the given parse options, runs the named probe in it, and returns the result
+hash<auto> sub run_child(softint child_po, string probe_func) {
+    Program child(child_po);
+    child.parse(ChildProbe, \"child\");
+    return child.callFunction(probe_func);
+}
+";
+        const BaseOptions = PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS;
+    }
+
+    constructor() : QUnit::Test("ReflectionNamespaceNavigationTest", "1.0") {
+        addTestCase("a restricted child cannot navigate from an inherited class to its parent", \childNavRefused());
+        addTestCase("the child's own namespace tree does not contain the parent's symbols", \childOwnTree());
+        addTestCase("a sandboxed Program cannot navigate another Program's reflection object", \sandboxedNavRefused());
+        addTestCase("navigation stays in the reflection object's own Program", \navStaysInProgram());
+        addTestCase("the creator of a Program can navigate and read it", \creatorAllowed());
+        addTestCase("an equally privileged caller can navigate another Program", \privilegedAllowed());
+        addTestCase("a trusted caller reads a static member of an object's class", \trustedMemberAccess());
+        set_return_value(main());
+    }
+
+    private Program parentProgram() {
+        Program parent(BaseOptions);
+        parent.parse(ParentSource, "parent");
+        return parent;
+    }
+
+    childNavRefused() {
+        Program parent = parentProgram();
+        # the child restricts domains the parent does not, so it is strictly less privileged than the parent that
+        # the inherited class belongs to
+        hash<auto> rv = parent.callFunction("run_child", BaseOptions | PO_NO_EXTERNAL_INFO | PO_NO_NETWORK, "probe");
+        # getNamespace() on the inherited class maps into the child's own tree; its root is the child's own, which
+        # holds none of the parent's private globals, and the parent's root is not reachable
+        if (rv.hasKey("nav")) {
+            # navigation left the child's Program: must be refused
+            assertEq("REFLECTION-ACCESS-ERROR", rv.nav);
+        } else {
+            # the inherited class's namespace maps into the child's own tree, whose root (path name "") holds none
+            # of the parent's private globals
+            assertEq("", rv.reached_root);
+            assertEq((), rv.globals);
+        }
+    }
+
+    childOwnTree() {
+        Program parent = parentProgram();
+        hash<auto> rv = parent.callFunction("run_child", BaseOptions | PO_NO_EXTERNAL_INFO, "probe_own");
+        # the child did not inherit the parent's private globals or constant
+        assertEq((), rv.globals);
+        assertEq("UNKNOWN-GLOBAL-VAR", rv.secret);
+        assertEq("UNKNOWN-CONSTANT", rv.const);
+    }
+
+    sandboxedNavRefused() {
+        Program parent = parentProgram();
+        Program sandboxed(BaseOptions | PO_NO_EXTERNAL_INFO);
+        sandboxed.parse("%requires reflection\n"
+            "auto sub nav(Namespace ns) { try { return ns.getGlobalVars(); } catch (hash<ExceptionInfo> ex) { "
+            "return ex.err; } }", "sb");
+        # this Program created parent, so it may look parent up; hand the result to the less-privileged sandboxed code
+        Namespace root = Namespace::forName(parent, "::");
+        assertEq("REFLECTION-ACCESS-ERROR", sandboxed.callFunction("nav", root));
+    }
+
+    navStaysInProgram() {
+        # getNamespace() on a class a child inherited returns a namespace in the child Program, not the parent's
+        Program parent = parentProgram();
+        hash<auto> rv = parent.callFunction("run_child", BaseOptions, "probe");
+        # a child as privileged as the parent may navigate, but its inherited class's namespace is its own root's
+        assertEq("", rv.reached_root);
+        # the child's root holds none of the parent's private globals
+        assertEq((), rv.globals);
+    }
+
+    creatorAllowed() {
+        # this Program creates the child, so it may navigate it even though the child restricts more
+        Program child(BaseOptions | PO_NO_EXTERNAL_INFO | PO_NO_NETWORK);
+        child.parse("our string child_var = \"child-value\";", "c");
+        Namespace root = Namespace::forName(child, "::");
+        list<string> globals = map $1.getName(), root.getGlobalVars();
+        assertEq(True, inlist("child_var", globals));
+    }
+
+    privilegedAllowed() {
+        # two Programs with identical options and no sandbox manager: either may navigate the other
+        Program a(BaseOptions);
+        a.parse("our string a_var = \"a\";", "a");
+        Program b(BaseOptions);
+        b.parse("%requires reflection\n"
+            "list<string> sub nav(Namespace ns) { return map $1.getName(), ns.getGlobalVars(); }", "b");
+        Namespace root = Namespace::forName(a, "::");
+        assertEq(True, inlist("a_var", b.callFunction("nav", root)));
+    }
+
+    trustedMemberAccess() {
+        # trusted, fully-privileged code reads a static member of a class of an object created in a restricted
+        # Program, modeling the DataProvider generic-API-call pattern (AbstractDataProvider.qc:8052)
+        Program target(BaseOptions | PO_NO_EXTERNAL_INFO | PO_NO_NETWORK | PO_NO_FILESYSTEM);
+        target.parse("%new-style\nclass Provider { public { static string info = \"provider-info\"; } }\n"
+            "object sub make() { return new Provider(); }", "target");
+        object obj = target.callFunction("make");
+        # this Program is unrestricted, so it is at least as privileged as the target
+        Class cls = Class::getClass(obj);
+        StaticMember m = cls.getStaticMember("info");
+        assertEq("provider-info", m.getValue());
+    }
+}

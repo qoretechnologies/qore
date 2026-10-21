@@ -1098,6 +1098,18 @@ protected:
 
     DLLLOCAL void setParent(QoreProgram* p_pgm, const QoreParseOptions& n_parse_options);
 
+    //! The IDs of the Programs that created this Program: its creator first, then the creator's creator, and so on
+    /** Set once by setParent() and never changed; empty for an independent Program, a module Program, or a Program
+        created by C++ code without a parent.  Reflection allows a Program that created another Program to navigate
+        it; see design/reflection-caller-privilege.md.
+    */
+    std::vector<unsigned> creator_ids;
+
+    //! Returns true if the Program with the given ID created this Program, directly or through Programs it created
+    DLLLOCAL bool isCreatedBy(unsigned pgm_id) const {
+        return std::find(creator_ids.begin(), creator_ids.end(), pgm_id) != creator_ids.end();
+    }
+
     //! copies the parent's external data into this Program and initializes it
     /** Called from qore_program_private's constructor rather than from setParent(), because
         AbstractQoreProgramExternalData::copy() documents that "the call is made after the child
@@ -3014,6 +3026,11 @@ public:
     // called when starting a new thread before the new thread is started, to avoid race conditions
     DLLLOCAL static int preregisterNewThread(QoreProgram& pgm, ExceptionSink* xsink) {
         return pgm.priv->preregisterNewThread(xsink);
+    }
+
+    //! Returns true if the Program with the given ID created \a pgm, directly or through Programs it created
+    DLLLOCAL static bool programCreatedBy(const QoreProgram& pgm, unsigned pgm_id) {
+        return pgm.priv->isCreatedBy(pgm_id);
     }
 
     // called when thread startup fails after preregistration

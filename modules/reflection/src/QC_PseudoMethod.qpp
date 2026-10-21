@@ -70,10 +70,13 @@ auto v = m.call(val, arg1, arg2);
     @return the return value of the method call
 
     @throw METHOD-ERROR the value is not compatible with the class implementing this method
+    @throw INVALID-FUNCTION-ACCESS the calling code's or the method's Program's sandboxing restrictions do not allow the variant called (see @ref reflection_caller_privilege)
 
     @see callArgs()
 */
 auto PseudoMethod::call(auto val, ...) {
+    // the privileges of the calling code
+    QoreReflectionCaller caller;
     // we have to explictly test value compatibility here, otherwise QoreClass::evalPseudoMethod() will throw
     // a confusing exception
     if (check_pseudo_call(val, *m->m, xsink)) {
@@ -88,6 +91,8 @@ auto PseudoMethod::call(auto val, ...) {
         call_args = args->copyListFrom(1);
     }
 
+    // the variant selected for the arguments must be allowed by the caller and the method's Program
+    QoreReflectionCallCheckHelper call_check(caller, m->pgm);
     // pseudo-classes and pseudo-methods are always valid
     return m->m->getClass()->evalPseudoMethod(m->m, nullptr, val, *call_args, xsink);
 }
@@ -104,16 +109,21 @@ auto v = m.callArgs(val, (arg1, arg2));
     @return the return value of the method call
 
     @throw METHOD-ERROR the value is not compatible with the class implementing this method
+    @throw INVALID-FUNCTION-ACCESS the calling code's or the method's Program's sandboxing restrictions do not allow the variant called (see @ref reflection_caller_privilege)
 
     @see call()
 */
 auto PseudoMethod::callArgs(auto val, *softlist<auto> argv) {
+    // the privileges of the calling code
+    QoreReflectionCaller caller;
     // we have to explictly test value compatibility here, otherwise QoreClass::evalPseudoMethod() will throw
     // a confusing exception
     if (check_pseudo_call(val, *m->m, xsink)) {
         return QoreValue();
     }
 
+    // the variant selected for the arguments must be allowed by the caller and the method's Program
+    QoreReflectionCallCheckHelper call_check(caller, m->pgm);
     // pseudo-classes and pseudo-methods are always valid
     return m->m->getClass()->evalPseudoMethod(m->m, nullptr, val, argv, xsink);
 }

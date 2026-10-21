@@ -108,9 +108,22 @@ Namespace ns = con.getNamespace();
     @endcode
 
     @return the namespace for the constant
+    @throw REFLECTION-ACCESS-ERROR the reflection object belongs to another Program that the calling code may not navigate the namespaces of (see @ref reflection_caller_privilege)
+    @throw UNKNOWN-NAMESPACE the namespace is not visible in the Program of the reflection object (see @ref reflection_caller_privilege)
  */
 Namespace Constant::getNamespace() [flags=CONSTANT] {
-    return new QoreObject(QC_NAMESPACE, c->pgm, new QoreReflectionNamespace(c->pgm, c->ns));
+    // the calling code's privileges apply (see @ref reflection_caller_privilege)
+    QoreReflectionCaller caller;
+    if (reflection_check_program_access(caller, c->pgm, "navigate the namespaces of", xsink)) {
+        return QoreValue();
+    }
+    // the declaring namespace of an inherited symbol belongs to the declaring Program; navigation stays in the
+    // Program of the reflection object
+    const QoreNamespace* ns = reflection_program_namespace(c->pgm, c->ns, xsink);
+    if (!ns) {
+        return QoreValue();
+    }
+    return new QoreObject(QC_NAMESPACE, c->pgm, new QoreReflectionNamespace(c->pgm, ns));
 }
 
 //! Returns a %Constant object from the constant name or namespace-justified path as a string
@@ -163,8 +176,14 @@ Constant con = Constant::forName(pgm, "Option::HAVE_FORK");
     @throw ENCODING-CONVERSION-ERROR this exception could be thrown if the string argument is not in the @ref default_encoding "default character encoding" and an error occurs during encoding conversion
 
     @note searches namespace constants only; does not search class constants
+    @throw REFLECTION-ACCESS-ERROR the calling code may not look up symbols in the given Program (see @ref reflection_caller_privilege)
  */
 static Constant Constant::forName(Program[QoreProgram] pgm, string path) [flags=RET_VALUE_ONLY] {
+    // the calling code's privileges apply (see @ref reflection_caller_privilege)
+    QoreReflectionCaller caller;
+    if (reflection_check_program_access(caller, *pgm, "look up symbols in", xsink)) {
+        return QoreValue();
+    }
     // the name is looked up as a C string, which would be cut at a NUL character and name another constant
     if (q_check_no_nul(path->c_str(), path->size(), "constant name", "constant names", "UNKNOWN-CONSTANT", xsink)) {
         return QoreValue();
@@ -215,7 +234,13 @@ list<Constant> l = Constant::findAllRegex(pgm, "^T");
     @return a list of constants matching the regular expression pattern argument or an empty list if no constants match
 
     @note searches namespace constants only; does not search class constants
+    @throw REFLECTION-ACCESS-ERROR the calling code may not look up symbols in the given Program (see @ref reflection_caller_privilege)
 */
 static list<Constant> Constant::findAllRegex(Program[QoreProgram] pgm, string pattern, *int re_opts) [flags=RET_VALUE_ONLY] {
+    // the calling code's privileges apply (see @ref reflection_caller_privilege)
+    QoreReflectionCaller caller;
+    if (reflection_check_program_access(caller, *pgm, "look up symbols in", xsink)) {
+        return QoreValue();
+    }
     return find_all_constants(*pattern, re_opts, *pgm, xsink);
 }
