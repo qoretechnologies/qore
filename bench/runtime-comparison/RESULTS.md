@@ -19332,3 +19332,168 @@ and collection costs before choosing another measured candidate.
 
 Raw timings, scripts, source/artifact hashes, qualifications and audit:
 [results-aot-known-closure-route-macos-arm64.json](results-aot-known-closure-route-macos-arm64.json).
+
+
+## Optimized post-known-closure branch, develop and Java checkpoint (2026-10-21)
+
+Feature `0beee48a1` versus merged develop `26f5581d5` and fresh warmed
+Temurin 25.0.2+10 / JMH 1.37. Both Qore runtimes use matched Release
+`-O3 -DNDEBUG` and their own `qcc -O3` output. Feature uses the exact runtime
+bytes qualified before its commit; develop is freshly built. Source, artifact,
+compiler and qualification identities are preserved in the accompanying report.
+
+All 55 Qore workloads, three fixed layouts (default, reverse, shuffle487), five
+forks, three warmup and three measured 300-ms windows, 4096 items and seed 7;
+order seed 211211. Java includes 37 microbenchmarks and six getter controls.
+All 1865 jobs / 5595 measured windows passed independent raw replay. Qore values
+are the median of three layout medians of five fork means; Java is the median
+of five fresh fork means. No outlier removal or cross-epoch ratios.
+
+Values below are whole-workload ns/item, not isolated call latency. These are
+same-Program kernels, not cross-QoreProgram calls. Java direct/final inlining is
+allowed; dynamic/callback restrictions are retained and documented in the report.
+
+|!Workload|!Develop AOT ns/item|!Feature AOT ns/item|!Java JIT ns/item|!Develop / feature time|!Feature / Java time
+|arithmetic|7.037|1.558|1.016|4.517x|1.534x
+|direct_call|7.164|1.554|1.030|4.611x|1.509x
+|method_call|7.221|1.627|1.026|4.439x|1.585x
+|indirect_call|231.366|6.910|1.721|33.484x|4.016x
+|polymorphic_call|323.703|22.955|2.663|14.102x|8.619x
+|polymorphic_expression_call|136.479|10.816|2.658|12.618x|4.069x
+|monomorphic_call|11.940|3.525|1.740|3.387x|2.026x
+|optional_method_call|210.623|10.613|1.725|19.846x|6.154x
+|polymorphic_float_call|347.218|23.028|2.647|15.078x|8.700x
+|polymorphic_float_expression_call|158.962|10.749|2.658|14.788x|4.045x
+|monomorphic_float_call|11.819|3.490|1.710|3.386x|2.042x
+|optional_float_method_call|205.614|10.743|1.663|19.139x|6.460x
+|boxed_float_method_call|251.319|19.690|2.669|12.764x|7.377x
+|dynamic_int_result_call|201.409|10.666|3.194|18.884x|3.340x
+|dynamic_int_result_fallback|463.307|21.805|2.974|21.248x|7.332x
+|boxed_int_method_call|229.444|16.458|2.647|13.941x|6.218x
+|boxed_int_method_fallback|280.378|31.317|2.631|8.953x|11.905x
+|boxed_float_method_fallback|328.844|32.810|2.644|10.023x|12.408x
+|boxed_int_method_effect|390.071|90.536|1.900|4.308x|47.656x
+|dynamic_float_result_call|219.381|11.766|3.400|18.646x|3.460x
+|indirect_wide|276.880|6.924|1.731|39.986x|4.000x
+|indirect_float|235.427|6.887|1.712|34.185x|4.023x
+|indirect_int_result|204.188|6.307|1.937|32.375x|3.256x
+|indirect_float_result|207.477|7.547|2.849|27.493x|2.649x
+|indirect_tagged_float|284.427|6.892|1.682|41.269x|4.099x
+|indirect_branch_float|245.942|6.930|1.702|35.488x|4.072x
+|indirect_affine|230.135|6.961|1.685|33.063x|4.132x
+|indirect_affine_wide|280.272|7.016|1.692|39.949x|4.147x
+|indirect_branch_int|232.213|6.902|1.733|33.645x|3.984x
+|dispatch_control|7.272|1.632|1.019|4.457x|1.601x
+|list_read|8.699|2.734|0.295|3.182x|9.278x
+|list_build|109.206|27.193|3.130|4.016x|8.688x
+|list_mutate|211.321|194.664|4.211|1.086x|46.232x
+|temporary_list|140.990|1.636|1.262|86.196x|1.296x
+|temporary_hash|328.804|341.271|16.374|0.963x|20.843x
+|closure_call|142.765|15.234|1.723|9.371x|8.840x
+|closure_capture|162.548|21.525|1.799|7.551x|11.963x
+
+Direct calls are about 1.5x Java time in this workload, not parity. Indirect,
+polymorphic and captured-closure costs remain substantially larger. List mutation
+is about 46x Java time; temporary hashes are about 21x, and **temporary_hash is
+3.791% slower than develop** in the three-layout aggregate. These are investigation
+priorities, not evidence that Qore has reached a global maximum.
+
+### Getter and fallback probes
+
+|!Workload|!Develop AOT ns/item|!Feature AOT ns/item|!Time change
+|object_loop|622.307|169.648|-72.739%
+|object_short|1531.613|1095.441|-28.478%
+|float_loop|665.363|174.262|-73.810%
+|float_short|1575.207|1094.618|-30.510%
+|string_loop|533.118|379.165|-28.878%
+|string_short|1346.705|1228.833|-8.753%
+|effect_loop|752.538|339.048|-54.946%
+|effect_short|1697.695|1295.535|-23.689%
+|two_read_loop|736.302|381.266|-48.219%
+|two_read_short|1630.024|1332.803|-18.234%
+|default_loop|870.536|721.543|-17.115%
+|default_short|1804.418|1686.658|-6.526%
+|string_result_loop|697.669|415.263|-40.478%
+|string_result_short|1625.559|1381.692|-15.002%
+
+Getter loops rotate three receivers per operation, read twice with a callback
+between reads, and accumulate results. Qore uses auto receivers and one
+name-based call_function entry per 4096-item operation; Java uses statically
+typed final classes and direct entry. No setup/dispatch cost is subtracted.
+Plain Java is unrestricted. Boundary controls prevent getter/callback inlining;
+read-lock controls also use nonfair ReentrantReadWriteLock. This is not Qore's
+member locking, dynamic lookup/deletion, context, ownership or cancellation.
+
+|!Workload|!Java control|!Java ns/item|!Feature / Java time|!Java allocated bytes/item
+|object_loop|plain|0.917|184.960x|0.000021
+|object_loop|boundary|3.290|51.569x|0.017653
+|object_loop|read-lock|8.452|20.072x|0.105661
+|float_loop|plain|0.949|183.584x|0.000021
+|float_loop|boundary|3.690|47.230x|0.017663
+|float_loop|read-lock|8.547|20.389x|0.105664
+
+No Java equivalent is claimed for the remaining twelve getter/fallback probes
+or for the four mixed workloads. Allocation is observed JVM allocation, not
+retained memory. Instrumented compiler diagnostics are excluded from timings.
+
+### Mixed processing
+
+|!Workload|!Develop ms / 4096 records|!Feature ms / 4096 records|!Speedup|!Time change
+|csv_report|4.578|4.067|1.126x|-11.153%
+|object_orders|8.920|7.710|1.157x|-13.559%
+|callback_pipeline|1.265|0.349|3.626x|-72.420%
+|text_index|7.106|5.594|1.270x|-21.280%
+
+The mixed cases improve by 1.13x to 3.63x versus develop. They include parsing,
+transformation, temporary allocation, aggregation and formatting, excluding input
+generation/startup/compilation. They are synthetic processing, not production
+throughput, a Java mixed-workload comparison or a single overall Qore score.
+
+### Every adverse Qore layout
+
+|!Workload|!Layout|!Feature time change vs develop|!Disjoint adverse observed ranges
+|temporary_hash|default|+2.070%|no
+|temporary_hash|reverse|+4.293%|no
+|temporary_hash|shuffle-487|+2.079%|no
+
+All smaller losses are retained too. Overlapping fork ranges do not prove
+non-regression; observed ranges are not confidence intervals. Host load,
+frequency and thermals were uncontrolled. This comparison measures cumulative
+branch impact, not a new individual optimization's causal speedup.
+
+### Validation and next optimization
+
+Fresh executable checks pass 4698 AOT and 1566 IR references, plus 555 Java
+micro and 72 Java getter references. Reference-harness tests pass 17 + 8 cases
+and 12600 independent probe simulations. All actual libraries, source/artifact
+hashes, fixed symbol orders and normalized optimized settings are verified.
+The separate Java diagnostics pass 72 references and 1200 cross-formula checks;
+plain getters/callback inline, controlled boundaries do not, and lock bytecode
+releases on normal and exceptional paths. Their durations are not measurements.
+
+No runtime source changed in this checkpoint. The previous commit's selected
+Release/Debug qualification (70 core fixtures, 109 executed passes plus eight
+platform skips, 18021 assertions per runtime) is reused by exact source and
+artifact identity, not represented as newly executed. Full qualification logs,
+skip ledgers, lvalue/GC/thread/context/SQL/native checks and restored module
+aliases remain in the hash-bound parent report. This is not full-suite,
+sanitizer or cross-platform certification.
+
+Ordinary indirect calls predominantly execute the prepared reusable helper, generated loop/callee, and stack-location restoration. TLS lookup is a small residual in this sampled shape; replacing more TLS alone is unlikely to close this gap. The live call guards and stack-walker synchronization must remain correct.
+
+Polymorphic calls spend substantial sampled work on pinned class-local assignment/cleanup, object reference accounting, class acceptance and guarded native dispatch, beyond the small scalar method bodies. Captured closures still show native admission, synchronized capture reads and deferred frame/stack checks.
+
+List mutation still reaches generic lvalue navigation/compound arithmetic, local publication and boxed value retain/discard/type handling. The workload also includes list construction and subsequent reads; the whole Java ratio is not an indexed-add-only cost. The previously rejected indexed-add prototype must not be reinstated unchanged.
+
+Temporary hashes show allocation/free, value cleanup, typed hash assignment and input checking in both runtimes. Sampling does not explain the measured 3.791% branch/develop loss causally. Hash optimization and layout attribution require a separate controlled experiment.
+
+Integer and floating getter loops retain ordinary name-based dispatch, local reload/reference handling and checked member access around the admitted native getter. Their large gap to plain Java includes these semantics and the documented setup/dispatch differences, not just the getter body.
+
+Next use these profiles and generated code to select a distinct call or
+collection optimization, with predeclared before/after/control gates and broad
+regression checks. Neither Java parity nor a justified performance ceiling has
+been established. All 62 audit-changes items and strict table checks are recorded
+before committing this evidence.
+
+Full raw windows, references, drivers, profiles, diagnostics, hashes and audit:
+[results-aot-post-known-closure-checkpoint-macos-arm64.json](results-aot-post-known-closure-checkpoint-macos-arm64.json).

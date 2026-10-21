@@ -3752,3 +3752,23 @@ optimized branch/develop/Java view, then profile remaining call/collection
 costs. Do not remove capture synchronization or revive previously rejected
 signature/lookup shortcuts without a distinct proof and new fixed measurement
 plan.
+
+
+## Optimized post-known-closure checkpoint (2026-10-21)
+
+Fresh optimized feature `0beee48a1`, develop `26f5581d5` and Temurin 25.0.2+10
+comparison retains all 1865 jobs / 5595 windows. Qore Release `-O3 -DNDEBUG`,
+own `qcc -O3`, three fixed layouts and five forks; Java warmed JMH 1.37.
+Whole-workload ns/item: direct 1.554 versus Java 1.030; indirect 6.910 versus
+1.721; polymorphic 22.955 versus 2.663; captured closure 21.525 versus 1.799.
+Mixed processing is 1.13x to 3.63x faster than develop. List mutation remains
+about 46x Java time; temporary hashes about 21x and 3.791% slower than develop.
+All results, including adverse layouts and semantic limitations, are in RESULTS
+and `results-aot-post-known-closure-checkpoint-macos-arm64.json`.
+
+These are cumulative branch results, not isolated call latencies, production
+throughput or cross-Program measurements. No Java parity or global maximum is
+established. Prior runtime qualification is reused by exact source/artifact
+identity; fresh reference and measurement checks are separately recorded.
+Next profile-guided call/collection changes require distinct before/after/control
+experiments and broad regression qualification; old rejected changes remain rejected.
