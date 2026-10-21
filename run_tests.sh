@@ -789,4 +789,9 @@ if [ $PRINT_TEXT -eq 1 ]; then
     echo "*************************************"
 fi
 
+# the exit status is the number of failed tests; it has 8 bits, so 256 failed tests would exit with 0 as if every
+# test had passed
+if [ $FAILED_TEST_COUNT -gt 255 ]; then
+    exit 255
+fi
 exit $FAILED_TEST_COUNT
