@@ -752,6 +752,14 @@ public:
     DLLLOCAL int queueChildModules(QoreAbstractModule& mi, ExceptionSink& xsink, ExceptionSink& wsink,
             int warning_mask);
 
+    //! makes the module manager usable in a child process created with fork(), where only the forking thread exists
+    /** The lock is held across dlopen(), so it is not acquired before fork() but initialized again here; a module
+        that a thread of the parent was initializing fails to load in the child (see QoreForkHandlers.h)
+
+        @param tid the TID of the thread that called fork(), or -1 for a thread unknown to Qore
+    */
+    DLLLOCAL void forkChild(int tid);
+
 private:
     // not implemented
     DLLLOCAL QoreModuleManager(const QoreModuleManager&) = delete;

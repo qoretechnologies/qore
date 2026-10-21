@@ -32,6 +32,7 @@
 #include <qore/Qore.h>
 #include "qore/intern/QoreLoggerBridge.h"
 #include "qore/intern/QoreAsyncIoLogger.h"
+#include "qore/intern/QoreForkHandlers.h"
 #include <unistd.h>
 #ifdef __linux__
 #include <sys/syscall.h>
@@ -41,6 +42,8 @@
 
 static QoreThreadLock async_io_logger_lock;
 static QoreLoggerBridge* async_io_logger = nullptr;
+// the logger can be set in a child process created with fork() (see QoreForkHandlers.h)
+static QoreForkThreadLock async_io_logger_fork_handler(async_io_logger_lock, QFLR_LEAF, "async_io_logger");
 
 void qore_set_async_io_logger(QoreObject* logger_obj, ExceptionSink* xsink) {
     // Type safety is enforced at the Qore level via *LoggerInterfaceBase parameter type

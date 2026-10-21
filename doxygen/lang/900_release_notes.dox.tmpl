@@ -5042,6 +5042,16 @@ while (*binary chunk = input.read(65536)) {
       modules can take the same lock with the new C++ API classes \c QoreEnvironmentReadLock and
       \c QoreEnvironmentValue and with \c SystemEnvironment::isSet(); code that uses the environment without %Qore's
       API, such as a third-party library, is not serialized with it
+    - Fixed child processes created with @ref Qore::fork() "fork()" that hung forever when other threads were running
+      in the parent: a child created while another thread started or exited hung in @ref Qore::fork() "fork()"
+      itself, and children could also hang when they started a thread, changed a signal handler, read a time zone
+      or a character encoding.
+      @ref Qore::fork() "fork()" now briefly waits for threads that hold the library's process-wide locks, and the
+      child process gets them free and repairs the state of the threads that do not exist in it; this also applies
+      to a \c fork() made by native code.  Objects that another thread was using at the moment of the fork, such
+      as a locked mutex, still cannot be used in the child.  Native code must not hold the environment lock
+      (\c QoreEnvironmentReadLock, \c AtomicEnvironmentSetter) while it calls \c fork(); the child gets a
+      consistent copy of the environment without it
     - Fixed a deadlock when the thread initialization code of a Program (see
       @ref Qore::set_thread_init() "set_thread_init()") started a thread or read the call stacks of all threads
     - Fixed the warnings of the files of a separated user module other than its \c .qm file: each was parsed with the

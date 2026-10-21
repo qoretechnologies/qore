@@ -1,0 +1,154 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+# the "cppapiuser" test module is built into the build tree by examples/test/module-cpp-api/CMakeLists.txt and is not
+# installed, so QORE_MODULE_DIR must include the build tree (run_tests.sh does this); it provides waitpid()
+%requires cppapiuser
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class ForkThreadChurnTest
+
+#! Tests that a child process created with fork() while other threads start and exit can run Qore code
+/** A child process created with fork() runs only the thread that called fork(); a lock that another thread held at
+    that moment stayed locked in the child forever.  Threads take the lock of the thread list when they start and
+    exit, and QoreSignalManager::postFork() needs it to start the signal thread in the child, so a child created while
+    another thread started or exited waited forever in fork() itself.  The library's fork handlers now acquire its
+    process-wide locks before the process is copied and re-initialize them in the child.
+
+    Churn threads start threads one after another, each of which exits at once, while the main thread creates the
+    children; each child runs Qore code that takes process-wide locks (the environment, character encodings, time
+    zones, starting and waiting for a thread) and exits with the number of failed checks.  The iteration counts are
+    fixed (the churn threads stop when the children have been created, or after a fixed number of threads); a
+    child that waits forever makes the test wait forever, which is how the failure shows (the test runner's time
+    limit is only a guard).
+*/
+class ForkThreadChurnTest inherits QUnit::Test {
+    #! the number of threads that start threads while the children are created
+    const Churners = 4;
+    #! the maximum number of threads that each churn thread starts
+    const MaxGenerations = 100000;
+    #! the number of child processes
+    const Forks = 100;
+
+    constructor() : QUnit::Test("ForkThreadChurnTest", "1.0", \ARGV) {
+        addTestCase("fork() while threads start and exit", \testForkChurn());
+        addTestCase("fork() without other threads", \testForkQuiet());
+        addTestCase("a fork() outside Qore's fork() leaves signal handling usable", \testForeignFork());
+        set_return_value(main());
+    }
+
+    testForkChurn() {
+        if (!Option::HAVE_FORK) {
+            testSkip("fork() is not available");
+        }
+        Counter start(1);
+        Counter forking(1);
+        Queue results();
+        for (int t = 0; t < Churners; ++t) {
+            background runChurn(start, forking, results);
+        }
+        start.dec();
+        list<int> rcs = ();
+        {
+            # the churn threads stop once all children have been created, also if an assertion fails
+            on_exit forking.dec();
+            for (int i = 0; i < Forks; ++i) {
+                rcs += forkChild(i);
+            }
+        }
+        int generations = 0;
+        for (int t = 0; t < Churners; ++t) {
+            generations += results.get();
+        }
+        assertGt(0, generations, "threads were started while the children were created");
+        assertEq((map 0, xrange(Forks)), rcs, "every child ran its code and exited normally");
+    }
+
+    testForkQuiet() {
+        if (!Option::HAVE_FORK) {
+            testSkip("fork() is not available");
+        }
+        # the positive control: no other thread starts or exits
+        assertEq(0, forkChild(-1));
+    }
+
+    testForeignFork() {
+        if (!Option::HAVE_FORK || !Option::HAVE_SIGNAL_HANDLING) {
+            testSkip("fork() or signal handling is not available");
+        }
+        # the signal thread does not exist in the child of a fork() that Qore's fork() did not make: changing a signal
+        # handler there waited forever for it
+        int rc = cpp_api_fork_and_call(int sub () {
+            set_signal_handler(SIGUSR2, sub (int sig) {});
+            remove_signal_handler(SIGUSR2);
+            return 0;
+        });
+        assertEq(0, rc, "the child changed a signal handler");
+        # and the parent's signal handling is unchanged
+        Queue q();
+        set_signal_handler(SIGUSR2, sub (int sig) { q.push(sig); });
+        on_exit remove_signal_handler(SIGUSR2);
+        kill(getpid(), SIGUSR2);
+        assertEq(SIGUSR2, q.get(), "the parent's signal handler ran");
+    }
+
+    #! creates a child process that runs childMain() and returns its exit status
+    private int forkChild(int i) {
+        int pid = fork();
+        if (!pid) {
+            childMain(i);
+        }
+        assertGt(0, pid, "fork() succeeded");
+        return cpp_api_wait_child(pid);
+    }
+
+    #! the child: runs Qore code that takes process-wide locks, then exits with the number of failed checks
+    private childMain(int i) {
+        int failed = 0;
+        try {
+            # the environment
+            string name = sprintf("QORE_FORK_CHURN_%d_%d", getpid(), i);
+            if (setenv(name, "child") || getenv(name) != "child") {
+                ++failed;
+            }
+            # character encodings
+            if (convert_encoding("äöü", "ISO-8859-1").encoding() != "ISO-8859-1") {
+                ++failed;
+            }
+            # time zones
+            TimeZone tz("Europe/Prague");
+            if (tz.region() != "Europe/Prague") {
+                ++failed;
+            }
+            # a thread started in the child
+            Counter c(1);
+            background c.dec();
+            c.waitForZero();
+        } catch (hash<ExceptionInfo> ex) {
+            ++failed;
+        }
+        exit(failed);
+    }
+
+    #! starts threads one after another, each of which exits at once, until the children have been created
+    private runChurn(Counter start, Counter forking, Queue results) {
+        int generations = 0;
+        try {
+            start.waitForZero();
+            while (forking.getCount() && generations < MaxGenerations) {
+                Counter done(1);
+                background done.dec();
+                done.waitForZero();
+                ++generations;
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            stderr.printf("churn thread: %s: %s\n", ex.err, ex.desc);
+        }
+        results.push(generations);
+    }
+}

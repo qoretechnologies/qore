@@ -144,6 +144,24 @@ QoreCounter::~QoreCounter() {
     delete priv;
 }
 
+void QoreCounter::lockForFork() {
+    priv->l.lock();
+}
+
+void QoreCounter::unlockForFork() {
+    priv->l.unlock();
+}
+
+void QoreCounter::reinitAfterFork(int count) {
+    // the waiting threads do not exist in the child
+    priv->waiting = 0;
+    if (count >= 0) {
+        priv->cnt = count;
+    }
+    priv->cond.reinitAfterFork();
+    priv->l.reinitAfterFork();
+}
+
 void QoreCounter::destructor(ExceptionSink* xsink) {
     priv->destructor(xsink);
 }

@@ -33,6 +33,7 @@
 #include "qore/intern/EncryptionTransforms.h"
 #include "qore/intern/ql_crypto.h"
 #include "qore/intern/QoreHashNodeIntern.h"
+#include "qore/intern/QoreForkHandlers.h"
 
 #include <bzlib.h>
 #include <cerrno>
@@ -55,6 +56,8 @@ typedef std::map<std::string, std::string> strmap_t;
 typedef std::map<std::string, EVP_CIPHER*, ltstrcase> cipher_cache_t;
 static cipher_cache_t cipher_cache;
 static QoreThreadLock cipher_cache_lock;
+// the cipher cache can be used in a child process created with fork() (see QoreForkHandlers.h)
+static QoreForkThreadLock cipher_cache_fork_handler(cipher_cache_lock, QFLR_LEAF, "cipher_cache");
 
 // map old cipher names -> new cipher names for backwards compatibility
 static strmap_t cipher_compat_aliases = {

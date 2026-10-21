@@ -38,6 +38,7 @@
 #include "qore/intern/QoreParseClass.h"
 #include "qore/intern/RuntimeConfig.h"
 #include "qore/intern/QoreLibIntern.h"
+#include "qore/intern/QoreForkHandlers.h"
 
 #include <algorithm>
 #include <atomic>
@@ -51,6 +52,8 @@
 
 // global class ID sequence
 DLLLOCAL Sequence classIDSeq(1);
+// class IDs can be allocated in a child process created with fork() (see QoreForkHandlers.h)
+static QoreForkThreadLock class_id_fork_handler(classIDSeq, QFLR_LEAF, "class_ids");
 
 static std::atomic<uint64_t> qore_method_dispatch_epoch{1};
 

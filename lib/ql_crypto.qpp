@@ -32,6 +32,7 @@
 #include <qore/Qore.h>
 #include "qore/intern/ql_crypto.h"
 #include "qore/intern/EncryptionTransforms.h"
+#include "qore/intern/QoreForkHandlers.h"
 
 #include <cstdio>
 #include <cstdlib>
@@ -49,6 +50,8 @@
 typedef std::map<std::string, EVP_MD*, ltstrcase> digest_cache_t;
 static digest_cache_t digest_cache;
 static QoreThreadLock digest_cache_lock;
+// the digest cache can be used in a child process created with fork() (see QoreForkHandlers.h)
+static QoreForkThreadLock digest_cache_fork_handler(digest_cache_lock, QFLR_LEAF, "digest_cache");
 #endif
 
 #define QCRYPTO_DECRYPT 0

@@ -163,6 +163,8 @@ private:
    QoreCounter tcount;     // thread counter, for synchronization only
    QoreCondition cond;     // to ensure atomicity of set and remove calls
    bool block;
+   //! the TID of the thread that set block in preFork(), or -1
+   int block_tid = -1;
    int waiting;
    // Includes callback and thread-resource cleanup; protected by mutex.
    bool handler_running = false;
@@ -208,6 +210,14 @@ public:
    DLLLOCAL void end_handler();
    DLLLOCAL void preFork();
    DLLLOCAL void postFork(bool new_process, ExceptionSink* xsink);
+   //! acquires the locks before fork(), whoever calls it (see QoreForkHandlers.h)
+   DLLLOCAL void forkPrepare();
+   //! releases the locks in the parent after fork()
+   DLLLOCAL void forkParent();
+   //! makes the signal manager consistent in the child after fork(), where only the forking thread exists
+   /** @param fork_tid the TID of the thread that called fork(), or -1 for a thread unknown to Qore
+   */
+   DLLLOCAL void forkChild(int fork_tid);
    DLLLOCAL int q_gettid() {
       return tid;
    }

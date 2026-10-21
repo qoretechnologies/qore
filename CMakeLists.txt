@@ -1831,6 +1831,7 @@ set(LIBQORE_CPP_SRC
     lib/ParseOptionMap.cpp
     lib/QoreParseOptions.cpp
     lib/SystemEnvironment.cpp
+    lib/QoreForkHandlers.cpp
     lib/QoreCounter.cpp
     lib/QoreFuture.cpp
     lib/ReferenceArgumentHelper.cpp
@@ -2180,6 +2181,7 @@ if (SINGLE_COMPILATION_UNIT)
 #include \"${CMAKE_SOURCE_DIR}/lib/ParseOptionMap.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreParseOptions.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/SystemEnvironment.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreForkHandlers.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreCounter.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreFuture.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/ReferenceArgumentHelper.cpp\"

@@ -600,6 +600,8 @@ DLLLOCAL const AbstractQoreZoneInfo* get_thread_tz(bool& set);
 DLLLOCAL void clear_thread_tz();
 
 DLLLOCAL ThreadProgramData* get_thread_program_data();
+//! returns the Program data of the current thread, or nullptr for a thread unknown to Qore
+DLLLOCAL ThreadProgramData* get_thread_program_data_if_any();
 DLLLOCAL ThreadLocalProgramData* get_thread_local_program_data();
 
 //! Ensures td->tlpd is set for td->current_pgm.
@@ -1525,6 +1527,14 @@ private:
 
    ThreadData* td;
 
+public:
+   //! initializes the lock again in a child process created with fork(), where the thread does not exist
+   DLLLOCAL void reinitLockAfterFork() {
+      pslock.reinitAfterFork();
+   }
+
+private:
+
    DLLLOCAL ~ThreadProgramData() {
       assert(pgm_set.empty());
       assert(tld_map.empty());
@@ -1616,6 +1626,13 @@ private:
 };
 
 DLLLOCAL extern pthread_mutexattr_t ma_recursive;
+
+//! the count that the current thread adds to thread_counter (its own run, or the ThreadPool task it runs)
+/** A child process created with fork() by the thread keeps only this count; see QoreForkHandlers.h
+*/
+DLLLOCAL extern thread_local int qore_thread_counter_share;
+//! the count that the current thread adds to tp_thread_counter (an external-lifecycle thread until it is joined)
+DLLLOCAL extern thread_local int qore_tp_thread_counter_share;
 
 #ifdef QORE_HAVE_THREAD_NAME
 DLLLOCAL void q_set_thread_name(const char* name);

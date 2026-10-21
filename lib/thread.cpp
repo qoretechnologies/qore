@@ -45,6 +45,7 @@
 #include "qore/intern/QoreSignal.h"
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/RuntimeConfig.h"
+#include "qore/intern/QoreForkHandlers.h"
 #include "qore/intern/ModuleInfo.h"
 #include "qore/intern/QoreHashNodeIntern.h"
 #include "qore/intern/QoreJIT.h"
@@ -127,6 +128,11 @@ QoreCounter thread_counter;
 
 // global counter for threads with external lifecycle management (ThreadPool)
 QoreCounter tp_thread_counter;
+
+// the counts that the current thread adds to thread_counter and tp_thread_counter: a child process created with fork()
+// by this thread keeps only these, since the other threads do not exist in the child
+thread_local int qore_thread_counter_share = 0;
+thread_local int qore_tp_thread_counter_share = 0;
 
 ThreadCleanupList tclist;
 
@@ -849,6 +855,28 @@ void QoreThreadList::activate(int tid, pthread_t ptid, QoreProgram* p, bool fore
     if (p) {
         td->tpd->saveProgram(true, nullptr);
     }
+}
+
+void ThreadEntry::abandonAfterFork() {
+    assert(status != QTS_AVAIL);
+    delete tidnode;
+    tidnode = nullptr;
+    // the thread does not exist in the child; its data is not freed, since Programs can still refer to it
+    thread_data = nullptr;
+    joined = false;
+    clearCancelState();
+    waiting_on = nullptr;
+    waiting_mutex = nullptr;
+    wake_cond = nullptr;
+    wake_mutex = nullptr;
+    wake_next = -1;
+    wake_queued = false;
+    wake_busy = false;
+    waiting_fd.store(-1, std::memory_order_relaxed);
+    wake_reg_depth = 0;
+    // the descriptors are the child's own copies
+    closeCancelWakeup();
+    status = QTS_AVAIL;
 }
 
 void ThreadEntry::cleanup() {
@@ -2469,6 +2497,11 @@ ThreadProgramData* get_thread_program_data() {
    return td->tpd;
 }
 
+ThreadProgramData* get_thread_program_data_if_any() {
+   ThreadData* td = thread_data.get();
+   return td ? td->tpd : nullptr;
+}
+
 ThreadLocalProgramData* get_thread_local_program_data() {
    ThreadData* td = thread_data.get();
    assert(td);
@@ -4025,6 +4058,27 @@ public:
         started = stopping = false;
     }
 
+    //! acquires the lock before fork()
+    void forkPrepare() {
+        mutex.lock();
+    }
+
+    //! releases the lock in the parent after fork()
+    void forkParent() {
+        mutex.unlock();
+    }
+
+    //! makes the reaper usable in the child after fork(), where its thread does not exist
+    /** The threads queued for joining do not exist in the child either; their arguments are not freed, as freeing
+        them could run code that expects the threads.  The next external-lifecycle thread starts a new reaper.
+    */
+    void forkChild() {
+        started = stopping = false;
+        head = tail = nullptr;
+        condition.reinitAfterFork();
+        mutex.reinitAfterFork();
+    }
+
 private:
     QoreThreadLock mutex;
     QoreCondition condition;
@@ -4106,6 +4160,12 @@ namespace {
         ThreadArg* ta = (ThreadArg*)arg;
         // save flags before ta is deleted
         int ta_flags = ta->flags;
+        // the count added for this thread when it was started
+        if (ta_flags & QTF_EXTERNAL_LIFECYCLE) {
+            qore_tp_thread_counter_share = 1;
+        } else {
+            qore_thread_counter_share = 1;
+        }
 
         register_thread(ta->tid, pthread_self(), 0, false, ta->flags);
         printd(5, "q_run_thread() ta: %p TID %d started\n", ta, ta->tid);
@@ -4179,8 +4239,10 @@ namespace {
         // OPENSSL_thread_stop() acquires OpenSSL's global lock and can cause
         // contention with concurrent TLS handshakes (e.g. QUIC/ngtcp2).
         if (ta_flags & QTF_EXTERNAL_LIFECYCLE) {
+            // the reaper releases the count once it has joined this thread
             external_thread_reaper.complete(ta);
         } else {
+            qore_thread_counter_share = 0;
             thread_counter.dec();
         }
         return nullptr;
@@ -4188,6 +4250,8 @@ namespace {
 
     extern "C" void* op_background_thread(void* x) {
         BGThreadParams* btp = (BGThreadParams*)x;
+        // the count added for this thread when it was started
+        qore_thread_counter_share = 1;
         // register thread
         register_thread(btp->tid, pthread_self(), btp->pgm);
         printd(5, "op_background_thread() btp: %p TID %d started\n", btp, btp->tid);
@@ -4278,6 +4342,7 @@ namespace {
         pthread_cleanup_pop(1);
         // NOTE: do not call OPENSSL_thread_stop() here — returning from the
         // thread function triggers TLS destructors automatically (see above).
+        qore_thread_counter_share = 0;
         thread_counter.dec();
         return nullptr;
     }
@@ -4563,7 +4628,8 @@ void q_enforce_thread_size_on_primary_thread() {
     QoreThreadDataHelper qtdh(initial_thread);
     ThreadData* td = qtdh.get();
     if (td) {
-        // make sure accesses to stack info are made locked
+        // make sure accesses to stack info are made locked; the stack lock is a leaf below the thread list (see
+        // QoreForkHandlers.h)
         AutoLocker al(stack_lck);
         td->setStackSize(qore_thread_stack_size);
     }
@@ -5274,6 +5340,17 @@ public:
         started = stopping = false;
     }
 
+    //! makes the waker usable in the child after fork(), where its thread does not exist
+    /** The lock was acquired before fork(); the thread is started again when it is next needed (see ensureStarted())
+    */
+    void forkChild() {
+        started = stopping = false;
+        head = tail = -1;
+        done.reinitAfterFork();
+        cond_ready.reinitAfterFork();
+        lck.reinitAfterFork();
+    }
+
 private:
     QoreCondition cond_ready;
     pthread_t native_id{};
@@ -5333,6 +5410,113 @@ void QoreCondWaker::run() {
         }
         done.broadcast();
     }
+}
+
+void QoreThreadList::forkChild(int tid) {
+    // the threads of the parent other than the forking thread do not exist in the child
+    for (int i = 0; i < MAX_QORE_THREADS; ++i) {
+        if (i != tid && !entry[i].available()) {
+            entry[i].abandonAfterFork();
+        }
+    }
+    num_threads = (tid > 0 && !entry[tid].available()) ? 1 : 0;
+    // held by this thread since forkPrepare()
+    lck.reinitAfterFork();
+}
+
+int qore_fork_get_tid() {
+    ThreadData* td = thread_data.get();
+    return td ? td->tid : -1;
+}
+
+namespace {
+//! the fork handler of the thread list: only the forking thread exists in the child
+class QoreThreadListForkHandler : public QoreForkHandler {
+public:
+    QoreThreadListForkHandler() : QoreForkHandler(QFLR_THREAD_LIST, "thread_list") {
+    }
+
+    void prepare() noexcept override {
+        thread_list.forkPrepare();
+    }
+
+    void parent() noexcept override {
+        thread_list.forkParent();
+    }
+
+    void child() noexcept override {
+        thread_list.forkChild(qore_fork_get_tid());
+    }
+};
+
+//! the fork handler of the process-wide thread counters: the child keeps only the forking thread's share
+/** Otherwise the child's exit and the end of its Programs would wait for threads that do not exist in it
+*/
+class QoreThreadCountersForkHandler : public QoreForkHandler {
+public:
+    QoreThreadCountersForkHandler() : QoreForkHandler(QFLR_THREAD_COUNTERS, "thread_counters") {
+    }
+
+    void prepare() noexcept override {
+        thread_counter.lockForFork();
+        tp_thread_counter.lockForFork();
+    }
+
+    void parent() noexcept override {
+        tp_thread_counter.unlockForFork();
+        thread_counter.unlockForFork();
+    }
+
+    void child() noexcept override {
+        tp_thread_counter.reinitAfterFork(qore_tp_thread_counter_share);
+        thread_counter.reinitAfterFork(qore_thread_counter_share);
+    }
+};
+
+//! the fork handler of the condition waker: its thread is started again in the child when it is needed
+class QoreCondWakerForkHandler : public QoreForkHandler {
+public:
+    QoreCondWakerForkHandler() : QoreForkHandler(QFLR_COND_WAKER, "cond_waker") {
+    }
+
+    void prepare() noexcept override {
+        cond_waker.lck.lock();
+    }
+
+    void parent() noexcept override {
+        cond_waker.lck.unlock();
+    }
+
+    void child() noexcept override {
+        cond_waker.forkChild();
+    }
+};
+
+//! the fork handler of the external thread reaper: its thread is started again in the child when it is needed
+class QoreThreadReaperForkHandler : public QoreForkHandler {
+public:
+    QoreThreadReaperForkHandler() : QoreForkHandler(QFLR_LEAF, "external_thread_reaper") {
+    }
+
+    void prepare() noexcept override {
+        external_thread_reaper.forkPrepare();
+    }
+
+    void parent() noexcept override {
+        external_thread_reaper.forkParent();
+    }
+
+    void child() noexcept override {
+        external_thread_reaper.forkChild();
+    }
+};
+
+QoreThreadListForkHandler thread_list_fork_handler;
+QoreThreadCountersForkHandler thread_counters_fork_handler;
+QoreCondWakerForkHandler cond_waker_fork_handler;
+QoreThreadReaperForkHandler thread_reaper_fork_handler;
+QoreForkThreadLock stack_lck_fork_handler(stack_lck, QFLR_STACK, "stack_lck");
+QoreForkThreadLock u_tld_seq_fork_handler(u_tld_seq, QFLR_LEAF, "u_tld_seq");
 }
 
 void qore_stop_cond_waker() {

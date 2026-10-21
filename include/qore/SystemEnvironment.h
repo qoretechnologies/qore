@@ -63,8 +63,13 @@ class QoreStringNode;
     set() and unset() then return -1 with \c errno \c EDEADLK, as do the AtomicEnvironmentSetter functions that
     change the environment, since the thread cannot wait for the exclusive lock while it holds the lock itself.
 
-    A child process created with \c fork() starts with the lock released, or held as the forking thread held it
-    (so that a lock object of the forking thread can be released in the child), whatever other threads held it.
+    Before \c fork(), whoever calls it, the lock is acquired exclusively, so the child gets a consistent copy of the
+    environment, and the child starts with the lock released, whatever other threads held it.  Code that creates a
+    child process with \c fork() therefore does not hold the lock, and must not: the library's fork handlers acquire
+    its other process-wide locks before the process is copied, and a thread that holds one of them while it waits
+    for the environment lock would deadlock with the forking thread.  A process created with \c posix_spawn(),
+    which runs no fork handlers, gets the environment that the caller passes, so the caller holds a
+    QoreEnvironmentReadLock while it passes \c environ.
 
     @note Only code that takes the lock is serialized with %Qore: native code that reads or changes the environment
     without it, for example a third-party library calling \c getenv() or \c setenv() internally, or a language

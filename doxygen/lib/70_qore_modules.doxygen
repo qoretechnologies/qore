@@ -212,9 +212,11 @@ int max = max_conn ? atoi(max_conn.c_str()) : 10;
 
     The lock can be nested in one thread, but a thread holding it shared (a QoreEnvironmentReadLock) cannot change
     the environment: SystemEnvironment::set() and SystemEnvironment::unset() return -1 with \c errno \c EDEADLK.
-    Hold the lock only briefly, since changes to the environment wait until it is released.  A child process created
-    with \c fork() starts with the lock released, or held as the forking thread held it, whatever other threads held
-    it.
+    Hold the lock only briefly, since changes to the environment wait until it is released.  Do not call \c fork()
+    with the lock held: the library's fork handlers acquire the lock while the process is copied (so the child gets
+    a consistent copy of the environment and starts with the lock released), and they acquire the library's other
+    process-wide locks first, which a thread waiting for the environment lock can hold.  \c posix_spawn() runs no
+    fork handlers, so hold the read lock while passing \c environ to it, as above.
 
     @note The lock only covers code that takes it.  A third-party library or an embedded language runtime that
     reads the environment internally (for example a resolver or TLS library reading its configuration variables, or

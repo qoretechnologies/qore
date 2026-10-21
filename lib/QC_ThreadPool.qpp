@@ -60,6 +60,8 @@ void ThreadPoolThread::worker(ExceptionSink* xsink) {
 
         assert(task);
 
+        // the task's count was added when it was submitted; while it runs, it belongs to this thread
+        ++qore_thread_counter_share;
         sl.unlock();
         task->run(xsink).discard(xsink);
         // Handle any exceptions from the task so they don't leak into the next task
@@ -79,6 +81,7 @@ void ThreadPoolThread::worker(ExceptionSink* xsink) {
         // between unrelated tasks on the same worker thread.
         clear_all_program_thread_local_data();
         // Task complete — decrement thread_counter that was incremented at submit time
+        --qore_thread_counter_share;
         thread_counter.dec();
 
         if (stopflag) {

@@ -3894,6 +3894,30 @@ private:
     typedef std::unordered_map<unsigned, QoreProgram*> programid_to_program_map_t;
     static programid_to_program_map_t programid_to_program_map;
     static QoreRWLock lck_programMap; // to protect program list manipulation
+
+public:
+    //! makes the Program consistent in a child process created with fork(), where only the forking thread exists
+    /** Its locks can be held by threads that do not exist in the child, so they are initialized again, and its
+        thread counts keep only the forking thread, so that the end of the Program does not wait for the other
+        threads; see QoreForkHandlers.h
+
+        @param tid the TID of the thread that called fork(), or -1 for a thread unknown to Qore
+        @param tpd the forking thread's Program data, or nullptr
+    */
+    DLLLOCAL void fixupAfterFork(int tid, ThreadProgramData* tpd);
+
+    //! calls fixupAfterFork() for every Program; the Program registry lock is held (see QoreForkHandlers.h)
+    DLLLOCAL static void fixupAllAfterFork(int tid, ThreadProgramData* tpd);
+
+    //! the Program registry lock (lck_programMap), for the fork handlers
+    DLLLOCAL static QoreRWLock& getProgramMapLock() {
+        return lck_programMap;
+    }
+
+    //! the global breakpoint list lock, for the fork handlers
+    DLLLOCAL static QoreRWLock& getBreakpointLockForFork();
+
+private:
     static unsigned programIdCounter;   // to generate programId
     unsigned programId;
 };

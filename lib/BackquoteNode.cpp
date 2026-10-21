@@ -399,13 +399,9 @@ QoreStringNode* backquoteEval(const char* cmd, int& rc, ExceptionSink* xsink) {
             return nullptr;
         }
 
-        pid_t pid;
-        {
-            // the child gets a copy of the environment, which it passes to the command: it must not change while the
-            // process is copied (in the child, the fork handler of SystemEnvironment restores this thread's hold)
-            QoreEnvironmentReadLock env_lock;
-            pid = fork();
-        }
+        // the child gets a copy of the environment, which it passes to the command: the library's fork handlers hold
+        // the environment lock while the process is copied
+        pid_t pid = fork();
         bool pgroup_ok = false;
         if (!pid) {
             if (use_pgroup) {

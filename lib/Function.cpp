@@ -62,6 +62,7 @@
 #include "qore/intern/QoreClosureNode.h"
 #include "qore/intern/typed_hash_decl_private.h"
 #include "qore/intern/ConstantList.h"
+#include "qore/intern/QoreForkHandlers.h"
 
 #include <algorithm>
 #include <atomic>
@@ -4866,6 +4867,8 @@ struct BuiltinLocKeyHash {
 static std::mutex g_builtin_loc_mutex;
 static std::unordered_map<BuiltinLocKey, std::unique_ptr<QoreProgramLocation>, BuiltinLocKeyHash>
     g_builtin_loc_pool;
+// the location pool can be used in a child process created with fork() (see QoreForkHandlers.h)
+static QoreForkStdMutex builtin_loc_fork_handler(g_builtin_loc_mutex, QFLR_LEAF, "builtin_locations");
 
 static const QoreProgramLocation* intern_builtin_src_loc(const char* file, int line) {
     if (!file) {

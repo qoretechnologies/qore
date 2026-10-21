@@ -69,6 +69,7 @@
 #include <qore/QoreHttpClientObject.h>
 #include <qore/QoreSandboxManager.h>
 #include "qore/intern/qore_thread_intern.h"
+#include "qore/intern/QoreForkHandlers.h"
 #include "qore/intern/QoreSignal.h"
 
 #include <openssl/evp.h>
@@ -86,6 +87,7 @@
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <sys/wait.h>
 #include <unistd.h>
 
 #include <atomic>
@@ -326,14 +328,18 @@ static int ut_reserve_closed_port() {
     return rc ? -1 : ntohs(addr.sin_port);
 }
 
+// each argument is evaluated once: the failure message must not run a call with side effects (a fork(), a wait for
+// a child process) a second time
 #define UT_ASSERT_EQ(counters, expected, actual, msg) do { \
+    const auto& ut_expected_ = (expected); \
+    const auto& ut_actual_ = (actual); \
     ++(counters).test_count; \
-    if ((expected) == (actual)) { \
+    if (ut_expected_ == ut_actual_) { \
         ++(counters).pass_count; \
     } else { \
         ++(counters).fail_count; \
         printf("  FAIL: %s (expected %lld, got %lld, line %d)\n", msg, \
-            (long long)(expected), (long long)(actual), __LINE__); \
+            (long long)(ut_expected_), (long long)(ut_actual_), __LINE__); \
     } \
 } while (0)
 
@@ -891,6 +897,106 @@ static void ut_rsection_try_notify_does_not_block_on_writer(UnitTestCounters& c)
 }
 
 #ifdef DEBUG
+namespace {
+//! state shared by the holder thread of ut_fork_waits_for_lock_holders() and the prepare hook
+struct ForkHoldTest {
+    std::mutex m;
+    std::condition_variable cv;
+    const char* target = nullptr;
+    bool held = false;
+    bool release = false;
+    bool hook_saw_held = false;
+};
+
+std::atomic<ForkHoldTest*> fork_hold_test{nullptr};
+
+//! called by the prepare handler before each handler; releases the holder when the target lock is reached
+void fork_hold_hook(const char* name) {
+    ForkHoldTest* t = fork_hold_test.load();
+    if (t && !strcmp(name, t->target)) {
+        std::lock_guard<std::mutex> lg(t->m);
+        // the holder still holds the lock: the prepare handler must wait for it
+        t->hook_saw_held = t->held && !t->release;
+        t->release = true;
+        t->cv.notify_all();
+    }
+}
+
+//! returns the exit status of a child process, or -1 if it did not exit normally
+int ut_wait_child(pid_t pid) {
+    int status = 0;
+    while (waitpid(pid, &status, 0) < 0) {
+        if (errno != EINTR) {
+            return -2;
+        }
+    }
+    return WIFEXITED(status) ? WEXITSTATUS(status) : -1;
+}
+}
+
+//! fork() waits for a thread that holds a registered lock acquired before fork(), and the lock is free in the child
+/** Another thread holds each lock, as the prepare handler would; the prepare hook releases it when the prepare handler
+    reaches the lock, so the prepare handler waits for the holder deterministically.  Before the fork handlers, the
+    child got the lock held by a thread that does not exist in it and waited forever when it took the lock.
+*/
+static void ut_fork_waits_for_lock_holders(UnitTestCounters& c) {
+    static const char* names[] = {
+        "signal_manager", "plugin_registry", "time_zones",
+        "thread_counters", "thread_list", "cond_waker", "stack_lck", "external_thread_reaper", "u_tld_seq",
+        "program_registry", "program_cleanup", "breakpoints", "constant_value_locks", "opaque_target_shards",
+        "encodings", "utc_offset_zones", "module_options", "app_registry", "complex_types", "external_types",
+        "aot_deferred_types", "builtin_locations", "class_ids", "scan_waits", "node_watches", "async_io_logger",
+        "cipher_cache", "digest_cache", "environment",
+        nullptr,
+    };
+    for (const char** name = names; *name; ++name) {
+        QoreForkHandler* h = qore_fork_find_handler(*name);
+        if (!h) {
+            // not registered in this build (for example a handler of a disabled feature)
+            continue;
+        }
+        ForkHoldTest t;
+        t.target = *name;
+        std::thread holder([&t, h]() {
+            // takes the lock as the prepare handler does
+            h->prepare();
+            std::unique_lock<std::mutex> ul(t.m);
+            t.held = true;
+            t.cv.notify_all();
+            t.cv.wait(ul, [&t] { return t.release; });
+            ul.unlock();
+            h->parent();
+        });
+        {
+            std::unique_lock<std::mutex> ul(t.m);
+            t.cv.wait(ul, [&t] { return t.held; });
+        }
+        fork_hold_test = &t;
+        qore_fork_prepare_hook = fork_hold_hook;
+        pid_t pid = fork();
+        if (!pid) {
+            // only this thread exists: the lock must be free
+            h->prepare();
+            h->parent();
+            _exit(0);
+        }
+        qore_fork_prepare_hook = nullptr;
+        fork_hold_test = nullptr;
+        {
+            // releases the holder if fork() failed before the hook ran
+            std::lock_guard<std::mutex> lg(t.m);
+            t.release = true;
+            t.cv.notify_all();
+        }
+        holder.join();
+        UT_ASSERT(c, pid > 0, "fork() succeeds");
+        if (pid > 0) {
+            UT_ASSERT(c, ut_wait_child(pid) == 0, *name);
+            UT_ASSERT(c, t.hook_saw_held, "the prepare handler reached a lock that another thread held");
+        }
+    }
+}
+
 //! A thread waiting for the block of another thread's fork() is woken when the block is lifted
 /** QoreSignalManager::postFork() lifted the block without the lock and without waking the waiters, so a thread that
     changed a signal handler during a fork() waited forever
@@ -9192,6 +9298,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     AsyncIoStoppingThreadTest::run(c);
     AsyncIoFrameSendTest::run(c);
     ut_cond_wait_cancel_in_window(c);
+    ut_fork_waits_for_lock_holders(c);
     ut_fork_signal_block_waiter(c);
     Http3ClientResponseRegistrationTest::run(c);
     ut_fast_real_deref_releases_last(c);

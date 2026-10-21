@@ -32,6 +32,7 @@
 
 #include <qore/intern/qore_encoding_private.h>
 #include <qore/intern/qore_string_private.h>
+#include "qore/intern/QoreForkHandlers.h"
 
 #include <cstdint>
 #include <cstdio>
@@ -89,6 +90,9 @@ encoding_map_t QoreEncodingManager::emap;
 const_encoding_map_t QoreEncodingManager::amap;
 QoreThreadLock QoreEncodingManager::mutex;
 QoreEncodingManager QEM;
+
+// the encoding maps can be used in a child process created with fork() (see QoreForkHandlers.h)
+static QoreForkThreadLock qem_fork_handler(QoreEncodingManager::getLockForFork(), QFLR_LEAF, "encodings");
 
 QoreEncoding::QoreEncoding(const char* code, const char* desc, unsigned char minwidth, unsigned char maxwidth,
         mbcs_length_t l, mbcs_end_t e, mbcs_pos_t p, mbcs_charlen_t c, mbcs_get_unicode_t gu, bool ascii_compat)

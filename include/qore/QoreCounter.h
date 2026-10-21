@@ -87,6 +87,16 @@ public:
     DLLLOCAL void waitForZero();
     DLLLOCAL void dec();
 
+    // internal use only - the fork handlers of process-wide counters (see QoreForkCounter)
+    //! acquires the counter's lock before fork()
+    DLLLOCAL void lockForFork();
+    //! releases the counter's lock in the parent after fork()
+    DLLLOCAL void unlockForFork();
+    //! initializes the counter's lock and condition again in the child after fork()
+    /** @param count the count in the child, or -1 to keep the count
+    */
+    DLLLOCAL void reinitAfterFork(int count = -1);
+
 private:
     //! private implementation of the counter
     struct qore_counter_private* priv;

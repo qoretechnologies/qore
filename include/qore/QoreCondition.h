@@ -66,6 +66,11 @@ public:
     //! destroys the condition object
     DLLEXPORT ~QoreCondition();
 
+    //! initializes the condition again in a child process created with fork(), where its waiters do not exist
+    /** internal
+    */
+    DLLLOCAL void reinitAfterFork();
+
     //! signals a single waiting thread to wake up
     DLLEXPORT int signal();
 

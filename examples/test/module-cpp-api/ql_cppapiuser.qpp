@@ -131,8 +131,6 @@ constexpr int ENV_CHILD_OK = 0;
 constexpr int ENV_CHILD_SET_FAILED = 2;
 // the exit status of a child process that read another value than it set
 constexpr int ENV_CHILD_WRONG_VALUE = 3;
-// the exit status of a child process whose own shared hold was not restored: it could change the environment
-constexpr int ENV_CHILD_HOLD_LOST = 4;
 
 // in a child process: sets the variable and reads it back; returns the exit status for the parent
 int env_child_set_and_check(const char* name, const char* value) {
@@ -163,13 +161,17 @@ public:
     }
 
     ~EnvLockHolderThread() {
-        releaseLock();
+        signalRelease();
+        if (holder.joinable()) {
+            holder.join();
+        }
     }
 
-    void releaseLock() {
-        if (holder.joinable()) {
+    //! tells the holder to release the lock; does not wait for it
+    void signalRelease() {
+        if (!released) {
+            released = true;
             release.set_value();
-            holder.join();
         }
     }
 
@@ -181,6 +183,7 @@ private:
     std::promise<void> release;
     std::future<void> release_future;
     std::thread holder;
+    bool released = false;
 };
 }
 
@@ -857,10 +860,10 @@ hash<auto> cpp_api_env_change_while_read_locked(string name, string value) [dom=
     return new QoreStringNode(v.str());
 }
 
-//! creates a child process with fork() while another thread holds the environment lock, and waits for it
-/** The child changes and reads the environment: in the child, the thread holding the lock does not exist, so the
-    child can only do this because the fork handler of SystemEnvironment resets the lock there; without it, the
-    child would wait forever (and so would this function)
+//! creates a child process with fork() while another thread is about to release the environment lock, and waits for it
+/** The other thread holds the lock until this thread is about to call fork(), and releases it then: fork() waits for
+    it (the fork handlers acquire the lock before the process is copied), and the child changes and reads the
+    environment, which it can only do if the lock is free in the child
 
     @param name the name of the variable that the child sets
     @param value the value that the child sets
@@ -876,6 +879,8 @@ int cpp_api_env_fork_while_held(string name, string value, bool exclusive) [dom=
     int fork_errno;
     {
         EnvLockHolderThread holder(exclusive);
+        // the holder releases the lock now, before or while fork() waits for it
+        holder.signalRelease();
         pid = fork();
         if (!pid) {
             // only this thread exists in the child
@@ -893,40 +898,28 @@ int cpp_api_env_fork_while_held(string name, string value, bool exclusive) [dom=
     return rc;
 }
 
-//! creates a child process with fork() while the calling thread holds a QoreEnvironmentReadLock, and waits for it
-/** In the child, the fork handler of SystemEnvironment restores the shared hold of the forking thread: the child
-    cannot change the environment while it holds the lock (\c EDEADLK), and it can after releasing it
+//! creates a child process with the C library's fork() (not Qore's fork()) that runs Qore code, and waits for it
+/** Qore's fork() stops the signal thread before fork() and starts it again after it; a fork() made by other code
+    (here, this module) does not, so the child must handle a signal thread that does not exist in it
 
-    @param name the name of the variable that the child sets
-    @param value the value that the child sets
+    @param c the code to run in the child; it returns the child's exit status (an integer)
 
-    @return the exit status of the child: 0 for success, 2 if it could not set the variable after releasing the lock,
-    3 if it read another value, 4 if it could change the environment while holding the lock (the hold was not
-    restored), -1 if it did not exit normally
+    @return the exit status of the child: the code's return value, 99 if the code raised an exception, or -1 if the
+    child did not exit normally
 
     @throw FORK-ERROR fork() or waitpid() failed
 */
-int cpp_api_env_fork_holding(string name, string value) [dom=PROCESS] {
-    pid_t pid;
-    int fork_errno;
-    int child_rc = ENV_CHILD_OK;
-    {
-        QoreEnvironmentReadLock env_lock;
-        pid = fork();
-        fork_errno = errno;
-        if (!pid) {
-            errno = 0;
-            if (SystemEnvironment::set(name->c_str(), value->c_str()) != -1 || errno != EDEADLK) {
-                child_rc = ENV_CHILD_HOLD_LOST;
-            }
-        }
-    }
+int cpp_api_fork_and_call(code c) [dom=PROCESS] {
+    pid_t pid = fork();
     if (!pid) {
-        // the hold has been released in the child as in the parent
-        _exit(child_rc != ENV_CHILD_OK ? child_rc : env_child_set_and_check(name->c_str(), value->c_str()));
+        ExceptionSink child_xsink;
+        ValueHolder rv(c->execValue(nullptr, &child_xsink), &child_xsink);
+        int status = child_xsink ? 99 : static_cast<int>(rv->getAsBigInt());
+        child_xsink.clear();
+        _exit(status);
     }
     if (pid < 0) {
-        return xsink->raiseErrnoException("FORK-ERROR", fork_errno, "fork() failed");
+        return xsink->raiseErrnoException("FORK-ERROR", errno, "fork() failed");
     }
     int rc = wait_child(pid);
     if (rc == -2) {

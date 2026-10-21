@@ -42,6 +42,10 @@ QoreRWLock::~QoreRWLock() {
     delete priv;
 }
 
+void QoreRWLock::reinitAfterFork() {
+    priv->reinitAfterFork();
+}
+
 int QoreRWLock::wrlock() {
     priv->wrlock();
     return 0;

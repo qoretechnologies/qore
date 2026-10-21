@@ -16,6 +16,7 @@
 #include <qore/intern/qore_program_private.h>
 #include <qore/intern/xxhash.h>
 #include <qore/intern/qore_list_private.h>
+#include "qore/intern/QoreForkHandlers.h"
 
 #include <algorithm>
 #include <atomic>
@@ -101,6 +102,10 @@ struct GlobalPluginOperationRef {
 std::map<uint32_t, GlobalPluginOperationRef> global_plugin_operations;
 uint32_t next_global_plugin_operation_id = 1;
 std::atomic<bool> plugin_operations_published{false};
+
+// the registry can be used in a child process created with fork() (see QoreForkHandlers.h); its holders check for
+// cancellation (the thread list) and read the trace settings below (the environment)
+QoreForkStdMutex plugin_registry_fork_handler(plugin_registry_mutex, QFLR_PLUGIN_REGISTRY, "plugin_registry");
 
 bool pluginRegisterTrace() {
     static const bool enabled = q_env_is_set("QORE_PLUGIN_REGISTER_TRACE");

@@ -212,6 +212,11 @@ private:
    DLLLOCAL static const QoreEncoding* findUnlocked(const char* name);
 
 public:
+   //! returns the lock of the encoding maps, for the fork handlers (internal)
+   DLLLOCAL static QoreThreadLock& getLockForFork() {
+      return mutex;
+   }
+
    //! adds an alias for an encoding
    DLLEXPORT static void addAlias(const QoreEncoding* qcs, const char* alias);
 

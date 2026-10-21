@@ -51,6 +51,7 @@
 #include <qore/Qore.h>
 #include "qore/intern/AllocTracking.h"
 #include "qore/intern/xxhash.h"
+#include "qore/intern/QoreForkHandlers.h"
 
 // Maximum backtrace depth to capture
 static constexpr int BT_DEPTH = 10;
@@ -91,6 +92,12 @@ static std::unordered_map<void*, PtrInfo>* live_ptrs = nullptr;
 
 static std::mutex obj_mutex;
 static std::unordered_map<std::string, ObjClassInfo>* obj_classes = nullptr;
+
+// the tracking data can be used in a child process created with fork(); the locks are taken in this order (see
+// QoreForkHandlers.h)
+static QoreForkStdMutex sites_fork_handler(sites_mutex, QFLR_ALLOC_TRACKING, "alloc_tracking_sites");
+static QoreForkStdMutex ptrs_fork_handler(ptrs_mutex, QFLR_ALLOC_TRACKING + 10, "alloc_tracking_ptrs");
+static QoreForkStdMutex obj_fork_handler(obj_mutex, QFLR_ALLOC_TRACKING + 20, "alloc_tracking_objects");
 
 // Real function pointers
 static void* (*real_malloc)(size_t) = nullptr;
@@ -204,18 +211,23 @@ static void track_free(void* ptr) {
     }
     HookGuard guard;
 
-    std::lock_guard<std::mutex> lg(ptrs_mutex);
-    if (!live_ptrs) {
-        return;
+    size_t size;
+    uint64_t bt_hash;
+    {
+        std::lock_guard<std::mutex> lg(ptrs_mutex);
+        if (!live_ptrs) {
+            return;
+        }
+        auto it = live_ptrs->find(ptr);
+        if (it == live_ptrs->end()) {
+            return; // Pointer was allocated before tracking started
+        }
+        size = it->second.size;
+        bt_hash = it->second.bt_hash;
+        live_ptrs->erase(it);
     }
-    auto it = live_ptrs->find(ptr);
-    if (it == live_ptrs->end()) {
-        return; // Pointer was allocated before tracking started
-    }
-    size_t size = it->second.size;
-    uint64_t bt_hash = it->second.bt_hash;
-    live_ptrs->erase(it);
 
+    // not nested in ptrs_mutex: qore_alloc_tracking_start() takes sites_mutex first (see QoreForkHandlers.h)
     std::lock_guard<std::mutex> lg2(sites_mutex);
     if (alloc_sites) {
         auto sit = alloc_sites->find(bt_hash);

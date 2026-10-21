@@ -31,6 +31,7 @@
 #include <qore/Qore.h>
 #include "qore/intern/QoreSignal.h"
 #include "qore/intern/qore_program_private.h"
+#include "qore/intern/QoreForkHandlers.h"
 
 #include <cerrno>
 #include <cstdio>
@@ -315,6 +316,7 @@ void QoreSignalManager::preFork() {
     // if another block is already in progress then wait for it to complete
     waitForBlockUnlocked();
     block = true;
+    block_tid = ::q_gettid();
     stop_signal_thread_unlocked();
 
     // wait for thread to exit (may be already gone)
@@ -330,9 +332,11 @@ void QoreSignalManager::postFork(bool new_process, ExceptionSink *xsink) {
     }
 
     AutoLocker al(mutex);
-    // the block is lifted under the lock, and the threads of this process that wait for it are woken
+    // the block is lifted under the lock, and the threads that wait for it are woken; in the child they do not exist
+    // (see forkChild())
     block = false;
-    if (!new_process && waiting) {
+    block_tid = -1;
+    if (waiting) {
         cond.broadcast();
     }
 
@@ -353,6 +357,72 @@ void QoreSignalManager::postFork(bool new_process, ExceptionSink *xsink) {
         new_process);
 
     start_signal_thread(xsink);
+}
+
+void QoreSignalManager::forkPrepare() {
+    mutex.lock();
+    tcount.lockForFork();
+}
+
+void QoreSignalManager::forkParent() {
+    tcount.unlockForFork();
+    mutex.unlock();
+}
+
+void QoreSignalManager::forkChild(int fork_tid) {
+    // the threads that waited for the lock or the block do not exist in the child
+    waiting = 0;
+    if (block && block_tid != fork_tid) {
+        // another thread's fork() set the block; its postFork() does not run in the child
+        block = false;
+        block_tid = -1;
+    }
+    int signal_threads = 0;
+    if (thread_running && fork_tid == tid) {
+        // fork() was called by the signal thread itself, which goes on in the child
+        signal_threads = 1;
+    } else if (thread_running || tid != -1) {
+        // the signal thread does not exist in the child (fork() was not called by Qore's fork(), which stops it); it
+        // is started again with the next signal handler (see setHandler())
+        thread_running = false;
+        tid = -1;
+        thread_joinable = false;
+        cmd = C_None;
+        handler_running = false;
+        for (int i = 0; i < QORE_SIGNAL_MAX; ++i) {
+            if (handlers[i].status == QoreSignalHandler::SH_InProgress) {
+                // the handler was running in the signal thread
+                handlers[i].status = QoreSignalHandler::SH_OK;
+            }
+        }
+    }
+    tcount.reinitAfterFork(signal_threads);
+    cond.reinitAfterFork();
+    // held by this thread since forkPrepare()
+    mutex.reinitAfterFork();
+}
+
+namespace {
+//! the fork handler of the signal manager (see QoreForkHandlers.h)
+class QoreSignalManagerForkHandler : public QoreForkHandler {
+public:
+    QoreSignalManagerForkHandler() : QoreForkHandler(QFLR_SIGNAL_MANAGER, "signal_manager") {
+    }
+
+    void prepare() noexcept override {
+        QSM.forkPrepare();
+    }
+
+    void parent() noexcept override {
+        QSM.forkParent();
+    }
+
+    void child() noexcept override {
+        QSM.forkChild(qore_fork_get_tid());
+    }
+};
+
+QoreSignalManagerForkHandler qsm_fork_handler;
 }
 
 void QoreSignalManager::signal_handler_thread() {

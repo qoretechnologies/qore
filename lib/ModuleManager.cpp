@@ -36,6 +36,7 @@
 // build
 #include "qore/QoreSandboxManager.h"
 #include "qore/intern/qore_program_private.h"
+#include "qore/intern/QoreForkHandlers.h"
 #include "qore/intern/ModuleInfo.h"
 #include "qore/intern/QoreNamespaceIntern.h"
 #include "qore/intern/QoreException.h"
@@ -86,6 +87,50 @@ const qore_mod_api_compat_s* qore_mod_api_list = qore_mod_api_list_l;
 const unsigned qore_mod_api_list_len = QORE_MOD_API_LEN;
 
 QoreModuleManager QMM;
+
+void QoreModuleManager::forkChild(int tid) {
+    // the threads that waited for or loaded modules do not exist in the child
+    module_load_waiting = 0;
+    module_wait_for.clear();
+    for (auto& i : module_load_map) {
+        ModuleLoadEntry& e = i.second;
+        e.waiters = 0;
+        if (e.state == MLS_INITIALIZING && e.owner_tid != tid) {
+            e.state = MLS_FAILED;
+            // called by a fork handler, which cannot throw: without memory for the message, the load fails with
+            // the message it has
+            try {
+                e.err = "LOAD-MODULE-ERROR";
+                e.desc = "the module was being initialized by another thread when the process was forked; it "
+                    "cannot be loaded in the child process";
+            } catch (...) {
+            }
+        }
+    }
+    module_load_cond.reinitAfterFork();
+    mutex.reinitAfterFork();
+}
+
+namespace {
+//! the fork handler of the module manager (see QoreForkHandlers.h)
+class QoreModuleManagerForkHandler : public QoreForkHandler {
+public:
+    QoreModuleManagerForkHandler() : QoreForkHandler(QFLR_MODULE_MANAGER, "module_manager") {
+    }
+
+    void prepare() noexcept override {
+    }
+
+    void parent() noexcept override {
+    }
+
+    void child() noexcept override {
+        QMM.forkChild(qore_fork_get_tid());
+    }
+};
+
+QoreModuleManagerForkHandler qmm_fork_handler;
+}
 ModuleManager MM;
 
 // thread-local counter tracking nested module loading depth

@@ -29,6 +29,7 @@
 */
 
 #include <qore/Qore.h>
+#include "qore/intern/QoreForkHandlers.h"
 
 #include <cassert>
 #include <cerrno>
@@ -107,25 +108,65 @@ bool qore_env_held_exclusively() {
     return qore_env_lock_depth < 0;
 }
 
-#ifdef HAVE_FORK
-// a child process created with fork() runs only the thread that called fork(): the holds of all other threads are
-// gone with them, so the lock is reset, and the forking thread's own hold is restored, so that the lock objects it
-// holds release the lock in the child as in the parent.  The lock is reset by assigning the static initializer: a
-// lock that was held cannot be initialized again with pthread_rwlock_init() (macOS refuses it with EBUSY).
-void qore_env_atfork_child() {
-    static const pthread_rwlock_t unlocked = PTHREAD_RWLOCK_INITIALIZER;
-    qore_env_lock = unlocked;
-    if (qore_env_lock_depth > 0) {
-        int rc = pthread_rwlock_rdlock(&qore_env_lock);
-        assert(!rc);
-        (void)rc;
-    } else if (qore_env_lock_depth < 0) {
-        int rc = pthread_rwlock_wrlock(&qore_env_lock);
-        assert(!rc);
-        (void)rc;
+//! the fork handler of the environment lock (see QoreForkHandler)
+/** Before fork(), the lock is acquired exclusively, so that the child gets a consistent copy of the environment.
+    It ranks last among the locks that the fork handlers acquire, since its holders take no other lock.
+
+    A thread must not call fork() while it holds the lock: the fork handlers would acquire the other locks while it
+    is held, and a thread that holds one of them while it waits for the environment lock would deadlock with the
+    forking thread (with a shared hold, on platforms whose read-write locks prefer writers, such as macOS, behind a
+    waiting writer).  In a debug build this is an assertion; otherwise the forking thread's hold, which also
+    excludes changes, is kept: a thread holding the lock shared cannot wait for the exclusive lock.
+
+    In the child, which runs only the thread that called fork(), the holds of all other threads are gone with them,
+    so the lock is reset, and a hold of the forking thread is restored, so that the lock objects it holds release the
+    lock in the child as in the parent.  The lock is reset by assigning the static initializer: a lock that was held
+    cannot be initialized again with pthread_rwlock_init() (macOS refuses it with EBUSY).
+*/
+class QoreEnvForkHandler : public QoreForkHandler {
+public:
+    QoreEnvForkHandler() : QoreForkHandler(QFLR_ENVIRONMENT, "environment") {
     }
-}
-#endif
+
+    void prepare() noexcept override {
+        // fork() must not be called with the environment lock held (see above)
+        assert(!qore_env_lock_depth);
+        if (!qore_env_lock_depth) {
+            int rc = pthread_rwlock_wrlock(&qore_env_lock);
+            assert(!rc);
+            (void)rc;
+            acquired = true;
+        }
+    }
+
+    void parent() noexcept override {
+        if (acquired) {
+            acquired = false;
+            int rc = pthread_rwlock_unlock(&qore_env_lock);
+            assert(!rc);
+            (void)rc;
+        }
+    }
+
+    void child() noexcept override {
+        acquired = false;
+        static const pthread_rwlock_t unlocked = PTHREAD_RWLOCK_INITIALIZER;
+        qore_env_lock = unlocked;
+        if (qore_env_lock_depth > 0) {
+            int rc = pthread_rwlock_rdlock(&qore_env_lock);
+            assert(!rc);
+            (void)rc;
+        } else if (qore_env_lock_depth < 0) {
+            int rc = pthread_rwlock_wrlock(&qore_env_lock);
+            assert(!rc);
+            (void)rc;
+        }
+    }
+
+private:
+    //! set by prepare() if it acquired the lock; only accessed by the forking thread, with the registry lock held
+    bool acquired = false;
+};
 
 // holds the lock shared for its lifetime
 class QoreEnvSharedHelper {
@@ -164,13 +205,10 @@ int qore_env_refuse_change() {
 }
 }
 
+// makes the lock usable in child processes created with fork(), by Qore or any other code in the process
+static QoreEnvForkHandler qore_env_fork_handler;
+
 SystemEnvironment::SystemEnvironment() {
-#ifdef HAVE_FORK
-    // restores the lock in child processes created with fork(), by Qore or any other code in the process
-    int rc = pthread_atfork(nullptr, nullptr, qore_env_atfork_child);
-    assert(!rc);
-    (void)rc;
-#endif
 }
 
 SystemEnvironment::~SystemEnvironment() {

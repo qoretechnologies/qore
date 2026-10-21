@@ -18,9 +18,11 @@
     AtomicEnvironmentSetter (the lock held exclusively) and QoreEnvironmentReadLock (the lock held shared), which take
     the same process-wide lock as the Qore-language environment functions.  The cppapiuser test module exercises them.
 
-    The fork cases create a child process while the lock is held, by another thread or by the forking thread: the
-    child can only use the environment because the fork handler of SystemEnvironment resets the lock there and
-    restores the forking thread's own hold.  If that were broken, the child, and with it the test, would wait forever.
+    The fork cases create a child process while another thread holds the lock and releases it while fork() waits for
+    it (the fork handlers acquire it before the process is copied).  If that were broken, the child, and with it the
+    test, would wait forever.
+    The fork() and exec() case creates its children while writer threads start, change the environment and exit
+    one after another, so the thread list's lock is taken while the process is copied too.
 */
 class EnvironmentLockTest inherits QUnit::Test {
     #! the number of iterations of each thread
@@ -29,8 +31,12 @@ class EnvironmentLockTest inherits QUnit::Test {
     const PairWriters = 3;
     #! the number of threads that read the environment while the pair changes
     const PairReaders = 3;
-    #! the number of threads that change the environment while child processes are created
+    #! the number of threads that start writer threads while child processes are created
     const ForkWriters = 3;
+    #! the maximum number of writer threads that each churn thread starts one after another
+    const MaxGenerations = 10000;
+    #! the number of iterations of each writer thread
+    const GenerationIterations = 50;
     #! the number of child processes created with fork() while the environment changes
     const Forks = 20;
     #! the padding of every value: long enough that each value is allocated
@@ -46,8 +52,7 @@ class EnvironmentLockTest inherits QUnit::Test {
         addTestCase("AtomicEnvironmentSetter changes variables atomically", \testAtomicPair());
         addTestCase("negative: a thread holding the lock shared cannot change the environment", \testReadLocked());
         addTestCase("the lock nests in an exclusive hold", \testNestedExclusive());
-        addTestCase("fork() while another thread holds the lock", \testForkWhileHeld());
-        addTestCase("fork() while the forking thread holds the lock", \testForkHolding());
+        addTestCase("fork() waits for another thread that holds the lock", \testForkWhileHeld());
         addTestCase("fork() and exec() while other threads change the environment", \testForkExec());
         set_return_value(main());
     }
@@ -146,17 +151,6 @@ class EnvironmentLockTest inherits QUnit::Test {
         assertNothing(getenv(name));
     }
 
-    testForkHolding() {
-        string name = prefix + "FORK_HOLDING";
-        on_exit unsetenv(name);
-
-        assertEq(0, cpp_api_env_fork_holding(name, "holding-" + Pad));
-        assertNothing(getenv(name));
-        # the lock has been released in the parent
-        assertEq(0, setenv(name, "parent"));
-        assertEq("parent", getenv(name));
-    }
-
     testForkExec() {
         if (!Option::HAVE_FORK) {
             testSkip("fork() is not available");
@@ -168,22 +162,21 @@ class EnvironmentLockTest inherits QUnit::Test {
         # the command run in each child exits with 0 if the variable has the form of a value written by a writer
         string cmd = sprintf("/bin/sh -c 'case \"$%s\" in [0-9]*-[0-9]*-%s) exit 0;; esac; exit 1'", var, Pad);
 
-        # no thread starts or exits while the child processes are created: the child of fork() restarts the signal
-        # thread, which needs the lock of the thread list, and a thread holds that lock while it starts or exits, so
-        # a child created at that moment would wait forever (a separate issue of fork(), not of the environment)
-        Counter started(ForkWriters);
+        # the churn threads start writer threads one after another while the children are created, so threads
+        # start and exit (taking the thread list's lock) and change the environment while the process is copied
         Counter start(1);
-        Counter forks_done(1);
+        Counter forking(1);
         Queue results();
+        Queue errors();
         for (int t = 0; t < ForkWriters; ++t) {
-            background runForkWriter(t, var, started, start, forks_done, results);
+            background runForkChurn(t, var, start, forking, results, errors);
         }
-        started.waitForZero();
         start.dec();
         list<int> rcs = ();
         {
-            # the writers exit once all children have been created, also if an assertion fails
-            on_exit forks_done.dec();
+            # the churn threads stop starting writers once all children have been created, also if an assertion
+            # fails
+            on_exit forking.dec();
             for (int i = 0; i < Forks; ++i) {
                 int pid = fork();
                 if (!pid) {
@@ -198,8 +191,17 @@ class EnvironmentLockTest inherits QUnit::Test {
                 rcs += cpp_api_wait_child(pid);
             }
         }
-        list<string> errors = getErrors(results, ForkWriters);
-        assertEq((), errors, "the writers changed the environment without errors");
+        int generations = 0;
+        for (int t = 0; t < ForkWriters; ++t) {
+            generations += results.get();
+        }
+        assertGt(0, generations, "writer threads were started");
+        # all writers have finished: each churn thread waits for its writers before it reports
+        list<string> errs = ();
+        while (errors.size()) {
+            errs += errors.get();
+        }
+        assertEq((), errs, "the writers changed the environment without errors");
         assertEq((map 0, xrange(Forks)), rcs, "every child got a consistent copy of the environment");
     }
 
@@ -246,27 +248,39 @@ class EnvironmentLockTest inherits QUnit::Test {
         results.push({"errors": errors});
     }
 
-    #! changes the variable that the children read, and adds and removes variables of its own
-    private runForkWriter(int t, string var, Counter started, Counter start, Counter forks_done, Queue results) {
-        list<string> errors = ();
-        started.dec();
+    #! starts writer threads one after another until the children have been created (at most MaxGenerations)
+    private runForkChurn(int t, string var, Counter start, Counter forking, Queue results, Queue errors) {
+        int generations = 0;
         try {
             start.waitForZero();
-            for (int i = 0; i < Iterations && errors.size() < 10; ++i) {
-                string v = sprintf("%d-%d-%s", t, i, Pad);
+            while (forking.getCount() && generations < MaxGenerations) {
+                Counter done(1);
+                background runForkWriter(t, generations, var, done, errors);
+                done.waitForZero();
+                ++generations;
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            errors.push(sprintf("fork churn %d: %s: %s", t, ex.err, ex.desc));
+        }
+        results.push(generations);
+    }
+
+    #! changes the variable that the children read, and adds and removes variables of its own, then exits
+    private runForkWriter(int t, int generation, string var, Counter done, Queue errors) {
+        on_exit done.dec();
+        try {
+            for (int i = 0; i < GenerationIterations; ++i) {
+                string v = sprintf("%d-%d-%s", t, generation * GenerationIterations + i, Pad);
                 if (setenv(var, v)) {
-                    errors += sprintf("fork writer %d: setenv(%y) failed: %s", t, var, strerror());
+                    errors.push(sprintf("fork writer %d: setenv(%y) failed: %s", t, var, strerror()));
                 }
                 string own = sprintf("%sW%d_%d", prefix, t, i % 16);
                 if (setenv(own, v) || unsetenv(own)) {
-                    errors += sprintf("fork writer %d: changing %y failed: %s", t, own, strerror());
+                    errors.push(sprintf("fork writer %d: changing %y failed: %s", t, own, strerror()));
                 }
             }
         } catch (hash<ExceptionInfo> ex) {
-            errors += sprintf("fork writer %d: %s", t, ex.err + ": " + ex.desc);
+            errors.push(sprintf("fork writer %d: %s: %s", t, ex.err, ex.desc));
         }
-        # the thread exits only after the last child process has been created
-        forks_done.waitForZero();
-        results.push({"errors": errors});
     }
 }

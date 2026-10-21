@@ -165,6 +165,9 @@ public:
 
     DLLLOCAL void cleanup();
 
+    //! frees the entry of a thread of the parent process in a child created with fork(), where it does not exist
+    DLLLOCAL void abandonAfterFork();
+
     //! Closes the cancellation wakeup channel, if any; must be called with thread_list.lck held
     /** The thread must not be blocked in qore_cancellable_poll(); a thread clears waiting_fd before it returns
         from the wait, so the descriptors cannot be in use by any canceller (cancellers only write while
@@ -322,6 +325,20 @@ public:
         return num_threads;
     }
 
+    //! acquires the lock before fork() (see QoreForkHandlers.h)
+    DLLLOCAL void forkPrepare() {
+        lck.lock();
+    }
+
+    //! releases the lock in the parent after fork()
+    DLLLOCAL void forkParent() {
+        lck.unlock();
+    }
+
+    //! leaves only the forking thread's entry in a child created with fork(), and initializes the lock again
+    /** @param tid the forking thread's TID, or a negative value if it has none
+    */
+    DLLLOCAL void forkChild(int tid);
 
     DLLLOCAL QoreHashNode* getAllCallStacks();
 

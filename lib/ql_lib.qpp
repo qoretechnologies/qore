@@ -705,12 +705,9 @@ int system(string command) [flags=NAMED_ARGS;dom=EXTERNAL_PROCESS] {
     // process, the child of fork() may only call async-signal-safe functions before the command is executed
     pid_t pid;
     bool pgroup_ok = false;
-    {
-        // the child gets a copy of the environment, which it passes to the command: it must not change while the
-        // process is copied (in the child, the fork handler of SystemEnvironment restores this thread's hold)
-        QoreEnvironmentReadLock env_lock;
-        pid = fork();
-    }
+    // the child gets a copy of the environment, which it passes to the command: the library's fork handlers hold
+    // the environment lock while the process is copied
+    pid = fork();
     if (!pid) {
         if (use_pgroup) {
             setpgid(0, 0);
@@ -1040,6 +1037,11 @@ if (pid = fork()) {
 
     @note
     - no background threads will be running in the new process
+    - the child process can start threads and use the process-wide services of the library (the environment,
+      character encodings, time zones, signal handlers), also when other threads were running when the process was
+      copied: fork() waits for threads that briefly hold the library's process-wide locks; an object that another
+      thread was using at that moment (for example a locked @ref Qore::Thread::Mutex "Mutex") cannot be used in the
+      child
     - on some platforms, after a fork(), the only safe call is @ref exec(), many system calls are not async-signal
       safe, including pthread_create() which is used to start new threads; on these platforms, the %Qore process will
       crash if unsafe operations are called after a fork()
@@ -1058,14 +1060,10 @@ int fork() [dom=PROCESS] {
 #endif
 
    //printd(5, "stopped signal thread, about to fork pid %d\n", getpid()); fflush(stdout);
-   int pid;
-   {
-      // the environment must not change while the process is copied, so that the child gets a consistent copy; in
-      // the child, the fork handler of SystemEnvironment restores this thread's exclusive hold, which is released
-      // here as in the parent
-      AtomicEnvironmentSetter env_lock;
-      pid = fork();
-   }
+   // the library's fork handlers acquire its process-wide locks (the environment, the thread list, the signal
+   // manager, ...) before the process is copied and re-initialize them in the child, which needs them to start its
+   // signal thread and to run Qore code (see QoreForkHandlers.h)
+   int pid = fork();
 
 #ifdef HAVE_SIGNAL_HANDLING
    // release signal handler lock

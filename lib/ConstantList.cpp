@@ -38,12 +38,15 @@
 #include "qore/intern/qore_aot_deps.h"
 #include "qore/intern/ql_debug.h"
 #include "qore/intern/xxhash.h"
+#include "qore/intern/QoreForkHandlers.h"
 
 #include <algorithm>
 #include <atomic>
 #include <cstdlib>
 #include <cstring>
 #include <memory>
+#include <mutex>
+#include <new>
 #include <unordered_set>
 #include <vector>
 
@@ -130,6 +133,37 @@ struct alignas(64) ConstantValueLock {
 */
 constexpr size_t ConstantValueLockCount = 64;
 ConstantValueLock constant_value_locks[ConstantValueLockCount];
+
+//! the fork handler of the constant value locks, which are leaf locks never held together (see QoreForkHandlers.h)
+class ConstantValueLocksForkHandler : public QoreForkHandler {
+public:
+    ConstantValueLocksForkHandler() : QoreForkHandler(QFLR_LEAF, "constant_value_locks") {
+    }
+
+    void prepare() noexcept override {
+        if (QFLM_STRIPED == QFLM_ACQUIRE) {
+            for (ConstantValueLock& l : constant_value_locks) {
+                l.m.lock();
+            }
+        }
+    }
+
+    void parent() noexcept override {
+        if (QFLM_STRIPED == QFLM_ACQUIRE) {
+            for (size_t i = ConstantValueLockCount; i; --i) {
+                constant_value_locks[i - 1].m.unlock();
+            }
+        }
+    }
+
+    void child() noexcept override {
+        for (ConstantValueLock& l : constant_value_locks) {
+            new (&l.m) std::mutex();
+        }
+    }
+};
+
+ConstantValueLocksForkHandler constant_value_locks_fork_handler;
 }
 
 std::mutex& ConstantEntry::runtimeValueLock() const {

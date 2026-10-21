@@ -46,7 +46,8 @@
 #define QORE_COND_CLOCK CLOCK_MONOTONIC
 #endif
 
-QoreCondition::QoreCondition() {
+// initializes a condition variable with the clock of the timed waits
+static void qore_cond_init(pthread_cond_t& c) {
 #ifdef QORE_COND_CLOCK
     pthread_condattr_t attr;
     pthread_condattr_init(&attr);
@@ -60,6 +61,20 @@ QoreCondition::QoreCondition() {
 #else
     pthread_cond_init(&c, nullptr);
 #endif
+}
+
+QoreCondition::QoreCondition() {
+    qore_cond_init(c);
+}
+
+void QoreCondition::reinitAfterFork() {
+    // the old state is not destroyed: pthread_cond_destroy() would wait for the waiters, which do not exist in the
+    // child, and pthread_cond_signal() could wait for them too (glibc); it is reset to the static initializer first,
+    // since an implementation may refuse to initialize a condition that is in use (as macOS does for read-write
+    // locks)
+    static const pthread_cond_t initial = PTHREAD_COND_INITIALIZER;
+    c = initial;
+    qore_cond_init(c);
 }
 
 QoreCondition::~QoreCondition() {

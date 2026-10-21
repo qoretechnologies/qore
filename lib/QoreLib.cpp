@@ -49,6 +49,7 @@
 #include "qore/intern/ModuleInfo.h"
 #include "qore/intern/QoreQuestionMarkOperatorNode.h"
 #include "qore/intern/QoreAsciiCompatStringHelper.h"
+#include "qore/intern/QoreForkHandlers.h"
 
 #include <algorithm>
 #include <atomic>
@@ -134,6 +135,14 @@ DLLLOCAL QoreThreadLock app_reg_lock;
 typedef std::map<std::string, QoreValue> app_reg_map_t;
 DLLLOCAL app_reg_map_t app_reg_map;
 
+// sets a module option with mod_opt_lock held; the replaced value is returned in old
+static void qore_set_module_option_intern(std::string mod, std::string opt, QoreValue val, QoreValue& old);
+
+// the module options and the application registry can be used in a child process created with fork() (see
+// QoreForkHandlers.h)
+static QoreForkThreadLock mod_opt_fork_handler(mod_opt_lock, QFLR_LEAF, "module_options");
+static QoreForkThreadLock app_reg_fork_handler(app_reg_lock, QFLR_LEAF, "app_registry");
+
 #ifndef HAVE_LOCALTIME_R
 DLLLOCAL QoreThreadLock lck_localtime;
 #endif
@@ -158,6 +167,11 @@ static QoreThreadLock lck_group;
 
 // time zone information source
 QoreTimeZoneManager QTZM;
+
+// the time zone maps can be used in a child process created with fork() (see QoreForkHandlers.h); a zone is loaded
+// with the zone map locked, which can check for cancellation (the thread list)
+static QoreForkRWLock qtzm_fork_handler(QTZM.getZoneLockForFork(), QFLR_TIME_ZONES, "time_zones");
+static QoreForkRWLock qtzm_offset_fork_handler(QTZM.getOffsetLockForFork(), QFLR_LEAF, "utc_offset_zones");
 
 // parse location for objects parsed on the command-line
 QoreCommandLineLocation qoreCommandLineLocation;
@@ -4512,7 +4526,18 @@ void qore_delete_app_registry() {
 }
 
 void qore_set_module_option(std::string mod, std::string opt, QoreValue val) {
-    AutoLocker al(mod_opt_lock);
+    // the replaced value is dereferenced after the lock is released: it can be an object whose destructor runs user
+    // code, which must not run with the lock held (see QoreForkHandlers.h)
+    QoreValue old;
+    {
+        AutoLocker al(mod_opt_lock);
+        qore_set_module_option_intern(std::move(mod), std::move(opt), val, old);
+    }
+    ExceptionSink xsink;
+    old.discard(&xsink);
+}
+
+static void qore_set_module_option_intern(std::string mod, std::string opt, QoreValue val, QoreValue& old) {
     mod_opt_val_map_t::iterator vi;
     mod_opt_map_t::iterator i = mod_opt_map.lower_bound(mod);
     if (i == mod_opt_map.end() || i->first != mod) {
@@ -4530,9 +4555,8 @@ void qore_set_module_option(std::string mod, std::string opt, QoreValue val) {
             vi = i->second.insert(vi, mod_opt_val_map_t::value_type(std::move(opt), val));
         }
     } else {
-        // first dereference the existing value
-        ExceptionSink xsink;
-        vi->second.discard(&xsink);
+        // the existing value is dereferenced by the caller
+        old = vi->second;
         if (!val) {
             // delete the option
             i->second.erase(vi);
@@ -4554,21 +4578,27 @@ QoreValue qore_get_module_option(std::string mod, std::string opt) {
 }
 
 void qore_set_app_registry(std::string key, QoreValue val) {
-    AutoLocker al(app_reg_lock);
-    app_reg_map_t::iterator i = app_reg_map.lower_bound(key);
-    if (i == app_reg_map.end() || i->first != key) {
-        if (val) {
-            app_reg_map.insert(i, app_reg_map_t::value_type(std::move(key), val));
-        }
-    } else {
-        ExceptionSink xsink;
-        i->second.discard(&xsink);
-        if (!val) {
-            app_reg_map.erase(i);
+    // the replaced value is dereferenced after the lock is released: it can be an object whose destructor runs user
+    // code, which must not run with the lock held (see QoreForkHandlers.h)
+    QoreValue old;
+    {
+        AutoLocker al(app_reg_lock);
+        app_reg_map_t::iterator i = app_reg_map.lower_bound(key);
+        if (i == app_reg_map.end() || i->first != key) {
+            if (val) {
+                app_reg_map.insert(i, app_reg_map_t::value_type(std::move(key), val));
+            }
         } else {
-            i->second = val;
+            old = i->second;
+            if (!val) {
+                app_reg_map.erase(i);
+            } else {
+                i->second = val;
+            }
         }
     }
+    ExceptionSink xsink;
+    old.discard(&xsink);
 }
 
 QoreValue qore_get_app_registry(std::string key) {

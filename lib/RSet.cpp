@@ -36,6 +36,7 @@
 #include "qore/intern/qore_list_private.h"
 #include "qore/intern/QoreHashNodeIntern.h"
 #include "qore/intern/ql_debug.h"
+#include "qore/intern/QoreForkHandlers.h"
 
 #include <algorithm>
 #include <chrono>
@@ -53,6 +54,7 @@
 //! a Counter decremented when the next scan starts waiting for another thread; see q_set_scan_wait_notify()
 static QoreThreadLock scan_wait_notify_lock;
 static Counter* scan_wait_notify = nullptr;
+static QoreForkThreadLock scan_wait_notify_fork_handler(scan_wait_notify_lock, QFLR_LEAF, "scan_wait_notify");
 
 void q_set_scan_wait_notify(Counter* c) {
     Counter* old;
@@ -268,6 +270,8 @@ private:
 */
 std::mutex scan_wait_lock;
 std::map<int, QoreScanWaitRecord>* scan_waits = nullptr;
+// the scan bookkeeping can be used in a child process created with fork() (see QoreForkHandlers.h)
+QoreForkStdMutex scan_wait_fork_handler(scan_wait_lock, QFLR_LEAF, "scan_waits");
 
 //! registers the current thread as waiting in a scan while it exists
 class ScanWaitHelper {
@@ -1228,6 +1232,7 @@ constexpr size_t NodeWatchBuckets = 4096;
 std::atomic<unsigned> node_watch_buckets[NodeWatchBuckets];
 std::mutex node_watch_lock;
 std::unordered_map<const AbstractQoreNode*, NodeWatch> node_watches;
+QoreForkStdMutex node_watch_fork_handler(node_watch_lock, QFLR_LEAF, "node_watches");
 
 size_t node_watch_bucket(const AbstractQoreNode* n) {
     uint64_t v = static_cast<uint64_t>(reinterpret_cast<uintptr_t>(n));
