@@ -14,6 +14,7 @@ class EventNotifierTest inherits QUnit::Test {
         addTestCase("basic test", \basicTest());
         addTestCase("EventLoop integration test", \eventLoopTest());
         addTestCase("multiple notifications test", \multipleNotificationsTest());
+        addTestCase("destroyed notifier test", \destroyedNotifierTest());
         set_return_value(main());
     }
 
@@ -81,5 +82,24 @@ class EventNotifierTest inherits QUnit::Test {
         # Should be empty after acknowledge
         events = loop.poll(10ms);
         assertFalse(exists events, "No events after acknowledge()");
+    }
+
+    #! A connection that still holds a notifier destroyed meanwhile does not signal it through its closed descriptor
+    /** The destructor of an EventNotifier closes its descriptor at once, also while a connection that it is
+        registered with still holds it; the connection signals it when it becomes ready, and that signal must not use
+        the descriptor, whose number the system can have given to another file meanwhile.
+    */
+    private destroyedNotifierTest() {
+        AbstractHttpPollConnection conn();
+        EventNotifier n();
+        assertTrue(conn.registerReadyNotifier(n), "the connection holds the notifier until it is ready");
+        delete n;
+
+        # a failed call sets errno to a known value, which signaling the closed notifier must leave unchanged
+        assertEq(NOTHING, hstat("/qore-event-notifier-test-missing/file"));
+        assertEq(ENOENT, errno());
+        conn.onConnectionReady();
+        assertEq(ENOENT, errno(), "the closed notifier's descriptor was not used");
+        assertTrue(conn.isReady());
     }
 }

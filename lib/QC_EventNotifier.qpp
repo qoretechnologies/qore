@@ -85,10 +85,11 @@ EventNotifier::constructor() {
 
 //! Destroys the EventNotifier object
 /** Deterministically closes the underlying file descriptor, even if C++ code
-    (e.g., EventNotifierAction) still holds a reference to the private data.
-    This prevents eventfd/pipe descriptor leaks when the Qore object is
+    (e.g., EventNotifierAction, or a connection that the notifier is registered with) still holds a reference to the
+    private data.  This prevents eventfd/pipe descriptor leaks when the Qore object is
     collected but the C++ private data outlives it due to non-DGC-visible
-    references.
+    references.  A signal in progress on another thread completes first; signals sent afterwards by those holders
+    do nothing.
 */
 EventNotifier::destructor() {
     en->closeFd();

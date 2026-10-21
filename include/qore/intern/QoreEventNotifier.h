@@ -42,6 +42,9 @@
 #endif
 
 #include <atomic>
+#include <condition_variable>
+#include <cstdint>
+#include <mutex>
 
 //! Cross-thread event notification abstraction
 /**
@@ -68,9 +71,13 @@
     @endcode
 
     Thread Safety:
-    - notify() is thread-safe and can be called from any thread
+    - notify() is thread-safe and lock-free and can be called from any thread
     - acknowledge() should only be called from the thread that owns the notifier
-    - fd() is thread-safe (returns immutable value)
+    - fd() is thread-safe; it returns -1 once closeFd() has closed the descriptor
+    - closeFd() is thread-safe: it waits until no notify() or acknowledge() call is using the descriptor before it
+      closes it, so no call can use a descriptor that is closed and possibly reused by the system; after it,
+      notify() and acknowledge() do nothing.  It must not be called from a notify() or acknowledge() call on the
+      same thread.
 */
 class QoreEventNotifier : public AbstractPollableIoObjectBase {
 public:
@@ -84,25 +91,25 @@ public:
     //! Destroys the event notifier
     DLLLOCAL ~QoreEventNotifier();
 
-    //! Returns true if the notifier was created successfully
+    //! Returns true if the notifier was created successfully and is not closed
     DLLLOCAL bool isValid() const {
 #ifdef __linux__
-        return notify_fd >= 0;
+        return notify_fd.load(std::memory_order_acquire) >= 0;
 #else
-        return pipe_fd[0] >= 0 && pipe_fd[1] >= 0;
+        return pipe_fd[0].load(std::memory_order_acquire) >= 0 && pipe_fd[1].load(std::memory_order_acquire) >= 0;
 #endif
     }
 
     //! Returns the file descriptor to register with EventLoop
     /** This fd should be registered for QORE_EV_READ events.
 
-        @return the notification fd, or -1 if not valid
+        @return the notification fd, or -1 if not valid or closed
     */
     DLLLOCAL int fd() const {
 #ifdef __linux__
-        return notify_fd;
+        return notify_fd.load(std::memory_order_acquire);
 #else
-        return pipe_fd[0];  // read end
+        return pipe_fd[0].load(std::memory_order_acquire);  // read end
 #endif
     }
 
@@ -116,13 +123,13 @@ public:
 
     //! Deterministically closes the underlying fd/pipe
     /** Called from the Qore-level destructor to release the OS resource
-        immediately, even if C++ code (e.g., EventNotifierAction) still holds
-        a reference to this object.  Subsequent notify()/acknowledge()/fd()
-        calls become no-ops or return -1.
+        immediately, even if C++ code (e.g., EventNotifierAction, or a connection that the notifier is registered
+        with to be signaled when it becomes ready) still holds a reference to this object.  Waits until no
+        notify() or acknowledge() call is using the descriptor, then closes it; subsequent notify() and
+        acknowledge() calls do nothing and fd() returns -1.  Idempotent.
 
-        This is safe because the only consumer of the fd is the event loop,
-        and by the time the Qore object is destroyed the fd has already been
-        removed from the event loop.
+        The event loop must not poll the descriptor any more: by the time the Qore object is destroyed, the fd has
+        already been removed from the event loop.
     */
     DLLLOCAL void closeFd();
 
@@ -130,16 +137,28 @@ public:
     /** This method can be called from any thread to wake up the event loop.
         Multiple calls to notify() before acknowledge() may be coalesced
         (on Linux with eventfd) or queued (on other platforms with pipe).
+        Does nothing once the notifier is closed.
     */
     DLLLOCAL void notify();
 
     //! Acknowledges/consumes the notification
     /** This method should be called after the event loop returns with an
         event on this notifier's fd. It drains any pending notifications.
+        Does nothing once the notifier is closed.
 
         @param xsink exception sink for error reporting
     */
     DLLLOCAL void acknowledge(ExceptionSink* xsink);
+
+#ifdef DEBUG
+    //! Debug builds: called by notify() and acknowledge() while they use the descriptor
+    /** Lets a test hold a call in the window in which the descriptor is in use
+    */
+    DLLLOCAL static std::atomic<void (*)(QoreEventNotifier* notifier)> dbg_in_use_hook;
+
+    //! Debug builds: called by closeFd() when it waits for calls that use the descriptor
+    DLLLOCAL static std::atomic<void (*)(QoreEventNotifier* notifier)> dbg_close_wait_hook;
+#endif
 
 #ifdef DARWIN
     //! Binds to a kqueue for optimized EVFILT_USER notification (macOS only)
@@ -168,19 +187,67 @@ public:
 #endif
 
 private:
+    //! Set in @ref use_state by closeFd(); never cleared
+    static constexpr uint32_t CLOSED_BIT = 0x80000000u;
+    //! The number of notify() and acknowledge() calls using the descriptor, in @ref use_state
+    static constexpr uint32_t IN_USE_MASK = 0x7fffffffu;
+
+    //! The closed bit and the number of calls using the descriptor
+    /** A call that uses the descriptor counts itself in before it reads the descriptor and out after its system
+        call, and does nothing if the closed bit is set; closeFd() sets the bit and closes the descriptor only when
+        the count is zero, so no call can use a descriptor that was closed and possibly reused by the system.
+    */
+    std::atomic<uint32_t> use_state{0};
+
+    //! Guards the wait of closeFd() for the calls using the descriptor; a leaf lock
+    std::mutex close_mutex;
+    //! Signaled when the last call using the descriptor ends after the closed bit was set
+    std::condition_variable close_cond;
+
 #ifdef __linux__
-    int notify_fd = -1;     //!< eventfd file descriptor
+    std::atomic<int> notify_fd{-1};     //!< eventfd file descriptor
 #elif defined(DARWIN)
     std::atomic<int> kq_fd{-1};        //!< bound kqueue fd (when optimized)
     uintptr_t user_ident = 0;          //!< unique EVFILT_USER identifier
     std::atomic<bool> optimized{false}; //!< true when bound to kqueue
-    int pipe_fd[2] = {-1, -1};         //!< fallback pipe [read, write]
+    std::atomic<int> pipe_fd[2] = {-1, -1};  //!< fallback pipe [read, write]
 
     //! Global counter for generating unique EVFILT_USER identifiers
     static std::atomic<uintptr_t> next_ident;
 #else
-    int pipe_fd[2] = {-1, -1};  //!< pipe file descriptors [read, write]
+    std::atomic<int> pipe_fd[2] = {-1, -1};  //!< pipe file descriptors [read, write]
 #endif
+
+    //! Counts a call in as using the descriptor; returns false (and counts nothing) if the notifier is closed
+    DLLLOCAL bool beginUse();
+
+    //! Counts a call out after it used the descriptor; wakes closeFd() if it waits for the last one
+    DLLLOCAL void endUse();
+
+    //! Counts a call using the descriptor in and out
+    class UseHelper {
+    public:
+        DLLLOCAL UseHelper(QoreEventNotifier& n) : n(n), in_use(n.beginUse()) {
+        }
+
+        DLLLOCAL ~UseHelper() {
+            if (in_use) {
+                n.endUse();
+            }
+        }
+
+        //! Returns true if the call may use the descriptor
+        DLLLOCAL operator bool() const {
+            return in_use;
+        }
+
+        UseHelper(const UseHelper&) = delete;
+        UseHelper& operator=(const UseHelper&) = delete;
+
+    private:
+        QoreEventNotifier& n;
+        bool in_use;
+    };
 
     // Non-copyable
     QoreEventNotifier(const QoreEventNotifier&) = delete;

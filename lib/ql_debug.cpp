@@ -5344,6 +5344,162 @@ static void ut_manager_pool_sandbox(UnitTestCounters& c) {
     }
 }
 
+//! notify() and acknowledge() do nothing once the notifier is closed: they use no descriptor
+static void ut_event_notifier_use_after_close(UnitTestCounters& c) {
+    ExceptionSink xsink;
+    ReferenceHolder<QoreEventNotifier> n(new QoreEventNotifier(&xsink), &xsink);
+    UT_ASSERT(c, !xsink.isException() && n->isValid(), "the notifier is created");
+    if (xsink.isException()) {
+        xsink.clear();
+        return;
+    }
+    n->notify();
+    n->acknowledge(&xsink);
+    UT_ASSERT(c, !xsink.isException(), "an open notifier is acknowledged");
+    xsink.clear();
+
+    // closed while another holder, such as a connection it is registered with, still references it
+    n->closeFd();
+    UT_ASSERT(c, !n->isValid() && n->fd() == -1, "a closed notifier has no descriptor");
+    errno = 0;
+    n->notify();
+    UT_ASSERT_EQ(c, 0, errno, "notify() after close makes no system call");
+    n->acknowledge(&xsink);
+    UT_ASSERT(c, !xsink.isException(), "acknowledge() after close raises no exception");
+    xsink.clear();
+    errno = 0;
+    n->closeFd();
+    UT_ASSERT_EQ(c, 0, errno, "a second close makes no system call");
+}
+
+//! notify() and acknowledge() racing closeFd() never use a descriptor that closeFd() closed
+/** The outcome does not depend on the interleaving; under ThreadSanitizer, a version without synchronization reports
+    the race between the calls and the close
+*/
+static void ut_event_notifier_concurrent_close(UnitTestCounters& c) {
+    int closed = 0;
+    for (int i = 0; i < 50; ++i) {
+        ExceptionSink xsink;
+        ReferenceHolder<QoreEventNotifier> n(new QoreEventNotifier(&xsink), &xsink);
+        if (xsink.isException()) {
+            xsink.clear();
+            break;
+        }
+        QoreEventNotifier* np = *n;
+        std::thread notifier_thread([np]() {
+            np->notify();
+            ExceptionSink axs;
+            np->acknowledge(&axs);
+            axs.clear();
+        });
+        std::thread closer([np]() {
+            np->closeFd();
+        });
+        notifier_thread.join();
+        closer.join();
+        if (n->fd() == -1) {
+            ++closed;
+        }
+    }
+    UT_ASSERT_EQ(c, 50, closed, "every notifier is closed after notify() and acknowledge() raced its close");
+}
+
+#ifdef DEBUG
+namespace {
+//! Coordinates ut_event_notifier_close_waits_for_notify() with the notifier's debug hooks
+struct UtNotifierHookState {
+    std::mutex m;
+    std::condition_variable cv;
+    bool in_use = false;
+    bool close_waiting = false;
+    bool release = false;
+};
+
+//! The notifier that the hooks act on; other notifiers, used by other threads meanwhile, are not affected
+std::atomic<QoreEventNotifier*> ut_notifier_hook_target{nullptr};
+std::atomic<UtNotifierHookState*> ut_notifier_hook_state{nullptr};
+
+//! Holds a notify() call of the target notifier while it uses the descriptor until the test releases it
+void ut_notifier_in_use_hook(QoreEventNotifier* n) {
+    if (n != ut_notifier_hook_target.load(std::memory_order_acquire)) {
+        return;
+    }
+    UtNotifierHookState* st = ut_notifier_hook_state.load(std::memory_order_acquire);
+    if (!st) {
+        return;
+    }
+    std::unique_lock<std::mutex> l(st->m);
+    st->in_use = true;
+    st->cv.notify_all();
+    st->cv.wait(l, [st]() { return st->release; });
+}
+
+//! Reports that closeFd() of the target notifier waits for the calls using the descriptor
+void ut_notifier_close_wait_hook(QoreEventNotifier* n) {
+    if (n != ut_notifier_hook_target.load(std::memory_order_acquire)) {
+        return;
+    }
+    UtNotifierHookState* st = ut_notifier_hook_state.load(std::memory_order_acquire);
+    if (!st) {
+        return;
+    }
+    std::lock_guard<std::mutex> l(st->m);
+    st->close_waiting = true;
+    st->cv.notify_all();
+}
+}
+
+//! closeFd() waits for a notify() call that is using the descriptor, so the descriptor cannot be closed (and its
+//! number reused) under it
+static void ut_event_notifier_close_waits_for_notify(UnitTestCounters& c) {
+    ExceptionSink xsink;
+    ReferenceHolder<QoreEventNotifier> n(new QoreEventNotifier(&xsink), &xsink);
+    if (xsink.isException()) {
+        UT_ASSERT(c, false, "the notifier is created");
+        xsink.clear();
+        return;
+    }
+    int fd = n->fd();
+    UtNotifierHookState st;
+    ut_notifier_hook_state.store(&st, std::memory_order_release);
+    ut_notifier_hook_target.store(*n, std::memory_order_release);
+    QoreEventNotifier::dbg_in_use_hook.store(ut_notifier_in_use_hook, std::memory_order_release);
+    QoreEventNotifier::dbg_close_wait_hook.store(ut_notifier_close_wait_hook, std::memory_order_release);
+
+    QoreEventNotifier* np = *n;
+    std::thread notifier_thread([np]() {
+        np->notify();
+    });
+    {
+        std::unique_lock<std::mutex> l(st.m);
+        st.cv.wait(l, [&st]() { return st.in_use; });
+    }
+    std::thread closer([np]() {
+        np->closeFd();
+    });
+    {
+        std::unique_lock<std::mutex> l(st.m);
+        st.cv.wait(l, [&st]() { return st.close_waiting; });
+    }
+    // the close waits for the call: the descriptor is still open
+    UT_ASSERT(c, fcntl(fd, F_GETFD) != -1, "the descriptor stays open while notify() uses it");
+    UT_ASSERT(c, n->fd() == fd, "the notifier keeps its descriptor while notify() uses it");
+    {
+        std::lock_guard<std::mutex> l(st.m);
+        st.release = true;
+        st.cv.notify_all();
+    }
+    notifier_thread.join();
+    closer.join();
+    UT_ASSERT(c, n->fd() == -1 && !n->isValid(), "the notifier is closed once notify() returned");
+
+    QoreEventNotifier::dbg_in_use_hook.store(nullptr, std::memory_order_release);
+    QoreEventNotifier::dbg_close_wait_hook.store(nullptr, std::memory_order_release);
+    ut_notifier_hook_target.store(nullptr, std::memory_order_release);
+    ut_notifier_hook_state.store(nullptr, std::memory_order_release);
+}
+#endif
+
 static void ut_manager_close_all(UnitTestCounters& c) {
     ExceptionSink xsink;
 
@@ -7451,6 +7607,11 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     ut_manager_pool_reuse(c);
     ut_connection_sandbox_use(c);
     ut_manager_pool_sandbox(c);
+    ut_event_notifier_use_after_close(c);
+    ut_event_notifier_concurrent_close(c);
+#ifdef DEBUG
+    ut_event_notifier_close_waits_for_notify(c);
+#endif
     ut_manager_close_all(c);
     ut_manager_proxy_url_parse(c);
     ut_http2_pending_response_data(c);
