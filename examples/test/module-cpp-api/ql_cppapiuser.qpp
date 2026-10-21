@@ -898,6 +898,50 @@ int cpp_api_env_fork_while_held(string name, string value, bool exclusive) [dom=
     return rc;
 }
 
+//! starts threads that fail while another thread sets the stack size of the primary thread, and returns the failures
+/** A thread start held the stack lock across pthread_create() and its failure handling, which deregisters the TID
+    under the lock of the thread list; q_enforce_thread_size_on_primary_thread() holds the lock of the thread list
+    while it takes the stack lock, so the two could deadlock.
+
+    The thread starts fail deterministically: the default thread stack size is set to a size that no process can
+    map (1 EiB) for the duration of the call.  Another thread calls q_enforce_thread_size_on_primary_thread() as
+    often as threads are started; it sets the stack size of the primary thread to the default size too, so no Qore
+    code runs in the primary thread until both loops are done and the sizes are restored.
+
+    @param iterations the number of thread starts and the number of calls of
+    q_enforce_thread_size_on_primary_thread()
+
+    @return the number of thread starts that failed
+*/
+int cpp_api_thread_start_failure_race(int iterations) [dom=PROCESS,THREAD_CONTROL] {
+    size_t default_size = q_thread_get_stack_size();
+    q_thread_set_stack_size(static_cast<size_t>(1) << 60, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    std::thread enforcer([iterations]() {
+        for (int64 i = 0; i < iterations; ++i) {
+            q_enforce_thread_size_on_primary_thread();
+        }
+    });
+    int64 failed = 0;
+    for (int64 i = 0; i < iterations; ++i) {
+        // a cancelled thread stops starting threads; the sizes are still restored below
+        if (i && !(i % 1000) && qore_check_cancel(nullptr, "starting threads")) {
+            break;
+        }
+        ExceptionSink start_xsink;
+        if (q_start_thread(&start_xsink, [](ExceptionSink*, void*) {}, nullptr) == -1) {
+            ++failed;
+        }
+        start_xsink.clear();
+    }
+    enforcer.join();
+    q_thread_set_stack_size(default_size, xsink);
+    q_enforce_thread_size_on_primary_thread();
+    return failed;
+}
+
 //! creates a child process with the C library's fork() (not Qore's fork()) that runs Qore code, and waits for it
 /** Qore's fork() stops the signal thread before fork() and starts it again after it; a fork() made by other code
     (here, this module) does not, so the child must handle a signal thread that does not exist in it
