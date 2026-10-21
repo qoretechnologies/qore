@@ -158,7 +158,19 @@ protected:
     QoreValue exp{};
 
     DLLLOCAL ~QoreSingleExpressionOperatorNode() {
+        // only a node deleted without being released holds a value here; see derefImpl()
         exp.discard(nullptr);
+    }
+
+    //! Releases the operand with the caller's exception sink
+    /** The copy that the background operator makes holds runtime values, whose release can run destructors; their
+        exceptions go to the thread releasing the node (see CallReferenceCallNode::derefImpl()), as the destructor has
+        no exception sink.
+    */
+    DLLLOCAL virtual bool derefImpl(ExceptionSink* xsink) {
+        exp.discard(xsink);
+        exp = QoreValue();
+        return T::derefImpl(xsink);
     }
 
 public:
@@ -213,7 +225,15 @@ protected:
     QoreValue exp{};
 
     DLLLOCAL ~QoreSingleValueExpressionOperatorNode() {
+        // only a node deleted without being released holds a value here; see derefImpl()
         exp.discard(nullptr);
+    }
+
+    //! Releases the operand with the caller's exception sink; see QoreSingleExpressionOperatorNode::derefImpl()
+    DLLLOCAL virtual bool derefImpl(ExceptionSink* xsink) {
+        exp.discard(xsink);
+        exp.clear();
+        return T::derefImpl(xsink);
     }
 
 public:
@@ -272,8 +292,18 @@ public:
     }
 
     DLLLOCAL ~QoreBinaryOperatorNode() {
+        // only a node deleted without being released holds values here; see derefImpl()
         left.discard(nullptr);
         right.discard(nullptr);
+    }
+
+    //! Releases the operands with the caller's exception sink; see QoreSingleExpressionOperatorNode::derefImpl()
+    DLLLOCAL virtual bool derefImpl(ExceptionSink* xsink) {
+        left.discard(xsink);
+        left = QoreValue();
+        right.discard(xsink);
+        right = QoreValue();
+        return T::derefImpl(xsink);
     }
 
     template<typename U>
@@ -366,9 +396,19 @@ protected:
     QoreValue e[N];
 
     DLLLOCAL virtual ~QoreNOperatorNodeBase() {
+        // only a node deleted without being released holds values here; see derefImpl()
         for (unsigned i = 0; i < N; ++i) {
             e[i].discard(nullptr);
         }
+    }
+
+    //! Releases the operands with the caller's exception sink; see QoreSingleExpressionOperatorNode::derefImpl()
+    DLLLOCAL virtual bool derefImpl(ExceptionSink* xsink) {
+        for (unsigned i = 0; i < N; ++i) {
+            e[i].discard(xsink);
+            e[i] = QoreValue();
+        }
+        return T::derefImpl(xsink);
     }
 
 public:

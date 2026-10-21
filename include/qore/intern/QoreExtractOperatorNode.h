@@ -43,10 +43,24 @@ protected:
     DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const;
 
     DLLLOCAL ~QoreExtractOperatorNode() {
+        // only a node deleted without being released holds values here; see derefImpl()
         lvalue_exp.discard(nullptr);
         offset_exp.discard(nullptr);
         length_exp.discard(nullptr);
         new_exp.discard(nullptr);
+    }
+
+    //! Releases the operands with the caller's exception sink; see QoreSingleExpressionOperatorNode::derefImpl()
+    DLLLOCAL virtual bool derefImpl(ExceptionSink* xsink) {
+        lvalue_exp.discard(xsink);
+        lvalue_exp = QoreValue();
+        offset_exp.discard(xsink);
+        offset_exp = QoreValue();
+        length_exp.discard(xsink);
+        length_exp = QoreValue();
+        new_exp.discard(xsink);
+        new_exp = QoreValue();
+        return LValueOperatorNode::derefImpl(xsink);
     }
 
     DLLLOCAL virtual int parseInitImpl(QoreValue& val, QoreParseContext& parse_context);

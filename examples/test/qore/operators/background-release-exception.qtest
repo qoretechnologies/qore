@@ -12,11 +12,12 @@
 %exec-class BackgroundReleaseExceptionTest
 
 #! An exception raised by a destructor when a background thread releases its call is reported
-/** A background thread releases the copy of its call when the call returns: the closure, the variables that it
-    captured and the evaluated arguments.  When that releases the last reference to an object, its destructor runs
-    there, and the call node released them with no exception sink: a debug build aborted ("Assertion `xsink || !de'
-    failed" in qore_class_private::execDestructor()).  The exception is now the thread's, and reported as any
-    exception of the thread that is not handled.
+/** A background thread releases the copy of its expression when the expression returns: for a call, the closure,
+    the variables that it captured and the evaluated arguments; for an operator, the values of its operands.  When
+    that releases the last reference to an object, its destructor runs there, and the call and operator nodes released
+    them with no exception sink: a debug build aborted ("Assertion `xsink || !de' failed" in
+    qore_class_private::execDestructor()).  The exception is now the thread's, and reported as any exception of the
+    thread that is not handled.
 
     Each case runs in a child process, so that the report and the exit status can be checked.
 */
@@ -52,7 +53,26 @@ release.dec();
         qore_bin = ENV.QORE_EXECUTABLE ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
         addTestCase("an object captured by the closure", \testCapturedObject());
         addTestCase("an object passed as an argument of a call reference", \testArgumentObject());
+        addTestCase("an object held by an operator", \testOperatorObject());
         set_return_value(main());
+    }
+
+    testOperatorObject() {
+        # the compiled tiers run an operator expression in the background operator through the AST interpreter only
+        # when AST fallback is enabled, so this case runs in AST mode
+        checkChild("sub wait_then() {
+    started.push(True);
+    release.waitForZero();
+}
+
+our bool done;
+
+sub start() {
+    Raiser r();
+    # the background copy of the expression holds the value of r as an operand
+    background (done = (wait_then() || r));
+}
+", "--exec-mode=ast");
     }
 
     testCapturedObject() {
