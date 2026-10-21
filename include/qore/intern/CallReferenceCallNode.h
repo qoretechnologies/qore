@@ -52,6 +52,13 @@ private:
 
     DLLLOCAL virtual int parseInitImpl(QoreValue& val, QoreParseContext& parse_context);
 
+    //! Releases the call expression and the arguments with the caller's exception sink
+    /** The copy that the background operator makes holds runtime values: the closure or call reference, with the
+        variables it captures, and the evaluated arguments.  Releasing them can run destructors, whose exceptions go
+        to the thread releasing the node; the destructor has no exception sink.
+    */
+    DLLLOCAL virtual bool derefImpl(ExceptionSink* xsink);
+
     DLLLOCAL virtual const QoreTypeInfo* getTypeInfo() const {
         return nullptr;
     }

@@ -1,0 +1,104 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires FsUtil
+%requires QUnit
+
+%exec-class BackgroundReleaseExceptionTest
+
+#! An exception raised by a destructor when a background thread releases its call is reported
+/** A background thread releases the copy of its call when the call returns: the closure, the variables that it
+    captured and the evaluated arguments.  When that releases the last reference to an object, its destructor runs
+    there, and the call node released them with no exception sink: a debug build aborted ("Assertion `xsink || !de'
+    failed" in qore_class_private::execDestructor()).  The exception is now the thread's, and reported as any
+    exception of the thread that is not handled.
+
+    Each case runs in a child process, so that the report and the exit status can be checked.
+*/
+class BackgroundReleaseExceptionTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+    }
+
+    public {
+        #! the destructor's exception, and the parts of a child script shared by the cases
+        const Prologue = "%modern
+class Raiser {
+    destructor() {
+        throw \"BACKGROUND-RELEASE-ERROR\", \"raised by a destructor run by the release of a background call\";
+    }
+
+    ok() {
+    }
+}
+
+our Queue started();
+our Counter release(1);
+";
+
+        #! the end of each child script: the background thread holds the last reference when it returns
+        const Epilogue = "start();
+started.get();
+release.dec();
+";
+    }
+
+    constructor() : QUnit::Test("BackgroundReleaseExceptionTest", "1.0") {
+        qore_bin = ENV.QORE_EXECUTABLE ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        addTestCase("an object captured by the closure", \testCapturedObject());
+        addTestCase("an object passed as an argument of a call reference", \testArgumentObject());
+        set_return_value(main());
+    }
+
+    testCapturedObject() {
+        checkChild("sub start() {
+    Raiser r();
+    background sub () {
+        started.push(True);
+        release.waitForZero();
+        r.ok();
+    }();
+}
+");
+    }
+
+    testArgumentObject() {
+        checkChild("sub start() {
+    code c = sub (Raiser r) {
+        started.push(True);
+        release.waitForZero();
+        r.ok();
+    };
+    # the background copy of the call holds the argument's value
+    Raiser r();
+    background c(r);
+}
+");
+    }
+
+    private checkChild(string start, string options = "") {
+        if (PlatformOS == "Windows") {
+            testSkip("the subprocess shell syntax in this test is POSIX-specific");
+        }
+        TmpDir tmp("qore-background-release-");
+        string script = tmp.path + "/child.q";
+        {
+            File f();
+            f.open2(script, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write(Prologue + start + Epilogue);
+        }
+        string out = backquote(sprintf("%s %s %s 2>&1; echo EXIT=$?", shellQuote(qore_bin), options,
+            shellQuote(script)));
+        assertRegex("BACKGROUND-RELEASE-ERROR", out, "the destructor's exception is reported");
+        assertRegex("\nEXIT=0\n$", out, "the process exits normally");
+    }
+
+    private static string shellQuote(string str) {
+        return "'" + replace(str, "'", "'\\''") + "'";
+    }
+}

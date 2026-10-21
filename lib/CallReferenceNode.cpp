@@ -61,6 +61,7 @@ CallReferenceCallNode::CallReferenceCallNode(const QoreProgramLocation* loc, Qor
 CallReferenceCallNode::~CallReferenceCallNode() {
     //printd(5, "CallReferenceCallNode::~CallReferenceCallNode() this: %p exp: %p '%s' type: %d refs: %d\n", this,
     //  exp, get_type_name(exp), get_node_type(exp), exp->reference_count());
+    // only a node deleted without being released holds values here; see derefImpl()
     exp.discard(nullptr);
     if (parse_args) {
         parse_args->deref(nullptr);
@@ -68,6 +69,23 @@ CallReferenceCallNode::~CallReferenceCallNode() {
     if (args) {
         args->deref(nullptr);
     }
+}
+
+bool CallReferenceCallNode::derefImpl(ExceptionSink* xsink) {
+    // a background thread releases the copy of its call when the call returns: the last reference to an object that
+    // the closure captured or that an argument holds runs the object's destructor here, and an exception that it
+    // raises is the thread's; with no sink it aborted a debug build
+    exp.discard(xsink);
+    exp = QoreValue();
+    if (parse_args) {
+        parse_args->deref(xsink);
+        parse_args = nullptr;
+    }
+    if (args) {
+        args->deref(xsink);
+        args = nullptr;
+    }
+    return true;
 }
 
 // get string representation (for %n and %N), foff is for multi-line formatting offset, -1 = no line breaks
