@@ -323,7 +323,8 @@ int StatementBlock::execIntern(RuntimeConfig& rc, QoreValue& return_value, Excep
         }
         if (ast_on_exit_count > 0) {
             static bool debug_on_exit = [] {
-                const char* debug_env = getenv("QORE_IR_DEBUG");
+                QoreEnvironmentValue debug_env_holder("QORE_IR_DEBUG");
+                const char* debug_env = debug_env_holder.c_str();
                 return debug_env && strstr(debug_env, "on_exit");
             }();
             if (debug_on_exit) {
@@ -1077,7 +1078,7 @@ int TopLevelStatementBlock::execImpl(RuntimeConfig& rc, QoreValue& return_value,
                 // IR execution failed without raising an exception.  This path only
                 // runs under %modern (ensureIrExecMode guarantees it), so silent AST
                 // fallback is disabled to expose IR-interpreter bugs immediately.
-                if (getenv("QORE_IR_TRACE_SILENT_FAIL")) {
+                if (q_env_is_set("QORE_IR_TRACE_SILENT_FAIL")) {
                     QoreIRInterpreter::dumpLastSilentFail("toplevel");
                 }
                 qore_program_private::get(*pgm)->recordIRFallback("execution: runtime failure");

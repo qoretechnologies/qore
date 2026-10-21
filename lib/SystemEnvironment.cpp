@@ -1,9 +1,9 @@
 /*
-  Environment.cpp
+  SystemEnvironment.cpp
 
   Qore Programming Language
 
-  Copyright (C) 2003 - 2023 David Nichols
+  Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
   Permission is hereby granted, free of charge, to any person obtaining a
   copy of this software and associated documentation files (the "Software"),
@@ -30,145 +30,300 @@
 
 #include <qore/Qore.h>
 
+#include <cassert>
+#include <cerrno>
+#include <cstdlib>
 #include <cstring>
-#include <memory>
+#include <pthread.h>
 #include <string>
 
 SystemEnvironment SysEnv;
 
-#ifdef NEED_ENVIRON_LOCK
-static QoreThreadLock lck_environ;
+namespace {
+// the process-wide environment lock: every access to the process environment that Qore makes holds it, shared to
+// read the environment and exclusively to change it.  It is initialized statically, so it works in code that runs
+// during static initialization, and it is never destroyed, so it works in code that runs during static destruction.
+pthread_rwlock_t qore_env_lock = PTHREAD_RWLOCK_INITIALIZER;
+
+// how the current thread holds the lock: 0 = not held, > 0 = shared (the nesting depth), < 0 = exclusively (the
+// negated nesting depth).  A thread that already holds the lock only counts a nested acquisition, so the lock is
+// never acquired twice by one thread: a second shared acquisition can wait forever behind a waiting writer where
+// writers are preferred, as on macOS.
+thread_local int qore_env_lock_depth = 0;
+
+void qore_env_acquire_shared() {
+    if (qore_env_lock_depth > 0) {
+        ++qore_env_lock_depth;
+        return;
+    }
+    if (qore_env_lock_depth < 0) {
+        --qore_env_lock_depth;
+        return;
+    }
+    int rc = pthread_rwlock_rdlock(&qore_env_lock);
+    assert(!rc);
+    (void)rc;
+    qore_env_lock_depth = 1;
+}
+
+// acquires the lock exclusively, or, if the thread already holds it shared, only nests the shared hold: the thread
+// cannot wait for the exclusive lock while holding it shared, since it would wait for itself; changes to the
+// environment are then refused (see qore_env_held_exclusively())
+void qore_env_acquire_exclusive() {
+    if (qore_env_lock_depth > 0) {
+        ++qore_env_lock_depth;
+        return;
+    }
+    if (qore_env_lock_depth < 0) {
+        --qore_env_lock_depth;
+        return;
+    }
+    int rc = pthread_rwlock_wrlock(&qore_env_lock);
+    assert(!rc);
+    (void)rc;
+    qore_env_lock_depth = -1;
+}
+
+void qore_env_release() {
+    assert(qore_env_lock_depth);
+    if (qore_env_lock_depth > 1) {
+        --qore_env_lock_depth;
+        return;
+    }
+    if (qore_env_lock_depth < -1) {
+        ++qore_env_lock_depth;
+        return;
+    }
+    qore_env_lock_depth = 0;
+    // lock objects are released right after calls whose errno the caller reads (fork(), popen(), execvp())
+    int saved_errno = errno;
+    int rc = pthread_rwlock_unlock(&qore_env_lock);
+    assert(!rc);
+    (void)rc;
+    errno = saved_errno;
+}
+
+bool qore_env_held_exclusively() {
+    return qore_env_lock_depth < 0;
+}
+
+#ifdef HAVE_FORK
+// a child process created with fork() runs only the thread that called fork(): the holds of all other threads are
+// gone with them, so the lock is reset, and the forking thread's own hold is restored, so that the lock objects it
+// holds release the lock in the child as in the parent.  The lock is reset by assigning the static initializer: a
+// lock that was held cannot be initialized again with pthread_rwlock_init() (macOS refuses it with EBUSY).
+void qore_env_atfork_child() {
+    static const pthread_rwlock_t unlocked = PTHREAD_RWLOCK_INITIALIZER;
+    qore_env_lock = unlocked;
+    if (qore_env_lock_depth > 0) {
+        int rc = pthread_rwlock_rdlock(&qore_env_lock);
+        assert(!rc);
+        (void)rc;
+    } else if (qore_env_lock_depth < 0) {
+        int rc = pthread_rwlock_wrlock(&qore_env_lock);
+        assert(!rc);
+        (void)rc;
+    }
+}
 #endif
 
+// holds the lock shared for its lifetime
+class QoreEnvSharedHelper {
+public:
+    QoreEnvSharedHelper() {
+        qore_env_acquire_shared();
+    }
+
+    ~QoreEnvSharedHelper() {
+        qore_env_release();
+    }
+
+    QoreEnvSharedHelper(const QoreEnvSharedHelper&) = delete;
+    QoreEnvSharedHelper& operator=(const QoreEnvSharedHelper&) = delete;
+};
+
+// holds the lock exclusively for its lifetime
+class QoreEnvExclusiveHelper {
+public:
+    QoreEnvExclusiveHelper() {
+        qore_env_acquire_exclusive();
+    }
+
+    ~QoreEnvExclusiveHelper() {
+        qore_env_release();
+    }
+
+    QoreEnvExclusiveHelper(const QoreEnvExclusiveHelper&) = delete;
+    QoreEnvExclusiveHelper& operator=(const QoreEnvExclusiveHelper&) = delete;
+};
+
+// returns -1 with errno EDEADLK: the current thread holds the lock shared only, so it cannot change the environment
+int qore_env_refuse_change() {
+    errno = EDEADLK;
+    return -1;
+}
+}
+
 SystemEnvironment::SystemEnvironment() {
+#ifdef HAVE_FORK
+    // restores the lock in child processes created with fork(), by Qore or any other code in the process
+    int rc = pthread_atfork(nullptr, nullptr, qore_env_atfork_child);
+    assert(!rc);
+    (void)rc;
+#endif
 }
 
 SystemEnvironment::~SystemEnvironment() {
 }
 
-int SystemEnvironment::set_intern(const char *name, const char *value, bool overwrite) {
+int SystemEnvironment::set_intern(const char* name, const char* value, bool overwrite) {
 #ifdef HAVE_SETENV
-   return setenv(name, value, (int)overwrite);
+    return setenv(name, value, static_cast<int>(overwrite));
 #else
-   if (!overwrite && getenv(name))
-      return -1;
-   std::string str = name;
-   str += "=";
-   str += value;
-   return putenv(strdup(str.c_str()));
+    if (!overwrite && getenv(name)) {
+        return -1;
+    }
+    std::string str = name;
+    str += "=";
+    str += value;
+    return putenv(strdup(str.c_str()));
 #endif
 }
 
-int SystemEnvironment::get_intern(const char *name, QoreString &str) {
-   char *p = getenv(name);
-   //printd(5, "SystemEnvironment::get_intern(name='%s') val=%s\n", name, p ? p : "(null)");
-   if (p)
-      str.concat(p);
-   return p ? 0 : -1;
+int SystemEnvironment::get_intern(const char* name, QoreString& str) {
+    const char* p = getenv(name);
+    //printd(5, "SystemEnvironment::get_intern(name='%s') val=%s\n", name, p ? p : "(null)");
+    if (p) {
+        str.concat(p);
+    }
+    return p ? 0 : -1;
 }
 
-QoreString *SystemEnvironment::get_intern(const char *name) {
-   char *p = getenv(name);
-   return p ? new QoreString(p) : 0;
+QoreString* SystemEnvironment::get_intern(const char* name) {
+    const char* p = getenv(name);
+    return p ? new QoreString(p) : nullptr;
 }
 
-QoreStringNode *SystemEnvironment::get_as_string_node_intern(const char *name) {
-   char *p = getenv(name);
-   return p ? new QoreStringNode(p) : 0;
+QoreStringNode* SystemEnvironment::get_as_string_node_intern(const char* name) {
+    const char* p = getenv(name);
+    return p ? new QoreStringNode(p) : nullptr;
 }
 
-int SystemEnvironment::unset_intern(const char *name) {
+int SystemEnvironment::unset_intern(const char* name) {
 #ifdef HAVE_UNSETENV
-   return unsetenv(name);
+    return unsetenv(name);
 #else
-   // FIXME: here we fake it - we don't actually remove the variable from the environment, but we set it to nothing...
-   std::string str = name;
-   str += "=";
-   return putenv(strdup(str.c_str()));
+    // FIXME: here we fake it - we don't actually remove the variable from the environment, but we set it to nothing...
+    std::string str = name;
+    str += "=";
+    return putenv(strdup(str.c_str()));
 #endif
 }
 
-int SystemEnvironment::set(const char *name, const char *value, bool overwrite) {
-#ifdef NEED_ENVIRON_LOCK
-   AutoLocker al(lck_environ);
-#endif
-   return set_intern(name, value, overwrite);
+bool SystemEnvironment::value_exists_intern(const char* name) {
+    if (!name || !name[0]) {
+        return false;
+    }
+    const char* p = getenv(name);
+    return p && p[0];
 }
 
-int SystemEnvironment::get(const char *name, QoreString &str) {
-#ifdef NEED_ENVIRON_LOCK
-   AutoLocker al(lck_environ);
-#endif
-   return get_intern(name, str);
+int SystemEnvironment::set(const char* name, const char* value, bool overwrite) {
+    QoreEnvExclusiveHelper env_lock;
+    if (!qore_env_held_exclusively()) {
+        return qore_env_refuse_change();
+    }
+    return set_intern(name, value, overwrite);
 }
 
-QoreString *SystemEnvironment::get(const char *name) {
-#ifdef NEED_ENVIRON_LOCK
-   AutoLocker al(lck_environ);
-#endif
-   return get_intern(name);
+int SystemEnvironment::get(const char* name, QoreString& str) {
+    QoreEnvSharedHelper env_lock;
+    return get_intern(name, str);
 }
 
-QoreStringNode *SystemEnvironment::getAsStringNode(const char *name) {
-#ifdef NEED_ENVIRON_LOCK
-   AutoLocker al(lck_environ);
-#endif
-   return get_as_string_node_intern(name);
+QoreString* SystemEnvironment::get(const char* name) {
+    QoreEnvSharedHelper env_lock;
+    return get_intern(name);
 }
 
-int SystemEnvironment::unset(const char *name) {
-#ifdef NEED_ENVIRON_LOCK
-   AutoLocker al(lck_environ);
-#endif
-   return unset_intern(name);
+QoreStringNode* SystemEnvironment::getAsStringNode(const char* name) {
+    QoreEnvSharedHelper env_lock;
+    return get_as_string_node_intern(name);
+}
+
+int SystemEnvironment::unset(const char* name) {
+    QoreEnvExclusiveHelper env_lock;
+    if (!qore_env_held_exclusively()) {
+        return qore_env_refuse_change();
+    }
+    return unset_intern(name);
 }
 
 bool SystemEnvironment::valueExists(const char* name) {
-  if (!name || !name[0]) return false;
-  QoreString *s = get(name);
-  if (!s) return false;
-  std::unique_ptr<QoreString> holder(s);
-  const char *str = s->getBuffer();
-  return str && str[0];
+    QoreEnvSharedHelper env_lock;
+    return value_exists_intern(name);
+}
+
+bool SystemEnvironment::isSet(const char* name) {
+    assert(name);
+    QoreEnvSharedHelper env_lock;
+    return getenv(name) != nullptr;
 }
 
 AtomicEnvironmentSetter::AtomicEnvironmentSetter() {
-#ifdef NEED_ENVIRON_LOCK
-   lck_environ.lock();
-#endif
+    qore_env_acquire_exclusive();
 }
 
 AtomicEnvironmentSetter::~AtomicEnvironmentSetter() {
-#ifdef NEED_ENVIRON_LOCK
-   lck_environ.unlock();
-#endif
+    qore_env_release();
 }
 
-int AtomicEnvironmentSetter::set(const char *name, const char *value, bool overwrite) {
-   return SystemEnvironment::set_intern(name, value, overwrite);
+int AtomicEnvironmentSetter::set(const char* name, const char* value, bool overwrite) {
+    if (!qore_env_held_exclusively()) {
+        return qore_env_refuse_change();
+    }
+    return SystemEnvironment::set_intern(name, value, overwrite);
 }
 
-int AtomicEnvironmentSetter::get(const char *name, QoreString &str) {
-   return SystemEnvironment::get_intern(name, str);
+int AtomicEnvironmentSetter::get(const char* name, QoreString& str) {
+    return SystemEnvironment::get_intern(name, str);
 }
 
-QoreString *AtomicEnvironmentSetter::get(const char *name) {
-   return SystemEnvironment::get_intern(name);
+QoreString* AtomicEnvironmentSetter::get(const char* name) {
+    return SystemEnvironment::get_intern(name);
 }
 
-QoreStringNode *AtomicEnvironmentSetter::getAsStringNode(const char *name) {
-   return SystemEnvironment::get_as_string_node_intern(name);
+QoreStringNode* AtomicEnvironmentSetter::getAsStringNode(const char* name) {
+    return SystemEnvironment::get_as_string_node_intern(name);
 }
 
-int AtomicEnvironmentSetter::unset(const char *name) {
-   return SystemEnvironment::unset_intern(name);
+int AtomicEnvironmentSetter::unset(const char* name) {
+    if (!qore_env_held_exclusively()) {
+        return qore_env_refuse_change();
+    }
+    return SystemEnvironment::unset_intern(name);
 }
 
 bool AtomicEnvironmentSetter::valueExists(const char* name) {
-  if (!name || !name[0]) return false;
-  QoreString *s = SystemEnvironment::get(name);
-  if (!s) return false;
-  std::unique_ptr<QoreString> holder(s);
-  const char *str = s->getBuffer();
-  return str && str[0];
+    // the lock is already held by this object
+    return SystemEnvironment::value_exists_intern(name);
+}
+
+QoreEnvironmentReadLock::QoreEnvironmentReadLock() {
+    qore_env_acquire_shared();
+}
+
+QoreEnvironmentReadLock::~QoreEnvironmentReadLock() {
+    qore_env_release();
+}
+
+QoreEnvironmentValue::QoreEnvironmentValue(const char* name) {
+    assert(name);
+    QoreEnvSharedHelper env_lock;
+    const char* p = getenv(name);
+    if (p) {
+        // copied under the lock; if the copy throws, the lock is released by the helper
+        value = p;
+        is_set = true;
+    }
 }

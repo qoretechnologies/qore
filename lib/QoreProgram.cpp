@@ -986,7 +986,8 @@ bool expand_module_path_macros(const std::string& in, std::string& out, std::str
                 owned = qore_module_api_version_str();
                 expansion = owned.c_str();
             } else {
-                const char* env_val = getenv(name.c_str());
+                QoreEnvironmentValue env_val_holder(name.c_str());
+                const char* env_val = env_val_holder.c_str();
                 if (!env_val) {
                     err = "undefined variable '";
                     err += name;

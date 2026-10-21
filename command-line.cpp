@@ -187,7 +187,8 @@ static bool is_directory(const char* path) {
 
 //! Returns true when the global legacy escape hatch is enabled.
 static bool old_style_default_enabled() {
-    const char* env = getenv("QORE_OLD_STYLE_DEFAULT");
+    QoreEnvironmentValue env_holder("QORE_OLD_STYLE_DEFAULT");
+    const char* env = env_holder.c_str();
     return env && *env && strcmp(env, "0") != 0;
 }
 
@@ -892,7 +893,7 @@ static void do_version(const char* arg) {
     }
 
     // TTY: colored ASCII art with version info on the right
-    bool use_color = !getenv("NO_COLOR");
+    bool use_color = !SystemEnvironment::isSet("NO_COLOR");
     const char* qc = use_color ? "\033[1;38;2;255;50;140m" : "";
     const char* reset = use_color ? "\033[0m" : "";
 
@@ -932,7 +933,7 @@ static void do_version_animation(const char* arg) {
     }
 
     // TTY: spinning coin animation followed by static art
-    bool use_color = !getenv("NO_COLOR");
+    bool use_color = !SystemEnvironment::isSet("NO_COLOR");
     const char* qc = use_color ? "\033[1;38;2;255;50;140m" : "";
     const char* reset = use_color ? "\033[0m" : "";
 
@@ -1238,8 +1239,9 @@ static void set_include_source(const char* arg) {
 }
 
 static bool qcc_output_verbose() {
-    const char* verbose = getenv("QORE_AOT_VERBOSE");
-    return debug > 0 || (verbose && *verbose && strcmp(verbose, "0")) || getenv("QORE_AOT_DEBUG");
+    QoreEnvironmentValue verbose_holder("QORE_AOT_VERBOSE");
+    const char* verbose = verbose_holder.c_str();
+    return debug > 0 || (verbose && *verbose && strcmp(verbose, "0")) || SystemEnvironment::isSet("QORE_AOT_DEBUG");
 }
 
 static const char* qcc_source_mode_suffix(bool include_source) {
@@ -1634,12 +1636,13 @@ int qore_main_intern(int argc, char* argv[], int other_po) {
 
       // allow enabling diagnostic modes via the environment (for tooling that cannot pass flags)
       if (!diag_json) {
-          const char* df = getenv("QORE_DIAG_FORMAT");
+          QoreEnvironmentValue df_holder("QORE_DIAG_FORMAT");
+          const char* df = df_holder.c_str();
           if (df && !strcmp(df, "json")) {
               diag_json = true;
           }
       }
-      if (!code_frames && getenv("QORE_CODE_FRAMES")) {
+      if (!code_frames && SystemEnvironment::isSet("QORE_CODE_FRAMES")) {
           code_frames = true;
       }
       if (diag_json || code_frames) {
@@ -1875,7 +1878,8 @@ int qore_main_intern(int argc, char* argv[], int other_po) {
          }
 
          // Allow environment variable to override optimization level for debugging/testing
-         const char* opt_override = getenv("QORE_AOT_OPT_LEVEL");
+         QoreEnvironmentValue opt_override_holder("QORE_AOT_OPT_LEVEL");
+         const char* opt_override = opt_override_holder.c_str();
          if (opt_override) {
             aot_opt_level = atoi(opt_override);
          }

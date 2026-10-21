@@ -4,7 +4,7 @@
 
   Qore Programming Language
 
-  Copyright (C) 2003 - 2026 David Nichols
+  Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
   Permission is hereby granted, free of charge, to any person obtaining a
   copy of this software and associated documentation files (the "Software"),
@@ -37,6 +37,17 @@
 
 /** @defgroup env_functions Environment Functions
     Environment functions
+
+    These functions can be called from any number of threads at the same time: every access to the process
+    environment that %Qore makes is serialized with one process-wide lock (reads run in parallel, changes one at a
+    time), including the copy of the environment that a new process gets from @ref Qore::system() "system()", the
+    @ref backquote_operator "backquote operator", @ref Qore::exec() "exec()" and @ref Qore::fork() "fork()".  Native
+    code that reads or changes the environment without the lock, such as a third-party library used by a binary
+    module, is not serialized with these functions.
+
+    @note The \c ENV hash (see @ref special_variables) is a copy of the environment made when %Qore starts; it does
+    not change when the environment is changed with these functions, and changing it does not change the
+    environment.
 */
 ///@{
 //! Retrieves the value of an environment variable or @ref nothing if the variable is not set

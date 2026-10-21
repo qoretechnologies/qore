@@ -30,8 +30,12 @@
 #include <cerrno>
 #include <climits>
 #include <dlfcn.h>
+#include <cstring>
 #include <fcntl.h>
+#include <future>
 #include <mutex>
+#include <string>
+#include <thread>
 #include <poll.h>
 #include <pthread.h>
 #include <signal.h>
@@ -40,6 +44,12 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
+#ifdef __APPLE__
+#include <crt_externs.h>
+#define environ (*_NSGetEnviron())
+#else
+extern char** environ;
+#endif
 
 namespace {
 // a pipe whose descriptors are closed when it goes out of scope
@@ -102,6 +112,76 @@ void record_fork_child() {
         (void)rc;
     }
 }
+
+// waits for a child process; returns its exit status, -1 if it did not exit normally, or -2 if waitpid() failed
+// (errno is then set)
+int wait_child(pid_t pid) {
+    int status = 0;
+    while (waitpid(pid, &status, 0) < 0) {
+        if (errno != EINTR) {
+            return -2;
+        }
+    }
+    return WIFEXITED(status) ? WEXITSTATUS(status) : -1;
+}
+
+// the exit status of a child process that changed and read the environment as expected
+constexpr int ENV_CHILD_OK = 0;
+// the exit status of a child process that could not change the environment
+constexpr int ENV_CHILD_SET_FAILED = 2;
+// the exit status of a child process that read another value than it set
+constexpr int ENV_CHILD_WRONG_VALUE = 3;
+// the exit status of a child process whose own shared hold was not restored: it could change the environment
+constexpr int ENV_CHILD_HOLD_LOST = 4;
+
+// in a child process: sets the variable and reads it back; returns the exit status for the parent
+int env_child_set_and_check(const char* name, const char* value) {
+    if (SystemEnvironment::set(name, value)) {
+        return ENV_CHILD_SET_FAILED;
+    }
+    QoreEnvironmentValue v(name);
+    return v && v.str() == value ? ENV_CHILD_OK : ENV_CHILD_WRONG_VALUE;
+}
+
+// holds the environment lock in another thread until it is released; the thread is always joined
+class EnvLockHolderThread {
+public:
+    EnvLockHolderThread(bool exclusive) : release_future(release.get_future()) {
+        std::future<void> held_future = held.get_future();
+        holder = std::thread([this, exclusive]() {
+            if (exclusive) {
+                AtomicEnvironmentSetter env_lock;
+                held.set_value();
+                release_future.wait();
+            } else {
+                QoreEnvironmentReadLock env_lock;
+                held.set_value();
+                release_future.wait();
+            }
+        });
+        held_future.wait();
+    }
+
+    ~EnvLockHolderThread() {
+        releaseLock();
+    }
+
+    void releaseLock() {
+        if (holder.joinable()) {
+            release.set_value();
+            holder.join();
+        }
+    }
+
+    EnvLockHolderThread(const EnvLockHolderThread&) = delete;
+    EnvLockHolderThread& operator=(const EnvLockHolderThread&) = delete;
+
+private:
+    std::promise<void> held;
+    std::promise<void> release;
+    std::future<void> release_future;
+    std::thread holder;
+};
 }
 
 /** @defgroup cppapiuser_functions cppapiuser Test Module Functions
@@ -637,6 +717,237 @@ hash<auto> cpp_api_fd_write_and_close(int fd, string path, string data) [dom=FIL
 */
 bool cpp_api_symbol_exported(string symbol) [flags=CONSTANT] {
     return dlsym(RTLD_DEFAULT, symbol->c_str()) != nullptr;
+}
+
+//! returns the environment variables whose names start with a prefix, read from \c environ under a QoreEnvironmentReadLock
+/** The \c environ array and its strings must stay valid and unchanged while the lock is held, however other threads
+    change the environment
+
+    @param prefix the prefix of the names of the variables to return
+
+    @return a hash of the variables found (name: value)
+*/
+hash<auto> cpp_api_env_snapshot(string prefix) [dom=EXTERNAL_INFO] {
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
+    QoreEnvironmentReadLock env_lock;
+    for (char** e = environ; *e; ++e) {
+        if (strncmp(*e, prefix->c_str(), prefix->size())) {
+            continue;
+        }
+        const char* eq = strchr(*e, '=');
+        if (!eq) {
+            continue;
+        }
+        std::string name(*e, eq - *e);
+        rv->setKeyValue(name.c_str(), new QoreStringNode(eq + 1), xsink);
+    }
+    return rv.release();
+}
+
+//! sets two environment variables to the same value atomically with an AtomicEnvironmentSetter
+/** @param name1 the name of the first variable
+    @param name2 the name of the second variable
+    @param value the value of both variables
+
+    @return 0 for success, -1 if a variable could not be set
+*/
+int cpp_api_env_set_pair(string name1, string name2, string value) [dom=PROCESS] {
+    AtomicEnvironmentSetter aes;
+    int rc = aes.set(name1->c_str(), value->c_str());
+    if (!rc) {
+        rc = aes.set(name2->c_str(), value->c_str());
+    }
+    return rc;
+}
+
+//! reads an environment variable with QoreEnvironmentValue
+/** @param name the name of the variable
+
+    @return the value of the variable, or @ref nothing if it is not set
+*/
+*string cpp_api_env_value(string name) [dom=EXTERNAL_INFO] {
+    QoreEnvironmentValue v(name->c_str());
+    if (!v) {
+        return QoreValue();
+    }
+    return new QoreStringNode(v.str());
+}
+
+//! returns the result of SystemEnvironment::isSet() for an environment variable
+bool cpp_api_env_is_set(string name) [dom=EXTERNAL_INFO] {
+    return SystemEnvironment::isSet(name->c_str());
+}
+
+//! tries to change and read the environment while holding a QoreEnvironmentReadLock
+/** A thread holding the lock shared cannot change the environment: SystemEnvironment::set() and
+    SystemEnvironment::unset() and the functions of an AtomicEnvironmentSetter created meanwhile (which nests the
+    shared hold) return -1 with \c errno \c EDEADLK; reads nest
+
+    @param name the name of the variable
+    @param value the value to try to set
+
+    @return a hash with the return value and \c errno of each attempt (\c set_rc, \c set_errno, \c unset_rc,
+    \c unset_errno, \c aes_set_rc, \c aes_set_errno, \c aes_unset_rc, \c aes_unset_errno), the value of the
+    variable read with nested reads (\c value, \c is_set), and \c after_rc, the return value of
+    SystemEnvironment::set() after the lock has been released
+*/
+hash<auto> cpp_api_env_change_while_read_locked(string name, string value) [dom=PROCESS] {
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
+    {
+        QoreEnvironmentReadLock env_lock;
+        errno = 0;
+        int rc = SystemEnvironment::set(name->c_str(), value->c_str());
+        rv->setKeyValue("set_rc", rc, xsink);
+        rv->setKeyValue("set_errno", errno, xsink);
+        errno = 0;
+        rc = SystemEnvironment::unset(name->c_str());
+        rv->setKeyValue("unset_rc", rc, xsink);
+        rv->setKeyValue("unset_errno", errno, xsink);
+        {
+            AtomicEnvironmentSetter aes;
+            errno = 0;
+            rc = aes.set(name->c_str(), value->c_str());
+            rv->setKeyValue("aes_set_rc", rc, xsink);
+            rv->setKeyValue("aes_set_errno", errno, xsink);
+            errno = 0;
+            rc = aes.unset(name->c_str());
+            rv->setKeyValue("aes_unset_rc", rc, xsink);
+            rv->setKeyValue("aes_unset_errno", errno, xsink);
+        }
+        // nested reads
+        QoreEnvironmentReadLock nested_lock;
+        QoreEnvironmentValue v(name->c_str());
+        rv->setKeyValue("value", v ? QoreValue(new QoreStringNode(v.str())) : QoreValue(), xsink);
+        rv->setKeyValue("is_set", SystemEnvironment::isSet(name->c_str()), xsink);
+    }
+    rv->setKeyValue("after_rc", SystemEnvironment::set(name->c_str(), value->c_str()), xsink);
+    return rv.release();
+}
+
+//! changes and reads the environment with the lock nested in one thread: exclusive inside exclusive, shared inside exclusive
+/** @param name the name of the variable
+    @param value the value to set
+
+    @return the value of the variable read inside the outer exclusive hold after the inner one set it to
+    <tt>value + "-inner"</tt> and SystemEnvironment::set() set it to \a value again, or @ref nothing if it is not set
+
+    @throw ENV-ERROR a change failed
+*/
+*string cpp_api_env_nested_exclusive(string name, string value) [dom=PROCESS] {
+    AtomicEnvironmentSetter outer;
+    std::string inner_value = std::string(value->c_str()) + "-inner";
+    {
+        AtomicEnvironmentSetter inner;
+        if (inner.set(name->c_str(), inner_value.c_str())) {
+            return xsink->raiseErrnoException("ENV-ERROR", errno, "nested AtomicEnvironmentSetter::set() failed");
+        }
+    }
+    QoreEnvironmentValue v1(name->c_str());
+    if (!v1 || v1.str() != inner_value) {
+        return xsink->raiseException("ENV-ERROR", "the nested change was not visible");
+    }
+    if (SystemEnvironment::set(name->c_str(), value->c_str())) {
+        return xsink->raiseErrnoException("ENV-ERROR", errno, "SystemEnvironment::set() inside the exclusive hold "
+            "failed");
+    }
+    QoreEnvironmentValue v(name->c_str());
+    if (!v) {
+        return QoreValue();
+    }
+    return new QoreStringNode(v.str());
+}
+
+//! creates a child process with fork() while another thread holds the environment lock, and waits for it
+/** The child changes and reads the environment: in the child, the thread holding the lock does not exist, so the
+    child can only do this because the fork handler of SystemEnvironment resets the lock there; without it, the
+    child would wait forever (and so would this function)
+
+    @param name the name of the variable that the child sets
+    @param value the value that the child sets
+    @param exclusive @ref True if the other thread holds the lock exclusively, @ref False if shared
+
+    @return the exit status of the child: 0 for success, 2 if it could not set the variable, 3 if it read another
+    value, -1 if it did not exit normally
+
+    @throw FORK-ERROR fork() or waitpid() failed
+*/
+int cpp_api_env_fork_while_held(string name, string value, bool exclusive) [dom=PROCESS] {
+    pid_t pid;
+    int fork_errno;
+    {
+        EnvLockHolderThread holder(exclusive);
+        pid = fork();
+        if (!pid) {
+            // only this thread exists in the child
+            _exit(env_child_set_and_check(name->c_str(), value->c_str()));
+        }
+        fork_errno = errno;
+    }
+    if (pid < 0) {
+        return xsink->raiseErrnoException("FORK-ERROR", fork_errno, "fork() failed");
+    }
+    int rc = wait_child(pid);
+    if (rc == -2) {
+        return xsink->raiseErrnoException("FORK-ERROR", errno, "waitpid() failed");
+    }
+    return rc;
+}
+
+//! creates a child process with fork() while the calling thread holds a QoreEnvironmentReadLock, and waits for it
+/** In the child, the fork handler of SystemEnvironment restores the shared hold of the forking thread: the child
+    cannot change the environment while it holds the lock (\c EDEADLK), and it can after releasing it
+
+    @param name the name of the variable that the child sets
+    @param value the value that the child sets
+
+    @return the exit status of the child: 0 for success, 2 if it could not set the variable after releasing the lock,
+    3 if it read another value, 4 if it could change the environment while holding the lock (the hold was not
+    restored), -1 if it did not exit normally
+
+    @throw FORK-ERROR fork() or waitpid() failed
+*/
+int cpp_api_env_fork_holding(string name, string value) [dom=PROCESS] {
+    pid_t pid;
+    int fork_errno;
+    int child_rc = ENV_CHILD_OK;
+    {
+        QoreEnvironmentReadLock env_lock;
+        pid = fork();
+        fork_errno = errno;
+        if (!pid) {
+            errno = 0;
+            if (SystemEnvironment::set(name->c_str(), value->c_str()) != -1 || errno != EDEADLK) {
+                child_rc = ENV_CHILD_HOLD_LOST;
+            }
+        }
+    }
+    if (!pid) {
+        // the hold has been released in the child as in the parent
+        _exit(child_rc != ENV_CHILD_OK ? child_rc : env_child_set_and_check(name->c_str(), value->c_str()));
+    }
+    if (pid < 0) {
+        return xsink->raiseErrnoException("FORK-ERROR", fork_errno, "fork() failed");
+    }
+    int rc = wait_child(pid);
+    if (rc == -2) {
+        return xsink->raiseErrnoException("FORK-ERROR", errno, "waitpid() failed");
+    }
+    return rc;
+}
+
+//! waits for a child process created with the Qore fork() function
+/** @param pid the PID of the child process
+
+    @return the exit status of the child, or -1 if it did not exit normally
+
+    @throw FORK-ERROR waitpid() failed
+*/
+int cpp_api_wait_child(int pid) [dom=PROCESS] {
+    int rc = wait_child(static_cast<pid_t>(pid));
+    if (rc == -2) {
+        return xsink->raiseErrnoException("FORK-ERROR", errno, "waitpid() failed");
+    }
+    return rc;
 }
 
 ///@}

@@ -39,7 +39,8 @@
 // read once, at the first call; set QORE_PCRE2_NO_JIT before starting Qore, including embedded runtimes
 bool qore_pcre2_jit_enabled() {
     static const bool enabled = []() {
-        const char* value = std::getenv("QORE_PCRE2_NO_JIT");
+        QoreEnvironmentValue value_holder("QORE_PCRE2_NO_JIT");
+        const char* value = value_holder.c_str();
         return !value || std::strcmp(value, "1");
     }();
     return enabled;

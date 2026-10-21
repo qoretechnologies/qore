@@ -788,7 +788,8 @@ int SocketQuicClientPollOperation::sendPendingPackets(
     // Test hook: QORE_QUIC_TEST_DROP_CLIENT_DATAGRAMS=i[,j...] silently drops the listed datagrams of each
     // connection attempt (0-based), modelling datagrams lost on the path.  Read on every call because tests
     // scope the variable to one case in a shared test process.
-    if (const char* drop = getenv("QORE_QUIC_TEST_DROP_CLIENT_DATAGRAMS")) {
+    if (QoreEnvironmentValue drop_holder("QORE_QUIC_TEST_DROP_CLIENT_DATAGRAMS");
+            const char* drop = drop_holder.c_str()) {
         std::set<int> dropped;
         for (const char* p = drop; *p; ) {
             char* end;

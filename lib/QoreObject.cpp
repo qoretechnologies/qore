@@ -64,7 +64,8 @@
 static std::atomic<uint64_t> object_id_seq{0};
 
 static const std::string qore_trace_object_refs_filter = [] {
-    const char* env = getenv("QORE_TRACE_OBJECT_REFS");
+    QoreEnvironmentValue env_holder("QORE_TRACE_OBJECT_REFS");
+    const char* env = env_holder.c_str();
     return env ? std::string(env) : std::string();
 }();
 
@@ -102,13 +103,14 @@ static bool qore_trace_object_refs_for_class(const char* cls) {
 }
 
 static bool qore_trace_object_ref_should_backtrace(int before, int after) {
-    static const bool always_backtrace = getenv("QORE_TRACE_OBJECT_REF_BACKTRACE") != nullptr;
+    static const bool always_backtrace = q_env_is_set("QORE_TRACE_OBJECT_REF_BACKTRACE");
     if (always_backtrace) {
         return true;
     }
 
     static const int threshold = [] {
-        const char* low_refs = getenv("QORE_TRACE_OBJECT_REF_BACKTRACE_LOW_REFS");
+        QoreEnvironmentValue low_refs_holder("QORE_TRACE_OBJECT_REF_BACKTRACE_LOW_REFS");
+        const char* low_refs = low_refs_holder.c_str();
         if (!low_refs || !*low_refs) {
             return 0;
         }

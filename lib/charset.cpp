@@ -646,7 +646,8 @@ void QoreEncodingManager::init(const char* def) {
         return;
     }
     // first see if QORE_CHARSET exists
-    const char* estr = getenv("QORE_CHARSET");
+    QoreEnvironmentValue estr_holder("QORE_CHARSET");
+    const char* estr = estr_holder.c_str();
     if (estr) {
         if (validateEncoding(estr)) {
             QCS_DEFAULT = get_default(estr, "QORE_CHARSET");
@@ -661,7 +662,8 @@ void QoreEncodingManager::init(const char* def) {
     }
     // try to get character set name from LANG variable; otherwise set QCS_DEFAULT to UTF-8
     QCS_DEFAULT = QCS_UTF8;
-    estr = getenv("LANG");
+    QoreEnvironmentValue lang_holder("LANG");
+    estr = lang_holder.c_str();
     const char* p;
     if (!estr || !(p = strrchr(estr, '.'))) {
         return;

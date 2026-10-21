@@ -121,7 +121,7 @@ int QoreFoldlOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse
     // use lazy evaluation if the iterator expression supports it
     iterator_func = dynamic_cast<FunctionalOperator*>(right.getInternalNode());
     const QoreTypeInfo* element_type = QoreTypeInfo::getReturnComplexListOrNothing(iteratorTypeInfo);
-    string_join = !std::getenv("QORE_DISABLE_AST_STRING_FOLD_JOIN")
+    string_join = !q_env_is_set("QORE_DISABLE_AST_STRING_FOLD_JOIN")
         && element_type
         && QoreTypeInfo::parseReturns(element_type, NT_STRING) == QTI_IDENT
         && get_string_join_separator(left);

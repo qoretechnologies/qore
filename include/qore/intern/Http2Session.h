@@ -754,21 +754,21 @@ public:
     //! Clears the stream completion callback
     DLLLOCAL void clearStreamCompleteCallback() {
         printd(5, "clearStreamCompleteCallback() session=%p about to lock\n", this);
-        if (getenv("QORE_HTTP2_DEBUG")) {
+        if (q_env_is_set("QORE_HTTP2_DEBUG")) {
             fprintf(stderr, "HTTP2 DEBUG: clearStreamCompleteCallback() session=%p isServer=%d tid=%d about to lock\n",
                 this, is_server ? 1 : 0, q_gettid());
             fflush(stderr);
         }
         std::lock_guard<std::recursive_mutex> lg(m);
         printd(5, "clearStreamCompleteCallback() locked, clearing callback\n");
-        if (getenv("QORE_HTTP2_DEBUG")) {
+        if (q_env_is_set("QORE_HTTP2_DEBUG")) {
             fprintf(stderr, "HTTP2 DEBUG: clearStreamCompleteCallback() session=%p tid=%d locked, clearing callback\n",
                 this, q_gettid());
             fflush(stderr);
         }
         stream_complete_callback = nullptr;
         printd(5, "clearStreamCompleteCallback() done\n");
-        if (getenv("QORE_HTTP2_DEBUG")) {
+        if (q_env_is_set("QORE_HTTP2_DEBUG")) {
             fprintf(stderr, "HTTP2 DEBUG: clearStreamCompleteCallback() session=%p tid=%d done\n", this, q_gettid());
             fflush(stderr);
         }

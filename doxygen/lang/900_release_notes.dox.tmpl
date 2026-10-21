@@ -5032,6 +5032,16 @@ while (*binary chunk = input.read(65536)) {
       the line endings are (before, the SSE queue did not end an event at a blank line after a line with another
       ending, such as LF and then CRLF, and joined it with the next one), and a block without a field that is kept,
       such as one with only unknown fields, is not returned as an event
+    - Fixed heap corruption and crashes when several threads use the process environment at the same time, for
+      example @ref Qore::setenv() "setenv()" called from two threads on Alpine Linux (musl), or
+      @ref Qore::getenv() "getenv()" called while another thread changes the environment, on any platform: every
+      access to the environment that %Qore makes, including its own settings read from the environment and the copy
+      of the environment that a new process gets from @ref Qore::system() "system()", the
+      @ref backquote_operator "backquote operator", @ref Qore::exec() "exec()" and @ref Qore::fork() "fork()", is
+      now serialized with one process-wide lock (reads run in parallel), where this was done only on HP-UX.  Binary
+      modules can take the same lock with the new C++ API classes \c QoreEnvironmentReadLock and
+      \c QoreEnvironmentValue and with \c SystemEnvironment::isSet(); code that uses the environment without %Qore's
+      API, such as a third-party library, is not serialized with it
     - Fixed the warnings of the files of a separated user module other than its \c .qm file: each was parsed with the
       warnings of the code loading the module (with \c qcc, the default warnings), not those the \c .qm file sets, so
       \c %%modern in the \c .qm file did not enable all warnings in the other files.  The module loader accepted an

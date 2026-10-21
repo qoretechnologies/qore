@@ -1099,8 +1099,8 @@ void QoreModuleManager::init(bool se) {
 
     // setup module directory list from QORE_MODULE_DIR (if it hasn't already been manually set up)
     if (moduleDirList.empty()) {
-        if (getenv("QORE_MODULE_DIR_ONLY")) {
-            moduleDirList.addDirList(getenv("QORE_MODULE_DIR"));
+        if (q_env_is_set("QORE_MODULE_DIR_ONLY")) {
+            moduleDirList.addDirList(QoreEnvironmentValue("QORE_MODULE_DIR").c_str());
         } else {
             QoreModuleManager::addStandardModulePaths();
         }
@@ -1162,7 +1162,7 @@ std::string module_dir_prefix(const char * path) {
 }
 
 void QoreModuleManager::addStandardModulePaths() {
-   moduleDirList.addDirList(getenv("QORE_MODULE_DIR"));
+   moduleDirList.addDirList(QoreEnvironmentValue("QORE_MODULE_DIR").c_str());
 
    // append version-specific binary/AOT module directory
    if (strcmp(MODULE_VER_DIR, USER_MODULE_VER_DIR))
@@ -3238,7 +3238,8 @@ int QoreModuleManager::loadAOTBinaryModuleDependencies(ExceptionSink& xsink,
 */
 static bool qore_verify_module_signatures() {
     static const bool rv = []() -> bool {
-        const char* v = getenv("QORE_VERIFY_MODULE_SIGNATURES");
+        QoreEnvironmentValue v_holder("QORE_VERIFY_MODULE_SIGNATURES");
+        const char* v = v_holder.c_str();
         return v && *v && strcmp(v, "0");
     }();
     return rv;

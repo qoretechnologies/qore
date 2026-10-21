@@ -1,0 +1,272 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+# the "cppapiuser" test module is built into the build tree by examples/test/module-cpp-api/CMakeLists.txt and is not
+# installed, so QORE_MODULE_DIR must include the build tree (run_tests.sh does this)
+%requires cppapiuser
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class EnvironmentLockTest
+
+#! Tests the C++ API that serializes access to the process environment (SystemEnvironment)
+/** Binary modules read and change the environment through SystemEnvironment, QoreEnvironmentValue,
+    AtomicEnvironmentSetter (the lock held exclusively) and QoreEnvironmentReadLock (the lock held shared), which take
+    the same process-wide lock as the Qore-language environment functions.  The cppapiuser test module exercises them.
+
+    The fork cases create a child process while the lock is held, by another thread or by the forking thread: the
+    child can only use the environment because the fork handler of SystemEnvironment resets the lock there and
+    restores the forking thread's own hold.  If that were broken, the child, and with it the test, would wait forever.
+*/
+class EnvironmentLockTest inherits QUnit::Test {
+    #! the number of iterations of each thread
+    const Iterations = 2000;
+    #! the number of threads that change two variables together
+    const PairWriters = 3;
+    #! the number of threads that read the environment while the pair changes
+    const PairReaders = 3;
+    #! the number of threads that change the environment while child processes are created
+    const ForkWriters = 3;
+    #! the number of child processes created with fork() while the environment changes
+    const Forks = 20;
+    #! the padding of every value: long enough that each value is allocated
+    const Pad = strmul("y", 40);
+
+    private {
+        #! the prefix of the names of the variables of this test (unique for the process)
+        string prefix = sprintf("QORE_ENVLOCK_TEST_%d_", getpid());
+    }
+
+    constructor() : QUnit::Test("EnvironmentLockTest", "1.0", \ARGV) {
+        addTestCase("QoreEnvironmentValue and SystemEnvironment::isSet()", \testValue());
+        addTestCase("AtomicEnvironmentSetter changes variables atomically", \testAtomicPair());
+        addTestCase("negative: a thread holding the lock shared cannot change the environment", \testReadLocked());
+        addTestCase("the lock nests in an exclusive hold", \testNestedExclusive());
+        addTestCase("fork() while another thread holds the lock", \testForkWhileHeld());
+        addTestCase("fork() while the forking thread holds the lock", \testForkHolding());
+        addTestCase("fork() and exec() while other threads change the environment", \testForkExec());
+        set_return_value(main());
+    }
+
+    testValue() {
+        string name = prefix + "VALUE";
+        on_exit unsetenv(name);
+
+        assertNothing(cpp_api_env_value(name));
+        assertFalse(cpp_api_env_is_set(name));
+
+        string v = "value-" + Pad;
+        assertEq(0, setenv(name, v));
+        assertEq(v, cpp_api_env_value(name));
+        assertTrue(cpp_api_env_is_set(name));
+        assertEq({name: v}, cpp_api_env_snapshot(name));
+
+        # a variable set to an empty value is set
+        assertEq(0, setenv(name, ""));
+        assertEq("", cpp_api_env_value(name));
+        assertTrue(cpp_api_env_is_set(name));
+
+        assertEq(0, unsetenv(name));
+        assertNothing(cpp_api_env_value(name));
+        assertFalse(cpp_api_env_is_set(name));
+        assertEq({}, cpp_api_env_snapshot(name));
+    }
+
+    testAtomicPair() {
+        string a = prefix + "PAIR_A";
+        string b = prefix + "PAIR_B";
+        on_exit {
+            unsetenv(a);
+            unsetenv(b);
+        }
+        string pair_prefix = prefix + "PAIR_";
+        assertEq(0, cpp_api_env_set_pair(a, b, sprintf("0-0-%s", Pad)));
+
+        Counter start(1);
+        Queue results();
+        for (int t = 0; t < PairWriters; ++t) {
+            background runPairWriter(t, a, b, start, results);
+        }
+        for (int t = 0; t < PairReaders; ++t) {
+            background runPairReader(t, pair_prefix, a, b, start, results);
+        }
+        start.dec();
+        list<string> errors = getErrors(results, PairWriters + PairReaders);
+        assertEq((), errors, "every snapshot saw both variables with the same value");
+    }
+
+    testReadLocked() {
+        string name = prefix + "READLOCKED";
+        on_exit unsetenv(name);
+        string v = "before-" + Pad;
+        assertEq(0, setenv(name, v));
+
+        hash<auto> h = cpp_api_env_change_while_read_locked(name, "changed");
+        assertEq(-1, h.set_rc);
+        assertEq(Err::EDEADLK, h.set_errno);
+        assertEq(-1, h.unset_rc);
+        assertEq(Err::EDEADLK, h.unset_errno);
+        assertEq(-1, h.aes_set_rc);
+        assertEq(Err::EDEADLK, h.aes_set_errno);
+        assertEq(-1, h.aes_unset_rc);
+        assertEq(Err::EDEADLK, h.aes_unset_errno);
+        # the nested reads see the unchanged variable
+        assertEq(v, h.value);
+        assertTrue(h.is_set);
+        # after the lock has been released, the environment can be changed
+        assertEq(0, h.after_rc);
+        assertEq("changed", getenv(name));
+    }
+
+    testNestedExclusive() {
+        string name = prefix + "NESTED";
+        on_exit unsetenv(name);
+
+        string v = "nested-" + Pad;
+        assertEq(v, cpp_api_env_nested_exclusive(name, v));
+        assertEq(v, getenv(name));
+        # the lock has been released: another thread can change the environment
+        Queue q();
+        background q.push(setenv(name, "other"));
+        assertEq(0, q.get());
+        assertEq("other", getenv(name));
+    }
+
+    testForkWhileHeld() {
+        string name = prefix + "FORK_HELD";
+        on_exit unsetenv(name);
+
+        assertEq(0, cpp_api_env_fork_while_held(name, "exclusive-" + Pad, True));
+        assertEq(0, cpp_api_env_fork_while_held(name, "shared-" + Pad, False));
+        # the variable was set only in the children
+        assertNothing(getenv(name));
+    }
+
+    testForkHolding() {
+        string name = prefix + "FORK_HOLDING";
+        on_exit unsetenv(name);
+
+        assertEq(0, cpp_api_env_fork_holding(name, "holding-" + Pad));
+        assertNothing(getenv(name));
+        # the lock has been released in the parent
+        assertEq(0, setenv(name, "parent"));
+        assertEq("parent", getenv(name));
+    }
+
+    testForkExec() {
+        if (!Option::HAVE_FORK) {
+            testSkip("fork() is not available");
+        }
+        string var = prefix + "FORK_EXEC";
+        on_exit unsetenv(var);
+        assertEq(0, setenv(var, sprintf("0-0-%s", Pad)));
+
+        # the command run in each child exits with 0 if the variable has the form of a value written by a writer
+        string cmd = sprintf("/bin/sh -c 'case \"$%s\" in [0-9]*-[0-9]*-%s) exit 0;; esac; exit 1'", var, Pad);
+
+        # no thread starts or exits while the child processes are created: the child of fork() restarts the signal
+        # thread, which needs the lock of the thread list, and a thread holds that lock while it starts or exits, so
+        # a child created at that moment would wait forever (a separate issue of fork(), not of the environment)
+        Counter started(ForkWriters);
+        Counter start(1);
+        Counter forks_done(1);
+        Queue results();
+        for (int t = 0; t < ForkWriters; ++t) {
+            background runForkWriter(t, var, started, start, forks_done, results);
+        }
+        started.waitForZero();
+        start.dec();
+        list<int> rcs = ();
+        {
+            # the writers exit once all children have been created, also if an assertion fails
+            on_exit forks_done.dec();
+            for (int i = 0; i < Forks; ++i) {
+                int pid = fork();
+                if (!pid) {
+                    # the child: only this thread exists, so it executes the command at once
+                    try {
+                        exec(cmd);
+                    } catch () {
+                    }
+                    abort();
+                }
+                assertGt(0, pid, "fork() succeeded");
+                rcs += cpp_api_wait_child(pid);
+            }
+        }
+        list<string> errors = getErrors(results, ForkWriters);
+        assertEq((), errors, "the writers changed the environment without errors");
+        assertEq((map 0, xrange(Forks)), rcs, "every child got a consistent copy of the environment");
+    }
+
+    #! returns the errors that the given number of threads reported
+    private list<string> getErrors(Queue results, int count) {
+        list<string> errors = ();
+        for (int i = 0; i < count; ++i) {
+            hash<auto> r = results.get();
+            errors += r.errors;
+        }
+        return errors;
+    }
+
+    #! sets both variables to the same value atomically
+    private runPairWriter(int t, string a, string b, Counter start, Queue results) {
+        list<string> errors = ();
+        try {
+            start.waitForZero();
+            for (int i = 0; i < Iterations && errors.size() < 10; ++i) {
+                if (cpp_api_env_set_pair(a, b, sprintf("%d-%d-%s", t, i, Pad))) {
+                    errors += sprintf("pair writer %d: the pair could not be set: %s", t, strerror());
+                }
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            errors += sprintf("pair writer %d: %s", t, ex.err + ": " + ex.desc);
+        }
+        results.push({"errors": errors});
+    }
+
+    #! reads the environment while the pair changes: both variables always have the same value
+    private runPairReader(int t, string pair_prefix, string a, string b, Counter start, Queue results) {
+        list<string> errors = ();
+        try {
+            start.waitForZero();
+            for (int i = 0; i < Iterations && errors.size() < 10; ++i) {
+                hash<auto> h = cpp_api_env_snapshot(pair_prefix);
+                if (h.size() != 2 || h{a} !== h{b} || !(h{a} =~ /^[0-9]+-[0-9]+-y{40}$/)) {
+                    errors += sprintf("pair reader %d: inconsistent snapshot: %y", t, h);
+                }
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            errors += sprintf("pair reader %d: %s", t, ex.err + ": " + ex.desc);
+        }
+        results.push({"errors": errors});
+    }
+
+    #! changes the variable that the children read, and adds and removes variables of its own
+    private runForkWriter(int t, string var, Counter started, Counter start, Counter forks_done, Queue results) {
+        list<string> errors = ();
+        started.dec();
+        try {
+            start.waitForZero();
+            for (int i = 0; i < Iterations && errors.size() < 10; ++i) {
+                string v = sprintf("%d-%d-%s", t, i, Pad);
+                if (setenv(var, v)) {
+                    errors += sprintf("fork writer %d: setenv(%y) failed: %s", t, var, strerror());
+                }
+                string own = sprintf("%sW%d_%d", prefix, t, i % 16);
+                if (setenv(own, v) || unsetenv(own)) {
+                    errors += sprintf("fork writer %d: changing %y failed: %s", t, own, strerror());
+                }
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            errors += sprintf("fork writer %d: %s", t, ex.err + ": " + ex.desc);
+        }
+        # the thread exits only after the last child process has been created
+        forks_done.waitForZero();
+        results.push({"errors": errors});
+    }
+}

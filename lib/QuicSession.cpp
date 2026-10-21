@@ -69,14 +69,16 @@ extern qore_classid_t CID_ASYNCIOCONTROLLER;
 static bool quic_ngtcp2_log_enabled() {
     static int cached = -1;
     if (cached < 0) {
-        const char* v = getenv("QORE_QUIC_NGTCP2_LOG");
+        QoreEnvironmentValue v_holder("QORE_QUIC_NGTCP2_LOG");
+        const char* v = v_holder.c_str();
         cached = (v && *v && strcmp(v, "0") != 0) ? 1 : 0;
     }
     return cached != 0;
 }
 
 static ngtcp2_duration get_configured_quic_idle_timeout_ns() {
-    const char* v = getenv("QORE_QUIC_IDLE_TIMEOUT_MS");
+    QoreEnvironmentValue v_holder("QORE_QUIC_IDLE_TIMEOUT_MS");
+    const char* v = v_holder.c_str();
     if (!v || !*v) {
         return QuicSession::QUIC_IDLE_TIMEOUT_NS;
     }
@@ -106,7 +108,8 @@ static ngtcp2_duration get_configured_quic_idle_timeout_ns() {
 // update because the test scopes the environment change to one case in a shared
 // test process.
 static bool quic_server_keep_alive_disabled_for_test() {
-    const char* v = getenv("QORE_QUIC_TEST_DISABLE_SERVER_KEEPALIVE");
+    QoreEnvironmentValue v_holder("QORE_QUIC_TEST_DISABLE_SERVER_KEEPALIVE");
+    const char* v = v_holder.c_str();
     return v && *v && strcmp(v, "0") != 0;
 }
 #endif
@@ -117,7 +120,8 @@ static bool quic_server_keep_alive_disabled_for_test() {
     ngtcp2 event of the connection, so it is meant for capturing a stall, not for permanent use.
 */
 static size_t quic_stall_trace_lines() {
-    const char* v = getenv("QORE_QUIC_STALL_TRACE");
+    QoreEnvironmentValue v_holder("QORE_QUIC_STALL_TRACE");
+    const char* v = v_holder.c_str();
     if (!v || !*v) {
         return 0;
     }
@@ -374,7 +378,8 @@ ngtcp2_tstamp QuicSession::nowLocked() const {
 // test hook: start new connections this many nanoseconds ahead of timestamp(), which is the
 // state a connection is in after the clock has stepped back by that amount
 static ngtcp2_tstamp quic_test_clock_step_back_ns() {
-    const char* ms = getenv("QORE_QUIC_TEST_CLOCK_STEP_BACK_MS");
+    QoreEnvironmentValue ms_holder("QORE_QUIC_TEST_CLOCK_STEP_BACK_MS");
+    const char* ms = ms_holder.c_str();
     return ms ? static_cast<ngtcp2_tstamp>(strtoull(ms, nullptr, 10)) * 1000 * 1000 : 0;
 }
 #endif
@@ -682,7 +687,9 @@ int QuicSession::setupClientSslCtx(const char* host, int ssl_verify_mode, Except
             return -1;
         }
     } else {
-        // Load system default CA certificates
+        // Load system default CA certificates; OpenSSL reads the SSL_CERT_FILE and SSL_CERT_DIR environment
+        // variables
+        QoreEnvironmentReadLock env_lock;
         SSL_CTX_set_default_verify_paths(ssl_ctx_);
     }
 
@@ -854,7 +861,9 @@ int QuicSession::setupServerSslCtx(QoreSSLCertificate* cert, QoreSSLPrivateKey* 
                     "(verify_mode=0x%x, accept_all_certs=true)\n", ssl_verify_mode);
             } else {
                 SSL_CTX_set_verify(ssl_ctx_, ssl_verify_mode, nullptr);
-                // Load system default CA certificates for client cert validation
+                // Load system default CA certificates for client cert validation; OpenSSL reads the
+                // SSL_CERT_FILE and SSL_CERT_DIR environment variables
+                QoreEnvironmentReadLock env_lock;
                 SSL_CTX_set_default_verify_paths(ssl_ctx_);
                 printd(3, "QuicSession::setupServerSslCtx(): mTLS enabled "
                     "(verify_mode=0x%x, accept_all_certs=false)\n", ssl_verify_mode);
@@ -3019,7 +3028,8 @@ int QuicSession::submitConnectResponse(int64_t stream_id, int status_code,
 
     pending_write_.store(true, std::memory_order_release);
 #ifdef DEBUG
-    if (const char* hold_ms = getenv("QORE_QUIC_DEFER_CONNECT_RESPONSE_MS")) {
+    if (QoreEnvironmentValue hold_ms_holder("QORE_QUIC_DEFER_CONNECT_RESPONSE_MS");
+            const char* hold_ms = hold_ms_holder.c_str()) {
         connect_response_hold_until_ = timestamp()
             + static_cast<ngtcp2_tstamp>(atoi(hold_ms)) * 1000 * 1000;
     }

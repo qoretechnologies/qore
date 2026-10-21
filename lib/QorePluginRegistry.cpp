@@ -103,12 +103,12 @@ uint32_t next_global_plugin_operation_id = 1;
 std::atomic<bool> plugin_operations_published{false};
 
 bool pluginRegisterTrace() {
-    static const bool enabled = std::getenv("QORE_PLUGIN_REGISTER_TRACE") != nullptr;
+    static const bool enabled = q_env_is_set("QORE_PLUGIN_REGISTER_TRACE");
     return enabled;
 }
 
 bool pluginDispatchTrace() {
-    static const bool enabled = std::getenv("QORE_PLUGIN_DISPATCH_TRACE") != nullptr;
+    static const bool enabled = q_env_is_set("QORE_PLUGIN_DISPATCH_TRACE");
     return enabled;
 }
 
@@ -116,18 +116,18 @@ bool pluginVerifyEnabled() {
 #ifndef NDEBUG
     return true;
 #else
-    static const bool enabled = std::getenv("QORE_PLUGIN_VERIFY") != nullptr;
+    static const bool enabled = q_env_is_set("QORE_PLUGIN_VERIFY");
     return enabled;
 #endif
 }
 
 bool pluginVerifyTrace() {
-    static const bool enabled = std::getenv("QORE_PLUGIN_VERIFY_TRACE") != nullptr;
+    static const bool enabled = q_env_is_set("QORE_PLUGIN_VERIFY_TRACE");
     return enabled;
 }
 
 bool pluginCrossTypeTrace() {
-    static const bool enabled = std::getenv("QORE_PLUGIN_CROSS_TYPE_TRACE") != nullptr;
+    static const bool enabled = q_env_is_set("QORE_PLUGIN_CROSS_TYPE_TRACE");
     return enabled;
 }
 
@@ -156,7 +156,8 @@ void traceCrossType(const std::string& msg) {
 }
 
 size_t pluginFallbackBufferLimit() {
-    const char* env = std::getenv("QORE_PLUGIN_FALLBACK_BUFFER");
+    QoreEnvironmentValue env_holder("QORE_PLUGIN_FALLBACK_BUFFER");
+    const char* env = env_holder.c_str();
     if (!env || !*env) {
         return 1024;
     }

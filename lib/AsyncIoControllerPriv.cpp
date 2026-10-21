@@ -2380,7 +2380,8 @@ AsyncIoControllerPriv::AsyncIoControllerPriv(bool autostop, ExceptionSink* xsink
       submit_seq(0),
       logger(nullptr), timer_callback(nullptr) {
     // The QORE_IO_THREADS environment variable sets any positive I/O thread count
-    const char* env_threads = getenv("QORE_IO_THREADS");
+    QoreEnvironmentValue env_threads_holder("QORE_IO_THREADS");
+    const char* env_threads = env_threads_holder.c_str();
     if (env_threads) {
         int n = atoi(env_threads);
         if (n > 0) {

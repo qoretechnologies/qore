@@ -128,6 +128,9 @@
 #include "linenoise.h"
 #include <llvm/Support/ConvertUTF.h>
 
+// the environment is read through Qore's API, which serializes it with changes made by other threads
+#include <qore/Qore.h>
+
 #include <limits>
 #include <memory>
 #include <stdexcept>
@@ -1222,7 +1225,8 @@ static inline bool hasHistoryProvider() {
 static void linenoiseAtExit(void);
 
 static bool isUnsupportedTerm(void) {
-  char* term = getenv("TERM");
+  QoreEnvironmentValue term_holder("TERM");
+  const char* term = term_holder.c_str();
   if (term == NULL) return false;
   for (int j = 0; unsupported_term[j]; ++j)
     if (!strcasecmp(term, unsupported_term[j])) {

@@ -108,7 +108,7 @@ extern "C" uint64_t qore_rt_background_static_method_name_call_aot(const char* q
         uint64_t* args, int nargs, ExceptionSink* xsink);
 
 static bool qore_ir_interpreter_use_unique_hash_literal_insert() {
-    static const bool enabled = std::getenv("QORE_DISABLE_IR_UNIQUE_HASH_LITERAL_INSERT") == nullptr;
+    static const bool enabled = !q_env_is_set("QORE_DISABLE_IR_UNIQUE_HASH_LITERAL_INSERT");
     return enabled;
 }
 
@@ -174,7 +174,7 @@ static bool qore_ir_try_string_arg_pseudo_fast_path(bool pseudo, bool base_known
         int nargs, QoreValue& res, ExceptionSink* xsink) {
     // read the environment once per process, and only after the cheap guards: this runs on every
     // string pseudo-method call in the interpreter, and getenv() is a linear scan of the environment
-    static const bool disabled = std::getenv("QORE_DISABLE_IR_GUARDED_STRING_PSEUDO") != nullptr;
+    static const bool disabled = q_env_is_set("QORE_DISABLE_IR_GUARDED_STRING_PSEUDO");
     if (!pseudo || !base_known_string || base.getType() != NT_STRING || disabled) {
         return false;
     }
@@ -1800,12 +1800,12 @@ static bool buildValueUseCounts(const QoreIRFunction& func,
 }
 
 static bool interpreterEffectSummaryDisabled() {
-    static const bool disabled = std::getenv("QORE_DISABLE_IR_EFFECT_SUMMARY") != nullptr;
+    static const bool disabled = q_env_is_set("QORE_DISABLE_IR_EFFECT_SUMMARY");
     return disabled;
 }
 
 static bool interpreterEffectSummaryStatsEnabled() {
-    static const bool enabled = std::getenv("QORE_IR_EFFECT_SUMMARY_STATS") != nullptr;
+    static const bool enabled = q_env_is_set("QORE_IR_EFFECT_SUMMARY_STATS");
     return enabled;
 }
 
@@ -2493,12 +2493,12 @@ static int8_t ensureInterpreterInlineIRFunctionState(QoreIRCallDirectInstruction
 }
 
 static bool interpreterNativeLeafInlineDisabled(QoreIRCallDirectInstruction::NativeLeafKind kind) {
-    static const bool all_disabled = std::getenv("QORE_DISABLE_IR_NATIVE_LEAF_INLINE") != nullptr;
-    static const bool int_disabled = std::getenv("QORE_DISABLE_IR_NATIVE_INT_LEAF_INLINE") != nullptr;
-    static const bool float_disabled = std::getenv("QORE_DISABLE_IR_NATIVE_FLOAT_LEAF_INLINE") != nullptr;
+    static const bool all_disabled = q_env_is_set("QORE_DISABLE_IR_NATIVE_LEAF_INLINE");
+    static const bool int_disabled = q_env_is_set("QORE_DISABLE_IR_NATIVE_INT_LEAF_INLINE");
+    static const bool float_disabled = q_env_is_set("QORE_DISABLE_IR_NATIVE_FLOAT_LEAF_INLINE");
     static const bool dynamic_disabled =
-        std::getenv("QORE_DISABLE_IR_NATIVE_DYNAMIC_LEAF_INLINE") != nullptr;
-    static const bool string_disabled = std::getenv("QORE_DISABLE_IR_NATIVE_STRING_LEAF_INLINE") != nullptr;
+        q_env_is_set("QORE_DISABLE_IR_NATIVE_DYNAMIC_LEAF_INLINE");
+    static const bool string_disabled = q_env_is_set("QORE_DISABLE_IR_NATIVE_STRING_LEAF_INLINE");
     if (all_disabled) {
         return true;
     }
@@ -2514,28 +2514,28 @@ static bool interpreterNativeLeafInlineDisabled(QoreIRCallDirectInstruction::Nat
             return string_disabled;
         case QoreIRCallDirectInstruction::NativeLeafKind::IntProgram: {
             static const bool program_disabled =
-                std::getenv("QORE_DISABLE_IR_NATIVE_INT_PROGRAM_INLINE") != nullptr;
+                q_env_is_set("QORE_DISABLE_IR_NATIVE_INT_PROGRAM_INLINE");
             return int_disabled || program_disabled;
         }
         case QoreIRCallDirectInstruction::NativeLeafKind::ClosureIntIncrement: {
             static const bool increment_disabled =
-                std::getenv("QORE_DISABLE_IR_NATIVE_CLOSURE_INCREMENT_INLINE") != nullptr;
+                q_env_is_set("QORE_DISABLE_IR_NATIVE_CLOSURE_INCREMENT_INLINE");
             return int_disabled || increment_disabled;
         }
         case QoreIRCallDirectInstruction::NativeLeafKind::ClosureIntBinary: {
             static const bool binary_disabled =
-                std::getenv("QORE_DISABLE_IR_NATIVE_CLOSURE_BINARY_INLINE") != nullptr;
+                q_env_is_set("QORE_DISABLE_IR_NATIVE_CLOSURE_BINARY_INLINE");
             return int_disabled || binary_disabled;
         }
         case QoreIRCallDirectInstruction::NativeLeafKind::ClosureFloatBinary: {
             static const bool binary_disabled =
-                std::getenv("QORE_DISABLE_IR_NATIVE_CLOSURE_FLOAT_BINARY_INLINE") != nullptr;
+                q_env_is_set("QORE_DISABLE_IR_NATIVE_CLOSURE_FLOAT_BINARY_INLINE");
             return float_disabled || binary_disabled;
         }
         case QoreIRCallDirectInstruction::NativeLeafKind::ClosureStringSize:
         case QoreIRCallDirectInstruction::NativeLeafKind::ClosureStringLength: {
             static const bool closure_string_disabled =
-                std::getenv("QORE_DISABLE_IR_NATIVE_CLOSURE_STRING_INLINE") != nullptr;
+                q_env_is_set("QORE_DISABLE_IR_NATIVE_CLOSURE_STRING_INLINE");
             return string_disabled || closure_string_disabled;
         }
     }
@@ -2792,7 +2792,7 @@ static bool isInterpreterNativeIntProgram(const QoreIRFunction* ir,
 }
 
 static bool ensureInterpreterNativeLeafState(QoreIRCallDirectInstruction* inst, int nargs) {
-    static const bool all_disabled = std::getenv("QORE_DISABLE_IR_NATIVE_LEAF_INLINE") != nullptr;
+    static const bool all_disabled = q_env_is_set("QORE_DISABLE_IR_NATIVE_LEAF_INLINE");
     if (all_disabled) {
         return false;
     }
@@ -5398,7 +5398,7 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
                 QoreValue idx = getIRValue(values, inv->operands[1]);
                 return getListAssignmentValue(rhs, idx.getAsBigInt());
             }
-            static const bool trace_lvmut = getenv("QORE_IR_TRACE_LVMUT_FALLBACK") != nullptr;
+            static const bool trace_lvmut = q_env_is_set("QORE_IR_TRACE_LVMUT_FALLBACK");
             if (trace_lvmut) {
                 const QoreProgramLocation* loc = inv->loc;
                 fprintf(stderr, "[ir-lvmut-fallback] opcode=%u loc=%s:%d\n",
@@ -6424,7 +6424,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     QoreIRBasicBlock* debug_break_target = nullptr;
 
     auto returnAfterUnhandledException = [&](bool values_cleaned = false) -> bool {
-        if (getenv("QORE_IR_TRACE_EXCEPTIONS")) {
+        if (q_env_is_set("QORE_IR_TRACE_EXCEPTIONS")) {
             fprintf(stderr, "[ir-exception] func='%s' return-unhandled xsink=%d\n",
                 func.name.c_str(), xsink && *xsink ? 1 : 0);
             fflush(stderr);
@@ -6527,8 +6527,8 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     size_t ip = 0;
     // execute() runs once per Qore function call, so these diagnostic flags must not re-scan the
     // environment per call; every other debug flag in this file is resolved once as well
-    static const bool trace_ir_refs = getenv("QORE_IR_TRACE_REFS") != nullptr;
-    static const bool trace_ir_refs_deep = getenv("QORE_IR_TRACE_REFS_DEEP") != nullptr;
+    static const bool trace_ir_refs = q_env_is_set("QORE_IR_TRACE_REFS");
+    static const bool trace_ir_refs_deep = q_env_is_set("QORE_IR_TRACE_REFS_DEEP");
     // Deep ref tracing intentionally dereferences object internals; leave it
     // off unless narrowing an IR lifetime/refcount bug under a debugger.
     auto traceIRRef = [&](const QoreIRInstruction* trace_inst, const char* event, uint32_t slot, QoreValue val,
@@ -6943,7 +6943,7 @@ next_instruction:
                 && inst->cached_start_line != last_debug_line && !(xsink && *xsink)) {
             last_debug_line = inst->cached_start_line;
             AbstractStatement* dbg_stmt = getDebugStatement(inst);
-            if (getenv("QORE_IR_TRACE_DEBUG")) {
+            if (q_env_is_set("QORE_IR_TRACE_DEBUG")) {
                 fprintf(stderr, "[ir-debug] func='%s' line=%d stmt=%p op=%d debug_active=%d\n",
                     func.name.c_str(), inst->cached_start_line + inst->loc->offset,
                     static_cast<void*>(dbg_stmt), static_cast<int>(inst->opcode), debug_active ? 1 : 0);
@@ -6951,7 +6951,7 @@ next_instruction:
             }
             if (dbg_stmt) {
                 int dbg_rc = tlpd->dbgStep(statements, dbg_stmt, xsink);
-                if (getenv("QORE_IR_TRACE_DEBUG")) {
+                if (q_env_is_set("QORE_IR_TRACE_DEBUG")) {
                     fprintf(stderr, "[ir-debug] func='%s' line=%d dbg_rc=%d xsink=%d\n",
                         func.name.c_str(), inst->cached_start_line + inst->loc->offset, dbg_rc,
                         xsink && *xsink ? 1 : 0);
@@ -6986,7 +6986,7 @@ next_instruction:
 
         // Verbose IR lowering diagnostics: enable with QORE_IR_DEBUG env var
         // Zero-cost when disabled: single static bool check only initialized once
-        static bool ir_verbose_enabled = (getenv("QORE_IR_DEBUG") != nullptr);
+        static bool ir_verbose_enabled = (q_env_is_set("QORE_IR_DEBUG"));
 
         // Log instruction execution for diagnostics (zero-cost path when disabled)
         if (ir_verbose_enabled && func.name.find("monitor") != std::string::npos) {
@@ -7846,7 +7846,7 @@ next_instruction:
                     cleanupLocalCaches();
                 }
                 if (xsink && *xsink) {
-                    if (getenv("QORE_IR_TRACE_EXCEPTIONS")) {
+                    if (q_env_is_set("QORE_IR_TRACE_EXCEPTIONS")) {
                         fprintf(stderr, "[ir-exception] func='%s' invoke-op=%d loc=%s:%d ex-target=%p\n",
                             func.name.c_str(), static_cast<int>(inv->invoke_opcode),
                             inst->loc ? inst->loc->getFile() : "",
@@ -7856,7 +7856,7 @@ next_instruction:
                     }
                     if (debug_active) {
                         tlpd->dbgException(getDebugStatement(inst), xsink);
-                        if (getenv("QORE_IR_TRACE_EXCEPTIONS")) {
+                        if (q_env_is_set("QORE_IR_TRACE_EXCEPTIONS")) {
                             fprintf(stderr, "[ir-exception] func='%s' after-dbgException xsink=%d ex-target=%p\n",
                                 func.name.c_str(), xsink && *xsink ? 1 : 0,
                                 static_cast<void*>(inv->exception_target));
@@ -7883,7 +7883,7 @@ next_instruction:
                         return returnAfterUnhandledException();
                     }
                     cleanupToTempScope(inv->temp_scope_id, true, false, true);
-                    if (getenv("QORE_IR_TRACE_EXCEPTIONS")) {
+                    if (q_env_is_set("QORE_IR_TRACE_EXCEPTIONS")) {
                         fprintf(stderr, "[ir-exception] func='%s' branch-exception xsink=%d target=%p\n",
                             func.name.c_str(), xsink && *xsink ? 1 : 0,
                             static_cast<void*>(inv->exception_target));
@@ -7905,7 +7905,7 @@ next_instruction:
                 break;
             }
             case QoreIROpcode::LandingPad: {
-                if (getenv("QORE_IR_TRACE_EXCEPTIONS")) {
+                if (q_env_is_set("QORE_IR_TRACE_EXCEPTIONS")) {
                     fprintf(stderr, "[ir-exception] func='%s' landingpad loc=%s:%d xsink=%d\n",
                         func.name.c_str(),
                         inst->loc ? inst->loc->getFile() : "",
@@ -7997,7 +7997,7 @@ next_instruction:
                     break;
                 }
                 QoreException* caught = xsink->catchException();
-                if (getenv("QORE_IR_TRACE_EXCEPTIONS")) {
+                if (q_env_is_set("QORE_IR_TRACE_EXCEPTIONS")) {
                     fprintf(stderr, "[ir-exception] func='%s' catch.exception caught=%p xsink=%d\n",
                         func.name.c_str(), static_cast<void*>(caught), xsink && *xsink ? 1 : 0);
                     fflush(stderr);
@@ -10664,7 +10664,7 @@ load_local_done:
             case QoreIROpcode::UninstantiateLocal: {
                 auto* local_inst = static_cast<QoreIRLocalInstruction*>(inst);
                 // resolved once: this opcode runs at every block scope exit
-                static const bool debug_uninst = getenv("QORE_DEBUG_UNINST") != nullptr;
+                static const bool debug_uninst = q_env_is_set("QORE_DEBUG_UNINST");
                 if (debug_uninst) {
                     bool ip2 = pre_instantiated && pre_instantiated->find(local_inst->local) != pre_instantiated->end();
                     fprintf(stderr, "UNINST: %s is_closure=%d slot=%d is_pre=%d\n",
@@ -12083,7 +12083,7 @@ load_local_done:
                 QoreValue value = getIRValue(values, guard_inst->operands.front());
 
                 // Verbose logging for guard failures (zero-cost when disabled)
-                static bool ir_guard_verbose = (getenv("QORE_IR_DEBUG") != nullptr);
+                static bool ir_guard_verbose = (q_env_is_set("QORE_IR_DEBUG"));
                 if (ir_guard_verbose && func.name.find("monitor") != std::string::npos) {
                     uint32_t source_slot = guard_inst->operands.front().id;
                     fprintf(stderr, "[IR-GUARD-CHECK] func='%s' ip=%zu guard_op=%d value_slot=%u val_type='%s' val_is_nothing=%d\n",
@@ -12112,7 +12112,8 @@ load_local_done:
                         printd(2, "QoreIRInterpreter::execute() guard failed (%s) for '%s' "
                             "— falling back to AST\n", guard_type, func.name.c_str());
                         static bool debug_guard = [] {
-                            const char* debug_env = getenv("QORE_IR_DEBUG");
+                            QoreEnvironmentValue debug_env_holder("QORE_IR_DEBUG");
+                            const char* debug_env = debug_env_holder.c_str();
                             return debug_env && strstr(debug_env, "guard");
                         }();
                         if (debug_guard) {
@@ -15438,7 +15439,7 @@ load_local_done:
                 } else {
                     // The inner expression was not a decomposable call shape.
                     // Report it so native lowering can be added.
-                    if (getenv("QORE_IR_TRACE_BG_FALLBACK")) {
+                    if (q_env_is_set("QORE_IR_TRACE_BG_FALLBACK")) {
                         const AbstractQoreNode* inner = bg_op ? bg_op->getExp().getInternalNode()
                                                               : nullptr;
                         const QoreProgramLocation* loc = inst->loc;
@@ -15723,7 +15724,7 @@ load_local_done:
                 if (debug_active) {
                     tlpd->dbgFunctionExit(statements, return_value, xsink);
                 }
-                if (getenv("QORE_IR_TRACE_EXCEPTIONS")) {
+                if (q_env_is_set("QORE_IR_TRACE_EXCEPTIONS")) {
                     fprintf(stderr, "[ir-exception] func='%s' return xsink-after-dbg-exit=%d\n",
                         func.name.c_str(), xsink && *xsink ? 1 : 0);
                     fflush(stderr);
@@ -15738,7 +15739,7 @@ load_local_done:
                 if (debug_active) {
                     tlpd->dbgFunctionExit(statements, return_value, xsink);
                 }
-                if (getenv("QORE_IR_TRACE_EXCEPTIONS")) {
+                if (q_env_is_set("QORE_IR_TRACE_EXCEPTIONS")) {
                     fprintf(stderr, "[ir-exception] func='%s' return-nothing xsink-after-dbg-exit=%d\n",
                         func.name.c_str(), xsink && *xsink ? 1 : 0);
                     fflush(stderr);

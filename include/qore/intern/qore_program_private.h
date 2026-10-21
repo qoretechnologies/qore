@@ -729,7 +729,7 @@ public:
             AutoLocker al(ir_fallback_lock);
             ir_fallback_counts[reason]++;
         }
-        if (getenv("QORE_IR_TRACE_FALLBACK")) {
+        if (q_env_is_set("QORE_IR_TRACE_FALLBACK")) {
             fprintf(stderr, "[ir-fallback] %s\n", reason.c_str());
             fflush(stderr);
         }
@@ -1022,7 +1022,8 @@ public:
     // true, so all other extensions — .qr, .qc, .qm, .qtest, .qsd, .qfd, .qrd,
     // .qore, or no extension at all — automatically get PO_MODERN.
     DLLLOCAL static bool should_auto_enable_modern(const char* filename) {
-        const char* env = getenv("QORE_OLD_STYLE_DEFAULT");
+        QoreEnvironmentValue env_holder("QORE_OLD_STYLE_DEFAULT");
+        const char* env = env_holder.c_str();
         if (env && *env && strcmp(env, "0") != 0) {
             return false;
         }

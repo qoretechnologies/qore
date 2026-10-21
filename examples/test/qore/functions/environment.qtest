@@ -1,0 +1,250 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class EnvironmentTest
+
+#! Tests that the process environment can be read and changed from several threads at once
+/** The C library's environment functions are not thread-safe: musl's setenv() frees the value it replaces, so two
+    threads replacing the same variable free the same memory twice and corrupt the heap, and every C library may
+    reallocate the environ array that getenv() and a new process read while another thread changes it.  %Qore
+    serializes every access to the environment with one process-wide lock (it did so only on HP-UX): without it, the
+    thread cases crash or corrupt the heap on musl (Alpine Linux).
+
+    The cases use fixed iteration counts; the threads start together at a Counter gate.
+*/
+class EnvironmentTest inherits QUnit::Test {
+    #! the number of threads that use the environment at once
+    const Threads = 8;
+    #! the number of iterations of each thread
+    const Iterations = 4000;
+    #! the number of variables that each thread adds and removes again (so that the environ array is reallocated)
+    const OwnVars = 16;
+    #! the number of commands that each command thread runs while the environment changes
+    const Commands = 60;
+    #! the number of threads that change the environment while the commands run
+    const Writers = 3;
+    #! the number of threads that run commands
+    const CommandThreads = 2;
+    #! the padding of every value: long enough that each value is allocated
+    const Pad = strmul("x", 48);
+    #! the pattern of every value written by the thread cases
+    const ValueRegex = "^[0-9]+-[0-9]+-x{48}$";
+    #! the maximum number of errors reported by one thread
+    const MaxErrors = 10;
+
+    private {
+        #! the prefix of the names of the variables of this test (unique for the process)
+        string prefix = sprintf("QORE_ENV_TEST_%d_", getpid());
+    }
+
+    constructor() : QUnit::Test("EnvironmentTest", "1.0", \ARGV) {
+        addTestCase("ENV holds the environment at startup", \testEnvHash());
+        addTestCase("setenv(), getenv() and unsetenv() from several threads", \testThreads());
+        addTestCase("a new process gets a consistent copy of the changing environment", \testChildCopy());
+        addTestCase("negative: invalid names", \testInvalid());
+        addTestCase("negative: exec() of a missing program", \testExecFailure());
+        set_return_value(main());
+    }
+
+    testEnvHash() {
+        assertTrue(ENV.size() > 0, "ENV is not empty");
+        # the variables of this test are the only ones that the process changes
+        foreach string key in (keys ENV) {
+            if (key.equalPartial(prefix)) {
+                continue;
+            }
+            assertEq(ENV{key}, getenv(key), sprintf("ENV{%y}", key));
+        }
+    }
+
+    testThreads() {
+        string shared = prefix + "SHARED";
+        on_exit unsetenv(shared);
+
+        Counter start(1);
+        Queue results();
+        for (int t = 0; t < Threads; ++t) {
+            background runThread(t, shared, start, results);
+        }
+        start.dec();
+        list<string> errors = getErrors(results, Threads);
+        assertEq((), errors, "no thread saw a wrong value or an error");
+
+        # the variables that the threads added are removed again
+        for (int t = 0; t < Threads; ++t) {
+            for (int i = 0; i < OwnVars; ++i) {
+                string own = sprintf("%sT%d_%d", prefix, t, i);
+                assertNothing(getenv(own), own);
+            }
+        }
+        # the environment can still be changed after the threads have finished
+        string v = sprintf("final-%s", Pad);
+        assertEq(0, setenv(shared, v));
+        assertEq(v, getenv(shared));
+        assertEq(0, unsetenv(shared));
+        assertNothing(getenv(shared));
+    }
+
+    testChildCopy() {
+%ifdef Windows
+        testSkip("Windows");
+%endif
+        string var = prefix + "CHILD";
+        on_exit unsetenv(var);
+        assertEq(0, setenv(var, sprintf("0-0-%s", Pad)));
+
+        Counter start(1);
+        Queue results();
+        # the writers change the variable that the commands read, and add and remove other variables, so that the
+        # environ array that each new process gets a copy of is changed and reallocated meanwhile
+        for (int t = 0; t < Writers; ++t) {
+            background runWriter(t, var, start, results);
+        }
+        for (int t = 0; t < CommandThreads; ++t) {
+            background runCommands(t, var, start, results);
+        }
+        start.dec();
+        list<string> errors = getErrors(results, Writers + CommandThreads);
+        assertEq((), errors, "every command got a consistent copy of the environment");
+    }
+
+    testInvalid() {
+        string name = prefix + "INVALID";
+        on_exit unsetenv(name);
+
+        # the C library refuses these names (a name with a NUL character is tested in security/nonpath-nul.qtest);
+        # the environment lock is released after each failure, so the environment can be used afterwards
+        assertEq(-1, setenv("", "value"));
+        assertEq(Err::EINVAL, errno());
+        assertEq(-1, setenv("A=B", "value"));
+        assertEq(Err::EINVAL, errno());
+        assertEq(-1, unsetenv("A=B"));
+        assertEq(Err::EINVAL, errno());
+        assertNothing(getenv("A=B"));
+
+        assertEq(0, setenv(name, "value"));
+        assertEq("value", getenv(name));
+        assertEq(0, unsetenv(name));
+        assertNothing(getenv(name));
+    }
+
+    testExecFailure() {
+%ifdef Windows
+        testSkip("Windows");
+%endif
+        # the program is searched in PATH with the environment lock held; the error number of execvp() is reported
+        *hash<ExceptionInfo> ex;
+        try {
+            exec(prefix + "missing-program");
+        } catch (hash<ExceptionInfo> e) {
+            ex = e;
+        }
+        assertEq("EXEC-ERROR", ex.err);
+        assertEq(Err::ENOENT, ex.arg);
+        # the lock has been released
+        string name = prefix + "EXEC";
+        on_exit unsetenv(name);
+        assertEq(0, setenv(name, "value"));
+        assertEq("value", getenv(name));
+    }
+
+    #! returns the errors that the given number of threads reported
+    private list<string> getErrors(Queue results, int count) {
+        list<string> errors = ();
+        for (int i = 0; i < count; ++i) {
+            hash<auto> r = results.get();
+            errors += r.errors;
+        }
+        return errors;
+    }
+
+    #! changes one shared variable and adds and removes variables of its own
+    private runThread(int t, string shared, Counter start, Queue results) {
+        list<string> errors = ();
+        try {
+            start.waitForZero();
+            for (int i = 0; i < Iterations && errors.size() < MaxErrors; ++i) {
+                string v = sprintf("%d-%d-%s", t, i, Pad);
+                if (setenv(shared, v)) {
+                    errors += sprintf("thread %d: setenv(%y) failed: %s", t, shared, strerror());
+                }
+                # every value of the shared variable is one that a thread wrote
+                *string sv = getenv(shared);
+                if (!exists sv || !regex(sv, ValueRegex)) {
+                    errors += sprintf("thread %d: %y has an unexpected value: %y", t, shared, sv);
+                }
+                # only this thread changes its own variables
+                string own = sprintf("%sT%d_%d", prefix, t, i % OwnVars);
+                if (setenv(own, v)) {
+                    errors += sprintf("thread %d: setenv(%y) failed: %s", t, own, strerror());
+                }
+                *string ov = getenv(own);
+                if (ov !== v) {
+                    errors += sprintf("thread %d: %y is %y, expected %y", t, own, ov, v);
+                }
+                if (unsetenv(own)) {
+                    errors += sprintf("thread %d: unsetenv(%y) failed: %s", t, own, strerror());
+                }
+                ov = getenv(own);
+                if (exists ov) {
+                    errors += sprintf("thread %d: %y is still set to %y after unsetenv()", t, own, ov);
+                }
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            errors += sprintf("thread %d: %s", t, ex.err + ": " + ex.desc);
+        }
+        results.push({"errors": errors});
+    }
+
+    #! changes the variable that the commands read, and adds and removes variables of its own
+    private runWriter(int t, string var, Counter start, Queue results) {
+        list<string> errors = ();
+        try {
+            start.waitForZero();
+            for (int i = 0; i < Iterations && errors.size() < MaxErrors; ++i) {
+                string v = sprintf("%d-%d-%s", t, i, Pad);
+                if (setenv(var, v)) {
+                    errors += sprintf("writer %d: setenv(%y) failed: %s", t, var, strerror());
+                }
+                string own = sprintf("%sW%d_%d", prefix, t, i % OwnVars);
+                if (setenv(own, v) || unsetenv(own)) {
+                    errors += sprintf("writer %d: changing %y failed: %s", t, own, strerror());
+                }
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            errors += sprintf("writer %d: %s", t, ex.err + ": " + ex.desc);
+        }
+        results.push({"errors": errors});
+    }
+
+    #! runs commands that check the value of the variable in the copy of the environment that they get
+    private runCommands(int t, string var, Counter start, Queue results) {
+        list<string> errors = ();
+        try {
+            start.waitForZero();
+            for (int i = 0; i < Commands && errors.size() < MaxErrors; ++i) {
+                if (i % 2) {
+                    # the command exits with 0 if the value has the form of a value written by a writer
+                    int rc = system(sprintf("case \"$%s\" in [0-9]*-[0-9]*-%s) exit 0;; *) exit 1;; esac", var, Pad));
+                    if (rc) {
+                        errors += sprintf("command thread %d: system() returned %d", t, rc);
+                    }
+                } else {
+                    string out = backquote(sprintf("printf '%%s' \"$%s\"", var));
+                    if (!regex(out, ValueRegex)) {
+                        errors += sprintf("command thread %d: the command printed %y", t, out);
+                    }
+                }
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            errors += sprintf("command thread %d: %s", t, ex.err + ": " + ex.desc);
+        }
+        results.push({"errors": errors});
+    }
+}

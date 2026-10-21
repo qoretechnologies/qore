@@ -1809,20 +1809,19 @@ void qore_setup_argv(int pos, int argc, char* argv[]) {
 }
 
 void init_lib_intern(char* env[]) {
-   // set up environment hash
-   int i = 0;
+   // set up environment hash; the environment is read under the environment lock, and its strings are not
+   // modified, since other threads (of a program embedding the library) may read them at the same time
    ENV = new QoreHashNode(autoTypeInfo);
-   while (env[i]) {
-      char* p;
-
-      if ((p = strchr(env[i], '='))) {
-         char save = *p;
-         *p = '\0';
-         ENV->setKeyValue(env[i], new QoreStringNode(p + 1), 0);
-         //printd(5, "creating $ENV{\"%s\"} = \"%s\"\n", env[i], p + 1);
-         *p = save;
+   {
+      QoreEnvironmentReadLock env_lock;
+      for (int i = 0; env[i]; ++i) {
+         const char* p = strchr(env[i], '=');
+         if (p) {
+            std::string key(env[i], p - env[i]);
+            ENV->setKeyValue(key.c_str(), new QoreStringNode(p + 1), nullptr);
+            //printd(5, "creating $ENV{\"%s\"} = \"%s\"\n", key.c_str(), p + 1);
+         }
       }
-      i++;
    }
 
    // initialize process-default local time zone
@@ -1852,6 +1851,8 @@ void delete_global_variables() {
 }
 
 struct tm *q_localtime(const time_t* clock, struct tm* tms) {
+   // the C library reads the TZ environment variable
+   QoreEnvironmentReadLock env_lock;
 #ifdef HAVE_LOCALTIME_R
    localtime_r(clock, tms);
 #else

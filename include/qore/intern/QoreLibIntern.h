@@ -1119,6 +1119,18 @@ DLLLOCAL BinaryNode* parseHex(const QoreProgramLocation* loc, const char* buf, i
 DLLLOCAL void print_node(FILE* fp, const QoreValue qv);
 DLLLOCAL void delete_global_variables();
 DLLLOCAL void init_lib_intern(char* env[]);
+
+//! returns true if the given environment variable is set, even to an empty value
+/** Reads the environment under the process environment lock (see SystemEnvironment); never call \c getenv()
+    directly in the library: a concurrent change to the environment can free the memory it reads and returns.
+    Use QoreEnvironmentValue to read a value.
+
+    This calls the exported SystemEnvironment::isSet(), so that inline functions of internal headers that use it
+    also link in the executables and modules that include them.
+*/
+static inline bool q_env_is_set(const char* name) {
+    return SystemEnvironment::isSet(name);
+}
 DLLLOCAL QoreParseListNode* make_args(const QoreProgramLocation* loc, QoreValue arg);
 
 DLLLOCAL QoreValue copy_value_and_resolve_lvar_refs(const QoreValue& n, ExceptionSink* xsink);

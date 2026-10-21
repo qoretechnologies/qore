@@ -6579,7 +6579,8 @@ int SSLSocketHelper::setVerifyMode(int mode, bool accept_all_certs, const std::s
                 rc = -1;
             }
         } else {
-            // issue #3818: load default CAs
+            // issue #3818: load default CAs; OpenSSL reads the SSL_CERT_FILE and SSL_CERT_DIR environment variables
+            QoreEnvironmentReadLock env_lock;
             SSL_CTX_set_default_verify_paths(ctx);
         }
 
@@ -6828,7 +6829,12 @@ int QoreCaresAddrInfoResolver::start(ExceptionSink* xsink) {
     options.sock_state_cb = sockStateCallback;
     options.sock_state_cb_data = this;
 
-    int rc = ares_init_options(&channel, &options, ARES_OPT_SOCK_STATE_CB);
+    int rc;
+    {
+        // c-ares reads the LOCALDOMAIN and RES_OPTIONS environment variables when it creates a channel
+        QoreEnvironmentReadLock env_lock;
+        rc = ares_init_options(&channel, &options, ARES_OPT_SOCK_STATE_CB);
+    }
     if (rc != ARES_SUCCESS) {
         xsink->raiseException("QOREADDRINFO-GETINFO-ERROR", "ares_init_options() failed: %s",
             ares_strerror(rc));
@@ -7413,7 +7419,12 @@ private:
         options.sock_state_cb = sockStateCallback;
         options.sock_state_cb_data = this;
 
-        int rc = ares_init_options(&channel, &options, ARES_OPT_SOCK_STATE_CB);
+        int rc;
+        {
+            // c-ares reads the LOCALDOMAIN and RES_OPTIONS environment variables when it creates a channel
+            QoreEnvironmentReadLock env_lock;
+            rc = ares_init_options(&channel, &options, ARES_OPT_SOCK_STATE_CB);
+        }
         if (rc != ARES_SUCCESS) {
             xsink->raiseException("GETHOSTBYADDR-ERROR", "ares_init_options() failed: %s", ares_strerror(rc));
             return -1;
@@ -7966,7 +7977,12 @@ int QoreCaresNameInfoResolver::start(ExceptionSink* xsink) {
     options.sock_state_cb = sockStateCallback;
     options.sock_state_cb_data = this;
 
-    int rc = ares_init_options(&channel, &options, ARES_OPT_SOCK_STATE_CB);
+    int rc;
+    {
+        // c-ares reads the LOCALDOMAIN and RES_OPTIONS environment variables when it creates a channel
+        QoreEnvironmentReadLock env_lock;
+        rc = ares_init_options(&channel, &options, ARES_OPT_SOCK_STATE_CB);
+    }
     if (rc != ARES_SUCCESS) {
         xsink->raiseException("QOREADDRINFO-GETNAMEINFO-ERROR", "ares_init_options() failed: %s",
             ares_strerror(rc));
@@ -10498,7 +10514,8 @@ int SSLSocketHelper::doNonBlockingIo(ExceptionSink* xsink, const char* mname, vo
             // every thread doing SSL I/O, so they are atomic, and they are only written while the hook is in use.
             static std::atomic<int> force_count{0};
             static std::atomic<int> force_max{0};
-            const char* env = getenv("QORE_TEST_SSL_PARTIAL_WRITE");
+            QoreEnvironmentValue env_holder("QORE_TEST_SSL_PARTIAL_WRITE");
+            const char* env = env_holder.c_str();
             if (!env || !*env || *env == '0') {
                 if (force_max.load(std::memory_order_relaxed)) {
                     force_count.store(0, std::memory_order_relaxed);
@@ -10507,7 +10524,8 @@ int SSLSocketHelper::doNonBlockingIo(ExceptionSink* xsink, const char* mname, vo
             } else if (action == WRITE && real_io) {
                 int max = force_max.load(std::memory_order_relaxed);
                 if (!max) {
-                    const char* lim = getenv("QORE_TEST_SSL_PARTIAL_WRITE_LIMIT");
+                    QoreEnvironmentValue lim_holder("QORE_TEST_SSL_PARTIAL_WRITE_LIMIT");
+                    const char* lim = lim_holder.c_str();
                     max = lim ? atoi(lim) : 4;
                     if (max < 1) {
                         max = 1;
@@ -18785,7 +18803,7 @@ QoreHashNode* SocketHttp2SendResponsePollOperation::continuePoll(ExceptionSink* 
                 int rv;
                 if (is_connect) {
                     // RFC 8441: CONNECT response (WebSocket over HTTP/2) - no body, no END_STREAM
-                    if (getenv("QORE_HTTP2_DEBUG")) {
+                    if (q_env_is_set("QORE_HTTP2_DEBUG")) {
                         fprintf(stderr, "HTTP2 DEBUG: send CONNECT response stream=%d status=%d\n",
                             stream_id, status_code);
                         fflush(stderr);
@@ -19483,13 +19501,13 @@ SocketHttp2ClientMultiplexPollOperation::~SocketHttp2ClientMultiplexPollOperatio
 
     // Deref any queued responses
     printd(5, "~SocketHttp2ClientMultiplexPollOperation() getting lock for responses\n");
-    if (getenv("QORE_HTTP2_DEBUG")) {
+    if (q_env_is_set("QORE_HTTP2_DEBUG")) {
         fprintf(stderr, "HTTP2 DEBUG: ~SocketHttp2ClientMultiplexPollOperation() getting lock for responses\n");
         fflush(stderr);
     }
     AutoLocker al(response_lock);
     printd(5, "~SocketHttp2ClientMultiplexPollOperation() derefing %zu responses\n", completed_responses.size());
-    if (getenv("QORE_HTTP2_DEBUG")) {
+    if (q_env_is_set("QORE_HTTP2_DEBUG")) {
         fprintf(stderr, "HTTP2 DEBUG: ~SocketHttp2ClientMultiplexPollOperation() derefing %zu responses\n",
             completed_responses.size());
         fflush(stderr);

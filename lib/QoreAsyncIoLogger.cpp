@@ -137,7 +137,8 @@ bool qore_async_io_trace_enabled() {
     // initialized once, on the first call; the initialization of a local static is thread-safe, while the I/O threads
     // of several controllers call this concurrently
     static const bool enabled = [] () {
-        const char* val = getenv("QORE_ASYNC_IO_TRACE");
+        QoreEnvironmentValue val_holder("QORE_ASYNC_IO_TRACE");
+        const char* val = val_holder.c_str();
         return val && val[0] == '1';
     }();
     return enabled;

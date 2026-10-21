@@ -153,7 +153,8 @@ ScanAcctSlot& scan_acct_slot(const char* name) {
 
 //! returns the path of the accounting file, with the process id appended, or an empty string if not enabled
 std::string scan_acct_path() {
-    const char* spec = getenv("QORE_SCAN_STATS");
+    QoreEnvironmentValue spec_holder("QORE_SCAN_STATS");
+    const char* spec = spec_holder.c_str();
     if (!spec || !*spec) {
         return std::string();
     }

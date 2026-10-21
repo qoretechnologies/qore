@@ -61,7 +61,7 @@ static bool http2DebugEnabled() {
     static std::once_flag flag;
     static int enabled = 0;
     std::call_once(flag, []() {
-        enabled = getenv("QORE_HTTP2_DEBUG") ? 1 : 0;
+        enabled = q_env_is_set("QORE_HTTP2_DEBUG") ? 1 : 0;
     });
     return enabled == 1;
 }

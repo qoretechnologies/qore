@@ -169,4 +169,58 @@
     the process for bumping the major version, and complete producer and consumer examples.  Two builtin modules
     publish C++ APIs this way and are worth reading as real examples of both sides: @ref json_cpp_api, and
     @ref avro_cpp_api, which is itself a consumer of the first.
+
+    @subsection module_environment Accessing the Process Environment
+
+    The C library's environment functions are not safe to call from several threads at once while one of them
+    changes the environment: \c setenv() may free the value it replaces (musl's does, so two threads replacing the
+    same variable free the same memory twice and corrupt the heap) and may reallocate the \c environ array (every
+    C library), so a thread calling \c getenv() or iterating \c environ at the same time reads freed memory.  %Qore
+    serializes every access to the environment that it makes, including the Qore-language functions
+    \c getenv(), \c setenv() and \c unsetenv() and the copy of the environment that a new process gets, with one
+    process-wide read-write lock.  A module must use the
+    same lock wherever it touches the environment, so never call \c getenv(), \c setenv(), \c unsetenv() or
+    \c putenv() directly in a module:
+
+    - to test whether a variable is set: SystemEnvironment::isSet()
+    - to read a variable: QoreEnvironmentValue (a copy of the value), SystemEnvironment::get() or
+      SystemEnvironment::getAsStringNode()
+    - to change a variable: SystemEnvironment::set() or SystemEnvironment::unset()
+    - to read and change several variables atomically: AtomicEnvironmentSetter, which holds the lock exclusively for
+      its lifetime; the C library functions may be called directly while it exists
+    - to read the environment with the C library directly (iterate \c environ, pass \c environ to \c posix_spawn()
+      or \c execve(), or call a third-party function that reads the environment): QoreEnvironmentReadLock, which
+      holds the lock shared for its lifetime
+
+    @code{.cpp}
+// a setting read from the environment: the value is copied under the lock
+QoreEnvironmentValue max_conn("MYMOD_MAX_CONNECTIONS");
+int max = max_conn ? atoi(max_conn.c_str()) : 10;
+
+// a child process gets a consistent copy of the environment
+{
+    QoreEnvironmentReadLock env_lock;
+    rc = posix_spawn(&pid, path, &actions, &attr, argv, environ);
+}
+
+// a third-party library that changes the environment: no other Qore thread uses the environment meanwhile
+{
+    AtomicEnvironmentSetter env_lock;
+    third_party_configure();
+}
+    @endcode
+
+    The lock can be nested in one thread, but a thread holding it shared (a QoreEnvironmentReadLock) cannot change
+    the environment: SystemEnvironment::set() and SystemEnvironment::unset() return -1 with \c errno \c EDEADLK.
+    Hold the lock only briefly, since changes to the environment wait until it is released.  A child process created
+    with \c fork() starts with the lock released, or held as the forking thread held it, whatever other threads held
+    it.
+
+    @note The lock only covers code that takes it.  A third-party library or an embedded language runtime that
+    reads the environment internally (for example a resolver or TLS library reading its configuration variables, or
+    a JavaScript, Python or Java runtime reading or changing \c environ) is not serialized with %Qore.  Where the
+    module calls such a function and the call is short, hold a QoreEnvironmentReadLock (or an
+    AtomicEnvironmentSetter if the function changes the environment) around it; otherwise the module must not let
+    that code change the environment while other threads may use it, and should pass values to it some other way
+    than through the environment.
  */
