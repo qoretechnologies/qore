@@ -392,20 +392,49 @@ case "$KERN_CORE_PATTERN" in
         ;;
 esac
 
+# the directories searched for the core of a test, in the order they are searched
+CORE_SEARCH_DIRS='"$CORE_DIR_ABS" "$SYSTEM_CORE_DIR" . /tmp /var/lib/apport/coredump /var/crash'
+
+# prints the find(1) name pattern of the core files in the given search directory
+core_search_name() {
+    if [ "$1" = "$SYSTEM_CORE_DIR" ]; then
+        printf '%s\n' "$SYSTEM_CORE_NAME"
+    elif [ "$1" = /var/crash ]; then
+        printf '%s\n' '*.crash'
+    else
+        printf '%s\n' 'core*'
+    fi
+}
+
+# prints the core files in the search directories, in the order they are searched
+list_test_cores() {
+    eval "set -- $CORE_SEARCH_DIRS"
+    for CORE_SEARCH_DIR in "$@"; do
+        if [ -n "$CORE_SEARCH_DIR" ] && [ -d "$CORE_SEARCH_DIR" ]; then
+            find "$CORE_SEARCH_DIR" -maxdepth 1 -type f -name "$(core_search_name "$CORE_SEARCH_DIR")" -print \
+                2>/dev/null
+        fi
+    done
+}
+
+# Sets CORE_FILE to the core the current test left: a file written after the test started, or one that did not
+# exist before the test (TEST_CORES_BEFORE), as BusyBox find (Alpine) compares whole seconds and so does not find a
+# core written in the second the test started
 find_test_core() {
     CORE_FILE=""
-    for CORE_SEARCH_DIR in "$CORE_DIR_ABS" "$SYSTEM_CORE_DIR" . /tmp /var/lib/apport/coredump /var/crash; do
+    eval "set -- $CORE_SEARCH_DIRS"
+    for CORE_SEARCH_DIR in "$@"; do
         if [ -z "$CORE_SEARCH_DIR" ] || [ ! -d "$CORE_SEARCH_DIR" ]; then
             continue
         fi
-        CORE_SEARCH_NAME='core*'
-        if [ "$CORE_SEARCH_DIR" = "$SYSTEM_CORE_DIR" ]; then
-            CORE_SEARCH_NAME=$SYSTEM_CORE_NAME
-        elif [ "$CORE_SEARCH_DIR" = /var/crash ]; then
-            CORE_SEARCH_NAME='*.crash'
-        fi
+        CORE_SEARCH_NAME=$(core_search_name "$CORE_SEARCH_DIR")
         CORE_FILE=$(find "$CORE_SEARCH_DIR" -maxdepth 1 -type f -name "$CORE_SEARCH_NAME" \
             -newer "$TEST_START_MARKER" -print 2>/dev/null | head -1)
+        if [ -z "$CORE_FILE" ]; then
+            CORE_FILE=$(find "$CORE_SEARCH_DIR" -maxdepth 1 -type f -name "$CORE_SEARCH_NAME" -print 2>/dev/null \
+                | awk -v before="$TEST_CORES_BEFORE" \
+                    'BEGIN { while ((getline f < before) > 0) seen[f] = 1 } !($0 in seen) { print; exit }')
+        fi
         if [ -n "$CORE_FILE" ]; then
             break
         fi
@@ -527,9 +556,11 @@ fi
 
 # A separate marker per runner also permits concurrent test shards.
 TEST_START_MARKER=$(mktemp "$CORE_DIR_ABS/test-start.XXXXXX") || exit 1
+# the core files there were when the current test started (see find_test_core())
+TEST_CORES_BEFORE=$(mktemp "$CORE_DIR_ABS/test-cores.XXXXXX") || exit 1
 # the FIFO through which a test and run_tests.sh report events to the watchdog of the test (see run_with_watchdog())
 TEST_EVENT_FIFO="$CORE_DIR_ABS/test-events.$$"
-trap 'rm -f "$TEST_START_MARKER" "$TEST_EVENT_FIFO"' 0
+trap 'rm -f "$TEST_START_MARKER" "$TEST_CORES_BEFORE" "$TEST_EVENT_FIFO"' 0
 
 # A test that exceeds its time limit is first sent SIGUSR1, unless signal handling is disabled (where SIGUSR1 would
 # end it without a core dump): a QUnit test then prints the call stacks of all its threads and reports it through
@@ -618,6 +649,7 @@ for test in $TESTS; do
         THIS_TEST_TIMEOUT=$TEST_TIMEOUT
     fi
 
+    list_test_cores > "$TEST_CORES_BEFORE"
     touch "$TEST_START_MARKER"
     if [ $MEASURE_TIME -eq 1 ]; then
         if [ -n "$TIMEOUT_CMD" ]; then
