@@ -754,11 +754,16 @@ public class OpenSearchLoggerAppenderTest inherits QUnit::Test {
     }
 
     #! Runs a shell command and kills it if it does not exit within \a secs seconds
-    /** @return the command's exit status; non-zero if the watchdog had to kill it
+    /** The watchdog ends its own timer when the command exits first, and is waited for, so that no process is left
+        running when this returns
+
+        @return the command's exit status; non-zero if the watchdog had to kill it
     */
     private int runWithWatchdog(string cmd, int secs) {
-        return system(sprintf("%s & cmd_pid=$!; (sleep %d; kill -9 $cmd_pid) > /dev/null 2>&1 & dog_pid=$!; "
-            "wait $cmd_pid; rc=$?; kill $dog_pid > /dev/null 2>&1; exit $rc", cmd, secs));
+        return system(sprintf("%s & cmd_pid=$!; "
+            "(trap 'kill $timer_pid 2>/dev/null; exit 0' TERM; sleep %d & timer_pid=$!; wait $timer_pid; "
+            "kill -9 $cmd_pid) > /dev/null 2>&1 & dog_pid=$!; "
+            "wait $cmd_pid; rc=$?; kill $dog_pid > /dev/null 2>&1; wait $dog_pid; exit $rc", cmd, secs));
     }
 
     private usageIntern() {
