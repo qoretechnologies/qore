@@ -531,25 +531,42 @@ which the closing `abort()` held.  This is how `HttpAsyncRequestTest.qtest` hung
 `fp_close_and_unlock()` / `fileproc_drain()`).  Linux's `close()` does not wait for epoll, so it does not hang, but a
 descriptor number registered after its close can belong to another connection there as well.
 
-Every registration of an object's descriptor, and every change of the events it is registered for, is therefore made
-in `AbstractPollableIoObjectBase::withPollableDescriptor()`, which passes the descriptor to a function and keeps it
-open until the function returns.  Removing a registration (`EV_DELETE`, `EPOLL_CTL_DEL`) takes no reference to the
-descriptor, so it cannot hang a close; `releaseFdIfOwner()` keeps it from removing the registration of another
-connection that got the number.  Socket objects and the controller's socket wrappers implement
-`withPollableDescriptor()` with
-`qore_socket_private::withDescriptor()`, an `IoUseHelper` without the TLS connection: a close made meanwhile closes
-the socket for its users and shuts the descriptor down, and the descriptor is closed when the registration is done,
-so the knote is attached before the close removes it.  The descriptor that a registration names is read in the
-call, so a registered descriptor that is no longer the object's (closed, or replaced by a reconnection) is
-released from the event loop instead of being modified, and the registration of an object that has been deleted is
-left as it is until its last operation is unregistered.  File objects use the default implementation, which calls
-the function with `getPollableDescriptor()`: `File::close()` fails while a non-blocking operation runs.  The extra
-descriptors of an operation (`extra_fds`) belong to the operation and are registered by number.
+The I/O thread therefore holds a descriptor open for as long as it has it registered: `addSocketFd()` takes a hold
+with `AbstractPollableIoObjectBase::holdPollableDescriptor()` before it adds the descriptor to the event queue and keeps
+it in `IoThreadContext::fd_holds`, and `eraseRegisteredFd()` releases it after `releaseFdIfOwner()` has removed the
+descriptor from the queue.  The holds are kept by registration (the hash of the registered object), not by
+descriptor: one descriptor can be registered for more than one object, such as a socket and a controller wrapper of
+it, or a number that `Socket::poll()` polls for a pollable implemented in %Qore or for an extra fd, and such a
+registration, which has no hold, must not release the hold of the owner's registration (`runSharedDescriptor()` in
+`AsyncIoDescriptorHoldTest`).  An exiting I/O thread releases the holds of all its registrations.  Every registration, change of the registered events and removal (`EV_ADD`, `EPOLL_CTL_MOD`,
+`EPOLL_CTL_DEL`, ...) thus acts on the object's own descriptor, and the number cannot be given to another object
+before the descriptor has been removed: a close made by any thread meanwhile closes the object for its users and
+shuts the descriptor down, which wakes the operations waiting on it, and the descriptor is closed when the hold is
+released.  An operation that runs after the close finds the object without a descriptor, so the registration is
+removed (with the kernel call, on the still open descriptor) and the hold released; the descriptor never stays
+registered without a hold, so no level-triggered event of a shut-down descriptor can wake the I/O thread over and
+over.  When the object was closed after its descriptor was read, `holdPollableDescriptor()` fails, the descriptor is
+not registered and the object's operations run again and see the close.
+
+Socket objects, the controller's socket wrappers and `QoreSocket::holdDescriptor()` implement the hold with
+`qore_socket_private::DescriptorHold`, a reference to the socket's `SharedDescriptor` like the one an I/O call takes
+(`IoUseHelper`): `close_and_reset_locked()` then sets `close_on_release`, and the last reference closes the
+descriptor.  A descriptor that `replaceDescriptor()` replaces (a QUIC connection migration) is closed by its last
+hold too.  Event notifiers keep the descriptor they are polled with in a reference that `closeFd()` releases (the
+Qore object can be destroyed while an operation waits on it).  File objects use the default implementation, which
+takes no hold: `File::close()` fails while a non-blocking operation runs.  The extra descriptors of an operation
+(`extra_fds`) belong to the operation and are registered by number.  A pollable object implemented in Qore or in a
+module that implements only `AbstractPollableIoObject::getPollableDescriptor()` is polled by number as well; a module
+whose pollable descriptor can be closed while an operation uses it implements the C++ base class and
+`holdPollableDescriptor()`, for example with `QoreSocket::holdDescriptor()`.
 
 `AsyncIoRegistrationCloseTest` in the C++ unit tests closes the socket from another thread at the point where the
 event loop is about to register its descriptor (the debug hook `QoreEventLoop::dbgSetBeforeRegister()`), for the
 first registration and for a change of the registered events, and checks that the descriptor is still the
-socket's when it is registered and is closed afterwards.
+socket's when it is registered, stays open while it is registered, and is closed once it has been removed.
+`AsyncIoDescriptorHoldTest` closes a socket whose descriptor a running I/O thread has registered from another thread,
+without the controller (as an HTTP/2 client abort does), and checks that the descriptor stays open and its number is
+not given to another socket until the I/O thread has removed it.
 
 ### Periodic work owned by a Qore object
 

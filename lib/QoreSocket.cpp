@@ -688,8 +688,13 @@ public:
         return priv->sock;
     }
 
-    DLLLOCAL virtual void withPollableDescriptor(const std::function<void(int)>& f) const override {
-        priv->withDescriptor(f);
+    DLLLOCAL virtual int holdPollableDescriptor(int fd, std::shared_ptr<void>& hold) const override {
+        std::shared_ptr<qore_socket_private::DescriptorHold> h = qore_socket_private::DescriptorHold::take(*priv, fd);
+        if (!h) {
+            return -1;
+        }
+        hold = std::move(h);
+        return 0;
     }
 
     DLLLOCAL virtual const std::string& getIoIdentityHash() const override {
@@ -5670,7 +5675,7 @@ qore_socket_private::SslRef qore_socket_private::getSsl() {
     return SslRef(s);
 }
 
-qore_socket_private::IoUseHelper::IoUseHelper(qore_socket_private& priv, bool use_ssl) : priv(priv) {
+qore_socket_private::IoUseHelper::IoUseHelper(qore_socket_private& priv) : priv(priv) {
     CloseLockHelper cl(priv);
     if (priv.sock != QORE_INVALID_SOCKET) {
         if (!priv.shared_fd || priv.shared_fd->fd != priv.sock) {
@@ -5678,12 +5683,37 @@ qore_socket_private::IoUseHelper::IoUseHelper(qore_socket_private& priv, bool us
         }
         fd = priv.shared_fd;
     }
-    if (use_ssl) {
-        if (SSLSocketHelper* s = priv.ssl.load(std::memory_order_relaxed)) {
-            s->ref();
-            ssl.assign(s);
-        }
+    if (SSLSocketHelper* s = priv.ssl.load(std::memory_order_relaxed)) {
+        s->ref();
+        ssl.assign(s);
     }
+}
+
+std::shared_ptr<qore_socket_private::DescriptorHold> qore_socket_private::DescriptorHold::take(
+        qore_socket_private& priv, int fd) {
+    CloseLockHelper cl(priv);
+    if (priv.sock == QORE_INVALID_SOCKET || priv.sock != fd) {
+        return nullptr;
+    }
+    if (!priv.shared_fd || priv.shared_fd->fd != priv.sock) {
+        priv.shared_fd = std::make_shared<SharedDescriptor>(priv.sock);
+    }
+    return std::make_shared<DescriptorHold>(priv, priv.shared_fd);
+}
+
+qore_socket_private::DescriptorHold::DescriptorHold(qore_socket_private& priv, std::shared_ptr<SharedDescriptor> fd)
+        : priv(&priv), fd(std::move(fd)) {
+    priv.ref();
+}
+
+qore_socket_private::DescriptorHold::~DescriptorHold() {
+    {
+        // the last use of a descriptor that the socket gave up closes it; every release of a descriptor is made with
+        // close_m held
+        CloseLockHelper cl(*priv);
+        fd.reset();
+    }
+    priv->deref();
 }
 
 qore_socket_private::IoUseHelper::~IoUseHelper() {
@@ -5693,11 +5723,6 @@ qore_socket_private::IoUseHelper::~IoUseHelper() {
         CloseLockHelper cl(priv);
         fd.reset();
     }
-}
-
-void qore_socket_private::withDescriptor(const std::function<void(int)>& f) {
-    IoUseHelper use(*this, false);
-    f(use.getDescriptor());
 }
 
 SSLSocketHelperHelper::SSLSocketHelperHelper(qore_socket_private* sock, bool set_thread_context) : s(sock),
@@ -8085,26 +8110,22 @@ int SocketConnectInetHappyEyeballsPollState::continuePoll(ExceptionSink* xsink) 
         }
         if (rc < 0) {
             // Failed — close this fd
-            bool was_primary = (active_attempts[i].fd == sock->sock);
-#ifdef _Q_WINDOWS
-            closesocket(active_attempts[i].fd);
-#else
-            ::close(active_attempts[i].fd);
-#endif
+            int fd = active_attempts[i].fd;
             active_attempts[i].fd = QORE_INVALID_SOCKET;
             fd_set_changed = true;
-            if (was_primary) {
-                // Assign another active fd as primary so isOpen() remains true
-                sock->sock = QORE_INVALID_SOCKET;
-                ++sock->fd_generation;
+            if (fd == sock->sock) {
+                // Assign another active fd as primary so isOpen() remains true; the failed one can be registered in
+                // an async I/O thread's event loop, which holds it open until it has removed it
+                int next_fd = QORE_INVALID_SOCKET;
                 for (auto& a : active_attempts) {
                     if (a.fd != QORE_INVALID_SOCKET) {
-                        sock->sock = a.fd;
-                        ++sock->fd_generation;
-                        sock->resetCloseInterrupt();
+                        next_fd = a.fd;
                         break;
                     }
                 }
+                releasePrimaryFd(fd, next_fd);
+            } else {
+                qore_socket_private::closeDescriptor(fd);
             }
         }
     }
@@ -8126,6 +8147,16 @@ int SocketConnectInetHappyEyeballsPollState::continuePoll(ExceptionSink* xsink) 
     if (next_addr_idx < sorted_addrs.size() && (he_state == HEBS_RACING || !any_active)) {
         int rc = startNextConnect(xsink);
         if (*xsink) {
+            // the attempt that is the socket's descriptor is released like the others; closeAllFds() leaves it to
+            // the socket
+            for (auto& a : active_attempts) {
+                if (a.fd != QORE_INVALID_SOCKET && a.fd == sock->sock) {
+                    int fd = a.fd;
+                    a.fd = QORE_INVALID_SOCKET;
+                    releasePrimaryFd(fd, QORE_INVALID_SOCKET);
+                    break;
+                }
+            }
             closeAllFds();
             sock->sock = QORE_INVALID_SOCKET;
             return -1;
@@ -8409,6 +8440,18 @@ void SocketConnectInetHappyEyeballsPollState::assignWinner(ExceptionSink* xsink)
 
     printd(5, "SocketConnectInetHappyEyeballsPollState::assignWinner() host: %s family: %s\n",
         host.c_str(), q_af_to_str(wp.family));
+}
+
+void SocketConnectInetHappyEyeballsPollState::releasePrimaryFd(int fd, int next_fd) {
+    bool close_old = false;
+    if (sock->replaceDescriptor(fd, next_fd, close_old)) {
+        if (close_old) {
+            qore_socket_private::closeDescriptor(fd);
+        }
+        if (next_fd != QORE_INVALID_SOCKET) {
+            sock->resetCloseInterrupt();
+        }
+    }
 }
 
 void SocketConnectInetHappyEyeballsPollState::closeAllFds() {
@@ -10829,6 +10872,15 @@ int QoreSocket::getSocket() const {
     return priv->sock;
 }
 
+int QoreSocket::holdDescriptor(int fd, std::shared_ptr<void>& hold) const {
+    std::shared_ptr<qore_socket_private::DescriptorHold> h = qore_socket_private::DescriptorHold::take(*priv, fd);
+    if (!h) {
+        return -1;
+    }
+    hold = std::move(h);
+    return 0;
+}
+
 const QoreEncoding* QoreSocket::getEncoding() const {
     return priv->enc;
 }
@@ -12608,13 +12660,19 @@ static void qore_socket_bind_reserve_port(qore_socket_private* priv, const std::
         }
         // the new socket replaces the socket's descriptor, which keeps its port allocated until this returns
         int old_fd = priv->sock;
-        if (!priv->replaceDescriptor(old_fd, fd)) {
+        bool close_old;
+        if (!priv->replaceDescriptor(old_fd, fd, close_old)) {
             for (int rfd : fds) {
                 qore_socket_private::closeDescriptor(rfd);
             }
             return;
         }
-        rejected.back() = old_fd;
+        if (close_old) {
+            rejected.back() = old_fd;
+        } else {
+            // the socket owns the new descriptor, and the last use of the old one closes it
+            rejected.pop_back();
+        }
         priv->port = port;
         priv->setBindReservations(std::move(fds));
         return;

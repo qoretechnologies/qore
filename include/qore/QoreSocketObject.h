@@ -86,6 +86,7 @@ class QoreSocketObject : public AbstractPollableIoObjectBase {
     friend class SocketHttp2FlushPollOperation;
     friend class SocketHttp2ClientMultiplexPollOperation;
     friend class AsyncIoControllerPriv;
+    friend class AsyncIoDescriptorHoldTest;
     friend class SocketSendAndReadHeaderPollOperation;
     friend class SocketSendStreamAndReadHeaderPollOperation;
     friend class SocketRecvFromPollOperation;
@@ -397,15 +398,15 @@ public:
     */
     DLLEXPORT int getPollableDescriptor() const override;
 
-    //! Calls a function with the socket's descriptor, which stays open until the function returns
+    //! Keeps the socket's descriptor open while the async I/O controller has it registered in an event loop
     /** A close() in another thread meanwhile closes the socket for its users at once and shuts the descriptor down,
-        and the descriptor is closed when @p f returns.
+        and the descriptor is closed when the hold is released.
 
-        @see AbstractPollableIoObjectBase::withPollableDescriptor()
+        @see AbstractPollableIoObjectBase::holdPollableDescriptor()
 
         @since %Qore 3.0
     */
-    DLLEXPORT void withPollableDescriptor(const std::function<void(int)>& f) const override;
+    DLLEXPORT int holdPollableDescriptor(int fd, std::shared_ptr<void>& hold) const override;
 
 #ifdef DARWIN
     //! Sets the write end of a notification pipe for kqueue poll on macOS

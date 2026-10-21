@@ -1511,6 +1511,7 @@ int SocketQuicClientPollOperation::migrateConnection(ExceptionSink* xsink, bool*
         return rc;
     }
 
+    bool close_old = false;
     // Swap the fd under the socket lock to synchronize with any concurrent
     // I/O.  Since migrateConnection() is now called from the I/O thread
     // (via the migration_pending flag), there is no concurrent poll() on the
@@ -1520,7 +1521,7 @@ int SocketQuicClientPollOperation::migrateConnection(ExceptionSink* xsink, bool*
         // the swap also bumps fd_generation so any sync I/O helper mid-wait (lock released) returns QSE_NOT_OPEN on
         // re-acquire instead of operating on the pre-migration fd; a close that raced with the migration has already
         // released the old fd, so the new fd is not installed and closed by the guard instead
-        if (!sock->priv->socket->priv->replaceDescriptor(old_fd, new_fd)) {
+        if (!sock->priv->socket->priv->replaceDescriptor(old_fd, new_fd, close_old)) {
             xsink->raiseException("SOCKET-CLOSED", "the socket was closed during QUIC connection migration");
             return -1;
         }
@@ -1529,9 +1530,12 @@ int SocketQuicClientPollOperation::migrateConnection(ExceptionSink* xsink, bool*
         local_addrlen_ = new_local_len;
     }
 
-    // Close old fd outside the lock — safe because the socket object now
-    // points to new_fd, and only this thread owns the old one
-    ::close(old_fd);
+    // Close old fd outside the lock — safe because the socket object now points to new_fd, and only this thread owns
+    // the old one; while the controller still has it registered in its event loop, it closes it when it removes it
+    // (see qore_socket_private::DescriptorHold), so its number cannot be reused for another connection before then
+    if (close_old) {
+        ::close(old_fd);
+    }
 
     // Send PATH_CHALLENGE + pending request frames immediately so the server
     // learns the new source address before the next poll() cycle

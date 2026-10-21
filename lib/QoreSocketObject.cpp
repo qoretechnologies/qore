@@ -6110,13 +6110,17 @@ int QoreSocketObject::getPollableDescriptor() const {
     return priv->socket->getSocket();
 }
 
-void QoreSocketObject::withPollableDescriptor(const std::function<void(int)>& f) const {
-    // an HTTP client can exchange its socket for another one (see QoreHttpClientObject); the reference keeps the one
-    // read here valid until the descriptor is released
-    qore_socket_private* sp = qore_socket_private::get(*priv->socket);
-    sp->ref();
-    ON_BLOCK_EXIT_OBJ(*sp, &qore_socket_private::deref);
-    sp->withDescriptor(f);
+int QoreSocketObject::holdPollableDescriptor(int fd, std::shared_ptr<void>& hold) const {
+    // an HTTP client can exchange its socket for another one (see QoreHttpClientObject): the hold references the
+    // socket read here until it is released; the object's lock is not taken, as the I/O thread calls this, and a
+    // blocking I/O call can hold the lock
+    std::shared_ptr<qore_socket_private::DescriptorHold> h
+        = qore_socket_private::DescriptorHold::take(*qore_socket_private::get(*priv->socket), fd);
+    if (!h) {
+        return -1;
+    }
+    hold = std::move(h);
+    return 0;
 }
 
 #ifdef DARWIN

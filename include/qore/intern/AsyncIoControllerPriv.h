@@ -79,6 +79,7 @@ class AsyncIoRoutedPollable : public AbstractPollableIoObjectBase {
 public:
     //! Returns the route key that selects the I/O thread of every operation on this object
     DLLLOCAL virtual const std::string& getAsyncIoRouteKey() const = 0;
+
 };
 
 //! Lends the previous poll info hash of an operation to the C++ continuePoll() call the I/O thread makes for it
@@ -545,6 +546,7 @@ DLLEXPORT extern const TypedHashDecl* hashdeclSocketPollResultInfo;
 class AsyncIoControllerPriv : public AbstractPrivateData {
 #ifdef DEBUG
     friend class AsyncIoCloseTest;
+    friend class AsyncIoDescriptorHoldTest;
     friend class AsyncIoOpCacheTest;
     friend class AsyncIoAbandonedSubmitTest;
     friend class AsyncIoRegistrationCloseTest;
@@ -1409,6 +1411,14 @@ private:
         //! The IDs of the operations registered for each socket
         std::unordered_map<std::string, std::unordered_set<uint64_t>> sock_hash_to_ops;
         std::unordered_map<int, std::string> fd_to_sock_hash;
+        //! The holds that keep the registered descriptors open, by the hash of the object registered with each
+        /** A descriptor registered in the event loop cannot be closed by another thread, so its number cannot be
+            given to another connection while the loop has it registered; see qore_socket_private::DescriptorHold.
+            Each registration (@ref registered_fds) has its own hold: one descriptor can be registered for more than
+            one object (a socket and a controller wrapper of it; a number that Socket::poll() polls for a %Qore
+            pollable or an extra fd), and a registration without a hold must not release the hold of another one
+        */
+        std::unordered_map<std::string, std::shared_ptr<void>> fd_holds;
         //! The extra fds of each operation, by operation ID
         std::unordered_map<uint64_t, std::unordered_set<int>> key_extra_fds;
         //! Extra fd readiness is operation-scoped (by operation ID); primary socket event masks can be zero.
@@ -1862,6 +1872,23 @@ private:
     */
     DLLLOCAL void releaseFdIfOwner(IoThreadContext& t, int old_fd,
         const std::string& expected_hash, ExceptionSink* xsink);
+
+    //! Adds the descriptor of an I/O object to the event loop of an I/O thread and records it for the socket hash
+    /** The descriptor is held open while it is registered (see AbstractPollableIoObjectBase::holdPollableDescriptor()),
+        so a close made by another thread cannot release its number to another object before the I/O thread has
+        removed it from its event loop.
+
+        @return 0 if the descriptor was added, -1 if not because the socket no longer has it (it was closed or
+        replaced; its number may already belong to another connection)
+    */
+    DLLLOCAL int addSocketFd(IoThreadContext& t, AbstractPollableIoObjectBase* s, QoreObject* socket,
+        const std::string& sock_hash, int fd, int events, ExceptionSink* xsink);
+
+    //! Forgets the registration of the descriptor of the object with the given hash and releases its hold
+    /** Called once the descriptor has been removed from the event loop (see releaseFdIfOwner()), or when it is not
+        the object's any more; a close made by another thread meanwhile closes the descriptor now
+    */
+    DLLLOCAL void eraseRegisteredFd(IoThreadContext& t, const std::string& sock_hash);
 
     //! Compute the event union for a socket
     DLLLOCAL int computeEventUnion(const IoThreadContext& t, const std::string& sock_hash) const;

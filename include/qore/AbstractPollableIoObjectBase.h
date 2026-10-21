@@ -35,7 +35,7 @@
 
 #include "qore/AbstractPrivateData.h"
 
-#include <functional>
+#include <memory>
 #include <string>
 
 class AbstractPollableIoObjectBase : public AbstractPrivateData {
@@ -45,36 +45,47 @@ public:
 
     virtual int getPollableDescriptor() const = 0;
 
-    //! Calls a function with the pollable descriptor, which stays open until the function returns
+    //! Keeps the pollable descriptor open while the async I/O controller has it registered in an event loop
     /** The async I/O controller registers the descriptor with the event queue of its I/O thread (kqueue on macOS,
-        epoll on Linux), and changes the events it is registered for, only in such a call: the system must not
-        register a descriptor while another thread closes it.  On macOS a close() made while kevent() registers the
-        same descriptor can wait forever, so that not even SIGKILL ends the process; on every system, a descriptor
-        number used after its close can already belong to another connection.
+        epoll on Linux) only with a hold that this method returns, and it keeps the hold until it has removed the
+        descriptor from the queue again: the system gives the lowest free descriptor number to the next socket or file
+        opened by any thread, so a registration, change or removal made with the number of a descriptor that another
+        thread closed would act on the object that got the number next, and on macOS a close() made while kevent()
+        registers the same descriptor can wait forever, so that not even SIGKILL ends the process.
 
-        An I/O object that another thread can close while an asynchronous operation uses it must keep the descriptor
-        open until @p f returns, and close it then if the object was closed meanwhile; Socket objects do.  The default
-        implementation calls @p f with getPollableDescriptor(), which is correct for an object that cannot be closed
-        while an asynchronous operation uses it, such as a File, whose close() fails during a non-blocking operation.
+        An I/O object that another thread can close while an asynchronous operation uses it must keep its descriptor
+        open while a hold exists: its close shuts the descriptor down, so the operations waiting on it wake up, and the
+        descriptor is closed when the last hold is released; Socket objects and event notifiers do.  The default
+        implementation returns no hold, which is correct for an object that cannot be closed while an asynchronous
+        operation uses it, such as a File, whose close() fails during a non-blocking operation.
 
-        @param f the function to call; it is passed the descriptor, or -1 if the object has no open descriptor; it
-        must not block and must not release the object
+        @param fd the descriptor that getPollableDescriptor() returned
+        @param hold set to the hold, which keeps @p fd open until it is released; left empty if no hold is needed
+
+        @return 0 if @p fd can be registered, -1 if it is no longer the object's descriptor: the object was closed or
+        its descriptor replaced since getPollableDescriptor() returned it, so the number can already belong to
+        another object
 
         @par Example:
         @code{.cpp}
-// registers the descriptor of an I/O object with a kqueue; a close in another thread meanwhile does not release it
-io->withPollableDescriptor([&](int fd) {
-    if (fd >= 0) {
-        struct kevent change;
-        EV_SET(&change, fd, EVFILT_READ, EV_ADD, 0, 0, nullptr);
-        kevent(kq, &change, 1, nullptr, 0, nullptr);
-    }
-});
+// registers the descriptor of an I/O object with a kqueue; a close in another thread does not release it until the
+// hold is released, after the registration has been deleted
+int fd = io->getPollableDescriptor();
+std::shared_ptr<void> hold;
+if (fd >= 0 && !io->holdPollableDescriptor(fd, hold)) {
+    struct kevent change;
+    EV_SET(&change, fd, EVFILT_READ, EV_ADD, 0, 0, nullptr);
+    kevent(kq, &change, 1, nullptr, 0, nullptr);
+    // ... until the descriptor is no longer waited for
+    EV_SET(&change, fd, EVFILT_READ, EV_DELETE, 0, 0, nullptr);
+    kevent(kq, &change, 1, nullptr, 0, nullptr);
+    hold.reset();
+}
         @endcode
 
         @since %Qore 3.0
     */
-    DLLEXPORT virtual void withPollableDescriptor(const std::function<void(int)>& f) const;
+    DLLEXPORT virtual int holdPollableDescriptor(int fd, std::shared_ptr<void>& hold) const;
 
     //! Closes the I/O object, releasing the underlying file descriptor
     /** Called by the async I/O controller when it owns the object's lifecycle

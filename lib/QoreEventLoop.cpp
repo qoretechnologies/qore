@@ -276,6 +276,11 @@ int QoreEventLoop::remove(int fd, ExceptionSink* xsink) {
         return 0;
     }
     fd_map.erase(it);
+#ifdef DEBUG
+    if (dbg_before_remove) {
+        dbg_before_remove(fd);
+    }
+#endif
 
 #ifdef DARWIN
     // kqueue: remove both filters (ignore errors if not registered)

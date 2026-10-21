@@ -114,8 +114,13 @@ public:
         return sock->sock;
     }
 
-    DLLLOCAL virtual void withPollableDescriptor(const std::function<void(int)>& f) const override {
-        sock->withDescriptor(f);
+    DLLLOCAL virtual int holdPollableDescriptor(int fd, std::shared_ptr<void>& hold) const override {
+        std::shared_ptr<qore_socket_private::DescriptorHold> h = qore_socket_private::DescriptorHold::take(*sock, fd);
+        if (!h) {
+            return -1;
+        }
+        hold = std::move(h);
+        return 0;
     }
 
     DLLLOCAL virtual const std::string& getIoIdentityHash() const override {

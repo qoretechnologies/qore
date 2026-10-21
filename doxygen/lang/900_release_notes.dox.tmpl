@@ -5131,8 +5131,11 @@ while (*binary chunk = input.read(65536)) {
       the next I/O loop iteration
     - Fixed a hang on macOS that not even \c SIGKILL could end, when a socket was closed while the async I/O
       controller started or changed waiting for I/O on it, for example when a poll operation was aborted by its
-      destructor: the close could wait forever in the system for the wait registered at the same time.  The socket's
-      descriptor now stays open until such a registration is made, and is closed then
+      destructor: the close could wait forever in the system for the wait registered at the same time.  Fixed the
+      async I/O controller changing or removing the wait of another connection, which could then miss its I/O, when a
+      socket or an event notifier was closed while the controller waited for I/O on it and its descriptor number was
+      given to the other connection.  The descriptor of a socket or event notifier now stays open while the controller
+      waits for I/O on it, and is closed when the controller stops waiting
     - Fixed a data race when @ref Qore::Socket::isOpen() "Socket::isOpen()" or another method that checks whether a
       socket is open was called while another thread closed the socket
     - Fixed a rare crash at the end of a process that used asynchronous socket I/O: the end of the process could

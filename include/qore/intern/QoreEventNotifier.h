@@ -44,6 +44,7 @@
 #include <atomic>
 #include <condition_variable>
 #include <cstdint>
+#include <memory>
 #include <mutex>
 
 //! Cross-thread event notification abstraction
@@ -118,6 +119,14 @@ public:
         return fd();
     }
 
+    //! Keeps the descriptor open while the async I/O controller has it registered in an event loop
+    /** closeFd() releases the notifier's own reference to the descriptor; the descriptor is closed when the last
+        hold is released too
+
+        @see AbstractPollableIoObjectBase::holdPollableDescriptor()
+    */
+    DLLLOCAL int holdPollableDescriptor(int fd, std::shared_ptr<void>& hold) const override;
+
     //! No-op for event notifiers (they don't represent closeable connections)
     DLLLOCAL void closeIo(ExceptionSink* /* xsink */) override {}
 
@@ -125,11 +134,12 @@ public:
     /** Called from the Qore-level destructor to release the OS resource
         immediately, even if C++ code (e.g., EventNotifierAction, or a connection that the notifier is registered
         with to be signaled when it becomes ready) still holds a reference to this object.  Waits until no
-        notify() or acknowledge() call is using the descriptor, then closes it; subsequent notify() and
+        notify() or acknowledge() call is using the descriptor, then releases it; subsequent notify() and
         acknowledge() calls do nothing and fd() returns -1.  Idempotent.
 
-        The event loop must not poll the descriptor any more: by the time the Qore object is destroyed, the fd has
-        already been removed from the event loop.
+        The descriptor that the notifier is polled with stays open while an async I/O event loop has it registered
+        (see holdPollableDescriptor()): the object can be destroyed while an operation waits on it, and the number of
+        a closed descriptor can be given to another connection.
     */
     DLLLOCAL void closeFd();
 
@@ -203,6 +213,17 @@ private:
     std::mutex close_mutex;
     //! Signaled when the last call using the descriptor ends after the closed bit was set
     std::condition_variable close_cond;
+
+    //! Guards @ref poll_fd_ref and the release of the polled descriptor
+    mutable std::mutex poll_fd_lock;
+    //! The notifier's reference to the descriptor it is polled with, which the last reference closes
+    /** Async I/O event loops take further references while they have the descriptor registered (see
+        holdPollableDescriptor()); guarded by @ref poll_fd_lock
+    */
+    std::shared_ptr<void> poll_fd_ref;
+
+    //! Creates @ref poll_fd_ref for the descriptor the notifier is polled with
+    DLLLOCAL void initPollFdRef(int fd);
 
 #ifdef __linux__
     std::atomic<int> notify_fd{-1};     //!< eventfd file descriptor

@@ -45,6 +45,7 @@
 #include <cctype>
 #include <cstdlib>
 #include <cstring>
+#include <memory>
 #include <strings.h>
 #include <sys/socket.h>
 #include <sys/types.h>
@@ -1947,6 +1948,29 @@ public:
     /** @return the file descriptor associated with this socket
     */
     DLLEXPORT int getSocket() const;
+
+    //! Keeps the socket's descriptor open while an async I/O event loop has it registered
+    /** For an I/O object whose pollable descriptor is that of a socket, to implement
+        AbstractPollableIoObjectBase::holdPollableDescriptor(): while the hold exists, a close of the socket from any
+        thread closes the socket for its users at once and shuts the descriptor down, and the descriptor is closed
+        when the last hold is released.
+
+        @param fd the descriptor read with getSocket()
+        @param hold set to the hold, which keeps @p fd open until it is released
+
+        @return 0 if the hold was taken, -1 if @p fd is no longer the socket's descriptor (the socket was closed or its
+        descriptor replaced)
+
+        @par Example:
+        @code{.cpp}
+int MyPollable::holdPollableDescriptor(int fd, std::shared_ptr<void>& hold) const {
+    return socket.holdDescriptor(fd, hold);
+}
+        @endcode
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT int holdDescriptor(int fd, std::shared_ptr<void>& hold) const;
 
     //! returns the character encoding associated with this socket
     /** @return the character encoding associated with this socket

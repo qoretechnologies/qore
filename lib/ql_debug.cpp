@@ -2653,6 +2653,521 @@ public:
     }
 };
 
+//! A socket closed by another thread while its descriptor is registered keeps the descriptor's number
+/** The system gives the lowest free descriptor number to the next socket or file opened by any thread, so an I/O
+    thread that still has the number of a closed descriptor registered in its event loop would remove or change the
+    registration of the connection that got the number next (a TSan race between epoll_ctl() and socket()).  The
+    I/O thread holds the descriptor of a registered socket open: a close by another thread that bypasses the
+    controller (as an HTTP/2 client abort does) shuts it down, which wakes the operation waiting on it, and the
+    descriptor is closed when the I/O thread removes it from its event loop.
+*/
+class AsyncIoDescriptorHoldTest {
+public:
+    static void run(UnitTestCounters& c) {
+        ExceptionSink xsink;
+        ReferenceHolder<AsyncIoControllerPriv> ctrl(new AsyncIoControllerPriv(false, &xsink), &xsink);
+        UT_ASSERT(c, !xsink, "descriptor hold controller construction succeeds");
+        if (xsink) {
+            xsink.clear();
+            return;
+        }
+        struct Cleanup {
+            AsyncIoControllerPriv* ctrl;
+            ExceptionSink& xsink;
+            ~Cleanup() {
+                xsink.clear();
+                ctrl->stopClear(&xsink);
+                xsink.clear();
+            }
+        } cleanup{*ctrl, xsink};
+        ctrl->setMaxIoThreads(1, &xsink);
+        ctrl->start(&xsink);
+        bool ready = !xsink && ctrl->waitReady(5000, &xsink);
+        UT_ASSERT(c, ready && !xsink, "descriptor hold controller starts");
+        if (!ready || xsink) {
+            return;
+        }
+
+        // a connected TCP socket
+        QoreSocketObject* listener = new QoreSocketObject;
+        ReferenceHolder<QoreObject> listener_obj(new QoreObject(QC_SOCKET, getProgram(), listener), &xsink);
+        int rc = listener->bindINET("127.0.0.1", "0", true, AF_INET, SOCK_STREAM, 0, &xsink);
+        if (!rc && !xsink) {
+            rc = listener->listen(5);
+        }
+        UT_ASSERT(c, !rc && !xsink, "descriptor hold listener listens");
+        if (rc || xsink) {
+            return;
+        }
+        QoreSocketObject* client = new QoreSocketObject;
+        ReferenceHolder<QoreObject> client_obj(new QoreObject(QC_SOCKET, getProgram(), client), &xsink);
+        rc = client->connectINET("127.0.0.1", listener->getPort(), 5000, &xsink);
+        UT_ASSERT(c, !rc && !xsink, "descriptor hold client connects");
+        if (rc || xsink) {
+            return;
+        }
+        // the connection stays in the listener's backlog: the peer never sends or closes
+        const int fd = client->getSocket();
+
+        // a receive on the client socket waits for data, so its descriptor is registered in the event loop
+        client->ref();
+        SocketRecvDataPollOperation* recv = new SocketRecvDataPollOperation(&xsink, client, false);
+        ReferenceHolder<QoreObject> op_obj(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), recv), &xsink);
+        if (xsink) {
+            QoreStringValueHelper err(xsink.getExceptionErr());
+            QoreStringValueHelper desc(xsink.getExceptionDesc());
+            std::string msg = std::string("descriptor hold receive construction succeeds: ") + err->c_str() + ": "
+                + desc->c_str();
+            UT_ASSERT(c, false, msg.c_str());
+            return;
+        }
+        recv->setSelf(*op_obj);
+        op_obj->setValue("sock", client_obj->objectRefSelf(), &xsink);
+        op_obj->setValue("goal", new QoreStringNode("recv"), &xsink);
+        ReferenceHolder<QoreHashNode> info(new QoreHashNode(hashdeclSocketPollOperationInfo, &xsink), &xsink);
+        info->setKeyValue("sock", client_obj->objectRefSelf(), &xsink);
+        info->setKeyValue("spop", op_obj->objectRefSelf(), &xsink);
+        info->setKeyValue("owner", new QoreStringNode("descriptor-hold-unit-test"), &xsink);
+        info->setKeyValue("key", new QoreStringNode("descriptor-hold-recv"), &xsink);
+        info->setKeyValue("to", -1, &xsink);
+        UT_ASSERT(c, !xsink, "descriptor hold submission info is initialized");
+        if (xsink) {
+            return;
+        }
+        ReferenceHolder<QoreObject> queue_obj(ctrl->submit(nullptr, info.release(), false, &xsink), &xsink);
+        bool processed = !xsink && queue_obj && ctrl->waitForProcessing(5000, &xsink);
+        UT_ASSERT(c, processed && !xsink, "the receive is submitted");
+        if (!processed || xsink) {
+            return;
+        }
+        // the I/O thread registers the descriptor in the iteration whose snapshot has the receive, after its first
+        // step; a getInfo() round trip is processed after that iteration
+        ReferenceHolder<QoreHashNode> io_info(ctrl->getInfo(&xsink), &xsink);
+        UT_ASSERT(c, !xsink, "the receive is waiting for data");
+        if (xsink) {
+            return;
+        }
+
+        // another thread closes the socket without the controller; the close shuts the descriptor down, which wakes
+        // the receive, and the I/O thread then removes the descriptor: the controller's lock, which the I/O thread
+        // takes for its snapshot before it continues an operation, keeps it from doing so before the checks
+        qore_socket_private* sp = qore_socket_private::get(*client->priv->socket);
+        {
+            AutoLocker al(ctrl->m);
+            std::thread closer([sp]() {
+                sp->prepareForClose();
+                sp->close_internal();
+            });
+            closer.join();
+            UT_ASSERT(c, sp->sock == QORE_INVALID_SOCKET, "the socket has no descriptor after the close");
+            UT_ASSERT(c, fcntl(fd, F_GETFD) != -1, "the registered descriptor stays open after the close");
+            int other = ::socket(AF_INET, SOCK_STREAM, 0);
+            UT_ASSERT(c, other != -1 && other != fd,
+                "a socket opened after the close does not get the number of the registered descriptor");
+            if (other != -1) {
+                ::close(other);
+            }
+        }
+
+        // the close shut the descriptor down, which wakes the receive, and the receive ends
+        ReferenceHolder<Queue> queue(static_cast<Queue*>(queue_obj->getReferencedPrivateData(CID_QUEUE, &xsink)),
+            &xsink);
+        if (queue && !xsink) {
+            bool timed_out = false;
+            ValueHolder result(queue->shift(&xsink, 5000, &timed_out), &xsink);
+            UT_ASSERT(c, !timed_out && !xsink, "the receive ends after the close");
+        }
+        xsink.clear();
+        // a cancellation is a round trip through the I/O thread, which has removed the descriptor by then
+        ctrl->cancel(client, &xsink);
+        xsink.clear();
+        UT_ASSERT(c, fcntl(fd, F_GETFD) == -1, "the descriptor is closed once the I/O thread has removed it");
+    }
+
+    //! An event notifier closed while an operation waits on it keeps its descriptor open until it is removed
+    /** EventNotifier's destructor closes the notifier's descriptor (QoreEventNotifier::closeFd()) while an
+        operation can still wait on it; nothing wakes the operation, so its registration stays until it is canceled.
+    */
+    static void runNotifier(UnitTestCounters& c) {
+        ExceptionSink xsink;
+        ReferenceHolder<AsyncIoControllerPriv> ctrl(new AsyncIoControllerPriv(false, &xsink), &xsink);
+        UT_ASSERT(c, !xsink, "notifier hold controller construction succeeds");
+        if (xsink) {
+            xsink.clear();
+            return;
+        }
+        struct Cleanup {
+            AsyncIoControllerPriv* ctrl;
+            ExceptionSink& xsink;
+            ~Cleanup() {
+                xsink.clear();
+                ctrl->stopClear(&xsink);
+                xsink.clear();
+            }
+        } cleanup{*ctrl, xsink};
+        ctrl->setMaxIoThreads(1, &xsink);
+        ctrl->start(&xsink);
+        bool ready = !xsink && ctrl->waitReady(5000, &xsink);
+        UT_ASSERT(c, ready && !xsink, "notifier hold controller starts");
+        if (!ready || xsink) {
+            return;
+        }
+
+        ReferenceHolder<QoreEventNotifier> notifier(new QoreEventNotifier(&xsink), &xsink);
+        UT_ASSERT(c, !xsink && notifier->isValid(), "notifier hold notifier is created");
+        if (xsink || !notifier->isValid()) {
+            return;
+        }
+        notifier->ref();
+        ReferenceHolder<QoreObject> notifier_obj(new QoreObject(QC_EVENTNOTIFIER, getProgram(), *notifier), &xsink);
+        const int fd = notifier->fd();
+
+        WaitOp* op = new WaitOp(*notifier_obj);
+        ReferenceHolder<QoreObject> op_obj(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), op), &xsink);
+        op->setSelf(*op_obj);
+        op_obj->setValue("sock", notifier_obj->objectRefSelf(), &xsink);
+        op_obj->setValue("goal", new QoreStringNode("wait"), &xsink);
+        ReferenceHolder<QoreHashNode> info(new QoreHashNode(hashdeclSocketPollOperationInfo, &xsink), &xsink);
+        info->setKeyValue("sock", notifier_obj->objectRefSelf(), &xsink);
+        info->setKeyValue("spop", op_obj->objectRefSelf(), &xsink);
+        info->setKeyValue("owner", new QoreStringNode("notifier-hold-unit-test"), &xsink);
+        info->setKeyValue("to", -1, &xsink);
+        UT_ASSERT(c, !xsink, "notifier hold submission info is initialized");
+        if (xsink) {
+            return;
+        }
+        ReferenceHolder<QoreObject> queue_obj(ctrl->submit(nullptr, info.release(), false, &xsink), &xsink);
+        bool processed = !xsink && queue_obj && ctrl->waitForProcessing(5000, &xsink);
+        UT_ASSERT(c, processed && !xsink, "the wait on the notifier is submitted");
+        if (!processed || xsink) {
+            return;
+        }
+        // see run(): the registration is made in the iteration whose snapshot has the operation
+        ReferenceHolder<QoreHashNode> io_info(ctrl->getInfo(&xsink), &xsink);
+        UT_ASSERT(c, !xsink, "the operation waits on the notifier");
+        if (xsink) {
+            return;
+        }
+
+        // another thread closes the notifier, as its Qore object's destructor does
+        QoreEventNotifier* n = *notifier;
+        std::thread closer([n]() {
+            n->closeFd();
+        });
+        closer.join();
+        UT_ASSERT(c, notifier->fd() == -1, "the notifier has no descriptor after the close");
+        UT_ASSERT(c, fcntl(fd, F_GETFD) != -1, "the registered descriptor of the notifier stays open after the close");
+        int other = ::socket(AF_INET, SOCK_STREAM, 0);
+        UT_ASSERT(c, other != -1 && other != fd,
+            "a socket opened after the close does not get the number of the notifier's registered descriptor");
+        if (other != -1) {
+            ::close(other);
+        }
+
+        // a cancellation is a round trip through the I/O thread, which has removed the descriptor by then
+        ctrl->cancel(*notifier, &xsink);
+        xsink.clear();
+        UT_ASSERT(c, fcntl(fd, F_GETFD) == -1,
+            "the notifier's descriptor is closed once the I/O thread has removed it");
+    }
+
+    //! QoreSocket::holdDescriptor(), for modules: a held descriptor stays open after the socket's close until the
+    //! hold is released; a descriptor that is not the socket's is not held
+    static void runSocketApi(UnitTestCounters& c) {
+        ExceptionSink xsink;
+        QoreSocket listener;
+        int rc = listener.bindINET("127.0.0.1", "0", true, AF_INET, SOCK_STREAM, 0, &xsink);
+        if (!rc && !xsink) {
+            rc = listener.listen(5);
+        }
+        UT_ASSERT(c, !rc && !xsink, "holdDescriptor() listener listens");
+        if (rc || xsink) {
+            xsink.clear();
+            return;
+        }
+        const int fd = listener.getSocket();
+        std::shared_ptr<void> hold;
+        UT_ASSERT_EQ(c, -1, listener.holdDescriptor(fd + 1000, hold), "another descriptor is not held");
+        UT_ASSERT(c, !hold, "no hold is given for another descriptor");
+        UT_ASSERT_EQ(c, 0, listener.holdDescriptor(fd, hold), "the socket's descriptor is held");
+        UT_ASSERT(c, hold != nullptr, "the hold is given");
+
+        listener.close();
+        UT_ASSERT(c, listener.getSocket() == QORE_INVALID_SOCKET, "the socket has no descriptor after the close");
+        UT_ASSERT(c, fcntl(fd, F_GETFD) != -1, "the held descriptor stays open after the close");
+        std::shared_ptr<void> hold2;
+        UT_ASSERT_EQ(c, -1, listener.holdDescriptor(fd, hold2), "a closed socket's descriptor is not held again");
+
+        hold.reset();
+        UT_ASSERT(c, fcntl(fd, F_GETFD) == -1, "the descriptor is closed when the hold is released");
+    }
+
+    //! A descriptor registered for two objects stays held by the registration that holds it
+    /** Socket::poll() polls the descriptor of a pollable implemented in %Qore, and an extra fd, by number, with no
+        hold; the same descriptor can be registered for its owner too.  The registration without a hold released the
+        owner's hold, so the owner's close closed the descriptor while the I/O thread still had it registered, and
+        the I/O thread later removed a number that could belong to another object by then (a TSan race between
+        epoll_ctl() and the eventfd() of a new EventNotifier in HttpAsyncRequestTest.qtest).
+    */
+    static void runSharedDescriptor(UnitTestCounters& c) {
+        ExceptionSink xsink;
+        ReferenceHolder<AsyncIoControllerPriv> ctrl(new AsyncIoControllerPriv(false, &xsink), &xsink);
+        UT_ASSERT(c, !xsink, "shared descriptor controller construction succeeds");
+        if (xsink) {
+            xsink.clear();
+            return;
+        }
+        struct Cleanup {
+            AsyncIoControllerPriv* ctrl;
+            ExceptionSink& xsink;
+            ~Cleanup() {
+                xsink.clear();
+                ctrl->stopClear(&xsink);
+                xsink.clear();
+            }
+        } cleanup{*ctrl, xsink};
+        ctrl->setMaxIoThreads(1, &xsink);
+        ctrl->start(&xsink);
+        bool ready = !xsink && ctrl->waitReady(5000, &xsink);
+        UT_ASSERT(c, ready && !xsink, "shared descriptor controller starts");
+        if (!ready || xsink) {
+            return;
+        }
+
+        ReferenceHolder<QoreEventNotifier> notifier(new QoreEventNotifier(&xsink), &xsink);
+        UT_ASSERT(c, !xsink && notifier->isValid(), "shared descriptor notifier is created");
+        if (xsink || !notifier->isValid()) {
+            return;
+        }
+        notifier->ref();
+        ReferenceHolder<QoreObject> notifier_obj(new QoreObject(QC_EVENTNOTIFIER, getProgram(), *notifier), &xsink);
+        const int fd = notifier->fd();
+        // the notifier's descriptor by number, as Socket::poll() polls it for a pollable implemented in Qore
+        ReferenceHolder<QoreObject> number_obj(new QoreObject(QC_ABSTRACTPOLLABLEIOOBJECTBASE, getProgram(),
+            new NumberPollable(fd)), &xsink);
+
+        // the owner's registration first, then the registration by number
+        if (submitWait(c, **ctrl, *notifier_obj, "shared-descriptor-owner", xsink)
+            || submitWait(c, **ctrl, *number_obj, "shared-descriptor-number", xsink)) {
+            return;
+        }
+
+        QoreEventNotifier* n = *notifier;
+        std::thread closer([n]() {
+            n->closeFd();
+        });
+        closer.join();
+        UT_ASSERT(c, fcntl(fd, F_GETFD) != -1,
+            "the owner's registration keeps the descriptor open after the owner's close");
+
+        // the registration by number is removed; the owner's registration still holds the descriptor
+        SimpleRefHolder<QoreStringNode> number_owner(new QoreStringNode("shared-descriptor-number"));
+        ctrl->cancelByOwner(*number_owner, &xsink);
+        xsink.clear();
+        UT_ASSERT(c, fcntl(fd, F_GETFD) != -1, "the descriptor stays open while the owner's registration holds it");
+
+        SimpleRefHolder<QoreStringNode> owner(new QoreStringNode("shared-descriptor-owner"));
+        ctrl->cancelByOwner(*owner, &xsink);
+        xsink.clear();
+        UT_ASSERT(c, fcntl(fd, F_GETFD) == -1, "the descriptor is closed once the owner's registration is removed");
+    }
+
+    //! A connection attempt that fails gives up the socket's descriptor through the hold
+    /** An Internet connection is made with happy eyeballs: each attempt has its own descriptor, and the socket's
+        descriptor is one of them while the attempts run.  A failed attempt that was the socket's descriptor was
+        closed at once, while the I/O thread had it registered, so the I/O thread then removed a number that another
+        object could have by then (a TSan race between epoll_ctl() and the eventfd() of a new EventNotifier in
+        HttpAsyncRequestTest.qtest).  The connection is refused after the descriptor has been registered (the connect
+        is started in the operation's first step, and its result is read in the second); the descriptor must still be
+        open when the I/O thread removes it.
+    */
+    static void runConnectFailure(UnitTestCounters& c) {
+        ExceptionSink xsink;
+        ReferenceHolder<AsyncIoControllerPriv> ctrl(new AsyncIoControllerPriv(false, &xsink), &xsink);
+        UT_ASSERT(c, !xsink, "connect failure controller construction succeeds");
+        if (xsink) {
+            xsink.clear();
+            return;
+        }
+        // each descriptor the event loop removes, and whether it was still open then; it outlives the I/O thread
+        struct RemoveLog {
+            std::mutex l;
+            std::vector<std::pair<int, bool>> removed;
+        } rlog;
+        struct Cleanup {
+            AsyncIoControllerPriv* ctrl;
+            ExceptionSink& xsink;
+            ~Cleanup() {
+                xsink.clear();
+                ctrl->stopClear(&xsink);
+                xsink.clear();
+            }
+        } cleanup{*ctrl, xsink};
+        ctrl->setMaxIoThreads(1, &xsink);
+        // set before the I/O thread starts, which is the only thread that uses the loop then
+        ctrl->io_threads[0]->loop->dbgSetBeforeRemove([&rlog](int fd) {
+            std::lock_guard<std::mutex> g(rlog.l);
+            rlog.removed.emplace_back(fd, fcntl(fd, F_GETFD) != -1);
+        });
+        ctrl->start(&xsink);
+        bool ready = !xsink && ctrl->waitReady(5000, &xsink);
+        UT_ASSERT(c, ready && !xsink, "connect failure controller starts");
+        if (!ready || xsink) {
+            return;
+        }
+        const int notifier_fd = ctrl->io_threads[0]->notifier->fd();
+
+        // a port that nothing listens on: that of a listener that is closed
+        int port;
+        {
+            QoreSocket listener;
+            int rc = listener.bindINET("127.0.0.1", "0", true, AF_INET, SOCK_STREAM, 0, &xsink);
+            UT_ASSERT(c, !rc && !xsink, "connect failure listener binds");
+            if (rc || xsink) {
+                return;
+            }
+            port = listener.getPort();
+            listener.close();
+        }
+
+        QoreSocketObject* sock = new QoreSocketObject;
+        ReferenceHolder<QoreObject> sock_obj(new QoreObject(QC_SOCKET, getProgram(), sock), &xsink);
+        std::string target = "127.0.0.1:" + std::to_string(port);
+        sock->ref();
+        // deferred: the connect is started by the operation's first step, on the I/O thread
+        SocketConnectPollOperation* op = new SocketConnectPollOperation(&xsink, false, target.c_str(), sock, true);
+        ReferenceHolder<QoreObject> op_obj(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), op), &xsink);
+        UT_ASSERT(c, !xsink, "connect failure operation is created");
+        if (xsink) {
+            return;
+        }
+        op->setSelf(*op_obj);
+        op_obj->setValue("sock", sock_obj->objectRefSelf(), &xsink);
+        op_obj->setValue("goal", new QoreStringNode("connect"), &xsink);
+        ReferenceHolder<QoreHashNode> info(new QoreHashNode(hashdeclSocketPollOperationInfo, &xsink), &xsink);
+        info->setKeyValue("sock", sock_obj->objectRefSelf(), &xsink);
+        info->setKeyValue("spop", op_obj->objectRefSelf(), &xsink);
+        info->setKeyValue("owner", new QoreStringNode("connect-failure-unit-test"), &xsink);
+        info->setKeyValue("to", 30000, &xsink);
+        UT_ASSERT(c, !xsink, "connect failure submission info is initialized");
+        if (xsink) {
+            return;
+        }
+        ReferenceHolder<QoreObject> queue_obj(ctrl->submit(nullptr, info.release(), false, &xsink), &xsink);
+        UT_ASSERT(c, !xsink && queue_obj, "the connection is submitted");
+        if (xsink || !queue_obj) {
+            return;
+        }
+        ReferenceHolder<Queue> queue(static_cast<Queue*>(queue_obj->getReferencedPrivateData(CID_QUEUE, &xsink)),
+            &xsink);
+        UT_ASSERT(c, queue && !xsink, "connect failure result queue is valid");
+        if (!queue || xsink) {
+            return;
+        }
+        bool timed_out = false;
+        ValueHolder result(queue->shift(&xsink, 30000, &timed_out), &xsink);
+        UT_ASSERT(c, !timed_out && !xsink && result->getType() == NT_HASH, "the connection ends");
+        if (result->getType() == NT_HASH) {
+            UT_ASSERT(c, result->get<QoreHashNode>()->getKeyValue("ex").getType() == NT_HASH,
+                "the connection is refused");
+        }
+        xsink.clear();
+
+        size_t socket_removals = 0;
+        bool all_open = true;
+        {
+            std::lock_guard<std::mutex> g(rlog.l);
+            for (auto& [fd, open] : rlog.removed) {
+                if (fd == notifier_fd) {
+                    continue;
+                }
+                ++socket_removals;
+                all_open = all_open && open;
+            }
+        }
+        UT_ASSERT(c, socket_removals > 0, "the socket's descriptor was registered and removed");
+        UT_ASSERT(c, all_open, "the descriptor of the failed attempt is still open when the I/O thread removes it");
+        UT_ASSERT(c, !sock->isOpen(), "the socket has no descriptor after the failed connection");
+    }
+
+private:
+    //! A pollable that has a descriptor by number and takes no hold, like the ones Socket::poll() creates
+    class NumberPollable : public AbstractPollableIoObjectBase {
+    public:
+        DLLLOCAL explicit NumberPollable(int fd) : fd(fd) {
+        }
+
+        DLLLOCAL virtual int getPollableDescriptor() const override {
+            return fd;
+        }
+
+        DLLLOCAL virtual void closeIo(ExceptionSink*) override {
+        }
+
+    private:
+        int fd;
+    };
+
+    //! Submits an operation that waits on the given object, and waits until its descriptor is registered
+    /** @return 0 for success, -1 for failure (reported)
+    */
+    static int submitWait(UnitTestCounters& c, AsyncIoControllerPriv& ctrl, QoreObject* obj, const char* owner,
+            ExceptionSink& xsink) {
+        WaitOp* op = new WaitOp(obj);
+        ReferenceHolder<QoreObject> op_obj(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), op), &xsink);
+        op->setSelf(*op_obj);
+        op_obj->setValue("sock", obj->objectRefSelf(), &xsink);
+        op_obj->setValue("goal", new QoreStringNode("wait"), &xsink);
+        ReferenceHolder<QoreHashNode> info(new QoreHashNode(hashdeclSocketPollOperationInfo, &xsink), &xsink);
+        info->setKeyValue("sock", obj->objectRefSelf(), &xsink);
+        info->setKeyValue("spop", op_obj->objectRefSelf(), &xsink);
+        info->setKeyValue("owner", new QoreStringNode(owner), &xsink);
+        info->setKeyValue("to", -1, &xsink);
+        UT_ASSERT(c, !xsink, "the wait's submission info is initialized");
+        if (xsink) {
+            return -1;
+        }
+        ReferenceHolder<QoreObject> queue_obj(ctrl.submit(nullptr, info.release(), false, &xsink), &xsink);
+        bool processed = !xsink && queue_obj && ctrl.waitForProcessing(5000, &xsink);
+        UT_ASSERT(c, processed && !xsink, "the wait is submitted");
+        if (!processed || xsink) {
+            return -1;
+        }
+        // see run(): the registration is made in the iteration whose snapshot has the operation
+        ReferenceHolder<QoreHashNode> io_info(ctrl.getInfo(&xsink), &xsink);
+        UT_ASSERT(c, !xsink, "the wait is registered");
+        return xsink ? -1 : 0;
+    }
+
+    //! Waits for a notifier; it is canceled by the test
+    class WaitOp : public SocketPollOperationBase {
+    public:
+        DLLLOCAL WaitOp(QoreObject* notifier_obj) : notifier_obj(notifier_obj) {
+        }
+
+        DLLLOCAL virtual bool goalReached() const override {
+            return false;
+        }
+
+        DLLLOCAL virtual void abort(ExceptionSink*) override {
+        }
+
+        DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink) override {
+            ReferenceHolder<QoreHashNode> info(new QoreHashNode(hashdeclSocketPollInfo, xsink), xsink);
+            info->setKeyValue("events", SOCK_POLLIN, xsink);
+            info->setKeyValue("socket", notifier_obj->objectRefSelf(), xsink);
+            return *xsink ? nullptr : info.release();
+        }
+
+        DLLLOCAL virtual const char* getStateImpl() const override {
+            return "waiting";
+        }
+
+    private:
+        QoreObject* notifier_obj;
+    };
+};
+
 //! Commands sent to every I/O thread while one of them is stopping
 /** An I/O thread that stops (autostop, or a Quit command) drains its command queue for the last time and cancels the
     operations in its cache, and only then clears its thread ID.  The fan-outs (cancelByOwner(), cancelByProgram(),
@@ -2932,8 +3447,8 @@ public:
     so not even SIGKILL ends the process (HttpAsyncRequestTest hung like this in close(), called from a poll
     operation's \c abort(), while an I/O thread waited for the socket's lock to process the descriptor's event).  On
     every system, a number registered after its close can already belong to another connection.  The registration
-    must keep the descriptor open: a close in another thread shuts it down, and it is closed when the registration
-    has finished.
+    must keep the descriptor open: a close in another thread shuts it down, and it is closed when the descriptor has
+    been removed from the event loop.
 
     The event loop's debug hook runs where the loop is about to register the descriptor with the system: it closes
     the socket from another thread and checks that the descriptor being registered is still the socket's.  Both the
@@ -3026,11 +3541,13 @@ private:
         UT_ASSERT(c, registered_open, "the descriptor stays open while it is registered");
         UT_ASSERT(c, !xsink, "the registration succeeds");
         xsink.clear();
-        UT_ASSERT(c, !is_socket_descriptor(), "the descriptor is closed once it is registered");
+        // the descriptor is held open while it is registered, so its number cannot be given to another connection
+        UT_ASSERT(c, is_socket_descriptor(), "the descriptor stays open until it is removed from the event loop");
 
         ctrl->unregisterFromEventLoop(t, op_id, &xsink);
         UT_ASSERT(c, !xsink, "the operation is unregistered");
         xsink.clear();
+        UT_ASSERT(c, !is_socket_descriptor(), "the descriptor is closed once it has been removed from the event loop");
     }
 };
 
@@ -8139,6 +8656,11 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
 #ifdef DEBUG
     AsyncIoCloseTest::resize(c);
     AsyncIoCloseTest::run(c);
+    AsyncIoDescriptorHoldTest::run(c);
+    AsyncIoDescriptorHoldTest::runNotifier(c);
+    AsyncIoDescriptorHoldTest::runSocketApi(c);
+    AsyncIoDescriptorHoldTest::runSharedDescriptor(c);
+    AsyncIoDescriptorHoldTest::runConnectFailure(c);
     AsyncIoAbandonedSubmitTest::run(c);
     AsyncIoRegistrationCloseTest::run(c);
     AsyncIoZeroPollHintTest::run(c);

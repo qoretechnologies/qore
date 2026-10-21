@@ -645,6 +645,15 @@ private:
 
     //! Close all active fds (cleanup)
     DLLLOCAL void closeAllFds();
+
+    //! Gives up the attempt descriptor \a fd, which is the socket's descriptor, for \a next_fd (another attempt, or
+    //! QORE_INVALID_SOCKET)
+    /** An async I/O thread can have the socket's descriptor registered in its event loop and hold it open (see
+        qore_socket_private::DescriptorHold): the descriptor is then closed when the I/O thread has removed it, so its
+        number cannot be given to another object before; otherwise it is closed now.  If a concurrent close of the
+        socket has released the descriptor already, nothing is closed here.
+    */
+    DLLLOCAL void releasePrimaryFd(int fd, int next_fd);
 };
 
 #ifndef _Q_WINDOWS
@@ -1195,8 +1204,7 @@ struct qore_socket_private : public QoreReferenceCounter {
     */
     class IoUseHelper {
     public:
-        //! Takes the descriptor and, with @p use_ssl, the TLS connection of the socket for an I/O call
-        DLLLOCAL IoUseHelper(qore_socket_private& priv, bool use_ssl = true);
+        DLLLOCAL IoUseHelper(qore_socket_private& priv);
 
         DLLLOCAL ~IoUseHelper();
 
@@ -1219,18 +1227,35 @@ struct qore_socket_private : public QoreReferenceCounter {
         SslRef ssl;
     };
 
-    //! Calls @p f with the socket's descriptor, which stays open until @p f returns
-    /** For a system call that names the descriptor without reading or writing the connection, such as the
-        registration of the descriptor with the event queue of an async I/O thread: a close in another thread while
-        @p f runs closes the socket for its users at once and shuts the descriptor down, and the descriptor is closed
-        when @p f returns (see @ref SharedDescriptor).
-
-        @param f the function to call with the descriptor, or @ref QORE_INVALID_SOCKET if the socket is closed; it
-        must not block
-
-        @see AbstractPollableIoObjectBase::withPollableDescriptor()
+    //! Keeps the socket's descriptor open while the async I/O controller has it registered in an event loop
+    /** The system gives the lowest free descriptor number to the next socket or file opened by any thread, so an
+        event loop that still has the number of a descriptor that another thread closed registered would remove or
+        change the registration of the connection that got the number next (seen as a TSan race between
+        epoll_ctl() on the I/O thread and socket() on another thread).  While a hold exists, a close of the socket
+        shuts the descriptor down, which wakes the operations that wait on it, and the release of the last hold or
+        I/O use closes it, as for an I/O call (see IoUseHelper).  Taken and released with @ref close_m held.
     */
-    DLLLOCAL void withDescriptor(const std::function<void(int)>& f);
+    class DescriptorHold {
+    public:
+        //! Takes a hold of the socket's descriptor if it is still \a fd
+        /** @return the hold, or nullptr if the socket was closed or has another descriptor: the number may already
+            belong to another connection
+        */
+        DLLLOCAL static std::shared_ptr<DescriptorHold> take(qore_socket_private& priv, int fd);
+
+        //! Releases the hold; closes the descriptor if the socket gave it up and this was its last use
+        DLLLOCAL ~DescriptorHold();
+
+        DescriptorHold(const DescriptorHold&) = delete;
+        DescriptorHold& operator=(const DescriptorHold&) = delete;
+
+        DLLLOCAL DescriptorHold(qore_socket_private& priv, std::shared_ptr<SharedDescriptor> fd);
+
+    private:
+        //! the socket, referenced
+        qore_socket_private* priv;
+        std::shared_ptr<SharedDescriptor> fd;
+    };
 
     //! Holds @ref close_m for the scope of the object
     class CloseLockHelper {
@@ -1987,18 +2012,24 @@ struct qore_socket_private : public QoreReferenceCounter {
     //! Replaces the open descriptor with another one, as for a QUIC connection migration
     /** @param old_fd the descriptor that the caller read from the socket
         @param new_fd the descriptor that replaces it
+        @param close_old set to true if the caller must close @a old_fd, false if the last I/O call or event loop
+        registration that still uses it closes it (see DescriptorHold)
 
-        @return true if @a old_fd was replaced by @a new_fd, in which case the caller must close @a old_fd; false if
-        the socket no longer has @a old_fd, because a concurrent close released it, in which case the caller keeps
-        @a new_fd and must not close @a old_fd
+        @return true if @a old_fd was replaced by @a new_fd; false if the socket no longer has @a old_fd, because a
+        concurrent close released it, in which case the caller keeps @a new_fd and must not close @a old_fd
     */
-    DLLLOCAL bool replaceDescriptor(int old_fd, int new_fd) {
+    DLLLOCAL bool replaceDescriptor(int old_fd, int new_fd, bool& close_old) {
         CloseLockHelper cl(*this);
         if (sock != old_fd || old_fd == QORE_INVALID_SOCKET) {
             return false;
         }
         sock = new_fd;
-        // the caller closes the old descriptor
+        // the caller closes the old descriptor, unless a use of it closes it when it ends with it
+        close_old = true;
+        if (shared_fd && shared_fd->fd == old_fd && shared_fd.use_count() > 1) {
+            shared_fd->close_on_release = true;
+            close_old = false;
+        }
         shared_fd.reset();
         // any sync I/O helper mid-wait returns QSE_NOT_OPEN instead of using the old descriptor
         ++fd_generation;

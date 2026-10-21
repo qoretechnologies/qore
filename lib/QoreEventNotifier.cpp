@@ -43,6 +43,35 @@
 #include <sys/event.h>
 #endif
 
+namespace {
+//! The descriptor that an event notifier is polled with; closed by its last reference
+struct QoreEventNotifierFd {
+    int fd;
+
+    explicit QoreEventNotifierFd(int fd) : fd(fd) {
+    }
+
+    ~QoreEventNotifierFd() {
+        ::close(fd);
+    }
+};
+}
+
+void QoreEventNotifier::initPollFdRef(int fd) {
+    if (fd >= 0) {
+        poll_fd_ref = std::make_shared<QoreEventNotifierFd>(fd);
+    }
+}
+
+int QoreEventNotifier::holdPollableDescriptor(int fd, std::shared_ptr<void>& hold) const {
+    std::lock_guard<std::mutex> lg(poll_fd_lock);
+    if (fd < 0 || !poll_fd_ref || static_cast<QoreEventNotifierFd*>(poll_fd_ref.get())->fd != fd) {
+        return -1;
+    }
+    hold = poll_fd_ref;
+    return 0;
+}
+
 #ifdef DARWIN
 // Initialize static counter for unique EVFILT_USER identifiers
 // Start at 1 to avoid using 0 as an identifier
@@ -90,6 +119,7 @@ QoreEventNotifier::QoreEventNotifier(ExceptionSink* xsink) {
         return;
     }
     notify_fd.store(nfd, std::memory_order_release);
+    initPollFdRef(nfd);
 #else
 #ifdef DARWIN
     // macOS: allocate unique identifier for EVFILT_USER optimization
@@ -103,6 +133,7 @@ QoreEventNotifier::QoreEventNotifier(ExceptionSink* xsink) {
     }
     pipe_fd[0].store(fds[0], std::memory_order_release);
     pipe_fd[1].store(fds[1], std::memory_order_release);
+    initPollFdRef(fds[0]);
 #endif
 }
 
@@ -149,19 +180,25 @@ void QoreEventNotifier::closeFd() {
         });
     }
 
+    // the descriptor the notifier is polled with is closed by its last reference: an async I/O event loop that has it
+    // registered keeps it open until it has removed it (see holdPollableDescriptor())
+    std::shared_ptr<void> polled;
+    {
+        std::lock_guard<std::mutex> lg(poll_fd_lock);
+        polled = std::move(poll_fd_ref);
 #ifdef __linux__
-    int nfd = notify_fd.exchange(-1, std::memory_order_acq_rel);
-    if (nfd >= 0) {
-        ::close(nfd);
-    }
+        notify_fd.store(-1, std::memory_order_release);
 #else
+        pipe_fd[0].store(-1, std::memory_order_release);
+#endif
+    }
+    polled.reset();
+#ifndef __linux__
     // Note (macOS): we don't need to explicitly remove the EVFILT_USER from kqueue as the EventLoop will handle
     // that, or it will be auto-cleaned if the kqueue is closed; notify() does nothing once the notifier is closed.
-    for (std::atomic<int>& fd : pipe_fd) {
-        int pfd = fd.exchange(-1, std::memory_order_acq_rel);
-        if (pfd >= 0) {
-            ::close(pfd);
-        }
+    int wfd = pipe_fd[1].exchange(-1, std::memory_order_acq_rel);
+    if (wfd >= 0) {
+        ::close(wfd);
     }
 #endif
 }

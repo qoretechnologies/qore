@@ -3351,8 +3351,9 @@ AbstractPollableIoObjectBase::AbstractPollableIoObjectBase() {
     io_unique_hash = tmp.c_str();
 }
 
-void AbstractPollableIoObjectBase::withPollableDescriptor(const std::function<void(int)>& f) const {
-    f(getPollableDescriptor());
+int AbstractPollableIoObjectBase::holdPollableDescriptor(int fd, std::shared_ptr<void>& hold) const {
+    // the object's descriptor cannot be closed while an asynchronous operation uses it
+    return 0;
 }
 
 int qore_get_object_hash(QoreString& str, const void* ptr, uint64_t id) {

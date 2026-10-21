@@ -247,12 +247,24 @@ public:
     DLLLOCAL void dbgSetBeforeRegister(std::function<void(int)> hook) {
         dbg_before_register = std::move(hook);
     }
+
+    //! Debug-only: sets a hook that remove() calls with a registered descriptor before it removes it
+    /** Lets a test check that a descriptor is still open when the loop removes it; see AsyncIoDescriptorHoldTest in
+        the C++ unit tests.
+
+        @param hook the hook, or an empty function to remove it; set before the loop's thread starts, or by it
+    */
+    DLLLOCAL void dbgSetBeforeRemove(std::function<void(int)> hook) {
+        dbg_before_remove = std::move(hook);
+    }
 #endif
 
 private:
 #ifdef DEBUG
     //! Debug-only: called with the descriptor before add() or modify() registers it; see dbgSetBeforeRegister()
     std::function<void(int)> dbg_before_register;
+    //! Debug-only: called with a registered descriptor before remove() removes it; see dbgSetBeforeRemove()
+    std::function<void(int)> dbg_before_remove;
 #endif
 
     //! Internal fd info

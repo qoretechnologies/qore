@@ -6539,6 +6539,7 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
 
     // Cleanup on exit — cancel results are collected under lock and delivered outside
     std::vector<PollInfo> exit_cancel_pinfos;
+    std::unordered_map<std::string, std::shared_ptr<void>> exit_holds;
     bool restart_after_exit = false;
     {
         AutoLocker al(m);
@@ -6568,6 +6569,9 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
         t.registered_events.clear();
         t.registered_fds.clear();
         t.fd_to_sock_hash.clear();
+        // no descriptor is registered any more: the holds are released after the lock below (the last reference to a
+        // socket can go with its hold), which closes the descriptors that other threads closed meanwhile
+        exit_holds.swap(t.fd_holds);
         t.key_events.clear();
         t.key_extra_fds.clear();
         t.extra_fd_to_key_events.clear();
@@ -6727,6 +6731,7 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
         doCancelIntern(pinfo, xsink);
         pinfo.cleanup(xsink);
     }
+    exit_holds.clear();
 
     // NOTE: call_dispatcher is NOT stopped here — it's stopped in stop() (explicit
     // shutdown) and deref() (destruction). Workers use QTF_EXTERNAL_LIFECYCLE so they
@@ -7858,53 +7863,43 @@ void AsyncIoControllerPriv::updateEventLoopRegistration(IoThreadContext& t, uint
         AbstractPollableIoObjectBase* s = static_cast<AbstractPollableIoObjectBase*>(
             socket->getReferencedPrivateData(CID_ABSTRACTPOLLABLEIOOBJECTBASE, xsink));
         if (s) {
-            // the descriptor stays open while its registration is changed, even if another thread closes the socket
-            // meanwhile; see AbstractPollableIoObjectBase::withPollableDescriptor()
-            s->withPollableDescriptor([&](int curr_fd) {
-                ASYNC_IO_TRACE("updateEventLoop op=%llu same_sock fd=%d\n", (unsigned long long)op_id, curr_fd);
-                auto fd_it = t.registered_fds.find(sock_hash);
-                if (curr_fd < 0 || !union_events) {
-                    if (fd_it != t.registered_fds.end()) {
-                        releaseFdIfOwner(t, fd_it->second, sock_hash, xsink);
-                        t.registered_fds.erase(fd_it);
-                        fd_changed = true;
-                    }
-                    t.registered_events[sock_hash] = union_events;
-                } else if (fd_it == t.registered_fds.end()) {
-                    t.loop->add(curr_fd, union_events, socket, xsink);
-                    t.registered_fds[sock_hash] = curr_fd;
-                    t.fd_to_sock_hash[curr_fd] = sock_hash;
-                    t.registered_events[sock_hash] = union_events;
-                    fd_changed = true;
-                } else if (fd_it->second != curr_fd) {
-                    fd_changed = true;
-                    printd(2, "AsyncIoControllerPriv::updateEventLoopRegistration() "
-                        "fd changed for socket '%s': %d -> %d\n",
-                        sock_hash.c_str(), fd_it->second, curr_fd);
-                    // Release the old fd from the event loop — guarded against
-                    // fd-recycling: if the same fd number has already been
-                    // reassigned to a different socket (e.g., migrateConnection
-                    // closed it and a concurrent registration picked it up),
-                    // releaseFdIfOwner() will leave the new owner alone.
-                    //
-                    // On Linux, epoll auto-removes closed fds; on macOS kqueue
-                    // does the same.  remove() silently handles EBADF/ENOENT.
+            // a registered descriptor is held open (see addSocketFd()), so its registration is changed on the
+            // object's own descriptor, even if another thread closes the object meanwhile
+            int curr_fd = s->getPollableDescriptor();
+            ASYNC_IO_TRACE("updateEventLoop op=%llu same_sock fd=%d\n", (unsigned long long)op_id, curr_fd);
+            auto fd_it = t.registered_fds.find(sock_hash);
+            if (curr_fd < 0 || !union_events) {
+                if (fd_it != t.registered_fds.end()) {
                     releaseFdIfOwner(t, fd_it->second, sock_hash, xsink);
-                    // Add new fd to EventLoop
-                    t.loop->add(curr_fd, union_events, socket, xsink);
-                    t.registered_fds[sock_hash] = curr_fd;
-                    t.fd_to_sock_hash[curr_fd] = sock_hash;
-                    t.registered_events[sock_hash] = union_events;
-                } else if (force_fd_reregister && union_events) {
-                    // The fd number can be reused after close(), especially in
-                    // Happy Eyeballs fallback.  epoll/kqueue may have dropped the
-                    // old registration even though the integer fd is unchanged.
-                    t.loop->modify(curr_fd, union_events, xsink);
-                    t.fd_to_sock_hash[curr_fd] = sock_hash;
-                    t.registered_events[sock_hash] = union_events;
+                    eraseRegisteredFd(t, sock_hash);
                     fd_changed = true;
                 }
-            });
+                t.registered_events[sock_hash] = union_events;
+            } else if (fd_it == t.registered_fds.end()) {
+                addSocketFd(t, s, socket, sock_hash, curr_fd, union_events, xsink);
+                t.registered_events[sock_hash] = union_events;
+                fd_changed = true;
+            } else if (fd_it->second != curr_fd) {
+                fd_changed = true;
+                printd(2, "AsyncIoControllerPriv::updateEventLoopRegistration() "
+                    "fd changed for socket '%s': %d -> %d\n",
+                    sock_hash.c_str(), fd_it->second, curr_fd);
+                // Release the old fd from the event loop; it is held open until it has been removed, so its number
+                // cannot belong to another connection meanwhile (e.g., after migrateConnection() replaced it)
+                releaseFdIfOwner(t, fd_it->second, sock_hash, xsink);
+                eraseRegisteredFd(t, sock_hash);
+                // Add new fd to EventLoop
+                addSocketFd(t, s, socket, sock_hash, curr_fd, union_events, xsink);
+                t.registered_events[sock_hash] = union_events;
+            } else if (force_fd_reregister && union_events) {
+                // The fd number can be reused after close(), especially in
+                // Happy Eyeballs fallback.  epoll/kqueue may have dropped the
+                // old registration even though the integer fd is unchanged.
+                t.loop->modify(curr_fd, union_events, xsink);
+                t.fd_to_sock_hash[curr_fd] = sock_hash;
+                t.registered_events[sock_hash] = union_events;
+                fd_changed = true;
+            }
             s->deref(xsink);
         }
         if (!fd_changed) {
@@ -7945,7 +7940,7 @@ void AsyncIoControllerPriv::updateEventLoopRegistration(IoThreadContext& t, uint
                     }
                 }
                 t.registered_events.erase(prev_sock_hash);
-                t.registered_fds.erase(prev_sock_hash);
+                eraseRegisteredFd(t, prev_sock_hash);
                 t.socket_refcounts.erase(rit);
                 clearSocketRouteIfOwner(prev_sock_hash, prev_sock, t.thread_idx);
             } else {
@@ -7970,17 +7965,13 @@ void AsyncIoControllerPriv::updateEventLoopRegistration(IoThreadContext& t, uint
         AbstractPollableIoObjectBase* s = static_cast<AbstractPollableIoObjectBase*>(
             socket->getReferencedPrivateData(CID_ABSTRACTPOLLABLEIOOBJECTBASE, xsink));
         if (s) {
-            // the descriptor stays open while it is registered, even if another thread closes the socket meanwhile;
-            // see AbstractPollableIoObjectBase::withPollableDescriptor()
-            s->withPollableDescriptor([&](int fd) {
-                ASYNC_IO_TRACE("updateEventLoop NEW op=%llu sock='%s' fd=%d events=%d\n",
-                    (unsigned long long)op_id, sock_hash.c_str(), fd, union_events);
-                if (fd >= 0 && union_events) {
-                    t.loop->add(fd, union_events, socket, xsink);
-                    t.registered_fds[sock_hash] = fd;
-                    t.fd_to_sock_hash[fd] = sock_hash;
-                }
-            });
+            int fd = s->getPollableDescriptor();
+            ASYNC_IO_TRACE("updateEventLoop NEW op=%llu sock='%s' fd=%d events=%d\n",
+                (unsigned long long)op_id, sock_hash.c_str(), fd, union_events);
+            if (fd >= 0 && union_events) {
+                // the descriptor is held open while it is registered; see addSocketFd()
+                addSocketFd(t, s, socket, sock_hash, fd, union_events, xsink);
+            }
             s->deref(xsink);
         } else {
             ASYNC_IO_TRACE("updateEventLoop NEW op=%llu sock='%s' NO_FD (not pollable)\n",
@@ -8045,7 +8036,7 @@ void AsyncIoControllerPriv::unregisterFromEventLoop(IoThreadContext& t, uint64_t
                     releaseFdIfOwner(t, fd_it->second, prev_sock_hash, xsink);
                 }
                 t.registered_events.erase(prev_sock_hash);
-                t.registered_fds.erase(prev_sock_hash);
+                eraseRegisteredFd(t, prev_sock_hash);
                 t.socket_refcounts.erase(rit);
                 clearSocketRouteIfOwner(prev_sock_hash, prev_sock, t.thread_idx);
             } else {
@@ -8083,7 +8074,7 @@ void AsyncIoControllerPriv::applyEventUnion(IoThreadContext& t, QoreObject* sock
         if (!union_events) {
             if (fd_it != t.registered_fds.end()) {
                 releaseFdIfOwner(t, fd_it->second, sock_hash, xsink);
-                t.registered_fds.erase(fd_it);
+                eraseRegisteredFd(t, sock_hash);
             }
         } else {
             // the private data of an object whose descriptor is registered is looked up without raising an exception
@@ -8098,25 +8089,20 @@ void AsyncIoControllerPriv::applyEventUnion(IoThreadContext& t, QoreObject* sock
                 return;
             }
             if (s) {
-                // the descriptor stays open while its registration is changed, even if another thread closes the
-                // socket meanwhile; see AbstractPollableIoObjectBase::withPollableDescriptor()
-                s->withPollableDescriptor([&](int fd) {
+                // a registered descriptor is held open (see addSocketFd()), so it is the object's own descriptor
+                int fd = s->getPollableDescriptor();
+                if (fd_it != t.registered_fds.end() && fd_it->second == fd) {
+                    t.loop->modify(fd, union_events, xsink);
+                } else {
                     if (fd_it != t.registered_fds.end()) {
-                        if (fd_it->second == fd) {
-                            t.loop->modify(fd, union_events, xsink);
-                            return;
-                        }
-                        // the registered descriptor is no longer the object's: it was closed, which removed its
-                        // registration, and the number can belong to another connection now
+                        // the registered descriptor is no longer the object's: it was closed or replaced
                         releaseFdIfOwner(t, fd_it->second, sock_hash, xsink);
-                        t.registered_fds.erase(fd_it);
+                        eraseRegisteredFd(t, sock_hash);
                     }
                     if (fd >= 0) {
-                        t.loop->add(fd, union_events, socket, xsink);
-                        t.registered_fds[sock_hash] = fd;
-                        t.fd_to_sock_hash[fd] = sock_hash;
+                        addSocketFd(t, s, socket, sock_hash, fd, union_events, xsink);
                     }
-                });
+                }
                 s->deref(xsink);
             }
         }
@@ -8372,8 +8358,43 @@ void AsyncIoControllerPriv::releaseFdIfOwner(IoThreadContext& t, int old_fd,
         // state intact
         return;
     }
+    ASYNC_IO_TRACE("releaseFdIfOwner[%d]: remove fd=%d sock='%s'\n", t.thread_idx, old_fd, expected_hash.c_str());
     t.loop->remove(old_fd, xsink);
     t.fd_to_sock_hash.erase(fsh_it);
+}
+
+void AsyncIoControllerPriv::eraseRegisteredFd(IoThreadContext& t, const std::string& sock_hash) {
+    ASYNC_IO_TRACE("eraseRegisteredFd[%d]: sock='%s' hold=%d\n", t.thread_idx, sock_hash.c_str(),
+        (int)t.fd_holds.count(sock_hash));
+    t.registered_fds.erase(sock_hash);
+    // the descriptor is no longer registered for the object: a close made by another thread meanwhile closes it now,
+    // unless another registration still holds it
+    t.fd_holds.erase(sock_hash);
+}
+
+int AsyncIoControllerPriv::addSocketFd(IoThreadContext& t, AbstractPollableIoObjectBase* s, QoreObject* socket,
+        const std::string& sock_hash, int fd, int events, ExceptionSink* xsink) {
+    std::shared_ptr<void> hold;
+    if (s->holdPollableDescriptor(fd, hold)) {
+        // the object was closed after its descriptor was read: the number may already belong to another object, so
+        // it is not registered; the operations on the object run again and see the close
+        ASYNC_IO_TRACE("addSocketFd[%d]: hold refused fd=%d sock='%s'\n", t.thread_idx, fd, sock_hash.c_str());
+        t.wake_socket_hashes.insert(sock_hash);
+        return -1;
+    }
+    ASYNC_IO_TRACE("addSocketFd[%d]: add fd=%d sock='%s' hold=%d\n", t.thread_idx, fd, sock_hash.c_str(),
+        hold ? 1 : 0);
+    t.loop->add(fd, events, socket, xsink);
+    t.registered_fds[sock_hash] = fd;
+    t.fd_to_sock_hash[fd] = sock_hash;
+    // the registration's own hold; an object that takes no hold (a pollable that Socket::poll() polls by number, a
+    // File) has none, and the holds of other registrations of the same descriptor are not touched
+    if (hold) {
+        t.fd_holds[sock_hash] = std::move(hold);
+    } else {
+        t.fd_holds.erase(sock_hash);
+    }
+    return 0;
 }
 
 bool AsyncIoControllerPriv::enqueueCmdLocked(IoCommand cmd, const std::string& key,
