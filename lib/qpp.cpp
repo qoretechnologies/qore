@@ -41,7 +41,6 @@
 #include <cassert>
 #include <cctype>
 #include <cerrno>
-#include <climits>
 #include <cstdarg>
 #include <cstdio>
 #include <cstdlib>
@@ -61,10 +60,6 @@
 #include <getopt.h>
 #else
 #include "qore/intern/getopt_long.h"
-#endif
-
-#ifndef PATH_MAX
-#define PATH_MAX 512
 #endif
 
 const char usage_str[] = "usage: %s [options] <input file(s)...>\n"
@@ -473,24 +468,15 @@ static void error(const char* fmt, ...) {
     //fflush(stderr);
 }
 
-// absolute paths of the output files that this run has written
+// the output files that this run has written
 /** When the run fails, they are removed: a build tool that compares file times would otherwise take the output of
     a failed run, which is newer than its input, for an up-to-date result
 */
 static strset_t output_files;
 
 //! Records an output file written by this run so that it can be removed if the run fails
-/** The path is made absolute because writing Java files changes the working directory
-*/
 static void record_output_file(const std::string& fn) {
-    std::string path = fn;
-    if (path.empty() || path[0] != '/') {
-        std::vector<char> cwd(PATH_MAX + 1);
-        if (getcwd(cwd.data(), cwd.size())) {
-            path = std::string(cwd.data()) + "/" + fn;
-        }
-    }
-    output_files.insert(path);
+    output_files.insert(fn);
 }
 
 //! Removes every output file written by this run; called when the run fails
@@ -2512,34 +2498,33 @@ static void add_init_code(FILE* fp) {
     initcode.clear();
 }
 
-static int mkdir_chdir(const char* path) {
-    // check if target path exists
+//! creates a directory unless it exists
+/** @return 0 for OK, -1 for error; an error has been reported in that case
+*/
+static int make_dir(const std::string& path) {
     struct stat sb;
-    if (stat(path, &sb)) {
-        //printf("stat('%s'): %s\n", path, strerror(errno));
+    if (!stat(path.c_str(), &sb)) {
+        return 0;
+    }
 #if defined _MSC_VER || ((defined _WIN32 || defined __WIN32__) && ! defined __CYGWIN__)
-        if (mkdir(path)) {
+    if (mkdir(path.c_str())) {
 #else
-        if (mkdir(path, 0755)) {
+    if (mkdir(path.c_str(), 0755)) {
 #endif
-            // ignore EEXIST: with a parallel build this can happen normally
-            if (errno != EEXIST) {
-                error("mkdir '%s': %s\n", path, strerror(errno));
-                return -1;
-            }
+        // ignore EEXIST: with a parallel build this can happen normally
+        if (errno != EEXIST) {
+            error("mkdir '%s': %s\n", path.c_str(), strerror(errno));
+            return -1;
         }
     }
-
-    if (chdir(path)) {
-        error("chdir '%s': %s\n", path, strerror(errno));
-        return -1;
-    }
-
     return 0;
 }
 
 //! opens the Java output file for a class
-/** @return the open file, or nullptr if it cannot be created; an error has been reported in that case
+/** The file is created in a directory for its package below the Java output directory; the working directory is not
+    changed, since the other output file names can be relative to it
+
+    @return the open file, or nullptr if it cannot be created; an error has been reported in that case
 */
 static std::unique_ptr<OutputFile> get_java_file(const std::string& ns, const std::string& name, std::string& pkg) {
     // open class file
@@ -2555,19 +2540,21 @@ static std::unique_ptr<OutputFile> get_java_file(const std::string& ns, const st
     }
 
     // start in root java output dir
-    if (mkdir_chdir(opts.javadoc_fn.c_str())) {
+    std::string dir = opts.javadoc_fn;
+    if (make_dir(dir)) {
         return nullptr;
     }
 
     //printf("dir: '%s' pkg: '%s'\n", opts.javadoc_fn.c_str(), pkg.c_str());
     for (auto& i : dirvec) {
-        if (mkdir_chdir(i.c_str())) {
+        dir += "/";
+        dir += i;
+        if (make_dir(dir)) {
             return nullptr;
         }
     }
 
-    std::string fn = name;
-    fn += ".java";
+    std::string fn = dir + "/" + name + ".java";
     std::unique_ptr<OutputFile> fp(new OutputFile(fn, "w"));
     if (!*fp) {
         return nullptr;

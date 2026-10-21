@@ -6538,6 +6538,11 @@ while (*binary chunk = input.read(65536)) {
         repeats of the \c "xx" and \c "uu" codes rather than a field width, and produced a run of digits
         instead of milliseconds or microseconds.  Search servers reject or misindex such timestamps, and the
         affected data providers sent them to their remote APIs
+    - \c qpp, the preprocessor that builds binary modules from <tt>.qpp</tt> files, writes its output files where
+      their paths name them when the paths are relative: with a relative Java output directory
+      (<tt>--javadoc</tt>), the Java files of the second and later classes of a file were written to a directory
+      nested in the Java output directory, and the output files written after the Java files, such as the metadata
+      (<tt>--metadata</tt>), were written to the Java output directory
 
     @section qore_2_2_1 Qore 2.2.1
 
