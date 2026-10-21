@@ -1,0 +1,141 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class DatasourceLockTimeoutTest
+
+#! A transaction lock timeout of 0 means no timeout
+/** Datasource::setTransactionLockTimeout() documents 0 as no timeout, as it was until Qore 2.1.0 and as it is for the
+    DatasourcePool error timeout; from Qore 2.1.1 a thread waiting for the transaction lock with a timeout of 0 failed
+    at once with TRANSACTION-LOCK-TIMEOUT instead.  A timeout of 0 now waits until the lock is released, and the wait
+    can be cancelled like any other.
+
+    The thread that waits signals that it is about to wait before it calls the method that waits, as in the
+    cancel-wakeup test; the lock is held by this thread until then, so with the fix the other thread can only finish
+    when the lock is released or when it is cancelled, whenever it gets to the lock.  Each case runs several times, as
+    before the fix the other thread failed only when it got to the lock before this thread released it or cancelled
+    it.  The "dbitest" mock driver needs no server.
+*/
+class DatasourceLockTimeoutTest inherits QUnit::Test {
+    public {
+        const ConnStr = "dbitest:u/p@db";
+
+        #! the default transaction lock timeout in milliseconds
+        const DefaultTimeout = 120000;
+
+        #! a hang guard for a result from another thread; never a timing assertion
+        const HangGuard = 30s;
+
+        #! the number of times each waiting case is run
+        const Trials = 3;
+    }
+
+    constructor() : QUnit::Test("DatasourceLockTimeoutTest", "1.0", \ARGV) {
+        addTestCase("a timeout of 0 waits for the lock", \testZeroWaits());
+        addTestCase("setTransactionLockTimeout() without an argument waits for the lock", \testNoArgWaits());
+        addTestCase("a wait with a timeout of 0 can be cancelled", \testZeroCancel());
+        addTestCase("a negative timeout waits for the lock", \testNegativeWaits());
+        addTestCase("a positive timeout and the default are unchanged", \testPositiveAndDefault());
+        set_return_value(main());
+    }
+
+    #! returns an open datasource
+    private Datasource getDs(*int timeout_ms) {
+        Datasource ds(ConnStr);
+        ds.setAutoCommit(False);
+        if (exists timeout_ms) {
+            ds.setTransactionLockTimeout(timeout_ms);
+        }
+        ds.open();
+        return ds;
+    }
+
+    #! starts a thread that executes SQL on the datasource in a transaction, after signalling that it is about to
+    /** @return the thread's TID; its result ("ok" or the error) is pushed on \a result
+    */
+    private static int startExec(Datasource ds, Queue started, Queue result) {
+        return background sub () {
+            try {
+                started.push(True);
+                ds.exec("insert into t values (1)");
+                ds.rollback();
+                result.push("ok");
+            } catch (hash<ExceptionInfo> ex) {
+                result.push(ex.err);
+            }
+        }();
+    }
+
+    #! the other thread waits until this thread releases the lock
+    private checkWaits(Datasource ds) {
+        for (int i = 0; i < Trials; ++i) {
+            ds.beginTransaction();
+            Queue started();
+            Queue result();
+            DatasourceLockTimeoutTest::startExec(ds, started, result);
+            started.get();
+            # the lock is released only now; the other thread cannot have failed while waiting for it
+            ds.rollback();
+            assertEq("ok", result.get(HangGuard), sprintf("trial %d: the other thread got the lock when it was "
+                "released", i));
+            assertEq(-1, ds.transactionTid());
+        }
+    }
+
+    testZeroWaits() {
+        Datasource ds = getDs(0);
+        assertEq(0, ds.getTransactionLockTimeout());
+        checkWaits(ds);
+    }
+
+    testNoArgWaits() {
+        Datasource ds = getDs();
+        ds.setTransactionLockTimeout();
+        assertEq(0, ds.getTransactionLockTimeout());
+        checkWaits(ds);
+    }
+
+    testZeroCancel() {
+        Datasource ds = getDs(0);
+        for (int i = 0; i < Trials; ++i) {
+            ds.beginTransaction();
+            Queue started();
+            Queue result();
+            int tid = DatasourceLockTimeoutTest::startExec(ds, started, result);
+            started.get();
+            cancel_thread(tid, "lock-timeout test");
+            # the wait for the lock that this thread still holds ends with the cancellation
+            assertEq("THREAD-CANCELLED", result.get(HangGuard), sprintf("trial %d", i));
+            assertEq(gettid(), ds.transactionTid(), "this thread still holds the lock");
+            ds.rollback();
+        }
+    }
+
+    testNegativeWaits() {
+        Datasource ds = getDs(-1);
+        assertEq(-1, ds.getTransactionLockTimeout());
+        checkWaits(ds);
+    }
+
+    testPositiveAndDefault() {
+        {
+            Datasource ds(ConnStr);
+            assertEq(DefaultTimeout, ds.getTransactionLockTimeout(), "the default timeout");
+        }
+        # a positive timeout still ends a wait for a lock that is not released
+        Datasource ds = getDs(50);
+        ds.beginTransaction();
+        Queue started();
+        Queue result();
+        DatasourceLockTimeoutTest::startExec(ds, started, result);
+        started.get();
+        assertEq("TRANSACTION-LOCK-TIMEOUT", result.get(HangGuard));
+        ds.rollback();
+    }
+}

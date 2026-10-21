@@ -656,7 +656,7 @@ int rows = db.exec("insert into table (varchar_col, timestamp_col, blob_col, num
     @par Datasource Transaction Locks
     %Datasource objects have an internal transaction lock which will be grabbed when the Datasource::exec(), Datasource::vexec() Datasource::execRaw(), or Datasource::beginTransaction() methods are executed and autocommit is not enabled. This enables a single datasource to be safely used for transaction management by several threads simultaneously. Note that an exception in a %Datasource method that would acquire the lock (such as the Datasource::exec() method) when it's not already held, will have the effect that the transaction lock is not acquired.\n\n
     Any thread attempting to do transaction-relevant actions on a %Datasource with auto-commit disabled while a transaction is in progress by another thread will block until the thread currently executing a transaction executes the Datasource::commit() or Datasource::rollback() methods (or the %Datasource is deleted, reset, or closed, in which case the lock is released and an exception is raised as well).\n\n
-    There is a timeout associated with the transaction lock; if a thread waits for the transaction lock for more than the timeout period, then an exception will be raised in the waiting thread. The timeout value can be read and changed with the Datasource::getTransactionLockTimeout() and Datasource::setTransactionLockTimeout() methods, respectively. The default transaction lock timeout value is 120 seconds.\n\n
+    There is a timeout associated with the transaction lock; if a thread waits for the transaction lock for more than the timeout period, then an exception will be raised in the waiting thread. The timeout value can be read and changed with the Datasource::getTransactionLockTimeout() and Datasource::setTransactionLockTimeout() methods, respectively; a value of 0 or less means no timeout. The default transaction lock timeout value is 120 seconds.\n\n
     Note that the @ref Qore::SQL::SQLStatement "SQLStatement" class also grabs the transaction lock when executing if it is created using a %Datasource object in the constructor; for more information see the  @ref Qore::SQL::SQLStatement "SQLStatement" class documentation.
 
     @par Thread Resource Handling
@@ -1842,19 +1842,28 @@ string Datasource::getOSCharset() [flags=CONSTANT] {
 }
 
 //! Sets the transaction lock timeout value in milliseconds; set to 0 for no timeout
-/** @param timeout_ms the transaction lock timeout value in milliseconds; set to 0 for no timeout.  Like all %Qore functions and methods taking timeout values, a @ref relative_dates "relative date/time value" may be passed instead of an integer to make the timeout units clear (ex: \c 2500ms for 2.5 seconds).
+/** @param timeout_ms the transaction lock timeout value in milliseconds: a thread that waits longer than this for the
+    @ref transaction_lock "transaction lock" gets a \c TRANSACTION-LOCK-TIMEOUT exception; 0 (the default value of the
+    argument) or a negative value sets no timeout: the thread waits until the lock is released, or until it is
+    cancelled.  Like all %Qore functions and methods taking timeout values, a @ref relative_dates "relative date/time
+    value" may be passed instead of an integer to make the timeout units clear (ex: \c 2500ms for 2.5 seconds).
 
     @par Example:
     @code{.py}
 db.setTransactionLockTimeout(4s);
     @endcode
+
+    @note The default transaction lock timeout of a new datasource is 120 seconds.  In %Qore 2.1.1 to 2.2.1, a timeout
+    of 0 made a thread that found the lock held fail at once with \c TRANSACTION-LOCK-TIMEOUT; since %Qore 3.0 it means
+    no timeout again
 */
 nothing Datasource::setTransactionLockTimeout(timeout timeout_ms = 0) [flags=NAMED_ARGS] {
     ds->setTransactionLockTimeout((int)timeout_ms);
 }
 
 //! Retrieves the transaction lock timeout value as an integer in milliseconds
-/** @return the transaction lock timeout value as an integer in milliseconds
+/** @return the transaction lock timeout value as an integer in milliseconds; 0 or a negative value means no timeout
+    (see Datasource::setTransactionLockTimeout())
 
     @par Example:
     @code{.py}

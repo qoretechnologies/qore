@@ -1104,6 +1104,19 @@
     @ref SqlUtil::AbstractTable::dropEmptyPartition() "dropEmptyPartition()".
     @endparblock
 
+    @par A Datasource Transaction Lock Timeout of 0 Means No Timeout Again
+    @parblock
+    A @ref Qore::SQL::Datasource "Datasource" transaction lock timeout of 0, which
+    @ref Qore::SQL::Datasource::setTransactionLockTimeout() "Datasource::setTransactionLockTimeout()" also sets when
+    called without an argument, again means no timeout, as documented and as in %Qore up to 2.1.0: a thread that
+    finds the lock held waits until it is released, and the wait can be cancelled.  In %Qore 2.1.1 to 2.2.1, such a
+    thread failed at once with \c TRANSACTION-LOCK-TIMEOUT.  A negative timeout also means no timeout, and a positive
+    timeout and the default of 120 seconds are unchanged.
+
+    <b>Workarounds:</b>
+    - Set a small positive timeout where a thread should give up waiting for the lock
+    @endparblock
+
     @par PostgreSQL Lists Only the Connection's Schemas
     @parblock
     On PostgreSQL, @ref SqlUtil::AbstractDatabase::listTables() "AbstractDatabase::listTables()" and

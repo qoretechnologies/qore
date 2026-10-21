@@ -120,19 +120,15 @@ int ManagedDatasource::grabLockIntern(ExceptionSink* xsink) {
         return 0;
     }
 
-    // the deadline for a positive timeout; a negative timeout means no timeout
+    // the deadline for a positive timeout; a timeout of 0 or less means no timeout, as documented (and as for the
+    // DatasourcePool error timeout): the wait ends when the lock is released or, with an exception sink, when the
+    // thread is cancelled
     int64 deadline_us = tl_timeout_ms > 0 ? q_get_monotonic_us() + static_cast<int64>(tl_timeout_ms) * 1000 : 0;
 
     while (tid != -1) {
         // Check for cancellation or program interrupt
         if (xsink && qore_check_cancel(xsink, "datasource lock acquisition")) {
             return -2;  // -2 indicates interrupt
-        }
-
-        if (!tl_timeout_ms) {
-            // Zero timeout means try once without waiting - fail immediately if lock not available
-            printd(5, "ManagedDatasource::grabLockIntern() this=%p lock not available (tl_timeout_ms=0), tid %d holds lock\n", this, tid);
-            return -1;
         }
 
         int64 wait_ms = -1;
