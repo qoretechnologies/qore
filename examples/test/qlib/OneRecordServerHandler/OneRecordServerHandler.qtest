@@ -110,6 +110,7 @@ class OneRecordTest inherits QUnit::Test {
         addTestCase("negative validation test", \negativeValidationTest());
         addTestCase("method not allowed test", \methodNotAllowedTest());
         addTestCase("notification delivery test", \notificationDeliveryTest());
+        addTestCase("notification delivery sandbox test", \notificationDeliverySandboxTest());
 
         set_return_value(main());
     }
@@ -630,6 +631,55 @@ class OneRecordTest inherits QUnit::Test {
         subscribeToType(type, refused_url);
         client.createLogisticsObject({"@type": type});
         assertRegex("HTTPCLIENT-CONNECT-ERROR", log_capture.waitForMessage("Notification delivery failed.*/refused"));
+    }
+
+    #! each delivery runs under the sandbox of the code that enqueued it, not the code that started the pool
+    /** The delivery pool is shared, but a notification caused by one sandboxed caller is delivered under that
+        caller's sandbox, and a notification caused by another is delivered under the other's.  Before the pool
+        was changed to submit each delivery as a task on the enqueuing thread, the persistent workers ran every
+        delivery under the sandbox of whichever caller started the pool (or, before thread inheritance, none).
+    */
+    notificationDeliverySandboxTest() {
+        string deny_type = CARGO_NS + "NotifySandboxDeny";
+        string allow_type = CARGO_NS + "NotifySandboxAllow";
+        # the denied caller's callback is on a fresh port never contacted before, so the delivery must open a new
+        # connection, which its network sandbox refuses; the allowed caller uses the running callback receiver
+        string deny_url = sprintf("http://localhost:%d/cb/sbdeny", get_free_port());
+        subscribeToType(deny_type, deny_url);
+        subscribeToType(allow_type, callback_url + "/cb/sballow");
+
+        # a sandboxed caller creates an object in-process through the handler; the delivery it causes runs on the
+        # shared delivery pool under that caller's own sandbox.  The pool is shared between the two callers.
+        Program deny = sandboxedCaller(False);
+        Program allow = sandboxedCaller(True);
+
+        deny.callFunction("create", handler, make_json({"@type": deny_type}));
+        # the denied caller's delivery is refused by its own network sandbox and logged
+        string msg = log_capture.waitForMessage("Notification delivery failed.*/cb/sbdeny");
+        assertRegex("ACCESS-DENIED|PROGRAM-INTERRUPTED|NETWORK", msg);
+
+        # the other caller reuses the same pool, but its delivery is governed by its own (allowing) sandbox
+        allow.callFunction("create", handler, make_json({"@type": allow_type}));
+        hash<auto> req = callback.requests.get(10000);
+        assertEq("/cb/sballow", req.path);
+        assertEq("api:Notification", req.body."@type");
+    }
+
+    #! a Program with a SandboxManager that denies (allow=False) or allows (allow=True) outbound network
+    private Program sandboxedCaller(bool allow) {
+        Program p(PO_NEW_STYLE);
+        # create() reaches the handler's create route in-process, so the enqueue and its delivery run under this
+        # Program's sandbox
+        p.parse("%new-style
+auto sub create(object handler, string body) {
+    hash<auto> cx = {\"url\": {\"path\": \"/logistics-objects\"}};
+    hash<auto> hdr = {\"method\": \"POST\"};
+    return handler.handleRequest(cx, hdr, body);
+}", "sandboxed-caller");
+        SandboxManager sm();
+        sm.setNetworkDefaultPolicy(allow);
+        p.setSandboxManager(sm);
+        return p;
     }
 
     errorResponsesTest() {

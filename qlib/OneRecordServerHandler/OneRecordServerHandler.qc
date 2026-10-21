@@ -66,25 +66,29 @@ public class OneRecordServerHandler inherits AbstractHttpRequestHandler, Logger:
         #! Base URL for constructing object URIs
         string base_url;
 
-        #! Notification work queue
-        Queue notification_queue();
+        #! Notification delivery pool; each delivery runs as a task under the sandbox of the code that enqueued it
+        /** The deliveries of a shared handler can be enqueued by different @ref sandboxing "sandboxes"; a
+            @ref Qore::Thread::ThreadPool "ThreadPool" worker is governed per task by the sandbox captured when the
+            task is submitted (on the enqueuing thread), so a delivery (an outbound HTTP POST to a subscriber's
+            callback URL) is checked against the sandbox of the code that caused the notification, not the sandbox
+            of whichever code happened to start the pool.  A persistent worker pool would instead run every
+            delivery under the sandbox of the first enqueuer.
+        */
+        *ThreadPool notification_pool;
 
-        #! Number of notification worker threads
+        #! Maximum number of threads in the notification pool
         int notification_workers;
 
-        #! Maximum notification queue size
+        #! Maximum number of notifications queued or in delivery at once (0 = unlimited)
         int max_queue_size;
 
-        #! Whether notification workers have been started
-        bool workers_started = False;
+        #! Counts notifications queued or in delivery, for the backpressure limit
+        Counter pending_notifications();
 
-        #! Mutex for worker startup
+        #! Mutex for lazy pool startup
         Mutex worker_mutex();
 
-        #! Counter for tracking active worker threads
-        Counter worker_counter();
-
-        #! Stop flag for worker threads
+        #! Stop flag: no new deliveries are submitted once set
         bool worker_stop = False;
 
         #! Notification receive callback
@@ -162,8 +166,9 @@ public class OneRecordServerHandler inherits AbstractHttpRequestHandler, Logger:
         stopNotificationWorkers();
     }
 
-    #! Stops the notification worker threads
+    #! Stops the notification delivery pool, waiting for queued deliveries to finish
     stopNotificationWorkers() {
+        *ThreadPool pool;
         {
             worker_mutex.lock();
             on_exit worker_mutex.unlock();
@@ -171,12 +176,12 @@ public class OneRecordServerHandler inherits AbstractHttpRequestHandler, Logger:
                 return;
             }
             worker_stop = True;
+            pool = remove notification_pool;
         }
-        # Push poison pills outside lock to wake all workers
-        for (int i = 0; i < notification_workers; ++i) {
-            notification_queue.push(NOTHING);
+        # wait for queued and in-flight deliveries to complete, then the pool threads stop
+        if (pool) {
+            pool.stopWait();
         }
-        worker_counter.waitForZero();
     }
 
     #! Sets the server information
@@ -1283,66 +1288,49 @@ public class OneRecordServerHandler inherits AbstractHttpRequestHandler, Logger:
     #! Enqueues a notification for async delivery by worker threads
     private enqueueNotification(string object_uri, *string object_type,
             string event_type, *hash<auto> object_data) {
-        ensureWorkersStarted();
+        *ThreadPool pool = ensurePoolStarted();
+        if (!pool) {
+            # the handler is shutting down
+            return;
+        }
 
-        # Drop if queue is full to prevent unbounded memory growth
-        if (max_queue_size > 0 && notification_queue.size() >= max_queue_size) {
+        # Drop if too many deliveries are queued or in flight, to prevent unbounded memory growth
+        if (max_queue_size > 0 && pending_notifications.getCount() >= max_queue_size) {
             log(Logger::LoggerLevel::ERROR,
                 "Notification queue full (%d items), dropping notification for %y event %y",
                 max_queue_size, object_uri, event_type);
             return;
         }
 
-        notification_queue.push({
-            "object_uri": object_uri,
-            "object_type": object_type,
-            "event_type": event_type,
-            "object_data": object_data,
-        });
+        # deliver on the pool; submitting on this (the enqueuing) thread captures its sandbox, so the delivery is
+        # governed by the sandbox of the code that caused the notification
+        pending_notifications.inc();
+        code deliver = sub () {
+            on_exit pending_notifications.dec();
+            deliverNotifications(object_uri, object_type, event_type, object_data);
+        };
+        try {
+            pool.submit(deliver);
+        } catch (hash<ExceptionInfo> ex) {
+            # the pool was stopped between the check and the submit
+            pending_notifications.dec();
+            log(Logger::LoggerLevel::ERROR,
+                "Notification delivery could not be submitted for %y event %y: %s: %s",
+                object_uri, event_type, ex.err, ex.desc);
+        }
     }
 
-    #! Ensures notification worker threads are started (lazy initialization)
-    private ensureWorkersStarted() {
-        if (workers_started || worker_stop) {
-            return;
-        }
+    #! Starts the delivery pool on first use; returns the pool, or @ref nothing if the handler is shutting down
+    private *ThreadPool ensurePoolStarted() {
         worker_mutex.lock();
         on_exit worker_mutex.unlock();
-        if (workers_started || worker_stop) {
+        if (worker_stop) {
             return;
         }
-        for (int i = 0; i < notification_workers; ++i) {
-            worker_counter.inc();
-            background notificationWorker(i);
+        if (!notification_pool) {
+            notification_pool = new ThreadPool(notification_workers);
         }
-        workers_started = True;
-    }
-
-    #! Notification worker thread main loop
-    private notificationWorker(int worker_id) {
-        on_exit worker_counter.dec();
-
-        while (!worker_stop) {
-            *hash<auto> work_item;
-            try {
-                # Block waiting for work with a 1-second timeout to check stop flag
-                work_item = notification_queue.get(1000);
-            } catch (hash<ExceptionInfo> ex) {
-                if (ex.err == "QUEUE-TIMEOUT") {
-                    continue;
-                }
-                # Queue error — exit worker
-                break;
-            }
-
-            # NOTHING is a poison pill (shutdown signal)
-            if (!exists work_item) {
-                break;
-            }
-
-            deliverNotifications(work_item.object_uri, work_item.object_type,
-                work_item.event_type, work_item.object_data);
-        }
+        return notification_pool;
     }
 
     #! Delivers notifications to all matching subscribers for a single event
