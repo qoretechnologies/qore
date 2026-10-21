@@ -2220,6 +2220,58 @@ public:
     }
 };
 
+//! Protocol frame sends never wait for the I/O controller while the decoder owns its channel lock
+class AsyncIoFrameSendTest {
+public:
+    //! A frame callback must enqueue without waiting for the I/O thread, also while installing buffered frames
+    static void run(UnitTestCounters& c) {
+        ExceptionSink xsink;
+        ReferenceHolder<QoreObject> ctrl_obj(qore_get_async_io_controller_obj(&xsink), &xsink);
+        ReferenceHolder<AsyncIoControllerPriv> ctrl(ctrl_obj ? static_cast<AsyncIoControllerPriv*>(
+            ctrl_obj->getReferencedPrivateData(CID_ASYNCIOCONTROLLER, &xsink)) : nullptr, &xsink);
+        UT_ASSERT(c, ctrl && !xsink, "frame-send test gets the global controller");
+        if (!ctrl || xsink) {
+            xsink.clear();
+            return;
+        }
+        // A controller command cannot complete while its lock is held. The timeout only releases a broken
+        // synchronous implementation so the test can report the failure instead of hanging the test process.
+        for (int protocol : {2, 3}) {
+            std::mutex m;
+            std::condition_variable cond;
+            bool held = false;
+            bool done = false;
+            bool timed_out = false;
+            std::thread blocker([&]() {
+                AutoLocker al(ctrl->m);
+                std::unique_lock<std::mutex> lock(m);
+                held = true;
+                cond.notify_all();
+                timed_out = !cond.wait_for(lock, std::chrono::seconds(5), [&]() { return done; });
+            });
+            {
+                std::unique_lock<std::mutex> lock(m);
+                cond.wait(lock, [&]() { return held; });
+            }
+            ReferenceHolder<QoreSocketObject> socket(new QoreSocketObject, &xsink);
+            int rv = protocol == 2
+                ? socket->sendHttp2StreamDataForAsyncPoll(1, nullptr, false, &xsink)
+                : socket->sendQuicClientStreamDataForAsyncPoll(0, nullptr, 0, false, &xsink);
+            {
+                std::lock_guard<std::mutex> lock(m);
+                done = true;
+                cond.notify_all();
+            }
+            blocker.join();
+            UT_ASSERT(c, !timed_out, protocol == 2
+                ? "HTTP/2 frame enqueue does not wait for the controller on an application thread"
+                : "HTTP/3 frame enqueue does not wait for the controller on an application thread");
+            UT_ASSERT(c, rv < 0 && xsink, "a missing protocol session is reported without submitting an I/O command");
+            xsink.clear();
+        }
+    }
+};
+
 //! Commands sent to every I/O thread while one of them is stopping
 /** An I/O thread that stops (autostop, or a Quit command) drains its command queue for the last time and cancels the
     operations in its cache, and only then clears its thread ID.  The fan-outs (cancelByOwner(), cancelByProgram(),
@@ -6757,6 +6809,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     AsyncIoCloseTest::run(c);
     AsyncIoAbandonedSubmitTest::run(c);
     AsyncIoStoppingThreadTest::run(c);
+    AsyncIoFrameSendTest::run(c);
     ut_cond_wait_cancel_in_window(c);
     Http3ClientResponseRegistrationTest::run(c);
     ut_fast_real_deref_releases_last(c);

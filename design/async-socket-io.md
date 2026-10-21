@@ -1614,3 +1614,20 @@ so the load of one busy connection stays on one thread.  The callback worker poo
 Any changes to queue or EventNotifier handling must preserve the acknowledge-and-recheck loop in `processCommands()` and the post-processCommands re-check protocol described
 above. Any changes to HTTP/2 frame processing must preserve the flush-after-receive pattern and the extended
 CONNECT rejection layers.
+
+### Sending control frames while installing a WebSocket decoder
+
+`ChannelAction::installFrameState()` feeds bytes received with the CONNECT response and drains the old channel
+under the action's mutex before publishing the decoder. It runs on the application thread, and a buffered ping,
+close or invalid frame can immediately send a pong or close. Meanwhile the I/O thread can be waiting for the same
+action mutex to dispatch another response. A synchronous controller send here deadlocks both threads and strands
+controller cancellation, including a later `Program` destructor.
+
+The HTTP/2 and HTTP/3 `send*StreamDataForAsyncPoll()` helpers therefore enqueue directly on their locked protocol
+sessions from **every** calling thread. They perform no socket I/O. Off the I/O thread they wake the controller,
+which alone flushes pending bytes; on the I/O thread the current poll cycle flushes them. The public synchronous
+send methods retain their synchronous behavior.
+
+`AsyncIoFrameSendTest` holds the controller lock on another thread and calls each helper on an application thread
+with a socket lacking a protocol session. The error must return without submitting a controller command. A bounded
+hold releases a broken synchronous implementation, so the regression reports a failure instead of hanging.

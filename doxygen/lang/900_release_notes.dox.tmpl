@@ -4808,6 +4808,9 @@ while (*binary chunk = input.read(65536)) {
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - Fixed a hang when opening an HTTP/2 or HTTP/3 WebSocket whose first buffered frames require a pong or close
+      response; the hang could also prevent unrelated programs from finishing or shutting down
+
     - Fixed the warnings of the files of a separated user module other than its \c .qm file: each was parsed with the
       warnings of the code loading the module (with \c qcc, the default warnings), not those the \c .qm file sets, so
       \c %%modern in the \c .qm file did not enable all warnings in the other files.  The module loader accepted an

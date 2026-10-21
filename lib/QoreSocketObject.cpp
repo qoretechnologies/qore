@@ -5756,11 +5756,12 @@ int QoreSocketObject::sendHttp2StreamData(int32_t stream_id, const BinaryNode* d
 
 int QoreSocketObject::sendHttp2StreamDataForAsyncPoll(int32_t stream_id, const BinaryNode* data,
         bool end_stream, ExceptionSink* xsink) {
-    // sendHttp2StreamData() covers the I/O thread and continuePoll workers directly; this alias
-    // is kept because WebSocketStreamFrameState's send callback documents its async-path intent
-    // by calling it, from both the H2 client (QC_Http2ClientPollOperationBase.qpp) and the H2
-    // server (QC_Http2PollOperationBase.qpp)
-    return sendHttp2StreamData(stream_id, data, end_stream, xsink);
+    // Installing a WebSocket decoder also feeds buffered frames on the application thread, under the
+    // ChannelAction lock. A pong or close must never wait for the controller: its I/O thread can be waiting
+    // for that same lock to deliver the next frame. Enqueue on the locked session and wake the controller;
+    // only the I/O thread flushes the bytes. Public synchronous callers keep sendHttp2StreamData().
+    return qore_socket_object_send_http2_stream_data_direct(this, qore_on_async_io_thread(), stream_id, data,
+        end_stream, xsink);
 }
 
 BinaryNode* QoreSocketObject::readHttp2StreamData(int32_t stream_id, size_t max_bytes, ExceptionSink* xsink) {
@@ -6607,16 +6608,19 @@ int QoreSocketObject::sendQuicClientStreamData(int64_t stream_id, const void* da
 
 int QoreSocketObject::sendQuicClientStreamDataForAsyncPoll(int64_t stream_id, const void* data,
         size_t len, bool end_stream, ExceptionSink* xsink) {
-    if (!qore_on_async_io_thread()) {
-        return sendQuicClientStreamData(stream_id, data, len, end_stream, xsink);
-    }
-
+    // Like the HTTP/2 frame callback, this can run under the ChannelAction lock on the application thread
+    // while installing the decoder. sendStreamData() only queues bytes under the session's mutex; it does
+    // no socket I/O, and must not be replaced here with the synchronous controller facade.
     std::shared_ptr<QuicSession> session = qore_socket_object_get_first_quic_session(this);
     if (!session) {
         xsink->raiseException("QUIC-ERROR", "no active QUIC session on this socket");
         return -1;
     }
-    return session->sendStreamData(stream_id, data, len, end_stream, xsink);
+    int rv = session->sendStreamData(stream_id, data, len, end_stream, xsink);
+    if (!*xsink && rv == 0 && !qore_on_async_io_thread()) {
+        qore_socket_object_wake_async_controller(this, xsink);
+    }
+    return *xsink ? -1 : rv;
 }
 
 void QoreSocketObject::setQuicClientStreamStreamingDirect(int64_t stream_id) {
