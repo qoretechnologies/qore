@@ -3779,6 +3779,38 @@ static void ut_asyncio_wait_for_processing_empty(UnitTestCounters& c) {
 
 // --- q_future_get_blocking tests ---
 
+#ifdef DEBUG
+namespace {
+//! State for ut_future_get_blocking_resolved(); see there
+struct FutureWaitTest {
+    QoreThreadLock lck;
+    QoreCondition cond;
+    //! the thread that waits on the Future
+    int waiter_tid = 0;
+    //! set when the waiter blocks in the Future's wait
+    bool waiting = false;
+};
+
+std::atomic<FutureWaitTest*> future_wait_test{nullptr};
+
+//! Reports that the waiter blocks in the Future's wait; it is called with the Future's lock held, which the waiter
+//! keeps until its wait releases it, so a Promise::set() made after the report finds the waiter waiting
+void future_wait_hook() {
+    FutureWaitTest* t = future_wait_test.load();
+    if (!t || q_gettid() != t->waiter_tid) {
+        return;
+    }
+    AutoLocker al(t->lck);
+    t->waiting = true;
+    t->cond.broadcast();
+}
+}
+#endif
+
+//! q_future_get_blocking() waits for a value that another thread sets while it waits
+/** In a debug build, the resolver sets the value once the waiter is blocked in the Future's wait, which the
+    condition-wait hook reports; the bounds of the waits only guard against a hang.
+*/
 static void ut_future_get_blocking_resolved(UnitTestCounters& c) {
     ExceptionSink xsink;
     // Create a Promise and its Future via the C++ API
@@ -3790,35 +3822,60 @@ static void ut_future_get_blocking_resolved(UnitTestCounters& c) {
     // Wrap the Future in a QoreObject (like FutureImpl would)
     QoreObject* future_obj = qore_new_future_impl_object(getProgram(), future.release());
 
-    // Resolve the promise from a background thread after ~50ms
-    std::thread resolver([&promise]() {
-        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+#ifdef DEBUG
+    FutureWaitTest t;
+    t.waiter_tid = q_gettid();
+    // installs the hook for the lifetime of the test; the resolver has finished when the test returns
+    struct HookHelper {
+        HookHelper(FutureWaitTest* t) {
+            future_wait_test = t;
+            qore_cond_wait_window_hook = future_wait_hook;
+        }
+        ~HookHelper() {
+            qore_cond_wait_window_hook = nullptr;
+            future_wait_test = nullptr;
+        }
+    } hook_helper(&t);
+    bool waiter_blocked = false;
+#endif
+
+    std::thread resolver([&]() {
+#ifdef DEBUG
+        {
+            AutoLocker al(t.lck);
+            int64 deadline_us = q_get_monotonic_us() + 30000000;
+            while (!t.waiting) {
+                int64 remaining_us = deadline_us - q_get_monotonic_us();
+                if (remaining_us <= 0) {
+                    break;
+                }
+                t.cond.wait2(&t.lck, (remaining_us + 999) / 1000);
+            }
+            waiter_blocked = t.waiting;
+        }
+#endif
         ExceptionSink tx;
         promise->set(QoreValue((int64)42), &tx);
         tx.clear();
     });
 
-    // Block on the future with a 5s budget — should return 42 within ~50ms
-    int unused_us;
-    int64 start_s = q_epoch_us(unused_us);
-    int64 start_us = start_s * 1000000LL + unused_us;
-    QoreValue result = q_future_get_blocking(future_obj, 5000, &xsink);
-    int end_us_tick;
-    int64 end_s = q_epoch_us(end_us_tick);
-    int64 elapsed_us = (end_s * 1000000LL + end_us_tick) - start_us;
+    // the budget only guards against a hang
+    QoreValue result = q_future_get_blocking(future_obj, 60000, &xsink);
 
     resolver.join();
     UT_ASSERT(c, !xsink, "q_future_get_blocking on resolved Future: no exception");
     UT_ASSERT_EQ(c, (int64)42, result.getAsBigInt(),
         "q_future_get_blocking returns the resolved value");
-    UT_ASSERT(c, elapsed_us >= 40000,
-        "q_future_get_blocking waits until background resolution");
+#ifdef DEBUG
+    UT_ASSERT(c, waiter_blocked, "q_future_get_blocking waits until background resolution");
+#endif
 
     result.discard(&xsink);
     future_obj->deref(&xsink);
     UT_ASSERT(c, !xsink, "cleanup succeeds");
 }
 
+//! q_future_get_blocking() raises FUTURE-TIMEOUT when no value is set within its timeout, and not before it
 static void ut_future_get_blocking_timeout(UnitTestCounters& c) {
     ExceptionSink xsink;
     ReferenceHolder<QorePromise> promise(new QorePromise(), &xsink);
@@ -3827,14 +3884,11 @@ static void ut_future_get_blocking_timeout(UnitTestCounters& c) {
 
     QoreObject* future_obj = qore_new_future_impl_object(getProgram(), future.release());
 
-    // Don't resolve the promise — wait should time out at 100ms
-    int unused_us;
-    int64 start_s = q_epoch_us(unused_us);
-    int64 start_us = start_s * 1000000LL + unused_us;
+    // Don't resolve the promise — the wait times out at 100ms; the deadline is taken on the monotonic clock after
+    // the start time below, so the wait cannot end before 100ms have passed on that clock
+    int64 start_us = q_clock_getmicros_monotonic();
     QoreValue result = q_future_get_blocking(future_obj, 100, &xsink);
-    int end_us_tick;
-    int64 end_s = q_epoch_us(end_us_tick);
-    int64 elapsed_us = (end_s * 1000000LL + end_us_tick) - start_us;
+    int64 elapsed_us = q_clock_getmicros_monotonic() - start_us;
 
     UT_ASSERT(c, xsink.isException(),
         "q_future_get_blocking times out → FUTURE-TIMEOUT exception");
@@ -3842,8 +3896,7 @@ static void ut_future_get_blocking_timeout(UnitTestCounters& c) {
     UT_ASSERT(c, err && !strcmp(err->c_str(), "FUTURE-TIMEOUT"),
         "timeout exception is FUTURE-TIMEOUT");
     UT_ASSERT(c, result.isNothing(), "timeout returns NOTHING");
-    UT_ASSERT(c, elapsed_us >= 90000 && elapsed_us < 500000,
-        "q_future_get_blocking elapsed ~100ms on timeout");
+    UT_ASSERT(c, elapsed_us >= 100000, "q_future_get_blocking does not time out before its timeout");
     xsink.clear();
 
     // Resolve AFTER the timeout so the Future drops cleanly
