@@ -4893,6 +4893,11 @@ while (*binary chunk = input.read(65536)) {
     - Fixed a hang when opening an HTTP/2 or HTTP/3 WebSocket whose first buffered frames require a pong or close
       response; the hang could also prevent unrelated programs from finishing or shutting down
 
+    - @ref Qore::Socket::shutdown() "Socket::shutdown()" on a secure connection now sends the TLS \c close_notify
+      alert before it shuts down the connection, as @ref Qore::Socket::close() "Socket::close()" does (RFC 8446
+      section 6.1): a peer saw the end of the connection as a truncation, and some peers treat that as an attack or
+      end the TLS session without keeping it for resumption.  A server connection that is closed after it was shut
+      down for sending sends the alert too
     - Fixed the warnings of the files of a separated user module other than its \c .qm file: each was parsed with the
       warnings of the code loading the module (with \c qcc, the default warnings), not those the \c .qm file sets, so
       \c %%modern in the \c .qm file did not enable all warnings in the other files.  The module loader accepted an

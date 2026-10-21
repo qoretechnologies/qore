@@ -70,6 +70,12 @@
 #include <qore/QoreSandboxManager.h>
 #include "qore/intern/qore_thread_intern.h"
 
+#include <openssl/evp.h>
+#include <openssl/x509.h>
+#if OPENSSL_VERSION_NUMBER < 0x30000000L
+#include <openssl/ec.h>
+#endif
+
 #include <arpa/inet.h>
 #include <cerrno>
 #include <cstdlib>
@@ -5500,6 +5506,257 @@ static void ut_event_notifier_close_waits_for_notify(UnitTestCounters& c) {
 }
 #endif
 
+//! Connects to the port and closes the connection at once (defined below)
+static void ut_connect_loopback_and_close(int port);
+
+//! Returns a new P-256 key, or nullptr
+static EVP_PKEY* ut_tls_make_key() {
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+    return EVP_EC_gen("P-256");
+#else
+    EVP_PKEY_CTX* pctx = EVP_PKEY_CTX_new_id(EVP_PKEY_EC, nullptr);
+    EVP_PKEY* key = nullptr;
+    if (pctx && EVP_PKEY_keygen_init(pctx) > 0
+            && EVP_PKEY_CTX_set_ec_paramgen_curve_nid(pctx, NID_X9_62_prime256v1) > 0) {
+        EVP_PKEY_keygen(pctx, &key);
+    }
+    EVP_PKEY_CTX_free(pctx);
+    return key;
+#endif
+}
+
+//! Returns a new self-signed certificate for the key, or nullptr
+static X509* ut_tls_make_cert(EVP_PKEY* key) {
+    X509* x = X509_new();
+    if (!x) {
+        return nullptr;
+    }
+    ASN1_INTEGER_set(X509_get_serialNumber(x), 1);
+    X509_gmtime_adj(X509_getm_notBefore(x), 0);
+    X509_gmtime_adj(X509_getm_notAfter(x), 3600);
+    X509_set_pubkey(x, key);
+    X509_NAME* name = X509_get_subject_name(x);
+    X509_NAME_add_entry_by_txt(name, "CN", MBSTRING_ASC, reinterpret_cast<const unsigned char*>("localhost"), -1, -1,
+        0);
+    X509_set_issuer_name(x, name);
+    if (!X509_sign(x, key, EVP_sha256())) {
+        X509_free(x);
+        return nullptr;
+    }
+    return x;
+}
+
+//! A TLS server peer, made with OpenSSL directly, that records whether the client's close_notify alert arrived
+/** The peer does not ignore an unexpected end of the stream (unlike Qore's own sockets), so it can tell a
+    close_notify from a bare TCP FIN.  It sends no session tickets, so the client has no unread data when it closes,
+    which would make the client's system answer the close with a reset.
+*/
+struct UtTlsPeer {
+    //! How the client ended the connection, set by the server thread
+    enum Result : int {
+        NO_TLS = -1,        //!< no TLS connection was made
+        NO_CLOSE_NOTIFY = 0, //!< the stream ended without close_notify (a truncation for the peer)
+        CLOSE_NOTIFY = 1,    //!< close_notify arrived before the end of the stream
+    };
+
+    int listen_fd = -1;
+    int port = 0;
+    SSL_CTX* ctx = nullptr;
+    std::thread thr;
+    std::atomic<int> result{NO_TLS};
+
+    //! When set, the server does not read until release() is called
+    bool hold_reads = false;
+    std::mutex m;
+    std::condition_variable cv;
+    bool released = false;
+
+    //! Creates the listener and the TLS context; @a max_version 0 = the default (TLS 1.3); returns 0 on success
+    int start(int max_version, bool hold) {
+        hold_reads = hold;
+        EVP_PKEY* key = ut_tls_make_key();
+        X509* cert = key ? ut_tls_make_cert(key) : nullptr;
+        ctx = SSL_CTX_new(TLS_server_method());
+        bool ok = ctx && cert && SSL_CTX_use_certificate(ctx, cert) == 1 && SSL_CTX_use_PrivateKey(ctx, key) == 1;
+        if (cert) {
+            X509_free(cert);
+        }
+        if (key) {
+            EVP_PKEY_free(key);
+        }
+        if (!ok) {
+            return -1;
+        }
+#if OPENSSL_VERSION_NUMBER >= 0x10101000L
+        SSL_CTX_set_num_tickets(ctx, 0);
+#endif
+        if (max_version) {
+            SSL_CTX_set_max_proto_version(ctx, max_version);
+        }
+
+        listen_fd = socket(AF_INET, SOCK_STREAM, 0);
+        if (listen_fd < 0) {
+            return -1;
+        }
+        sockaddr_in addr{};
+        addr.sin_family = AF_INET;
+        addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+        socklen_t alen = sizeof(addr);
+        if (::bind(listen_fd, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) < 0
+                || getsockname(listen_fd, reinterpret_cast<sockaddr*>(&addr), &alen) < 0
+                || listen(listen_fd, 1) < 0) {
+            return -1;
+        }
+        port = ntohs(addr.sin_port);
+
+        thr = std::thread([this]() {
+            int cfd = accept(listen_fd, nullptr, nullptr);
+            if (cfd < 0) {
+                return;
+            }
+            SSL* ssl = SSL_new(ctx);
+            SSL_set_fd(ssl, cfd);
+            if (SSL_accept(ssl) == 1) {
+                if (hold_reads) {
+                    std::unique_lock<std::mutex> l(m);
+                    cv.wait(l, [this]() { return released; });
+                }
+                char buf[4096];
+                while (true) {
+                    int n = SSL_read(ssl, buf, sizeof(buf));
+                    if (n > 0) {
+                        continue;
+                    }
+                    result.store(SSL_get_error(ssl, n) == SSL_ERROR_ZERO_RETURN ? CLOSE_NOTIFY : NO_CLOSE_NOTIFY,
+                        std::memory_order_release);
+                    break;
+                }
+            }
+            SSL_free(ssl);
+            ERR_clear_error();
+            ::close(cfd);
+        });
+        return 0;
+    }
+
+    //! Lets a server that holds its reads read
+    void release() {
+        std::lock_guard<std::mutex> l(m);
+        released = true;
+        cv.notify_all();
+    }
+
+    //! Waits for the server thread and returns how the client ended the connection
+    int finish() {
+        release();
+        if (thr.joinable()) {
+            thr.join();
+        }
+        return result.load(std::memory_order_acquire);
+    }
+
+    ~UtTlsPeer() {
+        finish();
+        if (listen_fd >= 0) {
+            ::close(listen_fd);
+        }
+        if (ctx) {
+            SSL_CTX_free(ctx);
+        }
+    }
+};
+
+//! RFC 8446 section 6.1: each party must send close_notify before closing its write side
+/** For TLS 1.2 and TLS 1.3, the peer must receive close_notify before the end of the stream when the client closes
+    the socket, shuts it down and closes it, or half-closes it (the lingering close of a server connection).  The
+    client does not wait for the peer's close_notify, which the peer never sends here.
+*/
+static void ut_tls_close_sends_close_notify(UnitTestCounters& c) {
+    enum Close { CLOSE, SHUTDOWN_CLOSE, HALF_CLOSE };
+    for (int version : {TLS1_2_VERSION, 0}) {
+        for (Close how : {CLOSE, SHUTDOWN_CLOSE, HALF_CLOSE}) {
+            std::string label = std::string(version ? "TLS 1.2" : "TLS 1.3") + (how == CLOSE ? " close(): "
+                : (how == SHUTDOWN_CLOSE ? " shutdown() and close(): " : " half-close: "));
+            UtTlsPeer peer;
+            if (peer.start(version, false)) {
+                UT_ASSERT(c, false, (label + "the TLS peer starts").c_str());
+                continue;
+            }
+            ExceptionSink xsink;
+            QoreSocket qs;
+            int rc = qs.connectINETSSL(&xsink, "127.0.0.1", peer.port, 5000);
+            UT_ASSERT(c, !rc && !xsink.isException(), (label + "the TLS connection is made").c_str());
+            if (rc || xsink.isException()) {
+                xsink.clear();
+                ut_connect_loopback_and_close(peer.port);
+                peer.finish();
+                continue;
+            }
+            const char msg[] = "data";
+            UT_ASSERT_EQ(c, 0, qs.send(msg, sizeof(msg) - 1, &xsink), (label + "data is sent").c_str());
+            switch (how) {
+                case CLOSE:
+                    qs.close();
+                    break;
+                case SHUTDOWN_CLOSE:
+                    qs.shutdown();
+                    qs.close();
+                    break;
+                case HALF_CLOSE:
+                    qore_socket_private::get(qs)->shutdown_write_direct();
+                    break;
+            }
+            int result = peer.finish();
+            if (how == HALF_CLOSE) {
+                qs.close();
+            }
+            UT_ASSERT_EQ(c, UtTlsPeer::CLOSE_NOTIFY, result,
+                (label + "the peer receives close_notify before the end of the stream").c_str());
+            xsink.clear();
+        }
+    }
+}
+
+//! Closing a TLS socket whose send buffer is full does not block: close_notify is attempted once, without waiting
+static void ut_tls_close_full_send_buffer(UnitTestCounters& c) {
+    UtTlsPeer peer;
+    if (peer.start(0, true)) {
+        UT_ASSERT(c, false, "the TLS peer starts");
+        return;
+    }
+    ExceptionSink xsink;
+    QoreSocket qs;
+    int rc = qs.connectINETSSL(&xsink, "127.0.0.1", peer.port, 5000);
+    UT_ASSERT(c, !rc && !xsink.isException(), "the TLS connection is made");
+    if (rc || xsink.isException()) {
+        xsink.clear();
+        ut_connect_loopback_and_close(peer.port);
+        return;
+    }
+    // the peer does not read: fill the connection's buffers with bytes written past TLS until no more fit
+    int fd = qs.getSocket();
+    int sndbuf = 4096;
+    setsockopt(fd, SOL_SOCKET, SO_SNDBUF, &sndbuf, sizeof(sndbuf));
+    char block[16384] = {};
+    size_t written = 0;
+    while (true) {
+        ssize_t n = ::send(fd, block, sizeof(block), MSG_DONTWAIT
+#ifdef MSG_NOSIGNAL
+            | MSG_NOSIGNAL
+#endif
+        );
+        if (n > 0) {
+            written += static_cast<size_t>(n);
+            continue;
+        }
+        break;
+    }
+    UT_ASSERT(c, written > 0 && (errno == EAGAIN || errno == EWOULDBLOCK), "the send buffer is full");
+    // returns although close_notify cannot be sent
+    UT_ASSERT_EQ(c, 0, qs.close(), "the socket is closed");
+    peer.finish();
+}
+
 static void ut_manager_close_all(UnitTestCounters& c) {
     ExceptionSink xsink;
 
@@ -7607,6 +7864,8 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     ut_manager_pool_reuse(c);
     ut_connection_sandbox_use(c);
     ut_manager_pool_sandbox(c);
+    ut_tls_close_sends_close_notify(c);
+    ut_tls_close_full_send_buffer(c);
     ut_event_notifier_use_after_close(c);
     ut_event_notifier_concurrent_close(c);
 #ifdef DEBUG

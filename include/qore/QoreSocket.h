@@ -1914,14 +1914,17 @@ public:
 
     //! closes the socket
     /** Deletes the socket file if it was a UNIX domain socket and was created with the QoreSocket::bind() call.
-         Also implicitly calls QoreSocket::shutdownSSL() if an SSL connection is active.
+        An active TLS connection sends its close_notify alert before the connection is closed (RFC 8446 section 6.1),
+        with one attempt that does not block, without waiting for the peer's alert; a TLS connection that another
+        thread is using is closed without the alert.
         @return 0 if OK, not 0 on error
     */
     DLLEXPORT int close();
 
     //! calls shutdown on the socket
     /** shuts down the socket for reading and writing, after this call further sends and receives are
-        disallowed until the socket is reopened.
+        disallowed until the socket is reopened.  An active TLS connection sends its close_notify alert first, as
+        with close().
 
         @note QoreSocket::shutdown() should normally be called before calling this function.
 

@@ -6026,6 +6026,11 @@ hash<SseMessageInfo> Socket::readServerSentEvent(timeout timeout_ms = -1) {
 //! Closes an open socket
 /** Also deletes the UNIX domain socket file if it was created by a call to Socket::bind(). Returns 0 for success, -1 for error; in this case check errno() for the error number
 
+    A secure connection sends its TLS \c close_notify alert before the connection is closed (RFC 8446 section 6.1),
+    so the peer can tell the end of the connection from a truncation; the alert is sent with one attempt that does not
+    block, and the peer's alert is not waited for.  A connection that another thread is reading or writing when it is
+    closed is closed without the alert.
+
     @par Example:
     @code{.py}
 if (sock.close())
@@ -6043,6 +6048,8 @@ int Socket::close() {
 
 //! Ensures that a socket will be closed even if the file descriptor is shared with other processes (for example, after a call to fork())
 /** Does not throw any exceptions; returns an error code in case of an error
+
+    A secure connection sends its TLS \c close_notify alert first, as with close()
 
     @par Example:
     @code{.py}

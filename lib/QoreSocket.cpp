@@ -6205,14 +6205,40 @@ int SSLSocketHelper::sysCallError(ExceptionSink* xsink, int rc, const char* mnam
     return QSE_SSL_ERR;
 }
 
-// returns 0 for success
-int SSLSocketHelper::shutdown() {
-    int rc = SSL_shutdown(ssl) < 0 ? -1 : 0;
-    // a layered connection is shut down before the connection that carries it
-    if (outer && outer->shutdown()) {
-        rc = -1;
+void SSLSocketHelper::sendCloseNotify(int fd) {
+    // nothing to send: the alert or a fatal alert was sent already, or the handshake did not complete, in which case
+    // SSL_shutdown() sends nothing either
+    if (!(SSL_get_shutdown(ssl) & SSL_SENT_SHUTDOWN) && SSL_is_init_finished(ssl)) {
+        // one attempt that cannot block: the write side is closed right after
+#ifdef _Q_WINDOWS
+        u_long mode = 1;
+        bool restore = !ioctlsocket(fd, FIONBIO, &mode) && !qore_on_async_io_thread();
+#else
+        int flags = fcntl(fd, F_GETFL, 0);
+        bool restore = flags >= 0 && !(flags & O_NONBLOCK) && !fcntl(fd, F_SETFL, flags | O_NONBLOCK);
+#endif
+        ERR_clear_error();
+        // 0: the alert was sent (the peer's is not awaited); < 0: it could not be sent now, which the error queue
+        // must not report to a later TLS call of this thread.  Either way SSL_SENT_SHUTDOWN is set, so the session
+        // stays resumable.
+        (void)SSL_shutdown(ssl);
+        ERR_clear_error();
+#ifdef _Q_WINDOWS
+        if (restore) {
+            // a socket used from Qore threads is blocking; one on the async I/O thread stays non-blocking
+            mode = 0;
+            ioctlsocket(fd, FIONBIO, &mode);
+        }
+#else
+        if (restore) {
+            fcntl(fd, F_SETFL, flags);
+        }
+#endif
     }
-    return rc;
+    // a layered connection is shut down before the connection that carries it
+    if (outer) {
+        outer->sendCloseNotify(fd);
+    }
 }
 
 // returns 0 for success

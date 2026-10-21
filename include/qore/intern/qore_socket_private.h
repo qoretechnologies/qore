@@ -1846,22 +1846,49 @@ struct qore_socket_private : public QoreReferenceCounter {
         return close_internal();
     }
 
+    //! Shuts down the connection for sending and receiving; a TLS connection sends its close_notify alert first
     DLLLOCAL int shutdown_direct() {
         if (std::shared_ptr<Http2Session> h2 = getH2SessionForClose()) {
             h2->markClosed();
         }
         CloseLockHelper cl(*this);
-        return sock != QORE_INVALID_SOCKET ? ::shutdown(sock, SHUTDOWN_ARG) : 0;
+        if (sock == QORE_INVALID_SOCKET) {
+            return 0;
+        }
+        sendTlsCloseNotifyLocked();
+        return ::shutdown(sock, SHUTDOWN_ARG);
     }
 
     //! Shuts down the sending side of the connection only (a half-close); the peer receives the end of the stream
-    /** Data already written is sent before the end of the stream, and data from the peer can still be received.
+    /** Data already written is sent before the end of the stream, and data from the peer can still be received.  A
+        TLS connection sends its close_notify alert first.
 
         @return 0 for success, -1 for an error (see errno)
     */
     DLLLOCAL int shutdown_write_direct() {
         CloseLockHelper cl(*this);
-        return sock != QORE_INVALID_SOCKET ? ::shutdown(sock, SHUTDOWN_WR_ARG) : 0;
+        if (sock == QORE_INVALID_SOCKET) {
+            return 0;
+        }
+        sendTlsCloseNotifyLocked();
+        return ::shutdown(sock, SHUTDOWN_WR_ARG);
+    }
+
+    //! Sends the close_notify alert of the TLS connection, if any, before the write side of the connection is closed
+    /** RFC 8446 section 6.1: each party must send a close_notify alert before closing its write side of the
+        connection, or the peer sees the end of the stream as a truncation.  The alert is sent once, with one
+        non-blocking attempt, and the peer's close_notify is not awaited (which section 6.1 does not require); it is
+        sent only if no other thread uses the TLS connection: the calls of an SSL object must not run concurrently,
+        and an I/O call in progress on another thread is cancelled by the TCP shutdown that follows, without the
+        alert.  @ref close_m must be held: other threads take their references to the TLS connection with it held, so
+        none can start a TLS call while the alert is sent.
+    */
+    DLLLOCAL void sendTlsCloseNotifyLocked() {
+        assert(sock != QORE_INVALID_SOCKET);
+        SSLSocketHelper* s = ssl.load(std::memory_order_relaxed);
+        if (s && s->onlySocketReference()) {
+            s->sendCloseNotify(sock);
+        }
     }
 
     //! Returns the HTTP/2 session to mark closed; the reference is read under @ref close_m
@@ -1924,9 +1951,11 @@ struct qore_socket_private : public QoreReferenceCounter {
         }
         // Shut down the raw fd to unblock any ::poll / SSL_read /
         // SSL_write currently in flight on this socket; if a racing close
-        // has already released the fd, there is nothing to shut down.
+        // has already released the fd, there is nothing to shut down.  A TLS
+        // connection that no call is using sends its close_notify alert first.
         CloseLockHelper cl(*this);
         if (sock != QORE_INVALID_SOCKET) {
+            sendTlsCloseNotifyLocked();
             ::shutdown(sock, SHUTDOWN_ARG);
         }
     }
@@ -2101,8 +2130,17 @@ struct qore_socket_private : public QoreReferenceCounter {
             old_h2_stream_complete_callback.swap(h2_stream_complete_callback);
 
             if (sock >= 0) {
-                // Cancel any in-flight I/O on this socket first: a TCP-level shutdown(SHUT_RDWR) makes an I/O call
-                // in progress on another thread fail and return.  It does not wait for that call to return, so the
+                // A TLS connection that no other thread uses sends its close_notify alert before the write side
+                // is closed (RFC 8446 section 6.1).  SSL_shutdown() only if no other thread holds the connection:
+                // the calls of an SSL object must not run concurrently, and a concurrent SSL_read() or SSL_write()
+                // colliding with SSL_shutdown() corrupts the cipher context (SIGSEGV inside EVP_CIPHER_get_mode /
+                // EVP_CIPHER_CTX_get0_cipher under H2 teardown load, CI jobs 170545, 170659).  The other threads
+                // take their references with this lock held, so none can start an SSL call while it runs.  A
+                // connection that another thread uses is closed without the alert, which could not be sent then.
+                sendTlsCloseNotifyLocked();
+
+                // Cancel any in-flight I/O on this socket: a TCP-level shutdown(SHUT_RDWR) makes an I/O call in
+                // progress on another thread fail and return.  It does not wait for that call to return, so the
                 // call can still be using the descriptor and the TLS connection: both are released by the call's
                 // IoUseHelper when it is still in progress (see SharedDescriptor and getSsl()).
                 //
@@ -2112,16 +2150,6 @@ struct qore_socket_private : public QoreReferenceCounter {
 
                 // release the TLS connection, if any; releasing it runs no Qore code
                 if (SSLSocketHelper* old_ssl = ssl.load(std::memory_order_relaxed)) {
-                    // SSL_shutdown() only if no other thread holds the connection: the calls of an SSL object must
-                    // not run concurrently, and a concurrent SSL_read() or SSL_write() colliding with
-                    // SSL_shutdown() corrupts the cipher context (SIGSEGV inside EVP_CIPHER_get_mode /
-                    // EVP_CIPHER_CTX_get0_cipher under H2 teardown load, CI jobs 170545, 170659).  The other
-                    // threads take their references with this lock held, so none can start an SSL call before the
-                    // connection is released here.  Nothing is lost by not calling it: the descriptor is already
-                    // shut down, so the close notification could not be sent.
-                    if (old_ssl->onlySocketReference()) {
-                        old_ssl->shutdown();
-                    }
                     ssl.store(nullptr, std::memory_order_relaxed);
                     advanceTlsStateGen();
                     old_ssl->deref();
