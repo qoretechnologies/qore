@@ -20,6 +20,10 @@ class PipeTest inherits QUnit::Test {
         addTestCase("nonblockingPipeFullReadTest", \nonblockingPipeFullReadTest());
         addTestCase("nonblockingPipeCompetingReadersTest", \nonblockingPipeCompetingReadersTest());
         addTestCase("nonblockingPipeCancellationTest", \nonblockingPipeCancellationTest());
+        # the ends of File::getPipe() own their descriptors: close() closed nothing and returned -1, the
+        # descriptors leaked with the objects, and the reading end never got the end of the input
+        addTestCase("pipe ends close", \pipeEndsCloseTest());
+        addTestCase("pipe ends are released", \pipeEndsReleasedTest());
 
         set_return_value(main());
     }
@@ -99,6 +103,41 @@ class PipeTest inherits QUnit::Test {
         w.close();
         assertEq(NOTHING, r.readShortBinary(1, 1000),
             "EOF remains distinct from temporary unavailability");
+    }
+
+    pipeEndsCloseTest() {
+        hash<PipeInfo> info = File::getPipe();
+        ReadOnlyFile r = info.read;
+        File w = info.write;
+        w.write("x");
+        assertEq(0, w.close(), "close() closes the writing end");
+        assertTrue(r.isDataAvailable(1m), "the reading end has the data and the end");
+        assertEq(binary("x"), r.readBinary(-1), "the data, up to the end");
+        assertEq(NOTHING, r.readBinary(-1), "the end");
+        assertThrows("FILE-OPEN2-ERROR", \w.open2(), (tmp_location() + DirSep + "x", O_RDONLY),
+            "a pipe end cannot be reopened");
+        assertEq(0, r.close(), "close() closes the reading end");
+    }
+
+    pipeEndsReleasedTest() {
+%ifdef Windows
+        testSkip("File::getPipe() is not available on Windows");
+%endif
+        if (!hstat("/dev/fd/0")) {
+            testSkip("there is no /dev/fd to see the open descriptors");
+        }
+        int rfd;
+        int wfd;
+        {
+            hash<PipeInfo> info = File::getPipe();
+            rfd = info.read.getPollableDescriptor();
+            wfd = info.write.getPollableDescriptor();
+            assertTrue(exists hstat("/dev/fd/" + rfd), "the reading end is open");
+            assertTrue(exists hstat("/dev/fd/" + wfd), "the writing end is open");
+        }
+        # the objects are destroyed with the hash
+        assertEq(NOTHING, hstat("/dev/fd/" + rfd), "the reading end's descriptor is released");
+        assertEq(NOTHING, hstat("/dev/fd/" + wfd), "the writing end's descriptor is released");
     }
 
     nonblockingPipeFullReadTest() {

@@ -176,7 +176,11 @@ private:
 struct qore_qf_private {
     int fd = -1;
     bool is_open = false;
+    //! a file made from a descriptor (stdin, stdout, stderr, the ends of File::getPipe()), which cannot be reopened
     bool special_file = false;
+    //! a special file that owns its descriptor (the ends of File::getPipe()): it is closed by close() and with the
+    //! object, while the descriptors of the standard streams are never closed
+    bool owned_special = false;
     const QoreEncoding* charset;
     std::string filename;
     mutable QoreThreadLock m;
@@ -219,7 +223,7 @@ struct qore_qf_private {
 
         int rc;
         if (is_open) {
-            if (special_file) {
+            if (special_file && !owned_special) {
                 rc = -1;
             } else {
                 rc = detach ? 0 : ::close(fd);
@@ -1316,9 +1320,9 @@ struct qore_qf_private {
 
         int rc = fd;
         // special files (stdout/stderr/stdin) are never closed, so they are not detached either: the object keeps its
-        // descriptor and stays open; any other file is left closed and without a descriptor, so it can never close the
-        // descriptor the caller now owns, and a second call returns -1
-        if (!special_file) {
+        // descriptor and stays open; any other file (an end of File::getPipe() included) is left closed and without a
+        // descriptor, so it can never close the descriptor the caller now owns, and a second call returns -1
+        if (!special_file || owned_special) {
             close_intern(true);
         }
         return rc;

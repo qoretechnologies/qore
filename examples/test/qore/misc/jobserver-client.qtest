@@ -171,7 +171,7 @@ class JobserverClientTest inherits QUnit::Test {
         testSkip("dbg_jobserver_admit() is only in a debug build of the library");
 %endif
 %ifdef QoreDebug
-        # a named pipe stands for make's pipe, as its write end can be closed (that of File::getPipe() cannot)
+        # a named pipe stands for make's pipe
         string dir = make_tmp_dir("jobserver-end");
         on_exit remove_tree(dir);
         string path = join_paths(dir, "jobserver");
