@@ -10300,21 +10300,31 @@ QoreListNode* qore_socket_private::poll(const QoreListNode* poll_list, int timeo
     };
 
     auto consume_result = [&](const QoreHashNode* result) -> int {
+        QoreValue other = result->getKeyValue("other");
+        const QoreHashNode* other_hash = other.getType() == NT_HASH ? other.get<const QoreHashNode>() : nullptr;
         QoreValue ex = result->getKeyValue("ex");
         if (ex.getType() == NT_HASH) {
             const QoreHashNode* ex_hash = ex.get<const QoreHashNode>();
             if (qore_socket_exec_exception_is(*ex_hash, "SOCKET-TIMEOUT")) {
                 return 0;
             }
+            // a socket that is closed or deleted while it is polled is reported with SOCK_POLLERR, as when the poll is
+            // canceled or times out (mark_closed_entries()): the I/O thread that waits for the socket sees the close,
+            // and the socket's operation ends with its error
+            if (other_hash) {
+                size_t index = static_cast<size_t>(other_hash->getKeyValue("index").getAsBigInt());
+                if (entry_closed(index)) {
+                    result_events[index] |= SOCK_POLLERR;
+                    return 0;
+                }
+            }
             qore_socket_raise_poll_result_exception(ex_hash, xsink);
             return -1;
         }
 
-        QoreValue other = result->getKeyValue("other");
-        if (other.getType() != NT_HASH) {
+        if (!other_hash) {
             return 0;
         }
-        const QoreHashNode* other_hash = other.get<const QoreHashNode>();
         size_t index = (size_t)other_hash->getKeyValue("index").getAsBigInt();
         int events = (int)other_hash->getKeyValue("events").getAsBigInt();
         QoreValue canceled = result->getKeyValue("canceled");
