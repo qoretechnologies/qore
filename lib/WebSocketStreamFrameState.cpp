@@ -142,7 +142,8 @@ void WebSocketStreamFrameState::handleFrame(WsFrame& frame) {
             }
 
             case WSOP_CLOSE: {
-                uint16_t code = WSCC_NormalClosure;
+                // a close frame without a status code has the close code 1005 (RFC 6455 section 7.1.5)
+                uint16_t code = WSCC_NoStatusRcvd;
                 std::string reason;
                 if (frame.payload && frame.payload->size() >= 2) {
                     const uint8_t* d = static_cast<const uint8_t*>(frame.payload->getPtr());

@@ -40,6 +40,8 @@
 #include "qore/QoreThreadLock.h"
 #include "qore/WebSocketFrameCodec.h"
 
+#include <atomic>
+
 //! Abstract callback for processing WebSocket frames on the I/O thread
 /** Implementations handle frames entirely in C++ with zero context switches.
     The I/O thread calls handleTextFrame/handleBinaryFrame when a complete
@@ -152,6 +154,9 @@ public:
 */
 class HttpWebSocketPollOperationPriv : public SocketPollOperationBase {
 public:
+    //! How long a close started by the server waits for the client's close frame by default (milliseconds)
+    static constexpr int64 DefaultCloseTimeoutMs = 5000;
+
     //! WebSocket connection states
     enum class WsState {
         CONNECTED,  //!< WebSocket connection is active
@@ -350,6 +355,27 @@ public:
         return idle_timeout_ms;
     }
 
+    //! Sets how long a close started by the server waits for the client's close frame (0 = no wait)
+    /** The wait starts when the server's close frame has been written; when the client's close frame does not
+        arrive in time, the operation ends closed with code 1006 and the reason \c "close handshake timed out".
+    */
+    DLLLOCAL void setCloseTimeout(int64 ms) {
+        AutoLocker al(m);
+        close_timeout_ms = ms > 0 ? ms : 0;
+    }
+
+    //! Returns how long a close started by the server waits for the client's close frame (0 = no wait)
+    DLLLOCAL int64 getCloseTimeout() const {
+        return close_timeout_ms;
+    }
+
+    //! Raises WEBSOCKET-CLOSING-ERROR once the server's close frame was queued or the operation has ended
+    /** No data frame may be sent after a close frame (RFC 6455 section 5.5.1); can be called from any thread
+
+        @return 0 if a data frame can be queued, -1 if an exception was raised
+    */
+    DLLLOCAL int checkDataSend(ExceptionSink* xsink) const;
+
     //! Sets the send timeout in milliseconds
     DLLLOCAL void setSendTimeout(int64 ms) {
         send_timeout_ms = ms;
@@ -406,9 +432,23 @@ private:
     SocketRecvDataPollOperation* recv_op = nullptr;
 
     WsState ws_state = WsState::CONNECTED;
+    //! True once the server's close frame was queued or the operation ended; read without a lock by
+    //! checkDataSend()
+    std::atomic<bool> closing{false};
+    //! The close code: the client's once its close frame has arrived
     uint16_t close_code = 1000;
+    //! The close reason: the client's once its close frame has arrived
     std::string close_reason;
-    bool close_initiated = false;           //!< true if we initiated the close handshake
+    bool close_sent = false;                //!< true once our close frame was queued
+    bool close_received = false;            //!< true once the client's close frame arrived
+    //! True once a close frame was put in the data to send; I/O thread only (see drainSendQueue())
+    bool close_frame_queued = false;
+    //! How long a close started by the server waits for the client's close frame (milliseconds, 0 = no wait)
+    int64 close_timeout_ms = DefaultCloseTimeoutMs;
+    //! When a close started by the server stops waiting for the client's close frame (monotonic ms, 0 = not set)
+    /** Set when the server's close frame has been written
+    */
+    int64 close_deadline_ms = 0;
     size_t max_frame_size = WS_DEFAULT_MAX_FRAME_SIZE;
 
     //! Error information (ref'd or nullptr)
@@ -512,6 +552,32 @@ private:
 
     //! Transitions to CLOSED state with the given code and reason
     DLLLOCAL void setClosed(uint16_t code, const char* reason);
+
+    //! Sets the state of the operation; every change of the state is made with this method
+    /** Data frames are refused once the operation has ended; a close frame received from the client does not refuse
+        them, as the answers to the messages received before it are sent before the server's close frame
+    */
+    DLLLOCAL void setWsStateValue(WsState s) {
+        ws_state = s;
+        if (s == WsState::CLOSED || s == WsState::ERROR) {
+            closing.store(true, std::memory_order_release);
+        }
+    }
+
+    //! Ends the close handshake when it is complete, the connection is lost, or the close deadline has passed
+    /** Starts the close deadline when the server's close frame has been written.
+
+        @return -1 if the operation ended, 0 if not
+    */
+    DLLLOCAL int checkClosing(ExceptionSink* xsink);
+
+    //! Returns true while a close started by the server waits for the client's close frame
+    /** The close handshake ends when the client's close frame arrives (RFC 6455 section 5.5.1), when the connection
+        is lost, or at the close deadline.
+    */
+    DLLLOCAL bool waitsForPeerClose() const {
+        return ws_state == WsState::CLOSING && close_sent && !close_received;
+    }
 };
 
 DLLLOCAL QoreClass* initHttpWebSocketPollOperationBaseClass(QoreNamespace& qorens);

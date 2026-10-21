@@ -131,6 +131,11 @@ module HttpServerUtil {
     @section httpserverutil_relnotes HttpServerUtil Module Release Notes
 
     @subsection httputil1_6 HttpServerUtil 1.6
+    - added @ref HttpServer::AbstractHttpSocketHandlerInterface::startClosingConnections()
+      "AbstractHttpSocketHandlerInterface::startClosingConnections()" and
+      @ref HttpServer::AbstractHttpSocketHandlerInterface::waitForConnectionsClosed() "waitForConnectionsClosed()",
+      which the HTTP server calls before it or a listener stops, so dedicated connections can be closed with their
+      protocol's closing handshake, all at the same time
     - request handlers receive the compression level of each content encoding for response bodies compressed on the
       fly in \c cx."compression-levels", and the weight of each acceptable content encoding in
       \c cx."header-info"."accept-encoding-weights"; @ref HttpServer::AbstractHttpRequestHandler::encodeBody()
@@ -4279,6 +4284,40 @@ public class AbstractHttpSocketHandlerInterface {
     stop() {
         stop = True;
         stopImpl();
+    }
+
+    #! Starts closing the handler's connections cleanly before the server or a listener stops
+    /** Called by the HTTP server before it stops (for all listeners) or before a listener stops (for that
+        listener), for every dedicated socket handler, and before it stops their connections with
+        @ref stop(softstring) "stop()": a handler whose protocol has a closing handshake (such as WebSocket, RFC 6455
+        section 5.5.1) starts it on all the connections here, so all the handshakes run at the same time.  The server
+        then calls @ref waitForConnectionsClosed() with the latest of the deadlines returned by its handlers, so it
+        waits at most one handshake timeout in total, never one per connection.
+
+        The default implementation does nothing and returns @ref nothing.
+
+        @param lid the listener ID, or @ref nothing for all listeners
+
+        @return the time by which the connections will have closed; the server waits until then at most; @ref nothing
+        if there is nothing to wait for
+
+        @since HttpServerUtil 1.6
+    */
+    *date startClosingConnections(*softstring lid) {
+    }
+
+    #! Waits until the connections that @ref startClosingConnections() started closing have closed, or until the
+    #! deadline
+    /** The connections that have not closed by then are stopped at once by @ref stop(softstring) "stop()".
+
+        The default implementation does nothing.
+
+        @param deadline the time at which the wait ends
+        @param lid the listener ID, or @ref nothing for all listeners
+
+        @since HttpServerUtil 1.6
+    */
+    waitForConnectionsClosed(date deadline, *softstring lid) {
     }
 
     #! Called when the handler stops

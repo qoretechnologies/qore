@@ -43,6 +43,9 @@ public class Http3StreamContext inherits AbstractStreamContext {
     const MaxDrainRetries = 10;
 
     private {
+        #! True once the end of the stream has been sent
+        bool ended = False;
+
         Socket sock;
         int session_id;
         int stream_id;
@@ -167,6 +170,9 @@ public class Http3StreamContext inherits AbstractStreamContext {
             }
             sock.waitForQuicStreamDrain(session_id, stream_id, 5s);
         }
+        if (end_stream) {
+            ended = True;
+        }
     }
 
     #! Sends data on the QUIC stream, waiting at most the given time for a full send buffer to drain
@@ -273,6 +279,11 @@ public class Http3StreamContext inherits AbstractStreamContext {
 
     #! Close the stream by sending end-of-stream
     close() {
+        # the end of the stream is sent once
+        if (ended) {
+            return;
+        }
+        ended = True;
         try {
             sock.submitQuicStreamData(session_id, stream_id, NOTHING, True);
             if (wake_callback) {

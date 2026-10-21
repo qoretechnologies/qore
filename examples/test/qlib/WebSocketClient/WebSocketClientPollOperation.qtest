@@ -44,6 +44,92 @@ class EchoWsHandler inherits WebSocketHandler {
     }
 }
 
+#! A WebSocket server for one connection, whose side of the close handshake the test chooses
+/** The server accepts one connection, answers its upgrade request, and then:
+    - \c "answer": answers the client's close frame with its own code and reason
+    - \c "silent": never answers the client's close frame; it reads on until the client closes the connection
+    - \c "initiate": starts the close handshake itself with its code and reason, and reads the client's answer
+
+    A code of 0 sends a close frame without a status code.
+
+    The frames it received are reported when the connection ends.
+*/
+class RawWsServer {
+    public {
+        #! the port of the server
+        int port;
+    }
+
+    private {
+        Socket listener();
+        string mode;
+        int code;
+        string reason;
+        #! gets the list of the frames the server received, or the exception that ended it
+        Queue result();
+    }
+
+    constructor(string mode, int code = 0, string reason = "") {
+        self.mode = mode;
+        self.code = code;
+        self.reason = reason;
+        listener.bindINET("127.0.0.1", "0");
+        listener.listen();
+        port = listener.getSocketInfo().port;
+        background serve();
+    }
+
+    #! Returns the server's close frame: one without a status code if the code is 0
+    private binary closeFrame() {
+        return ws_encode_message(code ? code.encodeMsb(2) + reason.toBinary() : binary(), WSOP_Close);
+    }
+
+    #! Returns the frames the server received once the connection has ended
+    list<hash<WsMsgInfo>> getFrames() {
+        auto r = result.get(HangGuard);
+        if (r.typeCode() == NT_HASH && r.err) {
+            throw r.err, r.desc;
+        }
+        return r;
+    }
+
+    private serve() {
+        list<hash<WsMsgInfo>> frames = ();
+        try {
+            *Socket s = listener.accept(HangGuard);
+            if (!s) {
+                throw "RAW-SERVER-ERROR", "no connection";
+            }
+            listener.close();
+            hash<auto> hdr = s.readHTTPHeader(HangGuard);
+            s.send(sprintf("HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n"
+                "Sec-WebSocket-Accept: %s\r\n\r\n", ws_get_response_key(hdr."sec-websocket-key")));
+            if (mode == "initiate") {
+                s.send(closeFrame());
+            }
+            bool answered;
+            while (True) {
+                hash<WsMsgInfo> frame;
+                try {
+                    frame = ws_read_message(s, HangGuard);
+                } catch (hash<ExceptionInfo> ex) {
+                    # the client closed the connection
+                    break;
+                }
+                frames += frame;
+                if (frame.op == WSOP_Close && mode == "answer" && !answered) {
+                    answered = True;
+                    s.send(closeFrame());
+                }
+            }
+            s.close();
+            result.push(frames);
+        } catch (hash<ExceptionInfo> ex) {
+            result.push({"err": ex.err, "desc": ex.desc});
+        }
+    }
+}
+
 public class WebSocketClientPollOperationTest inherits QUnit::Test {
     private {
         HttpServer m_server;
@@ -57,6 +143,12 @@ public class WebSocketClientPollOperationTest inherits QUnit::Test {
         addTestCase("binary send/receive", \binaryTest());
         addTestCase("ping/pong", \pingPongTest());
         addTestCase("close handshake", \closeHandshakeTest());
+        addTestCase("the server's close frame gives the close code and reason", \serverCloseFrameTest());
+        addTestCase("a close the server does not answer ends at the close timeout", \unansweredCloseTest());
+        addTestCase("a close the server starts is reported once", \serverInitiatedCloseTest());
+        addTestCase("no data frame is sent after a close frame", \noDataAfterCloseTest());
+        addTestCase("a close frame without a status code has the close code 1005", \noStatusCloseTest());
+        addTestCase("1005 and 1006 are never sent in a close frame", \reservedCloseCodeTest());
         addTestCase("poll state machine", \pollStateMachineTest());
         addTestCase("repeated close request", \repeatedCloseTest());
         addTestCase("multiple messages", \multipleMessagesTest());
@@ -84,9 +176,12 @@ public class WebSocketClientPollOperationTest inherits QUnit::Test {
     }
 
     #! Helper: perform WebSocket upgrade handshake and return the HTTPClient
-    private HTTPClient wsHandshake() {
-        HTTPClient hc({"url": "http://localhost:" + linfo.port});
-        hc.connect();
+    private HTTPClient wsHandshake(*int port) {
+        HTTPClient hc({"url": port ? "http://127.0.0.1:" + port : "http://localhost:" + linfo.port});
+        # the raw test server accepts one connection: the request's
+        if (!port) {
+            hc.connect();
+        }
         string key = get_random_string(16).toBase64();
         hash<auto> rh = hc.send(NOTHING, "GET", NOTHING, {
             "Upgrade": "websocket",
@@ -141,6 +236,30 @@ public class WebSocketClientPollOperationTest inherits QUnit::Test {
             }
             waitForPollInfo(pi);
         }
+    }
+
+    #! Helper: drives the operation until its goal is reached, and returns the messages it received
+    private list<hash<auto>> driveAndCollect(WebSocketClientPollOperation poll_op) {
+        list<hash<auto>> msgs = ();
+        while (!poll_op.goalReached()) {
+            *hash<SocketPollInfo> pi = poll_op.continuePoll();
+            while (*hash<auto> msg = poll_op.getReceivedMessage()) {
+                msgs += msg;
+            }
+            if (!pi) {
+                break;
+            }
+            waitForPollInfo(pi);
+        }
+        while (*hash<auto> msg = poll_op.getReceivedMessage()) {
+            msgs += msg;
+        }
+        return msgs;
+    }
+
+    #! Helper: returns the messages of a type
+    private static list<hash<auto>> messagesOfType(list<hash<auto>> msgs, string type) {
+        return select msgs, $1.type == type;
     }
 
     #! Test basic text message send/receive via poll operation
@@ -225,8 +344,147 @@ public class WebSocketClientPollOperationTest inherits QUnit::Test {
 
         assertTrue(poll_op.goalReached(), "goal reached after close");
         assertEq("closed", poll_op.getState(), "state is closed after close handshake");
-        assertEq(WSCC_NormalClosure, poll_op.getCloseCode(), "close code");
-        assertEq("test close", poll_op.getCloseReason(), "close reason");
+        # the close code and reason are those of the server's close frame: the server echoes the code only
+        assertEq(WSCC_NormalClosure, poll_op.getCloseCode(), "the close code of the server's close frame");
+        assertEq("", poll_op.getCloseReason(), "the server's close frame has no reason");
+    }
+
+    #! The close code and reason after a close the client started are those of the server's close frame
+    serverCloseFrameTest() {
+        RawWsServer server("answer", 4000, "server reason");
+        HTTPClient hc = wsHandshake(server.port);
+        WebSocketClientPollOperation poll_op(hc, "http1", 0, NOTHING, HangGuard, logger);
+
+        poll_op.sendClose(WSCC_NormalClosure, "client reason");
+        list<hash<auto>> msgs = driveAndCollect(poll_op);
+
+        assertEq("closed", poll_op.getState(), "the close handshake completes");
+        assertEq(4000, poll_op.getCloseCode(), "the close code is the server's");
+        assertEq("server reason", poll_op.getCloseReason(), "the close reason is the server's");
+        list<hash<auto>> close_msgs = messagesOfType(msgs, "close");
+        assertEq(1, close_msgs.size(), "the server's close frame is reported once");
+        assertEq(4000, close_msgs[0].code, "the received close frame has the server's code");
+        assertEq("server reason", close_msgs[0].reason, "the received close frame has the server's reason");
+
+        hc.disconnect();
+        list<hash<WsMsgInfo>> frames = server.getFrames();
+        assertEq((WSOP_Close,), (map $1.op, frames), "the server receives one close frame");
+        assertEq(WSCC_NormalClosure, frames[0].close, "the client's close frame has the client's code");
+        assertEq("client reason", frames[0].msg, "the client's close frame has the client's reason");
+    }
+
+    #! A close with a code that is never sent in a close frame sends a close frame without a status code
+    /** RFC 6455 section 7.4.1: 1005 and 1006 must not be set as a status code in a close frame
+    */
+    reservedCloseCodeTest() {
+        foreach int code in ((WSCC_NoStatusRcvd, WSCC_AbnormalClosure)) {
+            RawWsServer server("answer", WSCC_NormalClosure, "");
+            HTTPClient hc = wsHandshake(server.port);
+            WebSocketClientPollOperation poll_op(hc, "http1", 0, NOTHING, HangGuard, logger);
+
+            poll_op.sendClose(code, "reason");
+            driveAndCollect(poll_op);
+            assertEq("closed", poll_op.getState(), sprintf("%d: the close handshake completes", code));
+
+            hc.disconnect();
+            list<hash<WsMsgInfo>> frames = server.getFrames();
+            assertEq((WSOP_Close,), (map $1.op, frames), sprintf("%d: the server receives one close frame", code));
+            assertEq(WSCC_NoStatusRcvd, frames[0].close, sprintf("%d: the close frame has no status code", code));
+            assertNothing(frames[0].msg, sprintf("%d: the close frame has no reason", code));
+        }
+    }
+
+    #! A close the client started ends at the close timeout when the server never answers it
+    /** The idle timeout expires while the client waits for the server's close frame; it does not make the client
+        send a second close frame
+    */
+    unansweredCloseTest() {
+        RawWsServer server("silent");
+        HTTPClient hc = wsHandshake(server.port);
+        WebSocketClientPollOperation poll_op(hc, "http1", 0, NOTHING, 500ms, logger);
+        poll_op.setIdleTimeout(50);
+
+        poll_op.sendClose(WSCC_NormalClosure, "client reason");
+        list<hash<auto>> msgs = driveAndCollect(poll_op);
+
+        assertEq("closed", poll_op.getState(), "the operation ends closed");
+        assertEq(1006, poll_op.getCloseCode(), "no close frame was received from the server");
+        assertEq("close handshake timed out", poll_op.getCloseReason(), "the close handshake timed out");
+        assertEq((), messagesOfType(msgs, "close"), "no close frame is reported");
+        list<hash<auto>> closed_msgs = messagesOfType(msgs, "closed");
+        assertEq(1, closed_msgs.size(), "the end is reported once");
+        assertEq(1006, closed_msgs[0].code, "the end is reported with code 1006");
+        assertEq("close handshake timed out", closed_msgs[0].reason, "the end is reported with its reason");
+        assertEq("", poll_op.getCloseCause(), "the idle timeout did not close the connection");
+
+        hc.disconnect();
+        list<hash<WsMsgInfo>> frames = server.getFrames();
+        assertEq((WSOP_Close,), (map $1.op, frames), "the server receives one close frame");
+        assertEq(WSCC_NormalClosure, frames[0].close, "the client's close frame has the client's code");
+    }
+
+    #! A data frame cannot be sent once the close handshake has started (RFC 6455 section 5.5.1)
+    noDataAfterCloseTest() {
+        RawWsServer server("answer", WSCC_NormalClosure, "");
+        HTTPClient hc = wsHandshake(server.port);
+        WebSocketClientPollOperation poll_op(hc, "http1", 0, NOTHING, HangGuard, logger);
+
+        poll_op.sendText("before");
+        poll_op.sendClose(WSCC_NormalClosure, "done");
+        assertThrows("WEBSOCKET-CLOSING-ERROR", \poll_op.sendText(), "after");
+        assertThrows("WEBSOCKET-CLOSING-ERROR", \poll_op.sendBinary(), <0102>);
+        driveAndCollect(poll_op);
+        assertEq("closed", poll_op.getState(), "the close handshake completes");
+        assertThrows("WEBSOCKET-CLOSING-ERROR", \poll_op.sendText(), "after the close");
+
+        hc.disconnect();
+        list<hash<WsMsgInfo>> frames = server.getFrames();
+        assertEq((WSOP_Text, WSOP_Close), (map $1.op, frames), "the server receives the message, then the close");
+        assertEq("before", frames[0].msg, "the message sent before the close is delivered");
+    }
+
+    #! A close frame without a status code has the close code 1005, and its answer has no status code either
+    /** RFC 6455 sections 7.1.5 and 7.4.1: 1005 is never sent in a close frame
+    */
+    noStatusCloseTest() {
+        RawWsServer server("initiate", 0);
+        HTTPClient hc = wsHandshake(server.port);
+        WebSocketClientPollOperation poll_op(hc, "http1", 0, NOTHING, HangGuard, logger);
+
+        list<hash<auto>> msgs = driveAndCollect(poll_op);
+        assertEq("closed", poll_op.getState(), "the close handshake completes");
+        assertEq(WSCC_NoStatusRcvd, poll_op.getCloseCode(), "the close frame has no status code");
+        assertEq("", poll_op.getCloseReason(), "the close frame has no reason");
+        assertEq((WSCC_NoStatusRcvd,), (map $1.code, messagesOfType(msgs, "close")), "the close frame is reported");
+
+        hc.disconnect();
+        list<hash<WsMsgInfo>> frames = server.getFrames();
+        assertEq((WSOP_Close,), (map $1.op, frames), "the server receives the client's answer");
+        assertEq(WSCC_NoStatusRcvd, frames[0].close, "the answer has no status code");
+    }
+
+    #! A close the server starts is answered, and its close frame is reported once
+    serverInitiatedCloseTest() {
+        RawWsServer server("initiate", WSCC_GoingAway, "bye");
+        HTTPClient hc = wsHandshake(server.port);
+        WebSocketClientPollOperation poll_op(hc, "http1", 0, NOTHING, HangGuard, logger);
+
+        list<hash<auto>> msgs = driveAndCollect(poll_op);
+
+        assertEq("closed", poll_op.getState(), "the close handshake completes");
+        assertEq(WSCC_GoingAway, poll_op.getCloseCode(), "the close code is the server's");
+        assertEq("bye", poll_op.getCloseReason(), "the close reason is the server's");
+        list<hash<auto>> close_msgs = messagesOfType(msgs, "close");
+        assertEq(1, close_msgs.size(), "the server's close frame is reported once");
+        assertEq(WSCC_GoingAway, close_msgs[0].code, "the received close frame has the server's code");
+        assertEq("bye", close_msgs[0].reason, "the received close frame has the server's reason");
+
+        assertThrows("WEBSOCKET-CLOSING-ERROR", \poll_op.sendText(), "after the close");
+
+        hc.disconnect();
+        list<hash<WsMsgInfo>> frames = server.getFrames();
+        assertEq((WSOP_Close,), (map $1.op, frames), "the server receives the client's answer");
+        assertEq(WSCC_GoingAway, frames[0].close, "the client's answer echoes the server's code");
     }
 
     #! Test poll state machine transitions
@@ -265,8 +523,9 @@ public class WebSocketClientPollOperationTest inherits QUnit::Test {
 
         drivePollUntilGoal(poll_op);
         assertEq("closed", poll_op.getState(), "the close handshake completes");
+        # the server echoes the code of the close frame it received, which is the first request's
         assertEq(WSCC_NormalClosure, poll_op.getCloseCode(), "the first request's close code is sent");
-        assertEq("first", poll_op.getCloseReason(), "the first request's close reason is sent");
+        assertEq("", poll_op.getCloseReason(), "the close reason is that of the server's close frame");
     }
 
     #! Test multiple messages in sequence

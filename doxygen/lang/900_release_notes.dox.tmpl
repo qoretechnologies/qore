@@ -142,6 +142,32 @@
     A long-lived HTTP/2 or HTTP/3 connection no longer keeps a record of every request it has served or every stream
     the peer reset, on the client and on the server, so its memory use does not grow with the number of requests.
 
+    A WebSocket close started by a @ref websocketclientintro "WebSocketClient" connection now waits for the server's
+    CLOSE frame, as <a href="https://datatracker.ietf.org/doc/html/rfc6455">RFC 6455</a> requires, and the close
+    code and reason reported after it are always the server's; before, an HTTP/1.1 client stopped as soon as its own
+    CLOSE frame was sent, and it reported its own or the server's code and reason depending on timing.  A server that
+    does not answer within the connection's I/O timeout ends the connection with code 1006 and the reason
+    \c "close handshake timed out", on HTTP/1.1, HTTP/2 and HTTP/3.  A close started by the server is reported once
+    to the client; it was reported twice.
+
+    A close started by a @ref websockethandlerintro "WebSocketHandler" server
+    (@ref WebSocketHandler::WebSocketConnection::stop() "WebSocketConnection::stop()", a server or listener stop, an
+    idle timeout, or a message that is too big) now sends the server's CLOSE frame and waits for the client's, at most
+    the handler's new close timeout (default: 5 seconds; the \c close_timeout option), before the server closes the
+    connection; a server or listener stop closes all connections this way at the same time, so it waits at most the
+    close timeout in total, and WebSocket clients get a CLOSE frame (code 1001, going away) when a server stops.  The
+    close code and reason reported by the server are those of the client's CLOSE frame.  On HTTP/2 and HTTP/3, the
+    server now answers a client's CLOSE frame and ends the stream once the close handshake is complete; it did not
+    answer, and an HTTP/2 stream was not ended.
+
+    A WebSocket CLOSE frame without a status code is now reported with the close code 1005 (no status received), as
+    RFC 6455 section 7.1.5 defines, and is answered with a CLOSE frame without a status code, as 1005 is never sent;
+    it was reported as 1000 and answered with 1000.
+
+    A WebSocket message sent on a connection whose close handshake has started now raises
+    \c WEBSOCKET-CLOSING-ERROR, on the client and on the server: no data frame may follow a CLOSE frame (RFC 6455
+    section 5.5.1).  A server discarded such a message without notice; a client sent it after its CLOSE frame.
+
     LLM streaming requests accept a @ref QoreLlmUtils::LlmCancellation "LlmCancellation" token in
     @ref QoreLlmUtils::LlmRequestOptions::cancellation "LlmRequestOptions::cancellation". Cancelling the token
     closes an in-flight OpenAI-compatible, Anthropic, Gemini/Vertex AI, or Bedrock stream without polling and

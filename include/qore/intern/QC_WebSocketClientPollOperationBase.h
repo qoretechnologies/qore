@@ -83,6 +83,9 @@ public:
         ERROR       //!< Fatal error occurred
     };
 
+    //! How long a close started by the client waits for the server's close frame by default (milliseconds)
+    static constexpr int64 DefaultCloseTimeoutMs = 15000;
+
     //! Creates the WebSocket client poll operation
     /** @param self the QoreObject wrapping this private data
         @param sock the WebSocket socket (ref'd, ownership transferred)
@@ -210,6 +213,13 @@ public:
     */
     DLLLOCAL void requestClose(uint16_t code, const char* reason, ExceptionSink* xsink);
 
+    //! Raises WEBSOCKET-CLOSING-ERROR once the close handshake has started or the operation has ended
+    /** No data frame may be sent after a close frame (RFC 6455 section 5.5.1); can be called from any thread
+
+        @return 0 if a data frame can be queued, -1 if an exception was raised
+    */
+    DLLLOCAL int checkDataSend(ExceptionSink* xsink) const;
+
     //! Starts the close handshake with client masking from the thread that drives the operation
     /** Only called from the operation's step (continuePoll()); other threads use requestClose().
 
@@ -281,6 +291,17 @@ public:
         }
     }
 
+    //! Sets how long a close started by the client waits for the server's close frame (0 = no bound)
+    /** Applies to a close handshake started after the call.  When the server's close frame does not arrive in
+        time, the operation ends closed with code 1006 and the reason \c "close handshake timed out".
+
+        @param ms the time to wait in milliseconds (0 = wait until the server's close frame arrives or the
+        connection is lost)
+    */
+    DLLLOCAL void setCloseTimeout(int64 ms) {
+        close_timeout_ms = ms > 0 ? ms : 0;
+    }
+
     //! Returns the cause tag if the client initiated the close (e.g. "idle-timeout")
     DLLLOCAL const std::string& getCloseCause() const {
         return close_cause;
@@ -309,11 +330,21 @@ private:
     SocketRecvDataPollOperation* recv_op = nullptr;
 
     WsState ws_state = WsState::CONNECTED;
+    //! True once the operation left the connected state; read without a lock by checkDataSend()
+    std::atomic<bool> closing{false};
+    //! True once a close frame was put in the data to send; I/O thread only (see drainSendQueue())
+    bool close_frame_queued = false;
     //! True once requestClose() has queued a close request; read without a lock by getWsState()
     std::atomic<bool> close_requested{false};
+    //! The close code: the server's once its close frame has arrived
     uint16_t close_code = 1000;
+    //! The close reason: the server's once its close frame has arrived
     std::string close_reason;
     bool close_initiated = false;           //!< true if we initiated the close handshake
+    //! How long a close started by the client waits for the server's close frame (milliseconds, 0 = no bound)
+    int64 close_timeout_ms = DefaultCloseTimeoutMs;
+    //! When a close started by the client stops waiting for the server's close frame (monotonic ms, 0 = never)
+    int64 close_deadline_ms = 0;
     bool has_extensions = false;            //!< true if extensions are active (skip RSV validation)
     size_t max_frame_size = WS_DEFAULT_MAX_FRAME_SIZE;
 
@@ -365,6 +396,34 @@ private:
         @param xsink exception sink
     */
     DLLLOCAL void applyCloseRequest(const QoreHashNode* request, ExceptionSink* xsink);
+
+    //! Sets the state of the operation; every change of the state is made with this method
+    DLLLOCAL void setWsStateValue(WsState s) {
+        ws_state = s;
+        if (s != WsState::CONNECTED) {
+            closing.store(true, std::memory_order_release);
+        }
+    }
+
+    //! Returns true while a close started by the client waits for the server's close frame
+    /** The close handshake ends when the server's close frame arrives (RFC 6455 section 5.5.1), when the
+        connection is lost, or at the close deadline.
+    */
+    DLLLOCAL bool waitsForPeerClose() const {
+        return ws_state == WsState::CLOSING && close_initiated;
+    }
+
+    //! Sets the close deadline of a close started by the client
+    DLLLOCAL void startCloseWait() {
+        close_deadline_ms = close_timeout_ms ? q_clock_getmicros_monotonic() / 1000 + close_timeout_ms : 0;
+    }
+
+    //! Ends the operation closed without a close frame from the server, and reports it as a "closed" message
+    /** @param code the close code reported (1006 when the server's close frame did not arrive)
+        @param reason the close reason reported
+        @param xsink exception sink
+    */
+    DLLLOCAL void endClosed(uint16_t code, const char* reason, ExceptionSink* xsink);
 
     //! Process all complete frames in the decoder buffer
     /** Decodes frames, handles control frames (ping/pong/close),

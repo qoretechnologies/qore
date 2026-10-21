@@ -222,6 +222,10 @@ log("started listener on %s", lh.desc);
       (Bad Request), and the connection is closed, as RFC 9112 requires; before, the request was handled, and an
       obsolete line folding or a line without a colon ended the header, so that the header lines after it, such as
       \c Content-Length, were lost
+    - @ref HttpServer::HttpServer::stop() "HttpServer::stop()" and stopping a listener close the dedicated
+      connections, such as WebSocket connections, with their protocol's closing handshake first, all at the same
+      time, so a WebSocket client receives a close frame (code 1001, going away) when the server stops; the stop
+      waits at most the handlers' close timeout in total for the clients to answer
     - response bodies are compressed on the fly with levels suited to compressing them for each request, set with the
       new \c compression_levels server option and @ref HttpServer::HttpServer::setCompressionLevels()
       "setCompressionLevels()" (defaults: Brotli quality 5, Zstandard level 3, gzip and deflate level 6, bzip2 level
@@ -2098,6 +2102,10 @@ server.setCompressionLevels({"br": 4, "zstd": 3});
 
     #! Stops the HTTP server and releases all resources
     /** Performs a synchronous, ordered shutdown:
+        -# Closes the dedicated connections with their protocol's closing handshake, all at the same time: WebSocket
+           connections are sent a close frame (code 1001, going away), and the server waits for the clients' close
+           frames at most the close timeout of their handlers in total (see
+           @ref WebSocketHandler::WebSocketHandler::setCloseTimeout() "WebSocketHandler::setCloseTimeout()")
         -# Signals streaming handlers (SSE, WebSocket) to stop
         -# Stops the async I/O controller (cancels all accept, connection, and streaming
            operations and waits for in-flight handler tasks to complete)
@@ -2125,6 +2133,11 @@ server.setCompressionLevels({"br": 4, "zstd": 3});
             }
             callback_appender = NOTHING;
         }
+        # Close the dedicated connections (for example WebSocket connections) with their protocol's closing handshake
+        # first, while the I/O that the handshakes need still runs; all of them close at the same time, so this
+        # waits at most one handshake timeout in total
+        closeDedicatedConnections();
+
         # Cancel operations owned by this server on the global controller FIRST
         # (e.g. HTTP/2 and HTTP/3 poll operations from execAsyncPollOperation).
         # This must happen before asyncIo.stop() because that method calls
@@ -2179,6 +2192,27 @@ server.setCompressionLevels({"br": 4, "zstd": 3});
             stopped = True;
             stopping = False;
         }
+    }
+
+    #! Closes the dedicated connections of all listeners with their protocol's closing handshake, all at the same time
+    /** Each dedicated socket handler starts the closing handshake on its connections
+        (@ref HttpServer::AbstractHttpSocketHandlerInterface::startClosingConnections()
+        "AbstractHttpSocketHandlerInterface::startClosingConnections()"), and then the server waits until the latest
+        of the deadlines that the handlers return; the connections still open then are stopped at once with the
+        listeners.
+    */
+    private closeDedicatedConnections() {
+        hash<string, AbstractHttpSocketHandlerInterface> handlers = {};
+        {
+            lm.enter();
+            on_exit lm.exit();
+            foreach HttpListener l in (listeners.iterator()) {
+                handlers += l.getDedicatedSocketHandlers();
+            }
+        }
+        HttpListener::closeHandlerConnections(handlers, NOTHING, sub (string fmt, ...) {
+            logError("%s", vsprintf(fmt, argv));
+        });
     }
 
     #! stops a single listener based on its name or bind address; does not return until all connections on the listener have closed
@@ -5880,6 +5914,11 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
 
         # stop all dedicated socket connections
         {
+            # their protocol's closing handshake runs first, on all connections at the same time
+            closeHandlerConnections(getDedicatedSocketHandlers(), id, silent ? NOTHING : sub (string fmt, ...) {
+                logError("%s", vsprintf(fmt, argv));
+            });
+
             *hash<string, AbstractHttpSocketHandlerInterface> shh_copy;
             {
                 m.lock();
@@ -6085,6 +6124,54 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                 serv.logErrorArgs(args);
             } catch () {
                 # ignore if server was deleted
+            }
+        }
+    }
+
+    #! Returns the dedicated socket handlers of the listener's connections, keyed by their unique hashes
+    hash<string, AbstractHttpSocketHandlerInterface> getDedicatedSocketHandlers() {
+        hash<string, AbstractHttpSocketHandlerInterface> rv = {};
+        m.lock();
+        on_exit m.unlock();
+        foreach AbstractHttpSocketHandlerInterface h in (shh.iterator()) {
+            rv{h.uniqueHash()} = h;
+        }
+        return rv;
+    }
+
+    #! Closes the connections of dedicated socket handlers with their protocol's closing handshake
+    /** All the handlers start the handshake on their connections, then the latest of their deadlines is waited for,
+        so the wait is at most one handshake timeout in total.
+
+        @param handlers the handlers, keyed by their unique hashes
+        @param lid the listener ID, or @ref nothing for all listeners
+        @param log_error the error logging function, if any
+    */
+    static closeHandlerConnections(hash<string, AbstractHttpSocketHandlerInterface> handlers, *softstring lid,
+            *code log_error) {
+        *date deadline;
+        foreach AbstractHttpSocketHandlerInterface h in (handlers.iterator()) {
+            try {
+                *date d = h.startClosingConnections(lid);
+                if (d && (!deadline || d > deadline)) {
+                    deadline = d;
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                if (log_error) {
+                    log_error("error closing dedicated connections: %s: %s", ex.err, ex.desc);
+                }
+            }
+        }
+        if (!deadline) {
+            return;
+        }
+        foreach AbstractHttpSocketHandlerInterface h in (handlers.iterator()) {
+            try {
+                h.waitForConnectionsClosed(deadline, lid);
+            } catch (hash<ExceptionInfo> ex) {
+                if (log_error) {
+                    log_error("error waiting for dedicated connections to close: %s: %s", ex.err, ex.desc);
+                }
             }
         }
     }

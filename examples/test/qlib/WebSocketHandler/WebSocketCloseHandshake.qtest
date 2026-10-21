@@ -1,0 +1,547 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+/*  WebSocketCloseHandshake.qtest Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    The server side of the WebSocket close handshake (RFC 6455 sections 5.5.1, 7.1.1, 7.1.5, 7.1.6 and 7.4.1, RFC 8441
+    section 5, RFC 9220 section 3):
+    - the close code and reason are those of the client's close frame
+    - a close the server starts waits for the client's close frame, at most the close timeout, before the server
+      closes the connection, which it does first; the data frames that arrive meanwhile are discarded
+    - the server sends one close frame, and no data frame after it
+    - a server or listener stop closes all connections with the handshake, at the same time
+    - on HTTP/2 and HTTP/3, the server answers the client's close frame and ends the stream, and a close the client
+      starts ends at the client's close timeout when the server does not answer it
+*/
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Logger
+%requires HttpServerUtil
+%requires AsyncSocketIo
+%requires HttpServerAsyncIo
+%requires HttpServer
+%requires WebSocketUtil
+%requires WebSocketHandler
+%requires WebSocketClient
+%requires ../../TestCertificates.qm
+
+%exec-class WebSocketCloseHandshakeTest
+
+#! The bound on a blocking wait: a hang guard only, never a timing assertion
+const HangGuard = 60s;
+
+#! A pair of connected TCP sockets: the server side for a poll operation that the test drives, and a raw client
+class SocketPair {
+    public {
+        Socket server;
+        Socket client();
+    }
+
+    constructor() {
+        Socket listener();
+        listener.bindINET("127.0.0.1", "0");
+        listener.listen();
+        client.connect("127.0.0.1:" + listener.getSocketInfo().port, HangGuard);
+        *Socket s = listener.accept(HangGuard);
+        if (!s) {
+            throw "SOCKET-PAIR-ERROR", "the connection was not accepted";
+        }
+        server = s;
+        listener.close();
+    }
+}
+
+#! A server connection that reports its life to the test and can be blocked in gotMessage()
+class TestWsConnection inherits WebSocketConnection {
+    private {
+        TestWsHandler test_handler;
+    }
+
+    constructor(TestWsHandler handler) : WebSocketConnection(handler) {
+        test_handler = handler;
+    }
+
+    registered() {
+        test_handler.registered_queue.push(self);
+    }
+
+    gotMessage(string msg) {
+        if (msg == "BLOCK") {
+            # the connection processes nothing more until the test releases it, so it does not answer a close
+            test_handler.blocked.dec();
+            test_handler.release.waitForZero(HangGuard);
+        } else {
+            send("ECHO:" + msg);
+        }
+    }
+
+    connectionClosed() {
+        test_handler.closed_queue.push(True);
+    }
+}
+
+#! The handler of the test's server connections
+class TestWsHandler inherits WebSocketHandler {
+    public {
+        #! gets each connection when it is registered
+        Queue registered_queue();
+        #! gets an entry when a connection has closed
+        Queue closed_queue();
+        #! reaches zero when a connection blocks in gotMessage()
+        Counter blocked(1);
+        #! releases a connection blocked in gotMessage()
+        Counter release(1);
+    }
+
+    constructor(*hash<auto> opts) : WebSocketHandler(NOTHING, opts) {
+    }
+
+    WebSocketConnection getConnectionImpl(hash<auto> cx, hash<auto> hdr, string cid) {
+        return new TestWsConnection(self);
+    }
+}
+
+public class WebSocketCloseHandshakeTest inherits QUnit::Test {
+    public {
+        const CertPem = TestCertificates::CertPem;
+        const KeyPem = TestCertificates::KeyPem;
+    }
+
+    private {
+        Logger logger;
+    }
+
+    constructor() : Test("WebSocketCloseHandshakeTest", "1.0") {
+        addTestCase("the server reports the client's close frame", \serverReportsClientCloseTest());
+        addTestCase("a close frame without a status code has the close code 1005", \serverNoStatusCloseTest());
+        addTestCase("a close the server starts waits for the client's close frame", \serverCloseWaitsTest());
+        addTestCase("a close the server starts ends at the close timeout", \serverCloseTimeoutTest());
+        addTestCase("without a close timeout, the server does not wait", \serverCloseNoWaitTest());
+        addTestCase("the server sends one close frame and no data frame after it", \serverOneCloseTest());
+        addTestCase("stop() closes with the handshake, and the server closes first", \handlerStopTest());
+        addTestCase("a server stop closes all connections at the same time", \serverStopTest());
+        addTestCase("HTTP/2: the server answers the client's close frame", \h2ClientCloseTest());
+        addTestCase("HTTP/3: the server answers the client's close frame", \h3ClientCloseTest());
+        addTestCase("HTTP/2: a close frame without a status code is answered without one", \h2NoStatusCloseTest());
+        addTestCase("HTTP/3: a close frame without a status code is answered without one", \h3NoStatusCloseTest());
+        addTestCase("HTTP/2: stop() closes with the handshake", \h2ServerStopTest());
+        addTestCase("HTTP/3: stop() closes with the handshake", \h3ServerStopTest());
+        addTestCase("HTTP/2: a close the server does not answer ends at the client's close timeout",
+            \h2ClientCloseTimeoutTest());
+        addTestCase("HTTP/3: a close the server does not answer ends at the client's close timeout",
+            \h3ClientCloseTimeoutTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        logger = new Logger("ws-close", m_options.verbose > 2
+            ? LoggerLevel::getLevelInfo()
+            : LoggerLevel::getLevelWarn());
+        logger.addAppender(new StdoutAppender());
+    }
+
+    #! Runs steps of a poll operation that the test drives, until the predicate is true or the goal is reached
+    private static stepUntil(HttpWebSocketPollOperationBase op, code<bool(*hash<SocketPollInfo>)> done) {
+        while (!op.goalReached()) {
+            *hash<SocketPollInfo> pi = op.continuePoll();
+            if (done(pi) || !pi) {
+                return;
+            }
+            # with a poll_timeout_ms hint, Socket::poll() returns when the hint expires, and the operation is
+            # continued
+            if (!Socket::poll((pi,), HangGuard) && !exists pi.poll_timeout_ms) {
+                throw "POLL-TIMEOUT", sprintf("no socket event (events: %d) within %y", pi.events, HangGuard);
+            }
+        }
+    }
+
+    #! Runs steps of a poll operation until its goal is reached
+    private static stepToGoal(HttpWebSocketPollOperationBase op) {
+        stepUntil(op, bool sub (*hash<SocketPollInfo> pi) { return False; });
+    }
+
+    #! Runs steps of a poll operation until its close frame has been written and it waits for the client's
+    private static stepUntilCloseWritten(HttpWebSocketPollOperationBase op) {
+        stepUntil(op, bool sub (*hash<SocketPollInfo> pi) {
+            return pi && pi.events == SOCK_POLLIN && op.getState() == "closing";
+        });
+    }
+
+    #! Returns the frames that a poll operation received
+    private static list<hash<auto>> takeFrames(HttpWebSocketPollOperationBase op) {
+        list<hash<auto>> rv = ();
+        while (*hash<auto> frame = op.getReceivedFrame()) {
+            rv += frame;
+        }
+        return rv;
+    }
+
+    #! Returns a masked close frame, as a client sends it
+    private static binary clientClose(int code, string reason = "") {
+        return ws_encode_message(code.encodeMsb(2) + reason.toBinary(), WSOP_Close, True);
+    }
+
+    #! The close code and reason reported by the server after the client started the close are the client's
+    serverReportsClientCloseTest() {
+        SocketPair p();
+        HttpWebSocketPollOperationBase op(p.server);
+        p.client.send(clientClose(4001, "client reason"));
+        stepUntil(op, bool sub (*hash<SocketPollInfo> pi) { return op.getState() == "closing"; });
+        list<hash<auto>> frames = takeFrames(op);
+        assertEq(("close",), (map $1.type, frames), "the client's close frame is received");
+        # the server's handler answers it with the client's code, as HttpWebSocketPollOperation does
+        op.sendClose(frames[0].code);
+        stepToGoal(op);
+
+        assertEq("closed", op.getState(), "the close handshake completes");
+        assertEq(4001, op.getCloseCode(), "the close code is the client's");
+        assertEq("client reason", op.getCloseReason(), "the close reason is the client's");
+        hash<WsMsgInfo> answer = ws_read_message(p.client, HangGuard);
+        assertEq(WSOP_Close, answer.op, "the client gets the server's answer");
+        assertEq(4001, answer.close, "the answer echoes the client's code");
+    }
+
+    #! A close frame without a status code has the close code 1005, and its answer has no status code either
+    /** RFC 6455 sections 7.1.5 and 7.4.1: 1005 is never sent in a close frame
+    */
+    serverNoStatusCloseTest() {
+        SocketPair p();
+        HttpWebSocketPollOperationBase op(p.server);
+        p.client.send(ws_encode_message(binary(), WSOP_Close, True));
+        stepUntil(op, bool sub (*hash<SocketPollInfo> pi) { return op.getState() == "closing"; });
+        list<hash<auto>> frames = takeFrames(op);
+        assertEq((WSCC_NoStatusRcvd,), (map $1.code, frames), "the client's close frame has no status code");
+        op.sendClose(frames[0].code);
+        stepToGoal(op);
+
+        assertEq(WSCC_NoStatusRcvd, op.getCloseCode(), "the close code is 1005");
+        hash<WsMsgInfo> answer = ws_read_message(p.client, HangGuard);
+        assertEq(WSOP_Close, answer.op, "the client gets the server's answer");
+        assertEq(WSCC_NoStatusRcvd, answer.close, "the answer has no status code");
+    }
+
+    #! A close the server starts waits for the client's close frame; the data frames that arrive first are discarded
+    serverCloseWaitsTest() {
+        SocketPair p();
+        HttpWebSocketPollOperationBase op(p.server);
+        op.sendClose(WSCC_GoingAway, "going away");
+        stepUntilCloseWritten(op);
+        assertEq("closing", op.getState(), "the server waits for the client's close frame");
+
+        hash<WsMsgInfo> close = ws_read_message(p.client, HangGuard);
+        assertEq(WSOP_Close, close.op, "the client gets the server's close frame");
+        assertEq(WSCC_GoingAway, close.close, "the server's close frame has its code");
+        # the client sends a message before it answers
+        p.client.send(ws_encode_message("late", WSOP_Text, True));
+        p.client.send(clientClose(4002, "ok"));
+        stepToGoal(op);
+
+        assertEq("closed", op.getState(), "the close handshake completes");
+        assertEq(4002, op.getCloseCode(), "the close code is that of the client's close frame");
+        assertEq("ok", op.getCloseReason(), "the close reason is that of the client's close frame");
+        assertEq(("close",), (map $1.type, takeFrames(op)), "the message sent after the server's close is discarded");
+    }
+
+    #! A close the server starts ends at the close timeout when the client does not answer
+    serverCloseTimeoutTest() {
+        SocketPair p();
+        HttpWebSocketPollOperationBase op(p.server);
+        op.setCloseTimeout(200ms);
+        assertEq(200, op.getCloseTimeout(), "the close timeout is set");
+        op.sendClose(WSCC_GoingAway, "going away");
+        stepToGoal(op);
+
+        assertEq("closed", op.getState(), "the operation ends");
+        assertEq(1006, op.getCloseCode(), "no close frame was received from the client");
+        assertEq("close handshake timed out", op.getCloseReason(), "the close handshake timed out");
+        hash<WsMsgInfo> close = ws_read_message(p.client, HangGuard);
+        # 1006 is never sent in a close frame (RFC 6455 section 7.4.1)
+        assertEq(WSCC_GoingAway, close.close, "the client gets the server's close frame with its own code");
+    }
+
+    #! With a close timeout of 0, the server does not wait for the client's close frame
+    serverCloseNoWaitTest() {
+        SocketPair p();
+        HttpWebSocketPollOperationBase op(p.server);
+        op.setCloseTimeout(0);
+        op.sendClose(WSCC_GoingAway, "going away");
+        stepToGoal(op);
+
+        assertEq("closed", op.getState(), "the operation ends once its close frame has been written");
+        assertEq(1006, op.getCloseCode(), "no close frame was received from the client");
+        assertEq(WSCC_GoingAway, ws_read_message(p.client, HangGuard).close, "the client gets the close frame");
+    }
+
+    #! The server sends one close frame, and refuses data frames after it
+    serverOneCloseTest() {
+        SocketPair p();
+        HttpWebSocketPollOperationBase op(p.server);
+        op.sendText("before");
+        op.sendClose(WSCC_GoingAway, "first");
+        op.sendClose(WSCC_NormalClosure, "second");
+        assertThrows("WEBSOCKET-CLOSING-ERROR", \op.sendText(), "after");
+        assertThrows("WEBSOCKET-CLOSING-ERROR", \op.sendBinary(), <01>);
+        assertThrows("WEBSOCKET-CLOSING-ERROR", \op.sendRawFrame(), ws_encode_message("raw"));
+        stepUntilCloseWritten(op);
+        p.client.send(clientClose(WSCC_NormalClosure));
+        stepToGoal(op);
+        p.server.close();
+
+        list<hash<WsMsgInfo>> frames = ();
+        while (True) {
+            try {
+                frames += ws_read_message(p.client, HangGuard);
+            } catch (hash<ExceptionInfo> ex) {
+                # the server closed the connection
+                break;
+            }
+        }
+        assertEq((WSOP_Text, WSOP_Close), (map $1.op, frames), "the message, then one close frame");
+        assertEq("first", frames[1].msg, "the first close request is sent");
+    }
+
+    #! Starts an HTTP/1.1 server with the handler; returns its port
+    private int startServer(HttpServer server, TestWsHandler handler) {
+        server.setDefaultHandler("ws", handler);
+        int port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        server.waitForAsyncIo();
+        return port;
+    }
+
+    #! Connects a raw HTTP/1.1 WebSocket client; returns its socket after the 101 response
+    private static Socket rawConnect(int port) {
+        Socket s();
+        s.connect("127.0.0.1:" + port, HangGuard);
+        string key = get_random_string(16).toBase64();
+        s.send(sprintf("GET / HTTP/1.1\r\nHost: 127.0.0.1:%d\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n"
+            "Sec-WebSocket-Key: %s\r\nSec-WebSocket-Version: 13\r\n\r\n", port, key));
+        hash<auto> hdr = s.readHTTPHeader(HangGuard);
+        if (hdr.status_code != 101) {
+            throw "WEBSOCKET-ERROR", sprintf("expected 101, got %y", hdr.status_code);
+        }
+        return s;
+    }
+
+    #! stop() sends a close frame, waits for the client's answer, and the server then closes the connection
+    handlerStopTest() {
+        HttpServer server(<HttpServerOptionInfo>{"logger": logger});
+        on_exit server.stop();
+        TestWsHandler handler({"logger": logger});
+        int port = startServer(server, handler);
+        Socket client = rawConnect(port);
+        TestWsConnection conn = handler.registered_queue.get(HangGuard);
+
+        conn.stop();
+        assertThrows("WEBSOCKET-CLOSING-ERROR", \conn.send(), "after the stop");
+        hash<WsMsgInfo> close = ws_read_message(client, HangGuard);
+        assertEq(WSOP_Close, close.op, "the client gets the server's close frame");
+        assertEq(WSCC_GoingAway, close.close, "the server is going away");
+        client.send(clientClose(WSCC_NormalClosure, "bye"));
+        assertEq(True, handler.closed_queue.get(HangGuard), "the connection ends after the client's answer");
+        # the server closes the TCP connection first (RFC 6455 section 7.1.1)
+        *hash<ExceptionInfo> eof;
+        try {
+            ws_read_message(client, HangGuard);
+        } catch (hash<ExceptionInfo> ex) {
+            eof = ex;
+        }
+        assertEq("SOCKET-CLOSED", eof.err, "the server closed the connection");
+    }
+
+    #! A server stop closes all connections with the handshake at the same time
+    /** The clients get the server's close frame and never answer: the connections end at the close timeout, all at
+        the same time, so every client has its close frame before any connection is closed
+    */
+    serverStopTest() {
+        HttpServer server(<HttpServerOptionInfo>{"logger": logger});
+        TestWsHandler handler({"logger": logger, "close_timeout": 2s});
+        int port = startServer(server, handler);
+        Queue events();
+        list<Socket> clients = ();
+        Counter readers();
+        for (int i = 0; i < 3; ++i) {
+            Socket client = rawConnect(port);
+            handler.registered_queue.get(HangGuard);
+            clients += client;
+            readers.inc();
+            background sub () {
+                on_exit readers.dec();
+                try {
+                    hash<WsMsgInfo> frame = ws_read_message(client, HangGuard);
+                    events.push(frame.op == WSOP_Close ? "close" : "frame");
+                    # the client never answers; it reads until the server closes the connection
+                    while (True) {
+                        ws_read_message(client, HangGuard);
+                    }
+                } catch (hash<ExceptionInfo> ex) {
+                    events.push(ex.err == "SOCKET-CLOSED" ? "eof" : ex.err);
+                }
+            }();
+        }
+
+        server.stop();
+        readers.waitForZero(HangGuard);
+        list<string> got = ();
+        while (!events.empty()) {
+            got += events.get();
+        }
+        assertEq(("close", "close", "close", "eof", "eof", "eof"), got,
+            "every client gets the close frame before any connection is closed");
+    }
+
+    #! Starts a TLS server with HTTP/2 and HTTP/3 and the handler; returns its port
+    private int startTlsServer(HttpServer server, TestWsHandler handler) {
+        server.setDefaultHandler("ws", handler);
+        int port = server.addListener(<HttpListenerOptionInfo>{
+            "service": 0,
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+            "enable_h3": True,
+        }).port;
+        server.waitForAsyncIo();
+        return port;
+    }
+
+    #! Connects a client over HTTP/2 or HTTP/3; its messages, and NOTHING when it closes, are pushed to the queue
+    private WebSocketClient tlsConnect(string protocol, int port, Queue queue, *hash<auto> opts) {
+        hash<auto> conn_opts = protocol == "h2"
+            ? {"url": "wss://localhost:" + port, "http_version": "2.0"}
+            : {"url": "wss://127.0.0.1:" + port, "http3_mode": "required"};
+        WebSocketClient wsc(sub (*data msg) {
+            queue.push(msg);
+        }, conn_opts + opts + {"ssl_verify_cert": False, "logger": logger});
+        wsc.connect();
+        if (protocol == "h2") {
+            assertTrue(wsc.isHttp2(), "the client is connected over HTTP/2");
+        } else {
+            assertTrue(wsc.isHttp3(), "the client is connected over HTTP/3");
+        }
+        return wsc;
+    }
+
+    #! Waits for the client's close, skipping the messages before it
+    private static waitForClientClose(Queue queue) {
+        while (True) {
+            auto msg = queue.get(HangGuard);
+            if (!exists msg) {
+                return;
+            }
+        }
+    }
+
+    #! The server answers the client's close frame with the client's code, and ends the stream
+    private clientCloseImpl(string protocol, int code = 4000) {
+        HttpServer server(<HttpServerOptionInfo>{"logger": logger});
+        on_exit server.stop();
+        TestWsHandler handler({"logger": logger});
+        int port = startTlsServer(server, handler);
+        Queue queue();
+        WebSocketClient wsc = tlsConnect(protocol, port, queue);
+        on_exit try { wsc.disconnect(); } catch () {}
+        handler.registered_queue.get(HangGuard);
+        object op = wsc.getPollOperation();
+
+        op.sendClose(code, "bye");
+        waitForClientClose(queue);
+        assertEq(code, op.getCloseCode(), sprintf("the server's answer echoes the client's code (reason: %y)",
+            op.getCloseReason()));
+        assertEq("", op.getCloseReason(), "the server's answer has no reason");
+        assertEq(True, handler.closed_queue.get(HangGuard), "the server's connection ends");
+    }
+
+    h2ClientCloseTest() {
+        clientCloseImpl("h2");
+    }
+
+    h3ClientCloseTest() {
+        clientCloseImpl("h3");
+    }
+
+    #! A close frame without a status code (1005, which is never sent) is answered without a status code
+    h2NoStatusCloseTest() {
+        clientCloseImpl("h2", WSCC_NoStatusRcvd);
+    }
+
+    h3NoStatusCloseTest() {
+        clientCloseImpl("h3", WSCC_NoStatusRcvd);
+    }
+
+    #! stop() sends a close frame, which the client answers; the connection then ends
+    private serverStopImpl(string protocol) {
+        HttpServer server(<HttpServerOptionInfo>{"logger": logger});
+        on_exit server.stop();
+        TestWsHandler handler({"logger": logger});
+        int port = startTlsServer(server, handler);
+        Queue queue();
+        WebSocketClient wsc = tlsConnect(protocol, port, queue);
+        on_exit try { wsc.disconnect(); } catch () {}
+        TestWsConnection conn = handler.registered_queue.get(HangGuard);
+        object op = wsc.getPollOperation();
+
+        conn.stop();
+        assertThrows("WEBSOCKET-CLOSING-ERROR", \conn.send(), "after the stop");
+        waitForClientClose(queue);
+        assertEq(WSCC_GoingAway, op.getCloseCode(), "the client gets the server's close frame");
+        assertEq(True, handler.closed_queue.get(HangGuard), "the server's connection ends after the client's answer");
+    }
+
+    h2ServerStopTest() {
+        serverStopImpl("h2");
+    }
+
+    h3ServerStopTest() {
+        serverStopImpl("h3");
+    }
+
+    #! A close the client starts ends at the client's close timeout when the server does not answer it
+    /** The server's connection is blocked in gotMessage(), so it processes no frame and does not answer
+    */
+    private clientCloseTimeoutImpl(string protocol) {
+        HttpServer server(<HttpServerOptionInfo>{"logger": logger});
+        on_exit server.stop();
+        TestWsHandler handler({"logger": logger});
+        on_exit handler.release.dec();
+        int port = startTlsServer(server, handler);
+        Queue queue();
+        WebSocketClient wsc = tlsConnect(protocol, port, queue, {"timeout": 500ms});
+        on_exit try { wsc.disconnect(); } catch () {}
+        handler.registered_queue.get(HangGuard);
+        object op = wsc.getPollOperation();
+
+        wsc.send("BLOCK");
+        handler.blocked.waitForZero(HangGuard);
+        op.sendClose(WSCC_NormalClosure, "bye");
+        waitForClientClose(queue);
+        assertEq(1006, op.getCloseCode(), "no close frame was received from the server");
+        assertEq("close handshake timed out", op.getCloseReason(), "the close handshake timed out");
+    }
+
+    h2ClientCloseTimeoutTest() {
+        clientCloseTimeoutImpl("h2");
+    }
+
+    h3ClientCloseTimeoutTest() {
+        clientCloseTimeoutImpl("h3");
+    }
+}
