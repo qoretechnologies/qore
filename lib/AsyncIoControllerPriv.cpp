@@ -957,7 +957,8 @@ void AsyncIoControllerPriv::cleanupAbandonedCommand(Command& cmd, ExceptionSink*
         }
         case IoCommand::Cancel: {
             // Signal cancel waiter if present so waitCancel() returns.
-            // Uses the refcounted CancelCond helper — caller holds m.
+            // Uses the refcounted CancelCond helper, which needs m.
+            AutoLocker al(m);
             signalCancelLocked(cmd.key);
             // Release the cmd's ref on the count holder.  No fetch_add
             // here because this is the abandoned path — the caller's
@@ -968,25 +969,19 @@ void AsyncIoControllerPriv::cleanupAbandonedCommand(Command& cmd, ExceptionSink*
                 cmd.cancel_count->deref();
                 cmd.cancel_count = nullptr;
             }
-            // a cancelByKey() fan-out over several I/O threads waits on a shared completion; caller holds m
-            if (cmd.completion) {
-                cmd.completion->completeOne();
-                cmd.completion->deref();
-                cmd.completion = nullptr;
-            }
+            // a cancelByKey() fan-out over several I/O threads waits on a shared completion
+            completeAbandonedLocked(cmd);
             break;
         }
         case IoCommand::CloseSocket: {
+            // the socket is closed before its waiter is signaled, as when the command is processed
             if (cmd.close_sock) {
                 cmd.close_sock->closeIo(xsink);
                 cmd.close_sock->deref(xsink);
                 cmd.close_sock = nullptr;
             }
-            if (cmd.completion) {
-                cmd.completion->completeOne();
-                cmd.completion->deref();
-                cmd.completion = nullptr;
-            }
+            AutoLocker al(m);
+            completeAbandonedLocked(cmd);
             break;
         }
         case IoCommand::CancelByProgram:
@@ -996,23 +991,25 @@ void AsyncIoControllerPriv::cleanupAbandonedCommand(Command& cmd, ExceptionSink*
             // Multi-thread commands: completion->completeOne() decrements
             // pending_threads and signals the waiter if this was the last,
             // or skips the signal if the completion is uniquely held (caller
-            // already released).  Caller of cleanupAbandonedCommand must
-            // hold m — completeOne() assumes that.
-            if (cmd.completion) {
-                cmd.completion->completeOne();
-                cmd.completion->deref();
-                cmd.completion = nullptr;
-            }
+            // already released).  completeOne() needs m.
+            AutoLocker al(m);
+            completeAbandonedLocked(cmd);
             break;
         }
-        default:
+        default: {
             // WakeSocket, AddTimer, CancelTimer, Quit — no ref-holding fields
-            if (cmd.completion) {
-                cmd.completion->completeOne();
-                cmd.completion->deref();
-                cmd.completion = nullptr;
-            }
+            AutoLocker al(m);
+            completeAbandonedLocked(cmd);
             break;
+        }
+    }
+}
+
+void AsyncIoControllerPriv::completeAbandonedLocked(Command& cmd) {
+    if (cmd.completion) {
+        cmd.completion->completeOne();
+        cmd.completion->deref();
+        cmd.completion = nullptr;
     }
 }
 
@@ -3006,8 +3003,11 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
             cmd.submit_route_thread_idx = target->thread_idx;
         }
         {
-            AutoLocker al(m);
+            SafeLocker sl(m);
             if (shutting_down) {
+                // the command is cleaned up without the lock, which the cleanup takes itself where it needs it (see
+                // cleanupAbandonedCommand())
+                sl.unlock();
                 socket_async_io_guard.release();
                 cleanupAbandonedCommand(cmd, xsink);
                 xsink->raiseException("ASYNC-IO-ERROR", "controller is shutting down");
@@ -6553,6 +6553,10 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
 
     // Cleanup on exit — cancel results are collected under lock and delivered outside
     std::vector<PollInfo> exit_cancel_pinfos;
+    // commands that will not be processed and the references of the remaining timers: they are cleaned up and
+    // released after the lock below, as the cleanup takes it (see cleanupAbandonedCommand())
+    std::vector<Command> abandoned_cmds;
+    std::vector<AsyncIoDeferredRelease> exit_timer_refs;
     std::unordered_map<std::string, std::shared_ptr<void>> exit_holds;
     bool restart_after_exit = false;
     {
@@ -6598,7 +6602,7 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
             AsyncIoDeferredRelease refs;
             refs.udata = tinfo.udata;
             tinfo.udata = QoreValue();
-            releaseOffIoThread(refs, xsink);
+            exit_timer_refs.push_back(refs);
         }
         timer_info_map.clear();
 
@@ -6651,7 +6655,7 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
             for (auto& pending_cmd : pending_cmds) {
                 if (pending_cmd.cmd == IoCommand::SubmitOp) {
                     if (final_shutdown) {
-                        cleanupAbandonedCommand(pending_cmd, xsink);
+                        abandoned_cmds.push_back(std::move(pending_cmd));
                         continue;
                     }
                     // Re-queue for the next I/O thread to process
@@ -6680,7 +6684,7 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                     }
                 } else if (pending_cmd.cmd == IoCommand::CancelSocket
                         || pending_cmd.cmd == IoCommand::CloseSocket) {
-                    cleanupAbandonedCommand(pending_cmd, xsink);
+                    abandoned_cmds.push_back(std::move(pending_cmd));
                 } else if ((pending_cmd.cmd == IoCommand::CancelByProgram
                             || pending_cmd.cmd == IoCommand::CancelOwner
                             || pending_cmd.cmd == IoCommand::GetInfo)
@@ -6744,6 +6748,12 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
     for (auto& pinfo : exit_cancel_pinfos) {
         doCancelIntern(pinfo, xsink);
         pinfo.cleanup(xsink);
+    }
+    for (auto& cmd : abandoned_cmds) {
+        cleanupAbandonedCommand(cmd, xsink);
+    }
+    for (auto& refs : exit_timer_refs) {
+        releaseOffIoThread(refs, xsink);
     }
     exit_holds.clear();
 
@@ -6867,15 +6877,10 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                     // Release resources on commands that followed Quit in
                     // this batch — they would otherwise be silently
                     // discarded when batch is destroyed, leaking their
-                    // refcounted fields.  See cleanupAbandonedCommand().
-                    //
-                    // cleanupAbandonedCommand requires the caller to hold m
-                    // (it touches cancel_cond_map for Cancel commands).
-                    {
-                        AutoLocker al2(m);
-                        for (size_t j = batch_idx + 1; j < batch.size(); ++j) {
-                            cleanupAbandonedCommand(batch[j], xsink);
-                        }
+                    // refcounted fields.  See cleanupAbandonedCommand(),
+                    // which takes m itself where it needs it.
+                    for (size_t j = batch_idx + 1; j < batch.size(); ++j) {
+                        cleanupAbandonedCommand(batch[j], xsink);
                     }
                     return true;
                 }

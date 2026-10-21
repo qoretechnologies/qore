@@ -3885,6 +3885,202 @@ public:
     }
 };
 
+//! The commands that an I/O thread will not process are cleaned up without the controller's lock
+/** An I/O thread cleans up the commands that follow a Quit in its command batch, and those it drains when it stops
+    for good; a submission refused because the controller is shutting down is cleaned up the same way.  The cleanup
+    of a submission delivers its canceled result, logs, releases references and can create the callback dispatcher,
+    which take the controller's lock; it ran with the lock held, so the thread waited for itself forever.  The
+    callback dispatcher is created when it is first needed: the I/O thread hung when the controller had not run a
+    callback yet.
+
+    The test holds a fresh controller's I/O thread in the debug hook before its poll, pushes a Quit and submits an
+    operation, so that the I/O thread finds the submission after the Quit in one batch; the I/O thread must deliver
+    the submission's canceled result and stop.
+*/
+class AsyncIoAbandonedCommandLockTest {
+    typedef AsyncIoControllerPriv Ctrl;
+
+    //! Waits for a notifier; it is never continued, as its submission is abandoned
+    class IdleOp : public SocketPollOperationBase {
+    public:
+        DLLLOCAL IdleOp(QoreObject* notifier_obj) : notifier_obj(notifier_obj) {
+        }
+
+        DLLLOCAL virtual bool goalReached() const override {
+            return false;
+        }
+
+        DLLLOCAL virtual void abort(ExceptionSink*) override {
+        }
+
+        DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink) override {
+            ReferenceHolder<QoreHashNode> info(new QoreHashNode(hashdeclSocketPollInfo, xsink), xsink);
+            info->setKeyValue("events", SOCK_POLLIN, xsink);
+            info->setKeyValue("socket", notifier_obj->objectRefSelf(), xsink);
+            return *xsink ? nullptr : info.release();
+        }
+
+        DLLLOCAL virtual const char* getStateImpl() const override {
+            return "waiting";
+        }
+
+    private:
+        QoreObject* notifier_obj;
+    };
+
+    //! The state of the test hook; guarded by the controller's lock
+    struct HookState {
+        //! true while the I/O thread waits in the hook
+        bool waiting = false;
+        //! true once the test lets the I/O thread go on
+        bool released = false;
+        //! signaled when \c waiting or \c released changes
+        QoreCondition cond;
+    };
+
+public:
+    static void run(UnitTestCounters& c) {
+        ExceptionSink xsink;
+        ReferenceHolder<AsyncIoControllerPriv> ctrl(new AsyncIoControllerPriv(false, &xsink), &xsink);
+        UT_ASSERT(c, !xsink, "abandoned-command controller construction succeeds");
+        if (xsink) {
+            xsink.clear();
+            return;
+        }
+        struct Cleanup {
+            AsyncIoControllerPriv* ctrl;
+            ExceptionSink& xsink;
+            UnitTestCounters& c;
+
+            ~Cleanup() {
+                xsink.clear();
+                ctrl->stopClear(&xsink);
+                UT_ASSERT(c, !xsink, "abandoned-command controller cleanup succeeds");
+                xsink.clear();
+            }
+        } cleanup{*ctrl, xsink, c};
+
+        ctrl->setMaxIoThreads(1, &xsink);
+        ctrl->start(&xsink);
+        bool ready = !xsink && ctrl->waitReady(5000, &xsink);
+        UT_ASSERT(c, ready && !xsink, "abandoned-command controller starts");
+        if (!ready || xsink) {
+            return;
+        }
+        UT_ASSERT(c, !ctrl->call_dispatcher.load(), "the controller has not created its callback dispatcher yet");
+
+        HookState hs;
+        // removes the hook and lets the I/O thread go on, on every exit path, before the hook's state goes away
+        struct HookGuard {
+            AsyncIoControllerPriv* ctrl;
+            HookState& hs;
+
+            ~HookGuard() {
+                AutoLocker al(ctrl->m);
+                ctrl->io_threads[0]->dbg_before_poll = nullptr;
+                hs.released = true;
+                hs.cond.broadcast();
+            }
+        } hook_guard{*ctrl, hs};
+        Ctrl::IoThreadContext& t = *ctrl->io_threads[0];
+        {
+            AutoLocker al(ctrl->m);
+            Ctrl* cp = *ctrl;
+            t.dbg_before_poll = [cp, &hs](Ctrl::IoThreadContext&) {
+                if (hs.released) {
+                    return;
+                }
+                hs.waiting = true;
+                hs.cond.broadcast();
+                while (!hs.released) {
+                    hs.cond.wait(&cp->m);
+                }
+                hs.waiting = false;
+            };
+            // the I/O thread waits in its poll: woken, it goes round once and reaches the hook
+            t.notifier->notify();
+            while (!hs.waiting) {
+                if (hs.cond.wait2(&ctrl->m, 30000)) {
+                    break;
+                }
+            }
+            UT_ASSERT(c, hs.waiting, "the I/O thread waits in the hook before its poll");
+            if (!hs.waiting) {
+                return;
+            }
+            // the Quit is the first command of the thread's next batch
+            Ctrl::Command cmd;
+            cmd.cmd = Ctrl::IoCommand::Quit;
+            t.cmdq.push(std::move(cmd));
+        }
+
+        // a submission after the Quit, in the same batch
+        ReferenceHolder<QoreEventNotifier> notifier(new QoreEventNotifier(&xsink), &xsink);
+        UT_ASSERT(c, !xsink && notifier->isValid(), "abandoned-command notifier is created");
+        if (xsink || !notifier->isValid()) {
+            return;
+        }
+        notifier->ref();
+        ReferenceHolder<QoreObject> notifier_obj(new QoreObject(QC_EVENTNOTIFIER, getProgram(), *notifier), &xsink);
+        IdleOp* op = new IdleOp(*notifier_obj);
+        ReferenceHolder<QoreObject> op_obj(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), op), &xsink);
+        op->setSelf(*op_obj);
+        op_obj->setValue("sock", notifier_obj->objectRefSelf(), &xsink);
+        op_obj->setValue("goal", new QoreStringNode("abandoned"), &xsink);
+        ReferenceHolder<QoreHashNode> info(new QoreHashNode(hashdeclSocketPollOperationInfo, &xsink), &xsink);
+        info->setKeyValue("sock", notifier_obj->objectRefSelf(), &xsink);
+        info->setKeyValue("spop", op_obj->objectRefSelf(), &xsink);
+        info->setKeyValue("owner", new QoreStringNode("abandoned-command-unit-test"), &xsink);
+        info->setKeyValue("to", -1, &xsink);
+        UT_ASSERT(c, !xsink, "abandoned-command submission info is initialized");
+        if (xsink) {
+            return;
+        }
+        ReferenceHolder<QoreObject> queue_obj(ctrl->submit(nullptr, info.release(), false, &xsink), &xsink);
+        UT_ASSERT(c, !xsink && queue_obj, "the operation is submitted after the Quit");
+        if (xsink || !queue_obj) {
+            return;
+        }
+        ReferenceHolder<Queue> queue(static_cast<Queue*>(queue_obj->getReferencedPrivateData(CID_QUEUE, &xsink)),
+            &xsink);
+        UT_ASSERT(c, queue && !xsink, "abandoned-command result queue is valid");
+        if (!queue || xsink) {
+            return;
+        }
+
+        {
+            AutoLocker al(ctrl->m);
+            hs.released = true;
+            hs.cond.broadcast();
+        }
+
+        // the hang guards only bound a wait for a thread that does not stop
+        bool timed_out = false;
+        ValueHolder result(queue->shift(&xsink, 30000, &timed_out), &xsink);
+        UT_ASSERT(c, !timed_out && !xsink && result->getType() == NT_HASH,
+            "the abandoned submission gets its result");
+        if (result->getType() == NT_HASH) {
+            UT_ASSERT(c, result->get<QoreHashNode>()->getKeyValue("canceled").getAsBool(),
+                "the abandoned submission is canceled");
+        }
+        xsink.clear();
+        bool stopped = false;
+        {
+            AutoLocker al(ctrl->m);
+            while (t.tid) {
+                ctrl->io_waiting = true;
+                int rc = ctrl->io_cond.wait2(&ctrl->m, 30000);
+                ctrl->io_waiting = false;
+                if (rc) {
+                    break;
+                }
+            }
+            stopped = !t.tid;
+        }
+        UT_ASSERT(c, stopped, "the I/O thread stops after cleaning up the submission");
+    }
+};
+
 //! A submission that loses the race with the controller's shutdown releases its result Queue
 /** submit() packages an operation from a thread that is not its I/O thread into a SubmitOp command; when the
     controller starts shutting down before the command is pushed, cleanupAbandonedCommand() delivers a canceled
@@ -8866,6 +9062,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     AsyncIoRegistrationCloseTest::run(c);
     AsyncIoZeroPollHintTest::run(c);
     AsyncIoStaleReadinessTest::run(c);
+    AsyncIoAbandonedCommandLockTest::run(c);
     AsyncIoStoppingThreadTest::run(c);
     AsyncIoFrameSendTest::run(c);
     ut_cond_wait_cancel_in_window(c);

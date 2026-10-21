@@ -545,6 +545,7 @@ DLLEXPORT extern const TypedHashDecl* hashdeclSocketPollResultInfo;
 */
 class AsyncIoControllerPriv : public AbstractPrivateData {
 #ifdef DEBUG
+    friend class AsyncIoAbandonedCommandLockTest;
     friend class AsyncIoCloseTest;
     friend class AsyncIoDescriptorHoldTest;
     friend class AsyncIoOpCacheTest;
@@ -1726,11 +1727,14 @@ private:
         any condition-variable waiters (CancelOwner/CancelByProgram/GetInfo/
         Cancel) so callers don't hang.
 
-        @note Caller must hold @ref m — the helper touches
-        @ref cancel_cond_map (shared state) in the @ref IoCommand::Cancel
-        case.
+        @note The caller must not hold @ref m: the cleanup delivers a canceled result, logs, releases references
+        (which can run destructors) and can create the callback dispatcher, which take @ref m; it takes @ref m itself
+        to signal the waiters (@ref cancel_cond_map, completions)
     */
     DLLLOCAL void cleanupAbandonedCommand(Command& cmd, ExceptionSink* xsink);
+
+    //! Completes the completion of an abandoned command, if any; the caller holds @ref m
+    DLLLOCAL void completeAbandonedLocked(Command& cmd);
 
     //! Cancel an operation internally (delivers result, called from I/O thread)
     DLLLOCAL void doCancelIntern(PollInfo& pinfo, ExceptionSink* xsink);

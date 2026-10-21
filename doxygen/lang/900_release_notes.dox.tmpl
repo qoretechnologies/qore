@@ -5141,6 +5141,9 @@ while (*binary chunk = input.read(65536)) {
       consumes its event in @ref Qore::AbstractPollOperation::continuePoll() "AbstractPollOperation::continuePoll()",
       such as one that acknowledges an @ref Qore::EventNotifier "EventNotifier", could move on to its next step
       without a new event
+    - Fixed a hang of an async I/O thread that stopped while an operation was being submitted to it, or of a
+      submission made while the controller shut down: the canceled operation's result was delivered while the
+      controller's internal lock was held, and the delivery could wait for that lock forever
     - Fixed a data race when @ref Qore::Socket::isOpen() "Socket::isOpen()" or another method that checks whether a
       socket is open was called while another thread closed the socket
     - Fixed a rare crash at the end of a process that used asynchronous socket I/O: the end of the process could

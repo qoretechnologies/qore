@@ -61,6 +61,15 @@ barrier waits for or discards it; it is released on the calling thread only when
 the I/O threads have exited) or the objects' program is shutting down.  Builtin objects whose destruction is pure
 C++ (e.g. `Promise`, `EventNotifier`) may still be released on the I/O thread.
 
+The controller's lock `m` is not recursive, and the cleanup of a command that will not be processed
+(`cleanupAbandonedCommand()`: the commands after a Quit in an I/O thread's batch, those drained when a thread stops
+for good, a submission refused while the controller shuts down) delivers a canceled result, logs, releases
+references and can create the callback dispatcher, which take `m`.  It is therefore called without `m` and takes it
+itself to signal waiters; an exiting I/O thread collects the commands and the references of its timers under `m`
+and cleans them up after releasing it.  `AsyncIoAbandonedCommandLockTest` holds an I/O thread in the
+`dbg_before_poll` hook so that a submission follows a Quit in one batch, on a controller that has no callback
+dispatcher yet.
+
 ## Thread Model
 
 An operation's `abort()` callback performs transport cleanup for both timeout and explicit cancellation.
