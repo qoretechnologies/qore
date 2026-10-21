@@ -97,6 +97,9 @@ class OdbcFirebirdTest inherits SqlTestBase {
             # a Firebird timestamp has a precision of 100 microseconds
             "timestamp with time zone": 2023-01-28T16:48:30.5001,
 
+            # the column of the cop_trunc_date() tests
+            "timestamp": 2016-02-11T09:26:14,
+
             "varbinary": <bead>,
         );
     }

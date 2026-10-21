@@ -1,0 +1,216 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires DataProvider
+%requires SqlUtil
+%requires XdbcFirebirdSqlUtilBase
+%requires JdbcFirebirdSqlUtil
+
+%try-module jni
+%define NoJni
+%endtry
+
+%exec-class FirebirdAverageTest
+
+#! a datasource that gives SQL generation the catalog row of the database without a Firebird server
+class FirebirdAvgOfflineDatasource inherits Qore::SQL::AbstractDatasource {
+    private {
+        # the version of the server
+        string version;
+    }
+
+    constructor(string version) {
+        self.version = version;
+    }
+
+    *string getPassword() {}
+    *string getOSEncoding() {}
+    *string getDBName() { return "fbtest"; }
+    *string getUserName() { return "fbuser"; }
+    *string getHostName() {}
+    *int getPort() {}
+    *string getDBEncoding() {}
+    string getDriverName() { return "jni"; }
+    auto getServerVersion() {}
+    auto getClientVersion() {}
+    string getConfigString() { return ""; }
+    hash<auto> getConfigHash() { return {}; }
+    bool inTransaction() { return False; }
+    bool currentThreadInTransaction() { return False; }
+    nothing beginTransaction() {}
+    nothing commit() {}
+    nothing rollback() {}
+
+    auto exec(string sql, ...) { return 0; }
+    auto vexec(string sql, *softlist<auto> vargs) { return 0; }
+    auto execRaw(string sql) { return 0; }
+    auto select(string sql, ...) {}
+    auto vselect(string sql, *softlist<auto> vargs) {}
+    auto selectRow(string sql, ...) { return {"bpc": 4, "version": version}; }
+    auto vselectRow(string sql, *softlist<auto> vargs) { return {"bpc": 4, "version": version}; }
+    auto selectRows(string sql, ...) {}
+    auto vselectRows(string sql, *softlist<auto> vargs) {}
+    auto selectTyped(string sql, ...) {}
+    auto vselectTyped(string sql, *softlist<auto> vargs) {}
+    auto selectRowsTyped(string sql, ...) {}
+    auto vselectRowsTyped(string sql, *softlist<auto> vargs) {}
+}
+
+#! Tests averages on Firebird, which gives the average of an integer or an exact numeric in its own type
+/** The average of an integer or an exact numeric is exact, as on other databases: a \c DECFLOAT(34) from Firebird 4 on
+    and a <tt>DOUBLE PRECISION</tt> on Firebird 3; the average of a float is as before.  The live cases run with a
+    disposable Firebird database through the JDBC driver, given with \c -c or \c QORE_DB_CONNSTR_JDBC_FIREBIRD
+*/
+class FirebirdAverageTest inherits QUnit::Test {
+    public {
+        const MyOpts = Opts + {
+            "connstr": "c,conn=s",
+        };
+
+        #! the table of the live cases
+        const TableName = "fbavg_t";
+
+        #! the columns of the table
+        const Columns = {
+            "id": {"qore_type": "integer", "notnull": True},
+            "n": {"qore_type": "number", "size": 10, "scale": 2},
+            "f": {"qore_type": "float"},
+            "s": {"qore_type": "string", "size": 20},
+        };
+
+        #! the rows of the table
+        const Rows = (
+            {"id": 1, "n": 1.25n, "f": 1.0, "s": "a"},
+            {"id": 2, "n": 2.50n, "f": 2.0, "s": "bc"},
+        );
+    }
+
+    private {
+        *Datasource ds;
+        *AbstractTable table;
+    }
+
+    constructor() : Test("FirebirdAverage", "1.0", \ARGV, MyOpts) {
+        addTestCase("the average of an integer or an exact numeric is exact", \avgSql());
+        addTestCase("the average on Firebird 3", \avgSqlFirebird3());
+        addTestCase("live: averages", \liveAvg());
+        set_return_value(main());
+    }
+
+    globalTearDown() {
+        if (table) {
+            table.dropCommit();
+        }
+    }
+
+    private static hash<DataProviderExpression> exp(string op, list<auto> args) {
+        return <DataProviderExpression>{"exp": op, "args": args};
+    }
+
+    private static hash<DataProviderFieldReference> fld(string name) {
+        return <DataProviderFieldReference>{"field": name};
+    }
+
+    #! returns an offline table of the columns with a server of the given version
+    private static XdbcFirebirdTable getOfflineTable(string name = TableName, string version = "5.0.4") {
+        XdbcFirebirdTable t(new FirebirdAvgOfflineDatasource(version), name);
+        t.setupTable({"columns": Columns});
+        return t;
+    }
+
+    #! returns the SQL of a select with the given options
+    private static string selectSql(AbstractTable t, hash<auto> sh) {
+        list<auto> args;
+        return t.getSelectSql(sh, \args);
+    }
+
+    avgSql() {
+        XdbcFirebirdTable t = getOfflineTable();
+
+        # data provider expressions: a column of an integer or an exact numeric, an expression that returns an
+        # integer, and a float column, which is as before
+        assertEq("select avg(cast(id as decfloat(34))), avg(cast(n as decfloat(34))), avg(f), "
+            "avg(cast(char_length(s) as decfloat(34))) from fbavg_t", selectSql(t, {"columns": (
+                exp(COP_AVG, (fld("id"),)), exp(COP_AVG, (fld("n"),)), exp(COP_AVG, (fld("f"),)),
+                exp(COP_AVG, (exp(COP_LENGTH, (fld("s"),)),)))}));
+        # an expression of no known type is as before
+        assertEq("select avg(coalesce(n, f)) from fbavg_t", selectSql(t, {"columns": (
+            exp(COP_AVG, (exp(DP_FUNC_COALESCE, (fld("n"), fld("f"))),)),)}));
+
+        # column operators
+        assertEq("select avg(cast(id as decfloat(34))), avg(cast(n as decfloat(34))), avg(f) from fbavg_t",
+            selectSql(t, {"columns": (cop_avg("id"), cop_avg("n"), cop_avg("f"))}));
+
+        # the columns of a joined table
+        XdbcFirebirdTable other = getOfflineTable("fbavg_o");
+        assertEq("select avg(cast(o.n as decfloat(34))), avg(o.f) from fbavg_t inner join fbavg_o o on "
+            "(fbavg_t.id = o.id)", selectSql(t, {"columns": (exp(COP_AVG, (fld("o.n"),)),
+                exp(COP_AVG, (fld("o.f"),))), "join": join_inner(other, "o", {"id": "id"})}));
+        # with a column operator, a column of the table in a join, and a column of the joined table as before
+        assertEq("select avg(cast(fbavg_t.n as decfloat(34))), avg(o.n) from fbavg_t inner join fbavg_o o on "
+            "(fbavg_t.id = o.id)", selectSql(t, {"columns": (cop_avg("n"), cop_avg("o.n")),
+                "join": join_inner(other, "o", {"id": "id"})}));
+    }
+
+    avgSqlFirebird3() {
+        # Firebird 3 has no DECFLOAT: the average of an integer or an exact numeric is a float
+        XdbcFirebirdTable t = getOfflineTable(TableName, "3.0.12");
+        assertEq("select avg(cast(id as double precision)), avg(f) from fbavg_t", selectSql(t, {"columns": (
+            exp(COP_AVG, (fld("id"),)), exp(COP_AVG, (fld("f"),)))}));
+        assertEq("select avg(cast(n as double precision)) from fbavg_t", selectSql(t, {"columns": (cop_avg("n"),)}));
+    }
+
+    #! returns the live table, creating it on the first call
+    private AbstractTable getLiveTable() {
+%ifdef NoJni
+        testSkip("no jni module");
+%endif
+        if (table) {
+            return table;
+        }
+        string connstr = m_options.connstr ?? ENV.QORE_DB_CONNSTR_JDBC_FIREBIRD ?? "";
+        if (!connstr.val()) {
+            testSkip("no Firebird connection; set QORE_DB_CONNSTR_JDBC_FIREBIRD or use -c");
+        }
+        Datasource nds(connstr);
+        if (nds.getDriverRealName() !~ /^firebird/i) {
+            testSkip("not a Firebird connection");
+        }
+        ds = nds;
+        Database db(ds);
+        {
+            *AbstractTable old = db.getTable(TableName);
+            if (old) {
+                old.dropCommit();
+            }
+        }
+        AbstractTable t = db.makeTable(TableName, {"columns": Columns, "primary_key": {"name": "pk_fbavg_t",
+            "columns": ("id",)}});
+        t.create();
+        ds.commit();
+        map t.insert($1), Rows;
+        ds.commit();
+        return table = db.getTable(TableName);
+    }
+
+    liveAvg() {
+        AbstractTable t = getLiveTable();
+        if (cast<XdbcFirebirdTable>(t).getServerMajorVersion() < 4) {
+            testSkip("Firebird 3 gives the average of an integer or an exact numeric as a float");
+        }
+        # the average of 1 and 2 is 1.5, and of 1.25 and 2.50 1.875, as numbers; a float average is a float
+        assertEq({"id": 1.5n, "n": 1.875n, "f": 1.5, "len": 1.5n}, t.selectRow({"columns": (
+            exp(COP_AS, (exp(COP_AVG, (fld("id"),)), "id")),
+            exp(COP_AS, (exp(COP_AVG, (fld("n"),)), "n")),
+            exp(COP_AS, (exp(COP_AVG, (fld("f"),)), "f")),
+            exp(COP_AS, (exp(COP_AVG, (exp(COP_LENGTH, (fld("s"),)),)), "len")),
+        )}));
+        assertEq({"id": 1.5n, "n": 1.875n, "f": 1.5}, t.selectRow({"columns": (cop_as(cop_avg("id"), "id"),
+            cop_as(cop_avg("n"), "n"), cop_as(cop_avg("f"), "f"))}));
+    }
+}

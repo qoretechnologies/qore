@@ -194,6 +194,43 @@ table.addForeignConstraint("fk_order_lines_order", "order_id", "orders", "id", {
     \c toString expressions) has the largest size that the type can have in the default character set of the
     database: 8191 characters in \c UTF8, 32765 in \c NONE and in any character set of one byte per character.
 
+    @section xdbcfirebird_date_arithmetic Date Arithmetic
+
+    Firebird has no duration type.  A date plus or minus durations (the \c years, \c months, \c weeks, \c days,
+    \c hours, \c minutes, \c seconds, \c milliseconds and \c microseconds functions, relative date values, and
+    sums and differences of them) is given as nested <tt>dateadd()</tt>, which adds the durations in their order;
+    a microsecond is a fraction of a millisecond, to the precision of a Firebird timestamp (100 microseconds).
+
+    A duration anywhere else, such as alone in the select list or compared with a date, is refused with
+    \c SQLUTIL-EXPRESSION-NOT-PUSHDOWNABLE, as is a duration minus a date.  The duration functions have no SQL of
+    their own in the expression map, so
+    @ref DataProvider::AbstractDataProvider::splitPushdownableExpression() "AbstractDataProvider::splitPushdownableExpression()"
+    gives an expression with a duration to be evaluated client-side, as any expression that cannot be pushed down.
+
+    @par Example:
+    @code{.py}
+# select id from orders where created > dateadd(-(cast(%v as bigint)) day to current_timestamp)
+*list<hash<auto>> rows = table.selectRows({
+    "columns": ("id",),
+    "where": <DataProviderExpression>{"exp": DP_SEARCH_OP_GT, "args": (
+        <DataProviderFieldReference>{"field": "created"},
+        <DataProviderExpression>{"exp": DP_OP_MINUS, "args": (
+            <DataProviderExpression>{"exp": DP_FUNC_NOW},
+            <DataProviderExpression>{"exp": DP_FUNC_DAYS, "args": (7,)},
+        )},
+    )},
+});
+    @endcode
+
+    @section xdbcfirebird_averages Averages
+
+    Firebird gives the average of an integer or an exact numeric in its own type, so that the average of 1 and 2
+    is 1.  The average of a column of an integer or an exact numeric type, and of an expression that returns an
+    integer or a number, is therefore exact, as on other databases: it is computed in \c DECFLOAT(34) and is a
+    number from Firebird 4 on, and in <tt>DOUBLE PRECISION</tt> on Firebird 3, which has no \c DECFLOAT, so that it is a
+    float.  The average of a float is as Firebird gives it, a float.  The average of an expression of no known type,
+    and @ref SqlUtil::cop_avg() "cop_avg()" of a column of a joined table, are as Firebird gives them.
+
     @section xdbcfirebird_relnotes Release Notes
 
     @subsection xdbcfirebirdsqlutilbasev_0_2 XdbcFirebirdSqlUtilBase Module v0.2
@@ -256,6 +293,15 @@ table.addForeignConstraint("fk_order_lines_order", "order_id", "orders", "id", {
       other character sets
     - fixed the \c ltrim and \c rtrim expressions, which gave functions that Firebird does not have
     - fixed a date given as a literal value, such as with \c cop_value(), which Firebird refused
+    - behaviour change: the average of an integer or exact numeric column, or of an expression that returns an
+      integer or a number, is exact, as on other databases: the average of 1 and 2 is 1.5, and the average of
+      1.25 and 2.50 is 1.875; before, Firebird gave the average in the type of the column, so 1 and 1.87.  It is a
+      number from Firebird 4 on, and a float on Firebird 3 (see @ref xdbcfirebird_averages)
+    - fixed date arithmetic with durations (\c years to \c microseconds and relative date values), which always
+      failed: a date plus or minus durations is now given as \c dateadd(), and a duration anywhere else is refused
+      with \c SQLUTIL-EXPRESSION-NOT-PUSHDOWNABLE (see @ref xdbcfirebird_date_arithmetic)
+    - added support for @ref SqlUtil::cop_trunc_date() "cop_trunc_date()" and the \c truncate_date expression,
+      which were refused as unknown
 
     @subsection xdbcfirebirdsqlutilbasev_0_1 XdbcFirebirdSqlUtilBase Module v0.1
     - initial release
@@ -333,6 +379,127 @@ list<auto> sub firebird_infer_values(list<auto> args, int count, bool always = F
         }
     }
     return args;
+}
+
+# a term of a duration: an amount of a unit of dateadd(), to add or to subtract
+hashdecl FirebirdDurationTerm {
+    # the amount: an argument of an expression, given in SQL as getExpressionArg() gives it
+    auto amount;
+
+    # the amount as an SQL literal, for a component of a relative date value, instead of "amount"
+    *string amount_sql;
+
+    # the unit of dateadd(), or "microsecond", which is given as a fraction of a millisecond
+    string unit;
+
+    # True if the amount is subtracted
+    bool negate = False;
+}
+
+# the units of the duration functions in dateadd()
+const FirebirdDurationUnits = {
+    DP_FUNC_YEARS: "year",
+    DP_FUNC_MONTHS: "month",
+    DP_FUNC_WEEKS: "week",
+    DP_FUNC_DAYS: "day",
+    DP_FUNC_HOURS: "hour",
+    DP_FUNC_MINUTES: "minute",
+    DP_FUNC_SECONDS: "second",
+    DP_FUNC_MILLISECONDS: "millisecond",
+    DP_FUNC_MICROSECONDS: "microsecond",
+};
+
+# returns True if a value is a duration: a relative date
+bool sub firebird_is_duration_value(auto v) {
+    return v.typeCode() == NT_DATE && !v.absolute();
+}
+
+# returns the terms of an argument of an expression that is a duration: a duration function, a relative date value,
+# or a sum or a difference of durations; no value if the argument is not a duration
+*list<hash<FirebirdDurationTerm>> sub firebird_get_duration_terms(auto arg) {
+    if (firebird_is_duration_value(arg)) {
+        # the components of a relative date; a duration of zero has no terms
+        list<hash<FirebirdDurationTerm>> terms = ();
+        foreach hash<auto> i in ({
+                "year": arg.years(), "month": arg.months(), "day": arg.days(), "hour": arg.hours(),
+                "minute": arg.minutes(), "second": arg.seconds(),
+            }.pairIterator()) {
+            if (i.value) {
+                terms += <FirebirdDurationTerm>{"amount_sql": string(i.value), "unit": i.key};
+            }
+        }
+        if (int us = arg.microseconds()) {
+            # a millisecond with a fraction of tenths, the precision of a Firebird timestamp
+            int tenths = us / 100;
+            terms += <FirebirdDurationTerm>{
+                "amount_sql": sprintf("%s%d.%d", tenths < 0 ? "-" : "", abs(tenths) / 10, abs(tenths) % 10),
+                "unit": "millisecond",
+            };
+        }
+        return terms;
+    }
+    if (!(arg instanceof hash<DataProviderExpression>)) {
+        return;
+    }
+    string exp = arg.exp;
+    if (!FirebirdDurationUnits{exp} && OperatorAliasMap{exp}) {
+        exp = OperatorAliasMap{exp};
+    }
+    if (*string unit = FirebirdDurationUnits{exp}) {
+        return (<FirebirdDurationTerm>{"amount": arg.args[0], "unit": unit},);
+    }
+    switch (exp) {
+        case DP_OP_PLUS:
+        case COP_PLUS: {
+            list<hash<FirebirdDurationTerm>> terms = ();
+            foreach auto a in (arg.args) {
+                *list<hash<FirebirdDurationTerm>> t = firebird_get_duration_terms(a);
+                if (!exists t) {
+                    return;
+                }
+                terms += t;
+            }
+            return terms;
+        }
+        case DP_OP_MINUS:
+        case COP_MINUS: {
+            *list<hash<FirebirdDurationTerm>> t0 = firebird_get_duration_terms(arg.args[0]);
+            *list<hash<FirebirdDurationTerm>> t1 = firebird_get_duration_terms(arg.args[1]);
+            if (!exists t0 || !exists t1) {
+                return;
+            }
+            return t0 + (map $1 + {"negate": !$1.negate}, t1);
+        }
+    }
+}
+
+# throws SQLUTIL-EXPRESSION-NOT-PUSHDOWNABLE for a duration that is not added to or subtracted from a date
+sub firebird_refuse_duration(string what) {
+    throw "SQLUTIL-EXPRESSION-NOT-PUSHDOWNABLE", sprintf("%s: Firebird has no duration type, so a duration can only "
+        "be added to or subtracted from a date", what);
+}
+
+# the date truncation masks of cop_trunc_date(): the length of the text of a timestamp that is kept, and the rest of
+# the truncated timestamp
+const FirebirdTruncDate = {
+    DT_YEAR: (4, "-01-01 00:00:00"),
+    DT_MONTH: (7, "-01 00:00:00"),
+    DT_DAY: (10, " 00:00:00"),
+    DT_HOUR: (13, ":00:00"),
+    DT_MINUTE: (16, ":00"),
+    DT_SECOND: (19, ""),
+};
+
+# returns the SQL that truncates a date to a mask of cop_trunc_date(), or no value for an unknown mask: Firebird has no
+# date_trunc(), so the text of the date as a timestamp ("YYYY-MM-DD HH:MM:SS.ffff") is cut and given back as a
+# timestamp, which names the date once in the SQL, as it can have bound values
+*string sub firebird_get_trunc_date_sql(string exp, string mask) {
+    *list<auto> m = FirebirdTruncDate{mask};
+    if (!m) {
+        return;
+    }
+    return sprintf("cast(substring(cast(cast(%s as timestamp) as varchar(24)) from 1 for %d)%s as timestamp)", exp,
+        m[0], m[1] ? sprintf(" || '%s'", m[1]) : "");
 }
 
 # returns the Firebird 3 type of an arbitrary-precision number, as Firebird 3 has no DECFLOAT: a NUMERIC with the
@@ -1542,6 +1709,16 @@ string sql = db.getSqlIdentifier("Order Date");
                         return sprintf("char_length(%s)", cve);
                     },
                 },
+                COP_TRUNC_DATE: (
+                    "code": string sub (string cve, auto arg) {
+                        *string sql = firebird_get_trunc_date_sql(cve, arg);
+                        if (!sql) {
+                            throw "COP-TRUNC-DATE-ERROR", sprintf("Not allowed format argument: %n: allowed: %n", arg,
+                                keys FirebirdTruncDate);
+                        }
+                        return sql;
+                    },
+                ),
                 COP_PREPEND: (
                     "arg": Type::String,
                     "sqlvalue": True,
@@ -1747,54 +1924,18 @@ string sql = db.getSqlIdentifier("Order Date");
                     },
                 },
                 # --- Duration functions for Firebird ---
-                DP_FUNC_YEARS: DefaultExpressionMap{DP_FUNC_YEARS} + {
-                    "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
-                        return sprintf("dateadd(%s year to cast(0 as timestamp))",
-                            info.table.getExpressionArg(\info, role, args[0], AbstractDataProviderTypeMap."int"));
-                    },
-                },
-                DP_FUNC_MONTHS: DefaultExpressionMap{DP_FUNC_MONTHS} + {
-                    "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
-                        return sprintf("dateadd(%s month to cast(0 as timestamp))",
-                            info.table.getExpressionArg(\info, role, args[0], AbstractDataProviderTypeMap."int"));
-                    },
-                },
-                DP_FUNC_WEEKS: DefaultExpressionMap{DP_FUNC_WEEKS} + {
-                    "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
-                        return sprintf("dateadd(%s week to cast(0 as timestamp))",
-                            info.table.getExpressionArg(\info, role, args[0], AbstractDataProviderTypeMap."int"));
-                    },
-                },
-                DP_FUNC_DAYS: DefaultExpressionMap{DP_FUNC_DAYS} + {
-                    "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
-                        return sprintf("dateadd(%s day to cast(0 as timestamp))",
-                            info.table.getExpressionArg(\info, role, args[0], AbstractDataProviderTypeMap."int"));
-                    },
-                },
-                DP_FUNC_HOURS: DefaultExpressionMap{DP_FUNC_HOURS} + {
-                    "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
-                        return sprintf("dateadd(%s hour to cast(0 as timestamp))",
-                            info.table.getExpressionArg(\info, role, args[0], AbstractDataProviderTypeMap."int"));
-                    },
-                },
-                DP_FUNC_MINUTES: DefaultExpressionMap{DP_FUNC_MINUTES} + {
-                    "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
-                        return sprintf("dateadd(%s minute to cast(0 as timestamp))",
-                            info.table.getExpressionArg(\info, role, args[0], AbstractDataProviderTypeMap."int"));
-                    },
-                },
-                DP_FUNC_SECONDS: DefaultExpressionMap{DP_FUNC_SECONDS} + {
-                    "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
-                        return sprintf("dateadd(%s second to cast(0 as timestamp))",
-                            info.table.getExpressionArg(\info, role, args[0], AbstractDataProviderTypeMap."int"));
-                    },
-                },
-                DP_FUNC_MILLISECONDS: DefaultExpressionMap{DP_FUNC_MILLISECONDS} + {
-                    "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
-                        return sprintf("dateadd(%s millisecond to cast(0 as timestamp))",
-                            info.table.getExpressionArg(\info, role, args[0], AbstractDataProviderTypeMap."int"));
-                    },
-                },
+                # Firebird has no duration type: a duration has no SQL of its own, and is given in SQL only where
+                # it is added to or subtracted from a date, as dateadd() (see XdbcFirebirdTable::getDateArithmeticSql());
+                # anywhere else, it is refused with SQLUTIL-EXPRESSION-NOT-PUSHDOWNABLE
+                DP_FUNC_YEARS: DefaultExpressionMap{DP_FUNC_YEARS} - "code",
+                DP_FUNC_MONTHS: DefaultExpressionMap{DP_FUNC_MONTHS} - "code",
+                DP_FUNC_WEEKS: DefaultExpressionMap{DP_FUNC_WEEKS} - "code",
+                DP_FUNC_DAYS: DefaultExpressionMap{DP_FUNC_DAYS} - "code",
+                DP_FUNC_HOURS: DefaultExpressionMap{DP_FUNC_HOURS} - "code",
+                DP_FUNC_MINUTES: DefaultExpressionMap{DP_FUNC_MINUTES} - "code",
+                DP_FUNC_SECONDS: DefaultExpressionMap{DP_FUNC_SECONDS} - "code",
+                DP_FUNC_MILLISECONDS: DefaultExpressionMap{DP_FUNC_MILLISECONDS} - "code",
+                DP_FUNC_MICROSECONDS: DefaultExpressionMap{DP_FUNC_MICROSECONDS} - "code",
                 # --- Date extraction functions for Firebird ---
                 DP_FUNC_GET_YEAR: DefaultExpressionMap{DP_FUNC_GET_YEAR} + {
                     "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
@@ -2081,6 +2222,72 @@ string sql = db.getSqlIdentifier("Order Date");
                         return DefaultExpressionMap{DP_OP_IS_NOT_NULL}.code(\info, role, firebird_infer_values(args, 1, True));
                     },
                 },
+                # --- Date arithmetic for Firebird ---
+                # a date plus or minus a duration is dateadd()
+                DP_OP_PLUS: DefaultExpressionMap{DP_OP_PLUS} + {
+                    "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        return cast<XdbcFirebirdTable>(info.table).getDateArithmeticSql(\info, role, args, False,
+                            DefaultExpressionMap{DP_OP_PLUS}.code);
+                    },
+                },
+                COP_PLUS: DefaultExpressionMap{COP_PLUS} + {
+                    "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        return cast<XdbcFirebirdTable>(info.table).getDateArithmeticSql(\info, role, args, False,
+                            DefaultExpressionMap{COP_PLUS}.code);
+                    },
+                },
+                DP_OP_MINUS: DefaultExpressionMap{DP_OP_MINUS} + {
+                    "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        return cast<XdbcFirebirdTable>(info.table).getDateArithmeticSql(\info, role, args, True,
+                            DefaultExpressionMap{DP_OP_MINUS}.code);
+                    },
+                },
+                COP_MINUS: DefaultExpressionMap{COP_MINUS} + {
+                    "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        return cast<XdbcFirebirdTable>(info.table).getDateArithmeticSql(\info, role, args, True,
+                            DefaultExpressionMap{COP_MINUS}.code);
+                    },
+                },
+                # --- Date truncation for Firebird ---
+                COP_TRUNC_DATE: {
+                    "exp": <DataProviderExpressionInfo>{
+                        "type": DET_Operator,
+                        "name": COP_TRUNC_DATE,
+                        "display_name": COP_TRUNC_DATE,
+                        "desc": "truncates the given date to the given resolution; args: date, string code: Y: year, "
+                            "M: month, D: day, H: hour, m: minute, S: second",
+                        "symbol": COP_TRUNC_DATE,
+                        "groups": "Date/Time",
+                        "args": (
+                            DataProviderSignatureDateType,
+                            DataProviderSignatureStringValueType,
+                        ),
+                        "return_type": AbstractDataProviderTypeMap."date",
+                    },
+                    "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        # the cast gives a value its type
+                        args = firebird_infer_values(args, 1, True);
+                        string exp0 = info.table.getExpressionArg(\info, role, args[0],
+                            AbstractDataProviderTypeMap."date");
+                        *string sql = firebird_get_trunc_date_sql(exp0, args[1]);
+                        if (!sql) {
+                            throw "TRUNC-DATE-ERROR", sprintf("unknown date truncation format argument %y; "
+                                "supported date format arguments: %y", args[1], keys FirebirdTruncDate);
+                        }
+                        return sql;
+                    },
+                },
+                # --- Aggregates for Firebird ---
+                # the average of an integer or an exact numeric is exact, as on other databases (see
+                # XdbcFirebirdTable::getAvgSql())
+                COP_AVG: DefaultExpressionMap{COP_AVG} + {
+                    "code": string sub (reference<hash<QueryInfo>> info, int role, *list<auto> args) {
+                        XdbcFirebirdTable t = cast<XdbcFirebirdTable>(info.table);
+                        *bool exact = t.isExactNumericArg(info, args[0]);
+                        return t.getAvgSql(t.getExpressionArg(\info, role, args[0], AbstractDataProviderTypeMap."any"),
+                            exact);
+                    },
+                },
                 # Firebird has no ltrim() or rtrim()
                 DP_FUNC_LTRIM: DefaultExpressionMap{DP_FUNC_LTRIM} + {
                     "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
@@ -2222,7 +2429,7 @@ string sql = db.getSqlIdentifier("Order Date");
             select list, in arithmetic, in a string function, in a \c CASE expression or in a comparison of two
             values, it refuses a value without a type with <tt>Data type unknown</tt>, so such a value is bound in a
             cast to its type as getBindType() gives it (see @ref xdbcfirebird_bound_values); a value with no type,
-            such as \c NULL, is bound as it is
+            such as \c NULL, is bound as it is; a relative date value, which Firebird has no type for, is refused
 
             @param info the query information, to which a bound value is added
             @param role the role of the expression
@@ -2231,10 +2438,20 @@ string sql = db.getSqlIdentifier("Order Date");
 
             @return the SQL of the argument
 
+            @throw SQLUTIL-EXPRESSION-NOT-PUSHDOWNABLE the argument is a relative date value, which can only be added to
+            or subtracted from a date (see getDateArithmeticSql())
+
             @since XdbcFirebirdSqlUtilBase 0.2
         */
         string getExpressionArg(reference<hash<QueryInfo>> info, int role, auto arg,
                 AbstractDataProviderType expected_type) {
+            # a duration value is given only in date arithmetic (see getDateArithmeticSql())
+            {
+                auto v = (arg instanceof hash<FirebirdInferredValue>) ? arg.value : arg;
+                if (firebird_is_duration_value(v)) {
+                    firebird_refuse_duration(sprintf("relative date value %y", v));
+                }
+            }
             if (arg instanceof hash<FirebirdInferredValue>) {
                 info.args += arg.value;
                 return "%v";
@@ -2247,6 +2464,192 @@ string sql = db.getSqlIdentifier("Order Date");
                 }
             }
             return AbstractTable::getExpressionArg(\info, role, arg, expected_type);
+        }
+
+        #! returns the SQL of a sum or a difference of the arguments of an expression, with each duration as \c dateadd()
+        /** Firebird has no duration type: a date plus or minus durations (@ref DataProvider::DP_FUNC_YEARS "years"
+            to @ref DataProvider::DP_FUNC_MICROSECONDS "microseconds", relative date values, and sums and differences
+            of them) is given as nested <tt>dateadd(</tt><em>amount</em> <em>unit</em> <tt>to</tt> <em>date</em><tt>)</tt>,
+            in the order of the durations, with the amounts negated for a difference; a microsecond is a fraction of
+            a millisecond, to the precision of a Firebird timestamp (100 microseconds)
+
+            @param info the query information, to which the bound values are added
+            @param role the role of the expression
+            @param args the arguments of the sum, or the two arguments of the difference
+            @param minus @ref True "True" for a difference, @ref False "False" for a sum
+            @param default_code the SQL of the expression when no argument is a duration
+
+            @return the SQL of the expression
+
+            @throw SQLUTIL-EXPRESSION-NOT-PUSHDOWNABLE the expression is a duration without a date, or a duration
+            minus a date
+
+            @since XdbcFirebirdSqlUtilBase 0.2
+        */
+        string getDateArithmeticSql(reference<hash<QueryInfo>> info, int role, list<auto> args, bool minus,
+                code<string(reference<hash<QueryInfo>>, int, list<auto>)> default_code) {
+            # the durations, and the other arguments
+            list<hash<FirebirdDurationTerm>> terms = ();
+            list<auto> others = ();
+            bool duration;
+            foreach auto arg in (args) {
+                *list<hash<FirebirdDurationTerm>> t = firebird_get_duration_terms(arg);
+                if (!exists t) {
+                    others += arg;
+                    continue;
+                }
+                # a duration that is subtracted from a date
+                if (minus) {
+                    if (!$#) {
+                        # a duration minus a date, or minus a duration
+                        firebird_refuse_duration("a duration minus another value");
+                    }
+                    t = map $1 + {"negate": !$1.negate}, t;
+                }
+                terms += t;
+                duration = True;
+            }
+            if (!duration) {
+                return default_code(\info, role, args);
+            }
+            if (!others) {
+                firebird_refuse_duration("a sum of durations");
+            }
+
+            # the first term is added first, so its dateadd() is the innermost: the SQL of the amounts is made from
+            # the last term to the first, and then the SQL of the date, in the order of their bound values
+            int count = terms.size();
+            list<string> amounts = ();
+            for (int i = count - 1; i >= 0; --i) {
+                amounts += getDurationAmountSql(\info, role, terms[i]);
+            }
+            string sql = others.size() == 1
+                ? getExpressionArg(\info, role, others[0], AbstractDataProviderTypeMap."date")
+                : default_code(\info, role, others);
+            for (int i = 0; i < count; ++i) {
+                sql = sprintf("dateadd(%s %s to %s)", amounts[count - 1 - i],
+                    terms[i].unit == "microsecond" ? "millisecond" : terms[i].unit, sql);
+            }
+            return sql;
+        }
+
+        #! returns the SQL of the amount of a term of a duration for dateadd()
+        private string getDurationAmountSql(reference<hash<QueryInfo>> info, int role, hash<FirebirdDurationTerm> term) {
+            auto amount = term.amount;
+            # the cast of microseconds to a fraction of milliseconds gives a value its type
+            if (term.unit == "microsecond" && firebird_is_bound_value(amount)) {
+                amount = <FirebirdInferredValue>{"value": amount};
+            }
+            string sql = term.amount_sql ?? getExpressionArg(\info, role, amount, AbstractDataProviderTypeMap."int");
+            if (term.unit == "microsecond") {
+                # a fraction of a millisecond in tenths, the precision of a Firebird timestamp
+                sql = sprintf("cast(%s as numeric(18,1)) / 1000", sql);
+            }
+            return term.negate ? sprintf("-(%s)", sql) : sql;
+        }
+
+        #! returns the SQL of an average
+        /** Firebird gives the average of an integer or an exact numeric in its type, so that the average of 1 and 2
+            is 1; such an average is given exact, as on other databases: in a \c DECFLOAT(34) from Firebird 4 on, which
+            is a number, and in <tt>DOUBLE PRECISION</tt> on Firebird 3, which has no \c DECFLOAT, so that it is a
+            float.  The average of any other type, such as a float, is as Firebird gives it.
+
+            @param exp the SQL of the expression averaged
+            @param exact @ref True "True" if the expression is an integer or an exact numeric, @ref False "False" or
+            no value if it is not or if its type is not known
+
+            @return the SQL of the average
+
+            @since XdbcFirebirdSqlUtilBase 0.2
+        */
+        string getAvgSql(string exp, *bool exact) {
+            if (!exact) {
+                return sprintf("avg(%s)", exp);
+            }
+            return sprintf("avg(cast(%s as %s))", exp, getServerMajorVersion() >= 4 ? "decfloat(34)" : "double precision");
+        }
+
+        #! returns if an argument of an expression is an integer or an exact numeric
+        /** @param info the query information
+            @param arg the argument: a column of the table or of a joined table, an expression or a value
+
+            @return @ref True "True" for a column of an integer or exact numeric type, an expression that returns an
+            integer or a number, or an integer or a number value; @ref False "False" for any other column, expression
+            or value of a known type; no value if the type is not known, as for an alias
+
+            @since XdbcFirebirdSqlUtilBase 0.2
+        */
+        *bool isExactNumericArg(hash<QueryInfo> info, auto arg) {
+            if (arg instanceof hash<DataProviderFieldReference>) {
+                string name = arg.field;
+                name =~ s/^[0-9]+://;
+                *AbstractColumn c;
+                *string alias = (name =~ x/^(\w+)\./)[0];
+                if (alias) {
+                    *AbstractTable t = info.join_map{alias};
+                    if (!t) {
+                        return;
+                    }
+                    Columns cols = t.describe();
+                    string col = name.substr(alias.size() + 1);
+                    if (cols.hasKey(col)) {
+                        c = cols{col};
+                    }
+                } else if (columns.hasKey(name)) {
+                    c = columns{name};
+                }
+                return c ? XdbcFirebirdTable::isExactNumericColumn(c) : NOTHING;
+            }
+            if (arg instanceof hash<DataProviderExpression>) {
+                *hash<auto> exp = info.expression_map{arg.exp} ?? info.expression_map{OperatorAliasMap{arg.exp}};
+                switch (exp.exp.return_type ? exp.exp.return_type.getBaseTypeCode() : NT_ALL) {
+                    case NT_INT:
+                    case NT_NUMBER:
+                        return True;
+                    case NT_ALL:
+                        return;
+                }
+                return False;
+            }
+            switch (arg.typeCode()) {
+                case NT_INT:
+                case NT_NUMBER:
+                    return True;
+                case NT_NOTHING:
+                case NT_NULL:
+                    return;
+            }
+            return False;
+        }
+
+        #! returns if a column has an integer or an exact numeric type
+        /** @param c the column
+
+            @return @ref True "True" if the column is a \c SMALLINT, an \c INTEGER, a \c BIGINT, an \c INT128, a
+            \c NUMERIC or a \c DECIMAL
+
+            @since XdbcFirebirdSqlUtilBase 0.2
+        */
+        static bool isExactNumericColumn(AbstractColumn c) {
+            return inlist(c.native_type.lwr(), ("smallint", "integer", "int", "bigint", "int128", "numeric",
+                "decimal"));
+        }
+
+        #! returns if the SQL of a column of the table, as a column operator gives it, has an integer or an exact numeric type
+        /** @return @ref True "True" or @ref False "False" for a column of the table, no value for any other SQL, such
+            as a column of a joined table or an expression, of which the type is not known
+        */
+        private *bool isExactNumericColumnSql(string cve) {
+            # a column of the table has the name of the table in a join
+            string prefix = getSqlName() + ".";
+            if (cve.substr(0, prefix.size()) == prefix) {
+                cve = cve.substr(prefix.size());
+            }
+            foreach AbstractColumn c in (columns.iterator()) {
+                if (getColumnSqlName(c.name) == cve) {
+                    return XdbcFirebirdTable::isExactNumericColumn(c);
+                }
+            }
         }
 
         #! returns the SQL that casts an expression to a type
@@ -2335,13 +2738,20 @@ string sql = db.getSqlIdentifier("Order Date");
 
         #! returns the column operator map for this object
         /** @since XdbcFirebirdSqlUtilBase 0.2 \c cop_cast() gives a character type without a size the largest size
-            of the default character set of the database (see getCastSql())
+            of the default character set of the database (see getCastSql()), and \c cop_avg() of an integer or exact
+            numeric column of the table is exact (see getAvgSql())
         */
         private hash getColumnOperatorMapImpl() {
             return XdbcFirebirdCopMap + {
                 COP_CAST: XdbcFirebirdCopMap{COP_CAST} + {
                     "code": string sub (string cve, list<auto> args) {
                         return getCastSql(cve, args[0], args[1], args[2]);
+                    },
+                },
+                # the average of an integer or an exact numeric column of the table is exact (see getAvgSql())
+                COP_AVG: DefaultCopMap{COP_AVG} + {
+                    "code": string sub (string cve, auto arg) {
+                        return getAvgSql(cve, isExactNumericColumnSql(cve));
                     },
                 },
             };
