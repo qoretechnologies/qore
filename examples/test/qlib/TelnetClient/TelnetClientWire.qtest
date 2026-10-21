@@ -1,0 +1,289 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  TelnetClientWire.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# Tests what TelnetClient sends on the wire to a scripted server: text data has its IAC bytes doubled (RFC 854), the
+# values of option subnegotiation are escaped (RFC 854 and RFC 1572), and a name with a NUL character is refused.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires TelnetClient
+
+%exec-class TelnetClientWireTest
+
+#! a client whose negotiation values are set by the test
+class TestTelnetClient inherits TelnetClient {
+    public {
+        *string display = "host:0";
+        *string term = "vt100";
+        hash<auto> env = {};
+    }
+
+    constructor(string target) : TelnetClient(target) {
+    }
+
+    private *string getDisplay() {
+        return display;
+    }
+
+    private *string getTerminalType() {
+        return term;
+    }
+
+    private hash getEnvironment() {
+        return env;
+    }
+}
+
+#! a telnet server that sends what the test gives it and returns what the client sends
+class ScriptedTelnetServer {
+    private {
+        Socket listener();
+        int port;
+        #! data to send to the client; NOTHING ends the connection
+        Queue to_client();
+        #! the subnegotiation replies and the data received from the client
+        Queue from_client();
+        int tid;
+    }
+
+    constructor() {
+        listener.bind("127.0.0.1:0");
+        listener.listen();
+        port = listener.getSocketInfo().port;
+        tid = background serve();
+    }
+
+    int getPort() {
+        return port;
+    }
+
+    #! sends data to the client
+    send(binary data) {
+        to_client.push(data);
+    }
+
+    #! returns the next item received: a hash with \c sb (a subnegotiation reply) or \c data (data up to a \c "|")
+    hash<auto> receive() {
+        return from_client.get(30s);
+    }
+
+    #! ends the connection and waits for the server thread
+    stop() {
+        to_client.push();
+        while (exists from_client.get(30s)) {
+        }
+    }
+
+    private serve() {
+        on_exit {
+            from_client.push();
+        }
+        *Socket s = listener.accept(30s);
+        if (!s) {
+            return;
+        }
+        # a reader thread returns what the client sends, while this thread sends what the test gives it
+        Counter reader_done(1);
+        background read(s, reader_done);
+        while (exists (*binary data = to_client.get(30s))) {
+            s.send(data);
+        }
+        s.shutdown();
+        reader_done.waitForZero(30s);
+        s.close();
+    }
+
+    #! reads subnegotiation replies, unescaping doubled IAC bytes, and data up to each "|"
+    private read(Socket s, Counter done) {
+        on_exit {
+            done.dec();
+        }
+        binary data = binary();
+        try {
+            while (True) {
+                int c = s.recvu1(30s);
+                if (c == IAC) {
+                    int cmd = s.recvu1(30s);
+                    if (cmd == SB) {
+                        from_client.push(readSubnegotiation(s));
+                        continue;
+                    }
+                    if (cmd == IAC) {
+                        data += <ff>;
+                        continue;
+                    }
+                    # a command; not expected by these tests
+                    from_client.push({"cmd": cmd});
+                    continue;
+                }
+                if (c == ord("|")) {
+                    from_client.push({"data": data});
+                    data = binary();
+                    continue;
+                }
+                data += binary(chr(c));
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err != "SOCKET-CLOSED") {
+                rethrow;
+            }
+        }
+    }
+
+    #! returns the bytes of a subnegotiation, from the option code up to IAC SE, in the \c sb key
+    /** an IAC byte that is not doubled ends the subnegotiation: the bytes read are returned in the \c bad_iac key
+    */
+    private static hash<auto> readSubnegotiation(Socket s) {
+        binary sb = binary();
+        while (True) {
+            int c = s.recvu1(30s);
+            if (c == IAC) {
+                int next = s.recvu1(30s);
+                if (next == SE) {
+                    return {"sb": sb};
+                }
+                if (next != IAC) {
+                    return {"bad_iac": sb + <ff> + binary(chr(next))};
+                }
+            }
+            sb += binary(chr(c));
+        }
+    }
+}
+
+public class TelnetClientWireTest inherits QUnit::Test {
+    constructor() : Test("TelnetClientWire", "1.0", \ARGV) {
+        addTestCase("sendTextData() doubles IAC", \sendTextDataIac());
+        addTestCase("sendData() is verbatim", \sendDataVerbatim());
+        addTestCase("NEW-ENVIRON values are escaped", \newEnvironEscaped());
+        addTestCase("terminal type and display location", \termAndDisplay());
+        addTestCase("names with a NUL character", \nulNames());
+        set_return_value(main());
+    }
+
+    #! returns a connected client and server
+    static list<auto> connect() {
+        ScriptedTelnetServer server();
+        TestTelnetClient client("127.0.0.1:" + server.getPort());
+        client.connect(30s);
+        return (client, server);
+    }
+
+    sendTextDataIac() {
+        (TestTelnetClient client, ScriptedTelnetServer server) = TelnetClientWireTest::connect();
+        on_exit {
+            client.disconnect();
+            server.stop();
+        }
+        # "aÿb" in ISO-8859-1: "ÿ" is the byte 0xff, which is IAC
+        string text = convert_encoding("aÿb", "ISO-8859-1");
+        assertEq(<61ff62>, binary(text));
+        client.sendTextData(text);
+        client.sendData("|");
+        # the server reads the doubled IAC as one 0xff data byte
+        assertEq({"data": <61ff62>}, server.receive());
+    }
+
+    sendDataVerbatim() {
+        (TestTelnetClient client, ScriptedTelnetServer server) = TelnetClientWireTest::connect();
+        on_exit {
+            client.disconnect();
+            server.stop();
+        }
+        # sendData() is the raw API: a command is sent as given
+        client.sendData((IAC, IAC));
+        client.sendData("|");
+        assertEq({"data": <ff>}, server.receive());
+    }
+
+    newEnvironEscaped() {
+        (TestTelnetClient client, ScriptedTelnetServer server) = TelnetClientWireTest::connect();
+        on_exit {
+            client.disconnect();
+            server.stop();
+        }
+        # a user name with ESC, a variable name with VALUE, and a value with VAR, IAC and USERVAR bytes
+        client.setUser("u\x02x");
+        client.env = {"A\x01B": binary(<760061ff6c03>).toString("ISO-8859-1")};
+        # IAC SB NEW-ENVIRON SEND IAC SE, then data
+        server.send(<fffa2701fff0> + binary("OK"));
+        assertEq("OK", client.getAvailableData(30s));
+        binary expected = <2700>
+            + <00> + binary("DISPLAY") + <01> + binary("host:0")
+            + <00> + binary("USER") + <01> + binary("u") + <0202> + binary("x")
+            + <00> + binary("ACCT") + <01> + binary("u") + <0202> + binary("x")
+            + <03> + binary("A") + <0201> + binary("B") + <01> + binary("v") + <0200> + binary("a") + <ff>
+                + binary("l") + <0203>;
+        assertEq({"sb": expected}, server.receive());
+    }
+
+    termAndDisplay() {
+        (TestTelnetClient client, ScriptedTelnetServer server) = TelnetClientWireTest::connect();
+        on_exit {
+            client.disconnect();
+            server.stop();
+        }
+        client.term = binary(<7674ff31>).toString("ISO-8859-1");
+        client.display = binary(<68ff3a30>).toString("ISO-8859-1");
+        # IAC SB TERMINAL-TYPE SEND IAC SE and IAC SB X-DISPLAY-LOCATION SEND IAC SE
+        server.send(<fffa1801fff0fffa2301fff0> + binary("OK"));
+        assertEq("OK", client.getAvailableData(30s));
+        # the IAC bytes were doubled, so the server reads each subnegotiation to its end with the IAC byte as data
+        assertEq({"sb": <1800> + <7674ff31>}, server.receive());
+        assertEq({"sb": <2300> + <68ff3a30>}, server.receive());
+    }
+
+    nulNames() {
+        TelnetClient tc("127.0.0.1:1");
+        assertThrows("TELNET-OPTION-ERROR", "user name \"a\\\\x00b\" contains a NUL character", \tc.setUser(),
+            "a\x00b");
+
+        (TestTelnetClient client, ScriptedTelnetServer server) = TelnetClientWireTest::connect();
+        on_exit {
+            client.disconnect();
+            server.stop();
+        }
+        # a terminal type that, cut at the NUL character, would name another terminal type
+        client.term = "vt100\x00x";
+        server.send(<fffa1801fff0> + binary("OK"));
+        assertThrows("TELNET-OPTION-ERROR", "terminal type \"vt100\\\\x00x\" contains a NUL character",
+            \client.getAvailableData(), 30s);
+        # the subnegotiation was read in full, so the data after it is read as data
+        assertEq("OK", client.getAvailableData(30s));
+        # nothing was sent for the refused terminal type
+        client.sendData("|");
+        assertEq({"data": binary()}, server.receive());
+
+        client.term = "vt100";
+        client.display = "host\x00:0";
+        server.send(<fffa2301fff0> + binary("OK2"));
+        assertThrows("TELNET-OPTION-ERROR", "X display location \"host\\\\x00:0\" contains a NUL character",
+            \client.getAvailableData(), 30s);
+        assertEq("OK2", client.getAvailableData(30s));
+        client.sendData("|");
+        assertEq({"data": binary()}, server.receive());
+    }
+}

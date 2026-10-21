@@ -33,7 +33,7 @@
 %requires(reexport) ConnectionProvider >= 1.4
 
 module TelnetClient {
-    version = "1.7";
+    version = "1.8";
     desc = "allows connections to a Telnet server, to remotely execute commands and read their output";
     author = "Pavol Potancok <ppotancok@gmail.com>";
     url = "http://qore.org";
@@ -65,6 +65,21 @@ module TelnetClient {
     - @ref TelnetOptionCodes "TelnetOptionCodes": telnet protocol option codes and a lookup map
 
     @section telnetclient_relnotes TelnetClient Module Release Notes
+
+    @subsection telnetclient_v1_8 TelnetClient v1.8
+    - @ref TelnetClient::TelnetClient::sendTextData() "TelnetClient::sendTextData()" doubles each IAC byte (\c 0xff) in
+      the text, as the telnet protocol requires for data; before, text with a 0xff byte (for example \c "ÿ" in
+      ISO-8859-1) was read by the server as the start of a command
+    - the values sent in option subnegotiation (the terminal type, the X display location and the environment
+      variables) are encoded as the telnet protocol requires: an IAC byte is doubled, and the \c VAR, \c VALUE,
+      \c ESC and \c USERVAR bytes in environment variable names and values are escaped; before, such a byte could end
+      the subnegotiation early or add an environment variable chosen by whoever supplied the value
+    - a user name, terminal type or X display location with a NUL character is refused with
+      \c TELNET-OPTION-ERROR: @ref TelnetClient::TelnetClient::setUser() "TelnetClient::setUser()" refuses such a user
+      name, and @ref TelnetClient::TelnetClient::getAvailableData() "TelnetClient::getAvailableData()" raises the
+      error once it has read a subnegotiation that it cannot answer, without sending a reply
+    - @ref TelnetClient::TelnetClient::sendData() "TelnetClient::sendData()" is documented to send all values
+      verbatim, so that commands can be sent with it; it never doubled IAC bytes
 
     @subsection telnetclient_v1_7 TelnetClient v1.7
     - implemented support for a data provider scheme cache and rich option information for connections
@@ -300,6 +315,16 @@ public class TelnetClient {
 
         # hash of features the telnet server has asked for
         hash fh;
+
+        # an error raised once a subnegotiation that the client could not answer has been read in full
+        *hash<ExceptionInfo> negotiation_error;
+
+        # NEW-ENVIRON codes (RFC 1572)
+        const ENVIRON_IS = 0;
+        const ENVIRON_VAR = 0;
+        const ENVIRON_VALUE = 1;
+        const ENVIRON_ESC = 2;
+        const ENVIRON_USERVAR = 3;
     }
     #! @endcond
 
@@ -406,11 +431,17 @@ public class TelnetClient {
     }
 
     #! sets or clears (in case passed with no value) the username parameter for logging in to the telnet server
-    /** @param n_user the username to use for logins
+    /** @param n_user the username to use for logins; it is sent as the \c USER and \c ACCT environment variables
+        when the server asks for the environment
+
+        @throw TELNET-OPTION-ERROR the user name contains a NUL character
 
         @note This method is subject to thread serialization.
     */
     setUser(*string n_user) {
+        if (exists n_user) {
+            TelnetClient::checkOptionName(n_user, "user name");
+        }
         AutoLock al(m);
         user = n_user;
     }
@@ -429,10 +460,14 @@ public class TelnetClient {
             disconnectIntern();
     }
 
-    #! sends data to the server
-    /** @param arr a single element or a list of elements to send to the server; elements can be as follows:
-        - string: currently sent verbatim to the server, in particular no encoding conversions are performed on this string (possibly these should be scanned for @ref IAC characters which should be duplicated)
-        - integer: treated as a single-byte value; if the value is @ref IAC (ie 255 or 0xff) then it is sent twice
+    #! sends data and commands to the server verbatim
+    /** This is the raw API: every element is sent as it is, so that telnet commands can be sent with it, for example
+        <tt>sendData((IAC, DO, TOPT_ECHO))</tt>.  An @ref IAC byte (255, \c 0xff) is never doubled, so data with an
+        IAC byte is read by the server as the start of a command; use @ref sendTextData() to send text.
+
+        @param arr a single element or a list of elements to send to the server; elements can be as follows:
+        - string: the bytes of the string are sent verbatim; no encoding conversions are performed
+        - integer: sent as a single byte
         - binary: sent verbatim to the server
 
         @throw SEND-ERROR this exception is thrown if an invalid data type is passed to this method
@@ -448,8 +483,10 @@ public class TelnetClient {
         sendDataIntern(arr);
     }
 
-    #! sends literal string data to the server; the text dat is converted to the socket's encoding if necessary
-    /** @param str currently sent verbatim to the server; no encoding conversions are performed on this string (possibly these should be scanned for @ref IAC characters which should be duplicated)
+    #! sends text data to the server
+    /** @param str the text to send; the bytes of the string are sent with each @ref IAC byte (255, \c 0xff) doubled,
+        as the telnet protocol requires for data, so that the server reads it as data and not as the start of a
+        command; no encoding conversions are performed on this string
 
         @throw NOT-CONNECTED-EXCEPTION if the socket is not already connected then this exception is thrown
 
@@ -713,7 +750,50 @@ telnet.setEventQueue();
     }
 
     private sendTextDataIntern(string str) {
-        conn.sendBinary2(str);
+        conn.sendBinary2(TelnetClient::escapeIac(binary(str)));
+    }
+
+    #! returns the data with each IAC byte doubled, as the telnet protocol requires for data
+    private static binary escapeIac(binary data) {
+        int pos = data.find(<ff>);
+        if (pos < 0) {
+            return data;
+        }
+        binary rv = binary();
+        int start = 0;
+        while (pos >= 0) {
+            rv += data.substr(start, pos - start + 1) + <ff>;
+            start = pos + 1;
+            pos = data.find(<ff>, start);
+        }
+        return rv + data.substr(start);
+    }
+
+    #! returns an environment variable name or value encoded for the NEW-ENVIRON option (RFC 1572)
+    /** the VAR, VALUE, ESC and USERVAR bytes are escaped with ESC, and IAC bytes are doubled
+    */
+    private static binary escapeEnvironString(string str) {
+        binary data = binary(str);
+        binary rv = binary();
+        for (int i = 0; i < data.size(); ++i) {
+            int c = data[i];
+            if (c <= ENVIRON_USERVAR) {
+                rv += binary(chr(ENVIRON_ESC));
+            }
+            rv += data.substr(i, 1);
+            if (c == IAC) {
+                rv += <ff>;
+            }
+        }
+        return rv;
+    }
+
+    #! raises TELNET-OPTION-ERROR for a name that the telnet client sends in option negotiation with a NUL character
+    private static checkOptionName(string name, string what) {
+        if (name.contains(chr(0))) {
+            throw "TELNET-OPTION-ERROR", sprintf("%s \"%s\" contains a NUL character", what,
+                Qore::replace(name, chr(0), "\\x00"));
+        }
     }
 
     # don't override this method, fix/enhance it with a patch to the module
@@ -737,14 +817,19 @@ telnet.setEventQueue();
                 rethrow;
             }
 
-            if (char == IAC)
+            if (char == IAC) {
                 processCmd(\rv);
-            else if (!char || char == SUPDUP_OPT) {
+                # a subnegotiation that the client could not answer has been read in full; the stream is in sync
+                if (negotiation_error) {
+                    hash<ExceptionInfo> ex = remove negotiation_error;
+                    throw ex.err, ex.desc, ex.arg;
+                }
+            } else if (!char || char == SUPDUP_OPT) {
                 #logDbg("ignoring char: %d", char);
                 # ignore?
-            }
-            else
+            } else {
                 rv += chr(char);
+            }
         }
 
         #logDbg("rv: %y", rv);
@@ -898,7 +983,14 @@ telnet.setEventQueue();
                     # display location
                     *string display = getDisplay();
                     logDbg("SND: %s %y", OptMap{TOPT_XDL}, display);
-                    sendDataIntern((IAC,SB,TOPT_XDL, 0, display, IAC, SE));
+                    binary val;
+                    try {
+                        val = getOptionNameValue(display, "X display location");
+                    } catch (hash<ExceptionInfo> ex) {
+                        negotiation_error = ex;
+                        break;
+                    }
+                    sendDataIntern((IAC,SB,TOPT_XDL, 0, val, IAC, SE));
                     break;
                 }
 
@@ -918,33 +1010,18 @@ telnet.setEventQueue();
                     # FIXME: we send everything anyway...
                     logDbg("RCV: new environment options: %y", req);
 
-                    # set telnet environment vars
-                    sendDataIntern((IAC,SB,TOPT_ENVIR_NEW, 0));  # first 0=IS, second 0=VAR, see RFC 1572
-
-                    *string display = getDisplay();
-                    logDbg("SND: %s VAR DISPLAY %y", OptMap{TOPT_ENVIR_NEW}, display);
-                    # send 0=VAR "DISPLAY" 1=VALUE ...value...
-                    sendDataIntern((0, "DISPLAY", 1, display));
-
-                    # send USER if present
-                    if (!user.empty()) {
-                        logDbg("SND: %s VAR USER %y", OptMap{TOPT_ENVIR_NEW}, user);
-                        # send 0=VAR "USER" 1=VALUE ...value...
-                        sendDataIntern((0, "USER", 1, user));
-                        logDbg("SND: %s VAR ACCT %y", OptMap{TOPT_ENVIR_NEW}, user);
-                        # send 0=VAR "ACCT" 1=VALUE ...value...
-                        sendDataIntern((0, "ACCT", 1, user));
+                    # the reply is built in full before it is sent, so that a value that cannot be sent leaves no
+                    # partial subnegotiation on the connection
+                    binary reply;
+                    try {
+                        reply = getEnvironmentReply();
+                    } catch (hash<ExceptionInfo> ex) {
+                        negotiation_error = ex;
+                        break;
                     }
 
-                    # send user environment to server
-                    hash env = getEnvironment();
-                    foreach string k in (select keys env, env.$1.val()) {
-                        logDbg("SND: %s USERVAR %y = %y", OptMap{TOPT_ENVIR_NEW}, k, env{k});
-                        # send 3=USERVAR ...key... 1=VALUE ...value...
-                        sendDataIntern((3, k, 1, env{k}));
-                    }
-
-                    sendDataIntern((IAC,SE));
+                    # set telnet environment vars: IS, then the variables, see RFC 1572
+                    sendDataIntern((IAC, SB, TOPT_ENVIR_NEW, ENVIRON_IS, reply, IAC, SE));
                     break;
                 }
 
@@ -953,7 +1030,14 @@ telnet.setEventQueue();
                     # terminal type
                     *string term = getTerminalType();
                     logDbg("SND: %s %y", OptMap{TOPT_TERM}, term);
-                    sendDataIntern((IAC,SB,TOPT_TERM, 0, term, IAC, SE));
+                    binary val;
+                    try {
+                        val = getOptionNameValue(term, "terminal type");
+                    } catch (hash<ExceptionInfo> ex) {
+                        negotiation_error = ex;
+                        break;
+                    }
+                    sendDataIntern((IAC,SB,TOPT_TERM, 0, val, IAC, SE));
                     break;
                 }
 
@@ -963,6 +1047,56 @@ telnet.setEventQueue();
                 }
             }
         }
+    }
+
+    # returns a name sent as the value of a subnegotiation, with IAC bytes doubled
+    private binary getOptionNameValue(*string name, string what) {
+        if (!exists name) {
+            return binary();
+        }
+        TelnetClient::checkOptionName(name, what);
+        return TelnetClient::escapeIac(binary(name));
+    }
+
+    # returns the variables of the NEW-ENVIRON IS reply, escaped as RFC 1572 requires
+    private binary getEnvironmentReply() {
+        binary reply = binary();
+
+        *string display = getDisplay();
+        if (exists display) {
+            TelnetClient::checkOptionName(display, "X display location");
+        }
+        logDbg("SND: %s VAR DISPLAY %y", OptMap{TOPT_ENVIR_NEW}, display);
+        # send 0=VAR "DISPLAY" 1=VALUE ...value...
+        reply += getEnvironmentVariable(ENVIRON_VAR, "DISPLAY", display);
+
+        # send USER if present
+        if (!user.empty()) {
+            logDbg("SND: %s VAR USER %y", OptMap{TOPT_ENVIR_NEW}, user);
+            # send 0=VAR "USER" 1=VALUE ...value...
+            reply += getEnvironmentVariable(ENVIRON_VAR, "USER", user);
+            logDbg("SND: %s VAR ACCT %y", OptMap{TOPT_ENVIR_NEW}, user);
+            # send 0=VAR "ACCT" 1=VALUE ...value...
+            reply += getEnvironmentVariable(ENVIRON_VAR, "ACCT", user);
+        }
+
+        # send user environment to server
+        hash env = getEnvironment();
+        foreach string k in (select keys env, env.$1.val()) {
+            logDbg("SND: %s USERVAR %y = %y", OptMap{TOPT_ENVIR_NEW}, k, env{k});
+            # send 3=USERVAR ...key... 1=VALUE ...value...
+            reply += getEnvironmentVariable(ENVIRON_USERVAR, k, env{k});
+        }
+        return reply;
+    }
+
+    # returns one variable of a NEW-ENVIRON reply: the type, the name and VALUE with the value if it has one
+    private binary getEnvironmentVariable(int type, string name, auto value) {
+        binary rv = binary(chr(type)) + TelnetClient::escapeEnvironString(name);
+        if (exists value) {
+            rv += binary(chr(ENVIRON_VALUE)) + TelnetClient::escapeEnvironString(string(value));
+        }
+        return rv;
     }
     #! @endcond
 }
