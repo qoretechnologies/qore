@@ -9744,7 +9744,12 @@ QoreHashNode* QoreHttpClientObject::readServerSentEventConnMgr(const QoreStringN
             if (rc > 0) {
                 sl.unlock();
                 QoreString event_str(event_text.c_str(), event_text.size(), QCS_UTF8);
-                return parseSseEvent(xsink, event_str);
+                ReferenceHolder<QoreHashNode> evt(parseSseEvent(xsink, event_str), xsink);
+                // a block without a field is not an event, as no field of it was kept: the next event is read
+                if (!*xsink && evt && evt->empty()) {
+                    continue;
+                }
+                return evt.release();
             }
         }
 
@@ -9769,7 +9774,11 @@ QoreHashNode* QoreHttpClientObject::readServerSentEventConnMgr(const QoreStringN
             }
             if (!remaining.empty()) {
                 QoreString event_str(remaining.c_str(), remaining.size(), QCS_UTF8);
-                return parseSseEvent(xsink, event_str);
+                ReferenceHolder<QoreHashNode> evt(parseSseEvent(xsink, event_str), xsink);
+                // a block without a field is not an event
+                if (*xsink || !evt || !evt->empty()) {
+                    return evt.release();
+                }
             }
             eof = true;
             return nullptr;

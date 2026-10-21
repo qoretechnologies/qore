@@ -60,6 +60,15 @@ while (*hash<SseMessageInfo> evt = reader.readEvent(30s)) {
 */
 public class SseStreamReader {
     private {
+        #! The UTF-8 byte order mark, which the event stream format ignores at the start of a stream
+        const ByteOrderMark = <efbbbf>;
+
+        #! The blank lines that end an event: two line endings in a row, where a line ends with CRLF, LF or CR
+        /** A CR followed by LF is one line ending (CRLF), so CR LF is not a blank line
+        */
+        const BlankLines = (<0d0a0d0a>, <0d0a0a>, <0d0a0d>, <0a0d0a>, <0a0a>, <0a0d>, <0d0d0a>, <0d0d>);
+
+
         #! The underlying stream handle
         HttpClientIo::HttpClientStreamHandle stream;
 
@@ -86,6 +95,8 @@ public class SseStreamReader {
 
         #! True when the stream has ended (end_stream received or error)
         bool done = False;
+        #! True once the start of the stream has been checked for a byte order mark
+        bool bom_checked = False;
 
         #! The maximum size of an event in bytes; <= 0 means no limit
         int max_event_size;
@@ -157,14 +168,19 @@ public class SseStreamReader {
             # flushed at end-of-stream, concatenating multiple JSON payloads
             # into one data field that then fails to parse.  Detect both forms
             # and consume up to whichever blank-line boundary appears first.
-            # A line may also end with a CR alone, so "\r\r" is a blank line too.  A boundary can end in the data
-            # received last, so the search starts before its first byte.
+            # A line may also end with a CR alone, and a blank line can follow a line with another ending (for
+            # example LF, then CRLF), as the event stream format allows, so a blank line is any two line endings in a
+            # row.  A boundary can end in the data received last, so the search starts before its first byte.
+            if (!bom_checked) {
+                checkByteOrderMark();
+            }
             int start = scanned > 3 ? scanned - 3 : 0;
             int sep = -1;
             int sep_len = 0;
-            foreach binary sep_bin in ((<0d0a0d0a>, <0a0a>, <0d0d>)) {
+            foreach binary sep_bin in (BlankLines) {
                 int pos = sse_buffer.find(sep_bin, start);
-                if (pos >= 0 && (sep < 0 || pos < sep)) {
+                # the longest blank line at the first position, so that a CRLF is not taken as a CR
+                if (pos >= 0 && (sep < 0 || pos < sep || (pos == sep && sep_bin.size() > sep_len))) {
                     sep = pos;
                     sep_len = sep_bin.size();
                 }
@@ -179,7 +195,8 @@ public class SseStreamReader {
                 scanned = 0;
                 *hash<SseMessageInfo> evt =
                     Socket::parseServerSentEvent(event_text);
-                if (isCommentOnlyEvent(evt)) {
+                # a block without a field is not an event, as no field of it was kept
+                if (!evt || isCommentOnlyEvent(evt)) {
                     continue;
                 }
                 return evt;
@@ -283,6 +300,21 @@ public class SseStreamReader {
     }
 
     #! Returns True if the parsed frame is an SSE comment-only keep-alive
+    #! drops one byte order mark at the start of the stream, as the event stream format requires
+    /** The check is made once enough of the stream has been received
+    */
+    private checkByteOrderMark() {
+        int size = sse_buffer.size();
+        if (size >= ByteOrderMark.size()) {
+            if (sse_buffer.substr(0, ByteOrderMark.size()) == ByteOrderMark) {
+                sse_buffer = sse_buffer.substr(ByteOrderMark.size());
+            }
+            bom_checked = True;
+        } else if (size && ByteOrderMark.substr(0, size) != sse_buffer) {
+            bom_checked = True;
+        }
+    }
+
     private static bool isCommentOnlyEvent(*hash<SseMessageInfo> evt) {
         return evt && evt.comment.val() && !evt.data.val()
             && !evt.event.val() && !evt.id.val() && !evt.retry.val();

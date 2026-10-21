@@ -55,6 +55,7 @@
 #include "qore/intern/qore_thread_intern.h"
 #include "qore/intern/QoreHttpBodyCharset.h"
 #include "qore/intern/QoreConnectionDestinations.h"
+#include "qore/intern/SseEventFramer.h"
 
 #include <cctype>
 #include <cerrno>
@@ -1353,6 +1354,9 @@ struct qore_socket_private : public QoreReferenceCounter {
         event_data = false,
         sse_got_cr = false;
 
+    //! Drops one leading byte order mark of a server-sent event stream read with readServerSentEvent()
+    SseBomFilter sse_bom;
+
     //! The decoder of a compressed server-sent event stream, kept across reads; see readServerSentEvent()
     std::unique_ptr<StreamDecoder> sse_decoder;
 
@@ -2071,6 +2075,7 @@ struct qore_socket_private : public QoreReferenceCounter {
         if (sse_got_cr) {
             sse_got_cr = false;
         }
+        sse_bom.reset();
         sse_decoder.reset();
         listening = false;
         sfamily = AF_UNSPEC;

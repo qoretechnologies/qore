@@ -1976,6 +1976,13 @@ public:
         }
 
         out = QoreSocket::parseServerSentEvent(xsink, event_data);
+        if (!*xsink && out && out->empty()) {
+            // a block without a field is not an event, as no field of it was kept: the next event is read
+            out = nullptr;
+            event_data.clear();
+            eol_count = 0;
+            return false;
+        }
         if (!*xsink) {
             done = true;
         }
@@ -5329,7 +5336,8 @@ static QoreHashNode* qore_socket_exec_read_http_chunked_body(QoreSocket* s, int 
     return rv.release().get<QoreHashNode>();
 }
 
-static bool qore_socket_exec_process_sse_char(qore_socket_private* priv, QoreString& str, int& eol_count, char c) {
+static bool qore_socket_exec_process_sse_char_intern(qore_socket_private* priv, QoreString& str, int& eol_count,
+        char c) {
     if (priv->sse_got_cr) {
         priv->sse_got_cr = false;
         if (c == '\n') {
@@ -5353,6 +5361,17 @@ static bool qore_socket_exec_process_sse_char(qore_socket_private* priv, QoreStr
     }
     str.concat(c);
     return false;
+}
+
+//! Adds a byte of a server-sent event stream read from the socket to the event read so far
+/** One leading byte order mark of the stream is ignored, as the event stream format requires
+
+    @return true if the event is complete
+*/
+static bool qore_socket_exec_process_sse_char(qore_socket_private* priv, QoreString& str, int& eol_count, char c) {
+    return priv->sse_bom.add(c, [priv, &str, &eol_count](char b) {
+        return qore_socket_exec_process_sse_char_intern(priv, str, eol_count, b);
+    });
 }
 
 //! Reads a server-sent event
@@ -10251,77 +10270,22 @@ void SseAction::execute(QoreValue output, ExceptionSink* xsink) {
     // chunks are binary, but an H2 DATA+END_STREAM completion can pass through
     // the regular completed-response path where text/event-stream is decoded
     // to a Qore string before the action sees it.
+    bool pushed = false;
     if (output.getType() == NT_HASH) {
         QoreValue body_val = output.get<QoreHashNode>()->getKeyValue("body");
         if (body_val.getType() == NT_BINARY) {
             const BinaryNode* data = body_val.get<const BinaryNode>();
-            if (data->size() > 0) {
-                sse_buffer.concat((const char*)data->getPtr(), data->size());
-            }
+            pushed = addData(static_cast<const char*>(data->getPtr()), data->size(), xsink);
         } else if (body_val.getType() == NT_STRING) {
             QoreStringValueHelper data(body_val);
-            if (!data->empty()) {
-                sse_buffer.concat(data->c_str(), data->size());
-            }
+            pushed = addData(data->c_str(), data->size(), xsink);
         }
     }
     output.discard(xsink);
 
-    bool pushed = false;
-
-    // Parse complete SSE events (terminated by double newline)
-    while (true) {
-        // An event is dispatched by a blank line, and a line may be terminated by CRLF, LF, or
-        // CR; take whichever boundary appears first so that a stream mixing terminators is
-        // still framed at the right place.
-        static const struct {
-            const char* sep;
-            size_t len;
-        } sse_separators[] = {
-            {"\r\n\r\n", 4},
-            {"\n\n", 2},
-            {"\r\r", 2},
-        };
-        // a boundary can end in the data received last, so the search starts before its first byte
-        size_t start = scanned > 3 ? scanned - 3 : 0;
-        std::string_view unscanned(sse_buffer.c_str() + start, sse_buffer.size() - start);
-        qore_offset_t pos = -1;
-        size_t sep_len = 0;
-        for (const auto& s : sse_separators) {
-            size_t f = unscanned.find(s.sep, 0, s.len);
-            qore_offset_t p = f == std::string_view::npos ? -1 : static_cast<qore_offset_t>(start + f);
-            if (p >= 0 && (pos < 0 || p < pos || (p == pos && s.len > sep_len))) {
-                pos = p;
-                sep_len = s.len;
-            }
-        }
-        if (pos < 0) {
-            scanned = sse_buffer.size();
-            break;
-        }
-        // an event is limited even when it is complete
-        if (pos > MaxEventSize) {
-            break;
-        }
-        // Extract the event text (without the terminator)
-        QoreString event_text(sse_buffer.c_str(), pos);
-        event_text.concat("\n\n");  // parseSseEvent loop uses (i < size-1), needs double \n
-        // Remove consumed bytes from buffer
-        sse_buffer.replace(0, pos + sep_len, "");
-        scanned = 0;
-        QoreHashNode* evt = parseSseEvent(xsink, event_text);
-        if (evt && queue) {
-            queue->pushAndTakeRef(evt);
-            pushed = true;
-        }
-    }
-
     // an event is limited, including one that has not ended yet, so that a stream that never ends an event cannot
-    // exhaust memory; the buffer holds an event that is too large if it is larger than the limit and no event
-    // could be extracted from it
-    if (static_cast<int64>(sse_buffer.size()) > MaxEventSize) {
-        too_large = true;
-        sse_buffer.clear();
+    // exhaust memory
+    if (too_large) {
         if (queue) {
             ReferenceHolder<QoreHashNode> err_hash(new QoreHashNode(autoTypeInfo), xsink);
             err_hash->setKeyValue("err", new QoreStringNode("SSE-EVENT-TOO-LARGE"), xsink);
@@ -10338,6 +10302,33 @@ void SseAction::execute(QoreValue output, ExceptionSink* xsink) {
     if (pushed) {
         notify();
     }
+}
+
+bool SseAction::addData(const char* data, size_t len, ExceptionSink* xsink) {
+    bool pushed = false;
+    // the stream is split into events byte by byte, so that a blank line ends an event whatever the line endings
+    // are, as the event stream format requires (for example a line that ends with LF, then a line that ends with
+    // CRLF), and a leading byte order mark of the stream is dropped
+    for (size_t i = 0; i < len; ++i) {
+        if (framer.add(data[i])) {
+            std::string event = framer.take();
+            // parseSseEvent() parses the lines of the event, which end with LF
+            QoreString event_text(event.c_str(), event.size(), QCS_UTF8);
+            ReferenceHolder<QoreHashNode> evt(parseSseEvent(xsink, event_text), xsink);
+            // a block without a field is not an event, as no field of it was kept
+            if (evt && !evt->empty() && queue) {
+                queue->pushAndTakeRef(evt.release());
+                pushed = true;
+            }
+            continue;
+        }
+        if (static_cast<int64>(framer.size()) > MaxEventSize) {
+            too_large = true;
+            framer.reset();
+            break;
+        }
+    }
+    return pushed;
 }
 
 void QoreSocket::doException(int rc, const char* meth, int timeout_ms, ExceptionSink* xsink) {
@@ -16755,11 +16746,17 @@ bool SocketReadServerSentEventPollOperation::processSseChar(ExceptionSink* xsink
         return false;
     }
 
+    ReferenceHolder<QoreHashNode> parsed(QoreSocket::parseServerSentEvent(xsink, event_data), xsink);
+    if (!*xsink && parsed && parsed->empty()) {
+        // a block without a field is not an event, as no field of it was kept: the next event is read
+        event_data.clear();
+        eol_count = 0;
+        return false;
+    }
     if (set_non_block) {
         my_socket_priv::getPriv(*sock)->clearNonBlock(NB_RECV);
         set_non_block = false;
     }
-    ReferenceHolder<QoreHashNode> parsed(QoreSocket::parseServerSentEvent(xsink, event_data), xsink);
     if (*xsink) {
         return true;
     }

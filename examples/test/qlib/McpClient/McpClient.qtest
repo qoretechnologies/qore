@@ -185,6 +185,16 @@ class TestMcpServerHandler inherits McpServerHandler {
     }
 }
 
+#! exposes the parser of a streamable HTTP response with server-sent events
+class SseBodyMcpClient inherits McpClient::McpClient {
+    constructor() : McpClient::McpClient("http://127.0.0.1:1/mcp") {
+    }
+
+    hash<auto> parseBody(auto body, int request_id) {
+        return parseSseResponseBody(body, request_id);
+    }
+}
+
 class McpClientTest inherits QUnit::Test {
     public {
         #! Options pinning a client to the newest handshake-based protocol version
@@ -227,6 +237,7 @@ class McpClientTest inherits QUnit::Test {
         addTestCase("SSE listener test", \sseListenerTest());
         addTestCase("initialization negative test", \initializationNegativeTest());
         addTestCase("streamable request test", \streamableRequestTest());
+        addTestCase("streamable SSE response framing", \streamableSseFramingTest());
         addTestCase("standard task tool call test", \standardTaskToolCallTest());
         addTestCase("task survives SSE listener reconnect test", \taskSurvivesSseListenerReconnectTest());
         addTestCase("tasks/cancel propagates to tool call test",
@@ -946,6 +957,19 @@ class McpClientTest inherits QUnit::Test {
         assertTrue(tools.size() >= 2, "Streamable client should return tool list");
 
         client.close();
+    }
+
+    streamableSseFramingTest() {
+        SseBodyMcpClient client();
+        string note = "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/message\",\"params\":{}}";
+        string resp = "{\"jsonrpc\":\"2.0\",\"id\":7,\"result\":{\"ok\":true}}";
+        # events that end with CRLF blank lines are separate events, as the event stream format requires
+        assertEq({"jsonrpc": "2.0", "id": 7, "result": {"ok": True}},
+            client.parseBody("data: " + note + "\r\n\r\ndata: " + resp + "\r\n\r\n", 7));
+        # one leading byte order mark is ignored, so the first field is read
+        assertEq(7, client.parseBody(<efbbbf> + binary("data: " + resp + "\n\ndata: " + note + "\n\n"), 7).id);
+        # lines and blank lines that end with CR, or with LF after a line that ends with CRLF
+        assertEq(7, client.parseBody("data: " + note + "\r\ndata: x\r\n\ndata: " + resp + "\r\r", 7).id);
     }
 
     legacyTransportTest() {

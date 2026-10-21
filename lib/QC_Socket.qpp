@@ -5999,6 +5999,10 @@ Socket::readHTTPChunkedBodyBinaryWithCallback(code receive_callback, timeout tim
 /** When the stream is compressed, decompressed data left after the event, as well as any compressed data not
     decompressed yet, is kept for the next call, so that a compressed stream can be read one event at a time.
 
+    The stream is split into events as the WHATWG HTML event stream format requires: one leading byte order mark
+    (U+FEFF) of the stream is ignored, a line ends with CRLF, LF or CR, and a blank line ends an event; a block
+    without a field that is kept, such as one with only unknown fields, is not returned as an event.
+
     @param content_encoding the HTTP content coding of the stream (ex: \c "gzip" or \c "deflate"); \c "deflate",
     \c "x-deflate", \c "x-gzip", and \c "x-bzip2" are accepted as well as the
     @ref compression_transformations "compression algorithm" names; \c "identity" means no compression

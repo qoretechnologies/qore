@@ -4938,6 +4938,14 @@ while (*binary chunk = input.read(65536)) {
       joined with LF, and the first retry time was used), an empty ID is kept as an empty string, as it resets the
       last event ID (before, it was ignored), and empty data lines are kept (before, a data line without a value was
       dropped unless it was the first one)
+    - server-sent event streams received are split into events as the WHATWG HTML event stream format requires, by
+      @ref Qore::Socket::readServerSentEvent() "Socket::readServerSentEvent()",
+      @ref Qore::HTTPClient::readServerSentEvent() "HTTPClient::readServerSentEvent()" and the SSE queue of the
+      HTTP/1.1, HTTP/2 and HTTP/3 client streams: one leading byte order mark (U+FEFF) of a stream is ignored (before,
+      it was read as part of the first field name, so the first field was lost), a blank line ends an event whatever
+      the line endings are (before, the SSE queue did not end an event at a blank line after a line with another
+      ending, such as LF and then CRLF, and joined it with the next one), and a block without a field that is kept,
+      such as one with only unknown fields, is not returned as an event
     - Fixed the warnings of the files of a separated user module other than its \c .qm file: each was parsed with the
       warnings of the code loading the module (with \c qcc, the default warnings), not those the \c .qm file sets, so
       \c %%modern in the \c .qm file did not enable all warnings in the other files.  The module loader accepted an
