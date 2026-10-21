@@ -76,6 +76,13 @@ module RestSchemaValidator {
     @section restschemavalidator_relnotes RestSchemaValidator Module Release Notes
 
     @subsection restschemavalidator_2_5 RestSchemaValidator v2.5
+    - fixed a schema type build that fails part of the way through, for example on an enumeration value its type
+      cannot hold, leaving incomplete types in the schema's caches, so that building the same type again returned
+      the incomplete type instead of failing, and other types of the schema could refer to it; a build that fails
+      now leaves the caches as they were (see
+      @ref RestSchemaValidator::AbstractRestSchemaValidator::runTypeBuild())
+    - fixed concurrent type builds of one schema reading each other's incomplete types; the type builds of a schema
+      are serialized
     - prefer valid schema examples when describing fields and omit generated examples that violate the field type
     - JSON and YAML response bodies in another encoding than UTF-8 are converted to UTF-8 before they are parsed,
       instead of relabeling ISO-8859-1 text as UTF-8; HTTP bodies are decoded with their actual encoding (see
@@ -1383,12 +1390,29 @@ public namespace RestSchemaValidator {
             return new HashDataType(base_type, typename);
         }
 
+        #! Returns the schema whose type builds this schema object takes part in, if it serializes them
+        /** The base class returns @ref nothing, so that the types of a schema that does not serialize its type
+            builds are built as they were before; see
+            @ref RestSchemaValidator::AbstractRestSchemaValidator::runTypeBuild()
+
+            @since RestSchemaValidator 2.5
+        */
+        *AbstractRestSchemaValidator getTypeBuildSchema() {
+            return NOTHING;
+        }
+
         #! Returns the data type for this schema
         AbstractDataProviderType getDataType(bool required = True, *object rest) {
+            *AbstractRestSchemaValidator schema = getTypeBuildSchema();
+            if (schema && !schema.isTypeBuildActive()) {
+                return schema.runTypeBuild(AbstractDataProviderType sub () {
+                    return getDataType(required, rest);
+                });
+            }
             if (required) {
                 if (!dataType) {
                     if (orNothingDataType) {
-                        dataType = orNothingDataType.getMandatoryType();
+                        setCachedDataType(True, orNothingDataType.getMandatoryType());
                     } else {
                         # "dataType" is assigned in the call below
                         getDataTypeIntern("/", True, rest);
@@ -1398,7 +1422,7 @@ public namespace RestSchemaValidator {
             }
             if (!orNothingDataType) {
                 if (dataType) {
-                    orNothingDataType = dataType.getOrNothingType();
+                    setCachedDataType(False, dataType.getOrNothingType());
                 } else {
                     # "orNothingDataType" is assigned in the call below
                     getDataTypeIntern("/", False, rest);
@@ -1416,21 +1440,111 @@ public namespace RestSchemaValidator {
             @since RestSchemaValidator 2.5
         */
         replaceType(AbstractDataProviderType t) {
+            *AbstractRestSchemaValidator schema = getTypeBuildSchema();
+            if (schema && !schema.isTypeBuildActive()) {
+                schema.runTypeBuild(sub () {
+                    replaceType(t);
+                });
+                return;
+            }
             if (t.isOrNothingType()) {
                 if (dataType) {
-                    dataType = t.getMandatoryType();
+                    setCachedDataType(True, t.getMandatoryType());
                 }
                 if (orNothingDataType) {
-                    orNothingDataType = t;
+                    setCachedDataType(False, t);
                 }
             } else {
                 if (dataType) {
-                    dataType = t;
+                    setCachedDataType(True, t);
                 }
                 if (orNothingDataType) {
-                    orNothingDataType = t.getOrNothingType();
+                    setCachedDataType(False, t.getOrNothingType());
                 }
             }
+        }
+
+        #! Sets a cached data type of this schema, recording the write in the type build in progress
+        /** @param required @ref True for the mandatory type, @ref False for the "or nothing" type
+            @param t the type to cache
+
+            @since RestSchemaValidator 2.5
+        */
+        private setCachedDataType(bool required, AbstractDataProviderType t) {
+            *AbstractRestSchemaValidator schema = getTypeBuildSchema();
+            if (schema && schema.isTypeBuildActive()) {
+                *AbstractDataProviderType prev = required ? dataType : orNothingDataType;
+                schema.recordTypeBuildWrite(sub () {
+                    if (required) {
+                        dataType = prev;
+                    } else {
+                        orNothingDataType = prev;
+                    }
+                });
+            }
+            if (required) {
+                dataType = t;
+            } else {
+                orNothingDataType = t;
+            }
+        }
+
+        #! Sets a cached canonical field or per-use field, recording the write in the type build in progress
+        /** @param use @ref True for a per-use field (keyed by the use key), @ref False for a canonical field (keyed
+            by the field name)
+            @param key the field name or use key
+            @param rstr the requiredness key: \c "Y" or \c "N"
+            @param field the field to cache
+
+            @since RestSchemaValidator 2.5
+        */
+        private setCachedField(bool use, string key, string rstr, AbstractDataField field) {
+            *AbstractRestSchemaValidator schema = getTypeBuildSchema();
+            if (schema && schema.isTypeBuildActive()) {
+                *AbstractDataField prev = use ? usemap{key}{rstr} : fieldmap{key}{rstr};
+                schema.recordTypeBuildWrite(sub () {
+                    if (use) {
+                        if (prev) {
+                            usemap{key}{rstr} = prev;
+                        } else {
+                            remove usemap{key}{rstr};
+                            if (!usemap{key}) {
+                                remove usemap{key};
+                            }
+                        }
+                    } else if (prev) {
+                        fieldmap{key}{rstr} = prev;
+                    } else {
+                        remove fieldmap{key}{rstr};
+                        if (!fieldmap{key}) {
+                            remove fieldmap{key};
+                        }
+                    }
+                });
+            }
+            if (use) {
+                usemap{key}{rstr} = field;
+            } else {
+                fieldmap{key}{rstr} = field;
+            }
+        }
+
+        #! Records the use key a canonical field is built from, recording the write in the type build in progress
+        /** @since RestSchemaValidator 2.5
+        */
+        private setFieldUse(string name, string ukey) {
+            *AbstractRestSchemaValidator schema = getTypeBuildSchema();
+            if (schema && schema.isTypeBuildActive()) {
+                *string prev = field_use{name};
+                schema.recordTypeBuildWrite(sub () {
+                    if (exists prev) {
+                        field_use{name} = prev;
+                    } else {
+                        remove field_use{name};
+                    }
+                });
+            }
+            field_use{name} = ukey;
         }
 
         #! Returns the data type for the given schema
@@ -1438,11 +1552,7 @@ public namespace RestSchemaValidator {
             if (type == "string") {
                 AbstractDataProviderType t = AbstractDataProviderType::get((required ? "" : "*") + "string")
                     .copyWithConstraints(getConstraintInfo());
-                if (required) {
-                    dataType = t;
-                } else {
-                    orNothingDataType = t;
-                }
+                setCachedDataType(required, t);
                 return t;
             }
 
@@ -1450,11 +1560,7 @@ public namespace RestSchemaValidator {
             if (type == "any" && !properties && !hasSchemaCompositionFeatures()) {
                 AbstractDataProviderType t = AbstractDataProviderType::get(required ? "auto" : "*auto")
                     .copyWithConstraints(getConstraintInfo());
-                if (required) {
-                    dataType = t;
-                } else {
-                    orNothingDataType = t;
-                }
+                setCachedDataType(required, t);
                 return t;
             }
 
@@ -1479,11 +1585,7 @@ public namespace RestSchemaValidator {
                 t = cast<HashDataType>(t.copyWithConstraints(constraints));
             }
 
-            if (required) {
-                dataType = t;
-            } else {
-                orNothingDataType = t;
-            }
+            setCachedDataType(required, t);
             getSchemaObjectFields(t, path, def_body);
             if (additionalProperties === True) {
                 t.setDefaultOtherFieldType(AbstractDataProviderTypeMap."auto");
@@ -1522,12 +1624,18 @@ public namespace RestSchemaValidator {
         #! Returns the field for one use of this schema, building or decorating it as needed
         private AbstractDataField getFieldForUse(string path, string name, *string desc, bool required,
                 *object rest, auto default_value) {
+            *AbstractRestSchemaValidator schema = getTypeBuildSchema();
+            if (schema && !schema.isTypeBuildActive()) {
+                return schema.runTypeBuild(AbstractDataField sub () {
+                    return getFieldForUse(path, name, desc, required, rest, default_value);
+                });
+            }
             string rstr = required ? "Y" : "N";
             string ukey = AbstractRestSchemaObject::getFieldUseKey(name, desc, default_value);
-            if (*AbstractDataField rv = getCacheField(\usemap{ukey}, rstr)) {
+            if (*AbstractDataField rv = getCacheField(True, ukey, rstr)) {
                 return rv;
             }
-            if (*AbstractDataField rv = getCacheField(\fieldmap{name}, rstr)) {
+            if (*AbstractDataField rv = getCacheField(False, name, rstr)) {
                 return decorateField(rv, ukey, name, desc, required, default_value, rstr);
             }
             return decorateField(getFieldIntern(path, name, desc, required, rest, default_value, rstr, ukey),
@@ -1587,7 +1695,7 @@ public namespace RestSchemaValidator {
                 },
             } : NOTHING), getValidatedExampleCandidates(), getConstraintInfo());
             rv.updateFieldType(canonical.getType());
-            usemap{ukey}{rstr} = rv;
+            setCachedField(True, ukey, rstr, rv);
             return rv;
         }
 
@@ -1650,20 +1758,31 @@ public namespace RestSchemaValidator {
         }
 
         #! Returns a field object from the given cache
-        private *AbstractDataField getCacheField(reference<hash<string, AbstractDataField>> h, string key) {
+        /** @param use @ref True for the per-use cache (keyed by the use key), @ref False for the canonical cache
+            (keyed by the field name)
+            @param cache_key the field name or use key
+            @param key the requiredness key: \c "Y" or \c "N"
+        */
+        private *AbstractDataField getCacheField(bool use, string cache_key, string key) {
+            *hash<string, AbstractDataField> h = use ? usemap{cache_key} : fieldmap{cache_key};
             if (h) {
                 if ((key == "N") && !h.N) {
-                    return h.N = h.Y.getOrNothingType();
+                    AbstractDataField field = h.Y.getOrNothingType();
+                    setCachedField(use, cache_key, "N", field);
+                    return field;
                 }
                 if ((key == "Y") && !h.Y) {
+                    AbstractDataField field;
                     if (nullable) {
                         # A required nullable use has the same value type as an optional use;
                         # only property presence changes. Never mutate the shared cached field.
-                        AbstractDataField field = h.N.copy();
+                        field = h.N.copy();
                         field.setAttributes({"required": True, "preselected": True});
-                        return h.Y = field;
+                    } else {
+                        field = h.N.getMandatoryType();
                     }
-                    return h.Y = h.N.getMandatoryType();
+                    setCachedField(use, cache_key, "Y", field);
+                    return field;
                 }
                 return h{key};
             }
@@ -1686,7 +1805,7 @@ public namespace RestSchemaValidator {
             if (!ukey.val()) {
                 ukey = AbstractRestSchemaObject::getFieldUseKey(name, desc, default_value);
             }
-            field_use{name} = ukey;
+            setFieldUse(name, ukey);
             string field_desc = getMergedFieldDesc(desc);
             # the field registered below is handed to anything that re-enters this schema while its type
             # is being built, so it must not be copied until that build has finished
@@ -1706,7 +1825,7 @@ public namespace RestSchemaValidator {
                         "required": True,
                     },
                 } : NOTHING), getValidatedExampleCandidates(), getConstraintInfo());
-                fieldmap{name}{rstr} = field;
+                setCachedField(False, name, rstr, field);
                 field.updateFieldType(getDataType(required, rest));
                 return field;
             }
@@ -1719,7 +1838,7 @@ public namespace RestSchemaValidator {
                 "allowed_values": getFieldEnumValues(),
                 "default_value": default_value,
             }, getValidatedExampleCandidates(), getConstraintInfo());
-            fieldmap{name}{rstr} = field;
+            setCachedField(False, name, rstr, field);
             field.updateFieldType(getSchemaType(path, type, format, items, required));
             return field;
         }
@@ -2093,12 +2212,93 @@ public namespace RestSchemaValidator {
 
     #! abstract REST schema validation classes
     public class AbstractRestSchemaValidator inherits Logger::LoggerWrapper, Qore::Serializable {
+        private:internal {
+            #! Serializes the type builds of this schema; the thread holding it is the one building
+            transient Mutex type_build_lock();
+
+            #! How to undo the cache writes of the type build in progress, in the order they were made
+            transient list<code> type_build_undo = ();
+        }
+
         #! Creates the object without a logger
         constructor() {
         }
 
         #! Creates the object with the given logger
         constructor(Logger::LoggerInterface logger) : LoggerWrapper(logger) {
+        }
+
+        #! Runs a type build of this schema as one transaction
+        /** Schema objects cache the data types and fields they derive, and a build fills those caches as it goes:
+            a recursive schema is cut by a placeholder field that is completed in place once its type is built, and
+            the types built meanwhile refer to it.  A build that throws part of the way through would leave such
+            placeholders, and the types that refer to them, in caches that every later build reads.
+
+            The schema methods that build types therefore run their outermost call through this method, which holds
+            the schema's type build lock for the build and records how to undo each cache write
+            (@ref recordTypeBuildWrite()); if the build throws, every write it made is undone before the exception
+            propagates, so the caches are as they were before it started, and a later build starts from them.
+            The type builds of the schema are serialized, so a thread never reads a placeholder another thread is
+            still completing; builds of different schemas run in parallel.
+
+            If the calling thread is already building types of this schema, the code runs as part of that build.
+
+            @param build the code that builds types
+
+            @return the value returned by @p build
+
+            @note @p build must not wait for another thread that builds types of this schema, which would deadlock
+
+            @par Example:
+            @code{.py}
+AbstractDataProviderType type = schema.runTypeBuild(AbstractDataProviderType sub () {
+    return schema.getTypeForReference("Customer");
+});
+            @endcode
+
+            @since RestSchemaValidator 2.5
+        */
+        auto runTypeBuild(code build) {
+            if (type_build_lock.lockOwner()) {
+                return build();
+            }
+            type_build_lock.lock();
+            on_exit type_build_lock.unlock();
+            on_exit type_build_undo = ();
+            try {
+                return build();
+            } catch (hash<ExceptionInfo> ex) {
+                # undo the writes of the build, the latest first
+                while (type_build_undo) {
+                    code undo_write = pop type_build_undo;
+                    undo_write();
+                }
+                rethrow;
+            }
+        }
+
+        #! Returns @ref True if the calling thread is building types of this schema
+        /** @see runTypeBuild()
+
+            @since RestSchemaValidator 2.5
+        */
+        bool isTypeBuildActive() {
+            return type_build_lock.lockOwner();
+        }
+
+        #! Records how to undo a cache write of the type build of this schema in progress on the calling thread
+        /** Has no effect if the calling thread is not building types of this schema.
+
+            @param undo_write restores what the write replaced; must not throw
+
+            @see runTypeBuild()
+
+            @since RestSchemaValidator 2.5
+        */
+        recordTypeBuildWrite(code undo_write) {
+            if (type_build_lock.lockOwner()) {
+                push type_build_undo, undo_write;
+            }
         }
 
         #! Returns the data type corresponding to the given reusable schema reference
