@@ -376,6 +376,8 @@ hash schema = (
       DDL, supported on all Oracle versions) and, on Oracle 18c and later, runtime private temporary tables
       (\c "ORA$PTT_" name prefix; \c NOT \c NULL column constraints are not supported and are dropped); see
       @ref SqlUtil::AbstractDatabase::createTempTable() "AbstractDatabase::createTempTable()"
+    - fixed a \c cast data provider expression with a size, or with a precision and a scale: the size was ignored
+      and the precision was given as the scale, so that the cast failed or changed the value
 
     @subsection oracle161 OracleSqlUtilBase v1.6.1
     - fixed a bug where a select combining \c forupdate with \c limit or \c offset and an \c orderby failed with
@@ -2899,19 +2901,20 @@ public class OracleTable inherits SqlUtil::AbstractTable {
                 "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
                     string exp0 = info.table.getExpressionArg(\info, role, args[0],
                         AbstractDataProviderTypeMap."any");
+                    # the arguments are the expression, the type, and an optional size and scale
                     string name = QoreTypeMap{args[1]} ?? args[1];
                     *hash<auto> desc = OraTypeMap{name};
                     string sql = sprintf ("cast (%s as %s", exp0, name);
                     if (desc.size == SZ_MAND) {
-                        if (!exists args[1] && !exists desc.size_range)
+                        if (!exists args[2] && !exists desc.size_range)
                             throw "OPERATOR-ERROR", sprintf ("cast operator missing size for type %s",
                                 name);
-                        sql += sprintf("(%d)", args[1] ?? desc.size_range[1]);
-                    } else if (desc.size == SZ_NUM && exists args[1]) {
-                        sql += sprintf("(%d", args[1]);
-                        sql += exists args[2] ? sprintf(",%d)", args[2]) : ")";
-                    } else if (desc.size == SZ_OPT && exists args[1]) {
-                        sql += sprintf("(%d)", args[1]);
+                        sql += sprintf("(%d)", args[2] ?? desc.size_range[1]);
+                    } else if (desc.size == SZ_NUM && exists args[2]) {
+                        sql += sprintf("(%d", args[2]);
+                        sql += exists args[3] ? sprintf(",%d)", args[3]) : ")";
+                    } else if (desc.size == SZ_OPT && exists args[2]) {
+                        sql += sprintf("(%d)", args[2]);
                     }
                     sql += ")";
                     return sql;

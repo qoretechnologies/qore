@@ -1,0 +1,170 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires DataProvider
+%requires SqlUtil
+%requires PgsqlSqlUtilBase
+%requires OracleSqlUtilBase
+%requires MysqlSqlUtil
+%requires XdbcFirebirdSqlUtilBase
+
+%try-module oracle
+%define NoOracle
+%endtry
+
+%exec-class SqlUtilExpressionCastTest
+
+#! a datasource that records the SQL that it is given, so SQL is generated without a database server
+class CastRecordingDatasource inherits Qore::SQL::AbstractDatasource {
+    private {
+        string driver;
+        auto server_version;
+    }
+
+    constructor(string driver, auto server_version) {
+        self.driver = driver;
+        self.server_version = server_version;
+    }
+
+    *string getPassword() {}
+    *string getOSEncoding() {}
+    *string getDBName() { return "casttest"; }
+    *string getUserName() { return "castuser"; }
+    *string getHostName() {}
+    *int getPort() {}
+    *string getDBEncoding() {}
+    string getDriverName() { return driver; }
+    auto getServerVersion() { return server_version; }
+    auto getClientVersion() { return server_version; }
+    string getConfigString() { return ""; }
+    hash<auto> getConfigHash() { return {}; }
+    bool inTransaction() { return False; }
+    bool currentThreadInTransaction() { return False; }
+    nothing beginTransaction() {}
+    nothing commit() {}
+    nothing rollback() {}
+
+    auto exec(string sql, ...) { return 0; }
+    auto vexec(string sql, *softlist<auto> vargs) { return 0; }
+    auto execRaw(string sql) { return 0; }
+    auto select(string sql, ...) { return {}; }
+    auto vselect(string sql, *softlist<auto> vargs) { return {}; }
+    auto selectRow(string sql, ...) {}
+    auto vselectRow(string sql, *softlist<auto> vargs) {}
+    auto selectRows(string sql, ...) { return (); }
+    auto vselectRows(string sql, *softlist<auto> vargs) { return (); }
+    auto selectTyped(string sql, ...) {}
+    auto vselectTyped(string sql, *softlist<auto> vargs) {}
+    auto selectRowsTyped(string sql, ...) {}
+    auto vselectRowsTyped(string sql, *softlist<auto> vargs) {}
+}
+
+#! Tests the cast expression of the data provider expression API
+/** Its arguments are the expression, the type, and an optional size and scale; the size was read from the argument
+    that gives the type, so a cast to a type with a size gave a size of 0 or the scale as the size, and the scale was
+    ignored: a cast to a string type or a number with a precision failed or truncated the value
+*/
+class SqlUtilExpressionCastTest inherits QUnit::Test {
+    constructor() : Test("SqlUtilExpressionCast", "1.0", \ARGV) {
+        addTestCase("PostgreSQL: the size and the scale of a cast", \pgsqlCast());
+        addTestCase("Oracle: the size and the scale of a cast", \oracleCast());
+        addTestCase("MySQL: the size and the scale of a cast", \mysqlCast());
+        addTestCase("Firebird: the size and the scale of a cast", \firebirdCast());
+        addTestCase("PostgreSQL: a cast with a size and a scale runs", \pgsqlLive());
+        set_return_value(main());
+    }
+
+    #! returns the SQL of a select of one cast expression of the "id" column
+    private static string castSql(AbstractTable t, softlist<auto> cast_args) {
+        hash<DataProviderExpression> exp = <DataProviderExpression>{
+            "exp": COP_CAST,
+            "args": (<DataProviderFieldReference>{"field": "id"},) + cast_args,
+        };
+        list<auto> args;
+        string sql = t.getSelectSql({"columns": (exp,)}, \args);
+        # the cast expression and nothing else
+        return (sql =~ x/^select (cast \(.*\)) from /)[0] ?? sql;
+    }
+
+    #! checks the casts of a table to a type with a mandatory size, a type with a precision and a scale, and a type
+    #! with an optional size
+    private checkCasts(AbstractTable t, hash<string, string> expect) {
+        t.setupTable({"columns": {"id": {"qore_type": "integer", "notnull": True}}});
+        foreach hash<auto> i in (expect.pairIterator()) {
+            softlist<auto> cast_args = (map ($1 =~ /^[0-9]+$/ ? $1.toInt() : $1), i.key.split(","));
+            assertEq(i.value, castSql(t, cast_args), i.key);
+        }
+    }
+
+    pgsqlCast() {
+        checkCasts(new PgsqlTable(new CastRecordingDatasource("pgsql", 160000), "t"), {
+            "string,20": "cast (id as varchar(20))",
+            "number,10": "cast (id as numeric(10))",
+            "number,10,2": "cast (id as numeric(10,2))",
+            "number": "cast (id as numeric)",
+            "integer": "cast (id as bigint)",
+        });
+    }
+
+    oracleCast() {
+%ifdef NoOracle
+        testSkip("oracle module unavailable");
+%endif
+        checkCasts(new OracleTable(new CastRecordingDatasource("oracle", "19.0.0.0.0"), "t"), {
+            "string,20": "cast (id as varchar2(20))",
+            "number,10": "cast (id as number(10))",
+            "number,10,2": "cast (id as number(10,2))",
+            "number": "cast (id as number)",
+        });
+    }
+
+    mysqlCast() {
+        checkCasts(new MysqlTable(new CastRecordingDatasource("mysql", 80000), "t"), {
+            "number,10": "cast (id as decimal(10))",
+            "number,10,2": "cast (id as decimal(10,2))",
+            "number": "cast (id as decimal)",
+        });
+    }
+
+    firebirdCast() {
+        checkCasts(new XdbcFirebirdTable(new CastRecordingDatasource("jni", NOTHING), "t"), {
+            "string,20": "cast (id as varchar(20))",
+            "number,10": "cast (id as numeric(10))",
+            "number,10,2": "cast (id as numeric(10,2))",
+            "number": "cast (id as numeric)",
+        });
+    }
+
+    pgsqlLive() {
+        if (!ENV.QORE_DB_CONNSTR_PGSQL) {
+            testSkip("QORE_DB_CONNSTR_PGSQL is not set");
+        }
+        Datasource ds(ENV.QORE_DB_CONNSTR_PGSQL);
+        on_exit ds.rollback();
+        if (ds.getDriverName() != "pgsql") {
+            testSkip("QORE_DB_CONNSTR_PGSQL is not a pgsql connection");
+        }
+        # a temporary table lives only in this transaction's session
+        ds.execRaw("create temporary table sqlutil_expression_cast (id numeric(12,4) not null)");
+        ds.exec("insert into sqlutil_expression_cast values (%v)", 1234.5678n);
+        PgsqlTable t(ds, "pg_temp.sqlutil_expression_cast");
+        foreach hash<auto> i in ({
+                "args": ("string", 4), "value": "1234",
+            }, {
+                "args": ("number", 6, 1), "value": 1234.6n,
+            }) {
+            hash<DataProviderExpression> exp = <DataProviderExpression>{
+                "exp": COP_CAST,
+                "args": (<DataProviderFieldReference>{"field": "id"},) + i.args,
+            };
+            *hash<auto> row = t.selectRow({"columns": (exp,)});
+            assertEq(1, row.size(), sprintf("%y", i.args));
+            assertEq(i.value, row.firstValue(), sprintf("%y", i.args));
+        }
+    }
+}
