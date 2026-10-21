@@ -34,6 +34,8 @@
 
 #include <openssl/ssl.h>
 
+#include "qore/intern/QoreForkHandlers.h"
+
 #include <cstdint>
 #include <ctime>
 #include <mutex>
@@ -136,6 +138,8 @@ private:
     DLLLOCAL void evictExpired();
 
     mutable std::mutex mtx_;
+    //! the cache can be used in a child process created with fork() (see QoreForkHandlers.h)
+    QoreForkStdMutex fork_handler_{mtx_, QFLR_LEAF, "quic_ticket_cache"};
     std::unordered_map<std::string, QuicCachedTicket> cache_;
 };
 

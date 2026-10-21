@@ -941,7 +941,7 @@ int ut_wait_child(pid_t pid) {
 */
 static void ut_fork_waits_for_lock_holders(UnitTestCounters& c) {
     static const char* names[] = {
-        "signal_manager", "plugin_registry", "time_zones",
+        "signal_manager", "async_io_singleton", "plugin_registry", "time_zones",
         "thread_counters", "thread_list", "cond_waker", "stack_lck", "external_thread_reaper", "u_tld_seq",
         "program_registry", "program_cleanup", "breakpoints", "constant_value_locks", "opaque_target_shards",
         "encodings", "utc_offset_zones", "module_options", "app_registry", "complex_types", "external_types",
@@ -9053,6 +9053,8 @@ static QoreValue f_dbg_force_fd_swap_next_wait(const QoreListNode* params, Runti
     operation.  DEBUG builds only.  The fd is closed when the process exits.
 */
 static std::mutex dbg_detached_async_io_sockets_lock;
+static QoreForkStdMutex dbg_detached_async_io_sockets_fork_handler(dbg_detached_async_io_sockets_lock, QFLR_LEAF,
+    "dbg_detached_async_io_sockets");
 static std::vector<AbstractPrivateData*> dbg_detached_async_io_sockets;
 
 static QoreValue f_dbg_detach_async_io_socket(const QoreListNode* params, RuntimeConfig& rc,

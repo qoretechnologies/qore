@@ -5946,6 +5946,12 @@ int SSLSocketHelper::setLayeredClient(ExceptionSink* xsink, const char* mname, c
 #endif
 }
 
+void SSLSocketHelper::initLibrary() {
+#ifdef HAVE_BIO_METH_NEW
+    getLayeredBioMethod();
+#endif
+}
+
 #ifdef HAVE_BIO_METH_NEW
 BIO_METHOD* SSLSocketHelper::getLayeredBioMethod() {
     // created once and kept for the lifetime of the process
@@ -6674,11 +6680,22 @@ static int qore_cares_library_init(ExceptionSink* xsink) {
         init_status = ares_library_init(ARES_LIB_INIT_ALL);
     });
     if (init_status != ARES_SUCCESS) {
-        xsink->raiseException("QOREADDRINFO-GETINFO-ERROR", "c-ares initialization failed: %s",
-            ares_strerror(init_status));
+        if (xsink) {
+            xsink->raiseException("QOREADDRINFO-GETINFO-ERROR", "c-ares initialization failed: %s",
+                ares_strerror(init_status));
+        }
         return -1;
     }
     return 0;
+}
+
+void qore_network_init_once() {
+    // the one-time initializations of the network code run when the library is initialized, so that a child process
+    // created with fork() cannot inherit one that another thread was running (its guard would stay in progress in the
+    // child forever; see QoreForkHandlers.h); a c-ares failure is reported when a name is first resolved
+    qore_cares_library_init(nullptr);
+    SSLSocketHelper::initLibrary();
+    qore_quic_init_once();
 }
 
 #ifdef DEBUG

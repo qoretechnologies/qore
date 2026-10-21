@@ -5044,8 +5044,8 @@ while (*binary chunk = input.read(65536)) {
       API, such as a third-party library, is not serialized with it
     - Fixed child processes created with @ref Qore::fork() "fork()" that hung forever when other threads were running
       in the parent: a child created while another thread started or exited hung in @ref Qore::fork() "fork()"
-      itself, and children could also hang when they started a thread, changed a signal handler, read a time zone
-      or a character encoding.
+      itself, and children could also hang when they started a thread, changed a signal handler, used sockets, read
+      a time zone or a character encoding.
       @ref Qore::fork() "fork()" now briefly waits for threads that hold the library's process-wide locks, and the
       child process gets them free and repairs the state of the threads that do not exist in it; this also applies
       to a \c fork() made by native code.  Objects that another thread was using at the moment of the fork, such

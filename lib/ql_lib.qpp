@@ -1038,10 +1038,10 @@ if (pid = fork()) {
     @note
     - no background threads will be running in the new process
     - the child process can start threads and use the process-wide services of the library (the environment,
-      character encodings, time zones, signal handlers), also when other threads were running when the process was
-      copied: fork() waits for threads that briefly hold the library's process-wide locks; an object that another
-      thread was using at that moment (for example a locked @ref Qore::Thread::Mutex "Mutex") cannot be used in the
-      child
+      character encodings, time zones, socket I/O, signal handlers), also when other threads were running when the
+      process was copied: fork() waits for threads that briefly hold the library's process-wide locks; an object
+      that another thread was using at that moment (for example a locked @ref Qore::Thread::Mutex "Mutex") cannot be
+      used in the child
     - on some platforms, after a fork(), the only safe call is @ref exec(), many system calls are not async-signal
       safe, including pthread_create() which is used to start new threads; on these platforms, the %Qore process will
       crash if unsafe operations are called after a fork()

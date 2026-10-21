@@ -365,6 +365,9 @@ void qore_init(qore_license_t license, const char* def_charset, bool show_module
     // set up pseudo-methods
     pseudo_classes_init();
 
+    // one-time initializations that a child process created with fork() must not inherit in progress
+    qore_network_init_once();
+
 #ifdef _Q_WINDOWS
     // do windows socket initialization
     WORD wsver = MAKEWORD(2, 2);

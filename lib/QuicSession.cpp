@@ -544,6 +544,15 @@ static const uint8_t* quic_retry_secret(size_t& len) {
     return ok ? secret : nullptr;
 }
 
+void qore_quic_init_once() {
+    // the one-time initializations run when the library is initialized, so that a child process created with fork()
+    // cannot inherit one in progress in another thread (see QoreForkHandlers.h)
+    ensureOsslInit();
+    size_t len;
+    quic_retry_secret(len);
+    QuicSessionTicketCache::instance();
+}
+
 ssize_t QuicSession::writeRetry(uint8_t* buf, size_t buflen, const ngtcp2_pkt_hd& hd,
         const struct sockaddr* remote_addr, socklen_t remote_addrlen) {
     size_t secretlen;

@@ -43,6 +43,7 @@
 
 #include "qore/intern/ThreadPool.h"
 #include "qore/intern/MpscQueue.h"
+#include "qore/intern/QoreForkHandlers.h"
 
 #include <algorithm>
 #include <atomic>
@@ -659,6 +660,19 @@ public:
     //! Destructor
     DLLLOCAL virtual ~AsyncIoControllerPriv();
 
+    //! returns true if the controller is used in a child process created with fork() after it was created
+    /** Its I/O threads, workers and waiters do not exist in the child, and its locks can be held by them, so the
+        controller cannot be used, stopped or destroyed there: its operations raise an exception, its waits and its
+        stop return at once, and it is not freed (see QoreForkHandlers.h).  The default controller is replaced in
+        the child (see qore_get_async_io_controller_obj()).
+    */
+    DLLLOCAL bool forked() const {
+        return fork_generation != qore_fork_get_generation();
+    }
+
+    //! raises ASYNC-IO-ERROR and returns -1 if the controller is used in a child process (see forked())
+    DLLLOCAL int checkForked(const char* method, ExceptionSink* xsink) const;
+
     //! Submit an async operation
     /** @param self the QoreObject wrapping this controller
         @param info the SocketPollOperationInfo hash
@@ -888,6 +902,8 @@ public:
     DLLLOCAL void dispatchNativeTask(AsyncIoNativeTask* task);
 
 private:
+    //! the fork generation of the process that created the controller (see forked())
+    const unsigned fork_generation = qore_fork_get_generation();
     //! I/O thread commands
     enum class IoCommand {
         SubmitOp,            //!< Submit a new operation (carries PollInfo data)

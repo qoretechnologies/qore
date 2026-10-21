@@ -109,6 +109,36 @@ static QoreThreadLock aio_singleton_lock;
 static AsyncIoControllerPriv* aio_singleton = nullptr;
 static QoreObject* aio_singleton_obj = nullptr;
 
+namespace {
+//! the fork handler of the default controller (see QoreForkHandlers.h)
+/** The controller's I/O threads and workers do not exist in a child created with fork(), and on Linux its descriptors
+    are shared with the parent: the child abandons it (see AsyncIoControllerPriv::forked()) and creates a new one when
+    it is first needed.  Objects that keep the parent's controller fail with ASYNC-IO-ERROR in the child.
+*/
+class AsyncIoSingletonForkHandler : public QoreForkHandler {
+public:
+    AsyncIoSingletonForkHandler() : QoreForkHandler(QFLR_ASYNC_IO_SINGLETON, "async_io_singleton") {
+    }
+
+    void prepare() noexcept override {
+        aio_singleton_lock.lock();
+    }
+
+    void parent() noexcept override {
+        aio_singleton_lock.unlock();
+    }
+
+    void child() noexcept override {
+        // not freed: the controller of the parent cannot be stopped or destroyed in the child
+        aio_singleton = nullptr;
+        aio_singleton_obj = nullptr;
+        aio_singleton_lock.reinitAfterFork();
+    }
+};
+
+AsyncIoSingletonForkHandler aio_singleton_fork_handler;
+}
+
 //! Program cleanup callback: cancel all async I/O operations belonging to the program being destroyed
 /** Called from qore_program_private::waitForTerminationAndClear() BEFORE clearNamespaceData(),
     so type info is still valid and callbacks can execute safely.
@@ -130,17 +160,26 @@ static void aio_program_cleanup(QoreProgram* pgm) {
 }
 
 QoreObject* qore_get_async_io_controller_obj(ExceptionSink* xsink) {
-    AutoLocker al(aio_singleton_lock);
-    if (aio_singleton_obj) {
-        aio_singleton_obj->ref();
-        return aio_singleton_obj;
+    {
+        AutoLocker al(aio_singleton_lock);
+        if (aio_singleton_obj) {
+            aio_singleton_obj->ref();
+            return aio_singleton_obj;
+        }
     }
-    // Lazy-create singleton with autostop=True
+    // Lazy-create singleton with autostop=True; it is created without the lock, as its constructor reads the
+    // environment and creates descriptors, and published below unless another thread published one meanwhile
     ReferenceHolder<AsyncIoControllerPriv> holder(new AsyncIoControllerPriv(true, xsink), xsink);
     if (*xsink) {
         return nullptr;
     }
     holder->setExternalLifecycleThreads();
+    AutoLocker al(aio_singleton_lock);
+    if (aio_singleton_obj) {
+        // the controller created here is freed by the holder after the lock has been released
+        aio_singleton_obj->ref();
+        return aio_singleton_obj;
+    }
     aio_singleton = *holder;
     QoreObject* obj = new QoreObject(QC_ASYNCIOCONTROLLER, nullptr, holder.release());
     aio_singleton_obj = obj;
@@ -2406,7 +2445,18 @@ AsyncIoControllerPriv::AsyncIoControllerPriv(bool autostop, ExceptionSink* xsink
     }
 }
 
+int AsyncIoControllerPriv::checkForked(const char* method, ExceptionSink* xsink) const {
+    if (!forked()) {
+        return 0;
+    }
+    xsink->raiseException("ASYNC-IO-ERROR", "AsyncIoController::%s(): the controller was created before this process "
+        "was created with fork(); its I/O threads do not exist in this process", method);
+    return -1;
+}
+
 AsyncIoControllerPriv::~AsyncIoControllerPriv() {
+    // not reached in a forked child: deref() does not free a controller of the parent
+    assert(!forked());
     {
         AutoLocker al(m);
         // Broadcast+drop-map-ref for every pending cancel wait; each entry's
@@ -2424,6 +2474,11 @@ AsyncIoControllerPriv::~AsyncIoControllerPriv() {
 
 void AsyncIoControllerPriv::deref(ExceptionSink* xsink) {
     if (ROdereference()) {
+        if (forked()) {
+            // the controller of the parent cannot be stopped or freed in a child created with fork(): its threads do
+            // not exist, its locks can be held by them, and its conditions still count their waiters
+            return;
+        }
         stop(xsink);
         stopThreadPool(xsink);
         {
@@ -2452,6 +2507,9 @@ void AsyncIoControllerPriv::deref(ExceptionSink* xsink) {
 
 int AsyncIoControllerPriv::submitTask(ResolvedCallReferenceNode* task, ResolvedCallReferenceNode* cancel,
         ExceptionSink* xsink) {
+    if (checkForked("submitTask", xsink)) {
+        return -1;
+    }
     ThreadPool* tp;
     {
         AutoLocker al(pool_mutex);
@@ -2497,6 +2555,9 @@ void AsyncIoControllerPriv::stopThreadPool(ExceptionSink* xsink) {
 }
 
 void AsyncIoControllerPriv::flushCallbacks() {
+    if (forked()) {
+        return;
+    }
     // Take a reference on the controller so the dispatcher can't be
     // deleted (via deref → stop → delete) while we're waiting on it
     ref();
@@ -2513,6 +2574,9 @@ void AsyncIoControllerPriv::flushCallbacks() {
 }
 
 void AsyncIoControllerPriv::flushCallbacksByOwner(const std::string& owner) {
+    if (forked()) {
+        return;
+    }
     if (owner.empty()) {
         return;
     }
@@ -2550,6 +2614,9 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
     // (QC_AsyncIoController.qpp AsyncIoController::submit) calls info->ref()
     // before invoking this method to satisfy the transfer contract.
     ReferenceHolder<QoreHashNode> info_holder(info, xsink);
+    if (checkForked("submit", xsink)) {
+        return nullptr;
+    }
     // Extract fields from info hash
     QoreValue v = info->getKeyValue("sock");
     QoreObject* sock_obj = v.getType() == NT_OBJECT ? v.get<QoreObject>() : nullptr;
@@ -3072,6 +3139,9 @@ QoreHashNode* AsyncIoControllerPriv::exec(QoreObject* self, QoreHashNode* info, 
         ExceptionSink* xsink) {
     ReferenceHolder<QoreHashNode> info_holder(info, xsink);
 
+    if (checkForked("exec", xsink)) {
+        return nullptr;
+    }
     if (qore_on_async_io_thread()) {
         xsink->raiseException("ASYNC-IO-ERROR",
             "exec() cannot be called from the async I/O thread");
@@ -3364,11 +3434,17 @@ int AsyncIoControllerPriv::cancelBySocketHash(const std::string& sock_hash,
 }
 
 bool AsyncIoControllerPriv::cancel(AbstractPollableIoObjectBase* sock, ExceptionSink* xsink) {
+    if (checkForked("cancel", xsink)) {
+        return false;
+    }
     return cancelBySocketHash(getSocketHash(sock), xsink) > 0;
 }
 
 bool AsyncIoControllerPriv::cancelAndClose(AbstractPollableIoObjectBase* sock,
         ExceptionSink* xsink) {
+    if (checkForked("cancelAndClose", xsink)) {
+        return false;
+    }
     std::string sock_hash = getSocketHash(sock);
     int count = cancelBySocketHash(sock_hash, xsink);
     if (*xsink) {
@@ -3379,6 +3455,9 @@ bool AsyncIoControllerPriv::cancelAndClose(AbstractPollableIoObjectBase* sock,
 }
 
 int AsyncIoControllerPriv::close(AbstractPollableIoObjectBase* sock, ExceptionSink* xsink) {
+    if (checkForked("close", xsink)) {
+        return -1;
+    }
     std::string sock_hash = getSocketHash(sock);
     cancelBySocketHash(sock_hash, xsink);
     if (*xsink) {
@@ -3508,6 +3587,9 @@ int AsyncIoControllerPriv::closeSocketOnController(AbstractPollableIoObjectBase*
 }
 
 bool AsyncIoControllerPriv::cancelByKey(const QoreStringNode* key, ExceptionSink* xsink) {
+    if (checkForked("cancelByKey", xsink)) {
+        return false;
+    }
     std::string uh(key->c_str());
 
     // An operation runs on the I/O thread of its socket, which cannot be derived from its key; with several I/O
@@ -3708,6 +3790,9 @@ bool AsyncIoControllerPriv::cancelByKeyOnAllThreads(const std::string& uh, Excep
 }
 
 int AsyncIoControllerPriv::cancelByOwner(const QoreStringNode* owner, ExceptionSink* xsink) {
+    if (checkForked("cancelByOwner", xsink)) {
+        return -1;
+    }
     std::string owner_str(owner->c_str());
 
     bool do_signal = false;
@@ -3969,6 +4054,10 @@ int AsyncIoControllerPriv::cancelByOwner(const QoreStringNode* owner, ExceptionS
 }
 
 void AsyncIoControllerPriv::cancelByProgram(QoreProgram* pgm, ExceptionSink* xsink) {
+    if (forked()) {
+        // nothing of the Program runs in this controller in this process (see forked())
+        return;
+    }
     // Mark the program as shutting down in the call dispatcher FIRST.
     // This ensures any worker that picks up a callback for this program
     // will silently discard it, even if the callback was dispatched after
@@ -4316,6 +4405,9 @@ void AsyncIoControllerPriv::wakeSocketAfterClose(const std::string& sock_hash) {
 }
 
 void AsyncIoControllerPriv::wakeSocket(const std::string& sock_hash) {
+    if (forked()) {
+        return;
+    }
     // Look up which thread owns this socket; without a published route, the socket's operations - if any - are on
     // the thread its I/O identity routes to (see getThreadIndex())
     int thread_idx = -1;
@@ -4419,6 +4511,9 @@ void AsyncIoControllerPriv::clearSocketRouteIfOwner(const std::string& sock_hash
 }
 
 void AsyncIoControllerPriv::wakeSocketByObject(QoreObject* sock_obj, ExceptionSink* xsink) {
+    if (checkForked("wakeSocketByObject", xsink)) {
+        return;
+    }
     // Look up the socket hash from the lock-protected obj_to_sock_hash map.
     // This avoids iterating I/O-thread-only registered_sockets/sock_hash_to_ops
     // from worker threads (data race).  The map is maintained by the I/O thread
@@ -4448,6 +4543,9 @@ void AsyncIoControllerPriv::wakeSocketByObject(QoreObject* sock_obj, ExceptionSi
 }
 
 void AsyncIoControllerPriv::start(ExceptionSink* xsink) {
+    if (checkForked("start", xsink)) {
+        return;
+    }
     AutoLocker al(m);
     // starts every I/O thread that is not running; startIntern() skips running threads
     bool all_running = true;
@@ -4463,6 +4561,10 @@ void AsyncIoControllerPriv::start(ExceptionSink* xsink) {
 }
 
 void AsyncIoControllerPriv::stop(ExceptionSink* xsink) {
+    if (forked()) {
+        // nothing runs in this process (see forked())
+        return;
+    }
     bool do_signal = false;
     {
         AutoLocker al(m);
@@ -4502,11 +4604,18 @@ void AsyncIoControllerPriv::stop(ExceptionSink* xsink) {
 }
 
 void AsyncIoControllerPriv::stopClear(ExceptionSink* xsink) {
+    if (forked()) {
+        return;
+    }
     stop(xsink);
     stopThreadPool(xsink);
 }
 
 bool AsyncIoControllerPriv::waitStop(ExceptionSink* xsink) {
+    if (forked()) {
+        // no I/O thread runs in this process (see forked())
+        return true;
+    }
     AutoLocker al(m);
     while (anyThreadRunning()) {
         io_waiting = true;
@@ -4517,6 +4626,9 @@ bool AsyncIoControllerPriv::waitStop(ExceptionSink* xsink) {
 }
 
 bool AsyncIoControllerPriv::waitReady(int timeout_ms, ExceptionSink* xsink) {
+    if (checkForked("waitReady", xsink)) {
+        return false;
+    }
     AutoLocker al(m);
     if (ready_flag) {
         return true;
@@ -4535,6 +4647,9 @@ bool AsyncIoControllerPriv::waitReady(int timeout_ms, ExceptionSink* xsink) {
 }
 
 bool AsyncIoControllerPriv::waitForProcessing(int timeout_ms, ExceptionSink* xsink) {
+    if (checkForked("waitForProcessing", xsink)) {
+        return false;
+    }
     if (qore_on_async_io_thread()) {
         xsink->raiseException("ASYNC-IO-ERROR",
             "waitForProcessing() cannot be called from the async I/O thread");
@@ -4592,6 +4707,9 @@ bool AsyncIoControllerPriv::waitForProcessing(int timeout_ms, ExceptionSink* xsi
 
 bool AsyncIoControllerPriv::waitForProcessing(const std::set<int>& thread_idxs, int timeout_ms,
         ExceptionSink* xsink) {
+    if (checkForked("waitForProcessing", xsink)) {
+        return false;
+    }
     if (qore_on_async_io_thread()) {
         xsink->raiseException("ASYNC-IO-ERROR",
             "waitForProcessing() cannot be called from the async I/O thread");
@@ -4649,6 +4767,9 @@ bool AsyncIoControllerPriv::waitForProcessing(const std::set<int>& thread_idxs, 
 }
 
 bool AsyncIoControllerPriv::running() const {
+    if (forked()) {
+        return false;
+    }
     for (auto& tp : io_threads) {
         if (tp->running.load(std::memory_order_acquire)) {
             return true;
@@ -4658,6 +4779,9 @@ bool AsyncIoControllerPriv::running() const {
 }
 
 int AsyncIoControllerPriv::getCacheSize() const {
+    if (forked()) {
+        return 0;
+    }
     int total = 0;
     for (auto& tp : io_threads) {
         total += tp->cache_size.load(std::memory_order_relaxed);
@@ -4666,16 +4790,25 @@ int AsyncIoControllerPriv::getCacheSize() const {
 }
 
 void AsyncIoControllerPriv::setAutostop(bool autostop) {
+    if (forked()) {
+        return;
+    }
     AutoLocker al(m);
     autostop_flag = autostop;
 }
 
 bool AsyncIoControllerPriv::getAutostop() const {
+    if (forked()) {
+        return false;
+    }
     AutoLocker al(m);
     return autostop_flag;
 }
 
 QoreHashNode* AsyncIoControllerPriv::getInfo(ExceptionSink* xsink) {
+    if (checkForked("getInfo", xsink)) {
+        return nullptr;
+    }
     // Build the non-cache fields under lock (safe — these are mutex-protected state)
     ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
     {
@@ -4801,6 +4934,9 @@ QoreHashNode* AsyncIoControllerPriv::getInfo(ExceptionSink* xsink) {
 }
 
 void AsyncIoControllerPriv::clearCrossModuleRefs(ExceptionSink* xsink) {
+    if (forked()) {
+        return;
+    }
     ResolvedCallReferenceNode* tcb;
     std::unordered_map<int64_t, TimerInfo> stolen_timers;
     {
@@ -4818,6 +4954,9 @@ void AsyncIoControllerPriv::clearCrossModuleRefs(ExceptionSink* xsink) {
 }
 
 void AsyncIoControllerPriv::setLogger(QoreObject* logger_obj, ExceptionSink* xsink) {
+    if (checkForked("setLogger", xsink)) {
+        return;
+    }
     // Type safety is enforced at the Qore level via *LoggerInterfaceBase parameter type
     QoreLoggerBridge* old_logger;
     {
@@ -4833,6 +4972,9 @@ void AsyncIoControllerPriv::setLogger(QoreObject* logger_obj, ExceptionSink* xsi
 
 int64_t AsyncIoControllerPriv::addTimer(const DateTimeNode* deadline, QoreValue udata,
         ExceptionSink* xsink, const std::string& owner) {
+    if (checkForked("addTimer", xsink)) {
+        return -1;
+    }
     // Pre-allocate ID from atomic counter (no lock needed)
     int64_t id = next_ctrl_timer_id.fetch_add(1);
 
@@ -4889,6 +5031,9 @@ int64_t AsyncIoControllerPriv::addTimer(const DateTimeNode* deadline, QoreValue 
 }
 
 bool AsyncIoControllerPriv::cancelTimer(int64_t id, ExceptionSink* xsink) {
+    if (checkForked("cancelTimer", xsink)) {
+        return false;
+    }
     bool found = false;
     QoreValue discard_udata;
 
@@ -4927,6 +5072,9 @@ bool AsyncIoControllerPriv::cancelTimer(int64_t id, ExceptionSink* xsink) {
 }
 
 void AsyncIoControllerPriv::setTimerCallback(ResolvedCallReferenceNode* cb, ExceptionSink* xsink) {
+    if (checkForked("setTimerCallback", xsink)) {
+        return;
+    }
     AutoLocker al(m);
     if (timer_callback) {
         timer_callback->deref(xsink);
@@ -4936,11 +5084,17 @@ void AsyncIoControllerPriv::setTimerCallback(ResolvedCallReferenceNode* cb, Exce
 }
 
 void AsyncIoControllerPriv::setMaxCallbackWorkers(int max_workers) {
+    if (forked()) {
+        return;
+    }
     AutoLocker al(m);
     max_callback_workers = max_workers;
 }
 
 void AsyncIoControllerPriv::setMaxIoThreads(int num_threads, ExceptionSink* xsink) {
+    if (checkForked("setMaxIoThreads", xsink)) {
+        return;
+    }
     AutoLocker al(m);
     // Cannot change while running
     for (auto& tp : io_threads) {

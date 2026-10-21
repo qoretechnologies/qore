@@ -95,6 +95,12 @@ public:
     DLLLOCAL SSLSocketHelper(qore_socket_private& qs) : qs(qs) {
     }
 
+    //! Runs the one-time initialization of the TLS code; called when the library is initialized
+    /** Creates the process-wide BIO method of layered connections, so that a child process created with fork()
+        cannot inherit its initialization in progress in another thread
+    */
+    DLLLOCAL static void initLibrary();
+
     //! Releases a reference; the last one deletes the object
     /** The references are released by different threads: a thread closing the socket releases the socket's own
         reference while a thread in an I/O call holds another one, so the count is atomic.
