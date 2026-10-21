@@ -215,6 +215,9 @@
     validates the answer.
     Its chat and completion requests also honour the request's own timeout (<tt>timeout_ms</tt>); they were cut off
     at the client's timeout, 120 seconds by default, whatever the request asked for.
+    An OpenAI-shaped chat request with a tool choice no longer fails with HTTP 400 ("tool_choice: Input should be an
+    object"): <tt>"required"</tt> is sent as Anthropic's <tt>{"type": "any"}</tt> and a named function as a named
+    tool, and a model that rejects a forced tool choice is asked with <tt>{"type": "auto"}</tt>.
 
     AOT-compiled typed <tt>foreach</tt> loops now safely skip uninitialized or removed
     lists, matching the interpreter. A conditionally assigned list inside an outer

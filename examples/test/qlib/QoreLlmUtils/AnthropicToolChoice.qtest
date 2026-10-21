@@ -1,0 +1,73 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+#
+# Anthropic tool choice.  An OpenAI-shaped chat request's tool_choice ("required", "auto" or a named function) was
+# sent to Anthropic unchanged, and Anthropic refused every such request (HTTP 400 "tool_choice: Input should be an
+# object"); its tool choice is an object with a type.  The request body is built without a network call.
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires QoreLlmTypes
+%requires QoreLlmUtils
+%requires AnthropicRestClient
+%exec-class AnthropicToolChoiceTest
+
+#! builds request bodies with the provider's own builder, with the tool choice as the OpenAI facade gives it
+class AnthropicToolChoiceProbe inherits AnthropicRestClient::AnthropicLlmProvider {
+    constructor() : AnthropicLlmProvider(<QoreLlmUtils::LlmBackendConfig>{
+        "mode": "anthropic",
+        "url": "https://api.anthropic.com",
+        "model": "claude-haiku-5-5",
+    }) {
+    }
+
+    #! the request's tool_choice, as the body sent for @p model has it
+    auto toolChoice(string model, auto choice) {
+        hash<auto!> body_options;
+        applyOpenAiToolChoice(\body_options, choice);
+        hash<QoreLlmUtils::LlmRequestOptions> opts = <QoreLlmUtils::LlmRequestOptions>{"model": model};
+        if (body_options) {
+            opts.body_options = body_options;
+        }
+        return buildAnthropicBody((<QoreLlmUtils::ChatMessage>{"role": "user", "content": "go"},), (
+            <QoreLlmUtils::ToolDefinition>{
+                "name": "design_turn",
+                "description": "the design turn",
+                "parameters": {"type": "object", "properties": {"operation": {"type": "string"}}},
+            },
+        ), opts).tool_choice;
+    }
+}
+
+public class AnthropicToolChoiceTest inherits QUnit::Test {
+    constructor() : Test("AnthropicToolChoiceTest", "1.0") {
+        addTestCase("an OpenAI tool choice is sent in Anthropic's form", \openAiFormTest());
+        addTestCase("a model that rejects a forced tool choice is asked with auto", \rejectsForcedTest());
+        set_return_value(main());
+    }
+
+    openAiFormTest() {
+        AnthropicToolChoiceProbe probe();
+        assertEq({"type": "any"}, probe.toolChoice("claude-haiku-5-5", "required"), "required is any");
+        assertEq({"type": "auto"}, probe.toolChoice("claude-haiku-5-5", "auto"));
+        assertEq({"type": "none"}, probe.toolChoice("claude-haiku-5-5", "none"));
+        assertEq({"type": "tool", "name": "design_turn"}, probe.toolChoice("claude-haiku-5-5",
+            {"type": "function", "function": {"name": "design_turn"}}), "a named function is a named tool");
+        assertEq({"type": "tool", "name": "design_turn"}, probe.toolChoice("claude-haiku-5-5",
+            {"type": "tool", "name": "design_turn"}), "Anthropic's own form is kept");
+        assertNothing(probe.toolChoice("claude-haiku-5-5", "sometimes"), "a choice with no Anthropic form is left out");
+        assertNothing(probe.toolChoice("claude-haiku-5-5", NOTHING), "no choice, none sent");
+    }
+
+    rejectsForcedTest() {
+        AnthropicToolChoiceProbe probe();
+        foreach string model in (("claude-opus-5-5", "claude-sonnet-5-5", "claude-fable-5-1")) {
+            assertEq({"type": "auto"}, probe.toolChoice(model, "required"), model + ": required");
+            assertEq({"type": "auto"}, probe.toolChoice(model,
+                {"type": "function", "function": {"name": "design_turn"}}), model + ": a named function");
+        }
+        assertEq({"type": "any"}, probe.toolChoice("claude-opus-5", "required"), "Claude Opus 5 accepts it");
+    }
+}
