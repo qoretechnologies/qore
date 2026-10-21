@@ -154,6 +154,46 @@ table.addForeignConstraint("fk_order_lines_order", "order_id", "orders", "id", {
     @note the first value of a sequence created with a starting value is the starting value from Firebird 4 on, and
     the starting value plus the increment on Firebird 3
 
+    @section xdbcfirebird_bound_values Bound Values in Expressions
+
+    Firebird gives a value bound to a placeholder the type of the expression that it is part of only in some places:
+    in a comparison with a column or an expression, in a cast, in a null test and in a few functions.  Anywhere else,
+    such as in the select list, in arithmetic, in concatenation, in a string function, in the start or the count of
+    \c substring(), in a \c CASE expression or in a comparison of two values, Firebird refuses a value without a type
+    with <tt>Data type unknown</tt>.  A value of a data provider expression in such a place is therefore bound in a
+    cast to its type (see @ref XdbcFirebirdSqlUtilBase::XdbcFirebirdTable::getBindType() "XdbcFirebirdTable::getBindType()"):
+
+    <b>Firebird Types of Bound Values</b>
+    |!%Qore Type|!Firebird Type
+    |\c int|\c bigint
+    |\c float|<tt>double precision</tt>
+    |\c number|<tt>decfloat(34)</tt> from Firebird 4 on; a \c numeric of the digits of the value on Firebird 3 \
+      (<tt>double precision</tt> for more than 18 digits)
+    |\c bool|\c boolean
+    |\c date|\c timestamp; a relative date is bound without a cast
+    |\c string|a \c varchar of the size of the string, in characters, or in bytes in a character set of one byte \
+      per character, such as \c NONE; <tt>blob sub_type text</tt> for a string longer than a \c varchar can be in \
+      the default character set of the database
+    |\c binary|<tt>varchar(</tt><em>size</em><tt>) character set octets</tt>; a \c blob for more than 32765 bytes
+
+    A value compared with a column or an expression, a value in a cast or a null test, and the values in an \c in
+    list of a column are bound without a cast, as before, as are the values of a where hash, of an insert and of an
+    update; a \c NULL is always bound without a cast.
+
+    @par Example:
+    @code{.py}
+# select cast(%v as bigint) - cast(%v as bigint) as "diff" from orders where id = %v
+*hash<auto> row = table.selectRow({
+    "columns": (<DataProviderExpression>{"exp": COP_AS, "args": (
+        <DataProviderExpression>{"exp": COP_MINUS, "args": (10, 4)}, "diff")},),
+    "where": {"id": 1},
+});
+    @endcode
+
+    A cast to a character type without a size (as with @ref SqlUtil::cop_cast() "cop_cast()" or the \c cast and
+    \c toString expressions) has the largest size that the type can have in the default character set of the
+    database: 8191 characters in \c UTF8, 32765 in \c NONE and in any character set of one byte per character.
+
     @section xdbcfirebird_relnotes Release Notes
 
     @subsection xdbcfirebirdsqlutilbasev_0_2 XdbcFirebirdSqlUtilBase Module v0.2
@@ -205,6 +245,17 @@ table.addForeignConstraint("fk_order_lines_order", "order_id", "orders", "id", {
       case, but Firebird keeps such a name in the case that it is given in, so the table or sequence was never found
     - fixed reading a view, which was never found; the names of views are now listed in lower case, as the names of
       tables and sequences are; before, they were listed in upper case
+    - fixed values of data provider expressions that Firebird refused with <tt>Data type unknown</tt>, such as values
+      in the select list, in arithmetic, in concatenation, in string functions, in the start and the count of a
+      substring, in a \c CASE expression and in a comparison of two values: such a value is now bound in a cast to
+      its type, and a value compared with a column is bound as before (see @ref xdbcfirebird_bound_values); the
+      start and the count of the \c op_substr() where operator are bound as integers
+    - fixed a cast to a character type without a size in a database with a character set of more than one byte per
+      character, such as \c UTF8, which Firebird refused: it is now cast to the largest size of the character set
+      (8191 characters in \c UTF8), and the \c toString expression no longer has a fixed size of 8191 characters in
+      other character sets
+    - fixed the \c ltrim and \c rtrim expressions, which gave functions that Firebird does not have
+    - fixed a date given as a literal value, such as with \c cop_value(), which Firebird refused
 
     @subsection xdbcfirebirdsqlutilbasev_0_1 XdbcFirebirdSqlUtilBase Module v0.1
     - initial release
@@ -231,6 +282,74 @@ string sub firebird_get_catalog_name(string name) {
         return name;
     }
     return name.upr();
+}
+
+# a value of an expression that Firebird gives the type of the expression that it is part of, so that it is bound
+# without a cast (see XdbcFirebirdTable::getExpressionArg())
+hashdecl FirebirdInferredValue {
+    # the value to bind
+    auto value;
+}
+
+# returns True if an argument of an expression has a type in SQL of its own: a column or an expression
+bool sub firebird_is_typed_arg(auto arg) {
+    return arg instanceof hash<DataProviderFieldReference> || arg instanceof hash<DataProviderExpression>;
+}
+
+# returns True if an argument of an expression is a value bound to a placeholder that can be given a type: not a
+# column, an expression, a list, NULL or no value
+bool sub firebird_is_bound_value(auto arg) {
+    return exists arg && arg !== NULL && !firebird_is_typed_arg(arg) && !(arg instanceof hash<FirebirdInferredValue>)
+        && arg.typeCode() != NT_LIST;
+}
+
+# returns the arguments of an expression with each bound value of the first "count" arguments marked as a value that
+# Firebird types from the expression, so that it is bound without a cast: if one of these arguments is a column or an
+# expression, from which Firebird types the others in a comparison, or in any case if "always" is True, as for the
+# argument of a cast or of a null test
+list<auto> sub firebird_infer_values(list<auto> args, int count, bool always = False) {
+    # the arguments in a list that can hold a marked value, as a list of arguments can have a narrower type
+    {
+        list<auto> l = ();
+        l += args;
+        args = l;
+    }
+    count = min(count, args.size());
+    if (!always) {
+        bool typed;
+        for (int i = 0; i < count; ++i) {
+            if (firebird_is_typed_arg(args[i])) {
+                typed = True;
+                break;
+            }
+        }
+        if (!typed) {
+            return args;
+        }
+    }
+    for (int i = 0; i < count; ++i) {
+        if (firebird_is_bound_value(args[i])) {
+            args[i] = <FirebirdInferredValue>{"value": args[i]};
+        }
+    }
+    return args;
+}
+
+# returns the Firebird 3 type of an arbitrary-precision number, as Firebird 3 has no DECFLOAT: a NUMERIC with the
+# precision and the scale of its digits, or DOUBLE PRECISION for a number of more than 18 digits, an infinity or NaN
+string sub firebird_get_number_type(number n) {
+    *list<auto> digits = (n.toString() =~ x/^-?([0-9]*)(?:\.([0-9]*))?$/);
+    if (!digits) {
+        return "double precision";
+    }
+    string ip = digits[0] ?? "";
+    ip =~ s/^0+//;
+    int scale = (digits[1] ?? "").size();
+    int precision = ip.size() + scale;
+    if (precision > 18) {
+        return "double precision";
+    }
+    return sprintf("numeric(%d,%d)", precision ?: 1, scale);
 }
 
 #! the XdbcFirebirdSqlUtilBase namespace contains all the objects in the XdbcFirebirdSqlUtilBase module
@@ -1410,28 +1529,12 @@ string sql = db.getSqlIdentifier("Order Date");
                             "Firebird"));
                     },
                 },
+                # without a database, a character type without a size has its largest size in bytes; the column
+                # operator map of a table gives it the largest size of the character set of its database (see
+                # XdbcFirebirdTable::getColumnOperatorMapImpl())
                 COP_CAST: (
                     "code": string sub (string cve, list<auto> args) {
-                        string name = QoreTypeMap{args[0]} ?? args[0];
-                        *hash<auto> desc = XdbcFirebirdTypeMap{name};
-                        string sql = sprintf ("cast (%s as %s", cve, name);
-                        switch (name) {
-                            default:
-                                if (desc.size == SZ_MAND) {
-                                    if (!exists args[1] && !exists desc.size_range) {
-                                        throw "OPERATOR-ERROR", sprintf ("op_cast operator missing size for type %s",
-                                            name);
-                                    }
-                                    sql += sprintf("(%d)", args[1] ?? desc.size_range[1]);
-                                } else if (desc.size == SZ_NUM && exists args[1]) {
-                                    sql += args[1] == "*" ? "(*" : sprintf("(%d", args[1]);
-                                    sql += exists args[2] ? sprintf(",%d)", args[2]) : ")";
-                                } else if (desc.size == SZ_OPT && exists args[1]) {
-                                    sql += sprintf("(%d)", args[1]);
-                                }
-                        }
-                        sql += ")";
-                        return sql;
+                        return XdbcFirebirdTable::getCastSql(cve, args[0], args[1], args[2], int sub () { return 1; });
                     },
                 ),
                 COP_LENGTH: {
@@ -1457,6 +1560,19 @@ string sql = db.getSqlIdentifier("Order Date");
 
             #! Firebird operator map
             const FirebirdOpMap = DefaultOpMap + {
+                # Firebird cannot type a bound start or count of substring(), so they are bound as integers
+                OP_SUBSTR: DefaultOpMap{OP_SUBSTR} + {
+                    "code": string sub (reference<hash<QueryInfo>> info, string cn, auto arg) {
+                        info.args += arg[0]; # start
+                        if (!exists arg[1]) {
+                            info.args += arg[2]; # text
+                            return sprintf("substring(%s from cast(%%v as integer)) = %%v", cn);
+                        }
+                        info.args += arg[1]; # count
+                        info.args += arg[2]; # text
+                        return sprintf("substring(%s from cast(%%v as integer) for cast(%%v as integer)) = %%v", cn);
+                    },
+                },
                 OP_IN: AbstractDataProvider::GenericExpressions{DP_SEARCH_OP_IN} + (
                     "code": string sub (reference<hash<QueryInfo>> info, string cn, auto arg) {
                         # firebird accepts max 1500 args in "IN" lists
@@ -1553,25 +1669,12 @@ string sql = db.getSqlIdentifier("Order Date");
                         "return_type": AbstractDataProviderTypeMap."any",
                     },
                     "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        # the arguments are the expression, the type, and an optional size and scale; the cast gives
+                        # a value its type
+                        args = firebird_infer_values(args, 1, True);
                         string exp0 = info.table.getExpressionArg(\info, role, args[0],
                             AbstractDataProviderTypeMap."any");
-                        # the arguments are the expression, the type, and an optional size and scale
-                        string name = QoreTypeMap{args[1]} ?? args[1];
-                        *hash<auto> desc = XdbcFirebirdTypeMap{name};
-                        string sql = sprintf ("cast (%s as %s", exp0, name);
-                        if (desc.size == SZ_MAND) {
-                            if (!exists args[2] && !exists desc.size_range)
-                                throw "OPERATOR-ERROR", sprintf ("cast operator missing size for type %s",
-                                    name);
-                            sql += sprintf("(%d)", args[2] ?? desc.size_range[1]);
-                        } else if (desc.size == SZ_NUM && exists args[2]) {
-                            sql += sprintf("(%d", args[2]);
-                            sql += exists args[3] ? sprintf(",%d)", args[3]) : ")";
-                        } else if (desc.size == SZ_OPT && exists args[2]) {
-                            sql += sprintf("(%d)", args[2]);
-                        }
-                        sql += ")";
-                        return sql;
+                        return cast<XdbcFirebirdTable>(info.table).getCastSql(exp0, args[1], args[2], args[3]);
                     },
                 },
                 COP_LENGTH: {
@@ -1611,10 +1714,16 @@ string sql = db.getSqlIdentifier("Order Date");
                     "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
                         # firebird accepts max 1500 args in "IN" lists
                         list<string> argl;
+                        # the values in the list of a column or an expression have its type
+                        bool typed = firebird_is_typed_arg(args[0]);
                         string exp0 = info.table.getExpressionArg(\info, role, args[0],
                             AbstractDataProviderTypeMap."any");
                         if (args[1].typeCode() != NT_LIST) {
                             args[1] = (args[1],);
+                        }
+                        if (typed) {
+                            args[1] = map firebird_is_bound_value($1) ? <FirebirdInferredValue>{"value": $1} : $1,
+                                args[1];
                         }
                         while (args[1]) {
                             list<auto> arg_slice = extract args[1], 0, 1500;
@@ -1726,6 +1835,8 @@ string sql = db.getSqlIdentifier("Order Date");
                 # --- String pattern matching operators for Firebird ---
                 DP_OP_LIKE: DefaultExpressionMap{DP_OP_LIKE} + {
                     "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        # a value compared with a column or an expression has its type
+                        args = firebird_infer_values(args, 2);
                         string exp0 = info.table.getExpressionArg(\info, role, args[0],
                             AbstractDataProviderTypeMap."string");
                         string exp1 = info.table.getExpressionArg(\info, role, args[1],
@@ -1738,6 +1849,8 @@ string sql = db.getSqlIdentifier("Order Date");
                 },
                 DP_OP_CONTAINS: DefaultExpressionMap{DP_OP_CONTAINS} + {
                     "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        # a value compared with a column or an expression has its type
+                        args = firebird_infer_values(args, 2);
                         string exp0 = info.table.getExpressionArg(\info, role, args[0],
                             AbstractDataProviderTypeMap."string");
                         string exp1 = info.table.getExpressionArg(\info, role, args[1],
@@ -1750,6 +1863,8 @@ string sql = db.getSqlIdentifier("Order Date");
                 },
                 DP_OP_STARTS_WITH: DefaultExpressionMap{DP_OP_STARTS_WITH} + {
                     "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        # a value compared with a column or an expression has its type
+                        args = firebird_infer_values(args, 2);
                         string exp0 = info.table.getExpressionArg(\info, role, args[0],
                             AbstractDataProviderTypeMap."any");
                         string exp1 = info.table.getExpressionArg(\info, role, args[1],
@@ -1762,6 +1877,8 @@ string sql = db.getSqlIdentifier("Order Date");
                 },
                 DP_OP_ENDS_WITH: DefaultExpressionMap{DP_OP_ENDS_WITH} + {
                     "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        # a value compared with a column or an expression has its type
+                        args = firebird_infer_values(args, 2);
                         string exp0 = info.table.getExpressionArg(\info, role, args[0],
                             AbstractDataProviderTypeMap."any");
                         string exp1 = info.table.getExpressionArg(\info, role, args[1],
@@ -1774,6 +1891,10 @@ string sql = db.getSqlIdentifier("Order Date");
                 },
                 DP_OP_REPLACE: DefaultExpressionMap{DP_OP_REPLACE} + {
                     "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        # the values replaced in a column or an expression have its type
+                        if (firebird_is_typed_arg(args[0])) {
+                            args = (args[0],) + firebird_infer_values(args[1..], 2, True);
+                        }
                         string exp0 = info.table.getExpressionArg(\info, role, args[0],
                             AbstractDataProviderTypeMap."string");
                         string exp1 = info.table.getExpressionArg(\info, role, args[1],
@@ -1786,13 +1907,18 @@ string sql = db.getSqlIdentifier("Order Date");
                 # --- Type conversion operators for Firebird ---
                 DP_OP_TO_STRING: DefaultExpressionMap{DP_OP_TO_STRING} + {
                     "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        # the cast gives a value its type
+                        args = firebird_infer_values(args, 1, True);
                         string exp0 = info.table.getExpressionArg(\info, role, args[0],
                             AbstractDataProviderTypeMap."any");
-                        return sprintf("cast(%s as varchar(8191))", exp0);
+                        return sprintf("cast(%s as varchar(%d))", exp0,
+                            cast<XdbcFirebirdTable>(info.table).getMaxVarcharLength());
                     },
                 },
                 DP_OP_TO_INT: DefaultExpressionMap{DP_OP_TO_INT} + {
                     "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        # the cast gives a value its type
+                        args = firebird_infer_values(args, 1, True);
                         string exp0 = info.table.getExpressionArg(\info, role, args[0],
                             AbstractDataProviderTypeMap."any");
                         return sprintf("cast(%s as integer)", exp0);
@@ -1800,6 +1926,8 @@ string sql = db.getSqlIdentifier("Order Date");
                 },
                 DP_OP_TO_FLOAT: DefaultExpressionMap{DP_OP_TO_FLOAT} + {
                     "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        # the cast gives a value its type
+                        args = firebird_infer_values(args, 1, True);
                         string exp0 = info.table.getExpressionArg(\info, role, args[0],
                             AbstractDataProviderTypeMap."any");
                         return sprintf("cast(%s as double precision)", exp0);
@@ -1807,6 +1935,8 @@ string sql = db.getSqlIdentifier("Order Date");
                 },
                 DP_OP_TO_NUMBER: DefaultExpressionMap{DP_OP_TO_NUMBER} + {
                     "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        # the cast gives a value its type
+                        args = firebird_infer_values(args, 1, True);
                         string exp0 = info.table.getExpressionArg(\info, role, args[0],
                             AbstractDataProviderTypeMap."any");
                         return sprintf("cast(%s as numeric(18,4))", exp0);
@@ -1814,6 +1944,8 @@ string sql = db.getSqlIdentifier("Order Date");
                 },
                 DP_OP_TO_DATE: DefaultExpressionMap{DP_OP_TO_DATE} + {
                     "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        # the cast gives a value its type
+                        args = firebird_infer_values(args, 1, True);
                         string exp0 = info.table.getExpressionArg(\info, role, args[0],
                             AbstractDataProviderTypeMap."any");
                         return sprintf("cast(%s as timestamp)", exp0);
@@ -1821,6 +1953,8 @@ string sql = db.getSqlIdentifier("Order Date");
                 },
                 DP_OP_TO_BOOL: DefaultExpressionMap{DP_OP_TO_BOOL} + {
                     "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        # the cast gives a value its type
+                        args = firebird_infer_values(args, 1, True);
                         string exp0 = info.table.getExpressionArg(\info, role, args[0],
                             AbstractDataProviderTypeMap."any");
                         return sprintf("cast(%s as boolean)", exp0);
@@ -1842,6 +1976,10 @@ string sql = db.getSqlIdentifier("Order Date");
                 # --- Control flow operators for Firebird ---
                 DP_OP_TERNARY: DefaultExpressionMap{DP_OP_TERNARY} + {
                     "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        # Firebird types a condition as a boolean, and a value of a branch from the other branch if it
+                        # is a column or an expression
+                        args = firebird_infer_values(args, 1, True);
+                        args = (args[0],) + firebird_infer_values(args[1..], 2);
                         string cond = info.table.getExpressionArg(\info, role, args[0],
                             AbstractDataProviderTypeMap."bool");
                         string true_val = info.table.getExpressionArg(\info, role, args[1],
@@ -1853,14 +1991,322 @@ string sql = db.getSqlIdentifier("Order Date");
                 },
                 DP_OP_HAS_VALUE: DefaultExpressionMap{DP_OP_HAS_VALUE} + {
                     "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        # the null test gives a value its type
+                        args = firebird_infer_values(args, 1, True);
                         return sprintf("%s is not null", info.table.getExpressionArg(\info, role, args[0],
                             AbstractDataProviderTypeMap."any"));
+                    },
+                },
+                # --- Comparisons and logical operators for Firebird ---
+                # a value compared with a column or an expression has its type, so it is bound without a cast, as
+                # before; a value compared with a value is bound in a cast (see XdbcFirebirdTable::getExpressionArg())
+                OP_LT: DefaultExpressionMap{OP_LT} + {
+                    "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        return DefaultExpressionMap{OP_LT}.code(\info, role, firebird_infer_values(args, 2));
+                    },
+                },
+                OP_LE: DefaultExpressionMap{OP_LE} + {
+                    "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        return DefaultExpressionMap{OP_LE}.code(\info, role, firebird_infer_values(args, 2));
+                    },
+                },
+                OP_GT: DefaultExpressionMap{OP_GT} + {
+                    "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        return DefaultExpressionMap{OP_GT}.code(\info, role, firebird_infer_values(args, 2));
+                    },
+                },
+                OP_GE: DefaultExpressionMap{OP_GE} + {
+                    "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        return DefaultExpressionMap{OP_GE}.code(\info, role, firebird_infer_values(args, 2));
+                    },
+                },
+                OP_NE: DefaultExpressionMap{OP_NE} + {
+                    "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        return DefaultExpressionMap{OP_NE}.code(\info, role, firebird_infer_values(args, 2));
+                    },
+                },
+                OP_EQ: DefaultExpressionMap{OP_EQ} + {
+                    "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        return DefaultExpressionMap{OP_EQ}.code(\info, role, firebird_infer_values(args, 2));
+                    },
+                },
+                OP_BETWEEN: DefaultExpressionMap{OP_BETWEEN} + {
+                    "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        return DefaultExpressionMap{OP_BETWEEN}.code(\info, role, firebird_infer_values(args, 3));
+                    },
+                },
+                DP_FUNC_NULLIF: DefaultExpressionMap{DP_FUNC_NULLIF} + {
+                    "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        return DefaultExpressionMap{DP_FUNC_NULLIF}.code(\info, role, firebird_infer_values(args, 2));
+                    },
+                },
+                DP_OP_MOD: DefaultExpressionMap{DP_OP_MOD} + {
+                    "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        return DefaultExpressionMap{DP_OP_MOD}.code(\info, role, firebird_infer_values(args, 2));
+                    },
+                },
+                # a value of coalesce() has the type of a column or an expression of its arguments
+                DP_FUNC_COALESCE: DefaultExpressionMap{DP_FUNC_COALESCE} + {
+                    "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        return DefaultExpressionMap{DP_FUNC_COALESCE}.code(\info, role,
+                            firebird_infer_values(args, args.size()));
+                    },
+                },
+                # a condition is typed as a boolean
+                DP_OP_AND: DefaultExpressionMap{DP_OP_AND} + {
+                    "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        return DefaultExpressionMap{DP_OP_AND}.code(\info, role, firebird_infer_values(args, args.size(),
+                            True));
+                    },
+                },
+                # a condition is typed as a boolean
+                DP_OP_OR: DefaultExpressionMap{DP_OP_OR} + {
+                    "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        return DefaultExpressionMap{DP_OP_OR}.code(\info, role, firebird_infer_values(args, args.size(),
+                            True));
+                    },
+                },
+                OP_NOT: DefaultExpressionMap{OP_NOT} + {
+                    "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        return DefaultExpressionMap{OP_NOT}.code(\info, role, firebird_infer_values(args, 1, True));
+                    },
+                },
+                DP_OP_IS_NULL: DefaultExpressionMap{DP_OP_IS_NULL} + {
+                    "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        return DefaultExpressionMap{DP_OP_IS_NULL}.code(\info, role, firebird_infer_values(args, 1, True));
+                    },
+                },
+                DP_OP_IS_NOT_NULL: DefaultExpressionMap{DP_OP_IS_NOT_NULL} + {
+                    "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        return DefaultExpressionMap{DP_OP_IS_NOT_NULL}.code(\info, role, firebird_infer_values(args, 1, True));
+                    },
+                },
+                # Firebird has no ltrim() or rtrim()
+                DP_FUNC_LTRIM: DefaultExpressionMap{DP_FUNC_LTRIM} + {
+                    "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        return sprintf("trim(leading from %s)", info.table.getExpressionArg(\info, role, args[0],
+                            AbstractDataProviderTypeMap."string"));
+                    },
+                },
+                DP_FUNC_RTRIM: DefaultExpressionMap{DP_FUNC_RTRIM} + {
+                    "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        return sprintf("trim(trailing from %s)", info.table.getExpressionArg(\info, role, args[0],
+                            AbstractDataProviderTypeMap."string"));
                     },
                 },
             };
         }
 
+        public {
+            #! the largest size in bytes of a \c VARCHAR in Firebird
+            /** @since XdbcFirebirdSqlUtilBase 0.2
+            */
+            const MaxVarcharBytes = 32765;
+        }
+
+        private {
+            #! the number of bytes per character of the default character set of the database, once read
+            transient *int bytes_per_character;
+
+            #! the major version of the Firebird server, once read
+            transient *int server_major_version;
+
+            #! the lock of \a bytes_per_character and \a server_major_version
+            transient Mutex db_info_lock();
+        }
+
         constructor(AbstractDatasource ds, string name, *hash<auto> opts) : AbstractTable(ds, name, opts) {
+        }
+
+        #! returns the number of bytes per character of the default character set of the database
+        /** The character set is read from the database once for the object; the character set \c NONE gives 1
+
+            @return the number of bytes per character of the default character set of the database: 4 for \c UTF8, 1
+            for \c NONE and the character sets of one byte per character
+
+            @since XdbcFirebirdSqlUtilBase 0.2
+        */
+        int getDatabaseBytesPerCharacter() {
+            getDatabaseInfo();
+            return bytes_per_character;
+        }
+
+        #! returns the major version of the Firebird server
+        /** The version is read from the database once for the object
+
+            @return the major version of the Firebird server, such as 5 for Firebird 5.0, or 0 if it cannot be read
+
+            @since XdbcFirebirdSqlUtilBase 0.2
+        */
+        int getServerMajorVersion() {
+            getDatabaseInfo();
+            return server_major_version;
+        }
+
+        #! reads the character set of the database and the version of the server once
+        private getDatabaseInfo() {
+            db_info_lock.lock();
+            on_exit db_info_lock.unlock();
+
+            if (exists bytes_per_character) {
+                return;
+            }
+            # the default character set of a database without one is NONE, of one byte per character
+            *hash<auto> row = ds.selectRow("select cs.rdb$bytes_per_character as \"bpc\", "
+                "rdb$get_context('SYSTEM', 'ENGINE_VERSION') as \"version\" from rdb$database d "
+                "left join rdb$character_sets cs on cs.rdb$character_set_name = d.rdb$character_set_name");
+            *string major = (row.version =~ x/^([0-9]+)/)[0];
+            server_major_version = major ? major.toInt() : 0;
+            bytes_per_character = row.bpc ? int(row.bpc) : 1;
+        }
+
+        #! returns the largest size in characters of a \c VARCHAR in the default character set of the database
+        /** @return the largest size in characters of a \c VARCHAR in the default character set of the database:
+            8191 for \c UTF8 and 32765 for \c NONE and the character sets of one byte per character
+
+            @since XdbcFirebirdSqlUtilBase 0.2
+        */
+        int getMaxVarcharLength() {
+            return MaxVarcharBytes / getDatabaseBytesPerCharacter();
+        }
+
+        #! returns the Firebird type that a value is bound as in a cast, or no value if the value has none
+        /** @param v the value
+
+            @return the Firebird type of the value: \c BIGINT for an integer, <tt>DOUBLE PRECISION</tt> for a float,
+            \c DECFLOAT(34) for a number from Firebird 4 on, and on Firebird 3, which has no \c DECFLOAT, a \c NUMERIC
+            with the precision and the scale of its digits (<tt>DOUBLE PRECISION</tt> for more than 18 digits),
+            \c BOOLEAN for a boolean, \c TIMESTAMP for an absolute date, a \c VARCHAR of the size of a string
+            (a text \c BLOB for a string longer than a \c VARCHAR can be in the default character set of the
+            database) and a \c VARCHAR in the \c OCTETS character set of the size of a binary value (a \c BLOB for
+            more than 32765 bytes); no value for any other value, such as \c NULL or a relative date
+
+            @since XdbcFirebirdSqlUtilBase 0.2
+        */
+        *string getBindType(auto v) {
+            switch (v.typeCode()) {
+                case NT_INT:
+                    return "bigint";
+                case NT_FLOAT:
+                    return "double precision";
+                case NT_NUMBER:
+                    # an arbitrary-precision decimal; a NUMERIC of the digits of a value without fractional digits
+                    # would divide as an integer
+                    return getServerMajorVersion() >= 4 ? "decfloat(34)" : firebird_get_number_type(v);
+                case NT_BOOLEAN:
+                    return "boolean";
+                case NT_DATE:
+                    return v.absolute() ? "timestamp" : NOTHING;
+                case NT_STRING: {
+                    int bpc = getDatabaseBytesPerCharacter();
+                    # a character set of one byte per character, or NONE, counts the bytes of a string
+                    int len = bpc == 1 ? v.size() : v.length();
+                    if (len > MaxVarcharBytes / bpc) {
+                        return "blob sub_type text";
+                    }
+                    return sprintf("varchar(%d)", len ?: 1);
+                }
+                case NT_BINARY: {
+                    int len = v.size();
+                    if (len > MaxVarcharBytes) {
+                        return "blob";
+                    }
+                    return sprintf("varchar(%d) character set octets", len ?: 1);
+                }
+            }
+        }
+
+        #! returns the SQL of an argument of an expression; a bound value is bound in a cast to its type where Firebird cannot type it
+        /** Firebird gives a bound value the type of the expression that it is part of only in a comparison with a
+            column or an expression, in a cast, in a null test and in a few functions; anywhere else, such as in the
+            select list, in arithmetic, in a string function, in a \c CASE expression or in a comparison of two
+            values, it refuses a value without a type with <tt>Data type unknown</tt>, so such a value is bound in a
+            cast to its type as getBindType() gives it (see @ref xdbcfirebird_bound_values); a value with no type,
+            such as \c NULL, is bound as it is
+
+            @param info the query information, to which a bound value is added
+            @param role the role of the expression
+            @param arg the argument: a column, an expression or a value
+            @param expected_type the type of the argument that the expression expects
+
+            @return the SQL of the argument
+
+            @since XdbcFirebirdSqlUtilBase 0.2
+        */
+        string getExpressionArg(reference<hash<QueryInfo>> info, int role, auto arg,
+                AbstractDataProviderType expected_type) {
+            if (arg instanceof hash<FirebirdInferredValue>) {
+                info.args += arg.value;
+                return "%v";
+            }
+            if (firebird_is_bound_value(arg)) {
+                *string type = getBindType(arg);
+                if (type) {
+                    info.args += arg;
+                    return sprintf("cast(%%v as %s)", type);
+                }
+            }
+            return AbstractTable::getExpressionArg(\info, role, arg, expected_type);
+        }
+
+        #! returns the SQL that casts an expression to a type
+        /** @param exp the SQL of the expression
+            @param type a Qore type name, such as \c "string", or a Firebird type
+            @param size the size of the type, or the precision of a \c NUMERIC or a \c DECIMAL; a character type
+            without a size has the largest size that it can have in the default character set of the database (see
+            getMaxVarcharLength()), and a binary type the largest size in bytes
+            @param scale the scale of a \c NUMERIC or a \c DECIMAL
+
+            @return the SQL that casts the expression to the type
+
+            @throw OPERATOR-ERROR the type needs a size, and none is given
+
+            @since XdbcFirebirdSqlUtilBase 0.2 a character type without a size has the largest size of the default
+            character set of the database; before, it had the size in bytes, which Firebird refused in a character set
+            of more than one byte per character, such as \c UTF8
+        */
+        string getCastSql(string exp, string type, auto size, auto scale) {
+            return XdbcFirebirdTable::getCastSql(exp, type, size, scale, \getDatabaseBytesPerCharacter());
+        }
+
+        #! returns the SQL that casts an expression to a type, with the number of bytes per character of the database
+        /** @param exp the SQL of the expression
+            @param type a Qore type name, such as \c "string", or a Firebird type
+            @param size the size of the type, or the precision of a \c NUMERIC or a \c DECIMAL; a character type
+            without a size has the largest size that it can have in the character set, and a binary type the largest
+            size in bytes
+            @param scale the scale of a \c NUMERIC or a \c DECIMAL
+            @param bytes_per_character returns the number of bytes per character of the character set; called only
+            for a character type without a size
+
+            @return the SQL that casts the expression to the type
+
+            @throw OPERATOR-ERROR the type needs a size, and none is given
+
+            @since XdbcFirebirdSqlUtilBase 0.2
+        */
+        static string getCastSql(string exp, string type, auto size, auto scale, code<int()> bytes_per_character) {
+            string name = QoreTypeMap{type} ?? type;
+            *hash<auto> desc = XdbcFirebirdTypeMap{name};
+            string sql = sprintf("cast (%s as %s", exp, name);
+            if (desc.size == SZ_MAND) {
+                if (!exists size) {
+                    if (!exists desc.size_range) {
+                        throw "OPERATOR-ERROR", sprintf("cast operator missing size for type %s", name);
+                    }
+                    # the size range of a character type is in bytes
+                    size = desc.is_char
+                        ? desc.size_range[1] / bytes_per_character()
+                        : desc.size_range[1];
+                }
+                sql += sprintf("(%d)", size);
+            } else if (desc.size == SZ_NUM && exists size) {
+                sql += size == "*" ? "(*" : sprintf("(%d", size);
+                sql += exists scale ? sprintf(",%d)", scale) : ")";
+            } else if (desc.size == SZ_OPT && exists size) {
+                sql += sprintf("(%d)", size);
+            }
+            return sql + ")";
         }
 
         #! returns the name of the table to be used in SQL, as getSqlIdentifier() returns it
@@ -1888,8 +2334,17 @@ string sql = db.getSqlIdentifier("Order Date");
         }
 
         #! returns the column operator map for this object
+        /** @since XdbcFirebirdSqlUtilBase 0.2 \c cop_cast() gives a character type without a size the largest size
+            of the default character set of the database (see getCastSql())
+        */
         private hash getColumnOperatorMapImpl() {
-            return XdbcFirebirdCopMap;
+            return XdbcFirebirdCopMap + {
+                COP_CAST: XdbcFirebirdCopMap{COP_CAST} + {
+                    "code": string sub (string cve, list<auto> args) {
+                        return getCastSql(cve, args[0], args[1], args[2]);
+                    },
+                },
+            };
         }
 
         #! returns the "where" operator map for Firebird
@@ -2350,7 +2805,9 @@ where
                     # XdbcFirebird does not allow us to specify the UTC offset in the timestamp literal :(
                     TimeZone tz = TimeZone::get();
                     v = tz.date(v);
-                    return "timestamp " + v.format("'YYYY-MM-DDTHH:mm:SS.us'");
+                    # Firebird reads a "T" between the date and the time as a time zone, and a timestamp has four
+                    # fractional digits of seconds: the last two of the microseconds are left out
+                    return "timestamp '" + v.format("YYYY-MM-DD HH:mm:SS.us")[0..23] + "'";
                 }
             }
         }
