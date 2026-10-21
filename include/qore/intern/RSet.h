@@ -396,6 +396,12 @@ public:
     //! the object's rsection; with no lock held
     typedef void (*dbg_deref_decides_t)(RObject* o);
     DLLLOCAL static std::atomic<dbg_deref_decides_t> dbg_deref_decides;
+
+    //! Test hook run by tryFastDeref() after it has decided that there is nothing to decide, before the release
+    /** See design/dgc.md, "Known limitation: a lock-free release that decided before a scan committed a set".
+    */
+    typedef void (*dbg_before_fast_release_t)(RObject* o);
+    DLLLOCAL static std::atomic<dbg_before_fast_release_t> dbg_before_fast_release;
 #endif
 
     // wait_only=true means: we do not claim deleter status (so the "deleter vs. waiter" invariant

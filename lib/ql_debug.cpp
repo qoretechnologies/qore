@@ -1807,6 +1807,115 @@ static void ut_contended_queue_scan(UnitTestCounters& c) {
 static void ut_contended_queue_scan_window(UnitTestCounters& c) {
     ut_contended_queue_scan_run(c, true);
 }
+
+namespace {
+//! The hold of ut_fast_release_during_member_scan()
+struct UtFastReleaseHold {
+    std::mutex m;
+    std::condition_variable cv;
+    //! the object whose lock-free release the hook holds, once
+    RObject* obj = nullptr;
+    bool held = false;
+    bool release = false;
+};
+
+UtFastReleaseHold ut_fast_release_hold;
+
+//! holds the lock-free release of the object between its decision and its decrement
+void ut_hold_fast_release(RObject* o) {
+    UtFastReleaseHold& s = ut_fast_release_hold;
+    std::unique_lock<std::mutex> l(s.m);
+    if (o != s.obj) {
+        return;
+    }
+    s.obj = nullptr;
+    RObject::dbg_before_fast_release.store(nullptr);
+    s.held = true;
+    s.cv.notify_all();
+    s.cv.wait_for(l, UT_CONTENDED_HANG_GUARD, [&s]() { return s.release; });
+}
+
+//! true once the window that ut_fast_release_during_member_scan() exercises is closed
+/** See design/dgc.md, "Known limitation: a lock-free release that decided before a scan committed a set"; the test
+    fails until then, so it is skipped.
+*/
+constexpr bool UT_FAST_RELEASE_WINDOW_CLOSED = false;
+}
+
+//! Tests that a lock-free release that decided before another thread's scan committed a set does not strand the set
+/** X holds Q and Q holds X through their private data, closing a cycle whose scan is due at Q.  The lock-free release
+    of the last reference to X from outside the cycle is held between its decision (no set) and its decrement, while
+    this thread releases the last reference to Q from outside: the scan finds the cycle, commits a set, and reads X's
+    count with the held reference in it, so the set is kept; the held release then lands and decides nothing.
+*/
+static void ut_fast_release_during_member_scan(UnitTestCounters& c) {
+    if (!UT_FAST_RELEASE_WINDOW_CLOSED) {
+        printf("  SKIP: ut_fast_release_during_member_scan(): a known limitation, see design/dgc.md, \"Known "
+            "limitation: a lock-free release that decided before a scan committed a set\"\n");
+        return;
+    }
+    ExceptionSink xsink;
+    Queue* qq = new Queue;
+    QoreObject* q = new QoreObject(QC_QUEUE, getProgram(), qq);
+    Queue* xq = new Queue;
+    QoreObject* x = new QoreObject(QC_QUEUE, getProgram(), xq);
+    // weak references keep the objects allocated, so the test can see whether they were collected
+    q->tRef();
+    x->tRef();
+    // X holds Q
+    xq->push(&xsink, x, q->refSelf());
+    // the scan due at X is made now, before the cycle exists
+    x->ref();
+    x->deref(&xsink);
+    // the reference that the other thread releases with no lock
+    x->ref();
+    // Q holds X: the cycle, closed through Q's private data; a scan is due at Q
+    qq->push(&xsink, q, x->refSelf());
+    // the constructor's reference to X: no set and no scan due, so it is released with no lock
+    x->deref(&xsink);
+
+    UtFastReleaseHold& s = ut_fast_release_hold;
+    {
+        std::lock_guard<std::mutex> l(s.m);
+        s.obj = qore_object_private::get(*x);
+        s.held = s.release = false;
+    }
+    RObject::dbg_before_fast_release.store(ut_hold_fast_release);
+    std::thread releaser([x]() {
+        QoreForeignThreadHelper fth;
+        ExceptionSink txsink;
+        x->deref(&txsink);
+        txsink.clear();
+    });
+    bool held;
+    {
+        std::unique_lock<std::mutex> l(s.m);
+        held = s.cv.wait_for(l, UT_CONTENDED_HANG_GUARD, [&s]() { return s.held; });
+    }
+    UT_ASSERT(c, held, "the lock-free release of X is held between its decision and its decrement");
+    // the constructor's reference to Q: the scan due at Q finds the cycle, with X held from outside it
+    q->deref(&xsink);
+    {
+        std::lock_guard<std::mutex> l(s.m);
+        s.release = true;
+        s.cv.notify_all();
+    }
+    releaser.join();
+    RObject::dbg_before_fast_release.store(nullptr);
+
+    bool collected = !x->isValid() && !q->isValid();
+    UT_ASSERT(c, collected, "the cycle of X and Q is collected");
+    if (!collected) {
+        // a failure leaks nothing: the cycle is broken with a reference of the test's own, which then goes
+        q->ref();
+        qq->clear(&xsink, q);
+        q->deref(&xsink);
+    }
+    UT_ASSERT(c, !xsink, "releasing the cycle raises no exception");
+    xsink.clear();
+    x->tDeref();
+    q->tDeref();
+}
 #endif
 
 namespace {
@@ -6992,6 +7101,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     ut_superseded_snapshot_lock_free_release(c);
     ut_contended_queue_scan(c);
     ut_contended_queue_scan_window(c);
+    ut_fast_release_during_member_scan(c);
     AsyncIoOpCacheTest::run(c);
 #endif
     ut_program_family_thread_data(c);

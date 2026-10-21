@@ -707,6 +707,7 @@ std::atomic<RObject::dbg_after_fast_real_release_t> RObject::dbg_after_fast_real
 std::atomic<RObject::dbg_before_deref_scan_t> RObject::dbg_before_deref_scan{nullptr};
 std::atomic<RObject::dbg_scan_contended_t> RObject::dbg_scan_contended{nullptr};
 std::atomic<RObject::dbg_deref_decides_t> RObject::dbg_deref_decides{nullptr};
+std::atomic<RObject::dbg_before_fast_release_t> RObject::dbg_before_fast_release{nullptr};
 #endif
 
 int RObject::tryFastDeref(bool real) {
@@ -742,6 +743,13 @@ int RObject::tryFastDeref(bool real) {
             && !rrefs.load(std::memory_order_acquire)) {
         return -1;
     }
+#ifdef DEBUG
+    // a scan can commit a set for the object between the decision above and the release below; see design/dgc.md,
+    // "Known limitation: a lock-free release that decided before a scan committed a set"
+    if (dbg_before_fast_release_t hook = dbg_before_fast_release.load(std::memory_order_acquire)) {
+        hook(this);
+    }
+#endif
     return (references.fetch_sub(1, std::memory_order_acq_rel) - 1) ? 1 : 0;
 }
 

@@ -804,6 +804,33 @@ cycle take none, that an object inside one still does, and that cycles built aro
 captured variable are still collected.
 
 
+### Known limitation: a lock-free release that decided before a scan committed a set
+
+`RObject::tryFastDeref()` decides first and releases after: it reads `rset` (null), then releases the reference with
+one atomic decrement. A scan made by another thread can commit a recursive set for the object between the two, and
+the dereference that made the scan can read the object's count in `RSet::canDelete()` before the decrement lands:
+
+1. thread A releases a reference to member X of what is about to be a cycle, reads `rset` as null and is
+   descheduled before its decrement;
+2. thread B releases its reference to another member Q; the scan due at Q finds the cycle and commits a set for Q
+   and X; `canDelete()` reads X's count, which still includes A's reference, finds X held from outside the set and
+   keeps it;
+3. A's decrement lands: X now has only the reference from inside the set, but A decided nothing, and no other
+   dereference follows, so the cycle is never collected.
+
+The effect is a leaked cycle: nothing is freed early, nothing crashes, and the objects stay allocated with their
+destructors not run. The window is the two instructions between A's load of `rset` and its decrement, against B's
+whole scan and commit, so A has to be descheduled at exactly that point; it has not been seen outside a test that
+holds A there. "A count superseded by a release that decided nothing" covers the dereferencing object's own count,
+not the counts of the other members of the set it decides for.
+
+`ut_fast_release_during_member_scan()` in the C++ unit tests (`asyncio_unit_tests.qtest`) holds the lock-free
+release of X between its decision and its decrement (`RObject::dbg_before_fast_release`) while another thread's
+dereference of Q commits the set; the two-Queue cycle is never collected. It is skipped until the window is closed:
+closing it soundly costs the lock-free release more than its decrement (a weak reference across the release, a
+hazard slot read by the scanner before `canDelete()`, or a flag in the reference count word), and the choice
+between those is open.
+
 ### A dereference keeps its object allocated until it returns
 
 `RObject::derefDone()` makes a deleting dereference wait for the dereferences of other threads, but not for the
