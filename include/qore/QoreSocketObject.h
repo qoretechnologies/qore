@@ -630,8 +630,15 @@ public:
     //! Internal async-poll helper for HTTP/2 stream DATA enqueue.
     /** Public synchronous callers must use @ref sendHttp2StreamData(), which
         delegates through the async I/O controller.  Poll operations use this
-        helper so I/O-thread protocol callbacks can enqueue DATA directly on
-        the already-owned HTTP/2 session.
+        helper so protocol callbacks can enqueue DATA directly on the locked HTTP/2 session, also when an
+        application thread installs a WebSocket decoder and feeds buffered frames. It never waits for an I/O
+        command; off the I/O thread it wakes the controller to flush the queued bytes.
+
+        @param stream_id the HTTP/2 stream ID
+        @param data bytes to enqueue, or nullptr for no body data
+        @param end_stream whether this ends the stream
+        @param xsink receives session, flow-control or controller errors
+        @return 0 on success, -1 on error
 
         @since %Qore 3.0
     */
@@ -937,8 +944,9 @@ public:
     //! Internal async-poll helper for client-side HTTP/3 stream DATA enqueue.
     /** Public synchronous callers must use @ref sendQuicClientStreamData(), which
         delegates through the async I/O controller. Poll operations use this
-        helper so I/O-thread protocol callbacks can enqueue DATA directly on
-        the already-owned QUIC session.
+        helper so protocol callbacks can enqueue DATA directly on the locked QUIC session, also when an
+        application thread installs a WebSocket decoder and feeds buffered frames. It never waits for an I/O
+        command; off the I/O thread it wakes the controller to flush the queued bytes.
 
         @param stream_id the stream ID returned by submitQuicRequestStreaming()
         @param data body data (may be nullptr with len 0 to send empty DATA + END_STREAM)
