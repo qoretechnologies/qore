@@ -913,6 +913,9 @@
       @ref httpserverintro "HttpServer" answers a request whose header cannot be read, such as one with a NUL
       character, with status 400 (Bad Request) and closes the connection; before, the connection was closed without a
       response, or the request was handled without the headers after the NUL character
+    - server-sent events received: an event ID with a NUL character is ignored, as the event stream format requires,
+      so that it is never sent back in the \c Last-Event-ID header, and a retry time is used only if all of it is
+      digits, so <tt>"10\\x00z"</tt> is no longer read as 10
     - keywords compared with a string: a string with a NUL character is no longer equal to the keyword before the
       NUL character (for example, the goal <tt>"connect\\x00x"</tt> given to
       @ref Qore::SocketPollOperation "SocketPollOperation" raises \c INVALID-GOAL, and a server-sent event field
@@ -4905,6 +4908,10 @@ while (*binary chunk = input.read(65536)) {
       section 6.1): a peer saw the end of the connection as a truncation, and some peers treat that as an attack or
       end the TLS session without keeping it for resumption.  A server connection that is closed after it was shut
       down for sending sends the alert too
+    - Fixed the \c comment key of a server-sent event received, parsed by
+      @ref Qore::Socket::parseServerSentEvent() "Socket::parseServerSentEvent()" and the SSE clients: it also held the
+      values of the fields that are not kept as strings, such as a retry time, and of unknown fields; only a line that
+      starts with a colon is a comment
     - Fixed the warnings of the files of a separated user module other than its \c .qm file: each was parsed with the
       warnings of the code loading the module (with \c qcc, the default warnings), not those the \c .qm file sets, so
       \c %%modern in the \c .qm file did not enable all warnings in the other files.  The module loader accepted an

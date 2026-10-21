@@ -1,0 +1,90 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  SseParseNul.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# Server-sent events received with NUL characters are parsed as the event stream format requires: an ID with a NUL
+# character is ignored (a client could not send it back in Last-Event-ID), a retry value is used only if all of it is
+# digits, so it is not cut at a NUL character, and a field whose name has a NUL character names no field.  Only a
+# line that starts with a colon is a comment: the value of an ignored or numeric field is not reported as one.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class SseParseNulTest
+
+public class SseParseNulTest inherits QUnit::Test {
+    public {
+        #! an event with an ID and a retry value with NUL characters, a field name with one, and a comment
+        const Stream = "id: 4\x00x\nretry: 10\x00z\nev\x00ent: forged\n: note\nevent: e\ndata: a\x00b\n\n";
+    }
+
+    constructor() : Test("SseParseNul", "1.0", \ARGV) {
+        addTestCase("parseServerSentEvent()", \parseTest());
+        addTestCase("comments", \commentTest());
+        addTestCase("events read from a socket", \socketTest());
+        set_return_value(main());
+    }
+
+    checkEvent(hash<SseMessageInfo> evt, string label) {
+        # the ID and the retry value are ignored, and so is the field with a NUL character in its name
+        assertNothing(evt.id, label + ": ID");
+        assertNothing(evt.retry, label + ": retry");
+        assertEq("e", evt.event, label + ": event type");
+        # a NUL character in data is kept
+        assertEq("a\x00b", evt.data, label + ": data");
+        assertEq(3, evt.data.size(), label + ": data size");
+        assertEq("note", evt.comment, label + ": comment");
+    }
+
+    parseTest() {
+        checkEvent(Socket::parseServerSentEvent(Stream), "parse");
+        # without the NUL characters, the fields are used
+        hash<SseMessageInfo> evt = Socket::parseServerSentEvent("id: 4\nretry: 10\ndata: x\n\n");
+        assertEq("4", evt.id);
+        assertEq(10, evt.retry);
+    }
+
+    commentTest() {
+        # only a line that starts with a colon is a comment
+        hash<SseMessageInfo> evt = Socket::parseServerSentEvent("retry: 3000\nunknown: value\ndata: x\n\n");
+        assertEq(3000, evt.retry);
+        assertNothing(evt.comment, "no comment");
+        evt = Socket::parseServerSentEvent(": one\n: two\ndata: x\n\n");
+        assertEq("one\ntwo", evt.comment);
+    }
+
+    socketTest() {
+        Socket server();
+        server.bind("localhost:0");
+        server.listen();
+        hash<auto> info = server.getSocketInfo(False);
+        Socket client();
+        client.connectINET(info.address, info.port, 30s, info.family);
+        Socket conn = server.accept(30s);
+        conn.send(Stream);
+        # the readers of the event stream (this one, and those of the HTTP clients) parse events in the same way
+        checkEvent(client.readServerSentEvent(NOTHING, 30s), "socket");
+    }
+}

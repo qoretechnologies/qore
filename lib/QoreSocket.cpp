@@ -10122,16 +10122,15 @@ static void write_sse_key(ExceptionSink* xsink, ReferenceHolder<QoreHashNode>& r
     }
 }
 
-static bool sse_is_digits(const char* str) {
-    if (!str[0]) {
+// returns true if the whole value consists of ASCII digits; the value is checked to its end, so a value with a NUL
+// character, which is not a digit, is not cut at the NUL character
+static bool sse_is_digits(const QoreString& str) {
+    if (str.empty()) {
         return false;
     }
-    for (const char* p = str; *p; ++p) {
-        if (!isdigit(*p)) {
-            return false;
-        }
-    }
-    return true;
+    const char* p = str.c_str();
+    const char* e = p + str.size();
+    return std::all_of(p, e, [](char c) { return c >= '0' && c <= '9'; });
 }
 
 // Standalone SSE event parser — reused by SseAction on the I/O thread
@@ -10164,18 +10163,24 @@ QoreHashNode* parseSseEvent(ExceptionSink* xsink, const QoreString& buf) {
                 if ((**field == "event") || (**field == "data")) {
                     write_sse_key(xsink, rv, field->c_str(), value);
                 } else if (**field == "id") {
-                    if (value && !value->empty()) {
+                    // the event stream format ignores an ID with a NUL character, which a client could not send
+                    // back in the Last-Event-ID header
+                    if (value && !value->empty() && !memchr(value->c_str(), '\0', value->size())) {
                         write_sse_key_value(xsink, rv, "id", value);
                     }
                 } else if (**field == "retry") {
-                    if (value && !value->empty() && sse_is_digits(value->c_str()) && !rv->getKeyValue("retry")) {
+                    if (value && !value->empty() && sse_is_digits(**value) && !rv->getKeyValue("retry")) {
                         rv->setKeyValue("retry", strtoll(value->c_str(), 0, 10), xsink);
                     }
                 }
                 // ignore field data
                 field->clear();
-            }
-            if (value && !value->empty()) {
+                // the value of a field that is ignored, or that is not kept as a string, such as the retry time,
+                // is not a comment; only a line that starts with a colon is a comment
+                if (value) {
+                    value->clear();
+                }
+            } else if (value && !value->empty()) {
                 write_sse_key_value(xsink, rv, "comment", value);
             }
             if (do_value) {

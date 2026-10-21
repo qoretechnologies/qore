@@ -1901,12 +1901,18 @@ hashdecl Qore::SseMessageInfo {
     auto data;
 
     //! Message ID
+    /** An ID received with a NUL character is ignored, as the event stream format requires
+    */
     auto id;
 
     //! Client should set the reconnection time to this value in milliseconds
+    /** A retry value received is used only if all of it is ASCII digits
+    */
     int retry;
 
     //! Any comment
+    /** The text of the lines that start with a colon, joined with LF
+    */
     string comment;
 }
 
