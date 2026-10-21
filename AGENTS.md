@@ -43,6 +43,8 @@
 - Primary tests are Qore scripts under `examples/test/` with the `*.qtest` suffix; a binary module's own tests are in
   `modules/<module>/test/`.
 - Prefer adding tests alongside similar modules and keep naming descriptive.
+- A test must end every process it starts (servers, helpers, children): on Linux, `run_tests.sh` fails a test that
+  leaves processes running and kills them, as a leftover process keeps a CI job's output open and so the job running.
 - Use `QORE_TEST_OPTS` and database env vars (for example `QORE_DB_CONNSTR`) when tests need external services.
 
 ## Running Tests Under valgrind

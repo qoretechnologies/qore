@@ -3,6 +3,10 @@
 set -e
 set -x
 
+# no process the job starts may outlive it (see ci-job-processes.sh)
+. "$(dirname "$0")/ci-job-processes.sh"
+qore_ci_mark_job_processes
+
 # Performance test script - installs pre-built Release artifacts and runs only perf tests.
 # No database services are required.
 
@@ -54,4 +58,8 @@ TEST_RC=0
 
 # the cores of the processes the tests started are kept with those of the tests
 qore_ci_collect_cores "${QORE_SRC_DIR}/crash-dumps"
+# the runner ends the job only when no process the job started still holds its output
+if ! qore_ci_end_job_processes && [ "${TEST_RC}" = "0" ]; then
+    TEST_RC=1
+fi
 exit ${TEST_RC}

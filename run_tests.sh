@@ -441,6 +441,92 @@ find_test_core() {
     done
 }
 
+# The pipes the output of the tests goes to (Linux only): a CI job reads its output through a pipe and ends only when
+# no process holds it any more.  run_tests.sh and the processes that started it hold them as they should.
+TEST_OUTPUT_PIPES=""
+RUN_TESTS_ANCESTORS=""
+if [ -r /proc/self/environ ]; then
+    for fd in 1 2; do
+        target=`readlink /proc/$$/fd/$fd 2>/dev/null`
+        case "$target" in
+            pipe:*) TEST_OUTPUT_PIPES="$TEST_OUTPUT_PIPES $target" ;;
+        esac
+    done
+    RUN_TESTS_ANCESTORS=$$
+    ancestor=$$
+    while [ "$ancestor" -gt 1 ]; do
+        ancestor=`awk '/^PPid:/ { print $2 }' /proc/$ancestor/status 2>/dev/null`
+        if [ -z "$ancestor" ]; then
+            break
+        fi
+        RUN_TESTS_ANCESTORS="$RUN_TESTS_ANCESTORS $ancestor"
+    done
+fi
+
+# Returns 0 if the given process is the watcher BusyBox timeout leaves while it runs its command: it checks once a second
+# whether the command is still running, so it can still be there for up to a second after the command ended
+busybox_timeout_watcher() {
+    case "`readlink /proc/$1/exe 2>/dev/null`" in
+        */busybox) ;;
+        *) return 1 ;;
+    esac
+    arg0=`tr '\0' '\n' < /proc/$1/cmdline 2>/dev/null | head -1`
+    [ "${arg0##*/}" = timeout ]
+}
+
+# Sets TEST_SURVIVORS to the processes the current test started that are still running (Linux only).  Every process a
+# test starts, and every process those start, inherits QORE_TEST_PROCESS_MARK in its environment, also when it
+# leaves the test's session or is adopted by another parent, so a process that still has it when the test has ended
+# was not ended by the test.  Any other process that holds the output of the tests as its standard output or error,
+# such as one a test started with an environment of its own, is one too.
+find_test_survivors() {
+    TEST_SURVIVORS=""
+    if [ ! -r /proc/self/environ ]; then
+        return
+    fi
+    if [ -n "$TEST_OUTPUT_PIPES" ]; then
+        # the commands that look for them must not hold the output themselves
+        TEST_SURVIVORS=`{ ls -l /proc/[0-9]*/fd/1 /proc/[0-9]*/fd/2 | awk -v pipes="$TEST_OUTPUT_PIPES" \
+            -v own="$RUN_TESTS_ANCESTORS" 'BEGIN {
+                n = split(pipes, list, " ")
+                for (i = 1; i <= n; ++i) {
+                    pipe[list[i]] = 1
+                }
+                n = split(own, list, " ")
+                for (i = 1; i <= n; ++i) {
+                    skip[list[i]] = 1
+                }
+            }
+            $(NF - 1) == "->" && ($NF in pipe) {
+                split($(NF - 2), path, "/")
+                if (!(path[3] in skip) && !(path[3] in seen)) {
+                    seen[path[3]] = 1
+                    printf "%s ", path[3]
+                }
+            }'; } 2>/dev/null`
+    fi
+    TEST_SURVIVORS="$TEST_SURVIVORS"`awk -v mark="QORE_TEST_PROCESS_MARK=$1" 'BEGIN {
+        RS = "\0"
+        for (i = 1; i < ARGC; ++i) {
+            f = ARGV[i]
+            while ((getline e < f) > 0) {
+                if (e == mark) {
+                    sub(/^\/proc\//, "", f)
+                    sub(/\/environ$/, "", f)
+                    printf "%s ", f
+                    break
+                }
+            }
+            close(f)
+        }
+        exit
+    }' /proc/[0-9]*/environ`
+    # a process found both ways is listed once
+    if [ -n "$TEST_SURVIVORS" ]; then
+        TEST_SURVIVORS=`printf '%s\n' $TEST_SURVIVORS | sort -un | tr '\n' ' '`
+    fi
+}
+
 # Print info about used variables etc.
 echo "Using qore: $QORE"
 echo "Using libqore: $LIBQORE"
@@ -651,20 +737,48 @@ for test in $TESTS; do
 
     list_test_cores > "$TEST_CORES_BEFORE"
     touch "$TEST_START_MARKER"
+    # given to the test, and so inherited by every process it starts, but not to the helpers that time it (see
+    # find_test_survivors())
+    TEST_PROCESS_MARK="$$.$i"
+    TEST_ENV="env QORE_TEST_PROCESS_MARK=$TEST_PROCESS_MARK"
     if [ $MEASURE_TIME -eq 1 ]; then
         if [ -n "$TIMEOUT_CMD" ]; then
-            eval $TIMEOUT_CMD $TIMEOUT_SIGNAL_OPTS $THIS_TEST_TIMEOUT $TIME_CMD $QORE $QORE_TEST_OPTS $test $TEST_OUTPUT_FORMAT
+            eval $TIMEOUT_CMD $TIMEOUT_SIGNAL_OPTS $THIS_TEST_TIMEOUT $TIME_CMD $TEST_ENV $QORE $QORE_TEST_OPTS $test $TEST_OUTPUT_FORMAT
         else
-            eval $TIME_CMD $QORE $QORE_TEST_OPTS $test $TEST_OUTPUT_FORMAT
+            eval $TIME_CMD $TEST_ENV $QORE $QORE_TEST_OPTS $test $TEST_OUTPUT_FORMAT
         fi
     else
         if [ -n "$TIMEOUT_CMD" ]; then
-            run_with_watchdog $THIS_TEST_TIMEOUT $QORE $QORE_TEST_OPTS $test $TEST_OUTPUT_FORMAT
+            run_with_watchdog $THIS_TEST_TIMEOUT $TEST_ENV $QORE $QORE_TEST_OPTS $test $TEST_OUTPUT_FORMAT
         else
-            $QORE $QORE_TEST_OPTS $test $TEST_OUTPUT_FORMAT
+            $TEST_ENV $QORE $QORE_TEST_OPTS $test $TEST_OUTPUT_FORMAT
         fi
     fi
     test_exit=$?
+
+    # A test must end every process it starts: one still running keeps the output of the tests open, so that a CI job
+    # running them does not end until its time limit, and it can interfere with the tests that follow
+    find_test_survivors "$TEST_PROCESS_MARK"
+    TEST_LEFTOVERS=""
+    for pid in $TEST_SURVIVORS; do
+        # a BusyBox timeout watcher is ended without failing the test: the command it watches, if still running, is
+        # a survivor of its own
+        if busybox_timeout_watcher $pid; then
+            kill -KILL $pid 2>/dev/null
+        else
+            TEST_LEFTOVERS="$TEST_LEFTOVERS $pid"
+        fi
+    done
+    if [ -n "$TEST_LEFTOVERS" ]; then
+        echo "*** FAILURE: the test left processes running; they are killed: ***"
+        for pid in $TEST_LEFTOVERS; do
+            echo "  pid $pid: `tr '\0' ' ' < /proc/$pid/cmdline 2>/dev/null`"
+        done
+        kill -KILL $TEST_LEFTOVERS 2>/dev/null
+        if [ $test_exit -eq 0 ]; then
+            test_exit=1
+        fi
+    fi
 
     # GNU timeout returns 124; busybox timeout (Alpine) returns 143 (128+SIGTERM)
     if [ $test_exit -eq 124 ] || [ $test_exit -eq 143 ]; then

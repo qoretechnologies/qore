@@ -5,6 +5,9 @@ set -x
 
 # authenticate the clones CMake makes from github.com (see github-auth.sh)
 . "$(dirname "$0")/github-auth.sh"
+# no process the job starts may outlive it (see ci-job-processes.sh)
+. "$(dirname "$0")/ci-job-processes.sh"
+qore_ci_mark_job_processes
 
 ENV_FILE=/tmp/env.sh
 
@@ -297,9 +300,15 @@ gosu qore:qore env \
 # the cores of the processes the tests started are kept with those of the tests
 qore_ci_collect_cores "$CORE_DIR"
 if [ "${TEST_RC}" != "0" ]; then
+    qore_ci_end_job_processes || true
     exit ${TEST_RC}
 fi
 
 if [ "${drop_pgsql_schema}" = "1" ]; then
     cleanup_postgres_on_host
+fi
+
+# the runner ends the job only when no process the job started still holds its output
+if ! qore_ci_end_job_processes; then
+    exit 1
 fi
