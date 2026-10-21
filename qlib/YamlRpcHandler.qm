@@ -101,6 +101,8 @@ http.waitStop();
     - added module-level compile-time requirements: \c %strict-args, \c %require-types, \c %enable-all-warnings
     - added debug logging support
     - updated copyright year to 2025
+    - a \c GET request whose query has a parameter name that decodes to a NUL character (such as \c "a%00b") is
+      answered with status 400 (Bad Request) instead of 500
 
     @subsection yamlrpchandler_v1_2 YamlRpcHandler v1.2
     - fixed a bug where serialization errors would result in confusing responses
@@ -287,7 +289,18 @@ public namespace YamlRpcHandler {
                     };
                 }
 
-                yamlrpc += parse_uri_query(path);
+                try {
+                    yamlrpc += parse_uri_query(path);
+                } catch (hash<ExceptionInfo> ex) {
+                    if (ex.err != "URI-QUERY-ERROR") {
+                        rethrow;
+                    }
+                    # a query parameter name that decodes to a NUL character makes a malformed request
+                    return {
+                        "code": 400,
+                        "body": sprintf("%s: %s", ex.err, ex.desc),
+                    };
+                }
 
                 if (exists get_prefix && index(yamlrpc.method, ".") == -1)
                     yamlrpc.method = get_prefix + yamlrpc.method;

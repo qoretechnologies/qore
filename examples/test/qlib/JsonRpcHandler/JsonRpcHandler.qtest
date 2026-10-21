@@ -142,6 +142,7 @@ public class JsonRpcHandlerTest inherits QUnit::Test {
         addTestCase("context and cmark test", \contextAndCmarkTest());
         addTestCase("debug flag test", \debugFlagTest());
         addTestCase("HTTP method test", \httpMethodTest());
+        addTestCase("GET query parameter name with a NUL character", \getQueryNulTest());
         addTestCase("edge cases test", \edgeCasesTest());
 
         # Return for compatibility with test harness that checks return value.
@@ -396,6 +397,21 @@ public class JsonRpcHandlerTest inherits QUnit::Test {
         # Test GET echo method - still works but returns 202 (notification semantics)
         response = http.get("/system.echo?params=\"hello\"", NOTHING, \info);
         assertEq(202, info."response-headers".status_code, "GET echo should return 202");
+    }
+
+    # a query parameter name that decodes to a NUL character makes a malformed request
+    getQueryNulTest() {
+        assertEq(400, rawGetStatus(port, "/system.echo?pa%00rams=1"));
+        assertEq(202, rawGetStatus(port, "/system.echo?params=1"));
+    }
+
+    # sends a request target as given over a socket; HTTPClient would escape its percent signs
+    private static int rawGetStatus(int port, string target) {
+        Socket socket();
+        socket.connect("localhost:" + port, 30s);
+        on_exit socket.close();
+        socket.send(sprintf("GET %s HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n", target));
+        return socket.readHTTPHeader(30s).status_code;
     }
 
     edgeCasesTest() {

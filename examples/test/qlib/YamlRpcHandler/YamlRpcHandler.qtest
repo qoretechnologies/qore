@@ -76,6 +76,7 @@ class YamlRpcHandlerTest inherits QUnit::Test {
         addTestCase("method dispatch", \testMethodDispatch());
         addTestCase("error handling", \testErrorHandling());
         addTestCase("GET request", \testGetRequest());
+        addTestCase("GET query parameter name with a NUL character", \testGetQueryNul());
         addTestCase("POST request", \testPostRequest());
         addTestCase("invalid method", \testInvalidMethod());
         addTestCase("missing arguments", \testMissingArguments());
@@ -150,6 +151,14 @@ class YamlRpcHandlerTest inherits QUnit::Test {
         hash<auto> result = handler.testHandleRequest(cx, hdr, NOTHING);
         # GET requests parse differently - may need adjustment based on actual implementation
         assertTrue(result.code >= 200);
+    }
+
+    # a query parameter name that decodes to a NUL character makes a malformed request
+    testGetQueryNul() {
+        hash<auto> cx = {"peer-info": {"address_desc": "127.0.0.1"}};
+        hash<auto> result = handler.testHandleRequest(cx, {"method": "GET", "path": "/YAML/echo?a%00b=1"}, NOTHING);
+        assertEq(400, result.code);
+        assertRegex("^URI-QUERY-ERROR: .* contains a NUL character", result.body);
     }
 
     testPostRequest() {

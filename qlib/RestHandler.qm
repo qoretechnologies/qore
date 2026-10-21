@@ -398,6 +398,10 @@ Content-Length: 16
     @section resthandler_relnotes RestHandler Release Notes
 
     @subsection rh_1_6_7 RestHandler v1.6.7
+    - a request whose query has a parameter name that decodes to a NUL character (such as \c "a%00b") is answered
+      with status 400 (Bad Request), and
+      @ref RestHandler::RestHandler::handleExternalRequest() "handleExternalRequest()" raises \c INVALID-URI-PATH with
+      status 400; before, the request failed with status 500
     - a chunked HTTP/1.1 request body sent to a REST method without a stream handler is deserialized and validated
       as other request bodies are, and a hash body is reflected in the method arguments; before, the method received
       the raw body
@@ -1391,7 +1395,15 @@ public namespace RestHandler {
             };
 
             # get object and args
-            hash<auto> ah = parse_uri_query(path);
+            hash<auto> ah;
+            try {
+                ah = parse_uri_query(path);
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err != "URI-QUERY-ERROR") {
+                    rethrow;
+                }
+                throw "INVALID-URI-PATH", sprintf("cannot parse arguments in REST call %y: %s", path, ex.desc), 400;
+            }
 
             *hash<auto> args;
             if (ah.params) {
@@ -1877,14 +1889,16 @@ public namespace RestHandler {
             cx."orig-request-body" = body;
         }
 
-        #! Returns @ref True "True" if the given error code is an error processing a request body
+        #! Returns @ref True "True" if the given error code is an error processing a request body or query
         /** private:internal, so that it cannot clash with a method of a subclass
         */
         private:internal static bool isRequestBodyError(string err) {
             return err == "INVALID-ENCODING"
                 || err == "ENCODING-CONVERSION-ERROR"
                 || err == "DESERIALIZATION-ERROR"
-                || err == "SCHEMA-VALIDATION-ERROR";
+                || err == "SCHEMA-VALIDATION-ERROR"
+                # a query parameter name that decodes to a NUL character
+                || err == "URI-QUERY-ERROR";
         }
 
         #! Returns the path of the request relative to the root path of the handler, with any query arguments

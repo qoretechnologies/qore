@@ -136,6 +136,8 @@ module Util {
       \c "$(VAR)" syntax by correctly stripping delimiters
     - added @ref Util::parse_to_qore_value_with_yaml() "parse_to_qore_value_with_yaml()" for command-line
       values that should accept either the legacy Qore value syntax or YAML / JSON-compatible YAML
+    - @ref Util::parse_uri_query() "parse_uri_query()" raises \c URI-QUERY-ERROR for a parameter name that decodes to
+      a string with a NUL character (such as \c "a%00b"), which cannot be a hash key, instead of \c HASH-KEY-ERROR
 
     @subsection util_2_2 Util 2.2
     - added @ref Util::TerminalColor "TerminalColor" class for ANSI terminal color output
@@ -1522,11 +1524,17 @@ public string sub serialize_to_string(auto val) {
 
     @return a @ref UriQueryInfo hash
 
+    @throw URI-QUERY-ERROR a parameter name is or decodes to a string with a NUL character (such as \c "a%00b"),
+    which cannot be a hash key
+
     @note
     - the \a params output key value is always returned as a hash
     - the query string is split into parameters before URL-decoding each key and value
+    - a parameter value can contain a NUL character; a parameter name cannot
 
-    @since Util 1.3
+    @since
+    - Util 1.3
+    - Util 3.0 a parameter name with a NUL character raises \c URI-QUERY-ERROR
 */
 public hash<UriQueryInfo> sub parse_uri_query(string path) {
     int i = path.find("?");
@@ -1551,10 +1559,15 @@ public hash<UriQueryInfo> sub parse_uri_query(string path) {
     foreach string arg in (split(sep, path)) {
         if (arg.val()) {
             (*string key, *string value) = (arg =~ x/([^=]+)=(.*)$/ms);
+            # a parameter name is a key, which cannot contain a NUL character
+            string name = decode_url(key ?? arg);
+            if (name.contains(chr(0))) {
+                throw "URI-QUERY-ERROR", sprintf("URI query parameter name \"%s\" contains a NUL character",
+                    replace(name, chr(0), "\\x00"));
+            }
             if (exists key) {
-                key = decode_url(key);
                 value = decode_url(value);
-                reference kv = \h.params{key};
+                reference kv = \h.params{name};
                 if (exists kv) {
                     if (kv.typeCode() != NT_LIST) {
                         kv = (kv, value);
@@ -1565,7 +1578,7 @@ public hash<UriQueryInfo> sub parse_uri_query(string path) {
                     kv = value;
                 }
             } else {
-                h.params{decode_url(arg)} = True;
+                h.params{name} = True;
             }
         }
     }

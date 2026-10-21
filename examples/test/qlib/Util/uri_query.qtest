@@ -49,5 +49,12 @@ public class UriQueryTest inherits QUnit::Test {
             make_uri_query(cast<hash<UriQueryInfo>>(("method": "path", "params": ("x": "a=b;c%")))));
 
         assertEq("path?k=1;k=a%0Ab%0Ac", make_uri_query(parse_uri_query("path?k=1;k=a\nb\nc")));
+
+        # a parameter name that decodes to a NUL character cannot be a key; a value with one is kept
+        assertThrows("URI-QUERY-ERROR", "parameter name \"a\\\\x00b\" contains a NUL character",
+            \parse_uri_query(), "path?a%00b=1");
+        assertThrows("URI-QUERY-ERROR", "contains a NUL character", \parse_uri_query(), "path?x=1;a%00b");
+        assertThrows("URI-QUERY-ERROR", "contains a NUL character", \parse_uri_query(), "path?x=1&a\x00b=2");
+        assertEq(("method": "path", "params": ("k": "a\x00b")), parse_uri_query("path?k=a%00b"));
     }
 }

@@ -95,6 +95,8 @@ http.waitStop();
 
     @subsection jsonrpchandler_2_0 JsonRpcHandler v2.0
     - updated to use the Logger module
+    - a \c GET request whose query has a parameter name that decodes to a NUL character (such as \c "a%00b") is
+      answered with status 400 (Bad Request) instead of 500
 
     @subsection jsonrpchandler_1_3_1 JsonRpcHandler v1.3.1
     - minor type fix in handling JSON-RPC method calls
@@ -511,7 +513,18 @@ public class JsonRpcHandler inherits public AbstractHttpRequestHandler, Logger::
                 };
             }
 
-            jsonrpc += parse_uri_query(path);
+            try {
+                jsonrpc += parse_uri_query(path);
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err != "URI-QUERY-ERROR") {
+                    rethrow;
+                }
+                # a query parameter name that decodes to a NUL character makes a malformed request
+                return <HttpResponseInfo>{
+                    "code": 400,
+                    "body": sprintf("%s: %s", ex.err, ex.desc),
+                };
+            }
 
             if (exists get_prefix && index(jsonrpc.method, ".") == -1) {
                 jsonrpc.method = get_prefix + jsonrpc.method;

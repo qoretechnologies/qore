@@ -365,6 +365,7 @@ public class RestHandlerTest inherits QUnit::Test {
         addTestCase("constructor defaults", \constructorDefaultsTest());
         addTestCase("pre-encoded-URLs test", \preEncodedUrlsTest());
         addTestCase("test bad request", \badRequestTest());
+        addTestCase("query parameter name with a NUL character", \queryNulTest());
         addTestCase("Test direct interface", \directTest());
         addTestCase("Test external serialization", \serializationTest());
         addTestCase("Raw response test", \rawResponseTest());
@@ -478,6 +479,27 @@ public class RestHandlerTest inherits QUnit::Test {
             assertEq("path`0", rest.get("test/echo?arg=path`0").body.arg);
             assertEq("path^0", rest.get("test/echo?arg=path^0").body.arg);
         }
+    }
+
+    # a query parameter name that decodes to a NUL character makes a malformed request
+    queryNulTest() {
+        assertEq(400, rawGetStatus(port, "/test?a%00b=1"));
+        assertEq(200, rawGetStatus(port, "/test?action=action"));
+
+        # the same through the direct interface
+        RestHandler handler();
+        handler.addClass(new TestRestClass());
+        assertThrows("INVALID-URI-PATH", "contains a NUL character", \handler.handleExternalRequest(),
+            ("GET", "test?a%00b=1"));
+    }
+
+    # sends a request target as given over a socket; HTTPClient would escape its percent signs
+    private static int rawGetStatus(int port, string target) {
+        Socket socket();
+        socket.connect("localhost:" + port, 30s);
+        on_exit socket.close();
+        socket.send(sprintf("GET %s HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n", target));
+        return socket.readHTTPHeader(30s).status_code;
     }
 
     badRequestTest() {
