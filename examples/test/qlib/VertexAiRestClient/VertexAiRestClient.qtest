@@ -613,12 +613,15 @@ public class VertexAiTest inherits QUnit::Test {
         assertEq("https://europe-west4-aiplatform.googleapis.com",
             VertexAiRestClient::vertexApiUrl("europe-west4"),
             "European regional locations use the regional hostname");
-        assertEq("https://aiplatform.googleapis.com",
+        # a multi-region has its own jurisdictional endpoint: through the global endpoint, requests carried no
+        # processing guarantee for it, and a context cache created there was a global resource that Vertex AI
+        # refuses for the multi-region's models
+        assertEq("https://aiplatform.us.rep.googleapis.com",
             VertexAiRestClient::vertexApiUrl("us"),
-            "US multi-region uses the general hostname with location in the path");
-        assertEq("https://aiplatform.googleapis.com",
+            "US multi-region uses its jurisdictional endpoint");
+        assertEq("https://aiplatform.eu.rep.googleapis.com",
             VertexAiRestClient::vertexApiUrl("eu"),
-            "EU multi-region uses the general hostname with location in the path");
+            "EU multi-region uses its jurisdictional endpoint");
         assertEq("https://aiplatform.googleapis.com",
             VertexAiRestClient::vertexApiUrl("global"),
             "global uses the unprefixed hostname");
@@ -626,6 +629,21 @@ public class VertexAiTest inherits QUnit::Test {
             "Vertex AI location must not be empty",
             \VertexAiRestClient::vertexApiUrl(), ("",),
             "an empty location is rejected before an invalid hostname is built");
+
+        # a provider without a URL override sends every request, context caches included, to its location's endpoint
+        foreach list<string> location in (("eu", "https://aiplatform.eu.rep.googleapis.com"),
+                ("us", "https://aiplatform.us.rep.googleapis.com"), ("global", "https://aiplatform.googleapis.com"),
+                ("europe-west4", "https://europe-west4-aiplatform.googleapis.com")) {
+            VertexAiRestClient::VertexAiLlmProvider p(<QoreLlmUtils::LlmBackendConfig>{
+                "model": "gemini-3.5-flash",
+                "provider_options": {
+                    "gcp_project_id": "fake-project",
+                    "gcp_region": location[0],
+                    "gcp_sa_json_path": sa_path,
+                },
+            });
+            assertEq(location[1], p.createRestClient().getUrl(), location[0]);
+        }
     }
 
     private missingProjectTest() {
