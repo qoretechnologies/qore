@@ -85,7 +85,6 @@ to their public `HTTPCLIENT-TIMEOUT` error. Explicit Future cancellation still p
   - At the end of Phase 1 (cache snapshot), `processed_seq` is set to `submit_seq` and
     `processed_cond` is broadcast.  This allows `waitForProcessing()` to block until the I/O
     thread has captured all previously submitted operations in its poll set.
-
   - The I/O threads of the global controller are external-lifecycle threads (`QTF_EXTERNAL_LIFECYCLE`, set by
     `setExternalLifecycleThreads()` when the global controller is created): the cleanup at process exit waits for
     those after it stops the controller, and only for those, as it waits for the other threads before it starts.
@@ -953,6 +952,28 @@ The HTTP/3 counterparts of the HTTP/2 rules above, in `lib/QuicSession.cpp`:
   buffered bytes are kept (so HttpServer answers 413 instead of dispatching an empty body, which the previous code
   did after clearing them), the rest is not read (STOP_SENDING `H3_NO_ERROR`), and `readQuicStreamDataBlock()`
   raises `HTTP-BODY-TOO-LARGE` after the buffered bytes.
+
+## HTTP/2 and HTTP/3 Clients: Sending After a Reset or a Response
+
+What has been read of a response does not decide whether the request of a client stream can still be sent: a server
+can send its complete response before the request is complete and keep reading the request (RFC 9113 section 8.1,
+RFC 9114 section 4.1).  `Http2ClientStreamHandle::sendData()` and `Http3ClientStreamHandle::sendData()` refuse a send
+on their own only for a stream that was not started or that the caller cancelled; otherwise the session decides, so
+a send has the same result before and after another thread read the response:
+
+- the data is sent if the stream is open for sending;
+- `HTTPCLIENT-STREAM-CLOSED` (from `HTTP2-STREAM-CLOSED` / `QUIC-STREAM-CLOSED`) if the server closed it without an
+  error, where an empty half-close is a no-op;
+- the typed reset (`HTTP2-STREAM-RESET`, `HTTP2-STREAM-REFUSED`, `QUIC-STREAM-RESET`) if the server reset it; the
+  handle remembers the reset it reported and raises it for every later send, as `Http2Session::sendStreamData()`
+  reports a reset of an erased stream once.
+
+The QUIC session records a server's STOP_SENDING when the frame arrives (ngtcp2's `recv_stop_sending`, ngtcp2 1.24
+and later; `QuicSession::recordPeerStopSending()`): with an error code as a reset, with `H3_NO_ERROR` as a stream
+closed for sending.  ngtcp2 answers the frame by resetting the send side itself, and closes the stream (the
+`stream_close` callback, which recorded the stop before) only once the peer has acknowledged that RESET_STREAM: a
+response sent after the STOP_SENDING could be read whole before the reset was known, and a send in that window was
+queued and silently dropped.  A server learns of a client's STOP_SENDING at the same point.
 
 ## HTTP/2 and HTTP/3 Server: Incomplete Request Bodies
 

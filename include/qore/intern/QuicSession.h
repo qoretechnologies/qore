@@ -1416,8 +1416,30 @@ private:
                                    uint64_t final_size, uint64_t app_error_code,
                                    void* user_data, void* stream_user_data);
 
+    //! The peer sent STOP_SENDING: it stopped reading the stream (ngtcp2 1.24 and later)
+    /** Called when the frame arrives, before the frames that follow it are processed, so a sender sees the stop
+        before the response that the peer sent after it.  ngtcp2 answers the frame itself by resetting this side's
+        send stream with the peer's error code; until this callback was registered, the stop was recorded only when
+        the stream closed, which needs the peer's acknowledgment of that RESET_STREAM, so a response could be read
+        whole while a send still went out unreported.  See @ref recordPeerStopSending().
+    */
+    DLLLOCAL static int recvStopSendingCallback(ngtcp2_conn* conn, int64_t stream_id, uint64_t app_error_code,
+                                   void* user_data, void* stream_user_data);
+
+    //! Records that the peer stopped reading a stream
+    /** With an error code other than H3_NO_ERROR, the peer aborted the stream: recorded as a reset with
+        @ref recordPeerStreamReset(), so a send raises \c QUIC-STREAM-RESET.  With H3_NO_ERROR, the peer only needs
+        nothing more on the stream, as a server that sends its complete response before the request is complete
+        (RFC 9114 section 4.1.2): the stream is closed for sending, so a send raises \c QUIC-STREAM-CLOSED and an
+        empty half-close is a no-op, and the response on the stream is intact.
+
+        @param stream_id the QUIC stream ID
+        @param app_error_code the application error code of the STOP_SENDING frame
+    */
+    DLLLOCAL void recordPeerStopSending(int64_t stream_id, uint64_t app_error_code);
+
     //! Records a peer-initiated stream abort and marks the stream closed
-    /** Shared by the QUIC-transport (@ref streamResetCallback(),
+    /** Shared by the QUIC-transport (@ref streamResetCallback(), @ref recvStopSendingCallback(),
         @ref streamCloseCallback()) and HTTP/3-layer (@ref h3StopSendingCallback(),
         @ref h3ResetStreamCallback()) report paths.  RESET_STREAM and STOP_SENDING
         routinely arrive together for the same stream, and nghttp3 then asks us to

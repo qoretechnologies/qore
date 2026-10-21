@@ -980,9 +980,12 @@ int QuicSession::initClient(qore_socket_private* sock, ExceptionSink* xsink,
     // Despite the name it reports a *local* decision ("this endpoint stopped
     // reading"), not a peer STOP_SENDING — a server that finishes reading a
     // request body while still streaming its response would be misread as
-    // abandoned.  A peer STOP_SENDING reaches us as stream_close carrying the
-    // peer's application error code; see streamCloseCallback().
+    // abandoned.  A peer STOP_SENDING is reported by recv_stop_sending when the
+    // frame arrives (see recvStopSendingCallback()).
     callbacks.stream_reset = streamResetCallback;
+#if NGTCP2_VERSION_NUM >= 0x011800
+    callbacks.recv_stop_sending = recvStopSendingCallback;
+#endif
     callbacks.handshake_completed = handshakeCompletedCallback;
     callbacks.extend_max_local_streams_bidi = extendMaxLocalStreamsBidiCallback;
     callbacks.extend_max_stream_data = extendMaxStreamDataCallback;
@@ -1143,9 +1146,12 @@ int QuicSession::initServer(qore_socket_private* sock, ExceptionSink* xsink,
     // Despite the name it reports a *local* decision ("this endpoint stopped
     // reading"), not a peer STOP_SENDING — a server that finishes reading a
     // request body while still streaming its response would be misread as
-    // abandoned.  A peer STOP_SENDING reaches us as stream_close carrying the
-    // peer's application error code; see streamCloseCallback().
+    // abandoned.  A peer STOP_SENDING is reported by recv_stop_sending when the
+    // frame arrives (see recvStopSendingCallback()).
     callbacks.stream_reset = streamResetCallback;
+#if NGTCP2_VERSION_NUM >= 0x011800
+    callbacks.recv_stop_sending = recvStopSendingCallback;
+#endif
     callbacks.handshake_completed = handshakeCompletedCallback;
     callbacks.extend_max_remote_streams_bidi = extendMaxRemoteStreamsBidiCallback;
     callbacks.extend_max_stream_data = extendMaxStreamDataCallback;
@@ -4070,13 +4076,15 @@ int QuicSession::streamCloseCallback(ngtcp2_conn* /* conn */, uint32_t flags,
                 }
                 sit->second->error_message = buf;
             }
-            // This is the only place a peer STOP_SENDING becomes visible: ngtcp2
-            // absorbs the frame, resets our send side itself, and reports the
-            // outcome here with the peer's application error code.  A client that
-            // abandons a long-lived response stream (Server-Sent Events) while
-            // keeping the connection for other requests looks exactly like this,
-            // so without the report the stream's owner is never told and the
-            // server keeps writing into a stream nobody reads.
+            // A peer STOP_SENDING is also reported here: ngtcp2 absorbs the frame,
+            // resets our send side itself, and reports the outcome here with the
+            // peer's application error code.  A client that abandons a long-lived
+            // response stream (Server-Sent Events) while keeping the connection
+            // for other requests looks exactly like this, so without the report
+            // the stream's owner is never told and the server keeps writing into
+            // a stream nobody reads.  recvStopSendingCallback() has recorded it
+            // already when the frame arrived (ngtcp2 1.24 and later); the record
+            // is idempotent.
             session->recordPeerStreamReset(stream_id, app_error_code);
         }
 
@@ -5222,6 +5230,29 @@ void QuicSession::recordPeerStreamReset(int64_t stream_id, uint64_t app_error_co
     // raise QUIC-STREAM-RESET after streamCloseCallback() has erased the stream
     // from streams_.
     peer_reset_streams_[stream_id] = app_error_code;
+}
+
+int QuicSession::recvStopSendingCallback(ngtcp2_conn* /* conn */, int64_t stream_id, uint64_t app_error_code,
+        void* user_data, void* /* stream_user_data */) {
+    auto* session = static_cast<QuicSession*>(user_data);
+    ASYNC_IO_TRACE("QuicSession::recvStopSendingCallback session=%lld stream_id=%lld app_error=%llu\n",
+        static_cast<long long>(session->getSessionId()), static_cast<long long>(stream_id),
+        static_cast<unsigned long long>(app_error_code));
+    session->recordPeerStopSending(stream_id, app_error_code);
+    return 0;
+}
+
+void QuicSession::recordPeerStopSending(int64_t stream_id, uint64_t app_error_code) {
+    if (app_error_code != NGHTTP3_H3_NO_ERROR) {
+        recordPeerStreamReset(stream_id, app_error_code);
+        return;
+    }
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
+    auto it = streams_.find(stream_id);
+    if (it != streams_.end()) {
+        // closed for sending without an error; the receive side and the response on it are not affected
+        it->second->peer_stop_sending = true;
+    }
 }
 
 int QuicSession::streamResetCallback(ngtcp2_conn* /* conn */, int64_t stream_id,

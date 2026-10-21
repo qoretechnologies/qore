@@ -130,6 +130,15 @@
     shuts down a connection after its final \c GOAWAY no longer sends another \c GOAWAY with a larger stream ID,
     which made the client close the connection with an error.
 
+    The errors that a sender sees after an HTTP/2 or HTTP/3 stream is reset or closed by the server no longer depend
+    on whether the response was read first: a send raises the stream's reset error (\c HTTP2-STREAM-RESET,
+    \c QUIC-STREAM-RESET) or \c HTTPCLIENT-STREAM-CLOSED, where it raised \c HTTPCLIENT-STATE-ERROR once the
+    response had been read, and every later send raises the reset again.  A request body completed after an early
+    response is now delivered: when a server sends its complete response before the request is complete and keeps
+    reading the request, the rest of the request and its end are sent, where the end of the request was dropped and
+    the server waited for it.  An HTTP/3 client sees the server's \c STOP_SENDING when it arrives, so a send after it
+    raises \c QUIC-STREAM-RESET instead of being dropped.
+
     LLM streaming requests accept a @ref QoreLlmUtils::LlmCancellation "LlmCancellation" token in
     @ref QoreLlmUtils::LlmRequestOptions::cancellation "LlmRequestOptions::cancellation". Cancelling the token
     closes an in-flight OpenAI-compatible, Anthropic, Gemini/Vertex AI, or Bedrock stream without polling and
