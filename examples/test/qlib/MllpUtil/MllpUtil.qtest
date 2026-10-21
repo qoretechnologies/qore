@@ -48,6 +48,8 @@ class MllpUtilTest inherits QUnit::Test {
         addTestCase("TLS client test", \tlsClientTest());
         addTestCase("connection scheme test", \connectionSchemeTest());
         addTestCase("negative test", \negativeTest());
+        addTestCase("frame block bytes in a message", \frameBlockBytesTest());
+        addTestCase("ACK with an escaped segment terminator", \ackSegmentInjectionTest());
         addTestCase("listener bind target test", \listenerBindTargetTest());
         addTestCase("sandboxed listener bind test", \sandboxedListenerBindTest());
 
@@ -306,6 +308,48 @@ sub run_listener(string target, Queue q, Queue stop) {
         } catch () {
             return False;
         }
+    }
+
+    #! a message cannot contain the MLLP block bytes, which would start or end a frame inside it
+    private frameBlockBytesTest() {
+        assertThrows("MLLP-FRAME-ERROR", "the message contains the MLLP end block byte 0x1c at byte offset 3",
+            \MllpUtil::mllp_frame(), "MSH\x1c\rMSH|^~\\&|forged\r");
+        assertThrows("MLLP-FRAME-ERROR", "the message contains the MLLP start block byte 0x0b at byte offset 0",
+            \MllpUtil::mllp_frame(), "\x0bMSH|^~\\&|x\r");
+        # other control characters are framed
+        assertEq(<0b6109621c0d>, MllpUtil::mllp_frame("a\tb"));
+    }
+
+    #! a field value received escaped is escaped again when it is echoed in an ACK, so it cannot add a segment or a
+    #! frame of its own to the ACK
+    private ackSegmentInjectionTest() {
+        # MSH-10 holds the escape sequences of a CR, a forged MSA segment (with escaped field separators) and the
+        # MLLP end block byte
+        string request = "MSH|^~\\&|ADT|HOSP|EHR|HOSP|202605261200||ADT^A01|ID1\\X0D\\MSA\\F\\AE\\F\\forged\\X1C\\|P|"
+            "2.5.1\r";
+        string ack = MllpUtil::mllp_build_ack(request);
+        list<string> segments = (select ack.split("\r"), $1.val());
+        assertEq(2, segments.size(), "the ACK has its two segments: " + ack);
+        assertEq("MSH", segments[0].substr(0, 3));
+        assertEq("MSA", segments[1].substr(0, 3));
+        # the control ID is echoed as it was received
+        assertEq("AA|ID1\\X0D\\MSA\\F\\AE\\F\\forged\\X1C\\", segments[1].substr(4));
+
+        # the same over the wire: the listener answers with the ACK, which the client reads as one ACK
+        MllpUtil::MllpListener listener("127.0.0.1:0", {"timeout": 30s});
+        listener.start(*string sub (string msg) {
+            return MllpUtil::mllp_build_ack(msg);
+        });
+        on_exit listener.stop(30s);
+        Socket sock();
+        sock.connect("127.0.0.1:" + listener.getPort(), 30s);
+        on_exit sock.close();
+        MllpUtil::mllp_send_message(sock, request, 30s);
+        string received = MllpUtil::mllp_read_message(sock, 30s);
+        hash<MllpUtil::MllpAckInfo> info = MllpUtil::mllp_parse_ack(received);
+        assertEq("AA", info.acknowledgment_code);
+        assertEq("ID1\rMSA|AE|forged\x1c", info.message_control_id);
+        assertEq(2, (select received.split("\r"), $1.val()).size());
     }
 
     private listenerApiTest() {

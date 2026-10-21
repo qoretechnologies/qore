@@ -28,10 +28,25 @@ public namespace MllpUtil {
         @param encoding optional target encoding before byte conversion
 
         @return an MLLP-framed binary value
+
+        @throw MLLP-FRAME-ERROR the message contains the start block (\c 0x0b) or end block (\c 0x1c) byte, which
+        would start or end a frame inside it; in an HL7 v2 field value, these characters are written as the escape
+        sequences \c \\X0B\\ and \c \\X1C\\
     */
     public binary sub mllp_frame(string message, *string encoding = NOTHING) {
         string data = encoding ? convert_encoding(message, encoding) : message;
-        return chr(MllpStartBlock).toBinary() + data.toBinary() + chr(MllpEndBlock).toBinary()
+        binary payload = data.toBinary();
+        # the content of a frame cannot contain the block bytes: the receiver would read a new frame or the end of
+        # this one there, so the rest of the message would be read as a message of its own
+        foreach int byte in ((MllpStartBlock, MllpEndBlock)) {
+            int pos = payload.find(binary(chr(byte)));
+            if (pos >= 0) {
+                string what = byte == MllpStartBlock ? "start" : "end";
+                throw "MLLP-FRAME-ERROR", sprintf("the message contains the MLLP %s block byte 0x%02x at byte "
+                    "offset %d, which would %s a frame inside the message", what, byte, pos, what);
+            }
+        }
+        return chr(MllpStartBlock).toBinary() + payload + chr(MllpEndBlock).toBinary()
             + chr(MllpCarriageReturn).toBinary();
     }
 
@@ -118,6 +133,9 @@ public namespace MllpUtil {
         @param message HL7 v2 message text
         @param to socket send timeout
         @param encoding optional target encoding before byte conversion
+
+        @throw MLLP-FRAME-ERROR the message contains the start block (\c 0x0b) or end block (\c 0x1c) byte; nothing
+        is sent
     */
     public sub mllp_send_message(Socket sock, string message, timeout to = DefaultTimeout,
             *string encoding = NOTHING) {

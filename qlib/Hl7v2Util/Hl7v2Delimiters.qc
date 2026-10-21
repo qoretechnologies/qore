@@ -135,6 +135,15 @@ public namespace Hl7v2Util {
         }
 
         #! Escapes a scalar HL7 field value
+        /** The delimiters and the escape character are written as their escape sequences, and an LF as \c \\.br\\.
+            A CR, which ends a segment, and the MLLP start and end block characters (\c 0x0b and \c 0x1c), which start
+            and end a frame, are written as hexadecimal escape sequences (\c \\X0D\\, \c \\X0B\\ and
+            \c \\X1C\\), so that a value cannot end its segment or frame and add a segment or a frame of its own.
+
+            @param str the value to escape
+
+            @return the escaped value
+        */
         string escape(string str) {
             list<string> parts = ();
             for (int i = 0; i < str.size(); i++) {
@@ -151,6 +160,9 @@ public namespace Hl7v2Util {
                     push parts, escape_character + "E" + escape_character;
                 } else if (ch == "\n") {
                     push parts, escape_character + ".br" + escape_character;
+                } else if (ch == "\r" || ch == "\x0b" || ch == "\x1c") {
+                    # a CR ends a segment, and the MLLP block characters start and end a frame
+                    push parts, sprintf("%sX%02X%s", escape_character, ord(ch), escape_character);
                 } else {
                     push parts, ch;
                 }
