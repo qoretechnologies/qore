@@ -30,21 +30,41 @@ public namespace MllpUtil {
         @return an MLLP-framed binary value
 
         @throw MLLP-FRAME-ERROR the message contains the start block (\c 0x0b) or end block (\c 0x1c) byte, which
-        would start or end a frame inside it; in an HL7 v2 field value, these characters are written as the escape
-        sequences \c \\X0B\\ and \c \\X1C\\
+        would start or end a frame inside it, or another byte below \c 0x20 other than CR and LF, which a frame
+        cannot carry; nothing is framed.  In an HL7 v2 field value, these characters are written as hexadecimal
+        escape sequences such as \c \\X0B\\ (see \c Hl7v2Util::Hl7v2Delimiters::escape())
+
+        @note The MLLP block format allows only bytes above \c 0x1f and the CR in a frame, so an encoding with such
+        bytes in its characters, such as UTF-16, cannot be framed.  An LF is accepted, although the format does not
+        allow it, for senders that end segments with CRLF: it cannot start or end a frame
     */
     public binary sub mllp_frame(string message, *string encoding = NOTHING) {
         string data = encoding ? convert_encoding(message, encoding) : message;
         binary payload = data.toBinary();
         # the content of a frame cannot contain the block bytes: the receiver would read a new frame or the end of
-        # this one there, so the rest of the message would be read as a message of its own
-        foreach int byte in ((MllpStartBlock, MllpEndBlock)) {
-            int pos = payload.find(binary(chr(byte)));
-            if (pos >= 0) {
+        # this one there, so the rest of the message would be read as a message of its own; no other byte below 0x20
+        # is allowed in a frame either, except the CR that ends each segment and an LF
+        int pos = -1;
+        int byte;
+        for (int c = 0; c < 0x20; ++c) {
+            if (c == MllpCarriageReturn || c == 0x0a) {
+                continue;
+            }
+            int p = payload.find(binary(chr(c)));
+            if (p >= 0 && (pos < 0 || p < pos)) {
+                pos = p;
+                byte = c;
+            }
+        }
+        if (pos >= 0) {
+            if (byte == MllpStartBlock || byte == MllpEndBlock) {
                 string what = byte == MllpStartBlock ? "start" : "end";
                 throw "MLLP-FRAME-ERROR", sprintf("the message contains the MLLP %s block byte 0x%02x at byte "
                     "offset %d, which would %s a frame inside the message", what, byte, pos, what);
             }
+            throw "MLLP-FRAME-ERROR", sprintf("the message contains the control character 0x%02x at byte offset %d, "
+                "which an MLLP frame cannot carry; in an HL7 v2 field value, it is written as \\X%02X\\", byte,
+                pos, byte);
         }
         return chr(MllpStartBlock).toBinary() + payload + chr(MllpEndBlock).toBinary()
             + chr(MllpCarriageReturn).toBinary();
@@ -134,8 +154,8 @@ public namespace MllpUtil {
         @param to socket send timeout
         @param encoding optional target encoding before byte conversion
 
-        @throw MLLP-FRAME-ERROR the message contains the start block (\c 0x0b) or end block (\c 0x1c) byte; nothing
-        is sent
+        @throw MLLP-FRAME-ERROR the message contains the start block (\c 0x0b) or end block (\c 0x1c) byte, or
+        another byte below \c 0x20 other than CR and LF (see mllp_frame()); nothing is sent
     */
     public sub mllp_send_message(Socket sock, string message, timeout to = DefaultTimeout,
             *string encoding = NOTHING) {

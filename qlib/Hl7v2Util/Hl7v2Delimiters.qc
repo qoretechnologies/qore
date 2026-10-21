@@ -136,9 +136,12 @@ public namespace Hl7v2Util {
 
         #! Escapes a scalar HL7 field value
         /** The delimiters and the escape character are written as their escape sequences, and an LF as \c \\.br\\.
-            A CR, which ends a segment, and the MLLP start and end block characters (\c 0x0b and \c 0x1c), which start
-            and end a frame, are written as hexadecimal escape sequences (\c \\X0D\\, \c \\X0B\\ and
-            \c \\X1C\\), so that a value cannot end its segment or frame and add a segment or a frame of its own.
+            Every other control character (below \c 0x20) is written as a hexadecimal escape sequence (\c \\XhH\\,
+            for example \c \\X0D\\ for a CR and \c \\X09\\ for a tab): a CR ends a segment, the MLLP start
+            and end block characters (\c 0x0b and \c 0x1c) start and end a frame, so a value cannot end its segment
+            or frame and add a segment or a frame of its own, and the MLLP block format allows no other control
+            character in a frame.  An escaped value can therefore always be framed with
+            \c MllpUtil::mllp_frame().
 
             @param str the value to escape
 
@@ -160,8 +163,9 @@ public namespace Hl7v2Util {
                     push parts, escape_character + "E" + escape_character;
                 } else if (ch == "\n") {
                     push parts, escape_character + ".br" + escape_character;
-                } else if (ch == "\r" || ch == "\x0b" || ch == "\x1c") {
-                    # a CR ends a segment, and the MLLP block characters start and end a frame
+                } else if (ord(ch) < 0x20) {
+                    # a CR ends a segment, the MLLP block characters start and end a frame, and an MLLP frame
+                    # cannot carry any other control character
                     push parts, sprintf("%sX%02X%s", escape_character, ord(ch), escape_character);
                 } else {
                     push parts, ch;

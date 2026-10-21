@@ -203,6 +203,9 @@ class Hl7v2UtilTest inherits QUnit::Test {
         # a CR ends a segment and the MLLP block characters start and end a frame, so a value cannot hold them raw
         assertEq("A\\X0D\\B\\X0B\\C\\X1C\\D", d.escape("A\rB\x0bC\x1cD"));
         assertEq("A\rB\x0bC\x1cD", d.unescape(d.escape("A\rB\x0bC\x1cD")));
+        # no other control character is written raw either, as an MLLP frame cannot carry it; an LF is \.br\
+        assertEq("A\\X00\\B\\X09\\C\\X0C\\D\\X1F\\E\\.br\\F\x7f", d.escape("A\x00B\tC\x0cD\x1fE\nF\x7f"));
+        assertEq("A\x00B\tC\x0cD\x1fE\nF\x7f", d.unescape(d.escape("A\x00B\tC\x0cD\x1fE\nF\x7f")));
         # a segment formatted with such a value is one segment
         Hl7v2Base base();
         assertEq("ZZZ|A\\X0D\\MSH\\F\\x", base.formatSegment({"tag": "ZZZ", "fields": ("A\rMSH|x",)}));
