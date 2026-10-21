@@ -345,6 +345,13 @@ aωb\r
             hash<auto> res = mime_parse_form_urlencoded_string(it.getKey());
             assertEq(it.getValue(), res, "mime_parse_form_urlencoded_string " + it.getKey());
         }
+
+        # a parameter name that decodes to a NUL character cannot be a key; a value with one is kept
+        assertThrows("URLENCODED-PARSE-ERROR", "parameter name .* contains a NUL character",
+            \mime_parse_form_urlencoded_string(), "a%00b=1");
+        assertThrows("URLENCODED-PARSE-ERROR", "parameter name .* contains a NUL character",
+            \mime_parse_form_urlencoded_string(), "ok=1&x\x00=2");
+        assertEq({"a": "1\x002"}, mime_parse_form_urlencoded_string("a=1%002"));
     }
 
     jsonTests() {
