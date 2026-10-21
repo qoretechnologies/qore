@@ -34,6 +34,7 @@
 #define _QORE_QORETHREADLIST_H
 
 #include <qore/QoreRWLock.h>
+#include <qore/qore_thread.h>
 
 #include <atomic>
 #include <pthread.h>
@@ -55,6 +56,9 @@ static constexpr int QTF_NO_STACK_GUARD = (1 << 0);
     the counter, including native TLS destructors, after program data destruction.
 */
 static constexpr int QTF_EXTERNAL_LIFECYCLE = (1 << 1);
+// QTF_NO_SANDBOX_INHERIT (1 << 2) is public; see qore/qore_thread.h
+static_assert(!(QTF_NO_SANDBOX_INHERIT & (QTF_NO_STACK_GUARD | QTF_EXTERNAL_LIFECYCLE)),
+    "QTF_NO_SANDBOX_INHERIT must not share a bit with another thread creation flag");
 ///@}
 
 // FIXME: move to config.h or something like that

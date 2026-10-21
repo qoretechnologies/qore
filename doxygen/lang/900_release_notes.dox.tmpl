@@ -8,6 +8,16 @@
     result without an unused-result warning or a dummy local variable. It preserves evaluation, exceptions,
     and temporary-value cleanup in all execution modes and remains active when debugging is disabled.
 
+    <b>Security</b>: a thread started on behalf of sandboxed code now runs under the same @ref sandboxing "sandbox"
+    as the code that started it, so it can never do more than that code could: the @ref background "background"
+    operator, @ref Qore::call_async() "call_async()", @ref Qore::parallel_map() "parallel_map()",
+    @ref Qore::parallel_foreach() "parallel_foreach()", an @ref Qore::AsyncIoController "AsyncIoController" timer
+    callback, and threads that modules start on the caller's behalf all carry the caller's filesystem and network
+    policy, its program interrupts, its cancellation scope and its thread limit.  A thread that serves many callers
+    (a @ref Qore::Thread::ThreadPool "ThreadPool" worker, an async I/O thread) is instead governed per task by the
+    sandbox of the code that submitted that task.  @ref Qore::SandboxManager::setMaxThreads() "SandboxManager::setMaxThreads()"
+    now limits the number of such threads running at once and raises \c THREAD-CREATION-FAILURE at the limit.
+
     <b>Security</b>: the steps of a poll operation that the async I/O controller runs on its callback workers,
     such as \c continuePoll() and \c onComplete() of an operation implemented in %Qore, are governed by the
     @ref sandboxing "sandbox" of the code that submitted the operation (see

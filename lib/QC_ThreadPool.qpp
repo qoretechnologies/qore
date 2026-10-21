@@ -38,7 +38,9 @@ static void tpt_start_thread(ExceptionSink* xsink, ThreadPoolThread* tpt) {
 }
 
 ThreadPoolThread::ThreadPoolThread(ThreadPool& n_tp, ExceptionSink* xsink) : tp(n_tp) {
-    id = q_start_thread(xsink, (q_thread_t)tpt_start_thread, this, QTF_EXTERNAL_LIFECYCLE);
+    // a worker runs the tasks of every submitter, each under the sandbox the task captured when it was submitted
+    // (see ThreadTask), so it does not inherit the sandbox of the code that happens to start it
+    id = q_start_thread(xsink, (q_thread_t)tpt_start_thread, this, QTF_EXTERNAL_LIFECYCLE | QTF_NO_SANDBOX_INHERIT);
     if (id > 0) {
         tp.ref();
     }
@@ -123,7 +125,9 @@ ThreadPool::ThreadPool(ExceptionSink* xsink, int n_max, int n_minidle, int n_max
         minidle = 0;
     if (maxidle <= 0)
         maxidle = minidle;
-    if (q_start_thread(xsink, (q_thread_t)tp_start_thread, this, QTF_EXTERNAL_LIFECYCLE) == -1) {
+    // the pool's own thread only manages workers for every submitter; tasks carry their own sandbox (see ThreadTask)
+    if (q_start_thread(xsink, (q_thread_t)tp_start_thread, this, QTF_EXTERNAL_LIFECYCLE | QTF_NO_SANDBOX_INHERIT)
+            == -1) {
         assert(*xsink);
         stopped = true;
     }

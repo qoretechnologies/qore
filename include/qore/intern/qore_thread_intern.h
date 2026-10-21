@@ -40,6 +40,7 @@ class RuntimeConfig;
 #include <vector>
 #include <set>
 #include <map>
+#include <memory>
 
 #ifndef QORE_THREAD_STACK_SIZE
 #define QORE_THREAD_STACK_SIZE 1024*512
@@ -366,6 +367,66 @@ public:
 
     DLLLOCAL QoreSandboxContextHelper(const QoreSandboxContextHelper&) = delete;
     DLLLOCAL QoreSandboxContextHelper& operator=(const QoreSandboxContextHelper&) = delete;
+
+private:
+    const QoreSandboxContext* old_ctx = nullptr;
+    bool active = false;
+};
+
+//! The sandbox that a new thread inherits from the code that starts it
+/** Captured in the starting thread by the \c background operator and q_start_thread(), and applied in the new thread
+    for its whole life with QoreInheritedSandboxHelper.  The sandbox governs the new thread as the outermost caller
+    of everything it runs: a Program on the thread's own program-context stack that has a sandbox manager of its own
+    still governs the code it runs, exactly as in a synchronous call from the starting code.  See
+    design/thread-sandbox-inheritance.md.
+
+    Capturing counts the new thread against the thread limit of the governing sandbox manager
+    (QoreSandboxManager::setMaxThreads()); destroying the object stops counting it.
+*/
+class QoreInheritedSandbox {
+public:
+    //! Captures the sandbox that governs the current thread for a thread that it starts
+    /** @param xsink raises \c THREAD-CREATION-FAILURE if the governing sandbox has reached its thread limit
+        @param rv set to the captured sandbox, or left empty if no sandbox governs the current thread
+
+        @return 0 for OK, -1 if an exception was raised
+    */
+    DLLLOCAL static int capture(ExceptionSink* xsink, std::unique_ptr<QoreInheritedSandbox>& rv);
+
+    DLLLOCAL ~QoreInheritedSandbox();
+
+    //! Stops counting the thread against the thread limit; the sandbox still governs the thread
+    /** Called when the thread's work has ended, before its Program sees the thread end, so that code that waits
+        for a Program's threads to end can rely on the slots being free.
+    */
+    DLLLOCAL void releaseSlot();
+
+    DLLLOCAL QoreInheritedSandbox(const QoreInheritedSandbox&) = delete;
+    DLLLOCAL QoreInheritedSandbox& operator=(const QoreInheritedSandbox&) = delete;
+
+    //! The captured sandbox
+    const QoreSandboxContext ctx;
+
+private:
+    //! The manager the thread is counted against (referenced), or nullptr
+    QoreSandboxManager* counted = nullptr;
+
+    DLLLOCAL QoreInheritedSandbox() = default;
+};
+
+//! Governs the current thread by an inherited or captured sandbox as its outermost caller while the object exists
+class QoreInheritedSandboxHelper {
+public:
+    //! Applies the context, if any; the context must remain valid while the helper is active
+    DLLLOCAL QoreInheritedSandboxHelper(const QoreSandboxContext* ctx);
+
+    DLLLOCAL ~QoreInheritedSandboxHelper();
+
+    //! Restores the previous context; must be called before the thread's data is destroyed
+    DLLLOCAL void reset();
+
+    DLLLOCAL QoreInheritedSandboxHelper(const QoreInheritedSandboxHelper&) = delete;
+    DLLLOCAL QoreInheritedSandboxHelper& operator=(const QoreInheritedSandboxHelper&) = delete;
 
 private:
     const QoreSandboxContext* old_ctx = nullptr;

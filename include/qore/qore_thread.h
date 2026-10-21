@@ -267,12 +267,35 @@ DLLEXPORT int q_register_reserved_foreign_thread(int tid);
  */
 DLLEXPORT int q_deregister_reserved_foreign_thread();
 
+//! q_start_thread() flag: the new thread does not inherit the sandbox of the code that starts it
+/** A thread started with q_start_thread() is governed by the sandbox (@ref QoreSandboxManager) of the code that
+    starts it, as the outermost caller of everything the thread runs: filesystem and network policy, program
+    interrupts, cancellation scope and the sandbox thread limit (QoreSandboxManager::setMaxThreads()) apply to it as
+    they apply to the starting code.  A thread can therefore never run with more privileges than the code that
+    started it.
+
+    Only a thread that runs work for many callers (a pool or an event loop shared by many Programs or sandboxes) may
+    set this flag.  It must then capture the sandbox of each submitter with QoreSandboxCapture when the work is
+    submitted and apply it with QoreSandboxCaptureHelper around that submitter's work; otherwise the work of a
+    sandboxed caller would run with no sandbox at all.
+
+    A thread started with this flag is not counted against the thread limit of the starting code's sandbox.
+
+    @since %Qore 3.0
+*/
+static constexpr int QTF_NO_SANDBOX_INHERIT = (1 << 2);
+
 //! starts a new thread with the given arguments, when the thread terminates, it deregisters itself
-/** @param arg the argument to the function
+/** The new thread inherits the sandbox of the code that starts it; see @ref QTF_NO_SANDBOX_INHERIT.
+
+    @param arg the argument to the function
     @param f the function to start in the new thread
     @param xsink any errors starting the new thread will be raised here and cause -1 to be returned
 
     @return the new TID or -1 if an error occurred
+
+    @throw THREAD-CREATION-FAILURE the thread could not be created, or the sandbox governing the current thread has
+    reached its thread limit (QoreSandboxManager::setMaxThreads())
 
     @since %Qore 0.8.8
  */
@@ -287,10 +310,15 @@ int q_start_thread(ExceptionSink* xsink, q_thread_t f, void* arg = nullptr);
     @param f the function to start in the new thread
     @param arg the argument to the function
     @param stack_size the stack size for the new thread in bytes
-    @param flags optional thread flags (e.g. QTF_EXTERNAL_LIFECYCLE); QTF_NO_STACK_GUARD is
-    always set for custom-stack-size threads
+    @param flags optional thread flags (e.g. QTF_EXTERNAL_LIFECYCLE or @ref QTF_NO_SANDBOX_INHERIT);
+    QTF_NO_STACK_GUARD is always set for custom-stack-size threads
 
     @return the new TID or -1 if an error occurred
+
+    @throw THREAD-CREATION-FAILURE the thread could not be created, or the sandbox governing the current thread has
+    reached its thread limit (QoreSandboxManager::setMaxThreads())
+
+    @note the new thread inherits the sandbox of the code that starts it unless @ref QTF_NO_SANDBOX_INHERIT is set
 
     @since %Qore 3.0
  */
@@ -305,9 +333,14 @@ int q_start_thread(ExceptionSink* xsink, q_thread_t f, void* arg, size_t stack_s
     @param xsink any errors starting the new thread will be raised here and cause -1 to be returned
     @param f the function to start in the new thread
     @param arg the argument to the function
-    @param flags thread flags (e.g. QTF_EXTERNAL_LIFECYCLE)
+    @param flags thread flags (e.g. QTF_EXTERNAL_LIFECYCLE or @ref QTF_NO_SANDBOX_INHERIT)
 
     @return the new TID or -1 if an error occurred
+
+    @throw THREAD-CREATION-FAILURE the thread could not be created, or the sandbox governing the current thread has
+    reached its thread limit (QoreSandboxManager::setMaxThreads())
+
+    @note the new thread inherits the sandbox of the code that starts it unless @ref QTF_NO_SANDBOX_INHERIT is set
 
     @since %Qore 3.0
  */

@@ -216,6 +216,12 @@ class QoreSandboxContext;
 */
 typedef std::shared_ptr<const QoreSandboxContext> AsyncIoSandboxContext;
 
+//! Captures the sandbox of the current thread for work continued on a callback worker; empty if no sandbox governs it
+/** A nested capture keeps a context that is applied, so work submitted by a step of another operation inherits that
+    operation's sandbox.
+*/
+DLLLOCAL AsyncIoSandboxContext capture_async_io_sandbox_context();
+
 class QoreCallDispatcher {
 public:
     //! Dispatch type for async work items
@@ -288,9 +294,10 @@ public:
     /** @param callback the callback code (referenced — ownership transferred)
         @param args the argument list (referenced — ownership transferred, or nullptr)
         @param owner optional owner identifier for per-owner flush tracking (empty = untracked)
+        @param sandbox_ctx the sandbox of the code that added the timer, which governs the callback
     */
     DLLLOCAL void dispatchAsync(ResolvedCallReferenceNode* callback, QoreListNode* args,
-        const std::string& owner = std::string());
+        const std::string& owner = std::string(), AsyncIoSandboxContext sandbox_ctx = AsyncIoSandboxContext());
 
     //! Dispatch continuePoll() asynchronously with result delivery back to I/O thread
     /** @param spop_obj the AbstractPollOperation object (referenced — ownership transferred)
@@ -1224,6 +1231,7 @@ private:
     struct TimerInfo {
         QoreValue udata;                //!< Referenced Qore user data
         std::string owner;              //!< Owner identifier for per-owner callback flush (empty if untracked)
+        AsyncIoSandboxContext sandbox_ctx; //!< The sandbox of the code that added the timer, for its callback
     };
 
     //! Per-I/O-thread context — each thread owns its own event loop, cache, and socket state

@@ -979,7 +979,7 @@ void QoreNetworkSecurityManager::copyFrom(const QoreNetworkSecurityManager& othe
 
 QoreSandboxManager::QoreSandboxManager()
     : memory_limit(0), cpu_time_limit(0), wall_time_limit(0),
-      max_threads(0), max_recursion(0), interrupt_requested(false) {
+      max_threads(0), max_recursion(0), interrupt_requested(false), active_threads(0) {
 }
 
 QoreSandboxManager::~QoreSandboxManager() {
@@ -1031,6 +1031,27 @@ void QoreSandboxManager::setMaxThreads(int count) {
 
 int QoreSandboxManager::getMaxThreads() const {
     return max_threads;
+}
+
+int QoreSandboxManager::acquireThreadSlot(ExceptionSink* xsink) {
+    int count = active_threads.load();
+    while (true) {
+        int max = max_threads.load();
+        if (max > 0 && count >= max) {
+            xsink->raiseException("THREAD-CREATION-FAILURE", "cannot start a thread: sandbox thread limit of %d "
+                "reached", max);
+            return -1;
+        }
+        if (active_threads.compare_exchange_weak(count, count + 1)) {
+            return 0;
+        }
+    }
+}
+
+void QoreSandboxManager::releaseThreadSlot() {
+    int prev = active_threads.fetch_sub(1);
+    assert(prev > 0);
+    (void)prev;
 }
 
 void QoreSandboxManager::setMaxRecursionDepth(int depth) {
@@ -1112,7 +1133,7 @@ QoreHashNode* QoreSandboxManager::getConfiguration(ExceptionSink* xsink) const {
     config->setKeyValue("memory_limit", (int64)memory_limit, xsink);
     config->setKeyValue("cpu_time_limit", cpu_time_limit, xsink);
     config->setKeyValue("wall_time_limit", wall_time_limit, xsink);
-    config->setKeyValue("max_threads", max_threads, xsink);
+    config->setKeyValue("max_threads", max_threads.load(), xsink);
     config->setKeyValue("max_recursion", max_recursion, xsink);
     config->setKeyValue("interrupt_requested", interrupt_requested.load(), xsink);
 
@@ -1198,7 +1219,8 @@ QoreSandboxManager* QoreSandboxManager::copy() const {
     result->memory_limit = memory_limit;
     result->cpu_time_limit = cpu_time_limit;
     result->wall_time_limit = wall_time_limit;
-    result->max_threads = max_threads;
+    result->max_threads = max_threads.load();
+    // the copy governs no threads yet
     result->max_recursion = max_recursion;
     // Don't copy interrupt state
 
@@ -1218,7 +1240,7 @@ QoreSandboxManager* QoreSandboxManager::createLockdown() {
     sm->setMemoryLimit(10 * 1024 * 1024);   // 10 MB
     sm->setCPUTimeLimit(1000);               // 1 second
     sm->setWallTimeLimit(5000);              // 5 seconds
-    sm->setMaxThreads(1);                    // Single thread only
+    sm->setMaxThreads(1);                    // one thread started by the sandboxed code at a time
     sm->setMaxRecursionDepth(100);           // Limited recursion
 
     return sm;

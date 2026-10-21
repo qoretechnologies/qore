@@ -1041,6 +1041,14 @@ QoreCallDispatcher::QoreCallDispatcher(int max_workers, AsyncIoControllerPriv* c
 QoreCallDispatcher::~QoreCallDispatcher() {
 }
 
+AsyncIoSandboxContext capture_async_io_sandbox_context() {
+    std::shared_ptr<QoreSandboxContext> ctx = std::make_shared<QoreSandboxContext>();
+    if (ctx->manager || ctx->policy_manager) {
+        return ctx;
+    }
+    return AsyncIoSandboxContext();
+}
+
 void QoreCallDispatcher::dispatchAbortAsync(QoreObject* spop_obj, const std::string& owner,
         AsyncIoSandboxContext sandbox_ctx) {
     AsyncWorkItem item{spop_obj, nullptr, nullptr, nullptr, DT_ABORT, nullptr, std::string()};
@@ -1058,9 +1066,10 @@ void QoreCallDispatcher::dispatchOnCompleteAsync(QoreObject* spop_obj, QoreHashN
 }
 
 void QoreCallDispatcher::dispatchAsync(ResolvedCallReferenceNode* callback, QoreListNode* args,
-        const std::string& owner) {
+        const std::string& owner, AsyncIoSandboxContext sandbox_ctx) {
     AsyncWorkItem item{nullptr, nullptr, callback, args, DT_CALLBACK, nullptr, std::string()};
     item.owner = owner;
+    item.sandbox_ctx = std::move(sandbox_ctx);
     enqueue(std::move(item));
 }
 
@@ -1256,7 +1265,9 @@ void QoreCallDispatcher::enqueue(AsyncWorkItem&& item) {
             if (committed >= active_workers && active_workers < max_workers) {
                 ++active_workers;
                 ExceptionSink xsink;
-                int tid = q_start_thread(&xsink, workerEntry, this, QTF_EXTERNAL_LIFECYCLE);
+                // a callback worker runs the work of every submitter, each item under the sandbox it captured
+                // when it was submitted (AsyncIoSandboxContext), so it does not inherit the starting code's sandbox
+                int tid = q_start_thread(&xsink, workerEntry, this, QTF_EXTERNAL_LIFECYCLE | QTF_NO_SANDBOX_INHERIT);
                 if (tid == -1) {
                     --active_workers;
                 }
@@ -2569,15 +2580,8 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
     }
 
     // the sandbox of the code that submits the operation governs its steps on callback workers (see
-    // AsyncIoSandboxContext); a nested capture keeps a context that is applied, so an operation submitted by a step of
-    // another operation inherits that operation's sandbox
-    AsyncIoSandboxContext sandbox_ctx;
-    {
-        std::shared_ptr<QoreSandboxContext> ctx = std::make_shared<QoreSandboxContext>();
-        if (ctx->manager || ctx->policy_manager) {
-            sandbox_ctx = std::move(ctx);
-        }
-    }
+    // AsyncIoSandboxContext)
+    AsyncIoSandboxContext sandbox_ctx = capture_async_io_sandbox_context();
 
     // Detect Qore-language method overrides — if present, dispatch to worker thread
     const QoreClass* spop_cls = spop_obj->getClass();
@@ -4834,6 +4838,9 @@ int64_t AsyncIoControllerPriv::addTimer(const DateTimeNode* deadline, QoreValue 
     // Convert deadline to absolute microseconds since epoch
     int64_t deadline_us = deadline->getEpochMicrosecondsUTC();
 
+    // captured outside the lock: capturing resolves the sandbox through the thread's Program context
+    AsyncIoSandboxContext sandbox_ctx = capture_async_io_sandbox_context();
+
     {
         AutoLocker al(m);
 
@@ -4866,7 +4873,9 @@ int64_t AsyncIoControllerPriv::addTimer(const DateTimeNode* deadline, QoreValue 
         TimerInfo tinfo;
         tinfo.udata = udata.refSelf();
         tinfo.owner = owner;
-        timer_info_map[id] = tinfo;
+        // the sandbox of the code that adds the timer governs its callback
+        tinfo.sandbox_ctx = std::move(sandbox_ctx);
+        timer_info_map[id] = std::move(tinfo);
 
         target.cmdq.push(cmd);
         ++submit_seq;
@@ -5012,7 +5021,9 @@ void AsyncIoControllerPriv::startIntern(ExceptionSink* xsink) {
 
     ready_flag = false;
 
-    int thread_flags = external_lifecycle_threads ? QTF_EXTERNAL_LIFECYCLE : 0;
+    // an I/O thread runs the operations of every submitter, each step under the sandbox the operation captured when
+    // it was submitted (AsyncIoSandboxContext), so it does not inherit the sandbox of the code that starts it
+    int thread_flags = QTF_NO_SANDBOX_INHERIT | (external_lifecycle_threads ? QTF_EXTERNAL_LIFECYCLE : 0);
 
     // Start all I/O threads
     for (int i = 0; i < num_io_threads; ++i) {
@@ -6359,6 +6370,7 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
             int64_t id;
             QoreValue udata;
             std::string owner;
+            AsyncIoSandboxContext sandbox_ctx;
         };
         std::vector<TimerEvent> timer_events;
         ResolvedCallReferenceNode* cb_snapshot = nullptr;
@@ -6437,7 +6449,8 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                         int64_t tid_val = events[i].timer_id;
                         auto it = timer_info_map.find(tid_val);
                         if (it != timer_info_map.end()) {
-                            timer_events.push_back({tid_val, it->second.udata, it->second.owner});
+                            timer_events.push_back({tid_val, it->second.udata, it->second.owner,
+                                std::move(it->second.sandbox_ctx)});
                             timer_info_map.erase(it);
                         }
                     }
@@ -6463,7 +6476,8 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                 // fired-but-not-yet-run callback via flushCallbacksByOwner()
                 ResolvedCallReferenceNode* code_ref = te.udata.get<ResolvedCallReferenceNode>();
                 code_ref->ref();
-                call_dispatcher.load(std::memory_order_acquire)->dispatchAsync(code_ref, nullptr, te.owner);
+                call_dispatcher.load(std::memory_order_acquire)->dispatchAsync(code_ref, nullptr, te.owner,
+                    std::move(te.sandbox_ctx));
             } else if (cb_snapshot) {
                 // Fall back to the registered timer callback for non-code udata
                 ReferenceHolder<QoreHashNode> timer_hash(
@@ -6476,7 +6490,8 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                     QoreListNode* args = new QoreListNode(autoTypeInfo);
                     args->push(timer_hash.release(), xsink);
                     cb_snapshot->ref();
-                    call_dispatcher.load(std::memory_order_acquire)->dispatchAsync(cb_snapshot, args);
+                    call_dispatcher.load(std::memory_order_acquire)->dispatchAsync(cb_snapshot, args, std::string(),
+                        std::move(te.sandbox_ctx));
                 }
             }
             // the dispatched callback holds its own reference, but it can finish first; a closure can hold the
