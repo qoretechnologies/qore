@@ -3684,6 +3684,207 @@ public:
     }
 };
 
+//! An I/O event is reported to the operation it is for once
+/** The I/O thread reports the events of a poll to their operations in its next iteration.  When a command arrived
+    before it polled again, it went round without polling and reported the same events once more: an operation that
+    had consumed its event when it was continued for it was continued again for an event that was no longer there,
+    against the contract of AbstractPollOperation::continuePoll().  asyncio_state_events.qtest's "a canceled
+    operation ends with its last state" saw a %Qore operation go on to its next state with no notification, when its
+    worker returned the result of the step that acknowledged the notification before the I/O thread polled.
+
+    The operation waits for an event notifier and acknowledges the notification each time it is continued for it.  A
+    test hook pushes a command just before the I/O thread polls, in the iteration that continued the operation for
+    its notification; the operation must not be continued again before the I/O thread has polled.
+*/
+class AsyncIoStaleReadinessTest {
+    typedef AsyncIoControllerPriv Ctrl;
+
+    //! Waits for a notifier; acknowledges its notification each time it is continued after its first call
+    class NotifiedOp : public SocketPollOperationBase {
+    public:
+        DLLLOCAL NotifiedOp(QoreObject* notifier_obj, QoreEventNotifier* notifier) : notifier_obj(notifier_obj),
+                notifier(notifier) {
+        }
+
+        DLLLOCAL virtual bool goalReached() const override {
+            return false;
+        }
+
+        DLLLOCAL virtual void abort(ExceptionSink*) override {
+        }
+
+        DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink) override {
+            if (calls.load()) {
+                notifier->acknowledge(xsink);
+                if (*xsink) {
+                    return nullptr;
+                }
+            }
+            ReferenceHolder<QoreHashNode> info(new QoreHashNode(hashdeclSocketPollInfo, xsink), xsink);
+            info->setKeyValue("events", SOCK_POLLIN, xsink);
+            info->setKeyValue("socket", notifier_obj->objectRefSelf(), xsink);
+            if (*xsink) {
+                return nullptr;
+            }
+            {
+                std::lock_guard<std::mutex> g(l);
+                ++calls;
+            }
+            cond.notify_all();
+            return info.release();
+        }
+
+        DLLLOCAL virtual QoreValue getOutput() const override {
+            return calls.load();
+        }
+
+        DLLLOCAL virtual const char* getStateImpl() const override {
+            return "waiting";
+        }
+
+        //! Waits until the operation has been continued \a n times; returns false if it is not within the hang guard
+        DLLLOCAL bool waitForCalls(int n) {
+            std::unique_lock<std::mutex> g(l);
+            return cond.wait_for(g, std::chrono::seconds(30), [&]() { return calls.load() >= n; });
+        }
+
+        //! the number of continuePoll() calls
+        std::atomic<int> calls{0};
+
+    private:
+        QoreObject* notifier_obj;
+        QoreEventNotifier* notifier;
+        std::mutex l;
+        std::condition_variable cond;
+    };
+
+    //! The state of the test hook; guarded by the controller's lock
+    struct HookState {
+        NotifiedOp* op;
+        //! true once the hook has pushed its command
+        bool fired = false;
+        //! the number of times the I/O thread reached the hook again after it pushed its command
+        int checks_after = 0;
+        //! signaled when \c checks_after changes
+        QoreCondition cond;
+    };
+
+public:
+    static void run(UnitTestCounters& c) {
+        ExceptionSink xsink;
+        ReferenceHolder<AsyncIoControllerPriv> ctrl(new AsyncIoControllerPriv(false, &xsink), &xsink);
+        UT_ASSERT(c, !xsink, "stale-readiness controller construction succeeds");
+        if (xsink) {
+            xsink.clear();
+            return;
+        }
+        struct Cleanup {
+            AsyncIoControllerPriv* ctrl;
+            ExceptionSink& xsink;
+            UnitTestCounters& c;
+
+            ~Cleanup() {
+                xsink.clear();
+                ctrl->stopClear(&xsink);
+                UT_ASSERT(c, !xsink, "stale-readiness controller cleanup succeeds");
+                xsink.clear();
+            }
+        } cleanup{*ctrl, xsink, c};
+
+        ctrl->setMaxIoThreads(1, &xsink);
+        ctrl->start(&xsink);
+        UT_ASSERT(c, !xsink, "stale-readiness controller starts");
+        if (xsink) {
+            return;
+        }
+
+        ReferenceHolder<QoreEventNotifier> notifier(new QoreEventNotifier(&xsink), &xsink);
+        UT_ASSERT(c, !xsink && notifier->isValid(), "stale-readiness notifier is created");
+        if (xsink || !notifier->isValid()) {
+            return;
+        }
+        notifier->ref();
+        ReferenceHolder<QoreObject> notifier_obj(new QoreObject(QC_EVENTNOTIFIER, getProgram(), *notifier), &xsink);
+
+        NotifiedOp* op = new NotifiedOp(*notifier_obj, *notifier);
+        ReferenceHolder<QoreObject> op_obj(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), op), &xsink);
+        op->setSelf(*op_obj);
+        op_obj->setValue("sock", notifier_obj->objectRefSelf(), &xsink);
+        op_obj->setValue("goal", new QoreStringNode("stale-readiness"), &xsink);
+        ReferenceHolder<QoreHashNode> info(new QoreHashNode(hashdeclSocketPollOperationInfo, &xsink), &xsink);
+        info->setKeyValue("sock", notifier_obj->objectRefSelf(), &xsink);
+        info->setKeyValue("spop", op_obj->objectRefSelf(), &xsink);
+        info->setKeyValue("owner", new QoreStringNode("stale-readiness-unit-test"), &xsink);
+        info->setKeyValue("to", -1, &xsink);
+        UT_ASSERT(c, !xsink, "stale-readiness submission info is initialized");
+        if (xsink) {
+            return;
+        }
+        ReferenceHolder<QoreObject> queue_obj(ctrl->submit(nullptr, info.release(), false, &xsink), &xsink);
+        UT_ASSERT(c, !xsink && queue_obj, "stale-readiness operation is submitted");
+        if (xsink || !queue_obj) {
+            return;
+        }
+        UT_ASSERT(c, op->waitForCalls(1), "the operation makes its first step");
+
+        HookState hs;
+        hs.op = op;
+        // removes the hook on every exit path, before its state goes out of scope
+        struct HookGuard {
+            AsyncIoControllerPriv* ctrl;
+
+            ~HookGuard() {
+                AutoLocker al(ctrl->m);
+                ctrl->io_threads[0]->dbg_before_poll = nullptr;
+            }
+        } hook_guard{*ctrl};
+        {
+            AutoLocker al(ctrl->m);
+            Ctrl* cp = *ctrl;
+            ctrl->io_threads[0]->dbg_before_poll = [cp, &hs](Ctrl::IoThreadContext& t) {
+                if (hs.fired) {
+                    ++hs.checks_after;
+                    hs.cond.broadcast();
+                    return;
+                }
+                if (hs.op->calls.load() < 2) {
+                    return;
+                }
+                // the operation was continued for its notification in this iteration: a command arrives before the
+                // I/O thread polls, as one from another thread can
+                Ctrl::Command cmd;
+                cmd.cmd = Ctrl::IoCommand::WakeSocket;
+                cmd.sock_hash = "stale-readiness-unit-test";
+                t.cmdq.push(std::move(cmd));
+                ++cp->submit_seq;
+                ++t.submit_seq;
+                hs.fired = true;
+            };
+        }
+
+        notifier->notify();
+        UT_ASSERT(c, op->waitForCalls(2), "the operation is continued for its notification");
+        bool checked = false;
+        {
+            AutoLocker al(ctrl->m);
+            // the I/O thread reaches the hook again only after it has processed the command and continued the
+            // operations that it reported events to; it then polls
+            while (!hs.checks_after) {
+                if (hs.cond.wait2(&ctrl->m, 30000)) {
+                    break;
+                }
+            }
+            checked = hs.fired && hs.checks_after;
+        }
+        UT_ASSERT(c, checked, "the I/O thread processes the command that arrived before its poll");
+        UT_ASSERT_EQ(c, 2, op->calls.load(), "the operation is not continued again for the notification it consumed");
+
+        SimpleRefHolder<QoreStringNode> owner(new QoreStringNode("stale-readiness-unit-test"));
+        ctrl->cancelByOwner(*owner, &xsink);
+        xsink.clear();
+    }
+};
+
 //! A submission that loses the race with the controller's shutdown releases its result Queue
 /** submit() packages an operation from a thread that is not its I/O thread into a SubmitOp command; when the
     controller starts shutting down before the command is pushed, cleanupAbandonedCommand() delivers a canceled
@@ -8664,6 +8865,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     AsyncIoAbandonedSubmitTest::run(c);
     AsyncIoRegistrationCloseTest::run(c);
     AsyncIoZeroPollHintTest::run(c);
+    AsyncIoStaleReadinessTest::run(c);
     AsyncIoStoppingThreadTest::run(c);
     AsyncIoFrameSendTest::run(c);
     ut_cond_wait_cancel_in_window(c);

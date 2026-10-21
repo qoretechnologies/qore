@@ -550,6 +550,7 @@ class AsyncIoControllerPriv : public AbstractPrivateData {
     friend class AsyncIoOpCacheTest;
     friend class AsyncIoAbandonedSubmitTest;
     friend class AsyncIoRegistrationCloseTest;
+    friend class AsyncIoStaleReadinessTest;
     friend class AsyncIoStoppingThreadTest;
     friend class AsyncIoFrameSendTest;
 #endif
@@ -1354,6 +1355,9 @@ private:
         bool dbg_held = false;
         //! Test hook: signaled when \c dbg_held is set, and to release the thread
         QoreCondition dbg_cond;
+        //! Test hook: called by the thread with the controller's lock held just before it checks its command queue
+        //! for the last time before it polls its event loop; it may push a command to the queue
+        std::function<void(IoThreadContext&)> dbg_before_poll;
 #endif
 
         QoreEventLoop* loop = nullptr;

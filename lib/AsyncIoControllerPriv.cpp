@@ -5114,7 +5114,8 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
 
     // ready_socket_hashes must persist across iterations:
     // Phase 1 checks this set to decide which operations to continuePoll();
-    // it is populated at the bottom of each iteration after EventLoop::poll().
+    // it is populated at the bottom of each iteration after EventLoop::poll(),
+    // and cleared by the Phase 1 that reports its events.
     std::unordered_set<std::string> ready_socket_hashes;
     std::unordered_map<std::string, int> ready_socket_events;
     //! the events of extra fds that became ready, by operation ID
@@ -5341,6 +5342,13 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
             expand_ready_events(ready_socket_events);
             expand_hashes(ready_socket_hashes, true);
             expand_hashes(woken_hashes, true);
+            // the events of the last poll have now been reported to their operations; they must not be reported
+            // again when the loop goes round without polling (when a command arrives before the poll, or the poll
+            // fails): an operation continued for an event may have consumed it, and would be continued again for an
+            // event that is no longer there
+            ready_socket_hashes.clear();
+            ready_socket_events.clear();
+            ready_key_events.clear();
 
             // --- Step C: Expired timeouts ---
             while (!t.timeout_heap.empty()) {
@@ -6332,6 +6340,12 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
         // the MPSC queue's producer visibility window.
         {
             AutoLocker al(m);
+#ifdef DEBUG
+            // test hook: a command can be pushed at this point, as by another thread
+            if (t.dbg_before_poll) {
+                t.dbg_before_poll(t);
+            }
+#endif
             if (!t.cmdq.empty()) {
                 continue;
             }

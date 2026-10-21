@@ -5136,6 +5136,11 @@ while (*binary chunk = input.read(65536)) {
       socket or an event notifier was closed while the controller waited for I/O on it and its descriptor number was
       given to the other connection.  The descriptor of a socket or event notifier now stays open while the controller
       waits for I/O on it, and is closed when the controller stops waiting
+    - Fixed the async I/O controller continuing a poll operation a second time for an I/O event that it had already
+      handled, when another request reached the controller before it waited for I/O again: an operation that
+      consumes its event in @ref Qore::AbstractPollOperation::continuePoll() "AbstractPollOperation::continuePoll()",
+      such as one that acknowledges an @ref Qore::EventNotifier "EventNotifier", could move on to its next step
+      without a new event
     - Fixed a data race when @ref Qore::Socket::isOpen() "Socket::isOpen()" or another method that checks whether a
       socket is open was called while another thread closed the socket
     - Fixed a rare crash at the end of a process that used asynchronous socket I/O: the end of the process could

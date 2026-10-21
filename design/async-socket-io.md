@@ -85,6 +85,14 @@ to their public `HTTPCLIENT-TIMEOUT` error. Explicit Future cancellation still p
   - At the end of Phase 1 (cache snapshot), `processed_seq` is set to `submit_seq` and
     `processed_cond` is broadcast.  This allows `waitForProcessing()` to block until the I/O
     thread has captured all previously submitted operations in its poll set.
+  - The events of a poll are reported once: the Phase 1 that follows the poll queues their operations and clears
+    them.  When a command arrives before the next poll, the loop goes round without polling; the events it already
+    reported must not be reported again, as an operation continued for an event may have consumed it (read the data,
+    or acknowledged an `EventNotifier`), and `continuePoll()` is only called again for an event received after the
+    operation returned its poll info.  `AsyncIoStaleReadinessTest` in the C++ unit tests pushes a command just
+    before the poll with a debug hook (`IoThreadContext::dbg_before_poll`) and checks that the operation is not
+    continued again.
+
   - The I/O threads of the global controller are external-lifecycle threads (`QTF_EXTERNAL_LIFECYCLE`, set by
     `setExternalLifecycleThreads()` when the global controller is created): the cleanup at process exit waits for
     those after it stops the controller, and only for those, as it waits for the other threads before it starts.
