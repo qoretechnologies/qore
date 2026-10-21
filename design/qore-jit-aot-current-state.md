@@ -3795,3 +3795,26 @@ using the already-admitted invocation-local slot with unchanged live reference
 evaluation, cleanup order and generic fallback. The current profile shows
 repeated generic root lookup; no gain is assumed. Neither Java parity nor a
 global ceiling has been established.
+
+## Rejected prepared compound-root refresh (post-a22f87615)
+
+An existing prepared AOT local slot can eliminate repeated root lookup while
+preserving evaluation and cleanup, but this prototype failed its fixed 2% broad
+performance gate. Targeted screen/confirmation improve list mutation by
+2.171%/2.333% versus before; the broad screen improves only 1.598% versus before
+and 0.976% versus the disabled control (192.622/191.414 -> 189.545 ns/item).
+All 2277 runs / 6831 windows and adverse comparisons are retained. No broad
+confirmation retry or new runtime optimization is retained.
+
+Candidate focused Release: 16 fixtures / 22 QUnit cases / 9640 assertions;
+restored: 15 / 21 / 9422. Each fixture count includes two silent fixtures.
+Debug native assertions are 2068 per setting for the candidate and 2024 for
+restored HEAD. Indexed compound/weak references pass, and 125 Release module
+aliases are restored. The two original harness failures remain documented.
+These are focused gates, not full candidate retention qualification.
+
+Next examine first-public-base identity acceptance in the pinned receiver store,
+retaining ordinary fallback, private-access ordering, raw/parameterized checks,
+live slot state and real-reference ownership. No new call optimization has been
+implemented or measured yet. See RESULTS.md and
+`results-aot-prepared-lvalue-refresh-rejected-macos-arm64.json`. Neither Java parity nor a global ceiling is established.

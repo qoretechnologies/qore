@@ -19540,3 +19540,58 @@ These are whole-workload times, not new Java/develop ratios or isolated call
 latencies; neither parity nor a global performance ceiling is established.
 All layouts, raw windows, test logs, source patch, drivers and 62 audit items:
 [results-aot-lvalue-loop-cleanup-rejected-macos-arm64.json](results-aot-lvalue-loop-cleanup-rejected-macos-arm64.json).
+
+## Rejected AOT prepared compound-root refresh (2026-10-21)
+
+The branch includes develop `353336604` at merged baseline `a22f87615`.
+Fresh merged Release/Debug qualification preceded this experiment. The prototype
+reused an already-prepared AOT local slot after compound mutation, eliminating
+repeated lookup while preserving live evaluation, ownership publication,
+deferred cleanup, exception checks and the null-slot fallback.
+
+Release `-O3 -DNDEBUG`, `qcc -O3`, three fixed layouts, three warmups and
+three 300-ms samples per fork; targeted/broad screens use three forks and
+targeted confirmation uses five. These are geometric layout means for the
+list-mutation workload, not isolated operation latency:
+
+|!Phase|!Before ns/item|!Candidate ns/item|!Selector off ns/item|!Time reduction vs before|!Time reduction vs selector off
+|Targeted screen|193.527939|189.326134|194.281536|2.171%|2.551%
+|Targeted confirmation|191.277463|186.814289|192.925754|2.333%|3.168%
+|Broad 55-workload screen|192.622457|189.545148|191.413692|1.598%|0.976%
+
+The targeted screen and confirmation passed the predeclared 2% minimum against
+both controls, with all layouts improving. The broad screen did not: its
+1.598%/0.976% improvements miss that same fixed gate. The prototype is rejected;
+there is no broad confirmation retry, relaxed threshold or retained runtime gain.
+All 2277 runs / 6831 timed windows, including every loss, are preserved.
+
+Six broad workload/layout/control comparisons show disjoint fork ranges and
+slowdowns of at least 3% (up to 7.290%); two geometric-layout aggregates exceed
+3%. These are single-screen signals, not confirmed repeated regressions, and
+are not the rejection reason. All 55 workloads and controls are in the report.
+Only listMutate changes in generated benchmark LLVM. The target grows from
+782 to 790 ARM64 instructions, retaining the 320-byte frame and cancellation
+checks; the disabled bodies match before. Targeted references: 6507; broad: 7047.
+
+Candidate focused Release passes 16 total fixtures / 22 QUnit cases / 9640
+assertions, including two silent exit-status fixtures. Direct Debug units pass
+2068 assertions with prepared admission enabled and disabled. Two incomplete
+outer qualification runs exposed CMake/qmod-link assumptions; their successful
+child logs, failures and original drivers are preserved, and a fresh corrected
+run passed. No candidate code change was needed for those harness corrections.
+
+The five production edits and two fixtures were archived recoverably and removed.
+Fresh restored-HEAD qualification passes 15 total fixtures / 21 QUnit cases /
+9422 assertions, including two silent fixtures; Debug native units pass 2024
+assertions in both settings. Indexed compound and weak-reference supplements
+pass, and all 125 build-owned Release module aliases are restored. This is
+focused restoration qualification, not full selected Release/Debug reruns.
+
+Next investigate repeated public-inheritance acceptance during pinned receiver
+assignment. Any shortcut must preserve first-match/private-access and live
+parameterized-object behavior; an unguarded class cache or arbitrary later-base
+identity shortcut is not justified. This is a distinct, unmeasured hypothesis.
+No fresh Java/develop ratio, Java parity or global performance ceiling is claimed.
+
+All raw timing records, losses, qualification logs, recovery patch, drivers and
+62 audit items: [results-aot-prepared-lvalue-refresh-rejected-macos-arm64.json](results-aot-prepared-lvalue-refresh-rejected-macos-arm64.json).
