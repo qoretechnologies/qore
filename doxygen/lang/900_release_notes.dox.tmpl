@@ -5124,6 +5124,10 @@ while (*binary chunk = input.read(65536)) {
       or write could use its TLS connection after it was freed, and could read from or write to another connection
       that had been given the closed descriptor's number.  The read or write now fails, and the connection and the
       descriptor are released when it ends
+    - Fixed the async I/O threads using a CPU core for up to a millisecond before each timer that they wait for, such
+      as the timers of connection pools and protocol keep-alives: a wait was cut to whole milliseconds and ended
+      early, and the thread then polled without waiting until the timer was due.  Waits now use the system's finest
+      resolution and never end before the timer is due
     - Fixed an HTTP/3 connection attempt to a server that does not answer waiting forever instead of failing at its
       connect timeout, which also kept an automatic protocol selection from ever falling back or reporting the error:
       when the timeout expired while the attempt was being processed, the async I/O controller did not continue it

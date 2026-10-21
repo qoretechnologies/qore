@@ -33,9 +33,16 @@
 #include "qore/intern/QoreEventLoop.h"
 
 #include <cerrno>
+#include <climits>
 #include <cstring>
 #include <unistd.h>
 #include <poll.h>
+#include <time.h>
+#if defined(__linux__)
+#include <sys/syscall.h>
+#endif
+
+#include <atomic>
 
 //! Returns the current wall-clock time in microseconds since the Unix epoch (CLOCK_REALTIME).
 /** Used only for comparing against user-supplied absolute deadlines (\c addTimer() deadlines
@@ -49,6 +56,48 @@ static int64_t q_epoch_us_fast() {
     int64_t secs = q_epoch_us(us);
     return secs * 1000000LL + us;
 }
+
+//! Sets @p ts to a wait of @p us microseconds
+static void q_wait_us_to_timespec(int64_t us, struct timespec& ts) {
+    ts.tv_sec = static_cast<time_t>(us / 1000000);
+    ts.tv_nsec = static_cast<long>((us % 1000000) * 1000);
+}
+
+//! Returns a wait of @p us microseconds in milliseconds, rounded up, for a call that only waits whole milliseconds
+/** A timer must never fire early: a wait rounded down ends before the timer is due, and the loop then polls again
+    without blocking until it is, busy-looping its thread.  A wait rounded up ends late by less than the resolution.
+*/
+static int q_wait_us_to_ms(int64_t us) {
+    int64_t ms = us / 1000 + (us % 1000 ? 1 : 0);
+    return ms > INT_MAX ? INT_MAX : static_cast<int>(ms);
+}
+
+#if defined(__linux__) && (defined(HAVE_EPOLL_PWAIT2) || (defined(SYS_epoll_pwait2) && defined(__LP64__)))
+#define QORE_HAVE_EPOLL_NS_WAIT 1
+//! Set when the system does not provide epoll_pwait2() (Linux before 5.11, or a seccomp filter refusing it)
+static std::atomic<bool> q_epoll_pwait2_unavailable{false};
+
+//! Waits for epoll events with nanosecond resolution: @p ts is the wait
+/** @return the result of the call, or -2 if epoll_pwait2() is not available, in which case the caller waits with
+    epoll_wait()
+*/
+static int q_epoll_pwait2(int epfd, struct epoll_event* events, int maxevents, const struct timespec* ts) {
+    if (q_epoll_pwait2_unavailable.load(std::memory_order_relaxed)) {
+        return -2;
+    }
+#ifdef HAVE_EPOLL_PWAIT2
+    int rc = epoll_pwait2(epfd, events, maxevents, ts, nullptr);
+#else
+    // the C library has no wrapper (musl): on a 64-bit system struct timespec is the kernel's __kernel_timespec
+    int rc = static_cast<int>(syscall(SYS_epoll_pwait2, epfd, events, maxevents, ts, nullptr, 0));
+#endif
+    if (rc < 0 && (errno == ENOSYS || errno == EPERM)) {
+        q_epoll_pwait2_unavailable.store(true, std::memory_order_relaxed);
+        return -2;
+    }
+    return rc;
+}
+#endif
 
 QoreEventLoop::QoreEventLoop(ExceptionSink* xsink) {
 #ifdef DARWIN
@@ -368,20 +417,17 @@ bool QoreEventLoop::cancelTimer(int64_t id) {
 }
 
 int QoreEventLoop::poll(std::vector<QoreEventInfo>& events, int timeout_ms, ExceptionSink* xsink) {
-    // Clamp timeout based on earliest timer deadline
-    int effective_timeout_ms = timeout_ms;
+    // The wait in microseconds, -1 for no limit, clamped to the earliest timer deadline.  It is kept in microseconds
+    // and waited for with the resolution the system provides (kevent()'s timespec, epoll_pwait2(), ppoll()), and
+    // rounded up where only whole milliseconds can be waited for: a timer due in less than a millisecond used to make
+    // the wait 0, so the loop polled without blocking until the timer was due, busy-looping its thread.
+    int64_t wait_us = timeout_ms < 0 ? -1 : static_cast<int64_t>(timeout_ms) * 1000;
     if (!timer_set.empty()) {
-        int64_t now_us = q_epoch_us_fast();
-        int64_t remaining_us = timer_set.begin()->deadline_us - now_us;
+        int64_t remaining_us = timer_set.begin()->deadline_us - q_epoch_us_fast();
         if (remaining_us <= 0) {
-            effective_timeout_ms = 0;
-        } else {
-            int timer_ms = (int)(remaining_us / 1000);
-            // Sub-millisecond deadline: poll immediately (truncation to 0
-            // is correct — don't oversleep by rounding up to 1ms)
-            if (effective_timeout_ms < 0 || timer_ms < effective_timeout_ms) {
-                effective_timeout_ms = timer_ms;
-            }
+            wait_us = 0;
+        } else if (wait_us < 0 || remaining_us < wait_us) {
+            wait_us = remaining_us;
         }
     }
 
@@ -401,10 +447,18 @@ int QoreEventLoop::poll(std::vector<QoreEventInfo>& events, int timeout_ms, Exce
         return 0;
     }
 
-    // Timer-only mode: sleep using portable poll(nullptr, 0, timeout)
+    // Timer-only mode: sleep until the earliest timer is due (wait_us >= 0, as there is a timer)
     if (!has_fds) {
-        if (effective_timeout_ms > 0) {
-            ::poll(nullptr, 0, effective_timeout_ms);
+        if (wait_us > 0) {
+#ifdef HAVE_NANOSLEEP
+            struct timespec ts, rem;
+            q_wait_us_to_timespec(wait_us, ts);
+            while (nanosleep(&ts, &rem) && errno == EINTR) {
+                ts = rem;
+            }
+#else
+            ::poll(nullptr, 0, q_wait_us_to_ms(wait_us));
+#endif
         }
         // Collect expired timers only
         events.clear();
@@ -422,13 +476,12 @@ int QoreEventLoop::poll(std::vector<QoreEventInfo>& events, int timeout_ms, Exce
     struct timespec ts;
     struct timespec* pts = nullptr;
     int64_t deadline_us = 0;
-    if (effective_timeout_ms >= 0) {
-        ts.tv_sec = effective_timeout_ms / 1000;
-        ts.tv_nsec = (effective_timeout_ms % 1000) * 1000000;
+    if (wait_us >= 0) {
+        q_wait_us_to_timespec(wait_us, ts);
         pts = &ts;
         // Monotonic clock for the EINTR-retry deadline: this is a relative "wait at most N ms"
         // bound, so it must not be skewed by realtime clock adjustments.
-        deadline_us = q_get_monotonic_us() + (int64_t)effective_timeout_ms * 1000;
+        deadline_us = q_get_monotonic_us() + wait_us;
     }
 
     int rc;
@@ -446,8 +499,7 @@ int QoreEventLoop::poll(std::vector<QoreEventInfo>& events, int timeout_ms, Exce
                 rc = 0;
                 break;
             }
-            ts.tv_sec = remaining_us / 1000000;
-            ts.tv_nsec = (remaining_us % 1000000) * 1000;
+            q_wait_us_to_timespec(remaining_us, ts);
         }
     }
 
@@ -530,25 +582,37 @@ int QoreEventLoop::poll(std::vector<QoreEventInfo>& events, int timeout_ms, Exce
     std::vector<struct epoll_event> epevents(epoll_size);
 
     int rc;
-    int epoll_timeout_ms = effective_timeout_ms;
+    int64_t epoll_wait_us = wait_us;
     int64_t epoll_deadline_us = 0;
-    if (epoll_timeout_ms >= 0) {
+    if (epoll_wait_us >= 0) {
         // Monotonic clock for the EINTR-retry deadline (see kevent path above).
-        epoll_deadline_us = q_get_monotonic_us() + (int64_t)epoll_timeout_ms * 1000;
+        epoll_deadline_us = q_get_monotonic_us() + epoll_wait_us;
     }
     while (true) {
-        rc = epoll_wait(event_fd, epevents.data(), epevents.size(), epoll_timeout_ms);
+        rc = -2;
+#ifdef QORE_HAVE_EPOLL_NS_WAIT
+        // a limited wait with nanosecond resolution; epoll_wait() is the same for no limit and for no wait
+        if (epoll_wait_us > 0) {
+            struct timespec ts;
+            q_wait_us_to_timespec(epoll_wait_us, ts);
+            rc = q_epoll_pwait2(event_fd, epevents.data(), static_cast<int>(epevents.size()), &ts);
+        }
+#endif
+        if (rc == -2) {
+            rc = epoll_wait(event_fd, epevents.data(), epevents.size(),
+                epoll_wait_us < 0 ? -1 : q_wait_us_to_ms(epoll_wait_us));
+        }
         if (rc >= 0 || errno != EINTR) {
             break;
         }
         // Recompute remaining time after EINTR
-        if (epoll_timeout_ms >= 0) {
+        if (epoll_wait_us >= 0) {
             int64_t remaining_us = epoll_deadline_us - q_get_monotonic_us();
             if (remaining_us <= 0) {
                 rc = 0;
                 break;
             }
-            epoll_timeout_ms = (int)(remaining_us / 1000);
+            epoll_wait_us = remaining_us;
         }
     }
 
@@ -624,25 +688,33 @@ int QoreEventLoop::poll(std::vector<QoreEventInfo>& events, int timeout_ms, Exce
     }
 
     int rc;
-    int poll_timeout_ms = effective_timeout_ms;
+    int64_t poll_wait_us = wait_us;
     int64_t poll_deadline_us = 0;
-    if (poll_timeout_ms >= 0) {
+    if (poll_wait_us >= 0) {
         // Monotonic clock for the EINTR-retry deadline (see kevent/epoll paths above).
-        poll_deadline_us = q_get_monotonic_us() + (int64_t)poll_timeout_ms * 1000;
+        poll_deadline_us = q_get_monotonic_us() + poll_wait_us;
     }
     while (true) {
-        rc = ::poll(pollfds.data(), pollfds.size(), poll_timeout_ms);
+#ifdef HAVE_PPOLL
+        struct timespec ts;
+        if (poll_wait_us >= 0) {
+            q_wait_us_to_timespec(poll_wait_us, ts);
+        }
+        rc = ::ppoll(pollfds.data(), pollfds.size(), poll_wait_us < 0 ? nullptr : &ts, nullptr);
+#else
+        rc = ::poll(pollfds.data(), pollfds.size(), poll_wait_us < 0 ? -1 : q_wait_us_to_ms(poll_wait_us));
+#endif
         if (rc >= 0 || errno != EINTR) {
             break;
         }
         // Recompute remaining time after EINTR
-        if (poll_timeout_ms >= 0) {
+        if (poll_wait_us >= 0) {
             int64_t remaining_us = poll_deadline_us - q_get_monotonic_us();
             if (remaining_us <= 0) {
                 rc = 0;
                 break;
             }
-            poll_timeout_ms = (int)(remaining_us / 1000);
+            poll_wait_us = remaining_us;
         }
     }
 

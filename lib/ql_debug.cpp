@@ -1158,6 +1158,80 @@ static void ut_event_loop_remove_recycled_fd(UnitTestCounters& c) {
     close(sv2[1]);
 }
 
+//! A timer due in less than a millisecond, or a fraction of a millisecond away, wakes its event loop once
+/** The loop waited in whole milliseconds and rounded the time to the earliest timer down: a timer due in less than a
+    millisecond made the wait 0, so the loop's thread polled without blocking until the timer was due, and a wait
+    of 1.5 ms ended 0.5 ms early and did the same (an I/O thread of the async I/O controller polled thousands of
+    times for one timer).  The loop must wait until the timer is due - with the resolution the system provides, or
+    rounded up - and never return early without an event.
+
+    The test counts the polls that return no event before the timer's: there is at most one, when the realtime clock
+    of the timer's deadline lags behind the monotonic clock of the wait by a fraction of a microsecond.
+*/
+static void ut_event_loop_sub_ms_timer_wakeups(UnitTestCounters& c) {
+    for (bool with_fd : {true, false}) {
+        for (int64_t delay_us : {300, 1500}) {
+            QoreStringMaker what("a timer %lld us away, %s", (long long)delay_us,
+                with_fd ? "with a descriptor" : "with no descriptor");
+            ExceptionSink xsink;
+            QoreEventLoop loop(&xsink);
+            UT_ASSERT(c, !xsink && loop.isValid(), "sub-ms timer event loop construction succeeds");
+            if (xsink) {
+                xsink.clear();
+                return;
+            }
+            int sv[2] = {-1, -1};
+            if (with_fd) {
+                // a descriptor that never becomes readable, so the loop waits in kevent() / epoll_wait()
+                if (socketpair(AF_UNIX, SOCK_STREAM, 0, sv)) {
+                    UT_ASSERT(c, false, "socketpair() for the sub-ms timer test succeeds");
+                    return;
+                }
+                int rc = loop.add(sv[0], QORE_EV_READ, nullptr, &xsink);
+                UT_ASSERT(c, !rc && !xsink, "the descriptor is registered");
+                xsink.clear();
+            }
+
+            int us;
+            int64_t now_us = q_epoch_us(us) * 1000000 + us;
+            int64_t id = loop.addTimer(now_us + delay_us, nullptr);
+
+            int empty_wakeups = 0;
+            bool fired = false;
+            // bounded: before the fix, the polls end when the timer is due, a few thousand at most
+            while (!fired && empty_wakeups < 1000000) {
+                std::vector<QoreEventInfo> events;
+                int rc = loop.poll(events, -1, &xsink);
+                if (rc < 0 || xsink) {
+                    break;
+                }
+                for (const QoreEventInfo& ev : events) {
+                    if ((ev.events & QORE_EV_TIMER) && ev.timer_id == id) {
+                        fired = true;
+                    }
+                }
+                if (!fired) {
+                    ++empty_wakeups;
+                }
+            }
+            UT_ASSERT(c, !xsink, "polling for the timer raises no exception");
+            xsink.clear();
+            UT_ASSERT(c, fired, what.c_str());
+            UT_ASSERT(c, empty_wakeups <= 1, what.c_str());
+            if (empty_wakeups > 1) {
+                printf("  %s: %d polls returned no event before the timer's\n", what.c_str(), empty_wakeups);
+            }
+
+            if (with_fd) {
+                loop.remove(sv[0], &xsink);
+                xsink.clear();
+                close(sv[0]);
+                close(sv[1]);
+            }
+        }
+    }
+}
+
 //! Tests that a close racing with the release of a socket's descriptor never reaches the reused descriptor number
 /** The system gives the lowest free descriptor number to the next socket opened by any thread.  A close or
     prepareForClose() that read the number before a concurrent close released it, and used it afterwards, shut down
@@ -9044,6 +9118,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     ut_dgc_scan_generation(c);
     ut_debug_skips_foreign_thread_callbacks(c, rc.getProgram());
     ut_event_loop_remove_recycled_fd(c);
+    ut_event_loop_sub_ms_timer_wakeups(c);
     ut_socket_close_race_releases_descriptor_once(c);
     ut_socket_close_during_io_keeps_descriptor(c);
     ut_network_security_rules(c);

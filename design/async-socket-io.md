@@ -412,6 +412,15 @@ operation's current deadlines whether it timed out, its protocol timer fired, or
   TCP connection" never ended (`AsyncIoZeroPollHintTest` in the C++ unit tests and
   `examples/test/qlib/AsyncSocketIo/AsyncIoTimeoutHeap.qtest` check both result paths).
 - `getInfo()` reports each thread's heap size (`threads[].timeouts`).
+- **Waits are never shorter than the time to the next timer**: `QoreEventLoop::poll()` keeps the wait in
+  microseconds and waits with the resolution the system provides - `kevent()`'s timespec on macOS, `epoll_pwait2()`
+  on Linux 5.11 and later (the raw system call where the C library has no wrapper, as with musl), `ppoll()` for the
+  `poll()` fallback, `nanosleep()` for a loop with timers only - and rounds up to whole milliseconds only where
+  nothing finer exists (`epoll_wait()` before Linux 5.11).  It used to round the time to the earliest timer down to
+  whole milliseconds, so a timer due in less than a millisecond made the wait 0 and the I/O thread polled without
+  blocking until it was due (thousands of polls for one timer), and a wait of 1.5 ms ended 0.5 ms early and did the
+  same; `ut_event_loop_sub_ms_timer_wakeups` in the C++ unit tests counts the polls that return no event before a
+  timer's.
 
 ### Operation IDs
 

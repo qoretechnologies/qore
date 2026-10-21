@@ -1553,10 +1553,10 @@ qore_search_libs(LIBQORE_LIBS clock_gettime rt)
 
 set(CMAKE_REQUIRED_LIBRARIES ${CMAKE_CXX_IMPLICIT_LINK_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT} ${LIBQORE_LIBS})
 qore_check_funcs(
-    access alarm atoll bzero chown clock_gettime doprnt exp2 floor fork fsync getaddrinfo getegid geteuid
+    access alarm atoll bzero chown clock_gettime doprnt epoll_pwait2 exp2 floor fork fsync getaddrinfo getegid geteuid
     getgid getgrgid_r getgrnam_r getgroups gethostbyaddr gethostbyname gethostname getifaddrs getnameinfo getppid
     getpwnam_r getpwuid_r getrlimit getsockopt gettimeofday getuid glob gmtime_r inet_ntop inet_pton isblank kill lchown
-    localtime_r link_ntoa lstat memmem memmove memset mkfifo mkfifo nanosleep poll posix_spawn
+    localtime_r link_ntoa lstat memmem memmove memset mkfifo mkfifo nanosleep poll ppoll posix_spawn
     pthread_attr_getstack pthread_attr_getstacksize
     pthread_get_name_np pthread_get_stacksize_np pthread_getname_np putenv random
     readlink realloc realpath regcomp round select setegid setegid setenv
