@@ -83,9 +83,12 @@ module VertexAiRestClient {
 POST https://{region}-aiplatform.googleapis.com/v1/projects/{project}/locations/{region}/publishers/google/models/{model}:generateContent
     @endverbatim
 
-    The \c us and \c eu multi-region locations and the \c global location use
-    \c https://aiplatform.googleapis.com; the selected location remains in the
-    resource path.
+    The \c us and \c eu multi-region locations use their jurisdictional endpoints,
+    \c https://aiplatform.us.rep.googleapis.com and \c https://aiplatform.eu.rep.googleapis.com, so that requests
+    are processed within the multi-region; the \c global location uses \c https://aiplatform.googleapis.com.  The
+    selected location remains in the resource path.  A context cache (\c cachedContents) belongs to the location of
+    the endpoint that creates it: one created through the global endpoint is a \c global resource, which a model in
+    a multi-region location cannot use.
 
     Chat requests use \c :generateContent, and streamed chat requests use
     \c :streamGenerateContent with SSE framing (\c alt=sse).  Embeddings use the
@@ -204,7 +207,14 @@ public const DefaultScopes = ("https://www.googleapis.com/auth/cloud-platform",)
         \c europe-west4, a multi-region location (\c us or \c eu), or
         \c global
 
-    @return the Vertex AI API base URL for the location
+    @return the Vertex AI API base URL for the location: the regional endpoint for a region, the jurisdictional
+    endpoint (\c aiplatform.us.rep.googleapis.com, \c aiplatform.eu.rep.googleapis.com) for a multi-region, and
+    the global endpoint for \c global
+
+    @note A multi-region location was sent to the global endpoint: requests then carried no processing guarantee
+    for the multi-region, and a context cache created there was a \c global resource that Vertex AI refuses for a
+    multi-region model (<tt>The location `eu` in Model name ... should match the one in the CachedContent resource
+    :`global`</tt>)
 */
 public string sub vertexApiUrl(string location) {
     if (!location.val()) {
@@ -213,9 +223,10 @@ public string sub vertexApiUrl(string location) {
     }
     switch (location) {
         case "global":
+            return "https://aiplatform.googleapis.com";
         case "us":
         case "eu":
-            return "https://aiplatform.googleapis.com";
+            return sprintf("https://aiplatform.%s.rep.googleapis.com", location);
         default:
             return sprintf("https://%s-aiplatform.googleapis.com", location);
     }
