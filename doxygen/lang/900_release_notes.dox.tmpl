@@ -427,6 +427,10 @@
     configuration failed when no %Qore was installed, and used the files of an installed %Qore when
     there was one.
 
+    The binary modules built with %Qore no longer export their internal symbols, only their entry
+    points, C++ APIs and the other symbols they declare for use by other code, as external modules
+    do; another module's internal symbol could otherwise be bound in place of one of their own.
+
     @par Release Summary
     @parblock
     %Qore 3.0.0 is a major release whose central themes are:

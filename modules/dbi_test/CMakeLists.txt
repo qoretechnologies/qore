@@ -18,7 +18,9 @@ add_dependencies(${dbi_test_module_name} libqore)
 
 target_compile_definitions(${dbi_test_module_name} PRIVATE
     PACKAGE_VERSION="${VERSION}"
-    BUILDING_DLL=1)
+    BUILDING_DLL=1
+    # DLLLOCAL hides symbols as in every other module (see QORE_BINARY_MODULE_INTERN2 in QoreMacros.cmake)
+    $<$<BOOL:${HAVE_GCC_VISIBILITY}>:HAVE_GCC_VISIBILITY=1>)
 
 set_target_properties(${dbi_test_module_name} PROPERTIES
     PREFIX ""

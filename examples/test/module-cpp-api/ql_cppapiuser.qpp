@@ -29,6 +29,7 @@
 #include <atomic>
 #include <cerrno>
 #include <climits>
+#include <dlfcn.h>
 #include <fcntl.h>
 #include <mutex>
 #include <poll.h>
@@ -623,6 +624,19 @@ hash<auto> cpp_api_fd_write_and_close(int fd, string path, string data) [dom=FIL
     rv->setKeyValue("written", written, xsink);
     rv->setKeyValue("close_rc", close_rc, xsink);
     return rv.release();
+}
+
+//! returns whether the dynamic linker finds a symbol in the objects loaded into the process
+/** Binary modules are loaded with their symbols available to the whole process, so this tells whether a module
+    exports a symbol: one declared \c DLLEXPORT must be found, one declared \c DLLLOCAL must not.
+
+    @param symbol the symbol's name as the dynamic linker knows it: the mangled name of a C++ symbol, without the
+    leading underscore Mach-O adds
+
+    @return @ref True "True" if \c dlsym(RTLD_DEFAULT) resolves \a symbol
+*/
+bool cpp_api_symbol_exported(string symbol) [flags=CONSTANT] {
+    return dlsym(RTLD_DEFAULT, symbol->c_str()) != nullptr;
 }
 
 ///@}

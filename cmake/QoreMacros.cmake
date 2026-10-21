@@ -2131,6 +2131,14 @@ MACRO (QORE_BINARY_MODULE_INTERN2 _module_name _version _install_suffix _mod_suf
         set(QORE_MOD_NAME ${_module_name})
 	include_directories(${CMAKE_SOURCE_DIR}/include/)
 
+        # DLLLOCAL hides a symbol (and DLLEXPORT exports it) only where HAVE_GCC_VISIBILITY is defined (see
+        # include/qore/common.h): libqore defines it in its configuration header and external modules in theirs,
+        # but a module built with Qore has no such header, so without this DLLLOCAL is empty and every
+        # module-internal symbol is exported; the value is the one a header made with "#cmakedefine ... 1" gives
+        if (HAVE_GCC_VISIBILITY)
+            add_definitions(-DHAVE_GCC_VISIBILITY=1)
+        endif()
+
         if ("${QORE_USERMODULE_DOXYGEN_TEMPLATE}" STREQUAL "")
             set(QORE_USERMODULE_DOXYGEN_TEMPLATE ${CMAKE_SOURCE_DIR}/doxygen/modules/Doxyfile.cmake.in)
         endif ()

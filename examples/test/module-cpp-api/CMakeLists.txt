@@ -21,7 +21,9 @@ target_include_directories(cppapitest PRIVATE
 target_compile_definitions(cppapitest PRIVATE
     BUILDING_DLL=1
     HAVE_UNIX_CONFIG_H
-    PACKAGE_VERSION="${VERSION}")
+    PACKAGE_VERSION="${VERSION}"
+    # DLLLOCAL hides symbols as in every other module (see QORE_BINARY_MODULE_INTERN2 in QoreMacros.cmake)
+    $<$<BOOL:${HAVE_GCC_VISIBILITY}>:HAVE_GCC_VISIBILITY=1>)
 set_target_properties(cppapitest PROPERTIES
     PREFIX ""
     SUFFIX "${_cppapi_test_module_suffix}"
@@ -44,7 +46,9 @@ target_include_directories(cppapiuser PRIVATE
 target_compile_definitions(cppapiuser PRIVATE
     BUILDING_DLL=1
     HAVE_UNIX_CONFIG_H
-    PACKAGE_VERSION="${VERSION}")
+    PACKAGE_VERSION="${VERSION}"
+    # DLLLOCAL hides symbols as in every other module (see QORE_BINARY_MODULE_INTERN2 in QoreMacros.cmake)
+    $<$<BOOL:${HAVE_GCC_VISIBILITY}>:HAVE_GCC_VISIBILITY=1>)
 set_target_properties(cppapiuser PROPERTIES
     PREFIX ""
     SUFFIX "${_cppapi_test_module_suffix}"
