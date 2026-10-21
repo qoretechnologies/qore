@@ -841,9 +841,19 @@ void ThreadEntry::activate(int tid, pthread_t n_ptid, QoreProgram* p, bool forei
     // set (see qore_robject_hazard_register())
     qore_robject_hazard_register(tid);
     status = QTS_ACTIVE;
-    // set lvstack if QoreProgram set
+}
+
+void QoreThreadList::activate(int tid, pthread_t ptid, QoreProgram* p, bool foreign, int flags) {
+    ThreadData* td;
+    {
+        AutoLocker al(lck);
+        entry[tid].activate(tid, ptid, p, foreign, flags);
+        td = entry[tid].thread_data;
+    }
+    // set lvstack if QoreProgram set; this runs the Program's thread initialization code, which is user code: it
+    // can start threads, list them, or check for cancellation, all of which take the thread list lock
     if (p) {
-        thread_data->tpd->saveProgram(true, 0);
+        td->tpd->saveProgram(true, nullptr);
     }
 }
 

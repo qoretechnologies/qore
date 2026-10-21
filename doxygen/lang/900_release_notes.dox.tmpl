@@ -5042,6 +5042,8 @@ while (*binary chunk = input.read(65536)) {
       modules can take the same lock with the new C++ API classes \c QoreEnvironmentReadLock and
       \c QoreEnvironmentValue and with \c SystemEnvironment::isSet(); code that uses the environment without %Qore's
       API, such as a third-party library, is not serialized with it
+    - Fixed a deadlock when the thread initialization code of a Program (see
+      @ref Qore::set_thread_init() "set_thread_init()") started a thread or read the call stacks of all threads
     - Fixed the warnings of the files of a separated user module other than its \c .qm file: each was parsed with the
       warnings of the code loading the module (with \c qcc, the default warnings), not those the \c .qm file sets, so
       \c %%modern in the \c .qm file did not enable all warnings in the other files.  The module loader accepted an

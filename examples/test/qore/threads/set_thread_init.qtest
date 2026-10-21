@@ -12,6 +12,8 @@
 public class SetThreadInit inherits QUnit::Test {
     constructor() : Test("set_thread_init", "1.0") {
         addTestCase("set_thread_init", \setThreadInitTest());
+        addTestCase("the initialization code can list threads", \testInitListsThreads());
+        addTestCase("the initialization code can start a thread", \testInitStartsThread());
 
         # Return for compatibility with test harness that checks return value
         set_return_value(main());
@@ -32,5 +34,44 @@ public class SetThreadInit inherits QUnit::Test {
         background cnt.dec();
         cnt.waitForZero();
         assertEq(0, i);
+    }
+
+    #! the code runs while a new thread starts; it ran with the thread list locked, so listing the threads (which
+    #! locks it) waited forever
+    testInitListsThreads() {
+        Queue q();
+        set_thread_init(sub () {
+            q.push(get_all_thread_call_stacks().size());
+        });
+        on_exit set_thread_init();
+        Counter c(1);
+        background c.dec();
+        c.waitForZero();
+        assertGt(0, q.get(), "the code listed the running threads");
+    }
+
+    #! a thread started by the initialization code needs the thread list too; it runs the code as well, so only the
+    #! first thread started starts another one
+    testInitStartsThread() {
+        our Mutex init_mutex();
+        our int init_started = 0;
+        Counter inner(1);
+        set_thread_init(sub () {
+            bool start;
+            {
+                init_mutex.lock();
+                on_exit init_mutex.unlock();
+                start = !init_started++;
+            }
+            if (start) {
+                background inner.dec();
+            }
+        });
+        on_exit set_thread_init();
+        Counter outer(1);
+        background outer.dec();
+        outer.waitForZero();
+        inner.waitForZero();
+        assertEq(2, init_started, "the code ran in both threads");
     }
 }

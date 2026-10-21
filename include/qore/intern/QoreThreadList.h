@@ -282,11 +282,12 @@ public:
         return 0;
     }
 
+    //! activates the entry of the calling thread and initializes its data
+    /** The thread's data for its Program is set up after the lock has been released: it runs the Program's thread
+        initialization code (user code), which must not run with the thread list locked
+    */
     DLLLOCAL void activate(int tid, pthread_t ptid = pthread_self(), QoreProgram* p = nullptr, bool foreign = false,
-            int flags = QTF_NONE) {
-        AutoLocker al(lck);
-        entry[tid].activate(tid, ptid, p, foreign, flags);
-    }
+            int flags = QTF_NONE);
 
     DLLLOCAL void setStatus(int tid, int status) {
         AutoLocker al(lck);
