@@ -446,14 +446,22 @@ public class MemcachedClient {
     #! Get server statistics
     /** @param type optional stat type: NOTHING for general, "items", "slabs", "sizes"
         @return a hash with statistics
+
+        @throw MEMCACHED-KEY-ERROR \a type contains a NUL character or is longer than 250 bytes
+        @throw MEMCACHED-PROTOCOL-ERROR the server sent a statistic name with a NUL character, which cannot be a
+        key of the result; the remaining statistics are read first, so that the connection can still be used
     */
     hash<auto> stats(*string type) {
+        if (exists type) {
+            validateStatType(type);
+        }
         AutoLock al(m);
         ensureConnected();
 
         sendRequest(OP_STAT, type);
 
         hash<auto> result = {};
+        *string bad_name;
         while (True) {
             hash<auto> resp = readResponse();
             if (resp.status != STATUS_OK) {
@@ -463,7 +471,20 @@ public class MemcachedClient {
             if (!resp.key) {
                 break;
             }
+            # a statistic name is a key of the result, which cannot contain a NUL character; the statistics that
+            # follow are still read, so that their responses are not taken as the responses to a later request
+            if (resp.key.contains(chr(0))) {
+                if (!exists bad_name) {
+                    bad_name = resp.key;
+                }
+                continue;
+            }
             result{resp.key} = resp.value.toString();
+        }
+
+        if (exists bad_name) {
+            throw "MEMCACHED-PROTOCOL-ERROR", sprintf("the server sent the statistic name \"%s\", which contains a "
+                "NUL character", Qore::replace(bad_name, chr(0), "\\x00"));
         }
 
         return result;
@@ -489,13 +510,27 @@ public class MemcachedClient {
         if (key.empty()) {
             throw "MEMCACHED-KEY-ERROR", "Key cannot be empty";
         }
-        if (key.length() > MAX_KEY_LENGTH) {
+        # the key is sent and limited in bytes, not characters
+        if (key.size() > MAX_KEY_LENGTH) {
             throw "MEMCACHED-KEY-ERROR", sprintf("Key length %d exceeds maximum of %d bytes",
-                key.length(), MAX_KEY_LENGTH);
+                key.size(), MAX_KEY_LENGTH);
         }
         # Check for invalid characters (spaces, newlines, control chars)
         if (key =~ /[\x00-\x20\x7f]/) {
             throw "MEMCACHED-KEY-ERROR", "Key contains invalid characters (spaces or control characters)";
+        }
+    }
+
+    #! Validates a statistics group name, which is sent as the key of the request
+    private static validateStatType(string type) {
+        # a group name with a NUL character names no group
+        if (type.contains(chr(0))) {
+            throw "MEMCACHED-KEY-ERROR", sprintf("statistics group name \"%s\" contains a NUL character",
+                Qore::replace(type, chr(0), "\\x00"));
+        }
+        if (type.size() > MAX_KEY_LENGTH) {
+            throw "MEMCACHED-KEY-ERROR", sprintf("statistics group name length %d exceeds maximum of %d bytes",
+                type.size(), MAX_KEY_LENGTH);
         }
     }
 
@@ -639,7 +674,9 @@ public class MemcachedClient {
     }
 
     private sendRequestWithExtras(int opcode, *string key, *binary value, *binary extras, *int cas_token) {
-        int key_len = key ? key.length() : 0;
+        # the key length is the number of bytes sent; a length in characters would make the server read the bytes
+        # of a key with multibyte characters past the end of the key, and the end of the request as a new request
+        int key_len = key ? key.size() : 0;
         int extras_len = extras ? extras.size() : 0;
         int value_len = value ? value.size() : 0;
         int total_body = key_len + extras_len + value_len;
@@ -698,12 +735,23 @@ public class MemcachedClient {
         *string key;
         *binary value;
 
+        # the extras and the key are parts of the body; the body is read first, so that the next response is read
+        # from where this one ends
+        bool bad_lengths = (extras_len + key_len) > total_body;
+
+        *binary body;
         if (total_body > 0) {
-            binary body = sock.recvBinary(total_body);
+            body = sock.recvBinary(total_body);
             if (body.size() != total_body) {
                 throw "MEMCACHED-PROTOCOL-ERROR", "Incomplete response body";
             }
+        }
+        if (bad_lengths) {
+            throw "MEMCACHED-PROTOCOL-ERROR", sprintf("the response has an extras length of %d bytes and a key length "
+                "of %d bytes, which do not fit in its body of %d bytes", extras_len, key_len, total_body);
+        }
 
+        if (body) {
             int offset = 0;
             if (extras_len > 0) {
                 extras = body.substr(offset, extras_len);
