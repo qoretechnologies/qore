@@ -939,12 +939,15 @@ public:
         @param new_remote new remote address
         @param new_remote_len remote address length
         @param xsink exception sink
-        @return 0 on success, -1 on error
+        @param conn_id_blocked if not null, set to true instead of raising an exception when the peer has provided
+        no spare connection ID for a new path (NGTCP2_ERR_CONN_ID_BLOCKED); ngtcp2 changes nothing then
+        @return 0 on success, 1 if the migration was not made for lack of a spare connection ID (only with
+        \a conn_id_blocked), -1 on error
     */
     DLLLOCAL int initiateMigration(
         const struct sockaddr* new_local, socklen_t new_local_len,
         const struct sockaddr* new_remote, socklen_t new_remote_len,
-        ExceptionSink* xsink);
+        ExceptionSink* xsink, bool* conn_id_blocked = nullptr);
 
     //! Get the peer (client) certificate after TLS handshake completes
     /** Returns the peer's X.509 certificate (with incremented reference count).
@@ -1171,6 +1174,8 @@ public:
     //! Submit an HTTP/3 GOAWAY shutdown notice (first phase: max stream ID)
     /** Sends a GOAWAY frame with the maximum stream ID, indicating that the
         server intends to shut down but hasn't decided on the final stream ID yet.
+        A no-op after the final GOAWAY (submitShutdown()): the identifier of a GOAWAY never increases (RFC 9114
+        section 5.2).
         @param xsink exception sink
         @return 0 on success, -1 on error
     */
@@ -1178,7 +1183,8 @@ public:
 
     //! Submit an HTTP/3 GOAWAY shutdown (second phase: actual last stream ID)
     /** Sends a GOAWAY frame with the actual last stream ID that the server will
-        process.  After this, no new streams will be accepted.
+        process.  After this, no new streams will be accepted.  Sent once: a later call is a no-op, as a later GOAWAY
+        would carry a larger identifier once a request arrived after the first one (RFC 9114 section 5.2).
         @param xsink exception sink
         @return 0 on success, -1 on error
     */

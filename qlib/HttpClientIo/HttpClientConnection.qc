@@ -641,7 +641,15 @@ public class HttpClientConnection inherits HttpClientConnectionBase {
         return pool_key;
     }
 
-    #! Initiates connection migration (HTTP/3 only; default no-op for HTTP/2)
+    #! Migrates the connection to a new network path; only HTTP/3 connections can be migrated
+    /** This implementation makes no migration and returns @ref False; see @ref Http3ClientConnection::migrate()
+
+        @param migration_timeout the maximum time to wait for the migration to start; see
+        @ref Http3ClientConnection::migrate()
+
+        @return @ref True if the connection was migrated, @ref False if the protocol of the connection does not
+        support migration
+    */
     bool migrate(*timeout migration_timeout) {
         return False;
     }

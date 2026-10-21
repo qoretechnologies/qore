@@ -149,10 +149,28 @@ hash<auto> resp = manager.request(url, "GET", "/api/status");
 manager.closeAll();
     @endcode
 
+    @par Connection Migration (HTTP/3)
+    After a change of the local network, move the HTTP/3 connections to new network paths; a connection that cannot be
+    migrated drains, so new requests get a new connection:
+    @code{.py}
+%requires HttpClientIo
+
+HttpClientConnectionManager manager({"protocol": "h3"});
+manager.request("https://example.com", "GET", "/api/resource");
+# ... the network changes
+int migrated = manager.migrateAll();
+    @endcode
+
     @section httpclientio_relnotes Release Notes
 
     @subsection httpclientio_v1_0 Version 1.0
     - URL errors give the URL without its password
+    - @ref HttpClientIo::Http3ClientConnection::migrate() "Http3ClientConnection::migrate()" returns once the
+      connection has been migrated and raises the error of a failed migration (\c QUIC-MIGRATION-ERROR,
+      \c HTTP3-MIGRATION-TIMEOUT, \c HTTP3-CONNECTION-CLOSED); a migration for which the server has no spare
+      connection ID yet waits for one;
+      @ref HttpClientIo::HttpClientConnectionManager::migrateAll() "migrateAll()" drains a connection that cannot be
+      migrated
     Initial (not yet released) version of the unified %HttpClientIo module —
     HTTP/1.1, HTTP/2, and HTTP/3 client I/O behind a single API, as currently
     implemented:

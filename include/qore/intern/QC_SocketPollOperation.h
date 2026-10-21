@@ -1866,9 +1866,12 @@ public:
         and swaps the fd on the underlying socket object.
 
         @param xsink exception sink
-        @return 0 on success, -1 on error
+        @param conn_id_blocked if not null, set to true instead of raising an exception when the peer has provided
+        no spare connection ID for a new path (see QuicSession::initiateMigration()); nothing is changed then
+        @return 0 on success, 1 if the migration was not made for lack of a spare connection ID (only with
+        \a conn_id_blocked), -1 on error
     */
-    DLLLOCAL int migrateConnection(ExceptionSink* xsink);
+    DLLLOCAL int migrateConnection(ExceptionSink* xsink, bool* conn_id_blocked = nullptr);
 
 private:
     DLLLOCAL QoreHashNode* continueResolve(ExceptionSink* xsink);

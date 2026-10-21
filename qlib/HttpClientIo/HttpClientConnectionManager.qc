@@ -128,6 +128,17 @@ auto mgr_h3 = new HttpClientConnectionManager({"protocol": "h3"});
     another controller.
 */
 public class HttpClientConnectionManager inherits HttpClientConnectionManagerBase {
+    private {
+        #! The errors of @ref migrateAll() that are errors of the caller, not of the connection being migrated
+        /** They end @ref migrateAll(); any other error of a migration drains its connection
+        */
+        const MigrateAllCallerErrors = {
+            "SOCKET-SYNC-ON-IO-THREAD-ERROR": True,
+            "THREAD-CANCELLED": True,
+            "PROGRAM-INTERRUPTED": True,
+        };
+    }
+
     public {
         #! Interval before re-probing HTTP/3 for hosts that fell back to HTTP/2
         const H3_REPROBE_INTERVAL = 5m;
@@ -1933,9 +1944,30 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
     }
 
     #! Migrates all ready HTTP/3 connections to new network paths
-    /** @return the number of connections successfully migrated
+    /** Call this when the local network changes (for example, a new interface or address): each ready HTTP/3
+        connection is migrated with @ref Http3ClientConnection::migrate(), one after the other, each waiting up to
+        \a migration_timeout for the migration to start.  A connection that cannot be migrated is drained: the requests
+        in progress on it finish, and new requests get a new connection.  Connections of other protocols are not
+        changed.
+
+        @par Example:
+        @code{.py}
+int migrated = mgr.migrateAll(5s);
+printf("%d connection(s) migrated\n", migrated);
+        @endcode
+
+        @param migration_timeout the maximum time that each migration waits to start, including the wait for a
+        spare connection ID (see @ref Http3ClientConnection::migrate()); if no value is given, each connection's
+        connect timeout is used; a value <= 0 means no timeout
+
+        @return the number of connections migrated
+
+        @throw SOCKET-SYNC-ON-IO-THREAD-ERROR called on an async I/O thread, which drives the connections and so could
+        never see the result of a migration
+        @throw THREAD-CANCELLED the thread was cancelled; the connections not migrated yet are not changed
+        @throw PROGRAM-INTERRUPTED the program was interrupted; the connections not migrated yet are not changed
     */
-    int migrateAll() {
+    int migrateAll(*timeout migration_timeout) {
         # Pin @c pool_lock across this method: see @ref pool_lock_pin.
         RWLock pool_lock_pin = pool_lock;
         # Register as an in-flight caller so the destructor drains us: see @ref in_flight_drain.
@@ -1956,14 +1988,19 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
         int migrated = 0;
         foreach hash<auto> item in (to_migrate) {
             try {
-                if (item.conn.migrate()) {
+                if (item.conn.migrate(migration_timeout)) {
                     ++migrated;
                     log(LoggerLevel::DEBUG, "migrated connection %d to %s",
                         item.conn.getConnectionId(), item.key);
                 }
             } catch (hash<ExceptionInfo> ex) {
+                # errors of the caller, not of the connection, end the call: the other connections are not drained
+                if (MigrateAllCallerErrors{ex.err}) {
+                    rethrow;
+                }
                 log(LoggerLevel::ERROR, "migration failed for connection %d to %s: %s: %s",
                     item.conn.getConnectionId(), item.key, ex.err, ex.desc);
+                # a connection that cannot be migrated is drained, so new requests get a new connection
                 try {
                     item.conn.setDraining();
                 } catch () {

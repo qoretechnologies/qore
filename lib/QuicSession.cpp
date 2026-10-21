@@ -3817,6 +3817,11 @@ int QuicSession::submitShutdownNotice(ExceptionSink* xsink) {
         xsink->raiseException("QUIC-HTTP3-ERROR", "HTTP/3 layer not initialized");
         return -1;
     }
+    // after the final GOAWAY, a notice would carry a larger identifier, which an endpoint must never send (RFC 9114
+    // section 5.2); the final GOAWAY says more than the notice
+    if (goaway_sent_.load(std::memory_order_acquire)) {
+        return 0;
+    }
     int rv = nghttp3_conn_submit_shutdown_notice(h3_conn_);
     if (rv != 0) {
         xsink->raiseException("QUIC-HTTP3-ERROR", "failed to submit shutdown notice: %s",
@@ -3832,6 +3837,14 @@ int QuicSession::submitShutdown(ExceptionSink* xsink) {
     if (!h3_conn_) {
         xsink->raiseException("QUIC-HTTP3-ERROR", "HTTP/3 layer not initialized");
         return -1;
+    }
+    // the final GOAWAY is sent once: a later one would carry the stream ID after the last request received, which is
+    // larger once a request has arrived after the first one, and an endpoint must never increase the identifier (RFC
+    // 9114 section 5.2): the peer closes the connection with H3_ID_ERROR (nghttp3 asserts it in debug builds); the
+    // server's graceful close (SocketQuicServerPollOperation::abort()) shuts down every session, also one that has
+    // already been shut down
+    if (goaway_sent_.load(std::memory_order_acquire)) {
+        return 0;
     }
     int rv = nghttp3_conn_shutdown(h3_conn_);
     if (rv != 0) {
@@ -4585,7 +4598,7 @@ void QuicSession::updateLocalAddrLocked(const struct sockaddr* addr, socklen_t l
 int QuicSession::initiateMigration(
     const struct sockaddr* new_local, socklen_t new_local_len,
     const struct sockaddr* new_remote, socklen_t new_remote_len,
-    ExceptionSink* xsink) {
+    ExceptionSink* xsink, bool* conn_id_blocked) {
     std::lock_guard<std::recursive_mutex> lock(mtx_);
 
     if (!conn_) {
@@ -4635,6 +4648,11 @@ int QuicSession::initiateMigration(
     path.remote.addrlen = new_remote_len;
 
     int rv = ngtcp2_conn_initiate_immediate_migration(conn_, &path, nowLocked());
+    if (rv == NGTCP2_ERR_CONN_ID_BLOCKED && conn_id_blocked) {
+        // the caller waits for the peer to provide a spare connection ID
+        *conn_id_blocked = true;
+        return 1;
+    }
     if (rv != 0) {
         const char* detail;
         switch (rv) {

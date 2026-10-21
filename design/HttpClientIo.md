@@ -306,8 +306,8 @@ public abstract class HttpClientConnection {
     #! Marks the connection as draining
     abstract setDraining();
 
-    #! Initiates connection migration (HTTP/3 only; no-op for HTTP/2)
-    /** @return True if migration was initiated
+    #! Migrates the connection to a new network path (HTTP/3 only; no-op for HTTP/2)
+    /** @return True once the connection was migrated; False for a protocol without migration
     */
     bool migrate(*timeout migration_timeout) {
         # Default no-op for HTTP/2
@@ -365,6 +365,39 @@ int migrated = mgr.migrateAll();
 HttpClientConnection conn = stream.getConnection();
 bool ok = conn.migrate(10s);
 ```
+
+`Http3ClientConnection::migrate()` is synchronous with respect to the I/O thread that drives the connection:
+
+- the application thread posts a migration request to the HTTP/3 poll operation
+  (`Http3ClientPollOperationBase::requestMigration()`), wakes the connection's socket on its controller, and waits for
+  the result (`waitForMigration()`);
+- the I/O thread runs the pending requests in order at the start of its next read cycle (`handleReading()` ->
+  `runMigrations()`): `SocketQuicClientPollOperation::migrateConnection()` creates the new UDP socket, has the QUIC
+  layer start an immediate migration (`ngtcp2_conn_initiate_immediate_migration()`), and swaps the descriptor;
+- the error of a failed migration (`QUIC-MIGRATION-ERROR`, `SOCKET-CLOSED`) is kept as its code, description and
+  argument and raised again on the waiting thread, as for the error of a Future: an exception counts as active on the
+  thread that raised it until it is handled there;
+- the timeout applies only while the migration has not started (the I/O thread has not run it, or it waits for a
+  spare connection ID, see below): the request is then withdrawn
+  (`HTTP3-MIGRATION-TIMEOUT`, the connection is not migrated); a started migration is always waited for, as it makes no
+  blocking calls; a connection that closes fails its pending requests (`HTTP3-CONNECTION-CLOSED`).
+
+ngtcp2 does not refuse a migration while the validation of a previous path runs: it abandons that validation.  The only
+refusal that clears with time is "no spare connection IDs" (`NGTCP2_ERR_CONN_ID_BLOCKED`): each migration uses one of
+the spare connection IDs that the server provided and retires the ID of the path it leaves (RFC 9000 section 9.5), and
+the server replaces a retired ID with a `NEW_CONNECTION_ID` frame.  An ngtcp2 server keeps at most
+`NGTCP2_MAX_SCID_POOL_SIZE` (8) connection IDs including the retired ones (`conn_required_num_new_connection_id()`), and
+it drops a retired ID only one PTO after the `RETIRE_CONNECTION_ID` frame arrived, on its expiry timer
+(`conn_remove_retired_connection_id()`), so a client can make at most 7 migrations per PTO, and the replacement comes
+on a timer, not in answer to a request.  ngtcp2 offers the client no callback for an arriving connection ID, and
+`ngtcp2_conn_initiate_immediate_migration()` refuses with `NGTCP2_ERR_CONN_ID_BLOCKED` before it changes anything, so a
+migration that is refused for that reason stays pending (`migration_blocked`) and is tried again after each read of
+incoming packets in `handleReading()`, the event that can bring a new ID; the requests made after it wait for it.  Its
+requester's timeout applies, and expires with `HTTP3-MIGRATION-TIMEOUT` ("no spare connection ID became available").
+The client never uses an ID it was not given or one it retired: ngtcp2 takes the new path's ID from the unused IDs the
+server provided, within the client's `active_connection_id_limit` (RFC 9000 section 5.1.1).
+`migrateAll()` drains a connection that cannot be migrated, so new requests get a new connection; errors of the
+caller (`SOCKET-SYNC-ON-IO-THREAD-ERROR`, `THREAD-CANCELLED`, `PROGRAM-INTERRUPTED`) end it instead.
 
 ### mTLS (HTTP/3 Only)
 

@@ -112,6 +112,16 @@
     families to avoid, and reports the family of the connection with
     @ref Qore::Http3ClientPollOperationBase::getAddressFamily() "getAddressFamily()".
 
+    @ref HttpClientIo::Http3ClientConnection::migrate() "Http3ClientConnection::migrate()" returns once the HTTP/3
+    connection has moved to its new network path and raises the error of a migration that fails, for example
+    \c QUIC-MIGRATION-ERROR when the QUIC layer refuses it; it returned @ref True at once, and a failed migration was
+    not reported.  When the server has no spare connection ID for a new path, which happens after several migrations in
+    quick succession, the migration waits until the server provides one.  A migration that does not start within its
+    timeout raises \c HTTP3-MIGRATION-TIMEOUT and leaves the connection unchanged.
+    @ref HttpClientIo::HttpClientConnectionManager::migrateAll() "HttpClientConnectionManager::migrateAll()" counts
+    only the connections migrated and drains a connection that cannot be migrated, so new requests get a new
+    connection.
+
     LLM streaming requests accept a @ref QoreLlmUtils::LlmCancellation "LlmCancellation" token in
     @ref QoreLlmUtils::LlmRequestOptions::cancellation "LlmRequestOptions::cancellation". Cancelling the token
     closes an in-flight OpenAI-compatible, Anthropic, Gemini/Vertex AI, or Bedrock stream without polling and

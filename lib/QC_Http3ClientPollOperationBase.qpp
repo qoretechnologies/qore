@@ -40,6 +40,7 @@
 #include "qore/intern/HttpClientEventSink.h"
 #include "qore/intern/QoreHttp3ClientConnection.h"
 #include "qore/intern/AsyncIoControllerPriv.h"
+#include "qore/intern/SocketSyncPoll.h"
 
 // Forward declarations for QPP type references
 extern QoreClass* QC_ABSTRACTHTTPPOLLCONNECTION;
@@ -155,6 +156,8 @@ Http3ClientPollOperationPriv::~Http3ClientPollOperationPriv() {
 }
 
 void Http3ClientPollOperationPriv::cleanup(ExceptionSink* xsink) {
+    // a requester waiting for a migration must not wait for an operation that is gone
+    failMigrations();
     // Clean up stream actions — reject pending Promises so Future::get() doesn't hang
     {
         AutoLocker al(stream_lock);
@@ -330,18 +333,9 @@ QoreHashNode* Http3ClientPollOperationPriv::handleReading(ExceptionSink* xsink) 
         return nullptr;
     }
 
-    // Check for deferred migration (set by app thread)
-    if (migration_pending.exchange(false, std::memory_order_acq_rel)) {
-        int rv = inner_op->migrateConnection(xsink);
-        if (*xsink) {
-            xsink->clear();  // log but continue
-        }
-        if (!rv) {
-            // Migration swapped the socket fd; bump generation so the
-            // controller's fast-path cache invalidation detects the change
-            // and re-registers the new fd in kqueue/epoll.
-            bumpFdGeneration();
-        }
+    // run the migrations requested by application threads; their results are reported to the requesters
+    if (migration_pending.load(std::memory_order_acquire)) {
+        runMigrations();
     }
 
     int total_drain_count = 0;
@@ -588,6 +582,12 @@ QoreHashNode* Http3ClientPollOperationPriv::handleReading(ExceptionSink* xsink) 
         break;
     }
 
+    // a migration waiting for a spare connection ID is tried again once the packets read above have been
+    // processed, as they can carry the NEW_CONNECTION_ID frame that it waits for
+    if (migration_blocked && migration_pending.load(std::memory_order_acquire)) {
+        runMigrations();
+    }
+
     // Signal threads waiting on STREAM_ID_BLOCKED after draining responses
     if (total_drain_count > 0) {
         AutoLocker al(stream_lock);
@@ -638,6 +638,7 @@ QoreHashNode* Http3ClientPollOperationPriv::handleReading(ExceptionSink* xsink) 
 
 void Http3ClientPollOperationPriv::abort(ExceptionSink* xsink) {
     h3_state.store(H3State::CLOSED, std::memory_order_release);
+    failMigrations();
     if (inner_op) {
         inner_op->abort(xsink);
     }
@@ -675,6 +676,7 @@ void Http3ClientPollOperationPriv::setError(const char* err, const char* desc, E
         }
     }
     h3_state.store(H3State::CLOSED, std::memory_order_release);
+    failMigrations();
     // Socket cleanup is handled by the I/O controller's Phase3 close logic
     // via needsCloseOnComplete() returning true when h3_state == CLOSED.
     // Happy-eyeballs: if an owner is armed (handshake-phase racing), hand
@@ -1266,16 +1268,208 @@ void Http3ClientPollOperationPriv::installSseState(int64_t stream_id, Queue* que
 }
 
 void Http3ClientPollOperationPriv::setSubmitError(const char* err, const char* desc) {
-    AutoLocker al(stream_lock);
-    if (!error_info) {
-        ExceptionSink xsink;
-        error_info = new QoreHashNode(autoTypeInfo);
-        error_info->setKeyValue("err", new QoreStringNode(err), &xsink);
-        error_info->setKeyValue("desc", new QoreStringNode(desc), &xsink);
+    {
+        AutoLocker al(stream_lock);
+        if (!error_info) {
+            ExceptionSink xsink;
+            error_info = new QoreHashNode(autoTypeInfo);
+            error_info->setKeyValue("err", new QoreStringNode(err), &xsink);
+            error_info->setKeyValue("desc", new QoreStringNode(desc), &xsink);
+        }
+        h3_state.store(H3State::CLOSED, std::memory_order_release);
+        if (stream_blocked_waiters > 0) {
+            stream_capacity_cond.broadcast();
+        }
     }
-    h3_state.store(H3State::CLOSED, std::memory_order_release);
-    if (stream_blocked_waiters > 0) {
-        stream_capacity_cond.broadcast();
+    failMigrations();
+}
+
+int64_t Http3ClientPollOperationPriv::requestMigration(ExceptionSink* xsink) {
+    // the result is waited for, which the I/O thread that runs the migration cannot do
+    SocketSyncPoll::assertNotOnIoThread("Http3ClientPollOperationBase", "requestMigration", xsink);
+    if (*xsink) {
+        return -1;
+    }
+    AutoLocker al(migration_lock);
+    H3State state = h3_state.load(std::memory_order_acquire);
+    if (migration_closed || state == H3State::CLOSED) {
+        xsink->raiseException("HTTP3-CONNECTION-CLOSED", "cannot migrate the connection: the connection is closed");
+        return -1;
+    }
+    if (state == H3State::CONNECTING) {
+        xsink->raiseException("HTTP3-STATE-ERROR", "cannot migrate the connection before it is connected");
+        return -1;
+    }
+    int64_t id = ++migration_seq;
+    migration_requests.emplace(id, std::make_unique<MigrationRequest>());
+    migration_pending.store(true, std::memory_order_release);
+    return id;
+}
+
+int Http3ClientPollOperationPriv::waitForMigration(int64_t id, int64_t timeout_ms, ExceptionSink* xsink) {
+    SocketSyncPoll::assertNotOnIoThread("Http3ClientPollOperationBase", "waitForMigration", xsink);
+    if (*xsink) {
+        return -1;
+    }
+    // the deadline is on the monotonic clock, so a wall-clock step does not change it, and it is not restarted by a
+    // wakeup that is not for this request; a migration waiting for a spare connection ID is pending until one arrives
+    const bool has_deadline = timeout_ms > 0;
+    const int64 deadline_us = has_deadline ? q_clock_getmicros_monotonic() + timeout_ms * 1000 : 0;
+
+    AutoLocker al(migration_lock);
+    auto i = migration_requests.find(id);
+    if (i == migration_requests.end()) {
+        xsink->raiseException("HTTP3-STATE-ERROR", "unknown migration request " QLLD, static_cast<int64>(id));
+        return -1;
+    }
+    MigrationRequest& req = *i->second;
+    while (req.state != MigrationRequest::State::DONE) {
+        int64 wait_ms = -1;
+        // only a migration that has not started can time out: it is withdrawn, so the connection is not migrated
+        if (req.state == MigrationRequest::State::PENDING && has_deadline) {
+            int64 remaining_us = deadline_us - q_clock_getmicros_monotonic();
+            if (remaining_us <= 0) {
+                bool conn_id_blocked = req.conn_id_blocked;
+                migration_requests.erase(i);
+                if (conn_id_blocked) {
+                    xsink->raiseException("HTTP3-MIGRATION-TIMEOUT", "no spare connection ID became available "
+                        "within " QLLD " ms; the connection was not migrated", static_cast<int64>(timeout_ms));
+                } else {
+                    xsink->raiseException("HTTP3-MIGRATION-TIMEOUT", "the I/O thread of the connection did not "
+                        "start the migration within " QLLD " ms; the connection was not migrated",
+                        static_cast<int64>(timeout_ms));
+                }
+                return -1;
+            }
+            // round up, so the wait never ends before the deadline
+            wait_ms = (remaining_us + 999) / 1000;
+        }
+        if (migration_cond.waitWithInterrupt(migration_lock, wait_ms, xsink) == QORE_COND_RESULT_INTERRUPTED) {
+            if (req.state == MigrationRequest::State::RUNNING) {
+                // the I/O thread holds the request until the migration is done; it discards the result
+                req.abandoned = true;
+            } else {
+                migration_requests.erase(i);
+            }
+            return -1;
+        }
+    }
+    int rv = 0;
+    if (!req.err.empty()) {
+        xsink->raiseExceptionArg(req.err.c_str(), req.arg.refSelf(), "%s", req.desc.c_str());
+        rv = -1;
+    }
+    migration_requests.erase(i);
+    return rv;
+}
+
+void Http3ClientPollOperationPriv::MigrationRequest::takeError(ExceptionSink& xs) {
+    ExceptionSink dxsink;
+    ReferenceHolder<QoreHashNode> ex(xs.getExceptionInfo(), &dxsink);
+    xs.clear();
+    if (!ex) {
+        return;
+    }
+    QoreValue errv = ex->getKeyValue("err");
+    if (errv.getType() == NT_STRING) {
+        err = errv.get<const QoreStringNode>()->c_str();
+    }
+    if (err.empty()) {
+        err = "QUIC-MIGRATION-ERROR";
+    }
+    QoreValue descv = ex->getKeyValue("desc");
+    if (descv.getType() == NT_STRING) {
+        desc = descv.get<const QoreStringNode>()->c_str();
+    }
+    arg = ex->getKeyValue("arg").refSelf();
+}
+
+void Http3ClientPollOperationPriv::runMigrations() {
+    while (true) {
+        int64_t id = 0;
+        MigrationRequest* req = nullptr;
+        {
+            AutoLocker al(migration_lock);
+            for (auto& i : migration_requests) {
+                if (i.second->state == MigrationRequest::State::PENDING) {
+                    id = i.first;
+                    req = i.second.get();
+                    break;
+                }
+            }
+            if (!req) {
+                migration_pending.store(false, std::memory_order_release);
+                migration_blocked = false;
+                return;
+            }
+            // a started migration is not withdrawn by its requester
+            req->state = MigrationRequest::State::RUNNING;
+        }
+
+        // the migration makes no blocking calls; migration_lock is not held, so requesters are not blocked by it
+        ExceptionSink mxsink;
+        bool conn_id_blocked = false;
+        int rc = inner_op->migrateConnection(&mxsink, &conn_id_blocked);
+        if (!rc) {
+            // the migration swapped the socket's descriptor; bump the generation so the controller's fast-path cache
+            // invalidation detects the change and registers the new descriptor with kqueue/epoll
+            bumpFdGeneration();
+        }
+
+        AutoLocker al(migration_lock);
+        if (conn_id_blocked) {
+            // the server has no spare connection ID for a new path yet: each migration retires the connection ID of
+            // the path it leaves, and an ngtcp2 server, which holds at most 8 connection IDs including the retired
+            // ones, replaces a retired ID one PTO after it was retired, so a client can make at most 7 migrations
+            // per PTO.  The replacement arrives in a NEW_CONNECTION_ID frame, so the migration stays pending and is
+            // tried again after the next read of incoming packets (see handleReading()); its requester's timeout
+            // still applies.  ngtcp2 checks for a spare ID before it changes anything, so the attempt had no effect.
+            assert(!mxsink);
+            migration_blocked = true;
+            if (req->abandoned) {
+                migration_requests.erase(id);
+                migration_cond.broadcast();
+                continue;
+            }
+            req->state = MigrationRequest::State::PENDING;
+            req->conn_id_blocked = true;
+            // the requester's timeout applies again
+            migration_cond.broadcast();
+            // the requests made after it wait for it
+            return;
+        }
+        migration_blocked = false;
+        // the error is taken on this thread, which raised it; see MigrationRequest::err
+        req->state = MigrationRequest::State::DONE;
+        if (req->abandoned) {
+            mxsink.clear();
+            migration_requests.erase(id);
+        } else if (mxsink) {
+            req->takeError(mxsink);
+        }
+        migration_cond.broadcast();
+    }
+}
+
+void Http3ClientPollOperationPriv::failMigrations() {
+    AutoLocker al(migration_lock);
+    if (migration_closed) {
+        return;
+    }
+    migration_closed = true;
+    bool signal = false;
+    for (auto& i : migration_requests) {
+        MigrationRequest& req = *i.second;
+        // a running migration reports its own result
+        if (req.state == MigrationRequest::State::PENDING) {
+            req.state = MigrationRequest::State::DONE;
+            req.setError("HTTP3-CONNECTION-CLOSED", "the connection closed before it was migrated");
+            signal = true;
+        }
+    }
+    migration_pending.store(false, std::memory_order_release);
+    if (signal) {
+        migration_cond.broadcast();
     }
 }
 
@@ -1583,11 +1777,67 @@ nothing Http3ClientPollOperationBase::flushPendingWrites() {
     return QoreValue();
 }
 
-//! Requests connection migration (consumed by I/O thread on next continuePoll)
-/** Sets the migration pending flag.
+//! Requests a QUIC connection migration to a new network path, which the I/O thread runs in its next read cycle
+/** Each call requests one migration; requests are run in the order they were made.  The caller then wakes the
+    socket of the connection on its async I/O controller, so the I/O thread runs a read cycle, and waits for the
+    result with @ref waitForMigration().
+
+    @par Example:
+    @code{.py}
+int id = op.requestMigration();
+controller.wakeSocket(sock);
+op.waitForMigration(id, 10s);
+    @endcode
+
+    @return the ID of the request, for @ref waitForMigration()
+
+    @throw HTTP3-CONNECTION-CLOSED the connection is closed
+    @throw HTTP3-STATE-ERROR the connection is not connected yet
+    @throw SOCKET-SYNC-ON-IO-THREAD-ERROR called on an async I/O thread, where the result cannot be waited for
+
+    @since %Qore 3.0
 */
-nothing Http3ClientPollOperationBase::setMigrationPending() {
-    priv->setMigrationPending();
+int Http3ClientPollOperationBase::requestMigration() {
+    return priv->requestMigration(xsink);
+}
+
+//! Waits until the I/O thread has run a migration requested with @ref requestMigration(); raises its error
+/** The timeout applies only while the I/O thread has not started the migration: when it expires, the request is
+    withdrawn and the connection is not migrated.  A migration that has started is always waited for; it makes no
+    blocking calls.
+
+    @par Example:
+    @code{.py}
+int id = op.requestMigration();
+controller.wakeSocket(sock);
+try {
+    op.waitForMigration(id, 10s);
+} catch (hash<ExceptionInfo> ex) {
+    # QUIC-MIGRATION-ERROR or HTTP3-MIGRATION-TIMEOUT: the connection stays on its path
+    printf("%s: %s\n", ex.err, ex.desc);
+}
+    @endcode
+
+    A migration for which the peer has provided no spare connection ID stays pending: the I/O thread tries it again
+    after each read of incoming packets, which can bring a new ID, until it is made or the timeout expires.
+
+    @param request_id the ID returned by @ref requestMigration()
+    @param timeout_ms the maximum time to wait for the migration to start, including the wait for a spare connection
+    ID; a value <= 0 means no timeout
+
+    @throw QUIC-MIGRATION-ERROR the QUIC layer refused the migration or a new socket could not be created for it;
+    the connection stays on its previous path
+    @throw SOCKET-CLOSED the socket was closed during the migration
+    @throw HTTP3-MIGRATION-TIMEOUT the migration did not start within the timeout, because no spare connection ID
+    became available or the I/O thread did not start it; the connection was not migrated
+    @throw HTTP3-CONNECTION-CLOSED the connection closed before the migration ran
+    @throw HTTP3-STATE-ERROR unknown request ID
+    @throw SOCKET-SYNC-ON-IO-THREAD-ERROR called on an async I/O thread, which would never see the result
+
+    @since %Qore 3.0
+*/
+nothing Http3ClientPollOperationBase::waitForMigration(int request_id, timeout timeout_ms = -1) [flags=NAMED_ARGS] {
+    priv->waitForMigration(request_id, timeout_ms, xsink);
 }
 
 //! Phase 1: advisory capacity check under lock

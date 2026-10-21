@@ -40,6 +40,8 @@
 
 #include <algorithm>
 #include <atomic>
+#include <map>
+#include <memory>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -328,9 +330,34 @@ public:
         return goaway_received.load(std::memory_order_acquire);
     }
 
-    DLLLOCAL void setMigrationPending() {
-        migration_pending.store(true, std::memory_order_release);
-    }
+    //! Requests a connection migration, which the I/O thread runs in its next read cycle
+    /** Each request is one migration; requests are run in the order they were made.  The caller then wakes the
+        socket of the connection on its controller and waits for the result with waitForMigration().
+
+        Must not be called on an async I/O thread: the result can only be waited for on another thread.
+
+        @param xsink raises \c HTTP3-CONNECTION-CLOSED if the connection is closed, \c HTTP3-STATE-ERROR if it is
+        not connected yet, \c SOCKET-SYNC-ON-IO-THREAD-ERROR on an async I/O thread
+
+        @return the ID of the request for waitForMigration(), or -1 if an exception was raised
+    */
+    DLLLOCAL int64_t requestMigration(ExceptionSink* xsink);
+
+    //! Waits for the result of a migration requested with requestMigration()
+    /** The timeout applies only while the migration has not been started by the I/O thread: when it expires, the
+        request is withdrawn, so the connection is not migrated.  A migration that has started is always waited
+        for; it makes no blocking calls.  The wait ends at once if the thread is cancelled or its program is
+        interrupted; a migration that has started then still completes, and its result is discarded.
+
+        @param id the ID returned by requestMigration()
+        @param timeout_ms the time to wait for the I/O thread to start the migration; <= 0 means no timeout
+        @param xsink raises the error of a failed migration (e.g. \c QUIC-MIGRATION-ERROR or \c SOCKET-CLOSED),
+        \c HTTP3-MIGRATION-TIMEOUT, \c HTTP3-CONNECTION-CLOSED if the connection closed before the migration ran,
+        or \c HTTP3-STATE-ERROR for an unknown request ID
+
+        @return 0 if the connection was migrated, -1 if an exception was raised
+    */
+    DLLLOCAL int waitForMigration(int64_t id, int64_t timeout_ms, ExceptionSink* xsink);
 
     //! Returns the raw connection priv pointer (for I/O-thread calls)
     DLLLOCAL AbstractHttpPollConnectionPriv* getConnectionPriv() const {
@@ -395,8 +422,78 @@ private:
     //! True when GOAWAY received from server
     std::atomic<bool> goaway_received{false};
 
-    //! Set by app thread, consumed by I/O thread
+    //! A connection migration requested by an application thread with requestMigration()
+    struct MigrationRequest {
+        enum class State {
+            //! waiting for the I/O thread; the requester withdraws it when its timeout expires
+            PENDING,
+            //! being run by the I/O thread
+            RUNNING,
+            //! finished; @ref err has the error of a failed migration, if any
+            DONE,
+        };
+
+        State state = State::PENDING;
+        //! true if the requester stopped waiting while the migration ran; the I/O thread then discards the result
+        bool abandoned = false;
+        //! true once the I/O thread found no spare connection ID for the migration; it stays pending until one
+        //! arrives
+        bool conn_id_blocked = false;
+        //! the error code of a failed migration; empty if the migration was made
+        /** An exception is counted as active on the thread that raises it until it is handled on that thread, so
+            the error is kept as its code, description and argument and raised again on the requester's thread,
+            as for the error of a Future
+        */
+        std::string err;
+        //! the description of the error of a failed migration
+        std::string desc;
+        //! the argument of the error of a failed migration
+        QoreValue arg;
+
+        DLLLOCAL ~MigrationRequest() {
+            ExceptionSink xsink;
+            arg.discard(&xsink);
+        }
+
+        //! Takes the error of a failed migration from a sink of the thread that raised it; clears the sink
+        DLLLOCAL void takeError(ExceptionSink& xs);
+
+        //! Sets the error of a migration that was not made
+        DLLLOCAL void setError(const char* e, const char* d) {
+            err = e;
+            desc = d;
+        }
+    };
+
+    //! True while a migration request is pending; read by the I/O thread without @ref migration_lock
     std::atomic<bool> migration_pending{false};
+
+    //! Guards the migration request members; a leaf lock, never held while a migration runs
+    mutable QoreThreadLock migration_lock;
+    //! Signaled when a migration request is done, and when the operation closes
+    QoreCondition migration_cond;
+    //! Migration requests by ID, in the order they were made; guarded by @ref migration_lock
+    std::map<int64_t, std::unique_ptr<MigrationRequest>> migration_requests;
+    //! The ID of the last migration request; guarded by @ref migration_lock
+    int64_t migration_seq = 0;
+    //! True once the operation is closed: requests are refused; guarded by @ref migration_lock
+    bool migration_closed = false;
+
+    //! True while the first pending migration waits for a spare connection ID; I/O thread only
+    /** The server replaces a connection ID that a migration retired a PTO after it was retired (see
+        runMigrations()), in a NEW_CONNECTION_ID frame, so the migration is retried after each read of incoming
+        packets
+    */
+    bool migration_blocked = false;
+
+    //! Runs the pending migration requests in order (I/O thread, from handleReading())
+    /** A migration for which the server has provided no spare connection ID stays pending, and the requests after
+        it wait for it; @ref migration_blocked is set until it can be made.
+    */
+    DLLLOCAL void runMigrations();
+
+    //! Fails the pending migration requests and refuses new ones; called when the operation closes
+    DLLLOCAL void failMigrations();
 
     //! Consecutive empty reads counter
     int empty_read_count = 0;

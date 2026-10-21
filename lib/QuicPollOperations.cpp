@@ -1418,7 +1418,7 @@ QoreHashNode* SocketQuicClientPollOperation::continuePoll(ExceptionSink* xsink) 
     }
 }
 
-int SocketQuicClientPollOperation::migrateConnection(ExceptionSink* xsink) {
+int SocketQuicClientPollOperation::migrateConnection(ExceptionSink* xsink, bool* conn_id_blocked) {
     // Create a new connected UDP socket and swap the fd on the socket object.
     // The old fd is closed immediately — this removes it from epoll so the
     // controller's next continuePoll cycle re-adds the new fd cleanly.
@@ -1502,11 +1502,13 @@ int SocketQuicClientPollOperation::migrateConnection(ExceptionSink* xsink) {
     }
 
     // Initiate migration at the QUIC layer
-    if (quic_session->initiateMigration(
-            reinterpret_cast<const struct sockaddr*>(&new_local), new_local_len,
-            reinterpret_cast<const struct sockaddr*>(&remote_addr_), remote_addrlen_,
-            xsink) != 0) {
-        return -1;
+    int rc = quic_session->initiateMigration(
+        reinterpret_cast<const struct sockaddr*>(&new_local), new_local_len,
+        reinterpret_cast<const struct sockaddr*>(&remote_addr_), remote_addrlen_,
+        xsink, conn_id_blocked);
+    if (rc) {
+        // the new socket is closed by its guard; with no spare connection ID (rc == 1), nothing was changed
+        return rc;
     }
 
     // Swap the fd under the socket lock to synchronize with any concurrent

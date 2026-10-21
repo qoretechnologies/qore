@@ -481,16 +481,60 @@ public class Http3ClientConnection inherits HttpClientConnection {
         }
     }
 
-    #! Initiates QUIC connection migration to a new network path
-    /** Migration creates a new UDP socket and initiates QUIC path migration.
-        The old fd is closed and the controller is woken so that its next
-        forced poll cycle calls continuePoll(), which returns poll info
-        referencing the Socket object (now pointing to the new fd), causing
-        the EventLoop to re-register the new fd.
+    #! Migrates the QUIC connection to a new network path (RFC 9000 section 9)
+    /** The connection gets a new UDP socket with a new local port, and the QUIC layer moves the connection to the
+        new path: it validates the path with the server in the background while requests continue on it.  The
+        migration is made by the I/O thread that drives the connection; this method returns once the I/O thread
+        has made it, and raises its error if it failed.  Requests in progress continue on the new path.
 
-        @return True if migration was initiated successfully
+        Each call makes one migration; concurrent calls are made one after the other, in order.
 
-        @throw HTTP3-STATE-ERROR if the connection is not in Ready state
+        Each migration uses a spare connection ID that the server provided, and retires the ID of the path it
+        leaves.  When the server has no spare connection ID for a new path, the migration waits until the server
+        provides one: the I/O thread tries it again each time packets arrive, as the server sends a new ID in a
+        \c NEW_CONNECTION_ID frame.  A server replaces a retired ID only after a while: one probe timeout (PTO, about
+        the round-trip time of the connection plus the peer's acknowledgment delay) after it learned of the
+        retirement, and an ngtcp2-based server, as the Qore server is, keeps at most 8 connection IDs including the
+        retired ones, so a client can make at most 7 migrations in a row before a migration waits for the server.
+
+        @par Example:
+        @code{.py}
+int old_port = conn.getSocket().getSocketInfo().port;
+try {
+    conn.migrate(5s);
+    printf("migrated from local port %d to %d\n", old_port, conn.getSocket().getSocketInfo().port);
+} catch (hash<ExceptionInfo> ex) {
+    if (ex.err == "QUIC-MIGRATION-ERROR" || ex.err == "HTTP3-MIGRATION-TIMEOUT") {
+        # the connection stays on its previous path; for example, the server provided no spare connection ID
+        # within the timeout
+        printf("not migrated: %s\n", ex.desc);
+    } else {
+        rethrow;
+    }
+}
+        @endcode
+
+        @param migration_timeout the maximum time to wait for the migration to start: for the I/O thread to start
+        it, and for a spare connection ID if the server has none for a new path; when it expires, the migration is
+        withdrawn and the connection is not migrated.  A migration that has started is always waited for; it makes
+        no blocking calls.  If no value is given, the connection's connect timeout is used; a value <= 0 means no
+        timeout.
+
+        @return @ref True: the connection was migrated
+
+        @throw HTTP3-STATE-ERROR the connection is not ready
+        @throw QUIC-MIGRATION-ERROR the QUIC layer refused the migration (for example, the handshake is not
+        confirmed yet, or the server disabled active migration), or the new socket could not be created; the
+        connection stays on its previous path
+        @throw SOCKET-CLOSED the socket of the connection was closed during the migration
+        @throw HTTP3-MIGRATION-TIMEOUT the migration did not start within \a migration_timeout: the server provided
+        no spare connection ID in time (the description says so), or the I/O thread did not start it; the
+        connection was not migrated
+        @throw HTTP3-CONNECTION-CLOSED the connection closed before it was migrated
+        @throw SOCKET-SYNC-ON-IO-THREAD-ERROR called on an async I/O thread, which drives the connections and so
+        could never see the result
+
+        @see @ref HttpClientConnectionManager::migrateAll()
     */
     bool migrate(*timeout migration_timeout) {
         if (!self.isReady()) {
@@ -504,15 +548,19 @@ public class Http3ClientConnection inherits HttpClientConnection {
             ctl = controller_ref;
         }
 
-        log(LoggerLevel::DEBUG, "initiating QUIC connection migration");
-        poll_op.migrate();
-        log(LoggerLevel::DEBUG, "QUIC connection migration completed");
+        Socket sock = getSocket();
+        int old_port = sock.getSocketInfo().port;
+        log(LoggerLevel::DEBUG, "initiating QUIC connection migration from local port %d", old_port);
+        int id = poll_op.migrate();
 
-        # Wake the controller so it forces a continuePoll() cycle with the new fd
+        # the I/O thread runs the migration in its next read cycle
         if (ctl) {
-            ctl.wakeSocket(sock: getSocket());
+            ctl.wakeSocket(sock: sock);
         }
 
+        poll_op.waitForMigration(id, migration_timeout ?? (connect_timeout > 0 ? connect_timeout : -1));
+        log(LoggerLevel::DEBUG, "QUIC connection migrated from local port %d to %d", old_port,
+            sock.getSocketInfo().port);
         return True;
     }
 
