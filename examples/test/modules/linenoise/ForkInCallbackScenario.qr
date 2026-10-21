@@ -2,8 +2,9 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 
-# Run by fork-in-callback.qtest in a terminal that script(1) creates, with "ab", a tab and a newline as its input:
-# the tab runs the completion callback, which holds the module lock while it creates a child process with fork();
+# Run by fork-in-callback.qtest in a terminal that script(1) creates; the test types "ab", a tab and a newline once
+# the prompt is displayed: the tab runs the completion callback, which holds the module lock while it creates a child
+# process with fork();
 # the child uses the history functions, which take the module lock.  The result is written to the file given as the
 # only argument: the line read and the exit status of the child.
 
