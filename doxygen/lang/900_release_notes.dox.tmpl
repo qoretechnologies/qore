@@ -422,6 +422,10 @@
     with the SDK; image lookup includes only existing module documentation directories.
     The final pass of a two-phase documentation build retains language and caller-provided
     reference indexes alongside user-module indexes, including paths containing spaces.
+    An external module configured against a %Qore build tree, without installing %Qore, documents
+    itself with the build tree's documentation template and language reference index; its
+    configuration failed when no %Qore was installed, and used the files of an installed %Qore when
+    there was one.
 
     @par Release Summary
     @parblock

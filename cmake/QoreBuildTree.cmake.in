@@ -35,4 +35,11 @@ if (_qore_in_build_tree)
         "@CMAKE_BINARY_DIR@/modules/astparser:@CMAKE_BINARY_DIR@/modules/reflection:@CMAKE_BINARY_DIR@/modules/logger_bin:@CMAKE_BINARY_DIR@/modules/linenoise:@CMAKE_BINARY_DIR@/modules/i18n:@CMAKE_BINARY_DIR@/modules/krb5:@CMAKE_BINARY_DIR@/modules/mongodb:@CMAKE_BINARY_DIR@/modules/ml:@CMAKE_BINARY_DIR@/modules/tokenizer:@CMAKE_BINARY_DIR@/modules/ocr:@CMAKE_BINARY_DIR@/modules/dataframe:@CMAKE_BINARY_DIR@/modules/sshutil:@CMAKE_BINARY_DIR@/modules/protobuf:@CMAKE_BINARY_DIR@/modules/json:@CMAKE_BINARY_DIR@/modules/yaml")
     set(QORE_BUILDTREE_USER_MODULE_PATH
         "@CMAKE_BINARY_DIR@/qlib-qmod:@CMAKE_SOURCE_DIR@/qlib:${QORE_BUILDTREE_BINARY_MODULE_PATH}")
+    # module documentation uses the template the SDK installs, with the assets beside it, from the source tree,
+    # and the language reference's index from the build tree ("make docs" writes it), not from an install prefix
+    # that may hold another Qore's files or none at all
+    set(QORE_USERMODULE_DOXYGEN_TEMPLATE "@CMAKE_SOURCE_DIR@/doxygen/Doxyfile.in")
+    if(NOT DEFINED QORE_DOXYGEN_TAGFILE)
+        set(QORE_DOXYGEN_TAGFILE "@CMAKE_BINARY_DIR@/qore.tag")
+    endif()
 endif()
