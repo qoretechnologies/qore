@@ -63,24 +63,26 @@ public:
             values.reserve(old.values.size());
             for (auto& i : old.keys) {
                 keys.push_back(copy_value_and_resolve_lvar_refs(i, xsink));
-                if (*xsink)
+                if (*xsink) {
+                    // a copy that fails holds no entries; the keys copied so far have no values
+                    releaseEntries(xsink);
                     return;
+                }
             }
             for (auto& i : old.values) {
                 values.push_back(copy_value_and_resolve_lvar_refs(i, xsink));
-                if (*xsink)
+                if (*xsink) {
+                    releaseEntries(xsink);
                     return;
+                }
             }
     }
 
     DLLLOCAL ~QoreParseHashNode() {
+        // only a node deleted without being released holds entries here (see derefImpl()); a background copy that
+        // fails releases what it copied
         assert(keys.size() == values.size());
-        for (size_t i = 0; i < keys.size(); ++i) {
-            keys[i].discard(nullptr);
-            values[i].discard(nullptr);
-        }
-        keys.clear();
-        values.clear();
+        releaseEntries(nullptr);
     }
 
     DLLLOCAL void add(QoreValue n, QoreValue v, const QoreProgramLocation* loc) {
@@ -155,6 +157,30 @@ public:
     }
 
 protected:
+    //! Releases the keys and values with the given exception sink; see derefImpl()
+    DLLLOCAL void releaseEntries(ExceptionSink* xsink) {
+        // a background copy that fails can hold fewer values than keys, as the keys are copied first
+        assert(values.size() <= keys.size());
+        for (size_t i = 0; i < keys.size(); ++i) {
+            keys[i].discard(xsink);
+            if (i < values.size()) {
+                values[i].discard(xsink);
+            }
+        }
+        keys.clear();
+        values.clear();
+    }
+
+    //! Releases the keys and values with the caller's exception sink
+    /** The copy that the background operator makes holds runtime values (the values of the local variables of the
+        code that starts the thread), whose release can run destructors; their exceptions go to the thread releasing
+        the node, as the destructor has no exception sink.
+    */
+    DLLLOCAL virtual bool derefImpl(ExceptionSink* xsink) {
+        releaseEntries(xsink);
+        return ParseNode::derefImpl(xsink);
+    }
+
     typedef std::map<std::string, bool> kmap_t;
     typedef std::vector<const QoreProgramLocation*> lvec_t;
     nvec_t keys, values;
