@@ -5247,6 +5247,12 @@ private:
                         "READ-HTTP-CHUNK-ERROR", "chunked body trailer")) {
                     return -1;
                 }
+                // the trailer fields are field lines, checked as RFC 9112 requires; an obsolete line folding is
+                // replaced with spaces
+                if (qore_socket_private::checkHttpFieldLines(xsink, const_cast<char*>(trailers.c_str()), false,
+                        false, "READ-HTTP-CHUNK-ERROR", "chunked body trailer")) {
+                    return -1;
+                }
                 priv.convertHeaderToHash(*out, const_cast<char*>(trailers.c_str()), 0, nullptr, nullptr,
                     "response-headers-raw");
                 if (*xsink) {
@@ -6321,6 +6327,12 @@ int my_socket_priv::convertHeaderToHash(QoreHashNode& h, QoreString& hdr, Except
     // the trailer text is parsed as a C string, which a NUL character would cut off
     if (qore_socket_private::checkHttpHeaderNul(xsink, hdr.c_str(), hdr.size(), "READ-HTTP-CHUNK-ERROR",
             "chunked body trailer")) {
+        return -1;
+    }
+    // the trailer fields are field lines, checked as RFC 9112 requires; an obsolete line folding is replaced with
+    // spaces
+    if (qore_socket_private::checkHttpFieldLines(xsink, const_cast<char*>(hdr.c_str()), false, false,
+            "READ-HTTP-CHUNK-ERROR", "chunked body trailer")) {
         return -1;
     }
     socket->priv->convertHeaderToHash(&h, const_cast<char*>(hdr.c_str()), 0, info, nullptr,

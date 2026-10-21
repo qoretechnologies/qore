@@ -1,0 +1,108 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+#
+# The server answers an HTTP/1.x request whose field lines RFC 9112 does not allow with status 400, without calling a
+# handler, and closes the connection: a bare CR (section 2.2), an obsolete line folding (section 5.2), whitespace
+# between a field name and the colon (section 5.1, a MUST for a server) and a line without a colon (section 5).
+# Before, the request was handled: whitespace before the colon was kept in the field name, and an obsolete line
+# folding or a line without a colon ended the header, so the field lines after it, such as Content-Length, were
+# dropped and the body was read as the next request.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Logger
+%requires HttpServerUtil
+%requires HttpServerAsyncIo
+%requires HttpServer
+
+%exec-class HttpServerFieldLinesTest
+
+class CountingHandler inherits AbstractHttpRequestHandler {
+    public {
+        # the requests that reached the handler; the tests send them one at a time
+        int calls = 0;
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        ++calls;
+        return makeResponse(200, sprintf("path=%s body=%s", cx.raw_path, body ?? ""));
+    }
+}
+
+class HttpServerFieldLinesTest inherits QUnit::Test {
+    private {
+        HttpServer server;
+        CountingHandler handler();
+        int port;
+    }
+
+    constructor() : QUnit::Test("HttpServer field lines", "1.0") {
+        server = new HttpServer(<HttpServerOptionInfo>{});
+        server.setDefaultHandler("default", handler);
+        port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+        on_exit server.stop();
+
+        addTestCase("invalid field lines", \invalidFieldLines());
+        addTestCase("valid field lines", \validFieldLines());
+        set_return_value(main());
+    }
+
+    invalidFieldLines() {
+        string smuggled = "GET /smuggled HTTP/1.1\r\nHost: localhost\r\n\r\n";
+        string body_cl = sprintf("Content-Length: %d\r\n\r\n%s", smuggled.size(), smuggled);
+        foreach hash<auto> i in (
+                {"label": "bare CR", "req": "POST /p HTTP/1.1\r\nHost: localhost\r\nX-A: a\rb\r\n" + body_cl,
+                    "err": "bare CR"},
+                {"label": "obsolete line folding", "req": "POST /p HTTP/1.1\r\nHost: localhost\r\nX-A: a\r\n b\r\n"
+                    + body_cl, "err": "obsolete line folding"},
+                {"label": "whitespace before the colon", "req": "POST /p HTTP/1.1\r\nHost: localhost\r\n"
+                    "Transfer-Encoding : chunked\r\n" + body_cl, "err": "whitespace in the field name"},
+                {"label": "line without a colon", "req": "POST /p HTTP/1.1\r\nHost: localhost\r\nX-A\r\n" + body_cl,
+                    "err": "line without a colon"},
+            ) {
+            Socket socket();
+            socket.connect(sprintf("127.0.0.1:%d", port), 30s);
+            on_exit socket.close();
+            socket.send(i.req);
+            hash<auto> response = HttpServerFieldLinesTest::readResponse(socket);
+            assertEq(400, response.hdr.status_code, i.label);
+            assertEq("close", response.hdr.connection, i.label);
+            assertRegex(i.err, response.body, i.label);
+            assertTrue(HttpServerFieldLinesTest::isClosed(socket), i.label);
+            assertEq(0, handler.calls, i.label);
+        }
+    }
+
+    validFieldLines() {
+        int calls = handler.calls;
+        Socket socket();
+        socket.connect(sprintf("127.0.0.1:%d", port), 30s);
+        on_exit socket.close();
+
+        # lines that end with LF are accepted
+        socket.send("POST /lf HTTP/1.1\nHost: localhost\nContent-Length: 2\r\n\r\nok");
+        hash<auto> hdr = socket.readHTTPHeader(30s);
+        assertEq(200, hdr.status_code);
+        assertEq("path=/lf body=ok", socket.recv(int(hdr."content-length"), 30s));
+        assertEq(calls + 1, handler.calls);
+    }
+
+    #! reads a response
+    private static hash<auto> readResponse(Socket socket) {
+        hash<auto> hdr = socket.readHTTPHeader(30s);
+        int len = hdr."content-length" ? int(hdr."content-length") : 0;
+        string body = len ? socket.recv(len, 30s) : "";
+        return {"hdr": hdr, "body": body};
+    }
+
+    #! returns True if the server closed the connection after the response that was read
+    /** called only after a response that closes the connection, so reading to the end returns at once
+    */
+    private static bool isClosed(Socket socket) {
+        return !socket.recvBinary(-1, 30s).size();
+    }
+}

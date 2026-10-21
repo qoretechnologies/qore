@@ -3341,6 +3341,104 @@ struct qore_socket_private : public QoreReferenceCounter {
         return -1;
     }
 
+    //! checks the lines of an HTTP header or trailer section as RFC 9112 requires
+    /** - a CR is allowed only before the LF that ends a line; a bare CR is invalid (RFC 9112 section 2.2)
+        - a line may end with LF instead of CRLF (section 2.2)
+        - a field line has a colon, the field name before it is not empty and has no whitespace, as between the name
+          and the colon (sections 5 and 5.1)
+        - a line that starts with whitespace is an obsolete line folding (section 5.2); it is refused if
+          \a reject_obs_fold is true (a request), and is otherwise replaced in place with spaces; a whitespace line
+          before the first field line is refused (section 2.2)
+
+        The check ends at the first empty line, which ends the section.
+
+        @param xsink for the exception
+        @param str the text received, NUL-terminated; obsolete line foldings are replaced with spaces in it
+        @param skip_start_line true if the text starts with the start line of a message, which is not a field line
+        @param reject_obs_fold true to refuse an obsolete line folding, false to replace it with spaces
+        @param err the error code of the exception
+        @param what what the text is: \c "header" or \c "chunked body trailer"
+
+        @return 0 if the text is valid, -1 if an exception was raised
+    */
+    DLLLOCAL static int checkHttpFieldLines(ExceptionSink* xsink, char* str, bool skip_start_line, bool reject_obs_fold,
+            const char* err, const char* what) {
+        assert(str);
+        bool first_field = true;
+        bool start_line = skip_start_line;
+        char* line = str;
+        size_t count = 0;
+        while (*line) {
+            if (++count % 100 == 0 && qore_check_cancel(xsink, "HTTP field line check")) {
+                return -1;
+            }
+            // a line ends with LF or CRLF; a CR anywhere else is a bare CR
+            char* e = line;
+            while (*e && *e != '\n') {
+                if (*e == '\r' && e[1] != '\n') {
+                    xsink->raiseException(err, "invalid HTTP %s received with a bare CR character at byte offset %zu; "
+                        "a CR is allowed only before the LF that ends a line (RFC 9112 section 2.2)", what,
+                        static_cast<size_t>(e - str));
+                    return -1;
+                }
+                ++e;
+            }
+            char* le = (e > line && e[-1] == '\r') ? e - 1 : e;
+            // an empty line ends the section
+            if (le == line) {
+                break;
+            }
+            if (start_line) {
+                start_line = false;
+            } else if (*line == ' ' || *line == '\t') {
+                if (first_field) {
+                    xsink->raiseException(err, "invalid HTTP %s received with whitespace at the start of the first "
+                        "field line at byte offset %zu (RFC 9112 section 2.2)", what,
+                        static_cast<size_t>(line - str));
+                    return -1;
+                }
+                if (reject_obs_fold) {
+                    xsink->raiseException(err, "invalid HTTP %s received with an obsolete line folding at byte offset "
+                        "%zu: a field line starts with whitespace (RFC 9112 section 5.2)", what,
+                        static_cast<size_t>(line - str));
+                    return -1;
+                }
+                // the line terminator before the folded line is replaced with spaces, so that the line continues the
+                // value of the previous field line
+                assert(line > str && line[-1] == '\n');
+                line[-1] = ' ';
+                if (line - 1 > str && line[-2] == '\r') {
+                    line[-2] = ' ';
+                }
+            } else {
+                const char* colon = static_cast<const char*>(memchr(line, ':', le - line));
+                if (!colon) {
+                    xsink->raiseException(err, "invalid HTTP %s received with a line without a colon at byte offset "
+                        "%zu (RFC 9112 section 5)", what, static_cast<size_t>(line - str));
+                    return -1;
+                }
+                if (colon == line) {
+                    xsink->raiseException(err, "invalid HTTP %s received with an empty field name at byte offset %zu "
+                        "(RFC 9112 section 5)", what, static_cast<size_t>(line - str));
+                    return -1;
+                }
+                for (const char* n = line; n < colon; ++n) {
+                    if (*n == ' ' || *n == '\t') {
+                        xsink->raiseException(err, "invalid HTTP %s received with whitespace in the field name at "
+                            "byte offset %zu (RFC 9112 section 5.1)", what, static_cast<size_t>(n - str));
+                        return -1;
+                    }
+                }
+                first_field = false;
+            }
+            if (!*e) {
+                break;
+            }
+            line = e + 1;
+        }
+        return 0;
+    }
+
     //! processes a header string to a hash and raises socket events
     DLLLOCAL QoreHashNode* processHttpHeaderString(ExceptionSink* xsink, QoreStringNodeHolder& hdr,
             QoreHashNode* info, int source, const char* headers_raw_key = "headers-raw") {
@@ -3350,15 +3448,19 @@ struct qore_socket_private : public QoreReferenceCounter {
         if (checkHttpHeaderNul(xsink, hdr->c_str(), hdr->size(), "SOCKET-HTTP-ERROR", "header")) {
             return nullptr;
         }
+        // the field lines are checked as RFC 9112 requires; an obsolete line folding is refused in a request and
+        // replaced with spaces in a response, which a user agent must do (RFC 9112 section 5.2)
+        if (checkHttpFieldLines(xsink, const_cast<char*>(hdr->c_str()), true, strncmp(hdr->c_str(), "HTTP/", 5) != 0,
+                "SOCKET-HTTP-ERROR", "header")) {
+            return nullptr;
+        }
         const char* buf = hdr->c_str();
         char* p;
-        if ((p = (char*)strstr(buf, "\r\n"))) {
-            *p = '\0';
-            p += 2;
-        } else if ((p = (char*)strchr(buf, '\n'))) {
-            *p = '\0';
-            ++p;
-        } else if ((p = (char*)strchr(buf, '\r'))) {
+        // a line ends with LF, which a CR can precede (RFC 9112 section 2.2)
+        if ((p = (char*)strchr(buf, '\n'))) {
+            if (p > buf && p[-1] == '\r') {
+                p[-1] = '\0';
+            }
             *p = '\0';
             ++p;
         } else {
@@ -3655,17 +3757,17 @@ struct qore_socket_private : public QoreReferenceCounter {
         while (*p) {
             char* buf = p;
 
-            if ((p = strstr(buf, "\r\n"))) {
-                *p = '\0';
-                p += 2;
-            } else if ((p = strchr(buf, '\n'))) {
+            // a line ends with LF, which a CR can precede (RFC 9112 section 2.2); the lines have been checked with
+            // checkHttpFieldLines(), so there is no other CR
+            if ((p = strchr(buf, '\n'))) {
+                if (p > buf && p[-1] == '\r') {
+                    p[-1] = '\0';
+                }
                 *p = '\0';
                 p++;
-            } else if ((p = strchr(buf, '\r'))) {
-                *p = '\0';
-                p++;
-            } else
+            } else {
                 break;
+            }
             char* t = strchr(buf, ':');
             if (!t)
                 break;

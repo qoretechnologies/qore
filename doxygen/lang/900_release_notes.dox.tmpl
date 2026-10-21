@@ -921,6 +921,19 @@
       @ref httpserverintro "HttpServer" answers a request whose header cannot be read, such as one with a NUL
       character, with status 400 (Bad Request) and closes the connection; before, the connection was closed without a
       response, or the request was handled without the headers after the NUL character
+    - HTTP/1.x header and trailer field lines received are parsed with the stricter rules that RFC 9112 requires;
+      before, the header lines after an invalid line could be lost without an error, so that, for example,
+      \c Content-Length was ignored and the body was read as another message:
+      - a bare CR (one not followed by LF), whitespace in a field name (as in <tt>"Host : x"</tt>), a line without a
+        colon or with an empty field name, and a whitespace line before the first field line raise
+        \c SOCKET-HTTP-ERROR in a header and \c READ-HTTP-CHUNK-ERROR in a trailer; before, a bare CR and the
+        whitespace were kept, and a line without a colon ended the header
+      - an obsolete line folding (a field line that starts with whitespace) raises \c SOCKET-HTTP-ERROR in a request
+        and is replaced with spaces in a response or trailer; before, it ended the header
+      - a line that ends with LF instead of CRLF ends there; before, it was joined with the next line when a later
+        line ended with CRLF
+      - the @ref httpserverintro "HttpServer" answers a request with such a field line with status 400 (Bad Request)
+        and closes the connection, as RFC 9112 requires
     - server-sent events received: an event ID with a NUL character is ignored, as the event stream format requires,
       so that it is never sent back in the \c Last-Event-ID header, and a retry time is used only if all of it is
       digits, so <tt>"10\\x00z"</tt> is no longer read as 10
