@@ -3923,7 +3923,9 @@ static int qore_socket_object_exec_read_http_chunked_trailers(QoreSocketObject* 
     }
     if (!trailers.empty()) {
         my_socket_priv* priv = my_socket_priv::getPriv(*s);
-        priv->convertHeaderToHash(output, trailers, info);
+        if (priv->convertHeaderToHash(output, trailers, xsink, info)) {
+            return -1;
+        }
         priv->doReadHttpHeaderEvent(QORE_EVENT_HTTP_FOOTERS_RECEIVED, output, QORE_SOURCE_SOCKET);
     }
     return 0;

@@ -3317,9 +3317,39 @@ struct qore_socket_private : public QoreReferenceCounter {
         return 0;
     }
 
+    //! raises an exception if HTTP header or trailer text received contains a NUL character
+    /** HTTP header and trailer text is parsed as a C string, so a NUL character would cut it off; RFC 9110 does not
+        allow a NUL character in a field name or value
+
+        @param xsink for the exception
+        @param str the text received
+        @param len the length of the text in bytes
+        @param err the error code of the exception
+        @param what what the text is: \c "header" or \c "chunked body trailer"
+
+        @return 0 if the text has no NUL character, -1 if an exception was raised
+    */
+    DLLLOCAL static int checkHttpHeaderNul(ExceptionSink* xsink, const char* str, size_t len, const char* err,
+            const char* what) {
+        assert(str || !len);
+        const void* nul = len ? memchr(str, '\0', len) : nullptr;
+        if (!nul) {
+            return 0;
+        }
+        xsink->raiseException(err, "invalid HTTP %s received with a NUL character at byte offset %zu; an HTTP %s "
+            "cannot contain NUL characters", what, static_cast<size_t>(static_cast<const char*>(nul) - str), what);
+        return -1;
+    }
+
     //! processes a header string to a hash and raises socket events
     DLLLOCAL QoreHashNode* processHttpHeaderString(ExceptionSink* xsink, QoreStringNodeHolder& hdr,
             QoreHashNode* info, int source, const char* headers_raw_key = "headers-raw") {
+        // the header is parsed as a C string, which a NUL character would end: the header lines after it, such as
+        // Content-Length or Transfer-Encoding, would be lost silently, and the rest of the message read as the body
+        // or as another message, so a header with a NUL character is refused
+        if (checkHttpHeaderNul(xsink, hdr->c_str(), hdr->size(), "SOCKET-HTTP-ERROR", "header")) {
+            return nullptr;
+        }
         const char* buf = hdr->c_str();
         char* p;
         if ((p = (char*)strstr(buf, "\r\n"))) {

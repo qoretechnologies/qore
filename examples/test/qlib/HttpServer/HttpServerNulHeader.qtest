@@ -1,0 +1,109 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+#
+# An HTTP/1.x request header with a NUL character cannot be read: parsed as a C string, it was cut at the NUL
+# character, so the header lines after it, such as Content-Length, were lost without an error and the body was read
+# as the next request; a NUL character in the request line closed the connection without a response.  The server
+# answers such a request with status 400, without calling a handler, and closes the connection, whether the request
+# is the first on the connection or a later one.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Logger
+%requires HttpServerUtil
+%requires HttpServerAsyncIo
+%requires HttpServer
+
+%exec-class HttpServerNulHeaderTest
+
+class CountingHandler inherits AbstractHttpRequestHandler {
+    public {
+        # the requests that reached the handler; the tests send them one at a time
+        int calls = 0;
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        ++calls;
+        return makeResponse(200, sprintf("path=%s body=%s", cx.raw_path, body ?? ""));
+    }
+}
+
+class HttpServerNulHeaderTest inherits QUnit::Test {
+    private {
+        HttpServer server;
+        CountingHandler handler();
+        int port;
+    }
+
+    constructor() : QUnit::Test("HttpServer NUL header", "1.0") {
+        server = new HttpServer(<HttpServerOptionInfo>{});
+        server.setDefaultHandler("default", handler);
+        port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+        on_exit server.stop();
+
+        addTestCase("first request on a connection", \firstRequest());
+        addTestCase("later request on a connection", \laterRequest());
+        set_return_value(main());
+    }
+
+    firstRequest() {
+        string smuggled = "GET /smuggled HTTP/1.1\r\nHost: localhost\r\n\r\n";
+        foreach hash<auto> i in (
+                # the body would have been read as the next request
+                {"label": "header value", "req": sprintf("POST /p HTTP/1.1\r\nHost: localhost\r\nX-A: a\x00b\r\n"
+                    "Content-Length: %d\r\n\r\n%s", smuggled.size(), smuggled)},
+                {"label": "header name", "req": "GET /p HTTP/1.1\r\nHost: localhost\r\nX-\x00A: 1\r\n\r\n"},
+                {"label": "request line", "req": "GET /a\x00b HTTP/1.1\r\nHost: localhost\r\n\r\n"},
+            ) {
+            Socket socket();
+            socket.connect(sprintf("127.0.0.1:%d", port), 30s);
+            on_exit socket.close();
+            socket.send(i.req);
+            hash<auto> response = HttpServerNulHeaderTest::readResponse(socket);
+            assertEq(400, response.hdr.status_code, i.label);
+            assertEq("close", response.hdr.connection, i.label);
+            assertRegex("NUL character", response.body, i.label);
+            assertTrue(HttpServerNulHeaderTest::isClosed(socket), i.label);
+            assertEq(0, handler.calls, i.label);
+        }
+    }
+
+    laterRequest() {
+        int calls = handler.calls;
+        Socket socket();
+        socket.connect(sprintf("127.0.0.1:%d", port), 30s);
+        on_exit socket.close();
+
+        socket.send("POST /first HTTP/1.1\r\nHost: localhost\r\nContent-Length: 2\r\n\r\nok");
+        hash<auto> hdr = socket.readHTTPHeader(30s);
+        assertEq(200, hdr.status_code);
+        assertEq("path=/first body=ok", socket.recv(int(hdr."content-length"), 30s));
+        assertEq(calls + 1, handler.calls);
+
+        # the next request on the kept connection has a NUL character in a header value
+        socket.send("GET /second HTTP/1.1\r\nHost: localhost\r\nX-A: \x00\r\n\r\n");
+        hash<auto> response = HttpServerNulHeaderTest::readResponse(socket);
+        assertEq(400, response.hdr.status_code);
+        assertTrue(HttpServerNulHeaderTest::isClosed(socket));
+        assertEq(calls + 1, handler.calls);
+    }
+
+    #! reads a response
+    private static hash<auto> readResponse(Socket socket) {
+        hash<auto> hdr = socket.readHTTPHeader(30s);
+        int len = hdr."content-length" ? int(hdr."content-length") : 0;
+        string body = len ? socket.recv(len, 30s) : "";
+        return {"hdr": hdr, "body": body};
+    }
+
+    #! returns True if the server closed the connection after the response that was read
+    /** called only after a response that closes the connection, so reading to the end returns at once
+    */
+    private static bool isClosed(Socket socket) {
+        return !socket.recvBinary(-1, 30s).size();
+    }
+}

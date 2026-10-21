@@ -906,6 +906,13 @@
     - character encoding names: a name with a NUL character is the name of an encoding that %Qore does not know (the
       whole name, with the NUL character escaped as \c \\x00), so converting to or from it raises
       \c ENCODING-CONVERSION-ERROR instead of using the encoding named by the part before the NUL character
+    - HTTP/1.x headers and chunked body trailers received: they are parsed as C strings, so a NUL character in a
+      header block cut it, and the header lines after it, such as \c Content-Length or \c Connection, were lost
+      without an error; a header with a NUL character raises \c SOCKET-HTTP-ERROR, and a trailer with one
+      \c READ-HTTP-CHUNK-ERROR, with synchronous and asynchronous I/O.  The
+      @ref httpserverintro "HttpServer" answers a request whose header cannot be read, such as one with a NUL
+      character, with status 400 (Bad Request) and closes the connection; before, the connection was closed without a
+      response, or the request was handled without the headers after the NUL character
     - keywords compared with a string: a string with a NUL character is no longer equal to the keyword before the
       NUL character (for example, the goal <tt>"connect\\x00x"</tt> given to
       @ref Qore::SocketPollOperation "SocketPollOperation" raises \c INVALID-GOAL, and a server-sent event field

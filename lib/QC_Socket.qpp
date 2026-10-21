@@ -1631,7 +1631,9 @@ static int socket_exec_read_http_chunked_trailers(QoreObject* self, QoreSocketOb
     }
     if (!trailers.empty()) {
         my_socket_priv* priv = my_socket_priv::getPriv(*s);
-        priv->convertHeaderToHash(output, trailers, info);
+        if (priv->convertHeaderToHash(output, trailers, xsink, info)) {
+            return -1;
+        }
         priv->doReadHttpHeaderEvent(QORE_EVENT_HTTP_FOOTERS_RECEIVED, output, QORE_SOURCE_SOCKET);
     }
     return 0;
@@ -5724,6 +5726,7 @@ hash<auto> ans = sock.readHTTPHeader(10s);
     @throw SOCKET-TIMEOUT The data requested was not received in the timeout period
     @throw SOCKET-SSL-ERROR There was an SSL error while reading data from the socket
     @throw SOCKET-HTTP-ERROR Invalid HTTP data was received, in the case of invalid header info received, the \c arg key of the exception hash will have the invalid data received
+    @throw SOCKET-HTTP-ERROR a header with a NUL character was received; it would cut off the header lines after it
 
     @note
     - if the header claims a certain character encoding via a \c charset declaration in the \c "Content-Type" header, the Socket's @ref character_encoding "character encoding" is automatically set accordingly
@@ -5790,7 +5793,8 @@ hash<auto> ans = sock.readHTTPChunkedBody(20s);
     @throw SOCKET-RECV-ERROR There was an error receiving the data
     @throw SOCKET-TIMEOUT The data requested was not received in the timeout period
     @throw SOCKET-SSL-ERROR There was an SSL error while reading data from the socket
-    @throw READ-HTTP-CHUNK-ERROR negative value given for chunk size by server
+    @throw READ-HTTP-CHUNK-ERROR negative value given for chunk size by server, or a trailer with a NUL character
+    was received
     @throw HTTP-BODY-TOO-LARGE the body exceeds the limit set with setMaxChunkedBodySize()
 */
 hash<auto> Socket::readHTTPChunkedBody(timeout timeout_ms = -1) [flags=NAMED_ARGS] {
@@ -5817,7 +5821,8 @@ hash<auto> ans = sock.readHTTPChunkedBodyBinary(20s);
     @throw SOCKET-RECV-ERROR There was an error receiving the data
     @throw SOCKET-TIMEOUT The data requested was not received in the timeout period
     @throw SOCKET-SSL-ERROR There was an SSL error while reading data from the socket
-    @throw READ-HTTP-CHUNK-ERROR negative value given for chunk size by server
+    @throw READ-HTTP-CHUNK-ERROR negative value given for chunk size by server, or a trailer with a NUL character
+    was received
     @throw HTTP-BODY-TOO-LARGE the body exceeds the limit set with setMaxChunkedBodySize()
 */
 hash<auto> Socket::readHTTPChunkedBodyBinary(timeout timeout_ms = -1) [flags=NAMED_ARGS] {
@@ -5849,7 +5854,8 @@ hash<auto> ans = sock.readHTTPChunk(20s);
     @throw SOCKET-RECV-ERROR There was an error receiving the data
     @throw SOCKET-TIMEOUT The data requested was not received in the timeout period
     @throw SOCKET-SSL-ERROR There was an SSL error while reading data from the socket
-    @throw READ-HTTP-CHUNK-ERROR negative value given for chunk size by server
+    @throw READ-HTTP-CHUNK-ERROR negative value given for chunk size by server, or a trailer with a NUL character
+    was received
     @throw HTTP-BODY-TOO-LARGE the chunk exceeds the limit set with setMaxChunkedBodySize()
 */
 hash<auto> Socket::readHTTPChunk(timeout timeout_ms = -1) [flags=NAMED_ARGS] {
@@ -5877,7 +5883,8 @@ hash<auto> ans = sock.readHTTPChunkedBodyToOutputStream(outputStream, 20s);
     @throw SOCKET-RECV-ERROR There was an error receiving the data
     @throw SOCKET-TIMEOUT The data requested was not received in the timeout period
     @throw SOCKET-SSL-ERROR There was an SSL error while reading data from the socket
-    @throw READ-HTTP-CHUNK-ERROR negative value given for chunk size by server
+    @throw READ-HTTP-CHUNK-ERROR negative value given for chunk size by server, or a trailer with a NUL character
+    was received
     @throw HTTP-BODY-TOO-LARGE the body exceeds the limit set with setMaxChunkedBodySize();
     no data over the limit is written to the stream
     @throw SOCKET-WRITE-ERROR the OutputStream is not I/O-thread-safe
@@ -5913,7 +5920,8 @@ sock.readHTTPChunkedBodyWithCallback(recv_callback, 20s);
     @throw SOCKET-RECV-ERROR There was an error receiving the data
     @throw SOCKET-TIMEOUT The data requested was not received in the timeout period
     @throw SOCKET-SSL-ERROR There was an SSL error while reading data from the socket
-    @throw READ-HTTP-CHUNK-ERROR negative value given for chunk size by server
+    @throw READ-HTTP-CHUNK-ERROR negative value given for chunk size by server, or a trailer with a NUL character
+    was received
     @throw HTTP-BODY-TOO-LARGE the body exceeds the limit set with setMaxChunkedBodySize();
     no data over the limit is passed to the callback
 
@@ -5953,7 +5961,8 @@ sock.readHTTPChunkedBodyBinaryWithCallback(recv_callback, 20s);
     @throw SOCKET-RECV-ERROR There was an error receiving the data
     @throw SOCKET-TIMEOUT The data requested was not received in the timeout period
     @throw SOCKET-SSL-ERROR There was an SSL error while reading data from the socket
-    @throw READ-HTTP-CHUNK-ERROR negative value given for chunk size by server
+    @throw READ-HTTP-CHUNK-ERROR negative value given for chunk size by server, or a trailer with a NUL character
+    was received
     @throw HTTP-BODY-TOO-LARGE the body exceeds the limit set with setMaxChunkedBodySize();
     no data over the limit is passed to the callback
 

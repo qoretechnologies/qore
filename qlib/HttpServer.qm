@@ -214,6 +214,9 @@ log("started listener on %s", lh.desc);
       status 400 (Bad Request) before a handler is selected, over HTTP/1.1, HTTP/2 and HTTP/3; before, the decoded
       path reached a default handler, a server with path handlers closed the connection without a response, and an
       HTTP/2 or HTTP/3 request was answered with status 500
+    - an HTTP/1.x request whose header cannot be read, such as one with a NUL character in its request line or in a
+      header line, is answered with status 400 (Bad Request), and the connection is closed; before, the connection
+      was closed without a response, or the request was handled without the header lines after the NUL character
     - response bodies are compressed on the fly with levels suited to compressing them for each request, set with the
       new \c compression_levels server option and @ref HttpServer::HttpServer::setCompressionLevels()
       "setCompressionLevels()" (defaults: Brotli quality 5, Zstandard level 3, gzip and deflate level 6, bzip2 level

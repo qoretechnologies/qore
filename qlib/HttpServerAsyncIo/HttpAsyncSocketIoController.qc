@@ -3257,6 +3257,22 @@ public class HttpAsyncSocketIoController {
             return;
         }
 
+        # an HTTP/1.x request header that cannot be read, such as one with a NUL character, is answered with 400
+        # (Bad Request), as RFC 9112 requires, and the connection is closed, as the rest of the request cannot be
+        # framed; before, the connection was closed without a response
+        if ((state == HttpConnectionState::Idle || state == HttpConnectionState::KeepAlive
+                || state == HttpConnectionState::ReadHeader
+                || state == HttpConnectionState::SendAndReadHeader)
+            && ex.err == "SOCKET-HTTP-ERROR"
+            && cinfo.sock.isOpen()) {
+            # the target's error callback closes the socket, so the bad request is logged here
+            log(LoggerLevel::WARN, "invalid HTTP request header received on %s: %s: %s; answering with 400 (Bad "
+                "Request)", uh, ex.err, ex.desc);
+            if (sendBadRequest(uh, cinfo, ex.desc)) {
+                return;
+            }
+        }
+
         {
             AutoWriteLock al(m);
             remove connections{uh};
@@ -3272,6 +3288,44 @@ public class HttpAsyncSocketIoController {
         if (state != HttpConnectionState::Http3 && state != HttpConnectionState::Http3Sending) {
             try { cinfo.sock.close(); } catch () {}
         }
+    }
+
+    #! Answers an HTTP/1.x request whose header could not be read with 400 (Bad Request), then closes the connection
+    /** @param uh the connection's unique hash
+        @param cinfo the connection
+        @param desc why the header could not be read; sent as the body of the response
+
+        @return @ref True if the response is being sent; the connection is closed after it is sent, with a lingering
+        close; @ref False if the response could not be started, in which case the caller closes the connection
+    */
+    private bool sendBadRequest(string uh, hash<HttpActiveConnectionInfo> cinfo, string desc) {
+        AbstractPollOperation op;
+        try {
+            op = cinfo.sock.startPollSendHttpResponse(400, "Bad Request", "1.1", {
+                "Content-Type": "text/plain;charset=utf-8",
+                "Connection": "close",
+            }, desc + "\n");
+        } catch (hash<ExceptionInfo> ex) {
+            log(LoggerLevel::DEBUG, "400 response to %s not started: %s: %s", uh, ex.err, ex.desc);
+            return False;
+        }
+        # with no pending stream and no callback after the response, the connection is closed once it is sent
+        hash<HttpActiveConnectionInfo> new_cinfo = <HttpActiveConnectionInfo>{
+            "sock": cinfo.sock,
+            "listener": cinfo.listener,
+            "cx": cinfo.cx,
+            "target": cinfo.target,
+            "state": HttpConnectionState::SendStreamResponse,
+            "stream_op": op,
+            "ssl": cinfo.ssl,
+            "return_to_idle_after_send": False,
+        };
+        {
+            AutoWriteLock al(m);
+            connections{uh} = new_cinfo;
+        }
+        submitConnectionOp(uh, new_cinfo);
+        return True;
     }
 
     #! Handles header read completion

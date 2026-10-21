@@ -5242,6 +5242,11 @@ private:
         bytes_consumed = true;
         if (qore_socket_exec_http_blank_line(**line)) {
             if (!trailers.empty()) {
+                // the trailer text is parsed as a C string, which a NUL character would cut off
+                if (qore_socket_private::checkHttpHeaderNul(xsink, trailers.c_str(), trailers.size(),
+                        "READ-HTTP-CHUNK-ERROR", "chunked body trailer")) {
+                    return -1;
+                }
                 priv.convertHeaderToHash(*out, const_cast<char*>(trailers.c_str()), 0, nullptr, nullptr,
                     "response-headers-raw");
                 if (*xsink) {
@@ -6311,9 +6316,16 @@ void my_socket_priv::doReadHttpHeaderEvent(int event, const QoreHashNode& hdr, i
     socket->priv->do_read_http_header(event, &hdr, source);
 }
 
-void my_socket_priv::convertHeaderToHash(QoreHashNode& h, QoreString& hdr, QoreHashNode* info) const {
+int my_socket_priv::convertHeaderToHash(QoreHashNode& h, QoreString& hdr, ExceptionSink* xsink,
+        QoreHashNode* info) const {
+    // the trailer text is parsed as a C string, which a NUL character would cut off
+    if (qore_socket_private::checkHttpHeaderNul(xsink, hdr.c_str(), hdr.size(), "READ-HTTP-CHUNK-ERROR",
+            "chunked body trailer")) {
+        return -1;
+    }
     socket->priv->convertHeaderToHash(&h, const_cast<char*>(hdr.c_str()), 0, info, nullptr,
         "response-headers-raw");
+    return 0;
 }
 
 void my_socket_priv::clearHttpExpectChunkedBody() const {
@@ -17049,8 +17061,7 @@ int SocketReadHttpChunkedBodyPollOperation::handleTrailer(ExceptionSink* xsink) 
     if (line == "\r\n") {
         if (!trailers.empty()) {
             my_socket_priv* priv = my_socket_priv::getPriv(*sock);
-            priv->convertHeaderToHash(**out, trailers);
-            if (*xsink) {
+            if (priv->convertHeaderToHash(**out, trailers, xsink)) {
                 return -1;
             }
             priv->doReadHttpHeaderEvent(QORE_EVENT_HTTP_FOOTERS_RECEIVED, **out, source);
