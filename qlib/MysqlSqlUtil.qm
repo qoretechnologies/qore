@@ -118,9 +118,93 @@ module MysqlSqlUtil {
 *list<auto> rows = table.selectRows({"partition": "p1"});
     @endcode
 
+    @subsection mysql_fk_actions Foreign Constraint Referential Actions on MySQL
+
+    The \c on_delete and \c on_update @ref fk_actions "referential actions" of a foreign constraint are given in its
+    SQL and read back from \c information_schema.referential_constraints:
+    @code{.py}
+# alter table order_lines add constraint fk_order_lines foreign key (order_id) references orders (id) on delete cascade
+hash<auto> desc = {
+    "foreign_constraints": {
+        "fk_order_lines": {"columns": "order_id", "table": "orders", "target_columns": "id", "on_delete": "cascade"},
+    },
+};
+    @endcode
+    - @ref SqlUtil::FK_CASCADE "CASCADE" and @ref SqlUtil::FK_SET_NULL "SET NULL" are supported
+    - InnoDB checks @ref SqlUtil::FK_RESTRICT "RESTRICT" and @ref SqlUtil::FK_NO_ACTION "NO ACTION" immediately, so
+      they are the same action, the default: a template with either action and a constraint in the database without
+      one are equal, and table alignment does not change it; a constraint without an action is read back without
+      one, whether the server gives \c RESTRICT (MariaDB) or \c NO \c ACTION (MySQL 8) for it
+    - @ref SqlUtil::FK_SET_DEFAULT "SET DEFAULT" is refused with \c FOREIGN-CONSTRAINT-ERROR: InnoDB accepts it, but
+      enforces it as \c RESTRICT; a constraint created with it outside SqlUtil is read back without an action
+    - a change of an action is applied by table alignment by dropping the foreign constraint and adding it again, as
+      MySQL cannot change a foreign constraint
+
+    @subsection mysql_sequences Sequences on MySQL
+
+    MySQL has no sequences, so a sequence is emulated with a row in a table (\c sqlutil_sequences by default) and a
+    function that increments it (\c sqlutil_nextval by default); see the \c sequence_table and
+    \c sequence_function options in @ref MysqlSqlUtil::MysqlDatabase::MysqlOptions "MysqlDatabase::MysqlOptions".  An emulated sequence has an increment
+    of 1, and no minimum value, maximum value, cycle or cache: the start value of a sequence description is applied
+    when the sequence is created, and schema alignment does not change a sequence that exists (see
+    @ref SqlUtil::AbstractSequence::getAlterSql() "AbstractSequence::getAlterSql()"), so that it keeps its current
+    value.
+
+    @subsection mysql_identifiers Identifiers and String Literals on MySQL
+
+    Names are given to MySQL as described in @ref sql_identifiers: an ordinary name (a letter, an underscore or a
+    character from U+0080 to U+FFFF, then letters, digits, underscores, dollar signs or such characters) that is
+    not a reserved word is given as before, and any other name is given in backticks with each backtick doubled
+    (ex: <tt>`Order Date`</tt>, <tt>`a``b`</tt>), so that a name can never change the SQL that it is part of.  A
+    name is refused with \c IDENTIFIER-ERROR if:
+    - it is empty, or it has a NUL character or a character above U+FFFF, which MySQL does not allow in an
+      identifier
+    - it has to be quoted, it is used in SQL that can be run with arguments (a table name, and column names and
+      aliases in queries and DML), and it has \c "%", \c "'", \c "\"", \c "#", \c "--", \c "/*" or \c ":"
+      followed by a letter: the \c mysql driver reads these in SQL outside a string literal as a placeholder, a
+      quote or the start of a comment, also in a backtick-quoted identifier, and replaces \c "%s" with an argument as
+      given; such a column can still be created, described and dropped, as DDL is run without arguments
+
+    MySQL reads a backslash in a string literal as an escape character unless the session's \c sql_mode has
+    \c NO_BACKSLASH_ESCAPES, which can differ between connections and can change at any time.  A string value that
+    SqlUtil gives in SQL, as in a default value or the argument of the @ref SqlUtil::cop_prepend() "cop_prepend()",
+    @ref SqlUtil::cop_append() "cop_append()", @ref SqlUtil::uop_prepend() "uop_prepend()" and
+    @ref SqlUtil::uop_append() "uop_append()" operators, is therefore given as a string literal with each single
+    quote doubled if it has no backslash, as before, and otherwise as a hex literal with a character set introducer
+    (ex: <tt>_utf8mb4 X'615c62'</tt> for <tt>a\\b</tt>), which every \c sql_mode reads as the same string:
+    @code{.py}
+# select concat(_utf8mb4 X'433a5c',path) from mydb.files
+*list<auto> rows = table.selectRows({"columns": cop_prepend("path", "C:\\")});
+    @endcode
+    The following cannot have a backslash, as MySQL cannot read a hex literal there, and are refused with
+    \c VALUE-ERROR (comments) or \c IDENTIFIER-ERROR (sequence names):
+    - a column comment, as the \c COMMENT clause takes a string literal only
+    - the default value of a \c TEXT or \c BLOB column, which MariaDB does not keep correctly when it is given as a
+      hex literal
+    - the name of an emulated sequence, which is stored in a string literal
+
     @section mysql_relnotes Release Notes
 
     @subsection mysqlsqlutilv16 MysqlSqlUtil v1.6
+    - security: names are quoted and escaped where they are not ordinary names, or refused if they cannot be
+      identifiers in SQL run through the \c mysql driver, so that a table, column, index, constraint, sequence,
+      view, trigger, savepoint, schema or partition name or an alias can never change the SQL statement that it is
+      part of; before, only reserved words were quoted, and other names were given in SQL as they were, so that a
+      name from data, as a column name from a file, could inject SQL (see @ref mysql_identifiers)
+    - security: a string value with a backslash is given in SQL as a hex literal, which every \c sql_mode reads as
+      the same string; before, a string value was given in a string literal with its single quotes doubled, and a
+      backslash, which MySQL reads as an escape character unless the session's \c sql_mode has
+      \c NO_BACKSLASH_ESCAPES, could end the literal, so that a value, as the argument of a prepend or append
+      operator, could inject SQL; a column comment with a backslash is refused, as MySQL cannot read a hex literal
+      in a comment (see @ref mysql_identifiers)
+    - added support for the \c on_delete and \c on_update referential actions of foreign constraints; \c SET
+      \c DEFAULT, which InnoDB enforces as \c RESTRICT, is refused (see @ref mysql_fk_actions)
+    - documented that schema alignment does not change an emulated sequence that exists (see
+      @ref mysql_sequences)
+    - fixed reading the default value of a string column on MariaDB 10.2.7 and later, and a string in a partition
+      bound, with a backslash or a new line: the server gives them as string literals with escapes, which were not
+      read, so that such a default value differed from the template's and was changed by every table alignment
+    - fixed listing functions and procedures, which gave no names, as the query had no value for the schema
     - added the size of the current database (\c database(); see
       @ref SqlUtil::AbstractDatabase::getCurrentSchemaPhysicalSize() "AbstractDatabase::getCurrentSchemaPhysicalSize()")
     - added temporary-table support (\c "create temporary table"); see
@@ -227,6 +311,65 @@ public namespace MysqlSqlUtil {
         return new MysqlDatabase(nds, opts);
     }
 
+    # returns a name as an SQL identifier for DDL on MySQL: as given if MySQL reads it as one unquoted identifier
+    # (a letter, an underscore or a character from U+0080 to U+FFFF, then letters, digits, underscores, dollar signs or
+    # such characters) that is not a reserved word, otherwise in backticks with each backtick doubled, so that the name
+    # can never change the SQL that it is part of; a name with a character outside the Basic Multilingual Plane, which
+    # MySQL does not allow in an identifier, is refused.  DDL is run without arguments (execRaw()), so this is the name
+    # of a column, index, constraint or trigger in the SQL that creates, changes or drops it
+    string sub mysql_get_ddl_identifier(string name) {
+        if (name =~ /\A[A-Za-z_\x{80}-\x{ffff}][A-Za-z0-9_$\x{80}-\x{ffff}]*\z/
+            && !MysqlDatabase::MysqlReservedWords{name.lwr()}) {
+            return name;
+        }
+        if (name =~ /[\x{10000}-\x{10ffff}]/) {
+            throw "IDENTIFIER-ERROR", sprintf("MySQL: the name %y has a character outside the Basic Multilingual Plane "
+                "(above U+FFFF), which MySQL does not allow in an identifier", name);
+        }
+        return AbstractSqlUtilBase::getDelimitedIdentifier(name, "`", "`", "MySQL");
+    }
+
+    # returns a name as an SQL identifier for MySQL, as mysql_get_ddl_identifier() returns it, for SQL that can be run
+    # with arguments: a name that has to be quoted is refused if it has a character or a sequence that the mysql
+    # driver reads in SQL outside a string literal as a placeholder (%, or : followed by a letter), a quote (' or ") or
+    # a comment marker (#, -- or /*), as the driver does not skip backtick-quoted identifiers; "%s" in particular is
+    # replaced with an argument as given, so that a value could become SQL
+    string sub mysql_get_sql_identifier(string name) {
+        string rv = mysql_get_ddl_identifier(name);
+        if (rv != name) {
+            *string bad = (name =~ x/(%|'|"|#|--|\/\*|:[A-Za-z])/)[0];
+            if (bad) {
+                throw "IDENTIFIER-ERROR", sprintf("MySQL: the name %y cannot be an identifier in SQL run through the "
+                    "mysql driver: it has %y, which the driver reads outside a string literal, also in a "
+                    "backtick-quoted identifier, as a placeholder, a quote or the start of a comment", name, bad);
+            }
+        }
+        return rv;
+    }
+
+    # returns a name in the form "name" or "schema.name", where the schema is a name of word characters, for SQL, each
+    # part as mysql_get_sql_identifier() returns it
+    string sub mysql_get_sql_object_name(string name) {
+        *list<*string> l = (name =~ x/^(\w+)\.(.+)$/s);
+        if (l) {
+            return mysql_get_sql_identifier(l[0]) + "." + mysql_get_sql_identifier(l[1]);
+        }
+        return mysql_get_sql_identifier(name);
+    }
+
+    # returns the name of an emulated sequence as a string literal: the name is an identifier as
+    # mysql_get_sql_identifier() allows it, and has no backslash, as a backslash is an escape character in a string
+    # literal unless the session's sql_mode has NO_BACKSLASH_ESCAPES
+    string sub mysql_get_sequence_name_literal(string name) {
+        mysql_get_sql_identifier(name);
+        if (name.find("\\") >= 0) {
+            throw "IDENTIFIER-ERROR", sprintf("MySQL: the sequence name %y has a backslash, which cannot be in the name "
+                "of an emulated sequence, as it is stored in a string literal, which reads a backslash according to "
+                "the sql_mode of the session", name);
+        }
+        return "'" + replace(name, "'", "''") + "'";
+    }
+
     sub parse_schema_name(string nname, reference<*string> schema, reference<string> name) {
         *string sstr = (nname =~ x/^(\w+)\.\w+/)[0];
         if (sstr) {
@@ -248,17 +391,17 @@ public namespace MysqlSqlUtil {
 
         #! Creates the savepoint
         private createSavepointImpl() {
-            ds.exec("savepoint " + savepoint);
+            ds.exec("savepoint " + mysql_get_sql_identifier(savepoint));
         }
 
         #! Rolls back to the savepoint
         private rollbackImpl() {
-            ds.exec("rollback to " + savepoint);
+            ds.exec("rollback to " + mysql_get_sql_identifier(savepoint));
         }
 
         #! Deletes the savepoint
         private deleteSavepointImpl() {
-            ds.exec("release savepoint " + savepoint);
+            ds.exec("release savepoint " + mysql_get_sql_identifier(savepoint));
         }
     }
 
@@ -291,7 +434,7 @@ public namespace MysqlSqlUtil {
 
         #! returns a string that can be used to create the index in the database
         string getCreateSql(string table_name, *hash opt) {
-            string sql = sprintf("create %sindex %s", unique ? "unique " : "", name);
+            string sql = sprintf("create %sindex %s", unique ? "unique " : "", mysql_get_ddl_identifier(name));
             if (method.val()) {
                 sql += sprintf(" using %s", method.upr());
             }
@@ -315,18 +458,69 @@ public namespace MysqlSqlUtil {
         /** The index is renamed with \c RENAME \c INDEX, which needs MySQL 5.7 or MariaDB 10.5.2 or later
         */
         softlist<string> getRenameSql(string table_name, string new_name) {
-            return sprintf("alter table %s rename index %s to %s", table_name, name, new_name);
+            return sprintf("alter table %s rename index %s to %s", table_name, mysql_get_ddl_identifier(name),
+                mysql_get_ddl_identifier(new_name));
         }
 
         #! returns a string that can be used to drop the index from the table
         string getDropSql(string table_name) {
-            return sprintf("alter table %s drop index %s", table_name, name);
+            return sprintf("alter table %s drop index %s", table_name, mysql_get_ddl_identifier(getDbName()));
         }
     }
 
     #! represents a MySQL-specific foreign constraint
     public class MysqlForeignConstraint inherits SqlUtil::AbstractForeignConstraint {
-        constructor(string n, Columns c, ForeignConstraintTarget t) : AbstractForeignConstraint(n, c, t) {
+        #! creates the constraint from the supplied arguments
+        /** @param n the name of the constraint
+            @param c the source columns
+            @param t the target table and columns
+            @param on_delete the \c ON \c DELETE referential action (see @ref fk_actions), or NOTHING for the
+                database default
+            @param on_update the \c ON \c UPDATE referential action (see @ref fk_actions), or NOTHING for the
+                database default
+
+            @throw FOREIGN-CONSTRAINT-ERROR an invalid referential action
+
+            @note @ref SqlUtil::FK_SET_DEFAULT "SET DEFAULT" is refused when the SQL of the constraint is given (see
+            @ref mysql_fk_actions); \a on_delete and \a on_update are available since MysqlSqlUtil 1.6
+        */
+        constructor(string n, Columns c, ForeignConstraintTarget t, *string on_delete, *string on_update)
+                : AbstractForeignConstraint(n, c, t, False, False, on_delete, on_update) {
+        }
+
+        #! maps a rule from \c information_schema.referential_constraints to a referential action
+        /** InnoDB checks \c RESTRICT and \c NO \c ACTION immediately, so they are the same action, the default;
+            MariaDB gives \c RESTRICT and MySQL 8 gives \c NO \c ACTION for a constraint created without an action.
+            InnoDB enforces \c SET \c DEFAULT as \c RESTRICT, so it is the default too: MySQL 8 keeps it in the
+            catalog, MariaDB gives \c RESTRICT for it
+
+            @param rule the \c DELETE_RULE or \c UPDATE_RULE value
+
+            @return the referential action (see @ref fk_actions), or NOTHING for the database default
+
+            @since MysqlSqlUtil 1.6
+        */
+        static *string actionFromCatalog(*string rule) {
+            switch (rule) {
+                case "CASCADE": return FK_CASCADE;
+                case "SET NULL": return FK_SET_NULL;
+            }
+        }
+
+        #! returns the referential action as InnoDB enforces it: RESTRICT and NO ACTION are the default
+        private static *string getEnforcedAction(*string action) {
+            return (action == FK_RESTRICT || action == FK_NO_ACTION) ? NOTHING : action;
+        }
+
+        #! refuses SET DEFAULT, which InnoDB accepts and enforces as RESTRICT
+        /** @throw FOREIGN-CONSTRAINT-ERROR \a action is @ref SqlUtil::FK_SET_DEFAULT "SET DEFAULT"
+        */
+        static checkAction(string cname, *string action, string what) {
+            if (action == FK_SET_DEFAULT) {
+                throw "FOREIGN-CONSTRAINT-ERROR", sprintf("foreign constraint %y: the %s referential action %y is "
+                    "not supported on MySQL: InnoDB accepts SET DEFAULT but enforces it as RESTRICT", cname, what,
+                    action);
+            }
         }
 
         string getCreateSql(string table_name, *hash opt) {
@@ -355,15 +549,43 @@ public namespace MysqlSqlUtil {
             return sprintf("alter table %s ", table_name) + getAddSql(name, table_name, opt);
         }
 
+        #! returns the clause that adds the constraint, with its referential actions
+        /** @throw FOREIGN-CONSTRAINT-ERROR a referential action is @ref SqlUtil::FK_SET_DEFAULT "SET DEFAULT",
+            which InnoDB accepts and enforces as \c RESTRICT
+
+            @since MysqlSqlUtil 1.6 the referential actions are given
+        */
         string getAddSql(string name, string table_name, *hash opt) {
-            return sprintf("add constraint %s foreign key (%s) references %s (%s)", name,
-                (foldl $1 + ", " + $2, getSqlColumnNameIterator()), target.table,
-                (foldl $1 + ", " + $2, target.columns.getSqlColumnNameIterator()));
+            MysqlForeignConstraint::checkAction(name, on_delete, "on_delete");
+            MysqlForeignConstraint::checkAction(name, on_update, "on_update");
+            return sprintf("add constraint %s foreign key (%s) references %s (%s)%s", mysql_get_ddl_identifier(name),
+                (foldl $1 + ", " + $2, getSqlColumnNameIterator()), mysql_get_sql_object_name(target.table),
+                (foldl $1 + ", " + $2, target.columns.getSqlColumnNameIterator()), getActionsSql());
         }
 
         #! returns a string that can be used to drop the foreign constraint from the database
         string getDropSql(string table_name) {
-            return sprintf("alter table %s drop foreign key %s", table_name, name);
+            return sprintf("alter table %s drop foreign key %s", table_name, mysql_get_ddl_identifier(name));
+        }
+
+        #! returns @ref True "True" if the argument is equal to the current object, @ref False "False" if not
+        /** The constraints are compared as in the base class, with the referential actions as InnoDB enforces
+            them: \c RESTRICT and \c NO \c ACTION are the default, so a template with either action and a
+            constraint in the database without one are equal, and table alignment does not change it
+
+            @since MysqlSqlUtil 1.6
+        */
+        private bool equalImpl(AbstractConstraint con) {
+            AbstractForeignConstraint c = cast<AbstractForeignConstraint>(con);
+            return (h.keys() != c.h.keys())
+                || !target.equal(c.target)
+                || deferrable != c.deferrable
+                || initially_deferred != c.initially_deferred
+                || MysqlForeignConstraint::getEnforcedAction(on_delete)
+                    != MysqlForeignConstraint::getEnforcedAction(c.on_delete)
+                || MysqlForeignConstraint::getEnforcedAction(on_update)
+                    != MysqlForeignConstraint::getEnforcedAction(c.on_update)
+                ? False : True;
         }
     }
 
@@ -397,8 +619,23 @@ list<auto> l = col.getAddColumnSql(t);
 
         #! returns an sql string that can be used to add the column to a table
         string getCreateSql(AbstractTable t) {
+            # a string with a backslash is given as a hex literal (see MysqlTable::getSqlValue()), which MariaDB
+            # stores incorrectly as the default value of a TEXT or BLOB column
+            if (def_val =~ /^_utf8mb4 X'/ && native_type =~ /(text|blob)$/i) {
+                throw "VALUE-ERROR", sprintf("column %y: the default value of a %s column cannot have a backslash: it "
+                    "is given as a hex literal, which every sql_mode reads the same way, and MariaDB does not keep "
+                    "such a default value of a TEXT or BLOB column", name, native_type);
+            }
             string sql = AbstractColumn::getCreateSql(t);
             if (comment) {
+                # the COMMENT clause takes a string literal only, in which a backslash is read according to the
+                # sql_mode of the session; a comment with a backslash cannot be given so that every session reads
+                # it the same way, and a backslash could end the literal
+                if (comment.find("\\") >= 0) {
+                    throw "VALUE-ERROR", sprintf("column %y: the comment %y has a backslash, which a MySQL comment "
+                        "cannot have: the COMMENT clause takes a string literal only, which reads a backslash "
+                        "according to the sql_mode of the session", name, comment);
+                }
                 sql += " comment " + t.getSqlValue(comment);
             }
             return sql;
@@ -425,7 +662,17 @@ list<auto> l = col.getModifySql(t, newcol);
             MysqlColumn c = col;
 
             string ntd = c.getCreateSql(t);
-            if (ntd == getCreateSql(t)) {
+            # the column in the database can have a definition that SQL cannot give, such as a comment with a
+            # backslash (see getCreateSql()); it is then not the new definition
+            *string otd;
+            try {
+                otd = getCreateSql(t);
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err != "VALUE-ERROR") {
+                    rethrow;
+                }
+            }
+            if (ntd == otd) {
                 return;
             }
 
@@ -447,17 +694,23 @@ string str = col.getRenameSql(t, "new_name");
             @return a string that can be used to rename the column
         */
         string getRenameSql(AbstractTable t, string new_name) {
+            # the column definition starts with the name of the column and a space; a quoted name can have spaces
             string sql = getCreateSql(t);
-            int i = sql.find(" ");
-            splice sql, 0, i + 1;
+            splice sql, 0, ddl_name.size() + 1;
             return sprintf("alter table %s change %s %s %s", t.getSqlName(), ddl_name, getDdlName(new_name), sql);
         }
 
-        #! returns the column name with quoting in case the column name is a reserved word
-        /** the name returned here will be used when executing DDL
+        #! returns the column name for DDL: as given if it is an ordinary name, otherwise quoted
+        /** the name returned here will be used when executing DDL; a name that is not an ordinary name or that is a
+            reserved word is returned in backticks, with each backtick doubled
+
+            @throw IDENTIFIER-ERROR the name is empty, or has a NUL character or a character above U+FFFF
+
+            @since MysqlSqlUtil 1.6 a name that is not an ordinary name is quoted and escaped; before, only a reserved
+            word was quoted
         */
         string getDdlName(string name) {
-            return MysqlDatabase::MysqlReservedWords{name.lwr()} ? ("`" + name + "`") : name;
+            return mysql_get_ddl_identifier(name);
         }
 
         #! returns @ref True "True" if the argument is equal to the current object, @ref False "False" if not
@@ -594,18 +847,20 @@ auto v = c.name;
             MySQL 5.7 or MariaDB 10.5.2 or later, so that the foreign constraints that reference it are kept
         */
         list getRenameSql(string table_name, string new_name) {
-            return (sprintf("alter table %s rename index %s to %s", table_name, name, new_name),);
+            return (sprintf("alter table %s rename index %s to %s", table_name, mysql_get_ddl_identifier(name),
+                mysql_get_ddl_identifier(new_name)),);
         }
 
         string getCreateSql(string name, string table_name, *hash opts) {
-            string sql = sprintf("alter table %s add constraint %s unique ", table_name, name);
+            string sql = sprintf("alter table %s add constraint %s unique ", table_name,
+                mysql_get_ddl_identifier(name));
             getIndexSql(\sql, name, opts);
             return sql;
         }
 
         #! returns a string that can be used to drop the constraint from the database
         string getDropSql(string table_name) {
-            return sprintf("alter table %s drop index %s", table_name, name);
+            return sprintf("alter table %s drop index %s", table_name, mysql_get_ddl_identifier(name));
         }
 
         #! returns the SQL that disables and re-enables the foreign constraints that reference the constraint
@@ -688,12 +943,12 @@ auto v = c.name;
 
         #! returns a string that can be used to create the trigger in the database
         softlist getCreateSql(string table_name, *hash opt) {
-            return sprintf("create trigger %s %s", name, src);
+            return sprintf("create trigger %s %s", mysql_get_ddl_identifier(name), src);
         }
 
         #! returns a string that can be used to drop the trigger from the database
         softlist getDropSql(string table_name) {
-            return sprintf("drop trigger %s", name);
+            return sprintf("drop trigger %s", mysql_get_ddl_identifier(name));
         }
 
         #! returns @ref True "True" if the argument is equal to the current object, @ref False "False" if not
@@ -711,7 +966,8 @@ auto v = c.name;
             @return the SQL statements that drop the trigger and create it under the new name
         */
         softlist getRenameSql(string table_name, string new_name) {
-            return (getDropSql(table_name)[0], sprintf("create trigger %s %s", new_name, src));
+            return (getDropSql(table_name)[0], sprintf("create trigger %s %s", mysql_get_ddl_identifier(new_name),
+                src));
         }
     }
 
@@ -765,7 +1021,8 @@ auto v = c.name;
             start value, as with a database sequence
         */
         string getCreateSql(*hash opt) {
-            return sprintf("insert into %s (name, id) values ('%s', %d)", table_name, name, start - 1);
+            return sprintf("insert into %s (name, id) values (%s, %d)", mysql_get_sql_object_name(table_name),
+                mysql_get_sequence_name_literal(name), start - 1);
         }
 
         #! returns a string that can be used to rename the sequence in the database
@@ -773,14 +1030,16 @@ auto v = c.name;
             @param opt this argument is ignored
          */
         softlist getRenameSql(string new_name, *hash opt) {
-            return sprintf("update %s set name = '%s' where name = '%s'", table_name, new_name, name);
+            return sprintf("update %s set name = %s where name = %s", mysql_get_sql_object_name(table_name),
+                mysql_get_sequence_name_literal(new_name), mysql_get_sequence_name_literal(name));
         }
 
         #! returns a string that can be used to drop the sequence from the database
         /** @param opt this argument is ignored
          */
         string getDropSql(*hash opt) {
-            return sprintf("delete from %s where name = '%s'", table_name, name);
+            return sprintf("delete from %s where name = %s", mysql_get_sql_object_name(table_name),
+                mysql_get_sequence_name_literal(name));
         }
     }
 
@@ -816,9 +1075,18 @@ auto v = c.name;
             # TODO/FIXME: check options
             return sprintf("create %sview %s as %s",
                            opt.replace ? "or replace " : "",
-                           name,
+                           mysql_get_sql_object_name(name),
                            src
                           );
+        }
+
+        #! returns a string that can be used to drop the view from the database
+        /** @param opt this argument is ignored
+
+            @since MysqlSqlUtil 1.6 the name of the view is quoted if it is not an ordinary name
+        */
+        string getDropSql(*hash<auto> opt) {
+            return sprintf("drop view %s", mysql_get_sql_object_name(name));
         }
 
         #! returns a string that can be used to rename the view in the database
@@ -1163,6 +1431,26 @@ end";
             return MysqlMaxPrecision;
         }
 
+        #! returns a name as an SQL identifier for MySQL
+        /** A name that MySQL reads as one unquoted identifier (a letter, an underscore or a character from U+0080 to
+            U+FFFF, then letters, digits, underscores, dollar signs or such characters) and that is not a reserved word
+            is returned as given; any other name is returned in backticks with each backtick doubled
+
+            @param name the name of a database object, without a schema
+
+            @return the name as an SQL identifier for MySQL
+
+            @throw IDENTIFIER-ERROR the name is empty, has a NUL character or a character above U+FFFF, which MySQL
+            does not allow in an identifier, or it has to be quoted and has a character or a sequence that the
+            \c mysql driver reads in SQL as a placeholder, a quote or a comment marker also in a backtick-quoted
+            identifier: \c "%", \c "'", \c "\"", \c "#", \c "--", \c "/*" or \c ":" followed by a letter
+
+            @since MysqlSqlUtil 1.6
+        */
+        string getSqlIdentifier(string name) {
+            return mysql_get_sql_identifier(name);
+        }
+
         private list<string> featuresImpl() {
             return list(DB_FUNCTIONS, DB_PROCEDURES,
                         DB_TABLES, DB_VIEWS);
@@ -1180,7 +1468,8 @@ end";
             *AbstractTable t = getTable(sequence_table);
             if (!t)
                 return;
-            *string str = ds.selectRow("select name from %s where name = %v", sequence_table, name).name;
+            *string str = ds.selectRow("select name from " + mysql_get_sql_object_name(sequence_table)
+                + " where name = %v", name).name;
             if (!str)
                 return;
             return new MysqlSequence(sequence_table, name);
@@ -1277,7 +1566,8 @@ end";
                         l += tl;
 
                     # create / align function
-                    string fstr = sprintf(MysqlSequenceFunction, sequence_function, sequence_table);
+                    string fstr = sprintf(MysqlSequenceFunction, mysql_get_sql_object_name(sequence_function),
+                        mysql_get_sql_object_name(sequence_table));
                     tl = getAlignFunctionSql(new MysqlFunction(sequence_function, fstr), opt{MysqlDatabase::CreationOptions.keys()});
                     if (tl)
                         l += tl;
@@ -1299,7 +1589,7 @@ end";
             @return a list of string function names in the database
         */
         private list<string> listFunctionsImpl() {
-            *hash qh = ds.select("select routine_name from information_schema.routines where routine_schema = %v and routine_type = 'FUNCTION'");
+            *hash qh = ds.select("select routine_name from information_schema.routines where routine_schema = %v and routine_type = 'FUNCTION'", schema);
             return qh.routine_name;
         }
 
@@ -1309,7 +1599,7 @@ end";
             @return a list of string procedure names in the database
         */
         private list<string> listProceduresImpl() {
-            *hash qh = ds.select("select routine_name from information_schema.routines where routine_schema = %v and routine_type = 'PROCEDURE'");
+            *hash qh = ds.select("select routine_name from information_schema.routines where routine_schema = %v and routine_type = 'PROCEDURE'", schema);
             return qh.routine_name;
         }
 
@@ -1317,7 +1607,7 @@ end";
             *AbstractTable t = getTable(sequence_table);
             if (!t)
                 return ();
-            return ds.select("select name from %s", sequence_table).name;
+            return ds.select("select name from " + mysql_get_sql_object_name(sequence_table)).name;
         }
 
         private list<string> listViewsImpl() {
@@ -1356,7 +1646,8 @@ end";
         private softint getNextSequenceValueImpl(string name) {
             on_error seqds.rollback();
             on_success seqds.commit();
-            return seqds.selectRow("select %s(%v) as my_nextval", sequence_function, name).my_nextval;
+            return seqds.selectRow("select " + mysql_get_sql_object_name(sequence_function) + "(%v) as my_nextval",
+                name).my_nextval;
         }
 
         #! returns the last value issued for the given sequence in the current session
@@ -1397,7 +1688,7 @@ end";
 
             softlist tables = options.tables ? options.tables : listTables();
 
-            sql += sprintf("%s", tables.join(", "));
+            sql += (foldl $1 + ", " + $2, (map mysql_get_sql_object_name($1), tables));
 
             ds.select(sql);
         }
@@ -1410,7 +1701,7 @@ end";
 
             softlist tables = options.tables ? options.tables : listTables();
 
-            sql += sprintf("%s", tables.join(", "));
+            sql += (foldl $1 + ", " + $2, (map mysql_get_sql_object_name($1), tables));
 
             ds.select(sql);
         }
@@ -2213,8 +2504,17 @@ end";
         }
 
         #! returns the name of the table to be used in SQL (with a possible qualifiers for schema, etc)
+        /** @since MysqlSqlUtil 1.6 the schema and the name are quoted if they are not ordinary names
+        */
         string getSqlName() {
-            return schema + "." + name;
+            return mysql_get_sql_identifier(schema) + "." + mysql_get_sql_identifier(name);
+        }
+
+        #! returns a name as an SQL identifier for MySQL
+        /** @copydetails MysqlDatabase::getSqlIdentifier()
+        */
+        string getSqlIdentifier(string name) {
+            return mysql_get_sql_identifier(name);
         }
 
         #! Converts generic date format codes to MySQL DATE_FORMAT() specifiers
@@ -2350,9 +2650,13 @@ end";
                             }
                         }
                         case Type::String: {
-                            if (defval =~ /^'.*'$/) {
+                            if (defval =~ /^'.*'$/s) {
                                 defval = defval[1..(defval.size() - 2)];
-                                defval =~ s/''/'/g;
+                                # MariaDB 10.2.7 and later give a string default as a literal in which a backslash
+                                # escapes a character, as \\ a backslash and \n a new line
+                                defval = ds.getServerVersion() >= 100207
+                                    ? MysqlTable::unescapeCatalogString(defval)
+                                    : replace(defval, "''", "'");
                             }
                             break;
                         }
@@ -2397,7 +2701,8 @@ end";
                     }
                 }
             }
-            return AbstractDatabase::doCallback(opt, primaryKey.getCreateSql(name, opt), AbstractDatabase::AC_Add, "primary key", primaryKey.getName(), name);
+            return AbstractDatabase::doCallback(opt, primaryKey.getCreateSql(getSqlTableName(), opt),
+                AbstractDatabase::AC_Add, "primary key", primaryKey.getName(), name);
         }
 
         private MysqlPrimaryKey getPrimaryKeyImpl() {
@@ -2449,7 +2754,15 @@ end";
             hash rv;
             # get foreign referential constraints
             # FIXME: use schema name
-            *hash qh = ds.select("select t.constraint_name, column_name source_column, referenced_table_name target_table, referenced_column_name target_column from information_schema.table_constraints t inner join information_schema.key_column_usage k on (t.constraint_schema = k.constraint_schema and t.table_name = k.table_name and t.table_schema = k.table_schema and t.constraint_name = k.constraint_name) where constraint_type = 'FOREIGN KEY' and t.table_name = %v and t.table_schema = %v order by position_in_unique_constraint", name, schema);
+            *hash qh = ds.select("select t.constraint_name, k.column_name source_column, k.referenced_table_name "
+                "target_table, k.referenced_column_name target_column, r.delete_rule delete_rule, r.update_rule "
+                "update_rule from information_schema.table_constraints t inner join "
+                "information_schema.key_column_usage k on (t.constraint_schema = k.constraint_schema and "
+                "t.table_name = k.table_name and t.table_schema = k.table_schema and t.constraint_name = "
+                "k.constraint_name) inner join information_schema.referential_constraints r on "
+                "(r.constraint_schema = t.constraint_schema and r.constraint_name = t.constraint_name and "
+                "r.table_name = t.table_name) where constraint_type = 'FOREIGN KEY' and t.table_name = %v and "
+                "t.table_schema = %v order by k.position_in_unique_constraint", name, schema);
             if (qh.constraint_name) {
                 hash ch;
                 foreach hash<auto> row in (qh.contextIterator()) {
@@ -2457,13 +2770,16 @@ end";
                     c.columns.(row.source_column) = columns{row.source_column};
                     c.target.table = row.target_table;
                     c.target.columns.(row.target_column) = True;
+                    c.on_delete = MysqlForeignConstraint::actionFromCatalog(row.delete_rule);
+                    c.on_update = MysqlForeignConstraint::actionFromCatalog(row.update_rule);
                 }
 
                 foreach hash c in (ch.pairIterator()) {
                     # get a description of the target table's columns
                     Columns targ_columns = getReferencedTableColumnsUnlocked(c.value.target.table, opts.table_cache);
                     ForeignConstraintTarget fct(c.value.target.table, targ_columns.subset(c.value.target.columns.keys()));
-                    rv.(c.key) = new MysqlForeignConstraint(c.key, new Columns(c.value.columns), fct);
+                    rv.(c.key) = new MysqlForeignConstraint(c.key, new Columns(c.value.columns), fct,
+                        c.value.on_delete, c.value.on_update);
                 }
             }
 
@@ -2506,7 +2822,8 @@ end";
 
             foreach hash<auto> row in (qh.contextIterator()) {
                 string src = sprintf("%s %s on %s for each %s %s", row.action_timing.lwr(),
-                    row.event_manipulation.lwr(), name, row.action_orientation.lwr(), row.action_statement);
+                    row.event_manipulation.lwr(), mysql_get_ddl_identifier(name), row.action_orientation.lwr(),
+                    row.action_statement);
                 rv{row.trigger_name} = new MysqlTrigger(row.trigger_name, src);
             }
 
@@ -2517,18 +2834,18 @@ end";
             string sql = sprintf("%s (\n", getCreateTableStartSql());
 
             sql += foldl $1 + ",\n" + $2, (map "  " + $1.getCreateSql(self), columns.iterator());
-            sql += sprintf("\n) engine %s", engine);
+            sql += sprintf("\n) engine %s", MysqlTable::getTableOptionName("engine", engine));
             {
                 *string encoding = self.table_encoding ?? ds.getDBEncoding();
                 if (encoding.val()) {
-                    sql += sprintf(" character set %s", encoding);
+                    sql += sprintf(" character set %s", MysqlTable::getTableOptionName("character set", encoding));
                 }
             }
             {
                 # get collation option or connection option, if any
                 *string collation = self.collation ?? ds.getOption("collation");
                 if (collation) {
-                    sql += sprintf(" collate %s", collation);
+                    sql += sprintf(" collate %s", MysqlTable::getTableOptionName("collation", collation));
                 }
             }
 
@@ -2543,7 +2860,7 @@ end";
         */
         private string getCreateTableStartSql() {
             if (isTempTable()) {
-                return sprintf("create temporary table %s", name);
+                return sprintf("create temporary table %s", getSqlTableName());
             }
             return AbstractTable::getCreateTableStartSql();
         }
@@ -2595,7 +2912,7 @@ end";
         }
 
         private string getRenameSqlImpl(string new_name) {
-            return sprintf("alter table %s rename to %s", getSqlName(), new_name);
+            return sprintf("alter table %s rename to %s", getSqlName(), mysql_get_sql_object_name(new_name));
         }
 
         private AbstractColumn addColumnImpl(string cname, hash<auto> opt, bool nullable = True) {
@@ -2701,8 +3018,13 @@ end";
         }
 
         private AbstractForeignConstraint addForeignConstraintImpl(string cname, hash ch, string table, hash tch, *hash opt) {
+            *string on_delete = normalize_fk_action(opt.on_delete, "on_delete");
+            *string on_update = normalize_fk_action(opt.on_update, "on_update");
+            # refused here, so that a table description with it is refused before any SQL is given
+            MysqlForeignConstraint::checkAction(cname, on_delete, "on_delete");
+            MysqlForeignConstraint::checkAction(cname, on_update, "on_update");
             ForeignConstraintTarget fct(table, new Columns(tch));
-            return new MysqlForeignConstraint(cname, new Columns(ch), fct);
+            return new MysqlForeignConstraint(cname, new Columns(ch), fct, on_delete, on_update);
         }
 
         private AbstractCheckConstraint addCheckConstraintImpl(string cname, string src, *hash opt) {
@@ -2767,8 +3089,18 @@ end";
 
                 case NT_NUMBER: return string(v);
 
-                # double any single quotes in strings
-                case NT_STRING: v =~ s/'/''/g; return "'" + v + "'";
+                case NT_STRING: {
+                    # a backslash is an escape character in a string literal unless the sql_mode of the session
+                    # has NO_BACKSLASH_ESCAPES, which can differ between sessions and change at any time, so a string
+                    # with a backslash is given as a hex literal in UTF-8 with a character set introducer, which
+                    # every sql_mode reads as the same string; any other string is given as before, with single
+                    # quotes doubled
+                    if (v.find("\\") >= 0) {
+                        return "_utf8mb4 X'" + binary(convert_encoding(v, "UTF-8")).toHex() + "'";
+                    }
+                    v =~ s/'/''/g;
+                    return "'" + v + "'";
+                }
 
                 case NT_NULL:
                 case NT_NOTHING: return "null";
@@ -2784,16 +3116,74 @@ end";
             }
         }
 
-        #! returns the column name for use in SQL strings; subclasses can return a special string in case the column name is a reserved word
+        #! returns the column name for use in SQL strings, as getSqlIdentifier() returns it
         /** MySQL/MariaDB etc require column names to be enclosed in backticks instead of double quotes
+
+            @throw IDENTIFIER-ERROR the name cannot be an identifier in SQL run through the \c mysql driver; see
+            getSqlIdentifier()
+
+            @since MysqlSqlUtil 1.6 a name that is not an ordinary name is quoted and escaped; before, only a reserved
+            word was quoted
         */
         string getColumnSqlName(string col) {
-            return MysqlDatabase::MysqlReservedWords{col.lwr()} ? ("`" + col + "`") : col;
+            return mysql_get_sql_identifier(col);
         }
 
-        #! returns a list of column names for use in SQL strings; subclasses can process the argument list in case a column name is a reserved word
+        #! returns a list of column names for use in SQL strings, as getSqlIdentifier() returns them
         list getColumnSqlNames(softlist cols) {
-            return map getColumnSqlName($1), cols;
+            return map mysql_get_sql_identifier($1), cols;
+        }
+
+        #! returns the text of a string literal as the server gives it in the catalog, without its quotes
+        /** In the literal, a doubled single quote is a quote, and a backslash escapes the next character, as in a
+            string literal without the \c NO_BACKSLASH_ESCAPES sql_mode: \c "\\0", \c "\\b", \c "\\n", \c "\\r",
+            \c "\\t" and \c "\\Z" are control characters, and any other escaped character is that character
+
+            @param str the text of the literal between its quotes
+
+            @return the string that the literal gives
+
+            @since MysqlSqlUtil 1.6
+        */
+        static string unescapeCatalogString(string str) {
+            if (str.find("\\") < 0) {
+                return replace(str, "''", "'");
+            }
+            string rv = "";
+            int len = str.length();
+            for (int i = 0; i < len; ++i) {
+                string c = str[i];
+                if (c == "'" && i + 1 < len && str[i + 1] == "'") {
+                    rv += "'";
+                    ++i;
+                    continue;
+                }
+                if (c != "\\" || i + 1 == len) {
+                    rv += c;
+                    continue;
+                }
+                string e = str[++i];
+                switch (e) {
+                    case "0": rv += chr(0); break;
+                    case "b": rv += chr(8); break;
+                    case "n": rv += "\n"; break;
+                    case "r": rv += "\r"; break;
+                    case "t": rv += "\t"; break;
+                    case "Z": rv += chr(26); break;
+                    default: rv += e; break;
+                }
+            }
+            return rv;
+        }
+
+        #! returns the name of a table option for SQL (engine, character set or collation), which is a name of word
+        #! characters
+        private static string getTableOptionName(string option, string value) {
+            if (value !~ /\A\w+\z/) {
+                throw "OPTION-ERROR", sprintf("MySQL table %s %y is not a name of letters, digits and underscores",
+                    option, value);
+            }
+            return value;
         }
 
         private bool supportsPartitionsImpl() {
@@ -2874,7 +3264,7 @@ end";
                     "ordinal": row.partition_ordinal_position - 1,
                     "schema": schema,
                     "relation_name": pname,
-                    "sql_name": sprintf("%s partition (%s)", getSqlName(), pname),
+                    "sql_name": sprintf("%s partition (%s)", getSqlName(), mysql_get_ddl_identifier(pname)),
                     "is_default": strategy.method == "range" && pdesc =~ /^MAXVALUE$/i,
                 });
                 if (exists row.estimated_row_count) {
@@ -2941,7 +3331,7 @@ end";
                 "ordinal": row.partition_ordinal_position - 1,
                 "schema": schema,
                 "relation_name": row.partition_name,
-                "sql_name": sprintf("%s partition (%s)", getSqlName(), getColumnSqlName(row.partition_name)),
+                "sql_name": sprintf("%s partition (%s)", getSqlName(), mysql_get_ddl_identifier(row.partition_name)),
                 "is_default": strategy.method == "range" && pdesc =~ /^MAXVALUE$/i,
             });
             if (exists row.estimated_row_count) {
@@ -3102,12 +3492,12 @@ end";
 
         private string getDropPartitionSqlImpl(string partition_name, *hash<auto> opt) {
             hash<PartitionInfo> info = resolveMysqlPartitionInfoUnlocked(partition_name);
-            return sprintf("alter table %s drop partition %s", getSqlName(), getColumnSqlName(info.name));
+            return sprintf("alter table %s drop partition %s", getSqlName(), mysql_get_ddl_identifier(info.name));
         }
 
         private string getTruncatePartitionSqlImpl(string partition_name, *hash<auto> opt) {
             hash<PartitionInfo> info = resolveMysqlPartitionInfoUnlocked(partition_name);
-            return sprintf("alter table %s truncate partition %s", getSqlName(), getColumnSqlName(info.name));
+            return sprintf("alter table %s truncate partition %s", getSqlName(), mysql_get_ddl_identifier(info.name));
         }
 
         private assertNoMysqlDefaultPartitionForAddUnlocked(hash<PartitionSpec> spec) {
@@ -3126,7 +3516,7 @@ end";
             if (!spec.name) {
                 throw "PARTITION-ERROR", sprintf("%s: MySQL/MariaDB partition name is required", getDesc());
             }
-            return sprintf("partition %s %s", getColumnSqlName(spec.name), getMysqlPartitionBoundSql(spec));
+            return sprintf("partition %s %s", mysql_get_ddl_identifier(spec.name), getMysqlPartitionBoundSql(spec));
         }
 
         private string getMysqlPartitionBoundSql(hash<PartitionSpec> spec) {
@@ -3231,9 +3621,11 @@ end";
                 return;
             }
 
-            *string value = (sql =~ x/^'(.*)'$/)[0];
+            *string value = (sql =~ x/^'(.*)'$/s)[0];
             if (exists value) {
-                value =~ s/''/'/g;
+                # the server gives a string in a partition description as a literal in which a backslash escapes a
+                # character
+                value = MysqlTable::unescapeCatalogString(value);
                 return parseMysqlPartitionTypedLiteral(value, col) ?? value;
             }
             if (*auto typed = parseMysqlPartitionTypedLiteral(sql, col)) {

@@ -1,0 +1,369 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires SqlUtil
+%requires MysqlSqlUtil
+
+%try-module mysql
+%define NoMysql
+%endtry
+
+%exec-class MysqlReferentialActionsTest
+
+#! a datasource that records the SQL that it is given, so SQL is generated without a MySQL server
+class MysqlActionsRecordingDatasource inherits Qore::SQL::AbstractDatasource {
+    public {
+        #! each statement given
+        list<string> log = ();
+    }
+
+    *string getPassword() {}
+    *string getOSEncoding() {}
+    *string getDBName() { return "mtest"; }
+    *string getUserName() { return "muser"; }
+    *string getHostName() {}
+    *int getPort() {}
+    *string getDBEncoding() {}
+    string getDriverName() { return "mysql"; }
+    auto getServerVersion() {}
+    auto getClientVersion() {}
+    string getConfigString() { return ""; }
+    hash<auto> getConfigHash() { return {}; }
+    auto getOption(string opt) {}
+    bool inTransaction() { return False; }
+    bool currentThreadInTransaction() { return False; }
+    nothing beginTransaction() {}
+    nothing commit() {}
+    nothing rollback() {}
+
+    auto exec(string sql, ...) { log += sql; return 0; }
+    auto vexec(string sql, *softlist<auto> vargs) { log += sql; return 0; }
+    auto execRaw(string sql) { log += sql; return 0; }
+    auto select(string sql, ...) { log += sql; }
+    auto vselect(string sql, *softlist<auto> vargs) { log += sql; }
+    auto selectRow(string sql, ...) { log += sql; }
+    auto vselectRow(string sql, *softlist<auto> vargs) { log += sql; }
+    auto selectRows(string sql, ...) { log += sql; }
+    auto vselectRows(string sql, *softlist<auto> vargs) { log += sql; }
+    auto selectTyped(string sql, ...) {}
+    auto vselectTyped(string sql, *softlist<auto> vargs) {}
+    auto selectRowsTyped(string sql, ...) {}
+    auto vselectRowsTyped(string sql, *softlist<auto> vargs) {}
+}
+
+class MysqlReferentialActionsTest inherits QUnit::Test {
+    private {
+        *string connstr;
+    }
+
+    constructor() : Test("MysqlReferentialActionsTest", "1.0", \ARGV, Opts) {
+        addTestCase("the create SQL carries the actions", \createSql());
+        addTestCase("SET DEFAULT is refused", \setDefaultRefused());
+        addTestCase("RESTRICT and NO ACTION are the default", \defaultEquivalence());
+        addTestCase("catalog rules are read as actions", \catalogRules());
+        addTestCase("live: actions are created, read back and enforced", \liveActions());
+        addTestCase("live: a foreign constraint without actions is aligned", \liveNoChurn());
+        addTestCase("live: an action change replaces the foreign constraint", \liveActionChange());
+
+        connstr = m_options.connstr ?? ENV.QORE_DB_CONNSTR_MYSQL;
+        set_return_value(main());
+    }
+
+    # returns a table cache with the parent table
+    private static Tables getParentCache(MysqlActionsRecordingDatasource ds) {
+        MysqlTable parent(ds, "parent");
+        parent.setupTable({
+            "columns": {"id": {"qore_type": "integer", "notnull": True}},
+            "primary_key": {"name": "pk_parent", "columns": "id"},
+        });
+        Tables cache();
+        cache.add("parent", parent);
+        return cache;
+    }
+
+    # returns a child table with a foreign constraint on a parent table with the given options
+    private static MysqlTable getChild(MysqlActionsRecordingDatasource ds, *hash<auto> fk_opt, *Tables cache) {
+        cache = cache ?? getParentCache(ds);
+        MysqlTable child(ds, "child");
+        child.setupTable({
+            "columns": {
+                "id": {"qore_type": "integer", "notnull": True},
+                "parent_id": {"qore_type": "integer"},
+            },
+            "foreign_constraints": {
+                "fk_child": {"columns": "parent_id", "table": "parent", "target_columns": "id"} + fk_opt,
+            },
+        }, {"table_cache": cache});
+        return child;
+    }
+
+    createSql() {
+        MysqlActionsRecordingDatasource ds();
+        string prefix = "alter table child add constraint fk_child foreign key (parent_id) references parent (id)";
+
+        # without actions the SQL is as before
+        assertEq(prefix, getChild(ds).getForeignConstraints().fk_child.getCreateSql("child"));
+
+        AbstractForeignConstraint fk = getChild(ds, {"on_delete": "cascade", "on_update": "set null"})
+            .getForeignConstraints().fk_child;
+        assertEq("CASCADE", fk.on_delete);
+        assertEq("SET NULL", fk.on_update);
+        assertEq(prefix + " on delete cascade on update set null", fk.getCreateSql("child"));
+
+        # a table's create SQL has the clause
+        MysqlTable child = getChild(ds, {"on_delete": "set_null"});
+        assertEq(prefix + " on delete set null", child.getForeignConstraints().fk_child.getCreateSql("child"));
+
+        # an explicit RESTRICT is given as it is
+        assertEq(prefix + " on update restrict", getChild(ds, {"on_update": "restrict"}).getForeignConstraints()
+            .fk_child.getCreateSql("child"));
+
+        # an invalid action is refused
+        assertThrows("FOREIGN-CONSTRAINT-ERROR", "invalid on_delete referential action", \getChild(),
+            (ds, {"on_delete": "drop"}));
+    }
+
+    setDefaultRefused() {
+        MysqlActionsRecordingDatasource ds();
+        # InnoDB accepts SET DEFAULT but enforces it as RESTRICT, so it is refused
+        assertThrows("FOREIGN-CONSTRAINT-ERROR", "SET DEFAULT", \getChild(), (ds, {"on_delete": "set default"}));
+        assertThrows("FOREIGN-CONSTRAINT-ERROR", "SET DEFAULT", \getChild(), (ds, {"on_update": "SET_DEFAULT"}));
+
+        Tables cache = getParentCache(ds);
+        MysqlTable child = getChild(ds, NOTHING, cache);
+        assertThrows("FOREIGN-CONSTRAINT-ERROR", "SET DEFAULT", sub () {
+            child.addForeignConstraint("fk_other", "parent_id", "parent", "id",
+                {"on_delete": "setdefault", "table_cache": cache});
+        });
+        # the table is unchanged
+        assertEq(("fk_child",), child.getForeignConstraints().keys());
+        # another action is added
+        child.addForeignConstraint("fk_other", "parent_id", "parent", "id", {"on_delete": "cascade",
+            "table_cache": cache});
+        assertEq("CASCADE", child.getForeignConstraints().fk_other.on_delete);
+
+        # an action set on the object directly is refused when its SQL is given
+        AbstractForeignConstraint fk = getChild(ds).getForeignConstraints().fk_child;
+        fk.on_delete = "SET DEFAULT";
+        assertThrows("FOREIGN-CONSTRAINT-ERROR", "SET DEFAULT", \fk.getCreateSql(), "child");
+    }
+
+    defaultEquivalence() {
+        MysqlActionsRecordingDatasource ds();
+        AbstractForeignConstraint none = getChild(ds).getForeignConstraints().fk_child;
+        # InnoDB checks NO ACTION and RESTRICT immediately, so they are the same action
+        foreach hash<auto> opt in ({"on_delete": "restrict"}, {"on_update": "restrict"},
+                {"on_delete": "no action", "on_update": "RESTRICT"}) {
+            AbstractForeignConstraint fk = getChild(ds, opt).getForeignConstraints().fk_child;
+            assertTrue(fk.equal(none), sprintf("%y", opt));
+            assertTrue(none.equal(fk), sprintf("%y", opt));
+        }
+        foreach hash<auto> opt in ({"on_delete": "cascade"}, {"on_update": "set null"},
+                {"on_delete": "restrict", "on_update": "cascade"}) {
+            AbstractForeignConstraint fk = getChild(ds, opt).getForeignConstraints().fk_child;
+            assertFalse(fk.equal(none), sprintf("%y", opt));
+            assertFalse(none.equal(fk), sprintf("%y", opt));
+        }
+        # the same actions are equal
+        assertTrue(getChild(ds, {"on_delete": "cascade"}).getForeignConstraints().fk_child
+            .equal(getChild(ds, {"on_delete": "CASCADE"}).getForeignConstraints().fk_child));
+    }
+
+    catalogRules() {
+        # MariaDB gives RESTRICT and MySQL 8 gives NO ACTION for a foreign constraint without an action
+        assertEq(NOTHING, MysqlForeignConstraint::actionFromCatalog("RESTRICT"));
+        assertEq(NOTHING, MysqlForeignConstraint::actionFromCatalog("NO ACTION"));
+        assertEq("CASCADE", MysqlForeignConstraint::actionFromCatalog("CASCADE"));
+        assertEq("SET NULL", MysqlForeignConstraint::actionFromCatalog("SET NULL"));
+        # MySQL 8 keeps SET DEFAULT in the catalog and enforces it as RESTRICT
+        assertEq(NOTHING, MysqlForeignConstraint::actionFromCatalog("SET DEFAULT"));
+        assertEq(NOTHING, MysqlForeignConstraint::actionFromCatalog(NOTHING));
+
+        Columns cols({"parent_id": new MysqlColumn("parent_id", "bigint", "integer", 0, True)});
+        ForeignConstraintTarget target("parent", new Columns({"id": new MysqlColumn("id", "bigint", "integer", 0,
+            False)}));
+        MysqlForeignConstraint fk("fk_child", cols, target, "cascade", "set null");
+        assertEq("CASCADE", fk.on_delete);
+        assertEq("SET NULL", fk.on_update);
+        assertEq("alter table child add constraint fk_child foreign key (parent_id) references parent (id) "
+            "on delete cascade on update set null", fk.getCreateSql("child"));
+    }
+
+    private Datasource getLiveDatasource() {
+        if (!connstr) {
+            testSkip("no MySQL connection; set QORE_DB_CONNSTR_MYSQL or use -c");
+        }
+%ifdef NoMysql
+        testSkip("no mysql module");
+%endif
+        Datasource ds(connstr);
+        ds.open();
+        return ds;
+    }
+
+    # creates a parent and a child table with the given foreign constraint options and returns the names
+    private static hash<auto> createTables(Datasource ds, *hash<auto> fk_opt) {
+        string suffix = get_random_string(6, 1).lwr();
+        string pname = "b4sq_fkp_" + suffix;
+        string cname = "b4sq_fkc_" + suffix;
+        Table parent(ds, {
+            "columns": {"id": {"qore_type": "integer", "notnull": True}},
+            "primary_key": {"name": "pk_" + pname, "columns": "id"},
+        }, pname);
+        parent.create();
+        # the parent table is dropped if the child table cannot be created
+        on_error dropTables(ds, {"child": cname, "parent": pname});
+        Tables cache();
+        cache.add(pname, parent.getTable());
+        hash<auto> desc = {
+            "columns": {
+                "id": {"qore_type": "integer", "notnull": True},
+                "parent_id": {"qore_type": "integer"},
+            },
+            "primary_key": {"name": "pk_" + cname, "columns": "id"},
+            "foreign_constraints": {
+                "fk_" + cname: {"columns": "parent_id", "table": pname, "target_columns": "id"} + fk_opt,
+            },
+        };
+        Table child(ds, desc, cname, {"table_cache": cache});
+        child.create({"table_cache": cache});
+        ds.commit();
+        return {"parent": pname, "child": cname, "fk": "fk_" + cname, "desc": desc};
+    }
+
+    # returns a table cache with the parent table read from the database, for a template of the child table
+    private static Tables getCache(Datasource ds, hash<auto> names) {
+        Tables cache();
+        cache.add(names.parent, new Table(ds, names.parent).getTable());
+        return cache;
+    }
+
+    # returns a template of the child table with the given description
+    private static Table getTemplate(Datasource ds, hash<auto> names, hash<auto> desc, reference<Tables> cache) {
+        cache = getCache(ds, names);
+        return new Table(ds, desc, names.child, {"table_cache": cache});
+    }
+
+    private static dropTables(Datasource ds, hash<auto> names) {
+        ds.rollback();
+        foreach string t in (names.child, names.parent) {
+            try {
+                ds.execRaw("drop table if exists " + t);
+            } catch (hash<ExceptionInfo> ex) {
+                printf("%s: %s\n", ex.err, ex.desc);
+            }
+        }
+        ds.commit();
+    }
+
+    liveActions() {
+        Datasource ds = getLiveDatasource();
+        hash<auto> names = createTables(ds, {"on_delete": "cascade", "on_update": "set null"});
+        on_exit dropTables(ds, names);
+
+        # the actions are read back from the catalog
+        Table db(ds, names.child);
+        AbstractForeignConstraint fk = db.getForeignConstraints(){names.fk};
+        assertEq("CASCADE", fk.on_delete);
+        assertEq("SET NULL", fk.on_update);
+
+        # ... and enforced by the server
+        ds.execRaw(sprintf("insert into %s (id) values (1), (2)", names.parent));
+        ds.execRaw(sprintf("insert into %s (id, parent_id) values (10, 1), (20, 2)", names.child));
+        ds.execRaw(sprintf("update %s set id = 3 where id = 2", names.parent));
+        ds.execRaw(sprintf("delete from %s where id = 1", names.parent));
+        ds.commit();
+        assertEq({"id": (20,), "parent_id": (NULL,)},
+            ds.select(sprintf("select id, parent_id from %s order by id", names.child)));
+
+        # the template is aligned with the table
+        Tables cache;
+        Table template = getTemplate(ds, names, names.desc, \cache);
+        assertEq((), db.getAlignSql(template.getTable(), {"table_cache": cache}));
+
+        # the description of the table read from the database has the actions, and is aligned with the table
+        hash<auto> desc = db.getDescriptionHash();
+        assertEq({"on_delete": "CASCADE", "on_update": "SET NULL"},
+            desc.foreign_constraints{names.fk}{"on_delete", "on_update"});
+        Tables dcache;
+        Table dtemplate = getTemplate(ds, names, desc, \dcache);
+        assertEq((), db.getAlignSql(dtemplate.getTable(), {"table_cache": dcache}));
+    }
+
+    liveNoChurn() {
+        Datasource ds = getLiveDatasource();
+        hash<auto> names = createTables(ds);
+        on_exit dropTables(ds, names);
+
+        Table db(ds, names.child);
+        AbstractForeignConstraint fk = db.getForeignConstraints(){names.fk};
+        assertEq(NOTHING, fk.on_delete);
+        assertEq(NOTHING, fk.on_update);
+
+        # a template without actions, or with the equivalent RESTRICT or NO ACTION, needs no SQL
+        foreach *hash<auto> opt in (NOTHING, {"on_delete": "restrict", "on_update": "no action"},
+                {"on_update": "RESTRICT"}) {
+            hash<auto> desc = names.desc;
+            desc.foreign_constraints{names.fk} += opt;
+            Tables cache;
+            Table template = getTemplate(ds, names, desc, \cache);
+            assertEq((), db.getAlignSql(template.getTable(), {"table_cache": cache}), sprintf("%y", opt));
+        }
+
+        # a foreign constraint created with RESTRICT is aligned with a template without actions
+        hash<auto> rnames = createTables(ds, {"on_delete": "restrict", "on_update": "restrict"});
+        on_exit dropTables(ds, rnames);
+        Table rdb(ds, rnames.child);
+        hash<auto> rdesc = rnames.desc;
+        rdesc.foreign_constraints{rnames.fk} -= ("on_delete", "on_update");
+        Tables rcache;
+        Table rtemplate = getTemplate(ds, rnames, rdesc, \rcache);
+        assertEq((), rdb.getAlignSql(rtemplate.getTable(), {"table_cache": rcache}));
+    }
+
+    liveActionChange() {
+        Datasource ds = getLiveDatasource();
+        hash<auto> names = createTables(ds);
+        on_exit dropTables(ds, names);
+
+        hash<auto> desc = names.desc;
+        desc.foreign_constraints{names.fk} += {"on_delete": "cascade"};
+        Tables cache;
+        Table template = getTemplate(ds, names, desc, \cache);
+        Table db(ds, names.child);
+        list<auto> sql = db.getAlignSql(template.getTable(), {"table_cache": cache});
+        # the foreign constraint is dropped and added again with the new action
+        string fk = names.fk;
+        string schema = ds.getDBName();
+        assertEq((
+            sprintf("alter table %s drop foreign key %s", names.child, fk),
+            sprintf("alter table %s add constraint %s foreign key (parent_id) references %s (id) on delete cascade",
+                names.child, fk, names.parent),
+        ), map replace($1, schema + ".", ""), sql);
+        map ds.execRaw($1), sql;
+        ds.commit();
+
+        Table after(ds, names.child);
+        assertEq("CASCADE", after.getForeignConstraints(){fk}.on_delete);
+        assertEq((), after.getAlignSql(template.getTable(), {"table_cache": cache}));
+
+        # SET DEFAULT is refused before any SQL is given
+        desc.foreign_constraints{fk}.on_delete = "set default";
+        assertThrows("FOREIGN-CONSTRAINT-ERROR", "SET DEFAULT", sub () {
+            new Table(ds, desc, names.child, {"table_cache": getCache(ds, names)});
+        });
+    }
+
+    private usageIntern() {
+        TestReporter::usageIntern(OptionColumn);
+        printOption("-c,--conn=ARG", "set DB connection argument (ex: \"mysql:user/pass@db\")", OptionColumn);
+    }
+
+    const Opts = Test::Opts + {"connstr": "c,conn=s"};
+    const OptionColumn = 22;
+}

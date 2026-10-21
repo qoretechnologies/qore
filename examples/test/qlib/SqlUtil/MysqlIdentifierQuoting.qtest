@@ -1,0 +1,597 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires SqlUtil
+%requires MysqlSqlUtil
+
+%try-module mysql
+%define NoMysql
+%endtry
+
+%exec-class MysqlIdentifierQuotingTest
+
+#! a datasource that records the SQL that it is given, so SQL is generated without a MySQL server
+class MysqlRecordingDatasource inherits Qore::SQL::AbstractDatasource {
+    public {
+        #! each statement given, with the method and the arguments
+        list<hash<auto>> log = ();
+    }
+
+    private record(string m, string sql, *softlist<auto> args) {
+        log += {"method": m, "sql": sql, "args": args};
+    }
+
+    *string getPassword() {}
+    *string getOSEncoding() {}
+    *string getDBName() { return "mtest"; }
+    *string getUserName() { return "muser"; }
+    *string getHostName() {}
+    *int getPort() {}
+    *string getDBEncoding() {}
+    string getDriverName() { return "mysql"; }
+    auto getServerVersion() {}
+    auto getClientVersion() {}
+    string getConfigString() { return ""; }
+    hash<auto> getConfigHash() { return {}; }
+    auto getOption(string opt) {}
+    bool inTransaction() { return False; }
+    bool currentThreadInTransaction() { return False; }
+    nothing beginTransaction() {}
+    nothing commit() {}
+    nothing rollback() {}
+
+    auto exec(string sql, ...) { record("exec", sql, argv); return 0; }
+    auto vexec(string sql, *softlist<auto> vargs) { record("vexec", sql, vargs); return 0; }
+    auto execRaw(string sql) { record("execRaw", sql); return 0; }
+    auto select(string sql, ...) { record("select", sql, argv); }
+    auto vselect(string sql, *softlist<auto> vargs) { record("vselect", sql, vargs); }
+    auto selectRow(string sql, ...) { record("selectRow", sql, argv); }
+    auto vselectRow(string sql, *softlist<auto> vargs) { record("vselectRow", sql, vargs); }
+    auto selectRows(string sql, ...) { record("selectRows", sql, argv); }
+    auto vselectRows(string sql, *softlist<auto> vargs) { record("vselectRows", sql, vargs); }
+    auto selectTyped(string sql, ...) {}
+    auto vselectTyped(string sql, *softlist<auto> vargs) {}
+    auto selectRowsTyped(string sql, ...) {}
+    auto vselectRowsTyped(string sql, *softlist<auto> vargs) {}
+
+    #! returns the statements recorded since the last call and clears the log
+    list<hash<auto>> take() {
+        on_exit log = ();
+        return log;
+    }
+}
+
+class MysqlIdentifierQuotingTest inherits QUnit::Test {
+    public {
+        #! a hostile table name: a backtick ends a quoted identifier, the rest is SQL
+        const HostileTable = "t` x; drop table y";
+        #! the hostile table name as an identifier
+        const HostileTableSql = "`t`` x; drop table y`";
+        #! a hostile column name
+        const HostileColumn = "c` = 1; drop table x";
+        #! the hostile column name as an identifier
+        const HostileColumnSql = "`c`` = 1; drop table x`";
+        #! a value that ends a string literal in which a backslash escapes the next character
+        const InjectionValue = "\\'; drop table x; -- ";
+        #! a value that, before SqlUtil 3.11 / MysqlSqlUtil 1.6, ended the string literal and selected version()
+        const InjectionSelect = "\\', version()) as y -- ";
+    }
+
+    private {
+        *string connstr;
+    }
+
+    constructor() : Test("MysqlIdentifierQuotingTest", "1.0", \ARGV, Opts) {
+        addTestCase("ordinary names are unchanged", \ordinaryNames());
+        addTestCase("reserved words are quoted as before", \reservedWords());
+        addTestCase("other names are quoted and escaped in DDL", \quotedDdlNames());
+        addTestCase("a hostile table name is one identifier in DDL, DML and alignment", \hostileTable());
+        addTestCase("hostile column names are identifiers in DML", \hostileColumns());
+        addTestCase("names that the mysql driver cannot carry in SQL with arguments are refused", \driverSpecials());
+        addTestCase("names that cannot be identifiers are refused", \refusedNames());
+        addTestCase("aliases are identifiers", \aliases());
+        addTestCase("sequence names and savepoints", \sequencesAndSavepoints());
+        addTestCase("strings with a backslash are hex literals", \backslashValues());
+        addTestCase("catalog string literals are read with their escapes", \catalogStrings());
+        addTestCase("live: hostile names round trip", \liveRoundTrip());
+        addTestCase("live: values with a backslash in every sql_mode", \liveBackslashValues());
+        addTestCase("live: aliases give their result keys", \liveAliases());
+        addTestCase("live: functions are listed", \liveFunctions());
+
+        connstr = m_options.connstr ?? ENV.QORE_DB_CONNSTR_MYSQL;
+        set_return_value(main());
+    }
+
+    private static MysqlTable getTable(MysqlRecordingDatasource ds, string name, hash<auto> columns,
+            *hash<auto> desc, *hash<auto> opt) {
+        MysqlTable t(ds, name);
+        t.setupTable({"columns": columns} + desc, opt);
+        ds.take();
+        return t;
+    }
+
+    ordinaryNames() {
+        MysqlRecordingDatasource ds();
+        MysqlTable t = getTable(ds, "orders", {
+            "id": {"qore_type": "integer", "notnull": True},
+            "OrderDate": {"qore_type": "date"},
+            "total$eur": {"qore_type": "number", "size": 18, "scale": 2},
+        }, {"primary_key": {"name": "pk_orders", "columns": ("id",)},
+            "indexes": {"ix_orders_date": {"columns": ("OrderDate",)}}});
+
+        assertEq("mtest.orders", t.getSqlName());
+        assertEq("OrderDate", t.getColumnSqlName("OrderDate"));
+        assertEq("OrderDate", t.getSqlIdentifier("OrderDate"));
+        assertEq(("id", "OrderDate", "total$eur"), t.getColumnSqlNames(("id", "OrderDate", "total$eur")));
+        assertEq("město", t.getSqlIdentifier("město"));
+        assertEq((
+            "create table orders (\n  id bigint not null,\n  OrderDate timestamp(6),\n  total$eur decimal(18,2)\n) "
+                "engine innodb",
+            "create index ix_orders_date on orders (OrderDate)",
+            "alter table orders add primary key(id)",
+        ), t.getCreateSql());
+
+        list<auto> args;
+        assertEq("select id, OrderDate from mtest.orders where total$eur = %v order by OrderDate",
+            t.getSelectSql({"columns": ("id", "OrderDate"), "where": {"total$eur": 1}, "orderby": "OrderDate"},
+                \args));
+        assertEq((1,), args);
+
+        t.insert({"id": 1, "OrderDate": 2026-10-21});
+        assertEq("insert into mtest.orders (id,OrderDate) values (%v,%v)", ds.take()[0].sql);
+        # a string without a backslash is a string literal as before
+        assertEq("'it''s'", t.getSqlValue("it's"));
+    }
+
+    reservedWords() {
+        MysqlRecordingDatasource ds();
+        MysqlTable t = getTable(ds, "items", {
+            "id": {"qore_type": "integer", "notnull": True},
+            "order": {"qore_type": "string", "size": 20},
+            "Select": {"qore_type": "string", "size": 20},
+        });
+        # in backticks in the case given, as before
+        assertEq("`order`", t.getColumnSqlName("order"));
+        assertEq("`Select`", t.getColumnSqlName("Select"));
+        assertEq("`order`", t.describe().order.ddl_name);
+        assertEq("create table items (\n  id bigint not null,\n  `order` varchar(20),\n  `Select` varchar(20)\n) "
+            "engine innodb", t.getCreateTableSql());
+        list<auto> args;
+        assertEq("select `order` from mtest.items where `Select` = %v",
+            t.getSelectSql({"columns": ("order",), "where": {"Select": "x"}}, \args));
+        # a reserved word as a table name or schema
+        assertEq("mtest.`table`", new MysqlTable(ds, "table").getSqlName());
+        assertEq("`order`.t", new MysqlTable(ds, "order.t").getSqlName());
+    }
+
+    quotedDdlNames() {
+        MysqlRecordingDatasource ds();
+        MysqlTable parent = getTable(ds, "parent t", {"id": {"qore_type": "integer", "notnull": True}},
+            {"primary_key": {"name": "pk_parent", "columns": "id"}});
+        Tables cache();
+        cache.add("parent t", parent);
+        MysqlTable t = getTable(ds, "child", {
+            "id": {"qore_type": "integer", "notnull": True},
+            "a b": {"qore_type": "string", "size": 20, "comment": "it's"},
+            "c`d": {"qore_type": "string", "size": 20},
+            "parent_id": {"qore_type": "integer"},
+        }, {
+            "primary_key": {"name": "pk child", "columns": ("id",)},
+            "indexes": {"ix `1`": {"columns": ("a b",)}},
+            "unique_constraints": {"uk;1": {"columns": ("c`d",)}},
+            "foreign_constraints": {"fk-1": {"columns": ("parent_id",), "table": "parent t",
+                "target_columns": ("id",)}},
+            "triggers": {"trg x": "before insert on child for each row set new.id = 1"},
+        }, {"table_cache": cache});
+
+        assertEq("`a b`", t.describe(){"a b"}.ddl_name);
+        assertEq("`c``d`", t.describe(){"c`d"}.ddl_name);
+        assertEq((
+            "create table child (\n  id bigint not null,\n  `a b` varchar(20) comment 'it''s',\n"
+                "  `c``d` varchar(20),\n  parent_id bigint\n) engine innodb",
+            "create index `ix ``1``` on child (`a b`)",
+            "alter table child add primary key(id)",
+            "alter table child add constraint `fk-1` foreign key (parent_id) references `parent t` (id)",
+            "alter table child add constraint `uk;1` unique (`c``d`)",
+            "create trigger `trg x` before insert on child for each row set new.id = 1",
+        ), t.getCreateSql({"table_cache": cache}));
+
+        # renaming, changing and dropping objects names them as identifiers
+        assertEq("alter table mtest.child change `a b` `e``f` varchar(20) comment 'it''s'",
+            t.describe(){"a b"}.getRenameSql(t, "e`f"));
+        assertEq("alter table mtest.child drop column `c``d`", t.describe(){"c`d"}.getDropSql(t.getSqlName()));
+        assertEq("alter table mtest.child drop index `ix ``1```",
+            t.getIndexes(){"ix `1`"}.getDropSql(t.getSqlName()));
+        assertEq(("alter table mtest.child rename index `ix ``1``` to `ix;2`",),
+            t.getIndexes(){"ix `1`"}.getRenameSql(t.getSqlName(), "ix;2"));
+        assertEq("alter table mtest.child drop foreign key `fk-1`",
+            t.getForeignConstraints(){"fk-1"}.getDropSql(t.getSqlName()));
+        assertEq("alter table mtest.child drop index `uk;1`", t.getConstraints(){"uk;1"}.getDropSql(t.getSqlName()));
+        assertEq("drop trigger `trg x`", t.getTriggers(){"trg x"}.getDropSql(t.getSqlName())[0]);
+        assertEq("alter table mtest.child rename to `new name`", t.getRenameSql("new name"));
+        assertEq("alter table mtest.child rename to s.`new name`", t.getRenameSql("s.new name"));
+
+        # views
+        MysqlView v("v x", "select 1", NOTHING, NOTHING, NOTHING, NOTHING, NOTHING, False);
+        assertEq("create view `v x` as select 1", v.getCreateSql());
+        assertEq("drop view `v x`", v.getDropSql());
+    }
+
+    hostileTable() {
+        MysqlRecordingDatasource ds();
+        MysqlTable parent = getTable(ds, HostileTable + " p", {"id": {"qore_type": "integer", "notnull": True}},
+            {"primary_key": {"name": "pk_p", "columns": "id"}});
+        Tables cache();
+        cache.add(HostileTable + " p", parent);
+        MysqlTable t = getTable(ds, HostileTable, {
+            "id": {"qore_type": "integer", "notnull": True},
+            "v": {"qore_type": "string", "size": 20},
+            "p_id": {"qore_type": "integer"},
+        }, {
+            "primary_key": {"name": "pk_t", "columns": ("id",)},
+            "indexes": {"ix_t": {"columns": ("v",)}},
+            "unique_constraints": {"uk_t": {"columns": ("v", "id")}},
+            "foreign_constraints": {"fk_t": {"columns": ("p_id",), "table": HostileTable + " p",
+                "target_columns": ("id",)}},
+        }, {"table_cache": cache});
+
+        string pt = "`t`` x; drop table y p`";
+        assertEq((
+            "create table " + HostileTableSql + " (\n  id bigint not null,\n  v varchar(20),\n  p_id bigint\n) "
+                "engine innodb",
+            "create index ix_t on " + HostileTableSql + " (v)",
+            "alter table " + HostileTableSql + " add primary key(id)",
+            "alter table " + HostileTableSql + " add constraint fk_t foreign key (p_id) references " + pt + " (id)",
+            "alter table " + HostileTableSql + " add constraint uk_t unique (v, id)",
+        ), t.getCreateSql({"table_cache": cache}));
+
+        string sql_name = "mtest." + HostileTableSql;
+        assertEq(sql_name, t.getSqlName());
+        list<auto> args;
+        assertEq("select v from " + sql_name + " where id = %v",
+            t.getSelectSql({"columns": "v", "where": {"id": 1}}, \args));
+        t.insert({"id": 1, "v": "x"});
+        t.update({"v": "y"}, {"id": 1});
+        t.del({"id": 1});
+        t.truncate();
+        assertEq((
+            "insert into " + sql_name + " (id,v) values (%v,%v)",
+            "update " + sql_name + " set v = %v where id = %v",
+            "delete from " + sql_name + " where id = %v",
+            "truncate table " + sql_name,
+        ), map $1.sql, ds.take());
+        assertEq(("drop table " + sql_name,), t.getDropSql());
+
+        # alignment names the table as an identifier in every statement
+        MysqlTable template = getTable(ds, HostileTable, {
+            "id": {"qore_type": "integer", "notnull": True},
+            "w": {"qore_type": "string", "size": 20},
+        }, {"indexes": {"ix_w": {"columns": ("w",)}}});
+        list<auto> align = t.getAlignSql(template);
+        assertTrue(align.size() > 3);
+        foreach string sql in (align) {
+            assertTrue(sql.find(sql_name) >= 0, sql);
+            assertEq(-1, sql.find("t` x;"), sql);
+        }
+
+        # a temporary table
+        MysqlTable temp(ds, HostileTable);
+        temp.setTempScope(TT_Session);
+        temp.setupTable({"columns": {"id": {"qore_type": "integer"}}});
+        assertEq("create temporary table " + HostileTableSql + " (\n  id bigint\n) engine innodb",
+            temp.getCreateTableSql());
+    }
+
+    hostileColumns() {
+        MysqlRecordingDatasource ds();
+        MysqlTable t = getTable(ds, "t", {
+            "id": {"qore_type": "integer", "notnull": True},
+            HostileColumn: {"qore_type": "string", "size": 20},
+            "a b": {"qore_type": "string", "size": 20},
+        }, {"primary_key": {"name": "pk_t", "columns": ("id",)}});
+
+        list<auto> args;
+        assertEq("select " + HostileColumnSql + ", `a b` from mtest.t where " + HostileColumnSql
+            + " = %v order by `a b`", t.getSelectSql({"columns": (HostileColumn, "a b"),
+                "where": {HostileColumn: "x"}, "orderby": "a b"}, \args));
+        # a column given by its position in the order by clause
+        assertEq("select * from mtest.t order by " + HostileColumnSql, t.getSelectSql({"orderby": 2}, \args));
+        t.insert({"id": 1, HostileColumn: "x"});
+        t.update({HostileColumn: "y", "a b": uop_upper()}, {"id": 1});
+        t.del({HostileColumn: "y"});
+        assertEq((
+            "insert into mtest.t (id," + HostileColumnSql + ") values (%v,%v)",
+            "update mtest.t set " + HostileColumnSql + " = %v, `a b` = upper(`a b`) where id = %v",
+            "delete from mtest.t where " + HostileColumnSql + " = %v",
+        ), map $1.sql, ds.take());
+    }
+
+    driverSpecials() {
+        MysqlRecordingDatasource ds();
+        # the mysql driver reads these outside string literals, also in a backtick-quoted identifier
+        foreach string name in ("a%sb", "a%vb", "a'b", "a\"b", "a#b", "a--b", "a/*b", "a:b") {
+            assertThrows("IDENTIFIER-ERROR", "mysql driver", \ds_getSqlIdentifier(), (ds, name));
+            assertThrows("IDENTIFIER-ERROR", "mysql driver", sub () { new MysqlTable(ds, name).getSqlName(); });
+        }
+        # these are not special to the driver
+        assertEq("`a: b`", new MysqlTable(ds, "t").getSqlIdentifier("a: b"));
+        assertEq("`a-b`", new MysqlTable(ds, "t").getSqlIdentifier("a-b"));
+        assertEq("`a/b`", new MysqlTable(ds, "t").getSqlIdentifier("a/b"));
+
+        # an existing column with such a name is quoted in DDL, which is run without arguments
+        MysqlTable t = getTable(ds, "t", {
+            "id": {"qore_type": "integer", "notnull": True},
+            "a%sb": {"qore_type": "string", "size": 20},
+        });
+        assertEq("`a%sb`", t.describe(){"a%sb"}.ddl_name);
+        assertEq("create table t (\n  id bigint not null,\n  `a%sb` varchar(20)\n) engine innodb",
+            t.getCreateTableSql());
+        # ... and refused in DML, where "%s" would be replaced with an argument as given
+        assertThrows("IDENTIFIER-ERROR", "mysql driver", \t.insert(), {"id": 1, "a%sb": "x); drop table t; --"});
+        assertThrows("IDENTIFIER-ERROR", "mysql driver", \t.update(), ({"a%sb": "x"}, {"id": 1}));
+        list<auto> args;
+        assertThrows("IDENTIFIER-ERROR", "mysql driver", \t.getSelectSql(), ({"columns": "a%sb"}, \args));
+        assertEq((), ds.take());
+    }
+
+    private static string ds_getSqlIdentifier(MysqlRecordingDatasource ds, string name) {
+        return new MysqlTable(ds, "t").getSqlIdentifier(name);
+    }
+
+    refusedNames() {
+        MysqlRecordingDatasource ds();
+        MysqlTable t(ds, "t");
+        assertThrows("IDENTIFIER-ERROR", "empty", \t.getSqlIdentifier(), "");
+        assertThrows("IDENTIFIER-ERROR", "NUL", \t.getSqlIdentifier(), "a" + chr(0) + "b");
+        assertThrows("IDENTIFIER-ERROR", "above U\\+FFFF", \t.getSqlIdentifier(), "a😀b");
+        assertThrows("IDENTIFIER-ERROR", "above U\\+FFFF", sub () {
+            new MysqlColumn("😀", "varchar", "string", 10, True);
+        });
+        assertThrows("IDENTIFIER-ERROR", "NUL", sub () {
+            new MysqlIndex("ix" + chr(0), False, {}).getCreateSql("t");
+        });
+        # table options are names of word characters
+        assertThrows("OPTION-ERROR", "engine", sub () {
+            MysqlTable bad(ds, "t", {"engine": "innodb; drop table x"});
+            bad.setupTable({"columns": {"id": {"qore_type": "integer"}}});
+            bad.getCreateTableSql();
+        });
+    }
+
+    aliases() {
+        MysqlRecordingDatasource ds();
+        MysqlTable t = getTable(ds, "t", {
+            "id": {"qore_type": "integer", "notnull": True},
+            "v": {"qore_type": "string", "size": 20},
+        });
+        list<auto> args;
+        assertEq("select v as total, v as MixedCase, v as `My Total`, v as `order` from mtest.t",
+            t.getSelectSql({"columns": (cop_as("v", "total"), cop_as("v", "MixedCase"), cop_as("v", "My Total"),
+                cop_as("v", "order"))}, \args));
+        assertThrows("IDENTIFIER-ERROR", "mysql driver", \t.getSelectSql(),
+            ({"columns": cop_as("v", "it's")}, \args));
+        # a query alias and a join alias
+        MysqlTable t2 = getTable(ds, "t2", {"id": {"qore_type": "integer", "notnull": True}});
+        assertEq("select * from mtest.t `my t` inner join mtest.t2 `other t` on (`my t`.id = `other t`.id)",
+            t.getSelectSql({"alias": "my t", "join": join_inner(t2, "other t", {"id": "id"})}, \args));
+    }
+
+    sequencesAndSavepoints() {
+        MysqlSequence seq("sqlutil_sequences", "s q");
+        assertEq("insert into sqlutil_sequences (name, id) values ('s q', 0)", seq.getCreateSql());
+        assertEq("update sqlutil_sequences set name = 'n2' where name = 's q'", seq.getRenameSql("n2")[0]);
+        assertEq("delete from sqlutil_sequences where name = 's q'", seq.getDropSql());
+        MysqlSequence seq2("my seqs", "s");
+        assertEq("insert into `my seqs` (name, id) values ('s', 0)", seq2.getCreateSql());
+        # a name is never pasted into a string literal as it is
+        assertThrows("IDENTIFIER-ERROR", "backslash", \seq.getRenameSql(), "x\\");
+        assertThrows("IDENTIFIER-ERROR", "mysql driver", \seq.getRenameSql(), "x' or 1 = 1 --");
+        assertThrows("IDENTIFIER-ERROR", "backslash", sub () {
+            new MysqlSequence("sqlutil_sequences", "s\\").getCreateSql();
+        });
+
+        MysqlRecordingDatasource ds();
+        {
+            MysqlSavepointHelper sp(ds, "sp 1");
+            sp.rollback();
+        }
+        assertEq(("savepoint `sp 1`", "rollback to `sp 1`"), map $1.sql, ds.take());
+        assertThrows("IDENTIFIER-ERROR", "mysql driver", sub () { new MysqlSavepointHelper(ds, "x; -- y"); });
+        assertEq((), ds.take());
+    }
+
+    backslashValues() {
+        MysqlRecordingDatasource ds();
+        MysqlTable t = getTable(ds, "t", {
+            "id": {"qore_type": "integer", "notnull": True},
+            "v": {"qore_type": "string", "size": 40, "default_value": "a\\b"},
+            "w": {"qore_type": "string", "size": 40},
+        });
+        # the injection payload is one hex literal: it cannot end a string literal in any sql_mode
+        string hex = "_utf8mb4 X'" + binary(InjectionValue).toHex() + "'";
+        assertEq(hex, t.getSqlValue(InjectionValue));
+        assertEq(hex, MysqlTable::getSqlValue(InjectionValue));
+        list<auto> args;
+        assertEq("select concat(" + hex + ",v) from mtest.t",
+            t.getSelectSql({"columns": cop_prepend("v", InjectionValue)}, \args));
+        t.update({"w": uop_append(InjectionValue)}, {"id": 1});
+        assertEq("update mtest.t set w = concat(w," + hex + ") where id = %v", ds.take()[0].sql);
+        # a default value with a backslash
+        assertEq("_utf8mb4 X'615c62'", t.describe().v.def_val);
+        assertEq("create table t (\n  id bigint not null,\n  v varchar(40) default _utf8mb4 X'615c62',\n"
+            "  w varchar(40)\n) engine innodb", t.getCreateTableSql());
+        # non-ASCII text is given in UTF-8
+        assertEq("_utf8mb4 X'c3a95c'", t.getSqlValue(convert_encoding("é\\", "ISO-8859-1")));
+
+        # a COMMENT clause takes a string literal only, so a comment with a backslash is refused
+        assertThrows("VALUE-ERROR", "backslash", \getTable(), (ds, "c",
+            {"id": {"qore_type": "integer", "comment": "a\\b"}}));
+        MysqlColumn commented("id", "int", "integer", 0, True, NOTHING, "a\\b");
+        assertThrows("VALUE-ERROR", "backslash", \commented.getCreateSql(), t);
+        # a column in the database with such a comment is aligned when it is not changed, and replaced otherwise
+        MysqlColumn same("id", "int", "integer", 0, True, NOTHING, "a\\b");
+        assertEq((), commented.getModifySql(t, same));
+        assertEq("alter table mtest.t modify id int comment 'x'",
+            commented.getModifySql(t, new MysqlColumn("id", "int", "integer", 0, True, NOTHING, "x"))[0]);
+        # MariaDB does not keep a hex literal as the default value of a TEXT or BLOB column
+        assertThrows("VALUE-ERROR", "TEXT or BLOB", \getTable(), (ds, "x", {"id": {"qore_type": "integer"},
+            "t": {"native_type": "text", "default_value": "a\\b"}}));
+    }
+
+    catalogStrings() {
+        assertEq("a\\b'c\nd", MysqlTable::unescapeCatalogString("a\\\\b''c\\nd"));
+        assertEq("plain'q", MysqlTable::unescapeCatalogString("plain''q"));
+        assertEq("t\\", MysqlTable::unescapeCatalogString("t\\"));
+        assertEq("a" + chr(0) + "b\r\t", MysqlTable::unescapeCatalogString("a\\0b\\r\\t"));
+    }
+
+    private Datasource getLiveDatasource() {
+        if (!connstr) {
+            testSkip("no MySQL connection; set QORE_DB_CONNSTR_MYSQL or use -c");
+        }
+%ifdef NoMysql
+        testSkip("no mysql module");
+%endif
+        Datasource ds(connstr);
+        ds.open();
+        return ds;
+    }
+
+    # returns a unique table name for the run, with the given suffix
+    private static string getLiveName(string suffix) {
+        return sprintf("b4sq %s %s", get_random_string(6, 1).lwr(), suffix);
+    }
+
+    liveRoundTrip() {
+        Datasource ds = getLiveDatasource();
+        on_exit ds.rollback();
+        string tname = getLiveName("x; drop table y");
+        string col = "c` = 1; drop table z";
+        hash<auto> desc = {
+            "columns": {
+                "id": {"qore_type": "integer", "notnull": True},
+                col: {"qore_type": "string", "size": 40},
+                "a b": {"qore_type": "string", "size": 40, "comment": "it's"},
+                "order": {"qore_type": "string", "size": 40},
+            },
+            "primary_key": {"name": "pk b4sq", "columns": ("id",)},
+            "indexes": {"ix `a b`": {"columns": ("a b",)}},
+            "unique_constraints": {"uk;order": {"columns": ("order",)}},
+        };
+        Table t(ds, desc, tname);
+        on_exit {
+            try { ds.execRaw("drop table if exists " + t.getSqlName()); ds.commit(); } catch () {}
+        }
+        t.create();
+        t.insert({"id": 1, col: "one", "a b": "x", "order": "o1"});
+        t.insert({"id": 2, col: InjectionValue, "a b": "y", "order": "o2"});
+        ds.commit();
+
+        assertEq({"id": 2, col: InjectionValue}, t.selectRow({"columns": ("id", col), "where": {col: InjectionValue}}));
+        assertEq(1, t.update({col: "uno"}, {"a b": "x"}));
+        assertEq("uno", t.selectRow({"columns": col, "where": {"id": 1}}){col});
+        assertEq(1, t.del({"order": "o2"}));
+        ds.commit();
+        assertEq(1, t.rowCount());
+
+        # the table is described as it was created, so an alignment needs no SQL
+        Table db(ds, tname);
+        assertEq(sort(keys desc.columns), sort(db.describe().keys()));
+        Table template(ds, desc, tname);
+        assertEq((), db.getAlignSql(template.getTable()));
+        # statistics and space reclamation name the table as an identifier
+        Database sdb(ds);
+        sdb.computeStatistics({"tables": tname});
+        sdb.reclaimSpace({"tables": tname});
+        # nothing was dropped
+        assertTrue(t.checkExistence());
+    }
+
+    liveFunctions() {
+        Datasource ds = getLiveDatasource();
+        on_exit ds.rollback();
+        string fname = "b4sq_f_" + get_random_string(6, 1).lwr();
+        ds.execRaw("create function " + fname + "() returns int deterministic return 1");
+        on_exit {
+            try { ds.execRaw("drop function " + fname); } catch () {}
+        }
+        # the schema of the connection is given to the query that lists functions
+        assertTrue(inlist(fname, new Database(ds).listFunctions()));
+    }
+
+    liveBackslashValues() {
+        Datasource ds = getLiveDatasource();
+        on_exit ds.rollback();
+        string orig_mode = ds.selectRow("select @@session.sql_mode as m").m;
+        on_exit ds.execRaw("set session sql_mode = '" + orig_mode + "'");
+        foreach string mode in (("", "NO_BACKSLASH_ESCAPES")) {
+            ds.execRaw("set session sql_mode = '" + (mode ? orig_mode + "," + mode : orig_mode) + "'");
+            string tname = getLiveName("bs");
+            hash<auto> desc = {
+                "columns": {
+                    "id": {"qore_type": "integer", "notnull": True},
+                    "v": {"qore_type": "string", "size": 40, "default_value": "a\\b'c"},
+                    "w": {"qore_type": "string", "size": 40},
+                },
+                "primary_key": {"name": "pk_bs", "columns": ("id",)},
+            };
+            Table t(ds, desc, tname);
+            on_exit {
+                try { ds.execRaw("drop table if exists " + t.getSqlName()); ds.commit(); } catch () {}
+            }
+            t.create();
+            t.insert({"id": 1, "w": "w"});
+            ds.commit();
+            string m = mode ?: "default";
+            assertEq("a\\b'c", t.selectRow({"columns": "v", "where": {"id": 1}}).v, m + ": default value");
+
+            # an injection payload is a value in every sql_mode
+            assertEq(InjectionValue + "a\\b'c", t.selectRow({"columns": cop_as(cop_prepend("v", InjectionValue),
+                "x"), "where": {"id": 1}}).x, m + ": prepend");
+            # this payload selected the server version in the default sql_mode before
+            assertEq({"x": InjectionSelect + "a\\b'c"}, t.selectRow({"columns": cop_as(cop_prepend("v",
+                InjectionSelect), "x"), "where": {"id": 1}}), m + ": injected select");
+            t.update({"w": uop_append(InjectionValue)}, {"id": 1});
+            ds.commit();
+            assertEq("w" + InjectionValue, t.selectRow({"columns": "w", "where": {"id": 1}}).w, m + ": update");
+
+            # a default value with a backslash is read back as it was given, so the table is aligned
+            Table db(ds, tname);
+            Table template(ds, desc, tname);
+            assertEq((), db.getAlignSql(template.getTable()), m + ": alignment");
+            assertTrue(t.checkExistence());
+        }
+    }
+
+    liveAliases() {
+        Datasource ds = getLiveDatasource();
+        on_exit ds.rollback();
+        string tname = getLiveName("alias");
+        Table t(ds, {"columns": {"id": {"qore_type": "integer", "notnull": True}}}, tname);
+        on_exit {
+            try { ds.execRaw("drop table if exists " + t.getSqlName()); ds.commit(); } catch () {}
+        }
+        t.create();
+        t.insert({"id": 7});
+        ds.commit();
+        hash<auto> row = t.selectRow({"columns": (cop_as("id", "total"), cop_as("id", "MixedCase"),
+            cop_as("id", "My Total"), cop_as("id", "order"))});
+        # the mysql driver gives result column names in lower case, as it did for these aliases before, except
+        # "My Total", which gave invalid SQL
+        assertEq({"total": 7, "mixedcase": 7, "my total": 7, "order": 7}, row);
+        assertThrows("IDENTIFIER-ERROR", "mysql driver", sub () { t.selectRow({"columns": cop_as("id", "it's")}); });
+    }
+
+    private usageIntern() {
+        TestReporter::usageIntern(OptionColumn);
+        printOption("-c,--conn=ARG", "set DB connection argument (ex: \"mysql:user/pass@db\")", OptionColumn);
+    }
+
+    const Opts = Test::Opts + {"connstr": "c,conn=s"};
+    const OptionColumn = 22;
+}
