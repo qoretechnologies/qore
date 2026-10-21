@@ -8437,7 +8437,8 @@ nothing Socket::submitQuicResponse(int session_id, int stream_id, int status_cod
     @endcode
 
     Sends a GOAWAY frame with the maximum stream ID (shutdown notice phase),
-    indicating that the server intends to shut down.
+    indicating that the server intends to shut down.  After @ref submitQuicShutdown() this is a no-op: the
+    identifier of a GOAWAY never increases (RFC 9114 section 5.2).
 
     @param session_id the QUIC session ID
 
@@ -8462,7 +8463,9 @@ nothing Socket::submitQuicShutdownNotice(int session_id) [flags=NAMED_ARGS] {
     @endcode
 
     Sends a GOAWAY frame with the actual last stream ID that the server will
-    process.  After this, no new streams will be accepted.
+    process.  After this, no new streams will be accepted.  The final GOAWAY is sent once: a later call is a no-op,
+    because a later GOAWAY would carry a larger identifier once a request arrived after the first one, which the
+    peer must treat as a connection error (RFC 9114 section 5.2).
 
     @param session_id the QUIC session ID
 

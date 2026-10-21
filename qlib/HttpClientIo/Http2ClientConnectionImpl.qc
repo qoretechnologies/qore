@@ -151,13 +151,15 @@ public class Http2ClientConnection inherits HttpClientConnection {
         @param end_stream if True, signals end of stream
 
         @throw HTTP2-ERROR if the stream ID is not found
-        @throw HTTP2-STATE-ERROR if not in ready state
+        @throw HTTP2-STATE-ERROR if the connection is neither ready nor draining (a draining connection completes the
+        streams in progress)
         @throw HTTP2-STREAM-CLOSED if the stream closed without an error and \a data is not empty or
         \a end_stream is not set; an empty send with \a end_stream set on such a stream is a no-op
         @throw HTTP2-STREAM-RESET if the server reset the stream with an error
     */
     sendStreamData(int stream_id, data data, bool end_stream = False) {
-        if (!self.isReady()) {
+        # a draining connection completes the streams in progress
+        if (!self.canSendOnStreams()) {
             throw "HTTP2-STATE-ERROR",
                 sprintf("cannot send data in state: %y", self.getConnectionState());
         }
@@ -180,13 +182,14 @@ public class Http2ClientConnection inherits HttpClientConnection {
     /** @param stream_id the HTTP/2 stream ID
         @param trailers the trailer fields
 
-        @throw HTTP2-STATE-ERROR if not in ready state
+        @throw HTTP2-STATE-ERROR if the connection is neither ready nor draining
         @throw HTTP2-ERROR if the trailers cannot be sent
 
         @since HttpClientIo 1.0
     */
     sendTrailers(int stream_id, hash<string, string> trailers) {
-        if (!self.isReady()) {
+        # a draining connection completes the streams in progress
+        if (!self.canSendOnStreams()) {
             throw "HTTP2-STATE-ERROR",
                 sprintf("cannot send trailers in state: %y", self.getConnectionState());
         }

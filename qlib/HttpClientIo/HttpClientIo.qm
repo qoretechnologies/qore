@@ -161,6 +161,21 @@ manager.request("https://example.com", "GET", "/api/resource");
 int migrated = manager.migrateAll();
     @endcode
 
+    @par Seeing a Connection Drain (GOAWAY)
+    A connection that is used for a long time, such as a leased one, can wait for the server's \c GOAWAY: its
+    requests in progress can finish, but new requests belong on another connection:
+    @code{.py}
+%requires HttpClientIo
+
+HttpClientConnectionManager manager();
+HttpClientConnection conn = manager.leaseConnection("https://example.com");
+on_exit manager.releaseConnection(conn);
+int state = conn.waitForStateChange(HttpClientConnectionState::Ready, 1h);
+if (state == HttpClientConnectionState::Draining) {
+    # the server sent GOAWAY
+}
+    @endcode
+
     @section httpclientio_relnotes Release Notes
 
     @subsection httpclientio_v1_0 Version 1.0
@@ -171,6 +186,10 @@ int migrated = manager.migrateAll();
       connection ID yet waits for one;
       @ref HttpClientIo::HttpClientConnectionManager::migrateAll() "migrateAll()" drains a connection that cannot be
       migrated
+    - connections wait for a change of their state with
+      @ref Qore::AbstractHttpPollConnection::waitForStateChange() "waitForStateChange()", for example to see a
+      connection drain after the server's \c GOAWAY; the streams in progress on a draining connection can still send
+      their request bodies
     Initial (not yet released) version of the unified %HttpClientIo module —
     HTTP/1.1, HTTP/2, and HTTP/3 client I/O behind a single API, as currently
     implemented:

@@ -267,14 +267,15 @@ public class Http3ClientConnection inherits HttpClientConnection {
     /** @param stream_id the HTTP/3 stream ID
         @param trailers the trailer fields
 
-        @throw HTTP3-STATE-ERROR if not in ready state
+        @throw HTTP3-STATE-ERROR if the connection is neither ready nor draining
         @throw HTTP3-CONNECTION-CLOSED if the QUIC session is closed
         @throw QUIC-ERROR if the trailers cannot be sent
 
         @since HttpClientIo 1.0
     */
     sendTrailers(int stream_id, hash<string, string> trailers) {
-        if (!self.isReady()) {
+        # a draining connection completes the streams in progress
+        if (!self.canSendOnStreams()) {
             throw "HTTP3-STATE-ERROR",
                 sprintf("cannot send trailers in state: %y", self.getConnectionState());
         }
@@ -304,7 +305,8 @@ public class Http3ClientConnection inherits HttpClientConnection {
 
         @return 0 on success, -1 on error
 
-        @throw HTTP3-STATE-ERROR if the connection is not ready
+        @throw HTTP3-STATE-ERROR if the connection is neither ready nor draining (a draining connection completes the
+        streams in progress)
         @throw HTTP3-FLOW-CONTROL if the stream buffer does not drain
         @throw QUIC-STREAM-CLOSED if the server stopped reading the stream or closed it without an error and
         \a data is not empty or \a end_stream is not set; an empty send with \a end_stream set on such a stream is
@@ -312,7 +314,8 @@ public class Http3ClientConnection inherits HttpClientConnection {
         @throw QUIC-STREAM-RESET if the server reset the stream with an error
     */
     int sendStreamData(int stream_id, *data data, bool end_stream = False) {
-        if (!self.isReady()) {
+        # a draining connection completes the streams in progress
+        if (!self.canSendOnStreams()) {
             throw "HTTP3-STATE-ERROR",
                 sprintf("cannot send data in state: %y", self.getConnectionState());
         }

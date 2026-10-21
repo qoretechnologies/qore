@@ -610,6 +610,17 @@ public class HttpClientConnection inherits HttpClientConnectionBase {
         return ready;
     }
 
+    #! Returns @ref True if the streams in progress on the connection can still send data
+    /** That is, if the connection is ready or draining: a server's GOAWAY ends new requests only, and the streams in
+        progress are completed (RFC 9113 section 6.8, RFC 9114 section 5.2), so their request bodies can still be sent
+
+        @since HttpClientIo 1.0
+    */
+    bool canSendOnStreams() {
+        int cs = self.getConnectionState();
+        return cs == HttpClientConnectionState::Ready || cs == HttpClientConnectionState::Draining;
+    }
+
     #! Sets the connection to draining state (GOAWAY received)
     setDraining() {
         log(LoggerLevel::DEBUG, "connection draining");

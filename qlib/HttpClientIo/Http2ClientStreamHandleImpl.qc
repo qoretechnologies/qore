@@ -469,11 +469,13 @@ public class Http2ClientStreamHandle inherits HttpClientStreamHandle {
         }
 
         # Check connection state (lock-free atomic read) AFTER the stream-level
-        # checks.  The underlying H2 connection may have been closed (GOAWAY,
-        # TCP reset) while the stream handle's state is still Open.  Catching
-        # this here produces a clean HTTPCLIENT-STREAM-CLOSED instead of the
-        # opaque HTTP2-STATE-ERROR from sendStreamData().
-        if (!h2conn.isReady()) {
+        # checks.  The underlying H2 connection may have been closed (TCP
+        # reset) while the stream handle's state is still Open.  Catching this
+        # here produces a clean HTTPCLIENT-STREAM-CLOSED instead of the opaque
+        # HTTP2-STATE-ERROR from sendStreamData().  A draining connection (the
+        # server sent GOAWAY) still completes the streams in progress (RFC 9113
+        # section 6.8), so their requests can still be sent.
+        if (h2conn.isClosed()) {
             if (end_stream && data.empty()) {
                 return;
             }

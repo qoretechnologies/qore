@@ -399,6 +399,20 @@ server provided, within the client's `active_connection_id_limit` (RFC 9000 sect
 `migrateAll()` drains a connection that cannot be migrated, so new requests get a new connection; errors of the
 caller (`SOCKET-SYNC-ON-IO-THREAD-ERROR`, `THREAD-CANCELLED`, `PROGRAM-INTERRUPTED`) end it instead.
 
+### Connection State Changes and GOAWAY
+
+Every state transition of a connection (`AbstractHttpPollConnectionPriv`: `onConnectionReady()`, `setDraining()`,
+`setClosed()`) stores the state and broadcasts `ready_cond` under the connection's lock, so
+`AbstractHttpPollConnection::waitForStateChange(from_state, timeout)` waits on that condition (interruptibly) until the
+state differs from `from_state`; it never misses a transition.  A connection drains when the I/O thread processes the
+server's GOAWAY (HTTP/2: `Http2ClientPollOperationPriv`; HTTP/3: the read cycle of `Http3ClientPollOperationPriv`).
+
+A draining connection takes no new request, but its streams in progress are completed (RFC 9113 section 6.8, RFC 9114
+section 5.2): `sendStreamData()` and `sendTrailers()` of the connections and `sendData()` of the stream handles accept a
+ready or a draining connection (`HttpClientConnection::canSendOnStreams()`).  A QUIC server sends its final GOAWAY once
+(`QuicSession::submitShutdown()`): a later one would carry a larger identifier once a request arrived after the first
+one, which the client must treat as a connection error.
+
 ### mTLS (HTTP/3 Only)
 
 Client certificates are specified in the connection manager options. For HTTP/2 connections, the standard SSL verify mode and certificate chain apply through the TLS layer. For HTTP/3, `client_cert` and `client_pk` are passed to the QUIC handshake:

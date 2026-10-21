@@ -111,6 +111,33 @@ void AbstractHttpPollConnectionPriv::setClosed() {
     }
 }
 
+int AbstractHttpPollConnectionPriv::waitForStateChange(int from_state, int64_t timeout_ms, ExceptionSink* xsink) {
+    // the deadline is on the monotonic clock, so a wall-clock step does not change it, and it is not restarted by
+    // a broadcast that does not change the state
+    const bool has_deadline = timeout_ms > 0;
+    const int64 deadline_us = has_deadline ? q_clock_getmicros_monotonic() + timeout_ms * 1000 : 0;
+    AutoLocker al(lock);
+    while (true) {
+        // every transition stores the state and broadcasts under the lock, so it cannot be missed here
+        int current = state.load(std::memory_order_acquire);
+        if (current != from_state) {
+            return current;
+        }
+        int64 wait_ms = -1;
+        if (has_deadline) {
+            int64 remaining_us = deadline_us - q_clock_getmicros_monotonic();
+            if (remaining_us <= 0) {
+                return current;
+            }
+            // round up, so the wait never ends before the deadline
+            wait_ms = (remaining_us + 999) / 1000;
+        }
+        if (ready_cond.waitWithInterrupt(lock, wait_ms, xsink) == QORE_COND_RESULT_INTERRUPTED) {
+            return -1;
+        }
+    }
+}
+
 bool AbstractHttpPollConnectionPriv::registerReadyNotifier(QoreEventNotifier* notifier,
         QoreObject* notifier_obj) {
     AutoLocker al(lock);
@@ -181,6 +208,57 @@ bool AbstractHttpPollConnection::waitForReady(timeout timeout_ms = 30s) [flags=N
         return false;
     }
     return priv->waitForReady((int64_t)timeout_ms);
+}
+
+//! Waits until the state of the connection changes
+/** Returns at once if the state already differs from \a from_state; otherwise blocks until the connection leaves
+    \a from_state or the timeout expires.  Use it to see a connection that is in use for a long time, such as a leased
+    connection or one with a long-lived stream (a WebSocket, Server-Sent Events or a CONNECT tunnel), go from
+    @ref HttpClientIo::HttpClientConnectionState::Ready "Ready" to
+    @ref HttpClientIo::HttpClientConnectionState::Draining "Draining" when the server sends HTTP/2 or HTTP/3
+    \c GOAWAY: the requests in progress can finish, but the connection accepts no new request, so new work belongs
+    on another connection.  A connection goes to
+    @ref HttpClientIo::HttpClientConnectionState::Closed "Closed" when it closes, from any state.
+
+    The states are the values of @ref HttpClientIo::HttpClientConnectionState "HttpClientConnectionState": 0
+    (connecting), 1 (ready), 2 (draining) and 3 (closed).
+
+    @par Example:
+    @code{.py}
+# wait for the server to stop accepting requests on a leased connection
+HttpClientConnection conn = mgr.leaseConnection(url);
+on_exit mgr.releaseConnection(conn);
+int state = conn.getConnectionState();
+while (state == HttpClientConnectionState::Ready) {
+    state = conn.waitForStateChange(state, 1h);
+}
+if (state == HttpClientConnectionState::Draining) {
+    # GOAWAY: finish the work in progress and use a new connection for the rest
+}
+    @endcode
+
+    @param from_state the state to wait to leave
+    @param timeout_ms the maximum time to wait; no value or a value <= 0 means no timeout
+
+    @return the state of the connection after the wait; equal to \a from_state if the timeout expired
+
+    @throw SOCKET-SYNC-ON-IO-THREAD-ERROR called on an async I/O thread, which makes the state changes and so could
+    never see one
+    @throw THREAD-CANCELLED the thread was cancelled while it waited
+    @throw PROGRAM-INTERRUPTED the program was interrupted while it waited
+
+    @since %Qore 3.0
+*/
+int AbstractHttpPollConnection::waitForStateChange(int from_state, *timeout timeout_ms) [flags=NAMED_ARGS] {
+    SocketSyncPoll::assertNotOnIoThread("AbstractHttpPollConnection", "waitForStateChange", xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    int rv = priv->waitForStateChange(static_cast<int>(from_state), timeout_ms, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return rv;
 }
 
 //! Returns True if the connection is in READY state

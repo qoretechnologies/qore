@@ -434,8 +434,10 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
         # checks.  The underlying H3 connection may have been closed while the
         # stream handle's state is still Open.  Catching this here produces a
         # clean HTTPCLIENT-STREAM-CLOSED instead of an opaque protocol-level
-        # error from sendStreamData().
-        if (!h3conn.isReady()) {
+        # error from sendStreamData().  A draining connection (the server sent
+        # GOAWAY) still completes the streams in progress (RFC 9114 section
+        # 5.2), so their requests can still be sent.
+        if (h3conn.isClosed()) {
             if (end_stream && data.empty()) {
                 return;
             }

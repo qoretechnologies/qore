@@ -125,6 +125,22 @@ public:
         return state.load(std::memory_order_acquire) == READY;
     }
 
+    //! Blocks until the state differs from @a from_state, the timeout expires, or the thread is cancelled
+    /** Every state transition broadcasts the condition this waits on, so a change is never missed: if the state
+        already differs from @a from_state, the call returns at once.  The wait ends at once if the thread is
+        cancelled or its program is interrupted.
+
+        @param from_state the state to wait to leave
+        @param timeout_ms the maximum time to wait in milliseconds; <= 0 means no timeout
+        @param xsink raises \c THREAD-CANCELLED or \c PROGRAM-INTERRUPTED if the wait was interrupted
+
+        @return the state after the wait; equal to @a from_state if the timeout expired; -1 if an exception was
+        raised
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT int waitForStateChange(int from_state, int64_t timeout_ms, ExceptionSink* xsink);
+
     //! Transitions to DRAINING (GOAWAY received)
     DLLEXPORT void setDraining() {
         AutoLocker al(lock);

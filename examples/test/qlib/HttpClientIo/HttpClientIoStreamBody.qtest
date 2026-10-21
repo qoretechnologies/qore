@@ -1,0 +1,265 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    The request body of a streaming HTTP/2 or HTTP/3 request in progress is sent to its end after the server has sent
+    GOAWAY: a GOAWAY ends new requests only, and the streams in progress are completed (RFC 9113 section 6.8, RFC 9114
+    section 5.2); a stream in progress could not send the rest of its request on the draining connection
+    (HTTPCLIENT-STREAM-CLOSED), so its request could never be completed.
+
+    The servers are driven frame by frame (HTTP/2) or request by request (HTTP/3), so every step is ordered; the client
+    waits for its connection to drain with HttpClientConnection::waitForStateChange().
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires HttpClientIo
+%requires AsyncSocketIo
+%requires ../../TestCertificates.qm
+%requires ../../RawHttp2TestServer.qm
+
+%exec-class HttpClientIoStreamBodyTest
+
+public class HttpClientIoStreamBodyTest inherits QUnit::Test {
+    private {
+        #! the bound of a wait that only guards against a hang
+        const HangGuard = 30s;
+
+        #! the content type of the requests
+        const RequestHeaders = {"content-type": "application/octet-stream"};
+    }
+
+    constructor() : Test("HttpClientIoStreamBodyTest", "1.0") {
+        addTestCase("HTTP/2: the rest of a request in progress after GOAWAY", \h2AfterGoawayTest());
+        addTestCase("HTTP/3: the rest of a request in progress after GOAWAY", \h3AfterGoawayTest());
+        set_return_value(main());
+    }
+
+    #! Reads a streaming response to its end; returns its body
+    private string readResponse(HttpClientStreamHandle stream) {
+        binary body;
+        while (True) {
+            auto ev = stream.readData(HangGuard);
+            if (!exists ev) {
+                throw "TIMEOUT", sprintf("no response event within %y", HangGuard);
+            }
+            if (ev.typeCode() == NT_HASH) {
+                if (ev.error) {
+                    throw ev.error.err, ev.error.desc;
+                }
+                if (ev.end_stream) {
+                    break;
+                }
+                continue;
+            }
+            body += binary(ev);
+        }
+        assertEq(HttpClientStreamState::Complete, stream.getState(), "the response was read whole");
+        return body.toString();
+    }
+
+    #! Reads the DATA frames of a stream on a raw HTTP/2 connection until END_STREAM; returns their payload
+    private static string readH2Body(RawHttp2Connection conn, int stream_id) {
+        binary body;
+        while (True) {
+            hash<auto> f = conn.readFrame(HangGuard);
+            if (f.stream_id != stream_id) {
+                continue;
+            }
+            if (f.type == FrameRstStream) {
+                throw "RAW-HTTP2-RESET", sprintf("the client reset stream %d", stream_id);
+            }
+            if (f.type == FrameData) {
+                body += f.payload;
+                if (f.flags & FlagEndStream) {
+                    return body.toString();
+                }
+            }
+        }
+    }
+
+    #! Accepts a raw HTTP/2 connection and reads the headers of a request whose body is streamed
+    /** @return a hash with the connection and the stream ID
+    */
+    private static hash<auto> acceptH2Request(RawHttp2Listener srv) {
+        RawHttp2Connection conn = srv.accept();
+        while (True) {
+            hash<auto> f = conn.readFrame(HangGuard);
+            if (f.type == FrameHeaders) {
+                if (f.flags & FlagEndStream) {
+                    throw "RAW-HTTP2-PROTOCOL-ERROR", "the request has no streamed body";
+                }
+                return {"conn": conn, "stream_id": f.stream_id};
+            }
+        }
+    }
+
+    #! Starts a streaming request with a streamed body on a new HTTP/2 connection to a raw server
+    /** The server reads the request in the background; its connection and stream ID are pushed on \a q
+    */
+    private HttpClientStreamHandle startH2Request(HttpClientConnectionManager mgr, RawHttp2Listener srv, Queue q) {
+        background sub () {
+            try {
+                q.push(acceptH2Request(srv));
+            } catch (hash<ExceptionInfo> ex) {
+                q.push(ex);
+            }
+        }();
+        HttpClientStreamHandle stream = mgr.acquireStream(srv.getUrl());
+        stream.startStreaming("POST", "/body", RequestHeaders, True);
+        return stream;
+    }
+
+    #! Returns the next value pushed on a queue, or raises the exception pushed
+    private static auto getQueued(Queue q) {
+        auto rv = q.get(HangGuard);
+        if (rv.fullType() == "hash<ExceptionInfo>") {
+            throw rv.err, rv.desc, rv.arg;
+        }
+        return rv;
+    }
+
+    private HttpClientConnectionManager getH2Manager() {
+        return new HttpClientConnectionManager(<HttpClientConnectionManagerOptions>{
+            "protocol": "h2",
+            "connect_timeout": 10s,
+            "request_timeout": 20s,
+        });
+    }
+
+    private HttpClientConnectionManager getH3Manager() {
+        return new HttpClientConnectionManager(<HttpClientConnectionManagerOptions>{
+            "protocol": "h3",
+            "accept_all_certs": True,
+            "connect_timeout": 10s,
+            "request_timeout": 20s,
+        });
+    }
+
+    h2AfterGoawayTest() {
+        RawHttp2Listener srv();
+        on_exit srv.close();
+        HttpClientConnectionManager mgr = getH2Manager();
+        on_exit mgr.closeAll();
+
+        Queue q();
+        HttpClientStreamHandle stream = startH2Request(mgr, srv, q);
+        hash<auto> req = getQueued(q);
+        on_exit req.conn.close();
+        # the server processes the stream of the request, but no new stream
+        req.conn.goaway(req.stream_id);
+        HttpClientConnection conn = stream.getConnection();
+        assertEq(HttpClientConnectionState::Draining, conn.waitForStateChange(HttpClientConnectionState::Ready,
+            HangGuard), "the connection drains");
+
+        # the request in progress is sent to its end and answered
+        stream.sendData(binary("more"), True);
+        assertEq("more", readH2Body(req.conn, req.stream_id), "the server receives the request to its end");
+        req.conn.respond(req.stream_id, "answered");
+        assertEq("answered", readResponse(stream));
+    }
+
+    #! Starts a raw QUIC server that dispatches requests as soon as their headers arrive
+    private hash<auto> startQuicServer() {
+        Socket sock();
+        sock.bindINET("127.0.0.1", "0", False, AF_INET, SOCK_DGRAM);
+        sock.setCertificate(new SSLCertificate(TestCertificates::CertPem));
+        sock.setPrivateKey(new SSLPrivateKey(TestCertificates::KeyPem));
+        AsyncSocketIoController ctrl = AsyncSocketIo::getGlobalAsyncIoController();
+        AbstractPollOperation accept_op = sock.startPollQuicAccept({"headers_only": True});
+        string owner = sock.uniqueHash();
+        return {
+            "sock": sock,
+            "ctrl": ctrl,
+            "owner": owner,
+            "accept_op": accept_op,
+            "accept_q": ctrl.submit(<SocketPollOperationInfo>{
+                "sock": sock,
+                "spop": accept_op,
+                "owner": owner,
+                "to": HangGuard,
+            }),
+            "url": sprintf("https://127.0.0.1:%d", sock.getSocketInfo().port),
+        };
+    }
+
+    #! Waits for the headers of the next request on the raw QUIC server; the server keeps reading afterwards
+    private hash<auto> getQuicRequest(reference<hash<auto>> ctx) {
+        hash<SocketPollResultInfo> result = ctx.accept_q.get(HangGuard.durationMilliseconds());
+        if (result.ex) {
+            throw result.ex.err, result.ex.desc, result.ex.arg;
+        }
+        hash<auto> req = ctx.accept_op.getOutput();
+        ctx.accept_q = ctx.ctrl.submit(<SocketPollOperationInfo>{
+            "sock": ctx.sock,
+            "spop": ctx.accept_op,
+            "owner": ctx.owner,
+            "to": HangGuard,
+        }, True);
+        return req;
+    }
+
+    #! Reads the body of a request on the raw QUIC server to its end
+    private static string readQuicBody(hash<auto> ctx, hash<auto> req) {
+        binary body;
+        while (True) {
+            *binary chunk = ctx.sock.readQuicStreamDataBlock(req.session_id, req.stream_id, HangGuard);
+            if (!exists chunk) {
+                break;
+            }
+            body += chunk;
+        }
+        return body.toString();
+    }
+
+    #! Answers a request on the raw QUIC server
+    private static respondQuic(hash<auto> ctx, hash<auto> req, string body) {
+        ctx.sock.submitQuicResponse(req.session_id, req.stream_id, 200, {"content-type": "text/plain"}, body);
+        ctx.ctrl.wakeSocket(ctx.sock);
+    }
+
+    h3AfterGoawayTest() {
+        hash<auto> ctx = startQuicServer();
+        on_exit try { ctx.ctrl.cancelByOwner(ctx.owner); } catch () {}
+        HttpClientConnectionManager mgr = getH3Manager();
+        on_exit mgr.closeAll();
+
+        HttpClientStreamHandle stream = mgr.acquireStream(ctx.url);
+        stream.startStreaming("POST", "/body", RequestHeaders, True);
+        hash<auto> req = getQuicRequest(\ctx);
+        # GOAWAY: the server processes the streams in progress, but no new stream
+        ctx.sock.submitQuicShutdownNotice(req.session_id);
+        ctx.ctrl.wakeSocket(ctx.sock);
+        HttpClientConnection conn = stream.getConnection();
+        assertEq(HttpClientConnectionState::Draining, conn.waitForStateChange(HttpClientConnectionState::Ready,
+            HangGuard), "the connection drains");
+
+        # the request in progress is sent to its end and answered
+        stream.sendData(binary("more"), True);
+        assertEq("more", readQuicBody(ctx, req), "the server receives the request to its end");
+        respondQuic(ctx, req, "answered");
+        assertEq("answered", readResponse(stream));
+    }
+}
