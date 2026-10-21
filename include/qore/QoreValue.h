@@ -6,7 +6,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -444,7 +444,9 @@ private:
     template <typename T>
     DLLLOCAL void checkShortStringAccess() const {
         using Base = typename std::remove_cv<typename std::remove_pointer<T>::type>::type;
-        if constexpr (std::is_same<Base, QoreStringNode>::value || std::is_same<Base, QoreString>::value) {
+        // a constant condition rather than "if constexpr": the body is valid for every type, and a public header
+        // must compile under the C++ standard a module chooses; the Qore module build macros set none
+        if (std::is_same<Base, QoreStringNode>::value || std::is_same<Base, QoreString>::value) {
             assert(!isShortString());
         }
     }
