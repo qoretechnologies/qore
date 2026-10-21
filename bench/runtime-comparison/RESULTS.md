@@ -19497,3 +19497,46 @@ before committing this evidence.
 
 Full raw windows, references, drivers, profiles, diagnostics, hashes and audit:
 [results-aot-post-known-closure-checkpoint-macos-arm64.json](results-aot-post-known-closure-checkpoint-macos-arm64.json).
+
+
+## Rejected AOT lvalue-loop cleanup guards (2026-10-21)
+
+A late, loop-only immediate-value cleanup guard was tested against the frozen
+branch baseline and the same candidate with its compiler selector disabled.
+Only the list-mutation function changed in the prepared micro/getter LLVM.
+Release `-O3 -DNDEBUG`, `qcc -O3`, three fixed layouts, three forks, three
+warmups and three 300-ms samples: all 297 runs / 891 timed windows retained.
+
+|!List mutation layout|!Before ns/item|!Candidate ns/item|!Selector off ns/item|!Time change vs before
+|default|195.059994|186.213632|196.693410|-4.535%
+|reverse|195.580925|187.075182|195.089963|-4.349%
+|shuffle487|197.846591|188.798258|196.758005|-4.573%
+
+Geometric layout means: **196.159 -> 187.359 ns/item**, or **4.486% less time**
+(4.496% versus selector off). This misses the predeclared 5% threshold: the
+candidate is rejected, with no confirmation retry or relaxed gate. The single
+polymorphic/reverse/selector-off +3.083% disjoint screen comparison is retained,
+but is not repeated regression evidence and is not the rejection reason.
+
+All 6507 executable references passed. Focused candidate Release qualification
+passed 15 total fixtures: 21 QUnit cases / 6054 assertions and two exit-status
+fixtures, without skips. An initial outer harness incorrectly required QUnit
+output from a silent fixture; its child passed, but the outer failure is
+preserved and the entire focused gate was rerun. Machine code retains all
+cleanup fallback sites and cancellation polls; the target grows from 782 to
+831 static arm64 instructions with an unchanged 320-byte frame. A disassembler
+import-label mismatch is documented and corrected with resolved `otool` output.
+
+The prototype and two fixtures were archived recoverably and removed. Fresh
+restored Release qualification passes 14 total fixtures: 20 QUnit cases / 5974
+assertions and two exit-status fixtures; this is focused qualification, not
+a full selected Release/Debug rerun. No performance improvement is retained.
+Next investigate unconditional prepared-root refresh after compound mutation:
+omit repeated local lookup and combine publication/cleanup, while retaining
+live reference evaluation, COW, exception handling and owner rotation. This
+is a separate, not-yet-measured hypothesis, not a retry of this guard policy.
+
+These are whole-workload times, not new Java/develop ratios or isolated call
+latencies; neither parity nor a global performance ceiling is established.
+All layouts, raw windows, test logs, source patch, drivers and 62 audit items:
+[results-aot-lvalue-loop-cleanup-rejected-macos-arm64.json](results-aot-lvalue-loop-cleanup-rejected-macos-arm64.json).

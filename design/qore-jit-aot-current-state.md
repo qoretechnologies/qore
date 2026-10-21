@@ -3772,3 +3772,26 @@ established. Prior runtime qualification is reused by exact source/artifact
 identity; fresh reference and measurement checks are separately recorded.
 Next profile-guided call/collection changes require distinct before/after/control
 experiments and broad regression qualification; old rejected changes remain rejected.
+
+
+## Rejected loop-only scalar cleanup (post-b5652e77c)
+
+Optimized AOT list mutation improved from a geometric layout mean of
+196.159 to 187.359 ns/item: 4.486% versus before and 4.496% versus the
+compiler-disabled control. All 297 runs / 891 windows are retained. This
+misses the fixed 5% target gate, so no confirmation retry was run and the
+prototype was archived and removed. No new runtime improvement is retained.
+
+Candidate focused Release qualification passes 15 fixtures / 21 QUnit cases /
+6054 assertions; restored focused Release passes 14 / 20 / 5974. Each fixture
+total includes two exit-status fixtures; there are no skips. The original harness
+accounting failure and its fresh successful rerun are preserved. These are
+not full Release/Debug reruns or fresh Java/develop comparisons. All raw
+results, adverse layouts, controls and audit are in RESULTS.md and
+`results-aot-lvalue-loop-cleanup-rejected-macos-arm64.json`.
+
+Next investigate prepared-root refresh/publication after compound mutation,
+using the already-admitted invocation-local slot with unchanged live reference
+evaluation, cleanup order and generic fallback. The current profile shows
+repeated generic root lookup; no gain is assumed. Neither Java parity nor a
+global ceiling has been established.
