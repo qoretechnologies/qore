@@ -182,6 +182,9 @@ int ManagedDatasource::grabLock(ExceptionSink *xsink) {
 
 void ManagedDatasource::releaseLockIntern() {
    assert(lockTid() == q_gettid());
+   // the thread gives up the connection: the driver data of statements destroyed in other threads while it held it
+   // is closed first, in this thread
+   closeOrphans();
    setLockTid(-1);
    if (waiting)
       cond.signal();
@@ -200,6 +203,16 @@ void ManagedDatasource::forceReleaseLockIntern() {
 
 ManagedDatasource* ManagedDatasource::copy() {
    return new ManagedDatasource(*this);
+}
+
+void ManagedDatasource::closeOrphans() {
+    if (!isOpen()) {
+        // a connection closes them when it is closed
+        return;
+    }
+    ExceptionSink close_xsink;
+    qore_ds_private::get(*this)->closeOrphans(&close_xsink);
+    qore_dbi_private::reportCloseWarnings(this, close_xsink);
 }
 
 int ManagedDatasource::acquireLock(ExceptionSink* xsink, bool& new_lock) {

@@ -150,6 +150,27 @@ SQLStatement::constructor(DatasourcePool[DatasourcePool] datasource_pool) [flags
     @code{.py}
 delete stmt;
     @endcode
+
+    @throw SQLSTATEMENT-ERROR the statement uses a @ref Qore::SQL::DatasourcePool "DatasourcePool" connection that
+    another thread holds; the object is destroyed, and the statement is closed by that thread (see below)
+    @throw TRANSACTION-LOCK-TIMEOUT the statement uses a @ref Qore::SQL::Datasource "Datasource" whose transaction
+    lock another thread holds, and the lock was not released within the datasource's transaction lock timeout; the
+    object is destroyed, and the statement is closed by that thread (see below)
+
+    @note
+    - a prepared statement belongs to the connection that it uses, and is closed only by the thread holding that
+      connection.  When the statement is destroyed in another thread than the one holding its connection - a
+      @ref Qore::SQL::DatasourcePool "DatasourcePool" connection held by another thread, or the connection of a
+      @ref Qore::SQL::Datasource "Datasource" whose transaction lock another thread holds (the destructor first
+      waits for the lock, as any other action does) - the exception above is raised and the object is destroyed; the
+      thread holding the connection closes the statement at its next commit, rollback or close, or when it releases
+      the connection or the transaction lock, including when that thread ends (since %Qore 3.0)
+    - an error closing the statement then appears in the thread holding the connection: it is raised by the commit,
+      rollback, release or close that closes the statement, as for the other statements of the connection; when the
+      statement is closed as the transaction lock of a @ref Qore::SQL::Datasource "Datasource" is released, there is
+      no call to raise it to, and the error is reported as a DBI warning event on the datasource's event queue (see
+      @ref Qore::SQL::Datasource::setEventQueue() "Datasource::setEventQueue()"), with the error code in the
+      \c "warning" key and its description in the \c "desc" key
  */
 SQLStatement::destructor() {
    stmt->close(xsink);

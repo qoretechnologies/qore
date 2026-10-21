@@ -289,7 +289,14 @@ void QoreSQLStatement::deref(ExceptionSink* xsink) {
             stmt_ds = priv->ds;
         }
         if (stmt_ds) {
-            qore_ds_private::get(*stmt_ds)->removeStatement(this);
+            if (dsh->helperHeldByCurrentThread(stmt_ds)) {
+                // the driver data is closed below in this thread, which holds the connection
+                qore_ds_private::get(*stmt_ds)->removeStatement(this);
+            } else {
+                // the driver data belongs to a connection that this thread does not hold: it is handed to the
+                // connection, and the thread holding it closes it when its transaction ends or it releases it
+                qore_ds_private::get(*stmt_ds)->adoptStatementData(this);
+            }
         }
         closeIntern(xsink);
 

@@ -657,7 +657,7 @@ int rows = db.exec("insert into table (varchar_col, timestamp_col, blob_col, num
     %Datasource objects have an internal transaction lock which will be grabbed when the Datasource::exec(), Datasource::vexec() Datasource::execRaw(), or Datasource::beginTransaction() methods are executed and autocommit is not enabled. This enables a single datasource to be safely used for transaction management by several threads simultaneously. Note that an exception in a %Datasource method that would acquire the lock (such as the Datasource::exec() method) when it's not already held, will have the effect that the transaction lock is not acquired.\n\n
     Any thread attempting to do transaction-relevant actions on a %Datasource with auto-commit disabled while a transaction is in progress by another thread will block until the thread currently executing a transaction executes the Datasource::commit() or Datasource::rollback() methods (or the %Datasource is deleted, reset, or closed, in which case the lock is released and an exception is raised as well).\n\n
     There is a timeout associated with the transaction lock; if a thread waits for the transaction lock for more than the timeout period, then an exception will be raised in the waiting thread. The timeout value can be read and changed with the Datasource::getTransactionLockTimeout() and Datasource::setTransactionLockTimeout() methods, respectively; a value of 0 or less means no timeout. The default transaction lock timeout value is 120 seconds.\n\n
-    Note that the @ref Qore::SQL::SQLStatement "SQLStatement" class also grabs the transaction lock when executing if it is created using a %Datasource object in the constructor; for more information see the  @ref Qore::SQL::SQLStatement "SQLStatement" class documentation.
+    Note that the @ref Qore::SQL::SQLStatement "SQLStatement" class also grabs the transaction lock when executing if it is created using a %Datasource object in the constructor; for more information see the  @ref Qore::SQL::SQLStatement "SQLStatement" class documentation.  A statement destroyed in another thread than the one holding the transaction lock is closed by the thread holding the lock; see @ref Qore::SQL::SQLStatement::destructor() "SQLStatement::destructor()".
 
     @par Thread Resource Handling
     The Datasource class manages the transaction lock as a @ref thread_resources "thread resource"; if the
@@ -2085,6 +2085,11 @@ string Datasource::getConfigString() [flags=CONSTANT] {
     @param argument an argument to be included in the \c arg key of datasource events
 
     @throw QUEUE-ERROR the Queue passed has a maximum size set
+
+    @note DBI warning events also report errors that have no call to be raised to: an error closing a connection to
+    clean up after another error (see Datasource::close()), and an error closing a statement destroyed in another
+    thread when the thread holding the transaction lock releases it (see
+    @ref Qore::SQL::SQLStatement::destructor() "SQLStatement::destructor()")
 
     @since %Qore 0.8.9
 */

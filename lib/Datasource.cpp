@@ -47,6 +47,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <initializer_list>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -718,6 +719,40 @@ QoreListNode* Datasource::getCapabilityList() const {
 
 int Datasource::getCapabilities() const {
     return qore_dbi_private::get(*priv->dsl)->getCaps();
+}
+
+void qore_ds_private::adoptStatementData(QoreSQLStatement* stmt) {
+    AutoLocker al(m);
+    stmt_set.erase(stmt);
+    if (!stmt->getPrivateData()) {
+        // the connection's thread already closed it
+        return;
+    }
+    // the placeholder is registered before the data is moved into it, so that the data is never left without an
+    // owner
+    std::unique_ptr<SQLStatement> placeholder(new SQLStatement(ds, nullptr));
+    orphan_stmts.push_back(placeholder.get());
+    placeholder.release()->setPrivateData(stmt->takePrivateData());
+}
+
+void qore_ds_private::orphansDone(bool close, ExceptionSink* xsink) {
+    if (orphan_stmts.empty()) {
+        return;
+    }
+    for (SQLStatement* stmt : orphan_stmts) {
+        if (close) {
+            qore_dbi_private::get(*dsl)->stmt_close(stmt, xsink);
+        } else {
+            // the handles are freed before the connection is reset; the data is closed later
+            qore_dbi_private::get(*dsl)->stmt_free(stmt, xsink);
+        }
+    }
+    if (close) {
+        for (SQLStatement* stmt : orphan_stmts) {
+            delete stmt;
+        }
+        orphan_stmts.clear();
+    }
 }
 
 bool Datasource::isInTransaction() const {

@@ -80,6 +80,12 @@ protected:
         tid.store(t, std::memory_order_relaxed);
     }
 
+    //! closes the driver data of statements destroyed in other threads that the connection holds
+    /** called by the thread holding the transaction lock before it releases it, with ds_lock held; there is no
+        caller to raise an error closing them to, so an error is reported as a warning event
+    */
+    DLLLOCAL void closeOrphans();
+
     DLLLOCAL int acquireLock(ExceptionSink* xsink, bool& new_lock);
     //! acquires the transaction lock for an action and opens the datasource if necessary
     /** @param open if false, a closed datasource is not opened: 1 is returned with the transaction lock held, as for
@@ -226,6 +232,12 @@ public:
         }
         // only return "this" when there was an exception in startDBAction if we already had the lock
         return lockTid() == q_gettid() ? this : nullptr;
+    }
+
+    DLLLOCAL virtual bool helperHeldByCurrentThreadImpl(Datasource* ds) {
+        assert(ds == this);
+        // exact without ds_lock: a thread always reads its own last write
+        return lockTid() == q_gettid();
     }
 
     DLLLOCAL virtual void helperEndActionNoConnectImpl(bool new_transaction) {

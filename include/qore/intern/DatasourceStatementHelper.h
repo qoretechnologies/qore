@@ -76,6 +76,14 @@ public:
         return helperRefSelfImpl();
     }
 
+    //! returns true if the current thread holds the connection \a ds
+    /** \a ds is the connection that a statement uses: a connection of a DatasourcePool, or the Datasource, whose
+        connection the thread holding its transaction lock uses
+    */
+    DLLLOCAL bool helperHeldByCurrentThread(Datasource* ds) {
+        return helperHeldByCurrentThreadImpl(ds);
+    }
+
     // must dereference the datasource-providing object
     virtual void helperDestructorImpl(QoreSQLStatement* s, ExceptionSink* xsink) = 0;
     virtual Datasource* helperStartActionImpl(ExceptionSink* xsink, bool& new_transaction) = 0;
@@ -84,6 +92,7 @@ public:
     virtual void helperEndActionNoConnectImpl(bool new_transaction) = 0;
     virtual Datasource* helperEndActionImpl(char cmd, bool new_transaction, ExceptionSink* xsink) = 0;
     virtual DatasourceStatementHelper* helperRefSelfImpl() = 0;
+    virtual bool helperHeldByCurrentThreadImpl(Datasource* ds) = 0;
 };
 
 #endif

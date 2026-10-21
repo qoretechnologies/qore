@@ -63,6 +63,9 @@
 #define DBITEST_OPT_REJECT "reject"
 //! driver option returning the number of connections of the driver that are open in the process
 #define DBITEST_OPT_LIVE_CONNECTIONS "live-connections"
+//! driver option returning the number of statements closed in the process, and how many of them in another thread
+//! than the thread that prepared them
+#define DBITEST_OPT_STMT_CLOSE_STATS "stmt-close-stats"
 
 static DBIDriver* DBID_DBITEST = nullptr;
 static DBIDriver* DBID_DBITEST_NO_BULK = nullptr;
@@ -75,6 +78,10 @@ static void dbitest_module_delete();
 //! per-connection state
 //! the number of DbiTestConn objects in the process: the driver's open connections
 static std::atomic<int64> dbitest_live_connections(0);
+//! the number of statements closed in the process
+static std::atomic<int64> dbitest_stmt_closes(0);
+//! the number of statements closed in another thread than the one that prepared them
+static std::atomic<int64> dbitest_foreign_stmt_closes(0);
 
 class DbiTestConn {
 public:
@@ -115,6 +122,9 @@ public:
     int64 direct_execs = 0;
     //! commit calls
     int64 commits = 0;
+    //! the number of driver calls on the connection; deliberately not atomic, as a real driver's connection state is
+    //! used only by the thread that holds the connection, so a call from another thread is a data race
+    int64 calls = 0;
 
     //! returns true if the given fault is one of the armed faults
     DLLLOCAL bool faultIs(const char* f) const {
@@ -152,6 +162,8 @@ public:
     unsigned row = 0;
     //! true if the statement's connection had the "stmt-close" fault armed when the statement was prepared
     bool fail_close = false;
+    //! the thread that prepared the statement, which holds its connection
+    int prepare_tid = 0;
 };
 
 static DbiTestConn* get_conn(Datasource* ds) {
@@ -337,6 +349,7 @@ static QoreValue dbitest_exec_intern(Datasource* ds, const QoreString* str, Exce
     }
 
     ++conn->direct_execs;
+    ++conn->calls;
 
     if (conn->faultIs("abort-on-exec")) {
         xsink->raiseException("DBI-TEST-CONNECTION-ERROR", "injected connection loss while executing a statement");
@@ -362,6 +375,7 @@ static QoreValue dbitest_execraw(Datasource* ds, const QoreString* str, Exceptio
 static int dbitest_commit(Datasource* ds, ExceptionSink* xsink) {
     DbiTestConn* conn = get_conn(ds);
     ++conn->commits;
+    ++conn->calls;
     if (conn->faultIs("abort-on-commit")) {
         xsink->raiseException("DBI-TEST-CONNECTION-ERROR", "injected connection loss while committing");
         ds->connectionAborted(xsink);
@@ -376,6 +390,7 @@ static int dbitest_commit(Datasource* ds, ExceptionSink* xsink) {
 
 static int dbitest_rollback(Datasource* ds, ExceptionSink* xsink) {
     DbiTestConn* conn = get_conn(ds);
+    ++conn->calls;
     if (conn->faultIs("rollback")) {
         xsink->raiseException("DBI-TEST-ROLLBACK-ERROR", "injected rollback failure");
         return -1;
@@ -582,6 +597,12 @@ static QoreValue dbitest_opt_get(const Datasource* ds, const char* opt) {
     if (!strcmp(opt, DBITEST_OPT_LIVE_CONNECTIONS)) {
         return dbitest_live_connections.load();
     }
+    if (!strcmp(opt, DBITEST_OPT_STMT_CLOSE_STATS)) {
+        ReferenceHolder<QoreHashNode> stats(new QoreHashNode(autoTypeInfo), nullptr);
+        stats->setKeyValue("closes", dbitest_stmt_closes.load(), nullptr);
+        stats->setKeyValue("foreign_closes", dbitest_foreign_stmt_closes.load(), nullptr);
+        return stats.release();
+    }
     DbiTestConn* conn = reinterpret_cast<DbiTestConn*>(const_cast<Datasource*>(ds)->getPrivateData());
     if (!conn) {
         return QoreValue();
@@ -625,9 +646,13 @@ static int dbitest_stmt_prepare(SQLStatement* stmt, const QoreString& str, const
     }
     s->sql = str;
     s->row = 0;
+    s->prepare_tid = q_gettid();
     Datasource* ds = stmt->getDatasource();
     DbiTestConn* conn = ds ? get_conn(ds) : nullptr;
     s->fail_close = conn && conn->faultIs("stmt-close");
+    if (conn) {
+        ++conn->calls;
+    }
     return 0;
 }
 
@@ -648,6 +673,7 @@ static int dbitest_stmt_exec(SQLStatement* stmt, ExceptionSink* xsink) {
     DbiTestConn* conn = ds ? get_conn(ds) : nullptr;
     if (conn) {
         ++conn->stmt_execs;
+        ++conn->calls;
         if (conn->faultIs("abort-on-exec")) {
             xsink->raiseException("DBI-TEST-CONNECTION-ERROR",
                 "injected connection loss while executing a statement");
@@ -715,6 +741,15 @@ static bool dbitest_stmt_next(SQLStatement* stmt, ExceptionSink* xsink) {
 static int dbitest_stmt_close(SQLStatement* stmt, ExceptionSink* xsink) {
     std::unique_ptr<DbiTestStmt> s(get_stmt(stmt));
     stmt->setPrivateData(nullptr);
+    ++dbitest_stmt_closes;
+    if (s && s->prepare_tid != q_gettid()) {
+        ++dbitest_foreign_stmt_closes;
+    }
+    Datasource* ds = stmt->getDatasource();
+    DbiTestConn* conn = ds ? get_conn(ds) : nullptr;
+    if (conn) {
+        ++conn->calls;
+    }
     // the statement is freed in every case
     if (s && s->fail_close) {
         xsink->raiseException("DBI-TEST-STMT-CLOSE-ERROR", "injected failure closing a statement");
@@ -795,6 +830,9 @@ static void dbitest_add_methods(qore_dbi_method_list& methods, bool bulk_load, b
         boolTypeInfo);
     methods.registerOption(DBITEST_OPT_LIVE_CONNECTIONS, "the number of the driver's open connections in the "
         "process");
+    methods.registerOption(DBITEST_OPT_STMT_CLOSE_STATS, "the number of statements closed in the process "
+        "(\"closes\"), and how many of them were closed in another thread than the thread that prepared them "
+        "(\"foreign_closes\")");
 }
 
 static void dbitest_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {

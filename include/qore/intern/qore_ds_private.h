@@ -171,6 +171,8 @@ struct qore_ds_private {
     DLLLOCAL ~qore_ds_private() {
         assert(!private_data);
         assert(stmt_set.empty());
+        // the driver data of destroyed statements is closed with the connection
+        assert(orphan_stmts.empty());
         clearTypedResultHashDeclCache();
         ExceptionSink xsink;
         if (opt) {
@@ -442,6 +444,20 @@ struct qore_ds_private {
             stmt_set.erase(i);
     }
 
+    //! takes the driver data of a statement that is destroyed in a thread that does not hold this connection
+    /** The statement is removed from the connection, and its driver data, which belongs to the connection, is kept in
+        a placeholder statement; the thread that holds the connection closes it when its transaction ends (see
+        transactionDone()), when it releases the connection or the transaction lock (see closeOrphans()), or when the
+        connection is closed, so that the driver is only ever called for the connection by that thread.
+    */
+    DLLLOCAL void adoptStatementData(QoreSQLStatement* stmt);
+
+    //! closes the driver data of destroyed statements that the connection holds; called by the thread holding it
+    DLLLOCAL void closeOrphans(ExceptionSink* xsink) {
+        AutoLocker al(m);
+        orphansDone(true, xsink);
+    }
+
     DLLLOCAL void connectionAborted(ExceptionSink* xsink) {
         assert(isopen);
         // close all statements and clear private data, leave datasource allocated
@@ -488,6 +504,7 @@ struct qore_ds_private {
         }
         if (clear)
             stmt_set.clear();
+        orphansDone(close, xsink);
     }
 
     DLLLOCAL int commitIntern(ExceptionSink* xsink) {
@@ -626,6 +643,12 @@ struct qore_ds_private {
 private:
     // set of active SQLStatements on this datasource
     stmt_set_t stmt_set;
+    // placeholders holding the driver data of statements destroyed in another thread than the one holding this
+    // connection; protected by m, and closed by the thread holding the connection when its transaction ends
+    std::vector<SQLStatement*> orphan_stmts;
+
+    //! closes the placeholders (or frees their handles if \a close is false); called with m held
+    DLLLOCAL void orphansDone(bool close, ExceptionSink* xsink);
 };
 
 #endif

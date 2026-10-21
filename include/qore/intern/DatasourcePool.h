@@ -348,6 +348,10 @@ public:
         return ds;
     }
 
+    DLLLOCAL virtual bool helperHeldByCurrentThreadImpl(Datasource* ds) {
+        return findAllocatedDS() == ds;
+    }
+
     DLLLOCAL virtual void helperEndActionNoConnectImpl(bool new_transaction) {
         // no connection was allocated for the action
         assert(!new_transaction);
