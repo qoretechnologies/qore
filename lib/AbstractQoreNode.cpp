@@ -156,12 +156,7 @@ void AbstractQoreNode::ref() const {
         printd(REF_LVL, "AbstractQoreNode::ref() %p type: %d %s (%d->%d)\n", this, type, getTypeName(), references.load(), references.load() + 1);
 #endif
 #endif
-    if (!there_can_be_only_one) {
-        if (custom_reference_handlers)
-            customRef();
-        else
-            ROreference();
-    }
+    refImpl();
 }
 
 AbstractQoreNode* AbstractQoreNode::refSelf() const {

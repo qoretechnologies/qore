@@ -19738,3 +19738,88 @@ Neither Java parity nor a global performance ceiling has been established.
 
 Raw runs, code/profile evidence, failure/restoration logs, recovery patch, drivers
 and all 62 audit items: [results-aot-isolated-public-base-rejected-macos-arm64.json](results-aot-isolated-public-base-rejected-macos-arm64.json).
+
+## Shared-inline AOT first-public-base initializer (2026-10-21)
+
+Baseline `a62f36ab8` includes develop `e8add51ad`. The separate runtime TU now
+shares inlinable reference/real-reference primitives with the ordinary wrappers.
+It removes the isolated prototype's three extra call layers while preserving
+custom handlers, Debug tracing, actual ownership, relaxed atomic ordering,
+live closure-lent marks, pending exception/thread exit and publication order.
+Only exact self/first direct public-base identity bypasses ordered class lookup;
+raw/parameterized rules remain live and all other cases keep ordinary fallback.
+
+All four prespecified performance gates pass. Release `-O3 -DNDEBUG`, `qcc -O3`,
+three layouts, three-fork screens and five-fork confirmations; each fork has
+three warmups and three 300-ms samples. All 4968 runs / 14904 timed windows remain.
+Geometric means of layout medians, integer polymorphic-call workload:
+
+|!Phase|!Before ns/item|!Candidate ns/item|!Selector off ns/item|!Time reduction vs before|!Vs selector off
+|targeted_screen|22.623748|20.301371|22.487373|10.265%|9.721%
+|targeted_confirmation|22.309711|19.941304|22.055366|10.616%|9.585%
+|broad_screen|22.044474|19.799921|21.790548|10.182%|9.135%
+|broad_confirmation|22.304733|19.868732|22.278595|10.921%|10.817%
+
+Every target layout improves against both controls. The broad 55-workload
+confirmation also covers other calls and mixed workloads (ns/item):
+
+|!Workload|!Before|!Candidate|!Selector off|!Time change vs before
+|direct_call|1.515153|1.507065|1.512768|-0.534%
+|method_call|1.572465|1.561657|1.567624|-0.687%
+|indirect_call|6.768770|6.815539|6.755782|+0.691%
+|monomorphic_call|3.519935|3.512847|3.518280|-0.201%
+|polymorphic_call|22.304733|19.868732|22.278595|-10.921%
+|polymorphic_float_call|22.502134|21.105132|22.434513|-6.208%
+|polymorphic_expression_call|10.576117|10.383709|10.383939|-1.819%
+|closure_call|14.936381|14.944283|14.762077|+0.053%
+|closure_capture|21.025200|20.869672|21.102361|-0.740%
+|boxed_float_method_call|19.137967|19.238678|19.177048|+0.526%
+|list_build|26.696188|26.270454|26.574367|-1.595%
+|list_mutate|184.453132|183.332083|188.948642|-0.608%
+|temporary_hash|331.701856|327.322991|332.868521|-1.320%
+|csv_report|958.060296|954.328645|960.930482|-0.390%
+|text_index|1333.059964|1324.382260|1311.872942|-0.651%
+|object_orders|1776.594158|1823.488202|1803.662850|+2.640%
+|callback_pipeline|83.346774|81.906243|81.189194|-1.728%
+
+No repeated >=3% disjoint-layout or geometric-aggregate slowdown meets the fixed
+rejection rule. This does not mean every observation improves: broad screen's
+boxed-float call aggregate is +3.690%/+4.167% versus before/disabled, but falls to
++0.526%/+0.321% in confirmation. String-result-loop's +3.002% versus before does
+not repeat. Confirmation's string_result_short and two_read_loop are respectively
++3.359% and +3.587% versus disabled, and two_read_short/reverse is +3.743% with
+disjoint fork ranges; these do not repeat the screen. All other individual
+slowdowns and ranges are preserved, not discarded. Ranges are not confidence intervals.
+
+Before/disabled LLVM matches after verified startup metadata length normalization.
+Enabled micro code differs only in two v3-to-v4 initializer calls; getter/mixed
+bodies are unchanged. The integer target still has 1228 ARM64 instructions,
+a 496-byte frame and 48 static decref sites. Fifteen inspected old runtime helper
+instruction streams are unchanged; four addresses shift by -12 bytes. Candidate
+v4 retains virtual customRef dispatch and the actual real-reference atomic.
+Untimed sampling is diagnostic only and excluded from all performance estimates.
+
+Focused qualification: 9816 Release assertions, 2145 Debug native assertions per
+setting, 6507 targeted and 7047 broad reference checks. Selected fresh retention
+qualification rebuilt the 125-module dependency cohort in Release and Debug:
+
+- release: 74 core fixtures / 121 cases / 19721 assertions; 8 named platform skips. Lvalue/closure coverage: 16 fixtures / 1501 assertions / 3 skips.
+
+- debug: 74 core fixtures / 121 cases / 19721 assertions; 8 named platform skips. Lvalue/closure coverage: 16 fixtures / 2879 assertions / 0 skips.
+
+Both runs include 56 upstream AST/IR tests, eight DataProvider suites, DataFrame,
+thread-cancellation/concurrent-reference coverage, indexed compound in five modes,
+and 555 independent references per IR/AOT. Debug native: 2145 in each setting.
+Closure-bound locals/background-capture integration is included. Exact owned
+Release aliases are restored. Named unavailable Linux-memory, database, SGLang,
+OCR and Release-only instrumentation checks are explicitly excluded, not claimed
+as covered. This is selected qualification, not the full suite or sanitizer coverage.
+
+The result is a useful AOT polymorphic-call gain, not a general Qore speedup or
+new Java comparison. Direct/simple method calls are essentially unchanged.
+Remaining profile leads are dynamic method dispatch and slot cleanup/reference
+accounting. Further changes need a separate proof and fixed before/after/control
+plan; no ownership elision or Java parity is implied.
+
+All raw runs, code evidence, selected qualification logs, drivers and 62 audit
+items: [results-aot-inline-public-base-macos-arm64.json](results-aot-inline-public-base-macos-arm64.json).

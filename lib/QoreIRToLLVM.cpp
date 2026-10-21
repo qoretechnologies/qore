@@ -17310,12 +17310,16 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         probe_types.push_back(ptr_type);
                         probe_args.push_back(xsink_arg);
                         auto probe_ft = llvm::FunctionType::get(i32_type, probe_types, false);
+                        bool first_public_base = !std::getenv("QORE_DISABLE_AOT_FIRST_PUBLIC_BASE_ACCEPT");
                         llvm::Value* handled = emitMaybeInvoke(
-                            module.getOrInsertFunction(constraint ? "qore_rt_try_assign_pinned_class_local_aot_v3"
+                            module.getOrInsertFunction(constraint
+                                ? (first_public_base ? "qore_rt_try_assign_pinned_class_local_aot_v4"
+                                    : "qore_rt_try_assign_pinned_class_local_aot_v3")
                                 : (local_slot ? "qore_rt_try_assign_pinned_class_local_aot_v2"
                                     : "qore_rt_try_assign_pinned_class_local_aot_v1"), probe_ft),
                             module.getOrInsertFunction(constraint
-                                ? "qore_rt_try_assign_pinned_class_local_aot_throwing_v3"
+                                ? (first_public_base ? "qore_rt_try_assign_pinned_class_local_aot_throwing_v4"
+                                    : "qore_rt_try_assign_pinned_class_local_aot_throwing_v3")
                                 : (local_slot ? "qore_rt_try_assign_pinned_class_local_aot_throwing_v2"
                                     : "qore_rt_try_assign_pinned_class_local_aot_throwing_v1"), probe_ft),
                             probe_args,

@@ -3868,3 +3868,26 @@ focused qualification passed 9816 Release assertions and 2119 native assertions
 per setting; restored source passes 9634 and 2024, plus indexed compound/61 weak
 references. All 125 Release aliases restored; no full selected retention rerun.
 See RESULTS.md and `results-aot-isolated-public-base-rejected-macos-arm64.json` for the complete evidence and audit.
+
+## Shared-inline AOT class initializer (post-a62f36ab8)
+
+The retained v4 pinned-class initializer uses a separate runtime translation
+unit and shared internal reference/real-reference primitives. Exact self or the
+first direct public base can bypass ordinary ordered lookup; all other identity,
+access and raw/parameterized cases retain live ordinary acceptance. No decision
+is cached. The slot's actual owner, live tracksRealRefs/closure_lent rule and
+publication order remain intact; Debug uses the traced wrappers, Release inlines
+their shared primitive. Pending exception and thread exit are both checked.
+The compiler-only QORE_DISABLE_AOT_FIRST_PUBLIC_BASE_ACCEPT selector retains v3.
+Old helper ABIs and runtime admission controls remain available.
+
+Four fixed target gates and the 55-workload repeated-regression gate pass.
+Broad confirmation: integer polymorphic 22.304733 -> 19.868732 ns/item (10.921%
+lower versus before, 10.817% versus disabled); floating polymorphic 22.502134 ->
+21.105132 (6.208%/5.926%). All 4968 runs / 14904 windows, including nonrepeating
+slowdowns, are preserved. Direct/simple method calls are essentially unchanged.
+These are whole optimized AOT workloads, not isolated call latency or fresh
+Java/develop comparisons. Selected Release/Debug integration and native ownership
+tests pass; named unavailable checks are excluded and 125 Release aliases restored.
+No full-suite/sanitizer, Java parity or global-ceiling claim.
+See RESULTS.md and `results-aot-inline-public-base-macos-arm64.json` for measurements, qualification and all 62 audit items.

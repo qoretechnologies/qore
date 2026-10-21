@@ -35,6 +35,8 @@
 #include <qore/AsyncCompletionAction.h>
 #include "qore/intern/AsyncCompletionAction.h"
 #include "qore/intern/QoreObjectIntern.h"
+#include "qore/intern/QoreClassIntern.h"
+#include "qore/intern/QoreJITException.h"
 #include "qore/intern/ql_debug.h"
 #include "qore/intern/QoreIRInterpreter.h"
 #include "qore/intern/ql_type.h"
@@ -1196,6 +1198,195 @@ private:
     ExceptionSink& xsink;
     bool fail;
 };
+
+//! Compare live identity acceptance with ordinary ordered class lookup.
+static void ut_aot_first_public_base(UnitTestCounters& c) {
+    ExceptionSink xsink;
+    QoreClassHolder base_owner(new QoreClass("UtPublicBase", "::UtPublicBase"));
+    QoreClass* base = base_owner;
+    // Fresh native definitions have unset signature hashes and cannot compare
+    // structurally equal until committed. Model empty committed definitions.
+    qore_class_private::get(*base)->hash.updateEmpty();
+    QoreClassHolder copy_owner(base->copy());
+    QoreClass* copy = copy_owner;
+    QoreClassHolder child_owner(new QoreClass("UtPublicChild", "::UtPublicChild"));
+    QoreClass* child = child_owner;
+    child->addBuiltinBaseClass(copy);
+    QoreClassHolder deep_owner(new QoreClass("UtPublicDeep", "::UtPublicDeep"));
+    QoreClass* deep = deep_owner;
+    deep->addBuiltinBaseClass(child);
+    QoreClassHolder unrelated_owner(new QoreClass("UtUnrelated", "::UtUnrelated"));
+    QoreClass* unrelated = unrelated_owner;
+    QoreClassHolder second_owner(new QoreClass("UtSecondBase", "::UtSecondBase"));
+    QoreClass* second = second_owner;
+    second->addBuiltinBaseClass(unrelated);
+    second->addBuiltinBaseClass(base);
+    QoreClassHolder equivalent_owner(new QoreClass("UtPublicBase", "::UtPublicBase"));
+    QoreClass* equivalent = equivalent_owner;
+    qore_class_private::get(*equivalent)->hash.updateEmpty();
+    UT_ASSERT(c, qore_class_private::get(*base) != qore_class_private::get(*equivalent)
+        && qore_class_private::get(*base)->equal(*qore_class_private::get(*equivalent)),
+        "distinct definitions are structurally equivalent for the shadow regression");
+    QoreClassHolder shadow_owner(new QoreClass("UtPrivateShadow", "::UtPrivateShadow"));
+    QoreClass* shadow = shadow_owner;
+    shadow->addBuiltinBaseClass(equivalent);
+    shadow->addBuiltinBaseClass(base);
+    qore_class_private::get(*shadow)->scl->front()->access = Private;
+    auto compare = [&](QoreClass* actual, QoreClass* target, bool expected) {
+        ReferenceHolder<QoreObject> object(new QoreObject(actual, getProgram()), &xsink);
+        UT_ASSERT_EQ(c, expected, QoreTypeInfo::acceptsRequiredClassObject(*target, **object),
+            "ordinary live acceptance supplies the reference result");
+        UT_ASSERT_EQ(c, expected, QoreTypeInfo::acceptsRequiredClassObjectFirstPublicBase(*target, **object),
+            "first-public-base acceptance agrees with ordinary lookup");
+        UT_ASSERT_EQ(c, 1, object->reference_count(), "acceptance does not acquire ownership");
+    };
+    for (QoreClass* target : {base, copy}) {
+        for (QoreClass* actual : {base, copy, child, deep, second, equivalent}) {
+            compare(actual, target, true);
+        }
+        compare(unrelated, target, false);
+        compare(shadow, target, false);
+    }
+    // These classes/objects are test-local and unpublished. Change the first
+    // edge between calls to verify that no accepted decision is cached.
+    for (ClassAccess access : {Private, Internal, Public}) {
+        qore_class_private::get(*child)->scl->front()->access = access;
+        compare(child, base, access == Public);
+    }
+    {
+        QoreClassHolder generic_owner(new QoreClass("UtGenericBase", "::UtGenericBase"));
+        QoreClass* generic = generic_owner;
+        generic->addTypeParameter("T");
+        QoreParameterizedClassTypeInfo instantiated(generic, {bigIntTypeInfo}, false);
+        ReferenceHolder<QoreObject> object(new QoreObject(generic, getProgram()), &xsink);
+        for (bool parameterized : {false, true, false}) {
+            object->setInstantiatedTypeInfo(parameterized ? &instantiated : nullptr);
+            for (bool legacy : {false, true}) {
+                qore_class_private::get(*generic)->setLegacyRawGenericCompatibility(legacy, false);
+                bool expected = !parameterized || legacy;
+                UT_ASSERT_EQ(c, expected, QoreTypeInfo::acceptsRequiredClassObject(*generic, **object),
+                    "ordinary raw-class acceptance is live");
+                UT_ASSERT_EQ(c, expected,
+                    QoreTypeInfo::acceptsRequiredClassObjectFirstPublicBase(*generic, **object),
+                    "exact identity cannot bypass the live parameterized-object gate");
+            }
+        }
+    }
+    {
+        struct LocalScope {
+            LocalVar var;
+            ExceptionSink& xsink;
+            LocalScope(const QoreTypeInfo* ti, ExceptionSink& sink)
+                    : var("native_first_public_base", ti), xsink(sink) {
+                var.instantiateIntern(QoreValue(), false);
+            }
+            ~LocalScope() { var.uninstantiate(&xsink); }
+        } local(base->getTypeInfo(), xsink);
+        LocalVarValue* slot = thread_try_find_lvar(&local.var);
+        UT_ASSERT(c, slot && !slot->val.assigned, "fresh class slot is unassigned");
+        if (!slot) {
+            return;
+        }
+        struct BorrowedLocalContext : QoreAOTContext {
+            ~BorrowedLocalContext() { locals = nullptr; }
+        } context;
+        LocalVar* locals[] = {&local.var};
+        context.locals = locals;
+        context.num_locals = 1;
+        context.pgm = getProgram();
+        ReferenceHolder<QoreObject> object(new QoreObject(child, getProgram()), &xsink);
+        auto store = [&](uint64_t value) {
+            return qore_rt_try_assign_pinned_class_local_aot_v4(&context, 0, value, slot, base, &xsink);
+        };
+        uint64_t bits = QoreValue(*object).rawBits();
+        // Force the non-null prepared helper, including in disabled-control
+        // runs, so passing through ordinary fallback alone is insufficient.
+        for (int guard = 0; guard < 5; ++guard) {
+            slot->finalized = guard == 0;
+            slot->val.static_assignment = guard == 1;
+            slot->val.fixed_type = guard == 2;
+            if (guard == 3) {
+                xsink.raiseException("FIRST-PUBLIC-BASE-TEST", "pending exception");
+            }
+            if (guard == 4) {
+                xsink.raiseThreadExit();
+            }
+            UT_ASSERT_EQ(c, 0, store(bits), "live slot state or pending exception rejects initialization");
+            UT_ASSERT(c, !slot->val.assigned, "rejected initialization leaves storage untouched");
+            UT_ASSERT_EQ(c, 1, object->reference_count(), "rejected initialization acquires no reference");
+            slot->finalized = false;
+            slot->val.static_assignment = false;
+            slot->val.fixed_type = false;
+            xsink.clear();
+        }
+        for (QoreValue value : {QoreValue(), QoreValue(int64_t{7})}) {
+            UT_ASSERT_EQ(c, 0, store(value.rawBits()), "non-object representation is rejected");
+        }
+        UT_ASSERT_EQ(c, 1, store(bits), "first public base actually initializes the slot");
+        UT_ASSERT_EQ(c, 2, object->reference_count(), "initialization acquires exactly the slot owner");
+        UT_ASSERT_EQ(c, bits, slot->val.getValue().rawBits(), "published slot retains the exact object");
+        UT_ASSERT_EQ(c, 0, store(bits), "assigned slot cannot be reinitialized");
+        UT_ASSERT_EQ(c, 2, object->reference_count(), "assigned rejection acquires no extra owner");
+        slot->del(&xsink);
+        UT_ASSERT_EQ(c, 1, object->reference_count(), "ordinary cleanup releases exactly the slot owner");
+        xsink.raiseException("FIRST-PUBLIC-BASE-TEST", "pending throwing-helper exception");
+        bool caught = false;
+        try {
+            qore_rt_try_assign_pinned_class_local_aot_throwing_v4(&context, 0, bits, slot, base, &xsink);
+        } catch (const QoreJITException&) {
+            caught = true;
+        }
+        UT_ASSERT(c, caught && xsink && !slot->val.assigned, "throwing wrapper preserves pending failure");
+        xsink.clear();
+        xsink.raiseThreadExit();
+        caught = false;
+        try {
+            qore_rt_try_assign_pinned_class_local_aot_throwing_v4(&context, 0, bits, slot, base, &xsink);
+        } catch (const QoreJITException&) {
+            caught = true;
+        }
+        UT_ASSERT(c, caught && xsink.isThreadExit() && !slot->val.assigned,
+            "throwing wrapper preserves a pending thread exit");
+        xsink.clear();
+        int handled = qore_rt_try_assign_pinned_class_local_aot_v4(&context, 0, bits, slot, nullptr, &xsink);
+        bool enabled = !std::getenv("QORE_DISABLE_AOT_PINNED_CLASS_LOCAL")
+            && !std::getenv("QORE_DISABLE_AOT_FRESH_CLASS_LOCAL_STORE")
+            && !std::getenv("QORE_DISABLE_AOT_CLASS_STRONG_STORE");
+        UT_ASSERT_EQ(c, enabled ? 1 : 0, handled, "null constraint retains v2 admission and ownership");
+        slot->del(&xsink);
+        UT_ASSERT_EQ(c, 1, object->reference_count(), "fallback cleanup releases any acquired slot owner");
+        // Exercise the shared reference primitive directly, including in Debug.
+        object->refImpl();
+        UT_ASSERT_EQ(c, 2, object->reference_count(), "inline ref retains the object's custom reference handler");
+        object->deref(&xsink);
+        UT_ASSERT_EQ(c, 1, object->reference_count(), "ordinary deref balances inline custom ref");
+        ReferenceHolder<QoreStringNode> string(new QoreStringNode("inline-ref"), &xsink);
+        string->refImpl();
+        UT_ASSERT_EQ(c, 2, string->reference_count(), "inline ref retains ordinary node reference counting");
+        string->deref(&xsink);
+        UT_ASSERT_EQ(c, 1, string->reference_count(), "ordinary deref balances inline node ref");
+        // Flags belong to this unpublished test-local slot. Keep the marker
+        // decision live even though compiled admission excludes captured slots.
+        qore_object_private* data = qore_object_private::get(**object);
+        int initial_real_refs = data->rrefs.load(std::memory_order_relaxed);
+        for (int mode = 0; mode < 3; ++mode) {
+            slot->val.is_closure = mode != 0;
+            slot->val.closure_lent = mode == 2;
+            UT_ASSERT_EQ(c, 1, store(bits), "initial object store preserves live real-reference mode");
+            UT_ASSERT_EQ(c, 2, object->reference_count(), "each slot mode acquires exactly one owner");
+            UT_ASSERT_EQ(c, initial_real_refs + (mode != 1), data->rrefs.load(std::memory_order_relaxed),
+                "only ordinary or lent-closure slots mark a real reference");
+            slot->del(&xsink);
+            UT_ASSERT_EQ(c, 1, object->reference_count(), "each slot mode releases exactly one owner");
+            UT_ASSERT_EQ(c, initial_real_refs, data->rrefs.load(std::memory_order_relaxed),
+                "ordinary cleanup balances every real-reference mode");
+            UT_ASSERT(c, !slot->val.assigned, "cleanup leaves the slot unassigned in every mode");
+        }
+        slot->val.is_closure = false;
+        slot->val.closure_lent = false;
+    }
+    UT_ASSERT(c, !xsink, "first-public-base native checks raise no unexpected exception");
+}
 
 static void ut_aot_prepared_local_reload(UnitTestCounters& c) {
     ExceptionSink xsink;
@@ -7814,6 +8005,7 @@ static QoreValue f_run_debug_unit_tests(const QoreListNode* params, RuntimeConfi
     ut_lvalue_object_count_records(c);
     ut_local_discard(c);
     ut_aot_scalar_local_store(c);
+    ut_aot_first_public_base(c);
     ut_aot_prepared_local_reload(c);
     ut_qorevalue_operator_bool_null(c);
     ut_qorevalue_null_representations(c);
@@ -7837,6 +8029,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     ut_lvalue_object_count_records(c);
     ut_local_discard(c);
     ut_aot_scalar_local_store(c);
+    ut_aot_first_public_base(c);
     ut_aot_prepared_local_reload(c);
 
     ut_qorevalue_operator_bool_null(c);

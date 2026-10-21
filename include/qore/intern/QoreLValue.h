@@ -1174,11 +1174,25 @@ public:
         @param n already-referenced node, whose ownership passes to this slot
     */
     DLLLOCAL void assignInitialNode(AbstractQoreNode* n) {
+        assignInitialNodeWithMarker(n, [](AbstractQoreNode* value) {
+            check_lvalue_object_in_out(value, nullptr);
+        });
+    }
+
+    //! Initial node publication with an internal, type-specialized real-reference marker.
+    /** Shares the exact publication order and live tracksRealRefs() decision with
+        assignInitialNode(). The caller must satisfy the same empty-slot conditions.
+        @param n already-referenced node, whose ownership passes to this slot
+        @param mark nonthrowing internal operation equivalent to
+            check_lvalue_object_in_out(n, nullptr) for the admitted node type
+    */
+    template <typename Marker>
+    DLLLOCAL void assignInitialNodeWithMarker(AbstractQoreNode* n, Marker&& mark) {
         assert(!assigned && !fixed_type && !static_assignment);
         assigned = true;
         v.n = n;
         if (tracksRealRefs()) {
-            check_lvalue_object_in_out(v.n, nullptr);
+            mark(v.n);
         }
         type = QV_Node;
     }

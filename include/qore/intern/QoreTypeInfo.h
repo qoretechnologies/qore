@@ -163,6 +163,16 @@ public:
     */
     DLLLOCAL static bool acceptsRequiredClassObject(const QoreClass& constraint, const QoreObject& object);
 
+    //! Live class acceptance with an exact first-public-base identity shortcut.
+    /** Only self or the first direct public base can bypass ordinary ordered lookup.
+        All raw/parameterized rules and other hierarchy/access checks remain live.
+        @param constraint borrowed unfiltered required-class constraint
+        @param object live borrowed strong object
+        @return true if accepted unchanged; false requires normal assignment fallback
+    */
+    DLLLOCAL static bool acceptsRequiredClassObjectFirstPublicBase(const QoreClass& constraint,
+        const QoreObject& object);
+
     DLLLOCAL const QoreAcceptSpec& getFirstAcceptSpec() const {
         assert(!accept_vec.empty());
         return accept_vec[0];

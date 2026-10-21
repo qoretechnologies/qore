@@ -1519,7 +1519,7 @@ void qore_object_private::setRealReference() {
     printd(QORE_DEBUG_OBJ_REFS, "qore_object_private::setRealReference() this: %p '%s': references %d rrefs %d->%d\n",
         this, status == OS_OK ? getClassName() : "<deleted>", references.load(), rrefs.load(), rrefs.load() + 1);
     // no lock, as for realRef(): only the last real reference going away has to be ordered against rlck
-    rrefs.fetch_add(1, std::memory_order_relaxed);
+    setRealReferenceImpl();
 }
 
 void qore_object_private::unsetRealReference() {

@@ -773,6 +773,15 @@ public:
     // participate in recursive graphs)
     DLLLOCAL void setRealReference();
 
+    //! Internal real-reference increment shared with setRealReference(), without debug tracing.
+    /** The owning reference already keeps the object alive. Only the last real
+        reference going away must be ordered against rlck; increment ordering is
+        unchanged. Use setRealReference() in Debug builds to retain its tracing.
+    */
+    DLLLOCAL void setRealReferenceImpl() {
+        rrefs.fetch_add(1, std::memory_order_relaxed);
+    }
+
     // decrements the real reference count without decrementing the actual reference count
     DLLLOCAL void unsetRealReference();
 

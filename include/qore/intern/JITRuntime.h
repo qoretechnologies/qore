@@ -1970,6 +1970,24 @@ int qore_rt_try_assign_pinned_class_local_aot_v3(QoreAOTContext* ctx, int32_t id
 //! Throwing counterpart; throws QoreJITException on a populated sink.
 int qore_rt_try_assign_pinned_class_local_aot_throwing_v3(QoreAOTContext* ctx, int32_t idx,
     uint64_t value, void* prepared_slot, const QoreClass* constraint, ExceptionSink* xsink);
+//! Version 3 storage/ownership contract, with live first-public-base identity acceptance.
+/** @param ctx current AOT context
+    @param idx compiler-proven initial ordinary required-class body-local slot
+    @param value borrowed input independently pinned until every cached/SSA use ends
+    @param prepared_slot same-invocation storage handle
+    @param constraint prepared immutable declaration constraint; nullptr retains v2
+    @param xsink exception sink
+    @return 1 if stored unchanged, 0 for ordinary fallback
+    @note No acceptance decision is cached; non-public or later bases retain ordered lookup.
+*/
+int qore_rt_try_assign_pinned_class_local_aot_v4(QoreAOTContext* ctx, int32_t idx,
+    uint64_t value, void* prepared_slot, const QoreClass* constraint, ExceptionSink* xsink);
+//! Throwing counterpart; throws QoreJITException on a populated sink.
+/** @copydoc qore_rt_try_assign_pinned_class_local_aot_v4
+    @throw QoreJITException if the exception sink is populated after the initializer
+*/
+int qore_rt_try_assign_pinned_class_local_aot_throwing_v4(QoreAOTContext* ctx, int32_t idx,
+    uint64_t value, void* prepared_slot, const QoreClass* constraint, ExceptionSink* xsink);
 //! Clear the live slot value at the original source scope exit; nullptr uses ordinary lookup.
 /** @param ctx current AOT context
     @param idx compiler-proven ordinary class body-local index
