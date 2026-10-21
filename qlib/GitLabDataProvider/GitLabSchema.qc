@@ -94,8 +94,7 @@ public hashdecl GitLabSchemaProvenanceInfo {
     @ref GitLabDataProvider::GitLabCreateCommitDataProvider "GitLabCreateCommitDataProvider".  It keeps its
     action ID, so nothing calling it can tell the difference.
 
-    The schema is parsed once, on first use, rather than when the module loads, so that a program that only
-    needs the connection does not pay for it.
+    The schema is parsed once, when the module loads and registers its actions, which are built from it.
 */
 public class GitLabSchema {
     public {

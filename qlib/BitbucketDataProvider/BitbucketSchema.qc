@@ -75,8 +75,7 @@ public hashdecl BitbucketSchemaProvenanceInfo {
     nesting to name a branch, so the manifest presents them as plain values and converts them with wire
     codecs; see @ref BitbucketDataProvider::BitbucketManifest "BitbucketManifest".
 
-    The schema is parsed once, on first use, rather than when the module loads, so that a program that only
-    needs the connection does not pay for it.
+    The schema is parsed once, when the module loads and registers its actions, which are built from it.
 */
 public class BitbucketSchema {
     public {

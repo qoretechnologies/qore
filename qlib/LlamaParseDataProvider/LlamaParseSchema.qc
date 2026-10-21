@@ -75,8 +75,7 @@ public hashdecl LlamaParseSchemaProvenanceInfo {
 
 #! Loads and holds the vendored LlamaIndex Cloud API description
 /** The schema is pruned to the exported operations and the transitive closure of everything they
-    reference, and is parsed once on first use rather than when the module loads, so that a program that
-    only holds the connection never pays for it.
+    reference.  It is parsed once, when the module loads and registers its actions, which are built from it.
 
     @since %LlamaParseDataProvider 1.1
 */
