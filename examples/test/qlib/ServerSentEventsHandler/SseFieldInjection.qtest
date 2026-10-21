@@ -129,7 +129,7 @@ public class SseFieldInjectionTest inherits QUnit::Test {
         HttpServer http(<HttpServerOptionInfo>{});
         on_exit http.stop();
         http.setDefaultHandler("sse", sse);
-        int port = http.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        int port = http.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
 
         Socket s();
         s.connect("127.0.0.1:" + port, 30s);
