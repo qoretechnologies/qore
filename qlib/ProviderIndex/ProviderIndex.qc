@@ -496,6 +496,18 @@ set_signal_handler(SIGTERM, sub () { ProviderIndex::cancelWorkers(); });
             }
         }
         DataProviderActionCatalog::getAllActions();
+        # Getting the actions of one app attempts its failed output-type callbacks again, so that a recovered
+        # provider qualifies on this build without being registered again; a callback that still fails stays
+        # retained by the catalog and is reported with its action below
+        foreach hash<DataProviderAppInfo> app in (apps) {
+            try {
+                DataProviderActionCatalog::getActions(app.name, False);
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err != "ACTION-OUTPUT-TYPE-ERROR") {
+                    rethrow;
+                }
+            }
+        }
 
         # Reading factory info can resolve types, so it is read during the warm-up, like the apps and actions; the
         # factorymap keys are complete here, only their module names are resolved below
@@ -607,17 +619,28 @@ set_signal_handler(SIGTERM, sub () { ProviderIndex::cancelWorkers(); });
         hash<string, hash<auto>> rv;
         # the index is static metadata, so dynamic type and default value callbacks must not run
         DataProviderStaticMetadataHelper static_metadata();
-        foreach hash<DataProviderActionInfo> action in (DataProviderActionCatalog::getActions(app, False)) {
+        *list<hash<DataProviderActionInfo>> actions;
+        try {
+            actions = DataProviderActionCatalog::getActions(app, False);
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err != "ACTION-OUTPUT-TYPE-ERROR") {
+                rethrow;
+            }
+            # the actions whose output types resolved are published; the others are reported below
+            actions = DataProviderActionCatalog::getActionsNoInit(app);
+        }
+        foreach hash<DataProviderActionInfo> action in (actions) {
             try {
                 if (action.get_output_type) {
-                    # The catalog retains callbacks whose resolution failed. Output types are not stored in
-                    # the index, but an unresolved schema must not silently qualify as complete metadata.
-                    # Retry here on each build so a recovered provider can qualify without re-registration.
-                    *AbstractDataProviderType output_type = action.get_output_type();
-                    if (!output_type) {
-                        throw "DATA-PROVIDER-OUTPUT-TYPE-UNAVAILABLE", sprintf("no output type for %s/%s",
-                            app, action.action);
+                    # Output types are not stored in the index, but an unresolved schema must not silently
+                    # qualify as complete metadata.  The catalog retains the failure of a callback, which the
+                    # warm-up attempted again, and the sealed discovery reports it for this action.
+                    if ((map 1, DataProviderActionCatalog::getInitializationFailures((app,)),
+                            $1.action == action.action)) {
+                        continue;
                     }
+                    throw "DATA-PROVIDER-OUTPUT-TYPE-UNAVAILABLE", sprintf("no output type for %s/%s", app,
+                        action.action);
                 }
                 hash<auto> entry = (action - ("get_dynamic_options", "get_output_type", "output_type")) + {
                     "options": getSerializableActionOptions(app, action, \type_info_mismatches),

@@ -1724,6 +1724,16 @@ fetch
       returning a hash type without fields: the type of the options of an action has a field for each option, with
       its type (mandatory for a required option), description, default value and allowed values; other keys are
       still accepted as they are
+    - fixed an action whose \c get_output_type callback fails being returned without an output type and without
+      an error: the failure is now retained like a failed deferred initialization and returned by
+      @ref DataProvider::DataProviderActionCatalog::getInitializationFailures() "getInitializationFailures()", the
+      getters that return the action or its application's actions throw \c ACTION-OUTPUT-TYPE-ERROR, and each such
+      call attempts the callback again; a thread asking for an action while another thread was resolving its output
+      type could also get it without one (see @ref dataprovider_deferred_output_types)
+    - the getters that return actions build only the deferred output types of the actions they return, and the
+      application getters (\c getAllApps(), \c getApp(), \c getAppEx(), \c searchAppRegex(), \c searchAppSubstr())
+      and \c getDataProviderForAction() no longer build deferred output types, so loading one provider module and
+      reading one action no longer builds the output types of every action of every loaded module
 
     @subsection dataprovider_v3_10_2 DataProvider v3.10.2
     - the editor token spans of @ref DataProvider::DpqlActionSession "DpqlActionSession" (\c dpql-get-tokens and

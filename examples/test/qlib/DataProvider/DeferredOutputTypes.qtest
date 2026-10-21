@@ -1,0 +1,379 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires DataProvider
+%requires ConnectionProvider
+
+%exec-class DeferredOutputTypesTest
+
+#! The error thrown by a failing test callback
+const CallbackError = "TEST-OUTPUT-TYPE-ERROR";
+
+#! Output-type callbacks whose results the test controls
+class Callbacks {
+    public {
+        #! Calls per app/action
+        static hash<string, int> calls = {};
+
+        #! Callbacks that throw: app/action -> error code
+        static hash<string, string> failing = {};
+
+        #! Callbacks that return no type: app/action -> True
+        static hash<string, bool> no_type = {};
+    }
+
+    #! Returns the output-type callback of an action
+    static code get(string app, string action) {
+        string key = app + "/" + action;
+        return *AbstractDataProviderType sub () {
+            ++Callbacks::calls{key};
+            if (*string err = Callbacks::failing{key}) {
+                throw err, sprintf("the output type of %s cannot be built", key);
+            }
+            if (Callbacks::no_type{key}) {
+                return;
+            }
+            HashDataType rv(key);
+            rv.addField(new QoreDataField("id", "the ID", AbstractDataProviderTypeMap."string"));
+            return rv;
+        };
+    }
+
+    #! Returns the number of calls of the callback of an action
+    static int count(string app, string action) {
+        return Callbacks::calls{app + "/" + action} ?? 0;
+    }
+}
+
+#! Verifies when the catalog builds deferred output types and how it reports a callback that fails
+public class DeferredOutputTypesTest inherits QUnit::Test {
+    private {
+        #! Distinguishes the fixtures of the test cases, which share the process-wide catalog
+        int fixture_id = 0;
+
+        #! The connection scheme of the fixture applications
+        const Scheme = "qore-test-deferred-output";
+    }
+
+    constructor() : Test("DataProvider deferred output types", "1.0") {
+        ConnectionSchemeCache::registerScheme(Scheme, <ConnectionSchemeInfo>{
+            "display_name": "Deferred Output Types",
+            "short_desc": "Deferred output types test scheme",
+            "desc": "Deferred output types test scheme",
+            "schemes": {
+                Scheme: True,
+            },
+            "base_scheme_map": {
+                Scheme: Scheme,
+            },
+            "cls": Class::forName("ConnectionProvider::HttpConnection"),
+            "options": {},
+        });
+
+        addTestCase("a getter returning a failing action raises the failure and attempts it again",
+            \scopedFailureTest());
+        addTestCase("a getter returning every action retains a failure without raising or retrying it",
+            \globalFailureTest());
+        addTestCase("application getters build no output types", \appGetterTest());
+        addTestCase("a getter builds only the output types it returns", \scopeTest());
+        addTestCase("a repeated failure leaves the catalog revision, and a recovery clears the failure",
+            \revisionTest());
+        addTestCase("a callback returning no type publishes no output type", \noTypeTest());
+        addTestCase("callbacks run without the catalog lock, and concurrent first reads share one type",
+            \concurrencyTest());
+        addTestCase("a resolved action registered again with its callback is the same action",
+            \reregistrationTest());
+        set_return_value(main());
+    }
+
+    #! Registers an application with a scheme whose actions have deferred output types
+    /** @return the application name
+    */
+    private string registerFixture(list<string> actions, *bool with_scheme) {
+        string app = sprintf("QoreTestDeferredOutput%d", ++fixture_id);
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": app,
+            "display_name": "Deferred Output " + fixture_id,
+            "short_desc": "Deferred output types fixture",
+            "desc": "Deferred output types fixture",
+            "groups": (AppGroup::DataTransformation,),
+            "scheme": with_scheme ? Scheme : NOTHING,
+            "logo": "data",
+            "logo_mime_type": MimeTypeSvg,
+            "logo_file_name": "deferred-output.svg",
+        });
+        foreach string action in (actions) {
+            DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+                "app": app,
+                "action": action,
+                "path": "/" + action,
+                "display_name": "Action " + action,
+                "short_desc": "Fixture action " + action,
+                "desc": "Fixture action " + action,
+                "action_code": DPAT_API,
+                "get_output_type": Callbacks::get(app, action),
+            });
+        }
+        return app;
+    }
+
+    #! Returns the exception thrown by the given call, if any
+    private *hash<ExceptionInfo> getException(code c) {
+        try {
+            c();
+        } catch (hash<ExceptionInfo> ex) {
+            return ex;
+        }
+    }
+
+    #! Returns the retained failures of an application
+    private list<hash<DataProviderInitializationFailureInfo>> getFailures(string app) {
+        return DataProviderActionCatalog::getInitializationFailures((app,));
+    }
+
+    #! Returns the action as registered, without resolving it
+    private hash<DataProviderActionInfo> getStored(string app, string action) {
+        return (map $1, DataProviderActionCatalog::getActionsNoInit(app), $1.action == action)[0];
+    }
+
+    scopedFailureTest() {
+        string app = registerFixture(("good", "bad"), True);
+        Callbacks::failing{app + "/bad"} = CallbackError;
+
+        hash<string, code> getters = {
+            "getActions": sub () { DataProviderActionCatalog::getActions(app); },
+            "getActionsEx": sub () { DataProviderActionCatalog::getActionsEx(app); },
+            "getActionHash": sub () { DataProviderActionCatalog::getActionHash(app); },
+            "getActionHashEx": sub () { DataProviderActionCatalog::getActionHashEx(app); },
+            "searchAppActionRegex": sub () { DataProviderActionCatalog::searchAppActionRegex(app, "."); },
+            "searchAppActionSubstr": sub () { DataProviderActionCatalog::searchAppActionSubstr(app, "action"); },
+            "searchAppActionRegexEx": sub () { DataProviderActionCatalog::searchAppActionRegexEx(app, "."); },
+            "searchAppActionSubstrEx": sub () {
+                DataProviderActionCatalog::searchAppActionSubstrEx(app, "action");
+            },
+            "getActionsForScheme": sub () { DataProviderActionCatalog::getActionsForScheme(Scheme); },
+            "getAppAction": sub () { DataProviderActionCatalog::getAppAction(app, "bad"); },
+            "getAppActionEx": sub () { DataProviderActionCatalog::getAppActionEx(app, "bad"); },
+        };
+        foreach hash<auto> i in (getters.pairIterator()) {
+            int calls = Callbacks::count(app, "bad");
+            *hash<ExceptionInfo> ex = getException(i.value);
+            assertEq("ACTION-OUTPUT-TYPE-ERROR", ex.err, i.key + " raises the failure");
+            assertRegex("action \"bad\" of application \"" + app + "\".*" + CallbackError, ex.desc,
+                i.key + " names the action and the cause");
+            assertEq(1, ex.arg.size(), i.key + " has one failure");
+            assertEq({"kind": "action", "app": app, "action": "bad", "error": CallbackError},
+                ex.arg[0]{"kind", "app", "action", "error"}, i.key + " describes the failure");
+            assertEq(calls + 1, Callbacks::count(app, "bad"), i.key + " attempts the failed callback again");
+        }
+
+        # the action in scope that resolved is published although another one failed
+        hash<DataProviderActionInfo> good = getStored(app, "good");
+        assertTrue(good.output_type instanceof AbstractDataProviderType, "the good action is resolved");
+        assertFalse(exists good.get_output_type, "the good action has no callback left");
+        assertEq(1, Callbacks::count(app, "good"), "a resolved callback is never called again");
+        hash<DataProviderActionInfo> bad = getStored(app, "bad");
+        assertFalse(exists bad.output_type, "the failing action has no output type");
+        assertTrue(exists bad.get_output_type, "the failing action keeps its callback");
+
+        # the failure is retained with the original exception
+        list<hash<DataProviderInitializationFailureInfo>> failures = getFailures(app);
+        assertEq(1, failures.size());
+        assertEq({"kind": "action", "app": app, "action": "bad", "error": CallbackError,
+            "description": "the output type of " + app + "/bad cannot be built"},
+            failures[0]{"kind", "app", "action", "error", "description"});
+
+        # a getter asking for the other action is not affected
+        assertTrue(DataProviderActionCatalog::getAppActionEx(app, "good").output_type
+            instanceof AbstractDataProviderType);
+    }
+
+    globalFailureTest() {
+        string app = registerFixture(("good", "bad"), True);
+        Callbacks::failing{app + "/bad"} = CallbackError;
+
+        list<hash<DataProviderActionInfo>> actions = map $1, DataProviderActionCatalog::getAllActions(),
+            $1.app == app;
+        assertEq(2, actions.size(), "getAllActions() returns both actions");
+        assertEq(1, Callbacks::count(app, "bad"), "getAllActions() attempts an unattempted callback");
+        hash<string, hash<DataProviderActionInfo>> by_name = map {$1.action: $1}, actions;
+        assertTrue(by_name.good.output_type instanceof AbstractDataProviderType);
+        assertFalse(exists by_name.bad.output_type, "the failing action is returned without an output type");
+        assertTrue(exists by_name.bad.get_output_type, "the failing action is returned with its callback");
+        assertEq(1, getFailures(app).size(), "the failure is retained");
+        assertEq(CallbackError, getFailures(app)[0].error);
+
+        # none of the getters returning every action attempts the failure again or raises it
+        DataProviderActionCatalog::getAllActions();
+        DataProviderActionCatalog::searchActionRegex(".");
+        DataProviderActionCatalog::searchActionSubstr("action");
+        assertEq(1, Callbacks::count(app, "bad"), "a failed callback is not attempted again by global getters");
+        assertEq(1, Callbacks::count(app, "good"));
+    }
+
+    appGetterTest() {
+        string app = registerFixture(("one", "two"), True);
+        DataProviderActionCatalog::getAllApps();
+        DataProviderActionCatalog::getApp(app);
+        DataProviderActionCatalog::getAppEx(app);
+        DataProviderActionCatalog::searchAppRegex(app);
+        DataProviderActionCatalog::searchAppSubstr(app);
+        DataProviderActionCatalog::getAllAppsNoInit();
+        DataProviderActionCatalog::getActionsNoInit(app);
+        assertEq(0, Callbacks::count(app, "one"), "application getters do not build output types");
+        assertEq(0, Callbacks::count(app, "two"), "application getters do not build output types");
+        assertTrue(exists getStored(app, "one").get_output_type, "the action is still unresolved");
+        assertFalse(exists getStored(app, "one").output_type, "the action is still unresolved");
+    }
+
+    scopeTest() {
+        string app = registerFixture(("a1", "a2"));
+        string other = registerFixture(("b1",));
+
+        hash<DataProviderActionInfo> a1 = DataProviderActionCatalog::getAppActionEx(app, "a1");
+        assertTrue(a1.output_type instanceof AbstractDataProviderType, "the action asked for is resolved");
+        assertEq((1, 0, 0), (Callbacks::count(app, "a1"), Callbacks::count(app, "a2"),
+            Callbacks::count(other, "b1")), "getAppActionEx() builds only its action");
+
+        DataProviderActionCatalog::getActions(app);
+        assertEq((1, 1, 0), (Callbacks::count(app, "a1"), Callbacks::count(app, "a2"),
+            Callbacks::count(other, "b1")), "getActions() builds only the actions of its application");
+
+        DataProviderActionCatalog::getAllActions();
+        assertEq((1, 1, 1), (Callbacks::count(app, "a1"), Callbacks::count(app, "a2"),
+            Callbacks::count(other, "b1")), "getAllActions() builds the rest");
+    }
+
+    revisionTest() {
+        string app = registerFixture(("flaky",));
+        string key = app + "/flaky";
+        Callbacks::failing{key} = CallbackError;
+
+        assertEq("ACTION-OUTPUT-TYPE-ERROR",
+            getException(sub () { DataProviderActionCatalog::getAppActionEx(app, "flaky"); }).err);
+        int rev = DataProviderActionCatalog::getCatalogRevision();
+        assertEq("ACTION-OUTPUT-TYPE-ERROR",
+            getException(sub () { DataProviderActionCatalog::getAppActionEx(app, "flaky"); }).err);
+        assertEq(2, Callbacks::count(app, "flaky"));
+        assertEq(rev, DataProviderActionCatalog::getCatalogRevision(),
+            "a retry that fails the same way leaves the catalog revision unchanged");
+
+        Callbacks::failing{key} = "OTHER-OUTPUT-TYPE-ERROR";
+        *hash<ExceptionInfo> ex = getException(sub () { DataProviderActionCatalog::getAppActionEx(app, "flaky"); });
+        assertEq("ACTION-OUTPUT-TYPE-ERROR", ex.err);
+        assertEq("OTHER-OUTPUT-TYPE-ERROR", ex.arg[0].error, "the new cause is raised");
+        assertEq("OTHER-OUTPUT-TYPE-ERROR", getFailures(app)[0].error, "the new cause is retained");
+        int rev2 = DataProviderActionCatalog::getCatalogRevision();
+        assertGt(rev, rev2, "a different failure changes the catalog revision");
+
+        remove Callbacks::failing{key};
+        hash<DataProviderActionInfo> action = DataProviderActionCatalog::getAppActionEx(app, "flaky");
+        assertTrue(action.output_type instanceof AbstractDataProviderType, "the recovered callback is published");
+        assertFalse(exists action.get_output_type);
+        assertEq((), getFailures(app), "the recovery clears the failure");
+        assertGt(rev2, DataProviderActionCatalog::getCatalogRevision(), "the recovery changes the catalog revision");
+        assertEq(4, Callbacks::count(app, "flaky"));
+        DataProviderActionCatalog::getAppActionEx(app, "flaky");
+        assertEq(4, Callbacks::count(app, "flaky"), "a resolved callback is never called again");
+    }
+
+    noTypeTest() {
+        string app = registerFixture(("none",));
+        Callbacks::no_type{app + "/none"} = True;
+        hash<DataProviderActionInfo> action = DataProviderActionCatalog::getAppActionEx(app, "none");
+        assertFalse(exists action.output_type, "no output type is published");
+        assertFalse(exists action.get_output_type, "the callback is consumed");
+        assertEq((), getFailures(app), "no type is not a failure");
+        DataProviderActionCatalog::getActions(app);
+        assertEq(1, Callbacks::count(app, "none"), "the callback is called once");
+    }
+
+    reregistrationTest() {
+        string app = registerFixture(("again",));
+        hash<DataProviderActionInfo> definition = getStored(app, "again");
+        AbstractDataProviderType type = DataProviderActionCatalog::getAppActionEx(app, "again").output_type;
+
+        # a module registering its actions again registers the same definition, with the same callback
+        DataProviderActionCatalog::registerAction(definition);
+        hash<DataProviderActionInfo> action = DataProviderActionCatalog::getAppActionEx(app, "again");
+        assertTrue(action.output_type === type, "the resolved output type is kept");
+        assertFalse(exists action.get_output_type);
+        assertEq(1, Callbacks::count(app, "again"), "the callback is not called again");
+
+        # a definition with another callback is another action
+        hash<DataProviderActionInfo> other = definition;
+        other.get_output_type = Callbacks::get(app, "again");
+        *hash<ExceptionInfo> ex = getException(sub () { DataProviderActionCatalog::registerAction(other); });
+        assertEq("ACTION-ERROR", ex.err, "a definition with another callback is refused");
+    }
+
+    concurrencyTest() {
+        string app = sprintf("QoreTestDeferredOutput%d", ++fixture_id);
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": app,
+            "display_name": "Deferred Output " + fixture_id,
+            "short_desc": "Deferred output types fixture",
+            "desc": "Deferred output types fixture",
+            "groups": (AppGroup::DataTransformation,),
+            "logo": "data",
+            "logo_mime_type": MimeTypeSvg,
+            "logo_file_name": "deferred-output.svg",
+        });
+        Queue entered();
+        Queue release();
+        Counter calls();
+        HashDataType second_type("second");
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": app,
+            "action": "blocked",
+            "path": "/blocked",
+            "display_name": "Blocked",
+            "short_desc": "Fixture action",
+            "desc": "Fixture action",
+            "action_code": DPAT_API,
+            "get_output_type": AbstractDataProviderType sub () {
+                calls.inc();
+                if (calls.getCount() == 1) {
+                    # throws if this thread holds the catalog lock, which is not recursive
+                    DataProviderActionCatalog::getCatalogRevision();
+                    entered.push(True);
+                    release.get();
+                    return new HashDataType("first");
+                }
+                return second_type;
+            },
+        });
+
+        Queue result();
+        background sub () {
+            try {
+                result.push(DataProviderActionCatalog::getAppActionEx(app, "blocked"));
+            } catch (hash<ExceptionInfo> ex) {
+                result.push(ex);
+            }
+        }();
+        # the first reader is inside the callback; a second reader is not blocked by it
+        entered.get();
+        auto second;
+        try {
+            second = DataProviderActionCatalog::getAppActionEx(app, "blocked");
+        } catch (hash<ExceptionInfo> ex) {
+            second = ex;
+        }
+        # release the first reader before any assertion can end the test case
+        release.push(True);
+        auto first = result.get();
+        assertEq("hash<DataProviderActionInfo>", second.fullType(), "the second reader returns the action");
+        assertTrue(second.output_type === second_type, "the second reader publishes its result");
+        assertEq("hash<DataProviderActionInfo>", first.fullType(), "the first reader returns the action");
+        assertTrue(first.output_type === second_type, "the first reader returns the published type");
+        assertEq(2, calls.getCount(), "each reader called the callback once");
+        assertEq((), getFailures(app));
+    }
+}
