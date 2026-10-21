@@ -5094,6 +5094,11 @@ while (*binary chunk = input.read(65536)) {
       unchanged: a pipe, a FIFO or a terminal is checked for readiness first.  A file stream must therefore not
       share a pipe with other concurrent readers or writers, whose reads or writes between the check and the
       stream's read or write make the stream wait for the pipe
+    - The C++ API's <tt>OutputStream::writeWithTimeout()</tt> with a timeout of 0 or more now reports a pipe whose
+      reading end has closed with \c OUTPUT-STREAM-ERROR on every platform: a
+      @ref Qore::FileOutputStream "FileOutputStream" gave \c FILE-WRITE-ERROR on macOS, where only the write
+      reports the closed reader; a negative timeout still writes with a blocking write, whose error is the stream's
+      own
     - Fixed the warnings of the files of a separated user module other than its \c .qm file: each was parsed with the
       warnings of the code loading the module (with \c qcc, the default warnings), not those the \c .qm file sets, so
       \c %%modern in the \c .qm file did not enable all warnings in the other files.  The module loader accepted an

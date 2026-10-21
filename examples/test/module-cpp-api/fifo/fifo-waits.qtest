@@ -123,9 +123,10 @@ class FifoWaitsTest inherits QUnit::Test {
         } catch (hash<ExceptionInfo> ex) {
             err = ex;
         }
-        # Linux reports the closed reader with POLLERR, macOS (with select(2)) as write readiness, and the write fails
+        # Linux reports the closed reader with POLLERR, macOS (with select(2)) as write readiness, and the write fails;
+        # the error is the same on every platform
         assertTrue(exists err, "the write fails once the reader has closed");
-        assertRegex("^(OUTPUT-STREAM-ERROR|FILE-WRITE-ERROR)$", err.err, "the error");
+        assertEq("OUTPUT-STREAM-ERROR", err.err, "the error");
     }
 
     testHighDescriptors() {

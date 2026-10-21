@@ -34,6 +34,7 @@
 
 #include <stdint.h>
 #include <cerrno>
+#include <climits>
 #include <cstring>
 #include <fcntl.h>
 #include <unistd.h>
@@ -121,8 +122,64 @@ public:
       return rc;
    }
 
+   //! Writes with a timeout; a reading end that has closed is reported with OUTPUT-STREAM-ERROR on every platform
+   /** A negative timeout writes with write(), whose errors are the stream's own (FILE-WRITE-ERROR).  Otherwise the
+       wait is that of OutputStream::writeWithTimeout(), and a pipe whose reading end has closed gives
+       OUTPUT-STREAM-ERROR whether the wait reports it (POLLERR, as on Linux) or only the write (EPIPE, as on macOS,
+       where poll(2) and select(2) report such a pipe as writable); other write errors are FILE-WRITE-ERROR.
+   */
+   DLLLOCAL int64 writeWithTimeout(const void* ptr, int64 count, int64 timeout_ms, ExceptionSink* xsink) override {
+      if (timeout_ms < 0) {
+         return OutputStream::writeWithTimeout(ptr, count, timeout_ms, xsink);
+      }
+      int fd = f.isOpen() ? f.getFD() : -1;
+      if (fd < 0) {
+         xsink->raiseException("FILE-WRITE-ERROR", "file is not open");
+         return -1;
+      }
+      // the wait ends at once when the thread is cancelled or its Program is interrupted, as in
+      // OutputStream::writeWithTimeout()
+      struct pollfd pfd = {fd, POLLOUT, 0};
+      int rv = qore_cancellable_poll(&pfd, 1, timeout_ms > INT_MAX ? INT_MAX : static_cast<int>(timeout_ms), xsink,
+         "stream write");
+      if (rv == QORE_POLL_CANCELLED) {
+         return -1;
+      }
+      if (rv < 0) {
+         xsink->raiseException("OUTPUT-STREAM-ERROR", "poll() failed: %s", strerror(errno));
+         return -1;
+      }
+      if (!rv) {
+         return 0;
+      }
+      if (pfd.revents & POLLNVAL) {
+         xsink->raiseException("OUTPUT-STREAM-ERROR", "poll() returned error condition");
+         return -1;
+      }
+      if (pfd.revents & (POLLERR | POLLHUP)) {
+         raiseClosed(xsink);
+         return -1;
+      }
+      int err;
+      ssize_t rc = qore_file_stream_write_now(fd, ptr, static_cast<size_t>(count), err);
+      if (rc < 0) {
+         if (err == EPIPE) {
+            raiseClosed(xsink);
+         } else {
+            xsink->raiseException("FILE-WRITE-ERROR", "write failed: %s", strerror(err));
+         }
+         return -1;
+      }
+      return rc;
+   }
+
 private:
    QoreFile f;
+
+   //! raises OUTPUT-STREAM-ERROR for a reading end that has closed
+   DLLLOCAL void raiseClosed(ExceptionSink* xsink) const {
+      xsink->raiseException("OUTPUT-STREAM-ERROR", "the stream's reading end has closed: %s", strerror(EPIPE));
+   }
 };
 
 #endif // _QORE_FILEOUTPUTSTREAM_H

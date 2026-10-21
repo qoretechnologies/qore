@@ -21,6 +21,10 @@
     a duplicated descriptor) saw.  The streams' descriptors are named pipes, which can be left idle (a writer that
     does not write, a full pipe that is not read).
 
+    A write with a timeout of 0 or more to a pipe whose reading end has closed fails with OUTPUT-STREAM-ERROR on
+    every platform; it was OUTPUT-STREAM-ERROR on Linux, where the wait reports it, and FILE-WRITE-ERROR on macOS,
+    where only the write does.
+
     A wait that is not cancelled never ends before its timeout of an hour, and a read or write that must not wait
     and waits never ends, so these tests fail by hanging (the test runner's time limit is the guard).
 */
@@ -47,6 +51,7 @@ class StreamWaitsTest inherits QUnit::Test {
         addTestCase("reads and writes leave the descriptor's flags alone", \testFlags());
         addTestCase("reads and writes that must not wait do not wait", \testNoWait());
         addTestCase("a transfer through a pipe keeps the data", \testTransfer());
+        addTestCase("a closed reader gives the same error on every platform", \testClosedReader());
         set_return_value(main());
     }
 
@@ -198,6 +203,51 @@ class StreamWaitsTest inherits QUnit::Test {
         }
         assertEq(payload.size(), rv.size(), "the size");
         assertTrue(payload == rv, "the data");
+    }
+
+    testClosedReader() {
+        binary chunk = binary(strmul("x", 4096));
+        # Linux reports the reader that has closed in the wait (POLLERR), macOS only in the write (EPIPE)
+        list<hash<auto>> cases = (
+            {"name": "a full pipe, a timeout of an hour", "full": True, "timeout": LongMs},
+            {"name": "a full pipe, a timeout of 0", "full": True, "timeout": 0},
+            {"name": "a pipe with room, a timeout of 50 ms", "full": False, "timeout": 50},
+            {"name": "a pipe with room, a timeout of 0", "full": False, "timeout": 0},
+        );
+        foreach hash<auto> c in (cases) {
+            string path = makeFifo();
+            File r();
+            r.open2(path, O_RDONLY | O_NONBLOCK);
+            FileOutputStream os(path);
+            if (c.full) {
+                while (cpp_api_output_stream_write_with_timeout(os, chunk, 0)) {
+                }
+            }
+            r.close();
+            *hash<ExceptionInfo> err;
+            try {
+                cpp_api_output_stream_write_with_timeout(os, chunk, c.timeout);
+            } catch (hash<ExceptionInfo> ex) {
+                err = ex;
+            }
+            assertTrue(exists err, c.name + ": the write fails");
+            assertEq("OUTPUT-STREAM-ERROR", err.err, c.name + ": the error");
+        }
+
+        # a negative timeout writes with write(), whose error is the stream's own
+        string path = makeFifo();
+        File r();
+        r.open2(path, O_RDONLY | O_NONBLOCK);
+        FileOutputStream os(path);
+        r.close();
+        *hash<ExceptionInfo> err;
+        try {
+            cpp_api_output_stream_write_with_timeout(os, chunk, -1);
+        } catch (hash<ExceptionInfo> ex) {
+            err = ex;
+        }
+        assertTrue(exists err, "a blocking write fails");
+        assertEq("FILE-WRITE-ERROR", err.err, "a blocking write: the stream's own error");
     }
 
     #! makes a named pipe and returns its path
