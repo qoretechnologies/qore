@@ -19210,3 +19210,125 @@ measured. No Java parity or global performance ceiling is established.
 Raw timings, replay/measurement code, prototype patch, qualification logs,
 failure records, artifact hashes and all audit items:
 [results-aot-capture-first-entry-rejected-macos-arm64.json](results-aot-capture-first-entry-rejected-macos-arm64.json).
+
+
+## Known-closure AOT dispatch (post-27cca0da3, 2026-10-21)
+
+Merge `27cca0da3` incorporates develop `26f5581d5`. This checkpoint compares
+the qualified merged branch with an additive known-closure callback route,
+using optimized `-O3 -DNDEBUG` runtimes and `qcc -O3` executables. The frozen
+baseline runtime was built before the merge commit from its identical source
+tree; the candidate is bound by exact source and artifact hashes. These are
+branch-before/candidate measurements, not a fresh develop or Java comparison.
+
+The retained implementation adds `qore_rt_try_funcref_int_int_v5` with the
+same invocation-owned descriptor and scratch ABI as v4. A closure cache miss
+checks the live tag once and reaches the unchanged native closure admission
+directly, avoiding the generic v3 frame and duplicate decoding. A proven
+nonclosure uses the shared prepared-call implementation without redundant
+closure probes. Old v3/v4 entries and the positive reusable function-reference
+path remain. No closure or captured value is retained, no capture lock is
+removed, and all live Program/body/readiness/signature/debugger/stack/exception
+checks and lexical-context restoration remain.
+
+Only eligible reusable `int(int)` AOT callback sites select v5. Other
+signatures, non-reusable sites, IR interpretation and JIT lowering are unchanged.
+`QORE_DISABLE_AOT_KNOWN_CLOSURE_ROUTE=1` at compilation selects v4 on the same
+candidate runtime; it is absent during measurement. Existing runtime controls
+for the closure miss route and dynamic closure entry keep their behavior.
+Older AOT artifacts retain their original helper until recompiled.
+
+All four predeclared target gates passed. Each closure target had to improve
+by at least 3% against both controls, using geometric mean time across the
+three fixed layouts. Negative changes below mean lower time:
+
+|!Epoch|!Plain vs before|!Plain vs selector off|!Captured vs before|!Captured vs selector off
+|targeted screen|-13.366%|-13.774%|-10.077%|-10.723%
+|targeted confirmation|-13.491%|-13.938%|-10.198%|-9.905%
+|broad screen|-13.794%|-12.478%|-11.172%|-10.796%
+|broad confirmation|-13.962%|-14.554%|-11.013%|-10.846%
+
+Broad five-fork confirmation, default layout, ns per logical workload item:
+
+|!Workload|!Before|!Candidate|!Selector off|!Change vs before|!Change vs selector off
+|direct_call|1.502244|1.489581|1.505337|-0.843%|-1.047%
+|method_call|1.573329|1.559223|1.562254|-0.897%|-0.194%
+|monomorphic_call|3.336340|3.507658|3.361738|+5.135%|+4.341%
+|indirect_call|6.596480|6.721451|6.537752|+1.895%|+2.810%
+|polymorphic_call|22.130057|22.091413|22.062738|-0.175%|+0.130%
+|closure_call|17.059028|14.801069|17.230149|-13.236%|-14.098%
+|closure_capture|22.938591|20.592098|23.346395|-10.229%|-11.798%
+|list_read|2.677292|2.576781|2.761469|-3.754%|-6.688%
+|list_build|26.054198|26.011207|25.949303|-0.165%|+0.239%
+|list_mutate|184.214530|181.571734|182.098010|-1.435%|-0.289%
+|temporary_hash|327.315194|330.476228|326.430122|+0.966%|+1.240%
+|csv_report|948.132637|946.248372|930.336481|-0.199%|+1.710%
+|object_orders|1714.446312|1716.206395|1719.947992|+0.103%|-0.218%
+|callback_pipeline|79.801539|80.993180|81.074672|+1.493%|-0.101%
+|text_index|1316.288539|1292.626096|1282.521215|-1.798%|+0.788%
+
+The default layout is shown for readability, not selected to make the decision.
+Both broad epochs include all 55 workloads and all three layouts. No workload
+repeated a >=3% slowdown for the same control/layout with disjoint observed
+fork-median ranges, or a >=3% geometric-layout slowdown for the same control.
+This is not a claim of zero regressions: ordinary indirect-call aggregate time
+was +3.787% versus the same-runtime control in the screen and +1.705% in
+confirmation (+2.864% and +2.112% versus baseline). Individual adverse results
+and every raw window remain in the report. The four mixed workloads use
+unchanged v3 callback code; no broad application-speedup claim follows.
+
+The targeted pair has 189/315 runs and 567/945 measured windows, using seven
+workloads, three/five process forks and 200-ms windows. The broad pair has
+1485/2475 runs and 4455/7425 measured windows, using 55 workloads and 300-ms
+windows. Each run uses 4096 items, seed 7, three warmup and three measured
+windows. Layouts are default, reverse and shuffle487; order seeds were fixed
+before timing. Fork medians are combined with a median per layout, then a
+geometric mean across layouts. All 4464 runs / 13392 measured windows are
+retained, without outlier removal or post hoc layout/threshold changes. Owned
+builds, tests and profiling did not run concurrently with timing. Host load,
+frequency and thermals were not controlled.
+
+All 18 targeted executables passed 5265 reference checks; all 27 broad
+executables passed 7047, with another 12600 independent getter-reference
+simulation checks. Optimized LLVM bodies with the selector off equal baseline;
+enabled micro/probe bodies differ only by v4-to-v5 helper selection. Mixed
+bodies are unchanged. The startup-only compressed metadata length is normalized
+only after verifying its actual global-array size. Independent replay checks
+raw streams, fixed schedules, calculations, source/runtime identity and LLVM
+equivalence. On this arm64 build the v5 outer wrapper is frame-free and its
+known-closure miss uses an 80-byte frame, versus the older 272-byte v3 frame
+and 80-byte continuation. This inspection is explanatory, not a speed ceiling.
+
+Selected full Release/Debug qualification passed 205/218
+commands before supplements. Each runtime's core has 70 fixtures, 117 registered
+cases = 109 executed passes + eight Linux-only skips, and 18021
+assertions. Release lvalue coverage has 81 passes + three Debug-only skips /
+1391 assertions; Debug has all 84 passes / 2724 assertions. There are 28/36
+additional finite GC stress runs, 555 independent references each for IR and
+AOT, and Debug native units with both prepared-local controls. Six call-context
+supplement runs per runtime passed. Credential-free SQL supplements report
+executed passes separately from database skips. All 125 owned Release qmod
+aliases are restored and unrelated aliases preserved. The legacy QUnit summary
+can count skipped cases as successes; explicit skip ledgers determine these
+pass counts. Debug is correctness-only and retains baseline local-dependency
+deployment-target warnings; no older-macOS compatibility claim is made.
+
+The initial draft's helper block landed at an earlier matching patch anchor;
+the owned build was intentionally interrupted before tests/timing and its
+exit130 retained. The same block was moved to the intended EOF before fresh
+qualification. A first broad preparation failed because a copied helper check
+wrongly expected v4 in the mixed workload. Corrected baseline-derived presence
+and unchanged-body checks passed before broad timing. An initial disassembly
+selector matched a cold clone; its correction is also recorded. None of these
+attempts is relabeled as a successful measurement or qualification.
+
+All 62 audit-changes items and strict documentation-table checks are recorded
+with the evidence. This is selected on-host qualification, not a full-suite,
+sanitizer, cross-platform or race-absence certification. Timings are workload
+ns/item, not isolated call latency. No new Java parity or global performance
+maximum is established. Next refresh the optimized develop/branch/Java
+checkpoint after upstream synchronization, then profile the remaining call
+and collection costs before choosing another measured candidate.
+
+Raw timings, scripts, source/artifact hashes, qualifications and audit:
+[results-aot-known-closure-route-macos-arm64.json](results-aot-known-closure-route-macos-arm64.json).

@@ -555,6 +555,7 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
 #undef QORE_TYPED_FUNCREF_SYMBOL
     { "qore_rt_try_funcref_int_0_v4", reinterpret_cast<void*>(&qore_rt_try_funcref_int_0_v4) },
     { "qore_rt_try_funcref_int_int_v4", reinterpret_cast<void*>(&qore_rt_try_funcref_int_int_v4) },
+    { "qore_rt_try_funcref_int_int_v5", reinterpret_cast<void*>(&qore_rt_try_funcref_int_int_v5) },
     { "qore_rt_try_funcref_float_0_v4", reinterpret_cast<void*>(&qore_rt_try_funcref_float_0_v4) },
     { "qore_rt_try_funcref_float_float_v4", reinterpret_cast<void*>(&qore_rt_try_funcref_float_float_v4) },
     { "qore_rt_release_funcref_frame_v1", reinterpret_cast<void*>(&qore_rt_release_funcref_frame_v1) },
@@ -11023,10 +11024,12 @@ static int tryTypedFunctionRefExplicit(RuntimeConfig& rc, uint64_t ref_bits, Res
     return 1;
 }
 
-template <typename Result, uint32_t Signature, typename... Args>
+// ProbeClosure=false is only valid immediately after a live nonclosure tag check,
+// without intervening Qore execution. Legacy v3 entries keep the default behavior.
+template <typename Result, uint32_t Signature, bool ProbeClosure = true, typename... Args>
 static int tryPreparedFunctionRef(RuntimeConfig& rc, QorePreparedFunctionRefV3& cache,
         uint64_t ref_bits, Result* result, ExceptionSink* xsink, Args... args) {
-    if constexpr (Signature == (1 | (1 << 2))) {
+    if constexpr (ProbeClosure && Signature == (1 | (1 << 2))) {
         if (cache.owner != ref_bits) {
             // Ordinary function-reference preparation always rejects runtime closures
             // without changing the cache. Route the borrowed live closure directly;
@@ -11040,7 +11043,7 @@ static int tryPreparedFunctionRef(RuntimeConfig& rc, QorePreparedFunctionRefV3& 
         }
     }
     if (!prepareTypedFunctionRef(rc, ref_bits, Signature, cache, xsink)) {
-        if constexpr (Signature == (1 | (1 << 2))) {
+        if constexpr (ProbeClosure && Signature == (1 | (1 << 2))) {
             return tryNativeClosureContinuation(rc, ref_bits, result, xsink, args...);
         }
         return 0;
@@ -22776,4 +22779,41 @@ extern "C" DLLEXPORT __attribute__((noinline)) int qore_rt_assign_exact_scalar_l
         throw QoreJITException();
     }
     return published;
+}
+
+// The tag was checked by the miss dispatcher. Keep the larger generic prepared
+// frame off the known-closure path without probing the same nonclosure twice.
+static __attribute__((noinline)) int tryPreparedNonClosureIntUnary(
+        uint64_t ref, int64_t arg, int64_t* result, ExceptionSink* xsink, RuntimeConfig* rc,
+        QorePreparedFunctionRefV3* cache) {
+    return tryPreparedFunctionRef<int64_t, 1 | (1 << 2), false>(*rc, *cache, ref, result, xsink, arg);
+}
+
+static __attribute__((noinline)) int tryKnownClosureIntUnaryMiss(
+        uint64_t ref_bits, int64_t arg, int64_t* result, ExceptionSink* xsink, RuntimeConfig* rc,
+        QorePreparedFunctionRefV3* cache) {
+    static const bool route_closures = !std::getenv("QORE_DISABLE_AOT_CLOSURE_MISS_ROUTE");
+    if (!route_closures || !isDynamicClosureEntryEnabled()) {
+        return qore_rt_try_funcref_int_int_v3(ref_bits, arg, result, xsink, rc, cache);
+    }
+    QoreValue ref = fromBits(ref_bits);
+    if (ref.getType() != NT_RUNTIME_CLOSURE) {
+        return tryPreparedNonClosureIntUnary(ref_bits, arg, result, xsink, rc, cache);
+    }
+    // Borrow the live argument only for this call. No ownership change or user
+    // code occurs between the tag check and the unchanged native admission.
+    const auto* closure = static_cast<const QoreClosureBase*>(ref.getInternalNode());
+    const auto* function = static_cast<const UserClosureFunction*>(closure->getFunction());
+    const auto* uvb = function->first()->getUserVariantBase();
+    return tryExecNativeIntClosureScalar(*rc, closure, uvb, arg, *result, xsink);
+}
+
+extern "C" DLLEXPORT __attribute__((aligned(64))) int qore_rt_try_funcref_int_int_v5(
+        uint64_t ref, int64_t arg, int64_t* result, ExceptionSink* xsink, RuntimeConfig* rc,
+        QorePreparedFunctionRefV3* cache, QorePreparedFunctionRefFrameV4* frame) {
+    // Preserve v4's positive-hit path and tail-call-compatible argument order.
+    if (cache->owner != ref) {
+        return tryKnownClosureIntUnaryMiss(ref, arg, result, xsink, rc, cache);
+    }
+    return tryReusableIntUnary(ref, arg, result, xsink, rc, cache, frame);
 }

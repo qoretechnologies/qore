@@ -36,6 +36,7 @@ class DynamicClosureEntryTest inherits QUnit::Test {
         TmpDir dir("qore-dynamic-closure-");
         foreach string prefix in (("", "QORE_AOT_EH=1 ",
                 "QORE_DISABLE_AOT_DYNAMIC_CLOSURE_ENTRY=1 ",
+                "QORE_DISABLE_AOT_KNOWN_CLOSURE_ROUTE=1 ",
                 "QORE_DISABLE_AOT_DYNAMIC_CLOSURE_CONTEXT_V2=1 ",
                 "MAKEFLAGS= QCC_JOBS=4 QCC_SPLIT_THRESHOLD=1 ")) {
             foreach string level in (("-O0", "-O3")) {
@@ -61,7 +62,8 @@ class DynamicClosureEntryTest inherits QUnit::Test {
                 assertFalse(regex(ir,
                     "call void @qore_rt_bind_closure_int_unary_v1[^\\n]*dynamicClosureReference"),
                     "reference-backed capture not admitted");
-                assertTrue(ir.contains("call i32 @qore_rt_try_funcref_int_int_v4("),
+                string helper_version = prefix.startsWith("QORE_DISABLE_AOT_KNOWN_CLOSURE_ROUTE=") ? "v4" : "v5";
+                assertTrue(ir.contains("call i32 @qore_rt_try_funcref_int_int_" + helper_version + "("),
                     "alternating loop exercises the prepared callback miss route");
                 assertEq(expected, run((executable,)), prefix + level);
                 assertEq(expected, run((executable,), "QORE_DISABLE_AOT_DYNAMIC_CLOSURE_CONTEXT_V2=1 "),

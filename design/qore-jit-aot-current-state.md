@@ -3712,3 +3712,43 @@ retaining a closure or caching its values. All live guards and current signature
 checks must remain. This distinct hypothesis is unimplemented and unmeasured;
 do not retry the rejected signature proof or map shortcut unchanged. Java parity
 and a global performance ceiling remain open.
+
+
+## Known-closure AOT dispatch validated (post-27cca0da3)
+
+Develop `26f5581d5` is merged. The additive v5 reusable `int(int)` callback
+route checks a live closure tag once and avoids the generic prepared-call
+frame before unchanged native admission. It retains all live guards, locked
+capture reads, ownership/fallback rules and v3/v4 ABIs. `RuntimeConfig` is
+passed explicitly; no new per-call TLS acquisition is introduced. The AOT-only
+compiler selector can be disabled with
+`QORE_DISABLE_AOT_KNOWN_CLOSURE_ROUTE=1`; other signatures/non-reusable sites,
+IR interpretation and JIT lowering are unchanged.
+
+All four predeclared targeted/broad gates pass. Broad confirmation reduces
+plain closure time by 13.962% versus baseline and 14.554% versus the
+same-runtime compiler-disabled control; captured closures improve by 11.013%
+and 10.846%. Default-layout baseline/candidate times are 17.059028/14.801069
+and 22.938591/20.592098 ns/item. Ordinary indirect calls remain modestly slower:
+their broad aggregate is +3.787%/+1.705% versus the same-runtime control in
+screen/confirmation. No adverse >=3% gate repeats in both broad epochs, but
+this is not zero-regression or general-application-speedup evidence.
+
+The report preserves 4464 runs / 13392 measured windows, three fixed layouts,
+both controls and every adverse result. All timings use optimized Release
+runtimes and `qcc -O3`; none are Debug timings. The 55-workload broad pair,
+7047 broad and 5265 targeted reference checks, independent replay and selected
+full Release/Debug qualification are complete. Core counts per runtime are
+109 passes + eight platform skips / 18021 assertions. Debug additionally
+executes the Release-skipped GC/native-accessor cases. All 125 owned Release
+qmod aliases are restored. Detailed skip, interrupted/failed attempt and
+on-host coverage limits are in RESULTS.md and
+`results-aot-known-closure-route-macos-arm64.json`.
+
+Older AOT artifacts need recompilation to select v5. This checkpoint is not a
+fresh Java/develop comparison and does not establish parity or a global
+performance ceiling. Next synchronize upstream and refresh the matched
+optimized branch/develop/Java view, then profile remaining call/collection
+costs. Do not remove capture synchronization or revive previously rejected
+signature/lookup shortcuts without a distinct proof and new fixed measurement
+plan.

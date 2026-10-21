@@ -147,6 +147,18 @@ struct Invocation {
     QoreObject* snapshot_object = nullptr;
     bool live_object = false;
     bool v2 = false;
+    unsigned helper_version = 3;
+    QorePreparedFunctionRefFrameV4 frame{};
+
+    int call(int64_t* result, ExceptionSink* xsink, RuntimeConfig* rc) {
+        if (helper_version == 5) {
+            return qore_rt_try_funcref_int_int_v5(bits, 7, result, xsink, rc, &cache, &frame);
+        }
+        if (helper_version == 4) {
+            return qore_rt_try_funcref_int_int_v4(bits, 7, result, xsink, rc, &cache, &frame);
+        }
+        return qore_rt_try_funcref_int_int_v3(bits, 7, result, xsink, rc, &cache);
+    }
 };
 
 static uint64_t wrongClosureBody(QoreAOTContext*, ExceptionSink*) {
@@ -175,7 +187,7 @@ static QoreValue sweep(const void* ptr, const QoreListNode*, RuntimeConfig&, Exc
             bool overflow = request_overflow && qore_rt_get_stack_limit_v1(rc);
             probe.overflow = overflow;
             int64_t result = 123;
-            assert(qore_rt_try_funcref_int_int_v3(invocation.bits, 7, &result, xsink, rc, &invocation.cache) == 1);
+            assert(invocation.call(&result, xsink, rc) == 1);
             assert(result == (overflow ? 0 : 24) && static_cast<bool>(*xsink) == overflow);
             sameContext(before);
             assert(qore_get_call_program_context() == caller);
@@ -201,7 +213,7 @@ static QoreValue sweep(const void* ptr, const QoreListNode*, RuntimeConfig&, Exc
         probe.overflow = false;
         probe.reject = true;
         int64_t rejected = 123;
-        assert(qore_rt_try_funcref_int_int_v3(invocation.bits, 7, &rejected, xsink, rc, &invocation.cache) == 0);
+        assert(invocation.call(&rejected, xsink, rc) == 0);
         assert(!*xsink && rejected == 0);
         sameContext(before);
         assert(qore_get_call_program_context() == caller);
@@ -210,14 +222,14 @@ static QoreValue sweep(const void* ptr, const QoreListNode*, RuntimeConfig&, Exc
     assert(probe.calls == 8);
     xsink->raiseException("CLOSURE-PENDING", "pending sink must prevent entry");
     int64_t result = 123;
-    assert(qore_rt_try_funcref_int_int_v3(invocation.bits, 7, &result, xsink, rc, &invocation.cache) == 1);
+    assert(invocation.call(&result, xsink, rc) == 1);
     assert(*xsink && result == 0 && probe.calls == 8);
     xsink->clear();
     sameContext(before);
     bool ready = invocation.ctx->pc_loc_map_attached.exchange(false, std::memory_order_acq_rel);
     assert(ready);
     result = 123;
-    int handled = qore_rt_try_funcref_int_int_v3(invocation.bits, 7, &result, xsink, rc, &invocation.cache);
+    int handled = invocation.call(&result, xsink, rc);
     invocation.ctx->pc_loc_map_attached.store(ready, std::memory_order_release);
     assert(!handled && !*xsink && result == 123 && probe.calls == 8);
     sameContext(before);
@@ -226,10 +238,11 @@ static QoreValue sweep(const void* ptr, const QoreListNode*, RuntimeConfig&, Exc
     return QoreValue(int64_t(24));
 }
 
-static void check() {
+static void check(unsigned helper_version) {
     ExceptionSink xsink;
     QoreProgramHelper program(PO_MODERN, xsink);
     Invocation invocation{};
+    invocation.helper_version = helper_version;
     QoreValue empty;
     uint64_t empty_bits;
     std::memcpy(&empty_bits, &empty, sizeof(empty_bits));
@@ -324,22 +337,24 @@ static void check() {
         QoreProgramHelper other(PO_MODERN, xsink);
         QoreExternalProgramContextHelper other_context(&xsink, *other);
         int64_t result = 123;
-        assert(qore_rt_try_funcref_int_int_v3(invocation.bits, 7, &result, &xsink,
-            qore_rt_get_fast_runtime_config(), &invocation.cache) == 0);
+        assert(invocation.call(&result, &xsink, qore_rt_get_fast_runtime_config()) == 0);
         assert(!xsink && result == 123 && invocation.cache.owner == empty_bits);
+        assert(!invocation.frame.frame); // borrowed closures never construct reusable function-ref frames
     }
 }
 
 int main() {
     qore_init(QL_MIT, "UTF-8", true, QLO_DISABLE_SIGNAL_HANDLING);
-    check();
-    std::thread worker([]() {
-        for (unsigned i = 0; i < 3; ++i) {
-            QoreForeignThreadHelper foreign;
-            check();
-        }
-    });
-    worker.join();
+    for (unsigned version : {3, 4, 5}) {
+        check(version);
+        std::thread worker([version]() {
+            for (unsigned i = 0; i < 3; ++i) {
+                QoreForeignThreadHelper foreign;
+                check(version);
+            }
+        });
+        worker.join();
+    }
     qore_cleanup();
     std::puts("closure-deferred-context: ok");
 }

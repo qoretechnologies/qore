@@ -1268,6 +1268,21 @@ int qore_rt_try_funcref_int_0_v4(uint64_t ref, int64_t* result, ExceptionSink* x
 int qore_rt_try_funcref_int_int_v4(uint64_t ref, int64_t arg, int64_t* result, ExceptionSink* xsink,
     RuntimeConfig* rc, QorePreparedFunctionRefV3* cache, QorePreparedFunctionRefFrameV4* frame);
 
+//! V5 checks a live closure tag once on a reusable integer callback miss.
+/** @param ref the original NaN-boxed callback, borrowed for this call
+    @param arg native integer argument
+    @param result receives a native result when handled; unspecified on a miss
+    @param xsink exception sink; pending exceptions prevent execution
+    @param rc the current thread's runtime context
+    @param cache one integer-to-integer signature descriptor owned by this invocation
+    @param frame null-initialized scratch paired with this exact cache
+    @return 1 if handled (including exceptions), 0 for generic evaluation
+    @note The v4 scratch, ownership and cleanup contract is unchanged. Closures are never
+        retained in the cache; all live native-closure admission and capture locks remain.
+*/
+int qore_rt_try_funcref_int_int_v5(uint64_t ref, int64_t arg, int64_t* result, ExceptionSink* xsink,
+    RuntimeConfig* rc, QorePreparedFunctionRefV3* cache, QorePreparedFunctionRefFrameV4* frame);
+
 //! Zero-argument floating counterpart of qore_rt_try_funcref_int_0_v4().
 /** @param ref the original NaN-boxed function reference
     @param result receives a native double when handled; unchanged on a miss

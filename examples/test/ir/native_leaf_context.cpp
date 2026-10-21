@@ -2118,11 +2118,24 @@ static void check(bool inline_entry, bool inline_method) {
     QoreValue empty;
     std::memcpy(&cache.owner, &empty, sizeof(cache.owner));
     int64_t result = 0;
-    for (bool reuse : {false, true}) {
+    for (unsigned version : {3, 4, 5}) {
+        bool reuse = version != 3;
+        if (version == 5) {
+            // Start v5 from the same cold descriptor as v3/v4. The preceding
+            // v4 iteration deliberately leaves its retained owner warm.
+            QoreValue owner;
+            std::memcpy(&owner, &cache.owner, sizeof(owner));
+            owner.discard(&xsink);
+            assert(!xsink);
+            std::memcpy(&cache.owner, &empty, sizeof(cache.owner));
+        }
         ReusableCallbackFrame reusable;
-        auto call = [&reusable, reuse](uint64_t bits, int64_t arg, int64_t* result, ExceptionSink* sink,
+        auto call = [&reusable, version](uint64_t bits, int64_t arg, int64_t* result, ExceptionSink* sink,
                 RuntimeConfig* config, QorePreparedFunctionRefV3* prepared) {
-            return reuse ? qore_rt_try_funcref_int_int_v4(bits, arg, result, sink, config, prepared, &reusable.slot)
+            if (version == 5) {
+                return qore_rt_try_funcref_int_int_v5(bits, arg, result, sink, config, prepared, &reusable.slot);
+            }
+            return version == 4 ? qore_rt_try_funcref_int_int_v4(bits, arg, result, sink, config, prepared, &reusable.slot)
                 : qore_rt_try_funcref_int_int_v3(bits, arg, result, sink, config, prepared);
         };
         assert(call(bits, 7, &result, &xsink, rc, &cache) == 1);

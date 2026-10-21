@@ -54,7 +54,7 @@ class ClosureSignatureProofTest inherits QUnit::Test {
                         "call void @qore_rt_bind_closure_int_unary_v1[^\\n]*" + factory),
                         factory + " retains ordinary signature handling " + prefix + level);
                 }
-                assertTrue(generated.contains("call i32 @qore_rt_try_funcref_int_int_v4("),
+                assertTrue(generated.contains("call i32 @qore_rt_try_funcref_int_int_v5("),
                     "opaque loop callback exercises native closure continuation");
                 assertEq(expected, run((executable,)), prefix + level);
                 assertEq(expected, run((executable,), "QORE_DISABLE_AOT_CLOSURE_SIGNATURE_PROOF=1 "),

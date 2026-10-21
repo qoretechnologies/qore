@@ -1014,8 +1014,11 @@ llvm::Value* QoreIRToLLVM::emitTypedFunctionRefCall(const QoreIRInstruction* ins
         && (current_lowering_block_->is_loop_header || current_lowering_block_->enclosing_loop_exit)
         && funcref_frame_allocas.size() < MaxReusableFunctionRefFrames
         && !std::getenv("QORE_DISABLE_AOT_FUNCREF_FRAME_REUSE");
+    bool known_closure_route = reusable_frame && ret_kind == 1 && arg_kind == 1
+        && !std::getenv("QORE_DISABLE_AOT_KNOWN_CLOSURE_ROUTE");
     std::string helper_name = std::string("qore_rt_try_funcref_") + names[ret_kind] + "_"
-        + names[arg_kind] + (reusable_frame ? "_v4" : prepared_target ? "_v3" : explicit_context ? "_v2" : "_v1");
+        + names[arg_kind] + (known_closure_route ? "_v5" : reusable_frame ? "_v4"
+            : prepared_target ? "_v3" : explicit_context ? "_v2" : "_v1");
     std::vector<llvm::Type*> types{i64_type};
     std::vector<llvm::Value*> args{ref_boxed};
     if (arg) {
