@@ -118,9 +118,43 @@ module SqlUtil {
       driver-independent restart decisions for complete idempotent transaction
       bodies
 
+    @section sql_identifiers SQL Identifiers
+
+    The names of database objects (tables, columns, indexes, constraints, sequences, schemas, aliases) can come
+    from untrusted data, such as the keys of a hash read from a file or a data provider.  SqlUtil never pastes a
+    name into SQL as given; every name that reaches generated SQL is returned by
+    @ref SqlUtil::AbstractSqlUtilBase::getSqlIdentifier() "getSqlIdentifier()", which each database driver
+    overrides with its own rules:
+    - a name that the database reads as one ordinary unquoted identifier, and that is not a reserved word, is
+      returned as given, so that the SQL generated for ordinary names is the same as in earlier versions and
+      existing schemas and alignment do not change;
+    - any other name, such as one with spaces, quotes, semicolons, comment markers or other punctuation, is
+      quoted as a delimited identifier with the rules of the database (double quotes on PostgreSQL, Oracle,
+      SQLite and Firebird, backticks on MySQL, brackets on SQL Server), each delimiter character in the name
+      escaped, so that a name can never change the SQL statement that it is part of;
+    - a name that the database cannot represent as an identifier, such as an empty name, a name with a NUL
+      character, or a double quote on Oracle, is refused with \c IDENTIFIER-ERROR.
+
+    A driver whose quoting changes the case of a name (Oracle and Firebird quote in upper case, as unquoted names
+    are stored in upper case) returns a column alias (see @ref SqlUtil::cop_as() "cop_as()") in its exact case
+    through @ref SqlUtil::AbstractTable::getAliasSqlName() "getAliasSqlName()", so that an alias that works with the
+    database names the same result key as before.
+
+    @note Only driver-correct identifiers are quoted; a value is always bound, never pasted into SQL.  Code that
+    builds SQL itself, outside the per-database modules, and passes names to it is responsible for using
+    @ref SqlUtil::AbstractSqlUtilBase::getSqlIdentifier() "getSqlIdentifier()" for any name that can come from
+    untrusted data.
+
     @section sqlutil_relnotes Release Notes for the SqlUtil Module
 
     @subsection sqlutilv3_11_0 SqlUtil v3.11.0
+    - Security: the names of database objects that reach generated SQL (tables, columns, indexes, constraints,
+      sequences, schemas and column aliases) are quoted and escaped with the rules of the database when they are
+      not ordinary names, or refused with \c IDENTIFIER-ERROR when the database cannot represent them, so that a
+      name from untrusted data can never change the SQL statement that it is part of; the SQL generated for
+      ordinary names is unchanged, so existing schemas and alignment do not change (see @ref sql_identifiers).
+      Added @ref SqlUtil::AbstractSqlUtilBase::getSqlIdentifier() "getSqlIdentifier()" and
+      @ref SqlUtil::AbstractTable::getAliasSqlName() "getAliasSqlName()"
     - Added @ref SqlUtil::AbstractDatabase::getCurrentSchemaPhysicalSize()
       "AbstractDatabase::getCurrentSchemaPhysicalSize()", which measures the physical size of the schema that
       unqualified names resolve to on the connection, without the cost of measuring the whole database, on
@@ -5759,7 +5793,10 @@ int rows_updated = t.update(("counter": uop_divide(2)));
                 "return_type": AbstractDataProviderTypeMap."any",
             },
             "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
-                string column_name = args[0];
+                # a column is given by its name, or as a field reference or an expression
+                string column_name = args[0].typeCode() == NT_STRING
+                    ? info.table.getColumnSqlName(args[0])
+                    : info.table.getExpressionArg(\info, role, args[0], AbstractDataProviderTypeMap."any");
                 *string partitionby = args[1];
                 *string orderby = args[2];
                 if (!exists partitionby && exists orderby) {
@@ -5775,6 +5812,8 @@ int rows_updated = t.update(("counter": uop_divide(2)));
                             throw "OVER-ERROR", sprintf("Argument 2 (partition by) %y is not an alias or an "
                                 "accessible column", partitionby);
                         }
+                        # a column is an identifier in SQL
+                        partitionby = info.table.getColumnSqlName(partitionby);
                     }
                     sql += sprintf("partition by %s", partitionby);
                 }
@@ -5782,11 +5821,12 @@ int rows_updated = t.update(("counter": uop_divide(2)));
                     if (!info.pseudo_column_map{orderby}) {
                         if (!cols) {
                             cols = info.table.describe();
-                            if (!exists cols{orderby}) {
-                                throw "OVER-ERROR", sprintf("Argument 3 (order by) %y is not an alias or an "
-                                    "accessible column", orderby);
-                            }
                         }
+                        if (!exists cols{orderby}) {
+                            throw "OVER-ERROR", sprintf("Argument 3 (order by) %y is not an alias or an "
+                                "accessible column", orderby);
+                        }
+                        orderby = info.table.getColumnSqlName(orderby);
                     }
                     sql += sprintf(" order by %s", orderby);
                 }
@@ -5827,7 +5867,10 @@ int rows_updated = t.update(("counter": uop_divide(2)));
                 "return_type": AbstractDataProviderTypeMap."any",
             },
             "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
-                return sprintf("first_value(%s)", args[0]);
+                # a column is given by its name, or as a field reference or an expression
+                return sprintf("first_value(%s)", args[0].typeCode() == NT_STRING
+                    ? info.table.getColumnSqlName(args[0])
+                    : info.table.getExpressionArg(\info, role, args[0], AbstractDataProviderTypeMap."any"));
             },
         ),
         COP_LAST_VALUE: (
@@ -5846,7 +5889,10 @@ int rows_updated = t.update(("counter": uop_divide(2)));
                 "return_type": AbstractDataProviderTypeMap."any",
             },
             "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
-                return sprintf("last_value(%s)", args[0]);
+                # a column is given by its name, or as a field reference or an expression
+                return sprintf("last_value(%s)", args[0].typeCode() == NT_STRING
+                    ? info.table.getColumnSqlName(args[0])
+                    : info.table.getExpressionArg(\info, role, args[0], AbstractDataProviderTypeMap."any"));
             },
         ),
         COP_NTILE: (
@@ -9158,7 +9204,7 @@ AbstractIndex ix = indexes.pk_jobs;
 
         #! returns a string that can be used to drop the index from the database, by its name in the database
         string getDropSql(string table_name) {
-            return sprintf("drop index %s", getDbName());
+            return sprintf("drop index %s", AbstractSqlUtilBase::getPlainSqlName(getDbName(), self.className()));
         }
 
         #! returns @ref True "True" if the argument is equal to the current index, @ref False "False" if not
@@ -9385,7 +9431,8 @@ AbstractConstraint ix = constraints.uk_jobs;
 
         #! returns a string that can be used to drop the constraint from the database
         string getDropSql(string table_name) {
-            return sprintf("alter table %s drop constraint %s", table_name, name);
+            return sprintf("alter table %s drop constraint %s", table_name,
+                AbstractSqlUtilBase::getPlainSqlName(name, self.className()));
         }
 
         #! returns a list of SQL strings that can be used to rename the constraint in the database
@@ -9946,7 +9993,7 @@ string sql = constraint.getDeferrabilitySql();
         /** @param opt drop options (if supported by the driver and object); in this generic base class method, this argument is ignored
          */
         string getDropSql(*hash<auto> opt) {
-            return sprintf("drop sequence %s", name);
+            return sprintf("drop sequence %s", AbstractSqlUtilBase::getPlainSqlName(name, self.className()));
         }
 
         #! returns a list of strings that can be used to rename the sequence in the database
@@ -9985,7 +10032,7 @@ string sql = constraint.getDeferrabilitySql();
         /** @param opt drop options (if supported by the driver and object); in this generic base class method, this argument is ignored
          */
         string getDropSql(*hash<auto> opt) {
-            return sprintf("drop view %s", name);
+            return sprintf("drop view %s", AbstractSqlUtilBase::getPlainSqlName(name, self.className()));
         }
 
         #! returns a list with command(s) that can be used to rename the view in the database

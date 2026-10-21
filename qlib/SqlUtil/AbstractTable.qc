@@ -1130,7 +1130,8 @@ table.truncate();
         be dedicated to the calling thread.
     */
     truncate() {
-        ds.exec(getTruncateSqlImpl());
+        # the SQL has no arguments, so no placeholder is read in it
+        ds.execRaw(getTruncateSqlImpl());
         inDb = False;
     }
 
@@ -5885,7 +5886,7 @@ string sql = table.getSelectSql(sh, \args);
 
         string sql = sprintf("select %s from %s", cstr, getFromIntern(from, info.query_hash));
         if (info.query_hash.alias) {
-            sql += " " + info.query_hash.alias;
+            sql += " " + getSqlIdentifier(info.query_hash.alias);
         }
 
         # process join specifications
@@ -5904,7 +5905,7 @@ string sql = table.getSelectSql(sh, \args);
             AbstractTable t = jh.table;
             t.describe();
 
-            string an = jh.alias ? jh.alias : t.getSqlName();
+            string an = jh.alias ? getSqlIdentifier(jh.alias) : t.getSqlName();
 
             AbstractTable jt;
             if (jh.ta) {
@@ -5926,7 +5927,7 @@ string sql = table.getSelectSql(sh, \args);
                 if (!jt.foreignConstraints) {
                     jt.getForeignConstraints();
                 }
-                jtn = jh.ta;
+                jtn = getSqlIdentifier(jh.ta);
             } else {
                 if (!primaryKey) {
                     getPrimaryKey();
@@ -5934,7 +5935,7 @@ string sql = table.getSelectSql(sh, \args);
                 if (!foreignConstraints) {
                     getForeignConstraints();
                 }
-                jtn = info.query_hash.alias ?? getSqlName();
+                jtn = info.query_hash.alias ? getSqlIdentifier(info.query_hash.alias) : getSqlName();
             }
 
             # create "join on" clause
@@ -5954,7 +5955,7 @@ string sql = table.getSelectSql(sh, \args);
                     if (!t.describe().hasKey(value))
                         throw "SELECT-ERROR", sprintf("%s: cannot join on unknown column %y.%y; known columns: %y",
                             getDesc(), t.getSqlName(), value, t.columns.keys());
-                    jel += sprintf("%s.%s = %s.%s", jtn, key, an, value);
+                    jel += sprintf("%s.%s = %s.%s", jtn, jt.getColumnSqlName(key), an, t.getColumnSqlName(value));
                 }
             } else {
                 *hash<string, string> fkh;
@@ -5964,7 +5965,8 @@ string sql = table.getSelectSql(sh, \args);
                     if (fkh) {
                         HashIterator i(fkh);
                         while (i.next()) {
-                            jel += sprintf("%s.%s = %s.%s", jtn, i.getKey(), an, i.getValue());
+                            jel += sprintf("%s.%s = %s.%s", jtn, jt.getColumnSqlName(i.getKey()), an,
+                                t.getColumnSqlName(i.getValue()));
                         }
                     }
                 }
@@ -5977,7 +5979,8 @@ string sql = table.getSelectSql(sh, \args);
                             if (fkh) {
                                 HashIterator i(fkh);
                                 while (i.next()) {
-                                    jel += sprintf("%s.%s = %s.%s", jtn, i.getValue(), an, i.getKey());
+                                    jel += sprintf("%s.%s = %s.%s", jtn, jt.getColumnSqlName(i.getValue()), an,
+                                        t.getColumnSqlName(i.getKey()));
                                 }
                             }
                         }
@@ -6008,7 +6011,7 @@ string sql = table.getSelectSql(sh, \args);
             }
 
             sql += sprintf(" %s join %s%s on (%s)", JopMap{jh.jop}, t.getSelectSqlName(jh.opt),
-                jh.alias ? (" " + jh.alias) : "", (foldl $1 + " and " + $2, jel));
+                jh.alias ? (" " + getSqlIdentifier(jh.alias)) : "", (foldl $1 + " and " + $2, jel));
         }
 
         getSelectWhereSqlIntern(\info, \sql);
@@ -6267,7 +6270,7 @@ string sql = table.getSelectSql(sh, \args);
                     throw "SELECT-ERROR", sprintf("%s %d: %s does not support numeric column offsets for the %s "
                         "expression, and the table has %d column%s", key, cv, ds.getDriverName(), key, columns.size(),
                         columns.size() == 1 ? "" : "s");
-                ce += columns.keys()[cv - 1];
+                ce += getColumnSqlName(columns.keys()[cv - 1]);
             } else {
                 if (cv > coll.size())
                     throw "SELECT-ERROR", sprintf("%s %d: %s does not support numeric column offsets for the %s "
@@ -6421,15 +6424,18 @@ string sql = table.getSelectSql(sh, \args);
     private string getColumnNameIntern(hash<QueryInfo> info, string column_name) {
         # remove any disposable unique prefix
         column_name =~ s/^[0-9]+://;
-        # return the name if it's a "technical name" (starts with "_")
+        # return the name if it's a "technical name" (starts with "_"), as an identifier, so that it cannot change
+        # the SQL
         if (column_name =~ /^_/) {
-            return column_name;
+            return getColumnSqlName(column_name);
         }
 
         bool use_prefix = info.join_map.toBool();
 
         # see if we have a table.column spec
         *string table_prefix = (column_name =~ x/(\w+)\..+/)[0];
+        # the table or alias of the column for SQL
+        *string table_prefix_sql;
         if (table_prefix) {
             if (!info.join_map{table_prefix}) {
                 throw "COLUMN-ERROR", sprintf("%s: query references unknown alias %y in %y; known aliases in this "
@@ -6437,6 +6443,8 @@ string sql = table.getSelectSql(sh, \args);
             }
             # remove table alias from column name
             splice column_name, 0, table_prefix.size() + 1;
+            # the alias is an identifier in SQL, as in the join
+            table_prefix_sql = getSqlIdentifier(table_prefix);
 
             if (column_name != "*" && !info.join_map{table_prefix}.describe().hasKey(column_name)
                 && !info.pseudo_column_map{column_name})
@@ -6457,20 +6465,22 @@ string sql = table.getSelectSql(sh, \args);
                     "%y", getDesc(), column_name, keys info.subquery_column_map);
             }
         } else {
-            table_prefix = getSqlName();
+            table_prefix_sql = getSqlName();
             if (column_name == "*") {
                 use_prefix = asteriskRequiresPrefix();
             } else if (!columns.hasKey(column_name) && !info.pseudo_column_map{column_name}) {
                 throw "COLUMN-ERROR", sprintf("%s: query references unknown column \"%s.%s\"; known columns: %y; "
-                    "known column aliases: %y", getDesc(), table_prefix, column_name, columns.keys(),
+                    "known column aliases: %y", getDesc(), table_prefix_sql, column_name, columns.keys(),
                     keys info.pseudo_column_map);
             }
         }
 
-        # ensure that reserved words are properly quoted
-        column_name = getColumnSqlName(column_name);
+        # ensure that reserved words and names that are not ordinary names are properly quoted
+        if (column_name != "*") {
+            column_name = getColumnSqlName(column_name);
+        }
 
-        return use_prefix ? sprintf("%s.%s", table_prefix, column_name) : column_name;
+        return use_prefix ? sprintf("%s.%s", table_prefix_sql, column_name) : column_name;
     }
 
     #! returns @ref True if the database requires a wildcard \c "*" to be prefixed with the table name when it appears with other column arguments in a select statement
@@ -6594,7 +6604,7 @@ string sql = table.getSelectSql(sh, \args);
 
         return
             map doWhereExpressionIntern(\info, cprefix
-                ? sprintf("%s.%s", cprefix, $1.key)
+                ? sprintf("%s.%s", cprefix, getColumnSqlName(regex_subst($1.key, "^[0-9]+:", "")))
                 : getColumnNameIntern(info, $1.key), $1.value),
             cond.pairIterator();
     }
@@ -7628,7 +7638,7 @@ int ucnt = table.updateDpql({"counter": "@counter + 1"}, '@status == "active"');
             } else if (value instanceof hash<DataProviderExpression>) {
                 exp += getExpressionIntern(\qinfo, ER_Field, value, getColumnDataType(key));
             } else if (value.uop) {
-                exp += getUpdateExpression(key, cast<hash<UpdateOperatorInfo>>(value));
+                exp += getUpdateExpression(getColumnSqlName(key), cast<hash<UpdateOperatorInfo>>(value));
             } else {
                 exp += "%v";
                 qinfo.args += value;
@@ -11940,7 +11950,17 @@ string sql = table.getAlignSqlString(table2);
         @since SqlUtil 1.3
     */
     string getDesc() {
-        return sprintf("%s: %s %s", AbstractSqlUtilBase::makeDatasourceDesc(ds), getBaseType(), getSqlName());
+        string sql_name;
+        try {
+            sql_name = getSqlName();
+        } catch (hash<ExceptionInfo> ex) {
+            # a description is given for errors, also for a table whose name cannot be an identifier
+            if (ex.err != "IDENTIFIER-ERROR") {
+                rethrow;
+            }
+            sql_name = sprintf("%y", name);
+        }
+        return sprintf("%s: %s %s", AbstractSqlUtilBase::makeDatasourceDesc(ds), getBaseType(), sql_name);
     }
 
     #! returns the base type of the underlying object (normally \"table\", some DB-specific implementations may support others like \c "view")
@@ -11949,13 +11969,29 @@ string sql = table.getAlignSqlString(table2);
     }
 
     #! returns the name of the table to be used in SQL (with a possible qualifier for schema, etc)
+    /** Each part of the name is an SQL identifier as @ref getSqlIdentifier() returns it: as given if it is an
+        ordinary name, otherwise quoted and escaped for the database; see @ref sql_identifiers
+
+        @throw IDENTIFIER-ERROR a part of the name cannot be an identifier on the database
+    */
     string getSqlName() {
-        return name;
+        return getSqlIdentifier(name);
     }
 
-    #! returns the column name for use in SQL strings; subclasses can return a special string in case the column name is a reserved word
+    #! returns the column name for use in SQL strings
+    /** @param col the name of the column
+
+        @return the name of the column as an SQL identifier as @ref getSqlIdentifier() returns it: as given if it is
+        an ordinary name that is not a reserved word, otherwise quoted and escaped for the database; see
+        @ref sql_identifiers
+
+        @throw IDENTIFIER-ERROR the name cannot be an identifier on the database
+
+        @since SqlUtil 3.11.0 a name that is not an ordinary name is quoted and escaped; before, only a reserved word
+        was quoted, and any other name was returned as given
+    */
     string getColumnSqlName(string col) {
-        return col;
+        return getSqlIdentifier(col);
     }
 
     #! returns a column alias for SQL, as an identifier that names the result key exactly as given
@@ -11976,9 +12012,18 @@ string sql = table.getAlignSqlString(table2);
         return getColumnSqlName(alias);
     }
 
-    #! returns a list of column names for use in SQL strings; subclasses can process the argument list in case a column name is a reserved word
+    #! returns a list of column names for use in SQL strings
+    /** @param cols the names of the columns
+
+        @return the names of the columns as SQL identifiers as @ref getColumnSqlName() returns them
+
+        @throw IDENTIFIER-ERROR a name cannot be an identifier on the database
+
+        @since SqlUtil 3.11.0 a name that is not an ordinary name is quoted and escaped; before, only a reserved word
+        was quoted, and any other name was returned as given
+    */
     list<auto> getColumnSqlNames(softlist cols) {
-        return cols;
+        return map getSqlIdentifier($1), cols;
     }
 
     #! returns @ref True if the DB treats empty strings as @ref NULL, @ref False if not; by default this method returns @ref False
@@ -12503,7 +12548,7 @@ on_exit printf("SQL> %s\n", sql);
         if (!indexes)
             return;
 
-        return map AbstractDatabase::doCallback(opt, $1.getCreateSql(name, opt), AbstractDatabase::AC_Add, "index", $1.name, name), indexes.iterator();
+        return map AbstractDatabase::doCallback(opt, $1.getCreateSql(getSqlTableName(), opt), AbstractDatabase::AC_Add, "index", $1.name, name), indexes.iterator();
     }
 
     private *string getCreatePrimaryKeySqlUnlocked(*hash<auto> opt, bool cache = True) {
@@ -12511,7 +12556,7 @@ on_exit printf("SQL> %s\n", sql);
             getPrimaryKeyUnlocked();
         if (primaryKey.empty())
             return;
-        return AbstractDatabase::doCallback(opt, primaryKey.getCreateSql(name, opt), AbstractDatabase::AC_Add, "primary key", primaryKey.getName(), name);
+        return AbstractDatabase::doCallback(opt, primaryKey.getCreateSql(getSqlTableName(), opt), AbstractDatabase::AC_Add, "primary key", primaryKey.getName(), name);
     }
 
     private *list<auto> getCreateConstraintsSqlUnlocked(*hash<auto> opt, bool cache = True) {
@@ -12520,7 +12565,7 @@ on_exit printf("SQL> %s\n", sql);
         if (constraints.empty())
             return;
         bool ix = uniqueIndexCreatesConstraintImpl();
-        return map AbstractDatabase::doCallback(opt, $1.getCreateSql(name, opt), AbstractDatabase::AC_Add, "constraint", $1.getName(), name), constraints.iterator(), !ix || !$1.getIndex();
+        return map AbstractDatabase::doCallback(opt, $1.getCreateSql(getSqlTableName(), opt), AbstractDatabase::AC_Add, "constraint", $1.getName(), name), constraints.iterator(), !ix || !$1.getIndex();
     }
 
     private *list<auto> getCreateForeignConstraintsSqlUnlocked(*hash<auto> opt, bool cache = True) {
@@ -12534,7 +12579,7 @@ on_exit printf("SQL> %s\n", sql);
             if (opt.foreign_constraint_alignment && opt.foreign_constraint_alignment.deferAdd(name, name, fk)) {
                 continue;
             }
-            l += AbstractDatabase::doCallback(opt, fk.getCreateSql(name, opt), AbstractDatabase::AC_Add,
+            l += AbstractDatabase::doCallback(opt, fk.getCreateSql(getSqlTableName(), opt), AbstractDatabase::AC_Add,
                 "foreign constraint", fk.getName(), name);
         }
         return l;
@@ -12551,7 +12596,7 @@ on_exit printf("SQL> %s\n", sql);
             return;
 
         list<auto> l = ();
-        map l += AbstractDatabase::doCallback(opt, $1.getCreateSql(name, opt), AbstractDatabase::AC_Add, "trigger", $1.name, name), triggers.iterator();
+        map l += AbstractDatabase::doCallback(opt, $1.getCreateSql(getSqlTableName(), opt), AbstractDatabase::AC_Add, "trigger", $1.name, name), triggers.iterator();
         return l;
     }
 
@@ -13316,7 +13361,14 @@ on_exit printf("SQL> %s\n", sql);
         @since %SqlUtil 3.1
     */
     private string getCreateTableStartSql() {
-        return sprintf("create table %s", name);
+        return sprintf("create table %s", getSqlTableName());
+    }
+
+    #! returns the name of the table without any schema for SQL, as getSqlIdentifier() returns it
+    /** @since SqlUtil 3.11.0
+    */
+    private string getSqlTableName() {
+        return getSqlIdentifier(name);
     }
 
     #! returns any trailing clause to append to a temporary-table \c CREATE statement (e.g. \c " on commit drop")

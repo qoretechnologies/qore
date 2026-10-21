@@ -70,7 +70,9 @@ module PgsqlSqlUtilBase {
     (ex: <tt>"my schema"."My Table"</tt>, <tt>"a.b"."c.d"</tt>, <tt>s."F"</tt>); a quoted identifier is looked up
     without its quotes and with its case, an unquoted identifier is looked up as given.  A table is named in SQL as
     its name gives it, and the schema that the \c search_path resolves a name without a schema to is quoted in SQL
-    if it needs quotes.  The trigger functions of a table are the functions that its triggers execute, also with
+    if it needs quotes; a part of a name that is not a double-quoted identifier and not an ordinary identifier
+    (ex: <tt>my table</tt>, or a name with a quote or a semicolon) is given in double quotes in SQL, each double quote
+    doubled, so that it names exactly that object and can never change the SQL (see @ref sql_identifiers).  The trigger functions of a table are the functions that its triggers execute, also with
     trigger arguments, named as the triggers name them: by the function name alone when the \c search_path resolves
     it to the function, otherwise with its schema, with each identifier that needs it quoted as PostgreSQL quotes it
     (ex: <tt>"my schema"."F"()</tt>).  The partitions of a table in <tt>current_schema()</tt> are named by their names
@@ -227,6 +229,18 @@ $function$
     @section pgsql_relnotes Release Notes
 
     @subsection pgsqlsqlutilbasev119 PgsqlSqlUtilBase v1.19
+    - Security: a name of a table, column, index, constraint, sequence, schema, tablespace, trigger, view or alias
+      that is not an ordinary PostgreSQL identifier is given in double quotes, each double quote doubled, wherever
+      SQL is generated, so that a name from untrusted data can never change the SQL; an ordinary name is given as
+      before, so existing schemas and alignment do not change (see @ref sql_identifiers).  A sequence named in
+      \c nextval() or \c currval() is given as a correctly escaped string literal, a string value with a backslash
+      is given as an escape string, so that it is read as given whatever the value of
+      \c standard_conforming_strings, and a quote in a date format is doubled.  An empty name, or one with a NUL
+      character, is refused with \c IDENTIFIER-ERROR
+    - fixed @ref SqlUtil::AbstractDatabase::reclaimSpace() "reclaimSpace()" with the \c tables option vacuuming every
+      table of the database once for each table given, instead of the tables given
+    - fixed a partition's catalog name with an upper-case letter not being quoted in the SQL that names it, and a
+      given partition SQL name not being checked to be an SQL name
     - fixed aligning a table whose primary key or unique constraint has the template's columns under another name:
       the key was dropped, which cascaded to the foreign constraints that reference it, and added again (a unique
       constraint was added "using index" its dropped index, which failed); the key is now renamed in place, with
@@ -573,6 +587,80 @@ string sub pgsql_quote_identifier(string id) {
     return "\"" + replace(id, "\"", "\"\"") + "\"";
 }
 
+# returns a name given to SqlUtil as an identifier for SQL: as given if PostgreSQL reads it as one unquoted
+# identifier (a letter, an underscore or a non-ASCII character, then letters, digits, underscores, dollar signs or
+# non-ASCII characters) that is not a reserved word, so that its letters are folded to lower case as for any
+# unquoted name, as before; otherwise in double quotes with each double quote doubled, so that the name can never
+# change the SQL that it is part of
+string sub pgsql_get_sql_identifier(string name) {
+    if (name =~ /\A[A-Za-z_\x{80}-\x{10ffff}][A-Za-z0-9_$\x{80}-\x{10ffff}]*\z/
+        && !PgsqlDatabase::PgsqlReservedWords{name.lwr()}) {
+        return name;
+    }
+    return AbstractSqlUtilBase::getDelimitedIdentifier(name, "\"", "\"", "PostgreSQL");
+}
+
+# returns True if the argument is one double-quoted identifier, in which each double quote is doubled
+bool sub pgsql_is_quoted_identifier(string id) {
+    return id =~ /\A"(?:[^"]|"")*+"\z/ ? True : False;
+}
+
+# returns a name in the form "name" or "schema.name" for SQL, in which a part given as a double-quoted identifier is
+# used as given, and any other part is an identifier as pgsql_get_sql_identifier() returns it
+/* the schema is a double-quoted identifier or a name of word characters before the first ".", as
+   pgsql_parse_object_name() reads it (ex: \c "\"my.schema\".t" or \c "s.my table")
+*/
+string sub pgsql_get_sql_object_name(string nname) {
+    hash<PgsqlObjectName> on = pgsql_parse_object_name(nname);
+    string sql_name = pgsql_is_quoted_identifier(on.sql_name) ? on.sql_name : pgsql_get_sql_identifier(on.sql_name);
+    if (!exists on.sql_schema) {
+        return sql_name;
+    }
+    return pgsql_get_sql_schema(on.sql_schema) + "." + sql_name;
+}
+
+# returns a schema name as the name of an object gives it, as a double-quoted identifier or a name of word
+# characters, for SQL
+string sub pgsql_get_sql_schema(string sql_schema) {
+    return pgsql_is_quoted_identifier(sql_schema) ? sql_schema : pgsql_get_sql_identifier(sql_schema);
+}
+
+# returns a string literal with the name of a relation, as nextval() and currval() take it, which read the name as
+# SQL names the relation; a backslash in the name is given in an escape string, which reads it the same way whatever
+# the value of standard_conforming_strings
+string sub pgsql_get_relation_name_literal(string name) {
+    return pgsql_get_string_literal(pgsql_get_sql_object_name(name));
+}
+
+# returns a string literal for SQL: in single quotes with each single quote doubled; a string with a backslash is an
+# escape string (E'...'), in which each backslash is doubled as well, as PostgreSQL reads a backslash in a string in
+# single quotes as an escape character when standard_conforming_strings is off, and an escape string is read the same
+# way whatever its value
+string sub pgsql_get_string_literal(string v) {
+    if (v.find("\\") >= 0) {
+        return "E'" + replace(replace(v, "\\", "\\\\"), "'", "''") + "'";
+    }
+    return "'" + replace(v, "'", "''") + "'";
+}
+
+# returns the value of a string literal (ex: 'a''b' or E'a\\b'), or NOTHING if the argument is not a string literal
+# with only doubled quotes, and, in an escape string, escaped quotes and backslashes
+*string sub pgsql_get_string_literal_value(string sql) {
+    *list<*string> l = (sql =~ x/\A'((?:[^']|'')*+)'\z/s);
+    if (l) {
+        return replace(l[0] ?? "", "''", "'");
+    }
+    l = (sql =~ x/\A[Ee]'((?:[^'\\]|''|\\['\\])*+)'\z/s);
+    if (l) {
+        # each doubled quote and each escaped quote or backslash is one character
+        string rv = "";
+        foreach *string token in (regex_extract(l[0] ?? "", "([^'\\\\]++|''|\\\\['\\\\])", RE_Global)) {
+            rv += token.size() == 2 && (token == "''" || token[0] == "\\") ? token[1] : token;
+        }
+        return rv;
+    }
+}
+
 # the name of an object in the form "name" or "schema.name", as SQL gives it and as the catalog stores it
 hashdecl PgsqlObjectName {
     # the schema in the catalog, if the name has one
@@ -636,17 +724,17 @@ public class PgsqlSavepointHelper inherits AbstractSavepointHelper {
 
     #! Creates the savepoint
     private createSavepointImpl() {
-        ds.exec("savepoint " + savepoint);
+        ds.exec("savepoint " + pgsql_get_sql_identifier(savepoint));
     }
 
     #! Rolls back to the savepoint
     private rollbackImpl() {
-        ds.exec("rollback to savepoint " + savepoint);
+        ds.exec("rollback to savepoint " + pgsql_get_sql_identifier(savepoint));
     }
 
     #! Deletes the savepoint
     private deleteSavepointImpl() {
-        ds.exec("release savepoint " + savepoint);
+        ds.exec("release savepoint " + pgsql_get_sql_identifier(savepoint));
     }
 }
 
@@ -852,6 +940,8 @@ public class PgsqlIndex inherits SqlUtil::AbstractIndex {
                 } else if (c.typeCode() == NT_HASH && c.ddl_name.val()) {
                     name_sql = c.ddl_name;
                 } else {
+                    # an index "column" that is not a column of the table is an SQL expression, as it is for
+                    # every database (see AbstractTable::addIndex())
                     name_sql = cn;
                 }
                 if (opclass{cn}.val()) {
@@ -868,7 +958,8 @@ public class PgsqlIndex inherits SqlUtil::AbstractIndex {
             cols_sql = parts.join(", ");
         }
 
-        string sql = sprintf("create %sindex %s on %s", unique ? "unique " : "", name, table_name);
+        string sql = sprintf("create %sindex %s on %s", unique ? "unique " : "", pgsql_get_sql_identifier(name),
+            table_name);
         if (method.val()) {
             sql += sprintf(" using %s", method);
         }
@@ -877,8 +968,7 @@ public class PgsqlIndex inherits SqlUtil::AbstractIndex {
             # INCLUDE accepts identifiers, never SQL expressions. Always quote and escape them.
             list<string> quoted;
             foreach string col in (include) {
-                col =~ s/"/""/g;
-                quoted += "\"" + col + "\"";
+                quoted += AbstractSqlUtilBase::getDelimitedIdentifier(col, "\"", "\"", "PostgreSQL");
             }
             sql += " include (" + quoted.join(", ") + ")";
         }
@@ -897,7 +987,7 @@ public class PgsqlIndex inherits SqlUtil::AbstractIndex {
 
         *string ts = opt.index_tablespace ? opt.index_tablespace : tablespace;
         if (ts) {
-            sql += sprintf(" tablespace %s", ts);
+            sql += sprintf(" tablespace %s", pgsql_get_sql_identifier(ts));
         }
         if (predicate) {
             sql += " where " + predicate;
@@ -907,7 +997,7 @@ public class PgsqlIndex inherits SqlUtil::AbstractIndex {
 
     #! returns a string that can be used to drop the index from the database
     string getDropSql(string table_name) {
-        return sprintf("drop index if exists %s", name);
+        return sprintf("drop index if exists %s", pgsql_get_sql_identifier(name));
     }
 
     #! returns @ref True "True" if the argument is equal to the current index, @ref False "False" if not
@@ -993,7 +1083,8 @@ public class PgsqlIndex inherits SqlUtil::AbstractIndex {
 
     #! returns the SQL statement that renames the index in the database
     softlist<string> getRenameSql(string table_name, string new_name) {
-        return sprintf("alter index %s rename to %s", name, new_name);
+        return sprintf("alter index %s rename to %s", pgsql_get_sql_identifier(name),
+            pgsql_get_sql_identifier(new_name));
     }
 
 }
@@ -1013,12 +1104,14 @@ public class PgsqlForeignConstraint inherits SqlUtil::AbstractForeignConstraint 
 
     #! returns a string that can be used to drop the constraint from the database
     string getDropSql(string table_name) {
-        return sprintf("alter table %s drop constraint if exists %s cascade", table_name, name);
+        return sprintf("alter table %s drop constraint if exists %s cascade", table_name,
+            pgsql_get_sql_identifier(name));
     }
 
     #! returns the SQL that renames the constraint in place
     softlist getRenameSql(string table_name, string new_name) {
-        return sprintf("alter table %s rename constraint %s to %s", table_name, name, new_name);
+        return sprintf("alter table %s rename constraint %s to %s", table_name,
+            pgsql_get_sql_identifier(name), pgsql_get_sql_identifier(new_name));
     }
 
     #! Returns foreign-key DDL with the recorded SQL names of all participating columns
@@ -1033,8 +1126,9 @@ alter table draft_guard add constraint fk_draft foreign key (draft_user) referen
         @endcode
     */
     string getCreateSql(string name, string table_name, *hash<auto> opt) {
-        return sprintf("alter table %s add constraint %s foreign key (%s) references %s (%s)%s", table_name, name,
-            (foldl $1 + ", " + $2, getSqlColumnNameIterator()), target.table,
+        return sprintf("alter table %s add constraint %s foreign key (%s) references %s (%s)%s", table_name,
+            pgsql_get_sql_identifier(name), (foldl $1 + ", " + $2, getSqlColumnNameIterator()),
+            pgsql_get_sql_object_name(target.table),
             (foldl $1 + ", " + $2, target.columns.getSqlColumnNameIterator()),
             getDeferrabilitySql());
     }
@@ -1048,7 +1142,8 @@ public class PgsqlCheckConstraint inherits SqlUtil::AbstractCheckConstraint {
 
     #! returns a string that can be used to drop the constraint from the database
     string getDropSql(string table_name) {
-        return sprintf("alter table %s drop constraint %s cascade", table_name, name);
+        return sprintf("alter table %s drop constraint %s cascade", table_name,
+            pgsql_get_sql_identifier(name));
     }
 
     #! returns a string that can be used to create the constraint in the database
@@ -1058,12 +1153,14 @@ public class PgsqlCheckConstraint inherits SqlUtil::AbstractCheckConstraint {
 
     #! returns the SQL that renames the constraint in place
     list getRenameSql(string table_name, string new_name) {
-        return (sprintf("alter table %s rename constraint %s to %s", table_name, name, new_name),);
+        return (sprintf("alter table %s rename constraint %s to %s", table_name,
+            pgsql_get_sql_identifier(name), pgsql_get_sql_identifier(new_name)),);
     }
 
     #! returns a string that can be used to create the constraint in the database
     string getCreateSql(string name, string table_name, *hash opt) {
-        return sprintf("alter table %s add constraint %s check (%s)", table_name, name, src);
+        return sprintf("alter table %s add constraint %s check (%s)", table_name, pgsql_get_sql_identifier(name),
+            src);
     }
 }
 
@@ -1204,6 +1301,20 @@ list l = col.getModifySql(t, newcol);
         if (server_val === declared_val) {
             return True;
         }
+        # a string constant: compared by its value, so that a declared escape string (ex: E'a\\b', as
+        # getSqlValue() gives a string with a backslash) is the constant that the server returns (ex: 'a\b'::text, or
+        # E'a\\b'::text when standard_conforming_strings is off)
+        if (declared_val.val() && server_val.val()) {
+            *string declared_value = pgsql_get_string_literal_value(declared_val);
+            if (exists declared_value) {
+                string sv = server_val;
+                sv =~ s/::[^']*$//;
+                *string server_value = pgsql_get_string_literal_value(sv);
+                if (exists server_value && server_value == declared_value) {
+                    return True;
+                }
+            }
+        }
         if (!declared_val.val() || declared_val =~ /::/ || server_val !~ /::/) {
             return False;
         }
@@ -1237,7 +1348,7 @@ string str = col.getRenameSql(t, "new_name");
     /** the name returned here will be used when executing DDL
     */
     string getDdlName(string name) {
-        return PgsqlDatabase::PgsqlReservedWords{name.lwr()} ? ("\"" + name + "\"") : name;
+        return pgsql_get_sql_identifier(name);
     }
 
     #! returns @ref True "True" if the argument is equal to the current object, @ref False "False" if not
@@ -1305,20 +1416,21 @@ public class PgsqlUniqueConstraintCommon inherits SqlUtil::AbstractUniqueConstra
     getIndexSql(reference<string> sql, string name, *hash opts) {
         *string ix = opts.index ? opts.index : index;
         if (ix) {
-            sql += sprintf(" using index %s", ix);
+            sql += sprintf(" using index %s", pgsql_get_sql_identifier(ix));
         } else {
             sql += sprintf(" (%s)", (foldl $1 + ", " + $2, getSqlColumnNameIterator()));
 
             *string ts = opts.index_tablespace ? opts.index_tablespace : tablespace;
             if (ts) {
-                sql += sprintf(" using index tablespace %s", ts);
+                sql += sprintf(" using index tablespace %s", pgsql_get_sql_identifier(ts));
             }
         }
     }
 
     #! returns a string that can be used to drop the constraint from the database
     string getDropSql(string table_name) {
-        return sprintf("alter table %s drop constraint %s cascade", table_name, name);
+        return sprintf("alter table %s drop constraint %s cascade", table_name,
+            pgsql_get_sql_identifier(name));
     }
 }
 
@@ -1379,19 +1491,21 @@ auto v = c.name;
         @return the \c ALTER \c TABLE ... \c RENAME \c CONSTRAINT statement in a list
     */
     list<auto> getRenameSql(string table_name, string new_name) {
-        return (sprintf("alter table %s rename constraint %s to %s", table_name, name, new_name),);
+        return (sprintf("alter table %s rename constraint %s to %s", table_name,
+            pgsql_get_sql_identifier(name), pgsql_get_sql_identifier(new_name)),);
     }
 
     #! returns a string that can be used to rename the constraint
     string getCreateSql(string name, string table_name, *hash<auto> opts) {
-        string sql = sprintf("alter table %s add constraint %s unique ", table_name, name);
+        string sql = sprintf("alter table %s add constraint %s unique ", table_name, pgsql_get_sql_identifier(name));
         getIndexSql(\sql, name, opts);
         return sql;
     }
 
     #! returns a string that can be used to drop the constraint from the database
     string getDropSql(string table_name) {
-        return sprintf("alter table %s drop constraint %s cascade", table_name, name);
+        return sprintf("alter table %s drop constraint %s cascade", table_name,
+            pgsql_get_sql_identifier(name));
     }
 
     #! returns @ref True "True" if the constraint is enabled, @ref False "False" if not
@@ -1439,19 +1553,22 @@ auto v = c.name;
 
     #! returns a string that can be used to create the constraint
     string getCreateSql(string table_name, *hash<auto> opts) {
-        string sql = sprintf("alter table %s add constraint %s primary key", table_name, name);
+        string sql = sprintf("alter table %s add constraint %s primary key", table_name,
+            pgsql_get_sql_identifier(name));
         getIndexSql(\sql, name, opts);
         return sql;
     }
 
     #! returns the SQL that renames the constraint, and its index with it
     softlist getRenameSql(string table_name, string new_name) {
-        return sprintf("alter index %s rename to %s", name, new_name);
+        return sprintf("alter index %s rename to %s", pgsql_get_sql_identifier(name),
+            pgsql_get_sql_identifier(new_name));
     }
 
     #! returns a string that can be used to drop the constraint from the database
     string getDropSql(string table_name) {
-        return sprintf("alter table %s drop constraint %s cascade", table_name, name);
+        return sprintf("alter table %s drop constraint %s cascade", table_name,
+            pgsql_get_sql_identifier(name));
     }
 }
 
@@ -1490,7 +1607,8 @@ public class PgsqlSequence inherits SqlUtil::AbstractSequence {
 
     #! returns a string that can be used to create the sequence in the database
     string getCreateSql(*hash opt) {
-        string sql = sprintf("create sequence %s start with %d increment by %d ", name, start, increment);
+        string sql = sprintf("create sequence %s start with %d increment by %d ", pgsql_get_sql_object_name(name),
+            start, increment);
         sql += exists max ? sprintf("maxvalue %d", max) : "no maxvalue";
         if (exists min) {
             sql += sprintf(" minvalue %d", min);
@@ -1507,7 +1625,17 @@ public class PgsqlSequence inherits SqlUtil::AbstractSequence {
         @param opt this option is ignored
         */
     softlist getRenameSql(string new_name, *hash opt) {
-        return sprintf("alter sequence %s rename to %s", name, new_name);
+        return sprintf("alter sequence %s rename to %s", pgsql_get_sql_object_name(name),
+            pgsql_get_sql_identifier(new_name));
+    }
+
+    #! returns a string that can be used to drop the sequence from the database
+    /** @param opt this argument is ignored
+
+        @since PgsqlSqlUtilBase 1.19 the name of the sequence is quoted if it is not an ordinary name
+    */
+    string getDropSql(*hash<auto> opt) {
+        return sprintf("drop sequence %s", pgsql_get_sql_object_name(name));
     }
 }
 
@@ -1533,7 +1661,7 @@ public class PgsqlView inherits SqlUtil::AbstractView {
         return sprintf("create %s%sview %s as %s",
             opt.replace ? "or replace " : "",
             opt.temp ? "temp " : "",
-            name,
+            pgsql_get_sql_object_name(name),
             src
         );
     }
@@ -1544,7 +1672,17 @@ public class PgsqlView inherits SqlUtil::AbstractView {
         @param opt this option is ignored
         */
     softlist getRenameSql(string new_name, *hash opt) {
-        return sprintf("alter view %s rename to %s", name, new_name);
+        return sprintf("alter view %s rename to %s", pgsql_get_sql_object_name(name),
+            pgsql_get_sql_identifier(new_name));
+    }
+
+    #! returns a string that can be used to drop the view from the database
+    /** @param opt this argument is ignored
+
+        @since PgsqlSqlUtilBase 1.19 the name of the view is quoted if it is not an ordinary name
+    */
+    string getDropSql(*hash<auto> opt) {
+        return sprintf("drop view %s", pgsql_get_sql_object_name(name));
     }
 }
 
@@ -1556,12 +1694,12 @@ public class PgsqlTrigger inherits SqlUtil::AbstractTrigger {
 
     #! returns a string that can be used to create the trigger in the database
     softlist<string> getCreateSql(string table_name, *hash opt) {
-        return sprintf("create trigger %s %s", name, src);
+        return sprintf("create trigger %s %s", pgsql_get_sql_identifier(name), src);
     }
 
     #! returns a string that can be used to drop the trigger from the database
     softlist<string> getDropSql(string table_name) {
-        return sprintf("drop trigger %s on %s", name, table_name);
+        return sprintf("drop trigger %s on %s", pgsql_get_sql_identifier(name), table_name);
     }
 
     #! returns @ref True "True" if the argument is equal to the current object, @ref False "False" if not
@@ -1571,7 +1709,8 @@ public class PgsqlTrigger inherits SqlUtil::AbstractTrigger {
 
     #! returns a string that can be used to rename the trigger in the database
     softlist<string> getRenameSql(string table_name, string new_name) {
-        return sprintf("alter trigger %s on %s rename to %s", name, table_name, new_name);
+        return sprintf("alter trigger %s on %s rename to %s", pgsql_get_sql_identifier(name), table_name,
+            pgsql_get_sql_identifier(new_name));
     }
 
     #! returns normalized source for comparisons
@@ -1765,6 +1904,24 @@ public class PgsqlDatabase inherits SqlUtil::AbstractDatabase {
     }
 
     constructor(AbstractDatasource nds, *hash opts) : AbstractDatabase(nds, opts) {
+    }
+
+    #! returns a name as an SQL identifier for PostgreSQL
+    /** A name that PostgreSQL reads as one unquoted identifier (a letter, an underscore or a non-ASCII character,
+        then letters, digits, underscores, dollar signs or non-ASCII characters) and that is not a reserved word is
+        returned as given, so PostgreSQL folds its letters to lower case as for any unquoted name; any other name is
+        returned in double quotes with each double quote doubled, and so names exactly the object of that name
+
+        @param name the name of a database object, without a schema
+
+        @return the name as an SQL identifier for PostgreSQL
+
+        @throw IDENTIFIER-ERROR the name is empty or has a NUL character
+
+        @since PgsqlSqlUtilBase 1.19
+    */
+    string getSqlIdentifier(string name) {
+        return pgsql_get_sql_identifier(name);
     }
 
     private list<string> featuresImpl() {
@@ -2309,12 +2466,13 @@ public class PgsqlDatabase inherits SqlUtil::AbstractDatabase {
 
     #! returns the next value in the given sequence
     private softint getNextSequenceValueImpl(string name) {
-        return ds.selectRow("select nextval(%v)", name).nextval;
+        # nextval() reads the name as SQL names a relation, so a name that needs quotes is given quoted
+        return ds.selectRow("select nextval(%v)", pgsql_get_sql_object_name(name)).nextval;
     }
 
     #! returns the last value issued for the given sequence in the current session
     private softint getCurrentSequenceValueImpl(string name) {
-        return ds.selectRow("select last_value from %s", name).last_value;
+        return ds.selectRow("select last_value from " + pgsql_get_sql_object_name(name)).last_value;
     }
 
     #! returns @ref True "True" if the database supports sequences
@@ -2359,7 +2517,7 @@ public class PgsqlDatabase inherits SqlUtil::AbstractDatabase {
 
     #! rebuild index implementation. See @ref SqlUtil::AbstractDatabase::rebuildIndex()
     private bool rebuildIndexImpl(string name, *hash options) {
-        string sql = sprintf("reindex index %s", name);
+        string sql = sprintf("reindex index %s", pgsql_get_sql_object_name(name));
         ds.select(sql);
         return True;
     }
@@ -2368,24 +2526,26 @@ public class PgsqlDatabase inherits SqlUtil::AbstractDatabase {
     private computeStatisticsImpl(*hash options) {
         softlist tables = options.tables ? options.tables : listTables();
 
-        string sql = "analyze %s";
-
-        foreach string i in (tables)
-            ds.select(sql, i);
+        foreach string i in (tables) {
+            # "%s" in SQL with arguments is substituted as given, so the table name is quoted here
+            ds.select("analyze " + pgsql_get_sql_object_name(i));
+        }
     }
 
     #! reclaim space implementation. See @ref SqlUtil::AbstractDatabase::reclaimSpace()
     private reclaimSpaceImpl(*hash options) {
         softlist tables = options.tables ? options.tables : listTables();
 
-        string sql = sprintf("vacuum %s%s%s", options.full ? "full " : "",
-                                                options.analyze ? "analyze " : "");
+        string sql = sprintf("vacuum %s%s", options.full ? "full " : "", options.analyze ? "analyze " : "");
 
         if (options.tables) {
-            foreach string i in (tables)
-                ds.select(sql, i);
+            # each table is vacuumed by its name; the SQL had no place for the name, so every table of the
+            # database was vacuumed once for each table given
+            foreach string i in (tables) {
+                ds.select(sql + pgsql_get_sql_object_name(i));
+            }
         } else {
-            ds.select(sql, "");
+            ds.select(sql);
         }
     }
 
@@ -2808,7 +2968,7 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
                     "return_type": AbstractDataProviderTypeMap."int",
                 },
                 "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
-                    return sprintf("nextval('%s')", args[0]);
+                    return sprintf("nextval(%s)", pgsql_get_relation_name_literal(args[0]));
                 }
             },
             COP_SEQ_CURRVAL: {
@@ -2825,7 +2985,7 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
                     "return_type": AbstractDataProviderTypeMap."int",
                 },
                 "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
-                    return sprintf("currval('%s')", args[0]);
+                    return sprintf("currval(%s)", pgsql_get_relation_name_literal(args[0]));
                 }
             },
             # --- Date/Time functions for PostgreSQL ---
@@ -3071,7 +3231,8 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
                     string exp0 = info.table.getExpressionArg(\info, role, args[0],
                         AbstractDataProviderTypeMap."any");
                     if (exists args[1]) {
-                        string fmt = PgsqlTable::convertDateFormat(args[1]);
+                        # a quote in the format value is doubled so that it cannot end the string literal
+                        string fmt = replace(PgsqlTable::convertDateFormat(args[1]), "'", "''");
                         return sprintf("to_timestamp(%s, '%s')", exp0, fmt);
                     }
                     return sprintf("cast(%s as timestamp)", exp0);
@@ -3137,7 +3298,8 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
                 "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
                     string exp0 = info.table.getExpressionArg(\info, role, args[0],
                         AbstractDataProviderTypeMap."date");
-                    string fmt = PgsqlTable::convertDateFormat(args[1]);
+                    # a quote in the format value is doubled so that it cannot end the string literal
+                    string fmt = replace(PgsqlTable::convertDateFormat(args[1]), "'", "''");
                     return sprintf("to_char(%s, '%s')", exp0, fmt);
                 },
             },
@@ -3192,7 +3354,7 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
                 "nocolumn": True,
                 "withalias": True,
                 "code": string sub (*string cve, hash arg, reference<hash> psch) {
-                    string sql = sprintf("nextval('%s')", arg.seq);
+                    string sql = sprintf("nextval(%s)", pgsql_get_relation_name_literal(arg.seq));
                     if (arg.as) {
                         psch{arg.as} = sql;
                         sql += " " + arg.as;
@@ -3204,7 +3366,7 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
                 "nocolumn": True,
                 "withalias": True,
                 "code": string sub (*string cve, hash arg, reference<hash> psch) {
-                    string sql = sprintf("currval('%s')", arg.seq);
+                    string sql = sprintf("currval(%s)", pgsql_get_relation_name_literal(arg.seq));
                     if (arg.as) {
                         psch{arg.as} = sql;
                         sql += " " + arg.as;
@@ -3238,10 +3400,17 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
             IOP_SEQ: (
                 "arg": Type::String,
                 "placeholder": "nextval(%v)",
+                # nextval() reads the name as SQL names the relation, so a name that needs quotes is given quoted
+                "code": string sub (string cve, string arg) {
+                    return pgsql_get_sql_object_name(arg);
+                },
             ),
             IOP_SEQ_CURRVAL: (
                 "arg": Type::String,
                 "placeholder": "currval(%v)",
+                "code": string sub (string cve, string arg) {
+                    return pgsql_get_sql_object_name(arg);
+                },
             ),
         );
 
@@ -3250,13 +3419,13 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
             COP_SEQ: (
                 "nocolumn": True,
                 "code": string sub (*string cve, string arg) {
-                    return sprintf("nextval('%s')", arg);
+                    return sprintf("nextval(%s)", pgsql_get_relation_name_literal(arg));
                 }
             ),
             COP_SEQ_CURRVAL: (
                 "nocolumn": True,
                 "code": string sub (*string cve, string arg) {
-                    return sprintf("currval('%s')", arg);
+                    return sprintf("currval(%s)", pgsql_get_relation_name_literal(arg));
                 }
             ),
         );
@@ -3614,7 +3783,7 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
                 throw "COLUMN-ERROR", sprintf("%s.%s is not a valid column for the \"returning\" clause (valid "
                     "columns: %y)", name, rh.key, columns.keys());
             }
-            l += rh.key;
+            l += getColumnSqlName(rh.key);
             args += rh.type ?* c.qore_type ?* Type::String;
         }
         sql += sprintf(" returning %s", (foldl $1 + "," + $2, l));
@@ -3936,16 +4105,20 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
         return rows == -1 ? 0 : rows;
     }
 
-    #! returns the column name for use in SQL strings; subclasses can return a special string in case the column name is a reserved word
+    #! returns the column name for use in SQL strings, as getSqlIdentifier() returns it
+    /** @since PgsqlSqlUtilBase 1.19 a name that is not an ordinary name is quoted and escaped; before, only a
+        reserved word was quoted
+    */
     string getColumnSqlName(string col) {
-        return PgsqlDatabase::PgsqlReservedWords{col.lwr()} ? ("\"" + col + "\"") : col;
+        return pgsql_get_sql_identifier(col);
     }
 
-    #! returns a list of column names for use in SQL strings
-    /** subclasses can process the argument list in case a column name is a reserved word
+    #! returns a list of column names for use in SQL strings, as getSqlIdentifier() returns them
+    /** @since PgsqlSqlUtilBase 1.19 a name that is not an ordinary name is quoted and escaped; before, only a
+        reserved word was quoted
     */
     list<auto> getColumnSqlNames(softlist<auto> cols) {
-        return map (PgsqlDatabase::PgsqlReservedWords{$1.lwr()} ? ("\"" + $1 + "\"") : $1), cols;
+        return map pgsql_get_sql_identifier($1), cols;
     }
 
     #! returns a closure for performing upserts
@@ -4093,7 +4266,21 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
     /** the schema is given as the name of the table gives it, or quoted if it needs quotes
     */
     string getSqlName() {
-        return (sql_schema ?? pgsql_quote_identifier(schema)) + "." + name;
+        return (sql_schema ? pgsql_get_sql_schema(sql_schema) : pgsql_quote_identifier(schema)) + "."
+            + (pgsql_is_quoted_identifier(name) ? name : pgsql_get_sql_identifier(name));
+    }
+
+    #! returns a name as an SQL identifier for PostgreSQL
+    /** @copydetails PgsqlDatabase::getSqlIdentifier()
+    */
+    string getSqlIdentifier(string name) {
+        return pgsql_get_sql_identifier(name);
+    }
+
+    #! returns the name of the table without its schema for SQL: as given if it is a double-quoted identifier,
+    #! otherwise as getSqlIdentifier() returns it
+    private string getSqlTableName() {
+        return pgsql_is_quoted_identifier(name) ? name : pgsql_get_sql_identifier(name);
     }
 
     private hash getTableCreationOptions() {
@@ -4577,9 +4764,16 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
             foreach hash<auto> row in (qh.contextIterator()) {
                 reference<hash<auto>> c = \ch.(row.constraint_name);
                 c.columns.(row.source_column) = columns{row.source_column};
+                # the target is named so that it is read back as the table in the catalog: a schema that is not
+                # a name of word characters, and a table name that would be read as a quoted identifier, are
+                # quoted
+                string target_table = pgsql_is_quoted_identifier(row.target_table)
+                    ? pgsql_quote_identifier(row.target_table)
+                    : row.target_table;
                 c.target.table = row.schema == default_schema
-                    ? row.target_table
-                    : sprintf("%s.%s", row.schema, row.target_table);
+                    ? target_table
+                    : sprintf("%s.%s", row.schema =~ /\A\w+\z/ ? row.schema : pgsql_quote_identifier(row.schema),
+                        target_table);
                 c.target.columns.(row.target_column) = True;
                 c.deferrable = row.condeferrable;
                 c.initially_deferred = row.condeferred;
@@ -4707,7 +4901,8 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
                 src += " of ";
                 src += foldl $1 + ", " + $2, cols.event_object_column;
             }
-            src += sprintf(" on %s for each %s %s", name, row.action_orientation, row.action_statement);
+            src += sprintf(" on %s for each %s %s", getSqlTableName(), row.action_orientation,
+                row.action_statement);
             trigger_sources{row.trigger_name} = src;
         }
 
@@ -4772,7 +4967,7 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
 
         *string ts = opt.data_tablespace ? opt.data_tablespace : tablespace;
         if (ts)
-            sql += sprintf(" tablespace %s", ts);
+            sql += sprintf(" tablespace %s", pgsql_get_sql_identifier(ts));
 
         return sql;
     }
@@ -4780,7 +4975,7 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
     #! returns \c "create temporary table <name>" for temporary tables, \c "create table <name>" otherwise
     private string getCreateTableStartSql() {
         if (isTempTable()) {
-            return sprintf("create temporary table %s", name);
+            return sprintf("create temporary table %s", getSqlTableName());
         }
         return AbstractTable::getCreateTableStartSql();
     }
@@ -4803,9 +4998,10 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
             getTriggersUnlocked();
         }
 
-        list<auto> l = map AbstractDatabase::doCallback(opt, sprintf("comment on column %s.%s is %s", name,
-            $1.ddl_name, getSqlValueImpl($1.comment)), AbstractDatabase::AC_Add, "column comment", $1.name, name),
-            columns.iterator(), $1.comment;
+        # the table is named as the SQL that creates it names it
+        list<auto> l = map AbstractDatabase::doCallback(opt, sprintf("comment on column %s.%s is %s",
+            getSqlTableName(), $1.ddl_name, getSqlValueImpl($1.comment)), AbstractDatabase::AC_Add, "column comment",
+            $1.name, name), columns.iterator(), $1.comment;
 
         if (!opt.omit_trigger_functions && !triggerFunctions.empty()) {
             map l += AbstractDatabase::doCallback(opt, $1.getCreateSql(opt), AbstractDatabase::AC_Create,
@@ -4837,7 +5033,7 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
         foreach PgsqlTriggerFunction f in (triggerFunctions.iterator()) {
             if (!t.triggerFunctions.hasKey(f.name)) {
                 if (triggers{f.trigger}) {
-                    l += AbstractDatabase::doCallback(opt, triggers{f.trigger}.getDropSql(name),
+                    l += AbstractDatabase::doCallback(opt, triggers{f.trigger}.getDropSql(getSqlName()),
                         AbstractDatabase::AC_Drop, "trigger", f.trigger, name);
                     triggers.take(f.trigger);
                 }
@@ -4855,7 +5051,8 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
     }
 
     private string getRenameSqlImpl(string new_name) {
-        return sprintf("alter table %s rename to %s", getSqlName(), new_name);
+        return sprintf("alter table %s rename to %s", getSqlName(),
+            pgsql_is_quoted_identifier(new_name) ? new_name : pgsql_get_sql_identifier(new_name));
     }
 
     private AbstractColumn addColumnImpl(string cname, hash opt, bool nullable = True) {
@@ -4953,14 +5150,13 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
                 throw "COLUMN-BYTE-SIZE-ERROR", "PostgreSQL column names must fit 63 bytes without truncation";
             }
             # Names are literal identifiers, including embedded quotes and reserved words.
-            string quoted = column;
-            quoted =~ s/"/""/g;
+            string quoted = AbstractSqlUtilBase::getDelimitedIdentifier(column, "\"", "\"", "PostgreSQL");
             # A custom type or domain can have an implicit cast that materializes its value. Only
             # the built-in types with metadata-only octet_length implementations enter the branch.
-            expressions += sprintf("case when pg_catalog.pg_typeof(\"%s\") in "
+            expressions += sprintf("case when pg_catalog.pg_typeof(%s) in "
                 "('pg_catalog.text'::regtype, 'pg_catalog.varchar'::regtype, "
                 "'pg_catalog.bpchar'::regtype, 'pg_catalog.bytea'::regtype) "
-                "then pg_catalog.octet_length(\"%s\") else -1 end as qore_size_%d", quoted, quoted, index++);
+                "then pg_catalog.octet_length(%s) else -1 end as qore_size_%d", quoted, quoted, index++);
         }
         list<auto> args;
         string sql = "select " + (foldl $1 + ", " + $2, expressions) + " from " + getSqlName();
@@ -5111,8 +5307,9 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
 
             case NT_NUMBER: return string(v);
 
-            # double any single quotes in strings
-            case NT_STRING: v =~ s/'/''/g; return "'" + v + "'";
+            # double any single quotes in strings; a string with a backslash is an escape string, so that it is read
+            # as given whatever the value of standard_conforming_strings
+            case NT_STRING: return pgsql_get_string_literal(v);
 
             case NT_NULL:
             case NT_NOTHING: return "null";
@@ -5462,15 +5659,15 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
     }
 
     #! returns a schema-qualified, identifier-quoted SQL name for a partition relation
-    /** partition and schema names are identifiers, not SQL fragments; they are quoted through getColumnSqlName()
-        (the table's identifier-quoting helper, which quotes reserved words) so reserved words and special
-        characters are handled safely.  The result is suitable for use as PartitionInfo::sql_name and in generated
-        DDL.
+    /** partition and schema names are identifiers, not SQL fragments; they are the names in the catalog, and are
+        quoted as PostgreSQL's quote_ident() quotes them, so that reserved words, special characters and upper case
+        letters name the relation in the catalog.  The result is suitable for use as PartitionInfo::sql_name and in
+        generated DDL.
 
         @since PgsqlSqlUtilBase 1.9
     */
     private string getQuotedPartitionSqlName(string pschema, string relation_name) {
-        return sprintf("%s.%s", getColumnSqlName(pschema), getColumnSqlName(relation_name));
+        return sprintf("%s.%s", pgsql_quote_identifier(pschema), pgsql_quote_identifier(relation_name));
     }
 
     private hash<auto> parsePartitionRelationName(string partition_name) {
@@ -5481,6 +5678,13 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
 
     private string getPartitionSqlName(hash<PartitionSpec> spec) {
         if (spec.sql_name) {
+            # an SQL name is a name or a schema and a name, each an unquoted or double-quoted identifier, so
+            # that it can never change the SQL that it is part of
+            if (!pgsql_parse_qualified_name(spec.sql_name) || spec.sql_name =~ /\n/) {
+                throw "PARTITION-ERROR", sprintf("%s: partition %y: the SQL name %y is not an SQL name of the form "
+                    "\"name\" or \"schema.name\", in which each part is an unquoted or a double-quoted identifier",
+                    getDesc(), spec.name, spec.sql_name);
+            }
             return spec.sql_name;
         }
         if (spec.schema && spec.relation_name) {

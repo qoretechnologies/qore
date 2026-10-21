@@ -81,7 +81,7 @@ class Sqlite3ColumnsTest inherits QUnit::Test {
                 t.getModifyColumnSql("label", {"native_type": "text", "default_value": "'none'",
                     "default_value_native": True}, True), version);
             # a reserved word is quoted as SQLite requires it
-            assertEq(("alter table t alter column 'order' set not null",),
+            assertEq(("alter table t alter column \"order\" set not null",),
                 t.getModifyColumnSql("order", {"native_type": "text"}, False), version);
         }
     }
