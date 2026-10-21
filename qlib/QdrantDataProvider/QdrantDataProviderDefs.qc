@@ -102,4 +102,57 @@ public const QdrantExpressions = {
         },
     },
 };
+
+#! Writes payload key paths in the key syntax of Qdrant filters
+/** In a Qdrant filter, a payload key path is a list of keys separated by dots, so a key that contains a dot, or any
+    character other than an ASCII letter, a digit, \c "_" or \c "-", is written in double quotes:
+    <tt>"Unit.Price"</tt> (with the quotes) is the key \c Unit.Price, and <tt>order."Unit.Price"</tt> is that key
+    in the object \c order.  A quoted key has no escapes in Qdrant, so a key with a double quote or a backslash
+    cannot be named in a filter.
+
+    @par Example:
+    @code{.py}
+# 'order."Unit.Price"'
+*string key = QdrantPayloadKey::getPath(("order", "Unit.Price"));
+    @endcode
+
+    @since %QdrantDataProvider 1.0
+*/
+public class QdrantPayloadKey {
+    #! Returns the Qdrant payload key path that names the given keys, one in the other
+    /** @param key_list the keys of the path: the first is a key of the payload, and each one after it a key of the
+        object named before it
+
+        @return the payload key path, or no value if a key has a double quote or a backslash, which Qdrant cannot
+        name
+    */
+    static *string getPath(list<string> key_list) {
+        list<string> path = ();
+        foreach string key in (key_list) {
+            *string item = QdrantPayloadKey::getKey(key);
+            if (!exists item) {
+                return;
+            }
+            push path, item;
+        }
+        return path.join(".");
+    }
+
+    #! Returns the Qdrant payload key path that names one key of the payload
+    /** @param key the key
+
+        @return the key as it is written in a Qdrant filter: as it is, if it has only ASCII letters, digits, \c "_" and
+        \c "-", otherwise in double quotes; no value if it has a double quote or a backslash, which Qdrant cannot
+        name
+    */
+    static *string getKey(string key) {
+        if (key =~ /^[A-Za-z0-9_-]+$/ && !key.contains("\n")) {
+            return key;
+        }
+        if (key.contains("\"") || key.contains("\\")) {
+            return;
+        }
+        return "\"" + key + "\"";
+    }
+}
 }

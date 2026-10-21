@@ -277,6 +277,25 @@ public class QdrantVectorStoreTest inherits QUnit::Test {
         assertEq("log-errors", must_values.index_id);
         assertFalse(exists fake.last_body.filter.payload_eq);
         assertFalse(exists fake.last_body.filter.native_filter);
+
+        # a portable key is one key of the payload, as for the other vector stores: a key with a dot or a space is
+        # quoted, so that it names no key of a nested object
+        store.search((0.1, 0.2, 0.3, 0.4), 5, {
+            "native_filter": {"must": ()},
+            "payload_eq": {"doc.source": "wiki", "first name": "Ann", "n": 1},
+        });
+        assertEq((
+            {"key": "\"doc.source\"", "match": {"value": "wiki"}},
+            {"key": "\"first name\"", "match": {"value": "Ann"}},
+            {"key": "n", "match": {"value": 1}},
+        ), fake.last_body.filter.must);
+        # a filter with only payload_eq, given as a hash literal whose values all have the same type, is translated
+        # too; the clauses were added to the caller's hash, which could not hold them
+        store.search((0.1, 0.2, 0.3, 0.4), 5, {"payload_eq": {"index_id": "log-errors"}});
+        assertEq(({"key": "index_id", "match": {"value": "log-errors"}},), fake.last_body.filter.must);
+        # a key that a Qdrant filter cannot name is refused, instead of being sent as another key
+        assertThrows("QDRANT-VECTOR-STORE-ERROR", "the payload_eq filter key \"a\"b\" has a double quote",
+            \store.search(), ((0.1, 0.2, 0.3, 0.4), 5, {"payload_eq": {"a\"b": 1}}));
     }
 
     #! Invalid payload_eq values must not throw or leak into Qdrant filters

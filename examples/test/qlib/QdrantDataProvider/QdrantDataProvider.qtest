@@ -73,6 +73,7 @@ public class QdrantDataProviderTest inherits QUnit::Test {
         addTestCase("tablesCrudTest", \tablesCrudTest());
         addTestCase("tablesExpressionTest", \tablesExpressionTest());
         addTestCase("filterFieldPathTest", \filterFieldPathTest());
+        addTestCase("dotted payload keys on a server", \dottedKeyServerTest());
         addTestCase("connectionTest", \connectionTest());
         addTestCase("pingSchemeTest", \pingSchemeTest());
         addTestCase("pingAuthTest", \pingAuthTest());
@@ -108,10 +109,98 @@ public class QdrantDataProviderTest inherits QUnit::Test {
 
         # a path of two keys is a nested payload key
         assertEq({"must": ({"key": "meta.color", "match": {"value": "red"}},)}, get_filter("meta.color"));
-        # one key is the payload key, without the escapes of the field path
-        assertEq({"must": ({"key": "a\\b", "match": {"value": "red"}},)}, get_filter("a\\\\b"));
-        # a key with a dot cannot be written as a payload key, so it is never sent as its escaped text
-        assertThrows("WHERE-ERROR", "has a key with a dot", get_filter, "Unit\\.Price");
+        assertEq({"must": ({"key": "a-b_c9", "match": {"value": "red"}},)}, get_filter("a-b_c9"));
+        # a key with a dot is quoted, so it names that one key and not a key of a nested object
+        assertEq({"must": ({"key": "\"Unit.Price\"", "match": {"value": "red"}},)}, get_filter("Unit\\.Price"));
+        assertEq({"must": ({"key": "order.\"Unit.Price\"", "match": {"value": "red"}},)},
+            get_filter("order.Unit\\.Price"));
+        assertEq({"must": ({"key": "\"a.b\".\"c.d\"", "match": {"value": "red"}},)}, get_filter("a\\.b.c\\.d"));
+        # so is a key with any other character that the key syntax of Qdrant does not allow unquoted
+        assertEq({"must": ({"key": "\"first name\"", "match": {"value": "red"}},)}, get_filter("first name"));
+        assertEq({"must": ({"key": "\"café\"", "match": {"value": "red"}},)}, get_filter("café"));
+        assertEq({"must": ({"key": "\"a[0]\"", "match": {"value": "red"}},)}, get_filter("a[0]"));
+        # a key with a backslash or a double quote cannot be named, as a quoted key has no escapes
+        assertThrows("WHERE-ERROR", "has a key with a double quote or a backslash, which a Qdrant filter cannot name",
+            get_filter, "a\\\\b");
+        assertThrows("WHERE-ERROR", "double quote or a backslash", get_filter, "a\"b");
+
+        # each key of a plain where hash is a field path too
+        QdrantSearchRecordIterator i(client, "docs", {"Unit\\.Price": 10, "meta.color": "red"});
+        assertEq({"must": (
+            {"key": "\"Unit.Price\"", "match": {"value": 10}},
+            {"key": "meta.color", "match": {"value": "red"}},
+        )}, client.last_body.filter);
+    }
+
+    #! A field path with a key with a dot is pushed down to a server as a quoted key and finds that key
+    private dottedKeyServerTest() {
+        checkModule(self);
+        if (!rest) {
+            testSkip("no connection to server");
+        }
+
+        string collection = "test_dotted_" + get_random_string(8);
+        collection =~ tr/A-Z/a-z/;
+        QdrantCollectionsCreateDataProvider create_col(rest);
+        create_col.doRequest({
+            "collection": collection,
+            "vectors": {"size": 2, "distance": "Dot"},
+        });
+        on_exit {
+            QdrantCollectionsDeleteDataProvider del_col(rest);
+            try {
+                del_col.doRequest({"collection": collection});
+            } catch () {
+                # ignore errors during cleanup
+            }
+        }
+
+        # the key "Unit.Price" and the key "Price" of the object "Unit" have different values in each point
+        QdrantPointsUpsertDataProvider upsert(rest);
+        upsert.doRequest({
+            "collection": collection,
+            "wait": True,
+            "points": (
+                {
+                    "id": 1,
+                    "vector": (1.0, 0.0),
+                    "payload": {"Unit.Price": 10, "Unit": {"Price": 99}, "first name": "Ann",
+                        "order": {"Unit.Price": 5}},
+                },
+                {
+                    "id": 2,
+                    "vector": (0.0, 1.0),
+                    "payload": {"Unit.Price": 99, "Unit": {"Price": 10}, "first name": "Bob",
+                        "order": {"Unit.Price": 6}},
+                },
+            ),
+        });
+
+        QdrantDataProvider root({"restclient": rest});
+        AbstractDataProvider col_prov = root.getChildProviderEx("tables").getChildProviderEx(collection);
+        code<list<auto>(auto)> get_ids = list<auto> sub (auto cond) {
+            AbstractDataProviderRecordIterator iter = col_prov.searchRecords(cond, {"limit": 10});
+            list<auto> ids = ();
+            while (iter.next()) {
+                push ids, iter.getValue().id;
+            }
+            return sort(ids);
+        };
+        code<hash<DataProviderExpression>(string, auto)> eq = hash<DataProviderExpression> sub (string field,
+                auto value) {
+            return <DataProviderExpression>{
+                "exp": DP_SEARCH_OP_EQ,
+                "args": (<DataProviderFieldReference>{"field": field}, value),
+            };
+        };
+
+        # the key with a dot, not the key of the nested object
+        assertEq((1,), get_ids(eq("Unit\\.Price", 10)), "the key with a dot");
+        # the key of the nested object
+        assertEq((2,), get_ids(eq("Unit.Price", 10)), "the key of the nested object");
+        assertEq((1,), get_ids(eq("order.Unit\\.Price", 5)), "a key with a dot in a nested object");
+        assertEq((2,), get_ids(eq("first name", "Bob")), "a key with a space");
+        assertEq((1,), get_ids({"Unit\\.Price": 10}), "a key with a dot in a plain where hash");
     }
 
     #! Test service endpoints (health, liveness, readiness, telemetry, metrics, issues)

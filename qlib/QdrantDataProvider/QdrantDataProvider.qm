@@ -388,6 +388,30 @@ module QdrantDataProvider {
     Qdrant collections as drop-in vector stores for
     @ref QoreRagUtils::RagPipeline ingest and retrieval.
 
+    @section qdrantdataprovider_payload_keys Payload Keys in Search Filters
+
+    The field of a search expression is a field path: its keys are separated by dots, and a dot in a key is escaped
+    with a backslash.  In the filter sent to Qdrant, each key that has a dot, or any character other than an ASCII
+    letter, a digit, \c "_" or \c "-", is quoted (see @ref QdrantDataProvider::QdrantPayloadKey "QdrantPayloadKey"),
+    so that a payload key with a dot is found, and not a key of a nested object:
+    - \c order.id is the key \c id of the object \c order: <tt>order.id</tt>
+    - <tt>Unit\\.Price</tt> is the key \c Unit.Price: <tt>"Unit.Price"</tt>
+    - <tt>order.Unit\\.Price</tt> is that key in the object \c order: <tt>order."Unit.Price"</tt>
+
+    A quoted key has no escapes in Qdrant, so a key with a double quote or a backslash cannot be searched for; such a
+    field raises \c WHERE-ERROR.
+
+    @par Example: Search for a Payload Key with a Dot
+    @code{.py}
+AbstractDataProvider products = new QdrantDataProvider({"url": "http://localhost:6333"})
+    .getChildProviderEx("tables").getChildProviderEx("products");
+# finds the points whose payload key "Unit.Price" is 10
+AbstractDataProviderRecordIterator i = products.searchRecords(<DataProviderExpression>{
+    "exp": DP_SEARCH_OP_EQ,
+    "args": (<DataProviderFieldReference>{"field": "Unit\\.Price"}, 10),
+});
+    @endcode
+
     @section qdrantdataprovider_examples Qdrant Data Provider Examples
 
     These examples are with \c qdp, the command-line interface to the Data Provider API.
