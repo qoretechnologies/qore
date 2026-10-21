@@ -35,8 +35,13 @@ Program_loadModule_VsVi(...)
     new Programs while ProviderIndexUtil loaded application modules into its own.
 
     The race is reproduced in a child process, so a crash fails an assertion rather than the test
-    run.  Without the fix one round of it crashed in two of three runs on the machine the fix was
-    made on; three rounds are run.
+    run.  Each importer imports the module a bounded number of times while each module is loaded and
+    then waits for the next one: importers that imported without pause for the whole round took the CPU
+    from the loading thread, so a round that takes about 25 s on a machine with idle cores took about
+    2 minutes on two cores, and the test ran past its timeout on a loaded machine; a bounded round
+    takes about 21 s, and 29 s on two cores.  Without the fix,
+    a round crashed in 4 of 4 runs importing without pause and in 9 of 10 bounded (Linux x86_64 debug
+    build); three rounds are run.
 */
 class ConcurrentModuleProgramMergeTest inherits QUnit::Test {
     public {
@@ -45,6 +50,9 @@ class ConcurrentModuleProgramMergeTest inherits QUnit::Test {
 
         #! the number of threads importing the module into new Programs while it loads them
         const ImportThreads = 8;
+
+        #! the number of times each importing thread imports the module while one module is loaded
+        const ImportsPerLoad = 32;
 
         #! the number of rounds of the race
         const Rounds = 3;
@@ -97,33 +105,49 @@ class ConcurrentModuleProgramMergeTest inherits QUnit::Test {
 %%requires ProviderIndexUtil
 
 list<string> mods = (map trim($1), ReadOnlyFile::readTextFile(ARGV[0]).split(\"\\n\"), trim($1));
-Counter start(1);
+int threads = %d;
+int per_load = %d;
+# each importer gets the number of imports to make for the module being loaded, and 0 at the end
+list<Queue> go = ();
+Counter imported();
 Counter running();
-bool loader_done = False;
 int imports = 0;
-for (int t = 0; t < %d; ++t) {
+for (int t = 0; t < threads; ++t) {
+    Queue q();
+    push go, q;
     running.inc();
     background sub () {
         on_exit running.dec();
-        start.waitForZero();
-        while (!loader_done) {
-            Program p(PO_NEW_STYLE);
-            p.loadModule(\"ProviderIndexUtil\");
-            ++imports;
+        while (True) {
+            int n = q.get();
+            if (!n) {
+                break;
+            }
+            for (int i = 0; i < n; ++i) {
+                Program p(PO_NEW_STYLE);
+                p.loadModule(\"ProviderIndexUtil\");
+                ++imports;
+            }
+            imported.dec();
         }
     }();
 }
-start.dec();
 int loaded = 0;
 foreach string m in (mods) {
+    for (int t = 0; t < threads; ++t) {
+        imported.inc();
+    }
+    # the importers start while the module is loaded
+    map $1.push(per_load), go;
     if (ProviderIndexUtil::tryLoadModule(m)) {
         ++loaded;
     }
+    imported.waitForZero();
 }
-loader_done = True;
+map $1.push(0), go;
 running.waitForZero();
 printf(\"%s loaded=%%d imports=%%d\\n\", loaded, imports);
-", qlib_dir, ImportThreads, Done));
+", qlib_dir, ImportThreads, ImportsPerLoad, Done));
         f.close();
 
         for (int round = 1; round <= Rounds; ++round) {
