@@ -720,7 +720,7 @@ extern "C" DLLEXPORT const char* qore_aot_runtime_identity;
 /** This is \c qore_aot_runtime_identity unless the \c QORE_AOT_TEST_RUNTIME_IDENTITY environment variable is set,
     which only tests use to compile a module for a different runtime.
 */
-DLLLOCAL const char* qore_aot_get_compile_runtime_identity();
+DLLLOCAL std::string qore_aot_get_compile_runtime_identity();
 
 //! C ABI helper recording the AOT runtime identity that an AOT module was compiled for
 /** Called by the generated module descriptor function after qore_aot_fill_module_desc() in every AOT module with

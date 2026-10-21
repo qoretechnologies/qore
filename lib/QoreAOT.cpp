@@ -1958,10 +1958,10 @@ static bool appendModulePathListSections(QoreAOTBinaryWriter& writer,
     return true;
 }
 
-const char* qore_aot_get_compile_runtime_identity() {
-    QoreEnvironmentValue test_identity_holder("QORE_AOT_TEST_RUNTIME_IDENTITY");
-    const char* test_identity = test_identity_holder.c_str();
-    return test_identity && *test_identity ? test_identity : qore_aot_runtime_identity;
+std::string qore_aot_get_compile_runtime_identity() {
+    // a copy: the value read from the environment is only valid while it is held
+    QoreEnvironmentValue test_identity("QORE_AOT_TEST_RUNTIME_IDENTITY");
+    return test_identity && !test_identity.str().empty() ? test_identity.str() : qore_aot_runtime_identity;
 }
 
 //! Append producer/build diagnostics and an optional source stat fingerprint to the AOT metadata blob.
