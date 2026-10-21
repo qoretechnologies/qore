@@ -875,6 +875,27 @@ bool AsyncIoControllerPriv::refreshSocketWaitGeneration(PollInfo& pinfo, QoreHas
     return changed;
 }
 
+#ifdef DEBUG
+const pthread_mutexattr_t* AsyncIoControllerPriv::ErrorCheckLock::getAttr() {
+    // initialized once, on first use; the initialization of a local static is thread-safe
+    static const pthread_mutexattr_t* attr = [] () {
+        static pthread_mutexattr_t a;
+#ifndef NDEBUG
+        int rc =
+#endif
+        pthread_mutexattr_init(&a);
+        assert(!rc);
+#ifndef NDEBUG
+        rc =
+#endif
+        pthread_mutexattr_settype(&a, PTHREAD_MUTEX_ERRORCHECK);
+        assert(!rc);
+        return &a;
+    }();
+    return attr;
+}
+#endif
+
 void AsyncIoControllerPriv::cleanupAbandonedCommand(Command& cmd, ExceptionSink* xsink) {
     // Release refs and signal waiters for a command drained from cmdq that
     // will not be processed (because the I/O thread received Quit or is

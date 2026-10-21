@@ -547,6 +547,7 @@ DLLEXPORT extern const TypedHashDecl* hashdeclSocketPollResultInfo;
 class AsyncIoControllerPriv : public AbstractPrivateData {
 #ifdef DEBUG
     friend class AsyncIoAbandonedCommandLockTest;
+    friend class AsyncIoErrorCheckLockTest;
     friend class AsyncIoCloseTest;
     friend class AsyncIoDescriptorHoldTest;
     friend class AsyncIoOpCacheTest;
@@ -1687,7 +1688,24 @@ private:
     }
 
     // --- Mutex-protected state (rare paths: startup, shutdown, cancel wait) ---
+#ifdef DEBUG
+    //! The controller's lock in debug builds: an error-checking mutex
+    /** A thread that takes the lock it already holds (a self-deadlock: the lock is not recursive) or that releases a
+        lock it does not hold then fails the assertion in QoreThreadLock::lock() or unlock() at once, instead of
+        waiting for itself forever.  Release builds use a plain QoreThreadLock.
+    */
+    class ErrorCheckLock : public QoreThreadLock {
+    public:
+        DLLLOCAL ErrorCheckLock() : QoreThreadLock(getAttr()) {
+        }
+
+        //! Returns the attributes the lock is created with: those of an error-checking mutex
+        DLLLOCAL static const pthread_mutexattr_t* getAttr();
+    };
+    mutable ErrorCheckLock m;
+#else
     mutable QoreThreadLock m;
+#endif
     bool autostop_flag;
     //! True if the I/O threads are external-lifecycle threads; see setExternalLifecycleThreads()
     bool external_lifecycle_threads = false;

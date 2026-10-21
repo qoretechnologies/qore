@@ -98,6 +98,7 @@
 #include <functional>
 #include <limits>
 #include <mutex>
+#include <type_traits>
 #include <set>
 #include <thread>
 
@@ -4255,6 +4256,70 @@ public:
 
         SimpleRefHolder<QoreStringNode> owner(new QoreStringNode("stale-readiness-unit-test"));
         ctrl->cancelByOwner(*owner, &xsink);
+        xsink.clear();
+    }
+};
+
+// set when the unit tests are built with ThreadSanitizer, which reports the misuse of a mutex itself
+#if defined(__SANITIZE_THREAD__)
+#define QORE_UT_TSAN 1
+#elif defined(__has_feature)
+#if __has_feature(thread_sanitizer)
+#define QORE_UT_TSAN 1
+#endif
+#endif
+
+//! In debug builds, the controller's lock is an error-checking mutex
+/** The lock is not recursive: a thread that takes it again waits for itself forever (as cleanupAbandonedCommand() did
+    with its callers).  With an error-checking mutex, QoreThreadLock::lock() gets EDEADLK instead and its assertion
+    fails at once, with the stack of the thread that took the lock again.  The test checks the type of the lock and of
+    its attributes, and that a mutex made with those attributes reports a second lock and an unlock by another thread
+    (not under ThreadSanitizer, which reports that unlock itself) as errors.
+*/
+class AsyncIoErrorCheckLockTest {
+public:
+    static void run(UnitTestCounters& c) {
+        static_assert(std::is_same<decltype(AsyncIoControllerPriv::m), AsyncIoControllerPriv::ErrorCheckLock>::value,
+            "the controller's lock is an error-checking lock in debug builds");
+        static_assert(std::is_base_of<QoreThreadLock, AsyncIoControllerPriv::ErrorCheckLock>::value,
+            "the error-checking lock is a QoreThreadLock");
+
+        const pthread_mutexattr_t* attr = AsyncIoControllerPriv::ErrorCheckLock::getAttr();
+        int type = -1;
+        UT_ASSERT_EQ(c, 0, pthread_mutexattr_gettype(attr, &type), "the lock's attributes have a type");
+        UT_ASSERT_EQ(c, PTHREAD_MUTEX_ERRORCHECK, type, "the controller's lock is an error-checking mutex");
+
+        pthread_mutex_t mx;
+        UT_ASSERT_EQ(c, 0, pthread_mutex_init(&mx, attr), "a mutex is made with the lock's attributes");
+        UT_ASSERT_EQ(c, 0, pthread_mutex_lock(&mx), "the mutex is locked");
+        UT_ASSERT_EQ(c, EDEADLK, pthread_mutex_lock(&mx), "a second lock by the same thread is an error");
+#ifndef QORE_UT_TSAN
+        // ThreadSanitizer reports an unlock by a thread that does not hold a mutex itself, as an error of the test
+        int other_rc = 0;
+        std::thread other([&mx, &other_rc]() {
+            other_rc = pthread_mutex_unlock(&mx);
+        });
+        other.join();
+        UT_ASSERT_EQ(c, EPERM, other_rc, "an unlock by a thread that does not hold the mutex is an error");
+#endif
+        UT_ASSERT_EQ(c, 0, pthread_mutex_unlock(&mx), "the mutex is unlocked");
+        pthread_mutex_destroy(&mx);
+
+        // the controller's own lock works as a lock with these attributes
+        ExceptionSink xsink;
+        ReferenceHolder<AsyncIoControllerPriv> ctrl(new AsyncIoControllerPriv(false, &xsink), &xsink);
+        UT_ASSERT(c, !xsink, "error-check lock controller construction succeeds");
+        if (xsink) {
+            xsink.clear();
+            return;
+        }
+        {
+            AutoLocker al(ctrl->m);
+            UT_ASSERT(c, ctrl->m.trylock() != 0, "the held lock cannot be taken again");
+        }
+        UT_ASSERT_EQ(c, 0, ctrl->m.trylock(), "the released lock can be taken");
+        ctrl->m.unlock();
+        ctrl->stopClear(&xsink);
         xsink.clear();
     }
 };
@@ -9511,6 +9576,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     AsyncIoZeroPollHintTest::run(c);
     AsyncIoStaleReadinessTest::run(c);
     AsyncIoAbandonedCommandLockTest::run(c);
+    AsyncIoErrorCheckLockTest::run(c);
     AsyncIoStoppingThreadTest::run(c);
     AsyncIoFrameSendTest::run(c);
     ut_cond_wait_cancel_in_window(c);
