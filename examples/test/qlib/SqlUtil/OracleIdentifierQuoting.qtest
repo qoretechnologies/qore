@@ -1,0 +1,403 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires SqlUtil
+%requires OracleSqlUtilBase
+
+%try-module oracle
+%define NoOracle
+%endtry
+
+%exec-class OracleIdentifierQuotingTest
+
+#! SQL that Oracle schema objects give for names that are not ordinary identifiers
+/** A name that Oracle reads as one unquoted identifier (and is not a reserved word) is given as is, a reserved word
+    is quoted with its case, as before, and any other name is quoted in upper case, as Oracle stores an unquoted name;
+    a double quote or a NUL character cannot be part of an Oracle identifier, even a quoted one, and is refused.
+
+    With a connection (-c or QORE_DB_CONNSTR_ORACLE), a table with hostile names is also created, used and aligned
+    through SqlUtil.
+*/
+class OracleIdentifierQuotingTest inherits QUnit::Test {
+    public {
+        #! names that would change the SQL if given as they are, with the SQL that names them
+        const HostileNames = {
+            "a; drop table t; --": "\"A; DROP TABLE T; --\"",
+            "x) values (1); delete from t where (1=1": "\"X) VALUES (1); DELETE FROM T WHERE (1=1\"",
+            "a /* b": "\"A /* B\"",
+            "a -- b": "\"A -- B\"",
+            "x%sy": "\"X%SY\"",
+            "c:name": "\"C:NAME\"",
+            "it's": "\"IT'S\"",
+            "my col": "\"MY COL\"",
+            "1st": "\"1ST\"",
+            "_x": "\"_X\"",
+            "a.b": "\"A.B\"",
+            "Order Date": "\"ORDER DATE\"",
+        };
+
+        #! ordinary names are given as they are, with the case as given
+        const OrdinaryNames = ("abc", "Abc", "ABC", "a$b#c", "ora$ptt_x", "město", "x1_y");
+
+        #! reserved words are quoted with their case as given, as before
+        const ReservedWords = {
+            "order": "\"order\"",
+            "Order": "\"Order\"",
+            "select": "\"select\"",
+        };
+
+        const MyOpts = Opts + {
+            "connstr": "c,conn=s",
+        };
+    }
+
+    constructor() : Test("OracleIdentifierQuotingTest", "1.0", \ARGV, MyOpts) {
+        addTestCase("column names", \columnNames());
+        addTestCase("unrepresentable names are refused", \refusedNames());
+        addTestCase("index SQL", \indexSql());
+        addTestCase("constraint SQL", \constraintSql());
+        addTestCase("foreign constraint SQL", \foreignConstraintSql());
+        addTestCase("sequence, view and trigger SQL", \objectSql());
+        addTestCase("table SQL without a connection", \offlineTableSql());
+        addTestCase("column aliases", \aliasSql());
+        addTestCase("live table with hostile names", \liveTest());
+        set_return_value(main());
+    }
+
+    private static OracleColumn column(string name) {
+        return new OracleColumn(name, "varchar2", "string", 80, True);
+    }
+
+    private static hash<auto> colHash(softlist<string> names) {
+        hash<auto> rv;
+        foreach string name in (names) {
+            rv{name} = OracleIdentifierQuotingTest::column(name);
+        }
+        return rv;
+    }
+
+    private static Columns columns(softlist<string> names) {
+        return new Columns(OracleIdentifierQuotingTest::colHash(names));
+    }
+
+    columnNames() {
+        foreach hash<auto> i in (HostileNames.pairIterator()) {
+            assertEq(i.value, column(i.key).ddl_name, i.key);
+        }
+        foreach string name in (OrdinaryNames) {
+            assertEq(name, column(name).ddl_name, name);
+        }
+        foreach hash<auto> i in (ReservedWords.pairIterator()) {
+            assertEq(i.value, column(i.key).ddl_name, i.key);
+        }
+        OracleColumn c = column("a; drop table t; --");
+        assertEq("alter table t drop column \"A; DROP TABLE T; --\"", c.getDropSql("t"));
+    }
+
+    refusedNames() {
+        assertThrows("IDENTIFIER-ERROR", "double quote", \column(), "a\"b");
+        assertThrows("IDENTIFIER-ERROR", "double quote", \column(), "x\" varchar2(1)); drop table t; --");
+        assertThrows("IDENTIFIER-ERROR", "NUL", \column(), "a" + chr(0) + "b");
+        assertThrows("IDENTIFIER-ERROR", "empty", \column(), "");
+        # a name given to an object that is not a column is refused the same way
+        OracleSequence seq("a\"b");
+        assertThrows("IDENTIFIER-ERROR", "double quote", \seq.getCreateSql());
+        assertThrows("IDENTIFIER-ERROR", "double quote", \seq.getDropSql());
+        OracleIndex ix("ok_ix", False, colHash("a"), "NORMAL", "ts\"x");
+        assertThrows("IDENTIFIER-ERROR", "double quote", \ix.getCreateSql(), "t");
+    }
+
+    indexSql() {
+        OracleIndex ix("ix; drop table t; --", True, colHash(("a", "my col", "order")), "NORMAL", "my ts");
+        assertEq("create unique index \"IX; DROP TABLE T; --\" on t (a, \"MY COL\", \"order\") tablespace \"MY TS\"",
+            ix.getCreateSql("t"));
+        assertEq("drop index \"IX; DROP TABLE T; --\"", ix.getDropSql("t"));
+        assertEq(("alter index \"IX; DROP TABLE T; --\" rename to \"NEW IX\"",), ix.getRenameSql("t", "new ix"));
+
+        # ordinary names: the SQL is as before
+        OracleIndex plain("ix_t_a", False, colHash(("a", "b")), "NORMAL", "users");
+        assertEq("create index ix_t_a on t (a, b) tablespace users", plain.getCreateSql("t"));
+        assertEq("drop index ix_t_a", plain.getDropSql("t"));
+        assertEq(("alter index ix_t_a rename to ix_t_b",), plain.getRenameSql("t", "ix_t_b"));
+
+        # an index "column" that is not a column of the table is an SQL expression, as for every database
+        OracleIndex fix("ix_fn", False, {"upper(a)": {}}, "FUNCTION-BASED NORMAL");
+        assertEq("create index ix_fn on t (upper(a))", fix.getCreateSql("t"));
+    }
+
+    constraintSql() {
+        OracleCheckConstraint cc("ck x; drop table t; --", "a > 0");
+        assertEq("alter table t add constraint \"CK X; DROP TABLE T; --\" check (a > 0)", cc.getCreateSql("t"));
+        assertEq("alter table t drop constraint \"CK X; DROP TABLE T; --\"", cc.getDropSql("t"));
+        assertEq("alter table t rename constraint \"CK X; DROP TABLE T; --\" to \"CK Y\"",
+            cc.getRenameSql("t", "ck y")[0]);
+        assertEq("alter table t disable constraint \"CK X; DROP TABLE T; --\"", cc.getDisableSql("t"));
+        assertEq("alter table t enable constraint \"CK X; DROP TABLE T; --\"", cc.getEnableSql("t"));
+
+        OracleUniqueConstraint uk("uk x", colHash(("a", "my col")), True, "my ts");
+        assertEq("alter table t add constraint \"UK X\" unique (a, \"MY COL\") using index tablespace \"MY TS\"",
+            uk.getCreateSql("t"));
+        assertEq("alter table t add constraint \"UK X\" unique (a, \"MY COL\") using index \"MY IX\"",
+            uk.getCreateSql("t", {"index": "my ix"}));
+        assertEq("alter table t drop constraint \"UK X\"", uk.getDropSql("t"));
+
+        OraclePrimaryKey pk("pk x", colHash(("a", "my col")), "my ts");
+        assertEq("alter table t add constraint \"PK X\" primary key (a, \"MY COL\") using index tablespace \"MY TS\"",
+            pk.getCreateSql("t"));
+        assertEq("alter table t rename constraint \"PK X\" to pk_y", pk.getRenameSql("t", "pk_y")[0]);
+
+        # ordinary names: the SQL is as before
+        OracleUniqueConstraint puk("uk_t_a", colHash(("a", "order")), True);
+        assertEq("alter table t add constraint uk_t_a unique (a, \"order\")", puk.getCreateSql("t"));
+        assertEq("alter table t drop constraint uk_t_a", puk.getDropSql("t"));
+    }
+
+    foreignConstraintSql() {
+        OracleForeignConstraint fk("fk x", columns(("my col",)),
+            new ForeignConstraintTarget("s.parent table; drop table t; --", columns(("id",))), True);
+        assertEq("alter table child add constraint \"FK X\" foreign key (\"MY COL\") references "
+            "s.\"PARENT TABLE; DROP TABLE T; --\" (id)", fk.getCreateSql("child"));
+        assertEq("alter table child drop constraint \"FK X\"", fk.getDropSql("child"));
+
+        OracleForeignConstraint pfk("fk_child_parent", columns(("parent_id",)),
+            new ForeignConstraintTarget("parent", columns(("id",))), True);
+        assertEq("alter table child add constraint fk_child_parent foreign key (parent_id) references parent (id)",
+            pfk.getCreateSql("child"));
+        assertEq("alter table child drop constraint fk_child_parent", pfk.getDropSql("child"));
+    }
+
+    objectSql() {
+        OracleSequence seq("my seq; drop table t");
+        assertEq("create sequence \"MY SEQ; DROP TABLE T\" start with 1 increment by 1 nomaxvalue",
+            seq.getCreateSql());
+        assertEq("drop sequence \"MY SEQ; DROP TABLE T\"", seq.getDropSql());
+        assertEq("rename \"MY SEQ; DROP TABLE T\" to \"NEW SEQ\"", seq.getRenameSql("new seq")[0]);
+        OracleSequence sseq("s.my seq");
+        assertEq("drop sequence s.\"MY SEQ\"", sseq.getDropSql());
+        OracleSequence pseq("seq_t");
+        assertEq("create sequence seq_t start with 1 increment by 1 nomaxvalue", pseq.getCreateSql());
+        assertEq("drop sequence seq_t", pseq.getDropSql());
+
+        OracleView view("my view", "select 1 a from dual", NOTHING, NOTHING, NOTHING, NOTHING, NOTHING, NOTHING,
+            False, False);
+        assertEq("create noforce view \"MY VIEW\" as select 1 a from dual", view.getCreateSql());
+        assertEq("drop view \"MY VIEW\"", view.getDropSql());
+        assertEq("rename \"MY VIEW\" to v2", view.getRenameSql("v2")[0]);
+
+        OracleTrigger trig("my trig", "before insert on t for each row begin null; end;");
+        assertEq("create trigger \"MY TRIG\" before insert on t for each row begin null; end;",
+            trig.getCreateSql("t")[0]);
+        assertEq("drop trigger \"MY TRIG\"", trig.getDropSql("t")[0]);
+        assertEq("alter trigger \"MY TRIG\" rename to trig2", trig.getRenameSql("t", "trig2")[0]);
+    }
+
+    #! returns a table for SQL generation without a connection
+    private static OracleTable offlineTable(string name) {
+        OfflineDatasource ds("oracle:omq/pass@db", "Oracle Database 19c Enterprise Edition Release 19.0.0.0.0",
+            "oracle");
+        return new OracleTable(ds, name);
+    }
+
+    offlineTableSql() {
+%ifdef NoOracle
+        testSkip("no oracle module");
+%else
+        string tname = "b4sq t; drop table x --";
+        string tsql = "\"B4SQ T; DROP TABLE X --\"";
+        OracleTable t = offlineTable(tname);
+        assertEq("omq." + tsql, t.getSqlName());
+        t.setupTable({
+            "columns": {
+                "id": {"native_type": "number", "size": 14, "notnull": True},
+                "my col": {"native_type": "varchar2", "size": 20},
+                "order": {"native_type": "varchar2", "size": 20},
+            },
+            "primary_key": {"name": "pk x", "columns": ("id",)},
+            "indexes": {"ix x": {"columns": ("my col",)}},
+            "unique_constraints": {"uk x": {"columns": ("order",)}},
+        });
+        list<string> sql = t.getCreateSql();
+        assertGt(1, sql.size());
+        # the table is quoted in every statement that names it
+        foreach string stmt in (sql) {
+            assertRegex(regex_subst(tsql, "([.()?*+^$|\\[\\]{}])", "\\$1", RE_Global), stmt, stmt);
+            assertNRegex("b4sq t; drop table x --", stmt, stmt);
+        }
+        assertEq("create table " + tsql + " (\n  id number(14) not null,\n  \"MY COL\" varchar2(20),\n  "
+            "\"order\" varchar2(20)\n)", sql[0]);
+        assertEq("alter table omq." + tsql + " rename to \"B4SQ U\"", t.getRenameSql("b4sq u"));
+        assertEq(("drop table omq." + tsql,), t.getDropSql());
+
+        # DML: hostile column names are quoted, values are bound
+        list<auto> args;
+        string sel = t.getSelectSql({"columns": ("id", "my col"), "where": {"my col": "x", "order": "y"},
+            "orderby": "my col"}, \args);
+        assertEq("select id, \"MY COL\" from omq." + tsql + " where \"MY COL\" = %v and \"order\" = %v "
+            "order by \"MY COL\"", sel);
+        assertEq(("x", "y"), args);
+        hash<auto> upd = t.getUpdateSql({"my col": "v"}, {"id": 1});
+        assertEq("update omq." + tsql + " set \"MY COL\" = %v where id = %v", upd.sql);
+
+        # ordinary names: the SQL is as before
+        OracleTable p = offlineTable("plain_t");
+        assertEq("omq.plain_t", p.getSqlName());
+        assertEq("a", p.getColumnSqlName("a"));
+        assertEq("\"order\"", p.getColumnSqlName("order"));
+        assertEq(("a", "\"MY COL\""), p.getColumnSqlNames(("a", "my col")));
+        assertEq("remote_user.plain_t@remote.db", offlineTable("plain_t@remote.db").getSqlName().lwr());
+        assertThrows("IDENTIFIER-ERROR", "database link", \offlineTable(), "plain_t@x; drop table y");
+        assertThrows("IDENTIFIER-ERROR", "double quote", \p.getColumnSqlName(), "a\"b");
+%endif
+    }
+
+    aliasSql() {
+%ifdef NoOracle
+        testSkip("no oracle module");
+%else
+        OracleTable t = offlineTable("alias_t");
+        t.setupTable({"columns": {"id": {"native_type": "number", "size": 14, "notnull": True}}});
+        list<auto> args;
+        # an alias keeps its case; ordinary aliases and reserved words are given as before
+        assertEq("select id as total from omq.alias_t", t.getSelectSql({"columns": (cop_as("id", "total"),)},
+            \args));
+        assertEq("select id as Total from omq.alias_t", t.getSelectSql({"columns": (cop_as("id", "Total"),)},
+            \args));
+        assertEq("select id as \"order\" from omq.alias_t", t.getSelectSql({"columns": (cop_as("id", "order"),)},
+            \args));
+        assertEq("select id as \"My Total\" from omq.alias_t",
+            t.getSelectSql({"columns": (cop_as("id", "My Total"),)}, \args));
+        assertEq("select id as \"a; drop table x --\" from omq.alias_t",
+            t.getSelectSql({"columns": (cop_as("id", "a; drop table x --"),)}, \args));
+        assertThrows("IDENTIFIER-ERROR", "double quote", \t.getSelectSql(),
+            ({"columns": (cop_as("id", "a\" from dual; --"),)}, \args));
+%endif
+    }
+
+    liveTest() {
+%ifdef NoOracle
+        testSkip("no oracle module");
+%else
+        *string connstr = m_options.connstr ?? ENV.QORE_DB_CONNSTR_ORACLE;
+        if (!connstr) {
+            testSkip("no Oracle connection; set QORE_DB_CONNSTR_ORACLE or use -c");
+        }
+        Datasource ds(connstr);
+        OracleDatabase db(ds);
+        string tname = "b4sq hostile; drop table x --";
+        string iname = "ix hostile; --";
+        hash<auto> desc = {
+            "columns": {
+                "id": {"native_type": "number", "size": 14, "notnull": True},
+                "order": {"native_type": "varchar2", "size": 20},
+                "my col; drop table x --": {"native_type": "varchar2", "size": 20},
+                "x%s": {"native_type": "varchar2", "size": 20},
+                "c:name": {"native_type": "varchar2", "size": 20},
+                "order date": {"native_type": "varchar2", "size": 20},
+            },
+            "primary_key": {"name": "pk hostile", "columns": ("id",)},
+            "indexes": {
+                iname: {"columns": ("my col; drop table x --",)},
+            },
+        };
+        # the table does not exist before the test
+        {
+            AbstractTable t0 = AbstractTable::getTable(ds, tname);
+            if (t0.checkExistence()) {
+                map ds.execRaw($1), t0.getDropSql();
+                ds.commit();
+            }
+        }
+        AbstractTable t = AbstractTable::getTable(ds, tname);
+        t.setupTable(desc);
+        on_exit {
+            ds.rollback();
+            AbstractTable dt = AbstractTable::getTable(ds, tname);
+            if (dt.checkExistence()) {
+                map ds.execRaw($1), dt.getDropSql();
+            }
+            ds.commit();
+        }
+        t.create();
+        ds.commit();
+        assertEq("\"B4SQ HOSTILE; DROP TABLE X --\"", t.getSqlName().split(".")[1], "the table is quoted in upper case");
+
+        # DML with hostile column names in values, where and update
+        t.insert({"id": 1, "order": "o", "my col; drop table x --": "m", "x%s": "1); drop table x; --",
+            "c:name": "c", "order date": "d"});
+        t.insert({"id": 2, "order": "p", "my col; drop table x --": "n", "x%s": "v", "c:name": "e",
+            "order date": "f"});
+        assertEq(1, t.update({"x%s": "w"}, {"my col; drop table x --": "n"}));
+        list<hash<auto>> rows = t.selectRows({"orderby": "id"});
+        assertEq(2, rows.size());
+        assertEq("1); drop table x; --", rows[0]."x%s");
+        assertEq("w", rows[1]."x%s");
+        assertEq({"id": 1}, t.selectRow({"columns": "id", "where": {"c:name": "c", "order date": "d"}}));
+        assertEq(AbstractTable::UR_Verified, t.upsert({"id": 2, "order": "q", "my col; drop table x --": "n2"}));
+        assertEq("q", t.selectRow({"columns": "order", "where": {"id": 2}})."order");
+        # column aliases: the oracle driver gives the names of result columns in lower case, so an alias that
+        # works without quotes has the same key as before, and an alias that needs quotes keeps its letters
+        hash<auto> arow = t.selectRow({"columns": (cop_as("id", "total"), cop_as("id", "Total2"),
+            cop_as("id", "order"), cop_as("id", "My Total"), cop_as("my col; drop table x --", "a; b")),
+            "where": {"id": 1}});
+        assertEq({"total": 1, "total2": 1, "order": 1, "my total": 1, "a; b": "m"}, arow);
+        assertThrows("IDENTIFIER-ERROR", "double quote", \t.selectRow(),
+            {"columns": (cop_as("id", "x\" from dual --"),)});
+        assertEq(1, t.del({"x%s": "w"}));
+        ds.commit();
+
+        # the table is described with the names, and aligning it needs no SQL; on Oracle, names are described in
+        # lower case, so a template gives them in lower case, as it does ordinary names
+        AbstractTable live = AbstractTable::getTable(ds, tname);
+        hash<auto> live_desc = live.getDescriptionHash();
+        assertEq(sort(("id", "order", "my col; drop table x --", "x%s", "c:name", "order date")),
+            sort(keys live_desc.columns));
+        AbstractTable template = AbstractTable::getTable(ds, tname);
+        template.setupTable(desc);
+        assertEq((), live.getAlignSql(template), "an unchanged table needs no SQL");
+        # the other table is still there: no SQL was injected
+        assertTrue(boolean(ds.selectRow("select count(1) cnt from user_tables where table_name = %v",
+            "B4SQ HOSTILE; DROP TABLE X --").cnt));
+%endif
+    }
+}
+
+#! a datasource that gives SQL generation the server version without a connection
+class OfflineDatasource inherits Datasource {
+    private {
+        string version;
+        string real_driver;
+    }
+
+    constructor(string connstr, string version, string real_driver) : Datasource(connstr) {
+        self.version = version;
+        self.real_driver = real_driver;
+    }
+
+    auto getServerVersion() {
+        return version;
+    }
+
+    string getDriverRealName() {
+        return real_driver;
+    }
+
+    auto select(string sql, ...) {
+        return {};
+    }
+
+    auto selectRow(string sql, ...) {
+        # the user of a database link
+        if (sql =~ /db_links/) {
+            return {"username": "REMOTE_USER"};
+        }
+    }
+
+    auto selectRows(string sql, ...) {
+        return ();
+    }
+}

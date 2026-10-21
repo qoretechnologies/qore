@@ -116,9 +116,10 @@ class ConstraintRenameAlignmentTest inherits QUnit::Test {
         {
             OfflineDatasource ds("oracle:user/pass@db", "Oracle Database 19c Enterprise Edition Release "
                 "19.0.0.0.0", "oracle");
+            # "user" is a reserved word in Oracle, so the schema of the connection's user is quoted
             assertEq((
-                "alter table user.cra_t rename constraint uk_cra_old to uk_cra_new",
-                "alter table user.cra_t rename constraint fk_cra_old to fk_cra_new",
+                "alter table \"user\".cra_t rename constraint uk_cra_old to uk_cra_new",
+                "alter table \"user\".cra_t rename constraint fk_cra_old to fk_cra_new",
             ), memoryAlignSql(AbstractTable sub (string t) { return new OracleTable(ds, t); }), "Oracle");
         }
 %endif

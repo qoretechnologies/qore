@@ -153,6 +153,60 @@ ds.vselectRows("select * from schema.table where type = %v order by type offset 
     connection schema, then if a synonym of the same type exists and the target object is accessible, then the target
     object is read  automatically and the owning schema name is also set to the actual owner of the object.
 
+    @subsection ora_identifiers Identifiers on Oracle
+
+    Names of tables, columns, indexes, constraints, sequences, views, triggers, partitions, schemas, tablespaces,
+    savepoints and column aliases are given in SQL as follows (see @ref SqlUtil::AbstractSqlUtilBase::getSqlIdentifier()
+    "AbstractSqlUtilBase::getSqlIdentifier()"):
+    - a name that Oracle reads as one unquoted identifier (a letter, then letters, digits, \c "_", \c "$" or
+      \c "#") that is not a reserved word is given as it is, so that Oracle stores it in upper case, as before
+    - a reserved word is given in double quotes with its case as given, as before
+    - any other name, such as one with spaces, punctuation or a leading digit or underscore, is given in double
+      quotes <b>in upper case</b>, as Oracle stores an unquoted name, so that it names the object that %SqlUtil looks
+      up in upper case and describes in lower case; for example, a column \c "Order Date" is created as
+      <tt>"ORDER DATE"</tt> and described as \c "order date"; a column alias, which names no object, keeps its case
+      in double quotes
+    - a name with a double quote or a NUL character, which Oracle does not allow in an identifier, even a quoted one,
+      and an empty name, are refused with \c IDENTIFIER-ERROR
+    - a database link name (<tt>table@dblink</tt>) is given without quotes and must be of letters, digits, \c "_",
+      \c "$", \c "#", \c "." and \c "@"; any other is refused with \c IDENTIFIER-ERROR
+
+    Function, procedure, package, type and materialized view names, like their source, and SQL expressions given
+    in descriptions (default values, check constraint sources, index expressions, partition bounds) are SQL and are
+    used as given.
+
+    @subsection ora_fk_actions Foreign Constraint Referential Actions on Oracle
+
+    Oracle supports only these @ref SqlUtil::fk_actions "referential actions" of a foreign constraint (the
+    \c on_delete and \c on_update foreign constraint options):
+    - \c on_delete: @ref SqlUtil::FK_CASCADE "FK_CASCADE" (<tt>ON DELETE CASCADE</tt>),
+      @ref SqlUtil::FK_SET_NULL "FK_SET_NULL" (<tt>ON DELETE SET NULL</tt>), or no value or
+      @ref SqlUtil::FK_NO_ACTION "FK_NO_ACTION" for the default
+    - \c on_update: Oracle has no <tt>ON UPDATE</tt> clause, so only no value or
+      @ref SqlUtil::FK_NO_ACTION "FK_NO_ACTION" is accepted
+
+    Any other action (@ref SqlUtil::FK_RESTRICT "FK_RESTRICT" or @ref SqlUtil::FK_SET_DEFAULT "FK_SET_DEFAULT" for
+    \c on_delete, or any action for \c on_update) is refused with \c FOREIGN-CONSTRAINT-ERROR.  The
+    <tt>ON DELETE</tt> action of a foreign constraint is read from the database, so a schema alignment drops and
+    adds a foreign constraint again only when its template gives another action.
+
+    @subsection ora_sequences Sequences on Oracle
+
+    The \c start, \c increment, \c max (or \c end), \c min, \c cycle and \c cache keys of a
+    @ref SqlUtil::AbstractDatabase::SequenceDescriptionOptions "sequence description" are supported.  When a
+    schema is aligned, an existing sequence is changed with <tt>ALTER SEQUENCE</tt> for the increment, maximum,
+    minimum, cycle option and cache that differ, so that it keeps its current value; a parameter that the
+    description does not give is not changed.  The starting value of an existing sequence is not changed: Oracle
+    can change it only by resetting the current value (<tt>RESTART</tt>), or by dropping and creating the sequence,
+    which SqlUtil does not do.  A cache of 0 is \c NOCACHE; Oracle caches 20 values when no cache is given, and
+    does not accept a cache of 1.
+
+    The default maximum of an ascending sequence and the default minimum of a descending one are beyond the
+    integer range, so a sequence is described without them (no \c max or \c min value) when they are beyond
+    &plusmn;9000000000000000000; to align a sequence back to its default maximum or minimum, give a value beyond
+    that, such as 9223372036854775807, or the default of the other end (a minimum of 1 for an ascending sequence,
+    a maximum of -1 for a descending one).
+
     @subsection ora_type_mapping Type Mapping
 
     Column types are mapped from %Qore types as follows:
@@ -274,6 +328,34 @@ hash schema = (
     @section ora_relnotes Release Notes
 
     @subsection oracle17 OracleSqlUtilBase v1.7
+    - names that are not ordinary identifiers, such as table or column names from files or data providers with
+      spaces, quotes, semicolons or comment markers, are quoted in all generated SQL, so a name can no longer change
+      the SQL statement that it is part of; such a name is quoted in upper case, as Oracle stores an unquoted name,
+      and a name that Oracle cannot have in an identifier (with a double quote or a NUL character) or a database
+      link name with characters other than letters, digits, \c "_", \c "$", \c "#", \c "." and \c "@" is refused
+      with \c IDENTIFIER-ERROR; ordinary names and reserved words are given in SQL as before; see
+      @ref ora_identifiers
+    - fixed the names of sequences in the @ref SqlUtil::cop_seq() "cop_seq()", @ref SqlUtil::cop_seq_currval()
+      "cop_seq_currval()", @ref SqlUtil::uop_seq() "uop_seq()" and @ref SqlUtil::uop_seq_currval()
+      "uop_seq_currval()" operators and in @ref SqlUtil::AbstractDatabase::getNextSequenceValue()
+      "AbstractDatabase::getNextSequenceValue()", and the names of tables in
+      @ref SqlUtil::AbstractDatabase::reclaimSpace() "AbstractDatabase::reclaimSpace()", being inserted in SQL as
+      given
+    - added support for the \c on_delete foreign constraint option (<tt>ON DELETE CASCADE</tt> and
+      <tt>ON DELETE SET NULL</tt>), which is also read from the database, so that a schema alignment changes a
+      foreign constraint's action; Oracle has no <tt>ON UPDATE</tt> action, so the \c on_update option is
+      refused; see @ref ora_fk_actions
+    - an existing sequence is aligned with <tt>ALTER SEQUENCE</tt> for its increment, maximum, minimum, cycle
+      option and cache, keeping its current value, and the \c min, \c cycle and \c cache sequence options are
+      supported; the starting value of an existing sequence is not changed; see @ref ora_sequences
+    - fixed describing a descending sequence with the default maximum value, which failed with
+      \c SEQUENCE-ERROR
+    - fixed describing the foreign constraints of a table in another user's schema, which were not found, and of
+      a foreign constraint that references a table in another schema, whose table was looked up in the
+      connection's schema
+    - fixed the \c returning insert option with a column whose name is not a placeholder name (letters, digits and
+      \c "_" after a letter): the column was given as the name of its output placeholder; it is returned into a
+      placeholder of another name and given with its name in the result
     - added the size of the current schema (see @ref SqlUtil::AbstractDatabase::getCurrentSchemaPhysicalSize()
       "AbstractDatabase::getCurrentSchemaPhysicalSize()"): the segments of the user's own schema, or, when the
       session's current schema is another one, that schema's segments if the user can read \c dba_segments
@@ -405,6 +487,45 @@ hash schema = (
     - initial release
 */
 
+# returns a name as an SQL identifier for Oracle: as given if Oracle reads it as one unquoted identifier (a letter,
+# then letters, digits, underscores, dollar signs or pound signs) that is not a reserved word; a reserved word is quoted
+# with its case as given, as before; any other name is quoted in upper case, as Oracle stores an unquoted name, so
+# that it names the object that SqlUtil looks up in upper case and describes in lower case, and so that the name can
+# never change the SQL that it is part of; Oracle allows no double quote and no NUL character in an identifier, even
+# a quoted one
+string sub oracle_get_sql_identifier(string name) {
+    if (name =~ /\A\p{L}[\p{L}\p{N}_$#]*\z/) {
+        return OracleDatabase::OracleReservedWords{name.lwr()} ? ("\"" + name + "\"") : name;
+    }
+    if (name.find("\"") >= 0) {
+        AbstractSqlUtilBase::checkIdentifier(name, "Oracle");
+        throw "IDENTIFIER-ERROR", sprintf("Oracle: the name %y has a double quote, which Oracle does not allow in "
+            "an identifier", name);
+    }
+    return AbstractSqlUtilBase::getDelimitedIdentifier(name.upr(), "\"", "\"", "Oracle");
+}
+
+# returns a name in the form "name" or "schema.name", where the schema is a name of word characters, for SQL, each part
+# as oracle_get_sql_identifier() returns it
+string sub oracle_get_sql_object_name(string name) {
+    *list<*string> l = (name =~ x/^(\w+)\.(.+)$/s);
+    if (l) {
+        return oracle_get_sql_identifier(l[0]) + "." + oracle_get_sql_identifier(l[1]);
+    }
+    return oracle_get_sql_identifier(name);
+}
+
+# returns a database link name for SQL, where it is not quoted: letters, digits, underscores, dollar and pound signs,
+# periods and at signs, as in a database link's global name
+string sub oracle_check_dblink(string dblink) {
+    if (dblink !~ /\A[A-Za-z0-9_$#.@]+\z/) {
+        AbstractSqlUtilBase::checkIdentifier(dblink, "Oracle");
+        throw "IDENTIFIER-ERROR", sprintf("Oracle: the database link name %y is not of letters, digits, \"_\", "
+            "\"$\", \"#\", \".\" and \"@\"", dblink);
+    }
+    return dblink;
+}
+
 #! the OracleSqlUtilBase namespace contains all the objects in the OracleSqlUtilBase module
 public namespace OracleSqlUtilBase {
 #! returns an OracleTable object corresponding to the arguments
@@ -430,12 +551,12 @@ public class OracleSavepointHelper inherits AbstractSavepointHelper {
 
     #! Creates the savepoint
     private createSavepointImpl() {
-        ds.exec("savepoint " + savepoint);
+        ds.exec("savepoint " + oracle_get_sql_identifier(savepoint));
     }
 
     #! Rolls back to the savepoint
     private rollbackImpl() {
-        ds.exec("rollback to " + savepoint);
+        ds.exec("rollback to " + oracle_get_sql_identifier(savepoint));
     }
 
     #! Deletes the savepoint
@@ -574,11 +695,14 @@ string str = col.getRenameSql(t, "new_name");
         return char_used == cast<OracleColumn>(c).char_used;
     }
 
-    #! returns the column name with quoting in case the column name is a reserved word
+    #! returns the column name as an SQL identifier for DDL
     /** the name returned here will be used when executing DDL
+
+        @since OracleSqlUtilBase 1.7 a name that is not an ordinary name is quoted in upper case; before, only a
+        reserved word was quoted
     */
     string getDdlName(string name) {
-        return OracleDatabase::OracleReservedWords{name.lwr()} ? ("\"" + name + "\"") : name;
+        return oracle_get_sql_identifier(name);
     }
 }
 
@@ -721,8 +845,9 @@ public class OracleIndex inherits SqlUtil::AbstractIndex, OraclePartitionScopeSu
             indextype = m;
         }
 
+        # an index "column" that is not a column of the table is an SQL expression (see AbstractTable::addIndex())
         string sql = sprintf("create %s%sindex %s on %s (%s)",
-            unique ? "unique " : "", prefix ?? "", name, table_name,
+            unique ? "unique " : "", prefix ?? "", oracle_get_sql_identifier(name), table_name,
             (foldl $1 + ", " + $2, columns.getSqlColumnNameIterator()));
 
         if (indextype.val()) {
@@ -739,7 +864,7 @@ public class OracleIndex inherits SqlUtil::AbstractIndex, OraclePartitionScopeSu
 
         *string ts = opt.index_tablespace ? opt.index_tablespace : tablespace;
         if (ts)
-            sql += sprintf(" tablespace %s", ts);
+            sql += sprintf(" tablespace %s", oracle_get_sql_identifier(ts));
 
         if (opt.compute_statistics || compute_statistics)
             sql += " compute statistics";
@@ -782,7 +907,15 @@ public class OracleIndex inherits SqlUtil::AbstractIndex, OraclePartitionScopeSu
 
     #! returns the SQL statement that renames the index in the database
     softlist<string> getRenameSql(string table_name, string new_name) {
-        return sprintf("alter index %s rename to %s", name, new_name);
+        return sprintf("alter index %s rename to %s", oracle_get_sql_identifier(name),
+            oracle_get_sql_identifier(new_name));
+    }
+
+    #! returns a string that can be used to drop the index from the database, by its name in the database
+    /** @since OracleSqlUtilBase 1.7 the name of the index is quoted if it is not an ordinary name
+    */
+    string getDropSql(string table_name) {
+        return sprintf("drop index %s", oracle_get_sql_identifier(getDbName()));
     }
 }
 
@@ -793,31 +926,99 @@ public class OracleForeignConstraint inherits SqlUtil::AbstractForeignConstraint
         bool enabled;
     }
 
+    #! creates the constraint from the arguments
+    /** @param n the name of the constraint
+        @param c the source columns
+        @param t the target table and columns
+        @param e @ref True "True" if the constraint is enabled
+        @param deferrable @ref True "True" if checks can be deferred until transaction commit
+        @param initially_deferred @ref True "True" if checks are deferred by default
+        @param on_delete the \c ON \c DELETE referential action: @ref SqlUtil::FK_CASCADE "FK_CASCADE",
+            @ref SqlUtil::FK_SET_NULL "FK_SET_NULL", or NOTHING or @ref SqlUtil::FK_NO_ACTION "FK_NO_ACTION" for
+            the database default
+        @param on_update the \c ON \c UPDATE referential action; Oracle has none, so only NOTHING or
+            @ref SqlUtil::FK_NO_ACTION "FK_NO_ACTION" is accepted
+
+        @throw FOREIGN-CONSTRAINT-ERROR a referential action that Oracle does not support (see
+            @ref ora_fk_actions)
+
+        @note \a on_delete and \a on_update are available since OracleSqlUtilBase 1.7
+    */
     constructor(string n, Columns c, ForeignConstraintTarget t, bool e, bool deferrable = False,
-            bool initially_deferred = False)
-            : AbstractForeignConstraint(n, c, t, deferrable, initially_deferred) {
+            bool initially_deferred = False, *string on_delete, *string on_update)
+            : AbstractForeignConstraint(n, c, t, deferrable, initially_deferred, on_delete, on_update) {
         enabled = e;
+        checkActions();
     }
 
+    #! maps a \c DELETE_RULE value of the Oracle catalog to a referential action, or NOTHING for the default
+    /** @param rule the \c DELETE_RULE of the constraint in \c ALL_CONSTRAINTS: \c "CASCADE", \c "SET NULL" or
+        \c "NO ACTION"
+
+        @return the referential action (see @ref SqlUtil::fk_actions "fk_actions"), or NOTHING for the database
+        default (\c "NO ACTION")
+
+        @since OracleSqlUtilBase 1.7
+    */
+    static *string actionFromCatalog(*string rule) {
+        switch (rule) {
+            case "CASCADE": return FK_CASCADE;
+            case "SET NULL": return FK_SET_NULL;
+        }
+    }
+
+    #! returns a string that can be used to create the constraint in the database
+    /** @throw FOREIGN-CONSTRAINT-ERROR the constraint has a referential action that Oracle does not support (see
+        @ref ora_fk_actions)
+
+        @since OracleSqlUtilBase 1.7 the \c ON \c DELETE action is given if it is not the default
+    */
     string getCreateSql(string table_name, *hash opt) {
-        return sprintf("alter table %s add constraint %s foreign key (%s) references %s (%s)%s", table_name, name,
-            (foldl $1 + ", " + $2, getSqlColumnNameIterator()), target.table,
+        # the actions are public members that can be set after the constraint is created (as a table does from
+        # the foreign constraint options), so they are checked here
+        checkActions();
+        return sprintf("alter table %s add constraint %s foreign key (%s) references %s (%s)%s%s", table_name,
+            oracle_get_sql_identifier(name), (foldl $1 + ", " + $2, getSqlColumnNameIterator()),
+            oracle_get_sql_object_name(target.table),
             (foldl $1 + ", " + $2, target.columns.getSqlColumnNameIterator()),
-            getDeferrabilitySql());
+            on_delete ? " on delete " + on_delete.lwr() : "", getDeferrabilitySql());
+    }
+
+    #! checks that Oracle supports the referential actions of the constraint
+    private checkActions() {
+        if (on_update.val()) {
+            throw "FOREIGN-CONSTRAINT-ERROR", sprintf("foreign constraint %y: Oracle does not support ON UPDATE "
+                "referential actions; got on_update %y", name, on_update);
+        }
+        if (on_delete.val() && on_delete != FK_CASCADE && on_delete != FK_SET_NULL) {
+            throw "FOREIGN-CONSTRAINT-ERROR", sprintf("foreign constraint %y: Oracle does not support the ON DELETE "
+                "referential action %y; Oracle supports %y and %y, or no action (the default)", name, on_delete,
+                FK_CASCADE, FK_SET_NULL);
+        }
+    }
+
+    #! returns a string that can be used to drop the constraint from the database
+    /** @since OracleSqlUtilBase 1.7 the name of the constraint is quoted if it is not an ordinary name
+    */
+    string getDropSql(string table_name) {
+        return sprintf("alter table %s drop constraint %s", table_name, oracle_get_sql_identifier(name));
     }
 
     softlist getRenameSql(string table_name, string new_name) {
-        return sprintf("alter table %s rename constraint %s to %s", table_name, name, new_name);
+        return sprintf("alter table %s rename constraint %s to %s", table_name,
+            oracle_get_sql_identifier(name), oracle_get_sql_identifier(new_name));
     }
 
     #! returns a string that can be used to temporarily disable the constraint from the database
     string getDisableSql(string table_name) {
-        return sprintf("alter table %s disable constraint %s", table_name, name);
+        return sprintf("alter table %s disable constraint %s", table_name,
+            oracle_get_sql_identifier(name));
     }
 
     #! returns a string that can be used to enable the constraint in the database
     string getEnableSql(string table_name, *hash opt) {
-        return sprintf("alter table %s enable constraint %s", table_name, name);
+        return sprintf("alter table %s enable constraint %s", table_name,
+            oracle_get_sql_identifier(name));
     }
 }
 
@@ -833,21 +1034,32 @@ public class OracleCheckConstraint inherits SqlUtil::AbstractCheckConstraint {
     }
 
     string getCreateSql(string table_name, *hash opt) {
-        return sprintf("alter table %s add constraint %s check (%s)", table_name, name, src);
+        return sprintf("alter table %s add constraint %s check (%s)", table_name, oracle_get_sql_identifier(name),
+            src);
+    }
+
+    #! returns a string that can be used to drop the constraint from the database
+    /** @since OracleSqlUtilBase 1.7 the name of the constraint is quoted if it is not an ordinary name
+    */
+    string getDropSql(string table_name) {
+        return sprintf("alter table %s drop constraint %s", table_name, oracle_get_sql_identifier(name));
     }
 
     softlist getRenameSql(string table_name, string new_name) {
-        return sprintf("alter table %s rename constraint %s to %s", table_name, name, new_name);
+        return sprintf("alter table %s rename constraint %s to %s", table_name,
+            oracle_get_sql_identifier(name), oracle_get_sql_identifier(new_name));
     }
 
     #! returns a string that can be used to temporarily disable the constraint from the database
     string getDisableSql(string table_name) {
-        return sprintf("alter table %s disable constraint %s", table_name, name);
+        return sprintf("alter table %s disable constraint %s", table_name,
+            oracle_get_sql_identifier(name));
     }
 
     #! returns a string that can be used to enable the constraint in the database
     string getEnableSql(string table_name, *hash opt) {
-        return sprintf("alter table %s enable constraint %s", table_name, name);
+        return sprintf("alter table %s enable constraint %s", table_name,
+            oracle_get_sql_identifier(name));
     }
 }
 
@@ -910,18 +1122,18 @@ auto v = c.name;
     string getCreateSql(string table_name, *hash opts) {
         string scope = validatePartitionScope(opts.partition_scope, True, self.keys(), NOTHING,
             "CONSTRAINT-OPTION-ERROR", "constraint", name);
-        string sql = sprintf("alter table %s add constraint %s unique (%s)", table_name, name,
-            (foldl $1 + ", " + $2, getSqlColumnNameIterator()));
+        string sql = sprintf("alter table %s add constraint %s unique (%s)", table_name,
+            oracle_get_sql_identifier(name), (foldl $1 + ", " + $2, getSqlColumnNameIterator()));
         *string ix = opts.index ? opts.index : index;
         if (ix)
-            sql += sprintf(" using index %s", ix);
+            sql += sprintf(" using index %s", oracle_get_sql_identifier(ix));
         else {
             *string ts = opts.index_tablespace ? opts.index_tablespace : tablespace;
             bool compute = opts.compute_statistics || compute_statistics;
             if (ts || compute || scope == "local") {
                 sql += " using index";
                 if (ts) {
-                    sql += sprintf(" tablespace %s", ts);
+                    sql += sprintf(" tablespace %s", oracle_get_sql_identifier(ts));
                 }
                 if (compute) {
                     sql += " compute statistics";
@@ -936,17 +1148,27 @@ auto v = c.name;
     }
 
     softlist getRenameSql(string table_name, string new_name) {
-        return sprintf("alter table %s rename constraint %s to %s", table_name, name, new_name);
+        return sprintf("alter table %s rename constraint %s to %s", table_name,
+            oracle_get_sql_identifier(name), oracle_get_sql_identifier(new_name));
     }
 
     #! returns a string that can be used to temporarily disable the constraint from the database
     string getDisableSql(string table_name) {
-        return sprintf("alter table %s disable constraint %s", table_name, name);
+        return sprintf("alter table %s disable constraint %s", table_name,
+            oracle_get_sql_identifier(name));
     }
 
     #! returns a string that can be used to enable the constraint in the database
     string getEnableSql(string table_name, *hash opt) {
-        return sprintf("alter table %s enable constraint %s", table_name, name);
+        return sprintf("alter table %s enable constraint %s", table_name,
+            oracle_get_sql_identifier(name));
+    }
+
+    #! returns a string that can be used to drop the constraint from the database
+    /** @since OracleSqlUtilBase 1.7 the name of the constraint is quoted if it is not an ordinary name
+    */
+    string getDropSql(string table_name) {
+        return sprintf("alter table %s drop constraint %s", table_name, oracle_get_sql_identifier(name));
     }
 
     #! returns @ref True "True" if the constraint is enabled, @ref False "False" if not
@@ -1033,18 +1255,18 @@ auto v = c.name;
     string getCreateSql(string table_name, *hash opts) {
         string scope = validatePartitionScope(opts.partition_scope, True, self.keys(), NOTHING,
             "CONSTRAINT-OPTION-ERROR", "primary key", name);
-        string sql = sprintf("alter table %s add constraint %s primary key (%s)", table_name, name,
-            (foldl $1 + ", " + $2, getSqlColumnNameIterator()));
+        string sql = sprintf("alter table %s add constraint %s primary key (%s)", table_name,
+            oracle_get_sql_identifier(name), (foldl $1 + ", " + $2, getSqlColumnNameIterator()));
         *string ix = opts.index ? opts.index : index;
         if (ix) {
-            sql += sprintf(" using index %s", ix);
+            sql += sprintf(" using index %s", oracle_get_sql_identifier(ix));
         } else {
             *string ts = opts.index_tablespace ? opts.index_tablespace : tablespace;
             bool compute = opts.compute_statistics || compute_statistics;
             if (ts || compute || scope == "local") {
                 sql += " using index";
                 if (ts) {
-                    sql += sprintf(" tablespace %s", ts);
+                    sql += sprintf(" tablespace %s", oracle_get_sql_identifier(ts));
                 }
                 if (compute) {
                     sql += " compute statistics";
@@ -1059,7 +1281,8 @@ auto v = c.name;
     }
 
     softlist getRenameSql(string table_name, string new_name) {
-        return sprintf("alter table %s rename constraint %s to %s", table_name, name, new_name);
+        return sprintf("alter table %s rename constraint %s to %s", table_name,
+            oracle_get_sql_identifier(name), oracle_get_sql_identifier(new_name));
     }
 
     #! returns a string that can be used to drop the constraint from the database
@@ -1071,12 +1294,14 @@ auto v = c.name;
 
     #! returns a string that can be used to temporarily disable the constraint from the database
     string getDisableSql(string table_name) {
-        return sprintf("alter table %s disable constraint %s", table_name, name);
+        return sprintf("alter table %s disable constraint %s", table_name,
+            oracle_get_sql_identifier(name));
     }
 
     #! returns a string that can be used to enable the constraint in the database
     string getEnableSql(string table_name, *hash opt) {
-        return sprintf("alter table %s enable constraint %s", table_name, name);
+        return sprintf("alter table %s enable constraint %s", table_name,
+            oracle_get_sql_identifier(name));
     }
 
     #! returns the tablespace for the primary-key index, if known
@@ -1102,16 +1327,188 @@ auto v = c.name;
 
 #! represents an Oracle sequence
 public class OracleSequence inherits SqlUtil::AbstractSequence {
+    public {
+        #! the minimum value; no value for the default minimum (1 for an ascending sequence, the lowest value of an
+        #! Oracle sequence for a descending one)
+        /** @since OracleSqlUtilBase 1.7
+        */
+        *number min;
+
+        #! @ref True if the sequence starts again at its minimum (or maximum) value when it reaches its maximum (or
+        #! minimum) value
+        /** @since OracleSqlUtilBase 1.7
+        */
+        bool cycle = False;
+
+        #! the number of sequence values that the database caches; no value for the default (20), 0 for no cache
+        /** @since OracleSqlUtilBase 1.7
+        */
+        *int cache;
+    }
+
+    public {
+        #! the number of values that Oracle caches for a sequence created without a cache option
+        const DefaultCache = 20;
+    }
+
     #! creates the object from the arguments
-    constructor(string n_name, number n_start = 1, number n_increment = 1, *softnumber n_end)
-            : AbstractSequence(n_name, n_start, n_increment, n_end) {
+    /** @param n_name the name of the sequence
+        @param n_start the starting value
+        @param n_increment the increment
+        @param n_end the maximum value; no value for the default maximum
+        @param n_min the minimum value; no value for the default minimum
+        @param n_cycle @ref True if the sequence starts again when it reaches its limit
+        @param n_cache the number of values that the database caches; no value for the default (20), 0 for no cache
+
+        @throw SEQUENCE-ERROR the cache is negative or 1; Oracle caches at least 2 values or none
+
+        @note \a n_min, \a n_cycle and \a n_cache are available since OracleSqlUtilBase 1.7
+    */
+    constructor(string n_name, number n_start = 1, number n_increment = 1, *softnumber n_end, *softnumber n_min,
+            bool n_cycle = False, *softint n_cache) : AbstractSequence(n_name, n_start, n_increment, n_end) {
+        min = n_min;
+        cycle = n_cycle;
+        if (exists n_cache) {
+            OracleSequence::checkCache(name, n_cache);
+        }
+        cache = n_cache;
+    }
+
+    #! applies a sequence description, setting the minimum, cycle option and cache that Oracle supports
+    /** @param desc the sequence description (see
+            @ref SqlUtil::AbstractDatabase::SequenceDescriptionOptions "SequenceDescriptionOptions")
+
+        @throw SEQUENCE-ERROR the description gives a cache that is negative or 1
+
+        @since OracleSqlUtilBase 1.7
+    */
+    setDescription(hash<auto> desc) {
+        if (desc.hasKey("min")) {
+            min = desc.min;
+        }
+        if (desc.hasKey("cycle")) {
+            cycle = desc.cycle.toBool();
+        }
+        if (desc.hasKey("cache")) {
+            if (exists desc.cache) {
+                OracleSequence::checkCache(name, desc.cache);
+            }
+            cache = desc.cache;
+        }
     }
 
     #! returns a string that can be used to create the sequence in the database
+    /** @since OracleSqlUtilBase 1.7 the minimum value, the \c CYCLE option and the cache are given if they are set
+    */
     string getCreateSql(*hash opt) {
-        string sql = sprintf("create sequence %s start with %d increment by %d ", name, start, increment);
+        string sql = sprintf("create sequence %s start with %d increment by %d ", oracle_get_sql_object_name(name),
+            start, increment);
         sql += max ? sprintf("maxvalue %d", max) : "nomaxvalue";
+        if (exists min) {
+            sql += sprintf(" minvalue %d", min);
+        }
+        if (cycle) {
+            sql += " cycle";
+        }
+        if (exists cache) {
+            sql += cache ? sprintf(" cache %d", cache) : " nocache";
+        }
         return sql;
+    }
+
+    #! returns the SQL that alters the sequence to match the description, preserving its current value
+    /** The increment, minimum, maximum, cycle option and cache are aligned with \c ALTER \c SEQUENCE; a parameter
+        that the description does not give is not changed.  A maximum or minimum of no value, or that is the
+        default of the sequence's direction, is the default (\c NOMAXVALUE or \c NOMINVALUE), as the sequence is
+        described: for an ascending sequence, a minimum of 1 or a maximum above 9000000000000000000 (such as
+        9223372036854775807, the highest integer), and for a descending sequence, a maximum of -1 or a minimum below
+        -9000000000000000000.  A cache of no value is the default (20 values), and a cache of 0 is \c NOCACHE.
+
+        The starting value is not changed: Oracle cannot change it without \c RESTART, which resets the current
+        value of the sequence; a new starting value requires dropping and creating the sequence, which loses its
+        current value, so SqlUtil does not do it.  Oracle does not report the starting value of a sequence, so it is
+        not compared either.
+
+        @param desired the sequence description (see
+            @ref SqlUtil::AbstractDatabase::SequenceDescriptionOptions "SequenceDescriptionOptions")
+        @param opt this argument is ignored
+
+        @return the \c ALTER \c SEQUENCE statement for the parameters that differ, or NOTHING if none differ
+
+        @throw SEQUENCE-ERROR the description gives a cache that is negative or 1
+
+        @since OracleSqlUtilBase 1.7
+    */
+    *softlist<string> getAlterSql(hash<auto> desired, *hash<auto> opt) {
+        list<string> clauses = ();
+        if (exists desired.increment && desired.increment != increment) {
+            clauses += sprintf("increment by %d", desired.increment);
+        }
+        # the direction of the sequence after the alignment, for the default of a maximum or minimum
+        bool ascending = (exists desired.increment ? desired.increment : increment) > 0;
+        # the maximum: "max" or the legacy "end"; the default in the direction, or NOTHING, is the database default,
+        # as getSequenceImpl() describes it, so neither alters
+        if (desired.hasKey("max") || desired.hasKey("end")) {
+            *int new_max = desired.hasKey("max") ? desired.max : desired.end;
+            if (exists new_max && (ascending ? new_max > 9000000000000000000 : new_max == -1)) {
+                remove new_max;
+            }
+            if (OracleSequence::valueDiffers(new_max, max)) {
+                clauses += exists new_max ? sprintf("maxvalue %d", new_max) : "nomaxvalue";
+            }
+        }
+        if (desired.hasKey("min")) {
+            *int new_min = desired.min;
+            if (exists new_min && (ascending ? new_min == 1 : new_min < -9000000000000000000)) {
+                remove new_min;
+            }
+            if (OracleSequence::valueDiffers(new_min, min)) {
+                clauses += exists new_min ? sprintf("minvalue %d", new_min) : "nominvalue";
+            }
+        }
+        if (desired.hasKey("cycle")) {
+            bool new_cycle = desired.cycle.toBool();
+            if (new_cycle != cycle) {
+                clauses += new_cycle ? "cycle" : "nocycle";
+            }
+        }
+        if (desired.hasKey("cache")) {
+            int new_cache = desired.cache ?? DefaultCache;
+            OracleSequence::checkCache(name, new_cache);
+            if (new_cache != (cache ?? DefaultCache)) {
+                clauses += new_cache ? sprintf("cache %d", new_cache) : "nocache";
+            }
+        }
+        if (!clauses) {
+            return;
+        }
+        return sprintf("alter sequence %s %s", oracle_get_sql_object_name(name), clauses.join(" "));
+    }
+
+    #! returns @ref True if a maximum or minimum differs from the current one; no value is the default, which differs
+    #! from every value, including 0
+    private static bool valueDiffers(*number new_value, *number current) {
+        if (exists new_value != exists current) {
+            return True;
+        }
+        return exists new_value && new_value != current;
+    }
+
+    #! checks a cache value: Oracle caches at least 2 values or none
+    private static checkCache(string name, int cache) {
+        if (cache < 0 || cache == 1) {
+            throw "SEQUENCE-ERROR", sprintf("sequence %y: Oracle caches at least 2 sequence values, or none with a "
+                "cache of 0; got a cache of %d", name, cache);
+        }
+    }
+
+    #! returns a string that can be used to drop the sequence from the database
+    /** @param opt this argument is ignored
+
+        @since OracleSqlUtilBase 1.7 the name of the sequence is quoted if it is not an ordinary name
+    */
+    string getDropSql(*hash<auto> opt) {
+        return sprintf("drop sequence %s", oracle_get_sql_object_name(name));
     }
 
     #! returns a string that can be used to rename the sequence in the database
@@ -1120,7 +1517,7 @@ public class OracleSequence inherits SqlUtil::AbstractSequence {
         @param opt this option is ignored
         */
     softlist getRenameSql(string new_name, *hash opt) {
-        return sprintf("rename %s to %s", name, new_name);
+        return sprintf("rename %s to %s", oracle_get_sql_object_name(name), oracle_get_sql_identifier(new_name));
     }
 }
 
@@ -1163,9 +1560,18 @@ public class OracleView inherits SqlUtil::AbstractView {
         return sprintf("create %s%sview %s as %s",
                         opt.replace ? "or replace " : "",
                         opt.force ? "force " : "noforce ",
-                        name,
+                        oracle_get_sql_object_name(name),
                         src
                         );
+    }
+
+    #! returns a string that can be used to drop the view from the database
+    /** @param opt this argument is ignored
+
+        @since OracleSqlUtilBase 1.7 the name of the view is quoted if it is not an ordinary name
+    */
+    string getDropSql(*hash<auto> opt) {
+        return sprintf("drop view %s", oracle_get_sql_object_name(name));
     }
 
     #! returns a string that can be used to rename the view in the database
@@ -1174,7 +1580,7 @@ public class OracleView inherits SqlUtil::AbstractView {
         @param opt this option is ignored
         */
     softlist getRenameSql(string new_name, *hash opt) {
-        return sprintf("rename %s to %s", name, new_name);
+        return sprintf("rename %s to %s", oracle_get_sql_object_name(name), oracle_get_sql_identifier(new_name));
     }
 }
 
@@ -1190,7 +1596,8 @@ public class OracleTrigger inherits SqlUtil::AbstractTrigger {
     }
 
     softlist getCreateSql(string table_name, *hash opt) {
-        return sprintf("create%s trigger %s %s", opt.replace ? " or replace" : "", name, src);
+        return sprintf("create%s trigger %s %s", opt.replace ? " or replace" : "", oracle_get_sql_object_name(name),
+            src);
     }
 
     #! returns @ref True "True" if the argument is equal to the current object, @ref False "False" if not
@@ -1200,12 +1607,13 @@ public class OracleTrigger inherits SqlUtil::AbstractTrigger {
 
     #! returns a string that can be used to rename the trigger in the database
     softlist getRenameSql(string table_name, string new_name) {
-        return sprintf("alter trigger %s rename to %s", name, new_name);
+        return sprintf("alter trigger %s rename to %s", oracle_get_sql_object_name(name),
+            oracle_get_sql_identifier(new_name));
     }
 
     #! returns a string that can be used to drop the trigger from the database
     softlist getDropSql(string table_name) {
-        return sprintf("drop trigger %s", name);
+        return sprintf("drop trigger %s", oracle_get_sql_object_name(name));
     }
 }
 
@@ -1361,7 +1769,7 @@ public class OracleMaterializedView inherits OracleCodeBaseNoRename {
 
         *string ts = opt.data_tablespace ? opt.data_tablespace : tablespace;
         if (ts)
-            sql += sprintf(" tablespace %s", ts);
+            sql += sprintf(" tablespace %s", oracle_get_sql_identifier(ts));
 
         sql += logging ? " logging" : " nologging";
         sql += use_index ? " using index" : " using no index";
@@ -1576,6 +1984,26 @@ public class OracleDatabase inherits SqlUtil::AbstractDatabase {
     constructor(AbstractDatasource nds, *hash opts) : AbstractDatabase(nds, opts) {
     }
 
+    #! returns a name as an SQL identifier for Oracle
+    /** A name that Oracle reads as one unquoted identifier (a letter, then letters, digits, underscores, dollar
+        signs or pound signs) and that is not a reserved word is returned as given; a reserved word is returned in
+        double quotes with its case as given, as before; any other name is returned in double quotes in upper case,
+        as Oracle stores an unquoted name, so that it names the object that SqlUtil looks up in upper case and
+        describes in lower case
+
+        @param name the name of a database object, without a schema
+
+        @return the name as an SQL identifier for Oracle
+
+        @throw IDENTIFIER-ERROR the name is empty, or has a double quote or a NUL character, which Oracle does not
+        allow in an identifier
+
+        @since OracleSqlUtilBase 1.7
+    */
+    string getSqlIdentifier(string name) {
+        return oracle_get_sql_identifier(name);
+    }
+
     #! Returns the maximum precision for numeric or decimal columns
     /** @return -1 means, no maximum
 
@@ -1621,7 +2049,21 @@ public class OracleDatabase inherits SqlUtil::AbstractDatabase {
         *hash<auto> row = ds.selectRow("select * from all_sequences where sequence_owner = %v and sequence_name = %v", schema.upr(), name.upr());
         if (!row)
             return;
-        return new OracleSequence(name, row.min_value, row.increment_by, row.max_value > 9000000000000000000n ? NOTHING : row.max_value);
+        bool ascending = row.increment_by > 0;
+        # the default maximum and minimum of the sequence's direction are described as no value, as a sequence
+        # created without them has them; the default maximum of an ascending sequence and the default minimum of a
+        # descending one have 28 digits
+        *number max = row.max_value;
+        if ((ascending && max > 9000000000000000000n) || (!ascending && max == -1)) {
+            remove max;
+        }
+        *number min = row.min_value;
+        if ((ascending && min == 1) || (!ascending && min < -9000000000000000000n)) {
+            remove min;
+        }
+        # Oracle does not keep the starting value of a sequence; the first value in its direction is given
+        number start = ascending ? row.min_value : row.max_value;
+        return new OracleSequence(name, start, row.increment_by, max, min, row.cycle_flag == "Y", row.cache_size);
     }
 
     private *AbstractView getViewImpl(string name) {
@@ -1921,7 +2363,8 @@ public class OracleDatabase inherits SqlUtil::AbstractDatabase {
 
     #! returns the next value in the given sequence
     private softint getNextSequenceValueImpl(string name) {
-        return ds.selectRow("select %s.nextval from dual", name).nextval;
+        # "%s" in SQL with arguments is substituted as given, so the name is given as an identifier here
+        return ds.selectRow("select " + oracle_get_sql_object_name(name) + ".nextval from dual").nextval;
     }
 
     #! returns the last value issued for the given sequence
@@ -2016,7 +2459,7 @@ public class OracleDatabase inherits SqlUtil::AbstractDatabase {
     */
     bool rebuildIndexAnalyze(string name, int maxh, int maxleaf) {
         # unfortunately analyze index/select * from index_stats requires one transaction
-        ds.select("analyze index " + name + " validate structure");
+        ds.select("analyze index " + oracle_get_sql_object_name(name) + " validate structure");
         *hash<auto> is = ds.selectRow("select name, height, lf_rows as leafrows, del_lf_rows as leafrowsdeleted from index_stats");
         if (!is)
             return False;
@@ -2039,12 +2482,12 @@ public class OracleDatabase inherits SqlUtil::AbstractDatabase {
         if (!rebuild)
             return False;
 
-        string sql = sprintf("alter index %s rebuild ", name);
+        string sql = sprintf("alter index %s rebuild ", oracle_get_sql_object_name(name));
         sql += options.parallel ? "parallel " : "";
         sql += options.logging ? "" : "nologging ";
         sql += options.statictics ? "compute statistics" : "";
         if (strlen(options.tablespace))
-            sql += " tablespace " + options.tablespace;
+            sql += " tablespace " + oracle_get_sql_identifier(options.tablespace);
 
         ds.select(sql);
         return True;
@@ -2130,13 +2573,12 @@ public class OracleDatabase inherits SqlUtil::AbstractDatabase {
     private reclaimSpaceImpl(*hash options) {
         softlist tables = options.tables ?? listTables();
 
+        # "%s" in SQL with arguments is substituted as given, so each table name is given as an identifier here
         # first enable row movement
-        string sql = "alter table %s enable row movement";
-        map ds.select(sql, $1), tables;
+        map ds.select("alter table " + oracle_get_sql_object_name($1) + " enable row movement"), tables;
 
         # now shrink space
-        sql = "alter table %s shrink space cascade";
-        map ds.select(sql, $1), tables;
+        map ds.select("alter table " + oracle_get_sql_object_name($1) + " shrink space cascade"), tables;
     }
 
     #! @ref SqlUtil::AbstractDatabase.getPhysicalSize()
@@ -2176,7 +2618,9 @@ public class OracleDatabase inherits SqlUtil::AbstractDatabase {
         if (ac == AC_Create && type == "materialized_view" && ex.arg.alterr == "OCI-01031") {
             # try to drop any table created to back the materialized view, ignoring ORA-00942
             # "table or view does not exist" errors but rethrowing all others
-            ds.exec("begin execute immediate 'drop table " + name + "'; exception when others then if sqlcode != -942 then raise; end if; end;", name);
+            # the name is in a string literal, where each single quote is doubled
+            ds.execRaw("begin execute immediate 'drop table " + replace(name, "'", "''") + "'; exception when "
+                "others then if sqlcode != -942 then raise; end if; end;");
         }
     }
 }
@@ -2701,7 +3145,7 @@ public class OracleTable inherits SqlUtil::AbstractTable {
                     "return_type": AbstractDataProviderTypeMap."int",
                 },
                 "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
-                    return sprintf("%s.nextval", args[0]);
+                    return sprintf("%s.nextval", oracle_get_sql_object_name(args[0]));
                 },
             },
             COP_SEQ_CURRVAL: {
@@ -2719,7 +3163,7 @@ public class OracleTable inherits SqlUtil::AbstractTable {
                     "return_type": AbstractDataProviderTypeMap."int",
                 },
                 "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
-                    return sprintf("%s.currval", args[0]);
+                    return sprintf("%s.currval", oracle_get_sql_object_name(args[0]));
                 }
             },
             # --- Date/Time functions for Oracle ---
@@ -3177,7 +3621,7 @@ public class OracleTable inherits SqlUtil::AbstractTable {
                 "nocolumn": True,
                 "withalias": True,
                 "code": string sub (*string cve, hash arg, reference<hash> psch) {
-                    string sql = sprintf("%s.nextval", arg.seq);
+                    string sql = sprintf("%s.nextval", oracle_get_sql_object_name(arg.seq));
                     if (arg.as) {
                         psch{arg.as} = sql;
                         sql += " " + arg.as;
@@ -3189,7 +3633,7 @@ public class OracleTable inherits SqlUtil::AbstractTable {
                 "nocolumn": True,
                 "withalias": True,
                 "code": string sub (*string cve, hash arg, reference<hash> psch) {
-                    string sql = sprintf("%s.currval", arg.seq);
+                    string sql = sprintf("%s.currval", oracle_get_sql_object_name(arg.seq));
                     if (arg.as) {
                         psch{arg.as} = sql;
                         sql += " " + arg.as;
@@ -3228,15 +3672,17 @@ public class OracleTable inherits SqlUtil::AbstractTable {
             IOP_SEQ: (
                 "arg": Type::String,
                 "immediate": True,
+                # the sequence name is validated by AbstractTable before; a name that is not an ordinary name, such
+                # as a reserved word, is quoted
                 "code": string sub (string cve, string arg) {
-                    return sprintf("%s.nextval", arg);
+                    return sprintf("%s.nextval", oracle_get_sql_object_name(arg));
                 },
             ),
             IOP_SEQ_CURRVAL: (
                 "arg": Type::String,
                 "immediate": True,
                 "code": string sub (string cve, string arg) {
-                    return sprintf("%s.currval", arg);
+                    return sprintf("%s.currval", oracle_get_sql_object_name(arg));
                 },
             ),
         );
@@ -3246,13 +3692,13 @@ public class OracleTable inherits SqlUtil::AbstractTable {
             COP_SEQ: (
                 "nocolumn": True,
                 "code": string sub (*string cve, string arg) {
-                    return sprintf("%s.nextval", arg);
+                    return sprintf("%s.nextval", oracle_get_sql_object_name(arg));
                 }
             ),
             COP_SEQ_CURRVAL: (
                 "nocolumn": True,
                 "code": string sub (*string cve, string arg) {
-                    return sprintf("%s.currval", arg);
+                    return sprintf("%s.currval", oracle_get_sql_object_name(arg));
                 }
             ),
         );
@@ -3320,7 +3766,8 @@ public class OracleTable inherits SqlUtil::AbstractTable {
         # see if there is a dblink in the name
         *string dbl = (nname =~ x/@(.*)/)[0];
         if (dbl) {
-            dblink = dbl.upr();
+            # the database link is part of SQL without quotes
+            dblink = oracle_check_dblink(dbl.upr());
             splice nname, nname.size() - (dbl.size() + 1);
             name = nname;
             setDblinkSchema();
@@ -3446,8 +3893,51 @@ public class OracleTable inherits SqlUtil::AbstractTable {
     }
 
     #! returns the schema and table name in dot notation
+    /** The schema and the name of the table are SQL identifiers as getSqlIdentifier() returns them, followed by
+        any database link
+
+        @since OracleSqlUtilBase 1.7 a schema or table name that is not an ordinary name is quoted in upper case
+    */
     string getSqlName() {
-        return sprintf("%s.%s" + (dblink ? "@" + dblink : ""), schema, name);
+        return oracle_get_sql_identifier(schema) + "." + oracle_get_sql_object_name(name)
+            + (dblink ? "@" + dblink : "");
+    }
+
+    #! returns a name as an SQL identifier for Oracle
+    /** @copydetails OracleDatabase::getSqlIdentifier()
+    */
+    string getSqlIdentifier(string name) {
+        return oracle_get_sql_identifier(name);
+    }
+
+    #! returns the name of the table without its schema for SQL
+    private string getSqlTableName() {
+        return oracle_get_sql_object_name(name);
+    }
+
+    #! returns a column alias for SQL
+    /** An alias names no object in the catalog, so it keeps its case: an ordinary name that is not a reserved word is
+        returned as given, and any other name in double quotes with its case as given; the \c oracle driver gives
+        the names of result columns in lower case
+
+        @param alias the alias of a column in a query
+
+        @return the alias for SQL
+
+        @throw IDENTIFIER-ERROR the alias is empty, or has a double quote or a NUL character, which Oracle does not
+        allow in an identifier
+
+        @since OracleSqlUtilBase 1.7
+    */
+    string getAliasSqlName(string alias) {
+        if (alias =~ /\A\p{L}[\p{L}\p{N}_$#]*\z/) {
+            return oracle_get_sql_identifier(alias);
+        }
+        # an alias with a double quote is refused, as any other name is
+        if (alias.find("\"") >= 0) {
+            return oracle_get_sql_identifier(alias);
+        }
+        return AbstractSqlUtilBase::getDelimitedIdentifier(alias, "\"", "\"", "Oracle");
     }
 
     #! This method can change itself or disappear in the near future. Do not use it.
@@ -3504,7 +3994,8 @@ public class OracleTable inherits SqlUtil::AbstractTable {
                 :table := o_table;
                 :link := o_db_link;
                 end;",
-                sprintf("%s.%s", s_owner.upr(), s_name.upr()),
+                # the name is read as SQL names an object, so a name that needs quotes is given quoted
+                sprintf("%s.%s", oracle_get_sql_identifier(s_owner.upr()), oracle_get_sql_identifier(s_name.upr())),
                 Type::String, Type::String, Type::String
             );
             # simulate resultset from all_synonyms output
@@ -3587,7 +4078,7 @@ public class OracleTable inherits SqlUtil::AbstractTable {
         }
 
         if (row.db_link) {
-            dblink = row.db_link;
+            dblink = oracle_check_dblink(row.db_link);
 
             setDblinkSchema();
 
@@ -4088,9 +4579,10 @@ group by p.index_name", schema.upr(), name.upr());
         hash ch;
 
         # get foreign referential constraints
-        *hash qh = ds.select("select constraint_name, status, deferrable, deferred from user_constraints"
-            + (dblink ? "@" + dblink : "") + " where owner = %v and table_name = %v and constraint_type = 'R'",
-            schema.upr(), name.upr());
+        # the constraints of the table's schema, which can be another user's
+        *hash qh = ds.select("select constraint_name, status, deferrable, deferred, delete_rule from "
+            + systemView("dba_constraints") + (dblink ? "@" + dblink : "")
+            + " where owner = %v and table_name = %v and constraint_type = 'R'", schema.upr(), name.upr());
         if (qh.status) {
             hash rv;
             foreach hash<auto> row in (qh.contextIterator()) {
@@ -4100,15 +4592,22 @@ group by p.index_name", schema.upr(), name.upr());
                     "enabled": row.status == "ENABLED",
                     "deferrable": row.deferrable == "DEFERRABLE",
                     "initially_deferred": row.deferred == "DEFERRED",
+                    "on_delete": OracleForeignConstraint::actionFromCatalog(row.delete_rule),
                     );
             }
-            qh = ds.select("select c.constraint_name, status, cols1.column_name source_column, cols1.position, cols2.table_name target_table, cols2.column_name target_column from " + systemView("dba_constraints") + (dblink ? "@" + dblink : "") + " c, " + systemView("dba_cons_columns") + (dblink ? "@" + dblink : "") + " cols1, " + systemView("dba_cons_columns") + (dblink ? "@" + dblink : "") + " cols2 where c.owner = %v and c.table_name = %v and c.constraint_name = cols1.constraint_name and constraint_type = 'R' and c.r_constraint_name = cols2.constraint_name and cols1.position = cols2.position and cols1.owner = c.owner and cols2.owner = c.owner order by cols1.position", schema.upr(), name.upr());
+            qh = ds.select("select c.constraint_name, status, cols1.column_name source_column, cols1.position, cols2.owner target_owner, cols2.table_name target_table, cols2.column_name target_column from " + systemView("dba_constraints") + (dblink ? "@" + dblink : "") + " c, " + systemView("dba_cons_columns") + (dblink ? "@" + dblink : "") + " cols1, " + systemView("dba_cons_columns") + (dblink ? "@" + dblink : "") + " cols2 where c.owner = %v and c.table_name = %v and c.constraint_name = cols1.constraint_name and constraint_type = 'R' and c.r_constraint_name = cols2.constraint_name and cols1.position = cols2.position and cols1.owner = c.owner and cols2.owner = c.owner order by cols1.position", schema.upr(), name.upr());
+            # a target table in another schema than the connection's is given with its schema, as SQL names it
+            string user = ds.getUserName().upr();
             foreach hash<auto> row in (qh.contextIterator()) {
                 if (!native_case) {
                     row.constraint_name = row.constraint_name.lwr();
                     row.source_column = row.source_column.lwr();
                     row.target_column = row.target_column.lwr();
                     row.target_table = row.target_table.lwr();
+                }
+                if (row.target_owner != user) {
+                    row.target_table = (native_case ? row.target_owner : row.target_owner.lwr()) + "."
+                        + row.target_table;
                 }
                 reference<hash> c = \rv.(row.constraint_name);
                 #if (!columns.hasKey(row.source_column))# && c.target.columns.(row.target_column)) {
@@ -4123,7 +4622,7 @@ group by p.index_name", schema.upr(), name.upr());
                 Columns targ_columns = getReferencedTableColumnsUnlocked(c.value.target.table, opts.table_cache);
                 ForeignConstraintTarget fct(c.value.target.table, targ_columns.subset(c.value.target.columns.keys()));
                 ch.(c.key) = new OracleForeignConstraint(c.key, new Columns(c.value.columns), fct, c.value.enabled,
-                    c.value.deferrable, c.value.initially_deferred);
+                    c.value.deferrable, c.value.initially_deferred, c.value.on_delete);
             }
         }
 
@@ -4203,7 +4702,7 @@ group by p.index_name", schema.upr(), name.upr());
 
         *string ts = opt.data_tablespace ? opt.data_tablespace : tablespace;
         if (ts) {
-            sql += sprintf(" tablespace %s", ts);
+            sql += sprintf(" tablespace %s", oracle_get_sql_identifier(ts));
         }
 
         sql += getOraclePartitionCreateClause();
@@ -4217,7 +4716,7 @@ group by p.index_name", schema.upr(), name.upr());
     */
     private string getCreateTableStartSql() {
         if (isTempTable() && !isPreCreatedTempTable()) {
-            return sprintf("create private temporary table %s", name);
+            return sprintf("create private temporary table %s", getSqlTableName());
         }
         return AbstractTable::getCreateTableStartSql();
     }
@@ -4274,7 +4773,10 @@ group by p.index_name", schema.upr(), name.upr());
     private *list getCreateMiscSqlImpl(*hash opt, bool cache) {
         if (cache)
             getColumnsUnlocked();
-        return map AbstractDatabase::doCallback(opt, sprintf("comment on column %s.%s is %s", name, $1.ddl_name, getSqlValueImpl($1.comment)), AbstractDatabase::AC_Add, "column comment", $1.name, name), columns.iterator(), $1.comment;
+        # the table is named as the SQL that creates it names it
+        return map AbstractDatabase::doCallback(opt, sprintf("comment on column %s.%s is %s", getSqlTableName(),
+            $1.ddl_name, getSqlValueImpl($1.comment)), AbstractDatabase::AC_Add, "column comment", $1.name, name),
+            columns.iterator(), $1.comment;
     }
 
     private string getCreateSqlImpl(list l) {
@@ -4282,7 +4784,7 @@ group by p.index_name", schema.upr(), name.upr());
     }
 
     private string getRenameSqlImpl(string new_name) {
-        return sprintf("alter table %s rename to %s", getSqlName(), new_name);
+        return sprintf("alter table %s rename to %s", getSqlName(), oracle_get_sql_identifier(new_name));
     }
 
     private AbstractColumn addColumnImpl(string cname, hash opt, bool nullable = True) {
@@ -4347,7 +4849,7 @@ group by p.index_name", schema.upr(), name.upr());
     private AbstractForeignConstraint addForeignConstraintImpl(string cname, hash ch, string table, hash tch, *hash opt) {
         ForeignConstraintTarget fct(table, new Columns(tch));
         return new OracleForeignConstraint(cname, new Columns(ch), fct, True, opt.deferrable,
-            opt.initially_deferred);
+            opt.initially_deferred, opt.on_delete, opt.on_update);
     }
 
     private AbstractCheckConstraint addCheckConstraintImpl(string cname, string src, *hash opt) {
@@ -4550,12 +5052,12 @@ group by p.index_name", schema.upr(), name.upr());
 
     #! returns the column name for use in SQL strings; subclasses can return a special string in case the column name is a reserved word
     string getColumnSqlName(string col) {
-        return OracleDatabase::OracleReservedWords{col.lwr()} ? ("\"" + col + "\"") : col;
+        return oracle_get_sql_identifier(col);
     }
 
     #! returns a list of column names for use in SQL strings; subclasses can process the argument list in case a column name is a reserved word
     list getColumnSqlNames(softlist cols) {
-        return map (OracleDatabase::OracleReservedWords{$1.lwr()} ? ("\"" + $1 + "\"") : $1), cols;
+        return map oracle_get_sql_identifier($1), cols;
     }
 
     private bool supportsPartitionsImpl() {
@@ -4690,7 +5192,7 @@ group by p.index_name", schema.upr(), name.upr());
                 "ordinal": row.partition_position - 1,
                 "schema": schema,
                 "relation_name": pname,
-                "sql_name": sprintf("%s partition (%s)", getSqlName(), pname),
+                "sql_name": sprintf("%s partition (%s)", getSqlName(), getColumnSqlName(pname)),
                 "is_default": strategy.method == "range" ? high_value =~ /^MAXVALUE$/i
                     : high_value =~ /^DEFAULT$/i,
             });
@@ -5200,7 +5702,7 @@ group by p.index_name", schema.upr(), name.upr());
     #! high-performance "insert only" upsert supporting bulk DML
     private code getUpsertInsertOnly(Columns cols, hash<auto> row, *hash<auto> opt) {
         string sql = sprintf("merge into %s t using (select ", getSqlName());
-        sql += foldl $1 + "," + $2, (map sprintf("%v as %s", $1), row.keys());
+        sql += foldl $1 + "," + $2, (map sprintf("%v as %s", $1), getColumnSqlNames(row.keys()));
         sql += " from dual) source on (";
         sql += foldl $1 + " and " + $2, (map sprintf("t.%s = source.%s", $1, $1), getColumnSqlNames(cols.keys()));
         sql += sprintf(") when not matched then insert (");
@@ -5283,9 +5785,28 @@ group by p.index_name", schema.upr(), name.upr());
             l += rh.key;
             args += rh.type ?* c.qore_type ?* Type::String;
         }
-        sql += sprintf(" returning %s into %s", (foldl $1 + "," + $2, l), (foldl $1 + "," + $2, (map ":" + $1, l)));
+        # each column is returned into a placeholder of its name; a column whose name is not a placeholder name
+        # (a letter, then letters, digits and underscores) is returned into a placeholder of another name, which is
+        # renamed to the column's name in the result
+        hash<string, string> placeholder_map;
+        list<string> placeholders = ();
+        foreach string col in (l) {
+            if (col =~ /\A[A-Za-z][A-Za-z0-9_]*\z/) {
+                placeholders += ":" + col;
+            } else {
+                string ph = sprintf("qore_returning_%d", $#);
+                placeholder_map{ph} = col;
+                placeholders += ":" + ph;
+            }
+        }
+        sql += sprintf(" returning %s into %s", (foldl $1 + "," + $2, getColumnSqlNames(l)),
+            (foldl $1 + "," + $2, placeholders));
 
-        return execData(opt, sql, args);
+        auto rv = execData(opt, sql, args);
+        if (placeholder_map && rv.typeCode() == NT_HASH) {
+            rv = map {placeholder_map{$1.key} ?? $1.key: $1.value}, rv.pairIterator();
+        }
+        return rv;
     }
 
     private bool emptyImpl() {
