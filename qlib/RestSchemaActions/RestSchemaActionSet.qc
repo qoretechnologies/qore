@@ -130,16 +130,65 @@ public hashdecl RestSchemaReferenceDataInfo {
     *string desc;
 }
 
+#! Options for an action set
+/** @since RestSchemaActions 1.0
+*/
+public hashdecl RestSchemaActionSetOptionInfo {
+    #! Builds each action's output type when it is first needed rather than when the set is constructed
+    /** Most of the time a schema-derived action set spends at construction, and most of the memory it takes, goes
+        on output types: a response is usually a much larger graph than the request that produces it.  With this
+        option the constructor still resolves every operation, builds every request type and selects the response
+        each output type is derived from, and the output types are built by
+        @ref RestSchemaActions::RestSchemaActionOperation::getResponseType(), once each.
+
+        The action definitions then carry a \c get_output_type callback in place of an \c output_type (see
+        @ref DataProvider::DataProviderActionCatalog "DataProviderActionCatalog" for when the catalog calls it), and
+        an unwrap path or a response overlay that does not apply to its response is reported when the output type
+        is first built instead of by the constructor; an application test suite should build every output type,
+        for example by calling getActionInfo() and resolving each action through the catalog.
+
+        @see setEagerResponseTypes()
+    */
+    bool lazy_response_types = False;
+}
+
 #! An application's set of schema-derived actions
 /** Owns the manifest, resolves every entry against the schema, and generates the
     @ref DataProvider::DataProviderActionInfo "DataProviderActionInfo" hashes an application registers.
 
     All validation happens in the constructor, so a manifest that has drifted from its schema - an operation
     that no longer exists, an overlay entry that no longer resolves, a reference-data entry naming an action
-    that was removed - fails when the module is loaded rather than when a user opens the action.
+    that was removed - fails when the module is loaded rather than when a user opens the action.  The one
+    exception is a set constructed with
+    @ref RestSchemaActions::RestSchemaActionSetOptionInfo::lazy_response_types "lazy_response_types", whose
+    output types, and the checks of the manifest entries that shape them, are deferred to first use.
 */
 public class RestSchemaActionSet {
+    public {
+        #! The options of a set that builds its output types on first use
+        /** @see @ref RestSchemaActions::RestSchemaActionSetOptionInfo::lazy_response_types "lazy_response_types"
+
+            @since RestSchemaActions 1.0
+        */
+        const LazyResponseTypes = <RestSchemaActionSetOptionInfo>{"lazy_response_types": True};
+    }
+
     private {
+        #! Builds every output type at construction, even for a set constructed with lazy response types
+        static bool eager_response_types = False;
+
+        #! Output types are built on first use
+        bool lazy_response_types;
+
+        #! The output-type callbacks of the action definitions, keyed by action ID
+        /** Created by the first definition generated for an action and reused, so that every definition generated
+            for the action is the same
+        */
+        hash<string, code> output_type_callbacks = {};
+
+        #! Serializes the creation of the output-type callbacks
+        Mutex callback_lock();
+
         #! The schema the actions are derived from
         AbstractRestSchemaValidator schema;
 
@@ -166,6 +215,7 @@ public class RestSchemaActionSet {
         @param peers other sets in the same application whose reference data this one may use
         @param host_sources host source declarations, keyed by host source name; declared by the set that
         exports the action resolving the host, and reachable from a peer exactly as reference data is
+        @param opts set options; see @ref RestSchemaActions::RestSchemaActionSetOptionInfo
 
         An application whose API is split across documents needs one set per document, because a set binds
         one schema and the request URI takes its prefix from that schema's base path.  Its dropdowns do not
@@ -179,11 +229,14 @@ public class RestSchemaActionSet {
         cycle between two sets impossible to express.
 
         @throw REST-SCHEMA-ACTION-ERROR the manifest is inconsistent, or an entry does not resolve
+
+        @since RestSchemaActions 1.0 the \a opts parameter
     */
     constructor(AbstractRestSchemaValidator schema, list<hash<RestSchemaActionInfo>> manifest,
             *hash<string, hash<RestSchemaReferenceDataInfo>> refdata, *softlist<RestSchemaActionSet> peers,
-            *hash<string, hash<RestSchemaHostSourceInfo>> host_sources) {
+            *hash<string, hash<RestSchemaHostSourceInfo>> host_sources, *hash<RestSchemaActionSetOptionInfo> opts) {
         self.schema = schema;
+        lazy_response_types = opts.lazy_response_types && !eager_response_types;
         self.manifest = manifest;
         self.refdata = refdata ?? {};
         self.peers = peers ?? ();
@@ -232,7 +285,11 @@ public class RestSchemaActionSet {
                         "sources: %y", info.action, info.host_from, sort(keys getAllHostSourceDecls()));
                 }
             }
-            opmap{info.action} = new RestSchemaActionOperation(schema, info, hs);
+            # the operation is not referenced again here: releasing a reference to an object in the graph of
+            # cached schema types makes the reference cycle detection scan the graph, which every operation
+            # built from the schema extends, so doing it for each operation would scan the graph once per
+            # operation
+            opmap{info.action} = new RestSchemaActionOperation(schema, info, hs, lazy_response_types);
         }
         checkReferenceData();
         checkHostSources();
@@ -241,6 +298,40 @@ public class RestSchemaActionSet {
     #! Returns the schema the actions are derived from
     AbstractRestSchemaValidator getSchema() {
         return schema;
+    }
+
+    #! Returns @ref True if the set builds output types on first use
+    /** @see @ref RestSchemaActions::RestSchemaActionSetOptionInfo::lazy_response_types "lazy_response_types"
+
+        @since RestSchemaActions 1.0
+    */
+    bool hasLazyResponseTypes() {
+        return lazy_response_types;
+    }
+
+    #! Makes the action sets constructed afterwards build their output types at construction
+    /** Overrides @ref RestSchemaActions::RestSchemaActionSetOptionInfo::lazy_response_types "lazy_response_types"
+        for every set constructed in the process while it is set, so that a test suite can validate every
+        manifest at load or compare the output types built at construction with those built on first use.
+
+        @param eager @ref True to build output types at construction, @ref False to honor each set's option
+
+        @throw PERMISSION-DENIED the caller is restricted with @ref Qore::PO_NO_PROCESS_CONTROL
+
+        @par Example:
+        @code{.py}
+RestSchemaActionSet::setEagerResponseTypes(True);
+load_module("StripeDataProvider");
+        @endcode
+
+        @since RestSchemaActions 1.0
+    */
+    static setEagerResponseTypes(bool eager) {
+        if (Program::getCallerCapabilityMask() & PO_NO_PROCESS_CONTROL) {
+            throw "PERMISSION-DENIED", "cannot change how action sets build output types from a context with "
+                "restricted process control";
+        }
+        eager_response_types = eager;
     }
 
     #! Returns the action IDs in manifest order
@@ -294,7 +385,10 @@ public class RestSchemaActionSet {
         @param action the action ID
         @param common values merged into the generated action definition
 
-        @return the action definition
+        @return the action definition; for a set with
+        @ref RestSchemaActions::RestSchemaActionSetOptionInfo::lazy_response_types "lazy_response_types", an
+        action whose output type is built on first use has a \c get_output_type callback in place of an
+        \c output_type
     */
     hash<DataProviderActionInfo> getActionInfo(string app, string action, *hash<auto> common) {
         RestSchemaActionOperation op = getOperationEx(action);
@@ -320,13 +414,33 @@ public class RestSchemaActionSet {
         if (*hash<string, AbstractDataField> fields = op.getRequestFields()) {
             rv.options = DataProviderActionCatalog::getActionOptionFromFields(fields);
         }
-        if (*AbstractDataProviderType type = op.getResponseType()) {
+        if (op.isResponseTypeDeferred()) {
+            # built when the catalog first returns the action, which publishes it as the output type
+            rv.get_output_type = getOutputTypeCallback(action, op);
+        } else if (*AbstractDataProviderType type = op.getResponseType()) {
             rv.output_type = type;
         }
         if (common) {
             rv += common;
         }
         return rv;
+    }
+
+    #! Returns the callback building an action's output type, creating it on first use
+    private code getOutputTypeCallback(string action, RestSchemaActionOperation op) {
+        AutoLock al(callback_lock);
+        return output_type_callbacks{action}
+            ?? (output_type_callbacks{action} = RestSchemaActionSet::makeOutputTypeCallback(op));
+    }
+
+    #! Returns a new callback building an operation's output type
+    /** Static, so that the closure refers to the operation only and the set holding it creates no reference
+        cycle
+    */
+    private static code makeOutputTypeCallback(RestSchemaActionOperation op) {
+        return *AbstractDataProviderType sub () {
+            return op.getResponseType();
+        };
     }
 
     #! Registers every action in the set for the given application
