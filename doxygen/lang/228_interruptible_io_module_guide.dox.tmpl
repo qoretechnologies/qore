@@ -174,6 +174,65 @@ while (true) {
     and methods with their functional domains in \c .qpp files (\c dom=FILESYSTEM, \c dom=NETWORK,
     \c dom=PROCESS, ...), so that a @ref Qore::Program "Program"'s restrictions are enforced.
 
+    @subsection interruptible_io_sandbox_threads Carrying the Caller's Sandbox onto Another Thread
+
+    A thread started with <tt>q_start_thread()</tt> or the \c background operator inherits the
+    @ref sandboxing "sandbox" (the \c QoreSandboxManager, carrying filesystem and network policy, program
+    interrupts, the cancellation scope and the thread limit) of the code that starts it, applied as the outermost
+    caller of everything the thread runs.  So a module that starts one thread for one unit of work for one caller
+    needs to do nothing: the thread is already governed by that caller's sandbox, and work it runs in a
+    @ref Qore::Program "Program" that has a sandbox of its own is governed by that one, exactly as in a
+    synchronous call.
+
+    A thread that runs work for <b>many</b> callers - a worker pool, or a thread that a native library owns and
+    that runs callbacks registered by different callers (a message-delivery thread, an event or notification
+    callback, an async-completion callback) - must instead govern each piece of work by the sandbox of the code
+    that submitted or registered it.  Such a thread opts out of thread-start inheritance with
+    \c QTF_NO_SANDBOX_INHERIT, and for each unit of work:
+
+    - captures the submitting thread's sandbox with \c QoreSandboxCapture <b>when the work is submitted or the
+      callback is registered</b> (in the submitting thread), stored next to the callback and its \c QoreProgram;
+    - applies it with \c QoreSandboxCaptureHelper <b>around the work</b> on the worker or callback thread.
+
+    Both are declared in \c qore/QoreSandboxManager.h.  \c QoreSandboxCapture is immutable after construction and
+    may be shared between threads; a capture of an unsandboxed submitter applies as "no sandbox", so the pattern is
+    safe to use unconditionally.  It works on a foreign thread registered with \c q_register_foreign_thread() (or
+    \c QoreForeignThreadHelper): register the thread, enter the callback's \c QoreProgram with
+    \c QoreExternalProgramContextHelper, then apply the capture.  The core \c ThreadPool
+    (\c include/qore/intern/ThreadPool.h) and the async I/O controller are the reference implementations.
+
+    @code{.cpp}
+    // when the caller registers the callback (in the caller's thread):
+    class MyCallbackContext {
+    public:
+        ResolvedCallReferenceNode* callback;  // referenced
+        QoreProgram* pgm;                      // the callback's program (dep-referenced)
+        QoreSandboxCapture sandbox;            // captures the registering caller's sandbox here
+    };
+
+    // on the native/foreign thread the library calls back on:
+    extern "C" void my_library_callback(void* arg, const char* data) {
+        MyCallbackContext* ctx = static_cast<MyCallbackContext*>(arg);
+        QoreForeignThreadHelper fth;           // register this foreign thread with Qore (no-op if already a Qore thread)
+        if (!fth) {
+            return;
+        }
+        ExceptionSink xsink;
+        QoreExternalProgramContextHelper pch(&xsink, ctx->pgm);
+        if (xsink) {
+            xsink.clear();
+            return;
+        }
+        QoreSandboxCaptureHelper sch(ctx->sandbox);  // the callback now runs under the registering caller's sandbox
+        ReferenceHolder<QoreListNode> args(new QoreListNode(autoTypeInfo), &xsink);
+        args->push(new QoreStringNode(data), &xsink);
+        ctx->callback->execValue(*args, &xsink).discard(&xsink);
+        xsink.handleExceptions();
+    }
+    @endcode
+
+    See <tt>design/thread-sandbox-inheritance.md</tt> for the full model.
+
     @section interruptible_io_testing Testing
 
     - A cancellation test blocks a thread in the wait, cancels it, and checks that the call ends with
