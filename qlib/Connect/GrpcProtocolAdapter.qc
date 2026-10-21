@@ -109,6 +109,10 @@ public class GrpcProtocolAdapter {
         @param codec the codec to use for serialization
 
         @return an HttpResponseInfo hash
+
+        @note an error in the handler, and a request body that cannot be unframed or decoded, are answered with
+        \c grpc-status 13 (\c INTERNAL), as the gRPC protocol does for an error parsing a request; the
+        \c grpc-message trailer holds the error, percent-encoded (see @ref encodeGrpcMessage())
     */
     static hash<HttpResponseInfo> handleGrpcRequest(Socket s, hash<auto> cx,
             hash<auto> hdr, *data body, hash<ConnectServerMethodInfo> method_info,
@@ -198,6 +202,10 @@ public class GrpcProtocolAdapter {
         @param codec the codec to use for serialization
 
         @return an HttpResponseInfo hash
+
+        @note an error in the handler, and a request body that cannot be unframed or decoded, are answered with
+        \c grpc-status 13 (\c INTERNAL) in the trailer frame; the \c grpc-message trailer holds the error,
+        percent-encoded (see @ref encodeGrpcMessage())
     */
     static hash<HttpResponseInfo> handleGrpcWebRequest(Socket s, hash<auto> cx,
             hash<auto> hdr, *data body, hash<ConnectServerMethodInfo> method_info,
