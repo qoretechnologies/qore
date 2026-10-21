@@ -6021,6 +6021,12 @@ void QoreSocketObject::setSslTargetHostForAsyncPoll(const char* host) {
     priv->socket->priv->client_target = host;
 }
 
+std::shared_ptr<const QoreConnectionDestinations> QoreSocketObject::getConnectedDestinations() const {
+    // the socket is created with the object and destroyed with it; the record has its own leaf lock, so the I/O
+    // thread can read it while it holds other locks
+    return priv->socket->priv->getConnectedDestinations();
+}
+
 QoreHashNode* QoreSocketObject::getHttp2StreamTrailers(int32_t stream_id) const {
     Http2SessionPtr h2 = qore_socket_object_get_h2_session(this);
     return h2 ? h2->getStreamTrailers(stream_id) : nullptr;

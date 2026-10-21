@@ -198,6 +198,10 @@ manager.closeAll();
     - Connection pooling with configurable limits, HTTP-proxy support,
       configurable automatic request retry, and QUIC connection migration for
       HTTP/3
+    - A pooled connection, also the connection of a persistent session, is used only for code whose
+      @ref sandboxing "network sandbox" allows where it leads, checked as a new connection would be; a connection
+      through an HTTP proxy leads to the proxy and to the destination that the proxy connects to, and a sandbox
+      must allow both; a connection leased for a persistent session is used only by that session
     - HTTP/3 connections are created without blocking: their poll operation resolves the host name and binds the
       UDP socket in the I/O controller, so asynchronous requests can retry them, try another address family, and
       race them against HTTP/2 for a redirect in an I/O worker; an address family in which a connection did not

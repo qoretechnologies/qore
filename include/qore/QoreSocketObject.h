@@ -39,7 +39,10 @@
 #include <qore/AbstractPollableIoObjectBase.h>
 #include <qore/QoreThreadLock.h>
 
+#include <memory>
+
 class QoreSSLCertificate;
+class QoreConnectionDestinations;
 class QoreSSLPrivateKey;
 class Queue;
 class my_socket_priv;
@@ -716,6 +719,13 @@ public:
         @since %Qore 3.0
     */
     DLLLOCAL void setSslTargetHostForAsyncPoll(const char* host);
+
+    //! Returns where the socket's current connection leads, or a null pointer if no asynchronous connect recorded it
+    /** Can be called from any thread; see QoreConnectionDestinations
+
+        @since %Qore 3.0
+    */
+    DLLLOCAL std::shared_ptr<const QoreConnectionDestinations> getConnectedDestinations() const;
 
     //! Returns the trailers received for an HTTP/2 stream, or nullptr if none were received
     /** Can be called from any thread

@@ -237,6 +237,10 @@ public:
         ownership.  Callers MUST call @ref releaseConnection when done
         with the stream slot.
 
+        A pooled connection is reused only if the network sandbox of the calling code allows where it leads (see
+        HttpClientConnectionBase::checkSandboxUse()); otherwise a new connection is made, which the sandbox decides
+        on.
+
         @param scheme URL scheme ("http" or "https"); used to determine
             SSL requirement
         @param host target hostname (used for the Host header and pool key)
@@ -251,6 +255,8 @@ public:
         @throw HTTPCLIENT-CONNECT-ERROR if a new connection cannot be
             established
         @throw HTTPCLIENT-SHUTDOWN if the manager is shutting down
+        @throw NETWORK-ACCESS-DENIED if the network sandbox of the calling code denies a new connection, or denies
+            the pooled connections and no further connection can be opened (@c max_connections_per_host)
         @throw PROTOCOL-NOT-IMPLEMENTED if @c opts.protocol is H2 or H3
             (P3 limitation)
     */
@@ -715,6 +721,9 @@ private:
         ExceptionSink* xsink, HttpClientEventSink* event_sink, bool* retry);
     HttpClientConnectionManagerBase& operator=(const HttpClientConnectionManagerBase&) = delete;
 
+    //! Internal: the network sandbox of the calling code and its decisions on the connections of a pool scan
+    struct SandboxScan;
+
     //! Internal: shared implementation for @ref acquireConnection and
     //! @ref acquireConnectionAsync.  When @a wait_for_ready is @c false,
     //! newly-created connections are returned in CONNECTING state.  When
@@ -728,8 +737,17 @@ private:
     //! hold a shared or unique lock).  Returns @c nullptr if no live
     //! connection has capacity.  Reservation is atomic via
     //! @c tryReserveStream — see open question 7.6 in the design doc.
+    /** A connection is reused only by code whose network sandbox allows it, as checked by
+        HttpClientConnectionBase::checkSandboxUse().
+
+        @param key the pool key
+        @param streaming_send true to claim the incremental-body sender slot as well
+        @param scan the network sandbox of the calling code, which receives the decisions of the scan
+
+        @return a connection with a stream reserved, or nullptr
+    */
     DLLLOCAL HttpClientConnectionBase* findReusableLocked(const std::string& key,
-        bool streaming_send);
+        bool streaming_send, SandboxScan& scan);
 
     //! Internal: removes closed and (optionally) max-age-expired connections
     //! from @c pool_[key] (caller must hold the unique lock).

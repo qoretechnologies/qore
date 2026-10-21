@@ -2801,11 +2801,15 @@ void Http1ClientPollOperationPriv::notifyPendingStreams(const char* err, const c
 }
 
 void Http1ClientPollOperationPriv::fireReadyCallback(ExceptionSink* xsink) {
+    // where the connection leads, which a pool checks before it hands the connection to other code
+    std::shared_ptr<const QoreConnectionDestinations> destinations
+        = sock_obj ? sock_obj->getConnectedDestinations() : nullptr;
     // Read connection_priv under stream_lock to race-free disarm against
     // closeConnection's disarmConnectionPriv - matches the pattern used
     // by abort() / setError() above and by the H2 / H3 equivalents.
     AutoLocker al(stream_lock);
     if (connection_priv) {
+        connection_priv->setDestinations(std::move(destinations));
         connection_priv->onConnectionReady();  // Pure C++, no evalMethod, I/O-thread safe
     }
 }
@@ -3177,6 +3181,11 @@ Http1ClientPollOperationBase::constructor(Socket[QoreSocketObject] socket, strin
     // explicitly as a path, since an automatic target containing ':' would be resolved as a TCP host:port.
     bool unix_target = !proxy_tunnel && !plain_proxy && !target_port && target_host->strlen()
         && target_host->c_str()[0] == '/';
+    // the proxy connects to the target on the client's behalf, so the sandbox must allow the target as well
+    if (proxy_tunnel || plain_proxy) {
+        qore_socket_private::get(*my_socket_priv::getPriv(*sock_ptr)->socket)->setSandboxProxyTarget(
+            target_host->c_str(), (int)target_port);
+    }
     sock_ptr->ref();
     ReferenceHolder<SocketConnectPollOperation> connect_op(
         unix_target

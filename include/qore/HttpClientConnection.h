@@ -49,6 +49,7 @@ class QoreChannel;
 class HttpClientConnectionManagerBase;
 class AbstractAsyncAction;
 class HttpClientEventSink;
+class QoreSandboxManager;
 
 //! HTTP client protocol version
 /** @since %Qore 3.0
@@ -496,8 +497,40 @@ public:
     /** Qore subclasses (HttpClientIo::HttpClientConnection) create the
         C++ priv via this default constructor; protocol-specific state
         lives in the Qore layer.
+
+        The connection is opened for the calling code: its network sandbox, if any, is recorded (see
+        checkSandboxUse()).
     */
-    DLLEXPORT HttpClientConnectionBase() = default;
+    DLLEXPORT HttpClientConnectionBase();
+
+    //! Checks that the network sandbox of the calling code allows it to use the connection
+    /** A connection is checked against the network sandbox of the code that opens it; a connection pool hands it to
+        later callers, whose code can run under another sandbox, so the pool calls this before it hands the
+        connection to a caller.  The connection's destinations are checked as a new connection to them would be,
+        with the sandbox as it is configured now.
+
+        @param sm the network sandbox of the calling code (see SandboxManager::callWithSystemPolicy() for trusted
+        code), or nullptr if it has none
+        @param xsink raises \c NETWORK-ACCESS-DENIED if the sandbox denies a destination of the connection
+
+        @return 0 if the calling code may use the connection: it has no sandbox, its sandbox allows every
+        destination of the connection, or the connection is still being made for code under the same sandbox, which
+        the connect checks itself; -1 if the sandbox denies a destination of the connection (an exception is raised);
+        1 if the sandbox cannot decide on the connection (no exception is raised): it is still being made for code
+        under another sandbox, or it leads to a destination that was not resolved, such as the destination of a
+        proxy connection made without a sandbox
+
+        @since %Qore 3.0
+    */
+    DLLLOCAL int checkSandboxUse(QoreSandboxManager* sm, ExceptionSink* xsink) const;
+
+    //! Makes this connection one opened for the code that @a from was opened for
+    /** For a connection that takes over the socket of another one, such as the connection a negotiated protocol
+        hands over to, which can be created in another thread than the connection it takes over
+
+        @since %Qore 3.0
+    */
+    DLLLOCAL void inheritOpener(const HttpClientConnectionBase& from);
 
     //! Sets the pool key for O(1) eviction by the connection manager
     /** Called by the manager when inserting the connection into the pool.
@@ -647,22 +680,25 @@ public:
     }
 
 protected:
-    DLLLOCAL HttpClientConnectionBase(std::string target_host, int target_port,
-            bool ssl_required)
-        : target_host(std::move(target_host)),
-          target_port(target_port),
-          ssl_required(ssl_required) {
-        int us = 0;
-        created_us_ = q_epoch_us(us) * 1000000LL + us;
-    }
+    //! Creates the connection for the calling code, whose network sandbox, if any, is recorded
+    DLLEXPORT HttpClientConnectionBase(std::string target_host, int target_port, bool ssl_required);
+
+    //! Releases the recorded network sandbox of the code that opened the connection
+    DLLEXPORT ~HttpClientConnectionBase() override;
 
     //! Raises the stored protocol error for a closed connection, if available
     DLLEXPORT void raiseClosedSubmitError(const char* fallback_desc,
         ExceptionSink* xsink);
 
     std::string target_host;
-    int target_port;
-    bool ssl_required;
+    int target_port = 0;
+    bool ssl_required = false;
+
+    //! The network sandbox of the code that opened the connection, if any (referenced)
+    /** Set when the connection is created, on the thread of the code that opens it, where the connect operation
+        resolves the sandbox that it checks the connection against; see checkSandboxUse().
+    */
+    QoreSandboxManager* opener_policy = nullptr;
 
     //! Connection creation timestamp (epoch microseconds), born-at TTL.
     int64_t created_us_ = 0;

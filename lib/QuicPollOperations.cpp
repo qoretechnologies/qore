@@ -544,6 +544,13 @@ int SocketQuicClientPollOperation::initializeResolved(ExceptionSink* xsink) {
         return -1;
     }
 
+    // the connection leads to the remote address; a connection migration later changes only the local address
+    {
+        std::shared_ptr<QoreConnectionDestinations> d = std::make_shared<QoreConnectionDestinations>();
+        d->add(host.c_str(), reinterpret_cast<const struct sockaddr*>(&remote_addr_), remote_addrlen_, QSEC_NET_UDP);
+        sock->priv->socket->priv->setConnectedDestinations(std::move(d));
+    }
+
     // Enlarge UDP receive buffer to prevent packet drops under burst traffic.
     // QUIC sends many small datagrams; the kernel default (~208KB on Linux) is
     // easily exhausted when the server sends large responses.  1MB matches

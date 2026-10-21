@@ -111,6 +111,8 @@ class OneRecordTest inherits QUnit::Test {
         addTestCase("method not allowed test", \methodNotAllowedTest());
         addTestCase("notification delivery test", \notificationDeliveryTest());
         addTestCase("notification delivery sandbox test", \notificationDeliverySandboxTest());
+        addTestCase("notification delivery pooled connection sandbox test",
+            \notificationDeliveryPooledConnectionSandboxTest());
 
         set_return_value(main());
     }
@@ -663,6 +665,44 @@ class OneRecordTest inherits QUnit::Test {
         hash<auto> req = callback.requests.get(10000);
         assertEq("/cb/sballow", req.path);
         assertEq("api:Notification", req.body."@type");
+    }
+
+    #! a delivery under a sandbox gets a pooled connection only if the sandbox allows its destination
+    /** The delivery pool keeps connections to a callback receiver open for later deliveries; a connection opened
+        for a delivery caused by code without a sandbox is not used for a delivery whose sandbox denies the receiver
+    */
+    notificationDeliveryPooledConnectionSandboxTest() {
+        string warm_type = CARGO_NS + "NotifyPoolWarm";
+        string deny_type = CARGO_NS + "NotifyPoolDeny";
+        string allow_type = CARGO_NS + "NotifyPoolAllow";
+        subscribeToType(warm_type, callback_url + "/cb/poolwarm");
+        subscribeToType(deny_type, callback_url + "/cb/pooldeny");
+        subscribeToType(allow_type, callback_url + "/cb/poolallow");
+
+        # a delivery caused by code without a sandbox opens a connection to the receiver, which the pool keeps open
+        inProcessCaller().callFunction("create", handler, make_json({"@type": warm_type}));
+        assertEq("/cb/poolwarm", callback.requests.get(10000).path);
+
+        # the denied caller's delivery does not get the open connection, and its sandbox refuses a new one
+        sandboxedCaller(False).callFunction("create", handler, make_json({"@type": deny_type}));
+        string msg = log_capture.waitForMessage("Notification delivery failed.*/cb/pooldeny");
+        assertRegex("NETWORK-ACCESS-DENIED", msg);
+
+        # the next request that reaches the receiver is the allowed caller's: the denied delivery never reached it
+        sandboxedCaller(True).callFunction("create", handler, make_json({"@type": allow_type}));
+        assertEq("/cb/poolallow", callback.requests.get(10000).path);
+    }
+
+    #! a Program without a sandbox that creates objects in-process through the handler
+    private Program inProcessCaller() {
+        Program p(PO_NEW_STYLE);
+        p.parse("%new-style
+auto sub create(object handler, string body) {
+    hash<auto> cx = {\"url\": {\"path\": \"/logistics-objects\"}};
+    hash<auto> hdr = {\"method\": \"POST\"};
+    return handler.handleRequest(cx, hdr, body);
+}", "in-process-caller");
+        return p;
     }
 
     #! a Program with a SandboxManager that denies (allow=False) or allows (allow=True) outbound network

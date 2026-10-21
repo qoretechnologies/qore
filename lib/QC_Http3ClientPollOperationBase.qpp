@@ -806,12 +806,17 @@ void Http3ClientPollOperationPriv::fireReadyCallback(ExceptionSink* xsink) {
         }
     }
     if (owner) {
+        // the owner records the destinations of the attempt that wins
         owner->onInnerHandshakeReady(this);
         owner_cp->deref(xsink);  // release the callback lifetime ref
         return;
     }
+    // where the connection leads, which a pool checks before it hands the connection to other code
+    std::shared_ptr<const QoreConnectionDestinations> destinations
+        = sock_obj ? sock_obj->getConnectedDestinations() : nullptr;
     AutoLocker al(stream_lock);
     if (connection_priv) {
+        connection_priv->setDestinations(std::move(destinations));
         connection_priv->onConnectionReady();  // Pure C++, no evalMethod, I/O-thread safe
     }
 }

@@ -1163,8 +1163,12 @@ void Http2ClientPollOperationPriv::notifyPendingStreams(const char* err, const c
 }
 
 void Http2ClientPollOperationPriv::fireReadyCallback(ExceptionSink* xsink) {
+    // where the connection leads, which a pool checks before it hands the connection to other code
+    std::shared_ptr<const QoreConnectionDestinations> destinations
+        = sock_obj ? sock_obj->getConnectedDestinations() : nullptr;
     AutoLocker al(stream_lock);
     if (connection_priv) {
+        connection_priv->setDestinations(std::move(destinations));
         connection_priv->onConnectionReady();  // Pure C++, no evalMethod, I/O-thread safe
     }
 }
@@ -1786,6 +1790,12 @@ Http2ClientPollOperationBase::constructor(Socket[QoreSocketObject] socket, strin
         return;
     }
     QoreSocketObject* sock_ptr = *socket;
+
+    // the proxy connects to the target on the client's behalf, so the sandbox must allow the target as well
+    if (proxy_tunnel) {
+        qore_socket_private::get(*my_socket_priv::getPriv(*sock_ptr)->socket)->setSandboxProxyTarget(
+            target_host->c_str(), (int)target_port);
+    }
 
     // Create initial TCP connect operation
     sock_ptr->ref();

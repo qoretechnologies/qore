@@ -233,6 +233,30 @@ while (true) {
 
     See <tt>design/thread-sandbox-inheritance.md</tt> for the full model.
 
+    @subsection interruptible_io_sandbox_pools Reusing Connections for Other Callers
+
+    A connection is checked against the network sandbox of the code that makes it.  A module that keeps open
+    connections and hands them to later callers - a connection pool, or a client object that callers share - must
+    check each connection against the network sandbox of every caller it hands the connection to, as a new
+    connection would be checked: record the host name and the address that the connection was made to (and, for a
+    connection through a proxy, the destination that the proxy connects to), and before reusing the connection for
+    a caller, check them with the policy of that caller.  If the sandbox denies them, make a new connection for the
+    caller instead, which the sandbox decides on as usual.
+
+    @code{.cpp}
+    // before a pooled connection is handed to the calling code:
+    QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
+    if (smh && !smh->checkNetworkAccess(conn->host.c_str(), reinterpret_cast<const struct sockaddr*>(&conn->addr),
+            conn->addrlen, QSEC_NET_TCP, xsink)) {
+        // the sandbox denies this connection to the calling code and raised NETWORK-ACCESS-DENIED in xsink:
+        // clear it and make a new connection for the caller, or report it if no other connection can be made
+        ...
+    }
+    @endcode
+
+    Check on every reuse rather than once per caller: a sandbox can be tightened while the connection stays open.
+    See <tt>design/pooled-connection-sandbox.md</tt> for how the HTTP client pools of %Qore do this.
+
     @section interruptible_io_testing Testing
 
     - A cancellation test blocks a thread in the wait, cancels it, and checks that the call ends with

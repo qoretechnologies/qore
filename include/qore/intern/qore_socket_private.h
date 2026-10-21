@@ -54,6 +54,7 @@
 #include "qore/intern/QoreDatagramDispatcher.h"
 #include "qore/intern/qore_thread_intern.h"
 #include "qore/intern/QoreHttpBodyCharset.h"
+#include "qore/intern/QoreConnectionDestinations.h"
 
 #include <cctype>
 #include <cerrno>
@@ -603,6 +604,8 @@ private:
     std::string host, service;
     //! The destination that this connection to a proxy is made for, checked against the sandbox first
     std::string via_host, via_service;
+    //! Where the connection leads; published on the socket when the connection is made
+    std::shared_ptr<QoreConnectionDestinations> destinations;
     std::vector<SocketResolvedAddrInfo> addrs;
     std::vector<size_t> sorted_addrs;
     std::vector<ConnAttempt> active_attempts;
@@ -1407,6 +1410,14 @@ struct qore_socket_private : public QoreReferenceCounter {
     std::string sandbox_proxy_target_host;
     std::string sandbox_proxy_target_service;
 
+    //! Where the current connection leads, if an asynchronous connect recorded it; see setConnectedDestinations()
+    /** Guarded by @ref connected_destinations_lock, because the I/O thread that makes the connection records it,
+        and the protocol of a connection that runs on the socket reads it when the connection becomes ready.
+    */
+    std::shared_ptr<const QoreConnectionDestinations> connected_destinations;
+    //! Guards @ref connected_destinations; a leaf lock: nothing else is locked while it is held
+    mutable std::mutex connected_destinations_lock;
+
     //! Generation counter bumped on every close / fd swap.
     /** Async controller-backed socket operations snapshot and re-verify this
         counter across readiness waits: if it has changed, the fd they were
@@ -2038,6 +2049,8 @@ struct qore_socket_private : public QoreReferenceCounter {
         sprot = 0;
         // issue #3053: clear hostname for SNI
         client_target.clear();
+        // the next connection records its own destinations
+        setConnectedDestinations(nullptr);
         return rc;
     }
 
@@ -2792,6 +2805,21 @@ struct qore_socket_private : public QoreReferenceCounter {
     DLLLOCAL void setSandboxProxyTarget(const char* host, int port) {
         sandbox_proxy_target_host = host ? host : "";
         sandbox_proxy_target_service = std::to_string(port);
+    }
+
+    //! Records where the current connection leads; cleared when the socket is closed
+    /** Set by the asynchronous connect operations when the connection is made, so a connection pool can check the
+        destinations against the network sandbox of later callers before it hands the connection to them.
+    */
+    DLLLOCAL void setConnectedDestinations(std::shared_ptr<const QoreConnectionDestinations> d) {
+        std::lock_guard<std::mutex> l(connected_destinations_lock);
+        connected_destinations.swap(d);
+    }
+
+    //! Returns where the current connection leads, or a null pointer if no asynchronous connect recorded it
+    DLLLOCAL std::shared_ptr<const QoreConnectionDestinations> getConnectedDestinations() const {
+        std::lock_guard<std::mutex> l(connected_destinations_lock);
+        return connected_destinations;
     }
 
     //! Takes the destination set with setSandboxProxyTarget(), if any

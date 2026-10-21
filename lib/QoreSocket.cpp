@@ -7944,9 +7944,15 @@ SocketConnectInetHappyEyeballsPollState::SocketConnectInetHappyEyeballsPollState
     // close socket if already open
     qore_socket_close_private_from_controller(sock);
 
+    destinations = std::make_shared<QoreConnectionDestinations>();
+
     // a connection to a proxy is made for another destination, which the sandbox must allow as well
     sock->takeSandboxProxyTarget(via_host, via_service);
     if (!this->sandbox_manager) {
+        // without a sandbox, the destination is not resolved: the proxy resolves it
+        if (!via_host.empty()) {
+            destinations->addUnresolved(via_host.c_str(), QSEC_NET_TCP);
+        }
         via_host.clear();
     }
 
@@ -8119,10 +8125,13 @@ int SocketConnectInetHappyEyeballsPollState::continueProxyTargetCheck(ExceptionS
         return -1;
     }
     for (const SocketResolvedAddrInfo& ai : via_addrs) {
+        int proto = qore_socket_sandbox_proto(ai.family, ai.socktype);
         if (!sandbox_manager->checkNetworkAccess(via_host.c_str(), reinterpret_cast<const struct sockaddr*>(&ai.addr),
-                ai.addrlen, qore_socket_sandbox_proto(ai.family, ai.socktype), xsink)) {
+                ai.addrlen, proto, xsink)) {
             return -1;
         }
+        // the proxy can connect to any of the addresses
+        destinations->add(via_host.c_str(), reinterpret_cast<const struct sockaddr*>(&ai.addr), ai.addrlen, proto);
     }
     resolver.reset();
     via_host.clear();
@@ -8308,6 +8317,14 @@ void SocketConnectInetHappyEyeballsPollState::assignWinner(ExceptionSink* xsink)
     // Close all other fds
     closeAllFds();
 
+    // the connection leads to the address connected to, and, for a proxy, to the destination the proxy connects to
+    assert(destinations);
+    if (destinations) {
+        destinations->add(host.c_str(), reinterpret_cast<const struct sockaddr*>(&wp.addr), wp.addrlen,
+            qore_socket_sandbox_proto(wp.family, wp.socktype));
+        sock->setConnectedDestinations(std::move(destinations));
+    }
+
     sock->confirmConnected(host.c_str());
 
     printd(5, "SocketConnectInetHappyEyeballsPollState::assignWinner() host: %s family: %s\n",
@@ -8455,6 +8472,11 @@ int SocketConnectUnixPollState::checkConnection(ExceptionSink* xsink) {
     // connected successfully within the timeout period
     sock->socketname = addr.sun_path;
     sock->sfamily = AF_UNIX;
+    {
+        std::shared_ptr<QoreConnectionDestinations> d = std::make_shared<QoreConnectionDestinations>();
+        d->add(name.c_str(), reinterpret_cast<const struct sockaddr*>(&addr), sizeof(addr), QSEC_NET_UNIX);
+        sock->setConnectedDestinations(std::move(d));
+    }
     sock->confirmConnected(nullptr);
     return 0;
 }
@@ -12101,6 +12123,27 @@ static void qore_socket_set_bind_no_address_error() {
 #endif
 }
 
+#ifndef _Q_WINDOWS
+//! Applies the rules of a sandbox for a UNIX socket path; see qore_socket_check_unix_sandbox()
+/** @return 0 if allowed, -1 if denied (an exception is raised)
+*/
+static int qore_socket_check_unix_sandbox_rules(QoreSandboxManager& sm, const char* path, bool bind,
+        ExceptionSink* xsink) {
+    struct sockaddr_un addr = {};
+    addr.sun_family = AF_UNIX;
+    strncpy(addr.sun_path, path, sizeof(addr.sun_path) - 1);
+    const struct sockaddr* sa = reinterpret_cast<const struct sockaddr*>(&addr);
+    if (bind ? !sm.checkNetworkBind(sa, sizeof(addr), QSEC_NET_UNIX, xsink)
+            : !sm.checkNetworkAccess(path, sa, sizeof(addr), QSEC_NET_UNIX, xsink)) {
+        return -1;
+    }
+    if (!sm.checkFilesystemAccess(path, bind ? (QSEC_CREATE | QSEC_WRITE) : (QSEC_READ | QSEC_WRITE), xsink)) {
+        return -1;
+    }
+    return 0;
+}
+#endif
+
 //! Checks that the sandbox allows the UNIX socket path to be created (bind) or connected to
 /** A UNIX socket is a file: the network policy decides whether UNIX sockets may be used at all, and the filesystem
     policy decides which socket files may be reached, so a sandbox without filesystem access cannot reach a local
@@ -12114,21 +12157,62 @@ static int qore_socket_check_unix_sandbox(QoreSandboxManager* sm, const char* pa
     if (!sm) {
         return 0;
     }
-    struct sockaddr_un addr = {};
-    addr.sun_family = AF_UNIX;
-    strncpy(addr.sun_path, path, sizeof(addr.sun_path) - 1);
-    const struct sockaddr* sa = reinterpret_cast<const struct sockaddr*>(&addr);
-    if (bind ? !sm->checkNetworkBind(sa, sizeof(addr), QSEC_NET_UNIX, xsink)
-            : !sm->checkNetworkAccess(path, sa, sizeof(addr), QSEC_NET_UNIX, xsink)) {
-        qore_socket_set_sandbox_denied_error();
-        return -1;
-    }
-    if (!sm->checkFilesystemAccess(path, bind ? (QSEC_CREATE | QSEC_WRITE) : (QSEC_READ | QSEC_WRITE), xsink)) {
+    if (qore_socket_check_unix_sandbox_rules(*sm, path, bind, xsink)) {
         qore_socket_set_sandbox_denied_error();
         return -1;
     }
     return 0;
 #endif
+}
+
+void QoreConnectionDestinations::add(const char* host, const struct sockaddr* addr, socklen_t addrlen, int proto) {
+    assert(addr);
+    assert(addrlen > 0 && static_cast<size_t>(addrlen) <= sizeof(struct sockaddr_storage));
+    Destination d;
+    d.host = host ? host : "";
+    d.proto = proto;
+    // an address that cannot be stored is recorded as unresolved, which no sandbox can decide on
+    if (addr && addrlen > 0 && static_cast<size_t>(addrlen) <= sizeof(struct sockaddr_storage)) {
+        memcpy(&d.addr, addr, addrlen);
+        d.addrlen = addrlen;
+    }
+    destinations.push_back(std::move(d));
+}
+
+void QoreConnectionDestinations::addUnresolved(const char* host, int proto) {
+    Destination d;
+    d.host = host ? host : "";
+    d.proto = proto;
+    destinations.push_back(std::move(d));
+}
+
+int QoreConnectionDestinations::check(QoreSandboxManager& sm, ExceptionSink* xsink) const {
+    // a connection always leads somewhere; a record without a destination cannot be decided on
+    assert(!destinations.empty());
+    if (destinations.empty()) {
+        return 1;
+    }
+    // a denied destination is reported even when another one is unresolved
+    int rv = 0;
+    for (const Destination& d : destinations) {
+        if (!d.addrlen) {
+            rv = 1;
+            continue;
+        }
+#ifndef _Q_WINDOWS
+        if (d.proto == QSEC_NET_UNIX) {
+            if (qore_socket_check_unix_sandbox_rules(sm, d.host.c_str(), false, xsink)) {
+                return -1;
+            }
+            continue;
+        }
+#endif
+        if (!sm.checkNetworkAccess(d.host.empty() ? nullptr : d.host.c_str(),
+                reinterpret_cast<const struct sockaddr*>(&d.addr), d.addrlen, d.proto, xsink)) {
+            return -1;
+        }
+    }
+    return rv;
 }
 
 static int qore_socket_bind_unix_direct(QoreSocket* s, const char* name, int socktype, int protocol,

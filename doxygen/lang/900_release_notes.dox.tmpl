@@ -27,6 +27,19 @@
     from code at least as privileged as it, so sandboxed code can no longer reach objects, constants, classes or
     global variables outside its program by walking the namespace tree of a class it inherited.
 
+    <b>Security</b>: an open connection that a connection pool keeps for reuse is handed only to code whose
+    @ref sandboxing "network sandbox" allows where the connection leads, checked as a new connection would be, with
+    the sandbox as it is configured at that moment.  This applies to the connections of
+    @ref HttpClientIo::HttpClientConnectionManager "HttpClientConnectionManager" (and the clients built on it, such as
+    @ref RestClientIo::RestClientIo "RestClientIo" and @ref WebSocketClient::WebSocketClient "WebSocketClient"),
+    including the connection of a persistent session, and to the connections of a
+    @ref Qore::HTTPClient "HTTPClient" object (and of the clients built on it, such as
+    @ref RestClient::RestClient "RestClient"), over HTTP/1.1, HTTP/2, HTTP/3 and UNIX sockets.  Previously, sandboxed
+    code could send requests over a connection that other code had opened to a destination its own sandbox denies.
+    A connection made through a proxy leads to the proxy and to the destination the proxy connects to; a sandbox must
+    allow both, also for a new connection made by @ref HttpClientIo::HttpClientConnectionManager "HttpClientConnectionManager",
+    which previously checked only the proxy.
+
     <b>Security</b>: the steps of a poll operation that the async I/O controller runs on its callback workers,
     such as \c continuePoll() and \c onComplete() of an operation implemented in %Qore, are governed by the
     @ref sandboxing "sandbox" of the code that submitted the operation (see

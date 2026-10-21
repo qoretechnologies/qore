@@ -106,6 +106,18 @@ auto mgr_h2 = new HttpClientConnectionManager({"protocol": "h2"});
 auto mgr_h3 = new HttpClientConnectionManager({"protocol": "h3"});
     @endcode
 
+    @par Sandboxing
+    A connection is checked against the @ref sandboxing "network sandbox" of the code that opens it.  The pool
+    hands an open connection to later requests only if the network sandbox of the code making the request allows
+    where the connection leads, checked as a new connection would be, with the sandbox as it is configured then;
+    otherwise the request makes its own connection, which its sandbox decides on, and if no further connection can
+    be opened (see \c max_connections_per_host), the request fails with the sandbox's \c NETWORK-ACCESS-DENIED.
+    The connection of a persistent session is checked the same way, and the request fails with
+    \c NETWORK-ACCESS-DENIED if the sandbox does not allow it.  A connection through an HTTP proxy leads to the
+    proxy and to the destination that the proxy connects to; a sandbox must allow both.  The destination of a proxy
+    connection made by code without a sandbox is not resolved by the client, so that connection is not handed to
+    sandboxed code.
+
     @par Shared Global Controller
     All managers share the process-wide AsyncSocketIo global controller singleton
     (via @ref AsyncSocketIo::getGlobalAsyncIoController()). The controller uses
@@ -2168,6 +2180,8 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
         # transaction stays on the one leased socket; see pinConnection() / leaseConnection().
         *HttpClientConnection pinned = getPinnedConnection();
         if (pinned && pinned.getPoolKey() == key) {
+            # the session's connection can be used only by code whose network sandbox allows it
+            pinned.checkSandboxUse();
             if (!pinned.tryReserveStream()) {
                 throw "HTTPCLIENT-CAPACITY-ERROR",
                     sprintf("no free stream slot on the pinned persistent connection %d to %s",
@@ -2206,8 +2220,10 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
                                 continue;
                             }
                             # skip connections exclusively leased for a persistent session:
-                            # only their owning thread (via the pin above) may use them
-                            if (!live_conn && !conn.isLeased() && conn.tryReserveStream()) {
+                            # only their owning thread (via the pin above) may use them; a connection is
+                            # handed only to code whose network sandbox allows it
+                            if (!live_conn && !conn.isLeased() && conn.sandboxAllowsUse()
+                                && conn.tryReserveStream()) {
                                 live_conn = conn;
                             }
                         }
@@ -2277,7 +2293,10 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
                                 conn.getConnectionId(), key);
                         } else {
                             push live, conn;
-                            if (!reusable && !conn.isDraining() && conn.tryReserveStream()) {
+                            # as in the scan above: a leased connection belongs to its session, and a connection
+                            # is handed only to code whose network sandbox allows it
+                            if (!reusable && !conn.isDraining() && !conn.isLeased() && conn.sandboxAllowsUse()
+                                && conn.tryReserveStream()) {
                                 reusable = conn;
                             }
                         }
@@ -2300,10 +2319,21 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
                 int current_count = pool.hasKey(key) ? pool{key}.size() : 0;
                 if (opts.max_connections_per_host
                         && current_count >= opts.max_connections_per_host) {
-                    # Pick connection with fewest streams
+                    # Pick connection with fewest streams; a leased connection belongs to its session, and a
+                    # connection is handed only to code whose network sandbox allows it
                     list<HttpClientConnection> candidates;
+                    *HttpClientConnection sandbox_refused;
                     int min_streams = MAXINT;
                     foreach HttpClientConnection conn in (pool{key}) {
+                        if (conn.isLeased()) {
+                            continue;
+                        }
+                        if (!conn.sandboxAllowsUse()) {
+                            if (!sandbox_refused) {
+                                sandbox_refused = conn;
+                            }
+                            continue;
+                        }
                         int streams = conn.getActiveStreamCount();
                         if (streams < min_streams) {
                             min_streams = streams;
@@ -2323,6 +2353,10 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
                                 best.getConnectionId(), min_streams, key);
                             return best;
                         }
+                    } else if (sandbox_refused) {
+                        # no further connection can be opened, and the sandbox does not allow the open ones: raise
+                        # its denial
+                        sandbox_refused.checkSandboxUse();
                     }
                     throw "HTTPCLIENT-CAPACITY-ERROR",
                         sprintf("all %d connections to %s have reached the concurrent "
@@ -3008,6 +3042,10 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
                             continue;
                         }
                         if (!isConnectionAlive(conn)) {
+                            continue;
+                        }
+                        # a connection is handed only to code whose network sandbox allows it
+                        if (!conn.sandboxAllowsUse()) {
                             continue;
                         }
                         reuse = conn;
