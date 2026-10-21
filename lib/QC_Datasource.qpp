@@ -2004,7 +2004,14 @@ hash<auto> Datasource::getOptionHash() [flags=RET_VALUE_ONLY] {
 /** @param option the option to set
     @param value the value to set
 
-    @note in order to ensure atomicity when dealing with Datasource options, the transaction lock is acquired before executing this method if it was not already owned by the calling thread
+    The value is set on the connection if the datasource is open, and it is kept to be set on every new connection
+    of the datasource.
+
+    @note
+    - in order to ensure atomicity when dealing with Datasource options, the transaction lock is acquired before executing this method if it was not already owned by the calling thread
+    - a value that is refused - an option that the driver does not have, or a value that the driver does not accept
+      on an open connection - is not kept: the option keeps its previous value, also on the next connection (since
+      %Qore 3.0)
 
     @throw DBI-OPTION-ERROR unknown or unsupported option passed to driver, or the option name or a string option value contains a NUL character (since %Qore 3.0); option values are not shown in the exception
     @throw DATASOURCE-ERROR the datasource must be open for this call

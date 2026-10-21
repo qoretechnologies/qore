@@ -470,12 +470,11 @@ struct qore_dbi_private {
         return f.stmt.free ? f.stmt.free(stmt, xsink) : 0;
     }
 
-    DLLLOCAL int opt_set(Datasource* ds, const char* opt, const QoreValue val, ExceptionSink* xsink) {
-        OptInputHelper oh(xsink, *this, opt, true, val);
-        if (!oh)
-            return -1;
-
-        return f.opt.set(ds, opt, oh.val, xsink);
+    //! sets an option on an open connection; the option and its value have already been validated with OptInputHelper
+    /** @return the driver's return value; a driver that refuses the value raises an exception in \a xsink
+    */
+    DLLLOCAL int opt_set_validated(Datasource* ds, const char* opt, const QoreValue val, ExceptionSink* xsink) const {
+        return f.opt.set(ds, opt, val, xsink);
     }
 
     DLLLOCAL QoreValue opt_get(const Datasource* ds, const char* opt, ExceptionSink* xsink) {

@@ -5121,6 +5121,13 @@ while (*binary chunk = input.read(65536)) {
       "Datasource::currentThreadInTransaction()" returned @ref True afterwards, other threads timed out waiting for
       the lock, and destroying the datasource in another thread raised \c DATASOURCE-ERROR
 
+    - Fixed @ref Qore::SQL::Datasource::setOption() "Datasource::setOption()" keeping a value that was refused - an
+      option that the driver does not have, or a value that the driver did not accept on an open connection - so
+      that it was set again on the next connection, where a refused value made every open fail; a refused value is
+      no longer kept, and the option keeps its previous value.  The value that is kept for the next connection is the
+      one set on the connection, converted to the option's type where the option has a type that requires it, and
+      not the value as passed; a value that the driver accepts without raising an exception is kept as before
+
     - Fixed data races reading the transaction lock state of a @ref Qore::SQL::Datasource "Datasource" in one thread
       while another thread took or released the lock:
       @ref Qore::SQL::Datasource::currentThreadInTransaction() "Datasource::currentThreadInTransaction()",

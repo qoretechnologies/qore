@@ -1581,16 +1581,23 @@ QoreHashNode* Datasource::getOptionHash() const {
 }
 
 int Datasource::setOption(const char* opt, const QoreValue val, ExceptionSink* xsink) {
-    // maintain a copy of the option internally
-    priv->setOption(opt, val, xsink);
-    // only set options in private data if private data is already set
-    if (priv->private_data) {
-        return qore_dbi_private::get(*priv->dsl)->opt_set(this, opt, val, xsink);
-    }
-
+    // the errors of this call are collected in a sink of its own, as the caller's can already hold an exception
+    ExceptionSink opt_xsink;
     // issue #3243: validate options before sending them to the driver
-    OptInputHelper opt_helper(xsink, *qore_dbi_private::get(*priv->dsl), opt, true, val);
-    return *xsink ? -1 : 0;
+    OptInputHelper opt_helper(&opt_xsink, *qore_dbi_private::get(*priv->dsl), opt, true, val);
+    // with an open connection, the driver must accept the value as well
+    int rc = 0;
+    if (!opt_xsink && priv->private_data) {
+        rc = qore_dbi_private::get(*priv->dsl)->opt_set_validated(this, opt, opt_helper.val, &opt_xsink);
+    }
+    if (opt_xsink) {
+        // a value that was refused is not kept: it never becomes current, also not on the next connection
+        xsink->assimilate(opt_xsink);
+        return -1;
+    }
+    // the copy of the option that is set on every new connection
+    priv->setOption(opt, opt_helper.val, xsink);
+    return rc;
 }
 
 const QoreHashNode* Datasource::getConnectOptions() const {
