@@ -190,6 +190,11 @@ public class QoreDataType inherits AbstractDataProviderType {
     }
 
     #! creates the type
+    /** @param info the type definition
+
+        @throw RUNTIME-TYPE-ERROR an allowed value or element choice in \a info is a string with a NUL character,
+        which cannot be a key of the set of allowed values
+    */
     constructor(hash<QoreTypeInfo> info) : AbstractDataProviderType(info.path) {
         init(info);
     }
@@ -337,14 +342,14 @@ public class QoreDataType inherits AbstractDataProviderType {
         value = type.acceptsValue(value);
         string name = type.getName();
         if (allowed_values && !allowed_values_creatable) {
-            if (!allowed_values_map{value}) {
+            if (!DataProviderAllowedValueKeys::contains(allowed_values_map, value)) {
                 throw "TYPE-VALUE-ERROR", sprintf("Type %y does not accept value %y; allowed values: %y",
                     name, value, (map $1.value, allowed_values));
             }
         }
         if (element_allowed_values_map) {
             foreach auto v in (value) {
-                if (!element_allowed_values_map{v}) {
+                if (!DataProviderAllowedValueKeys::contains(element_allowed_values_map, v)) {
                     throw "TYPE-VALUE-ERROR", sprintf("Type %y does not accept value %y; allowed "
                         "values for elements: %y", name, v, (map $1.value, element_allowed_values));
                 }
@@ -507,12 +512,14 @@ public class QoreDataType inherits AbstractDataProviderType {
         allowed_values_creatable = info.allowed_values_creatable;
         if (info.allowed_values && !info.allowed_values_creatable) {
             # NOTE: requires values that can be converted to a string hash key to simulate a set
+            DataProviderAllowedValueKeys::check(allowed_values);
             allowed_values_map = map {$1.value: True}, allowed_values;
         }
         element_allowed_values = info.element_allowed_values;
         element_allowed_values_creatable = info.element_allowed_values_creatable;
         if (info.element_allowed_values && !info.element_allowed_values_creatable) {
             # NOTE: requires values that can be converted to a string hash key to simulate a set
+            DataProviderAllowedValueKeys::check(element_allowed_values);
             element_allowed_values_map = map {$1.value: True}, element_allowed_values;
         }
     }

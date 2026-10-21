@@ -1533,6 +1533,11 @@ fetch
     @section dataprovider_relnotes Release Notes
 
     @subsection dataprovider_v3_11 DataProvider v3.11
+    - an allowed value or element choice that is a string with a NUL character, which cannot be a key of the set of
+      allowed values, raises \c RUNTIME-TYPE-ERROR when it is set on a field or type, and a value with a NUL
+      character is refused as outside the allowed values (\c FIELD-VALUE-ERROR or \c TYPE-VALUE-ERROR); before,
+      each raised \c HASH-KEY-ERROR, and @ref DataProvider::AbstractDataField::setAllowedValues() "setAllowedValues()"
+      now leaves the previous allowed values of a field when it refuses a list
     - DPQL field completion follows field paths: after \c @ and a path of keys (<tt>\@create.</tt>,
       <tt>\@create.it</tt>), it offers the keys of the type the path reaches, each inserted as the field reference to
       its path as the serializer writes it (<tt>\@create.items</tt>, <tt>\@"create.order-id"</tt>); after accessors and

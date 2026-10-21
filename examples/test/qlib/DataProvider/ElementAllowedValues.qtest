@@ -13,6 +13,8 @@ class ElementAllowedValuesTest inherits QUnit::Test {
         addTestCase("Structured choices compare values rather than description records", \records());
         addTestCase("Choice replacement and custom values discard stale membership", \updates());
         addTestCase("Invalid replacement retains the previous choices", \rollback());
+        addTestCase("A choice with a NUL character is refused, and a value with one is outside every set",
+            \nulCharacters());
         set_return_value(main());
     }
 
@@ -81,5 +83,48 @@ class ElementAllowedValuesTest inherits QUnit::Test {
         assertFalse(value.getElementAllowedValuesCreatable());
         assertEq((1,), value.acceptsValue((1,)));
         assertThrows("FIELD-VALUE-ERROR", \value.acceptsValue(), ((2,),));
+    }
+
+    # allowed values are a set of hash keys, which cannot contain a NUL character
+    private nulCharacters() {
+        string nul = "a\x00b";
+        AbstractDataProviderType string_type = AbstractDataProviderType::get(StringType);
+
+        QoreDataField scalar({"name": "scalar", "type": string_type});
+        scalar.setAllowedValues(("x", "a"));
+        assertEq("x", scalar.acceptsValue("x"));
+        # "a\x00b" once named the key "a"
+        assertThrows("FIELD-VALUE-ERROR", "does not accept value", \scalar.acceptsValue(), (nul,));
+        assertThrows("RUNTIME-TYPE-ERROR", "allowed value \"a\\\\x00b\" contains a NUL character",
+            \scalar.setAllowedValues(), (("y", nul),));
+        # a refused list leaves the previous allowed values
+        assertEq(("x", "a"), map $1.value, scalar.getAllowedValues());
+        assertEq("a", scalar.acceptsValue("a"));
+        # values outside a creatable list are not a set, so they can contain a NUL character
+        scalar.setAllowedValues(("y", nul), True);
+        assertEq(nul, scalar.acceptsValue(nul));
+
+        QoreDataField list_field = field(string_type, ("x",));
+        assertEq(("x",), list_field.acceptsValue(("x",)));
+        assertThrows("FIELD-VALUE-ERROR", "allowed values for elements", \list_field.acceptsValue(), ((nul,),));
+        assertThrows("RUNTIME-TYPE-ERROR", "contains a NUL character", \list_field.setElementAllowedValues(),
+            (("y", nul),));
+        assertEq(("x",), map $1.value, list_field.getElementAllowedValues());
+
+        QoreDataType type(<QoreTypeInfo>{"type": StringType, "allowed_values": (<AllowedValueInfo>{"value": "x"},)});
+        assertEq("x", type.acceptsValue("x"));
+        assertThrows("TYPE-VALUE-ERROR", "does not accept value", \type.acceptsValue(), (nul,));
+        assertThrows("RUNTIME-TYPE-ERROR", "contains a NUL character", sub () {
+            QoreDataType refused(<QoreTypeInfo>{"type": StringType, "allowed_values": (<AllowedValueInfo>{
+                "value": nul},)});
+        });
+        QoreDataType element_type(<QoreTypeInfo>{"type": AutoListType, "element_allowed_values": (<AllowedValueInfo>{
+            "value": "x"},)});
+        assertEq(("x",), element_type.acceptsValue(("x",)));
+        assertThrows("TYPE-VALUE-ERROR", "allowed values for elements", \element_type.acceptsValue(), ((nul,),));
+        assertThrows("RUNTIME-TYPE-ERROR", "contains a NUL character", sub () {
+            QoreDataType refused(<QoreTypeInfo>{"type": AutoListType, "element_allowed_values": (<AllowedValueInfo>{
+                "value": nul},)});
+        });
     }
 }
