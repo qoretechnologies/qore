@@ -1616,7 +1616,6 @@ private:
 };
 
 DLLLOCAL extern pthread_mutexattr_t ma_recursive;
-DLLLOCAL extern QoreRWLock lck_debug_program;
 
 #ifdef QORE_HAVE_THREAD_NAME
 DLLLOCAL void q_set_thread_name(const char* name);

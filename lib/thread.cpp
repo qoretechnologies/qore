@@ -138,12 +138,6 @@ DLLLOCAL bool threads_initialized = false;
 // recursive mutex attribute
 DLLLOCAL pthread_mutexattr_t ma_recursive;
 
-#ifndef HAVE_GETHOSTBYADDR_R
-DLLLOCAL QoreThreadLock lck_gethostbyaddr;
-#endif
-
-DLLLOCAL QoreRWLock lck_debug_program;
-
 QoreThreadLock stack_lck;
 // 8MB default thread stack size
 #define STACK_SIZE (8 * 1024 * 1024)
@@ -4844,10 +4838,6 @@ QoreHashNode* QoreThreadList::getAllCallStacks() {
     ReferenceHolder<QoreHashNode> h(new QoreHashNode(
         qore_get_complex_list_type(hashdeclCallStackInfo->getTypeInfo())), nullptr);
 
-    if (exiting) {
-        return h.release();
-    }
-
     auto ph = qore_hash_private::get(**h);
 
     QoreString str;
@@ -5053,34 +5043,6 @@ void QoreThreadList::deleteDataReleaseSignalThread() {
     AutoLocker al(lck);
     entry[0].joined = true;
     releaseIntern(0);
-}
-
-unsigned QoreThreadList::cancelAllActiveThreads() {
-    int tid = q_gettid();
-
-    // thread cancel count
-    unsigned tcc = 0;
-
-    QoreThreadListIterator i;
-
-    assert(!exiting);
-    exiting = true;
-
-    while (i.next()) {
-        if (*i != (unsigned)tid) {
-            //printf("QoreThreadList::cancelAllActiveThreads() canceling TID %d ptid: %p (this TID: %d)\n", *i, entry[*i].ptid, tid);
-            int trc = pthread_cancel(entry[*i].ptid);
-            if (!trc) {
-                ++tcc;
-#ifdef DEBUG
-            } else {
-                printd(0, "pthread_cancel() returned %d (%s) on tid %d (%p)\n", trc, strerror(trc), tid, entry[*i].ptid);
-#endif
-            }
-        }
-    }
-
-    return tcc;
 }
 
 q_user_tld::q_user_tld(void* data, q_thread_local_destructor destructor) : data(data), destructor(destructor) {

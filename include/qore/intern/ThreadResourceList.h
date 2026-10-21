@@ -50,7 +50,6 @@ typedef std::map<ResolvedCallReferenceNode*, ArgPgm> crmap_t;
 
 class ThreadResourceList {
 private:
-    static Sequence seq;
     trset_t trset;
     crmap_t crmap;
 

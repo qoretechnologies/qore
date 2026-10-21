@@ -34,8 +34,6 @@
 #include "qore/intern/ThreadResourceList.h"
 #include <qore/AbstractThreadResource.h>
 
-Sequence ThreadResourceList::seq;
-
 void ThreadResourceList::set(AbstractThreadResource* atr) {
     //printd(5, "TRL::set() this: %p atr: %p\n", this, atr);
     // ignore object if already set

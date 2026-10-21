@@ -322,7 +322,6 @@ public:
         return num_threads;
     }
 
-    DLLLOCAL unsigned cancelAllActiveThreads();
 
     DLLLOCAL QoreHashNode* getAllCallStacks();
 
@@ -497,8 +496,6 @@ protected:
 
     // last TID issued to avoid reusing the same TID over and over again
     int last_tid = 0;
-
-    bool exiting = false;
 
     DLLLOCAL void releaseIntern(int tid) {
         // NOTE: cannot safely call printd here, because normally the thread_data has been deleted
