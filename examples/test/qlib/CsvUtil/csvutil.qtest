@@ -87,9 +87,27 @@ f2:3,00:5:25,34";
         addTestCase("issue 2739 test", \issue2739());
         addTestCase("example data without data rows", \exampleWithoutRows());
         addTestCase("binary inline data", \binaryDataTest());
+        addTestCase("header name with a NUL character", \nulHeaderTest());
 
         # Return for compatibility with test harness that checks return value.
         set_return_value(main());
+    }
+
+    #! a header name is the key of a field in each record, which cannot hold a NUL character
+    nulHeaderTest() {
+        foreach string data in ("a\x00b,c\n1,2\n", "\"a\x00b\",c\n1,2\n") {
+            CsvDataIterator i(data, {"header_lines": 1, "header_names": True});
+            assertThrows("ABSTRACTCSVITERATOR-ERROR", "CSV header name \"a\\\\x00b\" contains a NUL character, which a "
+                "Qore hash key cannot hold", \i.next());
+        }
+        # given as an option, the header names are checked when the iterator is created
+        assertThrows("ABSTRACTCSVITERATOR-ERROR", "CSV header name", sub () {
+            CsvDataIterator i("1,2\n", {"headers": ("a\x00b", "c")});
+        });
+        # a value keeps its NUL character
+        CsvDataIterator ok("a,c\n\"1\x002\",3\n", {"header_lines": 1, "header_names": True});
+        assertTrue(ok.next());
+        assertEq("1\x002", ok.getValue().a);
     }
 
     binaryDataTest() {

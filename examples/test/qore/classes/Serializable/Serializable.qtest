@@ -687,14 +687,14 @@ class SerializableTest inherits QUnit::Test {
         assertThrows("DESERIALIZATION-ERROR", \Serializable::deserialize(), bad);
     }
 
-    #! A key with a NUL character in serialized data cannot be a hash key; it was cut at the NUL character
+    #! A key with a NUL character in serialized data cannot be a hash key, so the data cannot be deserialized
     nulKeyTest() {
         # serialized data with the key "aXb" changed to "a\x00b"
         string hex = make_hex_string(Serializable::serialize({"aXb": 1}));
         assertEq(1, (hex =~ x/(615862)/g).size(), "the key appears once in the serialized data");
         binary data = parse_hex_string(replace(hex, "615862", "610062"));
-        assertThrows("HASH-KEY-ERROR", "key \"a\\\\x00b\" contains a NUL character at byte offset 1",
-            \Serializable::deserialize(), data);
+        assertThrows("DESERIALIZATION-ERROR", "serialized hash key \"a\\\\x00b\" contains a NUL character at byte "
+            "offset 1, which a Qore hash key cannot hold", \Serializable::deserialize(), data);
         # a value keeps its NUL character
         assertEq({"a": "x\x00y"}, Serializable::deserialize(Serializable::serialize({"a": "x\x00y"})));
     }

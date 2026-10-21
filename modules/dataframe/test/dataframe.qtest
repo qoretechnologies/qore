@@ -3699,15 +3699,18 @@ sub write_parquet(string path) {
     # struct field names and map keys with a NUL character cannot be hash keys
     nulNestedKeyTest() {
         string data = get_script_dir() + "/data/";
-        assertThrows("HASH-KEY-ERROR", \DataFrame::DataFrame::readParquet(), (data + "nul_struct.parquet",),
+        # the data cannot be read to hashes, so reading it is an I/O error of the format, not HASH-KEY-ERROR
+        assertThrows("DATAFRAME-IO-ERROR", "struct field name .* contains a NUL character at byte offset .*, which a "
+            "Qore hash key cannot hold", \DataFrame::DataFrame::readParquet(), (data + "nul_struct.parquet",),
             "a Parquet struct field name with a NUL character cannot be a hash key");
-        assertThrows("HASH-KEY-ERROR", \DataFrame::DataFrame::fromArrowIpc(),
-            (ReadOnlyFile::readBinaryFile(data + "nul_struct.arrow"),),
+        assertThrows("DATAFRAME-IO-ERROR", "struct field name .* contains a NUL character",
+            \DataFrame::DataFrame::fromArrowIpc(), (ReadOnlyFile::readBinaryFile(data + "nul_struct.arrow"),),
             "an Arrow struct field name with a NUL character cannot be a hash key");
-        assertThrows("HASH-KEY-ERROR", \DataFrame::DataFrame::readParquet(), (data + "nul_map.parquet",),
+        assertThrows("DATAFRAME-IO-ERROR", "map key .* contains a NUL character",
+            \DataFrame::DataFrame::readParquet(), (data + "nul_map.parquet",),
             "a Parquet map key with a NUL character cannot be a hash key");
-        assertThrows("HASH-KEY-ERROR", \DataFrame::DataFrame::fromArrowIpc(),
-            (ReadOnlyFile::readBinaryFile(data + "nul_map.arrow"),),
+        assertThrows("DATAFRAME-IO-ERROR", "map key .* contains a NUL character",
+            \DataFrame::DataFrame::fromArrowIpc(), (ReadOnlyFile::readBinaryFile(data + "nul_map.arrow"),),
             "an Arrow map key with a NUL character cannot be a hash key");
 
         # a struct column with only null values keeps a field name with a NUL character in its schema; a hash value

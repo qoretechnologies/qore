@@ -215,9 +215,12 @@ class ProtobufNameNulTest inherits QUnit::Test {
         ProtobufSchema s(Proto);
         # an entry of the counts map: key "a\0b", value 1
         binary bin = <0a070a036100621001>;
-        # a hash key cannot have a NUL character; cut at the NUL character, two keys could be merged into one
-        assertThrows("HASH-KEY-ERROR", sub () { s.decode("test.Counts", bin); });
-        assertThrows("HASH-KEY-ERROR", sub () { s.fromJson("test.Counts", "{\"counts\": {\"a\\u0000b\": 1}}"); });
+        # a hash key cannot have a NUL character; cut at the NUL character, two keys could be merged into one, so the
+        # message cannot be decoded to a hash
+        assertThrows("PROTOBUF-DECODE-ERROR", "protobuf map key \"a\\\\x00b\" contains a NUL character at byte offset "
+            "1, which a Qore hash key cannot hold", sub () { s.decode("test.Counts", bin); });
+        assertThrows("PROTOBUF-DECODE-ERROR", "protobuf map key", sub () { s.fromJson("test.Counts",
+            "{\"counts\": {\"a\\u0000b\": 1}}"); });
         # a key without a NUL character is decoded
         assertEq({"counts": {"ab": 1}}, s.decode("test.Counts", <0a060a0261621001>), "a key without NUL");
     }

@@ -2299,8 +2299,9 @@ QoreHashNode* QoreSerializable::deserializeHashFromStream(ExceptionSink* xsink, 
         if (*xsink) {
             return nullptr;
         }
-        // a key with a NUL character cannot be a hash key
-        if (QoreHashNode::checkKey(tstr->c_str(), tstr->size(), xsink)) {
+        // a key with a NUL character cannot be a hash key; the data cannot be deserialized to a hash
+        if (QoreHashNode::checkKey(tstr->c_str(), tstr->size(), "DESERIALIZATION-ERROR", "serialized hash key",
+                xsink)) {
             return nullptr;
         }
 

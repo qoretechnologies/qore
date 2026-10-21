@@ -355,8 +355,8 @@ QoreHashNode* QoreYamlDocumentIterator::parseMapping(ExceptionSink* xsink) {
         }
 
         std::string key((const char*)event.data.scalar.value, event.data.scalar.length);
-        // a key with a NUL character cannot be a hash key
-        if (QoreHashNode::checkKey(key.c_str(), key.size(), xsink)) {
+        // a key with a NUL character cannot be a hash key; the document cannot be parsed to a hash
+        if (QoreHashNode::checkKey(key.c_str(), key.size(), QY_PARSE_ERR, "YAML mapping key", xsink)) {
             return nullptr;
         }
 

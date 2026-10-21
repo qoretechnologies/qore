@@ -302,6 +302,14 @@ class CsvHelper {
         @return a list of field names in order of csv record
     */
     private list<string> adjustFieldsFromHeaders(string type, *list<auto> headers, bool check = False) {
+        # a header name is the name of a field and its key in each record; a name with a NUL character cannot be a
+        # hash key, so the data cannot be read to records
+        foreach auto header in (headers) {
+            if (header.typeCode() == NT_STRING && header.contains(chr(0))) {
+                throw errname, sprintf("CSV header name \"%s\" contains a NUL character, which a Qore hash key cannot "
+                    "hold", Qore::replace(header, chr(0), "\\x00"));
+            }
+        }
         hash<auto> spec = m_specs{type} ?? {};
         # issue #2179: ensure that all field specifications match headers set
         if (check && spec && headers) {

@@ -244,8 +244,13 @@ static QoreHashNode* get_json_object(const char*& buf, int& line_number, const Q
 
         // get key
         QoreString str(enc);
-        if (get_json_string_token(str, buf, line_number, sm, xsink))
+        if (get_json_string_token(str, buf, line_number, sm, xsink)) {
             break;
+        }
+        // a key with a NUL character (\u0000) cannot be a hash key; the input cannot be parsed to a hash
+        if (QoreHashNode::checkKey(str.c_str(), str.size(), "JSON-PARSE-ERROR", "JSON object key", xsink)) {
+            break;
+        }
 
         //printd(5, "get_json_object() key=%s\n", str.c_str());
 
@@ -270,7 +275,7 @@ static QoreHashNode* get_json_object(const char*& buf, int& line_number, const Q
                 "(expecting JSON value)", line_number);
             break;
         }
-        // the key is converted to the default encoding; a key with a NUL character raises HASH-KEY-ERROR
+        // the key is converted to the default encoding
         if (h->setKeyValue(str, val, xsink) || *xsink) {
             break;
         }

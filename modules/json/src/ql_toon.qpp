@@ -1380,8 +1380,8 @@ private:
                 }
                 if (c == '"') {
                     ++p;
-                    // a key with a NUL character cannot be a hash key
-                    if (QoreHashNode::checkKey(out.c_str(), out.size(), xsink)) {
+                    // a key with a NUL character cannot be a hash key; the input cannot be parsed to a hash
+                    if (QoreHashNode::checkKey(out.c_str(), out.size(), "TOON-PARSE-ERROR", "TOON key", xsink)) {
                         ok = false;
                     }
                     return out;
@@ -2050,6 +2050,11 @@ private:
                     return;
                 }
                 key = trim(s.substr(0, uc));
+                // the whole text before the colon is the key; a key with a NUL character cannot be a hash key, and
+                // cut at the NUL character, it would name another key
+                if (QoreHashNode::checkKey(key.data(), key.size(), "TOON-PARSE-ERROR", "TOON key", xsink)) {
+                    return;
+                }
                 cpos = uc;
             }
             size_t va, vb;
@@ -2247,9 +2252,9 @@ DataFrame::DataFrame df(rows);
     a \c DataFrame.
 
     @throw TOON-PARSE-ERROR syntax error parsing the TOON string (with line and
-    column where available), or the maximum nesting depth was exceeded
+    column where available), the maximum nesting depth was exceeded, or a key has a NUL character, which a hash key
+    cannot hold
     @throw STACK-LIMIT-EXCEEDED the data is nested too deeply for the thread's stack
-    @throw HASH-KEY-ERROR a key has a NUL character, which a hash key cannot contain
 
     @note
     - TOON is always UTF-8 (TOON specification §1.2, §18.2); if \a toon_str is

@@ -303,10 +303,11 @@ refs:
         assertEq({"x": 1, "y": 2}, result.refs.map_ref);
     }
 
-    #! A mapping key with a NUL character cannot be a hash key; it was cut at the NUL character
+    #! A mapping key with a NUL character cannot be a hash key, so the document cannot be parsed to a hash
     testNulKey() {
-        assertThrows("HASH-KEY-ERROR", "key \"a\\\\x00b\" contains a NUL character at byte offset 1", \parse_yaml(),
-            "a: 1\n\"a\\0b\": 2\n");
+        assertThrows("YAML-PARSER-ERROR", "YAML mapping key \"a\\\\x00b\" contains a NUL character at byte offset 1, "
+            "which a Qore hash key cannot hold", \parse_yaml(), "a: 1\n\"a\\0b\": 2\n");
+        assertThrows("YAML-PARSER-ERROR", "YAML mapping key", \parse_yaml(), ("{\"a\\0b\": 2}", 0));
         # a value keeps its NUL character
         assertEq({"a": "x\x00y"}, parse_yaml("a: \"x\\0y\"\n"));
     }

@@ -63,10 +63,11 @@ class YamlDocumentIteratorTest inherits QUnit::Test {
         set_return_value(main());
     }
 
-    #! A mapping key with a NUL character cannot be a hash key; it was cut at the NUL character
+    #! A mapping key with a NUL character cannot be a hash key, so the document cannot be parsed to a hash
     testNulKey() {
         YamlDocumentIterator iter("a: 1\n\"a\\0b\": 2\n");
-        assertThrows("HASH-KEY-ERROR", "key \"a\\\\x00b\" contains a NUL character at byte offset 1", \iter.next());
+        assertThrows("YAML-PARSER-ERROR", "YAML mapping key \"a\\\\x00b\" contains a NUL character at byte offset 1, "
+            "which a Qore hash key cannot hold", \iter.next());
     }
 
     testBasicIteration() {

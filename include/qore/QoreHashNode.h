@@ -311,6 +311,33 @@ h->setKeyValue(name.c_str(), value, xsink);
     */
     DLLEXPORT static int checkKey(const char* key, size_t len, ExceptionSink* xsink);
 
+    //! checks that a key read from data can be a hash key, raising the error of the data format if it cannot
+    /** A parser that builds hashes from data (such as JSON, YAML or CBOR) uses this function, so that a key with a
+        NUL character in the data raises the parse error of the format, which says what is wrong with the data,
+        instead of \c HASH-KEY-ERROR
+
+        @param key the key string, which need not be NUL-terminated
+        @param len the byte length of the key string
+        @param err the error code of the exception, ex: \c "JSON-PARSE-ERROR"
+        @param what what the key is in the description, ex: \c "JSON object key"
+        @param xsink an \a err exception is raised here if the key has a NUL character; the description gives the
+        key, escaped, and the byte offset of the NUL character
+
+        @return 0 if the string can be a key, -1 if it has a NUL character and an exception was raised
+
+        @par Example:
+        @code{.cpp}
+if (QoreHashNode::checkKey(name.data(), name.size(), "JSON-PARSE-ERROR", "JSON object key", xsink)) {
+    return QoreValue();
+}
+h->setKeyValue(name.c_str(), value, xsink);
+        @endcode
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT static int checkKey(const char* key, size_t len, const char* err, const char* what,
+        ExceptionSink* xsink);
+
     //! performs a delete operation on the value of the given key
     /** The delete operation means a simple dereference for all types except QoreObject, on this type the destructor will be run immediately.
         A Qore-language exception could occur eitherin converting the key string's encoding to QCS_DEFAULT, or in the destructor of a deleted object.

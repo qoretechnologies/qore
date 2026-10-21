@@ -85,10 +85,17 @@ class JsonTest inherits QUnit::Test {
 
     #! A hash key cannot contain a NUL character; such a key was cut at the NUL character and replaced another key
     nulKeyTest() {
-        assertThrows("HASH-KEY-ERROR", "key \"a\\\\x00b\" contains a NUL character at byte offset 1", \parse_json(),
-            '{"a": 1, "a\u0000b": 2}');
-        assertThrows("HASH-KEY-ERROR", "key \"a\\\\x00b\" contains a NUL character at byte offset 1", \parse_toon(),
-            "\"a\x00b\": 1");
+        # the input cannot be parsed to a hash, so it is a parse error of the format
+        assertThrows("JSON-PARSE-ERROR", "JSON object key \"a\\\\x00b\" contains a NUL character at byte offset 1, "
+            "which a Qore hash key cannot hold", \parse_json(), '{"a": 1, "a\u0000b": 2}');
+        assertThrows("JSON-PARSE-ERROR", "JSON object key", \parse_json(), '[{"x": {"a\u0000b": 2}}]');
+        assertThrows("TOON-PARSE-ERROR", "TOON key \"a\\\\x00b\" contains a NUL character at byte offset 1, "
+            "which a Qore hash key cannot hold", \parse_toon(), "\"a\x00b\": 1");
+        # the whole text before the colon is a key; cut at the NUL character, it was the key "a"
+        assertThrows("TOON-PARSE-ERROR", "TOON key \"a\\\\x00b\" contains a NUL character", \parse_toon(),
+            "a\x00b: 1");
+        assertThrows("TOON-PARSE-ERROR", "TOON key", \parse_toon(), "o:\n  a\x00b: 1\n");
+        assertThrows("TOON-PARSE-ERROR", "TOON key", \parse_toon(), "a\x00b[2]: 1,2\n");
         assertThrows("JSON-POINTER-ERROR", "NUL character at byte offset 2", \json_pointer_get(),
             ({"a": {"b": 1}}, "/a\x00/b"));
         assertThrows("JSON-POINTER-ERROR", "NUL character at byte offset 2", \json_pointer_exists(),
