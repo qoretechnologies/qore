@@ -1,0 +1,188 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class AOTLinkedModuleStaleTest
+
+# A build tree links the AOT modules it builds into the source qlib directory, where the module path finds them
+# before the module sources.  A linked module that is older than one of its sources, as listed in the depfile that qcc
+# wrote next to it (or, without one, its own sources), is not loaded: the source module is loaded instead, with a
+# warning that the AOT module must be rebuilt.  Before, the old AOT module was loaded without any sign of it.  A
+# module that is not a symbolic link, such as an installed one, is loaded as before.
+class AOTLinkedModuleStaleTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string libqore_dir;
+        string env;
+        #! the source module directory
+        string src_dir;
+        #! the build directory
+        string build_dir;
+    }
+
+    constructor() : QUnit::Test("AOTLinkedModuleStaleTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        env = sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir);
+
+        addTestCase("a current linked module is loaded", \currentTest());
+        addTestCase("a linked module older than its source is not loaded", \staleSourceTest());
+        addTestCase("a linked module older than a dependency is not loaded", \staleDependencyTest());
+        addTestCase("a linked module without a depfile is checked against its sources", \noDepfileTest());
+        addTestCase("a linked split module is checked against its component files", \splitModuleTest());
+        addTestCase("a module that is not a link is loaded", \copiedModuleTest());
+        set_return_value(main());
+    }
+
+    private string run(string cmd) {
+        return backquote(cmd + " 2>&1");
+    }
+
+    private write(string path, string body) {
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(body);
+    }
+
+    #! sets the modification time of a file to a time after any build
+    private touchLater(string path) {
+        assertEq(0, system(sprintf("touch -t 203001010000 '%s'", path)), "touch " + path);
+    }
+
+    private TmpDir initDirs() {
+        TmpDir tmp("qore-aot-linked-module-");
+        src_dir = tmp.path + "/qlib";
+        build_dir = tmp.path + "/build";
+        mkdir(src_dir);
+        mkdir(build_dir);
+        return tmp;
+    }
+
+    #! writes the source of the Dep module
+    private writeDep() {
+        write(src_dir + "/Dep.qm", "%modern\nmodule Dep { version = \"1.0\"; desc = \"dep\"; author = \"Qore\"; "
+            "license = \"MIT\"; }\npublic namespace Dep { public string sub tag() { return \"dep\"; } }\n");
+    }
+
+    #! writes the source of the Linked module, which returns the given value
+    private writeLinked(string value) {
+        write(src_dir + "/Linked.qm", sprintf("%%modern\n%%requires Dep\nmodule Linked { version = \"1.0\"; "
+            "desc = \"linked\"; author = \"Qore\"; license = \"MIT\"; }\n"
+            "public namespace Linked { public string sub value() { return %y + \"-\" + Dep::tag(); } }\n", value));
+    }
+
+    #! compiles the Linked module into the build directory and links it into the source directory
+    private compileLinked(bool link = True) {
+        string qmod = build_dir + "/Linked.qmod";
+        string out = run(sprintf("%s QORE_MODULE_DIR=%s %s -m --depfile=%s.d --depfile-module-deps=source -o %s %s",
+            env, src_dir, qcc_bin, qmod, qmod, src_dir + "/Linked.qm"));
+        assertTrue(is_file(qmod), "compiled Linked.qmod: " + out);
+        assertTrue(is_file(qmod + ".d"), "depfile written: " + out);
+        if (link) {
+            assertEq(0, system(sprintf("ln -s '%s' '%s/Linked.qmod'", qmod, src_dir)), "link Linked.qmod");
+        } else {
+            assertEq(0, system(sprintf("cp '%s' '%s/Linked.qmod'", qmod, src_dir)), "copy Linked.qmod");
+        }
+    }
+
+    #! returns the output of a script that loads the module and prints its value and the file it was loaded from
+    private string runLinked() {
+        return trim(run(sprintf("%s QORE_MODULE_DIR=%s %s -ne '%%requires Linked\n"
+            "printf(\"%%s %%s\\n\", Linked::value(), basename(get_module_hash().Linked.filename));'", env, src_dir,
+            qore_bin)));
+    }
+
+    currentTest() {
+        TmpDir tmp = initDirs();
+        writeDep();
+        writeLinked("v1");
+        compileLinked();
+        string out = runLinked();
+        assertEq("v1-dep Linked.qmod", out);
+    }
+
+    staleSourceTest() {
+        TmpDir tmp = initDirs();
+        writeDep();
+        writeLinked("v1");
+        compileLinked();
+        writeLinked("v2");
+        touchLater(src_dir + "/Linked.qm");
+        string out = runLinked();
+        list<string> lines = out.split("\n");
+        assertEq("v2-dep Linked.qm", lines.last(), out);
+        assertRegex("AOT module '.*/Linked\\.qmod' for feature 'Linked' is older than its source '.*/Linked\\.qm'; "
+            "loading source module '.*/Linked\\.qm' instead; rebuild the AOT module", out);
+    }
+
+    staleDependencyTest() {
+        TmpDir tmp = initDirs();
+        writeDep();
+        writeLinked("v1");
+        compileLinked();
+        # the module that Linked depends on is in its depfile
+        touchLater(src_dir + "/Dep.qm");
+        string out = runLinked();
+        assertEq("v1-dep Linked.qm", out.split("\n").last(), out);
+        assertRegex("is older than its source '.*/Dep\\.qm'", out);
+    }
+
+    noDepfileTest() {
+        TmpDir tmp = initDirs();
+        writeDep();
+        writeLinked("v1");
+        compileLinked();
+        unlink(build_dir + "/Linked.qmod.d");
+        assertEq("v1-dep Linked.qmod", runLinked());
+        writeLinked("v2");
+        touchLater(src_dir + "/Linked.qm");
+        string out = runLinked();
+        assertEq("v2-dep Linked.qm", out.split("\n").last(), out);
+        assertRegex("is older than its source '.*/Linked\\.qm'", out);
+    }
+
+    splitModuleTest() {
+        TmpDir tmp = initDirs();
+        string mod_dir = src_dir + "/Split";
+        mkdir(mod_dir);
+        write(mod_dir + "/Split.qm", "%modern\nmodule Split { version = \"1.0\"; desc = \"split\"; "
+            "author = \"Qore\"; license = \"MIT\"; }\n");
+        write(mod_dir + "/Part.qc", "public namespace Split { public string sub value() { return \"v1\"; } }\n");
+        mkdir(build_dir + "/Split");
+        string qmod = build_dir + "/Split/Split.qmod";
+        string out = run(sprintf("%s QORE_MODULE_DIR=%s %s -m -o %s %s", env, src_dir, qcc_bin, qmod, mod_dir));
+        assertTrue(is_file(qmod), "compiled Split.qmod: " + out);
+        assertEq(0, system(sprintf("ln -s '%s' '%s/Split.qmod'", qmod, mod_dir)), "link Split.qmod");
+        string cmd = sprintf("%s QORE_MODULE_DIR=%s %s -ne '%%requires Split\n"
+            "printf(\"%%s %%s\\n\", Split::value(), basename(get_module_hash().Split.filename));'", env, src_dir,
+            qore_bin);
+        assertEq("v1 Split.qmod", trim(run(cmd)));
+        # without a depfile, a changed component file of the module is found
+        write(mod_dir + "/Part.qc", "public namespace Split { public string sub value() { return \"v2\"; } }\n");
+        touchLater(mod_dir + "/Part.qc");
+        out = trim(run(cmd));
+        assertEq("v2 Split.qm", out.split("\n").last(), out);
+        assertRegex("is older than its source '.*/Split/Part\\.qc'", out);
+    }
+
+    copiedModuleTest() {
+        TmpDir tmp = initDirs();
+        writeDep();
+        writeLinked("v1");
+        compileLinked(False);
+        writeLinked("v2");
+        touchLater(src_dir + "/Linked.qm");
+        # an installed module is not checked: it is loaded
+        assertEq("v1-dep Linked.qmod", runLinked());
+    }
+}

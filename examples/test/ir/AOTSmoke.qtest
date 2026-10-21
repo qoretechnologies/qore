@@ -321,7 +321,7 @@ class AOTSmokeTest inherits QUnit::Test {
         # AOT Binary Format v1 tests
         addTestCase("AOT v1 version field", \testVersionField());
         addTestCase("AOT v1 parse options high bits", \testPOHighBitsRoundTrip());
-        addTestCase("AOT v1 source stale detection", \testSourceStaleDetection());
+        addTestCase("AOT v1 source fingerprint recorded", \testSourceFingerprintRecorded());
         addTestCase("AOT v1 feature flags", \testFeatureFlagsNonZero());
         addTestCase("AOT subscript compound assign", \testSubscriptCompoundAssign());
         addTestCase("AOT hash compound native", \testHashCompoundNative());
@@ -9767,8 +9767,9 @@ printf(\"%d %d\\n\", h.x, h.y);
         assertTrue(aot_out =~ /options test/, "Program executes with parse options");
     }
 
-    testSourceStaleDetection() {
-        # Test the stat fast path and exact-hash fallback used for source staleness detection.
+    testSourceFingerprintRecorded() {
+        # The source size and modification time are recorded in the binary for build tools; a compiled program runs
+        # without reading its source, which can change or be gone, so running it does not check the source.
         string code = "%modern\nprintf(\"hello\\n\");\n";
         hash<auto> paths = writeTempScript(code);
         on_exit {
@@ -9785,36 +9786,18 @@ printf(\"%d %d\\n\", h.x, h.y);
         assertTrue(info =~ /source-size: [0-9]+/, "AOT build info records source size: " + info);
         assertTrue(info =~ /source-mtime-ns: [0-9]+/, "AOT build info records source mtime: " + info);
 
-        string run_cmd = sprintf("LD_LIBRARY_PATH=%s QORE_AOT_SOURCE_CHECK_TRACE=1 %s -b -d 2>&1",
-            libqore_dir, paths.out);
-        string run_out = backquote(run_cmd);
-        assertTrue(run_out =~ /\[aot-source-check\] stat-hit/, "Unchanged source uses stat fast path: " + run_out);
-        assertFalse(run_out =~ /hash-fallback/, "Unchanged source is not read and hashed: " + run_out);
+        string run_cmd = sprintf("LD_LIBRARY_PATH=%s %s -b 2>&1", libqore_dir, paths.out);
+        assertEq("hello\n", backquote(run_cmd), "The binary runs");
 
-        # Force only the metadata to differ. The fallback must hash the file and
-        # prove that its unchanged content still matches without a warning.
-        assertEq(0, system(sprintf("touch -t 200001010000 %s", paths.src)),
-            "Can change source mtime for fallback test");
-        run_out = backquote(run_cmd);
-        assertTrue(run_out =~ /hash-fallback/, "Changed source metadata uses exact hash fallback: " + run_out);
-        assertTrue(run_out =~ /hash-match/, "Exact hash accepts unchanged source content: " + run_out);
-        assertFalse(run_out =~ /binary source hash mismatch/,
-            "Metadata-only source change does not produce a stale warning: " + run_out);
-
-        # Modify the source file to trigger staleness detection
+        # Changing or removing the source does not change what the binary runs
         {
             File f();
             f.open(paths.src, O_WRONLY | O_TRUNC);
             f.write("printf(\"modified\\n\");\n");
         }
-
-        # Run the binary directly as a standalone executable, not through the interpreter
-        run_out = backquote(run_cmd);
-
-        # Stale detection is a warning, not an error - binary should still run
-        assertTrue(run_out =~ /hello/, "Stale binary still executes");
-        assertTrue(run_out =~ /hash-fallback/, "Changed source content uses exact hash fallback: " + run_out);
-        assertTrue(run_out =~ /hash-mismatch/, "Exact hash detects changed source content: " + run_out);
+        assertEq("hello\n", backquote(run_cmd), "The binary runs after its source changed");
+        unlink(paths.src);
+        assertEq("hello\n", backquote(run_cmd), "The binary runs without its source");
     }
 
     testFeatureFlagsNonZero() {

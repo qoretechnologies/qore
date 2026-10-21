@@ -72,6 +72,9 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <vector>
+#ifndef _Q_WINDOWS
+#include <dirent.h>
+#endif
 
 static const qore_mod_api_compat_s qore_mod_api_list_l[] = {
     {2, 0},
@@ -174,6 +177,226 @@ static void qore_warn_binary_module_source_fallback(ExceptionSink& xsink, Except
         return;
     }
 
+    wsink.raiseExceptionArg("BINARY-MODULE-SOURCE-FALLBACK", new QoreStringNode(name), warn_desc);
+}
+
+#ifndef _Q_WINDOWS
+//! Returns the modification time of a file in nanoseconds
+static int64 qore_module_stat_mtime_ns(const struct stat& sb) {
+    long nsec = 0;
+#ifdef HAVE_STRUCT_STAT_ST_TIM
+    nsec = sb.st_mtim.tv_nsec;
+#elif defined(HAVE_STRUCT_STAT_ST_TIMESPEC)
+    nsec = sb.st_mtimespec.tv_nsec;
+#endif
+    return static_cast<int64>(sb.st_mtime) * 1000000000LL + nsec;
+}
+
+//! Returns true if the file exists and was modified after \a mtime_ns
+static bool qore_module_file_newer(const std::string& path, int64 mtime_ns) {
+    struct stat sb;
+    return !stat(path.c_str(), &sb) && S_ISREG(sb.st_mode) && qore_module_stat_mtime_ns(sb) > mtime_ns;
+}
+
+//! Returns the prerequisites of a Make-style dependency file written by qcc (\c --depfile)
+/** The file has one rule, <tt>target: prerequisite...</tt>; a space or backslash in a path is escaped with a
+    backslash, and a backslash before a line break continues the rule
+
+    @return false if the file cannot be read or has no rule
+*/
+static bool qore_read_module_depfile(const std::string& path, std::vector<std::string>& deps) {
+    FILE* fp = fopen(path.c_str(), "rb");
+    if (!fp) {
+        return false;
+    }
+    std::string content;
+    char buf[4096];
+    size_t len;
+    // a dependency file is small; one that is larger than any qcc writes is not read
+    static constexpr size_t max_size = 16 * 1024 * 1024;
+    while ((len = fread(buf, 1, sizeof buf, fp)) > 0) {
+        content.append(buf, len);
+        if (content.size() > max_size) {
+            fclose(fp);
+            return false;
+        }
+    }
+    bool error = ferror(fp);
+    fclose(fp);
+    if (error) {
+        return false;
+    }
+
+    // the target ends at the first colon that is not escaped
+    size_t i = 0;
+    for (; i < content.size(); ++i) {
+        if (content[i] == '\\' && i + 1 < content.size()) {
+            ++i;
+        } else if (content[i] == ':') {
+            break;
+        }
+    }
+    if (i == content.size()) {
+        return false;
+    }
+    std::string dep;
+    for (++i; i < content.size(); ++i) {
+        char c = content[i];
+        if (c == '\\' && i + 1 < content.size()) {
+            char n = content[i + 1];
+            if (n == '\n' || n == '\r') {
+                // a line continuation separates prerequisites
+                c = ' ';
+            } else {
+                dep += n;
+                ++i;
+                continue;
+            }
+        }
+        if (c == ' ' || c == '\t' || c == '\n' || c == '\r') {
+            if (!dep.empty()) {
+                deps.push_back(dep);
+                dep.clear();
+            }
+            continue;
+        }
+        dep += c;
+    }
+    if (!dep.empty()) {
+        deps.push_back(dep);
+    }
+    return true;
+}
+#endif
+
+//! Returns true if an AOT module linked into a source tree is older than one of its sources
+/** A build tree links the AOT modules it builds into the source \c qlib directory (\c QORE_AOT_LINK_SOURCE_MODULES),
+    where the in-tree tests find them before the module sources; without this check, a module built before one of its
+    sources was changed would run the old code without any sign of it.  Only a module that is a symbolic link is
+    checked, so an installed module is never checked.
+
+    The sources are the files listed in the dependency file that qcc wrote next to the module it links to
+    (<tt>\<module\>.d</tt>), which include the sources of the modules it depends on.  Without a dependency file, the
+    main source of the module and, for a module in a directory of its own, the module sources in that directory are
+    checked.
+
+    The check is skipped if the Program cannot access the filesystem; a file that the filesystem policy of a sandbox
+    does not allow to be read is not checked.
+
+    @param qmod_path the path of the AOT module found in the module path
+    @param source_dir the module directory where the source of the module was found
+    @param name the name of the module
+    @param pgm the Program loading the module, if any
+    @param stale_source set to a source that is newer than the module
+    @param xsink for cancellation
+
+    @return true if a source is newer than the module
+*/
+static bool qore_linked_aot_module_is_stale(const char* qmod_path, const std::string& source_dir, const char* name,
+        const QoreProgram* pgm, std::string& stale_source, ExceptionSink& xsink) {
+#ifdef _Q_WINDOWS
+    return false;
+#else
+    struct stat lsb;
+    if (lstat(qmod_path, &lsb) || !S_ISLNK(lsb.st_mode)) {
+        return false;
+    }
+    if (pgm && (pgm->getParseOptions() & PO_NO_FILESYSTEM)) {
+        return false;
+    }
+    char* resolved = realpath(qmod_path, nullptr);
+    if (!resolved) {
+        return false;
+    }
+    std::string target = resolved;
+    free(resolved);
+    struct stat sb;
+    if (stat(target.c_str(), &sb) || !S_ISREG(sb.st_mode)) {
+        return false;
+    }
+    int64 qmod_mtime = qore_module_stat_mtime_ns(sb);
+
+    // every file is checked against the filesystem policy of a sandbox; a file that cannot be read is not checked
+    QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
+    auto allowed = [&smh](const std::string& path) -> bool {
+        if (!smh) {
+            return true;
+        }
+        ExceptionSink sandbox_xsink;
+        if (smh->checkFilesystemAccess(path.c_str(), QSEC_READ, &sandbox_xsink)) {
+            return true;
+        }
+        sandbox_xsink.clear();
+        return false;
+    };
+
+    std::string depfile = target + ".d";
+    if (!allowed(depfile)) {
+        return false;
+    }
+
+    std::vector<std::string> deps;
+    if (qore_read_module_depfile(depfile, deps)) {
+        for (size_t i = 0; i < deps.size(); ++i) {
+            if (i && !(i % 100) && qore_check_cancel(&xsink, "AOT module source check")) {
+                return false;
+            }
+            if (allowed(deps[i]) && qore_module_file_newer(deps[i], qmod_mtime)) {
+                stale_source = deps[i];
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // without a dependency file, the sources of the module itself are checked
+    std::string main_source = source_dir + QORE_DIR_SEP_STR + name + ".qm";
+    if (allowed(main_source) && qore_module_file_newer(main_source, qmod_mtime)) {
+        stale_source = main_source;
+        return true;
+    }
+    std::string module_dir = source_dir + QORE_DIR_SEP_STR + name;
+    if (!allowed(module_dir)) {
+        return false;
+    }
+    DIR* dir = opendir(module_dir.c_str());
+    if (!dir) {
+        return false;
+    }
+    bool stale = false;
+    size_t count = 0;
+    while (struct dirent* de = readdir(dir)) {
+        if (++count % 100 == 0 && qore_check_cancel(&xsink, "AOT module source check")) {
+            break;
+        }
+        size_t len = strlen(de->d_name);
+        if (len < 4 || (strcmp(de->d_name + len - 3, ".qm") && strcmp(de->d_name + len - 3, ".qc"))) {
+            continue;
+        }
+        std::string path = module_dir + QORE_DIR_SEP_STR + de->d_name;
+        if (allowed(path) && qore_module_file_newer(path, qmod_mtime)) {
+            stale_source = path;
+            stale = true;
+            break;
+        }
+    }
+    closedir(dir);
+    return stale;
+#endif
+}
+
+//! Raises the warning for an AOT module that is not loaded because one of its sources is newer
+static void qore_warn_stale_aot_module(ExceptionSink& xsink, ExceptionSink& wsink, int warning_mask,
+        const char* name, const char* qmod_path, const char* source_path, const char* stale_source) {
+    QoreStringNode* warn_desc = new QoreStringNodeMaker("AOT module '%s' for feature '%s' is older than its source "
+        "'%s'; loading source module '%s' instead; rebuild the AOT module", qmod_path, name, stale_source,
+        source_path);
+    // the warning is always reported, as the module that is run is not the one the build tree provides
+    if (!warning_mask || &xsink == &wsink) {
+        printe("warning: %s\n", warn_desc->c_str());
+        warn_desc->deref();
+        return;
+    }
     wsink.raiseExceptionArg("BINARY-MODULE-SOURCE-FALLBACK", new QoreStringNode(name), warn_desc);
 }
 
@@ -1677,6 +1900,27 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
             load_opt & QMLO_REINJECT ? mpgm : path_pgm, load_opt, warning_mask);
     };
 
+    // an AOT module that a build tree links into a source tree is not loaded if one of its sources is newer: the
+    // source module is loaded instead, with a warning that the AOT module must be rebuilt
+    auto load_source_for_stale_aot_module = [&](const char* qmod_path, const std::string& source_dir,
+            QoreAbstractModule*& rv) -> bool {
+        std::string stale_source;
+        if (!qore_linked_aot_module_is_stale(qmod_path, source_dir, name, ctx_pgm, stale_source, xsink)) {
+            return false;
+        }
+        bool source_found = false;
+        QoreString source_path;
+        rv = load_user_module_source(source_dir, source_found, &source_path);
+        if (!source_found) {
+            return false;
+        }
+        if (rv && !xsink) {
+            qore_warn_stale_aot_module(xsink, wsink, warning_mask, name, qmod_path, source_path.c_str(),
+                stale_source.c_str());
+        }
+        return true;
+    };
+
     for (const std::string* path_ptr : search_paths) {
         const std::string& dir = *path_ptr;
         // Per module directory, the preference order is:
@@ -1721,6 +1965,13 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
                 // only a binary module without an API suffix falls back to the source module
                 std::string source_dir;
                 bool source_available = ai == qore_mod_api_list_len && find_user_module_source_dir(source_dir);
+                if (xsink) {
+                    return nullptr;
+                }
+                if (source_available && load_source_for_stale_aot_module(str.c_str(), source_dir, mi)) {
+                    return qore_check_load_module_intern(mi, op, version, pgm, xsink, wsink, warning_mask,
+                        unlock_lock) ? nullptr : mi;
+                }
                 if (xsink) {
                     return nullptr;
                 }
@@ -1783,6 +2034,13 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
                 // only a binary module without an API suffix falls back to the source module
                 std::string source_dir;
                 bool source_available = ai == qore_mod_api_list_len && find_user_module_source_dir(source_dir);
+                if (xsink) {
+                    return nullptr;
+                }
+                if (source_available && load_source_for_stale_aot_module(str.c_str(), source_dir, mi)) {
+                    return qore_check_load_module_intern(mi, op, version, pgm, xsink, wsink, warning_mask,
+                        unlock_lock) ? nullptr : mi;
+                }
                 if (xsink) {
                     return nullptr;
                 }

@@ -1400,6 +1400,15 @@ val = "string";      # OK
     the next unrelated reconfigure, leaving it out of the installation and leaving the \c .qmod out
     of date with respect to a source that it compiles.
 
+    @par Stale In-Tree AOT Modules
+    A build tree links the @ref exec_mode_aot "AOT" \c .qmod files that it builds into the source \c qlib
+    directory, where the in-tree tests find them before the module sources.  A linked \c .qmod that is older than one
+    of its sources, as listed in the dependency file that @ref qcc_tool "qcc" wrote next to it, is no longer loaded:
+    the source module is loaded instead, with a warning that the \c .qmod must be rebuilt.  Previously an edit to a
+    module source was not used until the module was rebuilt, without any sign of it.  Installed modules are not
+    links, and are loaded as before.  The run-time check of the source of an AOT binary against the path it was
+    compiled from, which only printed a message in debug builds, has been removed.
+
     @par Autotools Build System Removed
     @parblock
     The autotools build system (\c configure.ac, \c Makefile.am, \c reconf.sh, \c m4/) has been
