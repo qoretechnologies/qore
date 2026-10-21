@@ -5051,10 +5051,13 @@ while (*binary chunk = input.read(65536)) {
       in place, so that the statement outlived the connection it belonged to, and destroying the statement later
       opened a new connection only to free the statement against it
 
-    - Closing or destroying an @ref Qore::SQL::SQLStatement "SQLStatement" no longer makes a connection: on a closed
-      @ref Qore::SQL::Datasource "Datasource" it opened the connection again, which then stayed open for as long as
-      the datasource object existed, and with a @ref Qore::SQL::DatasourcePool "DatasourcePool" it gave the thread a
-      connection, opening a new one if none was free or waiting for one up to the pool's error timeout
+    - Closing or destroying an @ref Qore::SQL::SQLStatement "SQLStatement", and its
+      @ref Qore::SQL::SQLStatement::getSQL() "getSQL()" and
+      @ref Qore::SQL::SQLStatement::currentThreadInTransaction() "currentThreadInTransaction()" methods, no longer
+      make a connection: on a closed @ref Qore::SQL::Datasource "Datasource" they opened the connection again, which
+      then stayed open for as long as the datasource object existed, and with a
+      @ref Qore::SQL::DatasourcePool "DatasourcePool" they gave the thread a connection, opening a new one if none
+      was free or waiting for one up to the pool's error timeout
 
     - Fixed reference cycles closed by values held in a @ref Qore::Thread::Queue "Queue" or a
       @ref Qore::TreeMap "TreeMap" sometimes never being collected when the last reference to the cycle from outside

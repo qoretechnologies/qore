@@ -222,10 +222,8 @@ int ManagedDatasource::startDBAction(ExceptionSink *xsink, bool &new_transaction
 
     if (!isOpen()) {
         if (!open) {
-            // nothing is done on a closed datasource: release the transaction lock if it was acquired here
-            if (new_transaction) {
-                releaseLockIntern();
-            }
+            // the closed datasource is not opened; the transaction lock stays held for the action, as it is for an
+            // open datasource, and is released by the caller
             return 1;
         }
         // open the datasource

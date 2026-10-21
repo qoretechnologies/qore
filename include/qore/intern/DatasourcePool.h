@@ -318,6 +318,11 @@ public:
         return ds;
     }
 
+    DLLLOCAL virtual void helperEndActionNoConnectImpl(bool new_transaction) {
+        // no connection was allocated for the action
+        assert(!new_transaction);
+    }
+
     DLLLOCAL virtual Datasource* helperEndActionImpl(char cmd, bool new_transaction, ExceptionSink* xsink) {
         //printd(5, "DatasourcePool::helperEndAction() cmd: %d '%s', nt: %d\n", cmd, DAH_TEXT(cmd), new_transaction);
         if (cmd == DAH_RELEASE) {

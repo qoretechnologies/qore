@@ -742,6 +742,12 @@ hash<auto> SQLStatement::describe() {
     @code{.py}
 *string sql = stmt.getSQL();
     @endcode
+
+    @throw SQLSTATEMENT-ERROR the statement uses a @ref Qore::SQL::DatasourcePool "DatasourcePool" connection that
+    another thread holds
+
+    @note No connection is made to answer (since %Qore 3.0): a closed @ref Qore::SQL::Datasource "Datasource" is not
+    opened, and a @ref Qore::SQL::DatasourcePool "DatasourcePool" does not give the thread a connection
  */
 *string SQLStatement::getSQL() {
    return stmt->getSQL(xsink);
@@ -811,8 +817,15 @@ auto SQLStatement::memberGate(string key) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
 bool b = stmt.currentThreadInTransaction();
     @endcode
 
+    @throw SQLSTATEMENT-ERROR the statement uses a @ref Qore::SQL::DatasourcePool "DatasourcePool" connection that
+    another thread holds
+
+    @note No connection is made to answer (since %Qore 3.0): with a closed @ref Qore::SQL::Datasource "Datasource",
+    or in a thread that holds no connection of a @ref Qore::SQL::DatasourcePool "DatasourcePool", @ref False is
+    returned
+
     @since %Qore 0.8.12
  */
-bool SQLStatement::currentThreadInTransaction() [flags=CONSTANT] {
+bool SQLStatement::currentThreadInTransaction() [flags=RET_VALUE_ONLY] {
    return stmt->currentThreadInTransaction(xsink);
 }

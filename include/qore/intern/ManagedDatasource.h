@@ -63,8 +63,8 @@ protected:
 
     DLLLOCAL int acquireLock(ExceptionSink* xsink, bool& new_lock);
     //! acquires the transaction lock for an action and opens the datasource if necessary
-    /** @param open if false, a closed datasource is not opened: 1 is returned, and the transaction lock is released
-        if it was acquired by the call
+    /** @param open if false, a closed datasource is not opened: 1 is returned with the transaction lock held, as for
+        an open datasource, and the caller releases it if \a new_transaction is true
 
         @return 0 for OK, -1 if an exception was raised, 1 if the datasource is closed and \a open is false
     */
@@ -200,12 +200,19 @@ public:
             return this;
         }
         if (rc > 0) {
-            // the datasource is closed
+            // the datasource is closed; its transaction lock is held until helperEndActionNoConnectImpl()
             connected = false;
-            return nullptr;
+            return this;
         }
         // only return "this" when there was an exception in startDBAction if we already had the lock
         return tid == q_gettid() ? this : nullptr;
+    }
+
+    DLLLOCAL virtual void helperEndActionNoConnectImpl(bool new_transaction) {
+        // the lock is released only if the action acquired it
+        if (new_transaction) {
+            releaseLock();
+        }
     }
 
     DLLLOCAL virtual Datasource* helperEndActionImpl(char cmd, bool new_transaction, ExceptionSink* xsink) {

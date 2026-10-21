@@ -54,12 +54,16 @@ public:
     // the action command
     char cmd;
 
+    // true if the action has no connection to use; it must be ended with helperEndActionNoConnect()
+    bool noconn_action = false;
+
     // true if no connection was made for the action because the statement holds none
     bool no_connection = false;
 
-    /** @param connect if false, no connection is made for the action: a closed datasource is not opened, and a pool
-        does not give the thread a connection if it holds none; the helper is then invalid with no exception raised,
-        which noConnection() reports
+    /** @param connect if false, no connection is made for the action: a closed datasource is not opened (its
+        transaction lock is held for the action, as for an open datasource), and a pool does not give the thread a
+        connection if it holds none; the helper is then invalid with no exception raised, which noConnection()
+        reports
     */
     DLLLOCAL DBActionHelper(QoreSQLStatement& n_stmt, ExceptionSink* n_xsink, char n_cmd = DAH_NOCHANGE,
             bool connect = true) : stmt(n_stmt), xsink(n_xsink), cmd(n_cmd) {
@@ -68,15 +72,17 @@ public:
             ? stmt.dsh->helperStartAction(xsink, nt)
             : stmt.dsh->helperStartActionNoConnect(xsink, nt, connected);
         if (!connected) {
-            assert(!newds);
-            // the statements of a datasource are closed when it is closed, so the statement can only have driver
-            // data here on a pool connection that another thread holds
-            if (stmt.priv->data) {
+            noconn_action = true;
+            // issue #2334: the statement uses a pool connection that another thread holds
+            if (stmt.priv->ds && stmt.priv->ds != newds) {
                 assert(dynamic_cast<DatasourcePool*>(stmt.dsh));
                 xsink->raiseException("SQLSTATEMENT-ERROR", "cannot execute an action in another thread with an "
                     "allocated connection from a DatasourcePool");
                 return;
             }
+            // the statements of a datasource are closed when it is closed, and a pool statement holds driver data
+            // only with its connection
+            assert(!stmt.priv->data);
             no_connection = true;
             return;
         }
@@ -102,6 +108,11 @@ public:
     }
 
     DLLLOCAL ~DBActionHelper() {
+        if (noconn_action) {
+            stmt.dsh->helperEndActionNoConnect(nt);
+            return;
+        }
+
         // if no datasource is currently assigned
         if (!valid || !stmt.priv->ds)
             return;
@@ -598,9 +609,12 @@ bool QoreSQLStatement::active() const {
 }
 
 bool QoreSQLStatement::currentThreadInTransaction(ExceptionSink* xsink) {
-    DBActionHelper dba(*this, xsink, DAH_NOCHANGE);
-    if (!dba)
-       return false;
+    // no connection is made to answer: with a closed datasource, or in a thread that holds no connection of a pool,
+    // the thread is in no transaction
+    DBActionHelper dba(*this, xsink, DAH_NOCHANGE, false);
+    if (!dba) {
+        return false;
+    }
 
     return dba.inTransaction();
 }
@@ -647,10 +661,11 @@ int QoreSQLStatement::beginTransaction(ExceptionSink* xsink) {
 }
 
 QoreStringNode* QoreSQLStatement::getSQL(ExceptionSink* xsink) {
-   // we have to acquire the datasource in order to use the thread lock to access the SQL string
-   DBActionHelper dba(*this, xsink, DAH_NOCHANGE);
-   if (!dba)
-      return nullptr;
+    // the action is needed for the lock that protects the SQL string, not for a connection: no connection is made
+    DBActionHelper dba(*this, xsink, DAH_NOCHANGE, false);
+    if (!dba && !dba.noConnection()) {
+        return nullptr;
+    }
 
-   return str.empty() ? nullptr : new QoreStringNode(str);
+    return str.empty() ? nullptr : new QoreStringNode(str);
 }

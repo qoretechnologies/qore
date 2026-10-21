@@ -10,11 +10,13 @@
 
 %exec-class StmtClosedDatasourceTest
 
-#! A statement does not make a connection to close itself
+#! A statement does not make a connection to close itself or to answer a question about itself
 /** Closing a statement, which its destructor also does, acquired a connection like any other statement action: a
     closed Datasource was opened again only to close a statement that had nothing to close, and the connection then
     stayed open for as long as the Datasource object existed; a DatasourcePool gave the thread a connection, opening
-    a new one if none was free.
+    a new one if none was free.  SQLStatement::getSQL() and SQLStatement::currentThreadInTransaction() did the same
+    only to answer.  They still take the transaction lock of the datasource, and with a connection held they answer
+    as before.
 
     Closing a datasource also left the driver data of a statement prepared on its connection in place, so the
     statement outlived the connection it belonged to, and destroying it later opened a new connection and freed the
@@ -42,6 +44,11 @@ public class StmtClosedDatasourceTest inherits QUnit::Test {
         addTestCase("statement used again after close", \reuseTest());
         addTestCase("pool statement destroyed without a connection", \poolTest());
         addTestCase("pool statement held by another thread", \poolOtherThreadTest());
+        addTestCase("answers on a closed datasource", \closedAnswersTest());
+        addTestCase("answers with a connection held", \heldAnswersTest());
+        addTestCase("pool answers without a connection", \poolAnswersTest());
+        addTestCase("pool answers for a statement held by another thread", \poolOtherThreadAnswersTest());
+        addTestCase("answers take the transaction lock", \lockedAnswersTest());
         set_return_value(main());
     }
 
@@ -163,6 +170,9 @@ public class StmtClosedDatasourceTest inherits QUnit::Test {
         on_exit {
             release.dec();
             done.waitForZero();
+            # the objects are deleted once the other thread is done, as it can hold them until it has exited, and the
+            # next test case counts the driver's connections
+            delete pool;
         }
 
         # the statement is destroyed while the pool's only open connection is held by another thread
@@ -202,5 +212,145 @@ public class StmtClosedDatasourceTest inherits QUnit::Test {
         assertFalse(stmt.active());
         stmt.close();
         assertEq(base, liveConnections());
+        # the objects are deleted once the other thread is done, as it can hold them until it has exited, and the next
+        # test case counts the driver's connections
+        delete stmt;
+        delete pool;
+    }
+
+    #! getSQL() and currentThreadInTransaction() answer on a closed datasource without opening it
+    closedAnswersTest() {
+        int base = liveConnections();
+        Datasource ds = getDs();
+        SQLStatement stmt(ds);
+        stmt.prepare("select * from t");
+        ds.close();
+        assertEq(base, liveConnections(), "closed");
+
+        assertEq("select * from t", stmt.getSQL());
+        assertFalse(stmt.currentThreadInTransaction());
+        assertEq(base, liveConnections(), "answering did not reopen the datasource");
+    }
+
+    #! with a connection held, the answers are the same as before
+    heldAnswersTest() {
+        Datasource ds = getDs();
+        SQLStatement stmt(ds);
+        stmt.prepare("insert into t values (%v)");
+        # the datasource is open, but this thread does not hold its transaction lock
+        assertFalse(stmt.currentThreadInTransaction(), "open datasource");
+        stmt.bind(1);
+        # binding acquires the connection for this thread
+        assertTrue(stmt.currentThreadInTransaction(), "bound statement");
+        assertEq("insert into t values (%v)", stmt.getSQL());
+        stmt.rollback();
+        assertFalse(stmt.currentThreadInTransaction(), "released");
+
+        DatasourcePool pool(ConnStr + "{min=1,max=2}");
+        SQLStatement pool_stmt(pool);
+        pool_stmt.prepare("select * from t");
+        assertFalse(pool_stmt.currentThreadInTransaction(), "no pool connection");
+        pool.beginTransaction();
+        assertTrue(pool_stmt.currentThreadInTransaction(), "the thread holds a pool connection");
+        assertEq("select * from t", pool_stmt.getSQL());
+        pool.rollback();
+        assertFalse(pool_stmt.currentThreadInTransaction(), "the pool connection was returned");
+    }
+
+    #! a pool does not give the thread a connection to answer
+    poolAnswersTest() {
+        DatasourcePool pool(ConnStr + "{min=1,max=2}");
+        SQLStatement stmt(pool);
+        stmt.prepare("select * from t");
+        int base = liveConnections();
+        Counter held(1);
+        Counter release(1);
+        Counter done(1);
+        background sub () {
+            on_exit done.dec();
+            # this thread holds the pool's only open connection
+            pool.exec("insert into t values (1)");
+            held.dec();
+            release.waitForZero();
+            pool.rollback();
+        }();
+        held.waitForZero();
+        on_exit {
+            release.dec();
+            done.waitForZero();
+            # the objects are deleted once the other thread is done, as it can hold them until it has exited, and the
+            # next test case counts the driver's connections
+            delete stmt;
+            delete pool;
+        }
+
+        assertEq("select * from t", stmt.getSQL());
+        assertFalse(stmt.currentThreadInTransaction());
+        assertEq(base, liveConnections(), "no connection was opened to answer");
+    }
+
+    #! a statement using a pool connection that another thread holds cannot be asked about in this thread
+    poolOtherThreadAnswersTest() {
+        DatasourcePool pool(ConnStr + "{min=1,max=2}");
+        SQLStatement stmt(pool);
+        stmt.prepare("insert into t values (%v)");
+        int base = liveConnections();
+        Counter held(1);
+        Counter release(1);
+        Counter done(1);
+        background sub () {
+            on_exit done.dec();
+            # the statement now uses this thread's connection
+            stmt.exec(1);
+            held.dec();
+            release.waitForZero();
+            stmt.commit();
+        }();
+        held.waitForZero();
+        on_exit {
+            release.dec();
+            done.waitForZero();
+            # the objects are deleted once the other thread is done, as it can hold them until it has exited, and the
+            # next test case counts the driver's connections
+            delete stmt;
+            delete pool;
+        }
+
+        assertThrows("SQLSTATEMENT-ERROR", "another thread", \stmt.getSQL());
+        assertThrows("SQLSTATEMENT-ERROR", "another thread", \stmt.currentThreadInTransaction());
+        assertEq(base, liveConnections(), "no connection was opened in this thread");
+        assertFalse(pool.currentThreadInTransaction());
+    }
+
+    #! the answers wait for the transaction lock that another thread holds, as before
+    lockedAnswersTest() {
+        Datasource ds = getDs();
+        # the wait for the lock that the other thread holds ends with an exception
+        ds.setTransactionLockTimeout(50);
+        SQLStatement stmt(ds);
+        stmt.prepare("select * from t");
+        Counter held(1);
+        Counter release(1);
+        Counter done(1);
+        background sub () {
+            on_exit done.dec();
+            # this thread holds the transaction lock
+            ds.exec("insert into t values (1)");
+            held.dec();
+            release.waitForZero();
+            ds.rollback();
+        }();
+        held.waitForZero();
+        on_exit {
+            release.dec();
+            done.waitForZero();
+            # the objects are deleted once the other thread is done, as it can hold them until it has exited, and the
+            # next test case counts the driver's connections
+            delete stmt;
+            delete ds;
+        }
+
+        assertThrows("TRANSACTION-LOCK-TIMEOUT", \stmt.getSQL());
+        assertThrows("TRANSACTION-LOCK-TIMEOUT", \stmt.currentThreadInTransaction());
     }
 }
