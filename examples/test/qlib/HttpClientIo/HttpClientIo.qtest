@@ -1896,15 +1896,22 @@ class HttpClientIoTest inherits QUnit::Test {
         });
         on_exit delete mgr;
 
+        # only the connect's own error is caught: an assertion failing in driveAsyncConnect() (the race not ending)
+        # is reported as such
+        *hash<ExceptionInfo> ex;
         try {
             driveAsyncConnect(mgr, refused, 30s);
-            assertTrue(False, "connect to refused port must throw");
-        } catch (hash<ExceptionInfo> ex) {
-            assertEq("SOCKET-CONNECT-ERROR", ex.err, "async HE refused error type: " + ex.desc);
-            # the race waited for HTTP/3: both protocols' reasons are reported
-            assertRegex("H3/QUIC: ", ex.desc, "HTTP/3 outcome awaited");
-            assertRegex("H2/TCP: ", ex.desc, "HTTP/2 refusal reported");
+        } catch (hash<ExceptionInfo> ex1) {
+            if (ex1.err == "TEST-EXCEPTION") {
+                rethrow;
+            }
+            ex = ex1;
         }
+        assertTrue(exists ex, "connect to refused port must throw");
+        assertEq("SOCKET-CONNECT-ERROR", ex.err, "async HE refused error type: " + ex.desc);
+        # the race waited for HTTP/3: both protocols' reasons are reported
+        assertRegex("H3/QUIC: ", ex.desc, "HTTP/3 outcome awaited");
+        assertRegex("H2/TCP: ", ex.desc, "HTTP/2 refusal reported");
     }
 
     testAsyncHeNonBlockingAndSyncParity() {

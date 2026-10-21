@@ -386,6 +386,15 @@ operation's current deadlines whether it timed out, its protocol timer fired, or
   When the heap holds more than `2 * cache.size() + TIMEOUT_HEAP_COMPACT_SLACK` entries, it is rebuilt from the cache
   with the entry of each operation that has a deadline armed.  An operation queued for continuePoll() at that point
   has none and is re-armed with its result, so no deadline is lost.
+- **A hint of 0 is due now**: a `poll_timeout_ms` of 0 or less arms the protocol-level deadline at the current time
+  (`getPollTimeoutDeadline()`), so Step C of the next iteration continues the operation even if no I/O event arrives
+  for it.  An operation returns 0 when its own deadline expires while its continuePoll() runs - a QUIC handshake
+  deadline (`clampPollTimeoutToDeadline()`), the HTTP/1 and HTTP/2 connect deadlines - or to be continued at once
+  (the QUIC packet budget).  A hint of 0 used to make the I/O thread poll its event loop once without blocking and
+  drop the deadline, so such an operation was continued only by an I/O event: a QUIC handshake with a silent peer
+  was never timed out, and the happy-eyeballs race of HttpClientIo.qtest's "async HE waits for HTTP/3 after a refused
+  TCP connection" never ended (`AsyncIoZeroPollHintTest` in the C++ unit tests and
+  `examples/test/qlib/AsyncSocketIo/AsyncIoTimeoutHeap.qtest` check both result paths).
 - `getInfo()` reports each thread's heap size (`threads[].timeouts`).
 
 ### Operation IDs

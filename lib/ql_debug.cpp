@@ -3034,6 +3034,139 @@ private:
     }
 };
 
+//! A native operation whose poll timeout hint is 0 is continued at once
+/** A hint of 0 means that the operation's timer is due now, as when its own deadline expires while its continuePoll()
+    runs: SocketQuicClientPollOperation returns 0 when its handshake deadline passes during the call.  The I/O thread
+    polled its event loop once without blocking and dropped the hint, so the operation was continued only by an I/O
+    event: a QUIC handshake with a silent peer was never timed out, and the happy-eyeballs race of
+    HttpClientIo.qtest's "async HE waits for HTTP/3 after a refused TCP connection" never ended.
+
+    The operation waits for a listener that no client connects to, with no operation timeout, so only the hint can
+    continue it.
+*/
+class AsyncIoZeroPollHintTest {
+    //! Waits once with a hint of 0, and completes when it is continued
+    class ZeroHintOp : public SocketPollOperationBase {
+    public:
+        DLLLOCAL ZeroHintOp(QoreObject* poll_obj) : poll_obj(poll_obj) {
+        }
+
+        DLLLOCAL virtual bool goalReached() const override {
+            return calls > 1;
+        }
+
+        DLLLOCAL virtual void abort(ExceptionSink*) override {
+        }
+
+        DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink) override {
+            if (++calls > 1) {
+                return nullptr;
+            }
+            ReferenceHolder<QoreHashNode> info(new QoreHashNode(hashdeclSocketPollInfo, xsink), xsink);
+            info->setKeyValue("events", SOCK_POLLIN, xsink);
+            info->setKeyValue("socket", poll_obj->objectRefSelf(), xsink);
+            info->setKeyValue("poll_timeout_ms", 0, xsink);
+            return *xsink ? nullptr : info.release();
+        }
+
+        DLLLOCAL virtual QoreValue getOutput() const override {
+            return calls.load();
+        }
+
+        DLLLOCAL virtual const char* getStateImpl() const override {
+            return calls > 1 ? "done" : "waiting";
+        }
+
+    private:
+        QoreObject* poll_obj;
+        std::atomic<int> calls{0};
+    };
+
+public:
+    static void run(UnitTestCounters& c) {
+        ExceptionSink xsink;
+        ReferenceHolder<AsyncIoControllerPriv> ctrl(new AsyncIoControllerPriv(false, &xsink), &xsink);
+        UT_ASSERT(c, !xsink, "zero-hint controller construction succeeds");
+        if (xsink) {
+            xsink.clear();
+            return;
+        }
+        struct Cleanup {
+            AsyncIoControllerPriv* ctrl;
+            ExceptionSink& xsink;
+            UnitTestCounters& c;
+
+            ~Cleanup() {
+                xsink.clear();
+                ctrl->stopClear(&xsink);
+                UT_ASSERT(c, !xsink, "zero-hint controller cleanup succeeds");
+                xsink.clear();
+            }
+        } cleanup{*ctrl, xsink, c};
+
+        ctrl->setMaxIoThreads(1, &xsink);
+        ctrl->start(&xsink);
+        UT_ASSERT(c, !xsink, "zero-hint controller starts");
+        if (xsink) {
+            return;
+        }
+
+        QoreSocketObject* sock = new QoreSocketObject;
+        ReferenceHolder<QoreObject> sock_obj(new QoreObject(QC_SOCKET, getProgram(), sock), &xsink);
+        int rc = sock->bindINET("127.0.0.1", "0", true, AF_INET, SOCK_STREAM, 0, &xsink);
+        UT_ASSERT(c, !rc && !xsink, "zero-hint listener binds");
+        if (rc || xsink) {
+            return;
+        }
+        rc = sock->listen(5);
+        UT_ASSERT_EQ(c, 0, rc, "zero-hint listener listens");
+        if (rc) {
+            return;
+        }
+
+        ZeroHintOp* op = new ZeroHintOp(*sock_obj);
+        ReferenceHolder<QoreObject> op_obj(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), op), &xsink);
+        op->setSelf(*op_obj);
+        op_obj->setValue("sock", sock_obj->objectRefSelf(), &xsink);
+        op_obj->setValue("goal", new QoreStringNode("zero-hint"), &xsink);
+        ReferenceHolder<QoreHashNode> info(new QoreHashNode(hashdeclSocketPollOperationInfo, &xsink), &xsink);
+        info->setKeyValue("sock", sock_obj->objectRefSelf(), &xsink);
+        info->setKeyValue("spop", op_obj->objectRefSelf(), &xsink);
+        info->setKeyValue("owner", new QoreStringNode("zero-hint-unit-test"), &xsink);
+        // no operation timeout: only the hint can continue the operation
+        info->setKeyValue("to", -1, &xsink);
+        UT_ASSERT(c, !xsink, "zero-hint submission info is initialized");
+        if (xsink) {
+            return;
+        }
+        ReferenceHolder<QoreObject> queue_obj(ctrl->submit(nullptr, info.release(), false, &xsink), &xsink);
+        UT_ASSERT(c, !xsink && queue_obj, "zero-hint operation is submitted with a result queue");
+        if (xsink || !queue_obj) {
+            return;
+        }
+        ReferenceHolder<Queue> queue(static_cast<Queue*>(queue_obj->getReferencedPrivateData(CID_QUEUE, &xsink)),
+            &xsink);
+        UT_ASSERT(c, queue && !xsink, "zero-hint result queue is valid");
+        if (!queue || xsink) {
+            return;
+        }
+        // a hang guard only: the operation is continued in the iteration after its first call or never
+        bool timed_out = false;
+        ValueHolder result(queue->shift(&xsink, 30000, &timed_out), &xsink);
+        UT_ASSERT(c, !timed_out && !xsink && result->getType() == NT_HASH,
+            "an operation with a poll timeout hint of 0 is continued without an I/O event");
+        UT_ASSERT_EQ(c, 2, op->getOutput().getAsBigInt(), "the operation was continued once more");
+        if (result->getType() == NT_HASH) {
+            UT_ASSERT(c, !result->get<QoreHashNode>()->getKeyValue("canceled").getAsBool(),
+                "the zero-hint operation completes");
+        }
+        xsink.clear();
+        SimpleRefHolder<QoreStringNode> owner(new QoreStringNode("zero-hint-unit-test"));
+        ctrl->cancelByOwner(*owner, &xsink);
+        xsink.clear();
+    }
+};
+
 //! A submission that loses the race with the controller's shutdown releases its result Queue
 /** submit() packages an operation from a thread that is not its I/O thread into a SubmitOp command; when the
     controller starts shutting down before the command is pushed, cleanupAbandonedCommand() delivers a canceled
@@ -7935,6 +8068,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     AsyncIoCloseTest::run(c);
     AsyncIoAbandonedSubmitTest::run(c);
     AsyncIoRegistrationCloseTest::run(c);
+    AsyncIoZeroPollHintTest::run(c);
     AsyncIoStoppingThreadTest::run(c);
     AsyncIoFrameSendTest::run(c);
     ut_cond_wait_cancel_in_window(c);

@@ -1950,7 +1950,9 @@ hashdecl Qore::SocketPollInfo {
 
     //! Optional poll timeout hint in milliseconds for protocol-level timers (e.g., QUIC retransmission)
     /** When set, @ref Qore::Socket::poll() "Socket::poll()" and the I/O controller should wake up no later than this
-        many milliseconds from now, even if no socket events occur, to allow protocol timer processing.
+        many milliseconds from now, even if no socket events occur, to allow protocol timer processing.  With the I/O
+        controller, a value of 0 or less continues the operation at once, as for an operation whose own deadline has
+        just expired.
 
         @since %Qore 3.0
     */

@@ -72,6 +72,56 @@ class RepeatedWaitPollOperation inherits Qore::AbstractPollOperation<auto> {
     }
 }
 
+#! Waits once with a poll timeout hint of 0: its timer is due at once, and nothing else wakes the operation
+/** An operation whose own deadline expires while its continuePoll() runs, as a QUIC handshake deadline can, asks to
+    be continued at once with a hint of 0 and is not woken by any I/O event if none arrives.
+*/
+class ZeroHintPollOperation inherits Qore::AbstractPollOperation<auto> {
+    private {
+        EventNotifier notifier;
+        Queue polled;
+        int count = 0;
+        bool canceled = False;
+    }
+
+    constructor(EventNotifier notifier, Queue polled) {
+        self.notifier = notifier;
+        self.polled = polled;
+    }
+
+    string getGoal() {
+        return "zero-hint";
+    }
+
+    string getState() {
+        return canceled ? "canceled" : (count > 1 ? "done" : "waiting");
+    }
+
+    bool goalReached() {
+        return count > 1;
+    }
+
+    *hash<SocketPollInfo> continuePoll() {
+        if (canceled) {
+            return NOTHING;
+        }
+        polled.push(++count);
+        if (count > 1) {
+            return NOTHING;
+        }
+        # the notifier is never notified
+        return <SocketPollInfo>{
+            "events": SOCK_POLLIN,
+            "socket": notifier,
+            "poll_timeout_ms": 0,
+        };
+    }
+
+    abort() {
+        canceled = True;
+    }
+}
+
 class AsyncIoTimeoutHeapTest inherits QUnit::Test {
     public {
         const Waits = 50;
@@ -83,6 +133,7 @@ class AsyncIoTimeoutHeapTest inherits QUnit::Test {
     constructor() : Test("AsyncIoTimeoutHeapTest", "1.0", ARGV) {
         addTestCase("worker continuePoll results do not grow the timeout heap", \workerResultHeapTest());
         addTestCase("native continuePoll results do not grow the timeout heap", \nativeResultHeapTest());
+        addTestCase("a poll timeout hint of 0 continues the operation at once", \zeroHintTest());
         set_return_value(main());
     }
 
@@ -135,6 +186,28 @@ class AsyncIoTimeoutHeapTest inherits QUnit::Test {
         assertEq(Waits + 1, polled.get(10s));
         hash<SocketPollResultInfo> res = result_queue.get(10s);
         assertFalse(boolean(res.canceled));
+        assertNothing(res.ex);
+    }
+
+    zeroHintTest() {
+        EventNotifier notifier();
+        Queue polled();
+        Queue result_queue = AsyncIoController::submit(<SocketPollOperationInfo>{
+            "sock": notifier,
+            "spop": new ZeroHintPollOperation(notifier, polled),
+            "owner": "timeout-heap-zero-hint",
+            # no operation timeout: only the hint can continue the operation
+            "to": -1,
+        });
+        on_exit {
+            AsyncIoController::cancelByOwner("timeout-heap-zero-hint");
+        }
+
+        assertEq(1, polled.get(10s), "first continuePoll() call");
+        # the operation was not continued before: no I/O event ever arrives for it
+        assertEq(2, polled.get(30s), "a hint of 0 continues the operation without an I/O event");
+        hash<SocketPollResultInfo> res = result_queue.get(10s);
+        assertFalse(boolean(res.canceled), "the operation completes");
         assertNothing(res.ex);
     }
 

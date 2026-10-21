@@ -5068,6 +5068,11 @@ while (*binary chunk = input.read(65536)) {
       or write could use its TLS connection after it was freed, and could read from or write to another connection
       that had been given the closed descriptor's number.  The read or write now fails, and the connection and the
       descriptor are released when it ends
+    - Fixed an HTTP/3 connection attempt to a server that does not answer waiting forever instead of failing at its
+      connect timeout, which also kept an automatic protocol selection from ever falling back or reporting the error:
+      when the timeout expired while the attempt was being processed, the async I/O controller did not continue it
+      again until a packet arrived.  An asynchronous operation that asks to be continued at once is now continued in
+      the next I/O loop iteration
     - Fixed a hang on macOS that not even \c SIGKILL could end, when a socket was closed while the async I/O
       controller started or changed waiting for I/O on it, for example when a poll operation was aborted by its
       destructor: the close could wait forever in the system for the wait registered at the same time.  The socket's

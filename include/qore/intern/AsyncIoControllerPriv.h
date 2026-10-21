@@ -1615,6 +1615,15 @@ private:
     */
     DLLLOCAL int64 armTimeoutHeap(IoThreadContext& t, PollInfo& pinfo);
 
+    //! Returns the absolute deadline of an operation's protocol-level poll timeout hint (\c poll_timeout_ms)
+    /** The hint is the time in which the operation must be continued even if no I/O event arrives for it; a hint of
+        0 or less is due now, as for an operation whose own deadline expired while its continuePoll() ran.
+
+        @param poll_timeout_ms the hint in milliseconds
+        @return the deadline in microseconds since the epoch, as for PollInfo::poll_timeout_deadline_us
+    */
+    DLLLOCAL static int64 getPollTimeoutDeadline(int64 poll_timeout_ms);
+
     //! cancelByKey() on one of this controller's I/O threads; never waits for another I/O thread
     /** @param uh the operation key
         @param own_idx the index of the calling I/O thread

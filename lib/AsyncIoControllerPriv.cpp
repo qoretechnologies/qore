@@ -6094,21 +6094,15 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                         {
                             QoreValue ptv = result.new_poll_info->getKeyValue("poll_timeout_ms");
                             if (!ptv.isNullOrNothing()) {
-                                int64 pt_ms = ptv.getAsBigInt();
-                                if (pt_ms <= 0) {
-                                    poll_deadline_us = 1;
-                                    pinfo.poll_timeout_deadline_us = 0;
-                                } else {
-                                    int64 deadline = get_epoch_us() + pt_ms * 1000;
-                                    pinfo.poll_timeout_deadline_us = deadline;
-                                    armTimeoutHeap(t, pinfo);
-                                    // Ensure the event loop wakes in time for this
-                                    // deadline — poll_deadline_us was computed in
-                                    // Phase 1 before this entry existed.
-                                    if (poll_deadline_us == 0
-                                            || deadline < poll_deadline_us) {
-                                        poll_deadline_us = deadline;
-                                    }
+                                int64 deadline = getPollTimeoutDeadline(ptv.getAsBigInt());
+                                pinfo.poll_timeout_deadline_us = deadline;
+                                armTimeoutHeap(t, pinfo);
+                                // Ensure the event loop wakes in time for this
+                                // deadline — poll_deadline_us was computed in
+                                // Phase 1 before this entry existed.
+                                if (poll_deadline_us == 0
+                                        || deadline < poll_deadline_us) {
+                                    poll_deadline_us = deadline;
                                 }
                             } else {
                                 pinfo.poll_timeout_deadline_us = 0;
@@ -6777,6 +6771,13 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
             io_cond.broadcast();
         }
     }
+}
+
+int64 AsyncIoControllerPriv::getPollTimeoutDeadline(int64 poll_timeout_ms) {
+    // a hint of 0 or less means that the operation's timer is due now: the operation is continued in the next
+    // iteration, which nothing else would do if no I/O event arrives for it
+    int64 now_us = get_epoch_us();
+    return poll_timeout_ms > 0 ? now_us + poll_timeout_ms * 1000 : now_us;
 }
 
 int64 AsyncIoControllerPriv::armTimeoutHeap(IoThreadContext& t, PollInfo& pinfo) {
@@ -7649,12 +7650,7 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                                 QoreValue ptv = cmd.continue_poll_result->getKeyValue(
                                     "poll_timeout_ms");
                                 if (!ptv.isNullOrNothing()) {
-                                    int64 pt_ms = ptv.getAsBigInt();
-                                    if (pt_ms <= 0) {
-                                        pinfo.poll_timeout_deadline_us = 0;
-                                    } else {
-                                        pinfo.poll_timeout_deadline_us = get_epoch_us() + pt_ms * 1000;
-                                    }
+                                    pinfo.poll_timeout_deadline_us = getPollTimeoutDeadline(ptv.getAsBigInt());
                                 } else {
                                     pinfo.poll_timeout_deadline_us = 0;
                                 }
