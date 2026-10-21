@@ -142,7 +142,11 @@ public:
     DLLLOCAL void continueReading(ExceptionSink* xsink);
 
     //! Returns true if the connection is closed
+    /** The state is read under @ref op_lock: it is changed by the I/O thread's continuePoll() and by abort() on other
+        threads
+    */
     DLLLOCAL bool isClosed() const {
+        AutoLocker al(op_lock);
         return h2_state == H2ServerState::CLOSED;
     }
 
@@ -163,19 +167,25 @@ public:
 
     //! Returns true if an error occurred
     DLLLOCAL bool hasError() const {
+        AutoLocker al(op_lock);
         return error_info != nullptr;
     }
 
     //! Returns true if the socket should be auto-closed on completion
     /** CLOSED and ERROR states mean the H2 connection is dead.
         REQUEST_READY and SENT states mean the socket will be reused.
+
+        Called by the async I/O controller after continuePoll(), while another thread can abort() the operation, so
+        the state is read under @ref op_lock
     */
     DLLLOCAL bool needsCloseOnComplete() const override {
+        AutoLocker al(op_lock);
         return h2_state == H2ServerState::CLOSED || error_info != nullptr;
     }
 
     //! Returns error information if an error occurred (ref'd)
     DLLLOCAL QoreHashNode* getErrorInfo() const {
+        AutoLocker al(op_lock);
         if (error_info) {
             error_info->ref();
         }
@@ -184,6 +194,12 @@ public:
 
     //! Returns the current H2 state as a string
     DLLLOCAL const char* getH2State() const {
+        AutoLocker al(op_lock);
+        return getH2StateLocked();
+    }
+
+    //! Returns the current H2 state as a string; @ref op_lock must be held
+    DLLLOCAL const char* getH2StateLocked() const {
         switch (h2_state) {
             case H2ServerState::INIT:           return "init";
             case H2ServerState::READING:        return "reading";
@@ -198,6 +214,7 @@ public:
 
     //! Returns true if the connection should be kept alive
     DLLLOCAL bool shouldKeepAlive() const {
+        AutoLocker al(op_lock);
         return keep_alive && h2_state != H2ServerState::CLOSED && !error_info;
     }
 

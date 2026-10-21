@@ -172,7 +172,7 @@ void Http2PollOperationPriv::injectSendOp(SocketPollOperationBase* send_op, Qore
     AutoLocker al(op_lock);
     if (h2_state != H2ServerState::REQUEST_READY && h2_state != H2ServerState::SENT) {
         xsink->raiseException("HTTP2-STATE-ERROR",
-            "cannot send response in state: '%s'", getH2State());
+            "cannot send response in state: '%s'", getH2StateLocked());
         // Caller retains ownership of send_op/send_op_obj on error — they must deref
         return;
     }
@@ -188,7 +188,7 @@ void Http2PollOperationPriv::injectReadOp(SocketPollOperationBase* read_op, Qore
     AutoLocker al(op_lock);
     if (h2_state != H2ServerState::SENT && h2_state != H2ServerState::REQUEST_READY) {
         xsink->raiseException("HTTP2-STATE-ERROR",
-            "cannot read next request in state: '%s'", getH2State());
+            "cannot read next request in state: '%s'", getH2StateLocked());
         return;
     }
 
@@ -215,7 +215,7 @@ void Http2PollOperationPriv::continueReading(ExceptionSink* xsink) {
     }
     if (h2_state != H2ServerState::REQUEST_READY) {
         xsink->raiseException("HTTP2-STATE-ERROR",
-            "cannot continue reading in state: '%s'", getH2State());
+            "cannot continue reading in state: '%s'", getH2StateLocked());
         return;
     }
     if (request) {
