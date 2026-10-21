@@ -41,6 +41,23 @@
 - Prefer adding tests alongside similar modules and keep naming descriptive.
 - Use `QORE_TEST_OPTS` and database env vars (for example `QORE_DB_CONNSTR`) when tests need external services.
 
+## Running Tests Under valgrind
+- Disable signal handling with `-b` (`--disable-signals`), for example
+  `QORE_PCRE2_NO_JIT=1 valgrind qore -b --exec-mode=ir --enable-debug <test>`.  Qore wakes its signal handling thread
+  with `SIGSYS`, and valgrind treats `SIGSYS` as a fault signal: a wake-up that arrives while the signal thread is
+  outside a system call is delivered with its default action, and the process dies with "Bad system call" (exit
+  code 159; the valgrind log shows "Process terminating with default action of signal 31 (SIGSYS)").  This happens
+  with or without a Qore signal handler, at any wake-up including the one at exit; seen with valgrind 3.25.1 (musl)
+  and 3.26.0 (glibc).
+- A test of signal handling skips under `-b` (`HAVE_SIGNAL_HANDLING` is `False`).  To check one under valgrind, use a
+  verification build whose `QORE_STATUS_SIGNAL` (`include/qore/intern/QoreSignal.h`) is another signal, such as
+  `SIGUSR2`; never commit that change.
+- Observed, not root-caused: one valgrind 3.25.1 run of `signals.qtest` on musl without `-b` stalled, with both
+  threads waiting on valgrind's internal pipe.
+- `exit()` ends the process without the library's cleanup, and valgrind reports the memory still in use then as lost:
+  a `QoreValue` holds its node pointer with a tag in the high 16 bits, which valgrind's leak scan does not recognize
+  as a pointer.  A script whose leak report should mean something must end normally.
+
 ## Commit & Pull Request Guidelines
 - Commit messages use a short type prefix such as `fix:`, `feat:`, or `refactor:` in a present-tense summary.
 - Use `Revert` for rollbacks and `Merge` when bringing in upstream branches.
