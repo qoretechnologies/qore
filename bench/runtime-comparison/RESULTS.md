@@ -19665,3 +19665,76 @@ has been established.
 
 All raw records, losses, qualification/failure logs, recovery patch, drivers and
 62 audit items: [results-aot-first-public-base-rejected-macos-arm64.json](results-aot-first-public-base-rejected-macos-arm64.json).
+
+## Rejected isolated AOT first-public-base helper (2026-10-21)
+
+Baseline `65c5a5400` includes develop `e8add51ad`. This distinct implementation
+kept the live class-acceptance shortcut and pinned-slot ownership contract, but
+compiled the new runtime helper in its own translation unit. Existing v3 and
+QoreTypeInfo.cpp bodies were unchanged. No layout padding or alignment search.
+
+The optimized targeted screen used Release `-O3 -DNDEBUG`, `qcc -O3`, three fixed
+layouts, three forks, three warmups and three 300-ms samples per fork. All 378
+runs / 1134 timed windows are preserved. Geometric means of layout medians:
+
+|!Workload|!Before ns/item|!Candidate ns/item|!Selector off ns/item|!Time change vs before
+|direct_call|1.551339|1.563131|1.552000|+0.760%
+|method_call|1.623217|1.620885|1.616743|-0.144%
+|indirect_call|7.009506|6.835623|6.912819|-2.481%
+|monomorphic_call|3.573734|3.567814|3.582817|-0.166%
+|polymorphic_call|22.517280|22.219971|22.934886|-1.320%
+|polymorphic_expression_call|10.785207|10.785443|10.621896|+0.002%
+|closure_capture|21.509467|21.608324|21.387343|+0.460%
+|list_build|27.179035|27.129670|27.136936|-0.182%
+|list_mutate|192.824327|191.571323|191.422817|-0.650%
+|temporary_hash|336.497327|337.847582|337.809940|+0.401%
+
+This candidate is rejected at the first target gate. Integer polymorphic calls
+improve only 1.320% versus before and 3.117% versus selector off, below the fixed
+5% minimum; reverse layout is 1.592% slower than before. No unchanged retry,
+confirmation, broad timing or full selected retention qualification followed.
+The single adverse disjoint-range signal is polymorphic_expression_call in
+shuffle487 versus disabled (+3.406%); with no confirmation this is not a repeated
+regression. All other measured rows and fork ranges remain in the report.
+
+List building is effectively flat (-0.182% versus before, -0.027% versus disabled).
+Static inspection confirms that nine inspected list hot helpers, the original
+v3/throwing-v3 initializers and ordinary class acceptance retain both instruction
+streams and addresses (Mach-O imports independently resolved). The preceding
+frozen nine-profile diagnosis also found equivalent list-building LLVM and nine
+normalized hot helper bodies, with several addresses shifted by 232 bytes in the
+rejected in-SCU prototype. These findings support compilation/layout as a lead;
+they do not prove the cause of its regression.
+
+The isolated helper adds out-of-line exception-sink, generic node-reference and
+real-reference bookkeeping calls. The untimed profile observes all three in the
+hot initializer; the checked self/first-public-base path bypasses ordinary lookup.
+The AOT loop itself still has 1228 ARM64 instructions, a 496-byte frame, 48 static
+decref sites, one initializer and one scope-exit clear; cancellation and runtime
+preparation are unchanged. The extra helper calls are the next optimization lead,
+not a measured causal attribution or permission to weaken reference semantics.
+
+Candidate focused Release: eight fixtures / eight cases / 9816 assertions; Debug
+native: 2119 in each setting. Independent preparation verifies 6507 references.
+An initial harness incorrectly invoked the Debug-only native test entry in Release
+and failed; its logs and original driver are retained. CMake already excludes the
+entire native-test file from Release, correcting the earlier assumption that its
+fixture contributed to Release layout changes. The harness was corrected to
+verify symbol exclusion; a fresh complete focused qualification passed before
+any timings. Redundant fixture guards and out-of-line metadata getters were
+removed before that fresh qualification, not after observing timing results.
+
+All eight source edits are archived and removed. Fresh restored qualification:
+eight Release fixtures / eight cases / 9634 assertions, Debug native 2024 in each
+setting, indexed compound in all five modes and 61 weak-reference assertions.
+All 125 owned Release qmod aliases are restored. These are focused gates, not full
+selected Release/Debug qualification. There is no new Java/develop comparison.
+
+Next investigate inlinable internal sink/reference primitives while preserving
+custom reference handlers, tracing, live guards, atomic ordering and slot
+publication order. Any changed candidate requires a new declared plan and fresh
+qualification/measurements; the 5% target and regression gates remain unchanged.
+Neither Java parity nor a global performance ceiling has been established.
+
+Raw runs, code/profile evidence, failure/restoration logs, recovery patch, drivers
+and all 62 audit items: [results-aot-isolated-public-base-rejected-macos-arm64.json](results-aot-isolated-public-base-rejected-macos-arm64.json).

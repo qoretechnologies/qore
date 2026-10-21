@@ -3845,3 +3845,26 @@ Next diagnose frozen list-building code/profile differences and consider an
 isolated translation unit for a changed implementation; do not retry the same
 binary or waive the fixed regression gate. See RESULTS.md and
 `results-aot-first-public-base-rejected-macos-arm64.json`. Neither Java parity nor a global ceiling is established.
+
+## Isolated first-public-base helper rejected (post-65c5a5400)
+
+Separate-TU placement preserved addresses and normalized instructions of nine
+inspected list hot helpers and existing class initializers. List building is flat
+in the early screen: 27.179 -> 27.130 ns/item. But integer polymorphic calls improve
+only 22.517 -> 22.220 ns/item (1.320% versus before, 3.117% versus disabled), below
+the fixed 5% gate; reverse layout is 1.592% slower. All 378 runs / 1134 windows are
+archived. The prototype was removed without an unchanged retry or later stages.
+
+Untimed sampling and ARM64 show three new out-of-line operations in the isolated
+initializer: sink test, generic node ref and real-reference bookkeeping. This is
+the next lead, while preserving custom handlers, tracing, atomics and publication
+order. It is not yet a measured causal attribution. Runtime-slot cleanup and
+dynamic dispatch remain substantial costs. No Java parity or global ceiling.
+
+Corrected a harness mistake before timing: the native-test entry is Debug-only;
+the entire ql_debug.cpp was already excluded from Release. The initial failed
+Release-native invocation and original driver are retained. Fresh candidate
+focused qualification passed 9816 Release assertions and 2119 native assertions
+per setting; restored source passes 9634 and 2024, plus indexed compound/61 weak
+references. All 125 Release aliases restored; no full selected retention rerun.
+See RESULTS.md and `results-aot-isolated-public-base-rejected-macos-arm64.json` for the complete evidence and audit.
