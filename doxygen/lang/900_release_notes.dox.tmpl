@@ -1790,6 +1790,18 @@ val = "string";      # OK
     @ref Qore::Socket::bindINET() "Socket::bindINET()".
     @endparblock
 
+    @par qpp Fails the Build for Every Error It Reports
+    @parblock
+    \c qpp, the preprocessor that generates the C++ code and the documentation of binary modules from
+    <tt>.qpp</tt> files, now exits with an error status when it has reported an error, after it has reported all
+    errors in its input, so the build fails.  It reported some errors and still exited successfully, and the module
+    was built with incomplete documentation or code: for example, a function with functional domains
+    (<tt>dom=...</tt>) or code flags (<tt>flags=...</tt>) but no long comment (the block comment after its
+    <tt>//!</tt> line) was built without the restriction or code flag note in its documentation.  The output files of
+    a failed run are removed, so the next build runs \c qpp again.  A problem that leaves the output complete is
+    reported as a warning and does not fail the build.
+    @endparblock
+
     @subsection qore_3_0_0_new_features New Features in Qore
     @par LLVM-backed Execution Modes and AOT Compilation
     @parblock

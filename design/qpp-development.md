@@ -206,6 +206,9 @@ Use Doxygen-style comments:
 - Use `@par Example:` for code examples
 - Use `@param`, `@return`, `@throw` for parameter/return/exception docs
 - Use `@since %Qore X.Y` for version information
+- A function or method with functional domains (`dom=...`) or code flags (`flags=...`) needs a long comment (the
+  `/** ... */` block after the `//!` line): qpp inserts the `@par Restrictions:` and `@par Code Flags:` paragraphs
+  into it, and fails if it is missing (see [Diagnostics and Exit Status](#diagnostics-and-exit-status))
 
 ### Domain Flags
 
@@ -452,6 +455,33 @@ class QoreFeatureClass : public AbstractPrivateData {
 6. [ ] Verify no reserved words used as method names
 7. [ ] Verify object parameters are used correctly (`*param` for raw pointers, `.release()` for ownership transfer)
 8. [ ] Build and test
+
+## Diagnostics and Exit Status
+
+qpp reports problems on stderr as `qpp: ERROR: ...` or `qpp: WARNING: ...`.  The rule (`lib/qpp.cpp`, `error()`,
+`warning()` and `main()`):
+
+- **An error** means that an output would be wrong or incomplete.  Every call to `error()` is counted.  qpp keeps
+  going after an error wherever it can, so that one run reports every problem: all outputs (C++, documentation,
+  Java, metadata, unit test, stub) are generated even after one of them has failed, and each continues with the
+  next declaration of the file after one has failed.  Parsing a file stops at an error that it cannot recover from
+  (the position in the file is unknown), and no outputs are written for that file; later input files are not
+  processed then, because the definitions collected from a file (function groups, `qppval` and `qppinit` values)
+  are global.
+- When any error was reported, qpp exits with status 1 after a summary line (`N errors found ...; please correct the
+  errors above and try again`), and removes every output file it wrote in that run (only regular files, never a
+  device such as `/dev/stdout`).  A build tool that compares file times would otherwise take the output of the
+  failed run, which is newer than its input, for an up-to-date result.  Write errors (for example a full disk) are
+  errors too: `OutputFile::close()` checks them.
+- **A warning** means that the output is still complete and correct, for example an input file name without the
+  `.qpp` extension, a `@par Platform Availability` paragraph at the very end of a long comment (the generated
+  paragraphs are then inserted at the start of the long comment), and documentation table issues without
+  `--table-strict` (see `design/doc-tables.md`; with `--table-strict` they are errors).
+
+Never report an error and then carry on as if the run had succeeded: use `error()` for anything that leaves an
+output wrong or incomplete, `warning()` for anything else, and do not print diagnostics with `fprintf(stderr, ...)`
+or `log()`.  `examples/test/bin/qpp/qpp-diagnostics.qtest` checks the rule; it runs qpp with the arguments that
+`qore_wrap_qpp_value()` in `cmake/QoreMacros.cmake` passes.
 
 ## Common Errors
 

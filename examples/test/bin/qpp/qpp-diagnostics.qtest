@@ -1,0 +1,328 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class QppDiagnosticsTest
+
+#! qpp exits with an error status for every error it reports
+/** qpp used to report some errors and still exit with status 0: a function with functional domains or code flags but
+    no long comment was built without the restriction note in its documentation, and nothing failed.  Every error now
+    fails the run after all errors have been reported, and the output files of a failed run are removed, so that a
+    build cannot take them for an up-to-date result.  Problems that leave the output complete are warnings.
+*/
+class QppDiagnosticsTest inherits QUnit::Test {
+    private {
+        string qpp_bin;
+
+        const GroupStart = "/** @defgroup test_functions Test Functions
+    Test functions
+*/
+///@{
+";
+
+        const GroupEnd = "///@}
+";
+
+        const ClassStart = "//! test class
+/** a test class
+*/
+qclass TestCls [arg=void* p; ns=Qore];
+";
+    }
+
+    constructor() : QUnit::Test("QppDiagnosticsTest", "1.0", \ARGV) {
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string bin_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qpp_bin = ENV.QPP ?? ENV.QORE_QPP
+            ?? (is_file(bin_dir + "/qpp") ? bin_dir + "/qpp" : dirname(qore_bin) + "/qpp");
+
+        addTestCase("missing long comment with domains", \testMissingLongCommentDomains());
+        addTestCase("missing long comment with code flags", \testMissingLongCommentFlags());
+        addTestCase("missing long comment with flags and domains", \testMissingLongCommentBoth());
+        addTestCase("every error is reported in one run", \testAllErrorsReported());
+        addTestCase("a failed run removes earlier outputs", \testFailedRunRemovesOutputs());
+        addTestCase("long comment accepted", \testLongCommentAccepted());
+        addTestCase("undecorated function needs no long comment", \testNoFlagsNoLongComment());
+        addTestCase("platform availability is a warning", \testPlatformAvailabilityWarning());
+        addTestCase("invalid hashdecl fails", \testInvalidHashDecl());
+        addTestCase("unbalanced preprocessor directive fails", \testUnbalancedDirective());
+        addTestCase("unsupported type fails", \testUnsupportedType());
+        addTestCase("invalid class property fails", \testInvalidClassProperty());
+        addTestCase("write error fails", \testWriteError());
+
+        set_return_value(main());
+    }
+
+    #! runs qpp over a source fragment with the arguments of qore_wrap_qpp_value() in cmake/QoreMacros.cmake
+    /** @param source the qpp source
+        @param tmp the directory for the source and the outputs; a new one is created if not given
+        @param dox the documentation output file; the default is \c flagtest.dox.h in the directory
+
+        @return a hash with the exit status (\c status), the combined output (\c out) and which outputs exist
+    */
+    private hash<auto> runQpp(string source, *TmpDir tmp, *string dox) {
+        if (!is_file(qpp_bin)) {
+            testSkip("qpp binary not found at %y; set QPP or QORE_LIBDIR", qpp_bin);
+        }
+
+        if (!tmp) {
+            tmp = new TmpDir("qore-qpp-diag-");
+        }
+        string qpp_path = tmp.path + "/flagtest.qpp";
+        string cpp_path = tmp.path + "/flagtest.cpp";
+        string meta_path = tmp.path + "/flagtest.meta.json";
+        if (!dox) {
+            dox = tmp.path + "/flagtest.dox.h";
+        }
+
+        File f();
+        f.open2(qpp_path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(source);
+        f.close();
+
+        # the exit status is written to a file, so it is the status of qpp itself
+        string status_path = tmp.path + "/status";
+        string out = backquote(sprintf("%s --javadoc=%s/java --output=%s --dox-output=%s --metadata=%s %s 2>&1; "
+            "echo $? > %s", qpp_bin, tmp.path, cpp_path, dox, meta_path, qpp_path, status_path));
+
+        return {
+            "tmp": tmp,
+            "out": out,
+            "status": trim(ReadOnlyFile::readTextFile(status_path)).toInt(),
+            "cpp": is_file(cpp_path),
+            "dox": is_file(dox),
+            "meta": is_file(meta_path),
+            "dox_text": is_file(dox) ? ReadOnlyFile::readTextFile(dox) : "",
+        };
+    }
+
+    #! asserts that qpp failed with exit status 1 and left no output files
+    private assertFailed(hash<auto> r, string what) {
+        assertEq(1, r.status, what + ": qpp exits with status 1: " + r.out);
+        assertFalse(r.cpp, what + ": the cpp output of the failed run is removed");
+        assertFalse(r.dox, what + ": the dox output of the failed run is removed");
+        assertFalse(r.meta, what + ": the metadata output of the failed run is removed");
+        assertRegex("please correct the errors? above and try again", r.out, what + ": the run ends with a summary");
+    }
+
+    #! returns the number of error lines in qpp output, not counting the summary lines
+    private int countErrors(string out) {
+        int count = 0;
+        foreach string line in (out.split("\n")) {
+            if (line =~ /ERROR: / && line !~ /please correct the error/ && line !~ /documentation table issue/) {
+                ++count;
+            }
+        }
+        return count;
+    }
+
+    testMissingLongCommentDomains() {
+        hash<auto> r = runQpp(GroupStart + "//! returns True if the variable is set
+bool t_env_is_set(string name) [dom=EXTERNAL_INFO] {
+    return true;
+}
+" + GroupEnd);
+        assertFailed(r, "function with dom= and no long comment");
+        assertRegex("flagtest\\.qpp:6: t_env_is_set\\(\\): cannot insert domain flags: missing long comment", r.out,
+            "the diagnostic names the file, the line and the function");
+        assertEq(1, countErrors(r.out), "exactly one error is reported: " + r.out);
+        assertRegex("1 error found and the output files of this run were removed", r.out);
+    }
+
+    testMissingLongCommentFlags() {
+        hash<auto> r = runQpp(GroupStart + "//! returns one
+int t_one() [flags=CONSTANT] {
+    return 1;
+}
+" + GroupEnd);
+        assertFailed(r, "function with flags= and no long comment");
+        assertRegex("t_one\\(\\): cannot insert code flags: missing long comment", r.out);
+    }
+
+    testMissingLongCommentBoth() {
+        hash<auto> r = runQpp(GroupStart + "//! returns one
+int t_both() [flags=CONSTANT;dom=FILESYSTEM] {
+    return 1;
+}
+" + GroupEnd);
+        assertFailed(r, "function with flags= and dom= and no long comment");
+        assertRegex("t_both\\(\\): cannot insert code flags and domain flags: missing long comment", r.out);
+        assertEq(1, countErrors(r.out), "one missing comment is one error: " + r.out);
+    }
+
+    testAllErrorsReported() {
+        # two functions without a long comment in one group and a third in a second group
+        hash<auto> r = runQpp(GroupStart + "//! first
+bool t_first() [dom=EXTERNAL_INFO] {
+    return true;
+}
+
+//! second
+bool t_second() [dom=PROCESS] {
+    return true;
+}
+" + GroupEnd + "
+/** @defgroup more_functions More Functions
+    More functions
+*/
+///@{
+//! third
+bool t_third() [dom=NETWORK] {
+    return true;
+}
+///@}
+");
+        assertFailed(r, "three functions without long comments");
+        assertRegex("t_first\\(\\): cannot insert domain flags", r.out);
+        assertRegex("t_second\\(\\): cannot insert domain flags", r.out);
+        assertRegex("t_third\\(\\): cannot insert domain flags", r.out);
+        assertEq(3, countErrors(r.out), "every error is reported: " + r.out);
+        assertRegex("3 errors found", r.out);
+    }
+
+    testFailedRunRemovesOutputs() {
+        # a successful run creates the outputs
+        string good = GroupStart + "//! returns True
+/** @return True
+*/
+bool t_env() [dom=EXTERNAL_INFO] {
+    return true;
+}
+" + GroupEnd;
+        hash<auto> r = runQpp(good);
+        assertEq(0, r.status, r.out);
+        assertTrue(r.cpp && r.dox && r.meta, "the outputs of the successful run exist");
+
+        # the input is changed so that it fails: the outputs of the earlier run are newer than the old input but not
+        # than the new one; the failed run must not leave them behind as if they were up to date
+        string bad = GroupStart + "//! returns True
+bool t_env() [dom=EXTERNAL_INFO] {
+    return true;
+}
+" + GroupEnd;
+        r = runQpp(bad, r.tmp);
+        assertFailed(r, "rerun with an error");
+        # files that qpp did not write are not touched
+        assertTrue(is_file(r.tmp.path + "/flagtest.qpp"), "the input file is kept");
+    }
+
+    testLongCommentAccepted() {
+        hash<auto> r = runQpp(GroupStart + "//! returns True if the variable is set
+/** @param name the name of the variable
+
+    @return True if the variable is set
+*/
+bool t_env_is_set(string name) [dom=EXTERNAL_INFO] {
+    return true;
+}
+" + GroupEnd);
+        assertEq(0, r.status, "a function with a long comment is accepted: " + r.out);
+        assertNRegex("ERROR|WARNING", r.out, "no diagnostics");
+        assertTrue(r.cpp && r.dox && r.meta, "all outputs are written");
+        assertRegex("@par Restrictions:\n    @ref Qore::PO_NO_EXTERNAL_INFO", r.dox_text,
+            "the restriction note is in the documentation");
+    }
+
+    testNoFlagsNoLongComment() {
+        # without flags or domains there is nothing to insert, so the long comment stays optional
+        hash<auto> r = runQpp(GroupStart + "//! returns one
+int t_plain() {
+    return 1;
+}
+" + GroupEnd);
+        assertEq(0, r.status, "an undecorated function without a long comment is accepted: " + r.out);
+        assertNRegex("ERROR", r.out);
+        assertTrue(r.cpp && r.dox && r.meta, "all outputs are written");
+        assertRegex("int t_plain\\(\\);", r.dox_text);
+    }
+
+    testPlatformAvailabilityWarning() {
+        # the Platform Availability paragraph ends the comment, so the generated paragraphs go to its start instead
+        hash<auto> r = runQpp(GroupStart + "//! returns True
+/** @par Platform Availability */
+bool t_avail() [dom=EXTERNAL_INFO] {
+    return true;
+}
+" + GroupEnd);
+        assertEq(0, r.status, "the output is complete, so this is not an error: " + r.out);
+        assertRegex("WARNING: .*flagtest\\.qpp:7: t_avail\\(\\): cannot find the end of the Platform Availability "
+            "paragraph", r.out);
+        assertNRegex("ERROR", r.out);
+        assertRegex("@par Restrictions:\n    @ref Qore::PO_NO_EXTERNAL_INFO", r.dox_text,
+            "the restriction note is still in the documentation");
+    }
+
+    testInvalidHashDecl() {
+        hash<auto> r = runQpp("//! test hashdecl
+/** a test hashdecl
+*/
+hashdecl TestHash<T, T> {
+    //! a member
+    int a;
+}
+");
+        assertFailed(r, "hashdecl with a duplicate type parameter");
+        assertRegex("hashdecl 'TestHash' has duplicate type parameter 'T'", r.out);
+    }
+
+    testUnbalancedDirective() {
+        hash<auto> r = runQpp(GroupStart + "//! returns one
+/** @return one
+*/
+int t_one() {
+    return 1;
+}
+#endif
+" + GroupEnd);
+        assertFailed(r, "#endif without #if");
+        assertRegex("flagtest\\.qpp:11: #endif without #if", r.out, "the diagnostic names the line of the directive");
+    }
+
+    testUnsupportedType() {
+        hash<auto> r = runQpp(GroupStart + "//! returns one
+/** @param h a hash
+
+    @return one
+*/
+int t_hash(hash<int, string> h) {
+    return 1;
+}
+" + GroupEnd);
+        assertFailed(r, "parameter with an unsupported hash type");
+        assertRegex("unsupported complex hash type 'hash<int, string>'", r.out);
+    }
+
+    testInvalidClassProperty() {
+        hash<auto> r = runQpp("//! test class
+/** a test class
+*/
+qclass TestCls [arg=void* p; ns=Qore; module_public=maybe];
+");
+        assertFailed(r, "invalid module_public class property");
+        assertRegex("prop: 'module_public': 'maybe' - must be \"true\" or \"false\"", r.out);
+    }
+
+    testWriteError() {
+        # a full device makes every write fail; only Linux has one
+        if (!is_cdev("/dev/full")) {
+            testSkip("no /dev/full on this platform");
+        }
+        hash<auto> r = runQpp(ClassStart + "//! returns one
+/** @return one
+*/
+int TestCls::one() {
+    return 1;
+}
+", NOTHING, "/dev/full");
+        assertEq(1, r.status, "a failed write fails the run: " + r.out);
+        assertRegex("/dev/full: error writing output file", r.out);
+        assertFalse(r.cpp, "the cpp output of the failed run is removed");
+        assertTrue(is_cdev("/dev/full"), "a device is never removed");
+    }
+}

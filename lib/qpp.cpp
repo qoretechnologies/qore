@@ -41,6 +41,7 @@
 #include <cassert>
 #include <cctype>
 #include <cerrno>
+#include <climits>
 #include <cstdarg>
 #include <cstdio>
 #include <cstdlib>
@@ -60,6 +61,10 @@
 #include <getopt.h>
 #else
 #include "qore/intern/getopt_long.h"
+#endif
+
+#ifndef PATH_MAX
+#define PATH_MAX 512
 #endif
 
 const char usage_str[] = "usage: %s [options] <input file(s)...>\n"
@@ -442,6 +447,13 @@ static int my_vsprintf(std::string& buf, const char* fmt, va_list args) {
     return err ? -1 : 0;
 }
 
+// number of errors reported with error() in this run
+/** An error means that an output would be wrong or incomplete.  Every error is counted, and qpp exits with a
+    non-zero status after it has processed all of its input when any error was reported, so that every problem is
+    reported in one run; see "Diagnostics and Exit Status" in design/qpp-development.md
+*/
+static unsigned error_count = 0;
+
 static void error(const char* fmt, ...) {
     std::string buf;
     va_list args;
@@ -454,10 +466,102 @@ static void error(const char* fmt, ...) {
             break;
     }
 
+    ++error_count;
+
     fprintf(stderr, "%s: ERROR: ", pn.c_str());
     fputs(buf.c_str(), stderr);
     //fflush(stderr);
 }
+
+// absolute paths of the output files that this run has written
+/** When the run fails, they are removed: a build tool that compares file times would otherwise take the output of
+    a failed run, which is newer than its input, for an up-to-date result
+*/
+static strset_t output_files;
+
+//! Records an output file written by this run so that it can be removed if the run fails
+/** The path is made absolute because writing Java files changes the working directory
+*/
+static void record_output_file(const std::string& fn) {
+    std::string path = fn;
+    if (path.empty() || path[0] != '/') {
+        std::vector<char> cwd(PATH_MAX + 1);
+        if (getcwd(cwd.data(), cwd.size())) {
+            path = std::string(cwd.data()) + "/" + fn;
+        }
+    }
+    output_files.insert(path);
+}
+
+//! Removes every output file written by this run; called when the run fails
+static void remove_output_files() {
+    for (const std::string& path : output_files) {
+        if (unlink(path.c_str()) && errno != ENOENT) {
+            fprintf(stderr, "%s: WARNING: cannot remove output file '%s' of the failed run: %s\n", pn.c_str(),
+                path.c_str(), strerror(errno));
+        }
+    }
+    output_files.clear();
+}
+
+//! An output file written by qpp
+/** The file is recorded so that it is removed if the run fails, and close() reports write errors, so that a
+    truncated file is never taken for a complete one
+*/
+class OutputFile {
+public:
+    //! Opens the file; reports an error if it cannot be opened
+    OutputFile(const std::string& fn, const char* mode) : fn(fn), fp(fopen(fn.c_str(), mode)) {
+        if (!fp) {
+            error("%s: %s\n", fn.c_str(), strerror(errno));
+            return;
+        }
+        // only regular files are removed after a failed run, never a device like /dev/stdout
+        struct stat sb;
+        if (!fstat(fileno(fp), &sb) && S_ISREG(sb.st_mode)) {
+            record_output_file(fn);
+        }
+    }
+
+    OutputFile(const OutputFile&) = delete;
+    OutputFile& operator=(const OutputFile&) = delete;
+
+    ~OutputFile() {
+        // close() was not called, so the output is incomplete, e.g. because an exception is propagating
+        if (fp) {
+            fclose(fp);
+        }
+    }
+
+    //! Closes the file; returns -1 and reports an error if any write to it failed
+    int close() {
+        assert(fp);
+        bool write_error = ferror(fp) != 0;
+        int rc = fclose(fp);
+        fp = nullptr;
+        if (rc) {
+            error("%s: error writing output file: %s\n", fn.c_str(), strerror(errno));
+            return -1;
+        }
+        if (write_error) {
+            error("%s: error writing output file\n", fn.c_str());
+            return -1;
+        }
+        return 0;
+    }
+
+    FILE* get() const {
+        return fp;
+    }
+
+    explicit operator bool() const {
+        return fp != nullptr;
+    }
+
+private:
+    std::string fn;
+    FILE* fp;
+};
 
 static void warning(const char* fmt, ...) {
     std::string buf;
@@ -961,6 +1065,14 @@ static int read_line(unsigned &lineNumber, std::string& str, FILE* fp) {
         }
     }
     return 0;
+}
+
+//! returns the number of a line that read_line() has just read
+/** read_line() counts the newline that ends the line, so \a lineNumber is then the number of the next line, except for
+    a last line without a newline
+*/
+static unsigned read_line_number(const std::string& line, unsigned lineNumber) {
+    return !line.empty() && line.back() == '\n' ? lineNumber - 1 : lineNumber;
 }
 
 static int get_dox_comment(const char* fileName, unsigned &lineNumber, std::string& str, FILE* fp,
@@ -2057,8 +2169,8 @@ static int get_qore_type(const std::string& qt, std::string& cppt) {
                     }
                     log(LL_DEBUG, "registering complex hash return type '%s': '%s'\n", qt.c_str(), qc.c_str());
                 } else {
-                    log(LL_CRITICAL, "unsupported complex hash type found: '%s'\n", qt.c_str());
-                    assert(false);
+                    error("unsupported complex hash type '%s'; only hash<string, T> is supported\n", qt.c_str());
+                    return -1;
                 }
             } else {
                 if (subtype == "auto")
@@ -2143,8 +2255,8 @@ static int get_qore_type(const std::string& qt, std::string& cppt) {
             } else if (subtype == "relative") {
                 qc = on ? "dateRelativeOrNothingTypeInfo" : "dateRelativeTypeInfo";
             } else {
-                log(LL_CRITICAL, "unsupported date subtype '%s' in '%s'\n", subtype.c_str(), qt.c_str());
-                assert(false);
+                error("unsupported date subtype '%s' in '%s'\n", subtype.c_str(), qt.c_str());
+                return -1;
             }
             log(LL_DEBUG, "registering date subtype return type '%s': '%s'\n", qt.c_str(), qc.c_str());
         } else if (!qt.compare(on ? 1 : 0, 6, "union<")) {
@@ -2155,8 +2267,8 @@ static int get_qore_type(const std::string& qt, std::string& cppt) {
             parseSubtypes(subtypes_str, subtypes);
 
             if (subtypes.size() < 2) {
-                log(LL_CRITICAL, "union type requires at least 2 member types: '%s'\n", qt.c_str());
-                assert(false);
+                error("union type requires at least 2 member types: '%s'\n", qt.c_str());
+                return -1;
             }
 
             // Generate type_vec_t initialization - build element by element for GCC 15
@@ -2193,8 +2305,8 @@ static int get_qore_type(const std::string& qt, std::string& cppt) {
             }
 
             if (paren_pos == std::string::npos) {
-                log(LL_CRITICAL, "invalid code type '%s': missing '('\n", qt.c_str());
-                assert(false);
+                error("invalid code type '%s': missing '('\n", qt.c_str());
+                return -1;
             }
 
             // Extract return type and param types
@@ -2412,25 +2524,24 @@ static int mkdir_chdir(const char* path) {
 #endif
             // ignore EEXIST: with a parallel build this can happen normally
             if (errno != EEXIST) {
-                fprintf(stderr, "mkdir '%s': %s\n", path, strerror(errno));
+                error("mkdir '%s': %s\n", path, strerror(errno));
                 return -1;
             }
         }
     }
 
     if (chdir(path)) {
-        fprintf(stderr, "chdir '%s': %s\n", path, strerror(errno));
+        error("chdir '%s': %s\n", path, strerror(errno));
         return -1;
     }
 
     return 0;
 }
 
-#ifndef PATH_MAX
-#define PATH_MAX 512
-#endif
-
-static FILE* get_java_file(const std::string& ns, const std::string& name, std::string& pkg) {
+//! opens the Java output file for a class
+/** @return the open file, or nullptr if it cannot be created; an error has been reported in that case
+*/
+static std::unique_ptr<OutputFile> get_java_file(const std::string& ns, const std::string& name, std::string& pkg) {
     // open class file
     strlist_t dirvec = { "qore" };
     // convert namespace to package
@@ -2445,24 +2556,21 @@ static FILE* get_java_file(const std::string& ns, const std::string& name, std::
 
     // start in root java output dir
     if (mkdir_chdir(opts.javadoc_fn.c_str())) {
-        exit(1);
+        return nullptr;
     }
 
     //printf("dir: '%s' pkg: '%s'\n", opts.javadoc_fn.c_str(), pkg.c_str());
     for (auto& i : dirvec) {
         if (mkdir_chdir(i.c_str())) {
-            exit(1);
+            return nullptr;
         }
     }
 
     std::string fn = name;
     fn += ".java";
-    FILE* fp = fopen(fn.c_str(), "w");
-    if (!fp) {
-        char buf[PATH_MAX + 1];
-        fprintf(stderr, "cannot create java output file '%s/%s': %s\n", getcwd(buf, PATH_MAX), fn.c_str(),
-            strerror(errno));
-        exit(1);
+    std::unique_ptr<OutputFile> fp(new OutputFile(fn, "w"));
+    if (!*fp) {
+        return nullptr;
     }
     return fp;
 }
@@ -2615,8 +2723,10 @@ static int get_qore_value(const std::string& qv, std::string& v, const char* cna
                     v += buf;
                     v += ", 0, 0";
                 }
-                else
+                else {
                     error("cannot interpret relative date/time value '%s'\n", qv.c_str());
+                    return -1;
+                }
             }
             v += ")";
             if (force_node) {
@@ -3182,7 +3292,12 @@ static size_t justify_start(std::string& str) {
     return start;
 }
 
-static size_t find_start(std::string& str) {
+//! returns the position in the long comment where qpp inserts its generated paragraphs
+/** @param where the source location and name of the declaration, for diagnostics
+
+    @return the insertion position, or std::string::npos if there is no long comment
+*/
+static size_t find_start(std::string& str, const std::string& where) {
     // find start of long comment and justify text in comment
     size_t start = justify_start(str);
     if (start == std::string::npos)
@@ -3192,14 +3307,17 @@ static size_t find_start(std::string& str) {
 
     size_t i = str.find("@par Platform Availability", start);
     if (i != std::string::npos) {
+        // the generated paragraphs are still added, at the start of the long comment, so this is only a warning
         start = str.find('\n', i);
         if (start == std::string::npos) {
-            error("Error: cannot find end of Platform Availability data\n");
+            warning("%s: cannot find the end of the Platform Availability paragraph; the generated documentation "
+                "is inserted at the start of the long comment instead\n", where.c_str());
             return lc_start;
         }
         start = str.find('\n', start + 1);
         if (start == std::string::npos) {
-            error("Error: cannot find end of Platform Availability data\n");
+            warning("%s: cannot find the end of the Platform Availability paragraph; the generated documentation "
+                "is inserted at the start of the long comment instead\n", where.c_str());
             return lc_start;
         }
         str.insert(start + 1, "\n    ");
@@ -3315,58 +3433,70 @@ static void process_comment(std::string& buf) {
     }
 }
 
+//! writes a documentation comment, adding the code flag and functional domain paragraphs for the declaration
+/** @param where the source location and name of the declaration, for diagnostics; required if \a dom or \a flags
+    is not empty
+
+    @return 0 for OK, -1 if the documentation is incomplete; an error has been reported in that case
+
+    The code flag and restriction paragraphs are inserted into the long comment, the block comment that follows the
+    //! line; a declaration with code flags or functional domains but no long comment is an error, since its
+    documentation would not show them
+*/
 static int serialize_dox_comment(FILE* fp, std::string& buf, const strlist_t& dom = strlist_t(),
-        const strlist_t& flags = strlist_t()) {
+        const strlist_t& flags = strlist_t(), const std::string& where = std::string()) {
+    assert((dom.empty() && flags.empty()) || !where.empty());
     process_comment(buf);
 
-    size_t start = 0;
-    if (!flags.empty()) {
-        start = find_start(buf);
-        if (start == std::string::npos) {
-            error("cannot insert code flags: missing long comment\n");
-        } else {
-            std::string fbuf = "@par Code Flags:\n    ";
-            for (strlist_t::const_iterator i = flags.begin(), e = flags.end(); i != e; ++i) {
-                if (i != flags.begin())
-                    fbuf += ", ";
-                fbuf += "@ref ";
-                fbuf += *i;
-            }
-            fbuf += "\n\n";
-            buf.insert(start, fbuf);
-        }
-    } else if (dom.empty())
+    int rc = 0;
+    if (flags.empty() && dom.empty()) {
         justify_start(buf);
-
-    if (!dom.empty()) {
-        if (!start)
-            start = find_start(buf);
+    } else {
+        size_t start = find_start(buf, where);
         if (start == std::string::npos) {
-            error("cannot insert domain flags: missing long comment\n");
+            error("%s: cannot insert %s: missing long comment; add a /** ... */ comment after the //! line\n",
+                where.c_str(), dom.empty() ? "code flags" : (flags.empty() ? "domain flags"
+                    : "code flags and domain flags"));
+            rc = -1;
         } else {
-            std::string fbuf = "@par Restrictions:\n    ";
-            for (strlist_t::const_iterator i = dom.begin(), e = dom.end(); i != e; ++i) {
-                if (i != dom.begin())
-                    fbuf += ", ";
-                strmap_t::const_iterator di = dmap.find(*i);
-                if (di != dmap.end()) {
-                    fbuf += "@ref Qore::";
-                    fbuf += di->second;
+            if (!flags.empty()) {
+                std::string fbuf = "@par Code Flags:\n    ";
+                for (strlist_t::const_iterator i = flags.begin(), e = flags.end(); i != e; ++i) {
+                    if (i != flags.begin())
+                        fbuf += ", ";
+                    fbuf += "@ref ";
+                    fbuf += *i;
                 }
-                else {
-                    di = dnmap.find(*i);
-                    assert(di != dnmap.end());
-                    fbuf += "MUST HAVE: @ref Qore::";
-                    fbuf += di->second;
-                }
+                fbuf += "\n\n";
+                buf.insert(start, fbuf);
             }
-            fbuf += "\n\n";
-            buf.insert(start, fbuf);
+
+            // inserted at the same position, so the restrictions precede the code flags
+            if (!dom.empty()) {
+                std::string fbuf = "@par Restrictions:\n    ";
+                for (strlist_t::const_iterator i = dom.begin(), e = dom.end(); i != e; ++i) {
+                    if (i != dom.begin())
+                        fbuf += ", ";
+                    strmap_t::const_iterator di = dmap.find(*i);
+                    if (di != dmap.end()) {
+                        fbuf += "@ref Qore::";
+                        fbuf += di->second;
+                    }
+                    else {
+                        di = dnmap.find(*i);
+                        assert(di != dnmap.end());
+                        fbuf += "MUST HAVE: @ref Qore::";
+                        fbuf += di->second;
+                    }
+                }
+                fbuf += "\n\n";
+                buf.insert(start, fbuf);
+            }
         }
     }
 
     output_file(fp, buf);
-    return 0;
+    return rc;
 }
 
 class ConstantGroupElement {
@@ -4158,6 +4288,12 @@ public:
         return name.c_str();
     }
 
+    //! returns the source location and name of the declaration for diagnostics
+    std::string getDiagLocation() const {
+        // "line" is the line following the (last line of the) signature
+        return fileName + ":" + std::to_string(line > 1 ? line - 1 : line) + ": " + name + "()";
+    }
+
     operator bool() const {
         return valid;
     }
@@ -4317,7 +4453,7 @@ public:
     }
 
     int serializeDox(FILE* fp) {
-        serialize_dox_comment(fp, docs, dom, flags);
+        int rc = serialize_dox_comment(fp, docs, dom, flags, getDiagLocation());
 
         serializeQoreCppType(fp, return_type);
         fprintf(fp, " %s(", name.c_str());
@@ -4339,7 +4475,7 @@ public:
         }
         fputs(");\n\n", fp);
 
-        return 0;
+        return rc;
     }
 
     void serializeMetadataFunctionJson(FILE* fp, const std::string& ns_path, bool& first) const {
@@ -4605,7 +4741,7 @@ public:
 
             // Handle preprocessor directives
             if (!line.empty() && line[0] == '#') {
-                if (ppState.handleDirective(line, lineNumber, buf)) {
+                if (ppState.handleDirective(line, read_line_number(line, lineNumber), buf)) {
                     continue;
                 }
                 // Not a recognized/tracked directive - add to buf and continue
@@ -4831,17 +4967,21 @@ public:
         // serialize group header doc
         serialize_dox_comment(fp, doc);
 
+        // every function is written even if one fails, so that all errors are reported
+        int rc = 0;
         fputc('\n', fp);
-        for (fmap_t::const_iterator i = fmap.begin(), e = fmap.end(); i != e; ++i)
-            if (i->second->serializeDox(fp))
-                return -1;
+        for (fmap_t::const_iterator i = fmap.begin(), e = fmap.end(); i != e; ++i) {
+            if (i->second->serializeDox(fp)) {
+                rc = -1;
+            }
+        }
 
         // serialize group trailer
         fputs("///@}\n", fp);
 
         outputNamespaceEnd(fp);
 
-        return 0;
+        return rc;
     }
 
     int serializeConstantDox(FILE* fp, bool needs_prefix) {
@@ -4858,10 +4998,14 @@ public:
         // serialize group header doc
         serialize_dox_comment(fp, doc);
 
+        // every constant is written even if one fails, so that all errors are reported
+        int rc = 0;
         fputc('\n', fp);
-        for (cmap_t::const_iterator i = cmap.begin(), e = cmap.end(); i != e; ++i)
-            if (i->second->serializeDox(fp))
-                return -1;
+        for (cmap_t::const_iterator i = cmap.begin(), e = cmap.end(); i != e; ++i) {
+            if (i->second->serializeDox(fp)) {
+                rc = -1;
+            }
+        }
 
         // serialize group trailer
         fputs("///@}\n", fp);
@@ -4870,7 +5014,7 @@ public:
             outputNamespaceEnd(fp);
         }
 
-        return 0;
+        return rc;
     }
 
     bool hasFunctions() const {
@@ -5031,11 +5175,15 @@ public:
         if (!has_funcs)
             return 0;
 
-        for (unsigned i = 0; i < grouplist.size(); ++i)
-            if (grouplist[i]->serializeFunctionDox(fp))
-                return -1;
+        // every group is written even if one fails, so that all errors are reported
+        int rc = 0;
+        for (unsigned i = 0; i < grouplist.size(); ++i) {
+            if (grouplist[i]->serializeFunctionDox(fp)) {
+                rc = -1;
+            }
+        }
 
-        return 0;
+        return rc;
     }
 
     int serializeConstantDox(FILE* fp, bool needs_prefix = false) {
@@ -5043,10 +5191,14 @@ public:
             return 0;
         cdox_done = true;
 
-        for (unsigned i = 0; i < grouplist.size(); ++i)
-            if (grouplist[i]->serializeConstantDox(fp, needs_prefix))
-                return -1;
-        return 0;
+        // every group is written even if one fails, so that all errors are reported
+        int rc = 0;
+        for (unsigned i = 0; i < grouplist.size(); ++i) {
+            if (grouplist[i]->serializeConstantDox(fp, needs_prefix)) {
+                rc = -1;
+            }
+        }
+        return rc;
     }
 
     void serializeMetadataFunctionsJson(FILE* fp, bool& first) const {
@@ -6370,8 +6522,11 @@ public:
                 }
 
                 if (!valid) {
-                    error("cannot find pseudo var name in '%s'\n", pseudo_arg.c_str());
-                    exit(1);
+                    error("%s: cannot find pseudo var name in '%s'\n", getDiagLocation().c_str(),
+                        pseudo_arg.c_str());
+                    // the method is invalid, which stops parsing of the file
+                    CodeBase::valid = false;
+                    return;
                 }
 
                 pseudo_var = pseudo_arg.substr(i, end - i);
@@ -6742,7 +6897,7 @@ public:
         else
             fputs("\npublic:\n", fp);
 
-        serialize_dox_comment(fp, docs, dom, flags);
+        int rc = serialize_dox_comment(fp, docs, dom, flags, getDiagLocation());
 
         //fputs("    ", fp);
         if (attr & QCA_STATIC)
@@ -6769,7 +6924,7 @@ public:
             }
         }
         fputs(const_method ? ") const;\n" : ");\n", fp);
-        return 0;
+        return rc;
     }
 };
 
@@ -7034,6 +7189,7 @@ public:
                     module_public = false;
                 } else if (i->second != "true") {
                     error("prop: '%s': '%s' - must be \"true\" or \"false\"\n", i->first.c_str(), i->second.c_str());
+                    valid = false;
                 }
                 continue;
             }
@@ -7201,7 +7357,11 @@ public:
         }
 
         std::string pkg;
-        FILE* fp = get_java_file(ns, name, pkg);
+        std::unique_ptr<OutputFile> out = get_java_file(ns, name, pkg);
+        if (!out) {
+            return -1;
+        }
+        FILE* fp = out->get();
 
         fprintf(fp, "// Java created from Qore class %s::%s\n", ns.empty() ? "Qore" : ns.c_str(), name.c_str());
 
@@ -7234,7 +7394,7 @@ public:
         }
 
         fprintf(fp, "}\n");
-        return 0;
+        return out->close();
     }
 
     virtual int serializeCpp(FILE* fp) override {
@@ -7457,7 +7617,7 @@ public:
             outputNamespaceStart(fp);
         }
 
-        serialize_dox_comment(fp, doc, dom);
+        int rc = serialize_dox_comment(fp, doc, dom, strlist_t(), fileName + ": class " + name);
 
         size_t nl = name.size();
         if (name[0] == '<' && name[nl - 1] == '>') {
@@ -7504,18 +7664,27 @@ public:
 
         fputs(" {\n", fp);
 
-        for (mmap_t::const_iterator i = normal_mmap.begin(), e = normal_mmap.end(); i != e; ++i)
-            i->second->serializeDox(fp);
+        // every method is written even if one fails, so that all errors are reported
+        for (mmap_t::const_iterator i = normal_mmap.begin(), e = normal_mmap.end(); i != e; ++i) {
+            if (i->second->serializeDox(fp)) {
+                rc = -1;
+            }
+        }
 
-        for (mmap_t::const_iterator i = static_mmap.begin(), e = static_mmap.end(); i != e; ++i)
-            i->second->serializeDox(fp);
+        for (mmap_t::const_iterator i = static_mmap.begin(), e = static_mmap.end(); i != e; ++i) {
+            if (i->second->serializeDox(fp)) {
+                rc = -1;
+            }
+        }
 
         fputs("};\n", fp);
 
-        groups.serializeConstantDox(fp);
+        if (groups.serializeConstantDox(fp)) {
+            rc = -1;
+        }
 
         outputNamespaceEnd(fp);
-        return 0;
+        return rc;
     }
 
     // Emit a Qore-syntax class declaration — enough signature detail for
@@ -7828,7 +7997,7 @@ protected:
 
             // Handle preprocessor directives
             if (!str.empty() && str[0] == '#') {
-                if (ppState.handleDirective(str, lineNumber, buf)) {
+                if (ppState.handleDirective(str, read_line_number(str, lineNumber), buf)) {
                     continue;
                 }
                 // Not a recognized/tracked directive - add to buf and continue
@@ -7904,7 +8073,14 @@ protected:
                 if (!sc.compare(0, 9, "hashdecl ")) {
                     sc.erase(0, 9);
                     checkBuf(buf);
-                    source.push_back(new HashDecl(std::move(str), sc, fp, fileName, lineNumber));
+                    std::unique_ptr<HashDecl> hd(new HashDecl(std::move(str), sc, fp, fileName, lineNumber));
+                    // mark code as invalid if the hashdecl is invalid; the errors have been reported, and parsing
+                    // continues so that any others are reported too
+                    if (!*hd) {
+                        valid = false;
+                    }
+                    source.push_back(hd.get());
+                    hd.release();
                     continue;
                 }
 
@@ -8234,11 +8410,11 @@ public:
         if (unitTestFileName.empty()) {
             return 0;
         }
-        FILE* fp = fopen(unitTestFileName.c_str(), cpp_open_flag);
-        if (!fp) {
-            error("%s: %s\n", unitTestFileName.c_str(), strerror(errno));
+        OutputFile out(unitTestFileName, cpp_open_flag);
+        if (!out) {
             return -1;
         }
+        FILE* fp = out.get();
         log(LL_INFO, "creating unit test file %s -> %s\n", fileName, unitTestFileName.c_str());
 
         fprintf(fp, "#!/usr/bin/env qore\n");
@@ -8276,87 +8452,96 @@ public:
         fprintf(fp, "    }\n");
         fprintf(fp, "\n");
 
+        // every element is written even if one fails, so that all errors are reported
+        int rc = 0;
         for (source_t::const_iterator i = source.begin(), e = source.end(); i != e; ++i) {
             if ((*i)->serializeUnitTest(fp)) {
-                fclose(fp);
-                return -1;
+                rc = -1;
             }
         }
 
         if (groups.serializeUnitTest(fp)) {
-            fclose(fp);
-            return -1;
+            rc = -1;
         }
 
         fprintf(fp, "\n\n} # class Main \n");
 
-        fclose(fp);
+        if (out.close()) {
+            return -1;
+        }
 
         chmod(unitTestFileName.c_str(), 0744);
-        return 0;
+        return rc;
     }
 
     int serializeJavadoc() {
+        // every element is written even if one fails, so that all errors are reported
+        int rc = 0;
         for (auto& i : source) {
             if (i->serializeJavadoc()) {
-                valid = false;
-                return -1;
+                rc = -1;
             }
         }
 
-        return 0;
+        return rc;
     }
 
     int serializeCpp() {
-        FILE* fp = fopen(cppFileName.c_str(), cpp_open_flag);
-        if (!fp) {
-            error("%s: %s\n", cppFileName.c_str(), strerror(errno));
+        OutputFile out(cppFileName, cpp_open_flag);
+        if (!out) {
             return -1;
         }
+        FILE* fp = out.get();
         log(LL_INFO, "creating cpp file %s -> %s\n", fileName, cppFileName.c_str());
 
+        // every element is written even if one fails, so that all errors are reported
+        int rc = 0;
         for (source_t::const_iterator i = source.begin(), e = source.end(); i != e; ++i) {
             if ((*i)->serializeCpp(fp)) {
-                valid = false;
-                fclose(fp);
-                return -1;
+                rc = -1;
             }
         }
 
         if (groups.serializeFunctionCpp(fp, rootName.c_str())) {
-            fclose(fp);
-            return -1;
+            rc = -1;
         }
         if (groups.serializeConstantCpp(fp, rootName.c_str())) {
-            fclose(fp);
-            return -1;
+            rc = -1;
         }
 
-        fclose(fp);
-        return 0;
+        if (out.close()) {
+            return -1;
+        }
+        return rc;
     }
 
     int serializeDox() {
-        FILE* fp = fopen(doxFileName.c_str(), dox_open_flag);
-        if (!fp) {
-            error("%s: %s\n", doxFileName.c_str(), strerror(errno));
+        OutputFile out(doxFileName, dox_open_flag);
+        if (!out) {
             return -1;
         }
+        FILE* fp = out.get();
         log(LL_INFO, "creating dox file %s -> %s\n", fileName, doxFileName.c_str());
 
+        // every element is written even if one fails, so that all errors are reported
+        int rc = 0;
         for (source_t::const_iterator i = source.begin(), e = source.end(); i != e; ++i) {
             if ((*i)->serializeDox(fp)) {
-                valid = false;
-                fclose(fp);
-                return -1;
+                rc = -1;
             }
         }
 
-        groups.serializeFunctionDox(fp);
-        groups.serializeConstantDox(fp, true);
-        fclose(fp);
+        if (groups.serializeFunctionDox(fp)) {
+            rc = -1;
+        }
+        if (groups.serializeConstantDox(fp, true)) {
+            rc = -1;
+        }
 
-        return 0;
+        if (out.close()) {
+            return -1;
+        }
+        return rc;
     }
 
     // Emit a Qore-syntax compile-time stub file (.stub.qc) suitable for
@@ -8376,11 +8561,11 @@ public:
         // qore_wrap_qpp_value) always uses one qpp invocation per
         // .qpp file, so this is defensive for the multi-file CLI path
         // only.
-        FILE* fp = fopen(stubFileName.c_str(), cpp_open_flag);
-        if (!fp) {
-            error("%s: %s\n", stubFileName.c_str(), strerror(errno));
+        OutputFile out(stubFileName, cpp_open_flag);
+        if (!out) {
             return -1;
         }
+        FILE* fp = out.get();
         log(LL_INFO, "creating stub file %s -> %s\n", fileName, stubFileName.c_str());
 
         // Header: identify source + declare parse directives that
@@ -8397,32 +8582,30 @@ public:
         fputs("%require-types\n", fp);
         fputs("\n", fp);
 
+        // every element is written even if one fails, so that all errors are reported
+        int rc = 0;
         for (source_t::const_iterator i = source.begin(), e = source.end(); i != e; ++i) {
             if ((*i)->serializeStub(fp)) {
-                valid = false;
-                fclose(fp);
-                return -1;
+                rc = -1;
             }
         }
 
         if (groups.serializeStub(fp)) {
-            valid = false;
-            fclose(fp);
-            return -1;
+            rc = -1;
         }
 
-        fclose(fp);
-        return 0;
+        if (out.close()) {
+            return -1;
+        }
+        return rc;
     }
 
     int serializeMetadata() {
         if (opts.metadata_fn.empty()) {
             return 0;
         }
-        std::unique_ptr<FILE, int(*)(FILE*)> fp(
-            fopen(opts.metadata_fn.c_str(), "w"), fclose);
+        OutputFile fp(opts.metadata_fn, "w");
         if (!fp) {
-            error("%s: %s\n", opts.metadata_fn.c_str(), strerror(errno));
             return -1;
         }
         log(LL_INFO, "creating metadata file %s -> %s\n", fileName, opts.metadata_fn.c_str());
@@ -8476,7 +8659,7 @@ public:
         fputs("]", fp.get());
 
         fputs("}\n", fp.get());
-        return 0;
+        return fp.close();
     }
 
     operator bool() const {
@@ -8485,46 +8668,42 @@ public:
 };
 
 int do_table_file() {
-    FILE* ifp = fopen(opts.table_fn.c_str(), "r");
+    std::unique_ptr<FILE, int(*)(FILE*)> ifp(fopen(opts.table_fn.c_str(), "r"), fclose);
     if (!ifp) {
         error("%s: %s\n", opts.table_fn.c_str(), strerror(errno));
         return -1;
     }
 
-    FILE* ofp = fopen(opts.output_fn.c_str(), "w");
-    if (!ofp) {
-        error("%s: %s\n", opts.output_fn.c_str(), strerror(errno));
-        fclose(ifp);
-        return -1;
-    }
-
     std::string buf;
     while (true) {
-        int c = fgetc(ifp);
+        int c = fgetc(ifp.get());
         if (c == EOF)
             break;
 
         buf += c;
     }
-    fclose(ifp);
+    if (ferror(ifp.get())) {
+        error("%s: error reading file\n", opts.table_fn.c_str());
+        return -1;
+    }
+    ifp.reset();
+
+    OutputFile ofp(opts.output_fn, "w");
+    if (!ofp) {
+        return -1;
+    }
 
     // the whole file is processed as one buffer, so table diagnostics can report exact line numbers
     table_diag_file = opts.table_fn.c_str();
     table_diag_base_line = 1;
 
-    serialize_dox_comment(ofp, buf);
-    fclose(ofp);
+    serialize_dox_comment(ofp.get(), buf);
 
     table_diag_file = nullptr;
     table_diag_base_line = 0;
 
-    // remove the output in strict mode; otherwise the stale file is newer than its input and the
-    // next build would silently accept the broken documentation
-    if (opts.table_strict && table_issues) {
-        unlink(opts.output_fn.c_str());
-    }
-
-    return 0;
+    // in strict mode, table issues are errors, so the output is removed with the other outputs of the failed run
+    return ofp.close();
 }
 
 void init() {
@@ -8856,41 +9035,66 @@ int main(int argc, char* argv[]) {
     // initialize static reference data
     init();
 
+    // true if an output could not be generated completely
+    bool failed = false;
+
     for (int i = 0; i < argc; ++i) {
         Code code(argv[i], i && !opts.output_fn.empty(), i && !opts.dox_fn.empty());
         if (!code) {
-            error("please correct the errors above and try again\n");
-            exit(1);
+            // parsing stops at an error it cannot recover from; later input files are not processed, because the
+            // definitions collected from a file (function groups, qppval and qppinit values) are global
+            failed = true;
+            break;
         }
+
+        // every output is written even if one fails, so that all errors are reported in one run
+
         // create cpp output file
         if (code.serializeCpp())
-            return -1;
+            failed = true;
 
         // create unit test output file
         if (code.serializeUnitTest())
-            return -1;
+            failed = true;
 
         // create dox output file
-        code.serializeDox();
+        if (code.serializeDox())
+            failed = true;
 
         // create javadoc output file
-        code.serializeJavadoc();
+        if (code.serializeJavadoc())
+            failed = true;
 
         // create metadata output file
         if (code.serializeMetadata())
-            return -1;
+            failed = true;
 
         // create Qore-syntax compile-time stub output (--stub-output=)
         if (code.serializeStub())
-            return -1;
+            failed = true;
     }
 
-    if (!opts.table_fn.empty())
-        do_table_file();
+    if (!opts.table_fn.empty() && do_table_file())
+        failed = true;
 
-    if (opts.table_strict && table_issues) {
-        error("%u documentation table issue%s found; see design/doc-tables.md\n", table_issues,
-            table_issues == 1 ? "" : "s");
+    // every failure is reported where it is found; this makes sure that one that was not still fails the run
+    if (failed && !error_count) {
+        error("an output could not be generated\n");
+    }
+
+    if (error_count) {
+        // the summary lines below are not counted
+        unsigned errors = error_count;
+        bool removed = !output_files.empty();
+        remove_output_files();
+        // in strict mode, every table issue has been reported as an error
+        if (opts.table_strict && table_issues) {
+            error("%u documentation table issue%s found; see design/doc-tables.md\n", table_issues,
+                table_issues == 1 ? "" : "s");
+        }
+        error("%u error%s found%s; please correct the error%s above and try again\n", errors,
+            errors == 1 ? "" : "s", removed ? " and the output files of this run were removed" : "",
+            errors == 1 ? "" : "s");
         return 1;
     }
 
