@@ -125,6 +125,12 @@ DatasourcePool::DatasourcePool(ExceptionSink* xsink, DBIDriver* ndsl, const char
 }
 
 DatasourcePool::DatasourcePool(const DatasourcePool& old, ExceptionSink* xsink) :
+    DatasourcePool(old, CopyLock(old), xsink) {
+}
+
+// the configuration, the timeouts and the warning callback of the pool that is copied are changed with its lock held,
+// so they are copied with it held as well
+DatasourcePool::DatasourcePool(const DatasourcePool& old, CopyLock&& lock, ExceptionSink* xsink) :
     pool(new Datasource*[old.max]),
     tid_list(new int[old.max]),
     min(old.min),
@@ -133,13 +139,15 @@ DatasourcePool::DatasourcePool(const DatasourcePool& old, ExceptionSink* xsink) 
     wait_count(0),
     wait_max(0),
     tl_warning_ms(old.tl_warning_ms),
-    tl_timeout_ms(old.getErrorTimeout()),
+    tl_timeout_ms(old.tl_timeout_ms),
     stats_reqs(0),
     stats_hits(0),
     warning_callback(old.warning_callback ? old.warning_callback->refRefSelf() : nullptr),
     callback_arg(old.callback_arg.refSelf()),
     config(old.config),
     valid(false) {
+    // the connections of the copy are opened without the lock of the pool that was copied
+    lock.unlock();
     init(xsink);
 }
 

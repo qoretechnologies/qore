@@ -184,6 +184,36 @@ protected:
     */
     DLLLOCAL SqlMutationContext* getOrCreateMutationContext();
 
+    //! holds the lock of a pool while it is copied; see the copy constructor
+    class CopyLock {
+    public:
+        DLLLOCAL explicit CopyLock(const DatasourcePool& p)
+                : lck(static_cast<QoreThreadLock*>(const_cast<DatasourcePool*>(&p))) {
+            lck->lock();
+        }
+
+        DLLLOCAL ~CopyLock() {
+            unlock();
+        }
+
+        CopyLock(const CopyLock&) = delete;
+        CopyLock& operator=(const CopyLock&) = delete;
+
+        //! releases the lock early
+        DLLLOCAL void unlock() {
+            if (lck) {
+                lck->unlock();
+                lck = nullptr;
+            }
+        }
+
+    private:
+        QoreThreadLock* lck;
+    };
+
+    //! copies the pool with the lock of the pool that is copied held, which the caller acquires with \a lock
+    DLLLOCAL DatasourcePool(const DatasourcePool& old, CopyLock&& lock, ExceptionSink* xsink);
+
     DLLLOCAL Datasource* getAllocatedDS();
     //! returns the connection allocated to the current thread, or nullptr if it holds none
     DLLLOCAL Datasource* findAllocatedDS();

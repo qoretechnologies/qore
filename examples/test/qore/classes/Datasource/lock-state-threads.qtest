@@ -34,6 +34,7 @@ class DatasourceLockStateThreadsTest inherits QUnit::Test {
         addTestCase("the lock timeout is set while another thread uses the lock", \testSetLockTimeout());
         addTestCase("the pool error timeout is set while other threads wait for a connection", \testSetPoolTimeout());
         addTestCase("the autocommit flag is read while another thread sets it", \testAutoCommit());
+        addTestCase("a pool is copied while another thread changes its configuration", \testPoolCopy());
         set_return_value(main());
     }
 
@@ -185,4 +186,46 @@ class DatasourceLockStateThreadsTest inherits QUnit::Test {
             }
         }
         done.waitForZero();
+
+        assertTrue(on <= Rounds);
+        # the last value set by the other thread (Rounds is even, so the last round sets False)
+        assertFalse(ds.getAutoCommit(), "the value set last is the current one");
+        checkLockUsers(errors);
+    }
+
+    testPoolCopy() {
+        DatasourcePool pool(ConnStr + "{min=1,max=2}");
+        Counter start(1);
+        Counter done(1);
+        Queue errors();
+        background sub () {
+            on_exit done.dec();
+            try {
+                start.waitForZero();
+                Queue q();
+                for (int i = 0; i < Rounds; ++i) {
+                    pool.setWarningCallback(60s, sub () {}, i);
+                    pool.setEventQueue(q, i);
+                    pool.clearWarningCallback();
+                    pool.clearEventQueue();
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                errors.push(sprintf("%s: %s", ex.err, ex.desc));
+            }
+        }();
+        start.dec();
+
+        int bad = 0;
+        for (int i = 0; i < 20; ++i) {
+            DatasourcePool copy = pool.copy();
+            if (copy.getConfigString() != pool.getConfigString()) {
+                ++bad;
+            }
+            delete copy;
+        }
+        done.waitForZero();
+
+        assertEq(0, bad, "every copy has the configuration of the pool");
+        checkLockUsers(errors);
+    }
 }
