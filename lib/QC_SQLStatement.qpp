@@ -522,6 +522,14 @@ nothing SQLStatement::define() {
     @code{.py}
 stmt.close();
     @endcode
+
+    @note No connection is made to close a statement (since %Qore 3.0): a statement that holds no connection has
+    nothing to close, so a closed @ref Qore::SQL::Datasource "Datasource" is not opened again, and a
+    @ref Qore::SQL::DatasourcePool "DatasourcePool" does not give the thread a connection; this also applies when the
+    object is destroyed
+
+    @throw SQLSTATEMENT-ERROR the statement was executed on a @ref Qore::SQL::DatasourcePool "DatasourcePool"
+    connection that another thread holds
  */
 nothing SQLStatement::close() {
    stmt->close(xsink);

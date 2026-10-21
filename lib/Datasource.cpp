@@ -1377,7 +1377,18 @@ int Datasource::open(ExceptionSink* xsink) {
 }
 
 int Datasource::close() {
-    return priv->close();
+    if (!priv->isopen) {
+        return -1;
+    }
+    // no caller can receive an error closing the connection here
+    ExceptionSink xsink;
+    priv->close(&xsink);
+    qore_dbi_private::reportCloseWarnings(this, xsink);
+    return 0;
+}
+
+int Datasource::close(ExceptionSink* xsink) {
+    return priv->close(xsink);
 }
 
 void Datasource::connectionAborted() {
@@ -1405,9 +1416,10 @@ bool Datasource::wasConnectionAborted() const {
 // forces a close and open to reset a database connection
 void Datasource::reset(ExceptionSink* xsink) {
     if (priv->isopen) {
-        // close the Datasource
-        qore_dbi_private::get(*priv->dsl)->close(this);
-        priv->isopen = false;
+        // close the Datasource and the statements prepared on it; it is not reopened if the close raised an error
+        if (priv->close(xsink)) {
+            return;
+        }
 
         // open the connection
         open(xsink);

@@ -54,8 +54,32 @@ public:
     // the action command
     char cmd;
 
-    DLLLOCAL DBActionHelper(QoreSQLStatement& n_stmt, ExceptionSink* n_xsink, char n_cmd = DAH_NOCHANGE) : stmt(n_stmt), xsink(n_xsink), cmd(n_cmd) {
-        Datasource* newds = stmt.dsh->helperStartAction(xsink, nt);
+    // true if no connection was made for the action because the statement holds none
+    bool no_connection = false;
+
+    /** @param connect if false, no connection is made for the action: a closed datasource is not opened, and a pool
+        does not give the thread a connection if it holds none; the helper is then invalid with no exception raised,
+        which noConnection() reports
+    */
+    DLLLOCAL DBActionHelper(QoreSQLStatement& n_stmt, ExceptionSink* n_xsink, char n_cmd = DAH_NOCHANGE,
+            bool connect = true) : stmt(n_stmt), xsink(n_xsink), cmd(n_cmd) {
+        bool connected = true;
+        Datasource* newds = connect
+            ? stmt.dsh->helperStartAction(xsink, nt)
+            : stmt.dsh->helperStartActionNoConnect(xsink, nt, connected);
+        if (!connected) {
+            assert(!newds);
+            // the statements of a datasource are closed when it is closed, so the statement can only have driver
+            // data here on a pool connection that another thread holds
+            if (stmt.priv->data) {
+                assert(dynamic_cast<DatasourcePool*>(stmt.dsh));
+                xsink->raiseException("SQLSTATEMENT-ERROR", "cannot execute an action in another thread with an "
+                    "allocated connection from a DatasourcePool");
+                return;
+            }
+            no_connection = true;
+            return;
+        }
         // issue #2334
         if (newds && stmt.priv->ds && newds != stmt.priv->ds) {
             // can only happen with a DatasourcePool, otherwise the action above will block
@@ -121,6 +145,11 @@ public:
 
     DLLLOCAL operator bool() const {
         return valid;
+    }
+
+    //! returns true if no connection was made because the statement holds none; see the constructor
+    DLLLOCAL bool noConnection() const {
+        return no_connection;
     }
 
     DLLLOCAL bool inTransaction() const {
@@ -577,11 +606,14 @@ bool QoreSQLStatement::currentThreadInTransaction(ExceptionSink* xsink) {
 }
 
 int QoreSQLStatement::close(ExceptionSink* xsink) {
-   DBActionHelper dba(*this, xsink, DAH_NOCHANGE);
-   if (!dba)
-      return -1;
+    // no connection is made to close the statement: a statement that holds none has no driver data to free, so a
+    // closed datasource is not opened again, and a pool does not give the thread a connection, only to close it
+    DBActionHelper dba(*this, xsink, DAH_NOCHANGE, false);
+    if (!dba) {
+        return dba.noConnection() ? 0 : -1;
+    }
 
-   return closeIntern(xsink);
+    return closeIntern(xsink);
 }
 
 int QoreSQLStatement::commit(ExceptionSink* xsink) {

@@ -389,10 +389,14 @@ delete db;
     @endcode
 
     @throw DATASOURCEPOOL-ERROR The destructor was called while a transaction was still in progress
+
+    @note The connections of the pool are closed when the object is destroyed and no other thread is using the pool;
+    an error closing a connection is raised as an exception by DBI drivers that can report one (since %Qore 3.0)
  */
 DatasourcePool::destructor() {
    ds->destructor(xsink);
-   ds->deref();
+   // the last reference closes the pool's connections, where an error closing one is raised
+   ds->deref(xsink);
 }
 
 //! Creates a new Datasource object with the same driver as the original and copies of all the connection parameters

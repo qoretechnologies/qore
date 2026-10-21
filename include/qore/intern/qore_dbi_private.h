@@ -86,6 +86,8 @@ struct dbi_driver_opt {
 struct DBIDriverFunctions {
     q_dbi_open_t open = nullptr;
     q_dbi_close_t close = nullptr;
+    // called instead of "close" when registered
+    q_dbi_close_sink_t close_sink = nullptr;
     q_dbi_select_t select = nullptr;
     q_dbi_select_rows_t selectRows = nullptr;
     q_dbi_select_typed_t selectTyped = nullptr;
@@ -177,8 +179,9 @@ struct qore_dbi_private {
                 f.opt.set(ds, hi.getKey(), hi.get(), xsink);
                 if (*xsink) {
                     // the connection cannot be used as configured, and the datasource stays closed: the driver
-                    // closes it here, otherwise the next open or the datasource's destruction would leave it behind
-                    f.close(ds);
+                    // closes it here, otherwise the next open or the datasource's destruction would leave it behind;
+                    // the option error is the one reported, so an error closing the connection is a warning event
+                    closeWithWarnings(ds);
                     return -1;
                 }
             }
@@ -186,9 +189,20 @@ struct qore_dbi_private {
         return rc;
     }
 
-    DLLLOCAL int close(Datasource* ds) const {
-        return f.close(ds);
-    }
+    //! closes the connection; the connection is closed after the call in every case
+    /** @return 0 for OK, -1 if the driver reported an error closing the connection, which was added to \a xsink
+    */
+    DLLLOCAL int close(Datasource* ds, ExceptionSink* xsink) const;
+
+    //! closes the connection where an error closing it cannot be raised; the error is a DBI warning event
+    DLLLOCAL void closeWithWarnings(Datasource* ds) const;
+
+    //! reports the errors in \a xsink, raised closing a connection, as DBI warning events on the datasource's queue
+    /** used where no caller can receive an error closing the connection, or where the close only cleans up after an
+        error that is already being reported; the errors are discarded if the datasource has no event queue, and
+        \a xsink is empty after the call
+    */
+    DLLLOCAL static void reportCloseWarnings(Datasource* ds, ExceptionSink& xsink);
 
     DLLLOCAL QoreValue select(Datasource* ds, const QoreString* sql, const QoreListNode* args, ExceptionSink* xsink) const {
         DbiArgHelper dargs(args, (caps & DBI_CAP_HAS_NUMBER_SUPPORT), xsink);

@@ -424,8 +424,11 @@ struct qore_ds_private {
         if (getMutationCtx()) {
             mutation_conn_lost = true;
         }
-        // close the datasource
-        close();
+        // close the datasource; the connection is lost, and the driver reports that, so an error closing it is a
+        // warning event
+        ExceptionSink close_xsink;
+        close(&close_xsink);
+        qore_dbi_private::reportCloseWarnings(ds, close_xsink);
     }
 
     DLLLOCAL void connectionLost(ExceptionSink* xsink) {
@@ -525,19 +528,32 @@ struct qore_ds_private {
         return rc;
     }
 
-    DLLLOCAL int close() {
+    //! closes the connection and the statements prepared on it, if it is open
+    /** the datasource is closed after the call in every case
+
+        @return 0 if the connection was closed without an error or was not open, -1 if an error closing it or one of
+        its statements was added to \a xsink
+    */
+    DLLLOCAL int close(ExceptionSink* xsink) {
+        assert(xsink);
         if (isopen) {
             //printd(5, "qore_ds_private::close() this: %p in_transaction: %d active_transaction: %d\n", this, in_transaction, active_transaction);
             if (bulk_load_active && !connection_aborted) {
                 // A native protocol session cannot survive a close/reopen cycle.  Give the driver a
                 // final abort callback so it can close its wire-level state and stream boundary.
-                ExceptionSink xsink;
+                ExceptionSink bulk_xsink;
                 bulk_load_active = false;
-                qore_dbi_private::get(*dsl)->bulkLoadEnd(ds, false, &xsink);
-                xsink.clear();
+                qore_dbi_private::get(*dsl)->bulkLoadEnd(ds, false, &bulk_xsink);
+                bulk_xsink.clear();
             }
             bulk_load_active = false;
-            qore_dbi_private::get(*dsl)->close(ds);
+            // what is raised here is checked in a sink of its own, as the caller's can already hold an exception
+            ExceptionSink close_xsink;
+            // the statements prepared on the connection are closed while it is still open, as their driver data
+            // belongs to it; they stay registered, with their datasource, so that an action in progress - one in
+            // which the driver aborted the connection, for example - still releases the connection when it ends
+            transactionDone(false, true, &close_xsink);
+            qore_dbi_private::get(*dsl)->close(ds, &close_xsink);
             isopen = false;
             in_transaction = false;
             active_transaction = false;
@@ -549,9 +565,13 @@ struct qore_ds_private {
                 tx_seq = 0;
             }
             clearTypedResultHashDeclCache();
-            return 0;
+            if (!close_xsink) {
+                return 0;
+            }
+            xsink->assimilate(close_xsink);
+            return -1;
         }
-        return -1;
+        return 0;
     }
 
     DLLLOCAL void setStatementKeepLock(QoreSQLStatement* stmt) {

@@ -43,6 +43,18 @@ public:
         return helperStartActionImpl(xsink, new_transaction);
     }
 
+    //! starts an action with the connection the statement can use without making one
+    /** a closed datasource is not opened, and a pool does not give the thread a connection if it holds none
+
+        @param connected set to false if there is no connection to use, in which case nullptr is returned with no
+        exception raised; not changed otherwise
+
+        @return the datasource for the action, or nullptr if there is none or an exception was raised
+    */
+    DLLLOCAL Datasource* helperStartActionNoConnect(ExceptionSink* xsink, bool& new_transaction, bool& connected) {
+        return helperStartActionNoConnectImpl(xsink, new_transaction, connected);
+    }
+
     DLLLOCAL void helperDestructor(QoreSQLStatement* s, ExceptionSink* xsink) {
         helperDestructorImpl(s, xsink);
     }
@@ -58,6 +70,8 @@ public:
     // must dereference the datasource-providing object
     virtual void helperDestructorImpl(QoreSQLStatement* s, ExceptionSink* xsink) = 0;
     virtual Datasource* helperStartActionImpl(ExceptionSink* xsink, bool& new_transaction) = 0;
+    virtual Datasource* helperStartActionNoConnectImpl(ExceptionSink* xsink, bool& new_transaction,
+        bool& connected) = 0;
     virtual Datasource* helperEndActionImpl(char cmd, bool new_transaction, ExceptionSink* xsink) = 0;
     virtual DatasourceStatementHelper* helperRefSelfImpl() = 0;
 };

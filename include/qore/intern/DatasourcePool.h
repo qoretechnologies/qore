@@ -185,6 +185,10 @@ protected:
     DLLLOCAL SqlMutationContext* getOrCreateMutationContext();
 
     DLLLOCAL Datasource* getAllocatedDS();
+    //! returns the connection allocated to the current thread, or nullptr if it holds none
+    DLLLOCAL Datasource* findAllocatedDS();
+    //! closes all connections of the pool; called when the last reference to the pool is released
+    DLLLOCAL void closeConnections(ExceptionSink* xsink);
     DLLLOCAL Datasource* getDSIntern(bool& new_ds, int64& wait_total, ExceptionSink* xsink);
     DLLLOCAL Datasource* getDS(bool& new_ds, ExceptionSink* xsink);
     DLLLOCAL void freeDS(ExceptionSink* xsink);
@@ -209,6 +213,8 @@ public:
         // if the object is obliterated (due to a constructor error in a child class or a serialization error), make sure
         // it's destroyed properly
         if (ROdereference()) {
+            // the connections are closed here, where an error closing one can be raised
+            closeConnections(xsink);
             config.del(xsink);
             delete this;
         }
@@ -299,6 +305,17 @@ public:
 
     DLLLOCAL virtual Datasource* helperStartActionImpl(ExceptionSink* xsink, bool& new_transaction) {
         return getDS(new_transaction, xsink);
+    }
+
+    DLLLOCAL virtual Datasource* helperStartActionNoConnectImpl(ExceptionSink* xsink, bool& new_transaction,
+            bool& connected) {
+        // only a connection that the thread already holds is used
+        new_transaction = false;
+        Datasource* ds = findAllocatedDS();
+        if (!ds) {
+            connected = false;
+        }
+        return ds;
     }
 
     DLLLOCAL virtual Datasource* helperEndActionImpl(char cmd, bool new_transaction, ExceptionSink* xsink) {

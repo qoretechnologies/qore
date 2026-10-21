@@ -33,6 +33,7 @@
 #include <qore/Qore.h>
 
 #include "qore/intern/qore_dbi_private.h"
+#include "qore/intern/QoreException.h"
 
 #include <cassert>
 #include <cctype>
@@ -103,9 +104,11 @@ qore_dbi_method_list::~qore_dbi_method_list() {
     delete priv;
 }
 
-// covers open, commit, rollback, and begin transaction
+// covers open, close_sink, commit, rollback, and begin transaction: q_dbi_close_sink_t is the same function type as
+// q_dbi_open_t, so a close_sink method always resolves to this overload
 void qore_dbi_method_list::add(int code, q_dbi_open_t method) {
     assert(code == QDBI_METHOD_OPEN
+        || code == QDBI_METHOD_CLOSE_SINK
         || code == QDBI_METHOD_COMMIT
         || code == QDBI_METHOD_ROLLBACK
         || code == QDBI_METHOD_BEGIN_TRANSACTION
@@ -343,6 +346,10 @@ qore_dbi_private::qore_dbi_private(const char* nme, const qore_dbi_mlist_private
                 assert(!f.close);
                 f.close = (q_dbi_close_t)(*i).second;
                 break;
+            case QDBI_METHOD_CLOSE_SINK:
+                assert(!f.close_sink);
+                f.close_sink = reinterpret_cast<q_dbi_close_sink_t>((*i).second);
+                break;
             case QDBI_METHOD_SELECT:
                 assert(!f.select);
                 f.select = (q_dbi_select_t)(*i).second;
@@ -526,9 +533,10 @@ qore_dbi_private::qore_dbi_private(const char* nme, const qore_dbi_mlist_private
     } else {
         assert(!f.bulk_load_begin && !f.bulk_load_rows && !f.bulk_load_end);
     }
-    // ensure minimum methods are defined
+    // ensure minimum methods are defined; a driver that also supports earlier Qore versions registers both close
+    // methods
     assert(f.open);
-    assert(f.close);
+    assert(f.close || f.close_sink);
     assert(f.select);
     assert(f.selectRows);
     assert(f.execSQL);
@@ -559,6 +567,52 @@ qore_dbi_private::qore_dbi_private(const char* nme, const qore_dbi_mlist_private
 
     // copy options
     omap = methods.omap;
+}
+
+int qore_dbi_private::close(Datasource* ds, ExceptionSink* xsink) const {
+    assert(xsink);
+    if (!f.close_sink) {
+        // this method cannot report an error, and its return value is ignored as documented
+        f.close(ds);
+        return 0;
+    }
+    // a sink of its own, so that what the driver reports is checked against its return value even when the caller's
+    // sink already holds an exception
+    ExceptionSink close_xsink;
+    int rc = f.close_sink(ds, &close_xsink);
+    assert(!rc == !close_xsink);
+    // the driver releases its connection data in every case
+    assert(!ds->getPrivateData());
+    if (!close_xsink) {
+        return 0;
+    }
+    xsink->assimilate(close_xsink);
+    return -1;
+}
+
+void qore_dbi_private::closeWithWarnings(Datasource* ds) const {
+    ExceptionSink xsink;
+    close(ds, &xsink);
+    reportCloseWarnings(ds, xsink);
+}
+
+void qore_dbi_private::reportCloseWarnings(Datasource* ds, ExceptionSink& xsink) {
+    for (QoreException* e = xsink.getException(); e; e = e->next) {
+        Queue* q;
+        ReferenceHolder<QoreHashNode> h(ds->getEventQueueHash(q, QDBI_EVENT_WARNING), nullptr);
+        if (!h) {
+            break;
+        }
+        QoreStringValueHelper err(e->err);
+        QoreStringValueHelper desc(e->desc);
+        h->setKeyValue("warning", new QoreStringNode(**err), nullptr);
+        h->setKeyValue("desc", new QoreStringNode(**desc), nullptr);
+        if (!e->arg.isNothing()) {
+            h->setKeyValue("info", e->arg.refSelf(), nullptr);
+        }
+        q->pushAndTakeRef(h.release());
+    }
+    xsink.clear();
 }
 
 QoreListNode* qore_dbi_private::getCapList() const {

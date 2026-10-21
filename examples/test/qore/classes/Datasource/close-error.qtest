@@ -1,0 +1,247 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class DatasourceCloseErrorTest
+
+#! A DBI driver can report an error closing a connection
+/** The close method of a DBI driver had no exception sink and its return value was ignored, so a connection that
+    could not be closed cleanly was never reported.  A driver that registers the close method with an exception sink
+    (QDBI_METHOD_CLOSE_SINK) now has its error raised wherever the close was requested: Datasource::close(),
+    Datasource::reset(), the destruction of a Datasource or a DatasourcePool.  A close that cleans up after a failure
+    that is already being reported - a lost connection, an option that failed as the connection was opened - does not
+    raise it, but reports it as a DBI warning event on the datasource's event queue.
+
+    A datasource is closed when its close reports an error: the driver releases the connection in every case.
+
+    The "dbitest" mock driver's "close" fault makes its close report DBI-TEST-CLOSE-ERROR; "dbitestlegacyclose"
+    registers only the close method that cannot report errors.  Its "live-connections" option reports the number of
+    the driver's connections in the process.
+*/
+class DatasourceCloseErrorTest inherits QUnit::Test {
+    public {
+        const ConnStr = "dbitest:u/p@db";
+        const LegacyConnStr = "dbitestlegacyclose:u/p@db";
+
+        #! the event type of DBI warning events (QDBI_EVENT_WARNING in the C++ API)
+        const DbiEventWarning = 1;
+    }
+
+    private {
+        #! an open datasource that reports the number of the driver's connections in the process
+        Datasource monitor(ConnStr);
+    }
+
+    constructor() : QUnit::Test("DatasourceCloseErrorTest", "1.0", \ARGV) {
+        addTestCase("close", \testClose());
+        addTestCase("close in a transaction", \testCloseInTransaction());
+        addTestCase("destruction", \testDestruction());
+        addTestCase("reset", \testReset());
+        addTestCase("pool destruction", \testPool());
+        addTestCase("statement closed with the datasource", \testStatementClose());
+        addTestCase("lost connection", \testLostConnection());
+        addTestCase("option failing on open", \testOpenOptionFailure());
+        addTestCase("driver without the new close method", \testLegacyClose());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        monitor.open();
+    }
+
+    int liveConnections() {
+        return monitor.getOption("live-connections");
+    }
+
+    #! returns an open datasource whose close reports an error
+    Datasource getFailingDs() {
+        Datasource ds(ConnStr);
+        ds.open();
+        ds.setOption("fault", "close");
+        return ds;
+    }
+
+    #! returns the error codes of an exception and of the exceptions chained to it
+    list<string> getErrors(*hash<ExceptionInfo> ex) {
+        list<string> rv = ();
+        *hash<ExceptionInfo> e = ex;
+        while (e) {
+            rv += e.err;
+            e = e.next;
+        }
+        return rv;
+    }
+
+    #! returns the exception raised by a call, or NOTHING
+    *hash<ExceptionInfo> getException(code c) {
+        try {
+            c();
+        } catch (hash<ExceptionInfo> ex) {
+            return ex;
+        }
+    }
+
+    testClose() {
+        int base = liveConnections();
+        Datasource ds = getFailingDs();
+        assertEq(base + 1, liveConnections());
+
+        assertThrows("DBI-TEST-CLOSE-ERROR", "injected failure closing the connection", \ds.close());
+        # the datasource is closed although the close reported an error
+        assertEq(base, liveConnections(), "the connection was released");
+        # closing a closed datasource does nothing
+        ds.close();
+
+        # the datasource is reopened by the next use; the option is kept, so clear the fault before closing it
+        assertEq(1, ds.exec("insert into t values (1)"));
+        assertEq(base + 1, liveConnections());
+        ds.rollback();
+        ds.setOption("fault", "");
+        ds.close();
+        assertEq(base, liveConnections());
+    }
+
+    testCloseInTransaction() {
+        int base = liveConnections();
+        Datasource ds = getFailingDs();
+        ds.exec("insert into t values (1)");
+
+        *hash<ExceptionInfo> ex = getException(\ds.close());
+        # the transaction is rolled back and reported, and the failed close is reported after it
+        assertEq(("DATASOURCE-TRANSACTION-EXCEPTION", "DBI-TEST-CLOSE-ERROR"), getErrors(ex));
+        assertEq(base, liveConnections());
+    }
+
+    testDestruction() {
+        int base = liveConnections();
+        # an explicit delete
+        {
+            Datasource ds = getFailingDs();
+            assertThrows("DBI-TEST-CLOSE-ERROR", sub () { delete ds; });
+            assertFalse(exists ds);
+        }
+        assertEq(base, liveConnections(), "delete");
+
+        # the object going out of scope
+        assertThrows("DBI-TEST-CLOSE-ERROR", sub () {
+            Datasource ds = getFailingDs();
+            ds.exec("insert into t values (1)");
+            ds.commit();
+        });
+        assertEq(base, liveConnections(), "out of scope");
+    }
+
+    testReset() {
+        int base = liveConnections();
+        Datasource ds = getFailingDs();
+
+        assertThrows("DBI-TEST-CLOSE-ERROR", \ds.reset());
+        # the connection is not reopened after a failed close, as after any other failure of the close
+        assertEq(base, liveConnections(), "not reopened");
+
+        # the next use reopens it
+        ds.setOption("fault", "");
+        assertEq(1, ds.exec("insert into t values (1)"));
+        ds.rollback();
+        assertEq(base + 1, liveConnections());
+        ds.reset();
+        assertEq(base + 1, liveConnections(), "reset");
+        ds.close();
+        assertEq(base, liveConnections());
+    }
+
+    testPool() {
+        int base = liveConnections();
+        DatasourcePool pool(ConnStr + "{min=2,max=2,fault=close}");
+        assertEq(base + 2, liveConnections());
+
+        # both connections are closed when the pool is destroyed, and each failure is reported
+        *hash<ExceptionInfo> ex = getException(sub () { delete pool; });
+        assertEq(("DBI-TEST-CLOSE-ERROR", "DBI-TEST-CLOSE-ERROR"), getErrors(ex));
+        assertEq(base, liveConnections());
+    }
+
+    #! the statements of a datasource are closed when the datasource is closed, and their errors are reported
+    testStatementClose() {
+        int base = liveConnections();
+        Datasource ds(ConnStr);
+        ds.open();
+        # the statement prepared on the connection reports an error when it is closed
+        ds.setOption("fault", "stmt-close");
+        SQLStatement stmt(ds);
+        stmt.prepare("insert into t values (%v)");
+        stmt.bind(1);
+        assertTrue(stmt.active());
+
+        assertThrows("DBI-TEST-STMT-CLOSE-ERROR", "injected failure closing a statement", \ds.close());
+        assertFalse(stmt.active(), "the statement was closed with its connection");
+        assertEq(base, liveConnections());
+        # destroying the statement does not report it again
+        delete stmt;
+        assertEq(base, liveConnections());
+    }
+
+    #! a connection lost in a call: the close only cleans up, so its failure is a warning event
+    testLostConnection() {
+        int base = liveConnections();
+        Queue q();
+        Datasource ds(ConnStr);
+        ds.setEventQueue(q, "lost");
+        ds.open();
+        ds.setOption("fault", "abort-on-exec,close");
+
+        *hash<ExceptionInfo> ex = getException(sub () { ds.exec("insert into t values (1)"); });
+        # only the lost connection is raised
+        assertEq(("DBI-TEST-CONNECTION-ERROR",), getErrors(ex));
+        assertEq(base, liveConnections());
+
+        assertEq(1, q.size());
+        hash<auto> event = q.get();
+        assertEq(DbiEventWarning, event.eventtype);
+        assertEq("DBI-TEST-CLOSE-ERROR", event.warning);
+        assertEq("injected failure closing the connection", event.desc);
+        assertEq("lost", event.arg);
+        assertEq("u", event.user);
+        assertEq("db", event.db);
+    }
+
+    #! an option failing as the connection is opened: the close only cleans up, so its failure is a warning event
+    testOpenOptionFailure() {
+        int base = liveConnections();
+        Queue q();
+        # the options are set in order: the close fault is armed before the option that fails
+        Datasource ds(ConnStr + "{fault=close,reject=true}");
+        ds.setEventQueue(q, "open");
+
+        *hash<ExceptionInfo> ex = getException(\ds.open());
+        assertEq(("DBI-TEST-OPTION-ERROR",), getErrors(ex));
+        assertEq(base, liveConnections(), "no connection is left behind");
+
+        assertEq(1, q.size());
+        hash<auto> event = q.get();
+        assertEq(DbiEventWarning, event.eventtype);
+        assertEq("DBI-TEST-CLOSE-ERROR", event.warning);
+        assertEq("open", event.arg);
+    }
+
+    #! a driver that registers only the close method without an exception sink is closed with it
+    testLegacyClose() {
+        int base = liveConnections();
+        Queue q();
+        Datasource ds(LegacyConnStr);
+        ds.setEventQueue(q);
+        ds.open();
+        assertEq(base + 1, liveConnections());
+        # this close cannot report the fault
+        ds.setOption("fault", "close");
+        ds.close();
+        assertEq(base, liveConnections());
+        assertEq(0, q.size());
+    }
+}

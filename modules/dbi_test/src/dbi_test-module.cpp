@@ -42,6 +42,7 @@
 
 #include <atomic>
 #include <cstring>
+#include <memory>
 #include <string>
 
 #ifndef PACKAGE_VERSION
@@ -65,6 +66,7 @@
 
 static DBIDriver* DBID_DBITEST = nullptr;
 static DBIDriver* DBID_DBITEST_NO_BULK = nullptr;
+static DBIDriver* DBID_DBITEST_LEGACY_CLOSE = nullptr;
 
 static void dbitest_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink);
 static void dbitest_module_ns_init(QoreNamespace* rns, QoreNamespace* qns, ExceptionSink& xsink);
@@ -87,7 +89,7 @@ public:
     DbiTestConn(const DbiTestConn&) = delete;
     DbiTestConn& operator=(const DbiTestConn&) = delete;
 
-    //! the currently armed fault; sticky until changed with the "fault" option
+    //! the currently armed faults, separated by commas; sticky until changed with the "fault" option
     std::string fault;
     //! rows reported as affected by exec operations
     int64 rows = 1;
@@ -114,8 +116,21 @@ public:
     //! commit calls
     int64 commits = 0;
 
+    //! returns true if the given fault is one of the armed faults
     DLLLOCAL bool faultIs(const char* f) const {
-        return fault == f;
+        const size_t len = strlen(f);
+        size_t start = 0;
+        while (start <= fault.size()) {
+            size_t end = fault.find(',', start);
+            if (end == std::string::npos) {
+                end = fault.size();
+            }
+            if (end - start == len && !fault.compare(start, len, f)) {
+                return true;
+            }
+            start = end + 1;
+        }
+        return false;
     }
 
     DLLLOCAL void resetBulkStats() {
@@ -135,6 +150,8 @@ public:
     QoreString sql;
     //! index of the next row to return from next()
     unsigned row = 0;
+    //! true if the statement's connection had the "stmt-close" fault armed when the statement was prepared
+    bool fail_close = false;
 };
 
 static DbiTestConn* get_conn(Datasource* ds) {
@@ -234,12 +251,29 @@ static int dbitest_open(Datasource* ds, ExceptionSink* xsink) {
     return 0;
 }
 
+//! the close method of drivers that cannot report an error
 static int dbitest_close(Datasource* ds) {
     DbiTestConn* conn = get_conn(ds);
     ds->setPrivateData(nullptr);
     delete conn;
     return 0;
 }
+
+#ifdef QDBI_METHOD_CLOSE_SINK
+//! the close method that reports errors; the "close" fault makes it report one
+/** As a real driver must, it releases the connection in every case: the datasource is closed after the call even
+    when an error is reported.
+*/
+static int dbitest_close_sink(Datasource* ds, ExceptionSink* xsink) {
+    std::unique_ptr<DbiTestConn> conn(get_conn(ds));
+    ds->setPrivateData(nullptr);
+    if (conn && conn->faultIs("close")) {
+        xsink->raiseException("DBI-TEST-CLOSE-ERROR", "injected failure closing the connection");
+        return -1;
+    }
+    return 0;
+}
+#endif
 
 static QoreValue dbitest_select(Datasource* ds, const QoreString* str, const QoreListNode* args,
         ExceptionSink* xsink) {
@@ -591,6 +625,9 @@ static int dbitest_stmt_prepare(SQLStatement* stmt, const QoreString& str, const
     }
     s->sql = str;
     s->row = 0;
+    Datasource* ds = stmt->getDatasource();
+    DbiTestConn* conn = ds ? get_conn(ds) : nullptr;
+    s->fail_close = conn && conn->faultIs("stmt-close");
     return 0;
 }
 
@@ -676,17 +713,32 @@ static bool dbitest_stmt_next(SQLStatement* stmt, ExceptionSink* xsink) {
 }
 
 static int dbitest_stmt_close(SQLStatement* stmt, ExceptionSink* xsink) {
-    DbiTestStmt* s = get_stmt(stmt);
+    std::unique_ptr<DbiTestStmt> s(get_stmt(stmt));
     stmt->setPrivateData(nullptr);
-    delete s;
+    // the statement is freed in every case
+    if (s && s->fail_close) {
+        xsink->raiseException("DBI-TEST-STMT-CLOSE-ERROR", "injected failure closing a statement");
+        return -1;
+    }
     return 0;
 }
 
 /* ------------------------------------------------------------------------------ module glue */
 
-static void dbitest_add_methods(qore_dbi_method_list& methods, bool bulk_load) {
+//! registers the driver's methods
+/** @param methods the method list to populate
+    @param bulk_load registers the native bulk-load methods
+    @param close_sink registers the close method that reports errors as well as the one that cannot, as a driver
+    that also supports earlier %Qore versions does; otherwise only the one that cannot report errors is registered
+*/
+static void dbitest_add_methods(qore_dbi_method_list& methods, bool bulk_load, bool close_sink) {
     methods.add(QDBI_METHOD_OPEN, dbitest_open);
     methods.add(QDBI_METHOD_CLOSE, dbitest_close);
+#ifdef QDBI_METHOD_CLOSE_SINK
+    if (close_sink) {
+        methods.add(QDBI_METHOD_CLOSE_SINK, dbitest_close_sink);
+    }
+#endif
     methods.add(QDBI_METHOD_SELECT, dbitest_select);
     methods.add(QDBI_METHOD_SELECT_ROWS, dbitest_select_rows);
     methods.add(QDBI_METHOD_SELECT_ROW, dbitest_select_row);
@@ -729,9 +781,10 @@ static void dbitest_add_methods(qore_dbi_method_list& methods, bool bulk_load) {
     methods.add(QDBI_METHOD_OPT_SET, dbitest_opt_set);
     methods.add(QDBI_METHOD_OPT_GET, dbitest_opt_get);
 
-    methods.registerOption(DBITEST_OPT_FAULT, "the fault to inject: \"\", \"select\", \"exec\", \"commit\", "
-        "\"rollback\", \"abort-on-exec\", \"abort-on-commit\", \"stmt-exec\", \"stream\", "
-        "\"bulk-unavailable\", or \"bulk-rows\"", stringTypeInfo);
+    methods.registerOption(DBITEST_OPT_FAULT, "the faults to inject, separated by commas: \"select\", \"exec\", "
+        "\"commit\", \"rollback\", \"abort-on-exec\", \"abort-on-commit\", \"stmt-exec\", \"stream\", "
+        "\"bulk-unavailable\", \"bulk-rows\", \"close\" (closing the connection reports an error), or \"stmt-close\" "
+        "(closing a statement prepared afterwards reports an error); an empty string clears them", stringTypeInfo);
     methods.registerOption(DBITEST_OPT_ROWS, "the number of rows reported as affected by exec operations",
         bigIntTypeInfo);
     methods.registerOption(DBITEST_OPT_STREAM_CHUNK, "the chunk size in bytes used by the simulated bounded stream",
@@ -746,7 +799,7 @@ static void dbitest_add_methods(qore_dbi_method_list& methods, bool bulk_load) {
 
 static void dbitest_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
     qore_dbi_method_list methods;
-    dbitest_add_methods(methods, true);
+    dbitest_add_methods(methods, true, true);
 
     DBID_DBITEST = DBI.registerDriver("dbitest", methods, DBI_CAP_TRANSACTION_MANAGEMENT | DBI_CAP_BIND_BY_VALUE
         | DBI_CAP_HAS_EXECRAW | DBI_CAP_HAS_SELECT_ROW | DBI_CAP_HAS_DESCRIBE);
@@ -754,8 +807,16 @@ static void dbitest_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink
     // A second name with the same deterministic behavior but no native methods proves the capability
     // fallback without depending on any optional external database module.
     qore_dbi_method_list no_bulk_methods;
-    dbitest_add_methods(no_bulk_methods, false);
+    dbitest_add_methods(no_bulk_methods, false, true);
     DBID_DBITEST_NO_BULK = DBI.registerDriver("dbitestnobulk", no_bulk_methods,
+        DBI_CAP_TRANSACTION_MANAGEMENT | DBI_CAP_BIND_BY_VALUE | DBI_CAP_HAS_EXECRAW
+        | DBI_CAP_HAS_SELECT_ROW | DBI_CAP_HAS_DESCRIBE);
+
+    // A third name registers only the close method that cannot report an error, as a driver written for earlier
+    // Qore versions does, so that the fallback to it is tested.
+    qore_dbi_method_list legacy_close_methods;
+    dbitest_add_methods(legacy_close_methods, false, false);
+    DBID_DBITEST_LEGACY_CLOSE = DBI.registerDriver("dbitestlegacyclose", legacy_close_methods,
         DBI_CAP_TRANSACTION_MANAGEMENT | DBI_CAP_BIND_BY_VALUE | DBI_CAP_HAS_EXECRAW
         | DBI_CAP_HAS_SELECT_ROW | DBI_CAP_HAS_DESCRIBE);
 }

@@ -210,7 +210,7 @@ int ManagedDatasource::acquireLock(ExceptionSink* xsink, bool& new_lock) {
     return grabLock(xsink);
 }
 
-int ManagedDatasource::startDBAction(ExceptionSink *xsink, bool &new_transaction) {
+int ManagedDatasource::startDBAction(ExceptionSink *xsink, bool &new_transaction, bool open) {
     AutoLocker al(&ds_lock);
 
     // save previous trans lock status
@@ -220,12 +220,22 @@ int ManagedDatasource::startDBAction(ExceptionSink *xsink, bool &new_transaction
     if (grabLock(xsink))
         return -1;
 
-    // open the datasource if necessary
-    if (!isOpen() && (Datasource::open(xsink) || *xsink)) {
-        // release transaction lock if necessary
-        if (new_transaction)
-            releaseLockIntern();
-        return -1;
+    if (!isOpen()) {
+        if (!open) {
+            // nothing is done on a closed datasource: release the transaction lock if it was acquired here
+            if (new_transaction) {
+                releaseLockIntern();
+            }
+            return 1;
+        }
+        // open the datasource
+        if (Datasource::open(xsink) || *xsink) {
+            // release transaction lock if necessary
+            if (new_transaction) {
+                releaseLockIntern();
+            }
+            return -1;
+        }
     }
 
     //printd(5, "ManagedDatasource::startDBAction() this=%p need_lock=%d new_trans=%p had_lock=%d\n", this, need_transaction_lock, new_transaction, had_lock);
@@ -470,7 +480,10 @@ int ManagedDatasource::closeUnlocked(ExceptionSink *xsink) {
             forceReleaseLockIntern();
         }
 
-        Datasource::close();
+        // an error closing the connection or its statements is raised; the connection is closed in every case
+        if (Datasource::close(xsink)) {
+            rc = -1;
+        }
     } else if (held) {
         // the connection this thread was holding is already gone, so the lock has to go with it:
         // leaving it held by a thread that may be about to exit would keep every other thread from

@@ -108,8 +108,12 @@
 #define QDBI_METHOD_BULK_LOAD_BEGIN          39
 #define QDBI_METHOD_BULK_LOAD_ROWS           40
 #define QDBI_METHOD_BULK_LOAD_END            41
+//! the close method that can report an error closing the connection; see q_dbi_close_sink_t
+/** @since %Qore 3.0
+*/
+#define QDBI_METHOD_CLOSE_SINK               42
 
-#define QDBI_VALID_CODES 41
+#define QDBI_VALID_CODES 42
 
 /* DBI EVENT Types
    all DBI events must have the following keys:
@@ -117,7 +121,11 @@
    - db: db name (if available)
    - eventtype: integer event code
 */
-// warning events have the following additional keys: warning, desc, [info]
+//! the DBI warning event code
+/** warning events have the following additional keys: \c warning (the warning or error code), \c desc (its
+    description), and optionally \c info (more information); events also have an \c arg key with the argument given
+    when the event queue was set, if any
+*/
 #define QDBI_EVENT_WARNING      1
 
 class Datasource;
@@ -141,11 +149,41 @@ class QoreColumnarResult;
 typedef int (*q_dbi_open_t)(Datasource* ds, ExceptionSink* xsink);
 
 //! signature for the DBI "close" method - must be defined in each DBI driver
-/** this function cannot throw an exception and currently any return error code is ignored
+/** this function cannot raise an exception and its return value is ignored; a driver that can fail to close a
+    connection should also register a q_dbi_close_sink_t method with @ref QDBI_METHOD_CLOSE_SINK, which is called
+    instead of this one when it is registered
+
     @param ds the Datasource for the connection to close
     @return 0 for OK, non-zero for error
 */
 typedef int (*q_dbi_close_t)(Datasource* ds);
+
+//! signature for the DBI "close" method that can report an error closing the connection
+/** Registered with @ref QDBI_METHOD_CLOSE_SINK; when it is registered, the Qore library calls it instead of the
+    q_dbi_close_t method to close every connection of the driver.  A driver that also supports earlier versions of
+    Qore registers both methods, as earlier versions call only the q_dbi_close_t method.
+
+    The method must close the connection and release the driver's connection data, clearing it with
+    Datasource::setPrivateData() with the argument nullptr, in every case, also when it reports an error: the
+    Datasource is closed after the call whatever its result.  If the connection cannot be closed cleanly, an
+    exception describing the error should be added to \a xsink and -1 returned.
+
+    The error is raised where the close was requested: by Datasource::close(ExceptionSink*), Datasource::reset(), and
+    the %Qore-level close, reset and destruction of a Datasource or DatasourcePool object.  A close that cleans up
+    after an error that is already being reported, after the connection was lost (Datasource::connectionAborted())
+    or after a connection option failed while the connection was opened, and a close with no caller that can
+    receive an error (Datasource::close() and the Datasource destructor), report the error as a DBI warning event
+    (@ref QDBI_EVENT_WARNING) on the datasource's event queue instead; the error is discarded if no event queue is
+    set.
+
+    @param ds the Datasource for the connection to close
+    @param xsink if the connection cannot be closed cleanly, error information should be added to this object
+
+    @return 0 for OK, -1 if an exception was added to \a xsink
+
+    @since %Qore 3.0
+*/
+typedef int (*q_dbi_close_sink_t)(Datasource* ds, ExceptionSink* xsink);
 
 //! signature for the DBI "select" method - must be defined in each DBI driver
 /**
@@ -436,7 +474,8 @@ public:
     DLLEXPORT qore_dbi_method_list();
     DLLEXPORT ~qore_dbi_method_list();
 
-    // covers open, commit, rollback, and begin transaction
+    // covers open, close_sink, commit, rollback, and begin transaction (q_dbi_close_sink_t is the same type as
+    // q_dbi_open_t)
     DLLEXPORT void add(int code, q_dbi_open_t method);
     // for close
     DLLEXPORT void add(int code, q_dbi_close_t method);

@@ -62,7 +62,13 @@ protected:
     QoreCondition cond;             // condition when transaction lock is freed
 
     DLLLOCAL int acquireLock(ExceptionSink* xsink, bool& new_lock);
-    DLLLOCAL int startDBAction(ExceptionSink* xsink, bool& new_transaction);
+    //! acquires the transaction lock for an action and opens the datasource if necessary
+    /** @param open if false, a closed datasource is not opened: 1 is returned, and the transaction lock is released
+        if it was acquired by the call
+
+        @return 0 for OK, -1 if an exception was raised, 1 if the datasource is closed and \a open is false
+    */
+    DLLLOCAL int startDBAction(ExceptionSink* xsink, bool& new_transaction, bool open = true);
     // returns true if we have the transaction lock, false if not
     DLLLOCAL bool endDBActionIntern(char cmd = DAH_NOCHANGE, bool new_transaction = false);
     // returns true if we have the transaction lock, false if not
@@ -185,6 +191,21 @@ public:
 
         // only return "this" when there was an exception in startDBAction if we already had the lock
         return tid == q_gettid() ? this : 0;
+    }
+
+    DLLLOCAL virtual Datasource* helperStartActionNoConnectImpl(ExceptionSink* xsink, bool& new_transaction,
+            bool& connected) {
+        int rc = startDBAction(xsink, new_transaction, false);
+        if (!rc) {
+            return this;
+        }
+        if (rc > 0) {
+            // the datasource is closed
+            connected = false;
+            return nullptr;
+        }
+        // only return "this" when there was an exception in startDBAction if we already had the lock
+        return tid == q_gettid() ? this : nullptr;
     }
 
     DLLLOCAL virtual Datasource* helperEndActionImpl(char cmd, bool new_transaction, ExceptionSink* xsink) {

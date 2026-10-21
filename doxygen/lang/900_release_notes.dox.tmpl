@@ -2583,6 +2583,24 @@ DataFrame::DataFrame df = DataFrame::DataFrame::fromColumnarResult(selected);
     on Arrow C++ in libqore itself.
     @endparblock
 
+    @par DBI Drivers Can Report an Error Closing a Connection
+    @parblock
+    A DBI driver can now register a close method with an exception sink (\c QDBI_METHOD_CLOSE_SINK; see
+    \c q_dbi_close_sink_t in the C++ API) to report a connection that it could not close cleanly; the earlier close
+    method had no exception sink, and its return value was ignored.  The error is raised where the close was
+    requested: by @ref Qore::SQL::Datasource::close() "Datasource::close()",
+    @ref Qore::SQL::Datasource::reset() "Datasource::reset()", and the destruction of a
+    @ref Qore::SQL::Datasource "Datasource" or @ref Qore::SQL::DatasourcePool "DatasourcePool" object.  A close that
+    only cleans up after an error that is already being reported - a lost connection, or a connection option that
+    failed as the connection was opened - reports it as a DBI warning event on the datasource's event queue (see
+    @ref Qore::SQL::Datasource::setEventQueue() "Datasource::setEventQueue()") instead; it is discarded if no event
+    queue is set.  The datasource is closed in either case.
+
+    Drivers keep registering their earlier close method for earlier versions of %Qore, which call only that method.
+    In the C++ API, the new \c Datasource::close(ExceptionSink*) raises the error; \c Datasource::close() reports it
+    as a warning event.
+    @endparblock
+
     @par Experimental Plugin-Type ABI
     @parblock
     Binary modules can now register experimental plugin-type descriptors with libqore through
@@ -5027,6 +5045,16 @@ while (*binary chunk = input.read(65536)) {
       thread when no transaction was in progress: @ref Qore::SQL::Datasource::currentThreadInTransaction()
       "Datasource::currentThreadInTransaction()" returned @ref True afterwards, other threads timed out waiting for
       the lock, and destroying the datasource in another thread raised \c DATASOURCE-ERROR
+
+    - The statements of a @ref Qore::SQL::Datasource "Datasource" are closed when it is closed: closing or resetting
+      a datasource left the driver data of an @ref Qore::SQL::SQLStatement "SQLStatement" prepared on its connection
+      in place, so that the statement outlived the connection it belonged to, and destroying the statement later
+      opened a new connection only to free the statement against it
+
+    - Closing or destroying an @ref Qore::SQL::SQLStatement "SQLStatement" no longer makes a connection: on a closed
+      @ref Qore::SQL::Datasource "Datasource" it opened the connection again, which then stayed open for as long as
+      the datasource object existed, and with a @ref Qore::SQL::DatasourcePool "DatasourcePool" it gave the thread a
+      connection, opening a new one if none was free or waiting for one up to the pool's error timeout
 
     - Fixed reference cycles closed by values held in a @ref Qore::Thread::Queue "Queue" or a
       @ref Qore::TreeMap "TreeMap" sometimes never being collected when the last reference to the cycle from outside

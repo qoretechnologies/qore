@@ -874,6 +874,9 @@ delete db;
 
     @throw DATASOURCE-TRANSACTION-EXCEPTION The Datasource was destroyed while a transaction was still in progress;
     the transaction will be automatically rolled back
+
+    @note An error closing the connection is raised as an exception by DBI drivers that can report one (since %Qore
+    3.0); see Datasource::close()
 */
 Datasource::destructor() {
     ds->destructor(xsink);
@@ -916,7 +919,15 @@ db.close();
 
     @throw TRANSACTION-LOCK-TIMEOUT Timeout trying to acquire the transaction lock
 
-    @note see the documentation for the DBI driver being used for additional possible exceptions
+    @note
+    - see the documentation for the DBI driver being used for additional possible exceptions
+    - the @ref Qore::SQL::SQLStatement "SQLStatement" objects prepared on the connection are closed with it (since
+      %Qore 3.0); they are prepared again on a new connection if they are used again
+    - DBI drivers that can report an error closing a connection raise it here (since %Qore 3.0); the datasource is
+      closed in any case.  When the connection is closed to clean up after another error - a lost connection, or a
+      connection option that failed as the connection was opened - such an error is not raised but reported as a
+      DBI warning event on the event queue (see Datasource::setEventQueue()), with the error code in the
+      \c "warning" key and its description in the \c "desc" key
 */
 nothing Datasource::close() {
     ds->close(xsink);
@@ -1535,7 +1546,10 @@ db.reset();
 
     @throw TRANSACTION-LOCK-TIMEOUT Timeout trying to acquire the transaction lock
 
-    @note see the documentation for the DBI driver being used for additional possible exceptions
+    @note
+    - see the documentation for the DBI driver being used for additional possible exceptions
+    - if the DBI driver raises an error closing the connection (see Datasource::close()), the connection is not
+      opened again; it is opened by the next operation that needs it
  */
 nothing Datasource::reset() {
     ds->reset(xsink);

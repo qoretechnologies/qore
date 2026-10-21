@@ -1,0 +1,206 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class StmtClosedDatasourceTest
+
+#! A statement does not make a connection to close itself
+/** Closing a statement, which its destructor also does, acquired a connection like any other statement action: a
+    closed Datasource was opened again only to close a statement that had nothing to close, and the connection then
+    stayed open for as long as the Datasource object existed; a DatasourcePool gave the thread a connection, opening
+    a new one if none was free.
+
+    Closing a datasource also left the driver data of a statement prepared on its connection in place, so the
+    statement outlived the connection it belonged to, and destroying it later opened a new connection and freed the
+    old statement against it.  The statements of a datasource are now closed when it is closed, while its connection
+    is still open.
+
+    The mock dbitest driver is used so that this runs with no external database; its "live-connections" option
+    reports the number of its connections in the process.
+*/
+public class StmtClosedDatasourceTest inherits QUnit::Test {
+    public {
+        const ConnStr = "dbitest:u/p@db";
+    }
+
+    private {
+        #! an open datasource that reports the number of the driver's connections in the process
+        Datasource monitor(ConnStr);
+    }
+
+    constructor() : Test("StmtClosedDatasourceTest", "1.0", \ARGV) {
+        addTestCase("prepared statement destroyed after close", \preparedTest());
+        addTestCase("bound statement destroyed after close", \boundTest());
+        addTestCase("bound statement after reset", \resetTest());
+        addTestCase("statement closed after close", \explicitCloseTest());
+        addTestCase("statement used again after close", \reuseTest());
+        addTestCase("pool statement destroyed without a connection", \poolTest());
+        addTestCase("pool statement held by another thread", \poolOtherThreadTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        monitor.open();
+    }
+
+    int liveConnections() {
+        return monitor.getOption("live-connections");
+    }
+
+    Datasource getDs() {
+        Datasource ds(ConnStr);
+        ds.setAutoCommit(False);
+        ds.open();
+        return ds;
+    }
+
+    #! a statement that was never executed has nothing to close
+    preparedTest() {
+        int base = liveConnections();
+        Datasource ds = getDs();
+        {
+            SQLStatement stmt(ds);
+            stmt.prepare("select * from t");
+            ds.close();
+            assertEq(base, liveConnections(), "closed");
+        }
+        assertEq(base, liveConnections(), "destroying the statement did not reopen the datasource");
+    }
+
+    #! a bound statement holds driver data on the connection, and the connection lock, with no transaction
+    boundTest() {
+        int base = liveConnections();
+        Datasource ds = getDs();
+        {
+            SQLStatement stmt(ds);
+            stmt.prepare("insert into t values (%v)");
+            stmt.bind(1);
+            assertTrue(stmt.active());
+            ds.close();
+            assertFalse(stmt.active(), "the statement was closed with its connection");
+            assertEq(base, liveConnections(), "closed");
+        }
+        assertEq(base, liveConnections(), "destroying the statement did not reopen the datasource");
+        assertFalse(ds.currentThreadInTransaction());
+    }
+
+    #! a reset closes the statements of the connection it closes
+    resetTest() {
+        int base = liveConnections();
+        Datasource ds = getDs();
+        SQLStatement stmt(ds);
+        stmt.prepare("insert into t values (%v)");
+        stmt.bind(1);
+        assertTrue(stmt.active());
+        ds.reset();
+        assertFalse(stmt.active(), "the statement was closed with the connection it was prepared on");
+        assertEq(base + 1, liveConnections(), "reopened");
+        delete stmt;
+        assertEq(base + 1, liveConnections());
+        ds.close();
+        assertEq(base, liveConnections());
+    }
+
+    #! SQLStatement::close() on a closed datasource
+    explicitCloseTest() {
+        int base = liveConnections();
+        Datasource ds = getDs();
+        SQLStatement stmt(ds);
+        stmt.prepare("select * from t");
+        ds.close();
+        stmt.close();
+        assertEq(base, liveConnections(), "closing the statement did not reopen the datasource");
+        assertFalse(stmt.active());
+    }
+
+    #! a statement whose datasource was closed is prepared again on the reopened connection when it is used
+    reuseTest() {
+        int base = liveConnections();
+        Datasource ds = getDs();
+        SQLStatement stmt(ds);
+        stmt.prepare("select * from t");
+        stmt.exec();
+        assertTrue(stmt.next());
+        ds.rollback();
+        stmt.bind(1);
+        ds.close();
+        assertFalse(stmt.active());
+
+        stmt.exec();
+        assertEq(base + 1, liveConnections(), "the datasource was reopened to execute the statement");
+        assertEq(({"id": 1, "val": "a"}, {"id": 2, "val": "b"}), stmt.fetchRows());
+        stmt.close();
+        ds.rollback();
+        ds.close();
+        assertEq(base, liveConnections());
+    }
+
+    #! a pool does not give a thread a connection to close a statement that holds none
+    poolTest() {
+        DatasourcePool pool(ConnStr + "{min=1,max=2}");
+        # preparing the statement uses the pool's free connection and returns it
+        SQLStatement stmt(pool);
+        stmt.prepare("select * from t");
+        int base = liveConnections();
+        Counter held(1);
+        Counter release(1);
+        Counter done(1);
+        background sub () {
+            on_exit done.dec();
+            # this thread holds the pool's only open connection
+            pool.exec("insert into t values (1)");
+            held.dec();
+            release.waitForZero();
+            pool.rollback();
+        }();
+        held.waitForZero();
+        on_exit {
+            release.dec();
+            done.waitForZero();
+        }
+
+        # the statement is destroyed while the pool's only open connection is held by another thread
+        delete stmt;
+        assertEq(base, liveConnections(), "no connection was opened to destroy the statement");
+        assertFalse(pool.currentThreadInTransaction());
+    }
+
+    #! a statement whose driver data is on a connection another thread holds cannot be closed in this thread
+    poolOtherThreadTest() {
+        DatasourcePool pool(ConnStr + "{min=1,max=2}");
+        int base = liveConnections();
+        SQLStatement stmt(pool);
+        stmt.prepare("insert into t values (%v)");
+        Counter held(1);
+        Counter release(1);
+        Counter done(1);
+        background sub () {
+            on_exit done.dec();
+            # this thread's connection holds the statement's driver data
+            stmt.exec(1);
+            held.dec();
+            release.waitForZero();
+            stmt.commit();
+        }();
+        held.waitForZero();
+        {
+            on_exit {
+                release.dec();
+                done.waitForZero();
+            }
+            assertThrows("SQLSTATEMENT-ERROR", "another thread", \stmt.close());
+            assertEq(base, liveConnections(), "no connection was opened in this thread");
+            assertFalse(pool.currentThreadInTransaction());
+        }
+        # the statement was closed when its connection was returned to the pool
+        assertFalse(stmt.active());
+        stmt.close();
+        assertEq(base, liveConnections());
+    }
+}

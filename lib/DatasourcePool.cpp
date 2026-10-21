@@ -345,6 +345,20 @@ Datasource* DatasourcePool::getDS(bool &new_ds, ExceptionSink* xsink) {
    return ds;
 }
 
+Datasource* DatasourcePool::findAllocatedDS() {
+    SafeLocker sl((QoreThreadLock*)this);
+    thread_use_t::iterator i = tmap.find(q_gettid());
+    return i == tmap.end() ? nullptr : pool[i->second];
+}
+
+void DatasourcePool::closeConnections(ExceptionSink* xsink) {
+    // no other reference to the pool exists, so no thread can hold or allocate a connection
+    for (unsigned i = 0; i < cmax; ++i) {
+        // an error closing a connection is raised, and the others are still closed
+        pool[i]->close(xsink);
+    }
+}
+
 Datasource* DatasourcePool::getAllocatedDS() {
    SafeLocker sl((QoreThreadLock*)this);
    // see if thread already has a datasource allocated
