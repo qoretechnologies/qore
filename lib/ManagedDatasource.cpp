@@ -431,8 +431,13 @@ int ManagedDatasource::open(ExceptionSink *xsink) {
 int ManagedDatasource::closeUnlocked(ExceptionSink *xsink) {
     int rc = 0;
 
-    if (grabLock(xsink))
+    // the lock is taken to wait for the actions of other threads to finish; a lock that this call takes is released
+    // when the connection is closed, so that the datasource is free for every thread afterwards, as a datasource
+    // that was never opened is
+    const bool new_lock = tid != q_gettid();
+    if (grabLock(xsink)) {
         return -1;
+    }
 
     //printd(5, "ManagedDatasource::closeUnlocked() this: %p priv: %p %s:%s@%s open: %d trans: %d\n", this, qore_ds_private::get(*this), getDriverName(), getUsernameStr().c_str(), getDBNameStr().c_str(), isOpen(), isInTransaction());
 
@@ -471,6 +476,13 @@ int ManagedDatasource::closeUnlocked(ExceptionSink *xsink) {
         // leaving it held by a thread that may be about to exit would keep every other thread from
         // reopening the datasource
         forceReleaseLockIntern();
+    }
+
+    // otherwise the lock taken above was kept by this thread with no transaction and no thread resource to release
+    // it: currentThreadInTransaction() returned True after close(), other threads timed out on the lock, and a
+    // destructor run in another thread raised DATASOURCE-ERROR
+    if (new_lock && tid == q_gettid()) {
+        releaseLockIntern();
     }
 
     return rc;

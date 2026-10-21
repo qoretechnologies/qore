@@ -1,0 +1,139 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class DatasourceCloseLockTest
+
+#! Closing or resetting a Datasource leaves its transaction lock free
+/** Datasource::close() takes the transaction lock to wait for the actions of other threads to finish.  It kept the
+    lock when the datasource was not in a transaction, so the closing thread was left "in a transaction"
+    (currentThreadInTransaction() returned True), another thread timed out on the lock, and destroying the datasource
+    in another thread raised DATASOURCE-ERROR ("TID n deleted Datasource while TID m is holding the transaction lock")
+    and TRANSACTION-LOCK-TIMEOUT.  Datasource::reset() closes the connection the same way.
+
+    The "dbitest" mock driver needs no server.
+*/
+class DatasourceCloseLockTest inherits QUnit::Test {
+    public {
+        const ConnStr = "dbitest:u/p@db";
+
+        #! the transaction lock timeout: an operation that has to wait for the lock fails at once
+        const LockTimeout = 50;
+
+        #! a hang guard for a result from another thread; never a timing assertion
+        const HangGuard = 30s;
+    }
+
+    constructor() : QUnit::Test("DatasourceCloseLockTest", "1.0", \ARGV) {
+        addTestCase("close() of an open datasource", \testCloseOpen());
+        addTestCase("close() of a datasource that is not open", \testCloseNotOpen());
+        addTestCase("reset()", \testReset());
+        addTestCase("close() in a transaction", \testCloseInTransaction());
+        addTestCase("close() of a datasource destroyed in another thread", \testDestroyInOtherThread());
+        set_return_value(main());
+    }
+
+    #! Returns "ok" if another thread can use the datasource, or the error that it gets
+    private static string otherThreadUse(Datasource ds) {
+        Queue result();
+        background sub () {
+            try {
+                ds.getConfigHash();
+                result.push("ok");
+            } catch (hash<ExceptionInfo> ex) {
+                result.push(ex.err + ": " + ex.desc);
+            }
+        }();
+        return result.get(HangGuard);
+    }
+
+    testCloseOpen() {
+        Datasource ds(ConnStr);
+        ds.setTransactionLockTimeout(LockTimeout);
+        ds.open();
+        assertFalse(ds.currentThreadInTransaction(), "an open datasource is not in a transaction");
+        ds.close();
+        assertFalse(ds.currentThreadInTransaction(), "a closed datasource is not in a transaction");
+        assertEq("ok", DatasourceCloseLockTest::otherThreadUse(ds), "another thread can use the closed datasource");
+        # it can be opened and closed by another thread as well
+        Queue result();
+        background sub () {
+            try {
+                ds.open();
+                ds.close();
+                result.push("ok");
+            } catch (hash<ExceptionInfo> ex) {
+                result.push(ex.err + ": " + ex.desc);
+            }
+        }();
+        assertEq("ok", result.get(HangGuard), "another thread can open and close the datasource");
+        assertFalse(ds.currentThreadInTransaction());
+        assertEq("ok", DatasourceCloseLockTest::otherThreadUse(ds));
+    }
+
+    testCloseNotOpen() {
+        Datasource ds(ConnStr);
+        ds.setTransactionLockTimeout(LockTimeout);
+        ds.close();
+        assertFalse(ds.currentThreadInTransaction());
+        assertEq("ok", DatasourceCloseLockTest::otherThreadUse(ds));
+    }
+
+    testReset() {
+        # an open datasource that reports the number of the driver's connections in the process
+        Datasource monitor(ConnStr);
+        monitor.open();
+        int base = monitor.getOption("live-connections");
+        Datasource ds(ConnStr);
+        ds.setTransactionLockTimeout(LockTimeout);
+        ds.open();
+        ds.reset();
+        assertEq(base + 1, monitor.getOption("live-connections"), "the connection is open again after reset()");
+        assertFalse(ds.currentThreadInTransaction(), "a reset datasource is not in a transaction");
+        assertEq("ok", DatasourceCloseLockTest::otherThreadUse(ds), "another thread can use the reset datasource");
+        ds.close();
+    }
+
+    testCloseInTransaction() {
+        Datasource ds(ConnStr);
+        ds.setTransactionLockTimeout(LockTimeout);
+        ds.open();
+        ds.beginTransaction();
+        assertTrue(ds.currentThreadInTransaction());
+        # another thread waits for the transaction
+        assertRegex("^TRANSACTION-LOCK-TIMEOUT", DatasourceCloseLockTest::otherThreadUse(ds),
+            "the transaction holds the lock");
+        assertThrows("DATASOURCE-TRANSACTION-EXCEPTION", \ds.close());
+        assertFalse(ds.currentThreadInTransaction(), "closing the transaction released the lock");
+        assertEq("ok", DatasourceCloseLockTest::otherThreadUse(ds));
+    }
+
+    testDestroyInOtherThread() {
+        Queue<Datasource> pass();
+        {
+            Datasource ds(ConnStr);
+            ds.setTransactionLockTimeout(LockTimeout);
+            ds.open();
+            ds.close();
+            pass.push(ds);
+        }
+        # the other thread holds the only reference, and destroys the datasource
+        Queue result();
+        background sub () {
+            try {
+                Datasource ds = pass.get();
+                delete ds;
+                result.push("ok");
+            } catch (hash<ExceptionInfo> ex) {
+                result.push(ex.err + ": " + ex.desc);
+            }
+        }();
+        assertEq("ok", result.get(HangGuard), "the datasource closed by this thread is destroyed in another one");
+    }
+}

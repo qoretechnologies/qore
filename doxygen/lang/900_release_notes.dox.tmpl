@@ -5020,6 +5020,12 @@ while (*binary chunk = input.read(65536)) {
       datasource that was not open, so the next open or the datasource's destruction left it behind; the
       connection is now closed with the error
 
+    - Fixed @ref Qore::SQL::Datasource::close() "Datasource::close()" and
+      @ref Qore::SQL::Datasource::reset() "Datasource::reset()" leaving the transaction lock held by the calling
+      thread when no transaction was in progress: @ref Qore::SQL::Datasource::currentThreadInTransaction()
+      "Datasource::currentThreadInTransaction()" returned @ref True afterwards, other threads timed out waiting for
+      the lock, and destroying the datasource in another thread raised \c DATASOURCE-ERROR
+
     - Fixed threads with a small stack size on Linux with glibc having less stack for their code than the size set
       with @ref Qore::set_default_thread_stack_size() "set_default_thread_stack_size()": glibc takes the static
       thread-local storage of the process from each thread's stack, which left a thread set to 128KB too little stack
