@@ -219,12 +219,17 @@ class FakeLlmServer {
     }
 
     #! Reports whether the client closes the connection; it sends nothing more, so a read ends only then
+    /** A client that closes the connection resets it instead of closing it in order when response data reaches it
+        after the close, or is still unread at the close: the read then fails with \c ECONNRESET instead of ending
+        the stream.  Which of the two the server sees depends on when the response data arrives, so both are a
+        close.
+    */
     private waitForClientClose(Socket conn) {
         bool closed = False;
         try {
             conn.recv(1, 30s);
         } catch (hash<ExceptionInfo> ex) {
-            closed = ex.err == "SOCKET-CLOSED";
+            closed = ex.err == "SOCKET-CLOSED" || (ex.err == "SOCKET-RECV-ERROR" && ex.arg == ECONNRESET);
         }
         client_closed.push(closed);
     }
