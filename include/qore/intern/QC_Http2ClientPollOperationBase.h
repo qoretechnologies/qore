@@ -295,6 +295,15 @@ public:
         }
     }
 
+    //! Releases the records that the session keeps for a stream that the caller is done with
+    /** Application threads; see Http2Session::releaseStream()
+    */
+    DLLLOCAL void releaseStream(int32_t stream_id) {
+        if (sock_obj) {
+            sock_obj->releaseHttp2Stream(stream_id);
+        }
+    }
+
     //! Returns the time in microseconds since data was last received on the connection, or -1 if none was received
     /** Can be called from any thread
     */

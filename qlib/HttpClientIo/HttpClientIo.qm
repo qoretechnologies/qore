@@ -193,6 +193,8 @@ if (state == HttpClientConnectionState::Draining) {
     - the result of a send on an HTTP/2 or HTTP/3 stream handle does not depend on what has been read of the response:
       the rest of a request is sent after an early complete response, and a reset by the server is raised by every
       send
+    - a long-lived HTTP/2 or HTTP/3 connection keeps no record of the requests it has finished, so its memory use does
+      not grow with the number of requests
     Initial (not yet released) version of the unified %HttpClientIo module —
     HTTP/1.1, HTTP/2, and HTTP/3 client I/O behind a single API, as currently
     implemented:

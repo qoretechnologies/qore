@@ -4393,11 +4393,25 @@ public class HttpAsyncSocketIoController {
         # request reaches the live loop and is recognised generically via
         # AbstractHttpRequestHandler::isPersistentSessionEndRequest().
 
+        # Releases the session's record of a stream dispatched with its headers once the request has been handled
+        # (all headers-only dispatched streams, not just body_streaming ones, as on HTTP/3): the session keeps a
+        # dispatched stream for the handler until then, so without this a long-lived connection would keep one
+        # record for every request it served
+        bool headers_only = request.hdr.toBool();
+        code<nothing()> cleanup_stream = sub () {
+            if (headers_only) {
+                try {
+                    dispatch_sock.cleanupHttp2Stream(dispatch_stream_id);
+                } catch () {}
+            }
+        };
+
         # Give the target a protocol-independent admission point before the shared handler queue.
         try {
             *hash<HttpRequestResultInfo> prepared_result =
                 dispatch_target.prepareHttpRequest(conn_info);
             if (prepared_result) {
+                on_exit cleanup_stream();
                 if (body_streaming) {
                     resumeMultiplexedReading(dispatch_h2op, dispatch_uh,
                         HttpConnectionState::Http2);
@@ -4419,6 +4433,7 @@ public class HttpAsyncSocketIoController {
             } catch () {}
             wakeSocketIfPresent(dispatch_sock, dispatch_uh,
                 "HTTP/2 preparation error response");
+            cleanup_stream();
             return;
         }
 
@@ -4433,6 +4448,8 @@ public class HttpAsyncSocketIoController {
         # resumeMultiplexedReading() silently handles double-resume (catches STATE-ERROR).
         try {
             submitToHandlerPool(dispatch_target, sub () {
+                # NOTE: on_exit must be at closure scope, so that it runs when the request has been handled
+                on_exit cleanup_stream();
                 try {
                     hash<HttpRequestResultInfo> result = dispatch_target.onHttpRequest(conn_info);
                     if (body_streaming) {
@@ -4499,6 +4516,7 @@ public class HttpAsyncSocketIoController {
                     "Service Unavailable");
             } catch () {}
             wakeSocketIfPresent(dispatch_sock, dispatch_uh, "HTTP/2 submit failure response");
+            cleanup_stream();
         }
     }
 

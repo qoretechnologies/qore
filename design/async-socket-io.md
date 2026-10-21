@@ -975,6 +975,25 @@ closed for sending.  ngtcp2 answers the frame by resetting the send side itself,
 response sent after the STOP_SENDING could be read whole before the reset was known, and a send in that window was
 queued and silently dropped.  A server learns of a client's STOP_SENDING at the same point.
 
+## HTTP/2 and HTTP/3: Stream Records of Long-Lived Sessions
+
+A session serves any number of streams, so it keeps nothing per finished stream:
+
+- QUIC tells a closed request stream from an unknown one by the stream-ID watermark: stream IDs of a type are opened
+  in increasing order (RFC 9000 section 2.1), so a client-initiated bidirectional stream at or below the highest one
+  opened that is not in `QuicSession::open_bidi_streams_` (filled when ngtcp2 opens a stream: locally after
+  `ngtcp2_conn_open_bidi_stream()`, remotely in `stream_open`; emptied in `stream_close`) is closed
+  (`isClosedStreamLocked()`).  The set of closed streams that this replaced grew by one entry per request, on clients
+  and servers.  HTTP/2 already used nghttp2's stream-ID watermarks (`Http2Session::isClosedStreamIdUnlocked()`).
+- The record of a reset by the peer outlives the stream, so that a send reports it; it is released when the
+  application is done with the stream: on a client when a stream without a streaming consumer completes, and when the
+  stream handle of a streaming request is destroyed (`releaseStream()` on the HTTP/2 and HTTP/3 poll operations); on a
+  server in `cleanupStream()` (the handler is done); an HTTP/2 record also by the first send that reports it.
+- The one-shot reports of peer resets (`pending_peer_reset_reports`) are kept on server sessions only, whose poll
+  operations drain them.
+- `dbg_socket_stream_records()` (library-debug builds) returns the size of each kind of record of a session;
+  `HttpClientIoStreamRecords.qtest` checks that none grows with the number of requests made on one connection.
+
 ## HTTP/2 and HTTP/3 Server: Incomplete Request Bodies
 
 A request body ends cleanly only when the client ends the stream: `END_STREAM` (HTTP/2) or `FIN` (HTTP/3).  A stream

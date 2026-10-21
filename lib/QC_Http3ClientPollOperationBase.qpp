@@ -504,6 +504,8 @@ QoreHashNode* Http3ClientPollOperationPriv::handleReading(ExceptionSink* xsink) 
             if (action) {
                 response_dispatched = true;
             }
+            // a streaming consumer's handle releases the stream when it is done with it
+            const bool streaming_consumer = action && action->isStreaming();
 
             // Remove stream BEFORE action so active_stream_count is already
             // decremented by the time the action resolves the caller's Future
@@ -568,6 +570,16 @@ QoreHashNode* Http3ClientPollOperationPriv::handleReading(ExceptionSink* xsink) 
                                 stream_id_val) == data_ready_streams.end()) {
                         data_ready_streams.push_back(stream_id_val);
                     }
+                }
+            }
+
+            // the request of a stream that ended without a streaming consumer (a request with its whole body, or one
+            // whose caller is gone) is complete, so nothing sends on the stream any more: its records are released;
+            // a buffered response is released when it is dispatched to the request (dispatchBufferedResponses())
+            if (is_end && !streaming_consumer && !buffered) {
+                std::shared_ptr<QuicSession> session = inner_op->getSession();
+                if (session) {
+                    session->releaseStream(stream_id_val);
                 }
             }
         }
@@ -1156,6 +1168,9 @@ void Http3ClientPollOperationPriv::dispatchBufferedResponses(int64_t stream_id,
         if (is_end) {
             if (action->isStreaming()) {
                 action->complete(xsink);
+            } else {
+                // the request is complete, so nothing sends on the stream any more; see handleReading()
+                releaseStream(stream_id);
             }
             break;
         }
@@ -1838,6 +1853,20 @@ try {
 */
 nothing Http3ClientPollOperationBase::waitForMigration(int request_id, timeout timeout_ms = -1) [flags=NAMED_ARGS] {
     priv->waitForMigration(request_id, timeout_ms, xsink);
+}
+
+//! Releases the records that the session of the connection keeps for a stream that the caller is done with
+/** The session keeps the record of a reset of a stream by the server after the stream has closed, so that a send
+    on the stream reports the reset; the stream handles call this when they are destroyed, so a long-lived
+    connection does not keep a record for every stream the server reset.  Releasing a stream without records is a
+    no-op.
+
+    @param stream_id the ID of the stream
+
+    @since %Qore 3.0
+*/
+nothing Http3ClientPollOperationBase::releaseStream(int stream_id) [flags=NAMED_ARGS] {
+    priv->releaseStream(stream_id);
 }
 
 //! Phase 1: advisory capacity check under lock

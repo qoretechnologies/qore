@@ -986,6 +986,7 @@ int QuicSession::initClient(qore_socket_private* sock, ExceptionSink* xsink,
 #if NGTCP2_VERSION_NUM >= 0x011800
     callbacks.recv_stop_sending = recvStopSendingCallback;
 #endif
+    callbacks.stream_open = streamOpenCallback;
     callbacks.handshake_completed = handshakeCompletedCallback;
     callbacks.extend_max_local_streams_bidi = extendMaxLocalStreamsBidiCallback;
     callbacks.extend_max_stream_data = extendMaxStreamDataCallback;
@@ -1152,6 +1153,7 @@ int QuicSession::initServer(qore_socket_private* sock, ExceptionSink* xsink,
 #if NGTCP2_VERSION_NUM >= 0x011800
     callbacks.recv_stop_sending = recvStopSendingCallback;
 #endif
+    callbacks.stream_open = streamOpenCallback;
     callbacks.handshake_completed = handshakeCompletedCallback;
     callbacks.extend_max_remote_streams_bidi = extendMaxRemoteStreamsBidiCallback;
     callbacks.extend_max_stream_data = extendMaxStreamDataCallback;
@@ -2201,6 +2203,7 @@ int64_t QuicSession::submitRequest(const char* method, const char* path,
                               ngtcp2_strerror(rv));
         return -1;
     }
+    noteBidiStreamOpenLocked(stream_id);
 
     // Guard: ngtcp2 assigns unique stream IDs, so this should never collide
     // with an in-flight request's body data (matches the pattern in submitResponse())
@@ -2330,6 +2333,7 @@ int64_t QuicSession::submitRequestStreaming(const char* method, const char* path
                               ngtcp2_strerror(rv));
         return -1;
     }
+    noteBidiStreamOpenLocked(stream_id);
 
     // Set up empty streaming body data with deferred=true — the h3ReadDataCallback
     // will return NGHTTP3_ERR_WOULDBLOCK until data is provided via sendStreamData()
@@ -2457,6 +2461,7 @@ int64_t QuicSession::submitConnectRequest(const char* path, const qore_http_head
                               ngtcp2_strerror(rv));
         return -1;
     }
+    noteBidiStreamOpenLocked(stream_id);
 
     // Set up deferred streaming body data — h3ReadDataCallback returns
     // NGHTTP3_ERR_WOULDBLOCK until data is pushed via sendStreamData()
@@ -2732,6 +2737,10 @@ int QuicSession::sendStreamData(int64_t stream_id, const void* data, size_t len,
     {
         auto pit = peer_reset_streams_.find(stream_id);
         if (pit != peer_reset_streams_.end()) {
+            // a STOP_SENDING without an error closes the stream for sending (see recordPeerStopSending())
+            if (pit->second == NGHTTP3_H3_NO_ERROR) {
+                return sendOnClosedStream(stream_id, len, end_stream, xsink);
+            }
             xsink->raiseException("QUIC-STREAM-RESET",
                 "stream %" PRId64 " was reset by peer (error code %" PRIu64 ")",
                 stream_id, pit->second);
@@ -2759,7 +2768,7 @@ int QuicSession::sendStreamData(int64_t stream_id, const void* data, size_t len,
         // A stream that closed without an error (a reset with an error is reported above), including one the
         // peer closed with STOP_SENDING(H3_NO_ERROR) after its complete response, is closed for sending, so
         // producer loops can distinguish "the stream is closed" from an internal logic error
-        if (closed_streams_.count(stream_id) > 0) {
+        if (isClosedStreamLocked(stream_id)) {
             return sendOnClosedStream(stream_id, len, end_stream, xsink);
         }
         xsink->raiseException("QUIC-HTTP3-ERROR",
@@ -3230,7 +3239,9 @@ std::unique_ptr<QuicStreamInfo> QuicSession::takeCompletedStream() {
         auto it = streams_.find(stream_id);
         if (it != streams_.end()) {
             has_completed_streams_.store(!completed_streams_.empty(), std::memory_order_release);
-            if (it->second->connect_tunnel_active || it->second->streaming) {
+            // a streaming response whose body is complete gets no more DATA: it is erased below, as a long-lived
+            // session must not keep an entry for every streaming request it served
+            if (it->second->connect_tunnel_active || (it->second->streaming && !it->second->body_complete)) {
                 // CONNECT tunnel streams and streaming response streams must stay
                 // in streams_ for continued DATA accumulation.  Clone essential
                 // fields for the caller; move body and clear the original so the
@@ -3379,13 +3390,21 @@ bool QuicSession::isStreamComplete(int64_t stream_id) const {
 
 bool QuicSession::isStreamFullyAcked(int64_t stream_id) const {
     std::lock_guard<std::recursive_mutex> lock(mtx_);
-    return closed_streams_.count(stream_id) > 0;
+    return isClosedStreamLocked(stream_id);
 }
 
 void QuicSession::removeClosedStream(int64_t stream_id) {
+    releaseStream(stream_id);
+}
+
+void QuicSession::releaseStream(int64_t stream_id) {
     std::lock_guard<std::recursive_mutex> lock(mtx_);
-    closed_streams_.erase(stream_id);
     peer_reset_streams_.erase(stream_id);
+    // a reset can still arrive while ngtcp2 has the stream open (a client's RESET_STREAM answering this server's
+    // STOP_SENDING, for example): its record is released when ngtcp2 closes the stream
+    if (open_bidi_streams_.count(stream_id)) {
+        released_open_streams_.insert(stream_id);
+    }
 }
 
 uint64_t QuicSession::getBytesInFlight() const {
@@ -3469,6 +3488,9 @@ bool QuicSession::cleanupStream(int64_t stream_id) {
         connect_stream_frame_states_.erase(stream_id);
         connect_stream_data_.erase(stream_id);
     }
+    // the handler is done with the stream, so it sends nothing more on it: the record of a reset by the peer is not
+    // needed any more (handlers that outlive their streams learn of resets from takePendingPeerResetReports())
+    releaseStream(stream_id);
     return queued_frame;
 }
 
@@ -3815,6 +3837,29 @@ int QuicSession::cancelStream(int64_t stream_id, uint64_t app_error_code, Except
     return 0;
 }
 
+#ifdef DEBUG
+QoreHashNode* QuicSession::dbgGetStreamRecordCounts() const {
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
+    ReferenceHolder<QoreHashNode> h(new QoreHashNode(bigIntTypeInfo), nullptr);
+    auto set = [&h](const char* key, size_t count) {
+        h->setKeyValue(key, static_cast<int64>(count), nullptr);
+    };
+    set("streams", streams_.size());
+    set("open_bidi_streams", open_bidi_streams_.size());
+    set("released_open_streams", released_open_streams_.size());
+    set("peer_reset_streams", peer_reset_streams_.size());
+    set("pending_peer_reset_reports", pending_peer_reset_reports_.size());
+    set("response_send_watches", response_send_watches_.size());
+    set("response_send_results", response_send_results_.size());
+    set("completed_streams", completed_streams_.size());
+    set("body_data", body_data_.size());
+    set("streaming_body_data", streaming_body_data_.size());
+    set("stream_input_streams", stream_input_streams_.size());
+    set("datagram_queues", datagram_queues_.size());
+    return h.release();
+}
+#endif
+
 // ===== HTTP/3 GOAWAY (Graceful Shutdown) =====
 
 int QuicSession::submitShutdownNotice(ExceptionSink* xsink) {
@@ -4082,17 +4127,29 @@ int QuicSession::streamCloseCallback(ngtcp2_conn* /* conn */, uint32_t flags,
             // response stream (Server-Sent Events) while keeping the connection
             // for other requests looks exactly like this, so without the report
             // the stream's owner is never told and the server keeps writing into
-            // a stream nobody reads.  recvStopSendingCallback() has recorded it
-            // already when the frame arrived (ngtcp2 1.24 and later); the record
-            // is idempotent.
+            // a stream nobody reads.  With ngtcp2 1.24 and later, the peer's
+            // STOP_SENDING and RESET_STREAM were recorded when they arrived
+            // (recvStopSendingCallback(), streamResetCallback()), and the
+            // application may have released the stream since: the stream's
+            // records are not created again here, and an application error code
+            // here without either frame is this side's own reset.
+#if NGTCP2_VERSION_NUM < 0x011800
             session->recordPeerStreamReset(stream_id, app_error_code);
+#endif
         }
 
         // Record that this stream is fully closed (all data ACKed by peer).
         // Poll operations check this via isStreamFullyAcked() to avoid
         // transitioning to SENT before retransmission can recover data
         // lost during connection migration.
-        session->closed_streams_.insert(stream_id);
+        {
+            std::lock_guard<std::recursive_mutex> lock(session->mtx_);
+            session->open_bidi_streams_.erase(stream_id);
+            // the application released the stream before ngtcp2 closed it: a reset that arrived since is not needed
+            if (session->released_open_streams_.erase(stream_id)) {
+                session->peer_reset_streams_.erase(stream_id);
+            }
+        }
 
         // Report a watched response: ngtcp2 closes a stream without an application error only once the data
         // sent on it, including the FIN, has been acknowledged by the peer
@@ -5223,13 +5280,24 @@ void QuicSession::recordPeerStreamReset(int64_t stream_id, uint64_t app_error_co
     // Report the abort exactly once: RESET_STREAM and STOP_SENDING routinely
     // arrive together for the same stream, and nghttp3 then asks us to mirror
     // them, so up to four callbacks can fire for one abandoned stream.
-    if (peer_reset_streams_.find(stream_id) == peer_reset_streams_.end()) {
-        pending_peer_reset_reports_.push_back(stream_id);
+    // only a server's poll operation drains the reports; a STOP_SENDING without an error was not reported
+    if (is_server_) {
+        auto pit = peer_reset_streams_.find(stream_id);
+        if (pit == peer_reset_streams_.end() || pit->second == NGHTTP3_H3_NO_ERROR) {
+            pending_peer_reset_reports_.push_back(stream_id);
+        }
     }
     // Also record the reset in a standalone map so sendStreamData() can still
     // raise QUIC-STREAM-RESET after streamCloseCallback() has erased the stream
     // from streams_.
     peer_reset_streams_[stream_id] = app_error_code;
+}
+
+int QuicSession::streamOpenCallback(ngtcp2_conn* /* conn */, int64_t stream_id, void* user_data) {
+    auto* session = static_cast<QuicSession*>(user_data);
+    std::lock_guard<std::recursive_mutex> lock(session->mtx_);
+    session->noteBidiStreamOpenLocked(stream_id);
+    return 0;
 }
 
 int QuicSession::recvStopSendingCallback(ngtcp2_conn* /* conn */, int64_t stream_id, uint64_t app_error_code,
@@ -5252,6 +5320,11 @@ void QuicSession::recordPeerStopSending(int64_t stream_id, uint64_t app_error_co
     if (it != streams_.end()) {
         // closed for sending without an error; the receive side and the response on it are not affected
         it->second->peer_stop_sending = true;
+    }
+    // kept beyond the stream's entry, which is erased once its response is complete, so that a send still reports
+    // the closed stream; a reset with an error that was recorded already is kept as it is
+    if (peer_reset_streams_.find(stream_id) == peer_reset_streams_.end()) {
+        peer_reset_streams_[stream_id] = NGHTTP3_H3_NO_ERROR;
     }
 }
 

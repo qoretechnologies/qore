@@ -820,6 +820,8 @@ QoreHashNode* Http2ClientPollOperationPriv::handleReading(ExceptionSink* xsink) 
                 }
             }
         }
+        // a streaming consumer's handle releases the stream when it is done with it
+        const bool streaming_consumer = action && action->isStreaming();
 
         if (action) {
             if (is_end && action->isStreaming()) {
@@ -885,6 +887,13 @@ QoreHashNode* Http2ClientPollOperationPriv::handleReading(ExceptionSink* xsink) 
                     }
                 }
             }
+        }
+
+        // the request of a stream that ended without a streaming consumer (a request with its whole body, or one
+        // whose caller is gone) is complete, so nothing sends on the stream any more: its records are released
+        if (is_end && !streaming_consumer) {
+            static_cast<SocketHttp2ClientMultiplexPollOperation*>(op)->releaseStream(
+                static_cast<int32_t>(stream_id_val));
         }
     }
 
@@ -1931,6 +1940,20 @@ nothing Http2ClientPollOperationBase::setIdleTimeout(int idle_timeout_ms) [flags
 */
 nothing Http2ClientPollOperationBase::setMaxResponseBodySize(int max_size) [flags=NAMED_ARGS] {
     priv->setMaxResponseBodySize(max_size > 0 ? max_size : 0);
+}
+
+//! Releases the records that the session of the connection keeps for a stream that the caller is done with
+/** The session keeps the record of a reset of a stream by the server after the stream has closed, so that a send
+    on the stream reports the reset; the stream handles call this when they are destroyed, so a long-lived
+    connection does not keep a record for every stream the server reset.  Releasing a stream without records is a
+    no-op.
+
+    @param stream_id the ID of the stream
+
+    @since %Qore 3.0
+*/
+nothing Http2ClientPollOperationBase::releaseStream(int stream_id) [flags=NAMED_ARGS] {
+    priv->releaseStream(static_cast<int32_t>(stream_id));
 }
 
 //! Sets the encoding assumed for text response bodies whose character encoding is not determined otherwise

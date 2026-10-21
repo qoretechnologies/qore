@@ -139,6 +139,9 @@
     the server waited for it.  An HTTP/3 client sees the server's \c STOP_SENDING when it arrives, so a send after it
     raises \c QUIC-STREAM-RESET instead of being dropped.
 
+    A long-lived HTTP/2 or HTTP/3 connection no longer keeps a record of every request it has served or every stream
+    the peer reset, on the client and on the server, so its memory use does not grow with the number of requests.
+
     LLM streaming requests accept a @ref QoreLlmUtils::LlmCancellation "LlmCancellation" token in
     @ref QoreLlmUtils::LlmRequestOptions::cancellation "LlmRequestOptions::cancellation". Cancelling the token
     closes an in-flight OpenAI-compatible, Anthropic, Gemini/Vertex AI, or Bedrock stream without polling and

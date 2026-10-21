@@ -108,6 +108,8 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
     }
 
     #! Destructor — unregisters the datagram queue if one was registered
+    /** The session of the connection also releases the records it keeps for the stream
+    */
     destructor() {
         if (exists datagram_queue && exists stream_id) {
             *int sid = h3conn.getSessionId();
@@ -117,6 +119,13 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
                 } catch () {
                     # Best-effort cleanup during teardown; session may already be gone
                 }
+            }
+        }
+        if (exists stream_id) {
+            try {
+                h3conn.releaseStream(stream_id);
+            } catch () {
+                # Best-effort cleanup during teardown; the connection may already be closed
             }
         }
     }

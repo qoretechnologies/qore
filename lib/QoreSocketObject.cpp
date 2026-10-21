@@ -6047,6 +6047,20 @@ std::vector<int32_t> QoreSocketObject::takeHttp2PeerResetReportsForAsyncPoll() {
     return h2->takePendingPeerResetReports();
 }
 
+void QoreSocketObject::releaseHttp2Stream(int32_t stream_id) {
+    Http2SessionPtr h2 = qore_socket_object_get_h2_session(this);
+    if (h2) {
+        h2->releaseStream(stream_id);
+    }
+}
+
+void QoreSocketObject::releaseQuicStream(int64_t session_id, int64_t stream_id) {
+    std::shared_ptr<QuicSession> session = qore_socket_object_get_quic_session(this, session_id);
+    if (session) {
+        session->releaseStream(stream_id);
+    }
+}
+
 int QoreSocketObject::waitForHttp2StreamDrain(int32_t stream_id, int timeout_ms) {
     ExceptionSink xsink;
     int rc = waitForHttp2StreamDrain(stream_id, timeout_ms, &xsink);
@@ -6138,6 +6152,24 @@ void QoreSocketObject::dbgCloseAtNextSslIo() {
             fprintf(stderr, "dbgCloseAtNextSslIo(): cannot start the closing thread: %s\n", e.what());
         }
     });
+}
+
+QoreHashNode* QoreSocketObject::dbgGetStreamRecordCounts(int64_t session_id, ExceptionSink* xsink) {
+    if (session_id) {
+        std::shared_ptr<QuicSession> session = qore_socket_object_get_quic_session(this, session_id);
+        if (!session) {
+            xsink->raiseException("DBG-ARGUMENT-ERROR", "the socket has no QUIC session " QLLD,
+                static_cast<int64>(session_id));
+            return nullptr;
+        }
+        return session->dbgGetStreamRecordCounts();
+    }
+    Http2SessionPtr h2 = qore_socket_object_get_h2_session(this);
+    if (!h2) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "the socket has no HTTP/2 session");
+        return nullptr;
+    }
+    return h2->dbgGetStreamRecordCounts();
 }
 #endif
 

@@ -126,6 +126,11 @@ struct Http2StreamInfo {
     bool headers_complete = false;
     bool body_complete = false;
     bool reset = false;
+    //! True once the application has released the stream (Http2Session::releaseStream()) while it was open
+    /** A reset by the peer after that is not recorded in Http2Session::peer_reset_streams, as nothing will send on
+        the stream
+    */
+    bool released = false;
     bool marked_complete = false;  //!< True if already added to completed_streams (prevents duplicates)
     bool dispatched = false;       //!< True after headers-only dispatch (stream stays in map for DATA accumulation)
     bool headers_end_stream = false; //!< True if END_STREAM was on the initial HEADERS frame (no body expected)
@@ -578,6 +583,14 @@ public:
     */
     DLLLOCAL void stopRequestAfterResponse(int32_t stream_id);
 
+#ifdef DEBUG
+    //! Debug-only: the number of records that the session keeps for its streams, by kind
+    /** Tests use it to show that the records of a long-lived session do not grow with the number of streams it has
+        finished; see QoreSocketObject::dbgGetStreamRecordCounts()
+    */
+    DLLLOCAL QoreHashNode* dbgGetStreamRecordCounts() const;
+#endif
+
     //! Drains the stream IDs reset by the peer since the last call (one-shot)
     /** Lets the H2 server poll operation surface peer RST_STREAMs to the
         controller so a persistent dedicated handler thread bound to the
@@ -612,8 +625,19 @@ public:
         return rv;
     }
 
+    //! Releases the records that the session keeps for a stream once the application is done with it
+    /** The record of a reset by the peer outlives the stream so that a send reports it (sendStreamData()); once the
+        application cannot send on the stream any more, the record is not needed, and a long-lived session must not
+        keep one for every stream the peer reset.  A no-op for a stream without records.
+
+        @param stream_id the HTTP/2 stream ID
+    */
+    DLLLOCAL void releaseStream(int32_t stream_id);
+
     //! Remove stream from map (cleanup after handler finishes)
-    /** @param stream_id the stream to remove
+    /** Also releases the records of the stream; see releaseStream()
+
+        @param stream_id the stream to remove
         @since %Qore 3.0
     */
     DLLLOCAL void cleanupStream(int32_t stream_id);
@@ -981,7 +1005,10 @@ private:
         \c HTTP2-STREAM-RESET exception after the stream has been erased from
         \c streams by the normal close path.  Without this, a caller racing
         the close callback sees the generic \c HTTP2-ERROR "stream not found".
-        Mirrors @ref QuicSession::peer_reset_streams_.
+        An entry is removed by the first send that reports it, or when the
+        application is done with its stream (releaseStream(), cleanupStream()),
+        so a long-lived session does not keep one for every stream the peer
+        reset.  Mirrors @ref QuicSession::peer_reset_streams_.
     */
     std::unordered_map<int32_t, uint32_t> peer_reset_streams;
 
@@ -1001,7 +1028,8 @@ private:
 
     //! Stream IDs reset by the peer, awaiting one-shot reporting to the H2 poll
     //! operation for persistent-session teardown.  Pushed in onStreamCloseCallback()
-    //! (error_code!=0); drained by takePendingPeerResetReports().  Accessed under m.
+    //! (error_code!=0) on server sessions only, as nothing drains the reports of a
+    //! client session; drained by takePendingPeerResetReports().  Accessed under m.
     //! Mirrors @ref QuicSession::pending_peer_reset_reports_.
     std::vector<int32_t> pending_peer_reset_reports;
 

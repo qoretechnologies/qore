@@ -81,6 +81,17 @@ public class Http2ClientStreamHandle inherits HttpClientStreamHandle {
         *hash<ExceptionInfo> send_reset;
     }
 
+    #! Destroys the handle; the session of the connection releases the records it keeps for the stream
+    destructor() {
+        if (stream_id) {
+            try {
+                h2conn.releaseStream(stream_id);
+            } catch () {
+                # Best-effort cleanup during teardown; the connection may already be closed
+            }
+        }
+    }
+
     #! Creates a new stream handle
     constructor(Http2ClientConnection conn, timeout request_timeout = DefaultRequestTimeout,
             *LoggerInterface logger, timeout connect_timeout = DefaultConnectTimeout)

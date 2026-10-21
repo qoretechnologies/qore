@@ -2759,7 +2759,7 @@ QoreHashNode* SocketQuicSendResponsePollOperation::continuePoll(ExceptionSink* x
                         }
                         return poll_info;
                     }
-                    // Clean up the closed_streams_ entry if stream_close fired
+                    // the response is sent: release the records of the stream
                     quic_session->removeClosedStream(stream_id_);
                 }
 

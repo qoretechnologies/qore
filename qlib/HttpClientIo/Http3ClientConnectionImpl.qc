@@ -263,6 +263,18 @@ public class Http3ClientConnection inherits HttpClientConnection {
         poll_op.installSseState(stream_id, queue, notifier, initial_body);
     }
 
+    #! Releases the records that the session of the connection keeps for a stream that the caller is done with
+    /** Called by the stream handle when it is destroyed; see
+        @ref Qore::Http3ClientPollOperationBase::releaseStream() "Http3ClientPollOperationBase::releaseStream()"
+
+        @param stream_id the ID of the stream
+
+        @since HttpClientIo 1.0
+    */
+    releaseStream(int stream_id) {
+        poll_op.releaseStream(stream_id);
+    }
+
     #! Sends trailers that end the request body of a streaming request
     /** @param stream_id the HTTP/3 stream ID
         @param trailers the trailer fields

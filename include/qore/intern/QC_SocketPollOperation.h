@@ -1522,6 +1522,15 @@ public:
         return h2_session && h2_session->isGoawayReceived();
     }
 
+    //! Releases the records of a stream that the application is done with; see Http2Session::releaseStream()
+    /** I/O thread only
+    */
+    DLLLOCAL void releaseStream(int32_t stream_id) {
+        if (h2_session) {
+            h2_session->releaseStream(stream_id);
+        }
+    }
+
     //! Collects the response header of each stream whose header arrived and has not been reported
     /** @see Http2Session::takeResponseHeaderEvents()
 

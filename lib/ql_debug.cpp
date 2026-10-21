@@ -7721,6 +7721,26 @@ static QoreValue f_dbg_close_socket_at_next_ssl_io(const QoreListNode* params, R
     return QoreValue();
 }
 
+//! Debug-only: returns the number of records that a session of a socket keeps for its streams, by kind
+/** The QUIC session with the given ID, or the HTTP/2 session of the socket if no ID is given.  Tests use it to show
+    that a long-lived session does not keep records for the streams it has finished.  DEBUG builds only.
+*/
+static QoreValue f_dbg_socket_stream_records(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    const QoreObject* obj = get_param_value(params, 0).get<const QoreObject>();
+    if (!obj) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_socket_stream_records() requires a Socket argument");
+        return QoreValue();
+    }
+    ReferenceHolder<QoreSocketObject> sock(
+        reinterpret_cast<QoreSocketObject*>(
+            const_cast<QoreObject*>(obj)->getReferencedPrivateData(CID_SOCKET, xsink)),
+        xsink);
+    if (*xsink || !sock) {
+        return QoreValue();
+    }
+    return sock->dbgGetStreamRecordCounts(get_param_value(params, 1).getAsBigInt(), xsink);
+}
+
 //! Debug-only: stops one I/O thread of the global async I/O controller and waits until it has stopped
 /** Puts the controller in the state that autostop leaves it in when an idle I/O thread has stopped before another
     one: a test then ends the process in that state, in which the cleanup at exit stopped the controller with an
@@ -9196,6 +9216,10 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_close_socket_at_next_ssl_io", f_dbg_close_socket_at_next_ssl_io,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
         QC_SOCKET->getTypeInfo(), QORE_PARAM_NO_ARG, "sock");
+    qns.addBuiltinVariant("dbg_socket_stream_records", f_dbg_socket_stream_records,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, hashTypeInfo, 2,
+        QC_SOCKET->getTypeInfo(), QORE_PARAM_NO_ARG, "sock",
+        bigIntOrNothingTypeInfo, QORE_PARAM_NO_ARG, "session_id");
     qns.addBuiltinVariant("dbg_detach_async_io_socket", f_dbg_detach_async_io_socket,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
         QC_SOCKET->getTypeInfo(), QORE_PARAM_NO_ARG, "sock");

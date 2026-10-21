@@ -640,10 +640,19 @@ public:
     */
     DLLLOCAL bool isStreamFullyAcked(int64_t stream_id) const;
 
-    //! Remove a stream from the closed-streams set (cleanup after poll completes)
+    //! Releases the records of a stream after a poll operation has sent its response
     /** @param stream_id the HTTP/3 stream ID
     */
     DLLLOCAL void removeClosedStream(int64_t stream_id);
+
+    //! Releases the records that the session keeps for a stream once the application is done with it
+    /** The record of a reset by the peer outlives the stream so that a send reports it (sendStreamData()); once the
+        application cannot send on the stream any more, the record is not needed, and a long-lived session must not
+        keep one for every stream it served.  A no-op for a stream without records.
+
+        @param stream_id the HTTP/3 stream ID
+    */
+    DLLLOCAL void releaseStream(int64_t stream_id);
 
     //! Get the number of bytes in unacknowledged sent packets
     /** Uses ngtcp2_conn_get_conn_info() to read the connection-level
@@ -771,7 +780,7 @@ public:
     */
     DLLLOCAL void watchResponseSend(int64_t stream_id) {
         std::lock_guard<std::recursive_mutex> lock(mtx_);
-        if (isClosed() || closed_streams_.count(stream_id) || peer_reset_streams_.count(stream_id)) {
+        if (isClosed() || isClosedStreamLocked(stream_id) || peer_reset_streams_.count(stream_id)) {
             response_send_results_.emplace_back(stream_id, false);
             return;
         }
@@ -1171,6 +1180,14 @@ public:
     */
     DLLLOCAL void unregisterFromDispatcher();
 
+#ifdef DEBUG
+    //! Debug-only: the number of records that the session keeps for its streams, by kind
+    /** Tests use it to show that the records of a long-lived session do not grow with the number of streams it has
+        finished; see QoreSocketObject::dbgGetStreamRecordCounts()
+    */
+    DLLLOCAL QoreHashNode* dbgGetStreamRecordCounts() const;
+#endif
+
     //! Submit an HTTP/3 GOAWAY shutdown notice (first phase: max stream ID)
     /** Sends a GOAWAY frame with the maximum stream ID, indicating that the
         server intends to shut down but hasn't decided on the final stream ID yet.
@@ -1415,6 +1432,29 @@ private:
     DLLLOCAL static int streamResetCallback(ngtcp2_conn* conn, int64_t stream_id,
                                    uint64_t final_size, uint64_t app_error_code,
                                    void* user_data, void* stream_user_data);
+
+    //! A stream was opened by the peer
+    /** Records a request stream the peer opened, for isClosedStreamLocked()
+    */
+    DLLLOCAL static int streamOpenCallback(ngtcp2_conn* conn, int64_t stream_id, void* user_data);
+
+    //! Records a client-initiated bidirectional stream that ngtcp2 has opened; must be called with mtx_ held
+    DLLLOCAL void noteBidiStreamOpenLocked(int64_t stream_id) {
+        if ((stream_id & 3) == 0) {
+            open_bidi_streams_.insert(stream_id);
+            if (stream_id > max_bidi_stream_id_) {
+                max_bidi_stream_id_ = stream_id;
+            }
+        }
+    }
+
+    //! Returns true if ngtcp2 has closed a client-initiated bidirectional stream; must be called with mtx_ held
+    /** See @ref open_bidi_streams_
+    */
+    DLLLOCAL bool isClosedStreamLocked(int64_t stream_id) const {
+        return (stream_id & 3) == 0 && stream_id >= 0 && stream_id <= max_bidi_stream_id_
+            && !open_bidi_streams_.count(stream_id);
+    }
 
     //! The peer sent STOP_SENDING: it stopped reading the stream (ngtcp2 1.24 and later)
     /** Called when the frame arrives, before the frames that follow it are processed, so a sender sees the stop
@@ -1739,27 +1779,42 @@ private:
     //! Active streams (unordered_map for O(1) lookup vs O(log n) with std::map)
     std::unordered_map<int64_t, std::unique_ptr<QuicStreamInfo>> streams_;
 
-    //! Streams fully closed by ngtcp2 (all data ACKed by peer)
-    /** Populated by streamCloseCallback(); checked by isStreamFullyAcked();
-        cleaned up by removeClosedStream() after the poll operation transitions
-        to SENT.  Protected by mtx_.
+    //! The client-initiated bidirectional (request) streams that ngtcp2 has opened and not closed yet
+    /** With @ref max_bidi_stream_id_, tells whether ngtcp2 has closed a request stream (see isClosedStreamLocked())
+        without a record per closed stream: stream IDs of a type are opened in increasing order (RFC 9000 section
+        2.1), so a stream at or below the highest one opened that is not open any more is closed.  A set of the
+        closed streams grew by one entry with every request of a long-lived session; this one is bounded by the
+        number of streams in progress.  Protected by mtx_.
     */
-    std::unordered_set<int64_t> closed_streams_;
+    std::unordered_set<int64_t> open_bidi_streams_;
+
+    //! The highest client-initiated bidirectional stream ID that ngtcp2 has opened, or -1; protected by mtx_
+    int64_t max_bidi_stream_id_ = -1;
+
+    //! Request streams that the application released (releaseStream()) while ngtcp2 still had them open
+    /** A reset by the peer can still arrive for them; their records are released when ngtcp2 closes them
+        (streamCloseCallback()).  A subset of @ref open_bidi_streams_, so bounded the same way.  Protected by mtx_.
+    */
+    std::unordered_set<int64_t> released_open_streams_;
 
     //! Peer-initiated stream reset info, persisted beyond streams_.erase()
-    /** Populated by h3StopSendingCallback() and h3ResetStreamCallback() so that
+    /** The application error code of the peer's reset of a stream, or H3_NO_ERROR for a STOP_SENDING without an
+        error, which only closes the stream for sending (recordPeerStopSending()).  Populated by
+        recordPeerStreamReset() and recordPeerStopSending() so that
         @ref QuicSession::sendStreamData() can still surface a typed
         \c QUIC-STREAM-RESET exception after the stream has been erased from
-        streams_ by the normal close path.  Protected by mtx_.  Cleared when
-        the poll operation transitions to SENT (alongside closed_streams_).
+        streams_ by the normal close path.  Protected by mtx_.  An entry is
+        removed when the application is done with its stream (releaseStream(),
+        cleanupStream(), removeClosedStream()), so a long-lived session does
+        not keep one for every stream the peer reset.
     */
     std::unordered_map<int64_t, uint64_t> peer_reset_streams_;
 
     //! Stream IDs reset/stop-sent by the peer, awaiting one-shot reporting
-    /** Pushed alongside @ref peer_reset_streams_ in h3StopSendingCallback() and
-        h3ResetStreamCallback(); drained by @ref takePendingPeerResetReports() so
-        the H3 server poll operation can surface peer resets to the controller
-        (persistent-session teardown on multiplexed connections).  Protected by mtx_.
+    /** Pushed alongside @ref peer_reset_streams_ in recordPeerStreamReset(), on server sessions only; drained by
+        @ref takePendingPeerResetReports() so the H3 server poll operation can surface peer resets to the controller
+        (persistent-session teardown on multiplexed connections).  Nothing drains the reports of a client session, so
+        they are not kept there.  Protected by mtx_.
     */
     std::vector<int64_t> pending_peer_reset_reports_;
 

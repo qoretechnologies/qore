@@ -312,6 +312,16 @@ public:
         return session_id.load(std::memory_order_acquire);
     }
 
+    //! Releases the records that the session keeps for a stream that the caller is done with
+    /** Application threads; see QuicSession::releaseStream()
+    */
+    DLLLOCAL void releaseStream(int64_t stream_id) {
+        int64_t sid = session_id.load(std::memory_order_acquire);
+        if (sock_obj && sid) {
+            sock_obj->releaseQuicStream(sid, stream_id);
+        }
+    }
+
     //! Returns the address family of the connection once resolved, or AF_UNSPEC
     /** Can be called from any thread
     */

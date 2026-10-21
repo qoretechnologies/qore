@@ -115,6 +115,17 @@ public:
         @since %Qore 3.0
     */
     DLLLOCAL void dbgCloseAtNextSslIo();
+
+    //! Debug-only: returns the number of records that a session of the socket keeps for its streams, by kind
+    /** Called via the @c dbg_socket_stream_records() debug builtin in @ref lib/ql_debug.cpp, so tests can show that
+        a long-lived session does not keep records for the streams it has finished.
+
+        @param session_id the ID of a QUIC session of the socket; 0 for the HTTP/2 session of the socket
+        @param xsink raises \c DBG-ARGUMENT-ERROR if the socket has no such session
+
+        @since %Qore 3.0
+    */
+    DLLLOCAL QoreHashNode* dbgGetStreamRecordCounts(int64_t session_id, ExceptionSink* xsink);
 #endif
 
     DLLEXPORT QoreSocketObject();
@@ -750,6 +761,18 @@ public:
         HTTP/2 session.
     */
     DLLLOCAL std::vector<int32_t> takeHttp2PeerResetReportsForAsyncPoll();
+
+    //! Releases the records that the HTTP/2 session of the socket keeps for a stream that the caller is done with
+    /** See Http2Session::releaseStream(); a no-op if the socket has no HTTP/2 session.  Not for an I/O thread that
+        holds the lock of the socket.
+    */
+    DLLLOCAL void releaseHttp2Stream(int32_t stream_id);
+
+    //! Releases the records that a QUIC session of the socket keeps for a stream that the caller is done with
+    /** See QuicSession::releaseStream(); a no-op if the socket has no such session.  Not for an I/O thread that
+        holds the lock of the socket.
+    */
+    DLLLOCAL void releaseQuicStream(int64_t session_id, int64_t stream_id);
 
     //! Watches the response on an HTTP/2 server stream so that the result of its transmission is reported
     /** Must be called before the response is submitted; see Http2Session::watchResponseSend().  The result is

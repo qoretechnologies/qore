@@ -1,0 +1,304 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    A long-lived HTTP/2 or HTTP/3 connection keeps no record of the streams it has finished, on the client and on the
+    server: a QUIC session kept one entry for every stream it closed, and HTTP/2 and QUIC sessions kept one for every
+    stream the peer reset, so a connection that served many requests grew with every one of them.
+
+    Many requests are made one after the other on one connection; then the number of each kind of record of the
+    client's and the server's session must be bounded by the number of streams that can still be in progress, whatever
+    the number of requests.  The counts are read with the debug-only dbg_socket_stream_records(), so the test runs in
+    a library-debug build only.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Mime
+%requires Logger
+%requires HttpServerUtil
+%requires HttpServer
+%requires HttpClientIo
+%requires ../../TestCertificates.qm
+
+%exec-class HttpClientIoStreamRecordsTest
+
+#! Remembers the server socket and session of the last request it saw
+class SessionRecorder {
+    public {
+        *Socket sock;
+        *int session_id;
+    }
+
+    private {
+        Mutex m();
+    }
+
+    record(hash<auto> cx) {
+        if (!cx."header-info".sock) {
+            return;
+        }
+        AutoLock al(m);
+        sock = cx."header-info".sock;
+        session_id = cx."header-info".session_id;
+    }
+
+    hash<auto> get() {
+        AutoLock al(m);
+        return {"sock": sock, "session_id": session_id};
+    }
+}
+
+#! Answers every request with "ok"
+/** The request is dispatched as a body-streaming request, so the handler gets the server's socket and session for the
+    record check
+*/
+class OkHandler inherits AbstractHttpRequestHandler {
+    private {
+        SessionRecorder recorder;
+    }
+
+    constructor(SessionRecorder recorder) {
+        self.recorder = recorder;
+    }
+
+    bool wantsBodyStreaming(hash<auto> cx, hash<auto> hdr) {
+        return True;
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        recorder.record(cx);
+        return makeResponse(200, "ok", {"Content-Type": MimeTypeText});
+    }
+}
+
+#! Resets every request and answers 400: HTTP/3 stops reading the request with an error; HTTP/2 resets the stream
+class ResetHandler inherits AbstractHttpRequestHandler {
+    private {
+        SessionRecorder recorder;
+    }
+
+    constructor(SessionRecorder recorder) {
+        self.recorder = recorder;
+    }
+
+    bool wantsBodyStreaming(hash<auto> cx, hash<auto> hdr) {
+        return True;
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        recorder.record(cx);
+        Socket sock = cx."header-info".sock;
+        int stream_id = cx."header-info".stream_id;
+        if (cx."header-info".http3) {
+            sock.resetQuicStream(cx."header-info".session_id, stream_id);
+        } else {
+            sock.resetHttp2Stream(stream_id);
+            *code<nothing()> io_wake = cx."header-info".io_wake;
+            if (io_wake) {
+                io_wake();
+            }
+        }
+        return makeResponse(400, "rejected", {"Content-Type": MimeTypeText});
+    }
+}
+
+public class HttpClientIoStreamRecordsTest inherits QUnit::Test {
+    private {
+        #! the bound of a wait that only guards against a hang
+        const HangGuard = 30s;
+
+        #! the number of requests made on one connection
+        const Requests = 48;
+
+        #! the most records of a kind that a session may keep for the streams that can still be in progress
+        /** The requests are made one after the other, but the streams of the last requests can still be closing:
+            the transport closes a stream once its last data has been acknowledged
+        */
+        const MaxRecords = 3;
+
+        HttpServer server;
+        SessionRecorder recorder();
+        string h2_url;
+        *string h3_url;
+    }
+
+    constructor() : Test("HttpClientIoStreamRecordsTest", "1.0") {
+        addTestCase("HTTP/3: finished requests leave no records", \h3RequestsTest());
+        addTestCase("HTTP/3: reset requests leave no records", \h3ResetRequestsTest());
+        addTestCase("HTTP/2: finished requests leave no records", \h2RequestsTest());
+        addTestCase("HTTP/2: reset requests leave no records", \h2ResetRequestsTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            return;
+        }
+        server = new HttpServer(<HttpServerOptionInfo>{
+            "logger": new Logger("stream-records", LoggerLevel::getLevelInfo()),
+            "quic_headers_only": True,
+        });
+        server.setHandler("ok", "/ok", NOTHING, new OkHandler(recorder));
+        server.setHandler("reset", "/reset", NOTHING, new ResetHandler(recorder));
+        h2_url = sprintf("https://127.0.0.1:%d", server.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
+            "service": 0,
+            "cert": new SSLCertificate(TestCertificates::CertPem),
+            "key": new SSLPrivateKey(TestCertificates::KeyPem),
+        }).port);
+        try {
+            h3_url = sprintf("https://127.0.0.1:%d", server.addQuicListener(<HttpListenerOptionInfo>{
+                "node": "127.0.0.1",
+                "cert": new SSLCertificate(TestCertificates::CertPem),
+                "key": new SSLPrivateKey(TestCertificates::KeyPem),
+            }).port);
+        } catch (hash<ExceptionInfo> ex) {
+            # QUIC is not available; the HTTP/3 tests are skipped
+        }
+        server.waitForAsyncIo();
+    }
+
+    globalTearDown() {
+        if (server) {
+            server.stop();
+        }
+    }
+
+    #! Skips the test unless the library is a debug build, and HTTP/3 is available if needed
+    private checkAvailable(*bool http3) {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("dbg_socket_stream_records() is only registered in a library-debug build");
+        }
+        if (http3 && !h3_url) {
+            testSkip("QUIC is not available");
+        }
+    }
+
+    private HttpClientConnectionManager getManager(string protocol) {
+        return new HttpClientConnectionManager(<HttpClientConnectionManagerOptions>{
+            "protocol": protocol,
+            "accept_all_certs": True,
+            "connect_timeout": 10s,
+            "request_timeout": 20s,
+        });
+    }
+
+    #! Checks that no kind of record of a session is above the bound
+    private checkRecords(string what, Socket sock, *int session_id) {
+        hash<string, int> counts = call_function("dbg_socket_stream_records", sock, session_id);
+        assertGt(0, counts.size(), what + ": the records are counted");
+        foreach hash<auto> i in (counts.pairIterator()) {
+            assertLe(MaxRecords, i.value, sprintf("%s: %s after %d requests: %y", what, i.key, Requests, counts));
+        }
+    }
+
+    #! Checks the records of the client's session of the only connection of a manager, and of the server's session
+    private checkConnectionRecords(HttpClientConnectionManager mgr, string url, string protocol) {
+        assertEq(1, mgr.getStats().total_connections, "the requests are made on one connection");
+        HttpClientConnection conn = mgr.acquireStream(url).getConnection();
+        if (protocol == "h3") {
+            checkRecords("client", conn.getSocket(), cast<Http3ClientConnection>(conn).getSessionId());
+        } else {
+            checkRecords("client", conn.getSocket());
+        }
+        hash<auto> srv = recorder.get();
+        checkRecords("server", srv.sock, srv.session_id);
+    }
+
+    #! Reads a streaming response to its end
+    private readToEnd(HttpClientStreamHandle stream) {
+        while (True) {
+            auto ev = stream.readData(HangGuard);
+            if (!exists ev) {
+                throw "TIMEOUT", sprintf("no stream event within %y", HangGuard);
+            }
+            if (ev.typeCode() == NT_HASH && (ev.end_stream || ev.error)) {
+                break;
+            }
+        }
+    }
+
+    #! Makes requests that are answered
+    /** The last one streams its request body, so the handler gets the server's socket and session
+    */
+    private requestsImpl(string protocol, string url) {
+        HttpClientConnectionManager mgr = getManager(protocol);
+        on_exit mgr.closeAll();
+        for (int i = 0; i < Requests - 1; ++i) {
+            assertEq(200, mgr.request(url, "GET", "/ok").status_code);
+        }
+        {
+            HttpClientStreamHandle stream = mgr.acquireStream(url);
+            stream.startStreaming("POST", "/ok", {"content-type": "application/octet-stream"}, True);
+            stream.writesDone();
+            readToEnd(stream);
+            assertEq(200, stream.getResponse().status_code);
+        }
+        checkConnectionRecords(mgr, url, protocol);
+    }
+
+    #! Makes requests that the server resets: streaming requests through a stream handle, and plain requests
+    private resetRequestsImpl(string protocol, string url) {
+        HttpClientConnectionManager mgr = getManager(protocol);
+        on_exit mgr.closeAll();
+        for (int i = 0; i < Requests; ++i) {
+            if (i % 2) {
+                HttpClientStreamHandle stream = mgr.acquireStream(url);
+                stream.startStreaming("POST", "/reset", {"content-type": "application/octet-stream"}, True);
+                # HTTP/2 reports the reset as the stream's error; on HTTP/3 the server stopped reading with an error
+                # and sent its complete 400 response
+                readToEnd(stream);
+            } else {
+                try {
+                    mgr.request(url, "POST", "/reset", NOTHING, "body");
+                } catch (hash<ExceptionInfo> ex) {
+                    # HTTP/2: the request was reset
+                }
+            }
+        }
+        checkConnectionRecords(mgr, url, protocol);
+    }
+
+    h3RequestsTest() {
+        checkAvailable(True);
+        requestsImpl("h3", h3_url);
+    }
+
+    h3ResetRequestsTest() {
+        checkAvailable(True);
+        resetRequestsImpl("h3", h3_url);
+    }
+
+    h2RequestsTest() {
+        checkAvailable();
+        requestsImpl("h2", h2_url);
+    }
+
+    h2ResetRequestsTest() {
+        checkAvailable();
+        resetRequestsImpl("h2", h2_url);
+    }
+}
