@@ -13,18 +13,24 @@
 
 %exec-class StreamWaitsTest
 
-#! Tests the waits of the file streams: InputStream::readWithTimeout() and OutputStream::writeWithTimeout()
+#! Tests the waits and the I/O of the file streams: InputStream::readWithTimeout(), OutputStream::writeWithTimeout(),
+#! FileInputStream::readNonBlock() and FileOutputStream::writeNonBlock()
 /** A timed wait for a stream's descriptor ends at once when the thread is cancelled; it waited for its whole
-    timeout.  The streams' descriptors are named pipes, which can be left idle (a writer that does not write, a full
-    pipe that is not read).
+    timeout.  The reads and writes that must not wait leave the descriptor's file status flags alone: they turned
+    O_NONBLOCK on for their length, which every other holder of the file description (an inherited standard input,
+    a duplicated descriptor) saw.  The streams' descriptors are named pipes, which can be left idle (a writer that
+    does not write, a full pipe that is not read).
 
-    A wait that is not cancelled never ends before its timeout of an hour, so these tests fail by hanging (the test
-    runner's time limit is the guard).
+    A wait that is not cancelled never ends before its timeout of an hour, and a read or write that must not wait
+    and waits never ends, so these tests fail by hanging (the test runner's time limit is the guard).
 */
 class StreamWaitsTest inherits QUnit::Test {
     public {
         #! a timeout of an hour, for the waits that must end otherwise
         const LongMs = 3600000;
+
+        #! the data written to the pipes
+        const Data = <64617461>;
     }
 
     private {
@@ -38,6 +44,9 @@ class StreamWaitsTest inherits QUnit::Test {
     constructor() : QUnit::Test("StreamWaitsTest", "1.0", \ARGV) {
         addTestCase("a timed stream read is cancelled", \testReadCancel());
         addTestCase("a timed stream write is cancelled", \testWriteCancel());
+        addTestCase("reads and writes leave the descriptor's flags alone", \testFlags());
+        addTestCase("reads and writes that must not wait do not wait", \testNoWait());
+        addTestCase("a transfer through a pipe keeps the data", \testTransfer());
         set_return_value(main());
     }
 
@@ -89,6 +98,106 @@ class StreamWaitsTest inherits QUnit::Test {
                 r.readShortBinary(65536);
             }
         }
+    }
+
+    testFlags() {
+%ifndef QoreDebug
+        testSkip("the flags are watched by dbg_file_stream_io_flags(), which only a debug build of the library has");
+%endif
+%ifdef QoreDebug
+        string path = makeFifo();
+        Counter closed(1);
+        background sub () {
+            on_exit closed.dec();
+            File w();
+            w.open2(path, O_WRONLY);
+            w.write(Data);
+        }();
+        FileInputStream is(path);
+        closed.waitForZero();
+        binary data;
+        hash<auto> h = dbg_file_stream_io_flags(is.getPollableDescriptor(), sub () {
+            data = is.readWithTimeout(4096, LongMs);
+            # the end of the pipe
+            assertEq(NOTHING, is.readNonBlock(4096), "read: the end");
+        });
+        assertEq(Data, data, "read: the data");
+        assertGt(0, h.calls, "read: the reads are watched");
+        assertEq(0, h.nonblock_seen, "read: the second holder never sees O_NONBLOCK");
+        assertFalse(h.nonblock_after, "read: the descriptor stays blocking");
+
+        path = makeFifo();
+        File r();
+        r.open2(path, O_RDONLY | O_NONBLOCK);
+        FileOutputStream os(path);
+        h = dbg_file_stream_io_flags(os.getPollableDescriptor(), sub () {
+            assertEq(Data.size(), cpp_api_output_stream_write_with_timeout(os, Data, LongMs), "write: the data");
+            assertEq(Data.size(), cpp_api_output_stream_write_with_timeout(os, Data, 0), "write: the data again");
+        });
+        assertGt(0, h.calls, "write: the writes are watched");
+        assertEq(0, h.nonblock_seen, "write: the second holder never sees O_NONBLOCK");
+        assertFalse(h.nonblock_after, "write: the descriptor stays blocking");
+        assertEq(Data + Data, r.readBinary(Data.size() * 2), "write: the data arrives");
+%endif
+    }
+
+    testNoWait() {
+        # a pipe whose writer does not write: nothing to read
+        string path = makeFifo();
+        File w();
+        w.open2(path, O_RDWR);
+        FileInputStream is(path);
+        assertEq(NOTHING, is.readNonBlock(4096), "nothing to read");
+        assertEq(NOTHING, is.readWithTimeout(4096, 0), "nothing to read with a timeout of 0");
+
+        # a pipe that is not read: the writes that do not wait fill it, and then write nothing
+        path = makeFifo();
+        File r();
+        r.open2(path, O_RDONLY | O_NONBLOCK);
+        FileOutputStream os(path);
+        binary chunk = binary(strmul("x", 65536));
+        int total;
+        while (int n = cpp_api_output_stream_write_with_timeout(os, chunk, 0)) {
+            total += n;
+        }
+        assertGt(0, total, "writes fill the pipe");
+        assertEq(0, cpp_api_output_stream_write_with_timeout(os, chunk, 0), "a full pipe takes nothing");
+        assertEq(0, cpp_api_output_stream_write_with_timeout(os, chunk, 50), "a full pipe takes nothing in 50 ms");
+        int read;
+        while (r.isDataAvailable(0)) {
+            read += r.readShortBinary(65536).size();
+        }
+        assertEq(total, read, "everything written is read");
+    }
+
+    testTransfer() {
+        string path = makeFifo();
+        binary payload = get_random_bytes(300000);
+        Queue received();
+        background sub () {
+            try {
+                FileInputStream is(path);
+                binary data;
+                while (*binary chunk = is.readWithTimeout(65536, LongMs)) {
+                    data += chunk;
+                }
+                received.push(data);
+            } catch (hash<ExceptionInfo> ex) {
+                received.push(ex);
+            }
+        }();
+        FileOutputStream os(path);
+        int offset = 0;
+        while (offset < payload.size()) {
+            offset += cpp_api_output_stream_write_with_timeout(os, payload.substr(offset, 100000), LongMs);
+        }
+        os.close();
+        auto rv = received.get();
+        if (rv.typeCode() == NT_HASH) {
+            throw rv.err, rv.desc, rv.arg;
+        }
+        assertEq(payload.size(), rv.size(), "the size");
+        assertTrue(payload == rv, "the data");
     }
 
     #! makes a named pipe and returns its path

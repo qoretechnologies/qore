@@ -38,6 +38,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include "qore/InputStream.h"
+#include "qore/intern/FileStreamIo.h"
 
 /**
  * @brief Private data for the Qore::FileInputStream class.
@@ -86,11 +87,15 @@ public:
 
     DLLLOCAL int getPollableDescriptor() const override { return f.isOpen() ? f.getFD() : -1; }
 
-    //! Non-blocking read — sets O_NONBLOCK for the duration of the read and restores it.
-    /** @note Stream classes are single-threaded by design (enforced by thread affinity checks).
-        The O_NONBLOCK flag toggle is safe because no other thread should access this stream
-        concurrently.  However, if the underlying fd is shared with another descriptor (e.g. via
-        dup()), the flag change is visible to all descriptors sharing the same file description.
+    //! Reads what is available without waiting, without changing the descriptor's flags
+    /** The descriptor's file status flags belong to its file description, which other holders can share (an
+        inherited standard input, a duplicated descriptor, a child process), so O_NONBLOCK is never turned on for the
+        read: a pipe, a FIFO or a terminal is read once a check that does not wait reports it readable, a socket is
+        read with MSG_DONTWAIT, and a file or a descriptor that is already nonblocking is read directly (see
+        FileStreamIo.h).
+
+        @note The stream must not share a pipe with another concurrent reader: data that the other reader takes
+        between the check and the read makes the read wait for more data, also on the async I/O thread.
     */
     DLLLOCAL int64 readNonBlock(void* ptr, int64 limit, ExceptionSink* xsink) override {
         int fd = f.isOpen() ? f.getFD() : -1;
@@ -98,36 +103,10 @@ public:
             xsink->raiseException("FILE-READ-ERROR", "file is not open");
             return -1;
         }
-
-        // Set O_NONBLOCK
-        int flags = fcntl(fd, F_GETFL);
-        if (flags == -1) {
-            xsink->raiseException("FILE-READ-ERROR", "fcntl F_GETFL failed: %s", strerror(errno));
-            return -1;
-        }
-        if (!(flags & O_NONBLOCK)) {
-            if (fcntl(fd, F_SETFL, flags | O_NONBLOCK) == -1) {
-                xsink->raiseException("FILE-READ-ERROR", "fcntl F_SETFL failed: %s", strerror(errno));
-                return -1;
-            }
-        }
-
-        ssize_t rc = ::read(fd, ptr, limit);
-        int saved_errno = errno;
-
-        // Restore blocking mode
-        if (!(flags & O_NONBLOCK)) {
-            if (fcntl(fd, F_SETFL, flags) == -1) {
-                printd(0, "FileInputStream::readNonBlock() WARNING: failed to restore blocking mode: %s\n",
-                    strerror(errno));
-            }
-        }
-
+        int err;
+        ssize_t rc = qore_file_stream_read_now(fd, ptr, static_cast<size_t>(limit), err);
         if (rc < 0) {
-            if (saved_errno == EAGAIN || saved_errno == EWOULDBLOCK) {
-                return 0;
-            }
-            xsink->raiseException("FILE-READ-ERROR", "read failed: %s", strerror(saved_errno));
+            xsink->raiseException("FILE-READ-ERROR", "read failed: %s", strerror(err));
             return -1;
         }
         return rc;

@@ -73,6 +73,7 @@
 #include "qore/intern/QoreSignal.h"
 #include "qore/intern/QoreJIT.h"
 #include "qore/intern/QoreAOT.h"
+#include "qore/intern/FileStreamIo.h"
 
 #include <openssl/evp.h>
 #include <openssl/x509.h>
@@ -10220,6 +10221,78 @@ static QoreValue f_dbg_detach_async_io_socket(const QoreListNode* params, Runtim
     return QoreValue();
 }
 
+//! The second holder of the file description watched by dbg_file_stream_io_flags(), or -1
+static std::atomic<int> dbg_fsio_second{-1};
+//! The device and inode of the watched file description
+static dev_t dbg_fsio_dev;
+static ino_t dbg_fsio_ino;
+//! The reads and writes of the watched description made by the file streams without waiting
+static std::atomic<int> dbg_fsio_calls{0};
+//! The reads and writes at which the second holder saw O_NONBLOCK set
+static std::atomic<int> dbg_fsio_nonblock{0};
+
+static void dbg_fsio_hook(int fd) {
+    int second = dbg_fsio_second.load();
+    struct stat st;
+    if (second < 0 || fstat(fd, &st) || st.st_dev != dbg_fsio_dev || st.st_ino != dbg_fsio_ino) {
+        return;
+    }
+    ++dbg_fsio_calls;
+    int fl = fcntl(second, F_GETFL);
+    if (fl != -1 && (fl & O_NONBLOCK)) {
+        ++dbg_fsio_nonblock;
+    }
+}
+
+//! Debug-only: runs the code with a second holder of the file description of the descriptor, and reports the flags
+//! that the holder sees at each read or write of the description that a file stream makes without waiting
+/** The second holder is a duplicate of the descriptor (the same file description, as an inherited standard input
+    would be).  DEBUG builds only.
+
+    @return a hash: \c calls: the reads and writes made, \c nonblock_seen: how many of them the second holder saw
+    with O_NONBLOCK set, \c nonblock_before and \c nonblock_after: whether O_NONBLOCK was set before and after the
+    code ran
+
+    @throw DBG-FILE-STREAM-ERROR the descriptor cannot be duplicated
+*/
+static QoreValue f_dbg_file_stream_io_flags(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    int fd = static_cast<int>(get_param_value(params, 0).getAsBigInt());
+    const ResolvedCallReferenceNode* call = get_param_value(params, 1).get<const ResolvedCallReferenceNode>();
+    int second = dup(fd);
+    struct stat st;
+    if (second < 0 || fstat(second, &st)) {
+        int e = errno;
+        if (second >= 0) {
+            ::close(second);
+        }
+        return xsink->raiseErrnoException("DBG-FILE-STREAM-ERROR", e, "cannot duplicate descriptor %d", fd);
+    }
+    int before = fcntl(second, F_GETFL);
+    dbg_fsio_dev = st.st_dev;
+    dbg_fsio_ino = st.st_ino;
+    dbg_fsio_calls = 0;
+    dbg_fsio_nonblock = 0;
+    dbg_fsio_second = second;
+    qore_dbg_file_stream_io_hook = dbg_fsio_hook;
+    // the hook is removed and the second holder closed however the code ends
+    ON_BLOCK_EXIT([second] () {
+        qore_dbg_file_stream_io_hook = nullptr;
+        dbg_fsio_second = -1;
+        ::close(second);
+    });
+    ValueHolder rv(call->execValue(nullptr, xsink), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    int after = fcntl(second, F_GETFL);
+    ReferenceHolder<QoreHashNode> h(new QoreHashNode(autoTypeInfo), xsink);
+    h->setKeyValue("calls", static_cast<int64>(dbg_fsio_calls.load()), xsink);
+    h->setKeyValue("nonblock_seen", static_cast<int64>(dbg_fsio_nonblock.load()), xsink);
+    h->setKeyValue("nonblock_before", before != -1 && (before & O_NONBLOCK) ? true : false, xsink);
+    h->setKeyValue("nonblock_after", after != -1 && (after & O_NONBLOCK) ? true : false, xsink);
+    return h.release();
+}
+
 //! Debug-only: creates a child process with fork() while another thread holds the lock of a registered fork handler
 /** The other thread takes the lock as the handler's prepare handler does, and releases it when the prepare handlers
     reach the handler, so fork() waits for it.  The child takes and releases the lock in the same way, runs the code
@@ -11798,6 +11871,8 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_object_set_value", f_dbg_object_set_value, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         nothingTypeInfo, 4, listTypeInfo, QORE_PARAM_NO_ARG, "holder", stringTypeInfo, QORE_PARAM_NO_ARG, "member",
         stringTypeInfo, QORE_PARAM_NO_ARG, "key", autoTypeInfo, QORE_PARAM_NO_ARG, "val");
+    qns.addBuiltinVariant("dbg_file_stream_io_flags", f_dbg_file_stream_io_flags, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        hashTypeInfo, 2, bigIntTypeInfo, QORE_PARAM_NO_ARG, "fd", codeTypeInfo, QORE_PARAM_NO_ARG, "call");
     qns.addBuiltinVariant("dbg_fork_while_handler_held", f_dbg_fork_while_handler_held, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, hashTypeInfo, 2, stringTypeInfo, QORE_PARAM_NO_ARG, "name", codeOrNothingTypeInfo,
         QORE_PARAM_NO_ARG, "child");

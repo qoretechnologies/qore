@@ -44,6 +44,7 @@ closed descriptor.
 | stream pumps of sockets (`qore_socket_poll_fd_revents_now()`), the `Socket::poll()` pre-check | `qore_poll_compat()` |
 | HTTP/3 request bodies from a stream (`QuicPollOperations.cpp`) | `qore_poll_compat()` |
 | `ReadOnlyFile::startPollRead()`, `Socket::poll()`, `EventLoop` | `QoreEventLoop` |
+| `FileInputStream::readNonBlock()`, `FileOutputStream::writeNonBlock()` (checks that do not wait) | `qore_poll_compat()` (`FileStreamIo.h`) |
 
 Not affected: the backquote operator (anonymous pipes), socket waits, the terminal reads of `linenoise`, File reads
 without a wait (`read(2)` returns 0 at the end), and the `poll(2)` fallback of the event loop (not used on Darwin).

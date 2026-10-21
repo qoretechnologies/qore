@@ -55,6 +55,12 @@ static void FILEOUTPUTSTREAM_system_constructor(QoreObject* self, int fd, va_lis
     method in the thread that currently owns the stream, and the
     @ref Qore::StreamBase::reassignThread() "StreamBase::reassignThread()" method in the new thread.
 
+    @note A write that must not wait (including those made for the stream by the async I/O controller) leaves the
+    file status flags of the stream's descriptor unchanged, so that other holders of the descriptor's open file
+    description (for example an inherited standard output) are not affected: a pipe, a FIFO or a terminal is
+    checked for readiness first.  The stream must therefore not share a pipe with other concurrent writers: room
+    that another writer takes between the check and the write makes the write wait for the pipe.
+
     @see @ref Qore::StreamWriter "StreamWriter" for a class that can be used to write various kinds of data to an @ref Qore::OutputStream "OutputStream"
 
     @since %Qore 0.8.13

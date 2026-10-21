@@ -5085,6 +5085,15 @@ while (*binary chunk = input.read(65536)) {
       a full named pipe whose reader had closed did not end either.  macOS does not report these conditions to the
       readiness wait that %Qore used; waits on named pipes now use one that reports them, also for descriptors
       numbered 1024 and above.  Waits on named pipes still time out and can still be cancelled
+    - Fixed reads and writes of @ref Qore::FileInputStream "FileInputStream" and
+      @ref Qore::FileOutputStream "FileOutputStream" that must not wait (with
+      @ref Qore::FileInputStream::readNonBlock() "FileInputStream::readNonBlock()", a timed read, and those of
+      socket transfers to and from file streams): they turned \c O_NONBLOCK on for their length, which every other
+      holder of the open file description saw, so that the reads and writes of a shell or a child process sharing
+      an inherited standard input or output could fail with \c EAGAIN in the meantime.  The flags are now left
+      unchanged: a pipe, a FIFO or a terminal is checked for readiness first.  A file stream must therefore not
+      share a pipe with other concurrent readers or writers, whose reads or writes between the check and the
+      stream's read or write make the stream wait for the pipe
     - Fixed the warnings of the files of a separated user module other than its \c .qm file: each was parsed with the
       warnings of the code loading the module (with \c qcc, the default warnings), not those the \c .qm file sets, so
       \c %%modern in the \c .qm file did not enable all warnings in the other files.  The module loader accepted an

@@ -31,8 +31,13 @@
 
 #include <qore/Qore.h>
 #include <qore/InputStream.h>
+#include "qore/intern/FileStreamIo.h"
 
 #include <climits>
+
+#ifdef DEBUG
+std::atomic<void (*)(int)> qore_dbg_file_stream_io_hook{nullptr};
+#endif
 
 #ifdef HAVE_POLL
 #include <poll.h>

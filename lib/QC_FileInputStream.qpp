@@ -55,6 +55,12 @@ static void FILEINPUTSTREAM_system_constructor(QoreObject* self, int fd, va_list
     method in the thread that currently owns the stream, and the
     @ref Qore::StreamBase::reassignThread() "StreamBase::reassignThread()" method in the new thread.
 
+    @note A read that must not wait (including those made for the stream by the async I/O controller) leaves the
+    file status flags of the stream's descriptor unchanged, so that other holders of the descriptor's open file
+    description (for example an inherited standard input) are not affected: a pipe, a FIFO or a terminal is
+    checked for readiness first.  The stream must therefore not share a pipe with other concurrent readers: data
+    that another reader takes between the check and the read makes the read wait for the pipe.
+
     @see @ref Qore::StreamReader "StreamReader" for a class that can be used to read various kinds of data from an @ref Qore::InputStream "InputStream"
 
     @since %Qore 0.8.13

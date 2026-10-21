@@ -38,6 +38,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include "qore/OutputStream.h"
+#include "qore/intern/FileStreamIo.h"
 
 /**
  * @brief Private data for the Qore::FileOutputStream class.
@@ -95,11 +96,15 @@ public:
 
    DLLLOCAL int getPollableDescriptor() const override { return f.isOpen() ? f.getFD() : -1; }
 
-   //! Non-blocking write — sets O_NONBLOCK for the duration of the write and restores it.
-   /** @note Stream classes are single-threaded by design (enforced by thread affinity checks).
-       The O_NONBLOCK flag toggle is safe because no other thread should access this stream
-       concurrently.  However, if the underlying fd is shared with another descriptor (e.g. via
-       dup()), the flag change is visible to all descriptors sharing the same file description.
+   //! Writes what can be written without waiting, without changing the descriptor's flags
+   /** The descriptor's file status flags belong to its file description, which other holders can share (an
+       inherited standard output, a duplicated descriptor, a child process), so O_NONBLOCK is never turned on for the
+       write: a pipe, a FIFO or a terminal is written in chunks that a write after write readiness accepts without
+       waiting, a socket with MSG_DONTWAIT, and a file or a descriptor that is already nonblocking directly (see
+       FileStreamIo.h).
+
+       @note The stream must not share a pipe with another concurrent writer: room that the other writer takes
+       between the check and the write makes the write wait for the reader, also on the async I/O thread.
    */
    DLLLOCAL int64 writeNonBlock(const void* ptr, int64 count, ExceptionSink* xsink) override {
       int fd = f.isOpen() ? f.getFD() : -1;
@@ -107,36 +112,10 @@ public:
          xsink->raiseException("FILE-WRITE-ERROR", "file is not open");
          return -1;
       }
-
-      // Set O_NONBLOCK
-      int flags = fcntl(fd, F_GETFL);
-      if (flags == -1) {
-         xsink->raiseException("FILE-WRITE-ERROR", "fcntl F_GETFL failed: %s", strerror(errno));
-         return -1;
-      }
-      if (!(flags & O_NONBLOCK)) {
-         if (fcntl(fd, F_SETFL, flags | O_NONBLOCK) == -1) {
-            xsink->raiseException("FILE-WRITE-ERROR", "fcntl F_SETFL failed: %s", strerror(errno));
-            return -1;
-         }
-      }
-
-      ssize_t rc = ::write(fd, ptr, count);
-      int saved_errno = errno;
-
-      // Restore blocking mode
-      if (!(flags & O_NONBLOCK)) {
-         if (fcntl(fd, F_SETFL, flags) == -1) {
-            printd(0, "FileOutputStream::writeNonBlock() WARNING: failed to restore blocking mode: %s\n",
-               strerror(errno));
-         }
-      }
-
+      int err;
+      ssize_t rc = qore_file_stream_write_now(fd, ptr, static_cast<size_t>(count), err);
       if (rc < 0) {
-         if (saved_errno == EAGAIN || saved_errno == EWOULDBLOCK) {
-            return 0;
-         }
-         xsink->raiseException("FILE-WRITE-ERROR", "write failed: %s", strerror(saved_errno));
+         xsink->raiseException("FILE-WRITE-ERROR", "write failed: %s", strerror(err));
          return -1;
       }
       return rc;
