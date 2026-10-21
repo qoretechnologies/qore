@@ -39,9 +39,14 @@ class TestTelnetClient inherits TelnetClient {
         *string display = "host:0";
         *string term = "vt100";
         hash<auto> env = {};
+        hash<auto> window = {"columns": 80, "rows": 24};
     }
 
     constructor(string target) : TelnetClient(target) {
+    }
+
+    private hash getWindowSize() {
+        return window;
     }
 
     private *string getDisplay() {
@@ -181,7 +186,33 @@ public class TelnetClientWireTest inherits QUnit::Test {
         addTestCase("NEW-ENVIRON values are escaped", \newEnvironEscaped());
         addTestCase("terminal type and display location", \termAndDisplay());
         addTestCase("names with a NUL character", \nulNames());
+        addTestCase("NAWS window size", \nawsWindowSize());
         set_return_value(main());
+    }
+
+    nawsWindowSize() {
+        (TestTelnetClient client, ScriptedTelnetServer server) = TelnetClientWireTest::connect();
+        on_exit {
+            client.disconnect();
+            server.stop();
+        }
+
+        # RFC 1073: the width and the height are 16-bit values sent high byte first, and a byte with the value of IAC
+        # is doubled (RFC 855); the server reads the doubled bytes as one
+        client.window = {"columns": 300, "rows": 255};
+        server.send(<fffd1f> + binary("OK"));
+        assertEq("OK", client.getAvailableData(30s));
+        assertEq({"cmd": WILL}, server.receive());
+        assertEq({"sb": <1f012c00ff>}, server.receive());
+
+        # a window size update sends the new size
+        client.window = {"columns": 0xff10, "rows": 0x1ff};
+        client.windowSizeUpdated();
+        assertEq({"sb": <1fff1001ff>}, server.receive());
+
+        # the option code after WILL was read as data
+        client.sendData("|");
+        assertEq({"data": <1f>}, server.receive());
     }
 
     #! returns a connected client and server

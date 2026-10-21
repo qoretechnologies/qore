@@ -80,6 +80,8 @@ module TelnetClient {
       error once it has read a subnegotiation that it cannot answer, without sending a reply
     - @ref TelnetClient::TelnetClient::sendData() "TelnetClient::sendData()" is documented to send all values
       verbatim, so that commands can be sent with it; it never doubled IAC bytes
+    - the window size is sent as the telnet protocol requires (RFC 1073): before, the high byte of the width and of
+      the height was always sent as 0, so a window with 256 or more columns or rows was reported with the wrong size
 
     @subsection telnetclient_v1_7 TelnetClient v1.7
     - implemented support for a data provider scheme cache and rich option information for connections
@@ -843,9 +845,12 @@ telnet.setEventQueue();
 
     # don't override this method, fix/enhance it with a patch to the module
     private final updateWindowSizeIntern(hash wh) {
-        logDbg("SND: %s %s [%d,%d,%d,%d]", CmdMap{SB}, OptMap{TOPT_NAWS},(wh.columns & 0xff00),(wh.columns & 0xff),(wh.rows & 0xff00),(wh.rows & 0xff));
+        # RFC 1073: the width and the height are 16-bit values sent high byte first; a byte with the value of IAC is
+        # doubled
+        list<int> size = ((wh.columns >> 8) & 0xff, wh.columns & 0xff, (wh.rows >> 8) & 0xff, wh.rows & 0xff);
+        logDbg("SND: %s %s %y", CmdMap{SB}, OptMap{TOPT_NAWS}, size);
         sendDataIntern((IAC,SB,TOPT_NAWS));
-        sendDataIntern(((wh.columns & 0xff00),(wh.columns & 0xff),(wh.rows & 0xff00),(wh.rows & 0xff)), True);
+        sendDataIntern(size, True);
         sendDataIntern((IAC, SE));
     }
 
