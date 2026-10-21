@@ -4910,6 +4910,14 @@ while (*binary chunk = input.read(65536)) {
       reached: the reference taken on the object was never released after the \c THREAD-CREATION-FAILURE exception,
       so the object was never destroyed and its destructor never ran, and the @ref Qore::Program "Program" that it
       belongs to was never freed
+    - Fixed the @ref implicit_arguments "implicit arguments" (<tt>$1</tt>, <tt>$$</tt> and <tt>$#</tt>) of the code
+      that starts a thread with the @ref background "background operator" having no value in the new thread with
+      @ref exec_mode_ast "AST execution": for example <tt>map <b>background</b> f($1), list</tt> called \c f() with
+      @ref nothing for each element; they have the values of the code that starts the thread, as in the other
+      execution modes
+    - Fixed a crash when the @ref background "background operator" with @ref exec_mode_ast "AST execution" raises an
+      exception preparing an expression of the @ref map "map", @ref select "select", @ref foldl "foldl" or
+      @ref foldr "foldr" operator for the new thread, for example a call with a closure created in a destructor
     - Fixed calling the methods implemented by the abstract classes
       @ref Qore::SQL::AbstractDatasource "AbstractDatasource",
       @ref Qore::SQL::AbstractSQLStatement "AbstractSQLStatement",

@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -49,10 +49,11 @@ public:
     }
 
     DLLLOCAL virtual QoreOperatorNode* copyBackground(ExceptionSink* xsink) const {
-        ValueHolder n_e0(copy_value_and_resolve_lvar_refs(e[0], xsink), xsink);
+        // the key and value expressions are evaluated for each element with the operator's implicit arguments
+        ValueHolder n_e0(copy_value_and_resolve_lvar_refs_bound_implicit(e[0], xsink), xsink);
         if (*xsink)
             return nullptr;
-        ValueHolder n_e1(copy_value_and_resolve_lvar_refs(e[1], xsink), xsink);
+        ValueHolder n_e1(copy_value_and_resolve_lvar_refs_bound_implicit(e[1], xsink), xsink);
         if (*xsink)
             return nullptr;
         ValueHolder n_e2(copy_value_and_resolve_lvar_refs(e[2], xsink), xsink);

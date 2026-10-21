@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -75,7 +75,11 @@ public:
     }
 
     DLLLOCAL virtual QoreOperatorNode* copyBackground(ExceptionSink *xsink) const {
-        QoreFoldlOperatorNode* rv = copyBackgroundExplicit<QoreFoldlOperatorNode>(xsink);
+        // the fold expression is evaluated for each element with the operator's implicit arguments
+        QoreFoldlOperatorNode* rv = copyBackgroundIterating<QoreFoldlOperatorNode>(xsink, true);
+        if (!rv) {
+            return nullptr;
+        }
         // use lazy evaluation if the iterator expression supports it
         rv->iterator_func = dynamic_cast<FunctionalOperator*>(rv->right.getInternalNode());
         rv->string_join = string_join;
@@ -112,7 +116,11 @@ public:
     }
 
     DLLLOCAL virtual QoreOperatorNode* copyBackground(ExceptionSink *xsink) const {
-        QoreFoldrOperatorNode* rv = copyBackgroundExplicit<QoreFoldrOperatorNode>(xsink);
+        // the fold expression is evaluated for each element with the operator's implicit arguments
+        QoreFoldrOperatorNode* rv = copyBackgroundIterating<QoreFoldrOperatorNode>(xsink, true);
+        if (!rv) {
+            return nullptr;
+        }
         // use lazy evaluation if the iterator expression supports it
         rv->iterator_func = dynamic_cast<FunctionalOperator*>(rv->right.getInternalNode());
         rv->string_join = string_join;

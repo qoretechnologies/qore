@@ -46,6 +46,10 @@ private:
    ExceptionSink* xsink;
    std::vector<QoreObject*> objects;
    BackgroundClosureCaptureHelper* prev;
+   //! the number of operators binding implicit arguments of their own around the operand being copied
+   /** see copy_value_and_resolve_lvar_refs_bound_implicit()
+   */
+   unsigned bound_implicit_depth = 0;
    bool release = false;
 
 public:
@@ -54,6 +58,22 @@ public:
 
    DLLLOCAL void add(QoreObject* obj) {
       objects.push_back(obj);
+   }
+
+   //! Called when the copy enters an operand evaluated with the implicit arguments of an operator in the expression
+   DLLLOCAL void enterBoundImplicit() {
+      ++bound_implicit_depth;
+   }
+
+   //! Called when the copy leaves an operand entered with enterBoundImplicit()
+   DLLLOCAL void leaveBoundImplicit() {
+      assert(bound_implicit_depth);
+      --bound_implicit_depth;
+   }
+
+   //! Returns true if the copy is in an operand evaluated with the implicit arguments of an operator in the expression
+   DLLLOCAL bool inBoundImplicit() const {
+      return bound_implicit_depth != 0;
    }
 
    DLLLOCAL std::vector<QoreObject*> takeObjects() {
@@ -65,6 +85,15 @@ public:
 
 DLLLOCAL QoreValue copy_value_and_resolve_lvar_refs(const QoreValue& n, ExceptionSink* xsink);
 DLLLOCAL QoreValue copy_value_and_resolve_lvar_refs(RuntimeConfig& rc, const QoreValue& n, ExceptionSink* xsink);
+
+//! Copies an operand that an operator evaluates with implicit arguments of its own, for the background operator
+/** The background operator copies its expression with the values of the local variables and of the implicit
+    arguments ($1, $$, $#) of the code that starts the thread, which the new thread does not have (see
+    copy_value_and_resolve_lvar_refs()).  An operator that iterates (map, select, foldl, ...) evaluates its expression
+    for each element with its own implicit arguments: in a copy of that expression they are kept, and evaluated by the
+    new thread when the operator runs.
+*/
+DLLLOCAL QoreValue copy_value_and_resolve_lvar_refs_bound_implicit(const QoreValue& n, ExceptionSink* xsink);
 
 // type of logical operator function
 typedef bool (*op_log_func_t)(const QoreValue& l, const QoreValue& r, ExceptionSink* xsink);
@@ -357,6 +386,29 @@ public:
         ValueHolder n_right(copy_value_and_resolve_lvar_refs(right, xsink), xsink);
         if (*xsink)
             return nullptr;
+        return new O(this->loc, n_left.release(), n_right.release());
+    }
+
+    //! Copies an operator that evaluates one of its operands for each element with implicit arguments of its own
+    /** The implicit arguments of that operand are kept for the new thread; see
+        copy_value_and_resolve_lvar_refs_bound_implicit().
+
+        @param left_per_element true if the left operand is the one evaluated for each element, false for the right
+    */
+    template <class O>
+    DLLLOCAL O* copyBackgroundIterating(ExceptionSink* xsink, bool left_per_element) const {
+        ValueHolder n_left(left_per_element
+            ? copy_value_and_resolve_lvar_refs_bound_implicit(left, xsink)
+            : copy_value_and_resolve_lvar_refs(left, xsink), xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+        ValueHolder n_right(left_per_element
+            ? copy_value_and_resolve_lvar_refs(right, xsink)
+            : copy_value_and_resolve_lvar_refs_bound_implicit(right, xsink), xsink);
+        if (*xsink) {
+            return nullptr;
+        }
         return new O(this->loc, n_left.release(), n_right.release());
     }
 };

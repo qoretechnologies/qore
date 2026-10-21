@@ -652,6 +652,40 @@ QoreValue copy_value_and_resolve_lvar_refs(const QoreValue& n, ExceptionSink* xs
     return copy_value_and_resolve_lvar_refs(rc, n, xsink);
 }
 
+namespace {
+//! Counts an operator that binds implicit arguments around the operand being copied, for as long as it exists
+/** The count is that of the copy in progress (BackgroundClosureCaptureHelper), so a background expression that code
+    evaluated by the copy starts is copied with its own.
+*/
+class BackgroundBoundImplicitHelper {
+public:
+    BackgroundBoundImplicitHelper(BackgroundClosureCaptureHelper* copy) : copy(copy) {
+        if (copy) {
+            copy->enterBoundImplicit();
+        }
+    }
+
+    ~BackgroundBoundImplicitHelper() {
+        if (copy) {
+            copy->leaveBoundImplicit();
+        }
+    }
+
+    BackgroundBoundImplicitHelper(const BackgroundBoundImplicitHelper&) = delete;
+    BackgroundBoundImplicitHelper& operator=(const BackgroundBoundImplicitHelper&) = delete;
+
+private:
+    BackgroundClosureCaptureHelper* copy;
+};
+}
+
+QoreValue copy_value_and_resolve_lvar_refs_bound_implicit(const QoreValue& n, ExceptionSink* xsink) {
+    // a background expression is copied only by the background operator (do_op_background())
+    assert(background_closure_capture_helper);
+    BackgroundBoundImplicitHelper bh(background_closure_capture_helper);
+    return copy_value_and_resolve_lvar_refs(n, xsink);
+}
+
 QoreValue copy_value_and_resolve_lvar_refs(RuntimeConfig& rc, const QoreValue& n, ExceptionSink* xsink) {
     if (!n.hasNode()) {
         return const_cast<QoreValue&>(n);
@@ -703,6 +737,17 @@ QoreValue copy_value_and_resolve_lvar_refs(RuntimeConfig& rc, const QoreValue& n
 
         case NT_FUNCREFCALL:
             return call_ref_call_copy(rc, n.get<const CallReferenceCallNode>(), xsink);
+
+        case NT_IMPLICIT_ARG:
+        case NT_IMPLICIT_ELEMENT:
+            // the implicit arguments and the implicit element ($1, $$, $#) of the code that starts the thread are
+            // evaluated here, as its local variables are: the new thread does not have them; those of an operator
+            // in the expression that binds its own are kept (copy_value_and_resolve_lvar_refs_bound_implicit())
+            if (!background_closure_capture_helper || !background_closure_capture_helper->inBoundImplicit()) {
+                ValueEvalRefHolder vh(rc, n, xsink);
+                return *xsink ? QoreValue() : check_background_closure_capture(vh.takeReferencedValue(), xsink);
+            }
+            break;
 
         case NT_METHOD_CALL:
             return crlr_mcall_copy(rc, n.get<const MethodCallNode>(), xsink);
