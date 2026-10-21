@@ -529,11 +529,40 @@ public:
         return aborted_before_accept || state == SPS_ACCEPTING;
     }
 
+    //! Makes the accepted socket available to C++ callers with takeAcceptedSocket() instead of getOutput()
+    /** The TLS handshake of the accepted connection is then polled with a pollable wrapper of the accepted socket
+        instead of a Socket object: releasing a Socket object invalidates its socket, which the caller gets.  Call
+        before the operation is submitted.
+    */
+    DLLLOCAL void setNativeOutput() {
+        native_output = true;
+    }
+
+    //! Returns the accepted socket, which the caller then owns (one reference), or nullptr if none was accepted
+    DLLLOCAL QoreSocketObject* takeAcceptedSocket(ExceptionSink* xsink) {
+        QoreObject* wrapper;
+        QoreSocketObject* rv;
+        {
+            AutoLocker al(sock->priv->m);
+            rv = accepted_socket.release();
+            wrapper = accepted_socket_obj.release();
+        }
+        // the pollable wrapper of the TLS handshake holds a reference of its own; releasing it does not invalidate
+        // the socket
+        if (wrapper) {
+            assert(native_output);
+            wrapper->deref(xsink);
+        }
+        return rv;
+    }
+
 protected:
     mutable SimpleRefHolder<QoreSocketObject> accepted_socket;
     //! Cached QoreObject wrapper for the accepted socket during SSL handshake
     mutable ReferenceHolder<QoreObject> accepted_socket_obj;
     SocketSource* source = nullptr;
+    //! True if the accepted socket is taken with takeAcceptedSocket(); see setNativeOutput()
+    bool native_output = false;
 
     //! Called in the constructor
     DLLLOCAL virtual int preVerify(ExceptionSink* xsink) {
@@ -559,7 +588,8 @@ protected:
             // Cache the QoreObject wrapper to avoid creating a new one each time
             if (!accepted_socket_obj) {
                 accepted_socket->ref();
-                accepted_socket_obj = new QoreObject(QC_SOCKET, getProgram(), *accepted_socket);
+                accepted_socket_obj = new QoreObject(native_output ? QC_ABSTRACTPOLLABLEIOOBJECTBASE : QC_SOCKET,
+                    getProgram(), *accepted_socket);
             }
             accepted_socket_obj->ref();
             info->setKeyValue("socket", *accepted_socket_obj, xsink);

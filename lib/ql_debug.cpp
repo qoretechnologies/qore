@@ -7410,6 +7410,135 @@ static void ut_tls_close_full_send_buffer(UnitTestCounters& c) {
     peer.finish();
 }
 
+//! A client for ut_socket_object_accept_returns_valid_socket(): connects, with TLS or not, and reads one byte
+struct UtAcceptClient {
+    int port;
+    bool tls;
+    std::thread thr;
+    //! the byte read, or -1
+    std::atomic<int> received{-1};
+
+    DLLLOCAL UtAcceptClient(int port, bool tls) : port(port), tls(tls) {
+        thr = std::thread([this]() {
+            run();
+        });
+    }
+
+    DLLLOCAL ~UtAcceptClient() {
+        if (thr.joinable()) {
+            thr.join();
+        }
+    }
+
+    DLLLOCAL void finish() {
+        if (thr.joinable()) {
+            thr.join();
+        }
+    }
+
+private:
+    DLLLOCAL void run() {
+        int fd = ::socket(AF_INET, SOCK_STREAM, 0);
+        if (fd < 0) {
+            return;
+        }
+        // a hang guard only: the accepted socket sends the byte at once
+        struct timeval tv = {10, 0};
+        setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof tv);
+        struct sockaddr_in addr = {};
+        addr.sin_family = AF_INET;
+        addr.sin_port = htons(static_cast<uint16_t>(port));
+        addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+        if (::connect(fd, reinterpret_cast<struct sockaddr*>(&addr), sizeof addr)) {
+            ::close(fd);
+            return;
+        }
+        unsigned char b = 0;
+        if (tls) {
+            SSL_CTX* ctx = SSL_CTX_new(TLS_client_method());
+            SSL* ssl = ctx ? SSL_new(ctx) : nullptr;
+            if (ssl && SSL_set_fd(ssl, fd) == 1 && SSL_connect(ssl) == 1 && SSL_read(ssl, &b, 1) == 1) {
+                received = b;
+            }
+            if (ssl) {
+                SSL_free(ssl);
+            }
+            if (ctx) {
+                SSL_CTX_free(ctx);
+            }
+        } else if (::recv(fd, &b, 1, 0) == 1) {
+            received = b;
+        }
+        ::close(fd);
+    }
+};
+
+//! QoreSocketObject::accept() and acceptSSL() return a socket the caller can use
+/** Since accept became an operation of the async I/O controller, the C++ API took the accepted socket out of the
+    Socket object that the operation made for it; releasing that object invalidated the socket, so every use of it
+    raised OBJECT-ALREADY-DELETED.  Each variant accepts a connection, and the accepted socket sends a byte that the
+    client reads.
+*/
+static void ut_socket_object_accept_returns_valid_socket(UnitTestCounters& c) {
+    for (int variant = 0; variant < 4; ++variant) {
+        const bool tls = variant >= 2;
+        const bool with_source = variant % 2;
+        std::string what = std::string(tls ? "acceptSSL" : "accept") + (with_source ? "(source)" : "(timeout)");
+        ExceptionSink xsink;
+        QoreSocketObject* listener = new QoreSocketObject;
+        ReferenceHolder<QoreObject> listener_obj(new QoreObject(QC_SOCKET, getProgram(), listener), &xsink);
+        if (tls) {
+            EVP_PKEY* key = ut_tls_make_key();
+            X509* cert = key ? ut_tls_make_cert(key) : nullptr;
+            UT_ASSERT(c, key && cert, (what + ": a certificate is made").c_str());
+            if (!key || !cert) {
+                if (key) {
+                    EVP_PKEY_free(key);
+                }
+                continue;
+            }
+            listener->setCertificateAndPrivateKey(new QoreSSLCertificate(cert), new QoreSSLPrivateKey(key));
+        }
+        int rc = listener->bindINET("127.0.0.1", "0", true, AF_INET, SOCK_STREAM, 0, &xsink);
+        if (!rc && !xsink) {
+            rc = listener->listen(5);
+        }
+        UT_ASSERT(c, !rc && !xsink, (what + ": the listener listens").c_str());
+        if (rc || xsink) {
+            xsink.clear();
+            continue;
+        }
+
+        UtAcceptClient client(listener->getPort(), tls);
+        SocketSource source;
+        QoreSocketObject* accepted;
+        if (tls) {
+            accepted = with_source ? listener->acceptSSL(&xsink, &source) : listener->acceptSSL(&xsink, 10000);
+        } else {
+            accepted = with_source ? listener->accept(&source, &xsink) : listener->accept(10000, &xsink);
+        }
+        UT_ASSERT(c, accepted && !xsink, (what + ": a connection is accepted").c_str());
+        if (!accepted || xsink) {
+            xsink.clear();
+            client.finish();
+            continue;
+        }
+        // the caller owns the accepted socket and wraps it in a Socket object
+        ReferenceHolder<QoreObject> accepted_obj(new QoreObject(QC_SOCKET, getProgram(), accepted), &xsink);
+        rc = accepted->send("x", 1, 10000, &xsink);
+        UT_ASSERT(c, rc >= 0 && !xsink, (what + ": the accepted socket can be used").c_str());
+        xsink.clear();
+        client.finish();
+        UT_ASSERT_EQ(c, static_cast<int>('x'), client.received.load(),
+            (what + ": the client gets the byte the accepted socket sent").c_str());
+        if (with_source) {
+            UT_ASSERT(c, source.getAddress() && !strcmp(source.getAddress(), "127.0.0.1"),
+                (what + ": the source is the client's address").c_str());
+        }
+        accepted->close();
+    }
+}
+
 static void ut_manager_close_all(UnitTestCounters& c) {
     ExceptionSink xsink;
 
@@ -9630,6 +9759,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     ut_manager_pool_sandbox(c);
     ut_tls_close_sends_close_notify(c);
     ut_tls_close_full_send_buffer(c);
+    ut_socket_object_accept_returns_valid_socket(c);
     ut_event_notifier_use_after_close(c);
     ut_event_notifier_concurrent_close(c);
 #ifdef DEBUG

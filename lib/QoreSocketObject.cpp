@@ -3266,6 +3266,8 @@ static QoreSocketObject* qore_socket_object_exec_accept(QoreSocketObject* s, int
     if (*xsink) {
         return nullptr;
     }
+    // the caller gets the accepted socket itself, not a Socket object, whose release would invalidate it
+    accept_poller->setNativeOutput();
 
     my_socket_priv* priv = my_socket_priv::getPriv(*s);
     QoreSocketObjectAsyncIoGuard async_guard(*priv, xsink, NB_ALL);
@@ -3297,29 +3299,17 @@ static QoreSocketObject* qore_socket_object_exec_accept(QoreSocketObject* s, int
         return nullptr;
     }
 
-    ValueHolder output(accept_poller->getOutput(), xsink);
+    QoreSocketObject* accepted = accept_poller->takeAcceptedSocket(xsink);
     if (*xsink) {
-        return nullptr;
-    }
-    if (output->isNothing()) {
-        // no connection and no timeout: the operation was canceled
-        qore_socket_raise_accept_without_connection(*result, ssl ? "acceptSSL" : "accept", xsink);
-        return nullptr;
-    }
-    if (output->getType() != NT_OBJECT) {
-        xsink->raiseException("SOCKET-ACCEPT-ERROR",
-            "expected Socket object from async accept operation, got '%s'",
-            output->getFullTypeName());
-        return nullptr;
-    }
-
-    QoreObject* ns = output->get<QoreObject>();
-    QoreSocketObject* accepted = static_cast<QoreSocketObject*>(ns->getReferencedPrivateData(CID_SOCKET, xsink));
-    if (*xsink) {
+        if (accepted) {
+            accepted->deref(xsink);
+        }
         return nullptr;
     }
     if (!accepted) {
-        xsink->raiseException("SOCKET-ACCEPT-ERROR", "accepted object does not contain Socket private data");
+        // no connection and no timeout: the operation was canceled
+        qore_socket_raise_accept_without_connection(*result, ssl ? "acceptSSL" : "accept", xsink);
+        return nullptr;
     }
     return accepted;
 }

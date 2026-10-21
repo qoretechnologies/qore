@@ -269,9 +269,53 @@ public:
 
     // get port number for INET sockets
     DLLEXPORT int getPort();
+
+    //! Accepts a connection on a listening socket, waiting for one without a timeout
+    /** @param source if not null, set to the address of the connection's peer
+        @param xsink if an error occurs, the Qore-language exception information will be added here
+
+        @return a new socket object for the accepted connection, of which the caller owns the only reference (it is
+        normally given to a new Socket object: <tt>new QoreObject(QC_SOCKET, getProgram(), sock)</tt>), or nullptr
+        if an exception was raised
+
+        @par Example:
+        @code{.cpp}
+QoreSocketObject* accepted = listener->accept(nullptr, xsink);
+if (accepted) {
+    ReferenceHolder<QoreObject> obj(new QoreObject(QC_SOCKET, getProgram(), accepted), xsink);
+    accepted->send("hello", 5, 5000, xsink);
+}
+        @endcode
+    */
     DLLEXPORT QoreSocketObject* accept(SocketSource* source, ExceptionSink* xsink);
+
+    //! Accepts a connection on a listening socket and negotiates TLS with the socket's certificate and key
+    /** @param xsink if an error occurs, the Qore-language exception information will be added here
+        @param source if not null, set to the address of the connection's peer
+
+        @return a new socket object for the accepted connection, of which the caller owns the only reference, or
+        nullptr if an exception was raised; see accept(SocketSource*, ExceptionSink*)
+    */
     DLLEXPORT QoreSocketObject* acceptSSL(ExceptionSink* xsink, SocketSource* source);
+
+    //! Accepts a connection on a listening socket, waiting at most the given time for one
+    /** @param timeout_ms the maximum time to wait for a connection in milliseconds; -1 for no timeout
+        @param xsink if an error occurs, the Qore-language exception information will be added here
+
+        @return a new socket object for the accepted connection, of which the caller owns the only reference, or
+        nullptr if no connection arrived within the timeout (without an exception) or if an exception was raised; see
+        accept(SocketSource*, ExceptionSink*)
+    */
     DLLEXPORT QoreSocketObject* accept(int timeout_ms, ExceptionSink* xsink);
+
+    //! Accepts a connection and negotiates TLS with the socket's certificate and key, waiting at most the given time
+    /** @param xsink if an error occurs, the Qore-language exception information will be added here
+        @param timeout_ms the maximum time to wait for a connection in milliseconds; -1 for no timeout
+
+        @return a new socket object for the accepted connection, of which the caller owns the only reference, or
+        nullptr if no connection arrived within the timeout (without an exception) or if an exception was raised; see
+        accept(SocketSource*, ExceptionSink*)
+    */
     DLLEXPORT QoreSocketObject* acceptSSL(ExceptionSink* xsink, int timeout_ms);
 
     DLLEXPORT int listen(int backlog);
