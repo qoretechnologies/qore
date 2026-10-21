@@ -427,6 +427,8 @@ while (i.next()) {
     @section csvutil_relnotes Release Notes
 
     @subsection csvutil_v1_12 Version 1.12
+    - an empty CSV input can return its example record and field description after a search has finished,
+      including an input with no columns
     - added the \c write-data action, which returns the CSV data created from the records given to it and the
       number of records (@ref DataProvider::GeneratedDataInfo "GeneratedDataInfo") instead of writing a file;
       @ref CsvUtil::CsvWriteDataProvider "CsvWriteDataProvider" returns the data from
