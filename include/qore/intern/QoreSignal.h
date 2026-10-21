@@ -99,6 +99,20 @@ public:
       return rv;
    }
 
+   // must be called in the signal lock; returns a new reference to the callback for a caller that runs it outside
+   // the lock, where the handler can be replaced or removed and the handler's own reference released
+   DLLLOCAL ResolvedCallReferenceNode* refCallback() const {
+      assert(funcref);
+      return funcref->refRefSelf();
+   }
+
+   // must be called in the signal lock; returns a new reference to the Program, as refCallback()
+   DLLLOCAL QoreProgram* refProgram() const {
+      assert(pgm);
+      pgm->ref();
+      return pgm;
+   }
+
    // must be called in the signal lock
    DLLLOCAL CodePgm take() {
       assert(funcref);
@@ -124,12 +138,10 @@ public:
    sh_status_e status;
 
    DLLLOCAL void init();
-   DLLLOCAL void runHandler(int sig, ExceptionSink* xsink);
+   //! runs the callback with the signal number; the caller holds a reference to the callback
+   DLLLOCAL static void runHandler(const ResolvedCallReferenceNode& callback, int sig, ExceptionSink* xsink);
    DLLLOCAL bool isSet() const {
       return (bool)funcref;
-   }
-   DLLLOCAL QoreProgram* getProgram() const {
-      return pgm;
    }
 };
 

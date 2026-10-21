@@ -250,6 +250,12 @@
     wakeup from accessing the destroyed manager mutex. If a signal callback is still running, exit remains
     immediate so a callback waiting for the exiting thread cannot deadlock shutdown.
 
+    A signal callback whose handler is replaced while it runs, by another thread or by the callback itself, keeps
+    running safely: the callback and the values its closure captured are released when it returns, where they were
+    released at once and the process could crash.  A callback that removes its own handler twice no longer crashes
+    the process when it returns, and an exception raised by a destructor when a removed callback is released no
+    longer prevents the callback of the next signal from running.
+
     External module documentation locates shared HTML assets beside the installed
     SDK template, independently of the module's installation prefix. Custom SDK
     data directories and paths containing spaces are supported.

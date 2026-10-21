@@ -51,12 +51,12 @@ void QoreSignalHandler::init() {
     status = SH_OK;
 }
 
-// must be called in the signal lock
-void QoreSignalHandler::runHandler(int sig, ExceptionSink *xsink) {
+// called outside the signal lock
+void QoreSignalHandler::runHandler(const ResolvedCallReferenceNode& callback, int sig, ExceptionSink* xsink) {
     // create signal number argument
     ReferenceHolder<QoreListNode> args(new QoreListNode(bigIntTypeInfo), xsink);
     args->push(sig, nullptr);
-    funcref->execValue(*args, xsink).discard(xsink);
+    callback.execValue(*args, xsink).discard(xsink);
 }
 
 QoreSignalManager::QoreSignalManager() : is_enabled(false), tid(-1), block(false), waiting(0), num_handlers(0),
@@ -175,9 +175,11 @@ void QoreSignalManager::del() {
             if (!handlers[i].isSet())
                 continue;
 
-            if (handlers[i].status == QoreSignalHandler::SH_InProgress)
+            // a handler whose callback is running, including one already removed while it runs, is released by
+            // the signal thread when the callback returns
+            if (handlers[i].status != QoreSignalHandler::SH_OK) {
                 handlers[i].status = QoreSignalHandler::SH_Delete;
-            else {
+            } else {
                 // must be called in the signal lock
                 CodePgm old = handlers[i].take();
                 qore_program_private::delSignal(*old.pgm, i);
@@ -445,26 +447,37 @@ void QoreSignalManager::signal_handler_thread() {
             handlers[sig].status = QoreSignalHandler::SH_InProgress;
             handler_running = true;
 
-            // unlock to run handler code
-            sl.unlock();
-
-            // the handler's thread-local data in the Program's family is created when the handler first saves data
-            QoreProgram* pgm = handlers[sig].getProgram();
-
             {
-                ProgramThreadCountContextHelper tch(&xsink, pgm, true);
-                if (!xsink) {
-                    handlers[sig].runHandler(sig, &xsink);
+                // The callback and its Program are referenced while the lock is held and stay referenced while the
+                // callback runs: the callback itself or another thread can replace the handler in the meantime,
+                // which releases the references the handler holds
+                ReferenceHolder<QoreProgram> pgm(handlers[sig].refProgram(), &xsink);
+                ReferenceHolder<ResolvedCallReferenceNode> callback(handlers[sig].refCallback(), &xsink);
+
+                // unlock to run handler code
+                sl.unlock();
+
+                {
+                    // the handler's thread-local data in the Program's family is created when the handler first
+                    // saves data
+                    ProgramThreadCountContextHelper tch(&xsink, *pgm, true);
+                    if (!xsink) {
+                        QoreSignalHandler::runHandler(**callback, sig, &xsink);
+                    }
+                    // a callback whose handler was replaced while it ran is destroyed here, in its Program's context
+                    callback = nullptr;
                 }
-            }
 
-            // delete thread-local storage, if any
-            if (pgm) {
+                // delete thread-local storage
                 end_signal_thread(&xsink);
-            }
 
-            // cleanup thread resources
-            purge_thread_resources(&xsink);
+                // cleanup thread resources
+                purge_thread_resources(&xsink);
+
+                // released before the lock is reacquired: when the handler was replaced by one of another Program,
+                // this can be the last reference, and the Program's destruction removes its signal handlers
+                pgm = nullptr;
+            }
 
             // consume exceptions and reset exception sink
             xsink.handleExceptions();
@@ -488,6 +501,9 @@ void QoreSignalManager::signal_handler_thread() {
             assert(num_handlers >= 0);
             sl.unlock();
             old.del(&xsink);
+            // an exception raised by a destructor while the handler is released is reported here; left in the
+            // exception sink, it would prevent the next callback from running
+            xsink.handleExceptions();
             sl.lock();
             handler_running = false;
         }
@@ -635,6 +651,11 @@ int QoreSignalManager::removeHandler(int sig, ExceptionSink *xsink) {
 
         if (!handlers[sig].isSet())
             return 0;
+
+        // a handler removed while its callback runs is released by the signal thread when the callback returns
+        if (handlers[sig].status == QoreSignalHandler::SH_Delete) {
+            return 0;
+        }
 
         // remove from the signal mask for sigwait
         sigdelset(&mask, sig);
