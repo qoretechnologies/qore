@@ -398,10 +398,15 @@ public:
     DLLLOCAL static std::atomic<dbg_deref_decides_t> dbg_deref_decides;
 
     //! Test hook run by tryFastDeref() after it has decided that there is nothing to decide, before the release
-    /** See design/dgc.md, "Known limitation: a lock-free release that decided before a scan committed a set".
+    /** See design/dgc.md, "A lock-free release and a scan that commits a set: hazard slots".
     */
     typedef void (*dbg_before_fast_release_t)(RObject* o);
     DLLLOCAL static std::atomic<dbg_before_fast_release_t> dbg_before_fast_release;
+
+    //! Test hook run by RSetHelper::waitHazards() before it waits for a lock-free release of the object to finish,
+    //! with the lock of the waits held
+    typedef void (*dbg_hazard_wait_t)(RObject* o);
+    DLLLOCAL static std::atomic<dbg_hazard_wait_t> dbg_hazard_wait;
 #endif
 
     // wait_only=true means: we do not claim deleter status (so the "deleter vs. waiter" invariant
@@ -680,6 +685,23 @@ public:
     // returns the name of the object
     DLLLOCAL virtual const char* getName() const = 0;
 };
+
+//! Registers the calling thread's hazard slot; called by ThreadEntry::activate() on the thread itself
+/** A lock-free release (RObject::tryFastDeref()) publishes the object in the releasing thread's slot before it reads
+    the object's recursive set, and clears the slot after the release; a scan that commits a set for an object that
+    had none waits for each release of that object that a slot shows in progress (RSetHelper::waitHazards()), so that
+    RSet::canDelete() reads the object's count with that release in it.  A thread with no slot releases in the locking
+    path.  See design/dgc.md, "A lock-free release and a scan that commits a set: hazard slots".
+
+    @param tid the thread's Qore TID, which indexes the slots
+*/
+DLLLOCAL void qore_robject_hazard_register(int tid);
+
+//! Unregisters the calling thread's hazard slot; called before the thread's Qore data is deleted
+DLLLOCAL void qore_robject_hazard_unregister();
+
+//! Returns true if the calling thread has a hazard slot, so that its releases can take the lock-free path
+DLLLOCAL bool qore_robject_hazard_registered();
 
 //! Counts a scan's try of the locks of the containers in an object's private data for as long as it exists
 /** See RObject::private_scan_tries.
@@ -1072,6 +1094,13 @@ public:
         contended = true;
     }
 
+    //! Waits for the lock-free releases in progress of the objects that this scan's commit put in a set
+    /** A release that read no set for one of those objects before the commit can still be to come, and a verdict made
+        with the object's count before it lands reads its reference as one from outside the set; see
+        qore_robject_hazard_register().
+    */
+    DLLLOCAL void waitHazards();
+
 private:
     enum class NodeKind : unsigned char {
         Object,
@@ -1179,6 +1208,8 @@ private:
         result as current (RScanHelper::needScan()) and skip the scan that reads the container.
     */
     bool contended = false;
+    //! The objects that this scan's commit put in a set when they had none; see waitHazards()
+    std::vector<RObject*> newly_set;
     //! Set when this pass registered a notification with the owner of a lock it could not take
     /** A scan that gives up asks the constructor to roll back and retry, and the retry only makes progress
         because notifier.wait() blocks until the owner of the lock releases it.  Every path that abandons a

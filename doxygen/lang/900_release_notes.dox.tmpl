@@ -5033,6 +5033,9 @@ while (*binary chunk = input.read(65536)) {
       it was released while another thread was using the container, for example a poll operation submitted to the
       @ref Qore::AsyncIoController "AsyncIoController" that keeps its own result queue
 
+    - Fixed reference cycles in rare cases never being collected when references to two of their objects from outside
+      the cycle were released by different threads at the same time
+
     - Fixed threads with a small stack size on Linux with glibc having less stack for their code than the size set
       with @ref Qore::set_default_thread_stack_size() "set_default_thread_stack_size()": glibc takes the static
       thread-local storage of the process from each thread's stack, which left a thread set to 128KB too little stack

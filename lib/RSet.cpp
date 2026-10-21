@@ -43,6 +43,7 @@
 #include <deque>
 #include <map>
 #include <mutex>
+#include <condition_variable>
 
 // ---------------------------------------------------------------------------------------------------------------
 // Runtime scan accounting and scan waits; see design/dgc.md "Diagnosing scan contention"
@@ -708,18 +709,180 @@ std::atomic<RObject::dbg_before_deref_scan_t> RObject::dbg_before_deref_scan{nul
 std::atomic<RObject::dbg_scan_contended_t> RObject::dbg_scan_contended{nullptr};
 std::atomic<RObject::dbg_deref_decides_t> RObject::dbg_deref_decides{nullptr};
 std::atomic<RObject::dbg_before_fast_release_t> RObject::dbg_before_fast_release{nullptr};
+std::atomic<RObject::dbg_hazard_wait_t> RObject::dbg_hazard_wait{nullptr};
 #endif
+
+namespace {
+// Hazard slots: see design/dgc.md, "A lock-free release and a scan that commits a set: hazard slots"
+
+//! Set in a hazard slot by a scan that waits for the slot's release to finish
+constexpr uintptr_t HAZARD_WAITER = 1;
+
+//! The size of a hazard slot: one cache line, so that a thread's publications never share a line with another's
+#if defined(__aarch64__) || defined(__powerpc64__)
+constexpr size_t HAZARD_SLOT_SIZE = 128;
+#else
+constexpr size_t HAZARD_SLOT_SIZE = 64;
+#endif
+
+//! A thread's hazard slot; only its thread writes the object and the generation, a waiting scan only sets the flag
+struct alignas(HAZARD_SLOT_SIZE) RObjectHazardSlot {
+    //! the RObject whose reference the thread is releasing with no lock, with HAZARD_WAITER when a scan waits, or 0
+    std::atomic<uintptr_t> obj{0};
+    //! advanced before each publication, so that a scan waits for the release that it saw, not for later ones
+    std::atomic<unsigned> gen{0};
+};
+
+static_assert(sizeof(RObjectHazardSlot) == HAZARD_SLOT_SIZE, "a hazard slot fills its cache line exactly");
+static_assert(alignof(RObject) >= 2, "HAZARD_WAITER is stored in the low bit of an RObject pointer");
+
+//! One slot for each thread ID, as many as the thread list has entries (MAX_QORE_THREADS)
+/** Zero-initialized static storage: a page is only touched once a TID it holds a slot for has been used.
+*/
+RObjectHazardSlot hazard_slots[MAX_QORE_THREADS];
+
+//! One more than the highest TID that has registered its slot; the slots a scan reads
+std::atomic<int> hazard_slot_limit{0};
+
+//! The calling thread's slot, or nullptr when the thread has none
+/** A pointer, so trivially destructible: releases run after the thread's thread_local destructors (see
+    t_deref_inprogress).
+*/
+thread_local RObjectHazardSlot* t_hazard_slot = nullptr;
+
+//! The lock and condition of the scans that wait for a slot to be cleared; only taken when a scan waits
+struct HazardWait {
+    std::mutex lock;
+    std::condition_variable cond;
+};
+
+//! Returns the waits' lock and condition, created once and never destroyed, as releases run during process exit
+HazardWait& hazard_wait() {
+    static HazardWait* wait = new HazardWait;
+    return *wait;
+}
+
+//! Publishes the object in the slot before the release reads the object's set
+inline void hazard_publish(RObjectHazardSlot* slot, const RObject* o) {
+    slot->gen.store(slot->gen.load(std::memory_order_relaxed) + 1, std::memory_order_relaxed);
+    // release: a scan that reads the object reads the generation of this publication or of a later one
+    slot->obj.store(reinterpret_cast<uintptr_t>(o), std::memory_order_release);
+    // the publication is ordered before the release's read of the set, and a scan's commit before the scan's read
+    // of the slot by the scan's own fence (RSetHelper::waitHazards()): one of the two sees the other
+    std::atomic_thread_fence(std::memory_order_seq_cst);
+}
+
+//! Clears the slot after the release, and wakes the scans waiting for it
+inline void hazard_clear(RObjectHazardSlot* slot) {
+    // an exchange: a scan that marks the slot between a read of it and a store that clears it would never be woken
+    if (slot->obj.exchange(0, std::memory_order_acq_rel) & HAZARD_WAITER) {
+        HazardWait& w = hazard_wait();
+        std::lock_guard<std::mutex> l(w.lock);
+        w.cond.notify_all();
+    }
+}
+}
+
+void qore_robject_hazard_register(int tid) {
+    assert(tid >= 0 && tid < MAX_QORE_THREADS);
+    // a TID outside the thread list has no slot, and the thread releases in the locking path
+    if (tid < 0 || tid >= MAX_QORE_THREADS) {
+        return;
+    }
+    RObjectHazardSlot* slot = &hazard_slots[tid];
+    // the previous thread with the TID cleared the slot after each of its releases
+    assert(!slot->obj.load(std::memory_order_relaxed));
+    int limit = hazard_slot_limit.load(std::memory_order_relaxed);
+    while (limit <= tid && !hazard_slot_limit.compare_exchange_weak(limit, tid + 1, std::memory_order_acq_rel,
+            std::memory_order_relaxed)) {
+    }
+    t_hazard_slot = slot;
+}
+
+void qore_robject_hazard_unregister() {
+    // a release clears the slot before it returns, so nothing is published here
+    assert(!t_hazard_slot || !t_hazard_slot->obj.load(std::memory_order_relaxed));
+    t_hazard_slot = nullptr;
+}
+
+bool qore_robject_hazard_registered() {
+    return t_hazard_slot != nullptr;
+}
+
+void RSetHelper::waitHazards() {
+    if (newly_set.empty()) {
+        return;
+    }
+    // the sets were published before this fence: a release that publishes after it reads them in the release's own
+    // read of the set after its fence, and one that published before it is read in its slot below
+    std::atomic_thread_fence(std::memory_order_seq_cst);
+    std::sort(newly_set.begin(), newly_set.end());
+    int limit = hazard_slot_limit.load(std::memory_order_acquire);
+    for (int i = 0; i < limit; ++i) {
+        RObjectHazardSlot& slot = hazard_slots[i];
+        uintptr_t v = slot.obj.load(std::memory_order_acquire);
+        if (!v) {
+            continue;
+        }
+        uintptr_t o = v & ~HAZARD_WAITER;
+        if (!std::binary_search(newly_set.begin(), newly_set.end(), reinterpret_cast<RObject*>(o))) {
+            continue;
+        }
+        // the release in progress is the one of this publication or of a later one: the scan waits for it, and not
+        // for the next ones, which read the set
+        unsigned gen = slot.gen.load(std::memory_order_acquire);
+        HazardWait& w = hazard_wait();
+        std::unique_lock<std::mutex> l(w.lock);
+        while (true) {
+            uintptr_t cur = slot.obj.load(std::memory_order_seq_cst);
+            if ((cur & ~HAZARD_WAITER) != o || slot.gen.load(std::memory_order_acquire) != gen) {
+                break;
+            }
+            // the flag is set under the lock, so the releasing thread's notification, also under the lock, comes
+            // after this thread waits
+            if (!(cur & HAZARD_WAITER) && !slot.obj.compare_exchange_strong(cur, cur | HAZARD_WAITER,
+                    std::memory_order_seq_cst)) {
+                continue;
+            }
+#ifdef DEBUG
+            if (RObject::dbg_hazard_wait_t hook = RObject::dbg_hazard_wait.load(std::memory_order_acquire)) {
+                hook(reinterpret_cast<RObject*>(o));
+            }
+#endif
+            // the releasing thread holds no lock between its publication and its clear, and runs nothing there that
+            // can block it or end it, so the wait ends when that thread is scheduled
+            w.cond.wait(l);
+        }
+    }
+    newly_set.clear();
+}
 
 int RObject::tryFastDeref(bool real) {
     // an object in a recursive set has a collection decision to make
     if (rset.load(std::memory_order_acquire)) {
         return -1;
     }
+    // the release is published in the thread's hazard slot; a thread with none (a native thread not registered with
+    // Qore, or one whose Qore data is being deleted) releases in the locking path
+    RObjectHazardSlot* slot = t_hazard_slot;
+    if (!slot) {
+        return -1;
+    }
     if (real) {
         // the last real reference goes through the lock; see derefRealIntern()
+        if (rrefs.load(std::memory_order_relaxed) <= 1) {
+            return -1;
+        }
+        hazard_publish(slot, this);
+        // a set committed before the publication is seen here; one committed after it waits for this release
+        if (rset.load(std::memory_order_relaxed)) {
+            hazard_clear(slot);
+            return -1;
+        }
         int r = rrefs.load(std::memory_order_relaxed);
         do {
             if (r <= 1) {
+                hazard_clear(slot);
                 return -1;
             }
         } while (!rrefs.compare_exchange_weak(r, r - 1, std::memory_order_acq_rel, std::memory_order_relaxed));
@@ -734,7 +897,9 @@ int RObject::tryFastDeref(bool real) {
         // takes the last one in the locking path (derefRealIntern(), which waits for rset invalidations) and releases
         // its reference there.  This one is then the last reference, and the caller continues as the object's
         // deleter, as for a weak reference.
-        return (references.fetch_sub(1, std::memory_order_acq_rel) - 1) ? 1 : 0;
+        int rv = (references.fetch_sub(1, std::memory_order_acq_rel) - 1) ? 1 : 0;
+        hazard_clear(slot);
+        return rv;
     }
     // a deferred scan is made by the dereference that finds no real reference left; a scan trying the lock of a
     // container of the object's private data is about to make one due if it finds the lock held, after which the
@@ -743,14 +908,22 @@ int RObject::tryFastDeref(bool real) {
             && !rrefs.load(std::memory_order_acquire)) {
         return -1;
     }
+    hazard_publish(slot, this);
+    // a set committed before the publication is seen here; one committed after it waits for this release
+    if (rset.load(std::memory_order_relaxed)) {
+        hazard_clear(slot);
+        return -1;
+    }
 #ifdef DEBUG
-    // a scan can commit a set for the object between the decision above and the release below; see design/dgc.md,
-    // "Known limitation: a lock-free release that decided before a scan committed a set"
+    // a scan can commit a set for the object between the decision above and the release below, and then waits for
+    // this release (RSetHelper::waitHazards()); tests hold the release here
     if (dbg_before_fast_release_t hook = dbg_before_fast_release.load(std::memory_order_acquire)) {
         hook(this);
     }
 #endif
-    return (references.fetch_sub(1, std::memory_order_acq_rel) - 1) ? 1 : 0;
+    int rv = (references.fetch_sub(1, std::memory_order_acq_rel) - 1) ? 1 : 0;
+    hazard_clear(slot);
+    return rv;
 }
 
 // The objects this thread is currently dereferencing, innermost first.
@@ -2143,6 +2316,10 @@ RSetHelper::RSetHelper(RObject& obj, ExceptionSink* xsink, const std::vector<con
     // record what this scan had to do, so the next scan started here picks the mode that fits
     obj.scan_wrote.store(changed, std::memory_order_relaxed);
 
+    // the lock-free releases of objects that this commit put in a set, which read no set, land before any verdict is
+    // made with their counts
+    waitHazards();
+
     printd(QRO_LVL, "RSetHelper::RSetHelper() this: %p (%p) EXIT\n", this, &obj);
 }
 
@@ -2514,6 +2691,10 @@ void RSetHelper::commit() {
         RSet* rs = rsets[n.component];
         printd(QRO_LVL, "RSetHelper::commit() obj %p '%s' rset: %p rcount: %d\n", obj, obj->getName(), rs,
             n.internal);
+        // a lock-free release of an object that had no set can be in progress; see waitHazards()
+        if (rs && !obj->rset.load(std::memory_order_relaxed)) {
+            newly_set.push_back(obj);
+        }
         obj->setRSet(rs, rs ? n.internal : 0, rs && component_closed[n.component], n.edge_gen, n.remove_gen,
             !contended);
     }

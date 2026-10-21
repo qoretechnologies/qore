@@ -831,6 +831,9 @@ void ThreadEntry::activate(int tid, pthread_t n_ptid, QoreProgram* p, bool forei
     assert(!::thread_data.get());
     thread_data = new ThreadData(tid, p, foreign, flags);
     ::thread_data.set(thread_data);
+    // the thread's lock-free releases publish in its hazard slot; called on the thread itself, as the thread data is
+    // set (see qore_robject_hazard_register())
+    qore_robject_hazard_register(tid);
     status = QTS_ACTIVE;
     // set lvstack if QoreProgram set
     if (p) {
@@ -4837,6 +4840,8 @@ QoreHashNode* QoreThreadList::getCallStackHash(const QoreStackLocation& stack_lo
 // every listed thread under lck, and it used to find the pointer to data that had already been freed, in the window
 // between the delete and the lock.
 void QoreThreadList::deleteData(int tid) {
+    // the thread's releases from here on take the locking path: its TID's slot can be given to a new thread
+    qore_robject_hazard_unregister();
     {
         AutoLocker al(lck);
         entry[tid].thread_data = nullptr;
@@ -4849,6 +4854,8 @@ void QoreThreadList::deleteData(int tid) {
 }
 
 void QoreThreadList::deleteDataRelease(int tid) {
+    // the thread's releases from here on take the locking path: its TID's slot can be given to a new thread
+    qore_robject_hazard_unregister();
     {
         AutoLocker al(lck);
         entry[tid].thread_data = nullptr;
@@ -4862,6 +4869,8 @@ void QoreThreadList::deleteDataRelease(int tid) {
 }
 
 void QoreThreadList::deleteDataReleaseSignalThread() {
+    // the thread's releases from here on take the locking path: its TID's slot can be given to a new thread
+    qore_robject_hazard_unregister();
     thread_data.get()->del(nullptr);
     {
         AutoLocker al(lck);

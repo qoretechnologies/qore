@@ -804,11 +804,11 @@ cycle take none, that an object inside one still does, and that cycles built aro
 captured variable are still collected.
 
 
-### Known limitation: a lock-free release that decided before a scan committed a set
+### A lock-free release and a scan that commits a set: hazard slots
 
-`RObject::tryFastDeref()` decides first and releases after: it reads `rset` (null), then releases the reference with
-one atomic decrement. A scan made by another thread can commit a recursive set for the object between the two, and
-the dereference that made the scan can read the object's count in `RSet::canDelete()` before the decrement lands:
+`RObject::tryFastDeref()` decides before it releases: it reads `rset` (null), then releases the reference with one
+atomic decrement. A scan made by another thread can commit a recursive set for the object between the two, and the
+dereference that made the scan can read the object's count in `RSet::canDelete()` before the decrement lands:
 
 1. thread A releases a reference to member X of what is about to be a cycle, reads `rset` as null and is
    descheduled before its decrement;
@@ -816,20 +816,58 @@ the dereference that made the scan can read the object's count in `RSet::canDele
    and X; `canDelete()` reads X's count, which still includes A's reference, finds X held from outside the set and
    keeps it;
 3. A's decrement lands: X now has only the reference from inside the set, but A decided nothing, and no other
-   dereference follows, so the cycle is never collected.
+   dereference follows, so the cycle was never collected.
 
-The effect is a leaked cycle: nothing is freed early, nothing crashes, and the objects stay allocated with their
-destructors not run. The window is the two instructions between A's load of `rset` and its decrement, against B's
-whole scan and commit, so A has to be descheduled at exactly that point; it has not been seen outside a test that
-holds A there. "A count superseded by a release that decided nothing" covers the dereferencing object's own count,
-not the counts of the other members of the set it decides for.
+"A count superseded by a release that decided nothing" covers the dereferencing object's own count, not the counts
+of the other members of the set it decides for. Closing this window has to cost the lock-free release more than its
+decrement, as nothing that a scan does can tell a release that is still to land from a reference that is held. Each
+thread therefore has a **hazard slot** in which its lock-free releases are published, and a scan that commits a set
+waits for the releases that its slots show in progress:
+
+- **Publication.** The release writes the object's address to the thread's slot (after advancing the slot's
+  generation, see below), issues a sequentially consistent fence, and only then reads `rset`; after its decrement it
+  clears the slot. The commit publishes the sets and the scan issues a fence of its own before it reads the slots
+  (`RSetHelper::waitHazards()`), so for each release either the release reads the new set and takes the locking path,
+  or the scan reads the release in its slot. A release that read a set takes the locking path as before.
+- **The scan's wait.** A commit records each object that it put in a set when the object had none (`newly_set`);
+  only those can have a lock-free release in progress that read no set. After its commit, and before any verdict is
+  made with their counts, the scan reads every registered slot, and for one that shows one of those objects it waits
+  on a condition variable until the slot is cleared, or until its generation moves. It marks the slot with
+  `HAZARD_WAITER` (a compare-and-swap, under the lock of the waits) before it waits, and the releasing thread's clear
+  reports the mark and notifies the waits under the same lock, so the notification comes after the scan waits.
+- **The clear is an exchange.** A release that read its slot, found no mark and then stored 0 would overwrite a mark
+  made in between, and the scan that made it would wait for ever: the clear has to report the mark it replaces in
+  the same atomic operation. A lock-free release therefore costs a fence and an exchange on its own slot more than
+  its decrement; neither touches the object's cache line, so releases of a shared object do not contend more than
+  before. Measured on x86_64 (release build, a reference taken and released in a loop): 9.9 ns before, 18.4 ns with
+  the slot on one thread; 27.4 ns and 29.1 ns with 8 threads releasing references to one object. A weak reference
+  held across the release, the other sound way to close the window, costs as much on one thread and 75 ns with 8
+  threads, as its two atomic operations are on the shared object's line.
+- **The generation.** The release advances its slot's generation before it publishes; the scan reads the object and
+  then the generation, and waits only for the publication it saw. A thread that keeps releasing references to the
+  object with no lock (each of which now reads the set and takes the locking path) cannot keep the scan waiting.
+- **Liveness.** The releasing thread holds no lock between its publication and its clear, and runs nothing there
+  that can block it or end it: the loads, the decrement and the exchange, with no cancellation point (Qore's thread
+  cancellation and `thread_exit` act at statement boundaries; the `pthread_cancel()` made at process exit is deferred).
+  A thread cannot end with its slot set, and a descheduled thread only delays the scan until it runs again. The scan
+  holds the scan lock of the object that it started at while it waits, and the r-sections of the graph have been
+  released by the commit.
+- **Registration.** The slots are a static array with one slot per TID, as many as the thread list has entries
+  (`MAX_QORE_THREADS`), each alone in its cache line (64 bytes; 128 on aarch64), so a page is only touched once a TID
+  in it has been used. `ThreadEntry::activate()` registers the thread's slot when it creates the thread's Qore data, on
+  the thread itself (background threads, the main thread, foreign threads and the signal thread), and
+  `QoreThreadList::deleteData()` and its variants unregister it before deleting the data. A scan reads the slots up to
+  the highest TID that has registered one: about 0.4 ns per slot per commit that put objects in a set.
+- **Threads with no slot.** A native thread that is not registered with Qore, and a thread whose Qore data is being
+  deleted, have no slot; their releases take the locking path, which decides under `rlck` after the decrement and needs
+  no slot. `ut_unregistered_thread_release()` checks that a native thread's releases take the locking path, that a
+  registered thread's take the lock-free path, and that both, made at the same time on one object, release every
+  reference once.
 
 `ut_fast_release_during_member_scan()` in the C++ unit tests (`asyncio_unit_tests.qtest`) holds the lock-free
-release of X between its decision and its decrement (`RObject::dbg_before_fast_release`) while another thread's
-dereference of Q commits the set; the two-Queue cycle is never collected. It is skipped until the window is closed:
-closing it soundly costs the lock-free release more than its decrement (a weak reference across the release, a
-hazard slot read by the scanner before `canDelete()`, or a flag in the reference count word), and the choice
-between those is open.
+release of X between its decision and its decrement (`RObject::dbg_before_fast_release`) while this thread's
+dereference of Q commits the set; the scan's wait (`RObject::dbg_hazard_wait`) lets the held release continue, and
+the two-Queue cycle is collected. Both hooks are only in debug builds.
 
 ### A dereference keeps its object allocated until it returns
 

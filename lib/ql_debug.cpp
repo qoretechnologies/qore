@@ -1817,6 +1817,8 @@ struct UtFastReleaseHold {
     RObject* obj = nullptr;
     bool held = false;
     bool release = false;
+    //! set when the scan waits for the held release
+    bool scan_waited = false;
 };
 
 UtFastReleaseHold ut_fast_release_hold;
@@ -1835,25 +1837,27 @@ void ut_hold_fast_release(RObject* o) {
     s.cv.wait_for(l, UT_CONTENDED_HANG_GUARD, [&s]() { return s.release; });
 }
 
-//! true once the window that ut_fast_release_during_member_scan() exercises is closed
-/** See design/dgc.md, "Known limitation: a lock-free release that decided before a scan committed a set"; the test
-    fails until then, so it is skipped.
-*/
-constexpr bool UT_FAST_RELEASE_WINDOW_CLOSED = false;
+//! the scan waits for the held release: the release continues, and its clear wakes the scan
+void ut_release_held_fast_release(RObject* o) {
+    UtFastReleaseHold& s = ut_fast_release_hold;
+    std::lock_guard<std::mutex> l(s.m);
+    RObject::dbg_hazard_wait.store(nullptr);
+    s.scan_waited = true;
+    s.release = true;
+    s.cv.notify_all();
+}
 }
 
 //! Tests that a lock-free release that decided before another thread's scan committed a set does not strand the set
 /** X holds Q and Q holds X through their private data, closing a cycle whose scan is due at Q.  The lock-free release
     of the last reference to X from outside the cycle is held between its decision (no set) and its decrement, while
-    this thread releases the last reference to Q from outside: the scan finds the cycle, commits a set, and reads X's
-    count with the held reference in it, so the set is kept; the held release then lands and decides nothing.
+    this thread releases the last reference to Q from outside: the scan finds the cycle and commits a set, with X's
+    count still holding the reference being released.  The canDelete() verdict that followed read it as one from outside
+    the set and kept the set, and the release then landed and decided nothing, so the cycle was never collected.  The
+    scan now waits for the release, which its hazard slot shows in progress (RSetHelper::waitHazards()), before any
+    verdict; the hook on that wait lets the held release continue.
 */
 static void ut_fast_release_during_member_scan(UnitTestCounters& c) {
-    if (!UT_FAST_RELEASE_WINDOW_CLOSED) {
-        printf("  SKIP: ut_fast_release_during_member_scan(): a known limitation, see design/dgc.md, \"Known "
-            "limitation: a lock-free release that decided before a scan committed a set\"\n");
-        return;
-    }
     ExceptionSink xsink;
     Queue* qq = new Queue;
     QoreObject* q = new QoreObject(QC_QUEUE, getProgram(), qq);
@@ -1878,10 +1882,13 @@ static void ut_fast_release_during_member_scan(UnitTestCounters& c) {
     {
         std::lock_guard<std::mutex> l(s.m);
         s.obj = qore_object_private::get(*x);
-        s.held = s.release = false;
+        s.held = s.release = s.scan_waited = false;
     }
     RObject::dbg_before_fast_release.store(ut_hold_fast_release);
+    // the scan below waits for the held release, so the wait lets it continue
+    RObject::dbg_hazard_wait.store(ut_release_held_fast_release);
     std::thread releaser([x]() {
+        // a thread registered with Qore, so that it releases with no lock, from its hazard slot
         QoreForeignThreadHelper fth;
         ExceptionSink txsink;
         x->deref(&txsink);
@@ -1902,6 +1909,11 @@ static void ut_fast_release_during_member_scan(UnitTestCounters& c) {
     }
     releaser.join();
     RObject::dbg_before_fast_release.store(nullptr);
+    RObject::dbg_hazard_wait.store(nullptr);
+    {
+        std::lock_guard<std::mutex> l(s.m);
+        UT_ASSERT(c, s.scan_waited, "the scan waits for the held release before it decides");
+    }
 
     bool collected = !x->isValid() && !q->isValid();
     UT_ASSERT(c, collected, "the cycle of X and Q is collected");
@@ -1915,6 +1927,83 @@ static void ut_fast_release_during_member_scan(UnitTestCounters& c) {
     xsink.clear();
     x->tDeref();
     q->tDeref();
+}
+
+namespace {
+//! Releases \a n references to \a obj on the calling thread, and returns the number of them made in the locking path
+int64 ut_release_refs(QoreObject* obj, int n) {
+    ExceptionSink xsink;
+    int64 start = q_get_deref_locked_count();
+    for (int i = 0; i < n; ++i) {
+        obj->deref(&xsink);
+    }
+    xsink.clear();
+    return q_get_deref_locked_count() - start;
+}
+}
+
+//! Tests that the releases of a native thread not registered with Qore take the locking path, and stay correct
+/** A thread with no hazard slot cannot publish a lock-free release for a scan to wait for, so it releases every
+    reference in the locking path; a thread registered with Qore releases with no lock.  Native and registered threads
+    then release references to one object at the same time, and every reference is released once.
+*/
+static void ut_unregistered_thread_release(UnitTestCounters& c) {
+    constexpr int UT_RELEASES = 1000;
+    constexpr int UT_THREADS = 4;
+    ExceptionSink xsink;
+    QoreObject* obj = new QoreObject(QC_QUEUE, getProgram(), new Queue);
+    int base = obj->reference_count();
+    // the references released by the threads below; taking a reference needs no thread data
+    for (int i = 0; i < UT_RELEASES * (2 + 2 * UT_THREADS); ++i) {
+        obj->ref();
+    }
+
+    bool native_slot = true;
+    int64 native_locked = -1;
+    // no QoreForeignThreadHelper: the thread is not registered with Qore
+    std::thread native([&]() {
+        native_slot = qore_robject_hazard_registered();
+        native_locked = ut_release_refs(obj, UT_RELEASES);
+    });
+    native.join();
+    UT_ASSERT(c, !native_slot, "a native thread not registered with Qore has no hazard slot");
+    UT_ASSERT_EQ(c, UT_RELEASES, native_locked, "each release of the native thread takes the locking path");
+
+    bool registered_slot = false;
+    int64 registered_locked = -1;
+    std::thread registered([&]() {
+        QoreForeignThreadHelper fth;
+        registered_slot = qore_robject_hazard_registered();
+        registered_locked = ut_release_refs(obj, UT_RELEASES);
+    });
+    registered.join();
+    UT_ASSERT(c, registered_slot, "a thread registered with Qore has a hazard slot");
+    UT_ASSERT_EQ(c, 0, registered_locked, "each release of the registered thread takes the lock-free path");
+
+    // both kinds at the same time, on the same object
+    std::vector<std::thread> threads;
+    std::vector<int64> locked(2 * UT_THREADS, -1);
+    for (int t = 0; t < 2 * UT_THREADS; ++t) {
+        threads.emplace_back([obj, t, &locked]() {
+            if (t % 2) {
+                QoreForeignThreadHelper fth;
+                locked[t] = ut_release_refs(obj, UT_RELEASES);
+            } else {
+                locked[t] = ut_release_refs(obj, UT_RELEASES);
+            }
+        });
+    }
+    for (std::thread& t : threads) {
+        t.join();
+    }
+    for (int t = 0; t < 2 * UT_THREADS; ++t) {
+        UT_ASSERT_EQ(c, (t % 2) ? 0 : UT_RELEASES, locked[t], "concurrent releases take the path of their thread");
+    }
+    UT_ASSERT_EQ(c, base, obj->reference_count(), "every reference is released once");
+    // the constructor's reference: the last one
+    obj->deref(&xsink);
+    UT_ASSERT(c, !xsink, "releasing the object raises no exception");
+    xsink.clear();
 }
 #endif
 
@@ -7102,6 +7191,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     ut_contended_queue_scan(c);
     ut_contended_queue_scan_window(c);
     ut_fast_release_during_member_scan(c);
+    ut_unregistered_thread_release(c);
     AsyncIoOpCacheTest::run(c);
 #endif
     ut_program_family_thread_data(c);
