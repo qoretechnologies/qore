@@ -39,6 +39,21 @@ class DatasourceCloseLockTest inherits QUnit::Test {
         set_return_value(main());
     }
 
+    #! Returns "ok" if another thread can execute SQL on the datasource in a transaction, or the error that it gets
+    private static string otherThreadExec(Datasource ds) {
+        Queue result();
+        background sub () {
+            try {
+                ds.exec("insert into t values (1)");
+                ds.rollback();
+                result.push("ok");
+            } catch (hash<ExceptionInfo> ex) {
+                result.push(ex.err + ": " + ex.desc);
+            }
+        }();
+        return result.get(HangGuard);
+    }
+
     #! Returns "ok" if another thread can use the datasource, or the error that it gets
     private static string otherThreadUse(Datasource ds) {
         Queue result();
@@ -60,7 +75,10 @@ class DatasourceCloseLockTest inherits QUnit::Test {
         assertFalse(ds.currentThreadInTransaction(), "an open datasource is not in a transaction");
         ds.close();
         assertFalse(ds.currentThreadInTransaction(), "a closed datasource is not in a transaction");
+        assertEq(-1, ds.transactionTid(), "no thread holds the transaction lock after close()");
         assertEq("ok", DatasourceCloseLockTest::otherThreadUse(ds), "another thread can use the closed datasource");
+        assertEq("ok", DatasourceCloseLockTest::otherThreadExec(ds), "another thread can execute SQL on it");
+        ds.close();
         # it can be opened and closed by another thread as well
         Queue result();
         background sub () {
@@ -82,6 +100,7 @@ class DatasourceCloseLockTest inherits QUnit::Test {
         ds.setTransactionLockTimeout(LockTimeout);
         ds.close();
         assertFalse(ds.currentThreadInTransaction());
+        assertEq(-1, ds.transactionTid(), "no thread holds the transaction lock after close()");
         assertEq("ok", DatasourceCloseLockTest::otherThreadUse(ds));
     }
 
@@ -96,7 +115,9 @@ class DatasourceCloseLockTest inherits QUnit::Test {
         ds.reset();
         assertEq(base + 1, monitor.getOption("live-connections"), "the connection is open again after reset()");
         assertFalse(ds.currentThreadInTransaction(), "a reset datasource is not in a transaction");
+        assertEq(-1, ds.transactionTid(), "no thread holds the transaction lock after reset()");
         assertEq("ok", DatasourceCloseLockTest::otherThreadUse(ds), "another thread can use the reset datasource");
+        assertEq("ok", DatasourceCloseLockTest::otherThreadExec(ds), "another thread can execute SQL on it");
         ds.close();
     }
 
