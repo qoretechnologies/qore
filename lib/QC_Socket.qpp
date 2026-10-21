@@ -1893,20 +1893,26 @@ static int materializeDataBodyNode(const QoreValue& body, ValueHolder& holder,
 */
 hashdecl Qore::SseMessageInfo {
     //! Event type
+    /** In an event received, the value of the last \c event line
+    */
     string event;
 
     //! Message data
     /** This is sent and received as a string, but with data serialization, it could be any data type
+
+        In an event received, the values of the \c data lines joined with LF, including the empty ones
     */
     auto data;
 
     //! Message ID
-    /** An ID received with a NUL character is ignored, as the event stream format requires
+    /** In an event received, the value of the last \c id line; an empty string resets the last event ID.  An ID
+        received with a NUL character is ignored, as the event stream format requires
     */
     auto id;
 
     //! Client should set the reconnection time to this value in milliseconds
-    /** A retry value received is used only if all of it is ASCII digits
+    /** In an event received, the value of the last \c retry line that is all ASCII digits; other retry values are
+        ignored, as the event stream format requires
     */
     int retry;
 

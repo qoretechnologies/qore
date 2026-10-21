@@ -4920,6 +4920,11 @@ while (*binary chunk = input.read(65536)) {
       @ref Qore::Socket::parseServerSentEvent() "Socket::parseServerSentEvent()" and the SSE clients: it also held the
       values of the fields that are not kept as strings, such as a retry time, and of unknown fields; only a line that
       starts with a colon is a comment
+    - server-sent events received are interpreted as the WHATWG HTML event stream format requires: the event type,
+      the ID and the retry time are set by their last line (before, the event types and the IDs of an event were
+      joined with LF, and the first retry time was used), an empty ID is kept as an empty string, as it resets the
+      last event ID (before, it was ignored), and empty data lines are kept (before, a data line without a value was
+      dropped unless it was the first one)
     - Fixed the warnings of the files of a separated user module other than its \c .qm file: each was parsed with the
       warnings of the code loading the module (with \c qcc, the default warnings), not those the \c .qm file sets, so
       \c %%modern in the \c .qm file did not enable all warnings in the other files.  The module loader accepted an

@@ -10089,36 +10089,24 @@ QoreListNode* qore_socket_private::poll(const QoreListNode* poll_list, int timeo
     return build_results();
 }
 
-static void write_sse_key_value(ExceptionSink* xsink, ReferenceHolder<QoreHashNode>& rv, const char* f, QoreValue v,
+// sets a field that the event stream format sets to the value of its last line, such as the event type and the ID;
+// a line without a value sets the field to an empty string
+static void set_sse_key(ExceptionSink* xsink, ReferenceHolder<QoreHashNode>& rv, const char* f,
         SimpleRefHolder<QoreStringNode>& value) {
-    assert(value && !value->empty());
-    if (!v) {
-        rv->setKeyValue(f, value.release(), xsink);
-    } else {
-        QoreStringNodeValueHelper old_value(v);
-        QoreStringNode* str = new QoreStringNode(**old_value);
-        str->concat('\n');
-        str->concat(*value, xsink);
-        rv->setKeyValue(f, str, xsink);
-        value->clear();
+    rv->setKeyValue(f, value ? value.release() : new QoreStringNode(QCS_UTF8), xsink);
+}
+
+// appends the value of a line to the lines of a field that are joined with LF, such as the data lines; the lines are
+// collected while the event is parsed, so that each line is copied once
+static void append_sse_line(ExceptionSink* xsink, SimpleRefHolder<QoreStringNode>& lines,
+        SimpleRefHolder<QoreStringNode>& value) {
+    if (!lines) {
+        lines = value ? value.release() : new QoreStringNode(QCS_UTF8);
+        return;
     }
-}
-
-static void write_sse_key_value(ExceptionSink* xsink, ReferenceHolder<QoreHashNode>& rv, const char* f,
-        SimpleRefHolder<QoreStringNode>& value) {
-    write_sse_key_value(xsink, rv, f, rv->getKeyValue(f), value);
-}
-
-static void write_sse_key(ExceptionSink* xsink, ReferenceHolder<QoreHashNode>& rv, const char* f,
-        SimpleRefHolder<QoreStringNode>& value) {
-    QoreValue v = rv->getKeyValue(f);
-    if (!value || value->empty()) {
-        // if the field does not exist, set it to an empty string
-        if (!v) {
-            rv->setKeyValue(f, new QoreStringNode(QCS_UTF8), xsink);
-        }
-    } else {
-        write_sse_key_value(xsink, rv, f, v, value);
+    lines->concat('\n');
+    if (value) {
+        lines->concat(*value, xsink);
     }
 }
 
@@ -10144,6 +10132,9 @@ QoreHashNode* parseSseEvent(ExceptionSink* xsink, const QoreString& buf) {
     }
     SimpleRefHolder<QoreStringNode> field;
     SimpleRefHolder<QoreStringNode> value;
+    // the data lines and the comment lines, each joined with LF
+    SimpleRefHolder<QoreStringNode> data;
+    SimpleRefHolder<QoreStringNode> comment;
     int do_value = 0;
     for (size_t i = 0, e = buf.size() - 1; i < e; ++i) {
         char c = buf[i];
@@ -10160,16 +10151,21 @@ QoreHashNode* parseSseEvent(ExceptionSink* xsink, const QoreString& buf) {
         }
         if (c == '\n') {
             if (field && !field->empty()) {
-                if ((**field == "event") || (**field == "data")) {
-                    write_sse_key(xsink, rv, field->c_str(), value);
+                // the fields are interpreted as the WHATWG HTML event stream format requires: the event type, the
+                // ID and the retry time are set by their last valid line, and the data lines are joined with LF
+                if (**field == "event") {
+                    set_sse_key(xsink, rv, "event", value);
+                } else if (**field == "data") {
+                    // empty data lines are kept
+                    append_sse_line(xsink, data, value);
                 } else if (**field == "id") {
-                    // the event stream format ignores an ID with a NUL character, which a client could not send
-                    // back in the Last-Event-ID header
-                    if (value && !value->empty() && !memchr(value->c_str(), '\0', value->size())) {
-                        write_sse_key_value(xsink, rv, "id", value);
+                    // an ID with a NUL character is ignored, as a client could not send it back in the
+                    // Last-Event-ID header; an empty ID is kept, as it resets the last event ID
+                    if (!value || !memchr(value->c_str(), '\0', value->size())) {
+                        set_sse_key(xsink, rv, "id", value);
                     }
                 } else if (**field == "retry") {
-                    if (value && !value->empty() && sse_is_digits(**value) && !rv->getKeyValue("retry")) {
+                    if (value && sse_is_digits(**value)) {
                         rv->setKeyValue("retry", strtoll(value->c_str(), 0, 10), xsink);
                     }
                 }
@@ -10181,7 +10177,10 @@ QoreHashNode* parseSseEvent(ExceptionSink* xsink, const QoreString& buf) {
                     value->clear();
                 }
             } else if (value && !value->empty()) {
-                write_sse_key_value(xsink, rv, "comment", value);
+                append_sse_line(xsink, comment, value);
+                if (value) {
+                    value->clear();
+                }
             }
             if (do_value) {
                 do_value = 0;
@@ -10210,6 +10209,13 @@ QoreHashNode* parseSseEvent(ExceptionSink* xsink, const QoreString& buf) {
             field = new QoreStringNode(QCS_UTF8);
         }
         field->concat(c);
+    }
+
+    if (data) {
+        rv->setKeyValue("data", data.release(), xsink);
+    }
+    if (comment) {
+        rv->setKeyValue("comment", comment.release(), xsink);
     }
 
     //QoreNodeAsStringHelper str(*rv, FMT_NORMAL, xsink);

@@ -25,7 +25,9 @@
 # Server-sent events received with NUL characters are parsed as the event stream format requires: an ID with a NUL
 # character is ignored (a client could not send it back in Last-Event-ID), a retry value is used only if all of it is
 # digits, so it is not cut at a NUL character, and a field whose name has a NUL character names no field.  Only a
-# line that starts with a colon is a comment: the value of an ignored or numeric field is not reported as one.
+# line that starts with a colon is a comment: the value of an ignored or numeric field is not reported as one.  The
+# fields are interpreted as the WHATWG HTML event stream format requires: the event type, the ID and the retry time
+# are set by their last valid line, an empty ID is kept, and the data lines are joined with LF, including empty lines.
 
 %modern
 
@@ -43,6 +45,7 @@ public class SseParseNulTest inherits QUnit::Test {
     constructor() : Test("SseParseNul", "1.0", \ARGV) {
         addTestCase("parseServerSentEvent()", \parseTest());
         addTestCase("comments", \commentTest());
+        addTestCase("field interpretation", \fieldTest());
         addTestCase("events read from a socket", \socketTest());
         set_return_value(main());
     }
@@ -73,6 +76,35 @@ public class SseParseNulTest inherits QUnit::Test {
         assertNothing(evt.comment, "no comment");
         evt = Socket::parseServerSentEvent(": one\n: two\ndata: x\n\n");
         assertEq("one\ntwo", evt.comment);
+    }
+
+    fieldTest() {
+        # the event type and the ID are set by their last line
+        hash<SseMessageInfo> evt = Socket::parseServerSentEvent("event: a\nevent: b\nid: 1\nid: 2\ndata: x\n\n");
+        assertEq("b", evt.event);
+        assertEq("2", evt.id);
+        # an ID with a NUL character is ignored, and does not change the ID set before it
+        assertEq("1", Socket::parseServerSentEvent("id: 1\nid: 2\x00\ndata: x\n\n").id);
+        # an empty ID is kept: it resets the last event ID
+        assertEq("", Socket::parseServerSentEvent("id: 1\nid\ndata: x\n\n").id);
+        assertEq("", Socket::parseServerSentEvent("id:\ndata: x\n\n").id);
+        # a line without a colon is a field with an empty value
+        assertEq("", Socket::parseServerSentEvent("event\ndata: x\n\n").event);
+
+        # the retry time is set by its last line that is all ASCII digits
+        assertEq(20, Socket::parseServerSentEvent("retry: 10\nretry: 20\ndata: x\n\n").retry);
+        assertEq(10, Socket::parseServerSentEvent("retry: 10\nretry: 2x\nretry:\ndata: x\n\n").retry);
+        assertNothing(Socket::parseServerSentEvent("retry:\ndata: x\n\n").retry);
+
+        # the data lines are joined with LF, including empty lines
+        assertEq("a\n\n\nb", Socket::parseServerSentEvent("data: a\ndata\ndata:\ndata: b\n\n").data);
+        assertEq("a\n", Socket::parseServerSentEvent("data: a\ndata:\n\n").data);
+        assertEq("\nb", Socket::parseServerSentEvent("data:\ndata: b\n\n").data);
+        assertEq("", Socket::parseServerSentEvent("data\n\n").data);
+        # CRLF and CR end lines as LF does
+        evt = Socket::parseServerSentEvent("event: a\r\nevent: b\rdata: x\r\ndata:\rdata: y\r\n\r\n");
+        assertEq("b", evt.event);
+        assertEq("x\n\ny", evt.data);
     }
 
     socketTest() {
