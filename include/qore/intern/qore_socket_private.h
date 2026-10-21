@@ -437,6 +437,102 @@ constexpr int HEBS_RACING = 1;
 constexpr int HEBS_CONNECTED = 2;
 constexpr int HEBS_RESOLVING = 3;
 
+//! A socket descriptor shared by the users that keep it open: I/O calls, event loop registrations and its owner
+/** The last reference closes the descriptor if @ref close_on_release is set.  A socket uses it for its own descriptor
+    (see qore_socket_private::shared_fd); other owners make one with qore_owned_descriptor_create().
+*/
+struct QoreSharedDescriptor {
+    //! the descriptor
+    int fd;
+    //! set when the descriptor is given up while it is used: the last reference closes it
+    bool close_on_release = false;
+
+    DLLLOCAL explicit QoreSharedDescriptor(int fd) : fd(fd) {
+    }
+
+    DLLLOCAL ~QoreSharedDescriptor();
+
+    QoreSharedDescriptor(const QoreSharedDescriptor&) = delete;
+    QoreSharedDescriptor& operator=(const QoreSharedDescriptor&) = delete;
+};
+
+//! Makes an owned descriptor: a descriptor that its owner can give up while an async I/O thread has it registered
+/** The descriptors that an operation gives the async I/O controller as extra fds of its poll info, such as the
+    connection attempts of happy eyeballs or the sockets of a c-ares channel, are registered by number, and their owner
+    closes them when it is done with them, also while an I/O thread still has them registered: the number could then be
+    given to another object first.  The owner makes such a descriptor with this function and gives it up with
+    qore_owned_descriptor_release(); an I/O thread that registers the number takes a hold of it
+    (qore_owned_descriptor_hold()), and the descriptor is closed when its owner and every hold have released it.
+
+    @param fd the descriptor, which the returned object owns from now on
+    @return the owned descriptor; the caller holds the owner's reference
+*/
+DLLLOCAL std::shared_ptr<QoreSharedDescriptor> qore_owned_descriptor_create(int fd);
+
+//! Gives up an owned descriptor: it is closed now, or when the last hold of it is released
+/** @param fd the owner's reference, which is reset; nothing happens if it is null
+*/
+DLLLOCAL void qore_owned_descriptor_release(std::shared_ptr<QoreSharedDescriptor>& fd);
+
+//! Takes a hold of the owned descriptor with the given number, if any, which keeps it open while the hold exists
+/** @return the hold, or a null pointer if no owner has an owned descriptor with this number
+*/
+DLLLOCAL std::shared_ptr<void> qore_owned_descriptor_hold(int fd);
+
+//! Hands an owned descriptor over to a socket, which closes it itself from now on
+/** No new hold can be taken of the descriptor afterwards; the holds that exist count as uses of the socket's
+    descriptor (see qore_socket_private::shared_fd).
+
+    @param fd the owned descriptor, which is reset
+    @return the descriptor for the socket's @ref qore_socket_private::shared_fd
+*/
+DLLLOCAL std::shared_ptr<QoreSharedDescriptor> qore_owned_descriptor_adopt(std::shared_ptr<QoreSharedDescriptor>& fd);
+
+#if ARES_VERSION >= 0x012200
+//! The sockets of a c-ares channel, as owned descriptors (see qore_owned_descriptor_create())
+/** c-ares closes a socket of its channel when it is done with it, while an async I/O thread can still have it
+    registered as an extra fd of the resolving operation; with these socket functions, the socket is then closed when
+    the I/O thread has removed it.  The object must outlive the channel, as c-ares closes the channel's sockets when it
+    destroys it.
+*/
+class QoreCaresSockets {
+public:
+    DLLLOCAL QoreCaresSockets() = default;
+    DLLLOCAL ~QoreCaresSockets();
+
+    //! Makes the channel use these socket functions; returns an ARES_* status
+    DLLLOCAL int install(ares_channel_t* channel);
+
+    QoreCaresSockets(const QoreCaresSockets&) = delete;
+    QoreCaresSockets& operator=(const QoreCaresSockets&) = delete;
+
+private:
+    std::mutex lock;
+    //! the open sockets of the channel, by descriptor
+    std::unordered_map<int, std::shared_ptr<QoreSharedDescriptor>> fds;
+
+    DLLLOCAL static ares_socket_t asocket(int domain, int type, int protocol, void* user_data);
+    DLLLOCAL static int aclose(ares_socket_t sock, void* user_data);
+    DLLLOCAL static int asetsockopt(ares_socket_t sock, ares_socket_opt_t opt, const void* val,
+            ares_socklen_t val_size, void* user_data);
+    DLLLOCAL static int aconnect(ares_socket_t sock, const struct sockaddr* address, ares_socklen_t address_len,
+            unsigned int flags, void* user_data);
+    DLLLOCAL static ares_ssize_t arecvfrom(ares_socket_t sock, void* buffer, size_t length, int flags,
+            struct sockaddr* address, ares_socklen_t* address_len, void* user_data);
+    DLLLOCAL static ares_ssize_t asendto(ares_socket_t sock, const void* buffer, size_t length, int flags,
+            const struct sockaddr* address, ares_socklen_t address_len, void* user_data);
+    DLLLOCAL static int agetsockname(ares_socket_t sock, struct sockaddr* address, ares_socklen_t* address_len,
+            void* user_data);
+    DLLLOCAL static int abind(ares_socket_t sock, unsigned int flags, const struct sockaddr* address,
+            socklen_t address_len, void* user_data);
+    DLLLOCAL static unsigned int aif_nametoindex(const char* ifname, void* user_data);
+    DLLLOCAL static const char* aif_indextoname(unsigned int ifindex, char* ifname_buf, size_t ifname_buf_len,
+            void* user_data);
+
+    friend class QoreCaresSocketsTest;
+};
+#endif
+
 struct SocketResolvedAddrInfo {
     int family = AF_UNSPEC;
     int socktype = SOCK_STREAM;
@@ -497,6 +593,10 @@ private:
     bool done = false;
     //! set while the channel is destroyed for a restart, whose ARES_EDESTRUCTION result is not the lookup's
     bool restarting = false;
+#if ARES_VERSION >= 0x012200
+    //! the channel's sockets; destroyed after the channel (see ~QoreCaresAddrInfoResolver())
+    QoreCaresSockets sockets;
+#endif
 };
 
 class QoreCaresNameInfoResolver {
@@ -538,6 +638,10 @@ private:
     bool done = false;
     //! set while the channel is destroyed for a restart, whose ARES_EDESTRUCTION result is not the lookup's
     bool restarting = false;
+#if ARES_VERSION >= 0x012200
+    //! the channel's sockets; destroyed after the channel (see ~QoreCaresNameInfoResolver())
+    QoreCaresSockets sockets;
+#endif
 };
 
 //! Happy Eyeballs (RFC 8305) connection racing poll state for async I/O
@@ -597,6 +701,22 @@ private:
     struct ConnAttempt {
         int fd = QORE_INVALID_SOCKET;
         size_t addr_idx = 0;
+        //! the attempt's descriptor while the attempt owns it; null once the socket has taken it over
+        /** An attempt that is not the socket's descriptor is an extra fd of the operation: an async I/O thread can
+            hold it (see qore_owned_descriptor_create())
+        */
+        std::shared_ptr<QoreSharedDescriptor> owned;
+
+        DLLLOCAL ConnAttempt() = default;
+        DLLLOCAL ConnAttempt(ConnAttempt&&) = default;
+        DLLLOCAL ConnAttempt& operator=(ConnAttempt&&) = delete;
+        ConnAttempt(const ConnAttempt&) = delete;
+        ConnAttempt& operator=(const ConnAttempt&) = delete;
+
+        //! Gives the attempt's descriptor up if the attempt still owns it
+        DLLLOCAL ~ConnAttempt() {
+            qore_owned_descriptor_release(owned);
+        }
     };
 
     std::unique_ptr<QoreCaresAddrInfoResolver> resolver;
@@ -646,14 +766,14 @@ private:
     //! Close all active fds (cleanup)
     DLLLOCAL void closeAllFds();
 
-    //! Gives up the attempt descriptor \a fd, which is the socket's descriptor, for \a next_fd (another attempt, or
-    //! QORE_INVALID_SOCKET)
+    //! Gives up the attempt descriptor \a fd, which is the socket's descriptor, for that of \a next (another active
+    //! attempt, whose owned descriptor the socket takes over), or for none if \a next is null
     /** An async I/O thread can have the socket's descriptor registered in its event loop and hold it open (see
         qore_socket_private::DescriptorHold): the descriptor is then closed when the I/O thread has removed it, so its
         number cannot be given to another object before; otherwise it is closed now.  If a concurrent close of the
         socket has released the descriptor already, nothing is closed here.
     */
-    DLLLOCAL void releasePrimaryFd(int fd, int next_fd);
+    DLLLOCAL void releasePrimaryFd(int fd, ConnAttempt* next);
 };
 
 #ifndef _Q_WINDOWS
@@ -1173,27 +1293,17 @@ struct qore_socket_private : public QoreReferenceCounter {
     /** When the socket is closed while an I/O call uses its descriptor, the descriptor is shut down, which makes the
         call fail, but it is closed only when the last call using it ends: the system gives the lowest free descriptor
         number to the next socket or file opened by any thread, so a call still using the number of a closed
-        descriptor could read from or write to another connection.
+        descriptor could read from or write to another connection.  close_on_release is set when the socket was
+        closed while I/O calls or event loop registrations used the descriptor: the last one closes it.
     */
-    struct SharedDescriptor {
-        //! the descriptor
-        int fd;
-        //! set when the socket was closed while I/O calls used the descriptor: the last one closes it
-        bool close_on_release = false;
-
-        DLLLOCAL SharedDescriptor(int fd) : fd(fd) {
-        }
-
-        DLLLOCAL ~SharedDescriptor() {
-            if (close_on_release) {
-                closeDescriptor(fd);
-            }
-        }
-    };
+    typedef QoreSharedDescriptor SharedDescriptor;
 
     //! The socket's descriptor as shared with the I/O calls using it; guarded by @ref close_m
     /** Created by the first IoUseHelper for the descriptor; every copy is made and released with @ref close_m held,
-        so its use count tells whether an I/O call uses the descriptor.
+        so its use count tells whether an I/O call uses the descriptor.  The only other references are the holds that
+        event loops took of an owned descriptor before the socket adopted it (setDescriptor(), replaceDescriptor()),
+        which are released without the lock: when one is released while the socket is closed, either the close or
+        the last hold closes the descriptor, never both.
     */
     std::shared_ptr<SharedDescriptor> shared_fd;
 
@@ -2018,7 +2128,8 @@ struct qore_socket_private : public QoreReferenceCounter {
         @return true if @a old_fd was replaced by @a new_fd; false if the socket no longer has @a old_fd, because a
         concurrent close released it, in which case the caller keeps @a new_fd and must not close @a old_fd
     */
-    DLLLOCAL bool replaceDescriptor(int old_fd, int new_fd, bool& close_old) {
+    DLLLOCAL bool replaceDescriptor(int old_fd, int new_fd, bool& close_old,
+            std::shared_ptr<SharedDescriptor>* adopt = nullptr) {
         CloseLockHelper cl(*this);
         if (sock != old_fd || old_fd == QORE_INVALID_SOCKET) {
             return false;
@@ -2031,9 +2142,28 @@ struct qore_socket_private : public QoreReferenceCounter {
             close_old = false;
         }
         shared_fd.reset();
+        // an owned descriptor that becomes the socket's is taken over under close_m, so its holds count as uses
+        if (adopt && *adopt) {
+            shared_fd = qore_owned_descriptor_adopt(*adopt);
+        }
         // any sync I/O helper mid-wait returns QSE_NOT_OPEN instead of using the old descriptor
         ++fd_generation;
         return true;
+    }
+
+    //! Makes an owned descriptor the descriptor of the socket, which has none
+    /** Used by happy eyeballs (SocketConnectInetHappyEyeballsPollState) for the connection attempt that becomes the
+        socket's descriptor: the socket closes it from now on, and the holds of the event loops that have it
+        registered as an extra fd count as uses of it (see @ref shared_fd).
+
+        @param fd the descriptor
+        @param adopt the owned descriptor (see qore_owned_descriptor_create()), which is reset
+    */
+    DLLLOCAL void setDescriptor(int fd, std::shared_ptr<SharedDescriptor>& adopt) {
+        CloseLockHelper cl(*this);
+        sock = fd;
+        shared_fd = adopt ? qore_owned_descriptor_adopt(adopt) : nullptr;
+        ++fd_generation;
     }
 
     //! Closes a socket descriptor that is not the socket's own descriptor

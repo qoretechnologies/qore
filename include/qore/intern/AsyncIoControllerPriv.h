@@ -48,6 +48,7 @@
 #include <algorithm>
 #include <atomic>
 #include <deque>
+#include <map>
 #include <memory>
 #include <queue>
 #include <set>
@@ -1452,6 +1453,13 @@ private:
         std::unordered_map<std::string, std::shared_ptr<void>> fd_holds;
         //! The extra fds of each operation, by operation ID
         std::unordered_map<uint64_t, std::unordered_set<int>> key_extra_fds;
+        //! The holds of the owned extra fds of operations, by operation ID and descriptor
+        /** An extra fd is registered by number; when its owner made it an owned descriptor (see
+            qore_owned_descriptor_create(): the connection attempts of happy eyeballs, the sockets of a c-ares
+            channel), the registration holds it open, so the owner's close cannot release its number before the
+            registration is removed
+        */
+        std::map<std::pair<uint64_t, int>, std::shared_ptr<void>> extra_fd_holds;
         //! Extra fd readiness is operation-scoped (by operation ID); primary socket event masks can be zero.
         std::unordered_map<int, std::unordered_map<uint64_t, int>> extra_fd_to_key_events;
 

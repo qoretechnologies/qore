@@ -6731,6 +6731,7 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
     std::vector<Command> abandoned_cmds;
     std::vector<AsyncIoDeferredRelease> exit_timer_refs;
     std::unordered_map<std::string, std::shared_ptr<void>> exit_holds;
+    std::map<std::pair<uint64_t, int>, std::shared_ptr<void>> exit_extra_holds;
     bool restart_after_exit = false;
     {
         AutoLocker al(m);
@@ -6780,6 +6781,7 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
         // no descriptor is registered any more: the holds are released after the lock below (the last reference to a
         // socket can go with its hold), which closes the descriptors that other threads closed meanwhile
         exit_holds.swap(t.fd_holds);
+        exit_extra_holds.swap(t.extra_fd_holds);
         t.key_events.clear();
         t.key_extra_fds.clear();
         t.extra_fd_to_key_events.clear();
@@ -6946,6 +6948,7 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
         releaseOffIoThread(refs, xsink);
     }
     exit_holds.clear();
+    exit_extra_holds.clear();
 
     // NOTE: call_dispatcher is NOT stopped here — it's stopped in stop() (explicit
     // shutdown) and deref() (destruction). Workers use QTF_EXTERNAL_LIFECYCLE so they
@@ -8344,6 +8347,8 @@ void AsyncIoControllerPriv::removeExtraFdRegistration(IoThreadContext& t, int fd
         printd(2, "removeExtraFdRegistration() failed to remove fd %d; continuing\n", fd);
         xsink->clear();
     }
+    // the registration is removed: an owner that gave the descriptor up meanwhile has it closed now
+    t.extra_fd_holds.erase({op_id, fd});
 }
 
 bool AsyncIoControllerPriv::extraFdsChanged(const IoThreadContext& t, uint64_t op_id,
@@ -8441,6 +8446,15 @@ void AsyncIoControllerPriv::updateExtraFds(IoThreadContext& t, uint64_t op_id,
     // set to avoid erasing from new_fds during iteration (undefined behavior with unordered_set)
     std::vector<int> failed_fds;
     for (auto& [fd, ev_flags] : new_fd_events) {
+        // an owned descriptor (a connection attempt, a c-ares socket) is held open while it is registered: the hold
+        // is taken before the descriptor is registered and released when the registration is removed
+        // (removeExtraFdRegistration())
+        if (!prev_fds.count(fd)) {
+            std::shared_ptr<void> hold = qore_owned_descriptor_hold(fd);
+            if (hold) {
+                t.extra_fd_holds[{op_id, fd}] = std::move(hold);
+            }
+        }
         t.extra_fd_to_key_events[fd][op_id] = ev_flags;
         t.loop->addRegistration(fd, extraRegKey(op_id), ev_flags, socket, xsink);
         if (*xsink) {
@@ -8448,6 +8462,12 @@ void AsyncIoControllerPriv::updateExtraFds(IoThreadContext& t, uint64_t op_id,
             // The I/O loop still drives streaming via POLLOUT on the socket fd
             printd(2, "updateExtraFds() failed to update fd %d in event loop; skipping\n", fd);
             xsink->clear();
+            // the operation does not wait for the descriptor: a registration of the operation's that the event loop
+            // keeps for it (the descriptor was registered before and can no longer be changed, for example because
+            // its number now has another file) is removed, and then its hold is released
+            t.loop->removeRegistration(fd, extraRegKey(op_id), xsink);
+            xsink->clear();
+            t.extra_fd_holds.erase({op_id, fd});
             failed_fds.push_back(fd);
             auto xit = t.extra_fd_to_key_events.find(fd);
             if (xit != t.extra_fd_to_key_events.end()) {

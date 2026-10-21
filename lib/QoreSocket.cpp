@@ -72,6 +72,12 @@
 #include "qore/intern/ql_debug.h"
 
 #include <ares.h>
+#ifndef _Q_WINDOWS
+#include <fcntl.h>
+#include <net/if.h>
+#include <netinet/in.h>
+#include <netinet/tcp.h>
+#endif
 
 // maximum number of non-blocking network operations before returning
 constexpr unsigned max_nonblock_ops = 32;
@@ -6719,6 +6725,251 @@ static constexpr unsigned QORE_CARES_MAX_LOST_QUERY_RESTARTS = 3;
 
     @param channel the channel of an unfinished lookup, after its events were processed
 */
+QoreSharedDescriptor::~QoreSharedDescriptor() {
+    if (close_on_release) {
+        qore_socket_private::closeDescriptor(fd);
+    }
+}
+
+namespace {
+//! The owned descriptors that holds can be taken of, by number; see qore_owned_descriptor_create()
+std::mutex qore_owned_fd_lock;
+std::unordered_map<int, std::weak_ptr<QoreSharedDescriptor>> qore_owned_fds;
+}
+
+std::shared_ptr<QoreSharedDescriptor> qore_owned_descriptor_create(int fd) {
+    std::shared_ptr<QoreSharedDescriptor> rv = std::make_shared<QoreSharedDescriptor>(fd);
+    std::lock_guard<std::mutex> lg(qore_owned_fd_lock);
+    qore_owned_fds[fd] = rv;
+    // the last of the owner and the holds closes the descriptor; set once nothing can throw any more, so the caller
+    // still has the descriptor to close when this function throws
+    rv->close_on_release = true;
+    return rv;
+}
+
+void qore_owned_descriptor_release(std::shared_ptr<QoreSharedDescriptor>& fd) {
+    if (!fd) {
+        return;
+    }
+    // no hold can be taken any more; the descriptor is closed now if no hold exists, or by the last hold
+    std::lock_guard<std::mutex> lg(qore_owned_fd_lock);
+    auto it = qore_owned_fds.find(fd->fd);
+    if (it != qore_owned_fds.end() && it->second.lock() == fd) {
+        qore_owned_fds.erase(it);
+    }
+    fd.reset();
+}
+
+std::shared_ptr<void> qore_owned_descriptor_hold(int fd) {
+    std::lock_guard<std::mutex> lg(qore_owned_fd_lock);
+    auto it = qore_owned_fds.find(fd);
+    if (it == qore_owned_fds.end()) {
+        return nullptr;
+    }
+    return it->second.lock();
+}
+
+std::shared_ptr<QoreSharedDescriptor> qore_owned_descriptor_adopt(std::shared_ptr<QoreSharedDescriptor>& fd) {
+    std::shared_ptr<QoreSharedDescriptor> rv = std::move(fd);
+    if (!rv) {
+        return rv;
+    }
+    std::lock_guard<std::mutex> lg(qore_owned_fd_lock);
+    auto it = qore_owned_fds.find(rv->fd);
+    if (it != qore_owned_fds.end() && it->second.lock() == rv) {
+        qore_owned_fds.erase(it);
+    }
+    // the socket closes its descriptor itself; it sets the flag again when it gives it up while it is used
+    rv->close_on_release = false;
+    return rv;
+}
+
+#if ARES_VERSION >= 0x012200
+QoreCaresSockets::~QoreCaresSockets() {
+    // c-ares closes the channel's sockets when it destroys the channel, which the resolvers do before this object is
+    // destroyed; any socket left is released here
+    for (auto& [fd, owned] : fds) {
+        qore_owned_descriptor_release(owned);
+    }
+}
+
+int QoreCaresSockets::install(ares_channel_t* channel) {
+#ifdef _Q_WINDOWS
+    return ARES_SUCCESS;
+#else
+    static const struct ares_socket_functions_ex funcs = {
+        1, ARES_SOCKFUNC_FLAG_NONBLOCKING,
+        asocket, aclose, asetsockopt, aconnect, arecvfrom, asendto, agetsockname, abind, aif_nametoindex,
+        aif_indextoname,
+    };
+    return ares_set_socket_functions_ex(channel, &funcs, this);
+#endif
+}
+
+#ifndef _Q_WINDOWS
+ares_socket_t QoreCaresSockets::asocket(int domain, int type, int protocol, void* user_data) {
+    int fd = ::socket(domain, type, protocol);
+    if (fd < 0) {
+        return ARES_SOCKET_BAD;
+    }
+    // non-blocking and closed on exec, as c-ares makes its sockets; no SIGPIPE on a write to a closed connection
+    int fl = fcntl(fd, F_GETFL, 0);
+    if (fl < 0 || fcntl(fd, F_SETFL, fl | O_NONBLOCK) < 0 || fcntl(fd, F_SETFD, FD_CLOEXEC) < 0) {
+        int err = errno;
+        ::close(fd);
+        errno = err;
+        return ARES_SOCKET_BAD;
+    }
+#ifdef SO_NOSIGPIPE
+    int on = 1;
+    setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &on, sizeof on);
+#endif
+    // c-ares sends each query at once over TCP, as its own socket function does
+    if (type == SOCK_STREAM) {
+        int nodelay = 1;
+        if (setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &nodelay, sizeof nodelay)) {
+            int err = errno;
+            ::close(fd);
+            errno = err;
+            return ARES_SOCKET_BAD;
+        }
+    }
+    QoreCaresSockets* self = static_cast<QoreCaresSockets*>(user_data);
+    // nothing may be thrown into c-ares
+    std::shared_ptr<QoreSharedDescriptor> owned;
+    try {
+        owned = qore_owned_descriptor_create(fd);
+    } catch (...) {
+        ::close(fd);
+        errno = ENOMEM;
+        return ARES_SOCKET_BAD;
+    }
+    try {
+        std::lock_guard<std::mutex> lg(self->lock);
+        self->fds[fd] = owned;
+    } catch (...) {
+        qore_owned_descriptor_release(owned);
+        errno = ENOMEM;
+        return ARES_SOCKET_BAD;
+    }
+    return fd;
+}
+
+int QoreCaresSockets::aclose(ares_socket_t sock, void* user_data) {
+    QoreCaresSockets* self = static_cast<QoreCaresSockets*>(user_data);
+    // nothing may be thrown into c-ares; a socket that cannot be given up is closed by its last reference, which an
+    // I/O thread that holds it keeps
+    try {
+        std::shared_ptr<QoreSharedDescriptor> owned;
+        {
+            std::lock_guard<std::mutex> lg(self->lock);
+            auto it = self->fds.find(sock);
+            if (it != self->fds.end()) {
+                owned = std::move(it->second);
+                self->fds.erase(it);
+            }
+        }
+        if (!owned) {
+            return ::close(sock);
+        }
+        // an async I/O thread that has the socket registered as an extra fd closes it when it has removed it
+        qore_owned_descriptor_release(owned);
+    } catch (...) {
+        errno = EIO;
+        return -1;
+    }
+    return 0;
+}
+
+int QoreCaresSockets::asetsockopt(ares_socket_t sock, ares_socket_opt_t opt, const void* val,
+        ares_socklen_t val_size, void* user_data) {
+    // the options as c-ares's own socket functions set them
+    switch (opt) {
+        case ARES_SOCKET_OPT_SENDBUF_SIZE:
+            return setsockopt(sock, SOL_SOCKET, SO_SNDBUF, val, val_size);
+        case ARES_SOCKET_OPT_RECVBUF_SIZE:
+            return setsockopt(sock, SOL_SOCKET, SO_RCVBUF, val, val_size);
+#ifdef SO_BINDTODEVICE
+        case ARES_SOCKET_OPT_BIND_DEVICE:
+            return setsockopt(sock, SOL_SOCKET, SO_BINDTODEVICE, val, val_size);
+#endif
+        case ARES_SOCKET_OPT_TCP_FASTOPEN:
+            // TCP Fast Open for DNS over TCP (RFC 7413, RFC 7766 section 7): with a socket option on Linux, with
+            // connectx() on macOS (see aconnect())
+            if (val_size != sizeof(ares_bool_t)) {
+                errno = EINVAL;
+                return -1;
+            }
+#if defined(__linux__) && defined(TCP_FASTOPEN_CONNECT)
+            {
+                int on = *static_cast<const ares_bool_t*>(val) ? 1 : 0;
+                return setsockopt(sock, IPPROTO_TCP, TCP_FASTOPEN_CONNECT, &on, sizeof on);
+            }
+#elif defined(__APPLE__)
+            return 0;
+#else
+            errno = ENOSYS;
+            return -1;
+#endif
+        default:
+            // not supported: c-ares does not take ENOSYS as an error
+            errno = ENOSYS;
+            return -1;
+    }
+}
+
+int QoreCaresSockets::aconnect(ares_socket_t sock, const struct sockaddr* address, ares_socklen_t address_len,
+        unsigned int flags, void* user_data) {
+#ifdef __APPLE__
+    // TCP Fast Open (see asetsockopt()): the connection is made with the first data that c-ares sends
+    if (flags & ARES_SOCKET_CONN_TCP_FASTOPEN) {
+        sa_endpoints_t endpoints = {};
+        endpoints.sae_dstaddr = address;
+        endpoints.sae_dstaddrlen = address_len;
+        return connectx(sock, &endpoints, SAE_ASSOCID_ANY, CONNECT_DATA_IDEMPOTENT | CONNECT_RESUME_ON_READ_WRITE,
+            nullptr, 0, nullptr, nullptr);
+    }
+#endif
+    return ::connect(sock, address, address_len);
+}
+
+ares_ssize_t QoreCaresSockets::arecvfrom(ares_socket_t sock, void* buffer, size_t length, int flags,
+        struct sockaddr* address, ares_socklen_t* address_len, void* user_data) {
+    return ::recvfrom(sock, buffer, length, flags, address, address_len);
+}
+
+ares_ssize_t QoreCaresSockets::asendto(ares_socket_t sock, const void* buffer, size_t length, int flags,
+        const struct sockaddr* address, ares_socklen_t address_len, void* user_data) {
+    if (address) {
+        return ::sendto(sock, buffer, length, flags, address, address_len);
+    }
+    return ::send(sock, buffer, length, flags);
+}
+
+int QoreCaresSockets::agetsockname(ares_socket_t sock, struct sockaddr* address, ares_socklen_t* address_len,
+        void* user_data) {
+    return ::getsockname(sock, address, address_len);
+}
+
+int QoreCaresSockets::abind(ares_socket_t sock, unsigned int flags, const struct sockaddr* address,
+        socklen_t address_len, void* user_data) {
+    return ::bind(sock, address, address_len);
+}
+
+unsigned int QoreCaresSockets::aif_nametoindex(const char* ifname, void* user_data) {
+    return if_nametoindex(ifname);
+}
+
+const char* QoreCaresSockets::aif_indextoname(unsigned int ifindex, char* ifname_buf, size_t ifname_buf_len,
+        void* user_data) {
+    if (ifname_buf_len < IF_NAMESIZE) {
+        return nullptr;
+    }
+    return if_indextoname(ifindex, ifname_buf);
+}
+#endif
+#endif
+
 static bool qore_cares_channel_lost_query(ares_channel_t* channel) {
 #ifdef DEBUG
     // a lookup made to lose its query by dbg_cares_lose_query()
@@ -6857,6 +7108,15 @@ int QoreCaresAddrInfoResolver::start(ExceptionSink* xsink) {
             ares_strerror(rc));
         return -1;
     }
+#if ARES_VERSION >= 0x012200
+    // the channel's sockets stay open while an async I/O thread has them registered
+    rc = sockets.install(channel);
+    if (rc != ARES_SUCCESS) {
+        xsink->raiseException("QOREADDRINFO-GETINFO-ERROR", "ares_set_socket_functions_ex() failed: %s",
+            ares_strerror(rc));
+        return -1;
+    }
+#endif
 
     struct ares_addrinfo_hints hints = {};
     // POSIX AI_* and c-ares ARES_AI_* flags have different values, including across operating systems.
@@ -7446,6 +7706,15 @@ private:
             xsink->raiseException("GETHOSTBYADDR-ERROR", "ares_init_options() failed: %s", ares_strerror(rc));
             return -1;
         }
+#if ARES_VERSION >= 0x012200
+        // the channel's sockets stay open while an async I/O thread has them registered
+        rc = sockets.install(channel);
+        if (rc != ARES_SUCCESS) {
+            xsink->raiseException("GETHOSTBYADDR-ERROR", "ares_set_socket_functions_ex() failed: %s",
+                ares_strerror(rc));
+            return -1;
+        }
+#endif
 
         void* raw_addr = qore_get_in_addr(reinterpret_cast<struct sockaddr*>(&addr));
         info.length = addr.ss_family == AF_INET ? sizeof(struct in_addr) : sizeof(struct in6_addr);
@@ -7567,6 +7836,10 @@ private:
     bool restarting = false;
     bool started = false;
     bool done = false;
+#if ARES_VERSION >= 0x012200
+    //! the channel's sockets; destroyed after the channel (see ~QoreCaresHostByAddrResolver())
+    QoreCaresSockets sockets;
+#endif
 };
 
 class QoreSocketControllerResolveHostByAddrPollOperation : public SocketPollOperationBase {
@@ -8005,6 +8278,15 @@ int QoreCaresNameInfoResolver::start(ExceptionSink* xsink) {
             ares_strerror(rc));
         return -1;
     }
+#if ARES_VERSION >= 0x012200
+    // the channel's sockets stay open while an async I/O thread has them registered
+    rc = sockets.install(channel);
+    if (rc != ARES_SUCCESS) {
+        xsink->raiseException("QOREADDRINFO-GETNAMEINFO-ERROR", "ares_set_socket_functions_ex() failed: %s",
+            ares_strerror(rc));
+        return -1;
+    }
+#endif
 
     started = true;
     ares_socklen_t alen = len ? static_cast<ares_socklen_t>(len)
@@ -8149,14 +8431,18 @@ int SocketConnectInetHappyEyeballsPollState::continuePoll(ExceptionSink* xsink) 
             if (fd == sock->sock) {
                 // Assign another active fd as primary so isOpen() remains true; the failed one can be registered in
                 // an async I/O thread's event loop, which holds it open until it has removed it
-                int next_fd = QORE_INVALID_SOCKET;
+                ConnAttempt* next = nullptr;
                 for (auto& a : active_attempts) {
                     if (a.fd != QORE_INVALID_SOCKET) {
-                        next_fd = a.fd;
+                        next = &a;
                         break;
                     }
                 }
-                releasePrimaryFd(fd, next_fd);
+                releasePrimaryFd(fd, next);
+            } else if (active_attempts[i].owned) {
+                // an extra fd of the operation: an async I/O thread that has it registered closes it when it has
+                // removed it
+                qore_owned_descriptor_release(active_attempts[i].owned);
             } else {
                 qore_socket_private::closeDescriptor(fd);
             }
@@ -8186,7 +8472,7 @@ int SocketConnectInetHappyEyeballsPollState::continuePoll(ExceptionSink* xsink) 
                 if (a.fd != QORE_INVALID_SOCKET && a.fd == sock->sock) {
                     int fd = a.fd;
                     a.fd = QORE_INVALID_SOCKET;
-                    releasePrimaryFd(fd, QORE_INVALID_SOCKET);
+                    releasePrimaryFd(fd, nullptr);
                     break;
                 }
             }
@@ -8375,6 +8661,18 @@ int SocketConnectInetHappyEyeballsPollState::startNextConnect(ExceptionSink* xsi
             ++next_addr_idx;
             continue;
         }
+        // the attempt's descriptor is an owned descriptor from the start: an attempt that is not the socket's
+        // descriptor is an extra fd of the operation, which an async I/O thread can hold open while it has it
+        // registered, and the attempt gives it up on every path
+        ConnAttempt a;
+        a.fd = fd;
+        a.addr_idx = next_addr_idx;
+        try {
+            a.owned = qore_owned_descriptor_create(fd);
+        } catch (...) {
+            qore_socket_private::closeDescriptor(fd);
+            throw;
+        }
 
         int rc;
         while (true) {
@@ -8385,10 +8683,7 @@ int SocketConnectInetHappyEyeballsPollState::startNextConnect(ExceptionSink* xsi
         }
         if (rc == 0) {
             // Immediate connection
-            ConnAttempt a;
-            a.fd = fd;
-            a.addr_idx = next_addr_idx;
-            active_attempts.push_back(a);
+            active_attempts.push_back(std::move(a));
             winning_idx = (int)(active_attempts.size() - 1);
             ++next_addr_idx;
             fd_set_changed = true;
@@ -8397,29 +8692,23 @@ int SocketConnectInetHappyEyeballsPollState::startNextConnect(ExceptionSink* xsi
 
 #ifdef _Q_WINDOWS
         if (sock_get_error() != EAGAIN) {
-            closesocket(fd);
-            ++next_addr_idx;
-            continue;
-        }
 #else
         if (errno != EINPROGRESS && errno != EAGAIN) {
-            ::close(fd);
+#endif
+            // the descriptor was never registered
+            qore_owned_descriptor_release(a.owned);
             ++next_addr_idx;
             continue;
         }
-#endif
 
-        ConnAttempt a;
-        a.fd = fd;
-        a.addr_idx = next_addr_idx;
-        active_attempts.push_back(a);
+        active_attempts.push_back(std::move(a));
         ++next_addr_idx;
         fd_set_changed = true;
 
-        // Assign first racing fd to sock->sock so isOpen() returns true
+        // Assign first racing fd to sock->sock so isOpen() returns true; the socket takes the attempt's descriptor
+        // over
         if (sock->sock == QORE_INVALID_SOCKET) {
-            sock->sock = fd;
-            ++sock->fd_generation;
+            sock->setDescriptor(fd, active_attempts.back().owned);
             sock->resetCloseInterrupt();
         }
 
@@ -8444,14 +8733,34 @@ void SocketConnectInetHappyEyeballsPollState::assignWinner(ExceptionSink* xsink)
 
     SocketResolvedAddrInfo& wp = addrs[sorted_addrs[winner.addr_idx]];
 
-    // Assign winning fd to socket (may already be sock->sock if first attempt won)
+    // Assign winning fd to socket (may already be sock->sock if first attempt won); the socket takes the winner's
+    // descriptor over
     if (sock->sock != winner.fd) {
-        sock->sock = winner.fd;
-        ++sock->fd_generation;
-    } else {
-        sock->sock = winner.fd;
+        int old_primary = sock->sock;
+        if (old_primary == QORE_INVALID_SOCKET) {
+            sock->setDescriptor(winner.fd, winner.owned);
+        } else {
+            // the previous primary attempt is given up through the socket: an async I/O thread can have it
+            // registered, and holds it open until it has removed it
+            for (auto& a : active_attempts) {
+                if (a.fd == old_primary) {
+                    a.fd = QORE_INVALID_SOCKET;
+                    break;
+                }
+            }
+            bool close_old = false;
+            if (sock->replaceDescriptor(old_primary, winner.fd, close_old, &winner.owned)) {
+                if (close_old) {
+                    qore_socket_private::closeDescriptor(old_primary);
+                }
+            } else {
+                // a concurrent close released the previous descriptor
+                sock->setDescriptor(winner.fd, winner.owned);
+            }
+        }
     }
     winner.fd = QORE_INVALID_SOCKET;
+    winner.owned.reset();
     sock->resetCloseInterrupt();
     sock->sfamily = wp.family;
     sock->stype = wp.socktype;
@@ -8481,13 +8790,13 @@ QoreObject* qore_socket_dbg_new_controller_pollable(QoreSocket* s) {
 }
 #endif
 
-void SocketConnectInetHappyEyeballsPollState::releasePrimaryFd(int fd, int next_fd) {
+void SocketConnectInetHappyEyeballsPollState::releasePrimaryFd(int fd, ConnAttempt* next) {
     bool close_old = false;
-    if (sock->replaceDescriptor(fd, next_fd, close_old)) {
+    if (sock->replaceDescriptor(fd, next ? next->fd : QORE_INVALID_SOCKET, close_old, next ? &next->owned : nullptr)) {
         if (close_old) {
             qore_socket_private::closeDescriptor(fd);
         }
-        if (next_fd != QORE_INVALID_SOCKET) {
+        if (next) {
             sock->resetCloseInterrupt();
         }
     }
@@ -8497,15 +8806,18 @@ void SocketConnectInetHappyEyeballsPollState::closeAllFds() {
     for (auto& a : active_attempts) {
         if (a.fd != QORE_INVALID_SOCKET) {
             // Don't close the fd if it's currently assigned to sock->sock
-            // (that will be handled by sock->close() or by assignWinner)
+            // (that will be handled by sock->close() or by assignWinner); the
+            // others are extra fds of the operation, which an async I/O thread
+            // that has them registered closes when it has removed them
             if (a.fd != sock->sock) {
-#ifdef _Q_WINDOWS
-                closesocket(a.fd);
-#else
-                ::close(a.fd);
-#endif
+                if (a.owned) {
+                    qore_owned_descriptor_release(a.owned);
+                } else {
+                    qore_socket_private::closeDescriptor(a.fd);
+                }
             }
             a.fd = QORE_INVALID_SOCKET;
+            a.owned.reset();
         }
     }
 }

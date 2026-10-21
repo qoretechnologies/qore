@@ -593,10 +593,25 @@ descriptor.  A descriptor that `replaceDescriptor()` replaces (a QUIC connection
 hold too.  Event notifiers keep the descriptor they are polled with in a reference that `closeFd()` releases (the
 Qore object can be destroyed while an operation waits on it).  File objects use the default implementation, which
 takes no hold: `File::close()` fails while a non-blocking operation runs.  The extra descriptors of an operation
-(`extra_fds`) belong to the operation and are registered by number.  A pollable object implemented in Qore or in a
-module that implements only `AbstractPollableIoObject::getPollableDescriptor()` is polled by number as well; a module
-whose pollable descriptor can be closed while an operation uses it implements the C++ base class and
-`holdPollableDescriptor()`, for example with `QoreSocket::holdDescriptor()`.
+(`extra_fds`) are registered by number, and held when their owner made them owned descriptors (see below).  A
+pollable object implemented in Qore or in a module that implements only
+`AbstractPollableIoObject::getPollableDescriptor()` is polled by number as well; a module whose pollable descriptor
+can be closed while an operation uses it implements the C++ base class and `holdPollableDescriptor()`, for example
+with `QoreSocket::holdDescriptor()`.
+
+The extra fds that their owner closes while an operation can still have them registered are owned descriptors
+(`qore_owned_descriptor_create()`, a `QoreSharedDescriptor` in a registry by number): the connection attempts of
+happy eyeballs (`SocketConnectInetHappyEyeballsPollState`) and the sockets of the c-ares channels of the resolvers,
+which make them with their own socket functions (`QoreCaresSockets`, `ares_set_socket_functions_ex()`).
+`updateExtraFds()` takes a hold of an owned descriptor (`qore_owned_descriptor_hold()`) before it registers it, kept
+in `IoThreadContext::extra_fd_holds` until the registration is removed; the owner gives the descriptor up with
+`qore_owned_descriptor_release()`, which closes it now, or with the last hold.  A connection attempt that becomes the
+socket's descriptor is handed over to the socket (`qore_owned_descriptor_adopt()`, `setDescriptor()`,
+`replaceDescriptor()`), whose `shared_fd` it becomes, so the holds count as uses of it and a close of the socket defers
+its close (`runOwnedExtraFd()` in `AsyncIoDescriptorHoldTest`, `QoreCaresSocketsTest`).  An extra fd that the event
+loop refuses (a descriptor that epoll cannot wait for, or a number that a close and a reuse gave to such a file) is
+not waited for: `updateExtraFds()` removes any registration of the operation's for it and releases its hold
+(`runRefusedExtraFd()`).
 
 `AsyncIoRegistrationCloseTest` in the C++ unit tests closes the socket from another thread at the point where the
 event loop is about to register its descriptor (the debug hook `QoreEventLoop::dbgSetBeforeRegister()`), for the

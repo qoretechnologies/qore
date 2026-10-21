@@ -3099,6 +3099,96 @@ public:
     }
 };
 
+#if ARES_VERSION >= 0x012200 && !defined(_Q_WINDOWS)
+//! The socket functions that the c-ares channels of the resolvers use make owned descriptors
+/** c-ares closes a socket of its channel when it is done with it, while an async I/O thread can still have it
+    registered as an extra fd of the resolving operation.  A socket made by the functions can be held
+    (qore_owned_descriptor_hold()), a socket closed by c-ares stays open while a hold exists and is closed with the
+    last one, a socket that is not held is closed at once, and the functions can be installed on a channel.
+*/
+class QoreCaresSocketsTest {
+public:
+    static void run(UnitTestCounters& c) {
+        QoreCaresSockets cs;
+        ares_socket_t fd = QoreCaresSockets::asocket(AF_INET, SOCK_DGRAM, 0, &cs);
+        UT_ASSERT(c, fd != ARES_SOCKET_BAD, "c-ares sockets: a socket is made");
+        if (fd == ARES_SOCKET_BAD) {
+            return;
+        }
+        UT_ASSERT(c, (fcntl(fd, F_GETFL) & O_NONBLOCK) && (fcntl(fd, F_GETFD) & FD_CLOEXEC),
+            "c-ares sockets: the socket is non-blocking and closed on exec");
+        struct stat st0;
+        fstat(fd, &st0);
+        std::shared_ptr<void> hold = qore_owned_descriptor_hold(fd);
+        UT_ASSERT(c, hold != nullptr, "c-ares sockets: an I/O thread can hold the socket");
+        UT_ASSERT_EQ(c, 0, QoreCaresSockets::aclose(fd, &cs), "c-ares sockets: c-ares closes the socket");
+        struct stat st;
+        UT_ASSERT(c, !fstat(fd, &st) && st.st_ino == st0.st_ino && st.st_dev == st0.st_dev,
+            "c-ares sockets: a held socket stays open after c-ares closed it");
+        UT_ASSERT(c, qore_owned_descriptor_hold(fd) == nullptr,
+            "c-ares sockets: no new hold can be taken of a socket that c-ares closed");
+        hold.reset();
+        UT_ASSERT(c, fstat(fd, &st) || st.st_ino != st0.st_ino || st.st_dev != st0.st_dev,
+            "c-ares sockets: the socket is closed with the last hold");
+
+        fd = QoreCaresSockets::asocket(AF_INET, SOCK_DGRAM, 0, &cs);
+        UT_ASSERT(c, fd != ARES_SOCKET_BAD, "c-ares sockets: another socket is made");
+        if (fd != ARES_SOCKET_BAD) {
+            fstat(fd, &st0);
+            QoreCaresSockets::aclose(fd, &cs);
+            UT_ASSERT(c, fstat(fd, &st) || st.st_ino != st0.st_ino || st.st_dev != st0.st_dev,
+                "c-ares sockets: a socket that is not held is closed at once");
+        }
+
+        // a TCP socket is made and configured as c-ares's own socket functions do it
+        fd = QoreCaresSockets::asocket(AF_INET, SOCK_STREAM, 0, &cs);
+        UT_ASSERT(c, fd != ARES_SOCKET_BAD, "c-ares sockets: a TCP socket is made");
+        if (fd != ARES_SOCKET_BAD) {
+            int nodelay = 0;
+            socklen_t len = sizeof nodelay;
+            UT_ASSERT(c, !getsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &nodelay, &len) && nodelay,
+                "c-ares sockets: a TCP socket sends at once");
+            int size = 65536;
+            UT_ASSERT_EQ(c, 0, QoreCaresSockets::asetsockopt(fd, ARES_SOCKET_OPT_SENDBUF_SIZE, &size, sizeof size, &cs),
+                "c-ares sockets: the send buffer size is set");
+            ares_bool_t on = ARES_TRUE;
+            int rc = QoreCaresSockets::asetsockopt(fd, ARES_SOCKET_OPT_TCP_FASTOPEN, &on, sizeof on, &cs);
+#if defined(__linux__) && defined(TCP_FASTOPEN_CONNECT)
+            // a kernel without TCP Fast Open refuses the option, which c-ares then does not use
+            int err = errno;
+            UT_ASSERT(c, !rc || err == ENOPROTOOPT, "c-ares sockets: TCP Fast Open is offered");
+            if (!rc) {
+                int tfo = 0;
+                len = sizeof tfo;
+                UT_ASSERT(c, !getsockopt(fd, IPPROTO_TCP, TCP_FASTOPEN_CONNECT, &tfo, &len) && tfo,
+                    "c-ares sockets: TCP Fast Open is enabled on the socket");
+            }
+#elif defined(__APPLE__)
+            UT_ASSERT_EQ(c, 0, rc, "c-ares sockets: TCP Fast Open is offered");
+#else
+            UT_ASSERT(c, rc && errno == ENOSYS, "c-ares sockets: TCP Fast Open is not offered");
+#endif
+            QoreCaresSockets::aclose(fd, &cs);
+        }
+
+        ares_channel_t* channel = nullptr;
+        struct ares_options options = {};
+        int rc = ares_init_options(&channel, &options, 0);
+        UT_ASSERT_EQ(c, ARES_SUCCESS, rc, "c-ares sockets: a channel is made");
+        if (rc == ARES_SUCCESS) {
+            UT_ASSERT_EQ(c, ARES_SUCCESS, cs.install(channel), "c-ares sockets: the functions are installed");
+            ares_destroy(channel);
+        }
+    }
+};
+#else
+class QoreCaresSocketsTest {
+public:
+    static void run(UnitTestCounters& c) {
+    }
+};
+#endif
+
 //! A socket closed by another thread while its descriptor is registered keeps the descriptor's number
 /** The system gives the lowest free descriptor number to the next socket or file opened by any thread, so an I/O
     thread that still has the number of a closed descriptor registered in its event loop would remove or change the
@@ -3641,7 +3731,372 @@ public:
         }
     }
 
+    //! An owned extra fd that its owner gives up while it is registered stays open until the I/O thread removes it
+    /** The connection attempts of happy eyeballs and the sockets of a c-ares channel are extra fds of their
+        operation, registered by number; their owner closed them when it was done with them while the I/O thread
+        still had them registered, so the I/O thread then removed a number that another object could have by then.
+        The operation waits for a notifier and, as an extra fd, for an owned descriptor; when it is notified, it
+        gives the descriptor up and stops waiting for it: the descriptor must still be open when the I/O thread
+        removes it.
+    */
+    static void runOwnedExtraFd(UnitTestCounters& c) {
+        ExceptionSink xsink;
+        ReferenceHolder<AsyncIoControllerPriv> ctrl(new AsyncIoControllerPriv(false, &xsink), &xsink);
+        UT_ASSERT(c, !xsink, "owned extra fd controller construction succeeds");
+        if (xsink) {
+            xsink.clear();
+            return;
+        }
+        // the owned descriptor, and a descriptor that takes its number when the number is free when the I/O thread
+        // removes it, as a socket that another thread makes then would
+        struct Descriptors {
+            std::shared_ptr<QoreSharedDescriptor> owned;
+            int probe = -1;
+            //! set if the number of the owned descriptor was given to the probe
+            bool reused = false;
+
+            ~Descriptors() {
+                qore_owned_descriptor_release(owned);
+                if (probe >= 0) {
+                    ::close(probe);
+                }
+            }
+        } fds;
+        int x = ::socket(AF_INET, SOCK_DGRAM, 0);
+        struct stat xst;
+        UT_ASSERT(c, x >= 0 && !fstat(x, &xst), "the owned descriptor is made");
+        if (x < 0) {
+            return;
+        }
+        fds.owned = qore_owned_descriptor_create(x);
+        fds.probe = ::socket(AF_INET, SOCK_DGRAM, 0);
+        UT_ASSERT(c, fds.probe >= 0, "the probe descriptor is made");
+        if (fds.probe < 0) {
+            return;
+        }
+        // set when the event loop removes the descriptor: whether it was still the owned descriptor then
+        struct RemoveLog {
+            std::mutex l;
+            std::condition_variable cv;
+            bool removed = false;
+            bool open = false;
+        } rlog;
+        struct Cleanup {
+            AsyncIoControllerPriv* ctrl;
+            ExceptionSink& xsink;
+            ~Cleanup() {
+                xsink.clear();
+                ctrl->stopClear(&xsink);
+                xsink.clear();
+            }
+        } cleanup{*ctrl, xsink};
+        ctrl->setMaxIoThreads(1, &xsink);
+        ctrl->io_threads[0]->loop->dbgSetBeforeRemove([&rlog, &fds, x, ino = xst.st_ino, dev = xst.st_dev](int fd) {
+            if (fd != x) {
+                return;
+            }
+            struct stat st;
+            bool open = !fstat(fd, &st) && st.st_ino == ino && st.st_dev == dev;
+            // a free number goes to the next descriptor made: the I/O thread then removes that one's number
+            if (!open && fstat(fd, &st) && ::dup2(fds.probe, fd) == fd) {
+                fds.reused = true;
+            }
+            std::lock_guard<std::mutex> g(rlog.l);
+            rlog.removed = true;
+            rlog.open = open;
+            rlog.cv.notify_all();
+        });
+        ctrl->start(&xsink);
+        bool ready = !xsink && ctrl->waitReady(5000, &xsink);
+        UT_ASSERT(c, ready && !xsink, "owned extra fd controller starts");
+        if (!ready || xsink) {
+            return;
+        }
+
+        ReferenceHolder<QoreEventNotifier> notifier(new QoreEventNotifier(&xsink), &xsink);
+        if (xsink || !notifier->isValid()) {
+            return;
+        }
+        notifier->ref();
+        ReferenceHolder<QoreObject> notifier_obj(new QoreObject(QC_EVENTNOTIFIER, getProgram(), *notifier), &xsink);
+        ReferenceHolder<QoreObject> queue_obj(&xsink);
+        if (!submitExtraFdOp(c, **ctrl, *notifier_obj, new ExtraFdOp(*notifier_obj, *notifier, std::move(fds.owned)),
+                "owned-extra-fd-unit-test", queue_obj, xsink)) {
+            return;
+        }
+
+        // the operation gives the descriptor up in its next step and stops waiting for it
+        notifier->notify();
+        bool removed;
+        bool open;
+        {
+            std::unique_lock<std::mutex> g(rlog.l);
+            removed = rlog.cv.wait_for(g, std::chrono::seconds(30), [&rlog]() {
+                return rlog.removed;
+            });
+            open = rlog.open;
+        }
+        UT_ASSERT(c, removed, "the I/O thread removes the extra fd");
+        UT_ASSERT(c, open, "the owned extra fd is still open when the I/O thread removes it");
+        UT_ASSERT(c, !fds.reused, "the I/O thread does not remove a number that another descriptor has");
+
+        SimpleRefHolder<QoreStringNode> owner(new QoreStringNode("owned-extra-fd-unit-test"));
+        ctrl->cancelByOwner(*owner, &xsink);
+        xsink.clear();
+        struct stat st;
+        UT_ASSERT(c, fstat(x, &st) || st.st_ino != xst.st_ino || st.st_dev != xst.st_dev,
+            "the owned extra fd is closed once the I/O thread has removed it");
+        if (fds.reused) {
+            ::close(x);
+        }
+    }
+
+    //! An extra fd that the event loop refuses is not left registered or held for the operation
+    /** The controller forgot an extra fd that the event loop refused, but a registration that the operation had for it
+        stayed in the event loop, and the hold of an owned descriptor stayed in the I/O thread, which then kept the
+        descriptor open until it exited.  Linux only: epoll refuses /dev/null.
+        - "owned": the operation waits for an owned descriptor of /dev/null, which epoll refuses; when the owner gives
+          it up, it is closed.
+        - "by number": the operation waits for a socket by number, whose number then goes to a copy of /dev/null, as a
+          close by another thread and a reuse would, and the operation waits for the number again, also for writing:
+          epoll refuses the change, and the operation's registration of the number is removed.
+    */
+    static void runRefusedExtraFd(UnitTestCounters& c) {
+#ifdef __linux__
+        for (bool by_number : {false, true}) {
+            const char* v = by_number ? "by number" : "owned";
+            ExceptionSink xsink;
+            ReferenceHolder<AsyncIoControllerPriv> ctrl(new AsyncIoControllerPriv(false, &xsink), &xsink);
+            UT_ASSERT(c, !xsink, (std::string(v) + ": refused extra fd controller construction succeeds").c_str());
+            if (xsink) {
+                xsink.clear();
+                continue;
+            }
+            // the descriptors of the test, closed when it ends (the extra fd by number has the copy of /dev/null by
+            // then)
+            struct Descriptors {
+                std::shared_ptr<QoreSharedDescriptor> owned;
+                int null_fd = -1;
+                int x = -1;
+
+                ~Descriptors() {
+                    qore_owned_descriptor_release(owned);
+                    if (null_fd >= 0) {
+                        ::close(null_fd);
+                    }
+                    if (x >= 0) {
+                        ::close(x);
+                    }
+                }
+            } fds;
+            fds.null_fd = ::open("/dev/null", O_RDONLY | O_CLOEXEC);
+            UT_ASSERT(c, fds.null_fd >= 0, (std::string(v) + ": /dev/null is opened").c_str());
+            if (fds.null_fd < 0) {
+                continue;
+            }
+            int owned_fd = -1;
+            struct stat ost;
+            if (by_number) {
+                fds.x = ::socket(AF_INET, SOCK_DGRAM, 0);
+                UT_ASSERT(c, fds.x >= 0, (std::string(v) + ": the socket is made").c_str());
+                if (fds.x < 0) {
+                    continue;
+                }
+            } else {
+                owned_fd = ::dup(fds.null_fd);
+                UT_ASSERT(c, owned_fd >= 0 && !fstat(owned_fd, &ost),
+                    (std::string(v) + ": the owned descriptor is made").c_str());
+                if (owned_fd < 0) {
+                    continue;
+                }
+                fds.owned = qore_owned_descriptor_create(owned_fd);
+            }
+            // the steps of the operation, and the removal of the socket's number from the event loop
+            struct StepLog {
+                std::mutex l;
+                std::condition_variable cv;
+                int steps = 0;
+                bool removed = false;
+            } slog;
+            struct Cleanup {
+                AsyncIoControllerPriv* ctrl;
+                ExceptionSink& xsink;
+                ~Cleanup() {
+                    xsink.clear();
+                    ctrl->stopClear(&xsink);
+                    xsink.clear();
+                }
+            } cleanup{*ctrl, xsink};
+            ctrl->setMaxIoThreads(1, &xsink);
+            ctrl->io_threads[0]->loop->dbgSetBeforeRemove([&slog, x = fds.x](int fd) {
+                if (x < 0 || fd != x) {
+                    return;
+                }
+                std::lock_guard<std::mutex> g(slog.l);
+                slog.removed = true;
+                slog.cv.notify_all();
+            });
+            ctrl->start(&xsink);
+            bool ready = !xsink && ctrl->waitReady(5000, &xsink);
+            UT_ASSERT(c, ready && !xsink, (std::string(v) + ": refused extra fd controller starts").c_str());
+            if (!ready || xsink) {
+                continue;
+            }
+            ReferenceHolder<QoreEventNotifier> notifier(new QoreEventNotifier(&xsink), &xsink);
+            if (xsink || !notifier->isValid()) {
+                continue;
+            }
+            notifier->ref();
+            ReferenceHolder<QoreObject> notifier_obj(new QoreObject(QC_EVENTNOTIFIER, getProgram(), *notifier),
+                &xsink);
+            auto on_step = [&slog]() {
+                std::lock_guard<std::mutex> g(slog.l);
+                ++slog.steps;
+                slog.cv.notify_all();
+            };
+            ExtraFdOp* op = by_number
+                ? new ExtraFdOp(*notifier_obj, *notifier, fds.x, fds.null_fd, on_step)
+                : new ExtraFdOp(*notifier_obj, *notifier, std::move(fds.owned), on_step);
+            ReferenceHolder<QoreObject> queue_obj(&xsink);
+            if (!submitExtraFdOp(c, **ctrl, *notifier_obj, op, "refused-extra-fd-unit-test", queue_obj, xsink)) {
+                continue;
+            }
+
+            notifier->notify();
+            if (by_number) {
+                bool removed;
+                {
+                    std::unique_lock<std::mutex> g(slog.l);
+                    removed = slog.cv.wait_for(g, std::chrono::seconds(30), [&slog]() {
+                        return slog.removed;
+                    });
+                }
+                UT_ASSERT(c, removed,
+                    (std::string(v) + ": the operation's registration of the refused number is removed").c_str());
+            } else {
+                bool stepped;
+                {
+                    std::unique_lock<std::mutex> g(slog.l);
+                    stepped = slog.cv.wait_for(g, std::chrono::seconds(30), [&slog]() {
+                        return slog.steps > 0;
+                    });
+                }
+                UT_ASSERT(c, stepped, (std::string(v) + ": the operation gives the descriptor up").c_str());
+                struct stat st;
+                UT_ASSERT(c, fstat(owned_fd, &st) || st.st_ino != ost.st_ino || st.st_dev != ost.st_dev,
+                    (std::string(v) + ": the refused descriptor is closed when its owner gives it up").c_str());
+            }
+            SimpleRefHolder<QoreStringNode> owner(new QoreStringNode("refused-extra-fd-unit-test"));
+            ctrl->cancelByOwner(*owner, &xsink);
+            xsink.clear();
+        }
+#endif
+    }
+
 private:
+    //! Waits for a notifier and an extra fd; when it is notified, it changes the extra fd
+    /** With an owned descriptor, it gives the descriptor up and stops waiting for it; with a descriptor by number
+        (\a fd) and a \a replacement, it gives the descriptor's number to a copy of \a replacement, as a close by
+        another thread and a reuse of the number would, and waits for the number again, now also for writing, so that
+        the I/O thread changes the registration.  \a on_step is called in the I/O thread after each step after the
+        first.
+    */
+    class ExtraFdOp : public SocketPollOperationBase {
+    public:
+        DLLLOCAL ExtraFdOp(QoreObject* notifier_obj, QoreEventNotifier* notifier,
+                std::shared_ptr<QoreSharedDescriptor> owned, std::function<void()> on_step = nullptr)
+                : notifier_obj(notifier_obj), notifier(notifier), owned(std::move(owned)),
+                on_step(std::move(on_step)) {
+        }
+
+        DLLLOCAL ExtraFdOp(QoreObject* notifier_obj, QoreEventNotifier* notifier, int fd, int replacement,
+                std::function<void()> on_step) : notifier_obj(notifier_obj), notifier(notifier), fd(fd),
+                replacement(replacement), on_step(std::move(on_step)) {
+        }
+
+        DLLLOCAL ~ExtraFdOp() {
+            qore_owned_descriptor_release(owned);
+        }
+
+        DLLLOCAL virtual bool goalReached() const override {
+            return false;
+        }
+
+        DLLLOCAL virtual void abort(ExceptionSink*) override {
+        }
+
+        DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink) override {
+            bool step = calls++;
+            if (step) {
+                notifier->acknowledge(xsink);
+                if (owned) {
+                    // the owner is done with the descriptor, which the I/O thread still has registered
+                    qore_owned_descriptor_release(owned);
+                } else if (fd >= 0 && replacement >= 0) {
+                    ::dup2(replacement, fd);
+                    replacement = -1;
+                    extra_events = SOCK_POLLIN | SOCK_POLLOUT;
+                }
+            }
+            ReferenceHolder<QoreHashNode> info(new QoreHashNode(hashdeclSocketPollInfo, xsink), xsink);
+            info->setKeyValue("events", SOCK_POLLIN, xsink);
+            info->setKeyValue("socket", notifier_obj->objectRefSelf(), xsink);
+            int extra = owned ? owned->fd : fd;
+            if (extra >= 0) {
+                ReferenceHolder<QoreListNode> list(new QoreListNode(hashdeclExtraPollFdInfo->getTypeInfo()), xsink);
+                ReferenceHolder<QoreHashNode> h(new QoreHashNode(hashdeclExtraPollFdInfo, xsink), xsink);
+                h->setKeyValue("fd", extra, xsink);
+                h->setKeyValue("events", extra_events, xsink);
+                list->push(h.release(), xsink);
+                info->setKeyValue("extra_fds", list.release(), xsink);
+            }
+            if (step && on_step) {
+                on_step();
+            }
+            return *xsink ? nullptr : info.release();
+        }
+
+        DLLLOCAL virtual const char* getStateImpl() const override {
+            return "waiting";
+        }
+
+    private:
+        QoreObject* notifier_obj;
+        QoreEventNotifier* notifier;
+        std::shared_ptr<QoreSharedDescriptor> owned;
+        //! the extra fd by number, if not owned
+        int fd = -1;
+        //! the descriptor whose copy takes the extra fd's number in the operation's next step
+        int replacement = -1;
+        //! the events that the operation waits for on its extra fd
+        int extra_events = SOCK_POLLIN;
+        std::function<void()> on_step;
+        int calls = 0;
+    };
+
+    //! Submits an operation that waits for a notifier and an extra fd; returns false if it is not registered
+    static bool submitExtraFdOp(UnitTestCounters& c, AsyncIoControllerPriv& ctrl, QoreObject* notifier_obj,
+            ExtraFdOp* op, const char* owner, ReferenceHolder<QoreObject>& queue_obj, ExceptionSink& xsink) {
+        ReferenceHolder<QoreObject> op_obj(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), op), &xsink);
+        op->setSelf(*op_obj);
+        op_obj->setValue("sock", notifier_obj->objectRefSelf(), &xsink);
+        op_obj->setValue("goal", new QoreStringNode("extra"), &xsink);
+        ReferenceHolder<QoreHashNode> info(new QoreHashNode(hashdeclSocketPollOperationInfo, &xsink), &xsink);
+        info->setKeyValue("sock", notifier_obj->objectRefSelf(), &xsink);
+        info->setKeyValue("spop", op_obj->objectRefSelf(), &xsink);
+        info->setKeyValue("owner", new QoreStringNode(owner), &xsink);
+        info->setKeyValue("to", -1, &xsink);
+        queue_obj = ctrl.submit(nullptr, info.release(), false, &xsink);
+        bool processed = !xsink && queue_obj && ctrl.waitForProcessing(5000, &xsink);
+        ReferenceHolder<QoreHashNode> io_info(processed ? ctrl.getInfo(&xsink) : nullptr, &xsink);
+        UT_ASSERT(c, processed && !xsink, "the operation waits with its extra fd");
+        if (!processed || xsink) {
+            xsink.clear();
+            return false;
+        }
+        return true;
+    }
+
     //! Ends at the first continuePoll() after its first one, i.e. when its object is readable
     class ReadyOp : public SocketPollOperationBase {
     public:
@@ -9978,6 +10433,9 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     AsyncIoDescriptorHoldTest::runSharedDescriptor(c);
     AsyncIoDescriptorHoldTest::runConnectFailure(c);
     AsyncIoDescriptorHoldTest::runSharedRegistration(c);
+    AsyncIoDescriptorHoldTest::runOwnedExtraFd(c);
+    AsyncIoDescriptorHoldTest::runRefusedExtraFd(c);
+    QoreCaresSocketsTest::run(c);
     AsyncIoAbandonedSubmitTest::run(c);
     AsyncIoRegistrationCloseTest::run(c);
     AsyncIoZeroPollHintTest::run(c);
