@@ -97,6 +97,10 @@ public class AbstractTable inherits AbstractSqlUtilBase {
             "table_cache": "Tables",
             "deferrable": Type::Boolean,
             "initially_deferred": Type::Boolean,
+            # the ON DELETE referential action (see @ref fk_actions), since SqlUtil 3.11.0
+            "on_delete": Type::String,
+            # the ON UPDATE referential action (see @ref fk_actions), since SqlUtil 3.11.0
+            "on_update": Type::String,
         };
 
         #! default trigger options
@@ -2983,6 +2987,15 @@ printf("%s;\n", sql);
 
         # get the new foreign constraint object
         AbstractForeignConstraint fk = addForeignConstraintImpl(cname, ch, table, tch, opt);
+
+        # set the referential actions on the constraint, in a driver-independent way, so that a driver whose
+        # addForeignConstraintImpl() does not set them still gets them (validated against @ref fk_actions)
+        if (opt.hasKey("on_delete")) {
+            fk.on_delete = normalize_fk_action(opt.on_delete, "on_delete");
+        }
+        if (opt.hasKey("on_update")) {
+            fk.on_update = normalize_fk_action(opt.on_update, "on_update");
+        }
 
         if (generate_sql) {
             sql = fk.getCreateSql(getSqlName());
@@ -9594,6 +9607,14 @@ AbstractTable archived = table.finalizePartitionDetach({"bound_from": 2026-06-01
                 if (i.value.deferrable) {
                     fc.deferrable = True;
                     fc.initially_deferred = i.value.initially_deferred;
+                }
+                # a referential action is kept so that a description read from the database and used as a template
+                # keeps the action and does not drop and re-add the constraint on the next alignment
+                if (i.value.on_delete) {
+                    fc.on_delete = i.value.on_delete;
+                }
+                if (i.value.on_update) {
+                    fc.on_update = i.value.on_update;
                 }
                 rv.foreign_constraints{i.key} = fc;
             }

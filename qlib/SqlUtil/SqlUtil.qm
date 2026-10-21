@@ -159,6 +159,13 @@ module SqlUtil {
       "AbstractDatabase::getCurrentSchemaPhysicalSize()", which measures the physical size of the schema that
       unqualified names resolve to on the connection, without the cost of measuring the whole database, on
       PostgreSQL, Oracle, MySQL/MariaDB and SQL Server.
+    - foreign constraints have referential actions: the \c on_delete and \c on_update options and members (see
+      @ref fk_actions) create the constraint with \c ON \c DELETE and \c ON \c UPDATE actions, which are read back
+      from the database, compared, and kept by
+      @ref SqlUtil::AbstractTable::getDescriptionHash() "getDescriptionHash()"; an alignment that changes an
+      action drops and adds the constraint again.  A foreign constraint without actions is created and aligned
+      exactly as before; an action that the database does not support is refused with
+      \c FOREIGN-CONSTRAINT-ERROR
     - fixed @ref SqlUtil::AbstractTable::setupTable() "AbstractTable::setupTable()" requesting the DDL that adds a
       foreign constraint to an existing table while constructing an in-memory table description, as it did for a
       primary key before 3.2.0; a description of a table with foreign constraints can now be set up on a database
@@ -9846,6 +9853,69 @@ AbstractForeignConstraint ix = fcs.fk_jobs_job_defs;
         }
     }
 
+    /** @defgroup fk_actions Foreign Constraint Referential Actions
+        The action a database takes on the rows of a foreign constraint's table when a referenced row is deleted
+        (\c ON \c DELETE) or its referenced columns are updated (\c ON \c UPDATE).  An action is set with the
+        \c on_delete and \c on_update @ref SqlUtil::AbstractTable::ForeignConstraintOptions "foreign constraint
+        options" or the @ref SqlUtil::AbstractForeignConstraint::on_delete "on_delete" and
+        @ref SqlUtil::AbstractForeignConstraint::on_update "on_update" members; NOTHING or @ref FK_NO_ACTION is the
+        database default, which emits no clause, so a foreign constraint without actions creates exactly as before.
+        Not every database supports every action; a driver refuses an action that its database does not support
+    */
+    #/@{
+    #! the database takes no action, and the constraint is checked at the end of the statement (the default)
+    public const FK_NO_ACTION = "NO ACTION";
+    #! the database takes no action, and the constraint is checked immediately (not deferrable)
+    public const FK_RESTRICT = "RESTRICT";
+    #! the rows of the foreign constraint's table are deleted (\c ON \c DELETE) or updated (\c ON \c UPDATE) with
+    #! the referenced row
+    public const FK_CASCADE = "CASCADE";
+    #! the foreign constraint's columns are set to @ref NULL
+    public const FK_SET_NULL = "SET NULL";
+    #! the foreign constraint's columns are set to their default values
+    public const FK_SET_DEFAULT = "SET DEFAULT";
+
+    #! the set of valid referential actions, keyed by the canonical (upper-case) action
+    public const ForeignConstraintActions = {
+        FK_NO_ACTION: True,
+        FK_RESTRICT: True,
+        FK_CASCADE: True,
+        FK_SET_NULL: True,
+        FK_SET_DEFAULT: True,
+    };
+    #/@}
+
+    #! normalizes a referential action: NOTHING and an empty string become NOTHING (the database default,
+    #! @ref FK_NO_ACTION), any other value is upper-cased and validated
+    /** @param action the action, such as \c "cascade" or @ref FK_SET_NULL, or NOTHING for the default
+        @param what a description for the exception message, such as \c "on_delete"
+        @return the canonical upper-case action, or NOTHING for the database default
+
+        @throw FOREIGN-CONSTRAINT-ERROR the action is not one of @ref fk_actions
+
+        @since SqlUtil 3.11.0
+    */
+    public *string sub normalize_fk_action(*string action, string what) {
+        if (!action.val()) {
+            return;
+        }
+        string rv = action.upr();
+        # accept "SETNULL"/"SET_NULL" and "NOACTION"/"NO_ACTION" spellings too
+        rv = replace(rv, "_", " ");
+        if (rv == "SETNULL") {
+            rv = FK_SET_NULL;
+        } else if (rv == "SETDEFAULT") {
+            rv = FK_SET_DEFAULT;
+        } else if (rv == "NOACTION") {
+            rv = FK_NO_ACTION;
+        }
+        if (!ForeignConstraintActions{rv}) {
+            throw "FOREIGN-CONSTRAINT-ERROR", sprintf("invalid %s referential action %y; expecting one of: %y, or "
+                "nothing for the database default (%y)", what, action, keys ForeignConstraintActions, FK_NO_ACTION);
+        }
+        return rv == FK_NO_ACTION ? NOTHING : rv;
+    }
+
     #! the base class for foreign key constraint information
     public class AbstractForeignConstraint inherits AbstractColumnConstraint {
         public {
@@ -9858,6 +9928,18 @@ AbstractForeignConstraint ix = fcs.fk_jobs_job_defs;
             #! @ref True "True" if constraint checks are deferred by default; only valid when \c deferrable is
             #! @ref True "True"
             bool initially_deferred;
+
+            #! the \c ON \c DELETE referential action (see @ref fk_actions), or NOTHING for the database default
+            #! (@ref FK_NO_ACTION)
+            /** @since SqlUtil 3.11.0
+            */
+            *string on_delete;
+
+            #! the \c ON \c UPDATE referential action (see @ref fk_actions), or NOTHING for the database default
+            #! (@ref FK_NO_ACTION)
+            /** @since SqlUtil 3.11.0
+            */
+            *string on_update;
         }
 
         #! creates a foreign constraint
@@ -9867,12 +9949,19 @@ AbstractForeignConstraint ix = fcs.fk_jobs_job_defs;
             @param deferrable @ref True "True" if checks can be deferred until transaction commit
             @param initially_deferred @ref True "True" if checks are deferred by default; requires \a deferrable
                 to be @ref True "True"
+            @param on_delete the \c ON \c DELETE referential action (see @ref fk_actions), or NOTHING for the
+                database default
+            @param on_update the \c ON \c UPDATE referential action (see @ref fk_actions), or NOTHING for the
+                database default
 
             @throw FOREIGN-CONSTRAINT-ERROR \a initially_deferred is @ref True "True" and \a deferrable is
-                @ref False "False"
+                @ref False "False", or an invalid referential action
+
+            @note \a on_delete and \a on_update are available since SqlUtil 3.11.0
         */
         constructor(string name, Columns cols, ForeignConstraintTarget t, bool deferrable = False,
-                bool initially_deferred = False) : AbstractColumnConstraint(name, cols) {
+                bool initially_deferred = False, *string on_delete, *string on_update)
+                : AbstractColumnConstraint(name, cols) {
             if (initially_deferred && !deferrable) {
                 throw "FOREIGN-CONSTRAINT-ERROR", sprintf("foreign constraint %y: initially_deferred requires "
                     "deferrable", name);
@@ -9880,6 +9969,26 @@ AbstractForeignConstraint ix = fcs.fk_jobs_job_defs;
             target = t;
             self.deferrable = deferrable;
             self.initially_deferred = initially_deferred;
+            self.on_delete = normalize_fk_action(on_delete, "on_delete");
+            self.on_update = normalize_fk_action(on_update, "on_update");
+        }
+
+        #! returns the SQL clause for the referential actions, or an empty string for the database default on both
+        /** @return a leading-space clause such as <tt>" on delete cascade on update set null"</tt>, or an empty
+            string when both actions are the database default (@ref FK_NO_ACTION); an action is emitted only when it
+            is not the default, so a foreign constraint without actions creates exactly as before
+
+            @since SqlUtil 3.11.0
+        */
+        string getActionsSql() {
+            string sql = "";
+            if (on_delete.val()) {
+                sql += " on delete " + on_delete.lwr();
+            }
+            if (on_update.val()) {
+                sql += " on update " + on_update.lwr();
+            }
+            return sql;
         }
 
         #! returns the portable SQL clause representing the constraint's deferrability
@@ -9944,12 +10053,19 @@ string sql = constraint.getDeferrabilitySql();
         }
 
         #! returns @ref True "True" if the argument is equal to the current object, @ref False "False" if not
+        /** @note since SqlUtil 3.11.0 the referential actions are compared, with a missing action normalized to the
+            database default (@ref FK_NO_ACTION), so a template that changes an action is not equal to the foreign
+            constraint in the database, and a schema alignment drops and adds the constraint again with the new
+            action
+        */
         private bool equalImpl(AbstractConstraint con) {
             AbstractForeignConstraint c = cast<AbstractForeignConstraint>(con);
             return (h.keys() != c.h.keys())
                 || !target.equal(c.target)
                 || deferrable != c.deferrable
                 || initially_deferred != c.initially_deferred
+                || on_delete != c.on_delete
+                || on_update != c.on_update
                 ? False : True;
         }
     }

@@ -171,16 +171,41 @@ module Sqlite3SqlUtil {
     @ref sqlite3_alignment_refusals); a changed foreign constraint is one dropped and another added.  Such a table can
     only be created anew and its rows copied, which this module does not do.
 
-    A foreign constraint description in SqlUtil has no referential actions (\c ON \c DELETE, \c ON \c UPDATE) on
-    any database, so a foreign constraint is created without them and compared without them, and a foreign
-    constraint on SQLite cannot be deferrable through SqlUtil.
+    A foreign constraint can have referential actions (see @ref fk_actions): the \c on_delete and \c on_update
+    options give \c ON \c DELETE and \c ON \c UPDATE actions (\c CASCADE, \c SET \c NULL, \c SET \c DEFAULT,
+    \c RESTRICT or \c NO \c ACTION), which are written in the \c CREATE \c TABLE statement, read back from SQLite's
+    foreign key pragma and compared, so a table whose foreign constraints have the template's actions needs no SQL.
+    As SQLite cannot drop or add a foreign constraint of an existing table, a template that changes an action raises
+    \c UNSUPPORTED, as for any other change of a foreign constraint.  A foreign constraint on SQLite cannot be
+    deferrable through SqlUtil.
 
-    @note Foreign constraints are declared but not enforced on SQLite through the \c sqlite3 driver: a row that
-    references no row of the referenced table can be inserted.  SQLite enforces foreign constraints only on a
-    connection on which <tt>PRAGMA foreign_keys</tt> is on; it is off by default, and SQLite ignores the pragma inside
-    a transaction, while the \c sqlite3 driver runs every statement in a transaction, so the pragma cannot be turned
-    on through the driver.  Only an SQLite library built with \c SQLITE_DEFAULT_FOREIGN_KEYS=1 enforces them.  This
-    module does not change the setting.
+    @par Example:
+    @code{.py}
+hash<auto> desc = {
+    "columns": {
+        "id": c_int(True),
+        "order_id": c_int(),
+    },
+    "primary_key": {"name": "pk_order_item", "columns": ("id",)},
+    "foreign_constraints": {
+        "fk_order_item_order": {
+            "columns": ("order_id",),
+            "table": "orders",
+            "target_columns": ("id",),
+            # the items of an order are deleted with the order
+            "on_delete": FK_CASCADE,
+        },
+    },
+};
+    @endcode
+
+    @note SQLite enforces foreign constraints, and so their actions, only on a connection on which
+    <tt>PRAGMA foreign_keys</tt> is on.  It is off by default, and SQLite ignores the pragma inside a transaction,
+    which the \c sqlite3 driver starts before each statement, so it cannot be turned on with SQL through the driver:
+    enable the \c sqlite3 driver's \c foreign_keys option (\c sqlite3 module 1.2 and later), which turns the pragma on
+    each time a connection is opened, including after a reconnect (ex: <tt>sqlite3:@/path/db.sqlite{foreign_keys=true}</tt>).
+    Without it, foreign constraints are declared but not enforced: a row that references no row of the referenced
+    table can be inserted, and no action is taken.  This module does not change the setting.
 
     @subsection sqlite3_unique_constraints Unique Constraints
 
@@ -245,6 +270,9 @@ module Sqlite3SqlUtil {
       adding a foreign constraint to an existing table or dropping one raises \c UNSUPPORTED with a description;
       foreign constraints are declared but not enforced through the \c sqlite3 driver; see
       @ref sqlite3_foreign_constraints
+    - foreign constraints have \c ON \c DELETE and \c ON \c UPDATE referential actions (see @ref fk_actions),
+      written in the \c CREATE \c TABLE statement, read back from SQLite's foreign key pragma and compared; the
+      \c sqlite3 driver's \c foreign_keys option enforces them (see @ref sqlite3_foreign_constraints)
     - fixed renaming an index, as table alignment does for an index with the definition of the template's index
       under another name: the index was dropped and not created again, as the SQL that drops it and creates it under
       the new name was one string, of which the \c sqlite3 driver runs only the first statement; SQLite cannot rename
@@ -425,7 +453,20 @@ public namespace Sqlite3SqlUtil {
         named by @ref Sqlite3Table; see @ref sqlite3_foreign_constraints
     */
     public class Sqlite3ForeignConstraint inherits SqlUtil::AbstractForeignConstraint {
-        constructor(string n, Columns c, ForeignConstraintTarget t) : AbstractForeignConstraint(n, c, t) {
+        constructor(string n, Columns c, ForeignConstraintTarget t, *string on_delete, *string on_update)
+                : AbstractForeignConstraint(n, c, t, False, False, on_delete, on_update) {
+        }
+
+        #! maps an on_update/on_delete value of pragma foreign_key_list to a referential action
+        /** @param action the pragma value, such as \c "NO ACTION", \c "CASCADE" or \c "SET NULL"
+
+            @return the referential action (see @ref fk_actions), or NOTHING for the database default
+            (\c "NO ACTION")
+
+            @since Sqlite3SqlUtil 1.2
+        */
+        static *string actionFromPragma(*string action) {
+            return normalize_fk_action(action, "on_delete");
         }
 
         #! returns the \c FOREIGN \c KEY table constraint that creates the foreign constraint with its table
@@ -441,9 +482,9 @@ string sql = fk.getTableConstraintSql();
             @since Sqlite3SqlUtil 1.2
         */
         string getTableConstraintSql() {
-            return sprintf("constraint %s foreign key (%s) references %s (%s)", sqlite3_get_sql_identifier(name),
+            return sprintf("constraint %s foreign key (%s) references %s (%s)%s", sqlite3_get_sql_identifier(name),
                 (foldl $1 + ", " + $2, getSqlColumnNameIterator()), sqlite3_get_sql_object_name(target.table),
-                (foldl $1 + ", " + $2, target.columns.getSqlColumnNameIterator()));
+                (foldl $1 + ", " + $2, target.columns.getSqlColumnNameIterator()), getActionsSql());
         }
 
         #! SQLite cannot add a foreign constraint to an existing table
@@ -1795,6 +1836,9 @@ string sql = pk.getTableConstraintSql();
                 if (exists row.to && row.to !== NULL) {
                     fks{id}.target_columns{pos} = row.to;
                 }
+                # the pragma reports the referential actions once per constraint, the same on every row
+                fks{id}.on_delete = Sqlite3ForeignConstraint::actionFromPragma(row.on_delete);
+                fks{id}.on_update = Sqlite3ForeignConstraint::actionFromPragma(row.on_update);
             }
             hash<string, AbstractForeignConstraint> rv;
             foreach string id in (sort(keys fks)) {
@@ -1811,7 +1855,8 @@ string sql = pk.getTableConstraintSql();
                 }
                 string fk_name = sprintf("sqlite_fk_%d", id.toInt());
                 rv{fk_name} = new Sqlite3ForeignConstraint(fk_name, columns.subset(cols),
-                    new ForeignConstraintTarget(fk.table, targ_columns.subset(target_cols)));
+                    new ForeignConstraintTarget(fk.table, targ_columns.subset(target_cols)),
+                    fk.on_delete, fk.on_update);
             }
             return new ForeignConstraints(rv);
         }
