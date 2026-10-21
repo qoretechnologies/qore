@@ -56,6 +56,7 @@
 #include "qore/intern/AsyncIoControllerPriv.h"
 #include "qore/intern/FileInputStream.h"
 #include "qore/intern/FileOutputStream.h"
+#include "qore/intern/QorePollCompat.h"
 #include "qore/intern/QC_Queue.h"
 #include "qore/intern/QoreAsyncIoLogger.h"
 #include "qore/intern/QoreEventNotifier.h"
@@ -372,7 +373,9 @@ static int qore_socket_poll_fd_revents_now(int fd, short events, short& revents,
         pfd.events = events;
         pfd.revents = 0;
 
-        int rc = ::poll(&pfd, 1, 0);
+        // the descriptor can be a stream's named pipe, whose end only select(2) reports on Darwin (see
+        // QorePollCompat.h)
+        int rc = qore_poll_compat(&pfd, 1, 0);
         if (rc >= 0) {
             revents = rc > 0 ? pfd.revents : 0;
             return rc > 0 ? 1 : 0;
@@ -10429,7 +10432,9 @@ QoreListNode* qore_socket_private::poll(const QoreListNode* poll_list, int timeo
         unsigned loop = 0;
         int rc;
         while (true) {
-            rc = ::poll(pollfds.data(), pollfds.size(), 0);
+            // the objects can be Files on named pipes, whose end only select(2) reports on Darwin (see
+            // QorePollCompat.h)
+            rc = qore_poll_compat(pollfds.data(), pollfds.size(), 0);
             if (rc >= 0) {
                 break;
             }

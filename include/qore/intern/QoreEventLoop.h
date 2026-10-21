@@ -328,6 +328,9 @@ private:
         void* udata = nullptr;  //!< User data given to the system (that of the first registration)
         //! The registrations of the descriptor, by key
         std::map<uint64_t, Registration> regs;
+        //! A named pipe on Darwin, which is watched with select(2) instead of kqueue (see fifo_count); always false
+        //! on other platforms
+        bool fifo = false;
     };
 
     //! Registers the descriptor with the system; @p events are the union of its registrations' events
@@ -375,6 +378,21 @@ private:
     int event_fd = -1;  //!< kqueue file descriptor
     //! Map of user event ident -> udata (for EVFILT_USER)
     std::unordered_map<uintptr_t, void*> user_event_map;
+    //! the number of named pipes in fd_map
+    /** kqueue never reports the end of a named pipe whose writers have closed, nor the write end of one whose
+        readers have closed (see QorePollCompat.h), so named pipes are not registered with kqueue; while there are
+        any, poll() waits with select(2) for them and for the kqueue descriptor, which is readable when kqueue has
+        events
+    */
+    size_t fifo_count = 0;
+
+    //! Waits up to @p wait_us microseconds (-1 for no limit) for the kqueue and the named pipes
+    /** @return the number of kqueue events in @p kevents, or -1 on error (exception raised); the events of the named
+        pipes are appended to @p fifo_events, and a named pipe found closed is dropped, as kqueue drops a closed
+        descriptor
+    */
+    DLLLOCAL int waitWithFifos(int64_t wait_us, std::vector<struct kevent>& kevents,
+            std::vector<QoreEventInfo>& fifo_events, ExceptionSink* xsink);
 #elif defined(__linux__)
     int event_fd = -1;  //!< epoll file descriptor
 #if defined(HAVE_IO_URING)

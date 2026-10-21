@@ -46,6 +46,7 @@
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/RuntimeConfig.h"
 #include "qore/intern/QoreForkHandlers.h"
+#include "qore/intern/QorePollCompat.h"
 #include "qore/intern/ModuleInfo.h"
 #include "qore/intern/QoreHashNodeIntern.h"
 #include "qore/intern/QoreJIT.h"
@@ -5825,12 +5826,23 @@ int qore_cancellable_poll(struct pollfd* fds, unsigned nfds, int timeout_ms, Exc
 
     int64 deadline_us = timeout_ms > 0 ? q_get_monotonic_us() + static_cast<int64>(timeout_ms) * 1000 : 0;
 
+#ifdef DARWIN
+    // a wait on a named pipe uses select(2), since poll(2) misses its hang-up (see QorePollCompat.h); the wakeup
+    // channel, a kqueue, works with both
+    bool use_select = qore_poll_needs_select(fds, nfds);
+#endif
+
     // no cancellation can be delivered while it is deferred, and a thread unknown to Qore cannot be cancelled,
     // so the wait is a plain poll(); EINTR resumes it for the rest of the timeout
     int tid = q_gettid();
     if (tid < 0 || tid >= MAX_QORE_THREADS || qore_is_cancel_deferred()) {
         while (true) {
-            int rc = poll(fds, nfds, qore_poll_remaining_ms(timeout_ms, deadline_us));
+            int remaining_ms = qore_poll_remaining_ms(timeout_ms, deadline_us);
+#ifdef DARWIN
+            int rc = use_select ? qore_select_poll(fds, nfds, remaining_ms) : poll(fds, nfds, remaining_ms);
+#else
+            int rc = poll(fds, nfds, remaining_ms);
+#endif
             if (rc >= 0 || errno != EINTR) {
                 return rc;
             }
@@ -5884,7 +5896,12 @@ int qore_cancellable_poll(struct pollfd* fds, unsigned nfds, int timeout_ms, Exc
         int poll_errno = 0;
         bool cancelled = qore_check_cancel(xsink, operation);
         if (!cancelled) {
-            rc = poll(pfds, nfds + 1, qore_poll_remaining_ms(timeout_ms, deadline_us));
+            int remaining_ms = qore_poll_remaining_ms(timeout_ms, deadline_us);
+#ifdef DARWIN
+            rc = use_select ? qore_select_poll(pfds, nfds + 1, remaining_ms) : poll(pfds, nfds + 1, remaining_ms);
+#else
+            rc = poll(pfds, nfds + 1, remaining_ms);
+#endif
             poll_errno = errno;
         }
         if (!nested) {

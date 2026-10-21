@@ -31,6 +31,7 @@
 
 #include <qore/Qore.h>
 #include <qore/InputStream.h>
+#include "qore/intern/QorePollCompat.h"
 
 #ifdef HAVE_POLL
 #include <poll.h>
@@ -66,7 +67,8 @@ int64 InputStream::readWithTimeout(void* ptr, int64 limit, int64 timeout_ms, Exc
     pfd.events = POLLIN;
     pfd.revents = 0;
 
-    int rv = poll(&pfd, 1, static_cast<int>(timeout_ms));
+    // a named pipe's end is reported by select(2) on Darwin (see QorePollCompat.h)
+    int rv = qore_poll_compat(&pfd, 1, static_cast<int>(timeout_ms));
     if (rv < 0) {
         xsink->raiseException("INPUT-STREAM-ERROR", "poll() failed: %s", strerror(errno));
         return -1;

@@ -380,7 +380,8 @@ struct qore_qf_private {
 #if defined HAVE_POLL
     DLLLOCAL int poll_intern(int timeout_ms, bool read, const char* mname, ExceptionSink* xsink) const {
         // the wait ends at once when the thread is cancelled or its Program is interrupted; EINTR is handled by
-        // qore_cancellable_poll()
+        // qore_cancellable_poll(), which also waits on a named pipe with select(2) on Darwin, where poll(2) misses
+        // the end of the pipe (see QorePollCompat.h)
         pollfd fds = {fd, static_cast<short>(read ? POLLIN : POLLOUT), 0};
         int rc = qore_cancellable_poll(&fds, 1, timeout_ms, xsink, read ? "file read" : "file write");
         if (rc == QORE_POLL_CANCELLED) {

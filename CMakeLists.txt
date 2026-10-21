@@ -1759,6 +1759,7 @@ set(LIBQORE_CPP_SRC
     lib/QoreSocket.cpp
     lib/QoreHttpBodyCharset.cpp
     lib/SocketSyncPoll.cpp
+    lib/QorePollCompat.cpp
     lib/QoreEventLoop.cpp
     lib/QoreEventNotifier.cpp
     lib/QoreIoUring.cpp
@@ -2113,6 +2114,7 @@ if (SINGLE_COMPILATION_UNIT)
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreSocket.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreHttpBodyCharset.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/SocketSyncPoll.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QorePollCompat.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreEventLoop.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreEventNotifier.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreIoUring.cpp\"

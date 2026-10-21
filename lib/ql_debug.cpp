@@ -1401,6 +1401,120 @@ static std::map<uint64_t, std::pair<int, void*>> ut_event_loop_poll_keys(QoreEve
     return rv;
 }
 
+//! A named pipe in a temporary directory, opened for reading and writing with O_NONBLOCK; closed and removed on destruction
+struct UtFifo {
+    char dir[64] = {};
+    std::string path;
+    int r = -1;
+    int w = -1;
+
+    DLLLOCAL ~UtFifo() {
+        closeReader();
+        closeWriter();
+        if (!path.empty()) {
+            unlink(path.c_str());
+        }
+        if (dir[0]) {
+            rmdir(dir);
+        }
+    }
+
+    //! makes the pipe and opens both ends; returns false on error
+    DLLLOCAL bool open() {
+        strcpy(dir, "/tmp/qore-ut-fifo-XXXXXX");
+        if (!mkdtemp(dir)) {
+            dir[0] = '\0';
+            return false;
+        }
+        path = std::string(dir) + "/fifo";
+        if (mkfifo(path.c_str(), 0600)) {
+            path.clear();
+            return false;
+        }
+        // the read end first: opening the write end with O_NONBLOCK fails without a reader
+        r = ::open(path.c_str(), O_RDONLY | O_NONBLOCK);
+        w = r < 0 ? -1 : ::open(path.c_str(), O_WRONLY | O_NONBLOCK);
+        return r >= 0 && w >= 0;
+    }
+
+    DLLLOCAL void closeReader() {
+        if (r >= 0) {
+            ::close(r);
+            r = -1;
+        }
+    }
+
+    DLLLOCAL void closeWriter() {
+        if (w >= 0) {
+            ::close(w);
+            w = -1;
+        }
+    }
+};
+
+//! The registrations of a named pipe get the end of the pipe and a closed reader, and removing one keeps the others
+/** On Darwin, kqueue reports neither the end of a named pipe whose writer has closed nor the write end of a full one
+    whose reader has closed, so the loop keeps named pipes out of kqueue and waits for them with select(2); the
+    registrations of a named pipe must behave as those of any other descriptor
+*/
+static void ut_event_loop_fifo_registrations(UnitTestCounters& c) {
+    ExceptionSink xsink;
+    QoreEventLoop loop(&xsink);
+    UT_ASSERT(c, !xsink && loop.isValid(), "named pipe registrations: the event loop is created");
+    UtFifo fifo;
+    if (xsink || !fifo.open()) {
+        UT_ASSERT(c, false, "named pipe registrations: a named pipe is made");
+        xsink.clear();
+        return;
+    }
+    int a = 0, b = 0;
+
+    // the read end
+    UT_ASSERT_EQ(c, 0, loop.addRegistration(fifo.r, 1, QORE_EV_READ, &a, &xsink), "a read registration is added");
+    UT_ASSERT_EQ(c, 0, loop.addRegistration(fifo.r, 2, QORE_EV_READ, &b, &xsink), "a second one is added");
+    UT_ASSERT_EQ(c, 1, static_cast<int>(loop.size()), "named pipe: the descriptor is registered once");
+    UT_ASSERT(c, ut_event_loop_poll_keys(loop, fifo.r).empty(), "named pipe: nothing to read, no event");
+    UT_ASSERT(c, ::write(fifo.w, "x", 1) == 1, "named pipe: the writer writes");
+    auto ev = ut_event_loop_poll_keys(loop, fifo.r);
+    UT_ASSERT(c, ev.size() == 2 && ev.count(1) && ev.count(2) && (ev[1].first & QORE_EV_READ)
+        && ev[1].second == &a && ev[2].second == &b, "named pipe: both registrations get the data");
+    char ch;
+    UT_ASSERT(c, ::read(fifo.r, &ch, 1) == 1, "named pipe: the data is read");
+    UT_ASSERT_EQ(c, 0, loop.removeRegistration(fifo.r, 2, &xsink), "named pipe: one registration is removed");
+    UT_ASSERT(c, loop.hasRegistration(fifo.r, 1) && !loop.hasRegistration(fifo.r, 2),
+        "named pipe: the other registration is kept");
+    fifo.closeWriter();
+    ev = ut_event_loop_poll_keys(loop, fifo.r);
+    UT_ASSERT(c, ev.size() == 1 && ev.count(1) && (ev[1].first & QORE_EV_READ),
+        "named pipe: the kept registration gets the end of the pipe");
+    UT_ASSERT(c, ::read(fifo.r, &ch, 1) == 0, "named pipe: the read returns the end");
+    loop.removeRegistration(fifo.r, 1, &xsink);
+    UT_ASSERT_EQ(c, 0, static_cast<int>(loop.size()), "named pipe: removed with its last registration");
+
+    // the write end of a full pipe whose reader closes
+    UtFifo full;
+    if (!full.open()) {
+        UT_ASSERT(c, false, "named pipe registrations: a second named pipe is made");
+        return;
+    }
+    char buf[4096];
+    memset(buf, 'x', sizeof buf);
+    while (::write(full.w, buf, sizeof buf) > 0) {
+    }
+    UT_ASSERT_EQ(c, 0, loop.addRegistration(full.w, 1, QORE_EV_WRITE, &a, &xsink), "a write registration is added");
+    UT_ASSERT_EQ(c, 0, loop.addRegistration(full.w, 2, QORE_EV_WRITE, &b, &xsink), "a second one is added");
+    UT_ASSERT(c, ut_event_loop_poll_keys(loop, full.w).empty(), "named pipe: a full pipe is not writable");
+    UT_ASSERT_EQ(c, 0, loop.removeRegistration(full.w, 1, &xsink), "named pipe: a write registration is removed");
+    full.closeReader();
+    ev = ut_event_loop_poll_keys(loop, full.w);
+    UT_ASSERT(c, ev.size() == 1 && ev.count(2) && (ev[2].first & (QORE_EV_WRITE | QORE_EV_ERROR)),
+        "named pipe: the kept registration gets the closed reader");
+    loop.removeRegistration(full.w, 2, &xsink);
+    UT_ASSERT_EQ(c, 0, static_cast<int>(loop.size()), "named pipe: the write end is removed");
+    UT_ASSERT(c, !xsink, "named pipe registrations: no error");
+    xsink.clear();
+}
+
 //! A descriptor with several registrations: each gets the events it waits for, and removing one keeps the others
 /** The loop kept one registration per descriptor, so a second one replaced the first, and removing either removed
     the descriptor; see AsyncIoDescriptorHoldTest::runSharedRegistration() for the controller's side
@@ -1541,10 +1655,12 @@ static void ut_event_loop_remove_recycled_fd(UnitTestCounters& c) {
     of the timer's deadline lags behind the monotonic clock of the wait by a fraction of a microsecond.
 */
 static void ut_event_loop_sub_ms_timer_wakeups(UnitTestCounters& c) {
-    for (bool with_fd : {true, false}) {
+    // no descriptor, a socket, and a named pipe (which the loop waits for with select(2) on Darwin)
+    for (int fd_kind : {1, 2, 0}) {
+        const bool with_fd = fd_kind != 0;
         for (int64_t delay_us : {300, 1500}) {
             QoreStringMaker what("a timer %lld us away, %s", (long long)delay_us,
-                with_fd ? "with a descriptor" : "with no descriptor");
+                fd_kind == 1 ? "with a descriptor" : (fd_kind == 2 ? "with a named pipe" : "with no descriptor"));
             ExceptionSink xsink;
             QoreEventLoop loop(&xsink);
             UT_ASSERT(c, !xsink && loop.isValid(), "sub-ms timer event loop construction succeeds");
@@ -1553,12 +1669,23 @@ static void ut_event_loop_sub_ms_timer_wakeups(UnitTestCounters& c) {
                 return;
             }
             int sv[2] = {-1, -1};
-            if (with_fd) {
+            UtFifo fifo;
+            if (fd_kind == 1) {
                 // a descriptor that never becomes readable, so the loop waits in kevent() / epoll_wait()
                 if (socketpair(AF_UNIX, SOCK_STREAM, 0, sv)) {
                     UT_ASSERT(c, false, "socketpair() for the sub-ms timer test succeeds");
                     return;
                 }
+            } else if (fd_kind == 2) {
+                // a named pipe whose writer does not write; the descriptors are closed by fifo
+                if (!fifo.open()) {
+                    UT_ASSERT(c, false, "a named pipe for the sub-ms timer test is made");
+                    return;
+                }
+                sv[0] = fifo.r;
+                sv[1] = fifo.w;
+            }
+            if (with_fd) {
                 int rc = loop.add(sv[0], QORE_EV_READ, nullptr, &xsink);
                 UT_ASSERT(c, !rc && !xsink, "the descriptor is registered");
                 xsink.clear();
@@ -1597,8 +1724,10 @@ static void ut_event_loop_sub_ms_timer_wakeups(UnitTestCounters& c) {
             if (with_fd) {
                 loop.remove(sv[0], &xsink);
                 xsink.clear();
-                close(sv[0]);
-                close(sv[1]);
+                if (fd_kind == 1) {
+                    close(sv[0]);
+                    close(sv[1]);
+                }
             }
         }
     }
@@ -10418,6 +10547,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     ut_event_loop_remove_recycled_fd(c);
     ut_event_loop_sub_ms_timer_wakeups(c);
     ut_event_loop_registrations(c);
+    ut_event_loop_fifo_registrations(c);
     ut_socket_close_race_releases_descriptor_once(c);
     ut_socket_close_during_io_keeps_descriptor(c);
     ut_network_security_rules(c);

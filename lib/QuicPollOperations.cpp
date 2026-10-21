@@ -34,6 +34,7 @@
 
 #include "qore/intern/QC_SocketPollOperation.h"
 #include "qore/intern/QoreAsyncIoLogger.h"
+#include "qore/intern/QorePollCompat.h"
 
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -3035,7 +3036,8 @@ QoreHashNode* SocketQuicSendStreamingResponsePollOperation::continuePollIntern(E
                     pfd.fd = stream_fd;
                     pfd.events = POLLIN;
                     pfd.revents = 0;
-                    int poll_rv = poll(&pfd, 1, 0);
+                    // a named pipe's end is reported by select(2) on Darwin (see QorePollCompat.h)
+                    int poll_rv = qore_poll_compat(&pfd, 1, 0);
                     if (poll_rv < 0) {
                         xsink->raiseException("QUIC-ERROR", "poll() on stream fd failed: %s",
                             strerror(errno));

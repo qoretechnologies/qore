@@ -1,0 +1,259 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+# the "cppapiuser" test module is built into the build tree by examples/test/module-cpp-api/CMakeLists.txt and is not
+# installed, so QORE_MODULE_DIR must include the build tree (run_tests.sh does this)
+%requires cppapiuser
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class FifoWaitsTest
+
+#! Tests the C++ API waits on named pipes (FIFOs): qore_cancellable_poll() and OutputStream::writeWithTimeout()
+/** On macOS, poll(2) never reports the end of a named pipe whose writers have closed, nor the write end of a full
+    named pipe whose reader has closed, while select(2) reports both; these waits waited forever (or for their whole
+    timeout) there.  A wait on a pipe that does not become ready still times out and can still be cancelled, also on
+    a descriptor above FD_SETSIZE (1024 on macOS), which a fixed-size select(2) set cannot hold.
+
+    A wait that misses the end never ends, so these tests fail by hanging (the test runner's time limit is the
+    guard).
+*/
+class FifoWaitsTest inherits QUnit::Test {
+    public {
+        #! a timeout of an hour, for the waits that must end
+        const LongMs = 3600000;
+
+        #! FD_SETSIZE on macOS (and with glibc and musl)
+        const FdSetSize = 1024;
+
+        #! the data written to the pipes
+        const Data = <64617461>;
+    }
+
+    private {
+        #! the directory with the pipes
+        string dir;
+
+        #! the number of pipes made
+        int pipes;
+    }
+
+    constructor() : QUnit::Test("FifoWaitsTest", "1.0", \ARGV) {
+        addTestCase("qore_cancellable_poll(): the end of a pipe", \testReadEnd());
+        addTestCase("qore_cancellable_poll(): a closed reader", \testWriteEnd());
+        addTestCase("qore_cancellable_poll(): a pipe that does not become ready times out", \testTimeout());
+        addTestCase("qore_cancellable_poll(): a wait is cancelled", \testCancel());
+        addTestCase("OutputStream::writeWithTimeout(): a closed reader", \testOutputStream());
+        addTestCase("qore_cancellable_poll(): descriptors above FD_SETSIZE", \testHighDescriptors());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        dir = make_tmp_dir("fifo-waits");
+    }
+
+    globalTearDown() {
+        remove_tree(dir);
+    }
+
+    testReadEnd() {
+        Queue may_close();
+        Counter closed(1);
+        File r = openWithWriter(may_close, closed);
+        on_exit may_close.push(True);
+        checkReadEnd(r, may_close, closed, "");
+    }
+
+    testWriteEnd() {
+        hash<auto> p = openFull();
+        File w = p.w;
+        int fd = w.getPollableDescriptor();
+        hash<auto> h = cpp_api_cancellable_poll_fd(fd, True, 0);
+        assertEq(0, h.rc, "a full pipe is not writable");
+        p.r.close();
+        h = cpp_api_cancellable_poll_fd(fd, True, LongMs);
+        # Linux reports the closed reader with POLLERR, macOS (with select(2)) as write readiness
+        assertEq(1, h.rc, "the closed reader is reported");
+        assertThrows("FILE-WRITE-ERROR", "Broken pipe", \w.write(), ("x",), "the write fails");
+    }
+
+    testTimeout() {
+        hash<auto> p = openIdle();
+        hash<auto> h = cpp_api_cancellable_poll_fd(p.r.getPollableDescriptor(), False, 50);
+        assertEq(0, h.rc, "read: the timeout expires");
+        assertFalse(h.ready, "read: nothing is reported on timeout");
+
+        p = openFull();
+        h = cpp_api_cancellable_poll_fd(p.w.getPollableDescriptor(), True, 50);
+        assertEq(0, h.rc, "write: the timeout expires");
+        assertFalse(h.ready, "write: nothing is reported on timeout");
+    }
+
+    testCancel() {
+        hash<auto> idle = openIdle();
+        int rfd = idle.r.getPollableDescriptor();
+        hash<auto> full = openFull();
+        int wfd = full.w.getPollableDescriptor();
+        for (int i = 0; i < 3; ++i) {
+            assertEq("THREAD-CANCELLED", cancelBlocked(sub () { cpp_api_cancellable_poll_fd(rfd, False, -1); }),
+                "read");
+            assertEq("THREAD-CANCELLED", cancelBlocked(sub () { cpp_api_cancellable_poll_fd(wfd, True, -1); }),
+                "write");
+        }
+    }
+
+    testOutputStream() {
+        string path = makeFifo();
+        File r();
+        r.open2(path, O_RDONLY | O_NONBLOCK);
+        FileOutputStream os(path);
+        binary chunk = binary(strmul("x", 4096));
+        # writes that do not wait fill the pipe
+        while (cpp_api_output_stream_write_with_timeout(os, chunk, 0)) {
+        }
+        assertEq(0, cpp_api_output_stream_write_with_timeout(os, chunk, 50), "a full pipe: the timeout expires");
+        r.close();
+        *hash<ExceptionInfo> err;
+        try {
+            cpp_api_output_stream_write_with_timeout(os, chunk, LongMs);
+        } catch (hash<ExceptionInfo> ex) {
+            err = ex;
+        }
+        # Linux reports the closed reader with POLLERR, macOS (with select(2)) as write readiness, and the write fails
+        assertTrue(exists err, "the write fails once the reader has closed");
+        assertRegex("^(OUTPUT-STREAM-ERROR|FILE-WRITE-ERROR)$", err.err, "the error");
+    }
+
+    testHighDescriptors() {
+        int limit = getDescriptorLimit();
+        if (limit < FdSetSize + 64) {
+            testSkip(sprintf("the descriptor limit (%d) is too low to open descriptors above FD_SETSIZE (%d)", limit,
+                FdSetSize));
+        }
+        # every free descriptor up to FD_SETSIZE is taken, so the descriptors opened next are above it
+        list<File> fillers;
+        while (True) {
+            File f();
+            f.open2("/dev/null", O_RDONLY);
+            fillers += f;
+            if (f.getPollableDescriptor() >= FdSetSize) {
+                break;
+            }
+        }
+
+        {
+            Queue may_close();
+            Counter closed(1);
+            File r = openWithWriter(may_close, closed);
+            on_exit may_close.push(True);
+            assertGt(FdSetSize, r.getPollableDescriptor(), "the reader's descriptor is above FD_SETSIZE");
+            checkReadEnd(r, may_close, closed, "above FD_SETSIZE: ");
+        }
+
+        hash<auto> p = openIdle();
+        int fd = p.r.getPollableDescriptor();
+        assertGt(FdSetSize, fd, "the idle reader's descriptor is above FD_SETSIZE");
+        assertEq(0, cpp_api_cancellable_poll_fd(fd, False, 50).rc, "above FD_SETSIZE: the timeout expires");
+        assertEq("THREAD-CANCELLED", cancelBlocked(sub () { cpp_api_cancellable_poll_fd(fd, False, -1); }),
+            "above FD_SETSIZE: a wait is cancelled");
+    }
+
+    #! checks the read readiness of the data and of the end of the pipe
+    private checkReadEnd(File r, Queue may_close, Counter closed, string label) {
+        int fd = r.getPollableDescriptor();
+        hash<auto> h = cpp_api_cancellable_poll_fd(fd, False, LongMs);
+        assertEq(1, h.rc, label + "the data is reported");
+        assertTrue(h.ready, label + "read readiness with the data");
+        assertEq(Data, r.readShortBinary(4096), label + "the data");
+        may_close.push(True);
+        closed.waitForZero();
+        h = cpp_api_cancellable_poll_fd(fd, False, LongMs);
+        assertEq(1, h.rc, label + "the end is reported");
+        assertEq(NOTHING, r.readShortBinary(4096), label + "the end");
+    }
+
+    #! makes a named pipe and returns its path
+    private string makeFifo() {
+        string path = join_paths(dir, sprintf("fifo-%d", ++pipes));
+        if (mkfifo(path)) {
+            throw "MKFIFO-ERROR", sprintf("%s: %s", path, strerror());
+        }
+        return path;
+    }
+
+    #! returns the read end of a new named pipe; a background thread writes Data and closes the write end once
+    #! may_close gets a value, and then decrements closed (the callers push a value on exit as well, so that a
+    #! failed assertion does not leave the thread waiting)
+    private File openWithWriter(Queue may_close, Counter closed) {
+        string path = makeFifo();
+        background sub () {
+            on_exit closed.dec();
+            File w();
+            w.open2(path, O_WRONLY);
+            w.write(Data);
+            may_close.get();
+        }();
+        File r();
+        r.open2(path, O_RDONLY);
+        return r;
+    }
+
+    #! returns a hash with the read end (\c r) of a new named pipe whose writer (\c w) never writes
+    private hash<auto> openIdle() {
+        string path = makeFifo();
+        # opening for reading and writing does not wait for a reader
+        File w();
+        w.open2(path, O_RDWR);
+        File r();
+        r.open2(path, O_RDONLY);
+        return {"r": r, "w": w};
+    }
+
+    #! returns a hash with the ends (\c r and \c w) of a new named pipe that is full; both are opened with O_NONBLOCK
+    private hash<auto> openFull() {
+        string path = makeFifo();
+        File r();
+        r.open2(path, O_RDONLY | O_NONBLOCK);
+        File w();
+        w.open2(path, O_WRONLY | O_NONBLOCK);
+        binary chunk = binary(strmul("x", 4096));
+        try {
+            while (True) {
+                w.write(chunk);
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err != "FILE-WRITE-ERROR" || ex.desc !~ /Resource temporarily unavailable/) {
+                rethrow;
+            }
+        }
+        return {"r": r, "w": w};
+    }
+
+    #! runs the call in a thread, cancels the thread and returns the error that ended the call
+    private static string cancelBlocked(code call) {
+        Queue started();
+        Queue done();
+        int tid = background sub () {
+            try {
+                started.push(True);
+                call();
+                done.push("NONE");
+            } catch (hash<ExceptionInfo> ex) {
+                done.push(ex.err);
+            }
+        }();
+        started.get();
+        cancel_thread(tid, "named pipe test");
+        return done.get();
+    }
+
+    #! returns the soft limit of open descriptors
+    private static int getDescriptorLimit() {
+        string limit = trim(backquote("ulimit -n"));
+        return limit == "unlimited" ? MAXINT : limit.toInt();
+    }
+}
