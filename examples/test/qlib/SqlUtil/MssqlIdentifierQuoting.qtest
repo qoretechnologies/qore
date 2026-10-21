@@ -1,0 +1,462 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires SqlUtil
+%requires MssqlSqlUtilBase
+%requires FreetdsSqlUtil
+
+%try-module freetds
+%define NO_FREETDS
+%endtry
+
+%exec-class MssqlIdentifierQuotingTest
+
+#! SQL Server identifiers in the SQL that SqlUtil generates
+/** A name that is not a regular identifier, wherever it comes from, is given in brackets with each \c "]" doubled,
+    so that it can never change the SQL it is part of; a name that database drivers would read as placeholders,
+    string delimiters or comments also in brackets is refused.  The SQL is checked with tables described in memory
+    and a datasource that records it without connecting, and on the database given by \c QORE_DB_CONNSTR_FREETDS
+*/
+class MssqlIdentifierQuotingTest inherits QUnit::Test {
+    private {
+        #! a name that ends a bracketed identifier early unless its "]" is doubled
+        const HostileColumn = "a]; drop table mssql_iq_sentinel; select [b";
+
+        #! the columns of the test table
+        const Columns = {
+            "id": {"native_type": "int", "notnull": True},
+            HostileColumn: {"native_type": "varchar", "size": 20},
+            "order": {"native_type": "int"},
+            # names are described in lower case on SQL Server
+            "order date": {"native_type": "datetime"},
+        };
+
+        #! names that are refused: drivers read them as placeholders, string delimiters or comments
+        const RefusedNames = (
+            "a%sb", "a%vb", "a'b", "a\"b", "a--b", "a/*b", "a\\%b", "a\\:b",
+        );
+    }
+
+    constructor() : Test("MssqlIdentifierQuotingTest", "1.0", \ARGV) {
+        addTestCase("ordinary names are unchanged and reserved words are in brackets", \ordinaryNames());
+        addTestCase("other names are in brackets with each ] doubled", \hostileNames());
+        addTestCase("names drivers read as SQL are refused", \refusedNames());
+        addTestCase("table names", \tableNames());
+        addTestCase("DDL with hostile names", \ddlSql());
+        addTestCase("DML with hostile names", \dmlSql());
+        addTestCase("aliases", \aliasSql());
+        addTestCase("sequences", \sequenceSql());
+        addTestCase("maintenance and savepoints", \maintenanceSql());
+        addTestCase("filegroups", \filegroupSql());
+        addTestCase("a round trip on the database", \roundTrip());
+        set_return_value(main());
+    }
+
+    #! Returns a datasource that records the SQL and does not connect
+    private RecordingDatasource recordingDatasource() {
+%ifdef NO_FREETDS
+        testSkip("freetds module unavailable");
+%endif
+        return new RecordingDatasource();
+    }
+
+    #! Returns a table described in memory
+    private MssqlTable table(AbstractDatasource ds, string name = "mssql iq") {
+        MssqlTable t(ds, name);
+        t.setupTable({
+            "columns": Columns,
+            "primary_key": {"name": "pk mssql iq", "columns": ("id",)},
+            "indexes": {"ix [o]": {"columns": ("order", "order date")}},
+        });
+        return t;
+    }
+
+    ordinaryNames() {
+        MssqlTable t(recordingDatasource(), "t");
+        foreach string name in (("abc", "Order_Date", "#tmp", "město", "x$y", "a1@b", "日本")) {
+            assertEq(name, t.getSqlIdentifier(name), name);
+            assertEq(name, t.getColumnSqlName(name), name);
+        }
+        # reserved words were given in double quotes in DML, which delimit an identifier only with QUOTED_IDENTIFIER
+        # on, and in brackets in DDL; they are in brackets everywhere
+        assertEq("[order]", t.getColumnSqlName("order"));
+        assertEq("[Select]", t.getSqlIdentifier("Select"));
+        assertEq(("id", "[order]", "[Order Date]"), t.getColumnSqlNames(("id", "order", "Order Date")));
+        MssqlColumn c("order", "int", "int", 0, True);
+        assertEq("[order]", c.ddl_name);
+    }
+
+    hostileNames() {
+        MssqlTable t(recordingDatasource(), "t");
+        hash<string, string> expected = {
+            "Order Date": "[Order Date]",
+            "a]b": "[a]]b]",
+            HostileColumn: "[a]]; drop table mssql_iq_sentinel; select [b]",
+            "x; drop table y": "[x; drop table y]",
+            "[x]": "[[x]]]",
+            "@@version": "[@@version]",
+            "1abc": "[1abc]",
+            "a.b": "[a.b]",
+            "a\nb": "[a\nb]",
+        };
+        foreach hash<auto> i in (expected.pairIterator()) {
+            assertEq(i.value, t.getSqlIdentifier(i.key), i.key);
+        }
+    }
+
+    refusedNames() {
+        MssqlTable t(recordingDatasource(), "t");
+        foreach string name in (RefusedNames) {
+            assertThrows("IDENTIFIER-ERROR", "cannot be an SQL identifier", \t.getSqlIdentifier(), (name,), name);
+        }
+        assertThrows("IDENTIFIER-ERROR", "empty name", \t.getSqlIdentifier(), ("",));
+        assertThrows("IDENTIFIER-ERROR", "NUL character", \t.getSqlIdentifier(), ("a" + chr(0) + "b",));
+        # a table or a column with such a name is refused before any SQL is generated
+        assertThrows("IDENTIFIER-ERROR", "cannot be an SQL identifier", sub () {
+            MssqlTable bad(t.getDatasource(), "x'; drop table y; --");
+            bad.getSqlName();
+        });
+        assertThrows("IDENTIFIER-ERROR", "cannot be an SQL identifier", sub () {
+            MssqlTable bad(t.getDatasource(), "t");
+            bad.setupTable({"columns": {"a%s": {"native_type": "int"}}});
+        });
+        # a sequence name for an immediate insert operator is checked before it is used
+        MssqlTable st = table(t.getDatasource());
+        assertThrows("INSERT-OPERATOR-ERROR", "illegal characters", \st.insert(),
+            ({"id": 1, "order": iop_seq("s; drop table y")},));
+    }
+
+    tableNames() {
+        RecordingDatasource ds = recordingDatasource();
+        assertEq("dbo.t", (new MssqlTable(ds, "t")).getSqlName());
+        assertEq("s.t", (new MssqlTable(ds, "s.t")).getSqlName());
+        assertEq("dbo.[order]", (new MssqlTable(ds, "order")).getSqlName());
+        assertEq("dbo.[x; drop table y]", (new MssqlTable(ds, "x; drop table y")).getSqlName());
+        assertEq("s.[my t]", (new MssqlTable(ds, "s.my t")).getSqlName());
+        assertEq("dbo.[a]]b]", (new MssqlTable(ds, "a]b")).getSqlName());
+    }
+
+    ddlSql() {
+        RecordingDatasource ds = recordingDatasource();
+        MssqlTable t = table(ds);
+        assertEq("create table [mssql iq] (\n"
+            "  id int not null,\n"
+            "  [a]]; drop table mssql_iq_sentinel; select [b] varchar(20),\n"
+            "  [order] int,\n"
+            "  [order date] datetime\n"
+            ")\n"
+            "create index [ix [o]]] on [mssql iq] ([order], [order date])\n"
+            "alter table [mssql iq] add constraint [pk mssql iq] primary key (id)", t.getCreateSqlString());
+        assertEq(("alter table dbo.[mssql iq] add [new col]]] int",),
+            t.getAddColumnSql("new col]", {"native_type": "int"}));
+        # the index on the column is dropped with it
+        assertEq(("drop index [ix [o]]] on dbo.[mssql iq]", "alter table dbo.[mssql iq] drop column [order date]"),
+            t.getDropColumnSql("order date"));
+        assertEq("alter table dbo.[mssql iq] add constraint [uk x] unique  ([order], [order date])",
+            t.getAddUniqueConstraintSql("uk x", ("order", "order date")));
+        assertEq("alter table dbo.[mssql iq] add constraint [ck x] check (id > 0)",
+            t.getAddCheckConstraintSql("ck x", "id > 0"));
+        assertEq("alter table dbo.[mssql iq] add constraint [fk x] foreign key ([order]) references [mssql iq] (id)",
+            t.getAddForeignConstraintSql("fk x", "order", "mssql iq", "id"));
+        assertEq("drop index [ix [o]]] on dbo.[mssql iq]", t.getDropIndexSql("ix [o]"));
+        assertEq(("alter table dbo.[mssql iq] drop constraint [pk mssql iq]",), t.getDropPrimaryKeySql());
+
+        # sp_rename takes the object as an SQL name and the new name as it is, both as string literals
+        assertEq("sp_rename 'dbo.[mssql iq].[order]', 'new col', 'COLUMN'", t.getRenameColumnSql("order", "new col"));
+        assertEq("exec sp_rename 'dbo.[mssql iq]', 'new t'", t.getRenameSql("new t"));
+        assertEq(("exec sp_rename 'dbo.[mssql iq].[ix [o]]]', 'ix new', 'INDEX'",),
+            t.getIndexes().getHash(){"ix [o]"}.getRenameSql(t.getSqlName(), "ix new"));
+        assertEq(("exec sp_rename 'dbo.[pk mssql iq]', 'pk new', 'OBJECT'",),
+            t.getPrimaryKey().getRenameSql(t.getSqlName(), "pk new"));
+        assertThrows("IDENTIFIER-ERROR", "cannot be an SQL identifier", \t.getRenameSql(), ("x', 'y",));
+
+        # the constraint classes give the SQL that drops them
+        MssqlForeignConstraint fk("fk x", new Columns({"order": t.describe().order}),
+            new ForeignConstraintTarget("s.my t", new Columns({"id": t.describe().id})));
+        assertEq("alter table dbo.t drop constraint [fk x]", fk.getDropSql("dbo.t"));
+        assertEq("alter table dbo.t add constraint [fk x] foreign key ([order]) references s.[my t] (id)",
+            fk.getCreateSql("dbo.t"));
+        MssqlCheckConstraint ck("ck x", "id > 0");
+        assertEq("alter table dbo.t drop constraint [ck x]", ck.getDropSql("dbo.t"));
+        MssqlUniqueConstraint uk("uk x", {"order": t.describe().order});
+        assertEq("alter table dbo.t drop constraint [uk x]", uk.getDropSql("dbo.t"));
+        MssqlTrigger trig("trig x", "on dbo.t after insert as begin set nocount on end");
+        assertEq(("create trigger [trig x] on dbo.t after insert as begin set nocount on end",),
+            trig.getCreateSql("dbo.t"));
+        assertEq(("drop trigger [trig x]",), trig.getDropSql("dbo.t"));
+        MssqlView v("v x", "select 1 a");
+        assertEq("create view [v x] as select 1 a", v.getCreateSql());
+        assertEq("drop view [v x]", v.getDropSql());
+    }
+
+    dmlSql() {
+        RecordingDatasource ds = recordingDatasource();
+        MssqlTable t = table(ds);
+        list<auto> args;
+        assertEq("select id, [a]]; drop table mssql_iq_sentinel; select [b], [order] from dbo.[mssql iq] where "
+            "[order date] = %v and [order] = %v order by [order date]",
+            t.getSelectSql({"columns": ("id", HostileColumn, "order"), "where": {"order date": 1, "order": 2},
+                "orderby": "order date"}, \args));
+        assertEq("update dbo.[mssql iq] set [order date] = %v, [order] = [order] + 1 where id = %v",
+            t.getUpdateSql({"order date": 1, "order": uop_plus(1)}, {"id": 1}).sql);
+
+        ds.sql = ();
+        t.insert({"id": 1, HostileColumn: "x", "order": 2});
+        t.upsert({"id": 1, HostileColumn: "x", "order": 2});
+        t.del({"order": 1});
+        assertEq((
+            "insert into dbo.[mssql iq] (id,[a]]; drop table mssql_iq_sentinel; select [b],[order]) values (%v,%v,%v)",
+            # the source columns of the merge were the row's keys as given
+            "merge dbo.[mssql iq] t using (select %v,%v,%v) as source (id,[a]]; drop table mssql_iq_sentinel; "
+                "select [b],[order]) on (t.id=source.id) when matched then update set "
+                "t.[a]]; drop table mssql_iq_sentinel; select [b]=source.[a]]; drop table mssql_iq_sentinel; "
+                "select [b],t.[order]=source.[order] when not matched then insert (id,[a]]; drop table "
+                "mssql_iq_sentinel; select [b],[order]) values (source.id,source.[a]]; drop table "
+                "mssql_iq_sentinel; select [b],source.[order]);",
+            "delete from dbo.[mssql iq] where [order] = %v",
+        ), ds.sql);
+    }
+
+    aliasSql() {
+        RecordingDatasource ds = recordingDatasource();
+        MssqlTable t = table(ds);
+        list<auto> args;
+        # an alias that is an ordinary name is given as before, so the column keeps its name in the result; any other
+        # alias is given in double quotes, as reserved words were, which T-SQL takes as an alias whatever the
+        # QUOTED_IDENTIFIER setting, and which can be referenced by name in the query
+        assertEq("select [order] as lower, [order] as MixedCase, [order] as \"with space\", "
+            "[order date] as \"order\", id as \"a]b\" from dbo.[mssql iq]",
+            t.getSelectSql({"columns": (cop_as("order", "lower"), cop_as("order", "MixedCase"),
+                cop_as("order", "with space"), cop_as("order date", "order"), cop_as("id", "a]b"))}, \args));
+        assertThrows("IDENTIFIER-ERROR", "cannot be an SQL identifier", \t.getSelectSql(),
+            ({"columns": (cop_as("order", "it's"),)},));
+        # an alias that is a reserved word can be referenced by name, which gives its definition (issue #2163)
+        assertEq("select id as \"table\", * from dbo.[mssql iq] where id = id",
+            t.getSelectSql({"columns": (cop_as("id", "table"), "*"), "where": {"table": op_ceq("id")}}, \args));
+    }
+
+    sequenceSql() {
+        RecordingDatasource ds = recordingDatasource();
+        MssqlDatabase db(ds);
+        AbstractSequence seq = db.makeSequence("my seq");
+        assertEq("create sequence [my seq] start with 1 increment by 1 no maxvalue", seq.getCreateSql());
+        assertEq("drop sequence [my seq]", seq.getDropSql());
+        assertEq(("exec sp_rename '[my seq]', 'new seq', 'OBJECT'",), seq.getRenameSql("new seq"));
+        assertEq("create sequence s.[my seq] start with 1 increment by 1 no maxvalue",
+            db.makeSequence("s.my seq").getCreateSql());
+
+        MssqlTable t = table(ds);
+        list<auto> args;
+        assertEq("select next value for [my seq] as nv from dbo.[mssql iq]",
+            t.getSelectSql({"columns": (cop_seq("my seq", "nv"),)}, \args));
+        ds.sql = ();
+        # a sequence is named in SQL: "next value for %v" bound the name as a value, which SQL Server cannot take
+        t.insert({"id": 1, "order": iop_seq("dbo.my_seq")});
+        assertEq(("insert into dbo.[mssql iq] (id,[order]) values (%v,next value for dbo.my_seq)",), ds.sql);
+        ds.sql = ();
+        db.getNextSequenceValue("my seq");
+        assertEq(("select next value for [my seq] as nextval",), ds.sql);
+    }
+
+    maintenanceSql() {
+        RecordingDatasource ds = recordingDatasource();
+        MssqlDatabase db(ds);
+        ds.sql = ();
+        db.rebuildIndex("ix x", {"table_name": "t y"});
+        db.computeStatistics({"tables": ("t y", "s.t")});
+        assertEq(("alter index [ix x] on [t y] reorganize", "update statistics [t y]", "update statistics s.t"),
+            ds.sql);
+        # the table of the index is required; no option was accepted before
+        assertThrows("REBUILD-INDEX-ERROR", "table_name", \db.rebuildIndex(), ("ix",));
+
+        MssqlTable t = table(ds);
+        ds.sql = ();
+        AbstractSavepointHelper sp = t.getSavepointHelper("my sp");
+        sp.rollback();
+        assertEq(("begin transaction", "save tran [my sp]", "rollback tran [my sp]"), ds.sql);
+    }
+
+    filegroupSql() {
+        MssqlTable t = table(recordingDatasource());
+        hash<auto> cols = {"order": t.describe().order};
+        assertEq("create index ix on dbo.t ([order]) on [my fg]",
+            (new MssqlIndex("ix", False, cols, "my fg")).getCreateSql("dbo.t"));
+        assertEq("create index ix on dbo.t ([order]) on fg1",
+            (new MssqlIndex("ix", False, cols, "fg1")).getCreateSql("dbo.t"));
+        # a filegroup in brackets or double quotes is given in brackets
+        assertEq("create index ix on dbo.t ([order]) on [PRIMARY]",
+            (new MssqlIndex("ix", False, cols, "[PRIMARY]")).getCreateSql("dbo.t"));
+        assertEq("create index ix on dbo.t ([order]) on [my fg]",
+            (new MssqlIndex("ix", False, cols, "\"my fg\"")).getCreateSql("dbo.t"));
+        # a name in brackets with a "]" that is not doubled was used as given, so that it could end the identifier
+        assertEq("create index ix on dbo.t ([order]) on [[a]]; drop table x]]]",
+            (new MssqlIndex("ix", False, cols, "[a]; drop table x]")).getCreateSql("dbo.t"));
+        MssqlIndex ix("ix", False, cols, "[a]; drop table x; --]");
+        assertThrows("IDENTIFIER-ERROR", "cannot be an SQL identifier", \ix.getCreateSql(), ("dbo.t",));
+    }
+
+    #! The SQL runs on SQL Server: names are the names of the objects, and nothing else is run
+    roundTrip() {
+        Datasource ds = datasource();
+        string name = "mssql iq; drop table mssql_iq_sentinel";
+        on_exit dropTables(ds, (name, "mssql_iq_sentinel"));
+        dropTables(ds, (name, "mssql_iq_sentinel"));
+        ds.execRaw("create table dbo.mssql_iq_sentinel (id int)");
+        ds.execRaw("if object_id('dbo.mssql_iq_seq', 'SO') is not null drop sequence dbo.mssql_iq_seq");
+        ds.execRaw("create sequence dbo.mssql_iq_seq start with 10");
+        ds.commit();
+
+        hash<auto> desc = {
+            "columns": Columns,
+            "primary_key": {"name": "pk mssql iq", "columns": ("id",)},
+            "indexes": {"ix [o]": {"columns": ("order", "order date")}},
+        };
+        MssqlTable template(ds, name);
+        template.setupTable(desc);
+        {
+            on_success ds.commit();
+            on_error ds.rollback();
+            map ds.execRaw($1), template.getCreateSql();
+        }
+        Table t(ds, name);
+        assertEq(("id", HostileColumn, "order", "order date"), t.describe().keys());
+        {
+            on_success ds.commit();
+            on_error ds.rollback();
+            t.insert({"id": 1, HostileColumn: "x", "order": 2, "order date": 2026-10-21T10:00:00});
+            t.insert({"id": 2, HostileColumn: "y", "order": iop_seq("dbo.mssql_iq_seq")});
+            assertEq(1, t.update({HostileColumn: "z"}, {"id": 1}));
+            t.upsert({"id": 2, HostileColumn: "w", "order": 3});
+        }
+        assertEq({"id": (1, 2), HostileColumn: ("z", "w"), "order": (2, 3)},
+            t.select({"columns": ("id", HostileColumn, "order"), "orderby": "id"}));
+        # the result keys of aliases are their names, in lower case as the freetds driver gives column names, as for
+        # an unquoted alias before
+        assertEq({"lower": 2, "mixedcase": 2, "with space": 2, "order": 1},
+            t.selectRow({"columns": (cop_as("order", "lower"), cop_as("order", "MixedCase"),
+                cop_as("order", "with space"), cop_as("id", "order")), "where": {"id": 1}}));
+        {
+            on_success ds.commit();
+            on_error ds.rollback();
+            assertEq(1, t.del({"id": 2}));
+        }
+        # the table described from the database is the template: no SQL
+        MssqlTable live(ds, name);
+        assertEq((), live.getAlignSql(template));
+        # nothing else was run: the sentinel table is still there
+        assertEq(1, ds.selectRow("select count(1) c from sys.tables where name = %v", "mssql_iq_sentinel").c);
+        ds.rollback();
+    }
+
+    #! Returns a datasource to the database given by QORE_DB_CONNSTR_FREETDS
+    private Datasource datasource() {
+%ifdef NO_FREETDS
+        testSkip("freetds module unavailable");
+%endif
+        if (!ENV.QORE_DB_CONNSTR_FREETDS) {
+            testSkip("QORE_DB_CONNSTR_FREETDS is not set");
+        }
+        Datasource ds(ENV.QORE_DB_CONNSTR_FREETDS);
+        try {
+            ds.open();
+        } catch (hash<ExceptionInfo> ex) {
+            testSkip(sprintf("no DB connection: %s: %s", ex.err, ex.desc));
+        }
+        if (MssqlDatabase::isSybase(ds)) {
+            testSkip("the database is Sybase, not SQL Server");
+        }
+        return ds;
+    }
+
+    #! Drops the tables if they exist
+    private static dropTables(AbstractDatasource ds, softlist<string> tables) {
+        on_success ds.commit();
+        on_error ds.rollback();
+        foreach string table in (tables) {
+            string id = "dbo." + mssql_bracket(table);
+            ds.execRaw(sprintf("if object_id(%s, 'U') is not null drop table %s", mssql_literal(id), id));
+        }
+    }
+
+    #! Returns a name in brackets, for the SQL of the test itself
+    private static string mssql_bracket(string name) {
+        return "[" + replace(name, "]", "]]") + "]";
+    }
+
+    #! Returns a string literal, for the SQL of the test itself
+    private static string mssql_literal(string str) {
+        return "'" + replace(str, "'", "''") + "'";
+    }
+}
+
+#! A datasource that records the SQL it is given and does not connect
+class RecordingDatasource inherits Datasource {
+    public {
+        #! the SQL recorded
+        list<string> sql = ();
+    }
+
+    constructor() : Datasource("freetds:user/pass@db") {
+    }
+
+    auto getServerVersion() {
+        return "Microsoft SQL Server 2022 (RTM) - 16.0.1000.6";
+    }
+
+    string getDriverRealName() {
+        return "mssql";
+    }
+
+    auto select(string s, ...) {
+        sql += s;
+        return {};
+    }
+
+    auto selectRow(string s, ...) {
+        sql += s;
+        # the default schema of SQL Server
+        return {"schema": "dbo", "nextval": 1};
+    }
+
+    auto selectRows(string s, ...) {
+        sql += s;
+        return ();
+    }
+
+    auto vselectRow(string s, *softlist<auto> args) {
+        sql += s;
+        return {};
+    }
+
+    auto vselectRows(string s, *softlist<auto> args) {
+        sql += s;
+        return ();
+    }
+
+    auto exec(string s, ...) {
+        sql += s;
+        return 1;
+    }
+
+    auto vexec(string s, *softlist<auto> args) {
+        sql += s;
+        return 1;
+    }
+
+    auto execRaw(string s) {
+        sql += s;
+        return 1;
+    }
+
+    commit() {
+    }
+
+    rollback() {
+    }
+}

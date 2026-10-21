@@ -88,7 +88,65 @@ module MssqlSqlUtilBase {
     - From the SQL Server docs: The SQL Server query optimizer automatically makes the correct determination. It is recommended that table-level locking hints be used to change the default locking behavior only when necessary. Disallowing a locking level can affect concurrency adversely.
     - For more details on the above hints as well as information on which hints are supported for your particular version of SQL Server, see the SQL Server docs
 
+    @subsection mssql_identifiers Identifiers in SQL
+
+    A name that is a regular SQL Server identifier (a letter, an underscore or \c "#", then letters, decimal digits,
+    underscores, \c "@", \c "$" or \c "#") and not a reserved word is used in SQL as given; any other name of a table,
+    column, index, constraint, sequence, view, trigger, schema, filegroup, partition function or scheme, or savepoint
+    is given in brackets with each \c "]" doubled (ex: <tt>[Order Date]</tt>, <tt>[a]]b]</tt>), which delimit an
+    identifier whatever the \c QUOTED_IDENTIFIER setting of the connection, so that a name, wherever it comes from,
+    can never change the SQL that it is part of; a column alias that needs quotes is given in double quotes, which
+    T-SQL takes as an alias with \c QUOTED_IDENTIFIER on or off (see @ref sql_identifiers).
+
+    A name with a \c "%", a single or double quote, a comment marker (\c "--" or \c "/*") or a backslash before
+    \c "%" or \c ":" is refused with \c IDENTIFIER-ERROR, as database drivers read these in SQL as placeholders,
+    string delimiters and comments also in a bracketed identifier, as is an empty name or one with a NUL character.
+
+    @par Example:
+    @code{.py}
+Table t(ds, "Order Lines");
+# insert into dbo.[Order Lines] ([Order Date],[order]) values (%v,%v)
+t.insert({"Order Date": now_us(), "order": 1});
+    @endcode
+
     @section mssql_schema_management Schema Management with the MS SQL Databses
+
+    @subsection mssql_fk_actions Foreign Constraint Referential Actions
+
+    SQL Server supports the \c on_delete and \c on_update foreign constraint options (see
+    @ref fk_actions "referential actions") with \c "NO ACTION" (the default), \c "CASCADE", \c "SET NULL" and
+    \c "SET DEFAULT"; \c "RESTRICT" is refused with \c FOREIGN-CONSTRAINT-ERROR, as SQL Server has no such action
+    (\c "NO ACTION" is checked at the end of each statement, as SQL Server has no deferred constraints).  Sybase has
+    no referential actions, and refuses them.  The actions are described from the database, so a table with the
+    actions of its template needs no alignment, and a foreign constraint with another action is dropped and added
+    again with it.
+
+    @par Example:
+    @code{.py}
+hash<auto> desc = {
+    "columns": {
+        "id": {"native_type": "int", "notnull": True},
+        "order_id": {"native_type": "int"},
+    },
+    "foreign_constraints": {
+        "fk_order_lines_order": {
+            "columns": "order_id",
+            "table": "orders",
+            "target_columns": "id",
+            "on_delete": "cascade",
+        },
+    },
+};
+    @endcode
+
+    @subsection mssql_sequences Sequences
+
+    Sequences (SQL Server 2012 and later; Sybase has none) are described from the database with their increment,
+    minimum, maximum, cycle option and cache, and schema alignment changes these with \c ALTER \c SEQUENCE, which
+    keeps the current value of the sequence.  The starting value is not changed, as SQL Server can change it only by
+    restarting the sequence, which resets its current value; a sequence with another starting value must be dropped
+    and created again.  The minimum and maximum of the sequence's type are the defaults (\c bigint for a sequence
+    created by SqlUtil), and a \c cache of \c 0 gives no cache.
 
     @subsection mssql_type_mapping Type Mapping
 
@@ -128,6 +186,29 @@ module MssqlSqlUtilBase {
     schema alignment.
 
     @subsection MssqlSqlUtilBasev11 MssqlSqlUtilBase v1.1
+    - names of tables, columns, indexes, constraints, sequences, views, triggers, schemas, filegroups, partition
+      functions and schemes, savepoints and aliases are quoted in SQL when they are not ordinary names, so that a
+      name from untrusted data can never change an SQL statement; reserved words are now quoted in brackets in all
+      SQL, instead of double quotes in queries and DML, which needed \c QUOTED_IDENTIFIER on; a name that database
+      drivers would read as SQL also in brackets is refused with \c IDENTIFIER-ERROR (see @ref mssql_identifiers)
+    - fixed @ref SqlUtil::iop_seq() "iop_seq()", which gave the sequence as a bind value, which SQL Server does not
+      accept, and the next value of a sequence (@ref SqlUtil::AbstractDatabase::getNextSequenceValue()
+      "AbstractDatabase::getNextSequenceValue()"), index rebuilding (@ref SqlUtil::AbstractDatabase::rebuildIndex()
+      "AbstractDatabase::rebuildIndex()", which now takes the table of the index in the required \c table_name
+      option) and statistics updates (@ref SqlUtil::AbstractDatabase::computeStatistics()
+      "AbstractDatabase::computeStatistics()"), which gave identifiers as bind values as well
+    - added foreign constraint referential actions: \c on_delete and \c on_update, which are described from the
+      database and aligned (see @ref mssql_fk_actions)
+    - added sequence alignment: the increment, minimum, maximum, cycle option and cache of an existing sequence are
+      changed with \c ALTER \c SEQUENCE, keeping its current value, and a sequence is created with them (see
+      @ref mssql_sequences)
+    - fixed sequences in schema alignment, which were never created, as every sequence was taken to exist without
+      reading the database; sequences are described from the database, and
+      @ref SqlUtil::AbstractDatabase::listSequences() "AbstractDatabase::listSequences()" lists them
+    - fixed @ref SqlUtil::AbstractDatabase::getCurrentSequenceValue() "AbstractDatabase::getCurrentSequenceValue()"
+      for a sequence name with a schema, and a sequence with a maximum of \c 0, which was created with no maximum
+    - fixed renaming a table, which called a procedure that does not exist; a table is renamed with \c sp_rename
+    - fixed the upsert (merge) of a row, whose source columns were the names of the row's columns as given
     - added the size of the default schema of the connection's user (\c SCHEMA_NAME(); see
       @ref SqlUtil::AbstractDatabase::getCurrentSchemaPhysicalSize() "AbstractDatabase::getCurrentSchemaPhysicalSize()")
     - added temporary-table support (\c "#"-prefixed local temporary tables); see
@@ -201,8 +282,120 @@ sub parse_schema_name(string nname, reference<string> schema, reference<string> 
     @since MssqlSqlUtilBase 1.1
 */
 string sub mssql_object_rename_sql(string table_name, string name, string new_name) {
-    *string schema = (table_name =~ x/^(.+)\.[^.]+$/)[0];
-    return sprintf("exec sp_rename '%s%s', '%s', 'OBJECT'", schema ? schema + "." : "", name, new_name);
+    *string schema = mssql_get_sql_name_schema(table_name);
+    return sprintf("exec sp_rename %s, %s, 'OBJECT'",
+        mssql_get_string_literal((schema ? schema + "." : "") + mssql_get_sql_identifier(name)),
+        mssql_get_new_name_literal(new_name));
+}
+
+# returns a name as an SQL identifier for SQL Server and Sybase: as given if it is a regular identifier (a letter,
+# an underscore or "#", then letters, decimal digits, underscores, "@", "$" or "#") that is not a reserved word,
+# otherwise in brackets, with each "]" doubled, which delimit an identifier whatever the QUOTED_IDENTIFIER setting of
+# the connection, so that the name can never change the SQL that it is part of
+/* a name with a "%", a quote, a comment marker ("--" or "/*") or a backslash before "%" or ":" is refused: the jni
+   driver reads them in SQL outside string literals and double-quoted identifiers, so also in brackets, as
+   placeholders, quotes and comments (module-jni QoreJdbcStatement.cpp), and the same rule applies with every driver
+*/
+string sub mssql_get_sql_identifier(string name) {
+    if (name =~ /\A[\p{L}_#][\p{L}\p{Nd}_@$#]*\z/ && !MssqlDatabase::MssqlReservedWords{name.lwr()}) {
+        return name;
+    }
+    AbstractSqlUtilBase::checkIdentifier(name, "MS SQL Server");
+    if (name =~ /[%'"]|--|\/\*|\\[%:]/) {
+        throw "IDENTIFIER-ERROR", sprintf("MS SQL Server: the name %y cannot be an SQL identifier: it has a \"%%\", a "
+            "quote, a comment marker (\"--\" or \"/*\") or a backslash before \"%%\" or \":\", which database drivers "
+            "read in SQL as placeholders, string delimiters and comments, also in a bracketed identifier", name);
+    }
+    return AbstractSqlUtilBase::getDelimitedIdentifier(name, "[", "]", "MS SQL Server");
+}
+
+# returns a column alias for SQL: as mssql_get_sql_identifier() returns a name, but in double quotes instead of
+# brackets, as reserved words were given before; T-SQL takes a double-quoted alias as the alias whether
+# QUOTED_IDENTIFIER is on or off (when it is off, as a string literal, which an alias can be), and the column
+# operator for aliases registers a double-quoted alias without its quotes, so that the query can reference it by name
+string sub mssql_get_sql_alias(string alias) {
+    string id = mssql_get_sql_identifier(alias);
+    if (id == alias) {
+        return alias;
+    }
+    # mssql_get_sql_identifier() has refused a name with a double quote
+    return "\"" + alias + "\"";
+}
+
+# returns a name in the form "name" or "schema.name", where the schema is a name of word characters followed by a
+# name starting with a word character, as parse_schema_name() reads it, for SQL, each part as
+# mssql_get_sql_identifier() returns it
+string sub mssql_get_sql_object_name(string name) {
+    *list<*string> l = (name =~ x/^(\w+)\.(\w.*)$/s);
+    if (l) {
+        return mssql_get_sql_identifier(l[0]) + "." + mssql_get_sql_identifier(l[1]);
+    }
+    return mssql_get_sql_identifier(name);
+}
+
+# returns the schema of an SQL name in the form "schema.name", where each part is a bracketed identifier or a name
+# without brackets and dots, as MssqlTable::getSqlName() gives it, or NOTHING if the name has no schema
+*string sub mssql_get_sql_name_schema(string sql_name) {
+    return (sql_name =~ x/^(\[(?:[^\]]|\]\])*+\]|[^.\[\]]+)\..+$/s)[0];
+}
+
+# returns a string for an SQL string literal: in single quotes, with each single quote doubled
+string sub mssql_get_string_literal(string str) {
+    return "'" + replace(str, "'", "''") + "'";
+}
+
+# returns the new name of an object for sp_rename, which takes it as given and not as SQL, as a string literal; the
+# name must be one that mssql_get_sql_identifier() accepts
+string sub mssql_get_new_name_literal(string new_name) {
+    mssql_get_sql_identifier(new_name);
+    return mssql_get_string_literal(new_name);
+}
+
+# returns a filegroup name for SQL: a name given in brackets or in double quotes is quoted again in brackets, any
+# other name is quoted as mssql_get_sql_identifier() quotes it
+string sub mssql_get_filegroup_sql(string fg) {
+    *string bracketed = (fg =~ x/^\[((?:[^\]]|\]\])*+)\]$/s)[0];
+    if (exists bracketed) {
+        return AbstractSqlUtilBase::getDelimitedIdentifier(mssql_check_identifier(replace(bracketed, "]]", "]")),
+            "[", "]", "MS SQL Server");
+    }
+    *string dquoted = (fg =~ x/^"((?:[^"]|"")*+)"$/s)[0];
+    if (exists dquoted) {
+        return AbstractSqlUtilBase::getDelimitedIdentifier(mssql_check_identifier(replace(dquoted, "\"\"", "\"")),
+            "[", "]", "MS SQL Server");
+    }
+    return mssql_get_sql_identifier(fg);
+}
+
+# checks a name with the rules of mssql_get_sql_identifier() and returns it as given
+string sub mssql_check_identifier(string name) {
+    mssql_get_sql_identifier(name);
+    return name;
+}
+
+# checks the referential actions of a foreign constraint for SQL Server or Sybase: SQL Server has no RESTRICT action
+# (NO ACTION, its default, is checked at the end of each statement), and Sybase has no referential actions
+sub mssql_check_fk_actions(string name, *string on_delete, *string on_update, bool is_sybase) {
+    foreach hash<auto> i in ({"on_delete": on_delete, "on_update": on_update}.pairIterator()) {
+        if (!i.value.val()) {
+            continue;
+        }
+        if (is_sybase) {
+            throw "FOREIGN-CONSTRAINT-ERROR", sprintf("foreign constraint %y: %s referential action %y is not "
+                "supported by Sybase, which has no referential actions; leave it unset for the default (%y)", name,
+                i.key, i.value, FK_NO_ACTION);
+        }
+        if (i.value == FK_RESTRICT) {
+            throw "FOREIGN-CONSTRAINT-ERROR", sprintf("foreign constraint %y: %s referential action %y is not "
+                "supported by SQL Server; use the default, %y (leave it unset), which SQL Server checks at the end "
+                "of each statement, as it has no deferred constraints", name, i.key, i.value, FK_NO_ACTION);
+        }
+    }
+}
+
+# returns the SQL that drops a constraint of a table
+string sub mssql_drop_constraint_sql(string table_name, string name) {
+    return sprintf("alter table %s drop constraint %s", table_name, mssql_get_sql_identifier(name));
 }
 
 #! returns the SQL Server major version year, or 0 for non-SQL Server / unknown version strings
@@ -225,12 +418,12 @@ public class MssqlSavepointHelper inherits AbstractSavepointHelper {
     #! Creates the savepoint
     private createSavepointImpl() {
         ds.exec("begin transaction");
-        ds.exec("save tran " + savepoint);
+        ds.exec("save tran " + mssql_get_sql_identifier(savepoint));
     }
 
     #! Rolls back to the savepoint
     private rollbackImpl() {
-        ds.exec("rollback tran " + savepoint);
+        ds.exec("rollback tran " + mssql_get_sql_identifier(savepoint));
     }
 
     #! Deletes the savepoint
@@ -279,8 +472,9 @@ public class MssqlIndex inherits SqlUtil::AbstractIndex {
         if (method.val()) {
             prefix = method.lwr() + " ";
         }
+        # an index "column" that is not a column of the table is an SQL expression (see AbstractTable::addIndex())
         string sql = sprintf("create %s%sindex %s on %s (%s)",
-            unique ? "unique " : "", prefix ?? "", name, table_name,
+            unique ? "unique " : "", prefix ?? "", mssql_get_sql_identifier(name), table_name,
             (foldl $1 + ", " + $2, columns.getSqlColumnNameIterator()));
 
         if (with_options) {
@@ -307,7 +501,7 @@ public class MssqlIndex inherits SqlUtil::AbstractIndex {
                 ts = "[PRIMARY]";
             }
             if (ts)
-                sql += sprintf(" on %s", ts);
+                sql += sprintf(" on %s", mssql_get_filegroup_sql(ts));
         }
         return sql;
     }
@@ -330,7 +524,9 @@ public class MssqlIndex inherits SqlUtil::AbstractIndex {
 
     #! returns the SQL statement that renames the index in the database
     softlist<string> getRenameSql(string table_name, string new_name) {
-        return sprintf("exec sp_rename '%s.%s', '%s', 'INDEX'", table_name, name, new_name);
+        return sprintf("exec sp_rename %s, %s, 'INDEX'",
+            mssql_get_string_literal(table_name + "." + mssql_get_sql_identifier(name)),
+            mssql_get_new_name_literal(new_name));
     }
 
     #! returns the SQL statement that drops the index from its table
@@ -343,14 +539,29 @@ public class MssqlIndex inherits SqlUtil::AbstractIndex {
         @since MssqlSqlUtilBase 1.1
     */
     string getDropSql(string table_name) {
-        return sprintf("drop index %s on %s", name, table_name);
+        return sprintf("drop index %s on %s", mssql_get_sql_identifier(name), table_name);
     }
 }
 
 #! represents a Mssql-specific foreign constraint
 public class MssqlForeignConstraint inherits SqlUtil::AbstractForeignConstraint {
     #! creates the constraint from the supplied arguments
-    constructor(string n, Columns c, ForeignConstraintTarget t) : AbstractForeignConstraint(n, c, t) {
+    /** @param n the name of the constraint
+        @param c the source columns
+        @param t the target table and columns
+        @param on_delete the \c ON \c DELETE referential action (see @ref fk_actions "referential actions"), or
+        NOTHING for the default (\c NO \c ACTION)
+        @param on_update the \c ON \c UPDATE referential action (see @ref fk_actions "referential actions"), or
+        NOTHING for the default (\c NO \c ACTION)
+
+        @throw FOREIGN-CONSTRAINT-ERROR an invalid referential action, or \c RESTRICT, which SQL Server does not
+        support
+
+        @note \a on_delete and \a on_update are available since MssqlSqlUtilBase 1.1
+    */
+    constructor(string n, Columns c, ForeignConstraintTarget t, *string on_delete, *string on_update)
+            : AbstractForeignConstraint(n, c, t, False, False, on_delete, on_update) {
+        mssql_check_fk_actions(n, self.on_delete, self.on_update, False);
     }
 
     #! returns a string that can be used to create the constraint in the database
@@ -364,10 +575,25 @@ public class MssqlForeignConstraint inherits SqlUtil::AbstractForeignConstraint 
     }
 
     #! returns a string that can be used to create the constraint in the database
+    /** @since MssqlSqlUtilBase 1.1 the \c ON \c DELETE and \c ON \c UPDATE referential actions are given, if they
+        are not the default (\c NO \c ACTION)
+
+        @throw FOREIGN-CONSTRAINT-ERROR a referential action is \c RESTRICT, which SQL Server does not support
+    */
     string getCreateSql(string name, string table_name, *hash opt) {
-        return sprintf("alter table %s add constraint %s foreign key (%s) references %s (%s)", table_name, name,
-            (foldl $1 + ", " + $2, getSqlColumnNameIterator()), target.table,
-            (foldl $1 + ", " + $2, target.columns.getSqlColumnNameIterator()));
+        # the actions can be set after the constraint is created
+        mssql_check_fk_actions(name, on_delete, on_update, False);
+        return sprintf("alter table %s add constraint %s foreign key (%s) references %s (%s)%s", table_name,
+            mssql_get_sql_identifier(name), (foldl $1 + ", " + $2, getSqlColumnNameIterator()),
+            mssql_get_sql_object_name(target.table),
+            (foldl $1 + ", " + $2, target.columns.getSqlColumnNameIterator()), getActionsSql());
+    }
+
+    #! returns the SQL that drops the constraint from its table
+    /** @since MssqlSqlUtilBase 1.1 the name of the constraint is quoted if it is not an ordinary name
+    */
+    string getDropSql(string table_name) {
+        return mssql_drop_constraint_sql(table_name, name);
     }
 }
 
@@ -389,7 +615,15 @@ public class MssqlCheckConstraint inherits SqlUtil::AbstractCheckConstraint {
 
     #! returns a string that can be used to create the constraint in the database
     string getCreateSql(string name, string table_name, *hash opt) {
-        return sprintf("alter table %s add constraint %s check (%s)", table_name, name, src);
+        return sprintf("alter table %s add constraint %s check (%s)", table_name, mssql_get_sql_identifier(name),
+            src);
+    }
+
+    #! returns the SQL that drops the constraint from its table
+    /** @since MssqlSqlUtilBase 1.1 the name of the constraint is quoted if it is not an ordinary name
+    */
+    string getDropSql(string table_name) {
+        return mssql_drop_constraint_sql(table_name, name);
     }
 }
 
@@ -453,7 +687,7 @@ list l = col.getModifySql(t, newcol);
         string nts = c.getNativeTypeString();
         string dv_name = getDdlName("dv_" + name);
         # the existing default constraint: its name in the database, if read from it
-        string dv_drop_name = default_constraint ?? dv_name;
+        string dv_drop_name = default_constraint ? mssql_get_sql_identifier(default_constraint) : dv_name;
         if (getNativeTypeString() != nts) {
             #printf("ME: %s\nDB: %s\n", nts, getNativeTypeString());
             if (exists def_val && def_val !== c.def_val)
@@ -500,14 +734,18 @@ string str = col.getRenameSql(t, "new_name");
         # "@newname" is a literal, not an identifier: quoting a reserved word here would make the brackets part
         # of the new column name, so the unquoted name must be used ("@objname" is parsed as an identifier and
         # does take the quoted name)
-        return sprintf("sp_rename '%s.%s', '%s', 'COLUMN'", t.getSqlName(), ddl_name, new_name);
+        return sprintf("sp_rename %s, %s, 'COLUMN'", mssql_get_string_literal(t.getSqlName() + "." + ddl_name),
+            mssql_get_new_name_literal(new_name));
     }
 
-    #! returns the column name with quoting in case the column name is a reserved word
+    #! returns the column name for DDL, as MssqlTable::getSqlIdentifier() returns it
     /** the name returned here will be used when executing DDL
+
+        @since MssqlSqlUtilBase 1.1 a name that is not an ordinary name is quoted and escaped; before, only a
+        reserved word was quoted
     */
     string getDdlName(string name) {
-        return MssqlDatabase::MssqlReservedWords{name.lwr()} ? ("[" + name + "]") : name;
+        return mssql_get_sql_identifier(name);
     }
 
     #! returns @ref True "True" if the argument is equal to the current object, @ref False "False" if not
@@ -595,7 +833,7 @@ public class MssqlUniqueConstraintCommon inherits SqlUtil::AbstractUniqueConstra
                 ts = "[PRIMARY]";
             }
             if (ts) {
-                sql += sprintf(" on %s", ts);
+                sql += sprintf(" on %s", mssql_get_filegroup_sql(ts));
             }
         }
     }
@@ -660,9 +898,16 @@ auto v = c.name;
 
     #! returns a string that can be used to create the constraint with the given name
     string getCreateSql(string name, string table_name, *hash opts) {
-        string sql = sprintf("alter table %s add constraint %s unique ", table_name, name);
+        string sql = sprintf("alter table %s add constraint %s unique ", table_name, mssql_get_sql_identifier(name));
         getIndexSql(\sql, name, opts);
         return sql;
+    }
+
+    #! returns the SQL that drops the constraint from its table
+    /** @since MssqlSqlUtilBase 1.1 the name of the constraint is quoted if it is not an ordinary name
+    */
+    string getDropSql(string table_name) {
+        return mssql_drop_constraint_sql(table_name, name);
     }
 
     #! returns @ref True "True" if the constraint is enabled, @ref False "False" if not
@@ -730,8 +975,8 @@ auto v = c.name;
     string getCreateSql(string table_name, *hash opts) {
         bool nonaligned = opts.mssql_partition_scheme && opts.mssql_partition_key
             && !hasKey(opts.mssql_partition_key);
-        string sql = sprintf("alter table %s add constraint %s primary key%s", table_name, name,
-            nonaligned ? " nonclustered" : "");
+        string sql = sprintf("alter table %s add constraint %s primary key%s", table_name,
+            mssql_get_sql_identifier(name), nonaligned ? " nonclustered" : "");
         getIndexSql(\sql, name, opts);
         return sql;
     }
@@ -748,19 +993,133 @@ auto v = c.name;
     softlist getRenameSql(string table_name, string new_name) {
         return getSpRenameSql(table_name, new_name);
     }
+
+    #! returns the SQL that drops the primary key from its table
+    /** @since MssqlSqlUtilBase 1.1 the name of the primary key is quoted if it is not an ordinary name
+    */
+    string getDropSql(string table_name) {
+        return mssql_drop_constraint_sql(table_name, name);
+    }
 }
 
 #! class for Mssql sequences
 public class MssqlSequence inherits SqlUtil::AbstractSequence {
+    public {
+        #! the minimum value; no value for the default, the minimum of the sequence's type
+        /** @since MssqlSqlUtilBase 1.1
+        */
+        *number min;
+
+        #! @ref True if the sequence starts again at its minimum (or maximum) value when it reaches its maximum (or
+        #! minimum) value
+        /** @since MssqlSqlUtilBase 1.1
+        */
+        bool cycle = False;
+
+        #! the number of values cached: no value for the default cache, whose size the server chooses, \c 0 for no
+        #! cache (\c NO \c CACHE), or the number of values cached (\c CACHE \c n)
+        /** @since MssqlSqlUtilBase 1.1
+        */
+        *int cache;
+    }
+
+    private {
+        #! the minimum of the sequence's type, the default minimum; sequences are created as \c bigint
+        number type_min = MinBigint;
+
+        #! the maximum of the sequence's type, the default maximum
+        number type_max = MaxBigint;
+    }
+
+    public {
+        #! the minimum of a \c bigint, the type SQL Server creates a sequence with if none is given
+        const MinBigint = -9223372036854775808n;
+
+        #! the maximum of a \c bigint
+        const MaxBigint = 9223372036854775807n;
+    }
+
     #! creates the object from the arguments
-    constructor(string n_name, number n_start = 1, number n_increment = 1, *softnumber n_end) : AbstractSequence(n_name, n_start, n_increment, n_end) {
+    /** @param n_name the name of the sequence
+        @param n_start the starting value
+        @param n_increment the increment
+        @param n_end the maximum value; no value for the default, the maximum of the sequence's type
+        @param n_min the minimum value; no value for the default, the minimum of the sequence's type
+        @param n_cycle @ref True if the sequence starts again when it reaches its limit
+        @param n_cache the number of values cached: no value for the default cache, \c 0 for no cache
+
+        @throw SEQUENCE-ERROR \a n_cache is negative
+
+        @note \a n_min, \a n_cycle and \a n_cache are available since MssqlSqlUtilBase 1.1
+    */
+    constructor(string n_name, number n_start = 1, number n_increment = 1, *softnumber n_end, *softnumber n_min,
+            bool n_cycle = False, *softint n_cache) : AbstractSequence(n_name, n_start, n_increment, n_end) {
+        min = n_min;
+        cycle = n_cycle;
+        cache = MssqlSequence::checkCache(n_name, n_cache);
+    }
+
+    #! sets the minimum, the cycle option and the cache from a sequence description, so that a sequence is created
+    #! with all its parameters
+    /** @param desc the sequence description (see
+        @ref SqlUtil::AbstractDatabase::SequenceDescriptionOptions "SequenceDescriptionOptions"); its \c min,
+        \c cycle and \c cache keys are used, the others are set by the constructor
+
+        @throw SEQUENCE-ERROR the \c cache value is negative
+
+        @since MssqlSqlUtilBase 1.1
+    */
+    setDescription(hash<auto> desc) {
+        if (desc.hasKey("min")) {
+            # the minimum of the type is the default
+            min = exists desc.min && desc.min != type_min ? desc.min : NOTHING;
+        }
+        if (desc.hasKey("cycle")) {
+            cycle = desc.cycle.toBool();
+        }
+        if (desc.hasKey("cache")) {
+            cache = MssqlSequence::checkCache(name, desc.cache);
+        }
+    }
+
+    #! sets the limits of the sequence's type, as described from the database, which are the default minimum and maximum
+    /** @param tmin the minimum of the type
+        @param tmax the maximum of the type
+
+        @since MssqlSqlUtilBase 1.1
+    */
+    setTypeLimits(number tmin, number tmax) {
+        type_min = tmin;
+        type_max = tmax;
     }
 
     #! returns a string that can be used to create the sequence in the database
+    /** @since MssqlSqlUtilBase 1.1 the minimum, the cycle option and the cache are given if they are not the default
+    */
     string getCreateSql(*hash opt) {
-        string sql = sprintf("create sequence %s start with %d increment by %d ", name, start, increment);
-        sql += max ? sprintf("maxvalue %d", max) : "no maxvalue";
+        string sql = sprintf("create sequence %s start with %d increment by %d ", mssql_get_sql_object_name(name),
+            start, increment);
+        # a maximum of 0 was taken as no maximum
+        sql += exists max ? sprintf("maxvalue %d", max) : "no maxvalue";
+        if (exists min) {
+            sql += sprintf(" minvalue %d", min);
+        }
+        if (cycle) {
+            sql += " cycle";
+        }
+        if (exists cache) {
+            sql += cache ? sprintf(" cache %d", cache) : " no cache";
+        }
         return sql;
+    }
+
+    #! returns a string that can be used to drop the sequence from the database
+    /** @param opt this argument is ignored
+
+        @since MssqlSqlUtilBase 1.1 the name of the sequence is quoted if it is not an ordinary name
+    */
+    string getDropSql(*hash<auto> opt) {
+        return sprintf("drop sequence %s", mssql_get_sql_object_name(name));
     }
 
     #! returns a string that can be used to rename the sequence in the database
@@ -769,8 +1128,86 @@ public class MssqlSequence inherits SqlUtil::AbstractSequence {
         @param opt this option is ignored
         */
     softlist getRenameSql(string new_name, *hash opt) {
-        # no idea if this will work
-        return sprintf("sp_rename '%s', '%s', 'OBJECT'", name, new_name);
+        return sprintf("exec sp_rename %s, %s, 'OBJECT'", mssql_get_string_literal(mssql_get_sql_object_name(name)),
+            mssql_get_new_name_literal(new_name));
+    }
+
+    #! returns the SQL that alters the sequence to match the description, preserving its current value
+    /** The increment, minimum, maximum, cycle option and cache are aligned with \c ALTER \c SEQUENCE.  The starting
+        value is not changed: \c ALTER \c SEQUENCE can change it only with \c RESTART, which resets the current value,
+        so a sequence with another starting value must be dropped and created again to change it.
+
+        A minimum or maximum equal to the limit of the sequence's type is its default, as the sequence is described,
+        so neither alters the sequence; on SQL Server the default minimum and maximum are the limits of the type in
+        both directions (a descending sequence also has the type's maximum as its default maximum).  SQL Server refuses a minimum or maximum that excludes the current or the
+        starting value of the sequence.
+
+        @param desired the sequence description (see
+            @ref SqlUtil::AbstractDatabase::SequenceDescriptionOptions "SequenceDescriptionOptions"): the
+            \c increment, \c max (or \c end), \c min, \c cycle and \c cache keys are aligned; a key that is not given
+            is not changed; \c cache is \c 0 for no cache
+        @param opt this argument is ignored
+
+        @return the \c ALTER \c SEQUENCE statement for the parameters that differ, or NOTHING if none differ
+
+        @throw SEQUENCE-ERROR the \c cache value is negative
+
+        @since MssqlSqlUtilBase 1.1
+    */
+    *softlist<string> getAlterSql(hash<auto> desired, *hash<auto> opt) {
+        list<string> clauses = ();
+        if (exists desired.increment && desired.increment != increment) {
+            clauses += sprintf("increment by %d", desired.increment);
+        }
+        # the maximum: "max" or the legacy "end"; the type's maximum or NOTHING is the default, no maximum
+        if (desired.hasKey("max") || desired.hasKey("end")) {
+            *number new_max = desired.hasKey("max") ? desired.max : desired.end;
+            if (exists new_max && new_max == type_max) {
+                remove new_max;
+            }
+            if (new_max !== max) {
+                clauses += exists new_max ? sprintf("maxvalue %d", new_max) : "no maxvalue";
+            }
+        }
+        if (desired.hasKey("min")) {
+            *number new_min = desired.min;
+            if (exists new_min && new_min == type_min) {
+                remove new_min;
+            }
+            if (new_min !== min) {
+                clauses += exists new_min ? sprintf("minvalue %d", new_min) : "no minvalue";
+            }
+        }
+        if (desired.hasKey("cycle")) {
+            bool new_cycle = desired.cycle.toBool();
+            if (new_cycle != cycle) {
+                clauses += new_cycle ? "cycle" : "no cycle";
+            }
+        }
+        if (desired.hasKey("cache")) {
+            *int new_cache = MssqlSequence::checkCache(name, desired.cache);
+            if (new_cache !== cache) {
+                if (!exists new_cache) {
+                    # "cache" without a size gives the default cache
+                    clauses += "cache";
+                } else {
+                    clauses += new_cache ? sprintf("cache %d", new_cache) : "no cache";
+                }
+            }
+        }
+        if (!clauses) {
+            return;
+        }
+        return sprintf("alter sequence %s %s", mssql_get_sql_object_name(name), clauses.join(" "));
+    }
+
+    #! checks a cache value and returns it
+    private static *int checkCache(string name, *softint cache) {
+        if (cache < 0) {
+            throw "SEQUENCE-ERROR", sprintf("sequence %y: the cache value %d is negative; give 0 for no cache, or the "
+                "number of values cached", name, cache);
+        }
+        return cache;
     }
 }
 
@@ -788,9 +1225,18 @@ public class MssqlView inherits SqlUtil::AbstractView {
         return sprintf("create %s%sview %s as %s",
                         opt.replace ? "or replace " : "",
                         opt.temp ? "temp " : "",
-                        name,
+                        mssql_get_sql_object_name(name),
                         src
                         );
+    }
+
+    #! returns a string that can be used to drop the view from the database
+    /** @param opt this argument is ignored
+
+        @since MssqlSqlUtilBase 1.1 the name of the view is quoted if it is not an ordinary name
+    */
+    string getDropSql(*hash<auto> opt) {
+        return sprintf("drop view %s", mssql_get_sql_object_name(name));
     }
 
     #! returns a string that can be used to rename the view in the database
@@ -799,8 +1245,8 @@ public class MssqlView inherits SqlUtil::AbstractView {
         @param opt this option is ignored
         */
     softlist getRenameSql(string new_name, *hash opt) {
-        # no idea if this will work
-        return sprintf("sp_rename '%s', '%s', 'OBJECT'", name, new_name);
+        return sprintf("exec sp_rename %s, %s, 'OBJECT'", mssql_get_string_literal(mssql_get_sql_object_name(name)),
+            mssql_get_new_name_literal(new_name));
     }
 }
 
@@ -812,12 +1258,12 @@ public class MssqlTrigger inherits SqlUtil::AbstractTrigger {
 
     #! returns a string that can be used to create the trigger in the database
     softlist getCreateSql(string table_name, *hash opt) {
-        return sprintf("create trigger %s %s", name, src);
+        return sprintf("create trigger %s %s", mssql_get_sql_identifier(name), src);
     }
 
     #! returns a string that can be used to drop the trigger from the database
     softlist getDropSql(string table_name) {
-        return sprintf("drop trigger %s", name);
+        return sprintf("drop trigger %s", mssql_get_sql_identifier(name));
     }
 
     #! returns @ref True "True" if the argument is equal to the current object, @ref False "False" if not
@@ -872,8 +1318,9 @@ public class MssqlFunction inherits SqlUtil::AbstractFunction {
         @param opt this argument is ignored
         */
     softlist getRenameSql(string new_name, *hash opt) {
-        # no idea if this will work
-        return sprintf("sp_rename '%s', '%s', 'OBJECT'", name, new_name);
+        # a function is defined by its SQL source, and its name is given as it is; the names are string literals
+        return sprintf("exec sp_rename %s, %s, 'OBJECT'", mssql_get_string_literal(name),
+            mssql_get_string_literal(new_name));
     }
 
     #! sets the new name of the function
@@ -898,6 +1345,15 @@ public class MssqlDatabase inherits SqlUtil::AbstractDatabase {
 
         #! Options for reclaimSpace()
         const MssqlReclaimSpaceOptions = ReclaimSpaceOptions;
+
+        #! Options for rebuildIndex()
+        /** - \c table_name: (required) the name of the table of the index, which SQL Server names an index by
+
+            @since MssqlSqlUtilBase 1.1
+        */
+        const MssqlRebuildIndexOptions = {
+            "table_name": Type::String,
+        };
 
         #! hash of reserved words
         const MssqlReservedWords = (
@@ -1099,6 +1555,26 @@ public class MssqlDatabase inherits SqlUtil::AbstractDatabase {
         }
     }
 
+    #! returns a name as an SQL identifier for SQL Server and Sybase
+    /** A regular identifier (a letter, an underscore or \c "#", then letters, decimal digits, underscores, \c "@",
+        \c "$" or \c "#") that is not a reserved word is returned as given; any other name is returned in brackets,
+        with each \c "]" doubled, which delimit an identifier whatever the \c QUOTED_IDENTIFIER setting of the
+        connection
+
+        @param name the name of a database object, without a schema
+
+        @return the name as an SQL identifier for SQL Server and Sybase
+
+        @throw IDENTIFIER-ERROR the name is empty, or has a NUL character, a \c "%", a single or double quote, a
+        comment marker (\c "--" or \c "/*") or a backslash before \c "%" or \c ":", which database drivers read in
+        SQL as placeholders, string delimiters and comments also in a bracketed identifier
+
+        @since MssqlSqlUtilBase 1.1
+    */
+    string getSqlIdentifier(string name) {
+        return mssql_get_sql_identifier(name);
+    }
+
     #! Returns @ref True if the driver requires a scale to support decimal values in numeric or decimal columns
     /** @return @ref True if the driver requires a scale to support decimal values in numeric or decimal columns
 
@@ -1126,8 +1602,60 @@ public class MssqlDatabase inherits SqlUtil::AbstractDatabase {
         return new MssqlSequence(name, start, increment, end);
     }
 
+    #! returns the sequence with the given name, described from the database, or NOTHING if it does not exist
+    /** @since MssqlSqlUtilBase 1.1 the sequence is described from the database; before, a sequence object with the
+        default parameters was returned for any name, so that schema alignment never created a sequence
+    */
     private *AbstractSequence getSequenceImpl(string name) {
-        return new MssqlSequence(name);
+        # Sybase has no sequences
+        if (is_sybase) {
+            return;
+        }
+        string schema;
+        string sname;
+        parse_schema_name(name, \schema, \sname, default_schema);
+        # the values are sql_variant, of the type of the sequence; they are converted to strings to be read
+        *hash<auto> row = ds.selectRow("select convert(varchar(64), seq.start_value) start_value, "
+            "convert(varchar(64), seq.increment) increment, convert(varchar(64), seq.minimum_value) minimum_value, "
+            "convert(varchar(64), seq.maximum_value) maximum_value, seq.is_cycling, seq.is_cached, seq.cache_size, "
+            "t.name type_name, seq.precision from sys.sequences seq join sys.schemas s on s.schema_id = seq.schema_id "
+            "join sys.types t on t.user_type_id = seq.system_type_id where s.name = %v and seq.name = %v", schema,
+            sname);
+        if (!row) {
+            return;
+        }
+        hash<auto> limits = MssqlDatabase::getSequenceTypeLimits(row.type_name, row.precision);
+        number min = row.minimum_value.toNumber();
+        number max = row.maximum_value.toNumber();
+        # a sequence without a cache has no cache size; one with the default cache has none either
+        # (the cache size is NULL then, and is positive otherwise)
+        *int cache = !row.is_cached.toBool() ? 0 : (row.cache_size.val() ? row.cache_size.toInt() : NOTHING);
+        MssqlSequence seq(name, row.start_value.toNumber(), row.increment.toNumber(),
+            max == limits.max ? NOTHING : max, min == limits.min ? NOTHING : min, row.is_cycling.toBool(), cache);
+        seq.setTypeLimits(limits.min, limits.max);
+        return seq;
+    }
+
+    #! returns the minimum and maximum of a sequence type, the default limits of a sequence of the type
+    /** @param type_name the name of the type
+        @param precision the precision of the type, for \c decimal and \c numeric
+
+        @return a hash with \c min and \c max keys
+
+        @since MssqlSqlUtilBase 1.1
+    */
+    static hash<auto> getSequenceTypeLimits(string type_name, softint precision) {
+        switch (type_name.lwr()) {
+            case "tinyint": return {"min": 0n, "max": 255n};
+            case "smallint": return {"min": -32768n, "max": 32767n};
+            case "int": return {"min": -2147483648n, "max": 2147483647n};
+            case "decimal":
+            case "numeric": {
+                number max = strmul("9", precision).toNumber();
+                return {"min": -max, "max": max};
+            }
+        }
+        return {"min": MssqlSequence::MinBigint, "max": MssqlSequence::MaxBigint};
     }
 
     private *AbstractView getViewImpl(string name) {
@@ -1194,8 +1722,14 @@ public class MssqlDatabase inherits SqlUtil::AbstractDatabase {
         return listFunctionsImpl();
     }
 
+    #! returns the names of the sequences in the database, or an empty list on Sybase, which has no sequences
+    /** @since MssqlSqlUtilBase 1.1 the sequences are listed; this raised an \c UNIMPLEMENTED exception before
+    */
     private list<string> listSequencesImpl() {
-        throw "UNIMPLEMENTED", "unimplemented";
+        if (is_sybase) {
+            return ();
+        }
+        return ds.select("select name from sys.sequences").name ?? ();
     }
 
     private list<string> listViewsImpl() {
@@ -1230,12 +1764,19 @@ public class MssqlDatabase inherits SqlUtil::AbstractDatabase {
 
     #! returns the next value in the given sequence
     private softint getNextSequenceValueImpl(string name) {
-        return ds.selectRow("select next value for %v as nextval", name).nextval;
+        # a sequence is named in SQL; it cannot be a bind value
+        return ds.selectRow("select next value for " + mssql_get_sql_object_name(name) + " as nextval").nextval;
     }
 
     #! returns the last value issued for the given sequence in the current session
     private softint getCurrentSequenceValueImpl(string name) {
-        return ds.selectRow("select current_value from sys.sequences where name = %v", name).current_value;
+        # a name with a schema was searched for as given, including the schema, and was never found
+        string schema;
+        string sname;
+        parse_schema_name(name, \schema, \sname, default_schema);
+        return ds.selectRow("select convert(varchar(64), seq.current_value) current_value from sys.sequences seq "
+            "join sys.schemas s on s.schema_id = seq.schema_id where s.name = %v and seq.name = %v", schema,
+            sname).current_value;
     }
 
     #! returns @ref True "True" if the database supports sequences
@@ -1276,16 +1817,30 @@ public class MssqlDatabase inherits SqlUtil::AbstractDatabase {
         return False;
     }
 
+    #! returns driver-specific options to the base abstract class
+    private hash<auto> getRebuildIndexOptions() {
+        return MssqlRebuildIndexOptions;
+    }
+
     #! rebuild index implementation. See @ref SqlUtil::AbstractDatabase::rebuildIndex()
+    /** @throw REBUILD-INDEX-ERROR the \c table_name option, the table of the index, is not given
+    */
     private bool rebuildIndexImpl(string name, *hash options) {
-        ds.select("alter index %v on %v reorganize", name, options.table_name);
+        if (!options.table_name.val()) {
+            throw "REBUILD-INDEX-ERROR", sprintf("cannot rebuild index %y: SQL Server names an index by its table, "
+                "which the \"table_name\" option gives", name);
+        }
+        # the index and the table are identifiers; they cannot be bind values, as they were, nor could the table be
+        # given, as no option was accepted
+        ds.exec("alter index " + mssql_get_sql_identifier(name) + " on "
+            + mssql_get_sql_object_name(options.table_name) + " reorganize");
         return True;
     }
 
     #! compute statistics implementation. See @ref SqlUtil::AbstractDatabase::computeStatistics()
     private computeStatisticsImpl(*hash options) {
         if (options.tables)
-            map ds.select("update statistics %v", $1), options.tables;
+            map ds.exec("update statistics " + mssql_get_sql_object_name($1)), options.tables;
         else # otherwise update all statistics in the DB
             ds.select("exec sp_updatestats");
     }
@@ -1914,7 +2469,7 @@ public class MssqlTable inherits SqlUtil::AbstractTable {
                 "nocolumn": True,
                 "withalias": True,
                 "code": string sub (*string cve, hash arg, reference<hash<auto>> psch) {
-                    string sql = sprintf("next value for %s", arg.seq);
+                    string sql = sprintf("next value for %s", mssql_get_sql_object_name(arg.seq));
                     if (arg.as) {
                         psch{arg.as} = sql;
                         sql += " as " + arg.as;
@@ -1966,9 +2521,13 @@ public class MssqlTable inherits SqlUtil::AbstractTable {
 
         #! a hash of default value operator descriptions for Mssql
         const MssqlIopMap = DefaultIopMap + (
+            # a sequence is named in SQL; it cannot be a bind value, as it was in "next value for %v"
             IOP_SEQ: (
                 "arg": Type::String,
-                "placeholder": "next value for %v",
+                "immediate": True,
+                "code": string sub (string cve, string arg) {
+                    return "next value for " + mssql_get_sql_object_name(arg);
+                },
             ),
         );
 
@@ -1978,7 +2537,7 @@ public class MssqlTable inherits SqlUtil::AbstractTable {
                 "nocolumn": True,
                 "withalias": True,
                 "code": string sub (*string cve, string arg) {
-                    return sprintf("next value for %s", arg);
+                    return sprintf("next value for %s", mssql_get_sql_object_name(arg));
                 }
             ),
             COP_SEQ_CURRVAL: (
@@ -2076,7 +2635,7 @@ public class MssqlTable inherits SqlUtil::AbstractTable {
         string sql = sprintf("merge %s t using (select ", getSqlName());
         sql += foldl $1 + "," + $2, (map "%v", keys row);
         sql += ") as source (";
-        sql += foldl $1 + "," + $2, row.keyIterator();
+        sql += foldl $1 + "," + $2, getColumnSqlNames(row.keys());
         sql += ") on (";
         sql += foldl $1 + " and " + $2, (map sprintf("t.%s=source.%s", $1, $1), getColumnSqlNames(cols.keys()));
         sql += ")";
@@ -2089,7 +2648,7 @@ public class MssqlTable inherits SqlUtil::AbstractTable {
             sql += sprintf(" when not matched then insert (");
             sql += (foldl $1 + "," + $2, getColumnSqlNames(row.keys()));
             sql += ") values (";
-            sql += (foldl $1 + "," + $2, (map "source." + $1, keys row));
+            sql += (foldl $1 + "," + $2, (map "source." + $1, getColumnSqlNames(row.keys())));
             sql += ")";
         }
         sql += ";";
@@ -2127,7 +2686,14 @@ public class MssqlTable inherits SqlUtil::AbstractTable {
 
     #! returns the name of the table to be used in SQL (with a possible qualifiers for schema, etc)
     string getSqlName() {
-        return schema + "." + name;
+        return mssql_get_sql_identifier(schema) + "." + mssql_get_sql_identifier(name);
+    }
+
+    #! returns a name as an SQL identifier for SQL Server and Sybase
+    /** @copydetails MssqlDatabase::getSqlIdentifier()
+    */
+    string getSqlIdentifier(string name) {
+        return mssql_get_sql_identifier(name);
     }
 
     /** @brief Converts generic date format codes to MSSQL FORMAT() .NET format strings
@@ -2560,7 +3126,8 @@ and s.name = %v and t.name = %v order by i.name, ic.key_ordinal", schema, name);
         hash<auto> rv;
         # get foreign referential constraints
         *hash<auto> qh = ds.select("select fk.name constraint_name, sc.name source_column, rs.name target_schema,
-    rt.name target_table, tc.name target_column
+    rt.name target_table, tc.name target_column, fk.delete_referential_action_desc on_delete,
+    fk.update_referential_action_desc on_update
 from
     sys.foreign_keys fk
     join sys.tables t on (t.object_id = fk.parent_object_id)
@@ -2578,6 +3145,10 @@ order by
             hash<auto> ch;
             foreach hash<auto> row in (qh.contextIterator()) {
                 reference<hash<auto>> c = \ch{row.constraint_name.lwr()};
+                # the actions are given as "NO_ACTION", "CASCADE", "SET_NULL" and "SET_DEFAULT"; "NO_ACTION", the
+                # default, is described as no action, as a template without an action gives it
+                c.on_delete = normalize_fk_action(row.on_delete, "on_delete");
+                c.on_update = normalize_fk_action(row.on_update, "on_update");
                 string source_column = row.source_column.lwr();
                 c.columns{source_column} = columns{source_column};
                 # a table in another schema is referenced with its schema
@@ -2591,7 +3162,8 @@ order by
                 Columns targ_columns = getReferencedTableColumnsUnlocked(c.value.target.table, opts.table_cache);
                 ForeignConstraintTarget fct(c.value.target.table,
                     targ_columns.subset(c.value.target.columns.keys()));
-                rv{c.key} = new MssqlForeignConstraint(c.key, new Columns(c.value.columns), fct);
+                rv{c.key} = new MssqlForeignConstraint(c.key, new Columns(c.value.columns), fct, c.value.on_delete,
+                    c.value.on_update);
             }
         }
 
@@ -2648,7 +3220,7 @@ tc.constraint_name, c1.ordinal_position", schema, name);
 
     #! returns a string that can be used to create the table in the database
     private string getCreateTableSqlImpl(*hash opt) {
-        string sql = sprintf("create table %s (\n", name);
+        string sql = sprintf("create table %s (\n", getSqlTableName());
 
         sql += foldl $1 + ",\n" + $2, (map "  " + $1.getCreateSql(self), columns.iterator());
         sql += "\n)";
@@ -2659,7 +3231,7 @@ tc.constraint_name, c1.ordinal_position", schema, name);
         } else {
             *string ts = opt.data_tablespace ? opt.data_tablespace : filegroup;
             if (ts)
-                sql += sprintf(" on %s", ts);
+                sql += sprintf(" on %s", mssql_get_filegroup_sql(ts));
         }
 
         return sql;
@@ -2667,7 +3239,7 @@ tc.constraint_name, c1.ordinal_position", schema, name);
 
     private prepareCreateSqlOptionsImpl(reference<hash<auto>> opt) {
         if (partitionStrategy) {
-            opt.mssql_partition_scheme = getMssqlPartitionSchemeNameUnlocked();
+            opt.mssql_partition_scheme = mssql_get_sql_identifier(getMssqlPartitionSchemeNameUnlocked());
             opt.mssql_partition_column = getColumnSqlName(partitionStrategy.columns[0]);
             opt.mssql_partition_key = partitionStrategy.columns[0];
         }
@@ -2704,7 +3276,9 @@ tc.constraint_name, c1.ordinal_position", schema, name);
     }
 
     private string getRenameSqlImpl(string new_name) {
-        return sprintf("exec cp_name '%s', '%s'", getSqlName(), new_name);
+        # the table is renamed with sp_rename; "cp_name", which this called, does not exist
+        return sprintf("exec sp_rename %s, %s", mssql_get_string_literal(getSqlName()),
+            mssql_get_new_name_literal(new_name));
     }
 
     private AbstractColumn addColumnImpl(string cname, hash opt, bool nullable = True) {
@@ -2729,8 +3303,12 @@ tc.constraint_name, c1.ordinal_position", schema, name);
 
     private AbstractForeignConstraint addForeignConstraintImpl(string cname, hash ch, string table, hash tch,
             *hash opt) {
+        *string on_delete = normalize_fk_action(opt.on_delete, "on_delete");
+        *string on_update = normalize_fk_action(opt.on_update, "on_update");
+        # Sybase has no referential actions; SQL Server has no RESTRICT action
+        mssql_check_fk_actions(cname, on_delete, on_update, is_sybase);
         ForeignConstraintTarget fct(table, new Columns(tch));
-        return new MssqlForeignConstraint(cname, new Columns(ch), fct);
+        return new MssqlForeignConstraint(cname, new Columns(ch), fct, on_delete, on_update);
     }
 
     private AbstractCheckConstraint addCheckConstraintImpl(string cname, string src, *hash opt) {
@@ -2805,14 +3383,36 @@ tc.constraint_name, c1.ordinal_position", schema, name);
         }
     }
 
-    #! returns the column name for use in SQL strings; subclasses can return a special string in case the column name is a reserved word
+    #! returns the column name for use in SQL strings, as getSqlIdentifier() returns it
+    /** @since MssqlSqlUtilBase 1.1 a name that is not an ordinary name is quoted and escaped, and names are quoted in
+        brackets; before, only a reserved word was quoted, in double quotes, which delimit an identifier only with
+        \c QUOTED_IDENTIFIER on
+    */
     string getColumnSqlName(string col) {
-        return MssqlDatabase::MssqlReservedWords{col.lwr()} ? ("\"" + col + "\"") : col;
+        return mssql_get_sql_identifier(col);
     }
 
-    #! returns a list of column names for use in SQL strings; subclasses can process the argument list in case a column name is a reserved word
+    #! returns a list of column names for use in SQL strings, as getSqlIdentifier() returns them
     list getColumnSqlNames(softlist cols) {
-        return map getColumnSqlName($1), cols;
+        return map mssql_get_sql_identifier($1), cols;
+    }
+
+    #! returns a column alias for SQL
+    /** An alias that is a regular identifier and not a reserved word is returned as given; any other alias is
+        returned in double quotes, as reserved words were before, which T-SQL takes as the alias whatever the
+        \c QUOTED_IDENTIFIER setting of the connection, so that an alias gives the same result key as before
+
+        @param alias the alias, as for @ref SqlUtil::cop_as() "cop_as()"
+
+        @return the alias for SQL
+
+        @throw IDENTIFIER-ERROR the alias is empty, or has a NUL character, a \c "%", a single or double quote, a
+        comment marker (\c "--" or \c "/*") or a backslash before \c "%" or \c ":"
+
+        @since MssqlSqlUtilBase 1.1
+    */
+    string getAliasSqlName(string alias) {
+        return mssql_get_sql_alias(alias);
     }
 
     private bool emptyImpl() {
@@ -2833,8 +3433,9 @@ tc.constraint_name, c1.ordinal_position", schema, name);
 
         *PartitionStrategy strategy = getPartitionStrategyUnlocked();
         if (strategy) {
-            l += sprintf("drop partition scheme %s", getMssqlPartitionSchemeNameUnlocked());
-            l += sprintf("drop partition function %s", getMssqlPartitionFunctionNameUnlocked());
+            l += sprintf("drop partition scheme %s", mssql_get_sql_identifier(getMssqlPartitionSchemeNameUnlocked()));
+            l += sprintf("drop partition function %s",
+                mssql_get_sql_identifier(getMssqlPartitionFunctionNameUnlocked()));
         }
 
         return l;
@@ -3098,15 +3699,16 @@ tc.constraint_name, c1.ordinal_position", schema, name);
         validateMssqlPartitionSpecUnlocked(spec);
         auto split_value = getMssqlPartitionSplitValueUnlocked(spec);
         return sprintf("alter partition scheme %s next used %s;\nalter partition function %s() split range (%s)",
-            getMssqlPartitionSchemeNameUnlocked(), getMssqlPartitionFilegroupSqlName(filegroup ?? "PRIMARY"),
-            getMssqlPartitionFunctionNameUnlocked(), getMssqlPartitionSqlValue(split_value));
+            mssql_get_sql_identifier(getMssqlPartitionSchemeNameUnlocked()),
+            getMssqlPartitionFilegroupSqlName(filegroup ?? "PRIMARY"),
+            mssql_get_sql_identifier(getMssqlPartitionFunctionNameUnlocked()), getMssqlPartitionSqlValue(split_value));
     }
 
     private string getDropPartitionSqlImpl(string partition_name, *hash<auto> opt) {
         hash<PartitionInfo> info = resolveMssqlPartitionInfoUnlocked(partition_name);
         return sprintf("truncate table %s with (partitions (%d));\nalter partition function %s() merge range (%s)",
-            getSqlName(), info.driver.mssql.partition_number, getMssqlPartitionFunctionNameUnlocked(),
-            getMssqlPartitionSqlValue(info.bound_to));
+            getSqlName(), info.driver.mssql.partition_number,
+            mssql_get_sql_identifier(getMssqlPartitionFunctionNameUnlocked()), getMssqlPartitionSqlValue(info.bound_to));
     }
 
     private string getTruncatePartitionSqlImpl(string partition_name, *hash<auto> opt) {
@@ -3185,6 +3787,9 @@ tc.constraint_name, c1.ordinal_position", schema, name);
         list<auto> boundaries = getMssqlPartitionBoundariesUnlocked(plist);
         string pfn = getMssqlPartitionFunctionNameUnlocked();
         string psn = getMssqlPartitionSchemeNameUnlocked();
+        # the names are compared as string literals and given as identifiers
+        string pfn_sql = mssql_get_sql_identifier(pfn);
+        string psn_sql = mssql_get_sql_identifier(psn);
         string fg = getMssqlPartitionFilegroupSqlName(opt.data_tablespace ?? filegroup ?? "PRIMARY");
         string coltype = columns{partitionStrategy.columns[0]}.getNativeTypeString();
 
@@ -3193,8 +3798,8 @@ tc.constraint_name, c1.ordinal_position", schema, name);
             "if exists (select 1 from sys.partition_functions where name = %s) drop partition function %s;\n"
             "create partition function %s (%s) as range right for values (%s);\n"
             "create partition scheme %s as partition %s all to (%s)",
-            getSqlValue(psn), psn, getSqlValue(pfn), pfn, pfn, coltype,
-            (foldl $1 + ", " + $2, map getMssqlPartitionSqlValue($1), boundaries), psn, pfn, fg);
+            getSqlValue(psn), psn_sql, getSqlValue(pfn), pfn_sql, pfn_sql, coltype,
+            (foldl $1 + ", " + $2, map getMssqlPartitionSqlValue($1), boundaries), psn_sql, pfn_sql, fg);
     }
 
     private list<hash<PartitionInfo>> getMssqlSortedPartitionInfoUnlocked() {
@@ -3276,11 +3881,13 @@ tc.constraint_name, c1.ordinal_position", schema, name);
     }
 
     private string getMssqlPartitionFilegroupSqlName(string fg) {
-        if (fg =~ /^(\[.*\]|\".*\")$/) {
-            return fg;
+        # a name in brackets or double quotes was used as given, so that a bracket or quote in it could end it
+        # early and change the SQL; it is checked and quoted again
+        if (fg =~ /^(\[.*\]|\".*\")$/s) {
+            return mssql_get_filegroup_sql(fg);
         }
-        fg = replace(fg, "]", "]]");
-        return "[" + fg + "]";
+        # a filegroup is always given in brackets in partition DDL, as before
+        return AbstractSqlUtilBase::getDelimitedIdentifier(mssql_check_identifier(fg), "[", "]", "MS SQL Server");
     }
 
     private string getMssqlPartitionSqlValue(auto value) {
