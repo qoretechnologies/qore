@@ -425,11 +425,24 @@ list<int> l1 = new list<int>(2);
     @note
     - expressions that have no effect cannot be used with the background operator (a parse exception will be thrown)
     - it is illegal to make changes to a local variable anywhere in a background expression (a parse exception will be thrown)
-    - local variables and find expressions are evaluated before the new thread is started and the result of the evaluation is used in the expression in the new thread
-    - @ref implicit_arguments "implicit arguments" (<tt>$1</tt>, <tt>$$</tt> and <tt>$#</tt>) of the code that starts the thread are evaluated
-      in the same way, so <tt>map <b>background</b> f($1), list</tt> starts a thread for each element of \a list with the element as the
-      argument; an implicit argument of an operator in the background expression that iterates, such as the <tt>$1</tt> of
+    - in every @ref exec_mode_intro "execution mode", local variables, find expressions and the
+      @ref implicit_arguments "implicit arguments" (<tt>$1</tt>, <tt>$$</tt> and <tt>$#</tt>) of the code that starts the thread are
+      evaluated before the new thread is started, and the results are used in the expression in the new thread; so
+      <tt>map <b>background</b> f($1), list</tt> starts a thread for each element of \a list with the element as the argument; an
+      implicit argument of an operator in the background expression that iterates, such as the <tt>$1</tt> of
       <tt><b>background</b> f(map $1 * 2, list)</tt>, is that operator's
+    - where the rest of the expression is evaluated depends on the execution mode; this is planned to change so that the whole
+      expression is evaluated in the new thread in every mode:
+      - with @ref exec_mode_ast "AST execution", in the new thread: the arguments of the call and its target (the object of a
+        method call, such as the <tt><b>new</b> T()</tt> of <tt><b>background</b> (<b>new</b> T()).method()</tt>, or the
+        expression that gives the call reference to call) are evaluated there, so <tt><b>background</b> f(gettid())</tt> passes
+        the TID of the new thread, and an exception raised evaluating them is an exception of the new thread
+      - with @ref exec_mode_ir "IR", @ref exec_mode_jit "JIT" and @ref exec_mode_tiered "tiered" execution and in
+        @ref exec_mode_aot "AOT-compiled" code, in the starting thread: the arguments and the target are evaluated before the
+        new thread is started, so <tt><b>background</b> f(gettid())</tt> passes the TID of the starting thread, and an exception
+        raised evaluating them is raised to the code that starts the thread, which can catch it; only a call (of a function,
+        a method, a static method or a call reference) can be started this way: any other background expression raises an
+        \c IR-AST-FALLBACK-ERROR exception, and \c qcc cannot compile it
     - it is not possible to pass local variables by reference anywhere in a background expression (a parse exception will be thrown)
     - closure values created in object scope are checked before the new thread is started; if the captured object is valid,
       its scope is prolonged until the background expression has finished executing
