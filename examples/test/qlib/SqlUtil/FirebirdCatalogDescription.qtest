@@ -1,0 +1,285 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires SqlUtil
+%requires XdbcFirebirdSqlUtilBase
+%requires JdbcFirebirdSqlUtil
+
+%try-module jni
+%define NoJni
+%endtry
+
+%exec-class FirebirdCatalogDescriptionTest
+
+#! Tests what a live Firebird database is described as: indexes, tables named with a reserved word, views and sequences
+/** Runs with a disposable Firebird database through the JDBC driver, given with \c -c or
+    \c QORE_DB_CONNSTR_JDBC_FIREBIRD (ex: <tt>jdbc:user/pass\@firebird:?serverName=host&databaseName=/path/db.fdb{classpath=/path/jaybird.jar}</tt>);
+    the test creates and drops its own objects
+*/
+class FirebirdCatalogDescriptionTest inherits QUnit::Test {
+    public {
+        const MyOpts = Opts + {
+            "connstr": "c,conn=s",
+        };
+
+        #! the referenced table: a primary key and a unique constraint
+        const HeadTable = "fbcat_head";
+        const HeadDesc = {
+            "columns": {
+                "id": {"qore_type": "integer", "notnull": True},
+                "code": {"qore_type": "string", "size": 10, "notnull": True},
+            },
+            "primary_key": {"name": "pk_fbcat_head", "columns": ("id",)},
+            "unique_constraints": {"uk_fbcat_head": {"columns": ("code",)}},
+        };
+
+        #! the referencing table: a primary key, a foreign constraint, an index and a unique index
+        const LineTable = "fbcat_line";
+        const LineDesc = {
+            "columns": {
+                "id": {"qore_type": "integer", "notnull": True},
+                "head_id": {"qore_type": "integer"},
+                "val": {"qore_type": "integer"},
+                "qty": {"qore_type": "integer"},
+            },
+            "primary_key": {"name": "pk_fbcat_line", "columns": ("id",)},
+            "indexes": {
+                "ix_fbcat_line_val": {"columns": ("val",)},
+                "uix_fbcat_line": {"columns": ("val", "qty"), "unique": True},
+            },
+            "foreign_constraints": {
+                "fk_fbcat_line": {"columns": ("head_id",), "table": HeadTable, "target_columns": ("id",)},
+            },
+        };
+
+        #! a table and a column named with reserved words
+        const ReservedTable = "order";
+        const ReservedDesc = {
+            "columns": {
+                "id": {"qore_type": "integer", "notnull": True},
+                "select": {"qore_type": "string", "size": 20},
+            },
+            "primary_key": {"name": "pk_fbcat_order", "columns": ("id",)},
+            "indexes": {"ix_fbcat_order": {"columns": ("select",)}},
+        };
+
+        #! views: an ordinary name, a reserved word and a name that is not an ordinary identifier
+        const Views = {
+            "fbcat_v": "select id, val from fbcat_line",
+            "view": "select id\nfrom fbcat_line\nwhere val > 1",
+            "fbcat v2": "select id from fbcat_line",
+        };
+
+        #! a sequence named with a reserved word
+        const ReservedSequence = "value";
+
+        #! the tables in the order that they are dropped
+        const Tables = (LineTable, HeadTable, ReservedTable);
+    }
+
+    private {
+        *Datasource ds;
+    }
+
+    constructor() : Test("FirebirdCatalogDescription", "1.0", \ARGV, MyOpts) {
+        addTestCase("an index that is not the index of a constraint is described", \indexes());
+        addTestCase("unique constraints are described", \uniqueConstraints());
+        addTestCase("a character column is described with the size that it was declared with", \characterSize());
+        addTestCase("a table with indexes and constraints is aligned with no SQL", \alignIndexes());
+        addTestCase("a table named with a reserved word is found, described and aligned", \reservedTable());
+        addTestCase("views are read from the catalog and listed in lower case", \views());
+        addTestCase("a sequence named with a reserved word is found", \reservedSequence());
+        set_return_value(main());
+    }
+
+    globalTearDown() {
+        if (ds) {
+            dropAll();
+        }
+    }
+
+    #! returns the connection, creating the objects of the test on the first call
+    private Datasource getDatasource() {
+%ifdef NoJni
+        testSkip("no jni module");
+%endif
+        if (ds) {
+            return ds;
+        }
+        string connstr = m_options.connstr ?? ENV.QORE_DB_CONNSTR_JDBC_FIREBIRD ?? "";
+        if (!connstr.val()) {
+            testSkip("no Firebird connection; set QORE_DB_CONNSTR_JDBC_FIREBIRD or use -c");
+        }
+        Datasource nds(connstr);
+        if (nds.getDriverRealName() !~ /^firebird/i) {
+            testSkip("not a Firebird connection");
+        }
+        ds = nds;
+        dropAll();
+        Database db(ds);
+        db.makeTable(HeadTable, HeadDesc).create();
+        db.makeTable(LineTable, LineDesc).create();
+        db.makeTable(ReservedTable, ReservedDesc).create();
+        map ds.execRaw(new XdbcFirebirdView($1.key, $1.value).getCreateSql()), Views.pairIterator();
+        ds.execRaw(db.makeSequence(ReservedSequence, 5, 2).getCreateSql());
+        # Firebird uses an object only after the transaction that creates it is committed
+        ds.commit();
+        return ds;
+    }
+
+    #! drops every object of the test that exists
+    private dropAll() {
+        foreach string view in (keys Views) {
+            dropIfExists(new XdbcFirebirdView(view, "").getDropSql());
+        }
+        foreach string table in (Tables) {
+            dropIfExists(sprintf("drop table %s", new XdbcFirebirdTable(ds, table).getSqlName()));
+        }
+        dropIfExists(new XdbcFirebirdSequence(ReservedSequence).getDropSql());
+    }
+
+    private dropIfExists(string sql) {
+        try {
+            ds.execRaw(sql);
+            ds.commit();
+        } catch (hash<ExceptionInfo> ex) {
+            ds.rollback();
+            # an object that does not exist cannot be dropped
+            if (ex.desc !~ /(does not exist|not found|not defined|unknown)/i) {
+                rethrow;
+            }
+        }
+    }
+
+    #! returns the indexes of a table as a hash of their uniqueness and columns
+    private static hash<auto> describeIndexes(AbstractTable t) {
+        return map {$1.name: {"unique": $1.unique, "columns": $1.columns.keys()}}, t.getIndexes().iterator();
+    }
+
+    indexes() {
+        Datasource ds = getDatasource();
+
+        # the index and the unique index are described with their columns in order, and the index that Firebird
+        # creates for the foreign constraint under its name, as before; the index of the primary key is not
+        AbstractTable line = AbstractTable::getTable(ds, LineTable);
+        assertEq({
+            "fk_fbcat_line": {"unique": False, "columns": ("head_id",)},
+            "ix_fbcat_line_val": {"unique": False, "columns": ("val",)},
+            "uix_fbcat_line": {"unique": True, "columns": ("val", "qty")},
+        }, describeIndexes(line));
+        assertEq(("fk_fbcat_line",), line.getForeignConstraints().keys());
+
+        # the index of a unique constraint is described as a unique index, as before
+        AbstractTable head = AbstractTable::getTable(ds, HeadTable);
+        assertEq({"uk_fbcat_head": {"unique": True, "columns": ("code",)}}, describeIndexes(head));
+    }
+
+    uniqueConstraints() {
+        Datasource ds = getDatasource();
+
+        AbstractTable head = AbstractTable::getTable(ds, HeadTable);
+        assertEq(("uk_fbcat_head",), head.getConstraints().keys());
+        AbstractUniqueConstraint uk = cast<AbstractUniqueConstraint>(head.getConstraints().uk_fbcat_head);
+        assertEq(("code",), uk.keys());
+
+        # a unique index is no unique constraint on Firebird, and a primary key is described as one
+        AbstractTable line = AbstractTable::getTable(ds, LineTable);
+        assertEq((), line.getConstraints().keys());
+        assertEq(("id",), line.getPrimaryKey().keys());
+    }
+
+    #! the database of the test has a character set of more than one byte per character, such as UTF8, for this
+    #! test to fail without the fix: the size in bytes was described as the size of the column
+    characterSize() {
+        Datasource ds = getDatasource();
+
+        AbstractTable head = AbstractTable::getTable(ds, HeadTable);
+        assertEq(10, head.describe().code.size);
+        AbstractTable order = AbstractTable::getTable(ds, ReservedTable);
+        assertEq(20, order.describe()."select".size);
+    }
+
+    alignIndexes() {
+        Datasource ds = getDatasource();
+        Database db(ds);
+
+        # the description of each table is the table that it creates: aligning it needs no SQL, and nothing is
+        # dropped
+        foreach hash<auto> i in ({HeadTable: HeadDesc, LineTable: LineDesc}.pairIterator()) {
+            AbstractTable live = db.getTable(i.key);
+            assertEq((), live.getAlignSql(db.makeTable(i.key, i.value)), i.key);
+        }
+        assertEq((), db.getAlignSql({"tables": {HeadTable: HeadDesc, LineTable: LineDesc}}));
+
+        # a new index is the one statement of an alignment
+        AbstractTable live = db.getTable(LineTable);
+        hash<auto> desc = LineDesc + {"indexes": LineDesc.indexes + {"ix_fbcat_line_qty": {"columns": ("qty",)}}};
+        assertEq(("create index ix_fbcat_line_qty on fbcat_line (qty)",), live.getAlignSql(db.makeTable(LineTable,
+            desc)));
+    }
+
+    reservedTable() {
+        Datasource ds = getDatasource();
+        Database db(ds);
+
+        # the premise: the name is a reserved word, which is given in double quotes in the case given
+        assertTrue(XdbcFirebirdDatabase::XdbcFirebirdReservedWords{ReservedTable});
+        assertEq("\"order\"", new XdbcFirebirdTable(ds, ReservedTable).getSqlName());
+
+        assertTrue(inlist(ReservedTable, db.listTables()));
+        *AbstractTable t = db.getTable(ReservedTable);
+        assertTrue(exists t);
+        assertEq(("id", "select"), t.describe().keys());
+        assertEq(("id",), t.getPrimaryKey().keys());
+        assertEq({"ix_fbcat_order": {"unique": False, "columns": ("select",)}}, describeIndexes(t));
+        assertEq((), t.getAlignSql(db.makeTable(ReservedTable, ReservedDesc)));
+        assertEq((), db.getAlignSql({"tables": {ReservedTable: ReservedDesc}}));
+
+        # the table is used through its object
+        on_exit ds.rollback();
+        t.insert({"id": 1, "select": "one"});
+        assertEq({"id": 1, "select": "one"}, t.selectRow({"where": {"id": 1}}));
+    }
+
+    views() {
+        Datasource ds = getDatasource();
+        Database db(ds);
+
+        # views are listed in lower case, as tables and sequences are
+        list<string> views = db.listViews();
+        foreach string view in (keys Views) {
+            assertTrue(inlist(view, views), view);
+        }
+        assertEq((), select views, $1 != $1.lwr());
+
+        # each view is read with its source, which creates it again
+        foreach hash<auto> i in (Views.pairIterator()) {
+            *AbstractView v = db.getView(i.key);
+            assertTrue(exists v, i.key);
+            assertEq(i.key, v.name, i.key);
+            assertEq(i.value, v.src, i.key);
+            assertEq(new XdbcFirebirdView(i.key, i.value).getCreateSql(), v.getCreateSql(), i.key);
+        }
+
+        # a name that is not a view, and a table, is no view
+        assertEq(NOTHING, db.getView("fbcat_no_such_view"));
+        assertEq(NOTHING, db.getView(LineTable));
+    }
+
+    reservedSequence() {
+        Datasource ds = getDatasource();
+        Database db(ds);
+
+        assertTrue(XdbcFirebirdDatabase::XdbcFirebirdReservedWords{ReservedSequence});
+        assertTrue(inlist(ReservedSequence, db.listSequences()));
+        *AbstractSequence seq = db.getSequence(ReservedSequence);
+        assertTrue(exists seq);
+        assertEq(5n, seq.start);
+        assertEq(2n, seq.increment);
+    }
+}

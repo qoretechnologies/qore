@@ -193,6 +193,18 @@ table.addForeignConstraint("fk_order_lines_order", "order_id", "orders", "id", {
       the new name
     - fixed a \c cast data provider expression with a size, or with a precision and a scale: the size was ignored
       and the precision was given as the scale, so that the cast failed or changed the value
+    - fixed describing the indexes of a table: an index created with \c CREATE \c INDEX was never described, only
+      the indexes of unique and foreign constraints were, so schema alignment created an index again that the table
+      had already
+    - fixed describing the unique constraints of a table: none were described, so every schema alignment dropped the
+      index of each unique constraint and added the constraint again
+    - fixed describing the size of a \c CHAR or \c VARCHAR column in a database with a character set of more than
+      one byte per character, such as \c UTF8: its size in bytes was described, so every schema alignment changed
+      the type of the column again
+    - fixed finding a table or a sequence named with a reserved word, such as \c order: it was looked up in upper
+      case, but Firebird keeps such a name in the case that it is given in, so the table or sequence was never found
+    - fixed reading a view, which was never found; the names of views are now listed in lower case, as the names of
+      tables and sequences are; before, they were listed in upper case
 
     @subsection xdbcfirebirdsqlutilbasev_0_1 XdbcFirebirdSqlUtilBase Module v0.1
     - initial release
@@ -202,13 +214,23 @@ table.addForeignConstraint("fk_order_lines_order", "order_id", "orders", "id", {
 # letter, then ASCII letters, digits, underscores or dollar signs), so that Firebird folds it to upper case as for any
 # unquoted name, as before; a reserved word in double quotes in the case given, as before; any other name in upper
 # case in double quotes, with each double quote doubled, so that it names the object that an unquoted name of the same
-# letters would, as SqlUtil looks names up in upper case on Firebird, and can never change the SQL that it is part of;
-# the jni and odbc drivers read no placeholder, comment or escape in double-quoted text
+# letters would, and can never change the SQL that it is part of; the jni and odbc drivers read no placeholder,
+# comment or escape in double-quoted text; firebird_get_catalog_name() gives the name that Firebird keeps for it
 string sub firebird_get_sql_identifier(string name) {
     if (name =~ /\A[A-Za-z][A-Za-z0-9_$]*\z/) {
         return XdbcFirebirdDatabase::XdbcFirebirdReservedWords{name.lwr()} ? ("\"" + name + "\"") : name;
     }
     return AbstractSqlUtilBase::getDelimitedIdentifier(name.upr(), "\"", "\"", "Firebird");
+}
+
+# returns the name that Firebird keeps in its catalog for an object named in SQL with firebird_get_sql_identifier():
+# a reserved word in the case given, as it is given in double quotes in that case, and any other name in upper case,
+# as Firebird folds an unquoted name to upper case and any other name is given in upper case in double quotes
+string sub firebird_get_catalog_name(string name) {
+    if (name =~ /\A[A-Za-z][A-Za-z0-9_$]*\z/ && XdbcFirebirdDatabase::XdbcFirebirdReservedWords{name.lwr()}) {
+        return name;
+    }
+    return name.upr();
 }
 
 #! the XdbcFirebirdSqlUtilBase namespace contains all the objects in the XdbcFirebirdSqlUtilBase module
@@ -1112,19 +1134,24 @@ string sql = db.getSqlIdentifier("Order Date");
             # the starting value and the increment are kept from Firebird 3 on
             *hash<auto> row = ds.selectRow("select rdb$generator_name as \"sequence\", "
                 "rdb$initial_value as \"start\", rdb$generator_increment as \"increment\" from rdb$generators where "
-                "rdb$system_flag = 0 and rdb$generator_name = %v", name.upr());
+                "rdb$system_flag = 0 and rdb$generator_name = %v", firebird_get_catalog_name(name));
             return row.sequence
                 ? new XdbcFirebirdSequence(row.sequence.lwr(), row.start ?? 1, row.increment ?? 1)
                 : NOTHING;
         }
 
+        #! returns the view of the given name with its source, or no value if there is no such view
+        /** @since XdbcFirebirdSqlUtilBase 0.2 views are read from the catalog; before, no view was ever found
+        */
         private *AbstractView getViewImpl(string name) {
-            *hash<auto> row;
+            *hash<auto> row = ds.selectRow("select rdb$view_source as \"src\" from rdb$relations "
+                "where rdb$view_blr is not null and coalesce(rdb$system_flag, 0) = 0 and rdb$relation_name = %v",
+                firebird_get_catalog_name(name));
             if (!row) {
                 return;
             }
 
-            return new XdbcFirebirdView(name, row.sql);
+            return new XdbcFirebirdView(name, row.src);
         }
 
         private AbstractFunction makeFunctionImpl(string name, string src, *hash<auto> opts) {
@@ -1182,9 +1209,13 @@ string sql = db.getSqlIdentifier("Order Date");
                 "where rdb$system_flag = 0").name ?? ();
         }
 
+        #! returns the names of the views in the database, in lower case
+        /** @since XdbcFirebirdSqlUtilBase 0.2 the names are given in lower case, as the names of tables and
+            sequences are; before, they were given in upper case
+        */
         private list<string> listViewsImpl() {
-            return ds.select("select rdb$relation_name as \"name\" from rdb$relations where rdb$view_blr is not null "
-                "and (rdb$system_flag is null or rdb$system_flag = 0)").name;
+            return ds.select("select lower(trim(rdb$relation_name)) as \"name\" from rdb$relations "
+                "where rdb$view_blr is not null and coalesce(rdb$system_flag, 0) = 0").name ?? ();
         }
 
         private string getCreateSqlImpl(list<auto> l) {
@@ -1874,7 +1905,7 @@ string sql = db.getSqlIdentifier("Order Date");
         private bool checkExistenceImpl() {
             *hash<auto> row = ds.selectRow("select a.rdb$relation_name as \"name\" from rdb$relations a "
                 "where coalesce(rdb$system_flag, 0) = 0 and rdb$relation_type = 0 and a.rdb$relation_name = %v",
-                name.upr());
+                firebird_get_catalog_name(name));
             if (row) {
                 return inDb = True;
             }
@@ -1886,6 +1917,7 @@ string sql = db.getSqlIdentifier("Order Date");
             *hash<auto> qh = ds.select("select "
                 "   lower(rf.rdb$field_name) as \"name\", "
                 "   f.rdb$field_length as \"length\", "
+                "   f.rdb$character_length as \"char_length\", "
                 "   f.rdb$field_precision as \"precision\", "
                 "   f.rdb$field_scale as \"scale\", "
                 "   f.rdb$field_type as \"type\", "
@@ -1900,7 +1932,7 @@ string sql = db.getSqlIdentifier("Order Date");
                 "   (r.rdb$system_flag is null or r.rdb$system_flag = 0) and r.rdb$view_blr is null "
                 "   and f.rdb$field_name = rf.rdb$field_source "
                 "order by "
-                "   rf.rdb$field_position", name.upr());
+                "   rf.rdb$field_position", firebird_get_catalog_name(name));
             if (!qh.name) {
                 throw "TABLE-ERROR", sprintf("cannot retrieve table information for table %y in %y", name, dsdesc);
             }
@@ -1973,6 +2005,12 @@ string sql = db.getSqlIdentifier("Order Date");
                 if (typename == "numeric" || typename == "decimal") {
                     row.length = row.precision;
                 }
+                # "rdb$field_length" gives the size in bytes of a character column, which is more than the size in
+                # characters that it was declared with in a character set of more than one byte per character (four
+                # in UTF8); the declared size is "rdb$character_length"
+                else if ((typename == "char" || typename == "varchar") && row.char_length) {
+                    row.length = row.char_length;
+                }
                 if (row.scale < 0) {
                     row.scale = -row.scale;
                 }
@@ -2028,7 +2066,7 @@ from
     left join rdb$index_segments sg on ix.rdb$index_name = sg.rdb$index_name
     left join rdb$relation_constraints rc on rc.rdb$index_name = ix.rdb$index_name
 where
-    rc.rdb$constraint_type = 'PRIMARY KEY' and rc.rdb$relation_name = %v", name.upr());
+    rc.rdb$constraint_type = 'PRIMARY KEY' and rc.rdb$relation_name = %v", firebird_get_catalog_name(name));
 
             hash<auto> rv;
             foreach string col in (qh.column_name) {
@@ -2042,36 +2080,47 @@ where
                 : new XdbcFirebirdPrimaryKey();
         }
 
+        #! describes the indexes of the table from the catalog
+        /** Every index of the table is described but the index of its primary key: an index created with
+            \c CREATE \c INDEX, and the index that Firebird creates for each unique and foreign constraint, under the
+            name of the constraint, as before.  An index of an expression (\c COMPUTED \c BY) is not described, as
+            it has no columns.
+
+            @since XdbcFirebirdSqlUtilBase 0.2 an index created with \c CREATE \c INDEX is described; before, only the
+            indexes of unique and foreign constraints were
+        */
         private Indexes getIndexesImpl() {
-            hash<auto> rv;
-
-            # get index descriptions
+            # one row per column of each index, in the order of its columns; names are given in lower case, as for
+            # columns
             *hash<auto> qh = ds.select("select "
-                "   lower(ix.rdb$index_name) as \"name\", rdb$unique_flag as \"unique\" "
+                "   lower(trim(ix.rdb$index_name)) as \"name\", "
+                "   ix.rdb$unique_flag as \"unique\", "
+                "   lower(trim(sg.rdb$field_name)) as \"column_name\" "
                 "from "
-                "   rdb$indices ix, rdb$relation_constraints rc "
+                "   rdb$indices ix "
+                "   join rdb$index_segments sg on sg.rdb$index_name = ix.rdb$index_name "
+                "   left join rdb$relation_constraints rc on rc.rdb$index_name = ix.rdb$index_name "
                 "where "
-                "   rdb$system_flag = 0 and rc.rdb$index_name = ix.rdb$index_name "
-                "   and rc.rdb$constraint_type != 'PRIMARY KEY' and ix.rdb$relation_name = %v", name.upr());
-            hash<auto> ih;
+                "   coalesce(ix.rdb$system_flag, 0) = 0 and ix.rdb$relation_name = %v "
+                "   and (rc.rdb$constraint_type is null or rc.rdb$constraint_type != 'PRIMARY KEY') "
+                "order by "
+                "   ix.rdb$index_name, sg.rdb$field_position", firebird_get_catalog_name(name));
+
+            # the indexes in the order of the query, each with its columns in their order
+            hash<string, hash<auto>> ih;
             foreach hash<auto> row in (qh.contextIterator()) {
-                ih{row.name}.unique = row.unique;
-                *hash<auto> ch = ds.select("select lower(rdb$field_name) as \"cname\" from rdb$index_segments "
-                    "where rdb$index_name = %v order by rdb$field_position", row.name.upr());
-
-                foreach string col in (ch.cname) {
-                    on_error rethrow $1, sprintf("%s (index %y column %y)", $1.desc, row.name, col);
-                    ih{row.name}.columns{col} = columns{col};
+                on_error rethrow $1.err, sprintf("%s (index %y column %y)", $1.desc, row.name, row.column_name);
+                reference<hash<auto>> ix = \ih{row.name};
+                if (!ix) {
+                    ix = {"unique": boolean(row.unique), "columns": {}};
                 }
-
-                if (!ih{row.name}.columns) {
-                    throw "INDEX-ERROR", sprintf("index %y on table %y has no columns", row.name, getSqlName());
-                }
+                ix.columns{row.column_name} = columns{row.column_name};
             }
+
+            hash<string, AbstractIndex> rv;
             foreach hash<auto> i in (ih.pairIterator()) {
-                rv{i.key} = new XdbcFirebirdIndex(i.key, boolean(i.value.unique), i.value.columns);
+                rv{i.key} = new XdbcFirebirdIndex(i.key, i.value.unique, i.value.columns);
             }
-
             return new Indexes(rv);
         }
 
@@ -2098,7 +2147,7 @@ where
                 "where "
                 "   rc.rdb$constraint_type = 'FOREIGN KEY' and rc.rdb$relation_name = %v "
                 "order by "
-                "   rc.rdb$constraint_name, sg.rdb$field_position", name.upr());
+                "   rc.rdb$constraint_name, sg.rdb$field_position", firebird_get_catalog_name(name));
 
             # the constraints in the order of the query, each with its columns in their order
             hash<string, hash<auto>> fks;
@@ -2128,24 +2177,34 @@ where
             return new ForeignConstraints(rv);
         }
 
+        #! describes the unique constraints of the table from the catalog
+        /** @since XdbcFirebirdSqlUtilBase 0.2 unique constraints are described; before, none were, so that every table
+            alignment dropped the index of each unique constraint and added the constraint again
+        */
         private Constraints getConstraintsImpl() {
-            hash<auto> rv;
+            # one row per column of each unique constraint, in the order of its columns; names are given in lower
+            # case, as for columns and indexes
+            *hash<auto> qh = ds.select("select "
+                "   lower(trim(rc.rdb$constraint_name)) as \"constraint_name\", "
+                "   lower(trim(sg.rdb$field_name)) as \"column_name\" "
+                "from "
+                "   rdb$relation_constraints rc "
+                "   join rdb$index_segments sg on sg.rdb$index_name = rc.rdb$index_name "
+                "where "
+                "   rc.rdb$constraint_type = 'UNIQUE' and rc.rdb$relation_name = %v "
+                "order by "
+                "   rc.rdb$constraint_name, sg.rdb$field_position", firebird_get_catalog_name(name));
 
-            Constraints c = new Constraints(rv);
-            /*
-            # get unique constraints
-            *hash qh = ds.select("");
-            delete rv;
+            # the constraints in the order of the query, each with its columns in their order
+            hash<string, hash<string, AbstractColumn>> uh;
             foreach hash<auto> row in (qh.contextIterator()) {
-                reference<XdbcFirebirdUniqueConstraint> ch = \rv.(row.constraint_name);
-                if (!ch)
-                    ch = new XdbcFirebirdUniqueConstraint(row.constraint_name, {});
-                ch.add(row.column_name, columns{row.column_name});
+                on_error rethrow $1.err, sprintf("%s (unique constraint %y column %y)", $1.desc, row.constraint_name,
+                    row.column_name);
+                uh{row.constraint_name}{row.column_name} = columns{row.column_name};
             }
 
-            # add unique constraints to constraint hash
-            map c.add($1.key, $1.value), rv.pairIterator();
-            */
+            Constraints c();
+            map c.add($1.key, new XdbcFirebirdUniqueConstraint($1.key, $1.value)), uh.pairIterator();
             return c;
         }
 
