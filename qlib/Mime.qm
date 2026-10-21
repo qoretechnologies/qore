@@ -196,6 +196,12 @@ printf("%y: header word b: %y\n", mime_decode_header(mime_encode_header_word_b(s
     - @ref Mime::MultiPartMessage::serializeHeaders() "MultiPartMessage::serializeHeaders()" serializes a list
       value, which is how @ref Mime::MultiPartMessage::parseBody() "MultiPartMessage::parseBody()" returns a
       repeated header field, as a repeated header field; such a header was serialized with an empty value
+    - a name with a NUL character, which cannot be a hash key, no longer raises \c HASH-KEY-ERROR: a part header
+      name with one raises \c MULTIPART-PARSEBODY-ERROR in
+      @ref Mime::MultiPartMessage::parseBody() "MultiPartMessage::parseBody()", a form-data part name with one raises
+      \c MULTIPART-FORMDATA-MESSAGE-ERROR when a message is parsed and \c PART-ERROR when a part is added, and
+      @ref Mime::mime_parse_header_value() "mime_parse_header_value()" ignores a parameter whose name has one as
+      malformed; values with a NUL character are kept
 
     @subsection mime_1_8 v1.8
     - added @ref Mime::YamlMimeTypes "YamlMimeTypes" constant: set of all equivalent YAML MIME types
@@ -1596,7 +1602,8 @@ hash<MimeHeaderValueInfo> h = mime_parse_header_value("attachment; filename=\"a 
                 }
                 val = trim(hdr.substr(start, i - start));
             }
-            if (!name.val() || name =~ /[\s"]/ || exists rv.params{name}) {
+            # a parameter name with a NUL character is malformed, and cannot be a key
+            if (!name.val() || name =~ /[\s"]/ || name.contains(chr(0)) || exists rv.params{name}) {
                 continue;
             }
             if (name =~ /\*$/) {
@@ -2192,6 +2199,12 @@ hash: (2 members)
 
                     # make sure header keys are returned in lower case
                     hdr = hdr.lwr();
+                    # a header name is a key, which cannot contain a NUL character
+                    if (hdr.contains(chr(0))) {
+                        throw "MULTIPART-PARSEBODY-ERROR", sprintf("cannot parse MIME part %d/%d header line: the "
+                            "header name \"%s\" contains a NUL character", pnum, ranges.size(),
+                            replace(hdr, chr(0), "\\x00"));
+                    }
                     # repeated header fields are returned as a list of all values in the order
                     # received, as with HTTP header metadata, so that callers can detect ambiguous
                     # values for fields that may appear only once (RFC 2045 section 3)
@@ -2832,6 +2845,7 @@ hash: (2 members)
             @param hdr an optional hash of headers for the part
 
             @throw MULTIPART-FORMDATA-ERROR the name parameter is empty or conflicts with an existing part name
+            @throw PART-ERROR the name contains a NUL, CR or LF character
          */
         splicePart(data mime_data, string name, *hash<auto> hdr) {
             checkPartName(name);
@@ -2846,6 +2860,7 @@ hash: (2 members)
             @param hdr an optional hash of headers for the part
 
             @throw MULTIPART-FORMDATA-ERROR the name parameter is empty or conflicts with an existing part name; empty filename or content_type arguments
+            @throw PART-ERROR the name contains a NUL, CR or LF character
          */
         splicePart(data mime_data, string name, string filename, string content_type, *hash<auto> hdr) {
             checkPartName(name);
@@ -2856,6 +2871,7 @@ hash: (2 members)
         /** @param h the information for this part
 
             @throw MULTIPART-FORMDATA-ERROR the name parameter is empty or conflicts with an existing part name; empty filename or content_type arguments
+            @throw PART-ERROR the name contains a NUL, CR or LF character
          */
         splicePart(hash<FormDataMessageInfo> h) {
             checkPartName(h.name);
@@ -2868,6 +2884,7 @@ hash: (2 members)
             @param hdr an optional hash of headers for the part
 
             @throw MULTIPART-FORMDATA-ERROR the name parameter is empty or conflicts with an existing part name
+            @throw PART-ERROR the name contains a NUL, CR or LF character
          */
         addPart(data mime_data, string name, *hash<auto> hdr) {
             checkPartName(name);
@@ -2882,6 +2899,7 @@ hash: (2 members)
             @param hdr an optional hash of headers for the part
 
             @throw MULTIPART-FORMDATA-ERROR the name parameter is empty or conflicts with an existing part name; empty filename or content_type arguments
+            @throw PART-ERROR the name contains a NUL, CR or LF character
          */
         addPart(data mime_data, string name, string filename, string content_type, *hash<auto> hdr) {
             checkPartName(name);
@@ -2900,6 +2918,7 @@ hash: (2 members)
             @param hdr an optional hash of headers for the part
 
             @throw MULTIPART-FORMDATA-ERROR the name parameter is empty
+            @throw PART-ERROR the name contains a NUL, CR or LF character
 
             @note @ref parseMessage() returns the parts keyed by name, so when a message with
             repeated names is parsed back, only the last part with a given name is returned
@@ -2910,6 +2929,8 @@ hash: (2 members)
             if (name.empty()) {
                 throw "MULTIPART-FORMDATA-ERROR", "missing second argument giving the name of the part";
             }
+            # the name is part of the Content-Disposition header line and a key
+            check_line_text(name, "MIME form-data part name", "PART-ERROR");
             parts{name} = True;
             addPartIntern(mime_data, getPartHeader(name, NOTHING, NOTHING, hdr));
         }
@@ -2917,6 +2938,7 @@ hash: (2 members)
         #! Adds a named file or field while allowing repeated form names
         /** @param h the part body, name, optional filename, and headers
             @throw MULTIPART-FORMDATA-ERROR the part name is empty, or a filename has no content type
+            @throw PART-ERROR the name contains a NUL, CR or LF character
             @note Use MultiPartMessage::parseBody() to retain all parts when decoding repeated names.
             @since %Mime 1.9
         */
@@ -2934,6 +2956,7 @@ hash: (2 members)
         /** @param h the information for this part
 
             @throw MULTIPART-FORMDATA-ERROR the name parameter is empty or conflicts with an existing part name; empty filename or content_type arguments
+            @throw PART-ERROR the name contains a NUL, CR or LF character
          */
         addPart(hash<FormDataMessageInfo> h) {
             checkPartName(h.name);
@@ -2991,6 +3014,12 @@ hash: (2 members)
                     throw "MULTIPART-FORMDATA-MESSAGE-ERROR", sprintf("the Content-Disposion part header is missing "
                         "the part name in part %d/%d", $# + 1, mh.part.size());
                 string name = name_opt;  # assured to be non-null by check above
+                # the part name is a key, which cannot contain a NUL character
+                if (name.contains(chr(0))) {
+                    throw "MULTIPART-FORMDATA-MESSAGE-ERROR", sprintf("the part name \"%s\" in the "
+                        "Content-Disposition part header of part %d/%d contains a NUL character",
+                        replace(name, chr(0), "\\x00"), $# + 1, mh.part.size());
+                }
                 *string filename = (cd =~ x/filename="([^"]+)"/)[0];
                 rv{name} = cast<hash<FormDataMessageInfo>>((
                     "name": name,
@@ -3027,6 +3056,8 @@ hash: (2 members)
         private checkPartName(string name) {
             if (name.empty())
                 throw "MULTIPART-FORMDATA-ERROR", "missing second argument giving the name of the part";
+            # the name is part of the Content-Disposition header line and a key
+            check_line_text(name, "MIME form-data part name", "PART-ERROR");
             if (parts{name})
                 throw "MULTIPART-FORMDATA-ERROR", sprintf("part %y given twice", name);
             parts{name} = True;

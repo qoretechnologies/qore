@@ -102,6 +102,7 @@ aωb\r
         addTestCase("MIME parameter value quoting", \quoteParameterValueTest());
         addTestCase("RFC 2387 multipart/related header", \multiPartRelatedHeaderTest());
         addTestCase("header line breaks and encoded words", \headerLineBreakTest());
+        addTestCase("NUL characters in parsed names", \parsedNameNulTest());
 
         # Return for compatibility with test harness that checks return value.
         set_return_value(main());
@@ -1110,5 +1111,43 @@ aωb\r
             MultiPartMessage::serializeHeaders({"X-Test": ("a", "b"), "X-Other": "c"}));
         assertThrows("PART-ERROR", "contains a line break", \MultiPartMessage::serializeHeaders(),
             {"X-Test": ("a", "b\r\nX-Injected: 1")});
+    }
+
+    # a name with a NUL character cannot be a key: a part header name or form-data part name with one is a parse
+    # error, a header parameter with one is ignored as malformed, and a value with one is kept
+    parsedNameNulTest() {
+        string nul = "\x00";
+        string boundary = "nul-boundary";
+        string body = "--" + boundary + "\r\nContent-Type: text/plain\r\nX-A" + nul + "b: 1\r\n\r\ntext\r\n--"
+            + boundary + "--\r\n";
+        assertThrows("MULTIPART-PARSEBODY-ERROR", "header name .* contains a NUL character",
+            \MultiPartMessage::parseBody(), (boundary, body));
+        body = "--" + boundary + "\r\nContent-Type: text/plain\r\nX-A: a" + nul + "b\r\n\r\ntext\r\n--" + boundary
+            + "--\r\n";
+        hash<MessageInfo> msg = MultiPartMessage::parseBody(boundary, body);
+        assertEq("a" + nul + "b", msg.part[0].hdr."x-a");
+        assertEq("text", msg.part[0].body);
+
+        hash<MimeHeaderValueInfo> value = mime_parse_header_value("attachment; fi" + nul + "le=x; name=y");
+        assertEq("attachment", value.value);
+        assertEq({"name": "y"}, value.params);
+
+        string form = "--" + boundary + "\r\nContent-Disposition: form-data; name=\"a" + nul + "b\"\r\n\r\nvalue\r\n--"
+            + boundary + "--\r\n";
+        assertThrows("MULTIPART-FORMDATA-MESSAGE-ERROR", "part name .* contains a NUL character",
+            \MultiPartFormDataMessage::parseMessage(), ("multipart/form-data; boundary=" + boundary, form));
+        form = "--" + boundary + "\r\nContent-Disposition: form-data; name=\"ab\"\r\n\r\nvalue\r\n--" + boundary
+            + "--\r\n";
+        assertEq("value", MultiPartFormDataMessage::parseMessage("multipart/form-data; boundary=" + boundary,
+            form).ab.body);
+
+        MultiPartFormDataMessage fd();
+        assertThrows("PART-ERROR", "form-data part name .* contains a NUL character", \fd.addPart(),
+            ("data", "a" + nul + "b"));
+        assertThrows("PART-ERROR", "form-data part name .* contains a NUL character", \fd.addRepeatedPart(),
+            (binary("data"), "a" + nul + "b"));
+        assertEq(0, fd.size());
+        fd.addPart("data", "ab");
+        assertEq(1, fd.size());
     }
 }
