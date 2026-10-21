@@ -22228,6 +22228,10 @@ public:
         }
     }
     bool available() const { return ok; }
+    // The descriptor that becomes readable when a token is free
+    int readFd() const { return rfd; }
+    // True once the jobserver pipe has reached its end: make has gone, and no token can come
+    bool closed() const { return eof; }
     // Takes up to `max` tokens that are free now; returns the count taken.
     //
     // The pipe's file status flags are left unchanged: with the inherited-fd jobserver of older GNU make
@@ -22247,8 +22251,15 @@ public:
             int rc;
             while ((rc = qore_poll_compat(&pfd, 1, 0)) < 0 && errno == EINTR) {
             }
-            // nothing free now, or make has gone (a hang-up without a token)
-            if (rc <= 0 || !(pfd.revents & POLLIN)) {
+            if (rc <= 0) {
+                // nothing free now
+                break;
+            }
+            if (!(pfd.revents & POLLIN)) {
+                // a hang-up without a token: make has gone
+                if (pfd.revents & (POLLHUP | POLLERR | POLLNVAL)) {
+                    eof = true;
+                }
                 break;
             }
 #ifdef DEBUG
@@ -22258,8 +22269,13 @@ public:
             ssize_t r;
             while ((r = read(rfd, &c, 1)) < 0 && errno == EINTR) {
             }
+            if (!r) {
+                // the end of the pipe: make has gone
+                eof = true;
+                break;
+            }
             if (r != 1) {
-                // the end of the pipe, or (the fifo: form) another client took the token first
+                // (the fifo: form) another client took the token first
                 break;
             }
             tokens.push_back(c);
@@ -22279,6 +22295,7 @@ private:
     int wfd = -1;
     bool ok = false;
     bool own_fd = false;
+    bool eof = false;
     std::vector<char> tokens;
 
     void init(const char* mf) {
@@ -22322,6 +22339,131 @@ private:
     }
 };
 
+// The wakeup of the batch coordinator (see qoreAotBatchAdmitWorkers()): a pipe to which a byte is written for each
+// work event, so that the coordinator, which waits for it together with the jobserver pipe, wakes exactly then.
+// Both ends are this process's own nonblocking, close-on-exec descriptors, closed with the object.
+class AOTBatchWakeup {
+public:
+    AOTBatchWakeup() {
+        int p[2];
+        if (pipe(p)) {
+            return;
+        }
+        fds[0] = p[0];
+        fds[1] = p[1];
+        for (int fd : p) {
+            int fl = fcntl(fd, F_GETFL);
+            if (fl == -1 || fcntl(fd, F_SETFL, fl | O_NONBLOCK) == -1 || fcntl(fd, F_SETFD, FD_CLOEXEC) == -1) {
+                closeFds();
+                return;
+            }
+        }
+    }
+    ~AOTBatchWakeup() {
+        closeFds();
+    }
+    AOTBatchWakeup(const AOTBatchWakeup&) = delete;
+    AOTBatchWakeup& operator=(const AOTBatchWakeup&) = delete;
+
+    bool ok() const { return fds[0] >= 0; }
+    int readFd() const { return fds[0]; }
+    // Signals a work event; when the pipe is full, the coordinator has a wakeup pending already
+    void signal() {
+        if (fds[1] < 0) {
+            return;
+        }
+        char c = 1;
+        while (write(fds[1], &c, 1) < 0 && errno == EINTR) {
+        }
+    }
+    // Empties the pipe after a wakeup
+    void drain() {
+        char buf[64];
+        while (true) {
+            ssize_t r = read(fds[0], buf, sizeof buf);
+            if (r > 0 || (r < 0 && errno == EINTR)) {
+                continue;
+            }
+            break;
+        }
+    }
+private:
+    int fds[2] = {-1, -1};
+
+    void closeFds() {
+        for (int& fd : fds) {
+            if (fd >= 0) {
+                close(fd);
+                fd = -1;
+            }
+        }
+    }
+};
+
+//! The results of qoreAotBatchAdmitWorkers()
+struct AOTBatchAdmitResult {
+    unsigned wakeups = 0;           //!< the waits that ended with a token, a work event or the jobserver's end
+    bool jobserver_closed = false;  //!< the jobserver pipe hung up (make has gone): no token can be admitted
+};
+
+// Admits batch workers under a make jobserver: a worker is started for each token taken while work is unclaimed,
+// up to `requested_jobs` workers in all (`jobs` counts them, the one running under the process's implicit token
+// included).  Between the tokens, the coordinator waits without a timer for the jobserver pipe to become readable
+// (a token), for the wakeup (a work event: the work has run out, or a worker stopped), and for a cancellation
+// request, which ends the wait at once.  A jobserver pipe that hangs up ends the admission; the workers running
+// finish the work.
+//
+// Returns 0, or -1 with an exception in `xsink` when the wait was cancelled or failed.
+static int qoreAotBatchAdmitWorkers(JobserverClient& js, unsigned requested_jobs, unsigned& jobs,
+        const std::function<size_t()>& unclaimed, const std::atomic<bool>& stop, AOTBatchWakeup& wakeup,
+        const std::function<void()>& start_worker, AOTBatchAdmitResult& result, ExceptionSink* xsink
+#ifdef DEBUG
+        , const std::function<void()>* dbg_before_wait = nullptr
+#endif
+        ) {
+    assert(js.available() && wakeup.ok());
+    while (!stop.load() && jobs < requested_jobs) {
+        size_t left = unclaimed();
+        if (!left) {
+            break;
+        }
+        unsigned remaining = static_cast<unsigned>(std::min<size_t>(left, requested_jobs - jobs));
+        int acquired = js.acquire(static_cast<int>(remaining));
+        if (acquired > 0) {
+            for (int i = 0; i < acquired; ++i) {
+                start_worker();
+            }
+            jobs += static_cast<unsigned>(acquired);
+            continue;
+        }
+        if (js.closed()) {
+            // make has gone: no token can come, and the pipe would keep the wait from blocking
+            result.jobserver_closed = true;
+            break;
+        }
+#ifdef DEBUG
+        if (dbg_before_wait && *dbg_before_wait) {
+            (*dbg_before_wait)();
+        }
+#endif
+        struct pollfd pfds[2] = {{js.readFd(), POLLIN, 0}, {wakeup.readFd(), POLLIN, 0}};
+        int rc = qore_cancellable_poll(pfds, 2, -1, xsink, "AOT batch jobserver wait");
+        if (rc == QORE_POLL_CANCELLED) {
+            return -1;
+        }
+        if (rc < 0) {
+            xsink->raiseErrnoException("AOT-BATCH-ERROR", errno, "the wait for jobserver tokens failed");
+            return -1;
+        }
+        ++result.wakeups;
+        if (pfds[1].revents) {
+            wakeup.drain();
+        }
+        // a token or the jobserver's end is found by the next acquire()
+    }
+    return 0;
+}
+
 #ifdef DEBUG
 //! Debug-only: takes up to @p max tokens from the jobserver named in @p makeflags as parallel codegen does, and
 //! returns them; returns the count taken, or -1 if @p makeflags names no usable jobserver
@@ -22332,6 +22474,52 @@ DLLLOCAL int qore_aot_dbg_jobserver_acquire(const char* makeflags, int max) {
     }
     // the destructor returns the tokens
     return js.acquire(max);
+}
+
+//! Debug-only: runs the batch coordinator under the jobserver named in @p makeflags with simulated work
+/** The coordinator admits workers (counted, not started) for `work_items` items of work, with up to
+    `requested_jobs` workers.  Right before each wait, @p before_wait is called; it returns how many items the
+    workers claim then, and a claim that takes the last item signals a work event, as the batch workers do.
+
+    @return 0, or -1 with an exception in @p xsink; @p wakeups, @p waits and @p started receive the counts
+*/
+DLLLOCAL int qore_aot_dbg_jobserver_admit(const char* makeflags, unsigned requested_jobs, size_t work_items,
+        const std::function<size_t()>& before_wait, unsigned& wakeups, unsigned& waits, unsigned& started,
+        bool& jobserver_closed, ExceptionSink* xsink) {
+    JobserverClient js(makeflags);
+    AOTBatchWakeup wakeup;
+    if (!js.available() || !wakeup.ok()) {
+        xsink->raiseException("AOT-BATCH-ERROR", "no usable jobserver in '%s' or no wakeup", makeflags);
+        return -1;
+    }
+    std::atomic<size_t> claimed{0};
+    std::atomic<bool> stop{false};
+    unsigned jobs = 1;
+    started = 0;
+    waits = 0;
+    AOTBatchAdmitResult result;
+    std::function<void()> dbg_before_wait = [&]() {
+        ++waits;
+        size_t n = before_wait();
+        if (*xsink) {
+            // the test's code failed: the wait ends at once, and the coordinator stops
+            stop.store(true);
+            wakeup.signal();
+            return;
+        }
+        for (size_t i = 0; i < n; ++i) {
+            // a worker claims an item; the claim of the last one is a work event
+            if (claimed.fetch_add(1) + 1 == work_items) {
+                wakeup.signal();
+            }
+        }
+    };
+    int rc = qoreAotBatchAdmitWorkers(js, requested_jobs, jobs,
+        [&]() -> size_t { size_t c = claimed.load(); return c < work_items ? work_items - c : 0; }, stop, wakeup,
+        [&]() { ++started; }, result, xsink, &dbg_before_wait);
+    wakeups = result.wakeups;
+    jobserver_closed = result.jobserver_closed;
+    return *xsink ? -1 : rc;
 }
 #endif
 
@@ -28892,6 +29080,9 @@ bool QoreAOT::compileScriptFilesBatch(
     std::atomic<size_t> next_work{0};
     std::atomic<int> total_compiled_count{0};
     std::atomic<bool> stop{false};
+    // signalled by the workers when the claim of the last file is made and when they stop, so that the jobserver
+    // coordinator below wakes exactly then; it outlives the workers
+    AOTBatchWakeup batch_wakeup;
     std::mutex err_mutex;   // guards first_error
     std::mutex io_mutex;    // serializes diagnostic output across workers
     std::string first_error;
@@ -28916,6 +29107,10 @@ bool QoreAOT::compileScriptFilesBatch(
                 break;
             }
             size_t work = next_work.fetch_add(1);
+            if (work + 1 == work_order.size()) {
+                // the work has run out: the jobserver coordinator admits no more workers
+                batch_wakeup.signal();
+            }
             if (work >= work_order.size()) {
                 break;
             }
@@ -29011,6 +29206,10 @@ bool QoreAOT::compileScriptFilesBatch(
             }
         }
         total_compiled_count.fetch_add(local_compiled);
+        if (stop.load()) {
+            // the batch stops: the jobserver coordinator admits no more workers
+            batch_wakeup.signal();
+        }
         if (reg == QFT_OK) {
             q_deregister_foreign_thread();
         }
@@ -29024,39 +29223,33 @@ bool QoreAOT::compileScriptFilesBatch(
         // several short groups hold every spare token, then those groups exit
         // while core continues serially. Keep one worker productive under the
         // process's implicit make slot and admit new workers whenever tokens
-        // become available. This also avoids blocking a make slot in a waiter;
-        // the coordinator polls only while this qcc has unclaimed file emits.
+        // become available, while files are unclaimed. The coordinator waits
+        // without a timer for a token, the end of the work, a worker that
+        // stops, or a cancellation request (see qoreAotBatchAdmitWorkers());
+        // without a wakeup, the batch runs on the one worker.
         std::vector<llvm::thread> pool;
         pool.reserve(requested_jobs);
         pool.push_back(q_start_llvm_compile_thread(worker));
-        unsigned wait_iterations = 0;
-        while (!stop.load() && jobs < requested_jobs) {
-            if (++wait_iterations == 100) {
-                wait_iterations = 0;
-                if (qore_check_cancel(nullptr, "AOT batch jobserver wait")) {
-                    std::lock_guard<std::mutex> l(err_mutex);
-                    if (first_error.empty()) {
-                        first_error = "cancelled while waiting for AOT batch jobserver slots";
-                    }
-                    stop.store(true);
-                    break;
+        if (batch_wakeup.ok()) {
+            ExceptionSink admit_xsink;
+            AOTBatchAdmitResult admit;
+            if (qoreAotBatchAdmitWorkers(batch_jobserver, requested_jobs, jobs,
+                    [&]() -> size_t {
+                        size_t claimed = next_work.load();
+                        return claimed < work_order.size() ? work_order.size() - claimed : 0;
+                    }, stop, batch_wakeup,
+                    [&]() { pool.push_back(q_start_llvm_compile_thread(worker)); }, admit, &admit_xsink)) {
+                QoreStringValueHelper err(admit_xsink.getExceptionErr());
+                std::lock_guard<std::mutex> l(err_mutex);
+                if (first_error.empty()) {
+                    first_error = (!strcmp(err->c_str(), "THREAD-CANCELLED")
+                            || !strcmp(err->c_str(), "PROGRAM-INTERRUPTED"))
+                        ? "cancelled while waiting for AOT batch jobserver slots"
+                        : "the wait for AOT batch jobserver slots failed";
                 }
+                stop.store(true);
+                admit_xsink.clear();
             }
-            size_t claimed = next_work.load();
-            if (claimed >= work_order.size()) {
-                break;
-            }
-            unsigned remaining = static_cast<unsigned>(std::min<size_t>(
-                work_order.size() - claimed, requested_jobs - jobs));
-            int acquired = batch_jobserver.acquire(static_cast<int>(remaining));
-            if (acquired <= 0) {
-                std::this_thread::sleep_for(std::chrono::milliseconds(10));
-                continue;
-            }
-            for (int i = 0; i < acquired; ++i) {
-                pool.push_back(q_start_llvm_compile_thread(worker));
-            }
-            jobs += static_cast<unsigned>(acquired);
         }
         for (auto& th : pool) {
             th.join();

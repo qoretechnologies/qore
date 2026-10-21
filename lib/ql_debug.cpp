@@ -10295,6 +10295,48 @@ static QoreValue f_dbg_file_stream_io_flags(const QoreListNode* params, RuntimeC
 
 // defined in QoreAOT.cpp
 DLLLOCAL int qore_aot_dbg_jobserver_acquire(const char* makeflags, int max);
+DLLLOCAL int qore_aot_dbg_jobserver_admit(const char* makeflags, unsigned requested_jobs, size_t work_items,
+        const std::function<size_t()>& before_wait, unsigned& wakeups, unsigned& waits, unsigned& started,
+        bool& jobserver_closed, ExceptionSink* xsink);
+
+//! Debug-only: runs qcc's batch jobserver coordinator with simulated work, as a batch compile under make does
+/** The coordinator admits a worker (counted, not started) for each token taken while work is unclaimed, and waits
+    for a token, a work event or a cancellation request in between.  Right before each wait, the code is called; it
+    returns how many items the simulated workers claim then (the claim of the last item is a work event).  DEBUG
+    builds only.
+
+    @return a hash: \c wakeups: the waits that ended with a token, a work event or the jobserver's end, \c waits:
+    the waits, \c started: the workers admitted, \c jobserver_closed: whether the jobserver pipe hung up
+
+    @throw THREAD-CANCELLED the thread was cancelled during a wait
+    @throw AOT-BATCH-ERROR the flags name no usable jobserver
+*/
+static QoreValue f_dbg_jobserver_admit(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    QoreStringNodeValueHelper makeflags(get_param_value(params, 0));
+    unsigned requested_jobs = static_cast<unsigned>(get_param_value(params, 1).getAsBigInt());
+    size_t work_items = static_cast<size_t>(get_param_value(params, 2).getAsBigInt());
+    const ResolvedCallReferenceNode* code = get_param_value(params, 3).get<const ResolvedCallReferenceNode>();
+    unsigned wakeups = 0, waits = 0, started = 0;
+    bool closed = false;
+    int rv = qore_aot_dbg_jobserver_admit(makeflags->c_str(), requested_jobs, work_items, [code, xsink]() -> size_t {
+        ValueHolder claims(code->execValue(nullptr, xsink), xsink);
+        if (*xsink) {
+            return 0;
+        }
+        int64 n = claims->getAsBigInt();
+        return n > 0 ? static_cast<size_t>(n) : 0;
+    }, wakeups, waits, started, closed, xsink);
+    if (rv < 0) {
+        assert(*xsink);
+        return QoreValue();
+    }
+    ReferenceHolder<QoreHashNode> h(new QoreHashNode(autoTypeInfo), xsink);
+    h->setKeyValue("wakeups", static_cast<int64>(wakeups), xsink);
+    h->setKeyValue("waits", static_cast<int64>(waits), xsink);
+    h->setKeyValue("started", static_cast<int64>(started), xsink);
+    h->setKeyValue("jobserver_closed", closed, xsink);
+    return h.release();
+}
 
 //! Debug-only: takes up to @p max tokens from the make jobserver named in a MAKEFLAGS value, as qcc's parallel
 //! codegen does, and returns them to the jobserver
@@ -11886,6 +11928,10 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_object_set_value", f_dbg_object_set_value, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         nothingTypeInfo, 4, listTypeInfo, QORE_PARAM_NO_ARG, "holder", stringTypeInfo, QORE_PARAM_NO_ARG, "member",
         stringTypeInfo, QORE_PARAM_NO_ARG, "key", autoTypeInfo, QORE_PARAM_NO_ARG, "val");
+    qns.addBuiltinVariant("dbg_jobserver_admit", f_dbg_jobserver_admit, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        hashTypeInfo, 4, stringTypeInfo, QORE_PARAM_NO_ARG, "makeflags", bigIntTypeInfo, QORE_PARAM_NO_ARG,
+        "requested_jobs", bigIntTypeInfo, QORE_PARAM_NO_ARG, "work_items", codeTypeInfo, QORE_PARAM_NO_ARG,
+        "before_wait");
     qns.addBuiltinVariant("dbg_jobserver_acquire", f_dbg_jobserver_acquire, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         bigIntTypeInfo, 2, stringTypeInfo, QORE_PARAM_NO_ARG, "makeflags", bigIntTypeInfo, QORE_PARAM_NO_ARG, "max");
     qns.addBuiltinVariant("dbg_file_stream_io_flags", f_dbg_file_stream_io_flags, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,

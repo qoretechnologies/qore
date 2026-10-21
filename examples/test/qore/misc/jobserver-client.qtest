@@ -9,7 +9,12 @@
 # unavailable") in the meantime.  A second holder of the read end's file description watches the flags at each token
 # read (dbg_file_stream_io_flags()); dbg_jobserver_acquire() takes tokens as parallel codegen does and returns them.
 #
-# Both builtins are only in a debug build of the library.
+# The batch compile's coordinator, which admits a worker for each token that becomes free while files are unclaimed,
+# waits without a timer for a token, a work event or a cancellation request: it slept 10 ms between attempts and saw
+# a cancellation up to 100 attempts later.  dbg_jobserver_admit() runs it with simulated work and calls the test's code
+# right before each wait, so that each wait has exactly one event, and counts the waits and the wakeups.
+#
+# The builtins are only in a debug build of the library.
 
 %modern
 
@@ -25,6 +30,10 @@ class JobserverClientTest inherits QUnit::Test {
         addTestCase("an inherited jobserver pipe keeps its flags", \testInheritedPipe());
         addTestCase("a fifo: jobserver", \testFifo());
         addTestCase("no jobserver", \testNoJobserver());
+        addTestCase("the batch coordinator wakes once per event", \testCoordinatorEvents());
+        addTestCase("the batch coordinator waits for nothing else", \testCoordinatorCancel());
+        addTestCase("the batch coordinator sees the jobserver's end", \testCoordinatorJobserverEnd());
+        addTestCase("the batch coordinator with a fifo: jobserver", \testCoordinatorFifo());
         set_return_value(main());
     }
 
@@ -91,6 +100,133 @@ class JobserverClientTest inherits QUnit::Test {
 %ifdef QoreDebug
         assertEq(-1, dbg_jobserver_acquire("-j4", 2), "no jobserver in the flags");
         assertEq(-1, dbg_jobserver_acquire("-j4 --jobserver-auth=900,901", 2), "descriptors that are not open");
+%endif
+    }
+
+    testCoordinatorEvents() {
+%ifndef QoreDebug
+        testSkip("dbg_jobserver_admit() is only in a debug build of the library");
+%endif
+%ifdef QoreDebug
+        hash<PipeInfo> pipe = File::getPipe();
+        string makeflags = sprintf("-j4 --jobserver-auth=%d,%d", pipe.read.getPollableDescriptor(),
+            pipe.write.getPollableDescriptor());
+        int step;
+        hash<auto> h = dbg_jobserver_admit(makeflags, 4, 3, int sub () {
+            switch (++step) {
+                # a token becomes free: a worker is admitted
+                case 1:
+                case 2:
+                    pipe.write.write("+");
+                    return 0;
+                # the workers claim the 3 files: the work has run out
+                case 3:
+                    return 3;
+            }
+            throw "TEST-ERROR", sprintf("unexpected wait %d", step);
+        });
+        assertEq(3, h.waits, "one wait per event");
+        assertEq(3, h.wakeups, "one wakeup per event");
+        assertEq(2, h.started, "a worker per token");
+        assertFalse(h.jobserver_closed, "the jobserver is there");
+        assertEq(2, countTokens(pipe.read), "the tokens are returned");
+%endif
+    }
+
+    testCoordinatorCancel() {
+%ifndef QoreDebug
+        testSkip("dbg_jobserver_admit() is only in a debug build of the library");
+%endif
+%ifdef QoreDebug
+        hash<PipeInfo> pipe = File::getPipe();
+        string makeflags = sprintf("-j4 --jobserver-auth=%d,%d", pipe.read.getPollableDescriptor(),
+            pipe.write.getPollableDescriptor());
+        for (int i = 0; i < 3; ++i) {
+            Queue waiting();
+            Queue done();
+            int waits;
+            int tid = background sub () {
+                try {
+                    # no token and no work event: the coordinator waits until it is cancelled
+                    dbg_jobserver_admit(makeflags, 4, 5, int sub () {
+                        ++waits;
+                        waiting.push(True);
+                        return 0;
+                    });
+                    done.push("NONE");
+                } catch (hash<ExceptionInfo> ex) {
+                    done.push(ex.err);
+                }
+            }();
+            waiting.get();
+            cancel_thread(tid, "jobserver coordinator test");
+            assertEq("THREAD-CANCELLED", done.get(), "the wait ends with the cancellation");
+            assertEq(1, waits, "there is one wait, without rounds of polling");
+        }
+%endif
+    }
+
+    testCoordinatorJobserverEnd() {
+%ifndef QoreDebug
+        testSkip("dbg_jobserver_admit() is only in a debug build of the library");
+%endif
+%ifdef QoreDebug
+        # a named pipe stands for make's pipe, as its write end can be closed (that of File::getPipe() cannot)
+        string dir = make_tmp_dir("jobserver-end");
+        on_exit remove_tree(dir);
+        string path = join_paths(dir, "jobserver");
+        if (mkfifo(path)) {
+            throw "MKFIFO-ERROR", sprintf("%s: %s", path, strerror());
+        }
+        File r();
+        r.open2(path, O_RDONLY | O_NONBLOCK);
+        File w();
+        w.open2(path, O_WRONLY);
+        string makeflags = sprintf("-j4 --jobserver-auth=%d,%d", r.getPollableDescriptor(), w.getPollableDescriptor());
+        int step;
+        hash<auto> h = dbg_jobserver_admit(makeflags, 4, 3, int sub () {
+            if (++step == 1) {
+                # make exits: the last write end of the jobserver pipe closes
+                w.close();
+                return 0;
+            }
+            throw "TEST-ERROR", sprintf("unexpected wait %d", step);
+        });
+        assertEq(1, h.waits, "one wait");
+        assertEq(1, h.wakeups, "one wakeup, no busy loop");
+        assertTrue(h.jobserver_closed, "the jobserver's end is seen");
+        assertEq(0, h.started, "no worker is admitted");
+%endif
+    }
+
+    testCoordinatorFifo() {
+%ifndef QoreDebug
+        testSkip("dbg_jobserver_admit() is only in a debug build of the library");
+%endif
+%ifdef QoreDebug
+        string dir = make_tmp_dir("jobserver-coordinator");
+        on_exit remove_tree(dir);
+        string path = join_paths(dir, "jobserver");
+        if (mkfifo(path)) {
+            throw "MKFIFO-ERROR", sprintf("%s: %s", path, strerror());
+        }
+        File make();
+        make.open2(path, O_RDWR);
+        int step;
+        hash<auto> h = dbg_jobserver_admit("-j3 --jobserver-auth=fifo:" + path, 3, 2, int sub () {
+            switch (++step) {
+                case 1:
+                    make.write("+");
+                    return 0;
+                case 2:
+                    return 2;
+            }
+            throw "TEST-ERROR", sprintf("unexpected wait %d", step);
+        });
+        assertEq(2, h.waits, "fifo: one wait per event");
+        assertEq(2, h.wakeups, "fifo: one wakeup per event");
+        assertEq(1, h.started, "fifo: a worker per token");
+        assertEq(1, countTokens(make), "fifo: the token is returned");
 %endif
     }
 
