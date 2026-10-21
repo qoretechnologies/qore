@@ -210,6 +210,10 @@ log("started listener on %s", lh.desc);
     @section http_relnotes HttpServer Module Release Notes
 
     @subsection http1_7 HttpServer 1.7
+    - a request whose path contains an escaped NUL character (\c %00), which names no resource, is answered with
+      status 400 (Bad Request) before a handler is selected, over HTTP/1.1, HTTP/2 and HTTP/3; before, the decoded
+      path reached a default handler, a server with path handlers closed the connection without a response, and an
+      HTTP/2 or HTTP/3 request was answered with status 500
     - response bodies are compressed on the fly with levels suited to compressing them for each request, set with the
       new \c compression_levels server option and @ref HttpServer::HttpServer::setCompressionLevels()
       "setCompressionLevels()" (defaults: Brotli quality 5, Zstandard level 3, gzip and deflate level 6, bzip2 level
@@ -3623,6 +3627,22 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
             listener.logError("%s", str);
             cx.close = True;
             sendHttpError(listener, cx, s, 501, err, NOTHING, NOTHING, cx."response-encoding", head);
+            return;
+        }
+
+        # the decoded resource path selects the handler by key; an escaped NUL character (%00) decodes to a path that
+        # names no resource and cannot be a key, so the request is malformed; it is answered before any handler is
+        # selected, and an HTTP/1.x connection is closed, as the request body has not been read
+        if (exists hdr.path && hdr.path.contains(chr(0))) {
+            string err = "the request path contains an escaped NUL character";
+            listener.logError("%s: received from %s via %s", err, info.address_desc,
+                listener.getListenerSocketInfo().address_desc);
+            if (async_response_out) {
+                async_response_out = buildAsyncErrorResponse(400, err, cx, listener, s, !is_multiplexed);
+            } else {
+                cx.close = True;
+                sendHttpError(listener, cx, s, 400, err, NOTHING, NOTHING, cx."response-encoding", head);
+            }
             return;
         }
 
