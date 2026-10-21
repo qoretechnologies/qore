@@ -722,16 +722,6 @@ QoreHashNode* Http2ClientPollOperationPriv::handleReading(ExceptionSink* xsink) 
         }
     }
 
-    // Drain registered CONNECT stream queues after every read poll cycle.
-    // The inner op may have processed DATA frames for CONNECT streams that
-    // need to be delivered to handler threads via their registered Queues.
-    drainStreamQueues(xsink);
-    if (*xsink) {
-        setError("HTTP2-READ-ERROR", "stream queue drain error", xsink);
-        op->deref(xsink);
-        return nullptr;
-    }
-
     // Report the response header events of the streams whose header arrived in this read cycle, before
     // the completed responses are dispatched: a client that monitors a response must see its header
     // while the body is still being read.  Only the requests that have finished registering themselves
@@ -895,6 +885,19 @@ QoreHashNode* Http2ClientPollOperationPriv::handleReading(ExceptionSink* xsink) 
             static_cast<SocketHttp2ClientMultiplexPollOperation*>(op)->releaseStream(
                 static_cast<int32_t>(stream_id_val));
         }
+    }
+
+    // Drain registered CONNECT stream queues after every read poll cycle.
+    // The inner op may have processed DATA frames for CONNECT streams that
+    // need to be delivered to handler threads via their registered Queues.
+    // The drain runs after the responses of the cycle have been dispatched: the end of a stream that it reports in a
+    // queue then follows the stream's last data, also when a frame state decodes that data into the same queue
+    // (a stream whose last DATA frame carries END_STREAM, such as the answer to a WebSocket close frame).
+    drainStreamQueues(xsink);
+    if (*xsink) {
+        setError("HTTP2-READ-ERROR", "stream queue drain error", xsink);
+        op->deref(xsink);
+        return nullptr;
     }
 
     // Check dispatched flag
@@ -1294,7 +1297,9 @@ void Http2ClientPollOperationPriv::drainStreamQueuesLocked(std::vector<StreamQue
     std::vector<int32_t> completed;
     for (auto& [stream_id, info] : stream_queues) {
         int drain_count = 0;
-        while (true) {
+        // the data of a stream decoded by a frame state reaches the queue through the frame state; reading it here
+        // would take it from the decoder
+        while (!info.frame_state) {
             BinaryNode* data = sock_obj->readHttp2StreamDataForAsyncPoll(stream_id, 0, xsink);
             if (*xsink) {
                 return;
@@ -1703,6 +1708,20 @@ void Http2ClientPollOperationPriv::installFrameState(int32_t stream_id, Queue* m
 
     ch_action->installFrameState(std::move(frame_state), initial_holder.release(), xsink);
     ch_action->deref(xsink);
+
+    // a queue registration of the stream for the same queue only notifies the stream's listener from now on: the
+    // frame state gets the stream's data and writes the decoded frames to the queue
+    AutoLocker ml(stream_queues_lock);
+    auto it = stream_queues.find(stream_id);
+    if (it != stream_queues.end() && it->second.queue == msg_queue) {
+        it->second.frame_state = true;
+    }
+    AutoLocker al(sq_lock);
+    for (auto& i : pending_stream_registrations) {
+        if (i.first == stream_id && i.second.queue == msg_queue) {
+            i.second.frame_state = true;
+        }
+    }
 }
 
 void Http2ClientPollOperationPriv::installSseState(int32_t stream_id, Queue* queue,

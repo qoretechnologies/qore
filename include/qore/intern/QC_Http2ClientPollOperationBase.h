@@ -413,6 +413,11 @@ public:
         QoreObject* queue_obj;              //!< ref'd QoreObject wrapping queue (for DGC)
         QoreEventNotifier* notifier;        //!< ref'd EventNotifier for wake-up, or nullptr
         QoreObject* notifier_obj;           //!< ref'd QoreObject wrapping notifier, or nullptr
+        //! True if the stream's data is decoded by a frame state that writes to the queue (see installFrameState())
+        /** The frame state gets the stream's data through the stream's action and ends its output itself, so the
+            raw data is not read for the queue; the registration only notifies the stream's listener
+        */
+        bool frame_state = false;
     };
 
     //! Registers a Queue (and optional EventNotifier) for a CONNECT stream
