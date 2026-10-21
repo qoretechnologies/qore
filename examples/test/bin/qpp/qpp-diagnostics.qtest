@@ -53,6 +53,8 @@ qclass TestCls [arg=void* p; ns=Qore];
         addTestCase("invalid hashdecl fails", \testInvalidHashDecl());
         addTestCase("hashdecl member without a doc comment fails", \testUndocumentedHashDeclMember());
         addTestCase("hashdecl comments are allowed", \testHashDeclComments());
+        addTestCase("text between a group comment and its start fails", \testGroupStartMissing());
+        addTestCase("group start forms are accepted", \testGroupStartForms());
         addTestCase("unbalanced preprocessor directive fails", \testUnbalancedDirective());
         addTestCase("unsupported type fails", \testUnsupportedType());
         addTestCase("invalid class property fails", \testInvalidClassProperty());
@@ -342,6 +344,59 @@ hashdecl TestHash {
         assertNRegex("ERROR", r.out);
         assertRegex("int b;", r.dox_text, "the first member is documented");
         assertRegex("string c = \"x\";", r.dox_text, "the second member is documented");
+    }
+
+    #! anything between a group comment and "///@{" was read as part of the group description, silently
+    /** this lost the group's namespace and the constants or functions before the real start of the group
+    */
+    testGroupStartMissing() {
+        # a namespace declaration before the start of the group, a misspelled start, and the old "//@{" start
+        foreach list<string> l in (
+                ("namespace Qore::Test;\n///@{", "namespace Qore::Test;"),
+                ("///@\nnamespace Qore::Test;", "///@"),
+                ("//@{", "//@\\{"),
+            ) {
+            hash<auto> r = runQpp("/** @defgroup test_constants Test Constants
+    Test constants
+*/
+" + l[0] + "
+//! a test constant
+const TEST_ONE = 1;
+///@}
+");
+            assertFailed(r, l[1]);
+            assertRegex("flagtest\\.qpp:4: expecting \"///@\\{\" after the comment of group 'test_constants'; got: "
+                + l[1], r.out, "the diagnostic names the line and the group");
+            assertEq(1, countErrors(r.out), "the problem is reported once: " + r.out);
+        }
+    }
+
+    #! a group starts with "///@{" after its comment, optionally after blank lines, or with "@{" in the comment
+    testGroupStartForms() {
+        hash<auto> r = runQpp("/** @defgroup test_constants Test Constants
+    Test constants
+*/
+
+///@{
+namespace Qore::Test;
+//! a test constant
+const TEST_ONE = 1;
+///@}
+
+/** @defgroup more_constants More Test Constants
+    More test constants
+    @{
+*/
+namespace Qore::Test;
+//! another test constant
+const TEST_TWO = 2;
+///@}
+");
+        assertEq(0, r.status, "both forms are accepted: " + r.out);
+        assertNRegex("ERROR", r.out);
+        assertRegex("const TEST_ONE = 1;", r.dox_text, "the first group's constant is documented");
+        assertRegex("const TEST_TWO = 2;", r.dox_text, "the second group's constant is documented");
+        assertNRegex("namespace Qore::Test;", r.dox_text, "no namespace declaration is copied into the documentation");
     }
 
     testUnbalancedDirective() {

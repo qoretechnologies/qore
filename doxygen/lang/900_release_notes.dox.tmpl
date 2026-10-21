@@ -6545,6 +6545,10 @@ while (*binary chunk = input.read(65536)) {
       (<tt>--metadata</tt>), were written to the Java output directory
     - \c qpp reports an error for a member declaration of a hashdecl in a <tt>.qpp</tt> file that has no
       <tt>//!</tt> comment; such a member was left out of the hashdecl and of its documentation without a message
+    - \c qpp reports an error for anything other than a <tt>///@{</tt> line after the comment of a function or
+      constant group in a <tt>.qpp</tt> file; it was read as part of the group description without a message, so a
+      misspelled group start lost the group's constants or functions, and a namespace declaration placed before the
+      group start was lost
 
     @section qore_2_2_1 Qore 2.2.1
 

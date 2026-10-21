@@ -4610,14 +4610,47 @@ protected:
         }
     }
 
+    //! returns the name of the group from its @defgroup comment, for diagnostics
+    static std::string getGroupName(const std::string& doc) {
+        size_t i = doc.find("@defgroup");
+        if (i == std::string::npos) {
+            return std::string();
+        }
+        i = doc.find_first_not_of(" \t", i + 9);
+        if (i == std::string::npos) {
+            return std::string();
+        }
+        size_t e = doc.find_first_of(" \t\n", i);
+        return doc.substr(i, e == std::string::npos ? std::string::npos : e - i);
+    }
+
+    //! reads the group comment and the start of the group
+    /** The group starts with a "///@{" line after the comment, or with "@{" in the comment; anything else after the
+        comment would be read as part of the group description, so it is an error
+
+        @return 0 for OK, -1 for error; an error has been reported in that case
+    */
     int readUntilOpenGroup(const char* fileName, unsigned &lineNumber, std::string& str, FILE* fp) {
         bool open_group = false;
+        // true once the comment has ended without "@{", so that only a "///@{" line may follow
+        bool comment_closed = str.find("*/") != std::string::npos;
         while (true) {
             std::string line;
             if (read_line(lineNumber, line, fp)) {
                 error("%s:%d: premature EOF reading group description\n", fileName, lineNumber);
                 valid = false;
                 return -1;
+            }
+
+            if (comment_closed && line.compare(0, 5, "///@{")) {
+                std::string text = line;
+                trim(text);
+                if (!text.empty()) {
+                    error("%s:%u: expecting \"///@{\" after the comment of group '%s'; got: %s\n", fileName,
+                        read_line_number(line, lineNumber), getGroupName(str).c_str(), text.c_str());
+                    valid = false;
+                    return -1;
+                }
             }
 
             str += line;
@@ -4628,6 +4661,8 @@ protected:
                 open_group = true;
             } else if (open_group && !line.compare(0, 2, "*/")) {
                 break;
+            } else if (line.find("*/") != std::string::npos) {
+                comment_closed = true;
             }
         }
 
@@ -4711,8 +4746,8 @@ public:
     Group(std::string& buf, FILE* fp, const char* fn, unsigned& ln, PreprocessorState& pps)
             : valid(true), fileName(fn), startLineNumber(ln), lineNumber(ln), ppState(pps) {
         doc = buf;
+        // readUntilOpenGroup() has reported the error
         if (readUntilOpenGroup(fileName, lineNumber, doc, fp)) {
-            error("%s:%d: could not find start of group\n", fileName, lineNumber);
             valid = false;
             return;
         }

@@ -212,6 +212,9 @@ Use Doxygen-style comments:
 - Every member declaration of a `hashdecl` needs a `//!` comment (optionally followed by a `/** ... */` long
   comment); a member line without one is an error, since it would be left out of the hashdecl.  Blank lines and
   `//` and `/* ... */` comments between the members are allowed
+- A function or constant group starts with a `///@{` line after its `/** @defgroup ... */` comment (blank lines
+  may come between them), or with `@{` in the comment; anything else after the comment, such as a `namespace`
+  declaration, which belongs after `///@{`, is an error, since it would be read as part of the group description
 
 ### Domain Flags
 
