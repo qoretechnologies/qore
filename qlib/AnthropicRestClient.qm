@@ -127,6 +127,9 @@ stream.close();
     - chat and completion requests honour the request's own timeout
       (@ref QoreLlmUtils::LlmRequestOptions::timeout_ms "timeout_ms"); they were cut off at the client's timeout
       (120 seconds by default) whatever the request asked for
+    - an OpenAI-shaped chat request with a \c tool_choice no longer fails with HTTP 400 ("tool_choice: Input should
+      be an object"): \c "required" is sent as \c {"type": "any"}, \c "auto" and \c "none" as objects, and a named
+      function as a named tool; a model that rejects a forced tool choice is asked with \c {"type": "auto"}
 */
 
 %requires json
@@ -1362,8 +1365,55 @@ bool rejects = AnthropicLlmProvider::rejectsForcedToolChoice("claude-sonnet-5-5"
             }
             body.tools = tool_defs;
         }
+        body = mergeRequestBodyOptions(body, opts);
+        # a model that rejects a forced tool choice is asked for the tools with "auto" instead
+        if (inlist(body.tool_choice.type, ("any", "tool")) && rejectsForcedToolChoice(body.model ?? "")) {
+            body.tool_choice = (body.tool_choice - ("name",)) + {"type": "auto"};
+        }
         # the structured output goes in after the body options, so it is never lost to a merge
-        return addStructuredOutput(mergeRequestBodyOptions(body, opts), opts);
+        return addStructuredOutput(body, opts);
+    }
+
+    #! Routes an OpenAI \c tool_choice to Anthropic's native form
+    /** Anthropic refuses an OpenAI tool choice (HTTP 400 "tool_choice: Input should be an object"); its tool choice
+        is an object with a \c type:
+        - \c "auto" and \c "none" are \c {"type": "auto"} and \c {"type": "none"}
+        - \c "required" is \c {"type": "any"}: the model calls one of the tools
+        - a named function (\c {"type": "function", "function": {"name": ...}}) is \c {"type": "tool", "name": ...}
+
+        A choice already in Anthropic's form is kept, and one that has no Anthropic form is left out, so the model's
+        default (\c auto with tools) applies.  A model that rejects a forced choice
+        (@ref rejectsForcedToolChoice()) gets \c {"type": "auto"} when the request body is built.
+    */
+    applyOpenAiToolChoice(reference<hash<auto!>> body_options, auto choice) {
+        *hash<auto> tool_choice = anthropicToolChoice(choice);
+        if (tool_choice) {
+            body_options.tool_choice = tool_choice;
+        }
+    }
+
+    #! Returns Anthropic's form of an OpenAI or Anthropic tool choice, or @ref nothing if it has none
+    private static *hash<auto> anthropicToolChoice(auto choice) {
+        switch (choice.typeCode()) {
+            case NT_STRING:
+                switch (choice) {
+                    case "auto":
+                    case "none":
+                    case "any":
+                        return {"type": choice};
+                    case "required":
+                        return {"type": "any"};
+                }
+                return;
+            case NT_HASH:
+                if (choice.function.name.val()) {
+                    return {"type": "tool", "name": choice.function.name};
+                }
+                if (inlist(choice.type, ("auto", "none", "any")) || (choice.type == "tool" && choice.name.val())) {
+                    return choice;
+                }
+                return;
+        }
     }
 
     #! Routes an OpenAI \c response_format=json_schema to Anthropic's native structured output

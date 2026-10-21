@@ -1,0 +1,171 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+# the "cppapiuser" test module is built into the build tree by examples/test/module-cpp-api/CMakeLists.txt and is not
+# installed, so QORE_MODULE_DIR must include the build tree (run_tests.sh does this)
+%requires cppapiuser
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class FileDetachFdTest
+
+#! Tests QoreFile::detachFd() from a module's C++ code
+/** A detach hands the File's descriptor to the caller: the File is left closed and without a descriptor, so it never
+    closes the descriptor the caller now owns, neither in File::close() nor when it is destroyed.  Special files
+    (stdin, stdout, stderr) are never detached.
+
+    Each case takes the detached descriptor back with cpp_api_fd_write_and_close() before making any assertion, so
+    that a failing assertion leaves no descriptor open.  That function writes to and closes the descriptor only if it
+    is still open on the file it was detached from: if the File closed it, its number may have been reused.
+*/
+class FileDetachFdTest inherits QUnit::Test {
+    constructor() : QUnit::Test("FileDetachFdTest", "1.0", \ARGV) {
+        addTestCase("a detach leaves the File closed and without a descriptor", \testDetach());
+        addTestCase("a File does not close a descriptor detached from it", \testOwnership());
+        addTestCase("a File can be opened again after a detach", \testReopen());
+        addTestCase("a detach raises one close event", \testEvents());
+        addTestCase("a File that is not open has nothing to detach", \testNotOpen());
+        addTestCase("special files are not detached", \testSpecialFiles());
+        addTestCase("only a File can be detached", \testNotAFile());
+        set_return_value(main());
+    }
+
+    testDetach() {
+        TmpFile tmp("qore-file-detach-");
+        int open_fd = tmp.file.getPollableDescriptor();
+        hash<auto> h = cpp_api_file_detach_fd(tmp.file);
+        bool is_open = tmp.file.isOpen();
+        int pollable_fd = tmp.file.getPollableDescriptor();
+        hash<auto> w = cpp_api_fd_write_and_close(h.fd, tmp.path, "x");
+
+        assertGe(0, open_fd, "the open File has a descriptor");
+        assertEq(open_fd, h.fd, "the detach returns the File's descriptor");
+        assertFalse(h.is_open, "QoreFile::isOpen() is false after the detach");
+        assertEq(-1, h.get_fd, "QoreFile::getFD() returns -1 after the detach");
+        assertEq(-1, h.second_fd, "a second detach returns -1");
+        assertFalse(is_open, "File::isOpen() is False after the detach");
+        assertEq(-1, pollable_fd, "File::getPollableDescriptor() returns -1 after the detach");
+        assertTrue(w.same_file, "the detached descriptor is open on the file");
+        assertEq(1, w.written, "the detached descriptor can be written to");
+        assertEq(0, w.close_rc, "the caller closes the detached descriptor");
+        assertEq("x", ReadOnlyFile::readTextFile(tmp.path), "the data written through the descriptor is in the file");
+    }
+
+    testOwnership() {
+        foreach bool close_first in ((True, False)) {
+            string label = close_first ? "closed and destroyed" : "destroyed";
+
+            TmpFile tmp("qore-file-detach-");
+            tmp.file.close();
+            File f();
+            f.open2(tmp.path, O_WRONLY | O_TRUNC);
+            f.write("a");
+            hash<auto> h = cpp_api_file_detach_fd(f);
+            *int close_rc;
+            if (close_first) {
+                close_rc = f.close();
+            }
+            # destroys the File, whose destructor closes any descriptor it still has
+            delete f;
+            hash<auto> w = cpp_api_fd_write_and_close(h.fd, tmp.path, "b");
+
+            if (close_first) {
+                assertEq(0, close_rc, label + ": File::close() succeeds after the detach");
+            }
+            assertTrue(w.same_file, label + ": the detached descriptor is still open on the file");
+            assertEq(1, w.written, label + ": the detached descriptor can still be written to");
+            assertEq(0, w.close_rc, label + ": the detached descriptor is closed only by its owner");
+            assertEq("ab", ReadOnlyFile::readTextFile(tmp.path), label + ": the file has the data written before and "
+                "after the detach");
+        }
+    }
+
+    testReopen() {
+        TmpFile tmp("qore-file-detach-");
+        TmpFile other("qore-file-detach-");
+        other.file.close();
+        hash<auto> h = cpp_api_file_detach_fd(tmp.file);
+        tmp.file.open2(other.path, O_WRONLY | O_TRUNC);
+        bool reopened = tmp.file.isOpen();
+        int reopened_fd = tmp.file.getPollableDescriptor();
+        tmp.file.write("c");
+        int close_rc = tmp.file.close();
+        hash<auto> w = cpp_api_fd_write_and_close(h.fd, tmp.path, "d");
+
+        assertTrue(reopened, "the File is open again");
+        assertGe(0, reopened_fd, "the reopened File has a descriptor");
+        assertEq(0, close_rc, "the reopened File is closed");
+        assertTrue(w.same_file, "reopening and closing the File leaves the detached descriptor open");
+        assertEq(1, w.written, "the detached descriptor can still be written to");
+        assertEq(0, w.close_rc, "the detached descriptor is closed only by its owner");
+        assertEq("c", ReadOnlyFile::readTextFile(other.path), "the reopened File wrote to its own file");
+        assertEq("d", ReadOnlyFile::readTextFile(tmp.path), "the detached descriptor wrote to the original file");
+    }
+
+    testEvents() {
+        TmpFile tmp("qore-file-detach-");
+        tmp.file.close();
+        Queue q();
+        File f();
+        f.setEventQueue(q);
+        f.open2(tmp.path, O_WRONLY);
+        hash<auto> h = cpp_api_file_detach_fd(f);
+        list<int> after_detach = takeEvents(q);
+        f.close();
+        list<int> after_close = takeEvents(q);
+        delete f;
+        list<int> after_delete = takeEvents(q);
+        hash<auto> w = cpp_api_fd_write_and_close(h.fd, tmp.path, "e");
+
+        assertEq((EVENT_OPEN_FILE, EVENT_FILE_OPENED, EVENT_CHANNEL_CLOSED), after_detach,
+            "the detach closes the File's channel");
+        assertEq((), after_close, "File::close() raises no second close event after the detach");
+        assertEq((EVENT_DELETED,), after_delete, "destroying the File raises only the delete event");
+        assertTrue(w.same_file, "the detached descriptor is still open on the file");
+        assertEq(0, w.close_rc, "the detached descriptor is closed only by its owner");
+    }
+
+    testNotOpen() {
+        hash<auto> nothing_to_detach = {"fd": -1, "is_open": False, "get_fd": -1, "second_fd": -1};
+
+        File f();
+        assertEq(nothing_to_detach, cpp_api_file_detach_fd(f), "a File that was never opened");
+
+        TmpFile tmp("qore-file-detach-");
+        assertGe(0, tmp.file.getPollableDescriptor(), "the open File has a descriptor");
+        assertEq(0, tmp.file.close(), "the File is closed");
+        assertEq(-1, tmp.file.getPollableDescriptor(), "a closed File has no descriptor");
+        assertEq(nothing_to_detach, cpp_api_file_detach_fd(tmp.file), "a closed File");
+    }
+
+    testSpecialFiles() {
+        foreach hash<auto> i in (
+                {"name": "stdin", "file": stdin, "fd": 0},
+                {"name": "stdout", "file": stdout, "fd": 1},
+                {"name": "stderr", "file": stderr, "fd": 2},
+            ) {
+            assertEq({"fd": i.fd, "is_open": True, "get_fd": i.fd, "second_fd": i.fd}, cpp_api_file_detach_fd(i.file),
+                i.name + ": the descriptor is returned and the File keeps it");
+            assertTrue(i.file.isOpen(), i.name + ": the File is still open");
+            assertEq(i.fd, i.file.getPollableDescriptor(), i.name + ": the File still has its descriptor");
+        }
+    }
+
+    testNotAFile() {
+        assertThrows("OBJECT-INCOMPATIBLE", \cpp_api_file_detach_fd(), new Queue());
+    }
+
+    #! takes the events in the queue and returns their codes
+    private list<int> takeEvents(Queue q) {
+        list<int> rv = ();
+        while (q.size()) {
+            rv += q.get().event;
+        }
+        return rv;
+    }
+}

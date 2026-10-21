@@ -28,12 +28,14 @@
 
 #include <atomic>
 #include <cerrno>
+#include <climits>
 #include <fcntl.h>
 #include <mutex>
 #include <poll.h>
 #include <pthread.h>
 #include <signal.h>
 #include <sys/resource.h>
+#include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
@@ -557,6 +559,69 @@ hash<auto> cpp_api_find_create_timezone(string name, int epoch = 0) [flags=RET_V
     ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
     rv->setKeyValue("region", new QoreStringNode(tz_get_region_name(zone)), xsink);
     rv->setKeyValue("utc_offset", utc_offset, xsink);
+    return rv.release();
+}
+
+//! detaches the descriptor of a File object with QoreFile::detachFd() and returns the object's state afterwards
+/** Lets tests check that a detach leaves the object without the descriptor.  The descriptor is not closed here: it
+    is returned, so that the test can close or destroy the File before passing it to cpp_api_fd_write_and_close().
+
+    @param file a File object
+
+    @return a hash with \c fd: the descriptor returned by the detach (-1 if none), \c is_open: QoreFile::isOpen()
+    after it, \c get_fd: QoreFile::getFD() after it, and \c second_fd: the descriptor returned by a second detach
+
+    @throw OBJECT-INCOMPATIBLE \a file is not a File object
+*/
+hash<auto> cpp_api_file_detach_fd(object file) [dom=FILESYSTEM] {
+    QoreFileHelper fh(file, xsink);
+    // the helper raises an exception if the object has no File
+    if (*xsink) {
+        return QoreValue();
+    }
+    // the hash is created before the detach, so that no descriptor is detached if it cannot be created
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
+    int fd = fh->detachFd();
+    rv->setKeyValue("fd", fd, xsink);
+    rv->setKeyValue("is_open", fh->isOpen(), xsink);
+    rv->setKeyValue("get_fd", fh->getFD(), xsink);
+    rv->setKeyValue("second_fd", fh->detachFd(), xsink);
+    return rv.release();
+}
+
+//! writes to and closes a descriptor detached from a File, if it is still open on the file it was detached from
+/** Lets tests check that a File object does not close a descriptor detached from it, neither when it is closed nor
+    when it is destroyed.  A descriptor that is not open on \a path is neither written to nor closed, as it is not
+    the descriptor the caller owns: the File closed it, and its number may have been reused.
+
+    @param fd the descriptor returned by cpp_api_file_detach_fd()
+    @param path the path of the file the descriptor was opened on
+    @param data the data to write
+
+    @return a hash with \c same_file: @ref True if \a fd is open on \a path, \c written: the number of bytes
+    written (-1 if nothing was written or the write failed), and \c close_rc: the return value of close(2) (-1 if
+    the descriptor was not closed or the close failed)
+
+    @throw STAT-ERROR \a path cannot be checked
+*/
+hash<auto> cpp_api_fd_write_and_close(int fd, string path, string data) [dom=FILESYSTEM] {
+    struct stat path_st;
+    if (::stat(path->c_str(), &path_st)) {
+        return xsink->raiseErrnoException("STAT-ERROR", errno, "stat('%s') failed", path->c_str());
+    }
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
+    struct stat fd_st;
+    bool same_file = fd >= 0 && fd <= INT_MAX && !::fstat(static_cast<int>(fd), &fd_st)
+        && fd_st.st_dev == path_st.st_dev && fd_st.st_ino == path_st.st_ino;
+    int64 written = -1;
+    int close_rc = -1;
+    if (same_file) {
+        written = ::write(static_cast<int>(fd), data->c_str(), data->size());
+        close_rc = ::close(static_cast<int>(fd));
+    }
+    rv->setKeyValue("same_file", same_file, xsink);
+    rv->setKeyValue("written", written, xsink);
+    rv->setKeyValue("close_rc", close_rc, xsink);
     return rv.release();
 }
 
