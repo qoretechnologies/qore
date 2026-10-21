@@ -4289,6 +4289,19 @@ namespace {
     }
 }
 
+//! creates a native thread with the default attributes and returns the pthread_create() error, if any
+/** The stack lock is only held while the thread is created: it guards the default attributes, and its holder takes
+    no other lock; the failure paths of the callers take the thread list lock and run cleanup code, which must not
+    happen with the stack lock held
+*/
+static int q_create_native_thread(void* (*f)(void*), void* arg) {
+    pthread_t ptid;
+#ifdef QORE_MANAGE_STACK
+    AutoLocker al(stack_lck);
+#endif
+    return pthread_create(&ptid, ta_default.get_ptr(), f, arg);
+}
+
 QoreValue do_op_background(const QoreValue left, ExceptionSink* xsink) {
     RuntimeConfig& rc = rc_get_current_ref();
     return do_op_background(rc, left, xsink);
@@ -4327,16 +4340,10 @@ QoreValue do_op_background(RuntimeConfig& rc, const QoreValue left, ExceptionSin
         return QoreValue();
     }
 
-    int rc_thread;
-    pthread_t ptid;
-
     thread_counter.inc();
 
-#ifdef QORE_MANAGE_STACK
-    AutoLocker al(stack_lck);
-#endif
-
-    if ((rc_thread = pthread_create(&ptid, ta_default.get_ptr(), op_background_thread, tp))) {
+    int rc_thread = q_create_native_thread(op_background_thread, tp);
+    if (rc_thread) {
         tp->cleanup(xsink);
         tp->del();
 
@@ -4378,19 +4385,9 @@ int q_start_thread(ExceptionSink* xsink, q_thread_t f, void* arg) {
 
     ThreadArg* ta = new ThreadArg(f, arg, tid, QTF_NONE, std::move(sandbox));
 
-    //printd(5, "tp = %p\n", tp);
-    // create thread
-    int rc;
-    pthread_t ptid;
-
-#ifdef QORE_MANAGE_STACK
-    // make sure accesses to ta_default are made locked
-    AutoLocker al(stack_lck);
-#endif
-
-    //printd(5, "calling pthread_create(%p, %p, %p, %p)\n", &ptid, &ta_default, op_background_thread, tp);
     thread_counter.inc();
-    if ((rc = pthread_create(&ptid, ta_default.get_ptr(), q_run_thread, ta))) {
+    int rc = q_create_native_thread(q_run_thread, ta);
+    if (rc) {
         delete ta;
         thread_counter.dec();
         deregister_thread(tid);
@@ -4498,19 +4495,13 @@ int q_start_thread(ExceptionSink* xsink, q_thread_t f, void* arg, int flags) {
 
     ThreadArg* ta = new ThreadArg(f, arg, tid, flags, std::move(sandbox));
 
-    int rc;
-    pthread_t ptid;
-
-#ifdef QORE_MANAGE_STACK
-    AutoLocker al(stack_lck);
-#endif
-
     if (flags & QTF_EXTERNAL_LIFECYCLE) {
         tp_thread_counter.inc();
     } else {
         thread_counter.inc();
     }
-    if ((rc = pthread_create(&ptid, ta_default.get_ptr(), q_run_thread, ta))) {
+    int rc = q_create_native_thread(q_run_thread, ta);
+    if (rc) {
         delete ta;
         if (flags & QTF_EXTERNAL_LIFECYCLE) {
             tp_thread_counter.dec();
