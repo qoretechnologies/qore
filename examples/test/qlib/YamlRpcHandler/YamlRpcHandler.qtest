@@ -77,6 +77,7 @@ class YamlRpcHandlerTest inherits QUnit::Test {
         addTestCase("error handling", \testErrorHandling());
         addTestCase("GET request", \testGetRequest());
         addTestCase("GET query parameter name with a NUL character", \testGetQueryNul());
+        addTestCase("handler without a log closure", \testNoLogClosure());
         addTestCase("POST request", \testPostRequest());
         addTestCase("invalid method", \testInvalidMethod());
         addTestCase("missing arguments", \testMissingArguments());
@@ -159,6 +160,19 @@ class YamlRpcHandlerTest inherits QUnit::Test {
         hash<auto> result = handler.testHandleRequest(cx, {"method": "GET", "path": "/YAML/echo?a%00b=1"}, NOTHING);
         assertEq(400, result.code);
         assertRegex("^URI-QUERY-ERROR: .* contains a NUL character", result.body);
+    }
+
+    # a message is logged only when a log closure is set; one with a log message closure has messages to log
+    testNoLogClosure() {
+        MyYamlRpcHandler quiet(new PermissiveAuthenticator(), Methods, string sub (hash<auto> cx, hash<auto> method,
+                reference<auto> params) {
+            return "call " + method.text;
+        });
+        hash<auto> cx = {"peer-info": {"address_desc": "127.0.0.1"}};
+        hash<auto> result = quiet.testHandleRequest(cx, {"method": "POST", "path": "/YAML",
+            "content-type": MimeTypeYamlRpc}, make_yaml({"method": "add", "params": (5, 3)}));
+        assertEq(200, result.code);
+        assertEq({"result": 8}, parse_yaml(result.body));
     }
 
     testPostRequest() {
