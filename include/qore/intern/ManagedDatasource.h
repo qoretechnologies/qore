@@ -42,6 +42,7 @@
 #include "qore/intern/DatasourceStatementHelper.h"
 #include "qore/intern/QoreSQLStatement.h"
 
+#include <atomic>
 #include <set>
 
 // default timeout set to 120 seconds
@@ -55,11 +56,29 @@ protected:
     // connection/transaction lock
     mutable QoreThreadLock ds_lock;
 
-    int tid = -1,                   // TID of thread holding the connection/transaction lock
-        waiting = 0,                 // number of threads waiting on the transaction lock
-        tl_timeout_ms;               // transaction timeout in milliseconds
+    // TID of the thread holding the connection/transaction lock, or -1; see lockTid()
+    std::atomic<int> tid{-1};
+    // the number of threads waiting on the transaction lock, and the transaction lock timeout in milliseconds; both
+    // are accessed only with ds_lock held
+    int waiting = 0,
+        tl_timeout_ms;
 
     QoreCondition cond;             // condition when transaction lock is freed
+
+    //! returns the TID of the thread holding the transaction lock, or -1
+    /** The TID is written only with ds_lock held, but it is read without it: by currentThreadInTransaction(),
+        transactionTid() and after a statement action, so it is atomic.  Relaxed ordering is enough: a thread always
+        reads its own last write, so whether the current thread holds the lock is exact without ds_lock, and a TID
+        written by another thread is only reported as a snapshot that can change at any time, as documented.
+    */
+    DLLLOCAL int lockTid() const {
+        return tid.load(std::memory_order_relaxed);
+    }
+
+    //! sets the TID of the thread holding the transaction lock, or -1; ds_lock must be held
+    DLLLOCAL void setLockTid(int t) {
+        tid.store(t, std::memory_order_relaxed);
+    }
 
     DLLLOCAL int acquireLock(ExceptionSink* xsink, bool& new_lock);
     //! acquires the transaction lock for an action and opens the datasource if necessary
@@ -92,7 +111,8 @@ public:
     DLLLOCAL ManagedDatasource(DBIDriver *ndsl) : Datasource(ndsl, this), tl_timeout_ms(DEFAULT_TL_TIMEOUT) {
     }
 
-    DLLLOCAL ManagedDatasource(const ManagedDatasource& old) : Datasource(old, this), tl_timeout_ms(old.tl_timeout_ms) {
+    DLLLOCAL ManagedDatasource(const ManagedDatasource& old) : Datasource(old, this),
+            tl_timeout_ms(old.getTransactionLockTimeout()) {
     }
 
     DLLLOCAL virtual void cleanup(ExceptionSink* xsink);
@@ -161,11 +181,11 @@ public:
     DLLLOCAL int pushMutationDeclaration(const QoreHashNode* info, ExceptionSink* xsink);
 
     DLLLOCAL int transactionTid() const {
-        return tid;
+        return lockTid();
     }
 
     DLLLOCAL bool currentThreadInTransaction() const {
-        return tid == q_gettid();
+        return lockTid() == q_gettid();
     }
 
     DLLLOCAL QoreHashNode* getOptionHash(ExceptionSink* xsink);
@@ -190,7 +210,7 @@ public:
             return this;
 
         // only return "this" when there was an exception in startDBAction if we already had the lock
-        return tid == q_gettid() ? this : 0;
+        return lockTid() == q_gettid() ? this : 0;
     }
 
     DLLLOCAL virtual Datasource* helperStartActionNoConnectImpl(ExceptionSink* xsink, bool& new_transaction,
@@ -205,7 +225,7 @@ public:
             return this;
         }
         // only return "this" when there was an exception in startDBAction if we already had the lock
-        return tid == q_gettid() ? this : nullptr;
+        return lockTid() == q_gettid() ? this : nullptr;
     }
 
     DLLLOCAL virtual void helperEndActionNoConnectImpl(bool new_transaction) {
@@ -252,7 +272,7 @@ protected:
 public:
     DLLLOCAL DatasourceLockHelper(ManagedDatasource& n_ds, ExceptionSink* xsink) : ds(n_ds) {
         ds.ds_lock.lock();
-        had_lock = ds.tid == q_gettid();
+        had_lock = ds.lockTid() == q_gettid();
         valid = !ds.grabLock(xsink);
         if (!valid)
             ds.ds_lock.unlock();

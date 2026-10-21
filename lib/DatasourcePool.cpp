@@ -133,7 +133,7 @@ DatasourcePool::DatasourcePool(const DatasourcePool& old, ExceptionSink* xsink) 
     wait_count(0),
     wait_max(0),
     tl_warning_ms(old.tl_warning_ms),
-    tl_timeout_ms(old.tl_timeout_ms),
+    tl_timeout_ms(old.getErrorTimeout()),
     stats_reqs(0),
     stats_hits(0),
     warning_callback(old.warning_callback ? old.warning_callback->refRefSelf() : nullptr),

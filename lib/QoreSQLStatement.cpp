@@ -411,7 +411,7 @@ static int stmt_mutation_pre(qore_ds_private* dsp, int stmt_class, ExceptionSink
             return -1;
         }
     }
-    if (dsp->getMutationCtx() && !dsp->in_transaction) {
+    if (dsp->getMutationCtx() && !dsp->inTransaction()) {
         dsp->dispatchMutationTxBegin(xsink);
     }
     return 0;

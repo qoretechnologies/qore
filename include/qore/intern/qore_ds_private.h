@@ -40,6 +40,7 @@
 #include "qore/intern/DatasourceStatementHelper.h"
 #include "qore/intern/SqlMutationContext.h"
 
+#include <atomic>
 #include <map>
 #include <set>
 #include <string>
@@ -55,7 +56,10 @@ struct qore_ds_private {
 
     Datasource* ds;
 
-    bool in_transaction = false;
+    // written only by the thread that holds the connection (the transaction lock of a Datasource, or the connection
+    // of a DatasourcePool), and read by other threads as a snapshot (Datasource::isInTransaction(), the destruction
+    // of a pool), so it is atomic; relaxed ordering is enough, as the holder always reads its own last write
+    std::atomic<bool> in_transaction{false};
     bool active_transaction = false;
     bool isopen = false;
     bool autocommit = false;
@@ -123,6 +127,16 @@ struct qore_ds_private {
     // interface for the parent class
     DatasourceStatementHelper* dsh;
     std::map<std::string, const TypedHashDecl*> typed_result_hashdecl_cache;
+
+    //! returns true if a transaction is in progress on the connection; see in_transaction
+    DLLLOCAL bool inTransaction() const {
+        return in_transaction.load(std::memory_order_relaxed);
+    }
+
+    //! sets the transaction status; called only by the thread that holds the connection
+    DLLLOCAL void setInTransaction(bool b) {
+        in_transaction.store(b, std::memory_order_relaxed);
+    }
 
     DLLLOCAL qore_ds_private(Datasource* n_ds, DBIDriver* ndsl, DatasourceStatementHelper* dsh) : ds(n_ds),
             dsl(ndsl), opt(new QoreHashNode(autoTypeInfo)), dsh(dsh) {
@@ -280,7 +294,7 @@ struct qore_ds_private {
         }
         ev.tx_id = tx_id.c_str();
         ev.tx_seq = ++tx_seq;
-        ev.in_transaction = in_transaction;
+        ev.in_transaction = inTransaction();
         ev.autocommit = autocommit;
         int rc = ctx->dispatch(ev, *ds, xsink);
         if (rc && ev.isAdmission()) {
@@ -441,7 +455,7 @@ struct qore_ds_private {
         assert(isopen);
         // close statements but do not clear datasource or statements in the datasource
         transactionDone(false, false, xsink);
-        if (getMutationCtx() && in_transaction) {
+        if (getMutationCtx() && inTransaction()) {
             mutation_conn_lost = true;
         }
     }
@@ -466,7 +480,7 @@ struct qore_ds_private {
     DLLLOCAL int commitIntern(ExceptionSink* xsink) {
         //printd(5, "qore_ds_private::commitIntern() this: %p in_transaction: %d active_transaction: %d\n", this, in_transaction, active_transaction);
         assert(isopen);
-        in_transaction = false;
+        setInTransaction(false);
         active_transaction = false;
         if (!getMutationCtx()) {
             return qore_dbi_private::get(*dsl)->commit(ds, xsink);
@@ -503,7 +517,7 @@ struct qore_ds_private {
     DLLLOCAL int rollbackIntern(ExceptionSink* xsink) {
         //printd(5, "qore_ds_private::rollbackIntern() this: %p in_transaction: %d active_transaction: %d\n", this, in_transaction, active_transaction);
         assert(isopen);
-        in_transaction = false;
+        setInTransaction(false);
         active_transaction = false;
         if (!getMutationCtx()) {
             return qore_dbi_private::get(*dsl)->rollback(ds, xsink);
@@ -555,7 +569,7 @@ struct qore_ds_private {
             transactionDone(false, true, &close_xsink);
             qore_dbi_private::get(*dsl)->close(ds, &close_xsink);
             isopen = false;
-            in_transaction = false;
+            setInTransaction(false);
             active_transaction = false;
             commit_in_progress = false;
             // a pending connection-loss event must keep the transaction identity it belongs to;
@@ -577,8 +591,8 @@ struct qore_ds_private {
     DLLLOCAL void setStatementKeepLock(QoreSQLStatement* stmt) {
         assert(!keep_lock);
         keep_lock = true;
-        if (!in_transaction)
-            in_transaction = true;
+        if (!inTransaction())
+            setInTransaction(true);
         if (!active_transaction)
             active_transaction = true;
 

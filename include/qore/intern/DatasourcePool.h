@@ -346,10 +346,13 @@ public:
     DLLLOCAL QoreHashNode* getUsageInfo() const;
 
     DLLLOCAL void setErrorTimeout(unsigned t_ms) {
+        // a thread waiting for a connection reads the timeout with the pool lock held
+        AutoLocker al(static_cast<QoreThreadLock*>(this));
         tl_timeout_ms = t_ms;
     }
 
     DLLLOCAL unsigned getErrorTimeout() const {
+        AutoLocker al(static_cast<QoreThreadLock*>(const_cast<DatasourcePool*>(this)));
         return tl_timeout_ms;
     }
 

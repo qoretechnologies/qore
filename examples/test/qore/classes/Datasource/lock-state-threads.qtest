@@ -1,0 +1,161 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class DatasourceLockStateThreadsTest
+
+#! The transaction lock state of a Datasource is read safely from any thread while another thread uses the lock
+/** Datasource::currentThreadInTransaction(), Datasource::transactionTid(), Datasource::inTransaction() and
+    Datasource::getTransactionLockTimeout() read the state of the transaction lock without taking the datasource's
+    lock, while a thread that takes and releases the transaction lock writes it; Datasource::setTransactionLockTimeout()
+    and DatasourcePool::setErrorTimeout() write timeouts that a thread waiting for the lock or for a connection reads.
+    These were data races (reported by ThreadSanitizer); the answers themselves are unchanged.
+
+    Each case reads or writes the state in this thread while another thread uses the lock in a loop; the two threads
+    are not synchronized with each other between the start and the end of the loops, which is what makes a race
+    visible to ThreadSanitizer.  The "dbitest" mock driver needs no server.
+*/
+class DatasourceLockStateThreadsTest inherits QUnit::Test {
+    public {
+        const ConnStr = "dbitest:u/p@db";
+
+        #! the number of loop iterations in each thread
+        const Rounds = 200;
+    }
+
+    constructor() : QUnit::Test("DatasourceLockStateThreadsTest", "1.0", \ARGV) {
+        addTestCase("the lock state is read while another thread uses the lock", \testReadLockState());
+        addTestCase("the lock timeout is set while another thread uses the lock", \testSetLockTimeout());
+        addTestCase("the pool error timeout is set while other threads wait for a connection", \testSetPoolTimeout());
+        set_return_value(main());
+    }
+
+    #! starts a thread that takes and releases the transaction lock of the datasource in a loop once \a start is 0
+    /** @return a Counter that is 0 once the thread has finished; the thread's errors are pushed on \a errors
+    */
+    private static Counter startLockUser(AbstractDatasource ds, Counter start, Queue errors) {
+        Counter done(1);
+        background sub () {
+            on_exit done.dec();
+            try {
+                start.waitForZero();
+                for (int i = 0; i < Rounds; ++i) {
+                    ds.exec("insert into t values (%v)", i);
+                    ds.rollback();
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                errors.push(sprintf("%s: %s", ex.err, ex.desc));
+            }
+        }();
+        return done;
+    }
+
+    #! asserts that the lock users ended without errors
+    private checkLockUsers(Queue errors) {
+        list<string> l = ();
+        while (errors.size()) {
+            l += errors.get();
+        }
+        assertEq((), l, "the threads using the lock had no errors");
+    }
+
+    testReadLockState() {
+        Datasource ds(ConnStr);
+        ds.setAutoCommit(False);
+        ds.open();
+        Counter start(1);
+        Queue errors();
+        Counter done = DatasourceLockStateThreadsTest::startLockUser(ds, start, errors);
+        start.dec();
+
+        int mine = 0;
+        int own_tid = 0;
+        int other_tid = 0;
+        int lock_holder = -1;
+        for (int i = 0; i < Rounds; ++i) {
+            # this thread never takes the lock, so it is never in a transaction
+            if (ds.currentThreadInTransaction()) {
+                ++mine;
+            }
+            int tid = ds.transactionTid();
+            if (tid == gettid()) {
+                ++own_tid;
+            } else if (tid != -1) {
+                # the lock is held by the other thread, and only by that thread
+                if (lock_holder == -1) {
+                    lock_holder = tid;
+                } else if (tid != lock_holder) {
+                    ++other_tid;
+                }
+            }
+            # a snapshot of the other thread's transaction status
+            ds.inTransaction();
+        }
+        done.waitForZero();
+
+        assertEq(0, mine, "this thread was never reported in a transaction");
+        assertEq(0, own_tid, "this thread was never reported as the lock holder");
+        assertEq(0, other_tid, "only the thread using the lock was reported as its holder");
+        assertEq(-1, ds.transactionTid(), "the lock is free once the other thread has finished");
+        assertFalse(ds.inTransaction());
+        checkLockUsers(errors);
+    }
+
+    testSetLockTimeout() {
+        Datasource ds(ConnStr);
+        ds.setAutoCommit(False);
+        ds.open();
+        Counter start(1);
+        Queue errors();
+        Counter done = DatasourceLockStateThreadsTest::startLockUser(ds, start, errors);
+        start.dec();
+
+        int unexpected = 0;
+        for (int i = 0; i < Rounds; ++i) {
+            # the other thread never has to wait for the lock, so no timeout ends one of its calls
+            int timeout = (i % 2) ? 60000 : 120000;
+            ds.setTransactionLockTimeout(timeout);
+            if (ds.getTransactionLockTimeout() != timeout) {
+                ++unexpected;
+            }
+        }
+        done.waitForZero();
+
+        assertEq(0, unexpected, "the timeout read is the one set by this thread");
+        checkLockUsers(errors);
+    }
+
+    testSetPoolTimeout() {
+        # two threads share the pool's only connection, so each waits for it in turn
+        DatasourcePool pool(ConnStr + "{min=1,max=1}");
+        Counter start(1);
+        Queue errors();
+        Counter done1 = DatasourceLockStateThreadsTest::startLockUser(pool, start, errors);
+        Counter done2 = DatasourceLockStateThreadsTest::startLockUser(pool, start, errors);
+        start.dec();
+
+        int unexpected = 0;
+        for (int i = 0; i < Rounds; ++i) {
+            int timeout = (i % 2) ? 60000 : 120000;
+            pool.setErrorTimeout(timeout);
+            if (pool.getErrorTimeout() != timeout) {
+                ++unexpected;
+            }
+            # this thread holds no connection of the pool
+            if (pool.currentThreadInTransaction()) {
+                ++unexpected;
+            }
+        }
+        done1.waitForZero();
+        done2.waitForZero();
+
+        assertEq(0, unexpected, "the timeout read is the one set by this thread, and this thread holds no connection");
+        checkLockUsers(errors);
+    }
+}

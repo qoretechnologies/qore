@@ -5121,6 +5121,15 @@ while (*binary chunk = input.read(65536)) {
       "Datasource::currentThreadInTransaction()" returned @ref True afterwards, other threads timed out waiting for
       the lock, and destroying the datasource in another thread raised \c DATASOURCE-ERROR
 
+    - Fixed data races reading the transaction lock state of a @ref Qore::SQL::Datasource "Datasource" in one thread
+      while another thread took or released the lock:
+      @ref Qore::SQL::Datasource::currentThreadInTransaction() "Datasource::currentThreadInTransaction()",
+      @ref Qore::SQL::Datasource::transactionTid() "Datasource::transactionTid()" and
+      @ref Qore::SQL::Datasource::inTransaction() "Datasource::inTransaction()" read it unsynchronized, and
+      @ref Qore::SQL::Datasource::setTransactionLockTimeout() "Datasource::setTransactionLockTimeout()" and
+      @ref Qore::SQL::DatasourcePool::setErrorTimeout() "DatasourcePool::setErrorTimeout()" changed a timeout that a
+      waiting thread was reading; their results are unchanged
+
     - The statements of a @ref Qore::SQL::Datasource "Datasource" are closed when it is closed: closing or resetting
       a datasource left the driver data of an @ref Qore::SQL::SQLStatement "SQLStatement" prepared on its connection
       in place, so that the statement outlived the connection it belonged to, and destroying the statement later
