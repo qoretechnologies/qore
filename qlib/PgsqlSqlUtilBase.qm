@@ -3543,16 +3543,18 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
                 string iop = iop_val."_iop";
                 hash<auto> cmd = im{iop};
                 auto arg = iop_val.arg;
-                if (cmd.code) {
-                    arg = cmd.code(i.key, arg);
-                }
                 if (cmd.immediate) {
+                    # only an identifier is given to the operator's code, as the SQL that it returns is inserted
+                    # directly into the query, as for AbstractTable::insert()
                     if (arg =~ /[^a-z\._0-9]/i) {
                         throw "INSERT-OPERATOR-ERROR", sprintf("%s: immediate value to insert operator %y is %y "
                             "which contains illegal characters", getDesc(), iop, arg);
                     }
-                    select_exprs += arg;
+                    select_exprs += cmd.code ? cmd.code(i.key, arg) : arg;
                 } else {
+                    if (cmd.code) {
+                        arg = cmd.code(i.key, arg);
+                    }
                     string ph = cmd.placeholder ?? "%v";
                     select_exprs += ph;
                     scalar_binds += arg;

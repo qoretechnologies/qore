@@ -7509,6 +7509,17 @@ select * from schema.table where name = other_name and ((type = %v and validatio
     public const string IOP_SEQ_CURRVAL = "seq_currval";
 
     #! a hash of default insert operator descriptions (currently empty, all operators are driver-dependent)
+    /** Each driver's insert operator map gives an operator name a hash with these keys:
+        - \c arg: the type of the argument, if the operator takes one
+        - \c placeholder: the placeholder for the value in the SQL, if not \c "%v", such as \c "nextval(%v)"
+        - \c code: a closure called with the column name and the argument, whose return value is the value bound
+          for the placeholder, or, for an immediate operator, the SQL inserted into the query
+        - \c immediate: @ref True "True" if the value is SQL inserted into the query instead of a bound value; the
+          argument of an immediate operator is checked to be an identifier of ASCII letters, digits, dots and
+          underscores before the operator's \c code is called (since SqlUtil 3.11.0; before, the SQL that \c code
+          returned was checked), so \c code gets only such an identifier, and must build safe SQL from it, such as
+          <tt>seq.nextval</tt> or <tt>next value for [seq]</tt>
+    */
     public const hash<auto> DefaultIopMap = {};
     #/@}
 

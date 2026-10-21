@@ -4013,15 +4013,18 @@ table.insert(row);
                     }
                 }
 
-                if (cmd.code)
-                    v = cmd.code(key, v);
                 if (cmd.immediate) {
-                    # make sure only identifiers are included here since the string is inserted directly into the query
-                    if (v =~ /[^a-z\._0-9]/i)
-                        throw "INSERT-OPERATOR-ERROR", sprintf("%s: immediate value to insert operator %y is %y which contains illegal characters", getDesc(), iop, v);
-                    phl += v;
+                    # make sure only identifiers are given to the operator's code, as the SQL that it returns from
+                    # the argument is inserted directly into the query
+                    if (v =~ /[^a-z\._0-9]/i) {
+                        throw "INSERT-OPERATOR-ERROR", sprintf("%s: immediate value to insert operator %y is %y which "
+                            "contains illegal characters", getDesc(), iop, v);
+                    }
+                    phl += cmd.code ? cmd.code(key, v) : v;
                     continue;
                 }
+                if (cmd.code)
+                    v = cmd.code(key, v);
                 if (cmd.placeholder)
                     ph = cmd.placeholder;
                 phl += ph;
