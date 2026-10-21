@@ -1,0 +1,40 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# A child process created with fork() while another thread holds the lock of the ONNX execution providers that were
+# found unusable can take it: the module registers a fork handler for the lock.  Without it, the child got the lock
+# held by a thread that does not exist in it and waited forever for it (the test runner's time limit is only a
+# guard).  The lock only exists with ONNX Runtime support.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+
+%requires QUnit
+%requires ml
+
+%exec-class MlForkTest
+
+class MlForkTest inherits QUnit::Test {
+    constructor() : QUnit::Test("ml fork", "1.0", \ARGV) {
+        addTestCase("fork() while another thread holds the ONNX provider lock", \testFork());
+        set_return_value(main());
+    }
+
+    testFork() {
+        if (!Option::HAVE_FORK) {
+            testSkip("fork() is not available");
+        }
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the test needs a debug build of the library");
+        }
+        if (!ML::ml_get_capabilities().has_onnx) {
+            testSkip("the module was built without ONNX Runtime support");
+        }
+        # another thread holds the lock while fork() is called; the child takes it as the fork handler does
+        hash<auto> r = call_function("dbg_fork_while_handler_held", "ml_onnx_auto_providers");
+        assertTrue(r.waited, "fork() waited for the thread holding the lock");
+        assertEq(0, r.status, "the child took the lock");
+    }
+}

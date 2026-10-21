@@ -225,4 +225,57 @@ int max = max_conn ? atoi(max_conn.c_str()) : 10;
     AtomicEnvironmentSetter if the function changes the environment) around it; otherwise the module must not let
     that code change the environment while other threads may use it, and should pass values to it some other way
     than through the environment.
+
+    @subsection qore_module_fork_handlers Process-Wide Locks and fork()
+
+    A child process created with \c fork() runs only the thread that called \c fork(): a lock that another thread
+    held at that moment stays held in the child forever, and the child waits forever the first time it needs it.
+    %Qore therefore runs fork handlers for its own process-wide locks for every \c fork() in the process, whoever
+    calls it: before \c fork() they acquire the locks in one documented order (their ranks), so that no other thread
+    holds them while the process is copied, and after it they release them in the parent and initialize them again
+    in the child.
+
+    A module with a process-wide lock (a static lock or a lock of a static object, not the lock of an object that
+    Qore code creates) registers fork handlers for it with qore_register_fork_handler() in its initialization
+    function and removes them with qore_unregister_fork_handler() in its delete function (not while static objects
+    are constructed or destroyed, when the dynamic loader holds its lock).  The rank places the lock in the order of
+    the library's locks (see @ref QoreForkRank):
+    - @ref QFR_MODULE_LEAF: the lock's holders take no lock but the library's leaf locks (they only allocate memory
+      and work with strings and containers)
+    - @ref QFR_MODULE_CANCELLABLE: the lock is taken while no other registered lock is held, and its holders can check
+      for cancellation (qore_check_cancel()) or raise exceptions, but do not start threads or wait for them
+    - @ref QFR_MODULE_RESET: the lock is held while user code runs or while a thread waits for input, so \c fork()
+      must not wait for it: register only a child handler, which initializes the lock again; if a thread can call
+      \c fork() while it holds the lock (for example from a callback), the module counts its holds per thread and
+      the child handler takes the lock again as often as the forking thread held it
+
+    For a QoreThreadLock, qore_fork_prepare_thread_lock(), qore_fork_parent_thread_lock() and
+    qore_fork_child_thread_lock() are the handlers; a QoreRecursiveThreadLock is initialized again with
+    qore_fork_reinit_recursive_thread_lock().
+
+    @code{.cpp}
+// a registry of the module whose lock's holders check for cancellation
+static QoreThreadLock registry_lock;
+static QoreForkHandlerRegistration* registry_fork_reg = nullptr;
+
+static void mymod_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
+    registry_fork_reg = qore_register_fork_handler(QFR_MODULE_CANCELLABLE, "mymod_registry",
+        qore_fork_prepare_thread_lock, qore_fork_parent_thread_lock, qore_fork_child_thread_lock, &registry_lock);
+    if (!registry_fork_reg) {
+        xsink.outOfMemory();
+        return;
+    }
+    // ...
+}
+
+static void mymod_module_delete() {
+    qore_unregister_fork_handler(registry_fork_reg);
+    // ...
+}
+    @endcode
+
+    The handlers run in the thread that calls \c fork(): they must not throw, register or remove fork handlers,
+    acquire any lock but their own, or allocate memory in the child.  Code that calls \c fork() must not hold a
+    lock that a prepare handler acquires (it would wait for itself) nor the environment lock (see
+    @ref module_environment).
  */

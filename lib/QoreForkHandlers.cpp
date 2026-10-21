@@ -196,6 +196,76 @@ QoreForkHandler::~QoreForkHandler() {
     qore_fork_registry().remove(this);
 }
 
+// the ranks that modules use are the library's
+static_assert(static_cast<int>(QFR_MODULE_RESET) == static_cast<int>(QFLR_MODULE_RESET), "rank mismatch");
+static_assert(static_cast<int>(QFR_MODULE_CANCELLABLE) == static_cast<int>(QFLR_MODULE_CANCELLABLE),
+    "rank mismatch");
+static_assert(static_cast<int>(QFR_MODULE_LEAF) == static_cast<int>(QFLR_LEAF), "rank mismatch");
+
+//! the fork handlers that a module registered with qore_register_fork_handler()
+struct QoreForkHandlerRegistration : public QoreForkHandler {
+    DLLLOCAL QoreForkHandlerRegistration(int rank, const char* name, q_fork_handler_t prepare_handler,
+            q_fork_handler_t parent_handler, q_fork_handler_t child_handler, void* arg)
+            : QoreForkHandler(rank, name), prepare_handler(prepare_handler), parent_handler(parent_handler),
+            child_handler(child_handler), arg(arg) {
+    }
+
+    DLLLOCAL void prepare() noexcept override {
+        if (prepare_handler) {
+            prepare_handler(arg);
+        }
+    }
+
+    DLLLOCAL void parent() noexcept override {
+        if (parent_handler) {
+            parent_handler(arg);
+        }
+    }
+
+    DLLLOCAL void child() noexcept override {
+        if (child_handler) {
+            child_handler(arg);
+        }
+    }
+
+    q_fork_handler_t prepare_handler;
+    q_fork_handler_t parent_handler;
+    q_fork_handler_t child_handler;
+    void* arg;
+};
+
+QoreForkHandlerRegistration* qore_register_fork_handler(int rank, const char* name, q_fork_handler_t prepare,
+        q_fork_handler_t parent, q_fork_handler_t child, void* arg) {
+    // the registry itself has the lowest rank
+    assert(rank > QFLR_REGISTRY);
+    assert(name);
+    try {
+        return new QoreForkHandlerRegistration(rank, name, prepare, parent, child, arg);
+    } catch (const std::bad_alloc&) {
+        return nullptr;
+    }
+}
+
+void qore_unregister_fork_handler(QoreForkHandlerRegistration* reg) {
+    delete reg;
+}
+
+void qore_fork_prepare_thread_lock(void* lock) {
+    static_cast<QoreThreadLock*>(lock)->lock();
+}
+
+void qore_fork_parent_thread_lock(void* lock) {
+    static_cast<QoreThreadLock*>(lock)->unlock();
+}
+
+void qore_fork_child_thread_lock(void* lock) {
+    static_cast<QoreThreadLock*>(lock)->reinitAfterFork();
+}
+
+void qore_fork_reinit_recursive_thread_lock(QoreRecursiveThreadLock& lock) {
+    lock.reinitAfterFork(&ma_recursive);
+}
+
 void QoreForkThreadLock::prepare() noexcept {
     if (mode == QFLM_ACQUIRE) {
         l.lock();

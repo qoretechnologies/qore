@@ -9166,6 +9166,77 @@ static QoreValue f_dbg_detach_async_io_socket(const QoreListNode* params, Runtim
     return QoreValue();
 }
 
+//! Debug-only: creates a child process with fork() while another thread holds the lock of a registered fork handler
+/** The other thread takes the lock as the handler's prepare handler does, and releases it when the prepare handlers
+    reach the handler, so fork() waits for it.  The child takes and releases the lock in the same way, runs the code
+    given, if any, and exits with the value it returns (99 if it raised an exception).  DEBUG builds only.
+
+    @return a hash: \c status: the exit status of the child (-1 if it did not exit normally), \c waited: True if
+    fork() waited for the thread holding the lock
+
+    @throw DBG-FORK-ERROR no fork handler with the given name is registered, or fork() failed
+*/
+static QoreValue f_dbg_fork_while_handler_held(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    QoreStringNodeValueHelper name(get_param_value(params, 0));
+    const ResolvedCallReferenceNode* child_code = get_param_value(params, 1).get<const ResolvedCallReferenceNode>();
+    QoreForkHandler* h = qore_fork_find_handler(name->c_str());
+    if (!h) {
+        xsink->raiseException("DBG-FORK-ERROR", "no fork handler named '%s' is registered", name->c_str());
+        return QoreValue();
+    }
+    ForkHoldTest t;
+    t.target = h->getName();
+    std::thread holder([&t, h]() {
+        // takes the lock as the prepare handler does
+        h->prepare();
+        std::unique_lock<std::mutex> ul(t.m);
+        t.held = true;
+        t.cv.notify_all();
+        t.cv.wait(ul, [&t] { return t.release; });
+        ul.unlock();
+        h->parent();
+    });
+    {
+        std::unique_lock<std::mutex> ul(t.m);
+        t.cv.wait(ul, [&t] { return t.held; });
+    }
+    fork_hold_test = &t;
+    qore_fork_prepare_hook = fork_hold_hook;
+    pid_t pid = fork();
+    if (!pid) {
+        // only this thread exists: the lock must be free
+        h->prepare();
+        h->parent();
+        int status = 0;
+        if (child_code) {
+            ExceptionSink child_xsink;
+            ValueHolder rv(child_code->execValue(nullptr, &child_xsink), &child_xsink);
+            status = child_xsink ? 99 : static_cast<int>(rv->getAsBigInt());
+            child_xsink.clear();
+        }
+        _exit(status);
+    }
+    int fork_errno = errno;
+    qore_fork_prepare_hook = nullptr;
+    fork_hold_test = nullptr;
+    {
+        // releases the holder if fork() failed before the hook ran
+        std::lock_guard<std::mutex> lg(t.m);
+        t.release = true;
+        t.cv.notify_all();
+    }
+    holder.join();
+    if (pid < 0) {
+        xsink->raiseErrnoException("DBG-FORK-ERROR", fork_errno, "fork() failed");
+        return QoreValue();
+    }
+    int status = ut_wait_child(pid);
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
+    rv->setKeyValue("status", status, xsink);
+    rv->setKeyValue("waited", t.hook_saw_held, xsink);
+    return rv.release();
+}
+
 //! Debug-only: release the socket private data detached by dbg_detach_async_io_socket(), closing its fd.
 /** A test arms dbg_detach_async_io_socket() to reproduce the abrupt-drop state and calls this once the controller
     has evicted the operation, so the held fd and its buffers are freed (otherwise the detached socket is kept
@@ -10665,6 +10736,9 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_object_set_value", f_dbg_object_set_value, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         nothingTypeInfo, 4, listTypeInfo, QORE_PARAM_NO_ARG, "holder", stringTypeInfo, QORE_PARAM_NO_ARG, "member",
         stringTypeInfo, QORE_PARAM_NO_ARG, "key", autoTypeInfo, QORE_PARAM_NO_ARG, "val");
+    qns.addBuiltinVariant("dbg_fork_while_handler_held", f_dbg_fork_while_handler_held, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, hashTypeInfo, 2, stringTypeInfo, QORE_PARAM_NO_ARG, "name", codeOrNothingTypeInfo,
+        QORE_PARAM_NO_ARG, "child");
     qns.addBuiltinVariant("dbg_ref_set_unique_remove_key", f_dbg_ref_set_unique_remove_key, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, autoTypeInfo, 4, referenceTypeInfo, QORE_PARAM_NO_ARG, "ref", stringTypeInfo,
         QORE_PARAM_NO_ARG, "set_key", autoTypeInfo, QORE_PARAM_NO_ARG, "val", stringTypeInfo, QORE_PARAM_NO_ARG,

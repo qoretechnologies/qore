@@ -35,11 +35,32 @@
 SimpleRefHolder<DateTimeNode> QoreLoggerEvent::startTime;
 Sequence QoreLoggerEvent::sequence(1);
 QoreThreadLock QoreLoggerEvent::m;
+QoreForkHandlerRegistration* QoreLoggerEvent::sequence_fork_reg = nullptr;
+QoreForkHandlerRegistration* QoreLoggerEvent::m_fork_reg = nullptr;
 
-void QoreLoggerEvent::init() {
+void QoreLoggerEvent::init(ExceptionSink* xsink) {
     int us;
     int64 seconds = q_epoch_us(us);
     startTime = DateTimeNode::makeAbsolute(currentTZ(), seconds, us);
+
+    // the events can be created in a child process created with fork(); the holders of both locks only allocate
+    // and free memory
+    assert(!sequence_fork_reg && !m_fork_reg);
+    sequence_fork_reg = qore_register_fork_handler(QFR_MODULE_LEAF, "logger_event_sequence",
+        qore_fork_prepare_thread_lock, qore_fork_parent_thread_lock, qore_fork_child_thread_lock,
+        static_cast<QoreThreadLock*>(&sequence));
+    m_fork_reg = qore_register_fork_handler(QFR_MODULE_LEAF, "logger_event_start_time", qore_fork_prepare_thread_lock,
+        qore_fork_parent_thread_lock, qore_fork_child_thread_lock, &m);
+    if (!sequence_fork_reg || !m_fork_reg) {
+        xsink->outOfMemory();
+    }
+}
+
+void QoreLoggerEvent::del() {
+    qore_unregister_fork_handler(m_fork_reg);
+    m_fork_reg = nullptr;
+    qore_unregister_fork_handler(sequence_fork_reg);
+    sequence_fork_reg = nullptr;
 }
 
 //! Returns the full qualified classname

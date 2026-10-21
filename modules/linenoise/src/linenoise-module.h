@@ -38,8 +38,33 @@ extern "C" {
 // Module namespace
 extern QoreNamespace LinenoiseNS;
 
-// Thread lock for module state
+// Thread lock for module state; take it only with LinenoiseLockHelper
 extern QoreRecursiveThreadLock lock;
+
+//! how many times the current thread holds the module lock
+extern thread_local int linenoise_lock_depth;
+
+//! holds the module lock and counts the holds of the current thread
+/** The lock is held while a thread waits for terminal input and while user callbacks run, which can call fork(); a
+    child process created with fork() takes it again as often as the forking thread held it (see
+    linenoise_module_init())
+*/
+class LinenoiseLockHelper {
+public:
+    DLLLOCAL LinenoiseLockHelper() {
+        lock.lock();
+        ++linenoise_lock_depth;
+    }
+
+    DLLLOCAL ~LinenoiseLockHelper() {
+        --linenoise_lock_depth;
+        assert(linenoise_lock_depth >= 0);
+        lock.unlock();
+    }
+
+    LinenoiseLockHelper(const LinenoiseLockHelper&) = delete;
+    LinenoiseLockHelper& operator=(const LinenoiseLockHelper&) = delete;
+};
 
 // Callback references
 extern ResolvedCallReferenceNode* callbackNode;

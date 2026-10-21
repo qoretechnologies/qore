@@ -47,6 +47,7 @@ cannot deadlock with a thread that keeps to the order.
 | 0 | the handler registry | (held by the handlers) | — |
 | 40 | AOT lazy constant initialization lock | RESET | anything (runs compiled initializers) |
 | 50 | module manager (`QMM.mutex`) | RESET | anything (held across `dlopen()`) |
+| 60 | module locks held across user code or input (`QFR_MODULE_RESET`: linenoise) | RESET | anything |
 | 100 | signal manager (`QSM.mutex`, with `QSM.tcount`) | ACQUIRE | thread list, signal thread counter |
 | 150 | JIT compile lock (`QoreJIT::compile_mutex`) | TRY | JIT caches, JIT queue, type caches, environment |
 | 200 | async I/O controller singleton | ACQUIRE | Program cleanup callbacks |
@@ -54,11 +55,12 @@ cannot deadlock with a thread that keeps to the order.
 | 310 | plugin registry | ACQUIRE | thread list (cancellation checks), environment |
 | 320 | time zone manager (`QTZM`) | ACQUIRE | thread list (cancellation checks) |
 | 400 | thread counters (`thread_counter`, `tp_thread_counter`) | ACQUIRE | thread list, condition waker (cancellable waits) |
+| 450 | module locks whose holders check for cancellation (`QFR_MODULE_CANCELLABLE`: the sshutil registry) | ACQUIRE | thread list, leaf locks |
 | 500 | thread list (`thread_list.lck`) | ACQUIRE | condition waker, stack lock |
 | 510 | condition waker (`cond_waker.lck`) | ACQUIRE | — |
 | 520 | stack lock (`stack_lck`) | ACQUIRE | — (only `pthread_create()`) |
 | 900 | AOT PC map attach lock (`g_aot_pc_attach_lock`) | ACQUIRE | AOT PC map lock, environment |
-| 1000 | leaf locks: caches and registries (among them the JIT caches and queue, the AOT PC map, the AOT pending constants and the AOT regex cache) | ACQUIRE | environment, debug output, allocation tracking |
+| 1000 | leaf locks: caches and registries (among them the JIT caches and queue, the AOT PC map, the AOT pending constants and the AOT regex cache), and the leaf locks of modules (`QFR_MODULE_LEAF`: the i18n locale data fallbacks, the logger_bin event start time and id sequence, the ml ONNX provider list) | ACQUIRE | environment, debug output, allocation tracking |
 | 1500 | environment (`SystemEnvironment`) | ACQUIRE | debug output, allocation tracking |
 | 1900 | debug output (`printd()`) | ACQUIRE | allocation tracking |
 | 1950 | allocation tracking (only with `ENABLE_ALLOC_TRACKING`) | ACQUIRE | — |
@@ -90,6 +92,21 @@ which the stripes alone would reach, so TSan builds only initialize them again i
 - A recursive lock must not be created during static initialization: the recursive mutex attributes are only
   initialized by `qore_init()`, and a `QoreRecursiveThreadLock` created before is not recursive. Locks that a handler
   needs before their first use are created in `qore_init()` (`qore_aot_runtime_init_once()`).
+
+### Module locks
+
+Modules register fork handlers for their process-wide locks with the exported `qore_register_fork_handler()`
+(`include/qore/QoreForkHandler.h`, documented in the module guide) at a rank of `QoreForkRank`, in their
+initialization function, and remove them in their delete function. The rank comes from what the lock's holders do:
+the i18n, logger_bin and ml locks only protect containers (leaves); the holders of the sshutil registry lock check
+for cancellation, which takes the thread list lock, and nothing is held when it is taken (450, between the thread
+counters and the thread list); the linenoise lock is held while a thread waits for terminal input and while user
+callbacks run, so it is only reset in the child, which takes it again as often as the forking thread held it
+(counted per thread by `LinenoiseLockHelper`), since a callback can call `fork()`.
+
+`pthread_atfork()` in each module would not keep the order: modules register after the library, so their prepare
+handlers would run before all of the library's, and their handlers cannot be removed when a module is unloaded on
+musl or macOS.
 
 ## One-time initialization
 
@@ -148,7 +165,6 @@ Besides the locks:
 - Locks of third-party libraries (OpenSSL, LLVM, PCRE2, c-ares) and of the C++ runtime (the guard of a function-local
   static that another thread was initializing, for the statics that do not read the environment, and the per-object
   once flags of IR lowering).
-- Process-wide locks of modules (for example the locks of the in-tree `i18n`, `logger_bin` and `sshutil` modules): a
-  module that keeps such a lock needs its own `pthread_atfork()` handlers.
+- Process-wide locks of modules that do not register fork handlers (the in-tree modules do; see "Module locks").
 - A child should still execute a command or exit soon after `fork()` in a multithreaded program, as the
   documentation of `fork()` says.

@@ -1,0 +1,60 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# A child process created with fork() in a completion callback, which runs with the module lock held, can use the
+# module: the child initializes the lock again and takes it as often as the forking thread held it.  Without the
+# module's fork handler, the child got the lock owned by the thread of the parent and its first history call waited
+# forever (the test runner's time limit is only a guard).
+#
+# The callback only runs when the line is read from a terminal, so the scenario runs in a terminal that script(1)
+# creates: util-linux (or BusyBox) script on Linux, BSD script on macOS and the BSDs.  Without script(1), the test is
+# skipped.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+
+%requires QUnit
+%requires Util
+
+%exec-class LinenoiseForkTest
+
+class LinenoiseForkTest inherits QUnit::Test {
+    constructor() : QUnit::Test("linenoise fork in a callback", "1.0", \ARGV) {
+        addTestCase("fork() in a completion callback", \testForkInCompletionCallback());
+        set_return_value(main());
+    }
+
+    testForkInCompletionCallback() {
+        if (!Option::HAVE_FORK) {
+            testSkip("fork() is not available");
+        }
+        if (system("command -v script > /dev/null 2>&1")) {
+            testSkip("script(1) is not available to run the scenario in a terminal");
+        }
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string scenario = get_script_dir() + DirSep + "ForkInCallbackScenario.qr";
+        string result_path = tmp_location() + DirSep + sprintf("linenoise-fork-%d.txt", getpid());
+        on_exit unlink(result_path);
+        unlink(result_path);
+
+        string inner = sprintf("TERM=xterm %s %s %s", shell_quote(qore_bin), shell_quote(scenario),
+            shell_quote(result_path));
+        # the util-linux and BusyBox script take the command with -c; BSD script takes it as its last arguments
+        string cmd = PlatformOS == "Linux"
+            ? sprintf("script -q -c %s /dev/null", shell_quote(inner))
+            : sprintf("script -q /dev/null sh -c %s", shell_quote(inner));
+        int rc;
+        string out = backquote(sprintf("printf 'ab\\t\\n' | %s 2>&1", cmd), \rc);
+        on_error printf("script output (rc %d):\n%s\n", rc, out);
+        assertTrue(is_file(result_path), "the scenario ran in the terminal");
+        assertEq("line=abc child=0\n", ReadOnlyFile::readTextFile(result_path),
+            "the completion callback forked, and the child used the history functions");
+    }
+
+    #! returns the string quoted for the shell
+    private static string shell_quote(string str) {
+        return "'" + replace(str, "'", "'\\''") + "'";
+    }
+}

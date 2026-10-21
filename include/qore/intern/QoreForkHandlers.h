@@ -62,7 +62,10 @@
     that keeps to this order.  Locks of the same rank are never held together.
 
     A thread must not call fork() while holding a registered lock that is acquired before fork() (it would wait for
-    itself); the environment lock is the exception, see SystemEnvironment.
+    itself), nor while holding the environment lock (see SystemEnvironment).
+
+    Modules register fork handlers for their own process-wide locks with qore_register_fork_handler() (see
+    QoreForkHandler.h), at the ranks of QoreForkRank.
 */
 
 //! the ranks of the process-wide locks: the order in which the fork handlers acquire them
@@ -78,6 +81,8 @@ enum QoreForkLockRank : int {
     QFLR_AOT_LAZY_CONSTANT = 40,
     //! the module manager (QMM): held across dlopen() and module registration; reset only (never acquired)
     QFLR_MODULE_MANAGER = 50,
+    //! module locks held while user code runs or while a thread waits for input (QFR_MODULE_RESET): reset only
+    QFLR_MODULE_RESET = 60,
     //! the signal manager (QSM.mutex): starting the signal thread takes the thread list and the signal thread counter
     QFLR_SIGNAL_MANAGER = 100,
     //! the signal manager's thread counter (QSM.tcount)
@@ -95,6 +100,8 @@ enum QoreForkLockRank : int {
     QFLR_TIME_ZONES = 320,
     //! the process-wide thread counters (thread_counter, tp_thread_counter): waits check for cancellation
     QFLR_THREAD_COUNTERS = 400,
+    //! module locks whose holders check for cancellation (QFR_MODULE_CANCELLABLE): take the thread list
+    QFLR_MODULE_CANCELLABLE = 450,
     //! the thread list (thread_list.lck): taken when threads start and exit; takes the condition waker lock and the
     //! stack lock
     QFLR_THREAD_LIST = 500,
@@ -104,7 +111,8 @@ enum QoreForkLockRank : int {
     QFLR_STACK = 520,
     //! the AOT PC map attach lock: takes the AOT PC map lock
     QFLR_AOT_PC_ATTACH = 900,
-    //! leaf locks: caches and registries whose critical sections take no other registered lock (but the ones below)
+    //! leaf locks: caches and registries whose critical sections take no other registered lock (but the ones below),
+    //! also the leaf locks of modules (QFR_MODULE_LEAF)
     QFLR_LEAF = 1000,
     //! the process environment (SystemEnvironment): its holders take no other registered lock (but the ones below)
     QFLR_ENVIRONMENT = 1500,

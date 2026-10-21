@@ -986,6 +986,22 @@ public:
 
 #endif // HAVE_ONNXRUNTIME
 
+#ifdef HAVE_ONNXRUNTIME
+//! registers the fork handlers of the ONNX support's process-wide locks; returns -1 if an exception was raised
+DLLLOCAL int qore_ml_onnx_register_fork_handlers(ExceptionSink* xsink);
+
+//! removes the fork handlers of the ONNX support's process-wide locks
+DLLLOCAL void qore_ml_onnx_unregister_fork_handlers();
+#else
+//! without ONNX Runtime support, there are no process-wide locks
+static inline int qore_ml_onnx_register_fork_handlers(ExceptionSink*) {
+    return 0;
+}
+
+static inline void qore_ml_onnx_unregister_fork_handlers() {
+}
+#endif
+
 DLLLOCAL QoreObject* qore_ml_onnx_run_options_to_object(QoreOnnxRunOptions* options,
     QoreProgram* pgm, ExceptionSink* xsink);
 DLLLOCAL QoreObject* qore_ml_onnx_io_binding_to_object(QoreOnnxIoBinding* binding,

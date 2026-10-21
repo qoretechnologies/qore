@@ -268,6 +268,9 @@ const TypedHashDecl* hashdeclMLCapabilities;
 DLLLOCAL void init_ml_functions(QoreNamespace& ns);
 
 static void ml_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
+    if (qore_ml_onnx_register_fork_handlers(&xsink)) {
+        return;
+    }
     // Pre-initialize all classes first (creates class objects without methods)
     preinitAbstractMLModelClass();
     preinitAbstractMLEstimatorClass();
@@ -554,6 +557,7 @@ static void ml_module_ns_init(QoreNamespace* rns, QoreNamespace* qns, ExceptionS
 }
 
 static void ml_module_delete() {
+    qore_ml_onnx_unregister_fork_handlers();
     ExceptionSink xsink;
     MLNS.clear(&xsink);
 }

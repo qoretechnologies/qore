@@ -98,6 +98,7 @@ static void sshutil_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink
     SshUtilNS.addSystemClass(initSshUtilRegistryClass(SshUtilNS));
 
     qore_register_program_cleanup_callback(sshutil_program_cleanup);
+    SshUtilRegistry::registerForkHandler(&xsink);
 }
 
 static void sshutil_module_ns_init(QoreNamespace* rns, QoreNamespace* qns, ExceptionSink& xsink) {
@@ -110,6 +111,7 @@ static void sshutil_program_cleanup(QoreProgram* pgm) {
 }
 
 static void sshutil_module_delete() {
+    SshUtilRegistry::unregisterForkHandler();
     qore_deregister_program_cleanup_callback(sshutil_program_cleanup);
     ExceptionSink xsink;
     SshUtilRegistry::clear(&xsink);

@@ -1,0 +1,59 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# A child process created with fork() while another thread holds a process-wide lock of the logger_bin module (the
+# event start time lock or the event id sequence) can use it: the module registers fork handlers for both.  Without
+# them, the child got the lock held by a thread that does not exist in it and waited forever for it (the test
+# runner's time limit is only a guard).
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+
+%requires QUnit
+%requires logger_bin
+
+%exec-class LoggerBinForkTest
+
+class LoggerBinForkTest inherits QUnit::Test {
+    constructor() : QUnit::Test("logger_bin fork", "1.0", \ARGV) {
+        addTestCase("fork() while another thread holds the event start time lock", \testStartTimeLock());
+        addTestCase("fork() while another thread holds the event id sequence", \testSequence());
+        set_return_value(main());
+    }
+
+    testStartTimeLock() {
+        if (skip()) {
+            return;
+        }
+        # the child takes the lock as the module does
+        hash<auto> r = call_function("dbg_fork_while_handler_held", "logger_event_start_time", int sub () {
+            return Logger::LoggerEvent::getStartTime() ? 0 : 1;
+        });
+        assertTrue(r.waited, "fork() waited for the thread holding the lock");
+        assertEq(0, r.status, "the child read the start time");
+    }
+
+    testSequence() {
+        if (skip()) {
+            return;
+        }
+        # the child takes the sequence's lock as the fork handler does
+        hash<auto> r = call_function("dbg_fork_while_handler_held", "logger_event_sequence");
+        assertTrue(r.waited, "fork() waited for the thread holding the sequence");
+        assertEq(0, r.status, "the child took the sequence's lock");
+    }
+
+    private bool skip() {
+        if (!Option::HAVE_FORK) {
+            testSkip("fork() is not available");
+            return True;
+        }
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the test needs a debug build of the library");
+            return True;
+        }
+        return False;
+    }
+}

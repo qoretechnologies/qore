@@ -105,6 +105,7 @@ DLLEXPORT extern QoreCounter tp_thread_counter;
 #include <qore/QoreReflection.h>
 #include <qore/ScopeGuard.h>
 #include <qore/SystemEnvironment.h>
+#include <qore/QoreForkHandler.h>
 #include <qore/AutoVLock.h>
 #include <qore/CallReferenceNode.h>
 #include <qore/ReferenceNode.h>

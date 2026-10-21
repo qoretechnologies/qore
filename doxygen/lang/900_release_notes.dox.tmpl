@@ -5052,7 +5052,10 @@ while (*binary chunk = input.read(65536)) {
       code, code is not compiled to native code and runs in the IR tier.  Objects that another thread was using at
       the moment of the fork, such as a locked mutex, still cannot be used in the child.  Native code must not hold
       the environment lock (\c QoreEnvironmentReadLock, \c AtomicEnvironmentSetter) while it calls \c fork(); the
-      child gets a consistent copy of the environment without it
+      child gets a consistent copy of the environment without it.  Binary modules can register fork handlers for
+      their own process-wide locks with the new C++ API function \c qore_register_fork_handler(); the \c i18n,
+      \c linenoise, \c logger_bin, \c ml and \c sshutil modules do, so that a child process can use them, also
+      a child created in a completion callback of \c linenoise
     - Fixed a deadlock when the thread initialization code of a Program (see
       @ref Qore::set_thread_init() "set_thread_init()") started a thread or read the call stacks of all threads
     - Fixed the warnings of the files of a separated user module other than its \c .qm file: each was parsed with the

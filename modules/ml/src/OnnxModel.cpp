@@ -50,6 +50,7 @@
 #include <limits>
 #include <memory>
 #include <mutex>
+#include <new>
 #include <unordered_set>
 
 // Hashdecl extern declarations
@@ -58,6 +59,8 @@ namespace {
 
 std::mutex auto_provider_mutex;
 std::unordered_set<std::string> unusable_auto_providers;
+//! the fork handler of auto_provider_mutex, a leaf lock (see QoreForkHandler.h)
+QoreForkHandlerRegistration* auto_provider_fork_reg = nullptr;
 using SteadyClock = std::chrono::steady_clock;
 
 bool isAutoProviderDisabled(const std::string& provider) {
@@ -6269,6 +6272,33 @@ QoreListNode* QoreOnnxSessionPool::getOutputInfo(ExceptionSink* xsink) {
         return nullptr;
     }
     return sessions[lease->index]->getOutputInfo(xsink);
+}
+
+int qore_ml_onnx_register_fork_handlers(ExceptionSink* xsink) {
+    assert(!auto_provider_fork_reg);
+    // the provider list can be used in a child process created with fork(); its lock's holders only allocate memory
+    auto_provider_fork_reg = qore_register_fork_handler(QFR_MODULE_LEAF, "ml_onnx_auto_providers",
+        [](void*) {
+            auto_provider_mutex.lock();
+        },
+        [](void*) {
+            auto_provider_mutex.unlock();
+        },
+        [](void*) {
+            // held by the forking thread since the prepare handler; a std::mutex held by a thread of the parent
+            // cannot be unlocked in the child, so it is created again in place
+            new (&auto_provider_mutex) std::mutex();
+        }, nullptr);
+    if (!auto_provider_fork_reg) {
+        xsink->outOfMemory();
+        return -1;
+    }
+    return 0;
+}
+
+void qore_ml_onnx_unregister_fork_handlers() {
+    qore_unregister_fork_handler(auto_provider_fork_reg);
+    auto_provider_fork_reg = nullptr;
 }
 
 #endif // HAVE_ONNXRUNTIME

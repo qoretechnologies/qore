@@ -1,0 +1,28 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# Run by fork-in-callback.qtest in a terminal that script(1) creates, with "ab", a tab and a newline as its input:
+# the tab runs the completion callback, which holds the module lock while it creates a child process with fork();
+# the child uses the history functions, which take the module lock.  The result is written to the file given as the
+# only argument: the line read and the exit status of the child.
+
+%requires linenoise
+# provides cpp_api_fork_and_call()
+%requires cppapiuser
+
+string result_path = ARGV[0];
+int child_status = -2;
+
+Linenoise::set_callback(list<string> sub (string input) {
+    child_status = cpp_api_fork_and_call(int sub () {
+        Linenoise::history_add("added in the child");
+        return Linenoise::history_get_max_len() > 0 ? 0 : 1;
+    });
+    return ("abc",);
+});
+
+*string line = Linenoise::line("fork> ");
+File f();
+f.open2(result_path, O_CREAT | O_TRUNC | O_WRONLY);
+f.printf("line=%s child=%d\n", line ?? "<none>", child_status);
