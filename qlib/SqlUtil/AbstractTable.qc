@@ -6407,10 +6407,10 @@ string sql = table.getSelectSql(sh, \args);
         }
 
         if (cmd.withalias) {
-            # get escaped AS alias only when required (a reserved word)
+            # an alias is quoted when required, in the case given, as it names the key of the result
             switch (arg.typeCode()) {
-                case NT_STRING: arg = getColumnSqlName(arg); break;
-                case NT_HASH: arg.as = getColumnSqlName(arg.as); break;
+                case NT_STRING: arg = getAliasSqlName(arg); break;
+                case NT_HASH: arg.as = getAliasSqlName(arg.as); break;
             }
             return cmd.code(cve, arg, \info.pseudo_column_map);
         } else {
@@ -11956,6 +11956,24 @@ string sql = table.getAlignSqlString(table2);
     #! returns the column name for use in SQL strings; subclasses can return a special string in case the column name is a reserved word
     string getColumnSqlName(string col) {
         return col;
+    }
+
+    #! returns a column alias for SQL, as an identifier that names the result key exactly as given
+    /** An alias names a key of the result of a query, so it is returned as @ref getColumnSqlName() returns a column
+        name, except by a driver whose identifier rule changes the case of a quoted name (such as one that gives a
+        quoted name in upper case, as unquoted names are stored), which returns it quoted in the exact case given, so
+        that an alias that works with the database gives the same result key as before
+
+        @param alias the alias, as for @ref SqlUtil::cop_as() "cop_as()"
+
+        @return the alias as an SQL identifier
+
+        @throw IDENTIFIER-ERROR the alias cannot be an identifier on the database
+
+        @since SqlUtil 3.11.0
+    */
+    string getAliasSqlName(string alias) {
+        return getColumnSqlName(alias);
     }
 
     #! returns a list of column names for use in SQL strings; subclasses can process the argument list in case a column name is a reserved word

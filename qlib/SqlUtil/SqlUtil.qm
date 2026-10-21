@@ -5350,7 +5350,7 @@ int rows_updated = t.update(("counter": uop_divide(2)));
                 string exp = info.table.getExpressionArg(\info, role, args[0], AbstractDataProviderTypeMap."any");
                 string arg = args[1];
                 info.pseudo_column_map{arg} = exp;
-                return sprintf("%s as %s", exp, info.table.getColumnSqlName(arg));
+                return sprintf("%s as %s", exp, info.table.getAliasSqlName(arg));
             },
         },
         COP_PREPEND: {
