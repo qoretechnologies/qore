@@ -87,9 +87,94 @@ module XdbcFirebirdSqlUtilBase {
     without a size therefore use the widest int64-backed precision (\c 18) instead, and a scale must be given
     explicitly to store decimal values
 
+    @subsection xdbcfirebird_identifiers Identifiers
+
+    Names of tables, columns, indexes, constraints, sequences, views, triggers, savepoints and aliases are given to
+    Firebird as identifiers that can never change the SQL that they are part of (see @ref sql_identifiers):
+    - a name that Firebird reads as one unquoted identifier (an ASCII letter, then ASCII letters, digits, underscores
+      or dollar signs) is given as it is, and Firebird stores it in upper case, as before
+    - a reserved word is given in double quotes in the case given, as before
+    - any other name, such as one with spaces, non-ASCII letters, quotes or other punctuation, is given in upper case
+      in double quotes, with each double quote doubled, so that it names the object that an unquoted name of the same
+      letters would: SqlUtil looks up names in upper case on Firebird and gives the names that it reads from the
+      database in lower case, so a table created with a column \c "order date" has the column \c "ORDER DATE",
+      described as \c "order date"
+    - an alias (@ref SqlUtil::cop_as() "cop_as()") is given in double quotes in the case given, so the key of the
+      result is the alias, as before
+    - an empty name or a name with a NUL character cannot be an identifier and is refused with \c IDENTIFIER-ERROR
+
+    @par Example:
+    @code{.py}
+# create table orders (id bigint not null, "ORDER DATE" timestamp)
+string sql = table.getCreateTableSql();
+    @endcode
+
+    @subsection xdbcfirebird_fk_actions Foreign Constraint Referential Actions
+
+    Firebird supports the \c on_delete and \c on_update
+    @ref SqlUtil::AbstractTable::ForeignConstraintOptions "foreign constraint options" (see
+    @ref fk_actions) as follows:
+
+    <b>Firebird Referential Actions</b>
+    |!Action|!Firebird SQL|!Described as
+    |NOTHING or @ref SqlUtil::FK_NO_ACTION|no clause; the database default, which refuses the delete or update of a \
+      referenced row|NOTHING
+    |@ref SqlUtil::FK_CASCADE|<tt>on delete cascade</tt>, <tt>on update cascade</tt>|@ref SqlUtil::FK_CASCADE
+    |@ref SqlUtil::FK_SET_NULL|<tt>on delete set null</tt>, <tt>on update set null</tt>|@ref SqlUtil::FK_SET_NULL
+    |@ref SqlUtil::FK_SET_DEFAULT|<tt>on delete set default</tt>, <tt>on update set default</tt>|\
+      @ref SqlUtil::FK_SET_DEFAULT
+    |@ref SqlUtil::FK_RESTRICT|refused with \c FOREIGN-CONSTRAINT-ERROR: Firebird has no \c RESTRICT clause, and \
+      its default already refuses the delete or update of a referenced row|-
+
+    Firebird records \c RESTRICT in its catalog for an action that is not given and \c NO \c ACTION for an action
+    given as \c NO \c ACTION; both are described as NOTHING, the database default, so that a foreign constraint
+    created without an action is equal to a template foreign constraint without an action, and schema alignment
+    proposes no SQL for it.
+
+    @par Example:
+    @code{.py}
+# alter table order_lines add constraint fk_order_lines_order foreign key (order_id) references orders (id)
+#   on delete cascade
+string sql;
+table.addForeignConstraint("fk_order_lines_order", "order_id", "orders", "id", {"on_delete": FK_CASCADE}, \sql);
+    @endcode
+
+    @subsection xdbcfirebird_sequences Sequences
+
+    A Firebird sequence has a starting value and an increment, which Firebird keeps from Firebird 3 on, and no
+    minimum, maximum, cycle option or cache:
+    - a sequence is created with <tt>start with</tt> and <tt>increment by</tt> when they are not the defaults (1)
+    - schema alignment changes the increment of an existing sequence with <tt>alter sequence ... increment by</tt>,
+      which keeps its current value; the starting value of an existing sequence is never changed, as that would
+      restart it
+    - a sequence description with a minimum, a maximum (\c max or \c end), the cycle option or a cache is refused
+      with \c SEQUENCE-ERROR when the sequence is created or aligned; a cache of \c 0 and the cycle option
+      @ref False "False" are as Firebird sequences are, and are accepted
+
+    @note the first value of a sequence created with a starting value is the starting value from Firebird 4 on, and
+    the starting value plus the increment on Firebird 3
+
     @section xdbcfirebird_relnotes Release Notes
 
     @subsection xdbcfirebirdsqlutilbasev_0_2 XdbcFirebirdSqlUtilBase Module v0.2
+    - added support for the \c on_delete and \c on_update referential actions of foreign constraints (see
+      @ref xdbcfirebird_fk_actions)
+    - fixed describing the foreign constraints of a table: none were described, so schema alignment added the
+      foreign constraints of a template to a table that had them already; they are now described from the database,
+      with their referential actions
+    - fixed creating a sequence with the starting value and the increment of its description, which were not given,
+      so every sequence was created with the defaults; schema alignment now changes the increment of an existing
+      sequence, keeping its current value, and a description with a minimum, a maximum, the cycle option or a cache,
+      which Firebird sequences do not have, is refused with \c SEQUENCE-ERROR (see @ref xdbcfirebird_sequences)
+    - fixed listing the sequences of the database, which gave none
+    - fixed SQL injection through names: the names of tables, columns, indexes, constraints, sequences, views,
+      triggers and savepoints, and aliases, were given in SQL as they are, so a name with a double quote, a semicolon
+      or other punctuation, as a name from a file or a data provider can have, could change the SQL statement; a name
+      that is not an ordinary identifier is now quoted and escaped, an ordinary name or a reserved word is given as
+      before, and a name that cannot be an identifier is refused with \c IDENTIFIER-ERROR (see
+      @ref xdbcfirebird_identifiers)
+    - fixed a unique constraint naming its columns as they are, so that a column whose name is a reserved word was
+      not quoted
     - fixed renaming an index, as table alignment does for an index with the definition of the template's index
       under another name: the SQL that dropped the index and created it under the new name was two statements in one
       string; Firebird cannot rename an index, so such an index is now taken for the template's index and kept under
@@ -109,6 +194,19 @@ module XdbcFirebirdSqlUtilBase {
     @subsection xdbcfirebirdsqlutilbasev_0_1 XdbcFirebirdSqlUtilBase Module v0.1
     - initial release
 */
+
+# returns a name as an SQL identifier for Firebird: as given if Firebird reads it as one unquoted identifier (an ASCII
+# letter, then ASCII letters, digits, underscores or dollar signs), so that Firebird folds it to upper case as for any
+# unquoted name, as before; a reserved word in double quotes in the case given, as before; any other name in upper
+# case in double quotes, with each double quote doubled, so that it names the object that an unquoted name of the same
+# letters would, as SqlUtil looks names up in upper case on Firebird, and can never change the SQL that it is part of;
+# the jni and odbc drivers read no placeholder, comment or escape in double-quoted text
+string sub firebird_get_sql_identifier(string name) {
+    if (name =~ /\A[A-Za-z][A-Za-z0-9_$]*\z/) {
+        return XdbcFirebirdDatabase::XdbcFirebirdReservedWords{name.lwr()} ? ("\"" + name + "\"") : name;
+    }
+    return AbstractSqlUtilBase::getDelimitedIdentifier(name.upr(), "\"", "\"", "Firebird");
+}
 
 #! the XdbcFirebirdSqlUtilBase namespace contains all the objects in the XdbcFirebirdSqlUtilBase module
 public namespace XdbcFirebirdSqlUtilBase {
@@ -130,17 +228,17 @@ public namespace XdbcFirebirdSqlUtilBase {
 
         #! Creates the savepoint
         private createSavepointImpl() {
-            ds.exec("savepoint " + savepoint);
+            ds.exec("savepoint " + firebird_get_sql_identifier(savepoint));
         }
 
         #! Rolls back to the savepoint
         private rollbackImpl() {
-            ds.exec("rollback to " + savepoint);
+            ds.exec("rollback to " + firebird_get_sql_identifier(savepoint));
         }
 
         #! Deletes the savepoint
         private deleteSavepointImpl() {
-            ds.exec("release savepoint " + savepoint);
+            ds.exec("release savepoint " + firebird_get_sql_identifier(savepoint));
         }
     }
 
@@ -152,8 +250,9 @@ public namespace XdbcFirebirdSqlUtilBase {
 
         #! returns a string that can be used to create the index in the database
         string getCreateSql(string table_name, *hash<auto> opt) {
-            return sprintf("create %sindex %s on %s (%s)", unique ? "unique " : "", name, table_name,
-                (foldl $1 + ", " + $2, columns.getSqlColumnNameIterator()));
+            # an index "column" that is not a column of the table is an SQL expression (see AbstractTable::addIndex())
+            return sprintf("create %sindex %s on %s (%s)", unique ? "unique " : "", firebird_get_sql_identifier(name),
+                table_name, (foldl $1 + ", " + $2, columns.getSqlColumnNameIterator()));
         }
 
         #! returns @ref True "True" if the argument is equal to the current index, @ref False "False" if not
@@ -182,13 +281,66 @@ public namespace XdbcFirebirdSqlUtilBase {
 
         #! returns a string that can be used to drop the index from the table, by its name in the database
         string getDropSql(string table_name) {
-            return sprintf("drop index %s", getDbName());
+            return sprintf("drop index %s", firebird_get_sql_identifier(getDbName()));
         }
     }
 
     #! represents a Firebird-specific foreign constraint
     public class XdbcFirebirdForeignConstraint inherits SqlUtil::AbstractForeignConstraint {
-        constructor(string n, Columns c, ForeignConstraintTarget t) : AbstractForeignConstraint(n, c, t) {
+        #! creates the constraint from the arguments
+        /** @param n the name of the constraint
+            @param c the columns of the constraint
+            @param t the target table and columns
+            @param on_delete the \c ON \c DELETE referential action (see @ref xdbcfirebird_fk_actions), or NOTHING for
+                the database default
+            @param on_update the \c ON \c UPDATE referential action (see @ref xdbcfirebird_fk_actions), or NOTHING for
+                the database default
+
+            @throw FOREIGN-CONSTRAINT-ERROR an invalid referential action, or @ref SqlUtil::FK_RESTRICT, which
+            Firebird does not support
+
+            @note \a on_delete and \a on_update are available since XdbcFirebirdSqlUtilBase 0.2
+        */
+        constructor(string n, Columns c, ForeignConstraintTarget t, *string on_delete, *string on_update)
+                : AbstractForeignConstraint(n, c, t, False, False, on_delete, on_update) {
+            checkActions();
+        }
+
+        #! maps an \c rdb$delete_rule or \c rdb$update_rule value of \c rdb$ref_constraints to a referential action
+        /** Firebird records \c RESTRICT for a foreign constraint created without an action and \c NO \c ACTION for
+            one created with \c NO \c ACTION; both are the database default, which checks the constraint immediately,
+            and are described as NOTHING, so that a foreign constraint of a template without an action is equal to
+            the foreign constraint in the database (see @ref xdbcfirebird_fk_actions)
+
+            @param rule the value of \c rdb$delete_rule or \c rdb$update_rule
+
+            @return the referential action (see @ref fk_actions), or NOTHING for the database
+            default
+
+            @throw FOREIGN-CONSTRAINT-ERROR the value is not a referential action
+
+            @since XdbcFirebirdSqlUtilBase 0.2
+        */
+        static *string actionFromCatalog(*string rule) {
+            if (!rule.val()) {
+                return;
+            }
+            string action = trim(rule);
+            if (action.upr() == FK_RESTRICT) {
+                return;
+            }
+            return normalize_fk_action(action, "rdb$ref_constraints rule");
+        }
+
+        # Firebird has no RESTRICT clause: its default already refuses the delete or update of a referenced row
+        private checkActions() {
+            foreach hash<auto> i in ({"on_delete": on_delete, "on_update": on_update}.pairIterator()) {
+                if (i.value == FK_RESTRICT) {
+                    throw "FOREIGN-CONSTRAINT-ERROR", sprintf("foreign constraint %y: Firebird does not support the %s "
+                        "referential action %y; leave the action out for the database default, which refuses the "
+                        "%s of a referenced row", name, i.key, FK_RESTRICT, i.key == "on_delete" ? "delete" : "update");
+                }
+            }
         }
 
         string getCreateSql(string table_name, *hash<auto> opt) {
@@ -217,15 +369,23 @@ public namespace XdbcFirebirdSqlUtilBase {
             return sprintf("alter table %s ", table_name) + getAddSql(name, table_name, opt);
         }
 
+        #! returns the \c ADD \c CONSTRAINT clause that adds the constraint, with its referential actions
+        /** @throw FOREIGN-CONSTRAINT-ERROR a referential action is @ref SqlUtil::FK_RESTRICT, which Firebird does not
+            support
+
+            @note the referential actions are added since XdbcFirebirdSqlUtilBase 0.2
+        */
         string getAddSql(string name, string table_name, *hash<auto> opt) {
-            return sprintf("add constraint %s foreign key (%s) references %s (%s)", name,
-                (foldl $1 + ", " + $2, getSqlColumnNameIterator()), target.table,
-                (foldl $1 + ", " + $2, target.columns.getSqlColumnNameIterator()));
+            # the actions are public members, so they are checked again here
+            checkActions();
+            return sprintf("add constraint %s foreign key (%s) references %s (%s)%s", firebird_get_sql_identifier(name),
+                (foldl $1 + ", " + $2, getSqlColumnNameIterator()), firebird_get_sql_identifier(target.table),
+                (foldl $1 + ", " + $2, target.columns.getSqlColumnNameIterator()), getActionsSql());
         }
 
         #! returns a string that can be used to drop the foreign constraint from the database
         string getDropSql(string table_name) {
-            return sprintf("alter table %s drop constraint %s", table_name, name);
+            return sprintf("alter table %s drop constraint %s", table_name, firebird_get_sql_identifier(name));
         }
     }
 
@@ -306,11 +466,14 @@ string str = col.getRenameSql(t, "new_name");
             return sprintf("alter table %s drop %s", table_name, ddl_name);
         }
 
-        #! returns the column name with quoting in case the column name is a reserved word
+        #! returns the column name for DDL, as XdbcFirebirdTable::getSqlIdentifier() returns it
         /** the name returned here will be used when executing DDL
+
+            @since XdbcFirebirdSqlUtilBase 0.2 a name that is not an ordinary name is quoted in upper case and escaped;
+            before, only a reserved word was quoted
         */
         string getDdlName(string name) {
-            return XdbcFirebirdDatabase::XdbcFirebirdReservedWords{name.lwr()} ? ("\"" + name + "\"") : name;
+            return firebird_get_sql_identifier(name);
         }
 
         #! returns @ref True "True" if the argument is equal to the current object, @ref False "False" if not
@@ -372,13 +535,15 @@ auto v = c.name;
 
         #! returns a string that can be used to create the constraint in the database
         string getCreateSql(string name, string table_name, *hash opt) {
-            return sprintf("alter table %s add constraint %s unique (%s)", table_name, name,
-                (foldl $1 + ", " + $2, h.keys()));
+            # the columns are given by their SQL names; the names of the columns were given as they are, so a reserved
+            # word in a unique constraint was not quoted
+            return sprintf("alter table %s add constraint %s unique (%s)", table_name,
+                firebird_get_sql_identifier(name), (foldl $1 + ", " + $2, getSqlColumnNameIterator()));
         }
 
         #! returns a string that can be used to drop the constraint from the database
         string getDropSql(string table_name) {
-            return sprintf("alter table %s drop constraint %s", table_name, name);
+            return sprintf("alter table %s drop constraint %s", table_name, firebird_get_sql_identifier(name));
         }
 
         #! returns the SQL that disables and re-enables the foreign constraints that reference the constraint
@@ -457,12 +622,12 @@ auto v = c.name;
 
         #! returns a string that can be used to create the trigger in the database
         softlist getCreateSql(string table_name, *hash<auto> opt) {
-            return sprintf("create trigger %s %s", name, src);
+            return sprintf("create trigger %s %s", firebird_get_sql_identifier(name), src);
         }
 
         #! returns a string that can be used to drop the trigger from the database
         softlist getDropSql(string table_name) {
-            return sprintf("drop trigger %s", name);
+            return sprintf("drop trigger %s", firebird_get_sql_identifier(name));
         }
 
         #! returns @ref True "True" if the argument is equal to the current object, @ref False "False" if not
@@ -480,20 +645,137 @@ auto v = c.name;
             @return the SQL statements that drop the trigger and create it under the new name
         */
         softlist getRenameSql(string table_name, string new_name) {
-            return (getDropSql(table_name)[0], sprintf("create trigger %s %s", new_name, src));
+            return (getDropSql(table_name)[0], sprintf("create trigger %s %s", firebird_get_sql_identifier(new_name),
+                src));
         }
     }
 
     #! class for XDBC Firebird sequences
+    /** A Firebird sequence has a starting value and an increment, and no minimum, maximum, cycle option or cache
+        (see @ref xdbcfirebird_sequences)
+    */
     public class XdbcFirebirdSequence inherits SqlUtil::AbstractSequence {
+        private {
+            # the parameters of the description that Firebird sequences do not have, refused by getCreateSql()
+            list<string> unsupported = ();
+        }
+
         #! creates the object from the arguments
+        /** @param n_name the name of the sequence
+            @param n_start the starting value
+            @param n_increment the increment
+            @param n_end the maximum value; Firebird sequences have none, so getCreateSql() refuses a sequence with
+            a maximum
+        */
         constructor(string n_name, number n_start = 1, number n_increment = 1, *softnumber n_end)
                 : AbstractSequence(n_name, n_start, n_increment, n_end) {
         }
 
+        #! records the parameters of the description that Firebird sequences do not have
+        /** getCreateSql() refuses a sequence whose description has a minimum, a maximum, the cycle option or a
+            cache; this method does not, so that the SQL that drops such a sequence can be given
+
+            @param desc the sequence description (see
+                @ref SqlUtil::AbstractDatabase::SequenceDescriptionOptions "SequenceDescriptionOptions")
+
+            @since XdbcFirebirdSqlUtilBase 0.2
+        */
+        setDescription(hash<auto> desc) {
+            unsupported = XdbcFirebirdSequence::getUnsupportedParameters(desc);
+        }
+
         #! returns a string that can be used to create the sequence in the database
+        /** The starting value and the increment are given when they are not the defaults (1), so the SQL that
+            creates a sequence with the defaults is as before
+
+            @par Example:
+            @code{.py}
+# "create sequence seq_orders start with 1000 increment by 10"
+string sql = new XdbcFirebirdSequence("seq_orders", 1000, 10).getCreateSql();
+            @endcode
+
+            @throw SEQUENCE-ERROR the sequence has a minimum, a maximum, the cycle option or a cache, which Firebird
+            sequences do not have
+
+            @since XdbcFirebirdSqlUtilBase 0.2 the starting value and the increment are given; before, a sequence was
+            always created with the defaults
+        */
         string getCreateSql(*hash opt) {
-            return sprintf("create sequence %s", name);
+            list<string> params = unsupported;
+            if (exists max && !inlist("max", params) && !inlist("end", params)) {
+                params += "max";
+            }
+            XdbcFirebirdSequence::checkParameters(name, params);
+            string sql = sprintf("create sequence %s", firebird_get_sql_identifier(name));
+            if (start != 1) {
+                sql += sprintf(" start with %d", start);
+            }
+            if (increment != 1) {
+                sql += sprintf(" increment by %d", increment);
+            }
+            return sql;
+        }
+
+        #! returns the SQL that changes the increment of the sequence in the database, keeping its current value
+        /** Firebird keeps the increment of a sequence, which <tt>NEXT VALUE FOR</tt> uses, and changes it with
+            <tt>ALTER SEQUENCE ... INCREMENT BY</tt>; the starting value is never changed, as that would restart the
+            sequence
+
+            @param desired the sequence description (see
+                @ref SqlUtil::AbstractDatabase::SequenceDescriptionOptions "SequenceDescriptionOptions")
+            @param opt this argument is ignored
+
+            @return the SQL that changes the increment, or NOTHING if the increment is not given or is not changed
+
+            @throw SEQUENCE-ERROR the description has a minimum, a maximum, the cycle option or a cache, which
+            Firebird sequences do not have
+
+            @since XdbcFirebirdSqlUtilBase 0.2
+        */
+        *softlist<string> getAlterSql(hash<auto> desired, *hash<auto> opt) {
+            XdbcFirebirdSequence::checkParameters(name, XdbcFirebirdSequence::getUnsupportedParameters(desired));
+            if (exists desired.increment && desired.increment != increment) {
+                if (!desired.increment) {
+                    throw "SEQUENCE-ERROR", sprintf("sequence %y: increment cannot be zero", name);
+                }
+                return sprintf("alter sequence %s increment by %d", firebird_get_sql_identifier(name),
+                    desired.increment);
+            }
+        }
+
+        # returns the parameters of a description that Firebird sequences do not have; a cache of 0 is no cache, as
+        # Firebird sequences have, and the cycle option False is no cycle
+        private static list<string> getUnsupportedParameters(hash<auto> desc) {
+            list<string> rv = ();
+            foreach string key in (("min", "max", "end")) {
+                if (exists desc{key}) {
+                    rv += key;
+                }
+            }
+            if (desc.cycle) {
+                rv += "cycle";
+            }
+            if (desc.cache) {
+                rv += "cache";
+            }
+            return rv;
+        }
+
+        private static checkParameters(string name, list<string> params) {
+            if (params) {
+                throw "SEQUENCE-ERROR", sprintf("sequence %y: Firebird sequences have only a starting value and an "
+                    "increment, so the sequence cannot have %s %y", name, params.size() == 1 ? "the parameter"
+                    : "the parameters", params);
+            }
+        }
+
+        #! returns a string that can be used to drop the sequence from the database
+        /** @param opt this argument is ignored
+
+            @since XdbcFirebirdSqlUtilBase 0.2 the name of the sequence is quoted if it is not an ordinary name
+        */
+        string getDropSql(*hash<auto> opt) {
+            return sprintf("drop sequence %s", firebird_get_sql_identifier(name));
         }
 
         #! returns a string that can be used to rename the sequence in the database
@@ -515,7 +797,16 @@ auto v = c.name;
         #! returns a string that can be used to create the view in the database
         string getCreateSql(*hash<auto> opt) {
             # TODO/FIXME: check options
-            return sprintf("create view %s as %s", name, src);
+            return sprintf("create view %s as %s", firebird_get_sql_identifier(name), src);
+        }
+
+        #! returns a string that can be used to drop the view from the database
+        /** @param opt this argument is ignored
+
+            @since XdbcFirebirdSqlUtilBase 0.2 the name of the view is quoted if it is not an ordinary name
+        */
+        string getDropSql(*hash<auto> opt) {
+            return sprintf("drop view %s", firebird_get_sql_identifier(name));
         }
 
         #! returns a string that can be used to rename the view in the database
@@ -755,6 +1046,32 @@ auto v = c.name;
         constructor(AbstractDatasource ds, *hash<auto> opts) : AbstractDatabase(ds, opts) {
         }
 
+        #! returns a name as an SQL identifier for Firebird
+        /** A name that Firebird reads as one unquoted identifier (an ASCII letter, then ASCII letters, digits,
+            underscores or dollar signs) is returned as given, and Firebird folds it to upper case as for any unquoted
+            name; a reserved word is returned in double quotes in the case given, as before; any other name is returned
+            in upper case in double quotes, with each double quote doubled, so that it names the object that an unquoted
+            name of the same letters would: SqlUtil looks up names in upper case on Firebird and gives the names that it
+            reads from the database in lower case
+
+            @par Example:
+            @code{.py}
+# "\"ORDER DATE\""
+string sql = db.getSqlIdentifier("Order Date");
+            @endcode
+
+            @param name the name of a database object
+
+            @return the name as an SQL identifier for Firebird
+
+            @throw IDENTIFIER-ERROR the name is empty or has a NUL character
+
+            @since XdbcFirebirdSqlUtilBase 0.2
+        */
+        string getSqlIdentifier(string name) {
+            return firebird_get_sql_identifier(name);
+        }
+
         #! Returns @ref True if the driver requires a scale to support decimal values in numeric or decimal columns
         /** @return @ref True if the driver requires a scale to support decimal values in numeric or decimal columns
 
@@ -789,9 +1106,13 @@ auto v = c.name;
         }
 
         private *AbstractSequence getSequenceImpl(string name) {
-            *hash<auto> row = ds.selectRow("select rdb$generator_name as \"sequence\" from rdb$generators where "
+            # the starting value and the increment are kept from Firebird 3 on
+            *hash<auto> row = ds.selectRow("select rdb$generator_name as \"sequence\", "
+                "rdb$initial_value as \"start\", rdb$generator_increment as \"increment\" from rdb$generators where "
                 "rdb$system_flag = 0 and rdb$generator_name = %v", name.upr());
-            return row.sequence ? new XdbcFirebirdSequence(row.sequence.lwr()) : NOTHING;
+            return row.sequence
+                ? new XdbcFirebirdSequence(row.sequence.lwr(), row.start ?? 1, row.increment ?? 1)
+                : NOTHING;
         }
 
         private *AbstractView getViewImpl(string name) {
@@ -849,8 +1170,13 @@ auto v = c.name;
             return ();
         }
 
+        #! returns the names of the sequences in the database, in lower case
+        /** @since XdbcFirebirdSqlUtilBase 0.2 the sequences are listed; before, none were
+        */
         private list<string> listSequencesImpl() {
-            return ();
+            # a generator of an identity column has another system flag
+            return ds.select("select lower(trim(rdb$generator_name)) as \"name\" from rdb$generators "
+                "where rdb$system_flag = 0").name ?? ();
         }
 
         private list<string> listViewsImpl() {
@@ -868,12 +1194,15 @@ auto v = c.name;
 
         #! returns the next value in the given sequence
         private softint getNextSequenceValueImpl(string name) {
-            return ds.selectRow("select next value for %s as \"nextval\" from rdb$database", name).nextval;
+            # "%s" in SQL with arguments is substituted as given, so the name is given as an identifier here
+            return ds.selectRow("select next value for " + firebird_get_sql_identifier(name)
+                + " as \"nextval\" from rdb$database").nextval;
         }
 
         #! returns the last value issued for the given sequence in the current session
         private softint getCurrentSequenceValueImpl(string name) {
-            return ds.selectRow("select gen_id(%s, 0) as \"currentval\" from rdb$database", name).currentval;
+            return ds.selectRow("select gen_id(" + firebird_get_sql_identifier(name)
+                + ", 0) as \"currentval\" from rdb$database").currentval;
         }
 
         #! returns @ref True "True" since we have a workaround implementation for sequences in XdbcFirebird
@@ -1033,12 +1362,18 @@ auto v = c.name;
                     "arg": Type::String,
                     "withalias": True,
                     "code": string sub (string cve, string arg, reference<hash<auto>> aliases) {
-                        # issue #2163: make sure the unquoted alias is inserted in the map
-                        if (arg =~ /^(".*"|`.*`)$/) {
+                        # issue #2163: make sure the unquoted alias is inserted in the map; the alias is given as a
+                        # double-quoted identifier, with each double quote doubled (see
+                        # XdbcFirebirdTable::getAliasSqlName()), or as an ordinary name
+                        if (arg =~ /^".*"$/s) {
+                            arg = replace(arg.substr(1, -1), "\"\"", "\"");
+                        } else if (arg =~ /^`.*`$/s) {
                             arg = arg.substr(1, -1);
                         }
                         aliases{arg} = cve;
-                        return sprintf("%s as \"%s\"", cve, arg);
+                        # an alias is always given in double quotes, so the result key has its case
+                        return sprintf("%s as %s", cve, AbstractSqlUtilBase::getDelimitedIdentifier(arg, "\"", "\"",
+                            "Firebird"));
                     },
                 },
                 COP_CAST: (
@@ -1161,7 +1496,9 @@ auto v = c.name;
                             AbstractDataProviderTypeMap."any");
                         string arg = args[1];
                         info.pseudo_column_map{arg} = exp;
-                        return sprintf("%s as \"%s\"", exp, arg);
+                        # an alias is always given in double quotes, so the result key has its case, and is escaped,
+                        # so it cannot change the SQL
+                        return sprintf("%s as %s", exp, info.table.getAliasSqlName(arg));
                     },
                 },
                 COP_CAST: {
@@ -1491,9 +1828,28 @@ auto v = c.name;
         constructor(AbstractDatasource ds, string name, *hash<auto> opts) : AbstractTable(ds, name, opts) {
         }
 
-        #! returns the name of the table to be used in SQL (with a possible qualifiers for schema, etc)
+        #! returns the name of the table to be used in SQL, as getSqlIdentifier() returns it
+        /** @since XdbcFirebirdSqlUtilBase 0.2 a name that is not an ordinary name is quoted in upper case and escaped
+        */
         string getSqlName() {
-            return name;
+            return firebird_get_sql_identifier(name);
+        }
+
+        #! returns a name as an SQL identifier for Firebird
+        /** @copydetails XdbcFirebirdDatabase::getSqlIdentifier()
+        */
+        string getSqlIdentifier(string name) {
+            return firebird_get_sql_identifier(name);
+        }
+
+        #! returns an alias for SQL: in double quotes, in the case given, with each double quote doubled
+        /** An alias names a key of the result, so it is given in double quotes as before, also when it is an ordinary
+            name, and is not given in upper case as other names that need quotes are
+
+            @since XdbcFirebirdSqlUtilBase 0.2
+        */
+        string getAliasSqlName(string alias) {
+            return AbstractSqlUtilBase::getDelimitedIdentifier(alias, "\"", "\"", "Firebird");
         }
 
         #! returns the column operator map for this object
@@ -1715,8 +2071,57 @@ where
             return new Indexes(rv);
         }
 
+        #! describes the foreign constraints of the table, with their referential actions, from the catalog
+        /** @since XdbcFirebirdSqlUtilBase 0.2 the foreign constraints are described; before, none were
+        */
         private ForeignConstraints getForeignConstraintsImpl(*hash<auto> opts) {
-            return new ForeignConstraints();
+            # one row per column of each constraint: its target column is the column of the referenced primary key
+            # or unique constraint at the same position; names are given in lower case, as for columns and indexes
+            *hash<auto> qh = ds.select("select "
+                "   lower(trim(rc.rdb$constraint_name)) as \"constraint_name\", "
+                "   lower(trim(sg.rdb$field_name)) as \"column_name\", "
+                "   lower(trim(tc.rdb$relation_name)) as \"target_table\", "
+                "   lower(trim(tsg.rdb$field_name)) as \"target_column\", "
+                "   trim(ref.rdb$delete_rule) as \"delete_rule\", "
+                "   trim(ref.rdb$update_rule) as \"update_rule\" "
+                "from "
+                "   rdb$relation_constraints rc "
+                "   join rdb$ref_constraints ref on ref.rdb$constraint_name = rc.rdb$constraint_name "
+                "   join rdb$relation_constraints tc on tc.rdb$constraint_name = ref.rdb$const_name_uq "
+                "   join rdb$index_segments sg on sg.rdb$index_name = rc.rdb$index_name "
+                "   join rdb$index_segments tsg on tsg.rdb$index_name = tc.rdb$index_name "
+                "       and tsg.rdb$field_position = sg.rdb$field_position "
+                "where "
+                "   rc.rdb$constraint_type = 'FOREIGN KEY' and rc.rdb$relation_name = %v "
+                "order by "
+                "   rc.rdb$constraint_name, sg.rdb$field_position", name.upr());
+
+            # the constraints in the order of the query, each with its columns in their order
+            hash<string, hash<auto>> fks;
+            foreach hash<auto> row in (qh.contextIterator()) {
+                reference<hash<auto>> fk = \fks{row.constraint_name};
+                if (!fk) {
+                    fk = {
+                        "table": row.target_table,
+                        "columns": (),
+                        "target_columns": (),
+                        # the rules are given once per constraint, the same on every row
+                        "on_delete": XdbcFirebirdForeignConstraint::actionFromCatalog(row.delete_rule),
+                        "on_update": XdbcFirebirdForeignConstraint::actionFromCatalog(row.update_rule),
+                    };
+                }
+                fk.columns += row.column_name;
+                fk.target_columns += row.target_column;
+            }
+
+            hash<string, AbstractForeignConstraint> rv;
+            foreach hash<auto> i in (fks.pairIterator()) {
+                Columns targ_columns = getReferencedTableColumnsUnlocked(i.value.table, opts.table_cache);
+                rv{i.key} = new XdbcFirebirdForeignConstraint(i.key, columns.subset(i.value.columns),
+                    new ForeignConstraintTarget(i.value.table, targ_columns.subset(i.value.target_columns)),
+                    i.value.on_delete, i.value.on_update);
+            }
+            return new ForeignConstraints(rv);
         }
 
         private Constraints getConstraintsImpl() {
@@ -1756,7 +2161,7 @@ where
         }
 
         string getCreateTableSqlImpl(*hash<auto> opt) {
-            string sql = sprintf("create table %s (\n", name);
+            string sql = sprintf("create table %s (\n", getSqlName());
             sql += foldl $1 + ",\n" + $2, (map "  " + $1.getCreateSql(self), columns.iterator());
             sql += "\n)";
             return sql;
@@ -1807,7 +2212,7 @@ where
         private AbstractForeignConstraint addForeignConstraintImpl(string cname, hash<auto> ch, string table,
                 hash<auto> tch, *hash<auto> opt) {
             ForeignConstraintTarget fct(table, new Columns(tch));
-            return new XdbcFirebirdForeignConstraint(cname, new Columns(ch), fct);
+            return new XdbcFirebirdForeignConstraint(cname, new Columns(ch), fct, opt.on_delete, opt.on_update);
         }
 
         private AbstractCheckConstraint addCheckConstraintImpl(string cname, string src, *hash<auto> opt) {
@@ -1887,18 +2292,17 @@ where
             }
         }
 
-        #! Returns the column name for use in SQL strings
-        /** Subclasses can return a special string in case the column name is a reserved word
-
-            Firebird requires column names to be enclosed in double quotes
+        #! Returns the column name for use in SQL strings, as getSqlIdentifier() returns it
+        /** @since XdbcFirebirdSqlUtilBase 0.2 a name that is not an ordinary name is quoted in upper case and escaped;
+            before, only a reserved word was quoted
         */
         string getColumnSqlName(string col) {
-            return XdbcFirebirdDatabase::XdbcFirebirdReservedWords{col.lwr()} ? ("\"" + col + "\"") : col;
+            return firebird_get_sql_identifier(col);
         }
 
-        #! returns a list of column names for use in SQL strings; subclasses can process the argument list in case a column name is a reserved word
+        #! returns a list of column names for use in SQL strings, as getSqlIdentifier() returns them
         list<string> getColumnSqlNames(softlist<auto> cols) {
-            return map getColumnSqlName($1), cols;
+            return map firebird_get_sql_identifier($1), cols;
         }
 
         #! returns a string for use in SQL queries representing the DB-specific value of the argument

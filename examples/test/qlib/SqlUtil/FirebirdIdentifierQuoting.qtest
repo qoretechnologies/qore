@@ -1,0 +1,344 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires SqlUtil
+%requires XdbcFirebirdSqlUtilBase
+
+%exec-class FirebirdIdentifierQuotingTest
+
+#! a datasource that records the SQL that it is given, so SQL is generated without a Firebird server
+class FirebirdRecordingDatasource inherits Qore::SQL::AbstractDatasource {
+    public {
+        #! each statement given, with the method and the arguments
+        list<hash<auto>> log = ();
+
+        #! the row returned by selectRow() and vselectRow()
+        *hash<auto> row;
+    }
+
+    private record(string m, string sql, *softlist<auto> args) {
+        log += {"method": m, "sql": sql, "args": args};
+    }
+
+    *string getPassword() {}
+    *string getOSEncoding() {}
+    *string getDBName() { return "fbtest"; }
+    *string getUserName() { return "fbuser"; }
+    *string getHostName() {}
+    *int getPort() {}
+    *string getDBEncoding() {}
+    string getDriverName() { return "jni"; }
+    auto getServerVersion() {}
+    auto getClientVersion() {}
+    string getConfigString() { return ""; }
+    hash<auto> getConfigHash() { return {}; }
+    bool inTransaction() { return False; }
+    bool currentThreadInTransaction() { return False; }
+    nothing beginTransaction() {}
+    nothing commit() {}
+    nothing rollback() {}
+
+    auto exec(string sql, ...) { record("exec", sql, argv); return 0; }
+    auto vexec(string sql, *softlist<auto> vargs) { record("vexec", sql, vargs); return 0; }
+    auto execRaw(string sql) { record("execRaw", sql); return 0; }
+    auto select(string sql, ...) { record("select", sql, argv); }
+    auto vselect(string sql, *softlist<auto> vargs) { record("vselect", sql, vargs); }
+    auto selectRow(string sql, ...) { record("selectRow", sql, argv); return row; }
+    auto vselectRow(string sql, *softlist<auto> vargs) { record("vselectRow", sql, vargs); return row; }
+    auto selectRows(string sql, ...) { record("selectRows", sql, argv); }
+    auto vselectRows(string sql, *softlist<auto> vargs) { record("vselectRows", sql, vargs); }
+    auto selectTyped(string sql, ...) {}
+    auto vselectTyped(string sql, *softlist<auto> vargs) {}
+    auto selectRowsTyped(string sql, ...) {}
+    auto vselectRowsTyped(string sql, *softlist<auto> vargs) {}
+
+    #! returns the statements recorded since the last call and clears the log
+    list<hash<auto>> take() {
+        on_exit log = ();
+        return log;
+    }
+}
+
+class FirebirdIdentifierQuotingTest inherits QUnit::Test {
+    public {
+        #! a hostile name: a double quote ends a quoted identifier, the rest is SQL
+        const HostileTable = "t\"; drop table x; --";
+        #! a hostile column name
+        const HostileColumn = "c\" = 1; drop table x; --";
+    }
+
+    constructor() : Test("FirebirdIdentifierQuotingTest", "1.0", \ARGV) {
+        addTestCase("ordinary names are unchanged", \ordinaryNames());
+        addTestCase("reserved words are quoted as before", \reservedWords());
+        addTestCase("other names are quoted in upper case and escaped", \quotedNames());
+        addTestCase("names that cannot be identifiers are refused", \refusedNames());
+        addTestCase("getSqlIdentifier() gives the identifier rule", \sqlIdentifier());
+        addTestCase("a hostile table name is one identifier in DDL and DML", \hostileTable());
+        addTestCase("hostile column names are identifiers in DDL and DML", \hostileColumns());
+        addTestCase("index, constraint, sequence, view and trigger names are identifiers", \objectNames());
+        addTestCase("sequence values and savepoints name their object as an identifier", \sequencesAndSavepoints());
+        addTestCase("aliases keep their case and are escaped", \aliases());
+        set_return_value(main());
+    }
+
+    private static XdbcFirebirdTable getTable(FirebirdRecordingDatasource ds, string name, hash<auto> columns,
+            *hash<auto> desc) {
+        XdbcFirebirdTable t(ds, name);
+        t.setupTable({"columns": columns} + desc);
+        return t;
+    }
+
+    ordinaryNames() {
+        FirebirdRecordingDatasource ds();
+        XdbcFirebirdTable t = getTable(ds, "orders", {
+            "id": {"qore_type": "integer", "notnull": True},
+            "OrderDate": {"qore_type": "date"},
+            "total$eur": {"qore_type": "number", "size": 18, "scale": 2},
+        }, {"primary_key": {"name": "pk_orders", "columns": ("id",)},
+            "indexes": {"ix_orders_date": {"columns": ("OrderDate",)}}});
+
+        # unquoted, as before: Firebird folds them to upper case, as SqlUtil looks them up
+        assertEq("orders", t.getSqlName());
+        assertEq("OrderDate", t.getColumnSqlName("OrderDate"));
+        assertEq(("id", "OrderDate", "total$eur"), t.getColumnSqlNames(("id", "OrderDate", "total$eur")));
+        assertEq((
+            "create table orders (\n  id bigint not null,\n  OrderDate timestamp,\n  total$eur numeric(18,2)\n)",
+            "create index ix_orders_date on orders (OrderDate)",
+            "alter table orders add primary key (id)",
+        ), t.getCreateSql());
+
+        list<auto> args;
+        assertEq("select id, OrderDate from orders where total$eur = %v order by OrderDate",
+            t.getSelectSql({"columns": ("id", "OrderDate"), "where": {"total$eur": 1}, "orderby": "OrderDate"},
+                \args));
+        assertEq((1,), args);
+
+        t.insert({"id": 1, "OrderDate": 2026-10-21});
+        assertEq("insert into orders (id,OrderDate) values (%v,%v)", ds.take()[0].sql);
+    }
+
+    reservedWords() {
+        FirebirdRecordingDatasource ds();
+        XdbcFirebirdTable t = getTable(ds, "items", {
+            "id": {"qore_type": "integer", "notnull": True},
+            "order": {"qore_type": "string", "size": 20},
+            "Value": {"qore_type": "string", "size": 20},
+        });
+        # in double quotes in the case given, as before
+        assertEq("\"order\"", t.getColumnSqlName("order"));
+        assertEq("\"Value\"", t.getColumnSqlName("Value"));
+        assertEq("\"order\"", t.describe().order.ddl_name);
+        assertEq("create table items (\n  id bigint not null,\n  \"order\" varchar(20),\n  \"Value\" varchar(20)\n)",
+            t.getCreateTableSql());
+
+        # a unique constraint names its columns as SQL names them, so a reserved word is quoted
+        XdbcFirebirdUniqueConstraint uk("uk_items", {"order": t.describe().order});
+        assertEq("alter table items add constraint uk_items unique (\"order\")", uk.getCreateSql("items"));
+    }
+
+    quotedNames() {
+        FirebirdRecordingDatasource ds();
+        XdbcFirebirdTable t = getTable(ds, "orders", {"id": {"qore_type": "integer"}});
+        # in upper case, as Firebird stores an unquoted name and SqlUtil looks names up
+        hash<string, string> expected = {
+            "order date": "\"ORDER DATE\"",
+            "Order Date": "\"ORDER DATE\"",
+            "_x": "\"_X\"",
+            "1abc": "\"1ABC\"",
+            "město": "\"MĚSTO\"",
+            "a-b": "\"A-B\"",
+            "pct%s": "\"PCT%S\"",
+            "a--b": "\"A--B\"",
+            "a/*b*/": "\"A/*B*/\"",
+            "a'b": "\"A'B\"",
+            "a\"b": "\"A\"\"B\"",
+            HostileColumn: "\"C\"\" = 1; DROP TABLE X; --\"",
+        };
+        foreach hash<auto> i in (expected.pairIterator()) {
+            assertEq(i.value, t.getColumnSqlName(i.key), i.key);
+            assertEq(i.value, new XdbcFirebirdColumn(i.key, "varchar", "string", 10, True).ddl_name, i.key);
+        }
+    }
+
+    refusedNames() {
+        FirebirdRecordingDatasource ds();
+        XdbcFirebirdTable t = getTable(ds, "orders", {"id": {"qore_type": "integer"}});
+        assertThrows("IDENTIFIER-ERROR", "empty name", \t.getColumnSqlName(), "");
+        assertThrows("IDENTIFIER-ERROR", "NUL character", \t.getColumnSqlName(), "a" + chr(0) + "b");
+        assertThrows("IDENTIFIER-ERROR", "NUL character", sub () {
+            new XdbcFirebirdColumn("a" + chr(0) + "; drop table x", "varchar", "string", 10, True);
+        });
+        XdbcFirebirdTable nul_table(ds, "t" + chr(0) + "; drop table x");
+        assertThrows("IDENTIFIER-ERROR", "NUL character", \nul_table.getSqlName());
+    }
+
+    sqlIdentifier() {
+        FirebirdRecordingDatasource ds();
+        XdbcFirebirdTable t = getTable(ds, "orders", {"id": {"qore_type": "integer"}});
+        XdbcFirebirdDatabase db(ds);
+        foreach string name in ("orders", "order", "Order Date", HostileColumn) {
+            string expected = t.getColumnSqlName(name);
+            # called by name, so that the test runs on a SqlUtil without the method
+            assertEq(expected, call_object_method(t, "getSqlIdentifier", name), name);
+            assertEq(expected, call_object_method(db, "getSqlIdentifier", name), name);
+        }
+    }
+
+    hostileTable() {
+        FirebirdRecordingDatasource ds();
+        XdbcFirebirdTable t = getTable(ds, HostileTable, {
+            "id": {"qore_type": "integer", "notnull": True},
+            "name": {"qore_type": "string", "size": 20},
+        }, {"primary_key": {"name": "pk_t", "columns": ("id",)},
+            "indexes": {"ix_t_name": {"columns": ("name",)}}});
+        string sql_name = "\"T\"\"; DROP TABLE X; --\"";
+        assertEq(sql_name, t.getSqlName());
+        assertEq((
+            "create table " + sql_name + " (\n  id bigint not null,\n  name varchar(20)\n)",
+            "create index ix_t_name on " + sql_name + " (name)",
+            "alter table " + sql_name + " add primary key (id)",
+        ), t.getCreateSql());
+
+        list<auto> args;
+        assertEq("select id from " + sql_name + " where name = %v", t.getSelectSql({"columns": "id",
+            "where": {"name": "x"}}, \args));
+        assertEq("drop table " + sql_name, t.getDropSql()[0]);
+
+        t.insert({"id": 1, "name": "x"});
+        t.update({"name": "y"}, {"id": 1});
+        t.del({"id": 1});
+        assertEq((
+            "insert into " + sql_name + " (id,name) values (%v,%v)",
+            "update " + sql_name + " set name = %v where id = %v",
+            "delete from " + sql_name + " where id = %v",
+        ), map $1.sql, ds.take());
+    }
+
+    hostileColumns() {
+        FirebirdRecordingDatasource ds();
+        XdbcFirebirdTable t = getTable(ds, "orders", {
+            "id": {"qore_type": "integer", "notnull": True},
+            "Order Date": {"qore_type": "date"},
+            HostileColumn: {"qore_type": "string", "size": 10},
+        });
+        string hostile_sql = "\"C\"\" = 1; DROP TABLE X; --\"";
+        assertEq("create table orders (\n  id bigint not null,\n  \"ORDER DATE\" timestamp,\n  " + hostile_sql
+            + " varchar(10)\n)", t.getCreateTableSql());
+
+        list<auto> args;
+        assertEq("select id, \"ORDER DATE\", " + hostile_sql + " from orders where " + hostile_sql
+            + " = %v order by \"ORDER DATE\"", t.getSelectSql({"columns": ("id", "Order Date", HostileColumn),
+                "where": {HostileColumn: "v"}, "orderby": "Order Date"}, \args));
+        assertEq(("v",), args);
+
+        t.insert({"id": 1, "Order Date": 2026-10-21, HostileColumn: "x"});
+        t.update({HostileColumn: "y"}, {"Order Date": 2026-10-21});
+        assertEq((
+            "insert into orders (id,\"ORDER DATE\"," + hostile_sql + ") values (%v,%v,%v)",
+            "update orders set " + hostile_sql + " = %v where \"ORDER DATE\" = %v",
+        ), map $1.sql, ds.take());
+
+        # a column added to the table, renamed and dropped
+        XdbcFirebirdColumn c(HostileColumn, "varchar", "string", 10, True);
+        assertEq(("alter table orders add " + hostile_sql + " varchar(10)",), c.getAddColumnSql(t));
+        assertEq("alter table orders alter " + hostile_sql + " to \"NEW NAME\"", c.getRenameSql(t, "new name"));
+        assertEq("alter table orders drop " + hostile_sql, c.getDropSql("orders"));
+    }
+
+    objectNames() {
+        FirebirdRecordingDatasource ds();
+        XdbcFirebirdTable t = getTable(ds, "orders", {
+            "id": {"qore_type": "integer", "notnull": True},
+            "order": {"qore_type": "string", "size": 20},
+            "Order Date": {"qore_type": "date"},
+        });
+        Columns cols = t.describe();
+
+        XdbcFirebirdIndex ix("ix\"; drop table x; --", False, {"order": cols.order, "upper(x)": {}});
+        # an index "column" that is not a column of the table is an SQL expression, as before
+        assertEq("create index \"IX\"\"; DROP TABLE X; --\" on orders (\"order\", upper(x))",
+            ix.getCreateSql("orders"));
+        assertEq("drop index \"IX\"\"; DROP TABLE X; --\"", ix.getDropSql("orders"));
+
+        XdbcFirebirdUniqueConstraint uk("uk x", {"order": cols.order, "Order Date": cols."Order Date"});
+        assertEq("alter table orders add constraint \"UK X\" unique (\"order\", \"ORDER DATE\")",
+            uk.getCreateSql("orders"));
+        assertEq("alter table orders drop constraint \"UK X\"", uk.getDropSql("orders"));
+
+        XdbcFirebirdForeignConstraint fk("fk\"x", new Columns({"order": cols.order}),
+            new ForeignConstraintTarget("parent table", new Columns({"Order Date": cols."Order Date"})));
+        assertEq("alter table orders add constraint \"FK\"\"X\" foreign key (\"order\") references \"PARENT TABLE\" "
+            "(\"ORDER DATE\")", fk.getCreateSql("orders"));
+        assertEq("alter table orders drop constraint \"FK\"\"X\"", fk.getDropSql("orders"));
+
+        XdbcFirebirdSequence seq("s; drop table x");
+        assertEq("create sequence \"S; DROP TABLE X\"", seq.getCreateSql());
+        assertEq("drop sequence \"S; DROP TABLE X\"", seq.getDropSql());
+        assertEq("create sequence seq_orders", new XdbcFirebirdSequence("seq_orders").getCreateSql());
+
+        XdbcFirebirdView v("v w", "select 1 from rdb$database");
+        assertEq("create view \"V W\" as select 1 from rdb$database", v.getCreateSql());
+        assertEq("drop view \"V W\"", v.getDropSql());
+
+        XdbcFirebirdTrigger tr("tr\"x", "for orders before insert as begin end");
+        assertEq(("create trigger \"TR\"\"X\" for orders before insert as begin end",), tr.getCreateSql("orders"));
+        assertEq(("drop trigger \"TR\"\"X\"",), tr.getDropSql("orders"));
+        assertEq(("drop trigger \"TR\"\"X\"", "create trigger \"NEW TRIGGER\" for orders before insert as begin end"),
+            tr.getRenameSql("orders", "new trigger"));
+    }
+
+    sequencesAndSavepoints() {
+        FirebirdRecordingDatasource ds();
+        XdbcFirebirdDatabase db(ds);
+        ds.row = {"nextval": 2, "currentval": 1};
+        assertEq(2, db.getNextSequenceValue("s\"q"));
+        assertEq(1, db.getCurrentSequenceValue("s\"q"));
+        assertEq(2, db.getNextSequenceValue("seq_orders"));
+        # the name is part of the SQL as an identifier, and is not given as an argument substituted with "%s"
+        assertEq((
+            {"method": "selectRow", "sql": "select next value for \"S\"\"Q\" as \"nextval\" from rdb$database",
+                "args": NOTHING},
+            {"method": "selectRow", "sql": "select gen_id(\"S\"\"Q\", 0) as \"currentval\" from rdb$database",
+                "args": NOTHING},
+            {"method": "selectRow", "sql": "select next value for seq_orders as \"nextval\" from rdb$database",
+                "args": NOTHING},
+        ), ds.take());
+
+        {
+            XdbcFirebirdSavepointHelper sp(ds, "sp'x");
+            sp.rollback();
+        }
+        assertEq(("savepoint \"SP'X\"", "rollback to \"SP'X\""), map $1.sql, ds.take());
+    }
+
+    aliases() {
+        FirebirdRecordingDatasource ds();
+        XdbcFirebirdTable t = getTable(ds, "orders", {"id": {"qore_type": "integer"}});
+        # an alias names a key of the result: it is given in double quotes in its case, as before, and escaped
+        hash<string, string> expected = {
+            "total": "\"total\"",
+            "TotalCount": "\"TotalCount\"",
+            "total count": "\"total count\"",
+            "a\"b": "\"a\"\"b\"",
+        };
+        foreach hash<auto> i in (expected.pairIterator()) {
+            list<auto> args;
+            assertEq("select id as " + i.value + " from orders",
+                t.getSelectSql({"columns": cop_as("id", i.key)}, \args), i.key);
+            # the alias can be used in the query by its name
+            assertEq("select id as " + i.value + " from orders order by id",
+                t.getSelectSql({"columns": cop_as("id", i.key), "orderby": i.key}, \args), i.key);
+            # an alias given as an expression
+            hash<DataProviderExpression> exp = <DataProviderExpression>{
+                "exp": COP_AS,
+                "args": (<DataProviderFieldReference>{"field": "id"}, i.key),
+            };
+            assertEq("select id as " + i.value + " from orders", t.getSelectSql({"columns": (exp,)}, \args), i.key);
+        }
+    }
+}
