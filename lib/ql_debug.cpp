@@ -10293,6 +10293,21 @@ static QoreValue f_dbg_file_stream_io_flags(const QoreListNode* params, RuntimeC
     return h.release();
 }
 
+// defined in QoreAOT.cpp
+DLLLOCAL int qore_aot_dbg_jobserver_acquire(const char* makeflags, int max);
+
+//! Debug-only: takes up to @p max tokens from the make jobserver named in a MAKEFLAGS value, as qcc's parallel
+//! codegen does, and returns them to the jobserver
+/** DEBUG builds only.
+
+    @return the count of tokens taken, or -1 if the value names no usable jobserver
+*/
+static QoreValue f_dbg_jobserver_acquire(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    QoreStringNodeValueHelper makeflags(get_param_value(params, 0));
+    int max = static_cast<int>(get_param_value(params, 1).getAsBigInt());
+    return qore_aot_dbg_jobserver_acquire(makeflags->c_str(), max);
+}
+
 //! Debug-only: creates a child process with fork() while another thread holds the lock of a registered fork handler
 /** The other thread takes the lock as the handler's prepare handler does, and releases it when the prepare handlers
     reach the handler, so fork() waits for it.  The child takes and releases the lock in the same way, runs the code
@@ -11871,6 +11886,8 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_object_set_value", f_dbg_object_set_value, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         nothingTypeInfo, 4, listTypeInfo, QORE_PARAM_NO_ARG, "holder", stringTypeInfo, QORE_PARAM_NO_ARG, "member",
         stringTypeInfo, QORE_PARAM_NO_ARG, "key", autoTypeInfo, QORE_PARAM_NO_ARG, "val");
+    qns.addBuiltinVariant("dbg_jobserver_acquire", f_dbg_jobserver_acquire, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        bigIntTypeInfo, 2, stringTypeInfo, QORE_PARAM_NO_ARG, "makeflags", bigIntTypeInfo, QORE_PARAM_NO_ARG, "max");
     qns.addBuiltinVariant("dbg_file_stream_io_flags", f_dbg_file_stream_io_flags, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         hashTypeInfo, 2, bigIntTypeInfo, QORE_PARAM_NO_ARG, "fd", codeTypeInfo, QORE_PARAM_NO_ARG, "call");
     qns.addBuiltinVariant("dbg_fork_while_handler_held", f_dbg_fork_while_handler_held, QCF_NO_FLAGS,

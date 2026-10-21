@@ -81,7 +81,7 @@
 #ifdef DEBUG
 //! Debug-only: called with a file stream's descriptor right before each read or write that must not wait
 /** Lets a test see the descriptor's file status flags at that moment; see dbg_file_stream_io_flags() in
-    ql_debug.cpp
+    ql_debug.cpp.  The make jobserver client of qcc (QoreAOT.cpp) calls it as well, right before each token read.
 */
 DLLLOCAL extern std::atomic<void (*)(int)> qore_dbg_file_stream_io_hook;
 

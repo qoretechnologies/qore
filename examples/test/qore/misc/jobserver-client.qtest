@@ -1,0 +1,105 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# The make jobserver client of qcc's parallel codegen takes the free tokens without changing the jobserver pipe's
+# file status flags.  With the inherited-fd jobserver of older GNU make (including Apple's make 3.81) the flags
+# belong to the open file description that make and all of its clients share: turning O_NONBLOCK on for the token
+# reads made the reads of make and the other clients fail with EAGAIN ("jobserver read: Resource temporarily
+# unavailable") in the meantime.  A second holder of the read end's file description watches the flags at each token
+# read (dbg_file_stream_io_flags()); dbg_jobserver_acquire() takes tokens as parallel codegen does and returns them.
+#
+# Both builtins are only in a debug build of the library.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+
+%requires QUnit
+%requires FsUtil
+
+%exec-class JobserverClientTest
+
+class JobserverClientTest inherits QUnit::Test {
+    constructor() : QUnit::Test("make jobserver client", "1.0", \ARGV) {
+        addTestCase("an inherited jobserver pipe keeps its flags", \testInheritedPipe());
+        addTestCase("a fifo: jobserver", \testFifo());
+        addTestCase("no jobserver", \testNoJobserver());
+        set_return_value(main());
+    }
+
+    testInheritedPipe() {
+%ifndef QoreDebug
+        testSkip("dbg_jobserver_acquire() and dbg_file_stream_io_flags() are only in a debug build of the library");
+%endif
+%ifdef QoreDebug
+        hash<PipeInfo> pipe = File::getPipe();
+        int rfd = pipe.read.getPollableDescriptor();
+        string makeflags = sprintf("-j5 --jobserver-auth=%d,%d", rfd, pipe.write.getPollableDescriptor());
+        pipe.write.write("++++");
+
+        int taken;
+        hash<auto> h = dbg_file_stream_io_flags(rfd, sub () {
+            taken = dbg_jobserver_acquire(makeflags, 3);
+        });
+        assertEq(3, taken, "the client takes the tokens it asks for");
+        assertEq(3, h.calls, "each token read is watched");
+        assertEq(0, h.nonblock_seen, "the second holder never sees O_NONBLOCK");
+        assertFalse(h.nonblock_after, "the pipe stays blocking");
+        assertEq(4, countTokens(pipe.read), "the tokens are returned");
+
+        # all tokens are taken: the client takes none and does not wait
+        h = dbg_file_stream_io_flags(rfd, sub () {
+            taken = dbg_jobserver_acquire(makeflags, 2);
+        });
+        assertEq(0, taken, "no token is free");
+        assertEq(0, h.calls, "nothing is read");
+
+        # fewer tokens than asked for
+        pipe.write.write("+");
+        assertEq(1, dbg_jobserver_acquire(makeflags, 3), "the free token is taken");
+        assertEq(1, countTokens(pipe.read), "the token is returned");
+%endif
+    }
+
+    testFifo() {
+%ifndef QoreDebug
+        testSkip("dbg_jobserver_acquire() is only in a debug build of the library");
+%endif
+%ifdef QoreDebug
+        string dir = make_tmp_dir("jobserver-client");
+        on_exit remove_tree(dir);
+        string path = join_paths(dir, "jobserver");
+        if (mkfifo(path)) {
+            throw "MKFIFO-ERROR", sprintf("%s: %s", path, strerror());
+        }
+        # make holds the pipe open with the free tokens in it
+        File make();
+        make.open2(path, O_RDWR);
+        make.write("++");
+        string makeflags = "-j3 --jobserver-auth=fifo:" + path;
+        assertEq(2, dbg_jobserver_acquire(makeflags, 5), "the free tokens are taken");
+        assertEq(-1, dbg_jobserver_acquire(makeflags + "x", 5), "a missing fifo is no jobserver");
+        assertEq(2, countTokens(make), "the tokens are returned");
+%endif
+    }
+
+    testNoJobserver() {
+%ifndef QoreDebug
+        testSkip("dbg_jobserver_acquire() is only in a debug build of the library");
+%endif
+%ifdef QoreDebug
+        assertEq(-1, dbg_jobserver_acquire("-j4", 2), "no jobserver in the flags");
+        assertEq(-1, dbg_jobserver_acquire("-j4 --jobserver-auth=900,901", 2), "descriptors that are not open");
+%endif
+    }
+
+    #! reads the tokens in the pipe without waiting and returns their count
+    private static int countTokens(ReadOnlyFile f) {
+        int count;
+        while (f.isDataAvailable(0)) {
+            count += f.readShortBinary(64).size();
+        }
+        return count;
+    }
+}

@@ -35,6 +35,7 @@
 #include "qore/intern/QoreAOTBinary.h"
 #include "qore/intern/QoreDir.h"
 #include "qore/intern/qore_aot_deps.h"
+#include "qore/intern/FileStreamIo.h"
 #include <qore/QoreRegexInterface.h>
 #include <qore/QoreObject.h>
 #include <qore/Qore.h>
@@ -22214,7 +22215,73 @@ class JobserverClient {
 public:
     JobserverClient() {
         QoreEnvironmentValue mf_holder("MAKEFLAGS");
-        const char* mf = mf_holder.c_str();
+        init(mf_holder.c_str());
+    }
+    //! A client of the jobserver named in a MAKEFLAGS value (for tests)
+    explicit JobserverClient(const char* makeflags) {
+        init(makeflags);
+    }
+    ~JobserverClient() {
+        releaseAll();
+        if (own_fd && rfd >= 0) {
+            close(rfd);
+        }
+    }
+    bool available() const { return ok; }
+    // Takes up to `max` tokens that are free now; returns the count taken.
+    //
+    // The pipe's file status flags are left unchanged: with the inherited-fd jobserver of older GNU make
+    // (including Apple's make 3.81) they belong to the open file description that make and all of its other
+    // clients share, so turning O_NONBLOCK on for the reads made their own reads fail with EAGAIN ("jobserver read:
+    // Resource temporarily unavailable") in the meantime.  A token is read once a check that does not wait reports
+    // the pipe readable.  If another client takes it first, the read of the inherited pipe waits for the next token,
+    // which every client that holds one returns; the named pipe of the fifo: form is this client's own
+    // nonblocking open file description, so there the token taken first ends the acquisition.
+    int acquire(int max) {
+        if (!ok || max <= 0) {
+            return 0;
+        }
+        int got = 0;
+        while (got < max) {
+            struct pollfd pfd = {rfd, POLLIN, 0};
+            int rc;
+            while ((rc = qore_poll_compat(&pfd, 1, 0)) < 0 && errno == EINTR) {
+            }
+            // nothing free now, or make has gone (a hang-up without a token)
+            if (rc <= 0 || !(pfd.revents & POLLIN)) {
+                break;
+            }
+#ifdef DEBUG
+            qore_dbg_file_stream_io(rfd);
+#endif
+            char c;
+            ssize_t r;
+            while ((r = read(rfd, &c, 1)) < 0 && errno == EINTR) {
+            }
+            if (r != 1) {
+                // the end of the pipe, or (the fifo: form) another client took the token first
+                break;
+            }
+            tokens.push_back(c);
+            ++got;
+        }
+        return got;
+    }
+    void releaseAll() {
+        for (char c : tokens) {
+            ssize_t w = write(wfd, &c, 1);
+            (void)w;  // best-effort; the same token byte is written back
+        }
+        tokens.clear();
+    }
+private:
+    int rfd = -1;
+    int wfd = -1;
+    bool ok = false;
+    bool own_fd = false;
+    std::vector<char> tokens;
+
+    void init(const char* mf) {
         if (!mf) {
             return;
         }
@@ -22253,59 +22320,20 @@ public:
             }
         }
     }
-    ~JobserverClient() {
-        releaseAll();
-        if (own_fd && rfd >= 0) {
-            close(rfd);
-        }
-    }
-    bool available() const { return ok; }
-    // Non-blocking: acquire up to `max` tokens; return the count actually obtained.
-    int acquire(int max) {
-        if (!ok || max <= 0) {
-            return 0;
-        }
-        int fl = fcntl(rfd, F_GETFL);
-        bool restore_flags = false;
-        if (fl != -1) {
-            restore_flags = !(fl & O_NONBLOCK)
-                && fcntl(rfd, F_SETFL, fl | O_NONBLOCK) != -1;
-        }
-        int got = 0;
-        while (got < max) {
-            char c;
-            ssize_t r = read(rfd, &c, 1);
-            if (r == 1) {
-                tokens.push_back(c);
-                ++got;
-            } else {
-                break;  // EAGAIN / empty -> no more tokens available right now
-            }
-        }
-        // With the inherited-fd jobserver used by older GNU make (including
-        // Apple's make 3.81), file-status flags belong to the shared open-file
-        // description.  Leaving O_NONBLOCK set here would therefore also
-        // change make's copy of the pipe descriptor after qcc returns from
-        // this poll.  Keep the nonblocking window local to token acquisition.
-        if (restore_flags) {
-            fcntl(rfd, F_SETFL, fl);
-        }
-        return got;
-    }
-    void releaseAll() {
-        for (char c : tokens) {
-            ssize_t w = write(wfd, &c, 1);
-            (void)w;  // best-effort; the same token byte is written back
-        }
-        tokens.clear();
-    }
-private:
-    int rfd = -1;
-    int wfd = -1;
-    bool ok = false;
-    bool own_fd = false;
-    std::vector<char> tokens;
 };
+
+#ifdef DEBUG
+//! Debug-only: takes up to @p max tokens from the jobserver named in @p makeflags as parallel codegen does, and
+//! returns them; returns the count taken, or -1 if @p makeflags names no usable jobserver
+DLLLOCAL int qore_aot_dbg_jobserver_acquire(const char* makeflags, int max) {
+    JobserverClient js(makeflags);
+    if (!js.available()) {
+        return -1;
+    }
+    // the destructor returns the tokens
+    return js.acquire(max);
+}
+#endif
 
 // Phase 3 parallel codegen (split-after-opt): partition the already-optimized `module` into
 // QORE_AOT_SPLIT_PARTS parts and codegen them on up to `jobs` worker threads, each part with its
