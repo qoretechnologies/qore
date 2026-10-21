@@ -281,28 +281,12 @@ public class Http2SseStream inherits AbstractSseConnection {
     #! Formats an SSE event according to the spec
     /** @param event hash with optional keys: type, data, id, retry
         @return formatted SSE event string
+
+        @throw SSE-EVENT-ERROR the event type or ID contains a NUL, CR or LF character, or the retry value is not a
+        non-negative integer; see @ref HttpServerAsyncIo::SseEventFormat "SseEventFormat"
     */
     static string formatSseEvent(hash<auto> event) {
-        string msg = "";
-
-        if (event.id) {
-            msg += "id: " + event.id + "\n";
-        }
-        if (event.type) {
-            msg += "event: " + event.type + "\n";
-        }
-        if (event.retry) {
-            msg += "retry: " + event.retry + "\n";
-        }
-        if (event.data) {
-            # Split data by newlines and prefix each line with "data: "
-            list<string> lines = event.data.split("\n");
-            foreach string line in (lines) {
-                msg += "data: " + line + "\n";
-            }
-        }
-        msg += "\n";  # Empty line terminates the event
-        return msg;
+        return SseEventFormat::formatEvent(event);
     }
 
     private bool isStreamOpen() {

@@ -66,6 +66,8 @@ module HttpServerAsyncIo {
     - @ref HttpServerAsyncIo::HttpWebSocketPollOperation "HttpWebSocketPollOperation" - WebSocket bidirectional I/O (HTTP/1.x)
     - @ref Qore::Http3ServerPollOperation "Http3ServerPollOperation" - HTTP/3 server connection handling over QUIC (built-in C++ class)
     - @ref HttpServerAsyncIo::Http3SseStream "Http3SseStream" - SSE streaming support (HTTP/3)
+    - @ref HttpServerAsyncIo::SseEventFormat "SseEventFormat" - Formats SSE event fields, refusing values that the
+      event stream format cannot carry
     - @ref HttpServerAsyncIo::HttpAsyncTarget "HttpAsyncTarget" - Callback interface for HTTP events
     - @ref HttpServerAsyncIo::HttpAsyncSocketIoController "HttpAsyncSocketIoController" - HTTP-aware I/O controller
 

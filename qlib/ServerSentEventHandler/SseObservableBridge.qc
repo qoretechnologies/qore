@@ -281,32 +281,32 @@ public class SseObservableBridge inherits DataProvider::Observer {
     #! Serialize an @ref Qore::SseMessageInfo "SseMessageInfo" as an SSE
     #! event frame according to the configured serialization.
     /** Uses the W3C/WHATWG SSE framing — \c "event: NAME\n", \c "data:
-        VALUE\n", etc., terminated by a blank line.  Embedded newlines in
-        the rendered data value are split into multiple \c "data:" lines,
-        as required by the spec.
+        VALUE\n", etc., terminated by a blank line.  Line breaks (CRLF, CR or
+        LF) in the rendered data value and in a comment are split into
+        multiple lines, as required by the spec, so the client joins them
+        back with LF.
+
+        @throw SSE-EVENT-ERROR the event type or ID contains a NUL, CR or LF
+        character, which an event stream cannot carry, or the retry value is
+        negative; see @ref HttpServerAsyncIo::SseEventFormat "SseEventFormat"
     */
     string encodeMessage(hash<SseMessageInfo> msg) {
         string out = "";
         if (msg.event.val()) {
-            out += "event: " + msg.event + "\n";
+            out += SseEventFormat::formatLineField("event", msg.event);
         }
         if (exists msg.id) {
-            out += "id: " + msg.id + "\n";
+            out += SseEventFormat::formatLineField("id", msg.id);
         }
         if (msg.retry) {
-            out += "retry: " + msg.retry + "\n";
+            out += SseEventFormat::formatRetry(msg.retry);
         }
         if (msg.comment.val()) {
             # Comment lines are lines that start with ':' per the SSE spec
-            out += ": " + msg.comment + "\n";
+            out += SseEventFormat::formatMultiLineField("", msg.comment);
         }
         if (exists msg.data) {
-            string value = serializeValue(msg.data);
-            # SSE: data lines cannot contain raw newlines; split into
-            # multiple data lines so the client concatenates them.
-            foreach string line in (value.split("\n")) {
-                out += "data: " + line + "\n";
-            }
+            out += SseEventFormat::formatMultiLineField("data", serializeValue(msg.data));
         }
         out += "\n";
         return out;

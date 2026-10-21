@@ -264,6 +264,7 @@ public class HttpServerAsyncIoTest inherits QUnit::Test {
     constructor() : QUnit::Test("HttpServerAsyncIo Test", "1.0", ARGV) {
         addTestCase("Constants test", \constantsTest());
         addTestCase("Hashdecl test", \hashdeclTest());
+        addTestCase("SseEventFormat test", \sseEventFormatTest());
         addTestCase("Target class test", \targetClassTest());
         addTestCase("delayed preparation response", \delayedPreparationResponseTest());
         addTestCase("response delay guard for blocking bodies",
@@ -394,6 +395,35 @@ public class HttpServerAsyncIoTest inherits QUnit::Test {
         # Test timeouts
         assertEq(30s, DefaultHeaderReadTimeout);
         assertEq(75s, DefaultIdleTimeout);
+    }
+
+    sseEventFormatTest() {
+        # a value that cannot be one line of an event stream is refused
+        assertThrows("SSE-EVENT-ERROR", "server-sent event type \"a\\\\x0ab\" contains a line break",
+            \SseEventFormat::formatLineField(), ("event", "a\nb"));
+        assertThrows("SSE-EVENT-ERROR", "server-sent event ID \"a\\\\x0db\" contains a line break",
+            \SseEventFormat::formatLineField(), ("id", "a\rb"));
+        assertThrows("SSE-EVENT-ERROR", "server-sent event ID \"a\\\\x00b\" contains a NUL character",
+            \SseEventFormat::formatLineField(), ("id", "a\x00b"));
+        assertEq("id: 12\n", SseEventFormat::formatLineField("id", 12));
+        assertEq("event: \n", SseEventFormat::formatLineField("event", ""));
+
+        # each line of a value is one field line
+        assertEq("data: a\ndata: b\ndata: c\ndata: \n", SseEventFormat::formatMultiLineField("data", "a\r\nb\rc\n"));
+        assertEq("data: \n", SseEventFormat::formatMultiLineField("data", ""));
+        assertEq("data: a\x00b\n", SseEventFormat::formatMultiLineField("data", "a\x00b"));
+        assertEq(": x\n: y\n", SseEventFormat::formatMultiLineField("", "x\ny"));
+
+        assertEq("retry: 0\n", SseEventFormat::formatRetry(0));
+        assertEq("retry: 250\n", SseEventFormat::formatRetry("250"));
+        assertThrows("SSE-EVENT-ERROR", \SseEventFormat::formatRetry(), -1);
+        assertThrows("SSE-EVENT-ERROR", \SseEventFormat::formatRetry(), "250\n");
+        assertThrows("SSE-EVENT-ERROR", \SseEventFormat::formatRetry(), "1.5");
+        assertThrows("SSE-EVENT-ERROR", \SseEventFormat::formatRetry(), 1.5);
+
+        assertEq("id: 1\nevent: t\nretry: 10\ndata: x\n\n",
+            SseEventFormat::formatEvent({"id": 1, "type": "t", "retry": 10, "data": "x"}));
+        assertEq("\n", SseEventFormat::formatEvent({}));
     }
 
     hashdeclTest() {

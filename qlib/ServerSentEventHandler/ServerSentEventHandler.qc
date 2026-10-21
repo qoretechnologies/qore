@@ -415,13 +415,35 @@ public class ServerSentEventHandler inherits HttpServer::AbstractHttpSocketHandl
     }
 
     #! Encode a message for sending
+    /** @param msg the message to encode; the data is serialized with the handler's serialization, and a line break
+        (CRLF, CR or LF) in a comment or in the serialized data starts another line of the field
+
+        @return the message in the event stream format, terminated by the blank line that dispatches it; a message
+        with no fields is an empty comment
+
+        @throw SSE-EVENT-ERROR the event type or ID contains a NUL, CR or LF character, which an event stream cannot
+        carry, or the retry value is negative; see @ref HttpServerAsyncIo::SseEventFormat "SseEventFormat"
+    */
     string encodeMessage(hash<SseMessageInfo> msg) {
-        string str = foldl $1 + $2, (
-            map sprintf("%s: %s\n", $1.key == "comment" ? "" : $1.key,
-                $1.key == "data" ? serializer($1.value) : $1.value),
-                msg.pairIterator()
-        );
-        return (str ?? ":\n") + "\n";
+        string str = "";
+        foreach hash<auto> i in (msg.pairIterator()) {
+            switch (i.key) {
+                case "data":
+                    str += SseEventFormat::formatMultiLineField("data", serializer(i.value));
+                    break;
+                case "comment":
+                    str += SseEventFormat::formatMultiLineField("", i.value);
+                    break;
+                case "retry":
+                    str += SseEventFormat::formatRetry(i.value);
+                    break;
+                default:
+                    # an ID given with no value is written as an empty ID, which resets the client's last event ID
+                    str += SseEventFormat::formatLineField(i.key, i.value ?? "");
+                    break;
+            }
+        }
+        return (str.val() ? str : ":\n") + "\n";
     }
 
     #! JSON value serialization

@@ -1,0 +1,161 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  SseFieldInjection.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# An event stream splits lines at CR, LF and CRLF, so an event type or ID with a line break would start a field or an
+# event chosen by whoever supplied the value; an ID with a NUL character is ignored by a client, and an event type
+# with one names no event.  Every SSE writer refuses such a value with SSE-EVENT-ERROR before anything is written, and
+# writes each line of data and comments as a line of its own.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Logger
+%requires DataProvider
+%requires HttpServerUtil
+%requires HttpServerAsyncIo
+%requires HttpServer
+%requires ServerSentEventHandler
+
+%exec-class SseFieldInjectionTest
+
+#! hands each registered connection to the test
+class RegisteringSseHandler inherits ServerSentEventHandler::ServerSentEventHandler {
+    public {
+        Queue registered();
+    }
+
+    constructor() : ServerSentEventHandler::ServerSentEventHandler({"heartbeat": 0}) {
+    }
+
+    connectionRegisteredImpl(ServerSentEventHandler::ServerSentEventConnection conn) {
+        registered.push(conn);
+    }
+}
+
+public class SseFieldInjectionTest inherits QUnit::Test {
+    public {
+        #! an event type that would add an ID field and dispatch an event of its own
+        const InjectedType = "update\nid: 666\ndata: forged\n\nevent: x";
+        #! the same with a lone CR, which ends a line as well
+        const InjectedTypeCr = "update\rid: 666";
+        #! an ID with a NUL character, which a client ignores
+        const NulId = "42\x00tail";
+    }
+
+    constructor() : Test("SseFieldInjection", "1.0", \ARGV) {
+        addTestCase("ServerSentEventHandler::encodeMessage()", \handlerEncodeMessage());
+        addTestCase("SseObservableBridge::encodeMessage()", \bridgeEncodeMessage());
+        addTestCase("Http2SseStream::formatSseEvent()", \http2FormatSseEvent());
+        addTestCase("HttpSseStreamPollOperation::queueEvent()", \http1QueueEvent());
+        addTestCase("event stream on the wire", \wireTest());
+        set_return_value(main());
+    }
+
+    handlerEncodeMessage() {
+        ServerSentEventHandler h({"data": "none"});
+        assertThrows("SSE-EVENT-ERROR", \h.encodeMessage(), <SseMessageInfo>{"event": InjectedType, "data": "x"});
+        assertThrows("SSE-EVENT-ERROR", \h.encodeMessage(), <SseMessageInfo>{"event": InjectedTypeCr, "data": "x"});
+        assertThrows("SSE-EVENT-ERROR", \h.encodeMessage(), <SseMessageInfo>{"id": NulId, "data": "x"});
+        assertThrows("SSE-EVENT-ERROR", \h.encodeMessage(), <SseMessageInfo>{"id": "1\r\nevent: x", "data": "x"});
+        assertThrows("SSE-EVENT-ERROR", \h.encodeMessage(), <SseMessageInfo>{"retry": -1, "data": "x"});
+
+        # a comment line break starts another comment line
+        assertEq(": a\n: b\n: c\n\n", h.encodeMessage(<SseMessageInfo>{"comment": "a\r\nb\rc"}));
+        # a value with a NUL character is kept in data
+        string msg = h.encodeMessage(<SseMessageInfo>{"event": "e", "id": 7, "data": "a\x00b"});
+        assertTrue(msg.find("event: e\n") >= 0, "event type");
+        assertTrue(msg.find("id: 7\n") >= 0, "ID");
+        assertTrue(msg.find("data: a\x00b\n") >= 0, "data with a NUL character");
+        assertEq("\n\n", msg.substr(-2), "the event is dispatched");
+        # an empty ID resets the client's last event ID and stays allowed
+        assertTrue(h.encodeMessage(<SseMessageInfo>{"data": "x", "id": ""}).find("id: \n") >= 0, "empty ID");
+        assertEq(":\n\n", h.encodeMessage(<SseMessageInfo>{}));
+    }
+
+    bridgeEncodeMessage() {
+        SseObservableBridge b(new Observable(), {"serialization": "none"});
+        assertThrows("SSE-EVENT-ERROR", \b.encodeMessage(), <SseMessageInfo>{"event": InjectedType, "data": "x"});
+        assertThrows("SSE-EVENT-ERROR", \b.encodeMessage(), <SseMessageInfo>{"id": NulId, "data": "x"});
+        # a CR in data is escaped by the serialization, so it cannot end the data line
+        assertEq("data: a\\rid: 666\n\n", b.encodeMessage(<SseMessageInfo>{"data": "a\rid: 666"}));
+        assertEq(": a\n: b\n\n", b.encodeMessage(<SseMessageInfo>{"comment": "a\rb"}));
+    }
+
+    http2FormatSseEvent() {
+        assertThrows("SSE-EVENT-ERROR", \Http2SseStream::formatSseEvent(), {"type": InjectedType, "data": "x"});
+        assertThrows("SSE-EVENT-ERROR", \Http2SseStream::formatSseEvent(), {"id": NulId, "data": "x"});
+        assertThrows("SSE-EVENT-ERROR", \Http2SseStream::formatSseEvent(), {"retry": "5\nevent: x", "data": "x"});
+        assertEq("data: a\ndata: b\ndata: c\n\n", Http2SseStream::formatSseEvent({"data": "a\rb\r\nc"}));
+        assertEq("retry: 5000\ndata: x\n\n", Http2SseStream::formatSseEvent({"retry": "5000", "data": "x"}));
+        # a final line break is kept as an empty data line
+        assertEq("data: a\ndata: \n\n", Http2SseStream::formatSseEvent({"data": "a\n"}));
+    }
+
+    http1QueueEvent() {
+        HttpSseStreamPollOperation op(new Socket());
+        # the event is refused when it is queued, not when the I/O thread formats it
+        assertThrows("SSE-EVENT-ERROR", \op.queueEvent(), (InjectedType, "x"));
+        assertThrows("SSE-EVENT-ERROR", \op.queueEvent(), ("t", "x", NulId));
+        assertThrows("SSE-EVENT-ERROR", \op.queueRawEvent(), {"type": InjectedTypeCr, "data": "x"});
+        assertEq(0, op.getQueueSize());
+        op.queueEvent("t", "x");
+        assertEq(1, op.getQueueSize());
+    }
+
+    wireTest() {
+        RegisteringSseHandler sse();
+        HttpServer http(<HttpServerOptionInfo>{});
+        on_exit http.stop();
+        http.setDefaultHandler("sse", sse);
+        int port = http.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+
+        Socket s();
+        s.connect("127.0.0.1:" + port, 30s);
+        on_exit s.close();
+        s.send("GET /events HTTP/1.1\r\nHost: localhost\r\nAccept: text/event-stream\r\n\r\n");
+        hash<auto> hdr = s.readHTTPHeader(30s);
+        assertEq(200, hdr.status_code);
+
+        ServerSentEventConnection conn = sse.registered.get(30s);
+        assertThrows("SSE-EVENT-ERROR", \conn.send(), <SseMessageInfo>{"event": InjectedType, "data": "x"});
+        assertThrows("SSE-EVENT-ERROR", \conn.send(), <SseMessageInfo>{"event": InjectedTypeCr, "data": "x"});
+        assertThrows("SSE-EVENT-ERROR", \conn.send(), <SseMessageInfo>{"id": NulId, "data": "x"});
+        conn.send(<SseMessageInfo>{"comment": "one\rtwo"});
+        conn.send(<SseMessageInfo>{"event": "end", "data": "done"});
+
+        # reads the stream up to the last event sent; an HTTP/1.1 event stream is the body of a response that ends
+        # when the connection is closed
+        assertEq("close", hdr.connection);
+        string stream = "";
+        while (stream.find("event: end") < 0) {
+            stream += s.recv(-1, 30s);
+        }
+        # nothing of a refused event reached the client
+        assertEq(-1, stream.find("666"), "no forged ID: " + stream);
+        assertEq(-1, stream.find("forged"), "no forged data: " + stream);
+        assertEq(-1, stream.find("tail"), "no ID with a NUL character: " + stream);
+        assertTrue(stream.find(": one\n: two\n\n") >= 0, "the comment is two comment lines: " + stream);
+    }
+}

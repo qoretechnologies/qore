@@ -98,11 +98,17 @@ public class AbstractSseConnection {
         @param data the event data
         @param id the event ID (optional)
         @param retry retry interval in ms (optional)
+
+        @throw SSE-EVENT-ERROR the event type or ID contains a NUL, CR or LF character, or the retry value is not a
+        non-negative integer; nothing is queued (see @ref HttpServerAsyncIo::SseEventFormat "SseEventFormat")
     */
     abstract queueEvent(*string event_type, string data, *string id, *int retry);
 
     #! Queues a raw SSE message
     /** @param event hash with optional keys: type, data, id, retry
+
+        @throw SSE-EVENT-ERROR the event type or ID contains a NUL, CR or LF character, or the retry value is not a
+        non-negative integer; nothing is queued (see @ref HttpServerAsyncIo::SseEventFormat "SseEventFormat")
     */
     abstract queueRawEvent(hash<auto> event);
 
