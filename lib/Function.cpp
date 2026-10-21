@@ -4935,7 +4935,7 @@ void UserVariantBase::registerPrecompiledAOTFunction(
         has_aot_lazy_function_ir.store(false, std::memory_order_release);
     }
     if (ctx) {
-        if (getenv("QORE_DISABLE_IR_CONTEXT_ELISION")) {
+        if (q_env_is_set("QORE_DISABLE_IR_CONTEXT_ELISION")) {
             uses_argv.store(signature.argvid != nullptr, std::memory_order_release);
             uses_self.store(signature.selfid != nullptr, std::memory_order_release);
         } else {
@@ -4959,7 +4959,7 @@ void UserVariantBase::registerLazyPrecompiledAOTFunction(AotFunctionPtr fn,
         aot_lazy_function_ir_index = entry_index;
         has_aot_lazy_function_ir.store(true, std::memory_order_release);
     }
-    if (getenv("QORE_DISABLE_IR_CONTEXT_ELISION")) {
+    if (q_env_is_set("QORE_DISABLE_IR_CONTEXT_ELISION")) {
         uses_argv.store(signature.argvid != nullptr, std::memory_order_release);
         uses_self.store(signature.selfid != nullptr, std::memory_order_release);
     } else {
@@ -5032,7 +5032,7 @@ UserVariantBase::IRContextFlags UserVariantBase::getIRContextFlags(const QoreIRF
     assert(ir);
     IRContextFlags flags;
     flags.all_body_locals_ir_only = ir->areAllBodyLocalsIROnly();
-    if (getenv("QORE_DISABLE_IR_CONTEXT_ELISION")) {
+    if (q_env_is_set("QORE_DISABLE_IR_CONTEXT_ELISION")) {
         flags.uses_argv = signature.argvid != nullptr;
         flags.uses_self = signature.selfid != nullptr;
     } else {
@@ -5772,7 +5772,7 @@ QoreIRFunction* UserVariantBase::lowerIRFunction(const char* name, const std::st
         }
         return nullptr;
     }
-    if (getenv("QORE_IR_OPT_STATS")) {
+    if (q_env_is_set("QORE_IR_OPT_STATS")) {
         fprintf(stderr, "IR-OPT: %s: loops=%zu hoisted=%zu scalar-loads=%zu local-value-facts=%zu dense-list-facts=%zu dense-joins=%zu native-local-loads=%zu native-local-stores=%zu scalar-cse=%zu scalar-lists=%zu scalar-hashes=%zu literal-list-queries=%zu typed-foreach=%zu branches=%zu unreachable=%zu borrowed-list=%zu bounded-list=%zu boxed-direct=%zu inplace-push=%zu inplace-string=%zu pure-calls=%zu pure-cse=%zu phi-elided=%zu\n",
             name,
             optimization_stats.loops_analyzed, optimization_stats.instructions_hoisted,
@@ -5799,7 +5799,7 @@ QoreIRFunction* UserVariantBase::lowerIRFunction(const char* name, const std::st
             optimization_stats.redundant_phis_eliminated);
     }
 
-    if (getenv("QORE_IR_CONTEXT_STATS")) {
+    if (q_env_is_set("QORE_IR_CONTEXT_STATS")) {
         IRContextFlags flags = getIRContextFlags(func);
         fprintf(stderr, "IR-CONTEXT: %s: argv=%d self=%d\n",
             name ? name : "<fn>", flags.uses_argv, flags.uses_self);
@@ -5937,7 +5937,7 @@ void UserVariantBase::attemptIRLowering(const char* name, bool raise_on_failure,
 static bool isApproachBEligible(const UserVariantBase* uvb, const QoreIRFunction* callee_ir,
         QoreProgram* root_pgm) {
     // not "debug", which would hide the debugging level that printd() compares with
-    bool batch_debug = getenv("QORE_BATCH_DEBUG") != nullptr;
+    bool batch_debug = q_env_is_set("QORE_BATCH_DEBUG");
 
     // Must be same program (no ProgramThreadCountContextHelper needed)
     if (uvb->pgm != root_pgm) {
@@ -6014,7 +6014,7 @@ static std::vector<QoreJIT::BatchCallee> collectBatchCallees(const QoreIRFunctio
     std::vector<QoreJIT::BatchCallee> callees;
     std::unordered_set<const AbstractQoreFunctionVariant*> seen;
     std::vector<const QoreIRFunction*> worklist{&func};
-    bool collect_transitive = getenv("QORE_DISABLE_JIT_TRANSITIVE_BATCH") == nullptr;
+    bool collect_transitive = !q_env_is_set("QORE_DISABLE_JIT_TRANSITIVE_BATCH");
     size_t check_count = 0;
 
     for (size_t work_i = 0; work_i < worklist.size(); ++work_i) {
@@ -6049,7 +6049,7 @@ static std::vector<QoreJIT::BatchCallee> collectBatchCallees(const QoreIRFunctio
                         }
                     }
                 } else if (inst->opcode == QoreIROpcode::CreateClosure
-                        && getenv("QORE_DISABLE_JIT_NATIVE_CLOSURES") == nullptr) {
+                        && !q_env_is_set("QORE_DISABLE_JIT_NATIVE_CLOSURES")) {
                     const auto* create =
                         static_cast<const QoreIRCreateClosureInstruction*>(inst.get());
                     const QoreClosureParseNode* closure = create->closure_node;
@@ -6175,7 +6175,7 @@ void UserVariantBase::attemptJITCompilation() const {
         // the same oversized function.
         jit_compile_failed.store(true, std::memory_order_release);
         jit_compile_state.store(2, std::memory_order_release);
-        if (getenv("QORE_JIT_TIMING")) {
+        if (q_env_is_set("QORE_JIT_TIMING")) {
             fprintf(stderr, "[BG-JIT] skipped native promotion of '%s' (compilation budget exceeded; "
                 "%zu IR instructions; limit %zu)\n", ir->name.c_str(), instruction_count,
                 jit_ir_budget);
@@ -6213,7 +6213,7 @@ void UserVariantBase::attemptJITCompilation() const {
             batch_instruction_count += callee.ir_func->getInstructionCount();
         }
         if (batch_instruction_count > jit_ir_budget) {
-            if (getenv("QORE_JIT_TIMING")) {
+            if (q_env_is_set("QORE_JIT_TIMING")) {
                 fprintf(stderr, "[BG-JIT] disabled oversized batch for '%s' (compilation budget exceeded; "
                     "%zu IR instructions; limit %zu)\n", ir->name.c_str(), batch_instruction_count,
                     jit_ir_budget);
@@ -6224,12 +6224,12 @@ void UserVariantBase::attemptJITCompilation() const {
 
     if (!callees.empty()) {
         std::shared_ptr<QoreIRFunction> compile_ir;
-        if (statements && !getenv("QORE_DISABLE_JIT_INTERPROCEDURAL_REWRITES")) {
+        if (statements && !q_env_is_set("QORE_DISABLE_JIT_INTERPROCEDURAL_REWRITES")) {
             compile_ir.reset(lowerIRFunction(
                 ir->getDisplayName().c_str(), ir->name,
                 nullptr, nullptr, false, false));
         }
-        if (getenv("QORE_BATCH_DEBUG")) {
+        if (q_env_is_set("QORE_BATCH_DEBUG")) {
             printd(5, "BATCH: '%s' enqueued with %d callees:",
                 ir->name.c_str(), (int)callees.size());
             for (const auto& c : callees) {
@@ -6470,7 +6470,7 @@ QoreValue UserVariantBase::evalSpecializedIR(const char* name, const QoreIRFunct
             if (ok && !*xsink) {
                 val = ir_return_value;
             } else if (!*xsink) {
-                if (getenv("QORE_IR_TRACE_SILENT_FAIL")) {
+                if (q_env_is_set("QORE_IR_TRACE_SILENT_FAIL")) {
                     QoreIRInterpreter::dumpLastSilentFail(name ? name : "<fn>");
                 }
                 if (pgm) {
@@ -6718,7 +6718,8 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
                 if (!*xsink && qore_jit_deopt_requested()) {
                     printd(2, "evalTiered JIT-DEOPT: '%s' — falling back to AST\n", name);
                     static bool debug_deopt = [] {
-                        const char* debug_env = getenv("QORE_IR_DEBUG");
+                        QoreEnvironmentValue debug_env_holder("QORE_IR_DEBUG");
+                        const char* debug_env = debug_env_holder.c_str();
                         return debug_env && strstr(debug_env, "deopt");
                     }();
                     if (debug_deopt) {
@@ -6870,7 +6871,7 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
                         }
                     }
                     fell_back_to_ast = true;
-                    if (getenv("QORE_IR_TRACE_SILENT_FAIL")) {
+                    if (q_env_is_set("QORE_IR_TRACE_SILENT_FAIL")) {
                         QoreIRInterpreter::dumpLastSilentFail(name ? name : "<fn>");
                     }
                     if (pgm) {

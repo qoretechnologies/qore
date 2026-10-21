@@ -3390,7 +3390,7 @@ class QoreAOTBinaryMultiDeserializer {
     static bool timingEnabled() {
         static int cached = -1;
         if (cached < 0) {
-            cached = getenv("QORE_AOT_PHASE_TIMING") ? 1 : 0;
+            cached = q_env_is_set("QORE_AOT_PHASE_TIMING") ? 1 : 0;
         }
         return cached != 0;
     }

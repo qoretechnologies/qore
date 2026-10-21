@@ -1377,7 +1377,7 @@ bool qoreAOTReadMachoFuncSymbols(const std::string& path, std::vector<AOTElfFunc
 }
 
 static bool qorePluginQordTrace() {
-    return std::getenv("QORE_PLUGIN_QORD_TRACE") != nullptr;
+    return q_env_is_set("QORE_PLUGIN_QORD_TRACE");
 }
 
 static void tracePluginQord(const std::string& msg) {
@@ -1660,7 +1660,7 @@ static void qoreAOTAddClassLookupAliases(
 }
 
 static bool qoreAOTUseDeserializerReservations() {
-    static const bool enabled = getenv("QORE_DISABLE_AOT_DESERIALIZER_RESERVATIONS") == nullptr;
+    static const bool enabled = !q_env_is_set("QORE_DISABLE_AOT_DESERIALIZER_RESERVATIONS");
     return enabled;
 }
 
@@ -2323,7 +2323,7 @@ static bool skipAOTSerializedValue(const QoreAOTBinaryReader& reader,
 
 QoreAOTStringRef QoreAOTBinaryDeserializer::makeDeferredStringRef(const char* value) {
     static const bool use_reader_strings =
-        getenv("QORE_DISABLE_AOT_BORROWED_STRING_REFS") == nullptr;
+        !q_env_is_set("QORE_DISABLE_AOT_BORROWED_STRING_REFS");
     if (use_reader_strings) {
         return value;
     }
@@ -2341,7 +2341,7 @@ bool QoreAOTBinaryDeserializer::readDeferredValueBlob(const uint8_t*& ptr,
         return false;
     }
     static const bool use_borrowed_blobs =
-        getenv("QORE_DISABLE_AOT_BORROWED_DEFERRED_VALUES") == nullptr;
+        !q_env_is_set("QORE_DISABLE_AOT_BORROWED_DEFERRED_VALUES");
     if (use_borrowed_blobs) {
         value_blob.assign(start, ptr - start);
     } else {
@@ -2660,7 +2660,7 @@ static void aot_add_constant_value_reverse_mappings_impl(AOTConstantReverseMap& 
         it->second.init_seq = init_seq;
         it->second.deferred_init = deferred_init;
     }
-    if (getenv("QORE_AOT_DEBUG_CONST_MAP")) {
+    if (q_env_is_set("QORE_AOT_DEBUG_CONST_MAP")) {
         if (auto* obj = dynamic_cast<const QoreObject*>(node)) {
             fprintf(stderr, "AOT const map object: class=%s ptr=%p path=%s seq=%llu\n",
                 obj->getClassName(), static_cast<const void*>(node), crm[node].path.c_str(),
@@ -3032,7 +3032,8 @@ QoreValue qore_aot_resolve_constant_path_value(QoreProgram* pgm, const char* pat
     if (!path || !*path) {
         return QoreValue();
     }
-    const char* const_trace = getenv("QORE_AOT_CONST_TRACE");
+    QoreEnvironmentValue const_trace_holder("QORE_AOT_CONST_TRACE");
+    const char* const_trace = const_trace_holder.c_str();
     bool trace_const = const_trace && (!*const_trace || strstr(path, const_trace));
     if (trace_const) {
         fprintf(stderr, "[aot-init] resolve constant path pgm=%p path=%s defer=%d wrap=%d\n",
@@ -5411,7 +5412,7 @@ static const BuiltinTypeEntry builtin_types[] = {
 };
 
 const QoreTypeInfo* QoreAOTTypeResolver::resolveBuiltin(const char* path) {
-    static const bool use_index = getenv("QORE_DISABLE_AOT_BUILTIN_TYPE_INDEX") == nullptr;
+    static const bool use_index = !q_env_is_set("QORE_DISABLE_AOT_BUILTIN_TYPE_INDEX");
     if (use_index) {
         using builtin_type_index_t = std::unordered_map<std::string_view, const QoreTypeInfo**>;
         static const builtin_type_index_t builtin_type_index = []() {
@@ -6377,7 +6378,7 @@ const QoreTypeInfo* QoreAOTTypeResolver::resolve(const char* path, std::string& 
 
     if (!result) {
         static const bool use_shape_dispatch =
-            getenv("QORE_DISABLE_AOT_TYPE_SHAPE_DISPATCH") == nullptr;
+            !q_env_is_set("QORE_DISABLE_AOT_TYPE_SHAPE_DISPATCH");
         if (use_shape_dispatch) {
             const char* shape = *path == '*' ? path + 1 : path;
             if (!strncmp(shape, "hash<", 5)) {
@@ -12107,7 +12108,7 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
         const std::vector<AOTGlobalSlotId>& parent_globals,
         const AOTConstantReverseMap* const_reverse_map) {
     auto trace_unsupported_expr = [&expr](const char* reason, const AbstractQoreNode* node) {
-        if (!getenv("QORE_AOT_TRACE_UNSUPPORTED_EXPR") && !getenv("QORE_AOT_TRACE_GENERIC_EVAL")) {
+        if (!q_env_is_set("QORE_AOT_TRACE_UNSUPPORTED_EXPR") && !q_env_is_set("QORE_AOT_TRACE_GENERIC_EVAL")) {
             return;
         }
         const char* object_class = "";
@@ -13798,7 +13799,8 @@ bool serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompile
         uint32_t entry_size_pos = writer.position();
         writer.writeU32(0);  // placeholder for entry size (patched below)
         const uint32_t entry_payload_start = entry_size_pos + 4;
-        const char* trace_entry_env = getenv("QORE_AOT_SLOT_TRACE");
+        QoreEnvironmentValue trace_entry_env_holder("QORE_AOT_SLOT_TRACE");
+        const char* trace_entry_env = trace_entry_env_holder.c_str();
         const bool trace_entry = trace_entry_env
             && (!*trace_entry_env || func.name.find(trace_entry_env) != std::string::npos);
         auto traceEntryOffset = [&writer, entry_payload_start, &func, trace_entry](const char* label) {
@@ -13877,7 +13879,7 @@ bool serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompile
         // Expression slot entries (in slot order)
         for (size_t expr_idx = 0; expr_idx < func.slot_ids.exprs.size(); ++expr_idx) {
             auto& expr = func.slot_ids.exprs[expr_idx];
-            if (const char* trace = getenv("QORE_AOT_SLOT_TRACE")) {
+            if (QoreEnvironmentValue trace_holder("QORE_AOT_SLOT_TRACE"); const char* trace = trace_holder.c_str()) {
                 bool match = !*trace;
                 if (!match && func.name.find(trace) != std::string::npos) {
                     match = true;
@@ -14739,7 +14741,8 @@ static bool serializeIRInstruction(QoreAOTBinaryWriter& writer, const QoreIRInst
     record in the output.
 */
 static const char* aotTestFailIRSerialization() {
-    static const char* name = getenv("QORE_AOT_TEST_FAIL_IR_SERIALIZATION");
+    static const QoreEnvironmentValue name_holder("QORE_AOT_TEST_FAIL_IR_SERIALIZATION");
+    static const char* name = name_holder.c_str();
     return name && *name ? name : nullptr;
 }
 
@@ -14886,7 +14889,8 @@ bool serializeIRFunction(QoreAOTBinaryWriter& writer, const QoreIRFunction& func
             auto& inst_ptr = block->instructions[inst_idx];
             uint32_t inst_start = writer.position();
             QoreIRInstGroup group = classifyInstruction(inst_ptr.get());
-            if (const char* trace = getenv("QORE_AOT_TRACE_IR_SERIALIZE")) {
+            if (QoreEnvironmentValue trace_holder("QORE_AOT_TRACE_IR_SERIALIZE");
+                    const char* trace = trace_holder.c_str()) {
                 bool match = !*trace || (func.name.find(trace) != std::string::npos);
                 if (match) {
                     const OpcodeInfo* oi = getOpcodeInfo(static_cast<uint16_t>(inst_ptr->opcode));
@@ -14903,7 +14907,8 @@ bool serializeIRFunction(QoreAOTBinaryWriter& writer, const QoreIRFunction& func
             if (!serializeIRInstruction(writer, inst_ptr.get(), block_idx, writeExpr)) {
                 return false;
             }
-            if (const char* trace = getenv("QORE_AOT_TRACE_IR_SERIALIZE")) {
+            if (QoreEnvironmentValue trace_holder("QORE_AOT_TRACE_IR_SERIALIZE");
+                    const char* trace = trace_holder.c_str()) {
                 bool match = !*trace || (func.name.find(trace) != std::string::npos);
                 if (match) {
                     fprintf(stderr,
@@ -15728,12 +15733,12 @@ bool QoreAOTBinaryDeserializer::deserializeFunctionsAndMethods(std::string& erro
         return false;
     }
     slot_variant_bindings.clear();
-    cache_slot_variant_bindings = getenv("QORE_DISABLE_AOT_SLOT_VARIANT_BINDINGS") == nullptr;
+    cache_slot_variant_bindings = !q_env_is_set("QORE_DISABLE_AOT_SLOT_VARIANT_BINDINGS");
     if (cache_slot_variant_bindings) {
         slot_variant_bindings.reserve(slot_map_names.size());
     }
 
-    bool time_on = getenv("QORE_AOT_PHASE_TIMING") != nullptr;
+    bool time_on = q_env_is_set("QORE_AOT_PHASE_TIMING");
     auto now_us = [] () -> uint64_t {
         struct timespec ts;
         clock_gettime(CLOCK_MONOTONIC, &ts);
@@ -18140,7 +18145,7 @@ bool QoreAOTBinaryDeserializer::deserializeConstants(std::string& error) {
     }
 
     static const bool use_pending_constant_lookup =
-        getenv("QORE_DISABLE_AOT_PENDING_CONSTANT_LOOKUP") == nullptr;
+        !q_env_is_set("QORE_DISABLE_AOT_PENDING_CONSTANT_LOOKUP");
     if (!use_pending_constant_lookup) {
         rebuildAOTRootIndexes(pgm);
     }
@@ -18825,7 +18830,7 @@ static bool readAndSetupVariantSignature(
         clock_gettime(CLOCK_MONOTONIC, &ts);
         return (uint64_t)ts.tv_sec * 1000000ULL + ts.tv_nsec / 1000ULL;
     };
-    static const bool time_on_sub = getenv("QORE_AOT_PHASE_TIMING") != nullptr;
+    static const bool time_on_sub = q_env_is_set("QORE_AOT_PHASE_TIMING");
     uint64_t t_setup0 = time_on_sub ? now_us_fn() : 0;
 
     // Set up the variant's signature from metadata.  Only signature-
@@ -19018,7 +19023,7 @@ bool QoreAOTBinaryDeserializer::deserializeMethods(std::string& error) {
     // Gated by QORE_AOT_PHASE_TIMING; totals across all sessions
     // go into globals and are printed in the MultiDeserializer's
     // destructor.
-    const bool time_on = getenv("QORE_AOT_PHASE_TIMING") != nullptr;
+    const bool time_on = q_env_is_set("QORE_AOT_PHASE_TIMING");
     auto now_us = [] () -> uint64_t {
         struct timespec ts;
         clock_gettime(CLOCK_MONOTONIC, &ts);
@@ -19943,7 +19948,7 @@ bool serializeNamespaceTree(QoreAOTBinaryWriter& writer, qore_ns_private* root_n
     } serialization_context(writer, root_ns->getProgram(), module_name, keep_modules);
 
     std::vector<qore_ns_private*> extra_roots;
-    bool debug_local_modules = getenv("QORE_AOT_DEBUG_LOCAL_MODULES") != nullptr;
+    bool debug_local_modules = q_env_is_set("QORE_AOT_DEBUG_LOCAL_MODULES");
     if (debug_local_modules && keep_modules) {
         fprintf(stderr, "AOT local module metadata: root collection classes=%zu methods=%zu keep_modules=%zu\n",
             state.classes.size(), state.methods.size(), keep_modules->size());

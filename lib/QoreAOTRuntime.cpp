@@ -198,6 +198,7 @@
 #include <deque>
 #include <map>
 #include <limits>
+#include <optional>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -3246,7 +3247,7 @@ static std::shared_ptr<const QoreAOTDebugMetadata> makeAOTDebugMetadata(
     }
     auto retained = std::make_shared<QoreAOTDebugMetadata>(
         reader, metadata, static_cast<uint32_t>(metadata_len), storage);
-    if (std::getenv("QORE_AOT_TRACE_RETAINED_METADATA")) {
+    if (q_env_is_set("QORE_AOT_TRACE_RETAINED_METADATA")) {
         fprintf(stderr,
             "[aot-retained-metadata] label=%s blob=%d retained=%zu compression=%u borrowed=%u\n",
             reader.getLabel() ? reader.getLabel() : "<unknown>", metadata_len,
@@ -3422,8 +3423,8 @@ std::atomic<bool> g_aot_have_ranges{false};
 //! out with QORE_AOT_LOC_NO_LAZY (falls back to the eager runtime_loc). QORE_AOT_LOC_GATE
 //! still forces the build for diagnostic comparison. Validated lazy-active 789/789.
 inline bool aotLazyLocEnabled() {
-    static const bool enabled = getenv("QORE_AOT_LOC_NO_LAZY") == nullptr
-        || getenv("QORE_AOT_LOC_GATE") != nullptr;
+    static const bool enabled = !q_env_is_set("QORE_AOT_LOC_NO_LAZY")
+        || q_env_is_set("QORE_AOT_LOC_GATE");
     return enabled;
 }
 
@@ -3522,7 +3523,7 @@ thread_local AotPcArtifactCache* aot_pc_artifact_cache = nullptr;
 class AotPcArtifactCacheScope {
 public:
     AotPcArtifactCacheScope() {
-        static const bool enabled = getenv("QORE_AOT_LOC_NO_ARTIFACT_CACHE") == nullptr;
+        static const bool enabled = !q_env_is_set("QORE_AOT_LOC_NO_ARTIFACT_CACHE");
         if (enabled && aotLazyLocEnabled()) {
             previous = aot_pc_artifact_cache;
             aot_pc_artifact_cache = &cache;
@@ -3611,7 +3612,7 @@ static void aotAttachPcLocMap(AotFunctionPtr fn_ptr, const QoreAOTContext* ctx) 
         }
     }
     if (!symmap) {
-        if (getenv("QORE_AOT_LOC_DEBUG")) {
+        if (q_env_is_set("QORE_AOT_LOC_DEBUG")) {
             fprintf(stderr, "AOT-LOC: no map for fname=%s sym=%s\n",
                 info.dli_fname ? info.dli_fname : "?", info.dli_sname ? info.dli_sname : "?");
         }
@@ -3687,7 +3688,7 @@ static void aotAttachPcLocMap(AotFunctionPtr fn_ptr, const QoreAOTContext* ctx) 
         }
     }
     if (!sym_entries) {
-        if (getenv("QORE_AOT_LOC_DEBUG")) {
+        if (q_env_is_set("QORE_AOT_LOC_DEBUG")) {
             fprintf(stderr, "AOT-LOC: sym MISS fname=%s dladdr-sym=%s (map has %zu syms)\n",
                 info.dli_fname ? info.dli_fname : "?", info.dli_sname ? info.dli_sname : "?",
                 symmap->size());
@@ -3747,7 +3748,7 @@ static void aotAttachPcLocMap(AotFunctionPtr fn_ptr, const QoreAOTContext* ctx) 
     g_aot_pc_ranges.push_back(std::move(range));
     g_aot_pc_ranges_sorted = false;
     g_aot_have_ranges.store(true, std::memory_order_release);
-    if (getenv("QORE_AOT_LOC_DEBUG")) {
+    if (q_env_is_set("QORE_AOT_LOC_DEBUG")) {
         fprintf(stderr, "AOT-LOC: registered PC range base=0x%lx sym=%s entries=%zu (total=%zu)\n",
             (unsigned long)fn_start, info.dli_sname ? info.dli_sname : "(symtab)",
             g_aot_pc_ranges.back().offmap.size(),
@@ -3863,8 +3864,9 @@ const QoreProgramLocation* qore_aot_resolve_throw_location(const QoreProgramLoca
     // Lazy resolution is ON by default (Step 6, Phase A). Opt out with
     // QORE_AOT_LOC_NO_LAZY (returns nullptr -> eager). QORE_AOT_LOC_GATE forces the
     // comparison-only mode: compute + log the decision, but still return eager.
-    static const char* gate_env = getenv("QORE_AOT_LOC_GATE");
-    static const bool no_lazy = getenv("QORE_AOT_LOC_NO_LAZY") != nullptr;
+    static const QoreEnvironmentValue gate_env_holder("QORE_AOT_LOC_GATE");
+    static const char* gate_env = gate_env_holder.c_str();
+    static const bool no_lazy = q_env_is_set("QORE_AOT_LOC_NO_LAZY");
     if (!gate_env && no_lazy) {
         return nullptr;
     }
@@ -3951,7 +3953,7 @@ _Unwind_Reason_Code aotCollectCb(struct _Unwind_Context* uctx, void* arg) {
 
 size_t qore_aot_collect_backtrace_locs(std::vector<const QoreProgramLocation*>& out) {
     out.clear();
-    static const bool no_lazy = getenv("QORE_AOT_LOC_NO_LAZY") != nullptr;
+    static const bool no_lazy = q_env_is_set("QORE_AOT_LOC_NO_LAZY");
     if (no_lazy) {
         return 0;
     }
@@ -3961,7 +3963,7 @@ size_t qore_aot_collect_backtrace_locs(std::vector<const QoreProgramLocation*>& 
     AotCollectState st;
     st.out = &out;
     _Unwind_Backtrace(aotCollectCb, &st);
-    if (getenv("QORE_AOT_LOC_DEBUG") && !out.empty()) {
+    if (q_env_is_set("QORE_AOT_LOC_DEBUG") && !out.empty()) {
         fprintf(stderr, "AOT-LOC: backtrace collected %zu AOT frames:\n", out.size());
         for (size_t i = 0; i < out.size(); ++i) {
             const char* f = out[i] ? out[i]->getFile() : nullptr;
@@ -4025,7 +4027,8 @@ static QoreAOTContext* buildContextFromSlotMap(
     uint8_t num_lv_path_insts = QoreAOTBinaryReader::readU8(ptr); // was: padding byte
     int aot_num_regex_cases = qore_aot_func_num_regex_cases(aot_func);
     printd(5, "AOT buildCtx '%s': num_lv_path=%d (from binary)\n", name, num_lv_path_insts);
-    const char* trace_slot_reg_env = getenv("QORE_AOT_TRACE_SLOT_REG");
+    QoreEnvironmentValue trace_slot_reg_env_holder("QORE_AOT_TRACE_SLOT_REG");
+    const char* trace_slot_reg_env = trace_slot_reg_env_holder.c_str();
     const bool trace_slot_reg = trace_slot_reg_env
         && (!*trace_slot_reg_env || (name && std::strstr(name, trace_slot_reg_env)));
     if (trace_slot_reg) {
@@ -6381,11 +6384,11 @@ static QoreAOTContext* buildContextFromSlotMap(
                 };
                 const bool native_metadata_only = closure_bindings
                     && native_body_key && *native_body_key
-                    && std::getenv("QORE_DISABLE_AOT_NATIVE_CLOSURES") == nullptr;
+                    && !q_env_is_set("QORE_DISABLE_AOT_NATIVE_CLOSURES");
                 const bool lazy_fallback = !native_metadata_only
                     && debug_metadata && slot_maps_start
                     && ir_start_ptr >= slot_maps_start
-                    && std::getenv("QORE_DISABLE_AOT_LAZY_CLOSURE_IR") == nullptr;
+                    && !q_env_is_set("QORE_DISABLE_AOT_LAZY_CLOSURE_IR");
                 auto closure_ir = deserializeIRFunction(reader, ptr, ir_end_ptr, pgm,
                     readExprCb, &enclosing_locals, ir_error,
                     ctx->locals, num_locals, &closure_locals_vec,
@@ -6516,7 +6519,7 @@ static QoreAOTContext* buildContextFromSlotMap(
                     binding.class_ctx = closure_class
                         ? qore_class_private::get(*const_cast<QoreClass*>(closure_class)) : nullptr;
                     (*closure_bindings)[native_body_key] = std::move(binding);
-                    if (getenv("QORE_AOT_DEBUG_NATIVE_CLOSURES")) {
+                    if (q_env_is_set("QORE_AOT_DEBUG_NATIVE_CLOSURES")) {
                         fprintf(stderr, "AOT: resolved native closure '%s'\n", native_body_key);
                     }
                 }
@@ -7249,7 +7252,7 @@ static QoreAOTContext* buildContextFromSlotMap(
         // Keep an eager diagnostic mode for same-build performance and
         // compatibility comparisons.
         static const bool eager_stmt_locs =
-            getenv("QORE_DISABLE_AOT_LAZY_STMT_LOCS") != nullptr;
+            q_env_is_set("QORE_DISABLE_AOT_LAZY_STMT_LOCS");
         bool materialize_stmt_locs = pgm
             && (eager_stmt_locs || (pgm->getParseOptions() & PO_ALLOW_DEBUGGER));
         if (num_stmt_locs > 0 && materialize_stmt_locs) {
@@ -7423,7 +7426,7 @@ static QoreAOTContext* buildContextFromSlotMap(
     // are never called by a short-lived loader process, and the map is needed
     // only before this function can contribute a frame to an exception.
     ctx->pc_loc_fn = aot_func.fn_ptr;
-    static const bool eager_pc_loc_attach = getenv("QORE_AOT_LOC_EAGER_ATTACH") != nullptr;
+    static const bool eager_pc_loc_attach = q_env_is_set("QORE_AOT_LOC_EAGER_ATTACH");
     if (eager_pc_loc_attach) {
         qore_aot_ensure_pc_loc_map(ctx);
     }
@@ -9060,8 +9063,11 @@ std::unique_ptr<QoreIRFunction> deserializeIRFunction(
     }
 
     // 6. Read blocks and instructions
-    const bool disable_trace_cache = getenv("QORE_DISABLE_AOT_IR_TRACE_CACHE") != nullptr;
-    const char* cached_trace = disable_trace_cache ? nullptr : getenv("QORE_AOT_TRACE_IR_DESER");
+    // the trace setting is copied (a concurrent change to the environment could free the string getenv() returns);
+    // with QORE_DISABLE_AOT_IR_TRACE_CACHE, it is read again for each instruction
+    const bool disable_trace_cache = q_env_is_set("QORE_DISABLE_AOT_IR_TRACE_CACHE");
+    const QoreEnvironmentValue cached_trace_holder("QORE_AOT_TRACE_IR_DESER");
+    const char* cached_trace = disable_trace_cache ? nullptr : cached_trace_holder.c_str();
     for (int i = 0; i < num_blocks; ++i) {
         if (checkCancel()) {
             return nullptr;
@@ -9078,8 +9084,9 @@ std::unique_ptr<QoreIRFunction> deserializeIRFunction(
                 return nullptr;
             }
             const uint8_t* inst_start = ptr;
+            std::optional<QoreEnvironmentValue> live_trace;
             if (const char* trace = disable_trace_cache
-                    ? getenv("QORE_AOT_TRACE_IR_DESER") : cached_trace) {
+                    ? live_trace.emplace("QORE_AOT_TRACE_IR_DESER").c_str() : cached_trace) {
                 bool match = !*trace || (func->name.find(trace) != std::string::npos);
                 if (match && ptr + 3 <= end) {
                     uint16_t peek_opcode = static_cast<uint16_t>(ptr[0] | (static_cast<uint16_t>(ptr[1]) << 8));
@@ -9104,7 +9111,7 @@ std::unique_ptr<QoreIRFunction> deserializeIRFunction(
                 return nullptr;
             }
             if (const char* trace = disable_trace_cache
-                    ? getenv("QORE_AOT_TRACE_IR_DESER") : cached_trace) {
+                    ? live_trace.emplace("QORE_AOT_TRACE_IR_DESER").c_str() : cached_trace) {
                 bool match = !*trace || (func->name.find(trace) != std::string::npos);
                 if (match) {
                     fprintf(stderr,
@@ -9258,7 +9265,7 @@ QoreAOTContext* qore_aot_materialize_lazy_function_context(
     ExceptionSink local_xsink;
     ExceptionSink* build_xsink = xsink ? xsink : &local_xsink;
     std::lock_guard<std::mutex> resolution_lock(lazy_ir.resolution_mutex);
-    const bool use_resolution_cache = getenv("QORE_DISABLE_AOT_RESOLUTION_CACHE") == nullptr;
+    const bool use_resolution_cache = !q_env_is_set("QORE_DISABLE_AOT_RESOLUTION_CACHE");
     AOTSlotResolutionCacheScope resolution_cache_scope(
         use_resolution_cache ? &lazy_ir.resolution_cache : nullptr);
     // A first runtime call is a namespace reader, even though it builds private slot metadata.
@@ -9283,7 +9290,7 @@ QoreAOTContext* qore_aot_materialize_lazy_function_context(
         error = build_error.empty() ? "could not reconstruct the AOT slot context" : build_error;
         return nullptr;
     }
-    if (lazy_entry.aot_func && std::getenv("QORE_AOT_LAZY_CONTEXT_TRACE")) {
+    if (lazy_entry.aot_func && q_env_is_set("QORE_AOT_LAZY_CONTEXT_TRACE")) {
         fprintf(stderr, "[aot-lazy-context] materialized %s\n", serialized_name);
     }
     return ctx;
@@ -9601,7 +9608,7 @@ static void registerAOTFunctionsFromSlotMaps(
     // its path, load bias, trailer, and symbol table after resolving the first
     // function so the remaining functions avoid repeated dladdr() calls.
     AotPcArtifactCacheScope pc_artifact_cache_scope;
-    const bool use_resolution_cache = getenv("QORE_DISABLE_AOT_RESOLUTION_CACHE") == nullptr;
+    const bool use_resolution_cache = !q_env_is_set("QORE_DISABLE_AOT_RESOLUTION_CACHE");
     AOTSlotResolutionCache resolution_cache{pgm};
     AOTSlotResolutionCacheScope resolution_cache_scope(use_resolution_cache ? &resolution_cache : nullptr);
 
@@ -9628,8 +9635,8 @@ static void registerAOTFunctionsFromSlotMaps(
     const bool lazy_contexts = reader.getHeader().version >= QORE_AOT_LAZY_CONTEXT_FLAGS_VERSION
         && debug_metadata
         && !(pgm->getParseOptions() & PO_ALLOW_DEBUGGER)
-        && std::getenv("QORE_DISABLE_AOT_LAZY_FUNCTION_CONTEXTS") == nullptr
-        && std::getenv("QORE_AOT_LOC_EAGER_ATTACH") == nullptr;
+        && !q_env_is_set("QORE_DISABLE_AOT_LAZY_FUNCTION_CONTEXTS")
+        && !q_env_is_set("QORE_AOT_LOC_EAGER_ATTACH");
     std::shared_ptr<QoreAOTLazyFunctionIR> lazy_context_table;
     if (lazy_contexts) {
         lazy_context_table = std::make_shared<QoreAOTLazyFunctionIR>(pgm);
@@ -9659,11 +9666,12 @@ static void registerAOTFunctionsFromSlotMaps(
     // namespace walk.
     std::string last_class_name;
     const QoreClass* last_qc = nullptr;
-    const char* trace_slot_reg_env = getenv("QORE_AOT_TRACE_SLOT_REG");
+    QoreEnvironmentValue trace_slot_reg_env_holder("QORE_AOT_TRACE_SLOT_REG");
+    const char* trace_slot_reg_env = trace_slot_reg_env_holder.c_str();
     AOTClosureRuntimeBindingMap local_closure_bindings;
     AOTClosureRuntimeBindingMap& closure_bindings = external_closure_bindings
         ? *external_closure_bindings : local_closure_bindings;
-    const bool use_slot_prefix_index = getenv("QORE_DISABLE_AOT_SLOT_PREFIX_INDEX") == nullptr;
+    const bool use_slot_prefix_index = !q_env_is_set("QORE_DISABLE_AOT_SLOT_PREFIX_INDEX");
     std::unordered_map<std::string, std::vector<const QoreAOTFunc*>> slot_prefix_index;
     if (use_slot_prefix_index) {
         slot_prefix_index.reserve(func_map.size());
@@ -10146,7 +10154,7 @@ static void registerAOTFunctionsFromSlotMaps(
                 // closure_bindings.  Keep a stable local copy while resolving this body.
                 closure_local_slots = closure_binding->local_slots;
             }
-            if (std::getenv("QORE_DISABLE_AOT_NATIVE_CLOSURES") != nullptr) {
+            if (q_env_is_set("QORE_DISABLE_AOT_NATIVE_CLOSURES")) {
                 ++registered;
                 func_map.erase(it);
                 ptr = entry_end;
@@ -10214,7 +10222,7 @@ static void registerAOTFunctionsFromSlotMaps(
                 entry_index, qore_aot_func_uses_argv(*aot_func), qore_aot_func_uses_self(*aot_func));
             ++registered;
             func_map.erase(it);
-            if (std::getenv("QORE_AOT_LAZY_CONTEXT_TRACE")) {
+            if (q_env_is_set("QORE_AOT_LAZY_CONTEXT_TRACE")) {
                 fprintf(stderr, "[aot-lazy-context] deferred %s\n", func_name);
             }
             ptr = entry_end;
@@ -10242,7 +10250,7 @@ static void registerAOTFunctionsFromSlotMaps(
             // Remove from func_map so any registration gap is reported precisely.
             func_map.erase(it);
             printd(2, "AOT slot-reg: registered '%s' from slot map\n", func_name);
-            if (is_native_closure && getenv("QORE_AOT_DEBUG_NATIVE_CLOSURES")) {
+            if (is_native_closure && q_env_is_set("QORE_AOT_DEBUG_NATIVE_CLOSURES")) {
                 fprintf(stderr, "AOT: registered native closure '%s'\n", func_name);
             }
         } else if (ctx) {
@@ -11820,8 +11828,8 @@ struct AOTDependencyLoadResult {
 static AOTDependencyLoadResult aotLoadModuleDependencies(ExceptionSink& xsink,
         const std::vector<std::string>& providers, const std::vector<std::string>& imports,
         bool imports_present, QoreProgram* local_pgm) {
-    static const bool force_legacy_imports = getenv("QORE_AOT_LEGACY_IMPORT_ALL") != nullptr;
-    static const bool trace_dependencies = getenv("QORE_AOT_DEP_TRACE") != nullptr;
+    static const bool force_legacy_imports = q_env_is_set("QORE_AOT_LEGACY_IMPORT_ALL");
+    static const bool trace_dependencies = q_env_is_set("QORE_AOT_DEP_TRACE");
     if (trace_dependencies) {
         fprintf(stderr, "[aot-deps] providers=%zu imports=%zu mode=%s\n", providers.size(), imports.size(),
             (!imports_present || force_legacy_imports) ? "legacy-import-all" : "provider/import-split");
@@ -12261,7 +12269,7 @@ struct AotModuleState {
 static std::unordered_map<std::string, AotModuleState> aot_module_map;
 
 static bool useAOTSharedInitMetadata() {
-    static const bool enabled = getenv("QORE_DISABLE_AOT_SHARED_INIT_METADATA") == nullptr;
+    static const bool enabled = !q_env_is_set("QORE_DISABLE_AOT_SHARED_INIT_METADATA");
     return enabled;
 }
 
@@ -12339,7 +12347,7 @@ static void inheritAOTModulePathLists(QoreProgram* local_pgm, QoreProgram* paren
 }
 
 static bool aotInitTraceEnabled() {
-    static const bool enabled = getenv("QORE_AOT_INIT_TRACE") != nullptr;
+    static const bool enabled = q_env_is_set("QORE_AOT_INIT_TRACE");
     return enabled;
 }
 
@@ -12482,7 +12490,8 @@ static int aotModuleInitOwnerIntern(const qore_program_private* target_pp, const
     Program's pending module initializations exactly while the loading thread holds a freshly published claim.
 */
 static const char* aotTestInitClaimBarrierModule() {
-    static const char* mod = getenv("QORE_AOT_TEST_INIT_CLAIM_BARRIER");
+    static const QoreEnvironmentValue mod_holder("QORE_AOT_TEST_INIT_CLAIM_BARRIER");
+    static const char* mod = mod_holder.c_str();
     return mod && *mod ? mod : nullptr;
 }
 
@@ -14858,7 +14867,7 @@ static AOTPendingConstantInit* aotRegisterPendingConstantInit(std::unique_ptr<AO
 
 //! Test hook: leave every AOT constant uninitialized at module load so the first-read path is always taken
 static bool aotDeferConstantInitTestHook() {
-    static const bool enabled = getenv("QORE_AOT_TEST_DEFER_CONSTANT_INIT") != nullptr;
+    static const bool enabled = q_env_is_set("QORE_AOT_TEST_DEFER_CONSTANT_INIT");
     return enabled;
 }
 
@@ -15937,7 +15946,7 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v3(
     // load spends its budget — expectation is near-instant
     // deserialize + register, with any 5-second blocks indicating
     // AST fallback re-parse of the embedded source.
-    static const bool _aot_trace = getenv("QORE_AOT_LOAD_TRACE") != nullptr;
+    static const bool _aot_trace = q_env_is_set("QORE_AOT_LOAD_TRACE");
     struct timespec _aot_t_start;
     struct timespec _aot_t_prev;
     if (_aot_trace) {
@@ -16271,7 +16280,7 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v3(
         // of copying the complete module metadata again.
         if (state.init_descriptors) {
             static const bool cache_init_reader =
-                std::getenv("QORE_DISABLE_AOT_INIT_READER_CACHE") == nullptr;
+                !q_env_is_set("QORE_DISABLE_AOT_INIT_READER_CACHE");
             if (cache_init_reader) {
                 state.init_reader = std::make_shared<QoreAOTBinaryReader>(deserializer.takeReader());
                 state.init_reader->wrap_const_ref_in_rcr = false;
@@ -16836,7 +16845,7 @@ extern "C" DLLEXPORT int qore_aot_script_end_batch(QoreProgram* tpgm) {
     // own resolveAll phase breakdown via QORE_AOT_PHASE_TIMING in
     // its destructor; these counters cover the work that happens
     // AFTER resolveAll but inside end_batch.
-    const bool time_on = getenv("QORE_AOT_PHASE_TIMING") != nullptr;
+    const bool time_on = q_env_is_set("QORE_AOT_PHASE_TIMING");
     auto now_us = [] () -> uint64_t {
         struct timespec ts;
         clock_gettime(CLOCK_MONOTONIC, &ts);

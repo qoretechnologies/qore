@@ -435,7 +435,7 @@ static bool qoreIrExprClaimIsTypeCacheable(QoreIRExprClaimFn claim) {
 const QoreIRExprHandlerInfo* qore_ir_find_expr_handler(const QoreValue& expr) {
     using HandlerCache = std::unordered_map<const std::type_info*, const QoreIRExprHandlerInfo*>;
     static thread_local HandlerCache handler_cache;
-    static const bool cache_enabled = std::getenv("QORE_DISABLE_IR_EXPR_HANDLER_CACHE") == nullptr;
+    static const bool cache_enabled = !q_env_is_set("QORE_DISABLE_IR_EXPR_HANDLER_CACHE");
 
     const AbstractQoreNode* node = expr.hasNode() ? expr.getInternalNode() : nullptr;
     const std::type_info* dynamic_type = node ? &typeid(*node) : nullptr;
