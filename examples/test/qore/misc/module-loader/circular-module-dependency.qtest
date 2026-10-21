@@ -22,11 +22,15 @@
 # It asserts:
 #   - the detector fires (at least one attempt yields CYCLE -> CIRCULAR-MODULE-DEPENDENCY), and
 #   - no attempt ever HANGs (deadlock) or fails with any OTHER error or a crash.
+#
+# When this test itself runs under valgrind, each attempt runs under valgrind too, and must report no memory errors
+# and no definitely or possibly lost memory: the failure path of a detected cycle releases everything it created.
 
 %modern
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
 %requires QUnit
+%requires Util
 
 %exec-class CircularModuleDependencyTest
 
@@ -42,6 +46,11 @@ class CircularModuleDependencyTest inherits QUnit::Test {
         set_return_value(main());
     }
 
+    #! True when this test runs under valgrind
+    private static bool underValgrind() {
+        return is_file("/proc/self/maps") && ReadOnlyFile::readTextFile("/proc/self/maps") =~ /valgrind|vgpreload/;
+    }
+
     crossThreadCycleTest() {
         # absolutize the fixture dir: under the test harness get_script_dir() can be relative, and the
         # driver subprocess must find the fixture modules regardless of its working directory
@@ -53,6 +62,15 @@ class CircularModuleDependencyTest inherits QUnit::Test {
         # modules (absolute) prepended to the inherited module path
         string qore_bin = ENV.QORE_EXECUTABLE ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
         string modpath = dir + (ENV.QORE_MODULE_DIR ? ":" + ENV.QORE_MODULE_DIR : "");
+        string driver = dir + "/cross-cycle-attempt.qr";
+
+        # under valgrind, the attempts run under the same valgrind, found in the PATH
+        *string valgrind;
+        if (underValgrind()) {
+            int which_rc;
+            valgrind = trim(backquote("command -v valgrind", \which_rc));
+            assertEq(0, which_rc, "the valgrind that runs this test is in the PATH");
+        }
 
         bool saw_cycle = False;
         int attempts = 0;
@@ -60,10 +78,27 @@ class CircularModuleDependencyTest inherits QUnit::Test {
             ++attempts;
             # do not cd: keep the harness working directory so any relative entries inherited in
             # QORE_MODULE_DIR stay valid; reference the driver and fixtures by absolute path
-            string cmd = sprintf("QORE_MODULE_DIR=%y %y --enable-debug %y 2>&1",
-                modpath, qore_bin, dir + "/cross-cycle-attempt.qr");
-            string out = trim(backquote(cmd));
+            string cmd;
+            *string log;
+            if (valgrind) {
+                # valgrind's own report goes to a file, so the output is only the attempt's outcome
+                log = sprintf("%s%scross-cycle-attempt-%d-%d.valgrind", tmp_location(), DirSep, getpid(), i);
+                cmd = sprintf("QORE_MODULE_DIR=%y %y -q --leak-check=full --errors-for-leak-kinds=definite,possible "
+                    "--error-exitcode=97 --log-file=%y %y -b --enable-debug %y 2>&1", modpath, valgrind, log,
+                    qore_bin, driver);
+            } else {
+                cmd = sprintf("QORE_MODULE_DIR=%y %y --enable-debug %y 2>&1", modpath, qore_bin, driver);
+            }
+            on_exit if (log) {
+                unlink(log);
+            }
+            int rc;
+            string out = trim(backquote(cmd, \rc));
             on_error printf("attempt %d output: %y\n", i, out);
+            if (log) {
+                # neither memory errors nor lost memory
+                assertEq(0, rc, sprintf("attempt %d under valgrind: %s", i, ReadOnlyFile::readTextFile(log)));
+            }
             # the driver must never hang or fail with an unexpected error/crash
             assertFalse(out == "HANG", "attempt did not deadlock");
             assertFalse(out =~ /^OTHER:/, "attempt did not fail with an unexpected error");
