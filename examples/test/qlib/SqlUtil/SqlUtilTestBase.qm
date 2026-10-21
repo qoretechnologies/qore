@@ -1092,7 +1092,7 @@ public class SqlTestBase inherits QUnit::Test {
                 "limit": 1,
             };
             date dbnow = table.selectRow(date_check, \sql).now;
-            assertEq(now, dbnow);
+            assertEq(getStoredTimestamp(now), dbnow);
         }
 
         foreach hash<auto> e in (expect_data.pairIterator()) {
@@ -2166,6 +2166,14 @@ public class SqlTestBase inherits QUnit::Test {
     */
     private bool supportsColumnScaleIncrease() {
         return True;
+    }
+
+    #! returns a timestamp as the database gives it back: in the precision of its timestamps
+    /** Driver tests for a database whose timestamps have less than microsecond precision, such as Firebird, override
+        this
+    */
+    private date getStoredTimestamp(date d) {
+        return d;
     }
 
     resultSetPlaceholderTest() {

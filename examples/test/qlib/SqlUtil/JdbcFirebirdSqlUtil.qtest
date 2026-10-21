@@ -59,7 +59,9 @@ class JdbcFirebirdTestSchema inherits SqlUtilTestSchema {
     }
 
     private *hash<auto> getTablesImpl() {
-        return doTables(Tables, JdbcFirebirdTest::CustomColumns);
+        # the table of the analytic function tests, which is the same for every database
+        return doTables(Tables, JdbcFirebirdTest::CustomColumns)
+            + {"test_analytic_functions": T_TestAnalyticFunctions};
     }
 
     private *hash getIndexOptionsImpl() {
@@ -92,7 +94,8 @@ class JdbcFirebirdTest inherits SqlTestBase {
                 "value": 400.95n,
             ),
 
-            "timestamp with time zone": 2023-01-28T16:48:30.500123,
+            # a Firebird timestamp has a precision of 100 microseconds
+            "timestamp with time zone": 2023-01-28T16:48:30.5001,
 
             "varbinary": {
                 "size": 10,
@@ -143,6 +146,11 @@ class JdbcFirebirdTest inherits SqlTestBase {
     #! most N"); the column has to be rebuilt instead
     private bool supportsColumnScaleIncrease() {
         return False;
+    }
+
+    #! a Firebird timestamp has a precision of 100 microseconds
+    private date getStoredTimestamp(date d) {
+        return d - microseconds(d.microseconds() % 100);
     }
 
     private usageIntern() {
