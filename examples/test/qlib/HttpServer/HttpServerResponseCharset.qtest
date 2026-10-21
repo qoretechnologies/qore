@@ -189,7 +189,7 @@ class ResponseCharsetTest inherits QUnit::Test {
         HttpServer server();
         on_exit server.stop();
         server.setDefaultHandler("charset", new GeneratedCharsetHandler());
-        int port = server.addListener(0).port;
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
         HTTPClient client({"url": sprintf("http://127.0.0.1:%d/", port), "timeout": 30000});
         hash<string, list<auto>> modes = {
             "default": (200, "text/html"),
@@ -235,7 +235,7 @@ class ResponseCharsetTest inherits QUnit::Test {
         HttpServer server();
         on_exit server.stop();
         server.setDefaultHandler("explicit", new ExplicitCharsetHandler());
-        int port = server.addListener(0).port;
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
         HTTPClient client({"url": sprintf("http://127.0.0.1:%d/", port), "timeout": 30000});
         # the server sends the body in the encoding of the charset that the handler sets, and does not change the
         # label, whatever the client accepts
@@ -262,7 +262,7 @@ class ResponseCharsetTest inherits QUnit::Test {
         HttpServer server();
         on_exit server.stop();
         server.setDefaultHandler("stream", new TextStreamHandler());
-        int port = server.addListener(0).port;
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
         HTTPClient client({"url": sprintf("http://127.0.0.1:%d/", port), "timeout": 30000});
         foreach *string charset in (NOTHING, "utf8", "latin2") {
             string label = charset ? http_get_charset_label(charset) : "utf-8";

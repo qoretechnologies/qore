@@ -293,7 +293,7 @@ public class GenericApiCallAutoInjectionTest inherits QUnit::Test {
         m_http.setHandler("/users", "/users", MimeTypeJson, new EchoHandler());
         m_http.setHandler("/status-404", "/status-404", MimeTypeJson, new StatusHandler(404));
         m_http.setHandler("/status-202", "/status-202", MimeTypeJson, new StatusHandler(202));
-        port = m_http.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        port = m_http.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
 
         set_return_value(main());
     }

@@ -218,7 +218,7 @@ class A2aServerHandlerTest inherits QUnit::Test {
         http = new HttpServer(http_opts);
         http.setHandler("a2a-handler", "", MimeTypeJson, handler);
         http.setDefaultHandler("a2a-handler", handler);
-        port = http.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        port = http.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
 
         base_url = sprintf("http://localhost:%d", port);
 
@@ -228,7 +228,7 @@ class A2aServerHandlerTest inherits QUnit::Test {
         webhook_http.setHandler("webhook", "", NOTHING, webhook);
         webhook_http.setDefaultHandler("webhook", webhook);
         webhook_url = sprintf("http://localhost:%d/webhook",
-            webhook_http.addListener(<HttpListenerOptionInfo>{"service": 0}).port);
+            webhook_http.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port);
     }
 
     globalTearDown() {
@@ -737,7 +737,7 @@ class A2aServerHandlerTest inherits QUnit::Test {
         on_exit eh.stop();
         eh.setDefaultHandler("ext", h);
         string ext_url = sprintf("http://localhost:%d",
-            eh.addListener(<HttpListenerOptionInfo>{"service": 0}).port);
+            eh.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port);
 
         Qore::HTTPClient c({"url": ext_url});
         hash<auto> req = {"jsonrpc": "2.0", "method": "tasks/get", "id": 1, "params": {"id": "nope"}};
@@ -781,7 +781,7 @@ class A2aServerHandlerTest inherits QUnit::Test {
         on_exit eh.stop();
         eh.setDefaultHandler("req", h);
         string req_url = sprintf("http://localhost:%d",
-            eh.addListener(<HttpListenerOptionInfo>{"service": 0}).port);
+            eh.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port);
 
         Qore::HTTPClient c({"url": req_url});
         hash<auto> req = {"jsonrpc": "2.0", "method": "tasks/get", "id": 1, "params": {"id": "nope"}};
@@ -818,7 +818,7 @@ class A2aServerHandlerTest inherits QUnit::Test {
         on_exit eh.stop();
         eh.setDefaultHandler("rt", h);
         string rt_url = sprintf("http://localhost:%d",
-            eh.addListener(<HttpListenerOptionInfo>{"service": 0}).port);
+            eh.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port);
 
         A2aClient::A2aClient client(rt_url);
         assertEq((), client.getRequestedExtensions());

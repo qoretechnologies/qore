@@ -74,7 +74,7 @@ class Http1PersistenceTest inherits QUnit::Test {
 
     private nothing check(string version, string headers, bool persistent, bool redirect = False) {
         Socket listener();
-        listener.bind(0, True);
+        listener.bind("127.0.0.1:0", True);
         listener.listen();
         int port = listener.getSocketInfo().port;
         Queue completed();

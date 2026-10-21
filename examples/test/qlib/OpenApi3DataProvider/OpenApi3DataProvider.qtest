@@ -112,7 +112,7 @@ public class OpenApi3DataProviderTest inherits QUnit::Test {
         PetStoreHandler handler();
         m_http.setHandler("petstore", "/pets", MimeTypeJson, handler);
         m_http.setDefaultHandler("petstore-default", handler);
-        m_port = m_http.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        m_port = m_http.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
 
         set_return_value(main());
     }
@@ -553,7 +553,7 @@ public class OpenApi3DataProviderTest inherits QUnit::Test {
         on_exit http.stop();
         RateLimitHandler handler();
         http.setDefaultHandler("rate-limit", handler);
-        int port = http.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        int port = http.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
 
         OpenApi3DataProvider prov({
             "schema": PetStoreSpec,

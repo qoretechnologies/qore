@@ -90,7 +90,7 @@ class ZeyosTest inherits QUnit::Test {
         m_http = new HttpServer(http_opts);
         m_http.setHandler("/api/v1/actionsteps", "/api/v1/actionsteps",
                           MimeTypeJson, new FakeZeyosRestHandler(MimeTypeJson, VALUE_JSON.input));
-        port = m_http.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        port = m_http.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
 
         try {
             zeyosRestClient = new ZeyosRestClient({"url": "http://test1:test2@localhost:" + port, "appsecret": "a", "instance": "x"});

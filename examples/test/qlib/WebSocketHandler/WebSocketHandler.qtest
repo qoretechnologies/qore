@@ -435,7 +435,7 @@ class WebSocketHandlerTest inherits QUnit::Test {
         mServer = new HttpServer(http_opts);
         mServer.setHandler("ws-handler", "", NOTHING, wsHandler);
         mServer.setDefaultHandler("ws-handler", wsHandler);
-        port = mServer.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        port = mServer.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
 
         set_return_value(main());
 
@@ -504,6 +504,7 @@ class WebSocketHandlerTest inherits QUnit::Test {
         # the recv to return 0 bytes (EOF) or an SSL error.
 
         hash<auto> linfo = mServer.addListener(<HttpListenerOptionInfo>{
+            "node": "localhost",
             "cert": new SSLCertificate(TestCert),
             "key": new SSLPrivateKey(TestCert),
             "service": 0,
@@ -1215,7 +1216,7 @@ class WebSocketHandlerTest inherits QUnit::Test {
         on_exit hs.stop();
         hs.setHandler("ws-handler", "", NOTHING, h);
         hs.setDefaultHandler("ws-handler", h);
-        int p = hs.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        int p = hs.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
 
         WebSocketClient wsc(sub (*data msg) {}, {"url": "ws://localhost:" + p});
         wsc.connect();
@@ -1261,7 +1262,7 @@ class WebSocketHandlerTest inherits QUnit::Test {
         HttpServer hs(<HttpServerOptionInfo>{"logger": logger, "debug": True});
         on_exit hs.stop();
         hs.setDefaultHandler("ws-handler", h);
-        int p = hs.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        int p = hs.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
 
         # the callback is called with no argument when the connection closes
         Queue q();
@@ -1290,7 +1291,7 @@ class WebSocketHandlerTest inherits QUnit::Test {
         HttpServer hs(<HttpServerOptionInfo>{"logger": logger, "debug": True});
         on_exit hs.stop();
         hs.setDefaultHandler("ws-handler", h);
-        int p = hs.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        int p = hs.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
 
         Queue q();
         WebSocketClient wsc(sub (*data msg) { q.push(msg); }, {"url": "ws://localhost:" + p});
@@ -1314,7 +1315,7 @@ class WebSocketHandlerTest inherits QUnit::Test {
         HttpServer hs(<HttpServerOptionInfo>{"logger": logger, "debug": True});
         on_exit hs.stop();
         hs.setDefaultHandler("ws-handler", h);
-        int p = hs.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        int p = hs.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
 
         Socket s = connectNonReadingClient(p);
         on_exit delete s;
@@ -1331,7 +1332,7 @@ class WebSocketHandlerTest inherits QUnit::Test {
         HttpServer hs(<HttpServerOptionInfo>{"logger": logger, "debug": True});
         on_exit hs.stop();
         hs.setDefaultHandler("ws-handler", h);
-        int p = hs.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        int p = hs.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
 
         Socket s = connectNonReadingClient(p);
         on_exit delete s;
@@ -1364,7 +1365,7 @@ class WebSocketHandlerTest inherits QUnit::Test {
             ) {
             string label = sprintf("HTTP/%s with Connection: %s", i.version, i.connection);
             Socket s();
-            s.connect("127.0.0.1:" + port, 10s);
+            s.connect("localhost:" + port, 10s);
             hash<auto> resp = sendHandshake(s, i.version, i.connection);
             assertEq(400, resp.status_code, label);
             assertEq(NOTHING, resp.upgrade, label + ": Upgrade header");
@@ -1384,7 +1385,7 @@ class WebSocketHandlerTest inherits QUnit::Test {
 
         # the same handshake over HTTP/1.1 switches protocols
         Socket s();
-        s.connect("127.0.0.1:" + port, 10s);
+        s.connect("localhost:" + port, 10s);
         on_exit s.close();
         hash<auto> resp = sendHandshake(s, "1.1", "Upgrade");
         assertEq(101, resp.status_code);
@@ -1410,7 +1411,7 @@ class WebSocketHandlerTest inherits QUnit::Test {
         on_exit hs.stop();
         hs.setHandler("ws-handler", "", NOTHING, h);
         hs.setDefaultHandler("ws-handler", h);
-        int p = hs.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        int p = hs.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
 
         WebSocketClient wsc(sub (*data msg) {}, {"url": "ws://localhost:" + p});
         wsc.connect();

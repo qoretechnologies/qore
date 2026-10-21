@@ -230,7 +230,7 @@ class WebSocketClientTest inherits QUnit::Test {
         mServer.setHandler("ws-handler", "", NOTHING, wsHandler);
         mServer.setHandler("health-handler", "/health", "text/plain", new HealthHandler());
         mServer.setDefaultHandler("ws-handler", wsHandler);
-        linfo = mServer.addListener(<HttpListenerOptionInfo>{"service": 0});
+        linfo = mServer.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0});
 
         # Try to add HTTPS/HTTP/2 listener.
         #
@@ -246,6 +246,7 @@ class WebSocketClientTest inherits QUnit::Test {
             SSLCertificate cert(CertPem);
             SSLPrivateKey key(KeyPem);
             h2info = mServer.addListener(<HttpListenerOptionInfo>{
+                "node": "localhost",
                 "service": 0,
                 "cert": cert,
                 "key": key,
@@ -289,7 +290,7 @@ class WebSocketClientTest inherits QUnit::Test {
         HttpServer server(<HttpServerOptionInfo>{"logger": logger, "debug": True});
         MyWsHandler h();
         server.setDefaultHandler("ws-handler", h);
-        hash<auto> tl = server.addListener(<HttpListenerOptionInfo>{"service": 0});
+        hash<auto> tl = server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0});
 
         # the 101 is sent before the pre-start delay, so connect() returns while the
         # server is parked in the window
@@ -584,7 +585,7 @@ class WebSocketClientTest inherits QUnit::Test {
         observer.clear();
 
         # restart listener on the same port
-        linfo = mServer.addListener(<HttpListenerOptionInfo>{"service": linfo.port});
+        linfo = mServer.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": linfo.port});
 
         # wait for reconnect
         observer.wait(EVENT_WS_CONNECTED);
@@ -713,7 +714,7 @@ class WebSocketClientTest inherits QUnit::Test {
             assertGe(1, c.start_reconnect_calls, "startReconnect was at least attempted once");
 
             # Restart the listener on the same port so the recovery has somewhere to go
-            linfo = mServer.addListener(<HttpListenerOptionInfo>{"service": saved_port});
+            linfo = mServer.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": saved_port});
 
             # The fix in reconnect() must observe tid==0 and kick off a fresh
             # doReconnect rather than returning False

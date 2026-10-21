@@ -104,7 +104,7 @@ class McpClientDataProviderTest inherits QUnit::Test {
         server = new HttpServer(http_opts);
         server.setHandler("mcp", "", MimeTypeJson, mcpServer);
         server.setDefaultHandler("mcp", mcpServer);
-        port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        port = server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
 
         # Create MCP client and initialize.
         # This suite covers the data providers that wrap handshake-based protocol features —

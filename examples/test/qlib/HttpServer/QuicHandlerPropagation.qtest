@@ -82,6 +82,7 @@ public class QuicHandlerPropagationTest inherits QUnit::Test {
 
         # add an HTTPS listener with QUIC enabled (enable_h3 defaults to True)
         hash<auto> listener_info = server.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
             "service": 0,
             "cert": cert,
             "key": key,

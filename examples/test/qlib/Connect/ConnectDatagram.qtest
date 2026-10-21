@@ -208,6 +208,7 @@ l50Xb2GWQesIt9k5jF5IOw==
 
         try {
             hash<auto> info = m_http.addListener(<HttpListenerOptionInfo>{
+                "node": "127.0.0.1",
                 "service": 0,
                 "cert": new SSLCertificate(CertPem),
                 "key": new SSLPrivateKey(KeyPem),
@@ -218,6 +219,7 @@ l50Xb2GWQesIt9k5jF5IOw==
         } catch (hash<ExceptionInfo> ex) {
             # enable_h3 may fail if QUIC not compiled in; fall back to TLS-only
             hash<auto> info = m_http.addListener(<HttpListenerOptionInfo>{
+                "node": "127.0.0.1",
                 "service": 0,
                 "cert": new SSLCertificate(CertPem),
                 "key": new SSLPrivateKey(KeyPem),

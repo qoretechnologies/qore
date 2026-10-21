@@ -100,7 +100,7 @@ public class Main inherits QUnit::Test {
             "logger": new Logger("server", LoggerLevel::getLevelError()),
         });
         on_exit server.stop();
-        int port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
         DiscordEchoHandler handler();
         server.setHandler("discord", "", NOTHING, handler);
         server.setDefaultHandler("discord", handler);

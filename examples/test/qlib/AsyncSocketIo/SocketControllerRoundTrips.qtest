@@ -308,6 +308,7 @@ qiurSfIBhXYMDdqWsl9GD+c=
         on_exit delete srv;
         srv.setDefaultHandler("echo", new EchoHandler());
         int port = srv.addListener(<HttpListenerOptionInfo>{
+            "node": "localhost",
             "service": 0,
             "cert": new SSLCertificate(CertPem),
             "key": new SSLPrivateKey(KeyPem),
@@ -357,7 +358,7 @@ qiurSfIBhXYMDdqWsl9GD+c=
         });
         on_exit delete srv;
         srv.setDefaultHandler("echo", new EchoHandler());
-        int port = srv.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        int port = srv.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
         srv.waitForAsyncIo();
 
         Socket s();

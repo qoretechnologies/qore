@@ -329,7 +329,7 @@ public class SendCloudDataProviderTest inherits QUnit::Test {
             "logger": new Logger("server", LoggerLevel::getLevelError()),
         });
         on_exit server.stop();
-        int port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
         EchoRequestHandler handler();
         server.setHandler("echo", "", NOTHING, handler);
         server.setDefaultHandler("echo", handler);

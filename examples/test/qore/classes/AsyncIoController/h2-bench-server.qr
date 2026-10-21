@@ -113,6 +113,7 @@ server.setDefaultHandler("bench", new BenchHandler());
 SSLCertificate cert(CertPem);
 SSLPrivateKey key(KeyPem);
 hash<auto> listener_info = server.addListener(<HttpListenerOptionInfo>{
+    "node": "localhost",
     "service": 0,
     "cert": cert,
     "key": key,

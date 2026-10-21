@@ -299,6 +299,7 @@ class HttpClientIoAlpnFallbackTest inherits QUnit::Test {
         mServer.setHandler("simple", "/simple", NOTHING, new SimpleGetHandler());
         mServer.setHandler("alt-svc", "/alt-svc", NOTHING, new AltSvcGetHandler());
         int ssl_port = mServer.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
             "service": 0, "enable_h3": False,
             "cert": new SSLCertificate(CertPem),
             "key": new SSLPrivateKey(KeyPem),

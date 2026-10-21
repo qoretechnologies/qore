@@ -193,7 +193,7 @@ public class VertexAiTest inherits QUnit::Test {
         fake_http = new HttpServer(<HttpServerOptionInfo>{"logger": logger});
         handler = new FakeVertexHandler();
         fake_http.setDefaultHandler("vertex", handler);
-        fake_port = fake_http.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        fake_port = fake_http.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
 
         # write a minimal service-account JSON file whose token_uri points
         # at our fake token endpoint so GcpAuth resolves via JWT-bearer

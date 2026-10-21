@@ -221,7 +221,7 @@ public class HttpAsyncRequestTest inherits QUnit::Test {
         m_server.setDefaultHandler("default", new EchoRequestHandler());
         route_handler = new RoutingHandler();
         m_server.setHandler("route", "/route", NOTHING, route_handler);
-        port = m_server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        port = m_server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
     }
 
     tearDown() {
@@ -597,6 +597,7 @@ public class HttpAsyncRequestTest inherits QUnit::Test {
 
     requestHttp2Test() {
         int h2_port = m_server.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
             "service": 0,
             "cert": new SSLCertificate(ReadOnlyFile::readTextFile(get_script_dir() + "/mycert.pem")),
             "key": new SSLPrivateKey(ReadOnlyFile::readTextFile(get_script_dir() + "/mykey.pem"), "password"),

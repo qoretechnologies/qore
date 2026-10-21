@@ -191,7 +191,7 @@ public class BedrockTest inherits QUnit::Test {
         bedrock_http = new HttpServer(<HttpServerOptionInfo>{"logger": logger});
         handler = new FakeBedrockHandler();
         bedrock_http.setDefaultHandler("bedrock", handler);
-        bedrock_port = bedrock_http.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        bedrock_port = bedrock_http.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
     }
 
     globalTearDown() {

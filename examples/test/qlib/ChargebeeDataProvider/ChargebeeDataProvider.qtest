@@ -447,7 +447,7 @@ public class ChargebeeDataProviderTest inherits QUnit::Test {
             "logger": new Logger("server", LoggerLevel::getLevelError()),
         });
         on_exit server.stop();
-        int port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
         FakeChargebeeHandler handler();
         server.setHandler("chargebee", "", NOTHING, handler);
         server.setDefaultHandler("chargebee", handler);
@@ -468,7 +468,7 @@ public class ChargebeeDataProviderTest inherits QUnit::Test {
             "logger": new Logger("server", LoggerLevel::getLevelError()),
         });
         on_exit server.stop();
-        int port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
         FakeChargebeeHandler handler();
         server.setHandler("chargebee", "", NOTHING, handler);
         server.setDefaultHandler("chargebee", handler);
@@ -578,7 +578,7 @@ public class ChargebeeDataProviderTest inherits QUnit::Test {
             "logger": new Logger("server", LoggerLevel::getLevelError()),
         });
         on_exit server.stop();
-        int port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
         FakeChargebeeHandler handler();
         server.setHandler("chargebee", "", NOTHING, handler);
         server.setDefaultHandler("chargebee", handler);

@@ -94,6 +94,7 @@ class Http2PerfTest inherits QUnit::Test {
         mServer.setHandler("echo", "/echo", NOTHING, new PerfEchoHandler());
 
         mSslPort = mServer.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
             "service": 0,
             "cert": new SSLCertificate(CertPem),
             "key": new SSLPrivateKey(KeyPem),

@@ -253,7 +253,7 @@ class SocketTest inherits QUnit::Test {
     private doServ(Queue q) {
         Socket s0();
         # bind on a random free port
-        s0.bind(0);
+        s0.bind("localhost:0");
         s0.listen();
         q.push(s0.getSocketInfo().port);
         s0.setCertificate(TestCert);
@@ -1576,7 +1576,7 @@ class SocketTest inherits QUnit::Test {
                 background sub () {
                     Socket ssl();
                     # bind on a random free port
-                    ssl.bind(0);
+                    ssl.bind("localhost:0");
                     ssl.listen();
 
                     q.push(ssl.getSocketInfo().port);
@@ -1694,7 +1694,7 @@ class SocketTest inherits QUnit::Test {
                 background sub () {
                     Socket ssl();
                     # bind on a random free port
-                    ssl.bind(0);
+                    ssl.bind("127.0.0.1:0");
                     ssl.listen();
 
                     q.push(ssl.getSocketInfo().port);
@@ -1770,7 +1770,7 @@ class SocketTest inherits QUnit::Test {
                 background sub () {
                     Socket ssl();
                     # bind on a random free port
-                    ssl.bind(0);
+                    ssl.bind("127.0.0.1:0");
                     ssl.listen();
 
                     q.push(ssl.getSocketInfo().port);
@@ -1932,7 +1932,7 @@ class SocketTest inherits QUnit::Test {
     connectionIdTest() {
         Socket s();
         assertEq(0, s.getConnectionId());
-        s.bind(0);
+        s.bind("127.0.0.1:0");
         s.close();
         assertEq(1, s.getConnectionId());
     }
@@ -1944,7 +1944,7 @@ class SocketTest inherits QUnit::Test {
         # create server socket
         Socket s();
         # bind on a random free port
-        s.bind(0);
+        s.bind("127.0.0.1:0");
         s.listen();
         s.setCertificate(TestCert);
         s.setPrivateKey(TestCert);
@@ -1989,7 +1989,7 @@ class SocketTest inherits QUnit::Test {
 
     sslReadError(Queue q) {
         Socket s();
-        s.bind(0);
+        s.bind("127.0.0.1:0");
         s.listen();
         s.setCertificate(TestCert);
         s.setPrivateKey(TestCert);
@@ -2003,7 +2003,7 @@ class SocketTest inherits QUnit::Test {
         background sub () {
             try {
                 Socket server();
-                server.bind(0);
+                server.bind("127.0.0.1:0");
                 server.listen();
                 server.setCertificate(TestCert);
                 server.setPrivateKey(TestCert);
@@ -2038,7 +2038,7 @@ class SocketTest inherits QUnit::Test {
 
     sslUpgradePollOutputTest() {
         Socket server();
-        server.bind(0);
+        server.bind("127.0.0.1:0");
         server.listen();
         int port = server.getSocketInfo().port;
 
@@ -2111,7 +2111,7 @@ class SocketTest inherits QUnit::Test {
         on_exit unsetenv("QORE_TEST_SSL_PARTIAL_WRITE_LIMIT");
 
         Socket server();
-        server.bind(0);
+        server.bind("127.0.0.1:0");
         server.listen();
         server.setCertificate(TestCert);
         server.setPrivateKey(TestCert);
@@ -2174,7 +2174,7 @@ class SocketTest inherits QUnit::Test {
         # Server side
         background sub () {
             Socket server();
-            server.bind(0);
+            server.bind("127.0.0.1:0");
             server.listen();
             server.setCertificate(TestCert);
             server.setPrivateKey(TestCert);
@@ -3387,9 +3387,9 @@ class SocketTest inherits QUnit::Test {
             Socket server();
             on_exit server.close();
             if (api == "bindINET") {
-                server.bindINET(NOTHING, 0, True);
+                server.bindINET(NOTHING, 0, True);  # all-interfaces: tests the bind on all interfaces
             } else {
-                assertEq(0, server.bind(0, True));
+                assertEq(0, server.bind(0, True));  # all-interfaces: tests the bind on all interfaces
             }
             server.listen();
             hash<auto> info = server.getSocketInfo();
@@ -3437,7 +3437,7 @@ class SocketTest inherits QUnit::Test {
         }
 
         Socket server();
-        server.bindINET(NOTHING, 0, True);
+        server.bindINET(NOTHING, 0, True);  # all-interfaces: tests the bind on all interfaces
         server.listen();
         on_exit server.close();
         int port = server.getSocketInfo().port;
@@ -3474,7 +3474,7 @@ class SocketTest inherits QUnit::Test {
         Socket server();
         *hash<ExceptionInfo> bind_ex;
         try {
-            server.bindINET(NOTHING, port, False);
+            server.bindINET(NOTHING, port, False);  # all-interfaces: tests the bind on all interfaces
         } catch (hash<ExceptionInfo> ex) {
             bind_ex = ex;
         }
@@ -3490,7 +3490,7 @@ class SocketTest inherits QUnit::Test {
     wildcardBindSingleFamilyTest() {
         # an explicit IPv4 bind stays IPv4-only
         Socket v4();
-        v4.bindINET(NOTHING, 0, True, AF_INET);
+        v4.bindINET(NOTHING, 0, True, AF_INET);  # all-interfaces: tests the bind on all interfaces
         on_exit v4.close();
         hash<auto> info = v4.getSocketInfo();
         assertEq(AF_INET, info.family);
@@ -3499,7 +3499,7 @@ class SocketTest inherits QUnit::Test {
         # a datagram socket keeps the resolved IPv4 wildcard address, because each datagram is addressed with the
         # address family of the socket
         Socket udp();
-        udp.bindINET(NOTHING, 0, True, AF_UNSPEC, SOCK_DGRAM);
+        udp.bindINET(NOTHING, 0, True, AF_UNSPEC, SOCK_DGRAM);  # all-interfaces: tests the bind on all interfaces
         on_exit udp.close();
         info = udp.getSocketInfo();
         assertEq(AF_INET, info.family);
@@ -3548,7 +3548,7 @@ class SocketTest inherits QUnit::Test {
         }
 
         Socket server();
-        server.bindINET("::", 0, True, AF_INET6);
+        server.bindINET("::", 0, True, AF_INET6);  # all-interfaces: tests the bind on all interfaces
         server.listen();
         on_exit server.close();
         int port = server.getSocketInfo().port;

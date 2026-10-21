@@ -30,7 +30,8 @@ class StabilityCompatibilityTest inherits QUnit::Test {
         server = new HttpServer(<HttpServerOptionInfo>{"logger": new Logger::Logger("5422-compat", Logger::LoggerLevel::ERROR)});
         server.setDefaultHandler("fixture", handler);
         client = new StabilityAiRestClientIo({"apikey": "compatibility-key",
-            "url": sprintf("http://127.0.0.1:%d", server.addListener(<HttpListenerOptionInfo>{"service": 0}).port)});
+            "url": sprintf("http://127.0.0.1:%d",
+                server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port)});
         set_return_value(main());
     }
     globalTearDown() { delete server; }

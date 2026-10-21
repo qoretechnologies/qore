@@ -120,7 +120,7 @@ public class SwaggerDataProviderTest inherits QUnit::Test {
         on_exit http.stop();
         RateLimitHandler handler();
         http.setDefaultHandler("rate-limit", handler);
-        int port = http.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        int port = http.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
 
         SwaggerDataProvider provider({
             "schema": get_script_dir() + "/PetStore.swagger.yaml",

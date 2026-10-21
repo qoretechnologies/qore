@@ -49,7 +49,7 @@ class RestPathEncodingTest inherits QUnit::Test {
     globalSetUp() {
         server = new HttpServer();
         server.setDefaultHandler("encoded-resources", handler);
-        int port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
         client = new RestClient({"url": "http://127.0.0.1:" + port, "data": "json", "pre_encoded_urls": True,
             "connect_timeout": 5000, "timeout": 5000});
     }
@@ -97,7 +97,7 @@ class RestPathEncodingTest inherits QUnit::Test {
         HttpServer schema_server();
         on_exit schema_server.stop();
         schema_server.setDefaultHandler("schema-resources", new EncodedPathHandler(schema));
-        int port = schema_server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        int port = schema_server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
         RestClient schema_client({"url": "http://127.0.0.1:" + port, "data": "json", "pre_encoded_urls": True,
             "connect_timeout": 5000, "timeout": 5000});
         foreach string id in (("plain", "0", "folder/customer API", "literal%2F", "key?query", "příprava")) {

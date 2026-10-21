@@ -148,7 +148,7 @@ public class SseClientDecodingTest inherits QUnit::Test {
         server = new HttpServer(<HttpServerOptionInfo>{
             "logger": new Logger("server", LoggerLevel::getLevelError()),
         });
-        int port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
         # line endings of all kinds
         SseStreamHandler handler("data: one\n\nevent: e\r\ndata: two\r\n\r\ndata: three\r\r");
         server.setHandler("sse", "", NOTHING, handler);

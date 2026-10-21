@@ -227,7 +227,7 @@ public class InstantlyDataProviderTest inherits QUnit::Test {
             "logger": new Logger("server", LoggerLevel::getLevelError()),
         });
         on_exit server.stop();
-        int port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
         FakeInstantlyHandler handler();
         server.setHandler("instantly", "", NOTHING, handler);
         server.setDefaultHandler("instantly", handler);
@@ -248,7 +248,7 @@ public class InstantlyDataProviderTest inherits QUnit::Test {
             "logger": new Logger("server", LoggerLevel::getLevelError()),
         });
         on_exit server.stop();
-        int port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
         FakeInstantlyHandler handler();
         server.setHandler("instantly", "", NOTHING, handler);
         server.setDefaultHandler("instantly", handler);
@@ -345,7 +345,7 @@ public class InstantlyDataProviderTest inherits QUnit::Test {
             "logger": new Logger("server", LoggerLevel::getLevelError()),
         });
         on_exit server.stop();
-        int port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
         FakeInstantlyHandler handler();
         server.setHandler("instantly", "", NOTHING, handler);
         server.setDefaultHandler("instantly", handler);

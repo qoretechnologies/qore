@@ -707,7 +707,7 @@ public class ZohoInventoryDataProviderTest inherits QUnit::Test {
             "logger": new Logger("server", LoggerLevel::getLevelError()),
         });
         on_exit server.stop();
-        int port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
         ZohoEchoHandler handler();
         server.setHandler("zoho-echo", "", NOTHING, handler);
         server.setDefaultHandler("zoho-echo", handler);
@@ -766,7 +766,7 @@ public class ZohoInventoryDataProviderTest inherits QUnit::Test {
             "logger": new Logger("server", LoggerLevel::getLevelError()),
         });
         on_exit server.stop();
-        int port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
         FakeZohoInventoryHandler handler();
         server.setHandler("zoho", "", NOTHING, handler);
         server.setDefaultHandler("zoho", handler);

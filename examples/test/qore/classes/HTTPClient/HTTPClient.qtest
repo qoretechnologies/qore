@@ -32,7 +32,7 @@ class HttpTestServer {
         resp = r;
         # start a fake server
         Socket s();
-        if (s.bind(0, True))
+        if (s.bind("localhost:0", True))
             throw "BIND-ERROR", strerror();
 
         if (s.listen())
@@ -360,8 +360,11 @@ class RealTestHttpServer inherits HttpServer {
         if (cert_path) {
             listener_opts += http_get_ssl_objects(cert_path, key_path);
         }
-        # bind on a random port
+        # bind on a random port on the host of the tests' clients
         listener_opts.service = 0;
+        if (!exists listener_opts.node) {
+            listener_opts.node = "localhost";
+        }
         port = addListener(listener_opts).port;
     }
 
@@ -1220,7 +1223,7 @@ I45SPdad6fpziP1EtT5rfrC0ZH7cMU8edg==
         background sub () {
             try {
                 Socket proxy();
-                proxy.bind(0);
+                proxy.bind("localhost:0");
                 proxy.listen();
                 q.push(proxy.getSocketInfo().port);
 
@@ -1268,7 +1271,7 @@ I45SPdad6fpziP1EtT5rfrC0ZH7cMU8edg==
         background sub () {
             try {
                 Socket server();
-                server.bind(0);
+                server.bind("localhost:0");
                 server.listen();
                 q.push(server.getSocketInfo().port);
 
@@ -1306,7 +1309,7 @@ I45SPdad6fpziP1EtT5rfrC0ZH7cMU8edg==
         background sub () {
             try {
                 Socket server();
-                server.bind(0);
+                server.bind("localhost:0");
                 server.listen();
                 origin_q.push(server.getSocketInfo().port);
 
@@ -1326,7 +1329,7 @@ I45SPdad6fpziP1EtT5rfrC0ZH7cMU8edg==
         background sub () {
             try {
                 Socket proxy();
-                proxy.bind(0);
+                proxy.bind("localhost:0");
                 proxy.listen();
                 proxy_q.push(proxy.getSocketInfo().port);
 
@@ -1378,7 +1381,7 @@ I45SPdad6fpziP1EtT5rfrC0ZH7cMU8edg==
         background sub () {
             try {
                 Socket server();
-                server.bind(0);
+                server.bind("localhost:0");
                 server.listen();
                 q.push(server.getSocketInfo().port);
 
@@ -1423,7 +1426,7 @@ I45SPdad6fpziP1EtT5rfrC0ZH7cMU8edg==
         background sub () {
             try {
                 Socket server();
-                server.bind(0);
+                server.bind("localhost:0");
                 server.listen();
                 q.push(server.getSocketInfo().port);
 
@@ -1462,7 +1465,7 @@ I45SPdad6fpziP1EtT5rfrC0ZH7cMU8edg==
         background sub () {
             try {
                 Socket server();
-                server.bind(0);
+                server.bind("localhost:0");
                 server.listen();
                 q.push(server.getSocketInfo().port);
 
@@ -2291,13 +2294,13 @@ I45SPdad6fpziP1EtT5rfrC0ZH7cMU8edg==
 
     sslReadError(Queue q) {
         Socket s();
-        s.bind(0);
+        s.bind("localhost:0");
         s.listen();
         s.setCertificate(TestCert);
         s.setPrivateKey(TestCert);
         q.push(s.getSocketInfo().port);
         Socket ns = s.acceptSSL(15s);
-        ns.bind(0);
+        ns.bind("localhost:0");
     }
 
     sslReadClientCertTest(Queue q, int verify_mode, bool accept_all, Counter done) {
@@ -2307,7 +2310,7 @@ I45SPdad6fpziP1EtT5rfrC0ZH7cMU8edg==
             s.acceptAllCertificates();
         }
         s.captureRemoteCertificates();
-        s.bind(0);
+        s.bind("localhost:0");
         s.listen();
         s.setCertificate(TestCert);
         s.setPrivateKey(TestCert);

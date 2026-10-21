@@ -2773,7 +2773,7 @@ sub bind_unix(string path) {
     #! Tests the address forms and host patterns of the connection policy
     testNetworkConnectAddressForms() {
         Socket listener();
-        listener.bindINET(NOTHING, 0, True);
+        listener.bindINET(NOTHING, 0, True);  # all-interfaces: reached through each address form of the local host
         listener.listen();
         on_exit listener.close();
         int port = listener.getSocketInfo().port;
@@ -2860,7 +2860,7 @@ sub quic_connect_bound(string host, int port, Socket s) {
 ", "quic-deny");
         # a socket bound outside the sandbox is still checked when it connects
         Socket udp();
-        udp.bindINET(NOTHING, 0, False, AF_INET, SOCK_DGRAM);
+        udp.bindINET(NOTHING, 0, False, AF_INET, SOCK_DGRAM);  # all-interfaces: a client socket; nothing connects to it
         on_exit udp.close();
         assertThrows("NETWORK-ACCESS-DENIED", "default deny", \dp.callFunction(), ("quic_connect_bound", "192.0.2.1",
             443, udp));

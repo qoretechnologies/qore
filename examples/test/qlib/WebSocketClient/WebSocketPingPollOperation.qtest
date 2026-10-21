@@ -183,9 +183,10 @@ public class WebSocketPingPollOperationTest inherits QUnit::Test {
         m_server.setHandler("status", "/(status|block)", NOTHING, status_handler);
         m_server.setHandler("ws-handler", "", NOTHING, ws_handler);
         m_server.setDefaultHandler("ws-handler", ws_handler);
-        port = m_server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        port = m_server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
         string cert_dir = get_script_dir() + "/../ConnectionProvider/";
         tls_port = m_server.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
             "service": 0,
             "cert": new SSLCertificate(ReadOnlyFile::readTextFile(cert_dir + "mycert.pem")),
             "key": new SSLPrivateKey(ReadOnlyFile::readTextFile(cert_dir + "mykey.pem"), "password"),

@@ -144,7 +144,7 @@ public class CohereRestClientTest inherits QUnit::Test {
             "logger": logger,
             "debug": False,
         });
-        port = http.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        port = http.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
         chat_handler = new FakeCohereChatHandler();
         http.setHandler("cohere", "/", MimeTypeJson, chat_handler);
         key_handler = new FakeCohereKeyHandler();
@@ -312,7 +312,7 @@ public class CohereRestClientTest inherits QUnit::Test {
         request was ever sent
     */
     private chatDefaultModelTest() {
-        string url = "http://localhost:" + port;
+        string url = "http://127.0.0.1:" + port;
 
         CohereRestClient::CohereLlmProvider p(<QoreLlmUtils::LlmBackendConfig>{
             "mode": "cohere",

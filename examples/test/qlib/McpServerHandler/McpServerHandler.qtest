@@ -196,7 +196,7 @@ public class McpServerHandlerTest inherits QUnit::Test {
         http = new HttpServer(http_opts);
         http.setHandler("mcpserver-handler", "", MimeTypeJson, mcp_server);
         http.setDefaultHandler("mcpserver-handler", mcp_server);
-        port = http.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        port = http.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
 
         jsonrpc = new JsonRpcClient({"url": "http://localhost:" + port});
     }

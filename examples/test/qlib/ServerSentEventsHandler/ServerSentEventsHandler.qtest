@@ -80,7 +80,7 @@ public class Main inherits QUnit::Test {
         on_exit http.stop();
         http.setHandler("sse-handler", "", NOTHING, sse);
         http.setDefaultHandler("sse-handler", sse);
-        port = http.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        port = http.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
 
         # Return for compatibility with test harness that checks return value.
         set_return_value(main());
@@ -159,7 +159,7 @@ public class Main inherits QUnit::Test {
         on_exit test_http.stop();
         test_http.setHandler("sse-handler", "", NOTHING, test_sse);
         test_http.setDefaultHandler("sse-handler", test_sse);
-        int test_port = test_http.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        int test_port = test_http.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
 
         ServerSentEventClient client({"url": "sse://localhost:" + test_port});
         MyObserver observer();
@@ -201,7 +201,7 @@ public class Main inherits QUnit::Test {
         on_exit test_http.stop();
         test_http.setHandler("sse-handler", "", NOTHING, test_sse);
         test_http.setDefaultHandler("sse-handler", test_sse);
-        int test_port = test_http.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        int test_port = test_http.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
 
         # Establish an SSE connection
         ServerSentEventClient client({"url": "sse://localhost:" + test_port});
@@ -246,7 +246,7 @@ public class Main inherits QUnit::Test {
         on_exit test_http.stop();
         test_http.setHandler("sse-handler", "", NOTHING, test_sse);
         test_http.setDefaultHandler("sse-handler", test_sse);
-        int test_port = test_http.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        int test_port = test_http.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
 
         # Establish multiple SSE connections
         int num_clients = 3;
@@ -300,7 +300,7 @@ public class Main inherits QUnit::Test {
         on_exit test_http.stop();
         test_http.setHandler("sse-handler", "", NOTHING, test_sse);
         test_http.setDefaultHandler("sse-handler", test_sse);
-        int test_port = test_http.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        int test_port = test_http.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
 
         # Establish an SSE connection
         ServerSentEventClient client({"url": "sse://localhost:" + test_port});
@@ -372,7 +372,7 @@ public class Main inherits QUnit::Test {
         on_exit hs.stop();
         hs.setHandler("sse-handler", "", NOTHING, h);
         hs.setDefaultHandler("sse-handler", h);
-        int p = hs.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        int p = hs.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
 
         # connect a raw SSE client and wait for server-side registration
         Socket s();

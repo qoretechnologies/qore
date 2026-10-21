@@ -162,7 +162,7 @@ public class ApolloDataProviderTest inherits QUnit::Test {
             "logger": new Logger("server", LoggerLevel::getLevelError()),
         });
         on_exit server.stop();
-        int port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
         FakeApolloHandler handler();
         server.setHandler("apollo", "", NOTHING, handler);
         server.setDefaultHandler("apollo", handler);

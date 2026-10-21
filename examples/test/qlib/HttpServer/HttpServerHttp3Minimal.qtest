@@ -26,7 +26,7 @@ HttpServer server = new HttpServer(<HttpServerOptionInfo>{
 });
 server.setHandler("test", "/test", NOTHING, new SimpleHandler());
 
-int port = server.addListener(<HttpListenerOptionInfo>{"service": "0"}).port;
+int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": "0"}).port;
 string url = sprintf("http://127.0.0.1:%d", port);
 
 # Create client

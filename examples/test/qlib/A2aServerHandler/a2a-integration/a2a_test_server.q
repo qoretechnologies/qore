@@ -97,7 +97,7 @@ sub main() {
     HttpServer server(http_opts);
 
     # Add listener to get actual port
-    hash<auto> listener_info = server.addListener(<HttpListenerOptionInfo>{"service": port});
+    hash<auto> listener_info = server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": port});
     int actual_port = listener_info.port;
 
     # Create handler with correct URL

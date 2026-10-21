@@ -33,6 +33,7 @@ class HttpServerBenchmark {
         server.setHandler("test", "", MimeTypeHtml, handler);
         server.setDefaultHandler("test", handler);
         port = server.addListener(<HttpListenerOptionInfo>{
+            "node": "localhost",
             "service": 0,
             "name": "bench-test",
         }).port;

@@ -94,7 +94,7 @@ public class WebSocketListenerStopRaceTest inherits QUnit::Test {
         }
         server.setHandler("ws", "", NOTHING, handler);
         server.setDefaultHandler("ws", handler);
-        hash<auto> linfo = server.addListener(<HttpListenerOptionInfo>{"service": 0});
+        hash<auto> linfo = server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0});
         int port = linfo.port;
 
         # raw client: perform the WebSocket upgrade to spawn a server-side handler thread

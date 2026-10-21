@@ -165,12 +165,12 @@ public class BedrockDataProviderTest inherits QUnit::Test {
         http = new HttpServer(<HttpServerOptionInfo>{"logger": logger});
         handler = new FakeBedrockHandler();
         http.setDefaultHandler("bedrock", handler);
-        port = http.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        port = http.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
 
         control_http = new HttpServer(<HttpServerOptionInfo>{"logger": logger});
         control_handler = new FakeBedrockHandler();
         control_http.setDefaultHandler("bedrock-control", control_handler);
-        control_port = control_http.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        control_port = control_http.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
     }
 
     globalTearDown() {

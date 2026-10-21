@@ -643,11 +643,13 @@ l50Xb2GWQesIt9k5jF5IOw==
 
         # H1 plaintext listener
         h1_port = server.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
             "service": 0,
         }).port;
 
         # H2 over TLS (ALPN)
         h2_port = server.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
             "service": 0,
             "cert": new SSLCertificate(CertPem),
             "key": new SSLPrivateKey(KeyPem),
@@ -656,6 +658,7 @@ l50Xb2GWQesIt9k5jF5IOw==
 
         # H3 over QUIC
         h3_port = server.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
             "service": 0,
             "cert": new SSLCertificate(CertPem),
             "key": new SSLPrivateKey(KeyPem),
@@ -1208,6 +1211,7 @@ l50Xb2GWQesIt9k5jF5IOw==
         idle_server.setDefaultHandler("sse", idle_handler);
         idle_server.waitForAsyncIo();
         int idle_port = idle_server.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
             "service": 0,
             "cert": new SSLCertificate(CertPem),
             "key": new SSLPrivateKey(KeyPem),

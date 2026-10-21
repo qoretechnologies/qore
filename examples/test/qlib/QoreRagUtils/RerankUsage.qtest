@@ -128,7 +128,7 @@ class RerankUsageTest inherits QUnit::Test {
         http = new HttpServer(opts);
         http.setHandler("rerank", "", NOTHING, handler, NOTHING, False);
         http.setDefaultHandler("rerank", handler);
-        port = http.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        port = http.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
     }
 
     globalTearDown() {

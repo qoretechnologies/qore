@@ -60,7 +60,7 @@ class SewioWebSocketClientTest inherits QUnit::Test {
         mServer = new HttpServer(http_opts);
         mServer.setHandler("ws-handler", "", NOTHING, wsHandler);
         mServer.setDefaultHandler("ws-handler", wsHandler);
-        port = mServer.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        port = mServer.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
 
         on_exit {
             mServer.stop();

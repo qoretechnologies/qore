@@ -72,7 +72,8 @@ class DocumentAiWireTest inherits QUnit::Test {
         addTestCase("typed contracts survive repeated serialization", \serializationTest());
         server = new HttpServer(<HttpServerOptionInfo>{"logger": new Logger::Logger("5426-wire", Logger::LoggerLevel::ERROR)});
         server.setDefaultHandler("fixture", handler);
-        endpoint = sprintf("http://127.0.0.1:%d", server.addListener(<HttpListenerOptionInfo>{"service": 0}).port);
+        endpoint = sprintf("http://127.0.0.1:%d",
+            server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port);
         credentials = tmp_location() + "/qore-5426-wire-" + get_random_string(16) + ".json";
         File file();
         file.open2(credentials, O_CREAT | O_EXCL | O_WRONLY, 0600);

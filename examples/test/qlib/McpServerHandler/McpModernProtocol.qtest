@@ -241,7 +241,7 @@ public class McpModernProtocolTest inherits QUnit::Test {
         http = new HttpServer(<HttpServerOptionInfo>{"logger": logger});
         http.setHandler("mcp", "", MimeTypeJson, mcp_server);
         http.setDefaultHandler("mcp", mcp_server);
-        port = http.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        port = http.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
         url = sprintf("http://localhost:%d", port);
     }
 
@@ -934,7 +934,7 @@ public class McpModernProtocolTest inherits QUnit::Test {
         HttpServer server(<HttpServerOptionInfo>{"logger": l});
         server.setHandler("mcp", "", MimeTypeJson, handler);
         server.setDefaultHandler("mcp", handler);
-        int p = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        int p = server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
         on_exit server.stop();
         string surl = sprintf("http://localhost:%d", p);
 
@@ -1193,7 +1193,7 @@ public class McpModernProtocolTest inherits QUnit::Test {
         http.setHandler("mcp", "", MimeTypeJson, h);
         http.setDefaultHandler("mcp", h);
         string u = sprintf("http://localhost:%d",
-            http.addListener(<HttpListenerOptionInfo>{"service": 0}).port);
+            http.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port);
         on_exit {
             http.stop();
             delete http;

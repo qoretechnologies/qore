@@ -129,7 +129,7 @@ class OneRecordTest inherits QUnit::Test {
         http = new HttpServer::HttpServer(http_opts);
         http.setHandler("1r", "", MimeTypeOneRecord, handler);
         http.setDefaultHandler("1r", handler);
-        hash<auto> listener_info = http.addListener(<HttpListenerOptionInfo>{"service": 0});
+        hash<auto> listener_info = http.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0});
         port = listener_info.port;
         base_url = sprintf("http://localhost:%d", port);
 
@@ -144,7 +144,7 @@ class OneRecordTest inherits QUnit::Test {
         callback_http.setHandler("callback", "", NOTHING, callback);
         callback_http.setDefaultHandler("callback", callback);
         callback_url = sprintf("http://localhost:%d",
-            callback_http.addListener(<HttpListenerOptionInfo>{"service": 0}).port);
+            callback_http.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port);
     }
 
     globalTearDown() {

@@ -162,7 +162,7 @@ public class HttpClientIoUnixSocketTest inherits QUnit::Test {
         server.setHandler("sse", "/sse", NOTHING, sse);
         server.setDefaultHandler("echo", new EchoHandler());
         server.addListener(<HttpListenerOptionInfo>{"node": sock_path});
-        tcp_port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        tcp_port = server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
         server.waitForAsyncIo();
     }
 

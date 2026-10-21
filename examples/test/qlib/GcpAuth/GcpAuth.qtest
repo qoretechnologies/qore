@@ -127,12 +127,12 @@ public class GcpAuthTest inherits QUnit::Test {
         token_http = new HttpServer(<HttpServerOptionInfo>{"logger": logger});
         token_handler = new FakeGcpTokenHandler();
         token_http.setDefaultHandler("token", token_handler);
-        token_port = token_http.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        token_port = token_http.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
 
         mds_http = new HttpServer(<HttpServerOptionInfo>{"logger": logger});
         mds_handler = new FakeGcpMetadataHandler();
         mds_http.setDefaultHandler("mds", mds_handler);
-        mds_port = mds_http.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        mds_port = mds_http.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
 
         # write a usable RSA service-account file
         sa_path = tmp_location() + "/gcp_auth_test_sa_" + get_random_string(8) + ".json";

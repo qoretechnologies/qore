@@ -105,7 +105,7 @@ class AwsTest inherits QUnit::Test {
         m_http = new HttpServer(http_opts);
         m_http.setHandler("/api/v1/actionsteps", "/api/v1/actionsteps",
                         MimeTypeJson, new FakeAwsRestHandler(MimeTypeJson, VALUE_JSON.input));
-        port = m_http.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        port = m_http.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
 
         try {
             client = new AwsRestClient({"url": "http://localhost:" + port} + FakeAwsOptions);
@@ -297,7 +297,7 @@ class AwsTest inherits QUnit::Test {
         HttpServer sts_http(<HttpServerOptionInfo>{"logger": logger});
         FakeStsHandler sts_handler();
         sts_http.setDefaultHandler("sts", sts_handler);
-        int sts_port = sts_http.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        int sts_port = sts_http.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
         on_exit delete sts_http;
 
         hash<auto> creds = AwsRestClientBase::assumeRole({
@@ -424,7 +424,7 @@ class AwsTest inherits QUnit::Test {
         HttpServer imds_http(<HttpServerOptionInfo>{"logger": logger});
         FakeImdsHandler imds_handler();
         imds_http.setDefaultHandler("imds", imds_handler);
-        int imds_port = imds_http.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        int imds_port = imds_http.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
         on_exit delete imds_http;
 
         # snapshot existing AWS env vars so the test sees a clean slate
@@ -532,7 +532,7 @@ class AwsTest inherits QUnit::Test {
     */
     s3ContentSha256Test() {
         HttpServer srv(\log(), \log());
-        int port = srv.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        int port = srv.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
         on_exit srv.stop();
         srv.setDefaultHandler("cap", new HeaderCaptureHandler());
 
@@ -583,7 +583,7 @@ class AwsTest inherits QUnit::Test {
     #! The I/O client must retain AWS credentials when copied and sign pre-serialized bodies
     ioRawCopyTest() {
         HttpServer srv(\log(), \log());
-        int port = srv.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        int port = srv.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
         on_exit srv.stop();
         srv.setDefaultHandler("cap", new HeaderCaptureHandler());
 

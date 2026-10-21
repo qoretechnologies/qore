@@ -124,7 +124,7 @@ public class DebugHandlerTest inherits QUnit::Test {
         mServer = new HttpServer(http_opts);
         mServer.setHandler("ws-handler", "", wsHandler.getContentType(), wsHandler);
         mServer.setDefaultHandler("ws-handler", wsHandler);
-        port = mServer.addListener(0).port;
+        port = mServer.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
     }
 
     globalTearDown() {

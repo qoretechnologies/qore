@@ -742,7 +742,7 @@ public class DeepSeekDataProviderTest inherits QUnit::Test {
     private wireTest() {
         HttpServer http(<HttpServerOptionInfo>{"logger": new Logger("test", LoggerLevel::getLevelWarn())});
         on_exit delete http;
-        int port = http.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        int port = http.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
         DeepSeekWireHandler handler();
         http.setDefaultHandler("wire", handler);
         DeepSeekRestClientIo client({"url": sprintf("http://127.0.0.1:%d", port),

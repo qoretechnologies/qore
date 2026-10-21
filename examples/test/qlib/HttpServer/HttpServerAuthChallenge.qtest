@@ -148,7 +148,7 @@ public class HttpServerAuthChallengeTest inherits QUnit::Test {
         HttpServer server();
         server.setHandler("auth-test", "", MimeTypeText, handler);
         server.setDefaultHandler("auth-test", handler);
-        hash<auto> info = server.addListener(<HttpListenerOptionInfo>{"service": "0"});
+        hash<auto> info = server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": "0"});
         server.waitForAsyncIo();
         return {"server": server, "port": info.port};
     }

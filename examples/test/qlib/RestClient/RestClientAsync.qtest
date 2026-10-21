@@ -166,7 +166,7 @@ public class RestClientAsyncTest inherits QUnit::Test {
             new AuthRetryHandler());
         m_http.setHandler("/oauth2/token", "/oauth2/token", MimeTypeJson,
             new MockTokenHandler());
-        port = m_http.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        port = m_http.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
     }
 
     tearDown() {

@@ -194,6 +194,7 @@ class Http2BidiStreamingTest inherits QUnit::Test {
 
         # Add HTTPS listener (forces HTTP/2 via ALPN)
         mSslPort = mServer.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
             "service": 0,
             "cert": new SSLCertificate(CertPem),
             "key": new SSLPrivateKey(KeyPem),

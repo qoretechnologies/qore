@@ -255,7 +255,7 @@ public class AsyncSocketIoTest inherits QUnit::Test {
         http = new HttpServer(http_opts);
         http.setHandler("/api_text", "/api_text", MimeTypeText, new SimpleStringHandler(MimeTypeText,
             VALUE_TEXT.input));
-        port = http.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        port = http.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
     }
 
     tearDown() {
@@ -1171,7 +1171,7 @@ public class AsyncSocketIoTest inherits QUnit::Test {
 
     private int startCloseServer() {
         Socket server();
-        server.bind(0);
+        server.bind("127.0.0.1:0");
         int listen_port = server.getSocketInfo().port;
         server.listen();
         background closeOnAccept(server);

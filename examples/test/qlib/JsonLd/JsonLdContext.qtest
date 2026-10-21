@@ -210,7 +210,7 @@ class JsonLdContextTest inherits QUnit::Test {
         TestContextHandler handler();
         http.setHandler("context-handler", "", NOTHING, handler);
         http.setDefaultHandler("context-handler", handler);
-        port = http.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        port = http.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
         base_url = "http://localhost:" + string(port);
         httpLoader = new HttpJsonLdDocumentLoader();
         cache = new JsonLdContextCache();

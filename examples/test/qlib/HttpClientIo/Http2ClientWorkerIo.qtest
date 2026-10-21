@@ -506,6 +506,7 @@ public class Http2ClientWorkerIoTest inherits QUnit::Test {
         server.setDefaultHandler("test", handler);
         server.waitForAsyncIo();
         hash<auto> info = server.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
             "service": 0,
             "cert": new SSLCertificate(CertPem),
             "key": new SSLPrivateKey(KeyPem),

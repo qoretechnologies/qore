@@ -3936,6 +3936,7 @@ public class Http2Test inherits QUnit::Test {
         server.setHandler("test", "/test", MimeTypeText, new Http2TestHandler());
         server.setDefaultHandler("test", new Http2TestHandler());
         hash<auto> linfo = server.addListener(<HttpListenerOptionInfo>{
+            "node": "localhost",
             "service": 0,
             "cert": cert,
             "key": key,

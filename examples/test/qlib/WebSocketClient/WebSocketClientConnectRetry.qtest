@@ -240,6 +240,7 @@ class WebSocketClientConnectRetryTest inherits Test {
         });
         mServer.setHandler("ws-handler", "/ws", NOTHING, mWsHandler);
         mSslPort = mServer.addListener(<HttpListenerOptionInfo>{
+            "node": "localhost",
             "service": 0,
             "cert": new SSLCertificate(CertPem),
             "key": new SSLPrivateKey(KeyPem),

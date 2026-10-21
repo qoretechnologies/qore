@@ -145,7 +145,7 @@ class AsyncIoTimeoutHeapTest inherits QUnit::Test {
             server.stop();
         }
         server.setDefaultHandler("ok", new OkHandler());
-        int port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
         server.waitForAsyncIo();
 
         # every request on the keep-alive connection takes several continuePoll() calls of the server's native

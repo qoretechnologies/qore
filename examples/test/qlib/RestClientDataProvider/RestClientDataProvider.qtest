@@ -102,7 +102,7 @@ public class RestClientDataProviderTest inherits QUnit::Test {
         m_http.setHandler("/api_json", "/api_json", MimeTypeJson, new SimpleStringHandler(MimeTypeJson, VALUE_JSON.input));
         m_http.setHandler("/api_yaml", "/api_yaml", MimeTypeYaml, new SimpleStringHandler(MimeTypeYaml, VALUE_YAML.input));
         m_http.setHandler("/api_bin", "/api_bin", MimeTypeOctetStream, new SimpleStringHandler(MimeTypeOctetStream));
-        port = m_http.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        port = m_http.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
 
         # Return for compatibility with test harness that checks return value.
         set_return_value(main());

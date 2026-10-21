@@ -402,7 +402,7 @@ public class RestHandlerTest inherits QUnit::Test {
         mServer.setHandler("rest-handler", "/test", MimeTypeHtml, mHandler, NOTHING, False);
         mServer.setHandler("swagger-handler", "/swagger", MimeTypeJson, swaggerHandler, NOTHING, False);
         mServer.setDefaultHandler("rest-handler", mHandler);
-        port = mServer.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        port = mServer.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
 
         mClient = new RestClient({"url": "http://localhost:" + port});
     }

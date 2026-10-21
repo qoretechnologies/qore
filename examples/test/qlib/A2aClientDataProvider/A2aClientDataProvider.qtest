@@ -82,7 +82,7 @@ class A2aClientDataProviderTest inherits QUnit::Test {
         http = new HttpServer(http_opts);
         http.setHandler("a2a-handler", "", MimeTypeJson, a2a_server);
         http.setDefaultHandler("a2a-handler", a2a_server);
-        port = http.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        port = http.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
 
         base_url = sprintf("http://localhost:%d", port);
     }

@@ -146,16 +146,20 @@ class HttpServerDecodedBodyLimitTest inherits QUnit::Test {
         server.setHandler("string", "/string", NOTHING, new BodySizeHandler(True));
         server.setHandler("big", "/big", NOTHING, new BodySizeHandler(False, HandlerLimit));
         server.setHandler("unlimited", "/unlimited", NOTHING, new BodySizeHandler(False, -1));
-        url = "http://localhost:" + server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        url = "http://localhost:"
+            + server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
         small_url = "http://localhost:" + server.addListener(<HttpListenerOptionInfo>{
+            "node": "localhost",
             "service": 0,
             "max_decoded_body_size": ListenerLimit,
         }).port;
         request_listener_url = "http://localhost:" + server.addListener(<HttpListenerOptionInfo>{
+            "node": "localhost",
             "service": 0,
             "max_request_body_size": ListenerRequestLimit,
         }).port;
         tls_port = server.addListener(<HttpListenerOptionInfo>{
+            "node": "localhost",
             "service": 0,
             "cert": new SSLCertificate(CertPem),
             "key": new SSLPrivateKey(KeyPem),
@@ -169,7 +173,8 @@ class HttpServerDecodedBodyLimitTest inherits QUnit::Test {
             "max_request_body_size": RequestLimit,
         });
         request_server.setHandler("size", "/size", NOTHING, new BodySizeHandler());
-        request_url = "http://localhost:" + request_server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        request_url = "http://localhost:"
+            + request_server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
         request_server.waitForAsyncIo();
 
         default_server = new HttpServer(<HttpServerOptionInfo>{
@@ -177,8 +182,10 @@ class HttpServerDecodedBodyLimitTest inherits QUnit::Test {
             "debug": True,
         });
         default_server.setHandler("size", "/size", NOTHING, new BodySizeHandler());
-        default_url = "http://localhost:" + default_server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        default_url = "http://localhost:"
+            + default_server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
         default_request_url = "http://localhost:" + default_server.addListener(<HttpListenerOptionInfo>{
+            "node": "localhost",
             "service": 0,
             "max_request_body_size": ListenerRequestLimit,
         }).port;
@@ -297,7 +304,8 @@ class HttpServerDecodedBodyLimitTest inherits QUnit::Test {
         srv.setMaxDecodedBodySize(100);
         assertEq(100, srv.getMaxDecodedBodySize());
         srv.setHandler("size", "/size", NOTHING, new BodySizeHandler());
-        string srv_url = "http://localhost:" + srv.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        string srv_url = "http://localhost:"
+            + srv.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
         srv.waitForAsyncIo();
         assertAccepted(srv_url, "/size", "deflate", 100);
         assertRejected(srv_url, "/size", "deflate", 101);

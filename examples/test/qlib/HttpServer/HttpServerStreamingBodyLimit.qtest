@@ -184,6 +184,7 @@ class HttpServerStreamingBodyLimitTest inherits QUnit::Test {
         listener_url = "https://localhost:" + addTlsListener(server, ListenerLimit);
         server_url = "https://localhost:" + addTlsListener(server);
         plain_url = "http://localhost:" + server.addListener(<HttpListenerOptionInfo>{
+            "node": "localhost",
             "service": 0,
             "max_request_body_size": ListenerLimit,
         }).port;
@@ -218,6 +219,7 @@ class HttpServerStreamingBodyLimitTest inherits QUnit::Test {
 
     private static int addTlsListener(HttpServer srv, *int limit) {
         hash<HttpListenerOptionInfo> opts = <HttpListenerOptionInfo>{
+            "node": "localhost",
             "service": 0,
             "cert": new SSLCertificate(CertPem),
             "key": new SSLPrivateKey(KeyPem),

@@ -162,7 +162,7 @@ class SsePerfTest inherits QUnit::Test {
         HttpServer http(opts);
         http.setHandler("sse-handler", "", NOTHING, sse);
         http.setDefaultHandler("sse-handler", sse);
-        int port = http.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        int port = http.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
         return {
             "http": http,
             "sse": sse,

@@ -389,7 +389,7 @@ class GroqActionsTest inherits QUnit::Test {
     private wireTest() {
         HttpServer server(<HttpServerOptionInfo>{"logger": new Logger("test", LoggerLevel::getLevelWarn())});
         on_exit delete server;
-        int port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
         GroqWireHandler handler();
         server.setDefaultHandler("test", handler);
         GroqRestClientIo client({"url": sprintf("http://127.0.0.1:%d", port), "apikey": "test-key", "http_version": "1.1"});

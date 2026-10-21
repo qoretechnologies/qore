@@ -137,7 +137,7 @@ class WebSocketPerfTest inherits QUnit::Test {
         mServer = new HttpServer(http_opts);
         mServer.setHandler("ws-handler", "", NOTHING, echoHandler);
         mServer.setDefaultHandler("ws-handler", echoHandler);
-        linfo = mServer.addListener(<HttpListenerOptionInfo>{"service": 0});
+        linfo = mServer.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0});
 
         set_return_value(main());
 

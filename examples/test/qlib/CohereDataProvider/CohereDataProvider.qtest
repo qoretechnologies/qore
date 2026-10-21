@@ -506,7 +506,7 @@ public class CohereDataProviderTest inherits QUnit::Test {
         on_exit delete server;
         CohereWireHandler handler();
         server.setDefaultHandler("cohere", handler);
-        int port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
         CohereRestClient::CohereRestClientIo client({
             "url": sprintf("http://127.0.0.1:%d", port), "apikey": "wire-key", "http_version": "1.1",
         });

@@ -85,7 +85,7 @@ public class GetFileFromUrlTest inherits QUnit::Test {
         HttpServer http(http_opts);
         on_exit delete http;
         http.setHandler("text", "/text", MimeTypeText, new SimpleStringHandler());
-        int http_port = http.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        int http_port = http.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
 
         string url = sprintf("http://localhost:%d/text", http_port);
         data file_data = get_file_from_url(url);
@@ -120,7 +120,7 @@ public class GetFileFromUrlTest inherits QUnit::Test {
         RetrievalHandler handler();
         http.setHandler("retrieval", "", NOTHING, handler);
         http.setDefaultHandler("retrieval", handler);
-        int port = http.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        int port = http.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
         string base = sprintf("http://localhost:%d", port);
 
         # text without a charset is ISO-8859-1, as with HTTPClient; a charset is respected

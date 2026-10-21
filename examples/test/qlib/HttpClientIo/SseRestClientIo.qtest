@@ -179,7 +179,7 @@ class SseRestClientIoTest inherits Test {
         server.setDefaultHandler("sse", handler);
         server.setHandler("sse-comment", "/comment", NOTHING, comment_handler);
         server.setHandler("sse-error", "/error", NOTHING, new TestSseErrorHandler());
-        port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        port = server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
     }
 
     globalTearDown() {

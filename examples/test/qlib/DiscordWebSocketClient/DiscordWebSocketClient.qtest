@@ -302,7 +302,7 @@ public class Main inherits QUnit::Test {
         GatewayDiscoveryHandler handler();
         http.setHandler("gateway", "", NOTHING, handler);
         http.setDefaultHandler("gateway", handler);
-        int port = http.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        int port = http.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
         string base = sprintf("http://localhost:%d", port);
 
         assertEq("wss://gateway.test/", DiscordWebSocketConnection::discoverUrl(base + "/api/gateway"));

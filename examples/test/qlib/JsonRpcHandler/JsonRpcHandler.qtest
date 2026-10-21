@@ -163,7 +163,7 @@ public class JsonRpcHandlerTest inherits QUnit::Test {
         mServer = new HttpServer(http_opts);
         mServer.setHandler("jsonrpc-handler", "", MimeTypeJson, mHandler);
         mServer.setDefaultHandler("jsonrpc-handler", mHandler);
-        port = mServer.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        port = mServer.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
 
         mClient = new JsonRpcClient(("url": "http://localhost:" + port));
     }

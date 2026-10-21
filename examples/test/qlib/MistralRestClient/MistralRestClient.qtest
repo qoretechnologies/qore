@@ -186,7 +186,7 @@ public class MistralRestClientTest inherits QUnit::Test {
         Logger logger("mistral-test", LoggerLevel::getLevelWarn());
         HttpServer server(<HttpServerOptionInfo>{"logger": logger});
         on_exit delete server;
-        int port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
         MistralPingHandler handler();
         server.setHandler("models", "/v1/models", NOTHING, handler);
         string url = sprintf("http://127.0.0.1:%d", port);

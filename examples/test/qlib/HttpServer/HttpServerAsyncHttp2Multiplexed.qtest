@@ -311,11 +311,12 @@ class HttpServerAsyncHttp2MultiplexedTest inherits QUnit::Test {
 
         # Add HTTPS listener for HTTP/2
         mSslPort = mServer.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
             "service": 0,
             "cert": new SSLCertificate(CertPem),
             "key": new SSLPrivateKey(KeyPem),
         }).port;
-        mSslUrl = "https://localhost:" + mSslPort;
+        mSslUrl = "https://127.0.0.1:" + mSslPort;
 
         mServer.waitForAsyncIo();
 
@@ -363,7 +364,7 @@ class HttpServerAsyncHttp2MultiplexedTest inherits QUnit::Test {
 
     private WebSocketClient getWsClient(code cb, *int timeout_ms) {
         return new WebSocketClient(cb, {
-            "url": "wss://localhost:" + mSslPort + "/ws",
+            "url": "wss://127.0.0.1:" + mSslPort + "/ws",
             "logger": mLogger,
             "http_version": "2.0",
             "ssl_verify_cert": False,
@@ -995,6 +996,7 @@ class HttpServerAsyncHttp2MultiplexedTest inherits QUnit::Test {
         test_server.setHandler("simple", "/simple", NOTHING, new SimpleGetHandler());
 
         int test_port = test_server.addListener(<HttpListenerOptionInfo>{
+            "node": "localhost",
             "service": 0,
             "cert": new SSLCertificate(CertPem),
             "key": new SSLPrivateKey(KeyPem),
@@ -1075,6 +1077,7 @@ class HttpServerAsyncHttp2MultiplexedTest inherits QUnit::Test {
         test_server.setHandler("simple", "/simple", NOTHING, new SimpleGetHandler());
 
         int test_port = test_server.addListener(<HttpListenerOptionInfo>{
+            "node": "localhost",
             "service": 0,
             "cert": new SSLCertificate(CertPem),
             "key": new SSLPrivateKey(KeyPem),
@@ -1656,7 +1659,7 @@ class HttpServerAsyncHttp2MultiplexedTest inherits QUnit::Test {
         }
 
         # Run the client with -get-path and -stream-path for same-connection test
-        string run_cmd = sprintf("%s -host localhost -port %d -path /ws -get-path /simple "
+        string run_cmd = sprintf("%s -host 127.0.0.1 -port %d -path /ws -get-path /simple "
             "-stream-path /stream/8192 > %s 2>&1", bin_path, mSslPort, log_path);
 
         if (m_options.verbose > 1) {
@@ -1702,6 +1705,7 @@ class HttpServerAsyncHttp2MultiplexedTest inherits QUnit::Test {
         test_server.setHandler("block", "/block", NOTHING, block_handler);
 
         int test_port = test_server.addListener(<HttpListenerOptionInfo>{
+            "node": "localhost",
             "service": 0,
             "cert": new SSLCertificate(CertPem),
             "key": new SSLPrivateKey(KeyPem),
@@ -1823,6 +1827,7 @@ class HttpServerAsyncHttp2MultiplexedTest inherits QUnit::Test {
         test_server.setHandler("simple", "/simple", NOTHING, new SimpleGetHandler());
 
         int test_port = test_server.addListener(<HttpListenerOptionInfo>{
+            "node": "localhost",
             "service": 0,
             "cert": new SSLCertificate(CertPem),
             "key": new SSLPrivateKey(KeyPem),

@@ -296,6 +296,7 @@ l50Xb2GWQesIt9k5jF5IOw==
         server.setHandler("recording", "/recording", NOTHING, new RecordingHandler(events));
 
         int h2_port = server.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
             "service": 0,
             "cert": new SSLCertificate(CertPem),
             "key": new SSLPrivateKey(KeyPem),

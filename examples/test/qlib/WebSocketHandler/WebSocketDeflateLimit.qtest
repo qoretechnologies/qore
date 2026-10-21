@@ -127,8 +127,9 @@ class WebSocketDeflateLimitTest inherits QUnit::Test {
         unlimited = new DeflateWsHandler({"logger": logger});
         server.setHandler("limited", "/small", NOTHING, limited);
         server.setHandler("unlimited", "/default", NOTHING, unlimited);
-        port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        port = server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
         tls_port = server.addListener(<HttpListenerOptionInfo>{
+            "node": "localhost",
             "service": 0,
             "cert": new SSLCertificate(CertPem),
             "key": new SSLPrivateKey(KeyPem),

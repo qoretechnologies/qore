@@ -47,7 +47,7 @@ class HttpServerRequestEncodingTest inherits QUnit::Test {
         on_exit server.stop();
         RequestEncodingHandler handler();
         server.setDefaultHandler("encoding", handler);
-        int port = server.addListener(0).port;
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
         HTTPClient client({"url": sprintf("http://127.0.0.1:%d/", port), "timeout": 30000});
         string value = "é\r\n \t";
         foreach string encoding in ("UTF-8", "ISO-8859-1", "UTF-16LE", "UTF-16BE") {
@@ -68,7 +68,7 @@ class HttpServerRequestEncodingTest inherits QUnit::Test {
         on_exit server.stop();
         RequestEncodingHandler handler();
         server.setDefaultHandler("encoding", handler);
-        int port = server.addListener(0).port;
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
         HTTPClient client({"url": sprintf("http://127.0.0.1:%d/", port), "timeout": 30000});
         string value = "é\r\n \t";
         foreach hash<auto> i in (
@@ -92,7 +92,7 @@ class HttpServerRequestEncodingTest inherits QUnit::Test {
         HttpServer server();
         on_exit server.stop();
         server.setDefaultHandler("charset", new ResponseCharsetHandler());
-        int port = server.addListener(0).port;
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
         HTTPClient client({"url": sprintf("http://127.0.0.1:%d/", port), "timeout": 30000});
         foreach hash<auto> i in (
                 {"ct": 'text/plain;charset="ISO-8859-1"', "enc": "ISO-8859-1", "bct": "text/plain"},
@@ -165,7 +165,7 @@ class HttpServerRequestEncodingTest inherits QUnit::Test {
         on_exit server.stop();
         RequestEncodingHandler handler();
         server.setDefaultHandler("encoding", handler);
-        int port = server.addListener(0).port;
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
         HTTPClient client({"url": sprintf("http://127.0.0.1:%d/", port), "timeout": 30000});
 
         binary file = <00017fff52494646>;
@@ -190,7 +190,7 @@ class HttpServerRequestEncodingTest inherits QUnit::Test {
         on_exit server.stop();
         RequestEncodingHandler handler();
         server.setDefaultHandler("encoding", handler);
-        int port = server.addListener(0).port;
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
         HTTPClient client({"url": sprintf("http://127.0.0.1:%d/", port), "timeout": 30000});
         foreach binary value in (<00ff0d0a>, <3c0078003e00>, <003c0078003e>) {
             assertEq("ok", client.post("/", value, {"Content-Type": "application/octet-stream"}));

@@ -280,7 +280,7 @@ qiurSfIBhXYMDdqWsl9GD+c=
         mSyncServer = new HttpServer(sync_opts);
         mSyncServer.setHandler("echo", "", NOTHING, new BodyEchoHandler());
         mSyncServer.setDefaultHandler("echo", new BodyEchoHandler());
-        mSyncPort = mSyncServer.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        mSyncPort = mSyncServer.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
         mSyncUrl = "http://localhost:" + mSyncPort;
 
         # Async server with body size limit
@@ -292,11 +292,12 @@ qiurSfIBhXYMDdqWsl9GD+c=
         mAsyncServer = new HttpServer(async_opts);
         mAsyncServer.setHandler("echo", "", NOTHING, new BodyEchoHandler());
         mAsyncServer.setDefaultHandler("echo", new BodyEchoHandler());
-        mAsyncPort = mAsyncServer.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        mAsyncPort = mAsyncServer.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
         mAsyncUrl = "http://localhost:" + mAsyncPort;
 
         # Add HTTPS listener for HTTP/2 testing
         mAsyncSslPort = mAsyncServer.addListener(<HttpListenerOptionInfo>{
+            "node": "localhost",
             "service": 0,
             "cert": new SSLCertificate(CertPem),
             "key": new SSLPrivateKey(KeyPem),
@@ -322,9 +323,10 @@ qiurSfIBhXYMDdqWsl9GD+c=
         mUnlimitedServer.setHandler("echo", "", NOTHING, new BodyEchoHandler());
         mUnlimitedServer.setDefaultHandler("echo", new BodyEchoHandler());
         mUnlimitedServer.setHandler("early", "/early", NOTHING, new EarlyResponseHandler(), NOTHING, False);
-        mUnlimitedPort = mUnlimitedServer.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        mUnlimitedPort = mUnlimitedServer.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
         mUnlimitedUrl = "http://localhost:" + mUnlimitedPort;
         mUnlimitedSslUrl = "https://localhost:" + mUnlimitedServer.addListener(<HttpListenerOptionInfo>{
+            "node": "localhost",
             "service": 0,
             "cert": new SSLCertificate(CertPem),
             "key": new SSLPrivateKey(KeyPem),
@@ -669,7 +671,7 @@ qiurSfIBhXYMDdqWsl9GD+c=
         on_exit delete srv;
         srv.setHandler("echo", "", NOTHING, new BodyEchoHandler());
         srv.setDefaultHandler("echo", new BodyEchoHandler());
-        int port = srv.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        int port = srv.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
         string url = "http://localhost:" + port;
 
         # Verify initial state: no limit

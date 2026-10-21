@@ -104,7 +104,7 @@ class SGLangRerankerTest inherits QUnit::Test {
             "debug": False,
         };
         http = new HttpServer(http_opts);
-        port = http.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        port = http.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
     }
 
     globalTearDown() {

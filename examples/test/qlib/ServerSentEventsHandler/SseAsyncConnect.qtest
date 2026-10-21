@@ -111,7 +111,7 @@ public class SseAsyncConnectTest inherits QUnit::Test {
         m_server = new HttpServer(http_opts);
         m_server.setHandler("sse-handler", "", NOTHING, sse_handler);
         m_server.setDefaultHandler("sse-handler", sse_handler);
-        port = m_server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        port = m_server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
 
         # error server for non-SSE responses
         m_error_server = new HttpServer(http_opts);
@@ -119,9 +119,10 @@ public class SseAsyncConnectTest inherits QUnit::Test {
             new WrongContentTypeHandler());
         m_error_server.setHandler("recording", "/(rec|block)", NOTHING, recording_handler);
         m_error_server.setDefaultHandler("not-found", new NotFoundHandler());
-        error_port = m_error_server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        error_port = m_error_server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
         string cert_dir = get_script_dir() + "/../ConnectionProvider/";
         h2_port = m_server.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
             "service": 0,
             "cert": new SSLCertificate(ReadOnlyFile::readTextFile(cert_dir + "mycert.pem")),
             "key": new SSLPrivateKey(ReadOnlyFile::readTextFile(cert_dir + "mykey.pem"), "password"),

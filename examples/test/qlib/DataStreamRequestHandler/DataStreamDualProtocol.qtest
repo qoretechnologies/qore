@@ -67,7 +67,7 @@ class DataStreamDualProtocolTest inherits QUnit::Test {
 
         m_http.setHandler("connect", "", NOTHING, m_connect_handler);
         m_http.setDefaultHandler("connect", m_connect_handler);
-        port = m_http.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        port = m_http.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
 
         set_return_value(main());
 

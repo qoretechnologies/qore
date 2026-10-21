@@ -135,7 +135,7 @@ public class RestClientResponseLimitTest inherits QUnit::Test {
                 "/gzip-exact", "/gzip-over") {
             server.setHandler(path, path, "*/*", new ResponseLimitHandler(path));
         }
-        port = server.addListener(<HttpServer::HttpListenerOptionInfo>{"service": 0}).port;
+        port = server.addListener(<HttpServer::HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
     }
 
     tearDown() {

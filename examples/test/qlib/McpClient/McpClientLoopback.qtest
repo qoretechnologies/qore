@@ -150,7 +150,7 @@ public class McpClientLoopbackTest inherits QUnit::Test {
         dual_http.setHandler("mcp", "", MimeTypeJson, dual_handler);
         dual_http.setDefaultHandler("mcp", dual_handler);
         dual_url = sprintf("http://localhost:%d",
-            dual_http.addListener(<HttpListenerOptionInfo>{"service": 0}).port);
+            dual_http.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port);
 
         legacy_handler = new LoopbackHandler(logger);
         legacy_handler.setModernEnabled(False);
@@ -158,7 +158,7 @@ public class McpClientLoopbackTest inherits QUnit::Test {
         legacy_http.setHandler("mcp", "", MimeTypeJson, legacy_handler);
         legacy_http.setDefaultHandler("mcp", legacy_handler);
         legacy_url = sprintf("http://localhost:%d",
-            legacy_http.addListener(<HttpListenerOptionInfo>{"service": 0}).port);
+            legacy_http.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port);
     }
 
     globalTearDown() {
@@ -660,7 +660,7 @@ public class McpClientLoopbackTest inherits QUnit::Test {
         HttpServer server(<HttpServerOptionInfo>{"logger": l});
         server.setHandler("mcp", "", MimeTypeJson, handler);
         server.setDefaultHandler("mcp", handler);
-        int p = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        int p = server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
         on_exit server.stop();
 
         McpClient::McpClient c = getClient(sprintf("http://localhost:%d", p));
@@ -756,7 +756,7 @@ public class McpClientLoopbackTest inherits QUnit::Test {
         http.setHandler("mcp", "", MimeTypeJson, h);
         http.setDefaultHandler("mcp", h);
         string u = sprintf("http://localhost:%d",
-            http.addListener(<HttpListenerOptionInfo>{"service": 0}).port);
+            http.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port);
         on_exit {
             http.stop();
             delete http;

@@ -132,6 +132,7 @@ class WebSocketH2SendOrderTest inherits QUnit::Test {
         mServer = new HttpServer(<HttpServerOptionInfo>{"logger": mLogger, "debug": True});
         mServer.setHandler("ws-handler", "/ws", NOTHING, mWsHandler);
         mPort = mServer.addListener(<HttpListenerOptionInfo>{
+            "node": "localhost",
             "service": 0,
             "cert": new SSLCertificate(CertPem),
             "key": new SSLPrivateKey(KeyPem),

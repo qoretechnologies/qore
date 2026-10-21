@@ -92,7 +92,7 @@ public class DeepgramRestClientTest inherits QUnit::Test {
         });
         http.setHandler("projects", "", MimeTypeJson, capture);
         http.setDefaultHandler("projects", capture);
-        int port = http.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        int port = http.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
         on_exit http.stop();
         hash<auto> opts = {
             "apikey": "wire-key",

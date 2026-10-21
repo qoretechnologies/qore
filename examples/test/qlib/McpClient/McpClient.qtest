@@ -252,7 +252,7 @@ class McpClientTest inherits QUnit::Test {
         http = new HttpServer(http_opts);
         http.setHandler("mcp-handler", "", MimeTypeJson, mcp_server);
         http.setDefaultHandler("mcp-handler", mcp_server);
-        port = http.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        port = http.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
 
         base_url = sprintf("http://localhost:%d", port);
     }

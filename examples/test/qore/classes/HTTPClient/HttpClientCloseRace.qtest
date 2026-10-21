@@ -67,7 +67,7 @@ public class HttpClientCloseRaceTest inherits QUnit::Test {
         server = new HttpServer(<HttpServerOptionInfo>{
             "logger": new Logger("server", LoggerLevel::getLevelError()),
         });
-        int port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
         ChunkedHandler handler();
         server.setHandler("chunked", "", NOTHING, handler);
         server.setDefaultHandler("chunked", handler);

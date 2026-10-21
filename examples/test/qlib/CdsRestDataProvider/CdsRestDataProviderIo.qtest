@@ -291,7 +291,7 @@ class CdsRestDataProviderIoTest inherits QUnit::Test {
             "debug": True,
         });
         on_error server.stop();
-        port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        port = server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
         handler.port = port;
         server.setHandler("x", "", NOTHING, handler);
         server.setDefaultHandler("x", handler);

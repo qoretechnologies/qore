@@ -289,7 +289,7 @@ public class Main inherits QUnit::Test {
         m_http.setHandler("/api_bin", "/api_bin", MimeTypeOctetStream, new SimpleStringHandler(MimeTypeOctetStream));
         m_http.setHandler("/swagger", "/swagger", MimeTypeYaml, new SimpleStringHandler(MimeTypeYaml, Main::getSwaggerSchema()));
         m_http.setHandler("/notfound-echo", "/notfound-echo", MimeTypeJson, new NotFoundEchoHandler());
-        port = m_http.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        port = m_http.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
     }
 
     tearDown() {
@@ -312,7 +312,7 @@ public class Main inherits QUnit::Test {
         TestLogAppender log_appender();
         Logger log("redaction", LoggerLevel::getLevelDebug());
         log.addAppender(log_appender);
-        RestClient rest({"url": "http://localhost:" + port, "sensitive_headers": ("x-service-key",),
+        RestClient rest({"url": "http://127.0.0.1:" + port, "sensitive_headers": ("x-service-key",),
             "logger": log}, True);
         assertEq(("x-service-key",), rest.getSensitiveHeaders());
         hash<auto> info;
@@ -339,7 +339,7 @@ public class Main inherits QUnit::Test {
         }
 
         # a header declared after the client is created, in any case
-        RestClient late({"url": "http://localhost:" + port}, True);
+        RestClient late({"url": "http://127.0.0.1:" + port}, True);
         late.addSensitiveHeaders("X-SERVICE-KEY");
         assertEq(("x-service-key",), late.getSensitiveHeaders());
         try {
@@ -350,11 +350,11 @@ public class Main inherits QUnit::Test {
             assertEq("request-id-value-4", info.headers."X-Request-Id");
         }
         # a copy keeps the declared headers
-        RestClient copy = cast<RestClient>(late.copyWithUrl("http://localhost:" + port));
+        RestClient copy = cast<RestClient>(late.copyWithUrl("http://127.0.0.1:" + port));
         assertEq(("x-service-key",), copy.getSensitiveHeaders());
 
         # without the declaration, a header whose name is not a credential is not redacted
-        RestClient undeclared({"url": "http://localhost:" + port}, True);
+        RestClient undeclared({"url": "http://127.0.0.1:" + port}, True);
         try {
             undeclared.get("/notfound-echo", NOTHING, \info, hdr);
             fail("a 404 response must throw");
@@ -364,7 +364,7 @@ public class Main inherits QUnit::Test {
         }
 
         # the token_api_key_header is a credential
-        RestClient api_key({"url": "http://localhost:" + port, "token": "api-key-token-value",
+        RestClient api_key({"url": "http://127.0.0.1:" + port, "token": "api-key-token-value",
             "token_api_key_header": "X-Shop-Access"}, True);
         assertEq(("x-shop-access",), api_key.getSensitiveHeaders());
         assertEq({"X-Shop-Access": "<redacted>", "X-Request-Id": "r"},
@@ -373,7 +373,7 @@ public class Main inherits QUnit::Test {
         # invalid names are rejected
         assertThrows("SENSITIVE-HEADER-ERROR", \rest.addSensitiveHeaders(), ("",));
         assertThrows("SENSITIVE-HEADER-ERROR", sub () {
-            RestClient bad({"url": "http://localhost:" + port, "sensitive_headers": (1,)}, True);
+            RestClient bad({"url": "http://127.0.0.1:" + port, "sensitive_headers": (1,)}, True);
         });
     }
 
@@ -868,7 +868,7 @@ public class Main inherits QUnit::Test {
 
         CountingStringHandler ping_handler(MimeTypeText, VALUE_TEXT.input);
         ping_server.setHandler("/ping", "/ping", MimeTypeText, ping_handler);
-        int ping_port = ping_server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        int ping_port = ping_server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
 
         # the connection URL carries a path component that must not be prepended to the ping URL
         string url = sprintf("http://127.0.0.1:%d/v1", port);

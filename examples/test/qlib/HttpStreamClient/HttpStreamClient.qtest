@@ -338,7 +338,7 @@ public class HttpStreamClientTest inherits QUnit::Test {
         m_http.setHandler("/large-encoded-body", "/large-encoded-body", MimeTypeHtml,
             new BigContentLengthHandler(True));
 
-        port = m_http.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        port = m_http.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
     }
 
     globalTearDown() {

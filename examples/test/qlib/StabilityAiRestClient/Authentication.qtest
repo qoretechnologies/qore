@@ -47,7 +47,8 @@ class StabilityAuthenticationTest inherits QUnit::Test {
         addTestCase("live positive and invalid-key read-only authentication", \liveTest());
         server = new HttpServer(<HttpServerOptionInfo>{"logger": new Logger::Logger("5422-auth", Logger::LoggerLevel::ERROR)});
         server.setDefaultHandler("fixture", handler);
-        endpoint = sprintf("http://127.0.0.1:%d", server.addListener(<HttpListenerOptionInfo>{"service": 0}).port);
+        endpoint = sprintf("http://127.0.0.1:%d",
+            server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port);
         options = {"url": endpoint, "apikey": "stability-fixture-key", "organization": "org-fixture",
             "timeout": 5s, "connect_timeout": 2s};
         set_return_value(main());

@@ -47,7 +47,7 @@ class CaptureServer {
     constructor(string response_body = "[]", string status_line = "200 OK") {
         self.response_body = response_body;
         self.status_line = status_line;
-        sock.bind(0, True);
+        sock.bind("localhost:0", True);
         sock.listen();
         port = sock.getSocketInfo().port;
         background serve();

@@ -116,7 +116,7 @@ class AbstractRestClientTest inherits QUnit::Test {
         server = new HttpServer(http_opts);
         server.setHandler("/api", "/api", MimeTypeJson, new JsonEchoHandler());
         server.setDefaultHandler("/api", new JsonEchoHandler());
-        port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        port = server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
 
         rest = new RestClient({
             "url": sprintf("http://localhost:%d", port),

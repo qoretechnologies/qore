@@ -109,7 +109,7 @@ class GraphQLClientTest inherits QUnit::Test {
         mServer = new HttpServer(<HttpServerOptionInfo>{"logger": logger, "debug": True});
         StubGraphQLHandler handler();
         mServer.setDefaultHandler("graphql", handler);
-        port = mServer.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        port = mServer.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
     }
 
     globalTearDown() {

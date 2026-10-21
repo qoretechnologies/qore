@@ -71,7 +71,7 @@ public class SmartSheetRecordPagingTest inherits QUnit::Test {
         server = new HttpServer(<HttpServerOptionInfo>{"logger": logger});
         handler = new FakeSmartSheetHandler();
         server.setDefaultHandler("smartsheet", handler);
-        port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        port = server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
 
         addTestCase("matches on later pages", \laterPageTest());
         addTestCase("limit without a condition", \limitTest());

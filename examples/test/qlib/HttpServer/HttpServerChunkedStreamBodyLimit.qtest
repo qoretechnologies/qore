@@ -147,10 +147,11 @@ class HttpServerChunkedStreamBodyLimitTest inherits QUnit::Test {
         server.setHandler("count", "", NOTHING, handler);
         server.setDefaultHandler("count", handler);
         listener_port = server.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
             "service": 0,
             "max_request_body_size": ListenerLimit,
         }).port;
-        server_port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        server_port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
     }
 
     globalTearDown() {

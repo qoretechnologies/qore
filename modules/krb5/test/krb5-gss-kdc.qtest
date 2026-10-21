@@ -403,7 +403,7 @@ public class Krb5GssKdcIntegrationTest inherits QUnit::Test {
         HttpServer server();
         server.setHandler("krb5-http-negotiate", "", MimeTypeText, handler);
         server.setDefaultHandler("krb5-http-negotiate", handler);
-        hash<auto> info = server.addListener(<HttpListenerOptionInfo>{"service": 0});
+        hash<auto> info = server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0});
         server.waitForAsyncIo();
 
         return {
@@ -422,7 +422,7 @@ public class Krb5GssKdcIntegrationTest inherits QUnit::Test {
         server.setHandler("krb5-http-negotiate-sse", "", "text/event-stream",
             handler);
         server.setDefaultHandler("krb5-http-negotiate-sse", handler);
-        hash<auto> info = server.addListener(<HttpListenerOptionInfo>{"service": 0});
+        hash<auto> info = server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0});
         server.waitForAsyncIo();
 
         return {

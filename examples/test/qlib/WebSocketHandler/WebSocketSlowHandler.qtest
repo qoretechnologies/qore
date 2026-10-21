@@ -189,6 +189,7 @@ class WebSocketSlowHandlerTest inherits QUnit::Test {
         mServer.setHandler("ws-handler", "/ws", NOTHING, mWsHandler);
         mServer.setHandler("probe", "/probe", NOTHING, new ProbeHandler());
         mPort = mServer.addListener(<HttpListenerOptionInfo>{
+            "node": "localhost",
             "service": 0,
             "cert": new SSLCertificate(CertPem),
             "key": new SSLPrivateKey(KeyPem),

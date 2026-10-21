@@ -571,12 +571,14 @@ class HttpClientIoTest inherits QUnit::Test {
 
         # Add plain HTTP listener
         mHttpPort = mServer.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
             "service": 0,
         }).port;
         mHttpUrl = "http://127.0.0.1:" + mHttpPort;
 
         # Add HTTPS listener
         mSslPort = mServer.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
             "service": 0,
             "cert": new SSLCertificate(CertPem),
             "key": new SSLPrivateKey(KeyPem),
@@ -3502,6 +3504,7 @@ class HttpClientIoTest inherits QUnit::Test {
         server.setHandler("simple", "/simple", NOTHING, new SimpleGetHandler());
         server.setHandler("echo", "/echo", NOTHING, new EchoHandler());
         int port = server.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
             "service": 0,
             "cert": new SSLCertificate(CertPem),
             "key": new SSLPrivateKey(KeyPem),
@@ -3558,6 +3561,7 @@ class HttpClientIoTest inherits QUnit::Test {
         new_server.setHandler("simple", "/simple", NOTHING, new SimpleGetHandler());
         new_server.setHandler("echo", "/echo", NOTHING, new EchoHandler());
         int new_port = new_server.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
             "service": port,
             "cert": new SSLCertificate(CertPem),
             "key": new SSLPrivateKey(KeyPem),
@@ -3580,6 +3584,7 @@ class HttpClientIoTest inherits QUnit::Test {
         HttpServer server(opts);
         server.setHandler("simple", "/simple", NOTHING, new SimpleGetHandler());
         int port = server.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
             "service": 0,
         }).port;
         string url = "http://127.0.0.1:" + port;
@@ -3614,6 +3619,7 @@ class HttpClientIoTest inherits QUnit::Test {
         on_exit delete new_server;
         new_server.setHandler("simple", "/simple", NOTHING, new SimpleGetHandler());
         int new_port = new_server.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
             "service": port,
         }).port;
         assertEq(port, new_port, "H1 stale: new server bound to same port");
@@ -3639,6 +3645,7 @@ class HttpClientIoTest inherits QUnit::Test {
         server.setHandler("simple", "/simple", NOTHING, new SimpleGetHandler());
         # Need an HTTPS listener too (for the server to function)
         server.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
             "service": 0,
             "cert": new SSLCertificate(CertPem),
             "key": new SSLPrivateKey(KeyPem),
@@ -3682,6 +3689,7 @@ class HttpClientIoTest inherits QUnit::Test {
         on_exit delete new_server;
         new_server.setHandler("simple", "/simple", NOTHING, new SimpleGetHandler());
         new_server.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
             "service": 0,
             "cert": new SSLCertificate(CertPem),
             "key": new SSLPrivateKey(KeyPem),

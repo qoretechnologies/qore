@@ -307,6 +307,7 @@ public class HttpClientIoAuthTest inherits QUnit::Test {
         other_server = new HttpServer(<HttpServerOptionInfo>{"logger": logger, "enable_h3": False});
         other_server.setDefaultHandler("other", other);
         other_url = sprintf("http://localhost:%d", other_server.addListener(<HttpListenerOptionInfo>{
+            "node": "localhost",
             "service": 0}).port);
         on_exit {
             server.stop();

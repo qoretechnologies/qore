@@ -111,7 +111,7 @@ public class YamlRpcClientIoTest inherits QUnit::Test {
         handler = new TestYamlRpcHandler(sub (string msg) { logger.info(msg); });
         server.setHandler("yamlrpc-handler", "", MimeTypeYamlRpc, handler);
         server.setDefaultHandler("yamlrpc-handler", handler);
-        port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        port = server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
 
         client = new YamlRpcClientIo::YamlRpcClientIo("http://localhost:" + port + "/YAML");
     }

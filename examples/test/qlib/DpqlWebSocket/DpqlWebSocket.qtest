@@ -89,7 +89,7 @@ public class DpqlWebSocketTest inherits QUnit::Test {
         };
         server = new HttpServer(http_opts);
         server.setHandler("dpql", "/ws/dpql", NOTHING, ws_handler);
-        port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        port = server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
         on_exit server.stop();
 
         set_return_value(main());
@@ -357,7 +357,7 @@ public class DpqlWebSocketTest inherits QUnit::Test {
             },
         });
 
-        hash<HttpListenerOptionInfo> linfo = <HttpListenerOptionInfo>{"service": 0};
+        hash<HttpListenerOptionInfo> linfo = <HttpListenerOptionInfo>{"node": "localhost", "service": 0};
         int auth_port = server.addListener(linfo).port;
         server.setHandler("dpql-auth", "/ws/auth-dpql", NOTHING, auth_handler);
 
@@ -396,7 +396,7 @@ public class DpqlWebSocketTest inherits QUnit::Test {
             "max_connections": 1,
         });
 
-        hash<HttpListenerOptionInfo> linfo = <HttpListenerOptionInfo>{"service": 0};
+        hash<HttpListenerOptionInfo> linfo = <HttpListenerOptionInfo>{"node": "localhost", "service": 0};
         int limit_port = server.addListener(linfo).port;
         server.setHandler("dpql-limit", "/ws/limit-dpql", NOTHING, limit_handler);
 

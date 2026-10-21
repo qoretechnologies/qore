@@ -308,7 +308,7 @@ public class Main inherits QUnit::Test {
         server = new HttpServer(<HttpServerOptionInfo>{
             "logger": new Logger("server", LoggerLevel::getLevelError()),
         });
-        port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        port = server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
         FakeHaltianHandler handler();
         server.setHandler("haltian", "", NOTHING, handler);
         server.setDefaultHandler("haltian", handler);

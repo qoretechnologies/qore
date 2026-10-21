@@ -131,6 +131,7 @@ l50Xb2GWQesIt9k5jF5IOw==
         m_http.waitForAsyncIo();
 
         hash<auto> info = m_http.addListener(<HttpListenerOptionInfo>{
+            "node": "localhost",
             "service": 0,
             "cert": new SSLCertificate(CertPem),
             "key": new SSLPrivateKey(KeyPem),
