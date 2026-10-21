@@ -199,6 +199,18 @@ public:
     */
     std::atomic_bool scan_wrote{true};
 
+    //! The number of scans trying the lock of a container in this object's private data right now
+    /** A Pattern B container (a Queue, a TreeMap, ...) reports its values to a scan under its own lock, which the
+        scan only tries: a scan that finds it held cannot read the values, and makes a scan due at this object again
+        (privateScanContended()).  The lock can be released, and this object dereferenced, between the try and that
+        mark; while this count is non-zero a dereference therefore treats a scan as due, as for deferred_scan.  See
+        design/dgc.md, "A container that a scan finds locked".
+
+        In the padding after scan_wrote, so that no member of RObject or of its subclasses moves; at most one per
+        thread, so it cannot overflow (MAX_QORE_THREADS is below its range; asserted in RSet.cpp).
+    */
+    std::atomic<uint16_t> private_scan_tries{0};
+
     //! Advanced every time an edge from this object may have been added without a scan of it following
     /** The object's recursive set records the references between its members when a scan assigns or confirms it.
         An edge added between members afterwards is missing from those counts, so the set reads the reference it
@@ -375,6 +387,15 @@ public:
     //! Test hook run by qore_object_private::customDeref() between releasing the reference and scanning
     typedef void (*dbg_before_deref_scan_t)(RObject* o);
     DLLLOCAL static std::atomic<dbg_before_deref_scan_t> dbg_before_deref_scan;
+
+    //! Test hook run by privateScanContended() before it makes the scan due, with the scan's locks held
+    typedef void (*dbg_scan_contended_t)(RObject* o);
+    DLLLOCAL static std::atomic<dbg_scan_contended_t> dbg_scan_contended;
+
+    //! Test hook run by qore_object_private::customDeref() when a dereference has a decision to make, before it takes
+    //! the object's rsection; with no lock held
+    typedef void (*dbg_deref_decides_t)(RObject* o);
+    DLLLOCAL static std::atomic<dbg_deref_decides_t> dbg_deref_decides;
 #endif
 
     // wait_only=true means: we do not claim deleter status (so the "deleter vs. waiter" invariant
@@ -393,8 +414,11 @@ public:
         @param closed whether the set is closed
         @param seen_edge_gen edge_gen as read by the scan before it followed the object's edges
         @param seen_remove_gen remove_gen as read by the scan before it followed the object's edges
+        @param advance_generation false if the scan skipped a container whose lock was held, so that a scan waiting
+        for it is still made (see RSetHelper::containerContended())
     */
-    DLLLOCAL void setRSet(RSet* rs, int rcnt, bool closed, unsigned seen_edge_gen, unsigned seen_remove_gen);
+    DLLLOCAL void setRSet(RSet* rs, int rcnt, bool closed, unsigned seen_edge_gen, unsigned seen_remove_gen,
+            bool advance_generation = true);
 
     //! Records that an edge from this object may have been added without a scan of it following
     DLLLOCAL void edgesAdded() {
@@ -419,6 +443,33 @@ public:
             invalidateRegion();
         }
     }
+
+    //! A scan is about to try the lock of a container in this object's private data; see private_scan_tries
+    /** Made before the lock is tried, so that a dereference of the object made after the lock has been released
+        finds either this count or the mark that privateScanContended() makes.
+    */
+    DLLLOCAL void privateScanTry() {
+        private_scan_tries.fetch_add(1, std::memory_order_seq_cst);
+        // the count is visible before the container's lock is tried: the thread holding the lock releases it after
+        // the try, and its dereference of the object after that reads the count
+        std::atomic_thread_fence(std::memory_order_seq_cst);
+    }
+
+    //! A scan's try of a container's lock is over; see privateScanTry()
+    DLLLOCAL void privateScanTryDone() {
+        assert(private_scan_tries.load(std::memory_order_relaxed));
+        private_scan_tries.fetch_sub(1, std::memory_order_seq_cst);
+    }
+
+    //! A scan found a container of this object's private data locked by another thread and skipped its values
+    /** The scan does not see the edges the container holds, so what it records for this object cannot be trusted:
+        a scan is made due again at the object's next dereference that finds no real reference (deferred_scan), and a
+        recursive set recorded by the scan is not trusted, as for an edge added without a scan (edgesAdded()).
+        Without the mark, the dereference that made the scan had taken the scan due and the cycle that the container
+        closed was never found.  Called between privateScanTry() and privateScanTryDone(), with the scan's locks held;
+        takes rlck, a leaf lock.  See design/dgc.md, "A container that a scan finds locked".
+    */
+    DLLLOCAL void privateScanContended();
 
     //! The closed region the object is in, or 0; bit 0 is a spin lock guarding the pointer and region_comp
     /** Read and written without the object's other locks: edgesAdded() is called by containers under their own
@@ -622,6 +673,26 @@ public:
 
     // returns the name of the object
     DLLLOCAL virtual const char* getName() const = 0;
+};
+
+//! Counts a scan's try of the locks of the containers in an object's private data for as long as it exists
+/** See RObject::private_scan_tries.
+*/
+class PrivateScanTryHelper {
+public:
+    DLLLOCAL explicit PrivateScanTryHelper(RObject& obj) : obj(obj) {
+        obj.privateScanTry();
+    }
+
+    DLLLOCAL ~PrivateScanTryHelper() {
+        obj.privateScanTryDone();
+    }
+
+    PrivateScanTryHelper(const PrivateScanTryHelper&) = delete;
+    PrivateScanTryHelper& operator=(const PrivateScanTryHelper&) = delete;
+
+private:
+    RObject& obj;
 };
 
 // use a vector set for performance
@@ -984,6 +1055,17 @@ public:
     //! Reports an object or closure-bound variable referenced by the node being scanned; always returns false
     DLLLOCAL bool checkNode(RObject& robj);
 
+    //! Reports that a container in the private data of \a holder was skipped because another thread held its lock
+    /** Called by a Pattern B scanner (and QorePrivateDataScanner::contended()) instead of reporting the container's
+        values, which it cannot read; the scan is made due again at \a holder (RObject::privateScanContended()), and
+        this pass's commit advances no scan generation (see contended).  See design/dgc.md, "A container that a scan
+        finds locked".
+    */
+    DLLLOCAL void containerContended(RObject& holder) {
+        holder.privateScanContended();
+        contended = true;
+    }
+
 private:
     enum class NodeKind : unsigned char {
         Object,
@@ -1086,6 +1168,11 @@ private:
     bool scan_deferred = false;
     // true if another thread scanned the object while this one waited; see skipped()
     bool scan_skipped = false;
+    //! Set when this pass skipped the values of a container whose lock another thread held; see containerContended()
+    /** The commit of such a pass advances no scan generation: a scan waiting for this one would otherwise take its
+        result as current (RScanHelper::needScan()) and skip the scan that reads the container.
+    */
+    bool contended = false;
     //! Set when this pass registered a notification with the owner of a lock it could not take
     /** A scan that gives up asks the constructor to roll back and retry, and the retry only makes progress
         because notifier.wait() blocks until the owner of the lock releases it.  Every path that abandons a

@@ -1631,6 +1631,182 @@ static void ut_superseded_snapshot_lock_free_release(UnitTestCounters& c) {
     xsink.clear();
     obj->tDeref();
 }
+
+namespace {
+//! The interleaving of a push that holds a Queue's lock and a scan of the Queue's object
+struct UtContendedScan {
+    std::mutex m;
+    std::condition_variable cv;
+    //! the object whose push the push hook holds, until push_release
+    const QoreObject* pushed = nullptr;
+    //! the object whose contended scan the scan hook holds (ut_contended_queue_scan_window())
+    RObject* scanned = nullptr;
+    //! the object whose scanning dereference by the pushing thread is noted
+    RObject* watched = nullptr;
+    //! the thread whose own scanning dereferences are not the pushing thread's
+    std::thread::id scanner;
+    bool push_held = false;
+    bool push_release = false;
+    bool pusher_scans = false;
+    bool pusher_done = false;
+};
+
+UtContendedScan ut_contended_scan;
+
+//! guards against a hang only: a hold that is not reached fails the test
+constexpr std::chrono::seconds UT_CONTENDED_HANG_GUARD{30};
+
+//! holds the push of the object with the queue's lock, once
+void ut_hold_queue_push(const QoreObject* self) {
+    UtContendedScan& s = ut_contended_scan;
+    std::unique_lock<std::mutex> l(s.m);
+    if (self != s.pushed) {
+        return;
+    }
+    s.pushed = nullptr;
+    qore_dbg_queue_push_locked_hook.store(nullptr);
+    s.push_held = true;
+    s.cv.notify_all();
+    s.cv.wait_for(l, UT_CONTENDED_HANG_GUARD, [&s]() { return s.push_release; });
+}
+
+//! notes that the pushing thread's dereference of the object has a decision to make: it does not find nothing to do
+void ut_note_pusher_scan(RObject* o) {
+    UtContendedScan& s = ut_contended_scan;
+    std::lock_guard<std::mutex> l(s.m);
+    if (o != s.watched || std::this_thread::get_id() == s.scanner) {
+        return;
+    }
+    s.watched = nullptr;
+    RObject::dbg_deref_decides.store(nullptr);
+    s.pusher_scans = true;
+    s.cv.notify_all();
+}
+
+//! holds the scan that found the queue's lock held, before it makes the scan due, until the pushing thread has
+//! released the lock and dereferenced the object
+void ut_hold_contended_scan(RObject* o) {
+    UtContendedScan& s = ut_contended_scan;
+    std::unique_lock<std::mutex> l(s.m);
+    if (o != s.scanned) {
+        return;
+    }
+    s.scanned = nullptr;
+    RObject::dbg_scan_contended.store(nullptr);
+    s.watched = o;
+    RObject::dbg_deref_decides.store(ut_note_pusher_scan);
+    s.push_release = true;
+    s.cv.notify_all();
+    s.cv.wait_for(l, UT_CONTENDED_HANG_GUARD, [&s]() { return s.pusher_scans || s.pusher_done; });
+}
+
+//! Pushes a Queue's object into the Queue on another thread, which is held with the queue's lock while the test's
+//! thread releases the other reference from outside the cycle; the pushing thread releases the last one
+/** @param hold_scan true to hold the scan that finds the queue's lock held before it makes the scan due
+*/
+static void ut_contended_queue_scan_run(UnitTestCounters& c, bool hold_scan) {
+    ExceptionSink xsink;
+    Queue* q = new Queue;
+    QoreObject* obj = new QoreObject(QC_QUEUE, getProgram(), q);
+    // a weak reference keeps the object allocated, so the test can see that it was collected
+    obj->tRef();
+    // the pushing thread's reference; the constructor's is the other holder's
+    obj->ref();
+
+    UtContendedScan& s = ut_contended_scan;
+    {
+        std::lock_guard<std::mutex> l(s.m);
+        s.pushed = obj;
+        s.scanned = hold_scan ? qore_object_private::get(*obj) : nullptr;
+        s.watched = nullptr;
+        s.scanner = std::this_thread::get_id();
+        s.push_held = s.push_release = s.pusher_scans = s.pusher_done = false;
+    }
+    qore_dbg_queue_push_locked_hook.store(ut_hold_queue_push);
+    if (hold_scan) {
+        RObject::dbg_scan_contended.store(ut_hold_contended_scan);
+    }
+
+    std::thread pusher([q, obj]() {
+        QoreForeignThreadHelper fth;
+        ExceptionSink pxsink;
+        // the Queue holds itself: a cycle that only its private data closes, and the push makes a scan due at the
+        // object's next dereference
+        q->push(&pxsink, obj, obj->refSelf());
+        // the last reference from outside the cycle, released after the push, as the async I/O controller releases
+        // its own reference to a result Queue's object
+        obj->deref(&pxsink);
+        pxsink.clear();
+        UtContendedScan& s = ut_contended_scan;
+        std::lock_guard<std::mutex> l(s.m);
+        s.pusher_done = true;
+        s.cv.notify_all();
+    });
+
+    bool held;
+    {
+        std::unique_lock<std::mutex> l(s.m);
+        held = s.cv.wait_for(l, UT_CONTENDED_HANG_GUARD, [&s]() { return s.push_held; });
+    }
+    UT_ASSERT(c, held, "the push is held with the Queue's lock");
+
+    // the other holder's reference: the push made a scan due, so this dereference scans, and finds the queue's lock
+    // held; with hold_scan, the hook lets the push finish before the scan makes the scan due again
+    obj->deref(&xsink);
+    {
+        std::lock_guard<std::mutex> l(s.m);
+        s.push_release = true;
+        s.cv.notify_all();
+    }
+    pusher.join();
+    qore_dbg_queue_push_locked_hook.store(nullptr);
+    RObject::dbg_scan_contended.store(nullptr);
+    RObject::dbg_deref_decides.store(nullptr);
+
+    if (hold_scan) {
+        bool pusher_scans;
+        {
+            std::lock_guard<std::mutex> l(s.m);
+            pusher_scans = s.pusher_scans;
+        }
+        UT_ASSERT(c, pusher_scans, "the pushing thread's dereference has a decision to make while the scan that "
+            "found the lock held is still trying it");
+    }
+    UT_ASSERT(c, !obj->isValid(), "the Queue that holds itself is collected after a scan found its lock held");
+    if (obj->isValid()) {
+        // a failure leaks nothing: the cycle is broken with a reference of the test's own, which then goes
+        obj->ref();
+        q->clear(&xsink, obj);
+        obj->deref(&xsink);
+    }
+    UT_ASSERT(c, !xsink, "releasing the Queue raises no exception");
+    xsink.clear();
+    obj->tDeref();
+}
+}
+
+//! Tests that a cycle through a Queue is collected when a scan finds the Queue's lock held
+/** A scan cannot read the values of a Queue whose lock another thread holds; it skipped them, so it found no cycle,
+    and the dereference that made it had taken the scan due at the Queue's object.  A Queue that holds itself, pushed
+    on one thread while another releases a reference and scans, was then never collected: the async I/O controller
+    pushes a poll operation's result to its result Queue on its I/O thread while a callback worker releases the
+    controller's reference to the Queue's object (asyncio_queue_gc.qtest, 1.6% of runs under load).  A scan that finds
+    a container's lock held now makes the scan due again (RSetHelper::containerContended()).
+*/
+static void ut_contended_queue_scan(UnitTestCounters& c) {
+    ut_contended_queue_scan_run(c, false);
+}
+
+//! Tests that a dereference made while a scan tries a Queue's lock scans
+/** The thread holding the lock can release it and dereference the object before the scan that found it held makes
+    the scan due again: the dereference that would find the scan due then finds nothing to do.  The scan counts its
+    try first (RObject::private_scan_tries), and the dereference treats a counted try as a scan due.  The hook holds
+    the scan between finding the lock held and making the scan due, while the pushing thread releases the last
+    reference from outside the cycle.
+*/
+static void ut_contended_queue_scan_window(UnitTestCounters& c) {
+    ut_contended_queue_scan_run(c, true);
+}
 #endif
 
 namespace {
@@ -6814,6 +6990,8 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     Http3ClientResponseRegistrationTest::run(c);
     ut_fast_real_deref_releases_last(c);
     ut_superseded_snapshot_lock_free_release(c);
+    ut_contended_queue_scan(c);
+    ut_contended_queue_scan_window(c);
     AsyncIoOpCacheTest::run(c);
 #endif
     ut_program_family_thread_data(c);

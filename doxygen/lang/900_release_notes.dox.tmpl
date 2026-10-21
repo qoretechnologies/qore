@@ -2061,7 +2061,9 @@ dsp.setMutationObserver(*hash<SqlMutationDecisionInfo> sub (hash<SqlMutationEven
     - binary modules can have the garbage collector follow the values that the private data of their objects holds
       in C++ containers: private data derived from the new C++ class \c AbstractScannablePrivateData reports them to
       the collector with \c scanValues() while its object has registered it with
-      \c QoreObject::addPrivateDataScan(), so that a reference cycle through such a value is collected;
+      \c QoreObject::addPrivateDataScan(), so that a reference cycle through such a value is collected (a
+      \c scanValues() that finds its container's lock held calls \c QorePrivateDataScanner::contended(), so that the
+      object is scanned again once the lock is released);
       \c _QORE_HAS_SCANNABLE_PRIVATE_DATA is defined when the API is available
     - garbage collection no longer walks a graph that an earlier scan has already walked and that has not gained an
       edge since: storing a reference to a large, unchanged object graph in a new object now costs the same whatever
@@ -5025,6 +5027,11 @@ while (*binary chunk = input.read(65536)) {
       thread when no transaction was in progress: @ref Qore::SQL::Datasource::currentThreadInTransaction()
       "Datasource::currentThreadInTransaction()" returned @ref True afterwards, other threads timed out waiting for
       the lock, and destroying the datasource in another thread raised \c DATASOURCE-ERROR
+
+    - Fixed reference cycles closed by values held in a @ref Qore::Thread::Queue "Queue" or a
+      @ref Qore::TreeMap "TreeMap" sometimes never being collected when the last reference to the cycle from outside
+      it was released while another thread was using the container, for example a poll operation submitted to the
+      @ref Qore::AsyncIoController "AsyncIoController" that keeps its own result queue
 
     - Fixed threads with a small stack size on Linux with glibc having less stack for their code than the size set
       with @ref Qore::set_default_thread_stack_size() "set_default_thread_stack_size()": glibc takes the static

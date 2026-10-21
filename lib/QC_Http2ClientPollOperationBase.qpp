@@ -122,16 +122,16 @@ bool Http2ClientPollOperationPriv::scanMembers(RObject& obj, RSetHelper& rsh) {
     // be DGC-invisible, blocking collection of any cycle that crosses the
     // Queue/EventNotifier.
     //
-    // Non-blocking: trylock both stream_lock and sq_lock.  If either is
-    // contended we return false and let the scanner try again in the next
-    // cycle — blocking here could deadlock with an app thread holding the
-    // lock and waiting on the same QoreObject's rsection lock (held by the
-    // scanner).  See qore_queue_private::scanMembers for the reference
-    // implementation of this pattern.
+    // Non-blocking: trylock both stream_lock and sq_lock; blocking here could deadlock with an app thread holding the
+    // lock and waiting on the same QoreObject's rsection lock (held by the scanner).  A container whose lock is held
+    // cannot report its values, so the scan is made due again at the object (RSetHelper::containerContended(); see
+    // design/dgc.md, "A container that a scan finds locked").  See qore_queue_private::scanMembers for the
+    // reference implementation of this pattern.
     //
     // Both containers are read in one critical section of stream_queues_lock: the I/O thread moves pending
     // registrations into stream_queues under it, so a registration in transit cannot be missed by both reads.
     if (stream_queues_lock.trylock()) {
+        rsh.containerContended(obj);
         return false;
     }
     AutoLocker ml(stream_queues_lock, true);
@@ -153,6 +153,8 @@ bool Http2ClientPollOperationPriv::scanMembers(RObject& obj, RSetHelper& rsh) {
                 return true;
             }
         }
+    } else {
+        rsh.containerContended(obj);
     }
     return false;
 }

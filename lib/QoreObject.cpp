@@ -543,6 +543,10 @@ bool qore_object_private::scanMembers(RSetHelper& rsh) {
         ON_BLOCK_EXIT_OBJ(xsink, &ExceptionSink::clear);
         // the containers of private data can change after their locks are released, so the scan keeps their values
         RSetHeldEdgeHelper held(rsh);
+        // the containers' locks are only tried: one found held makes a scan due at this object again
+        // (RSetHelper::containerContended()), and a dereference made meanwhile finds the try counted; see
+        // RObject::private_scan_tries
+        PrivateScanTryHelper try_helper(*this);
         printd(5, "qore_object_private::checkIntern() scanning internals of object of class '%s'\n",
             theclass->getName());
         {
@@ -1472,6 +1476,12 @@ void qore_object_private::customDeref(ExceptionSink* xsink, bool real) {
                     "nothing to do\n", this, status == OS_OK ? getClassName() : "<deleted>");
                 return;
             }
+#ifdef DEBUG
+            // this dereference has a decision to make; tests note it here, before the rsection can block it
+            if (dbg_deref_decides_t hook = dbg_deref_decides.load(std::memory_order_acquire)) {
+                hook(this);
+            }
+#endif
 
             while (true) {
                 bool recalc = false;
@@ -2316,6 +2326,10 @@ bool QorePrivateDataScanner::scan(const QoreValue& value) {
     // own reference to the node
     QoreValue v(value);
     return obj.scanCheck(rsh, v.getInternalNode());
+}
+
+void QorePrivateDataScanner::contended() {
+    rsh.containerContended(obj);
 }
 
 bool AbstractScannablePrivateData::needsScan(const QoreValue& value) {

@@ -105,6 +105,11 @@ DLLLOCAL void qore_dbg_conn_close_released();
 
 //! the number of times the next c-ares lookups report their query as lost; set by dbg_cares_lose_query()
 DLLLOCAL extern std::atomic<int> qore_dbg_cares_lost_query_count;
+
+//! called by qore_queue_private::push() with the queue's lock held, after a value pushed with the queue's object has
+//! been counted for the collector and before the lock is released, with the queue's object; set by the C++ unit tests
+typedef void (*qore_dbg_queue_push_locked_hook_t)(const QoreObject* self);
+DLLLOCAL extern std::atomic<qore_dbg_queue_push_locked_hook_t> qore_dbg_queue_push_locked_hook;
 #endif
 
 #endif

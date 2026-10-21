@@ -32,6 +32,7 @@
 #include <qore/QoreQueue.h>
 #include "qore/intern/QoreQueueIntern.h"
 #include "qore/intern/QoreObjectIntern.h"
+#include "qore/intern/ql_debug.h"
 
 #include <cerrno>
 #include <sys/time.h>
@@ -342,9 +343,19 @@ void qore_queue_private::push(ExceptionSink* xsink, QoreObject* self, QoreValue 
             // no scan follows the new edge (Pattern B in design/dgc.md); marked under the lock, as another thread
             // can take the value and release it as soon as the lock is released
             qore_dgc_value_stored(*qore_object_private::get(*self), n);
+#ifdef DEBUG
+            // tests hold the push here, with the lock held, while another thread releases a reference and scans
+            if (qore_dbg_queue_push_locked_hook_t hook = qore_dbg_queue_push_locked_hook.load()) {
+                hook(self);
+            }
+#endif
         }
     }
 }
+
+#ifdef DEBUG
+std::atomic<qore_dbg_queue_push_locked_hook_t> qore_dbg_queue_push_locked_hook{nullptr};
+#endif
 
 void qore_queue_private::insert(ExceptionSink* xsink, QoreObject* self, QoreValue n, int timeout_ms, bool& to) {
     to = false;
@@ -576,9 +587,11 @@ void qore_queue_private::clearError() {
 }
 
 bool qore_queue_private::scanMembers(RObject& obj, RSetHelper& rsh) {
-    // if we cannot lock the lock, then return false to ignore
-    // blocking here or returning true could cause a deadlock
+    // the lock is only tried: blocking here or returning true could cause a deadlock; a queue whose lock is held
+    // cannot report its values, so the scan is made due again at its object (see design/dgc.md, "A container that a
+    // scan finds locked")
     if (l.trylock()) {
+        rsh.containerContended(obj);
         return false;
     }
     AutoLocker al(l, true);

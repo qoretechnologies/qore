@@ -95,6 +95,16 @@ public:
     */
     DLLEXPORT bool scan(const QoreValue& value);
 
+    //! Reports that the values cannot be reported because another thread holds the container's lock
+    /** AbstractScannablePrivateData::scanValues() calls this when it finds its container's lock held, and returns
+        false: the scan cannot see the values, so the collector scans the object again at its next dereference, once
+        the thread holding the lock has released it.  Without it, a cycle that only the container's values close can
+        be missed for good.
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT void contended();
+
 private:
     friend class qore_object_private;
 
@@ -145,8 +155,9 @@ public:
     //! Reports the values that can be part of a cycle to the collector
     /** Called with the scan's locks held, so it must not block, raise an exception, or call Qore code or the code of
         any other language:
-        - it tries the container's lock and returns false at once if the lock is held: a container that the scan
-          skips keeps its object from being collected for that scan, but blocking can deadlock
+        - it tries the container's lock, and if the lock is held it calls QorePrivateDataScanner::contended() and
+          returns false at once: blocking can deadlock, and the collector scans the object again later, once the
+          lock has been released
         - it calls QorePrivateDataScanner::scan() for each value and returns true at once if that call does
         - it does not release a reference: the last reference to a value would run its destructor in the scan
 

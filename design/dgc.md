@@ -588,7 +588,8 @@ is a try-lock:
 
 - `tryRSectionLockNotifyWaitRead()` (`lib/RSection.cpp`) registers an `RNotifier` against the conflicting owner
   and returns `-1` rather than waiting.
-- Pattern B private-data scanners (below) use `trylock()` and skip a contended container.
+- Pattern B private-data scanners (below) use `trylock()` and skip a contended container, making the scan due
+  again; see "A container that a scan finds locked".
 
 On a conflict the scan **rolls back** — releasing every r-section it holds — waits on the notifier until the
 conflicting owner releases, and starts over. Because a waiting scan holds nothing, scans can never wait on each
@@ -613,6 +614,51 @@ same object — every accepted connection releasing a local that holds a shared 
 restarts stop converging: every thread sits in `RNotifier::wait()`, no scan finishes, and the work those
 threads were doing never resumes. Native stacks then show many threads parked in `RSetHelper::RSetHelper()`
 with nothing running, which reads like a deadlock but is the restart loop failing to converge.
+
+### A container that a scan finds locked
+
+A Pattern B container reports its values to a scan under its own lock, and the scan only tries that lock: blocking
+could deadlock, as the lock can be held by a thread that waits for something the scan holds (a `Queue` releases
+the values it clears under its lock, which can run any destructor). A scan that finds the lock held cannot read the
+values, so it does not see the edges they make, and the dereference that made the scan has already taken the scan
+due at the object (`deferred_scan`). Skipping the values used to be all there was to it, on the assumption that a
+later scan would read them; but nothing made one due, and a cycle that only the container's values closed was never
+found. The async I/O controller pushes a poll operation's result to the operation's own result Queue on its I/O
+thread while a callback worker releases the controller's reference to the Queue's object: the worker's
+dereference consumed the scan due that the push had made, found the Queue's lock held by the push, committed no
+set, and the operation and its Queue were never collected (`asyncio_queue_gc.qtest`, 10 of 1024 runs under load
+on Alpine).
+
+A scanner that finds its container's lock held therefore calls `RSetHelper::containerContended()` (a module's
+`scanValues()` calls `QorePrivateDataScanner::contended()`), which does three things:
+
+- `RObject::privateScanContended()` makes the scan due again at the object (`deferred_scan`), so that its next
+  dereference that finds no real reference scans, and reads the container once its lock has been released;
+- the same call marks an edge added (`edgesAdded()`), so that a recursive set the scan records for the object,
+  which does not count the container's edges, is not trusted for a verdict of "cannot delete" until a scan has read
+  them;
+- the scan's commit advances no scan generation (`RSetHelper::contended`): a scan of the object waiting for this
+  one would otherwise take its result as current (`RScanHelper::needScan()`) and skip the scan that reads the
+  container, after consuming the scan due itself.
+
+The thread that held the lock can release it and dereference the object between the scan's try and its mark: that
+dereference would find no scan due, and the mark would come too late for anything to act on it. The dispatcher in
+`qore_object_private::scanMembers()` therefore counts the try before any container's lock is tried
+(`RObject::private_scan_tries`, `PrivateScanTryHelper`, with a sequentially consistent fence), and a dereference
+treats a non-zero count as a scan due (`RObject::tryFastDeref()`, `RObject::deref()`). A dereference made after the
+lock has been released finds the count or the mark. The count is a 16-bit atomic in the padding after
+`scan_wrote`, so no member of `RObject` or `ClosureVarValue` moves; a thread counts one try at a time, and
+`MAX_QORE_THREADS` is below its range (asserted in `lib/RSet.cpp`).
+
+The scan made due is made by a later dereference of the object, so a thread that operates on a container whose
+values can close a cycle holds a reference to the container's object for the duration, as every Qore method call
+does and as the C++ API's callers that pass the object do; its release is that dereference.
+
+`ut_contended_queue_scan()` in the C++ unit tests (`asyncio_unit_tests.qtest`) holds a push with the queue's lock
+(`qore_dbg_queue_push_locked_hook`) while another thread's dereference scans; `ut_contended_queue_scan_window()`
+also holds the scan between finding the lock held and making the scan due (`RObject::dbg_scan_contended`) while
+the pushing thread releases the last reference from outside the cycle, and checks that its dereference has a
+decision to make (`RObject::dbg_deref_decides`).
 
 ### Every abandoned pass registers the notification its retry waits on
 
@@ -857,11 +903,14 @@ When the owning `StreamReader` object is destroyed (cycle or otherwise), its `cd
 
 Implement `scanMembers` on the private class; the object scanner dispatches to it.
 
-See `lib/QoreQueue.cpp:509`:
+See `qore_queue_private::scanMembers()` in `lib/QoreQueue.cpp`:
 
 ```cpp
 bool qore_queue_private::scanMembers(RObject& obj, RSetHelper& rsh) {
-    if (l.trylock()) return false;   // non-blocking: skip if contended
+    if (l.trylock()) {               // non-blocking: skip if contended, and make the scan due again
+        rsh.containerContended(obj);
+        return false;
+    }
     AutoLocker al(l, true);
 
     QoreQueueNode* w = head;
@@ -935,8 +984,9 @@ A module's private data reports its values through the public API in `include/qo
   it can be released or handed out with the container's reference, both under the container's lock.
 - `_QORE_HAS_SCANNABLE_PRIVATE_DATA` is defined when the API is available.
 
-The rules for `scanValues()` are the scanner rules: it tries the container's lock and returns false if the lock is
-held, it raises no exception and calls no Qore or foreign-language code, and it releases no reference. A container
+The rules for `scanValues()` are the scanner rules: it tries the container's lock, and if the lock is held it calls
+`QorePrivateDataScanner::contended()` and returns false (see "A container that a scan finds locked"), it raises no
+exception and calls no Qore or foreign-language code, and it releases no reference. A container
 lock that is held while the module releases values or runs Qore code can be tried by a scan on the same thread, so
 the lock that `scanValues()` tries should only be held while the container itself is changed, with the values it
 gives up released after the lock.

@@ -641,7 +641,8 @@ bool RObject::scanCheck(RSetHelper& rsh, AbstractQoreNode* n) {
     return rsh.checkNode(n);
 }
 
-void RObject::setRSet(RSet* rs, int rcnt, bool closed, unsigned seen_edge_gen, unsigned seen_remove_gen) {
+void RObject::setRSet(RSet* rs, int rcnt, bool closed, unsigned seen_edge_gen, unsigned seen_remove_gen,
+        bool advance_generation) {
     assert(rml.checkRSectionExclusive());
     // the lock-free dereference path reads rset alone and infers rcount from it; see RObject::rset
     assert(rs || !rcnt);
@@ -673,7 +674,9 @@ void RObject::setRSet(RSet* rs, int rcnt, bool closed, unsigned seen_edge_gen, u
     // set from a non-null one and takes the rsection for anything else, where it reads all of this again.
     rset.store(rs, std::memory_order_release);
     // increment transaction count
-    ++rcycle;
+    if (advance_generation) {
+        ++rcycle;
+    }
 }
 
 void RObject::derefRealIntern() {
@@ -702,6 +705,8 @@ void RObject::derefRealIntern() {
 #ifdef DEBUG
 std::atomic<RObject::dbg_after_fast_real_release_t> RObject::dbg_after_fast_real_release{nullptr};
 std::atomic<RObject::dbg_before_deref_scan_t> RObject::dbg_before_deref_scan{nullptr};
+std::atomic<RObject::dbg_scan_contended_t> RObject::dbg_scan_contended{nullptr};
+std::atomic<RObject::dbg_deref_decides_t> RObject::dbg_deref_decides{nullptr};
 #endif
 
 int RObject::tryFastDeref(bool real) {
@@ -730,8 +735,11 @@ int RObject::tryFastDeref(bool real) {
         // deleter, as for a weak reference.
         return (references.fetch_sub(1, std::memory_order_acq_rel) - 1) ? 1 : 0;
     }
-    // a deferred scan is made by the dereference that finds no real reference left
-    if (deferred_scan.load(std::memory_order_acquire) && !rrefs.load(std::memory_order_acquire)) {
+    // a deferred scan is made by the dereference that finds no real reference left; a scan trying the lock of a
+    // container of the object's private data is about to make one due if it finds the lock held, after which the
+    // thread holding the lock can release it and dereference the object (see private_scan_tries)
+    if ((deferred_scan.load(std::memory_order_acquire) || private_scan_tries.load(std::memory_order_seq_cst))
+            && !rrefs.load(std::memory_order_acquire)) {
         return -1;
     }
     return (references.fetch_sub(1, std::memory_order_acq_rel) - 1) ? 1 : 0;
@@ -804,7 +812,9 @@ int RObject::deref(bool real, bool& do_scan, bool& rescan) {
     do_scan = !rrefs;
 
     if (do_scan) {
-        rescan = deferred_scan.exchange(false);
+        // a scan trying a container's lock may be about to make a scan due (see private_scan_tries); this one is
+        // made now instead, and reads the container if its lock has been released
+        rescan = deferred_scan.exchange(false) || private_scan_tries.load(std::memory_order_seq_cst);
     } else {
         rescan = false;
     }
@@ -919,6 +929,26 @@ void RObject::markRSetStale() {
         // a scan started elsewhere must enter the set again: its counts describe the graph before the change
         clearRSetClosed();
     }
+}
+
+// a thread tries the lock of one container of an object at a time; see RObject::private_scan_tries
+static_assert(MAX_QORE_THREADS < 65536, "RObject::private_scan_tries cannot count a try by every thread");
+
+void RObject::privateScanContended() {
+#ifdef DEBUG
+    // tests hold the scan here: the thread holding the container's lock can release it and dereference the object
+    // before the mark below is made
+    if (dbg_scan_contended_t hook = dbg_scan_contended.load(std::memory_order_acquire)) {
+        hook(this);
+    }
+#endif
+    // the set this scan records for the object, if any, does not count the container's edges: it is not trusted until
+    // a scan has read them (RSet::edgesUnchangedSinceScan())
+    edgesAdded();
+    // the dereference that made this scan took the scan due at the object: the next one that finds no real reference
+    // scans again, and reads the container once its lock has been released
+    AutoLocker al(rlck);
+    deferred_scan = true;
 }
 
 bool RObject::deferScanToPinnedMember() {
@@ -2380,7 +2410,7 @@ void RSetHelper::commit() {
             }
             RObject* obj = static_cast<RObject*>(n.ptr);
             assert(qore_var_rwlock_priv::get(obj->rml)->write_tid >= -1);
-            obj->confirmRSet(obj == root_obj, n.edge_gen, n.remove_gen);
+            obj->confirmRSet(obj == root_obj && !contended, n.edge_gen, n.remove_gen);
             RSet* rs = obj->rset.load(std::memory_order_relaxed);
             if (rs) {
                 rs->setScanEpoch(scan_epoch);
@@ -2465,7 +2495,7 @@ void RSetHelper::commit() {
             // scan changed another component and holds the rsection exclusively
             printd(QRO_LVL, "RSetHelper::commit() obj %p '%s' rset: %p unchanged\n", obj, obj->getName(),
                 obj->rset.load(std::memory_order_relaxed));
-            obj->confirmRSet(true, n.edge_gen, n.remove_gen);
+            obj->confirmRSet(!contended, n.edge_gen, n.remove_gen);
             RSet* rs = obj->rset.load(std::memory_order_relaxed);
             if (rs) {
                 rs->setScanEpoch(scan_epoch);
@@ -2476,7 +2506,8 @@ void RSetHelper::commit() {
         RSet* rs = rsets[n.component];
         printd(QRO_LVL, "RSetHelper::commit() obj %p '%s' rset: %p rcount: %d\n", obj, obj->getName(), rs,
             n.internal);
-        obj->setRSet(rs, rs ? n.internal : 0, rs && component_closed[n.component], n.edge_gen, n.remove_gen);
+        obj->setRSet(rs, rs ? n.internal : 0, rs && component_closed[n.component], n.edge_gen, n.remove_gen,
+            !contended);
     }
 
 #ifdef DEBUG
@@ -2554,6 +2585,8 @@ void RSetHelper::rollback(bool yield) {
     root_rset = nullptr;
     need_exclusive = false;
     changed = false;
+    // the marks made for a container skipped by this pass stay; the next pass reads the container again
+    contended = false;
     retry_notified = false;
     next_index = 0;
     current = -1;
