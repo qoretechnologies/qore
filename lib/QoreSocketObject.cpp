@@ -6096,6 +6096,15 @@ int QoreSocketObject::getPollableDescriptor() const {
     return priv->socket->getSocket();
 }
 
+void QoreSocketObject::withPollableDescriptor(const std::function<void(int)>& f) const {
+    // an HTTP client can exchange its socket for another one (see QoreHttpClientObject); the reference keeps the one
+    // read here valid until the descriptor is released
+    qore_socket_private* sp = qore_socket_private::get(*priv->socket);
+    sp->ref();
+    ON_BLOCK_EXIT_OBJ(*sp, &qore_socket_private::deref);
+    sp->withDescriptor(f);
+}
+
 #ifdef DARWIN
 void QoreSocketObject::setPollNotifyFd(int fd) {
     qore_socket_private::get(*priv->socket)->poll_notify_fd.store(fd, std::memory_order_release);

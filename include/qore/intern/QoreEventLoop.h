@@ -34,6 +34,7 @@
 
 #include <qore/Qore.h>
 
+#include <functional>
 #include <memory>
 #include <vector>
 #include <set>
@@ -236,7 +237,24 @@ public:
     DLLLOCAL int removeUserEvent(uintptr_t ident, ExceptionSink* xsink);
 #endif
 
+#ifdef DEBUG
+    //! Debug-only: sets a hook that add() and modify() call with the descriptor before they register it
+    /** Lets a test close the descriptor's socket from another thread at the point where the descriptor is about to
+        be registered with the system's event queue; see AsyncIoRegistrationCloseTest in the C++ unit tests.
+
+        @param hook the hook, or an empty function to remove it; the loop must only be used by the calling thread
+    */
+    DLLLOCAL void dbgSetBeforeRegister(std::function<void(int)> hook) {
+        dbg_before_register = std::move(hook);
+    }
+#endif
+
 private:
+#ifdef DEBUG
+    //! Debug-only: called with the descriptor before add() or modify() registers it; see dbgSetBeforeRegister()
+    std::function<void(int)> dbg_before_register;
+#endif
+
     //! Internal fd info
     struct FdInfo {
         int events;     //!< Registered events

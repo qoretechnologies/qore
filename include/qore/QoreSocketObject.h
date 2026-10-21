@@ -386,6 +386,16 @@ public:
     */
     DLLEXPORT int getPollableDescriptor() const override;
 
+    //! Calls a function with the socket's descriptor, which stays open until the function returns
+    /** A close() in another thread meanwhile closes the socket for its users at once and shuts the descriptor down,
+        and the descriptor is closed when @p f returns.
+
+        @see AbstractPollableIoObjectBase::withPollableDescriptor()
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT void withPollableDescriptor(const std::function<void(int)>& f) const override;
+
 #ifdef DARWIN
     //! Sets the write end of a notification pipe for kqueue poll on macOS
     /** @see AbstractPollableIoObjectBase::setPollNotifyFd()

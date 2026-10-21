@@ -35,6 +35,7 @@
 
 #include "qore/AbstractPrivateData.h"
 
+#include <functional>
 #include <string>
 
 class AbstractPollableIoObjectBase : public AbstractPrivateData {
@@ -43,6 +44,37 @@ public:
     DLLLOCAL AbstractPollableIoObjectBase();
 
     virtual int getPollableDescriptor() const = 0;
+
+    //! Calls a function with the pollable descriptor, which stays open until the function returns
+    /** The async I/O controller registers the descriptor with the event queue of its I/O thread (kqueue on macOS,
+        epoll on Linux), and changes the events it is registered for, only in such a call: the system must not
+        register a descriptor while another thread closes it.  On macOS a close() made while kevent() registers the
+        same descriptor can wait forever, so that not even SIGKILL ends the process; on every system, a descriptor
+        number used after its close can already belong to another connection.
+
+        An I/O object that another thread can close while an asynchronous operation uses it must keep the descriptor
+        open until @p f returns, and close it then if the object was closed meanwhile; Socket objects do.  The default
+        implementation calls @p f with getPollableDescriptor(), which is correct for an object that cannot be closed
+        while an asynchronous operation uses it, such as a File, whose close() fails during a non-blocking operation.
+
+        @param f the function to call; it is passed the descriptor, or -1 if the object has no open descriptor; it
+        must not block and must not release the object
+
+        @par Example:
+        @code{.cpp}
+// registers the descriptor of an I/O object with a kqueue; a close in another thread meanwhile does not release it
+io->withPollableDescriptor([&](int fd) {
+    if (fd >= 0) {
+        struct kevent change;
+        EV_SET(&change, fd, EVFILT_READ, EV_ADD, 0, 0, nullptr);
+        kevent(kq, &change, 1, nullptr, 0, nullptr);
+    }
+});
+        @endcode
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT virtual void withPollableDescriptor(const std::function<void(int)>& f) const;
 
     //! Closes the I/O object, releasing the underlying file descriptor
     /** Called by the async I/O controller when it owns the object's lifecycle

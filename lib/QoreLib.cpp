@@ -3351,6 +3351,10 @@ AbstractPollableIoObjectBase::AbstractPollableIoObjectBase() {
     io_unique_hash = tmp.c_str();
 }
 
+void AbstractPollableIoObjectBase::withPollableDescriptor(const std::function<void(int)>& f) const {
+    f(getPollableDescriptor());
+}
+
 int qore_get_object_hash(QoreString& str, const void* ptr, uint64_t id) {
    assert(!random_salt.empty());
    QoreString tmp(random_salt);

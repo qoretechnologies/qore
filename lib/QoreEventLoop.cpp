@@ -111,6 +111,12 @@ int QoreEventLoop::add(int fd, int events, void* udata, ExceptionSink* xsink) {
     // Store in our map
     fd_map[fd] = {events, udata};
 
+#ifdef DEBUG
+    if (dbg_before_register) {
+        dbg_before_register(fd);
+    }
+#endif
+
 #ifdef DARWIN
     // kqueue: register events using kevent()
     // We may need up to 2 events (read + write)
@@ -186,6 +192,12 @@ int QoreEventLoop::modify(int fd, int events, ExceptionSink* xsink) {
 
     void* udata = it->second.udata;
     it->second.events = events;
+
+#ifdef DEBUG
+    if (dbg_before_register) {
+        dbg_before_register(fd);
+    }
+#endif
 
 #ifdef DARWIN
     // kqueue: need to remove old events and add new ones

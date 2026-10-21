@@ -114,6 +114,10 @@ public:
         return sock->sock;
     }
 
+    DLLLOCAL virtual void withPollableDescriptor(const std::function<void(int)>& f) const override {
+        sock->withDescriptor(f);
+    }
+
     DLLLOCAL virtual const std::string& getIoIdentityHash() const override {
         return identity_hash;
     }

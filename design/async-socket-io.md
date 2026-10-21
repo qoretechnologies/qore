@@ -505,6 +505,44 @@ another thread at the start of its next SSL I/O call; see
 `examples/test/qore/classes/Socket/ssl-close-during-io.qtest` and the `ut_socket_close_during_io_keeps_descriptor`
 unit test in `lib/ql_debug.cpp`.
 
+### A socket closed while the I/O thread registers its descriptor
+
+The I/O thread registers a socket's descriptor with its event queue (kqueue on macOS, epoll on Linux) when an
+operation on the socket starts waiting for I/O, and changes the registration when the events it waits for change.
+The `abort()` of a poll operation closes the socket on the thread that calls it, for example in the destructor of an
+`HttpRequestPollOperation`, so a close can run at the same time as the registration.
+
+On macOS that race can hang the process for good.  `kevent()` takes a reference to the descriptor before it attaches
+the registration (a knote) and gives it to the knote; `close()` first removes the descriptor's knotes and then waits
+for the other references to be released (`fileproc_drain()`, wait channel `fpdrain`, uninterruptible, no timeout).
+A knote attached between those two steps keeps its reference until it is deleted or its kqueue is closed: the
+close waits forever, the process ignores `SIGKILL`, and it stays a zombie in `close()` until the machine restarts.
+In the hang that was seen, the I/O thread that would have deleted the registration also waited for the socket's lock,
+which the closing `abort()` held.  This is how `HttpAsyncRequestTest.qtest` hung (kernel stack `close` -> `fileproc_drain` -> `msleep`
+-> `lck_mtx_sleep`; XNU `bsd/kern/kern_event.c` `kevent_register()` / `kq_add_knote()`, `bsd/kern/kern_descrip.c`
+`fp_close_and_unlock()` / `fileproc_drain()`).  Linux's `close()` does not wait for epoll, so it does not hang, but a
+descriptor number registered after its close can belong to another connection there as well.
+
+Every registration of an object's descriptor, and every change of the events it is registered for, is therefore made
+in `AbstractPollableIoObjectBase::withPollableDescriptor()`, which passes the descriptor to a function and keeps it
+open until the function returns.  Removing a registration (`EV_DELETE`, `EPOLL_CTL_DEL`) takes no reference to the
+descriptor, so it cannot hang a close; `releaseFdIfOwner()` keeps it from removing the registration of another
+connection that got the number.  Socket objects and the controller's socket wrappers implement
+`withPollableDescriptor()` with
+`qore_socket_private::withDescriptor()`, an `IoUseHelper` without the TLS connection: a close made meanwhile closes
+the socket for its users and shuts the descriptor down, and the descriptor is closed when the registration is done,
+so the knote is attached before the close removes it.  The descriptor that a registration names is read in the
+call, so a registered descriptor that is no longer the object's (closed, or replaced by a reconnection) is
+released from the event loop instead of being modified, and the registration of an object that has been deleted is
+left as it is until its last operation is unregistered.  File objects use the default implementation, which calls
+the function with `getPollableDescriptor()`: `File::close()` fails while a non-blocking operation runs.  The extra
+descriptors of an operation (`extra_fds`) belong to the operation and are registered by number.
+
+`AsyncIoRegistrationCloseTest` in the C++ unit tests closes the socket from another thread at the point where the
+event loop is about to register its descriptor (the debug hook `QoreEventLoop::dbgSetBeforeRegister()`), for the
+first registration and for a change of the registered events, and checks that the descriptor is still the
+socket's when it is registered and is closed afterwards.
+
 ### Periodic work owned by a Qore object
 
 `AsyncIoController::addTimer(date deadline, auto user_data, string owner)` is the correct mechanism

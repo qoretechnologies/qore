@@ -1195,7 +1195,8 @@ struct qore_socket_private : public QoreReferenceCounter {
     */
     class IoUseHelper {
     public:
-        DLLLOCAL IoUseHelper(qore_socket_private& priv);
+        //! Takes the descriptor and, with @p use_ssl, the TLS connection of the socket for an I/O call
+        DLLLOCAL IoUseHelper(qore_socket_private& priv, bool use_ssl = true);
 
         DLLLOCAL ~IoUseHelper();
 
@@ -1217,6 +1218,19 @@ struct qore_socket_private : public QoreReferenceCounter {
         std::shared_ptr<SharedDescriptor> fd;
         SslRef ssl;
     };
+
+    //! Calls @p f with the socket's descriptor, which stays open until @p f returns
+    /** For a system call that names the descriptor without reading or writing the connection, such as the
+        registration of the descriptor with the event queue of an async I/O thread: a close in another thread while
+        @p f runs closes the socket for its users at once and shuts the descriptor down, and the descriptor is closed
+        when @p f returns (see @ref SharedDescriptor).
+
+        @param f the function to call with the descriptor, or @ref QORE_INVALID_SOCKET if the socket is closed; it
+        must not block
+
+        @see AbstractPollableIoObjectBase::withPollableDescriptor()
+    */
+    DLLLOCAL void withDescriptor(const std::function<void(int)>& f);
 
     //! Holds @ref close_m for the scope of the object
     class CloseLockHelper {

@@ -688,6 +688,10 @@ public:
         return priv->sock;
     }
 
+    DLLLOCAL virtual void withPollableDescriptor(const std::function<void(int)>& f) const override {
+        priv->withDescriptor(f);
+    }
+
     DLLLOCAL virtual const std::string& getIoIdentityHash() const override {
         return identity_hash;
     }
@@ -5666,7 +5670,7 @@ qore_socket_private::SslRef qore_socket_private::getSsl() {
     return SslRef(s);
 }
 
-qore_socket_private::IoUseHelper::IoUseHelper(qore_socket_private& priv) : priv(priv) {
+qore_socket_private::IoUseHelper::IoUseHelper(qore_socket_private& priv, bool use_ssl) : priv(priv) {
     CloseLockHelper cl(priv);
     if (priv.sock != QORE_INVALID_SOCKET) {
         if (!priv.shared_fd || priv.shared_fd->fd != priv.sock) {
@@ -5674,9 +5678,11 @@ qore_socket_private::IoUseHelper::IoUseHelper(qore_socket_private& priv) : priv(
         }
         fd = priv.shared_fd;
     }
-    if (SSLSocketHelper* s = priv.ssl.load(std::memory_order_relaxed)) {
-        s->ref();
-        ssl.assign(s);
+    if (use_ssl) {
+        if (SSLSocketHelper* s = priv.ssl.load(std::memory_order_relaxed)) {
+            s->ref();
+            ssl.assign(s);
+        }
     }
 }
 
@@ -5687,6 +5693,11 @@ qore_socket_private::IoUseHelper::~IoUseHelper() {
         CloseLockHelper cl(priv);
         fd.reset();
     }
+}
+
+void qore_socket_private::withDescriptor(const std::function<void(int)>& f) {
+    IoUseHelper use(*this, false);
+    f(use.getDescriptor());
 }
 
 SSLSocketHelperHelper::SSLSocketHelperHelper(qore_socket_private* sock, bool set_thread_context) : s(sock),

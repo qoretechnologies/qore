@@ -83,6 +83,7 @@
 #include <fcntl.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
+#include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
 
@@ -2917,6 +2918,119 @@ public:
             }
             th.join();
         }
+    }
+};
+
+//! A socket closed by another thread while the I/O thread registers its descriptor with its event queue
+/** The I/O thread registers a socket's descriptor with the system's event queue of the thread (kqueue on macOS,
+    epoll on Linux) when an operation on the socket waits for I/O, and changes the registration when the events it
+    waits for change.  The \c abort() of a poll operation closes the socket on the thread that calls it, for example
+    in the destructor of an HTTP request poll operation, so the close can run at the same time.
+
+    On macOS a close() that runs while kevent() registers the same descriptor can leave the registration in place
+    after close() has removed the descriptor's registrations, and close() then waits for it forever, in the kernel,
+    so not even SIGKILL ends the process (HttpAsyncRequestTest hung like this in close(), called from a poll
+    operation's \c abort(), while an I/O thread waited for the socket's lock to process the descriptor's event).  On
+    every system, a number registered after its close can already belong to another connection.  The registration
+    must keep the descriptor open: a close in another thread shuts it down, and it is closed when the registration
+    has finished.
+
+    The event loop's debug hook runs where the loop is about to register the descriptor with the system: it closes
+    the socket from another thread and checks that the descriptor being registered is still the socket's.  Both the
+    first registration of the socket and a change of the events it is registered for are checked.
+*/
+class AsyncIoRegistrationCloseTest {
+public:
+    static void run(UnitTestCounters& c) {
+        runCase(c, false);
+        runCase(c, true);
+    }
+
+private:
+    //! Registers a listening socket's descriptor; with \a change, changes the events it is registered for
+    static void runCase(UnitTestCounters& c, bool change) {
+        const char* what = change ? "a change of the registered events" : "the first registration";
+        ExceptionSink xsink;
+        ReferenceHolder<AsyncIoControllerPriv> ctrl(new AsyncIoControllerPriv(false, &xsink), &xsink);
+        UT_ASSERT(c, !xsink, "registration-close controller construction succeeds");
+        if (xsink) {
+            xsink.clear();
+            return;
+        }
+        // an I/O thread context that the test drives itself, on this thread
+        std::unique_ptr<AsyncIoControllerPriv::IoThreadContext> tp(new AsyncIoControllerPriv::IoThreadContext);
+        AsyncIoControllerPriv::IoThreadContext& t = *tp;
+        t.loop = new QoreEventLoop(&xsink);
+        UT_ASSERT(c, !xsink && t.loop->isValid(), "registration-close event loop construction succeeds");
+        if (xsink) {
+            xsink.clear();
+            return;
+        }
+
+        QoreSocketObject* sock = new QoreSocketObject;
+        ReferenceHolder<QoreObject> sock_obj(new QoreObject(QC_SOCKET, getProgram(), sock), &xsink);
+        int rc = sock->bindINET("127.0.0.1", "0", true, AF_INET, SOCK_STREAM, 0, &xsink);
+        UT_ASSERT(c, !rc && !xsink, "registration-close listener binds");
+        if (rc || xsink) {
+            xsink.clear();
+            return;
+        }
+        rc = sock->listen(5);
+        UT_ASSERT_EQ(c, 0, rc, "registration-close listener listens");
+        if (rc) {
+            return;
+        }
+
+        const int fd = sock->getSocket();
+        struct stat orig;
+        if (fstat(fd, &orig)) {
+            UT_ASSERT(c, false, "fstat() of the listener's descriptor succeeds");
+            return;
+        }
+        // true if the descriptor number refers to the socket's own connection
+        auto is_socket_descriptor = [&]() -> bool {
+            struct stat st;
+            return !fstat(fd, &st) && st.st_dev == orig.st_dev && st.st_ino == orig.st_ino;
+        };
+
+        const uint64_t op_id = 1;
+        const std::string sock_hash = AsyncIoControllerPriv::getSocketHash(sock);
+        if (change) {
+            ctrl->updateEventLoopRegistration(t, op_id, *sock_obj, sock_hash, SOCK_POLLIN, false, &xsink);
+            UT_ASSERT(c, !xsink, "the listener's descriptor is registered for reading");
+            xsink.clear();
+        }
+
+        bool hooked = false;
+        bool closed = false;
+        bool registered_open = false;
+        t.loop->dbgSetBeforeRegister([&](int rfd) {
+            if (rfd != fd || hooked) {
+                return;
+            }
+            hooked = true;
+            // another thread closes the socket now, as the abort() of a poll operation does
+            std::thread closer([&]() {
+                closed = !sock->close();
+            });
+            closer.join();
+            registered_open = is_socket_descriptor();
+        });
+        ctrl->updateEventLoopRegistration(t, op_id, *sock_obj, sock_hash, change ? (SOCK_POLLIN | SOCK_POLLOUT)
+            : SOCK_POLLIN, false, &xsink);
+        t.loop->dbgSetBeforeRegister(nullptr);
+
+        UT_ASSERT(c, hooked, what);
+        UT_ASSERT(c, closed, "the socket is closed while its descriptor is registered");
+        UT_ASSERT(c, !sock->isOpen(), "the socket is closed for its users at once");
+        UT_ASSERT(c, registered_open, "the descriptor stays open while it is registered");
+        UT_ASSERT(c, !xsink, "the registration succeeds");
+        xsink.clear();
+        UT_ASSERT(c, !is_socket_descriptor(), "the descriptor is closed once it is registered");
+
+        ctrl->unregisterFromEventLoop(t, op_id, &xsink);
+        UT_ASSERT(c, !xsink, "the operation is unregistered");
+        xsink.clear();
     }
 };
 
@@ -7820,6 +7934,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     AsyncIoCloseTest::resize(c);
     AsyncIoCloseTest::run(c);
     AsyncIoAbandonedSubmitTest::run(c);
+    AsyncIoRegistrationCloseTest::run(c);
     AsyncIoStoppingThreadTest::run(c);
     AsyncIoFrameSendTest::run(c);
     ut_cond_wait_cancel_in_window(c);

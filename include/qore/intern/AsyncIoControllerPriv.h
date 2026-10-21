@@ -547,6 +547,7 @@ class AsyncIoControllerPriv : public AbstractPrivateData {
     friend class AsyncIoCloseTest;
     friend class AsyncIoOpCacheTest;
     friend class AsyncIoAbandonedSubmitTest;
+    friend class AsyncIoRegistrationCloseTest;
     friend class AsyncIoStoppingThreadTest;
     friend class AsyncIoFrameSendTest;
 #endif
