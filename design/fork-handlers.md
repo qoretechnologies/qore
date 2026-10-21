@@ -85,6 +85,19 @@ which the stripes alone would reach, so TSan builds only initialize them again i
   Program's thread initialization code ran (`QoreThreadList::activate()`); that code now runs after the lock is
   released.
 
+## One-time initialization
+
+A function-local static is initialized under a guard of the C++ runtime (and `std::call_once()` under its once
+flag). A child created with `fork()` while another thread was initializing it waits for the guard forever on musl
+and macOS, and with libstdc++'s static guards also on glibc. The fork handlers make the window wide for every static
+that reads the environment: the environment lock is held exclusively while the process is copied, so a thread that
+starts such an initialization then blocks inside the guard.
+
+- Settings read from the environment are `constinit` objects without a guard: `QoreEnvFlag` (whether a variable is
+  set) and `QoreLazyValue<T>` (a value computed from the environment), both in `QoreLibIntern.h`. Threads that read
+  one for the first time at the same time can all compute it; they all return the value that the first of them
+  stored. `constinit` makes the compiler reject one that would need a guard.
+
 ## What the child repairs
 
 Besides the locks:

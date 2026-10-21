@@ -6720,11 +6720,12 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
                 // Body locals are still instantiated, so AST can re-execute.
                 if (!*xsink && qore_jit_deopt_requested()) {
                     printd(2, "evalTiered JIT-DEOPT: '%s' — falling back to AST\n", name);
-                    static bool debug_deopt = [] {
+                    static constinit QoreLazyValue<bool> debug_deopt_setting([]() -> bool {
                         QoreEnvironmentValue debug_env_holder("QORE_IR_DEBUG");
                         const char* debug_env = debug_env_holder.c_str();
                         return debug_env && strstr(debug_env, "deopt");
-                    }();
+                    });
+                    const bool debug_deopt = debug_deopt_setting.get();
                     if (debug_deopt) {
                         fprintf(stderr, "[DEOPT-JIT->AST] Function '%s' deopting from JIT to AST\n",
                                 name ? name : "<unknown>");

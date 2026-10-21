@@ -840,7 +840,8 @@ static bool qoreAotHandleWarnings(ExceptionSink& wsink, std::string& error,
 }
 
 static bool aotEmitDebugInfo() {
-    static const bool strip = q_env_is_set("QORE_AOT_NO_DEBUG_INFO");
+    static constinit QoreEnvFlag strip_env("QORE_AOT_NO_DEBUG_INFO");
+    const bool strip = strip_env.get();
     return !strip;
 }
 
@@ -938,7 +939,8 @@ static bool isAOTImplicitSelfFastEntryEligible(const QoreIRFunction* ir_func,
         const UserVariantBase* uvb, const QoreClass* qc, const QoreMethod* method,
         const AbstractQoreFunctionVariant* variant, bool allow_overridable = false,
         bool allow_type_parameters = false) {
-    static const bool enabled = !q_env_is_set("QORE_DISABLE_AOT_SELF_FAST_ENTRY");
+    static constinit QoreEnvFlag enabled_env("QORE_DISABLE_AOT_SELF_FAST_ENTRY");
+    const bool enabled = !enabled_env.get();
     if (!enabled || !qc
             || (!allow_overridable && !isAOTNonOverridableMethodTarget(qc, variant))
             || !method || method->isStatic()
@@ -3088,11 +3090,12 @@ static bool outlineInitExpression(QoreIRFunction* outer,
     // `DataProviderExpressions.qc` (93-operand public const).  Set
     // `QORE_AOT_OUTLINE_INIT=0` to disable if a regression is
     // suspected — useful as an experimental toggle.
-    static const bool enable = []() {
+    static constinit QoreLazyValue<bool> enable_setting([]() -> bool {
         QoreEnvironmentValue s_holder("QORE_AOT_OUTLINE_INIT");
         const char* s = s_holder.c_str();
         return !s || !*s || strcmp(s, "0") != 0;
-    }();
+    });
+    const bool enable = enable_setting.get();
     if (!enable) {
         return true;
     }
@@ -3332,7 +3335,7 @@ struct AOTFnOutlineTunables {
 };
 
 static const AOTFnOutlineTunables& aotFnOutlineTunables() {
-    static const AOTFnOutlineTunables tunables = []() {
+    static constinit QoreLazyValue<AOTFnOutlineTunables> tunables_setting([]() -> AOTFnOutlineTunables {
         AOTFnOutlineTunables t;
         // Opt-out gate: set QORE_AOT_OUTLINE_FN=0 to disable the pass.
         QoreEnvironmentValue s_holder("QORE_AOT_OUTLINE_FN");
@@ -3353,7 +3356,8 @@ static const AOTFnOutlineTunables& aotFnOutlineTunables() {
         t.min_fn_blocks = env_size("QORE_AOT_OUTLINE_FN_MIN_BLOCKS", 500);
         t.target_region_insts = env_size("QORE_AOT_OUTLINE_FN_TARGET_INSTS", 1500);
         return t;
-    }();
+    });
+    const AOTFnOutlineTunables& tunables = tunables_setting.get();
     return tunables;
 }
 
@@ -15269,8 +15273,9 @@ static bool resolveAOTBatchGenericSpecializations(QoreProgram* pgm,
         AOTFunctionOutliner outline_probe;
         bool will_outline = outline_probe.run(ir.get(), false);
         outline_probe.undo();
-        static const bool speculative_object_fast_entry =
-            !q_env_is_set("QORE_DISABLE_AOT_SPECULATIVE_OBJECT_METHOD_FAST_ENTRY");
+        static constinit QoreEnvFlag speculative_object_fast_entry_env(
+            "QORE_DISABLE_AOT_SPECULATIVE_OBJECT_METHOD_FAST_ENTRY");
+        const bool speculative_object_fast_entry = !speculative_object_fast_entry_env.get();
         bool implicit_self = instance_method
             && isAOTImplicitSelfFastEntryEligible(ir.get(), uvb,
                 method->getClass(), method, variant,
@@ -15614,8 +15619,9 @@ static bool declareAOTBatchFastEntries(qore_ns_private* ns, QoreProgram* pgm,
                 AOTFunctionOutliner outline_probe;
                 bool will_outline = outline_probe.run(ir_func, false);
                 outline_probe.undo();
-                static const bool speculative_object_fast_entry =
-                    !q_env_is_set("QORE_DISABLE_AOT_SPECULATIVE_OBJECT_METHOD_FAST_ENTRY");
+                static constinit QoreEnvFlag speculative_object_fast_entry_env(
+                    "QORE_DISABLE_AOT_SPECULATIVE_OBJECT_METHOD_FAST_ENTRY");
+                const bool speculative_object_fast_entry = !speculative_object_fast_entry_env.get();
                 bool implicit_self = isAOTImplicitSelfFastEntryEligible(
                     ir_func, uvb, qc, meth, variant, speculative_object_fast_entry);
                 if (!will_outline && fast_method_eligible
@@ -20584,8 +20590,9 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                     std::string fast_entry_name;
                     std::vector<BatchCalleeParamKind> fast_entry_param_kinds;
                     std::vector<uint8_t> fast_entry_param_rejects_nothing;
-                    static const bool speculative_object_fast_entry =
-                        !q_env_is_set("QORE_DISABLE_AOT_SPECULATIVE_OBJECT_METHOD_FAST_ENTRY");
+                    static constinit QoreEnvFlag speculative_object_fast_entry_env(
+                        "QORE_DISABLE_AOT_SPECULATIVE_OBJECT_METHOD_FAST_ENTRY");
+                    const bool speculative_object_fast_entry = !speculative_object_fast_entry_env.get();
                     bool implicit_self_fast_entry = !metadata_only && !fn_outliner.active()
                         && isAOTImplicitSelfFastEntryEligible(ir_func, uvb, qc, meth,
                             variant, speculative_object_fast_entry);

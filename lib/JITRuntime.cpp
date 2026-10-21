@@ -3006,8 +3006,8 @@ static bool qore_rt_apply_complex_hash_value_type(const QoreHashNode* h, const c
     }
     const QoreTypeInfo* vti = h->getValueTypeInfo();
     qore_type_t result_type = result.getType();
-    static const bool exact_scalar_enabled =
-        !q_env_is_set("QORE_DISABLE_FAST_HASH_SCALAR_ACCEPTANCE");
+    static constinit QoreEnvFlag exact_scalar_enabled_env("QORE_DISABLE_FAST_HASH_SCALAR_ACCEPTANCE");
+    const bool exact_scalar_enabled = !exact_scalar_enabled_env.get();
     bool exact_scalar_type = exact_scalar_enabled
         && ((vti == bigIntTypeInfo && result_type == NT_INT)
             || (vti == floatTypeInfo && result_type == NT_FLOAT)
@@ -3558,7 +3558,8 @@ static const TypedHashDecl* qore_rt_resolve_hashdecl_path_cached(QoreAOTContext*
     hash ^= reinterpret_cast<uintptr_t>(receiver_type_info) >> 4;
     hash ^= ctx->hashdecl_cache_generation;
     HashDeclFrontCacheEntry& front_entry = front_cache[hash & (HASHDECL_FRONT_CACHE_SIZE - 1)];
-    static const bool disable_front_cache = q_env_is_set("QORE_DISABLE_AOT_HASHDECL_FRONT_CACHE");
+    static constinit QoreEnvFlag disable_front_cache_env("QORE_DISABLE_AOT_HASHDECL_FRONT_CACHE");
+    const bool disable_front_cache = disable_front_cache_env.get();
     if (!disable_front_cache
             && front_entry.generation == ctx->hashdecl_cache_generation
             && front_entry.path_address == hd_path
@@ -3855,8 +3856,8 @@ static const QoreTypeInfo* qore_rt_resolve_full_type_path(const char* type_path,
 
 static const QoreTypeInfo* qore_rt_resolve_full_type_path_cached(QoreAOTContext* ctx,
         const char* type_path, const char* op, ExceptionSink* xsink) {
-    static const bool cache_enabled =
-        !q_env_is_set("QORE_DISABLE_AOT_FULL_TYPE_PATH_CACHE");
+    static constinit QoreEnvFlag cache_enabled_env("QORE_DISABLE_AOT_FULL_TYPE_PATH_CACHE");
+    const bool cache_enabled = !cache_enabled_env.get();
     // the type of a signature type parameter depends on the instantiation of the current call, so it is not cached
     if (!cache_enabled || !ctx || !type_path || !*type_path || qore_aot_type_path_has_signature_type_param(type_path)) {
         return qore_rt_resolve_full_type_path(type_path, op, xsink);
@@ -4633,8 +4634,8 @@ static uint64_t qore_rt_make_hash_const_keys_impl(const char** keys, uint64_t* v
 static uint64_t qore_rt_make_hash_const_keys_2_unique_impl(
         const char* key0, uint64_t val0_bits, const char* key1, uint64_t val1_bits,
         ExceptionSink* xsink, bool infer_value_type) {
-    static const bool enabled =
-        !q_env_is_set("QORE_DISABLE_AOT_FIXED_HASH_2_BUILD");
+    static constinit QoreEnvFlag enabled_env("QORE_DISABLE_AOT_FIXED_HASH_2_BUILD");
+    const bool enabled = !enabled_env.get();
     if (!enabled) {
         const char* keys[] = {key0, key1};
         uint64_t values[] = {val0_bits, val1_bits};
@@ -6652,8 +6653,8 @@ static bool closureDirectArgsNeedNoBinding(const UserVariantBase* uvb,
 static bool tryExecClosureNativeLeaf(const AbstractQoreNode* node,
         const UserVariantBase* uvb, uint64_t* args, int nargs,
         uint64_t** arg_cleanups, uint64_t& result_bits) {
-    static const bool disabled =
-        q_env_is_set("QORE_DISABLE_IR_NATIVE_CLOSURE_LEAF_INLINE");
+    static constinit QoreEnvFlag disabled_env("QORE_DISABLE_IR_NATIVE_CLOSURE_LEAF_INLINE");
+    const bool disabled = disabled_env.get();
     if (disabled || !uvb || arg_cleanups
             || uvb->hasLazyAOTClosureIR()
             || !uvb->isStaticallyFastCallEligible()) {
@@ -6884,7 +6885,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_closure_fast_consume_args(uint64_t re
 }
 
 static qore_list_private* qore_rt_prepare_map_result(QoreListNode& result, size_t size) {
-    static const bool enabled = !q_env_is_set("QORE_DISABLE_IR_MAP_RESULT_FAST_APPEND");
+    static constinit QoreEnvFlag enabled_env("QORE_DISABLE_IR_MAP_RESULT_FAST_APPEND");
+    const bool enabled = !enabled_env.get();
     if (!enabled) {
         return nullptr;
     }
@@ -7277,8 +7279,8 @@ static uint64_t qore_rt_map_hash_key_offset_any_impl(uint64_t list_val,
     ReferenceHolder<QoreListNode> result(new QoreListNode(autoTypeInfo), xsink);
     size_t size = list->size();
     qore_list_private* result_priv = qore_rt_prepare_map_result(**result, size);
-    static const bool scalar_fast_path =
-        !q_env_is_set("QORE_DISABLE_IR_MAP_HASH_OFFSET_ANY_SCALAR_FAST_PATH");
+    static constinit QoreEnvFlag scalar_fast_path_env("QORE_DISABLE_IR_MAP_HASH_OFFSET_ANY_SCALAR_FAST_PATH");
+    const bool scalar_fast_path = !scalar_fast_path_env.get();
     for (size_t i = 0; i < size; ++i) {
         if (i && !(i % 100) && qore_check_cancel(xsink, "map hash-key offset")) {
             return toBits(QoreValue());
@@ -7389,8 +7391,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_hash_map_two_keys_prehashed(uint64_t list_
         const char* key1, uint64_t key1_hash64, uint32_t key1_hash32,
         const char* key2, uint64_t key2_hash64, uint32_t key2_hash32,
         ExceptionSink* xsink) {
-    static const bool enabled =
-        !q_env_is_set("QORE_DISABLE_AOT_HASH_MAP_TWO_KEYS_FAST_BUILD");
+    static constinit QoreEnvFlag enabled_env("QORE_DISABLE_AOT_HASH_MAP_TWO_KEYS_FAST_BUILD");
+    const bool enabled = !enabled_env.get();
     if (!enabled) {
         return qore_rt_hash_map_two_keys(list_val, key1, key2, xsink);
     }
@@ -11781,11 +11783,23 @@ static Var* qore_rt_resolve_global_slot_aot(QoreAOTContext* ctx, int32_t idx, Ex
     assert(ctx && idx >= 0 && idx < ctx->num_globals);
     // resolved once per process: this runs on every resolved AOT global slot access, and getenv()
     // is a linear scan of the environment
-    static const QoreEnvironmentValue trace_env_holder("QORE_AOT_TRACE_GLOBAL_SLOT");
-    static const char* const trace_env = trace_env_holder.c_str();
-    static const std::string trace_pattern = trace_env ? trace_env : std::string();
-    auto trace_slot = [ctx, idx]() -> bool {
-        if (!trace_env) {
+    struct GlobalSlotTrace {
+        bool enabled = false;
+        std::string pattern;
+    };
+    static constinit QoreLazyValue<GlobalSlotTrace> trace_setting([]() -> GlobalSlotTrace {
+        QoreEnvironmentValue env("QORE_AOT_TRACE_GLOBAL_SLOT");
+        GlobalSlotTrace rv;
+        if (env) {
+            rv.enabled = true;
+            rv.pattern = env.str();
+        }
+        return rv;
+    });
+    const GlobalSlotTrace& trace = trace_setting.get();
+    const std::string& trace_pattern = trace.pattern;
+    auto trace_slot = [ctx, idx, &trace, &trace_pattern]() -> bool {
+        if (!trace.enabled) {
             return false;
         }
         if (trace_pattern.empty()) {
@@ -11856,8 +11870,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_load_global_aot(QoreAOTContext* ctx, int32
     Var* var = qore_rt_resolve_global_slot_aot(ctx, idx, xsink);
     uint64_t rv = qore_rt_load_global(var, xsink);
     // resolved once per process: this runs on every AOT global variable read
-    static const QoreEnvironmentValue trace_holder("QORE_AOT_TRACE_GLOBAL_SLOT");
-    static const char* const trace = trace_holder.c_str();
+    static constinit QoreLazyValue<QoreEnvironmentValue> trace_setting([]() -> QoreEnvironmentValue {
+        return QoreEnvironmentValue("QORE_AOT_TRACE_GLOBAL_SLOT");
+    });
+    const char* const trace = trace_setting.get().c_str();
     if (trace) {
         const char* name = (ctx && static_cast<size_t>(idx) < ctx->global_names.size())
             ? ctx->global_names[idx].c_str() : "";
@@ -11903,8 +11919,8 @@ extern "C" DLLEXPORT void qore_rt_store_thread_local_eval_weak_aot(QoreAOTContex
 
 extern "C" DLLEXPORT uint64_t qore_rt_load_closure_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink) {
     assert(ctx && idx >= 0 && idx < ctx->num_locals);
-    static const bool disable_direct_load =
-        q_env_is_set("QORE_DISABLE_AOT_DIRECT_CLOSURE_LOAD");
+    static constinit QoreEnvFlag disable_direct_load_env("QORE_DISABLE_AOT_DIRECT_CLOSURE_LOAD");
+    const bool disable_direct_load = disable_direct_load_env.get();
     if (!disable_direct_load) {
         if (ClosureVarValue* cvv = thread_resolve_runtime_closure_var(ctx->locals[idx])) {
             bool needs_deref = true;
@@ -11917,8 +11933,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_load_closure_aot(QoreAOTContext* ctx, int3
 
 extern "C" DLLEXPORT void qore_rt_store_closure_aot(QoreAOTContext* ctx, int32_t idx, uint64_t val, ExceptionSink* xsink) {
     assert(ctx && idx >= 0 && idx < ctx->num_locals);
-    static const bool disable_direct_store =
-        q_env_is_set("QORE_DISABLE_AOT_DIRECT_CLOSURE_STORE");
+    static constinit QoreEnvFlag disable_direct_store_env("QORE_DISABLE_AOT_DIRECT_CLOSURE_STORE");
+    const bool disable_direct_store = disable_direct_store_env.get();
     if (!disable_direct_store) {
         if (ClosureVarValue* cvv = thread_resolve_runtime_closure_var(ctx->locals[idx])) {
             qore_rt_assign_closure_impl(cvv, val, xsink, false);
@@ -11943,8 +11959,8 @@ extern "C" DLLEXPORT int64_t qore_rt_increment_closure_int_aot(
 extern "C" DLLEXPORT void qore_rt_store_closure_eval_weak_aot(QoreAOTContext* ctx, int32_t idx,
         uint64_t val, ExceptionSink* xsink) {
     assert(ctx && idx >= 0 && idx < ctx->num_locals);
-    static const bool disable_direct_store =
-        q_env_is_set("QORE_DISABLE_AOT_DIRECT_CLOSURE_STORE");
+    static constinit QoreEnvFlag disable_direct_store_env("QORE_DISABLE_AOT_DIRECT_CLOSURE_STORE");
+    const bool disable_direct_store = disable_direct_store_env.get();
     if (!disable_direct_store) {
         if (ClosureVarValue* cvv = thread_resolve_runtime_closure_var(ctx->locals[idx])) {
             qore_rt_assign_closure_impl(cvv, val, xsink, true);
@@ -12285,18 +12301,24 @@ static uint64_t qore_rt_call_static_method_direct_impl(const QoreMethod* method,
         const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr);
 
 static bool qore_rt_aot_disable_prelinked_calls() {
-    static const bool enabled = qore_rt_aot_env_enabled("QORE_AOT_DISABLE_PRELINKED_CALLS");
-    return enabled;
+    static constinit QoreLazyValue<bool> enabled_setting([]() -> bool {
+        return qore_rt_aot_env_enabled("QORE_AOT_DISABLE_PRELINKED_CALLS");
+    });
+    return enabled_setting.get();
 }
 
 static bool qore_rt_aot_trace_link_relocs() {
-    static const bool enabled = qore_rt_aot_env_enabled("QORE_AOT_TRACE_LINK_RELOCS");
-    return enabled;
+    static constinit QoreLazyValue<bool> enabled_setting([]() -> bool {
+        return qore_rt_aot_env_enabled("QORE_AOT_TRACE_LINK_RELOCS");
+    });
+    return enabled_setting.get();
 }
 
 static bool qore_rt_aot_strict_prelink() {
-    static const bool enabled = qore_rt_aot_env_enabled("QORE_AOT_STRICT_PRELINK");
-    return enabled;
+    static constinit QoreLazyValue<bool> enabled_setting([]() -> bool {
+        return qore_rt_aot_env_enabled("QORE_AOT_STRICT_PRELINK");
+    });
+    return enabled_setting.get();
 }
 
 static void qore_rt_trace_aot_prelink(QoreAOTContext* ctx, int32_t slot,
@@ -15673,7 +15695,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_ref_foreach_get_entry(uint64_t state_ptr, 
         entry = state->tlist.refSelf();
     }
     // resolved once per process: this runs on every reference-foreach iteration
-    static const bool trace_ref_foreach = q_env_is_set("QORE_AOT_TRACE_REF_FOREACH");
+    static constinit QoreEnvFlag trace_ref_foreach_env("QORE_AOT_TRACE_REF_FOREACH");
+    const bool trace_ref_foreach = trace_ref_foreach_env.get();
     if (trace_ref_foreach) {
         fprintf(stderr, "[ref-foreach] get_entry state=%p l_tlist=%p index=%ld "
             "entry_type=%d\n",
@@ -16873,8 +16896,8 @@ static bool qore_rt_build_aot_dispatch_key(QoreObject* object,
 
 static QoreAOTMethodDispatchCache* qore_rt_get_aot_method_dispatch_cache(
         QoreAOTCallTarget& target) {
-    static const bool enabled =
-        !q_env_is_set("QORE_DISABLE_AOT_POLYMORPHIC_DISPATCH_CACHE");
+    static constinit QoreEnvFlag enabled_env("QORE_DISABLE_AOT_POLYMORPHIC_DISPATCH_CACHE");
+    const bool enabled = !enabled_env.get();
     if (!enabled) {
         return nullptr;
     }
@@ -17033,8 +17056,8 @@ static uint64_t qore_rt_dispatch_aot_object_method_by_name(
                     dispatch_epoch, arg_types, arg_states, nargs);
             if (entry) {
                 uint64_t result;
-                static const bool use_fast_entry = !q_env_is_set(
-                    "QORE_DISABLE_AOT_POLYMORPHIC_DISPATCH_FAST_ENTRY");
+                static constinit QoreEnvFlag use_fast_entry_env("QORE_DISABLE_AOT_POLYMORPHIC_DISPATCH_FAST_ENTRY");
+                const bool use_fast_entry = !use_fast_entry_env.get();
                 if (use_fast_entry && !entry->method->isStatic()
                         && try_dispatch_method_fast(object, entry->method,
                             object->getClass(), entry->variant, args,
@@ -17177,8 +17200,8 @@ static const QoreAOTObjectMemberDescriptor*
 qore_rt_get_aot_object_member_descriptor(
         QoreAOTCallTarget& target, const char* member_name,
         const qore_class_private* class_ctx) {
-    static const bool cache_member_info = !q_env_is_set(
-        "QORE_DISABLE_AOT_OBJECT_MEMBER_METADATA_CACHE");
+    static constinit QoreEnvFlag cache_member_info_env("QORE_DISABLE_AOT_OBJECT_MEMBER_METADATA_CACHE");
+    const bool cache_member_info = !cache_member_info_env.get();
     if (!cache_member_info) {
         return nullptr;
     }
@@ -17216,8 +17239,8 @@ static QoreValue qore_rt_get_aot_object_member(
         return object->getReferencedMemberNoMethod(
             member_name, target_class, xsink);
     }
-    static const bool use_prehash = !q_env_is_set(
-        "QORE_DISABLE_AOT_OBJECT_MEMBER_PREHASH");
+    static constinit QoreEnvFlag use_prehash_env("QORE_DISABLE_AOT_OBJECT_MEMBER_PREHASH");
+    const bool use_prehash = !use_prehash_env.get();
     return use_prehash
         ? object_priv->getReferencedMemberNoMethodResolvedPrehashed(
             member_name, descriptor->key_hash,
@@ -17374,13 +17397,13 @@ extern "C" DLLEXPORT uint64_t qore_rt_object_member_set_get_aot(
         descriptor ? descriptor->info : nullptr;
     qore_object_private* object_priv = qore_object_private::get(*object);
 
-    static const bool single_lvalue =
-        !q_env_is_set("QORE_DISABLE_AOT_OBJECT_SET_GET_SINGLE_LVALUE");
+    static constinit QoreEnvFlag single_lvalue_env("QORE_DISABLE_AOT_OBJECT_SET_GET_SINGLE_LVALUE");
+    const bool single_lvalue = !single_lvalue_env.get();
     ValueHolder value(xsink);
     {
         LValueHelper helper(xsink);
-        static const bool use_lvalue_prehash = !q_env_is_set(
-            "QORE_DISABLE_AOT_OBJECT_MEMBER_LVALUE_PREHASH");
+        static constinit QoreEnvFlag use_lvalue_prehash_env("QORE_DISABLE_AOT_OBJECT_MEMBER_LVALUE_PREHASH");
+        const bool use_lvalue_prehash = !use_lvalue_prehash_env.get();
         int rc = member_info && use_lvalue_prehash
             ? object_priv->getLValueResolvedPrehashed(member_name,
                 descriptor->key_hash, *member_info, class_ctx, helper,
@@ -17452,8 +17475,8 @@ static T qore_rt_object_member_set_get_native_aot(QoreAOTContext* ctx,
                 qore_object_private::get(*object);
 
             QoreValue assigned_value = fromBits(args[value_param]);
-            static const bool use_direct_scalar = !q_env_is_set(
-                "QORE_DISABLE_AOT_OBJECT_MEMBER_DIRECT_SCALAR");
+            static constinit QoreEnvFlag use_direct_scalar_env("QORE_DISABLE_AOT_OBJECT_MEMBER_DIRECT_SCALAR");
+            const bool use_direct_scalar = !use_direct_scalar_env.get();
             if (member_info && use_direct_scalar) {
                 int rc = object_priv
                     ->tryAssignScalarMemberResolvedPrehashed(member_name,
@@ -17466,8 +17489,8 @@ static T qore_rt_object_member_set_get_native_aot(QoreAOTContext* ctx,
             }
 
             LValueHelper helper(xsink);
-            static const bool use_lvalue_prehash = !q_env_is_set(
-                "QORE_DISABLE_AOT_OBJECT_MEMBER_LVALUE_PREHASH");
+            static constinit QoreEnvFlag use_lvalue_prehash_env("QORE_DISABLE_AOT_OBJECT_MEMBER_LVALUE_PREHASH");
+            const bool use_lvalue_prehash = !use_lvalue_prehash_env.get();
             int rc = member_info && use_lvalue_prehash
                 ? object_priv->getLValueResolvedPrehashed(member_name,
                     descriptor->key_hash, *member_info, class_ctx, helper,
@@ -17574,8 +17597,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_object_member_compound_get_aot(
     ValueHolder value(xsink);
     {
         LValueHelper helper(xsink);
-        static const bool use_lvalue_prehash = !q_env_is_set(
-            "QORE_DISABLE_AOT_OBJECT_MEMBER_LVALUE_PREHASH");
+        static constinit QoreEnvFlag use_lvalue_prehash_env("QORE_DISABLE_AOT_OBJECT_MEMBER_LVALUE_PREHASH");
+        const bool use_lvalue_prehash = !use_lvalue_prehash_env.get();
         int rc = member_info && use_lvalue_prehash
             ? object_priv->getLValueResolvedPrehashed(member_name,
                 descriptor->key_hash, *member_info, class_ctx, helper,

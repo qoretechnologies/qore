@@ -5301,7 +5301,8 @@ static bool qore_ir_is_forwardable_scalar_load(const QoreIRFunction& func,
 static bool qore_ir_call_has_no_side_effects(const QoreIRInstruction& inst) {
     // this is reached once per instruction in several nested analysis loops, so the kill switch is
     // read once rather than on every query
-    static const bool disabled = q_env_is_set("QORE_DISABLE_IR_PURE_CALL_NO_INVALIDATE");
+    static constinit QoreEnvFlag disabled_env("QORE_DISABLE_IR_PURE_CALL_NO_INVALIDATE");
+    const bool disabled = disabled_env.get();
     if (disabled) {
         return false;
     }
@@ -5328,7 +5329,8 @@ static bool qore_ir_call_has_no_side_effects(const QoreIRInstruction& inst) {
     a loop-invariant motion moves, and no flag can exclude it.
 */
 static bool qore_ir_is_hoistable_total_call(const QoreIRInstruction& inst) {
-    static const bool disabled = q_env_is_set("QORE_DISABLE_IR_TOTAL_CALL_LICM");
+    static constinit QoreEnvFlag disabled_env("QORE_DISABLE_IR_TOTAL_CALL_LICM");
+    const bool disabled = disabled_env.get();
     if (disabled || inst.opcode != QoreIROpcode::CallDirect || !inst.result.isValid()
             || inst.exception_target) {
         return false;

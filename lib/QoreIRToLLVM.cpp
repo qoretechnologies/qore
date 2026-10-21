@@ -146,12 +146,14 @@ const BatchCalleeInfo* QoreIRToLLVM::getBatchCallee(
 }
 
 static bool qore_ir_use_prehashed_keys() {
-    static const bool enabled = !q_env_is_set("QORE_DISABLE_AOT_PREHASHED_KEYS");
+    static constinit QoreEnvFlag enabled_env("QORE_DISABLE_AOT_PREHASHED_KEYS");
+    const bool enabled = !enabled_env.get();
     return enabled;
 }
 
 static bool qore_ir_use_unique_hash_literal_insert() {
-    static const bool enabled = !q_env_is_set("QORE_DISABLE_IR_UNIQUE_HASH_LITERAL_INSERT");
+    static constinit QoreEnvFlag enabled_env("QORE_DISABLE_IR_UNIQUE_HASH_LITERAL_INSERT");
+    const bool enabled = !enabled_env.get();
     return enabled;
 }
 
@@ -2813,7 +2815,7 @@ void QoreIRToLLVM::emitLocalUninstantiation(llvm::Module& module) {
 }
 
 size_t QoreIRToLLVM::getCleanupPhiBudget() {
-    static const size_t budget = []() -> size_t {
+    static constinit QoreLazyValue<size_t> budget_setting([]() -> size_t {
         constexpr size_t default_budget = 4096;
         QoreEnvironmentValue env_holder("QORE_JIT_CLEANUP_PHI_BUDGET");
         const char* env = env_holder.c_str();
@@ -2828,7 +2830,8 @@ size_t QoreIRToLLVM::getCleanupPhiBudget() {
             return default_budget;
         }
         return static_cast<size_t>(value);
-    }();
+    });
+    const size_t budget = budget_setting.get();
     return budget;
 }
 
@@ -2882,7 +2885,7 @@ bool QoreIRToLLVM::prepareIteratorCleanupArray(llvm::Function* llvm_func, size_t
 }
 
 size_t QoreIRToLLVM::getReloadChainCallThreshold() {
-    static const size_t threshold = []() -> size_t {
+    static constinit QoreLazyValue<size_t> threshold_setting([]() -> size_t {
         constexpr size_t default_threshold = 32;
         QoreEnvironmentValue env_holder("QORE_JIT_RELOAD_CHAIN_CALL_THRESHOLD");
         const char* env = env_holder.c_str();
@@ -2899,7 +2902,8 @@ size_t QoreIRToLLVM::getReloadChainCallThreshold() {
         // 0 disables the helper form entirely
         return value ? static_cast<size_t>(value)
             : std::numeric_limits<size_t>::max();
-    }();
+    });
+    const size_t threshold = threshold_setting.get();
     return threshold;
 }
 
@@ -8397,8 +8401,8 @@ llvm::Value* QoreIRToLLVM::emitAotBatchFastEntryOrFallback(
         llvm::FunctionType::get(ptr_type, {ptr_type, i32_type}, false));
     llvm::Value* callee_ctx = callee_info.context_independent_fast_entry
         ? aot_ctx_arg : nullptr;
-    static const bool hoist_context =
-        !q_env_is_set("QORE_DISABLE_AOT_CALLEE_CONTEXT_HOIST");
+    static constinit QoreEnvFlag hoist_context_env("QORE_DISABLE_AOT_CALLEE_CONTEXT_HOIST");
+    const bool hoist_context = !hoist_context_env.get();
     if (!callee_ctx && hoist_context) {
         auto context_it = aot_call_target_contexts.find(slot);
         if (context_it != aot_call_target_contexts.end()) {
@@ -9671,13 +9675,16 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
         // for compat (same behavior as the new default).  The
         // per-function QORE_AOT_EH_MAX_CALLS gate is still honored
         // when invoke-based is explicitly enabled.
-        static const bool env_no_eh = q_env_is_set("QORE_AOT_NO_EH");
-        static const bool env_explicit_eh = q_env_is_set("QORE_AOT_EH");
-        static const int env_eh_max_calls = []() {
+        static constinit QoreEnvFlag env_no_eh_env("QORE_AOT_NO_EH");
+        const bool env_no_eh = env_no_eh_env.get();
+        static constinit QoreEnvFlag env_explicit_eh_env("QORE_AOT_EH");
+        const bool env_explicit_eh = env_explicit_eh_env.get();
+        static constinit QoreLazyValue<int> env_eh_max_calls_setting([]() -> int {
             QoreEnvironmentValue s_holder("QORE_AOT_EH_MAX_CALLS");
             const char* s = s_holder.c_str();
             return s ? std::atoi(s) : 100;
-        }();
+        });
+        const int env_eh_max_calls = env_eh_max_calls_setting.get();
         // Typed fast entries are called both from local Qore try blocks and
         // from EH adapters. Keep their bodies check-based so they always
         // return with xsink populated; the call site then either branches to
@@ -9783,11 +9790,12 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     // post-lowering pass at the end of lowerFunction re-checks against
     // llvm_func->size() and can retro-tag those.
     {
-        static const size_t big_fn_threshold = []() {
+        static constinit QoreLazyValue<size_t> big_fn_threshold_setting([]() -> size_t {
             QoreEnvironmentValue s_holder("QORE_AOT_BIG_FN_THRESHOLD");
             const char* s = s_holder.c_str();
             return s ? static_cast<size_t>(std::atoi(s)) : size_t(0);
-        }();
+        });
+        const size_t big_fn_threshold = big_fn_threshold_setting.get();
         if (big_fn_threshold > 0 && func.blocks.size() >= big_fn_threshold) {
             llvm_func->addFnAttr(llvm::Attribute::OptimizeNone);
             llvm_func->addFnAttr(llvm::Attribute::NoInline);
@@ -9886,10 +9894,10 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     aot_adjusted_ir_only.clear();
     if (aot_mode && ir_only_locals_set && !func.all_body_locals.empty()) {
         aot_adjusted_ir_only = *ir_only_locals_set;
-        static const bool native_aot_body_locals =
-            !q_env_is_set("QORE_DISABLE_AOT_NATIVE_BODY_LOCALS");
-        static const bool string_aot_body_locals =
-            !q_env_is_set("QORE_DISABLE_AOT_STRING_BODY_LOCALS");
+        static constinit QoreEnvFlag native_aot_body_locals_env("QORE_DISABLE_AOT_NATIVE_BODY_LOCALS");
+        const bool native_aot_body_locals = !native_aot_body_locals_env.get();
+        static constinit QoreEnvFlag string_aot_body_locals_env("QORE_DISABLE_AOT_STRING_BODY_LOCALS");
+        const bool string_aot_body_locals = !string_aot_body_locals_env.get();
         for (LocalVar* lv : func.all_body_locals) {
             const void* key = reinterpret_cast<const void*>(lv);
             const QoreTypeInfo* ti = lv->getTypeInfo();
@@ -11522,8 +11530,8 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
             dot_eval_only_bases.insert(id);
         }
     }
-    static const bool native_boolean_consumers =
-        !q_env_is_set("QORE_DISABLE_NATIVE_BOOLEAN_CONSUMERS");
+    static constinit QoreEnvFlag native_boolean_consumers_env("QORE_DISABLE_NATIVE_BOOLEAN_CONSUMERS");
+    const bool native_boolean_consumers = !native_boolean_consumers_env.get();
     if (native_boolean_consumers) {
         size_t boolean_consumer_count = 0;
         for (const auto& [id, count] : to_bool_uses) {
@@ -12305,11 +12313,12 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     // retro-tag if needed so the OptimizeNone attribute applies even
     // for IR-compact-but-LLVM-huge functions.
     if (!llvm_func->hasFnAttribute(llvm::Attribute::OptimizeNone)) {
-        static const size_t big_fn_threshold = []() {
+        static constinit QoreLazyValue<size_t> big_fn_threshold_setting([]() -> size_t {
             QoreEnvironmentValue s_holder("QORE_AOT_BIG_FN_THRESHOLD");
             const char* s = s_holder.c_str();
             return s ? static_cast<size_t>(std::atoi(s)) : size_t(0);
-        }();
+        });
+        const size_t big_fn_threshold = big_fn_threshold_setting.get();
         if (big_fn_threshold > 0 && llvm_func->size() >= big_fn_threshold) {
             llvm_func->addFnAttr(llvm::Attribute::OptimizeNone);
             llvm_func->addFnAttr(llvm::Attribute::NoInline);

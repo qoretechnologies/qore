@@ -1127,6 +1127,90 @@ DLLLOCAL void init_lib_intern(char* env[]);
 static inline bool q_env_is_set(const char* name) {
     return SystemEnvironment::isSet(name);
 }
+
+//! a flag read from the environment the first time it is needed, without a static initialization guard
+/** A function-local static is initialized under a guard of the C++ runtime: a child process created with fork()
+    while another thread was initializing it (for example, waiting for the environment lock, which the fork handlers
+    hold while the process is copied) waits for the guard forever.  This object is constant-initialized instead;
+    declare it \c constinit, as a function-local static or at namespace scope:
+    @code{.cpp}
+    static constinit QoreEnvFlag disable_env("QORE_DISABLE_X");
+    const bool disable = disable_env.get();
+    @endcode
+
+    Threads that read the flag for the first time at the same time all return the value that the first of them
+    stored.
+*/
+class QoreEnvFlag {
+public:
+    //! the name must be a string literal
+    constexpr QoreEnvFlag(const char* name) : name(name) {
+    }
+
+    //! returns true if the variable is set (even to an empty value)
+    DLLLOCAL bool get() const {
+        int v = state.load(std::memory_order_acquire);
+        if (v < 0) {
+            v = q_env_is_set(name) ? 1 : 0;
+            int expected = -1;
+            if (!state.compare_exchange_strong(expected, v, std::memory_order_acq_rel, std::memory_order_acquire)) {
+                v = expected;
+            }
+        }
+        return v != 0;
+    }
+
+private:
+    const char* name;
+    //! -1 = not read yet, 0 = not set, 1 = set
+    mutable std::atomic<int> state{-1};
+};
+
+//! a value computed the first time it is needed, without a static initialization guard
+/** For settings computed from the environment; see QoreEnvFlag.  Declare it \c constinit:
+    @code{.cpp}
+    static constinit QoreLazyValue<size_t> budget_setting([]() -> size_t {
+        QoreEnvironmentValue env("QORE_X_BUDGET");
+        return env ? strtoull(env.c_str(), nullptr, 10) : 4096;
+    });
+    const size_t budget = budget_setting.get();
+    @endcode
+
+    Threads that call get() for the first time at the same time can all run the function, so it must have no
+    effects other than computing the value; they all return the value that the first of them stored, which is kept
+    for the life of the process.
+*/
+template <typename T>
+class QoreLazyValue {
+public:
+    //! the type of the function that computes the value
+    using compute_t = T (*)();
+
+    constexpr QoreLazyValue(compute_t compute) : compute(compute) {
+    }
+
+    //! returns the value, computing it the first time
+    DLLLOCAL const T& get() const {
+        const T* p = value.load(std::memory_order_acquire);
+        if (!p) {
+            T* v = new T(compute());
+            const T* expected = nullptr;
+            if (value.compare_exchange_strong(expected, v, std::memory_order_acq_rel, std::memory_order_acquire)) {
+                p = v;
+            } else {
+                delete v;
+                p = expected;
+            }
+        }
+        return *p;
+    }
+
+private:
+    compute_t compute;
+    //! the value; never freed, so that it is valid during static destruction
+    mutable std::atomic<const T*> value{nullptr};
+};
+
 DLLLOCAL QoreParseListNode* make_args(const QoreProgramLocation* loc, QoreValue arg);
 
 DLLLOCAL QoreValue copy_value_and_resolve_lvar_refs(const QoreValue& n, ExceptionSink* xsink);

@@ -103,19 +103,21 @@ static bool qore_trace_object_refs_for_class(const char* cls) {
 }
 
 static bool qore_trace_object_ref_should_backtrace(int before, int after) {
-    static const bool always_backtrace = q_env_is_set("QORE_TRACE_OBJECT_REF_BACKTRACE");
+    static constinit QoreEnvFlag always_backtrace_env("QORE_TRACE_OBJECT_REF_BACKTRACE");
+    const bool always_backtrace = always_backtrace_env.get();
     if (always_backtrace) {
         return true;
     }
 
-    static const int threshold = [] {
+    static constinit QoreLazyValue<int> threshold_setting([]() -> int {
         QoreEnvironmentValue low_refs_holder("QORE_TRACE_OBJECT_REF_BACKTRACE_LOW_REFS");
         const char* low_refs = low_refs_holder.c_str();
         if (!low_refs || !*low_refs) {
             return 0;
         }
         return atoi(low_refs);
-    }();
+    });
+    const int threshold = threshold_setting.get();
     if (threshold <= 0) {
         return false;
     }

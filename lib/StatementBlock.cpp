@@ -322,11 +322,12 @@ int StatementBlock::execIntern(RuntimeConfig& rc, QoreValue& return_value, Excep
             }
         }
         if (ast_on_exit_count > 0) {
-            static bool debug_on_exit = [] {
+            static constinit QoreLazyValue<bool> debug_on_exit_setting([]() -> bool {
                 QoreEnvironmentValue debug_env_holder("QORE_IR_DEBUG");
                 const char* debug_env = debug_env_holder.c_str();
                 return debug_env && strstr(debug_env, "on_exit");
-            }();
+            });
+            const bool debug_on_exit = debug_on_exit_setting.get();
             if (debug_on_exit) {
                 fprintf(stderr, "[ON_EXIT-AST] executed %d on_exit handlers\n", ast_on_exit_count);
                 fflush(stderr);

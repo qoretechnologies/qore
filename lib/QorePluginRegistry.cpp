@@ -107,33 +107,37 @@ std::atomic<bool> plugin_operations_published{false};
 // cancellation (the thread list) and read the trace settings below (the environment)
 QoreForkStdMutex plugin_registry_fork_handler(plugin_registry_mutex, QFLR_PLUGIN_REGISTRY, "plugin_registry");
 
+// read the first time they are needed, also under the registry lock, with no static initialization guard
+constinit QoreEnvFlag plugin_register_trace("QORE_PLUGIN_REGISTER_TRACE");
+constinit QoreEnvFlag plugin_dispatch_trace("QORE_PLUGIN_DISPATCH_TRACE");
+#ifdef NDEBUG
+constinit QoreEnvFlag plugin_verify("QORE_PLUGIN_VERIFY");
+#endif
+constinit QoreEnvFlag plugin_verify_trace("QORE_PLUGIN_VERIFY_TRACE");
+constinit QoreEnvFlag plugin_cross_type_trace("QORE_PLUGIN_CROSS_TYPE_TRACE");
+
 bool pluginRegisterTrace() {
-    static const bool enabled = q_env_is_set("QORE_PLUGIN_REGISTER_TRACE");
-    return enabled;
+    return plugin_register_trace.get();
 }
 
 bool pluginDispatchTrace() {
-    static const bool enabled = q_env_is_set("QORE_PLUGIN_DISPATCH_TRACE");
-    return enabled;
+    return plugin_dispatch_trace.get();
 }
 
 bool pluginVerifyEnabled() {
 #ifndef NDEBUG
     return true;
 #else
-    static const bool enabled = q_env_is_set("QORE_PLUGIN_VERIFY");
-    return enabled;
+    return plugin_verify.get();
 #endif
 }
 
 bool pluginVerifyTrace() {
-    static const bool enabled = q_env_is_set("QORE_PLUGIN_VERIFY_TRACE");
-    return enabled;
+    return plugin_verify_trace.get();
 }
 
 bool pluginCrossTypeTrace() {
-    static const bool enabled = q_env_is_set("QORE_PLUGIN_CROSS_TYPE_TRACE");
-    return enabled;
+    return plugin_cross_type_trace.get();
 }
 
 void traceRegister(const std::string& msg) {

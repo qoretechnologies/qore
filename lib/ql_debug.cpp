@@ -1044,6 +1044,58 @@ static void ut_fork_signal_block_waiter(UnitTestCounters& c) {
     UT_ASSERT(c, rc == 0, "a thread waiting for the fork() block is woken and completes its change");
 }
 
+//! A value that another thread was computing for the first time when the process was forked is computed in the child
+/** A function-local static is initialized under a guard of the C++ runtime: a child process created with fork()
+    while another thread was initializing it waited for the guard forever.  The settings read from the environment
+    use QoreLazyValue and QoreEnvFlag instead, which have no guard.
+*/
+static void ut_fork_lazy_value_in_first_use(UnitTestCounters& c) {
+    static std::mutex m;
+    static std::condition_variable cv;
+    static bool computing = false;
+    static bool release = false;
+    static pid_t parent_pid = 0;
+    static bool ran = false;
+    if (ran) {
+        // the value is computed once per process
+        return;
+    }
+    ran = true;
+    parent_pid = getpid();
+    static constinit QoreLazyValue<int> value([]() -> int {
+        if (getpid() != parent_pid) {
+            return 2;
+        }
+        // the first computation, in the parent, lasts until the process has been forked
+        std::unique_lock<std::mutex> ul(m);
+        computing = true;
+        cv.notify_all();
+        cv.wait(ul, [] { return release; });
+        return 1;
+    });
+    std::thread first([]() {
+        (void)value.get();
+    });
+    {
+        std::unique_lock<std::mutex> ul(m);
+        cv.wait(ul, [] { return computing; });
+    }
+    pid_t pid = fork();
+    if (!pid) {
+        _exit(value.get() == 2 ? 0 : 1);
+    }
+    {
+        std::lock_guard<std::mutex> lg(m);
+        release = true;
+        cv.notify_all();
+    }
+    first.join();
+    UT_ASSERT(c, pid > 0, "fork() succeeds");
+    if (pid > 0) {
+        UT_ASSERT_EQ(c, 0, ut_wait_child(pid), "the child computes the value itself");
+    }
+    UT_ASSERT_EQ(c, 1, value.get(), "the parent keeps the value of the first computation");
+}
 #endif
 
 #ifdef DEBUG
@@ -9300,6 +9352,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     ut_cond_wait_cancel_in_window(c);
     ut_fork_waits_for_lock_holders(c);
     ut_fork_signal_block_waiter(c);
+    ut_fork_lazy_value_in_first_use(c);
     Http3ClientResponseRegistrationTest::run(c);
     ut_fast_real_deref_releases_last(c);
     ut_superseded_snapshot_lock_free_release(c);

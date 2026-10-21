@@ -1811,7 +1811,7 @@ uint64_t QoreJIT::getJITThreshold() {
 // a constrained container.  Such functions therefore stay on the IR tier.
 uint64_t QoreJIT::getMaxJITIRInstructions() {
     // function-local so the value cannot be read before its initializer runs, and is computed once
-    static const uint64_t budget = []() -> uint64_t {
+    static constinit QoreLazyValue<uint64_t> budget_setting([]() -> uint64_t {
         constexpr uint64_t default_max = 10000;
         QoreEnvironmentValue env_holder("QORE_JIT_MAX_IR_INSTRUCTIONS");
         const char* env = env_holder.c_str();
@@ -1839,7 +1839,8 @@ uint64_t QoreJIT::getMaxJITIRInstructions() {
         }
         // 0 means "no limit"
         return static_cast<uint64_t>(value);
-    }();
+    });
+    const uint64_t budget = budget_setting.get();
     return budget;
 }
 
@@ -2188,11 +2189,12 @@ void QoreJIT::enqueueBgCompile(const AbstractQoreFunctionVariant* variant, const
 }
 
 bool QoreJIT::syncBgCompile() {
-    static const bool sync = []() -> bool {
+    static constinit QoreLazyValue<bool> sync_setting([]() -> bool {
         QoreEnvironmentValue env_holder("QORE_JIT_SYNC_COMPILE");
         const char* env = env_holder.c_str();
         return env && *env && strcmp(env, "0") != 0;
-    }();
+    });
+    const bool sync = sync_setting.get();
     return sync;
 }
 

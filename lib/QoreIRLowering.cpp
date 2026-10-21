@@ -1308,8 +1308,8 @@ QoreIRValue QoreIRLowering::tryPluginLowering(const QoreValue& expr, std::string
     if (!node) {
         return QoreIRValue();
     }
-    static const bool empty_fast_path_enabled =
-        !q_env_is_set("QORE_DISABLE_IR_PLUGIN_EMPTY_FAST_PATH");
+    static constinit QoreEnvFlag empty_fast_path_enabled_env("QORE_DISABLE_IR_PLUGIN_EMPTY_FAST_PATH");
+    const bool empty_fast_path_enabled = !empty_fast_path_enabled_env.get();
     if (empty_fast_path_enabled && !qore_plugin_has_registered_operations()) {
         return QoreIRValue();
     }
@@ -6968,11 +6968,12 @@ static bool opcodeNeverReturnsNothing(QoreIROpcode op) {
 bool QoreIRLowering::needsNotNothingGuard(const QoreValue* expr, const QoreTypeInfo* target_type,
         bool allow_maybe_nothing) const {
 
-    static bool debug_guard_entry = [] {
+    static constinit QoreLazyValue<bool> debug_guard_entry_setting([]() -> bool {
         QoreEnvironmentValue debug_env_holder("QORE_IR_DEBUG");
         const char* debug_env = debug_env_holder.c_str();
         return debug_env && strstr(debug_env, "guard");
-    }();
+    });
+    const bool debug_guard_entry = debug_guard_entry_setting.get();
 
     if (debug_guard_entry) {
         fprintf(stderr, "[GUARD-NEED-CHECK-ENTRY] expr=%p has_node=%d, target_type=%p, allow_maybe=%d\n",
@@ -6997,11 +6998,12 @@ bool QoreIRLowering::needsNotNothingGuard(const QoreValue* expr, const QoreTypeI
     // This handles optional returns that are being assigned to non-optional variables
     // and prevents IR->AST deopt that causes side effect re-execution
     if (allow_maybe_nothing) {
-        static bool debug_guard = [] {
+        static constinit QoreLazyValue<bool> debug_guard_setting([]() -> bool {
             QoreEnvironmentValue debug_env_holder("QORE_IR_DEBUG");
             const char* debug_env = debug_env_holder.c_str();
             return debug_env && strstr(debug_env, "guard");
-        }();
+        });
+        const bool debug_guard = debug_guard_setting.get();
         if (debug_guard) {
             fprintf(stderr, "[GUARD-SKIP-DEOPT-RISK] Skipping guard to prevent deopt: allow_maybe_nothing=true\n");
             fflush(stderr);
@@ -7041,11 +7043,12 @@ bool QoreIRLowering::needsNotNothingGuard(const QoreValue* expr, const QoreTypeI
                 got_analysis = false;
             }
 
-            static bool debug_guard = [] {
+            static constinit QoreLazyValue<bool> debug_guard_setting([]() -> bool {
                 QoreEnvironmentValue debug_env_holder("QORE_IR_DEBUG");
                 const char* debug_env = debug_env_holder.c_str();
                 return debug_env && strstr(debug_env, "guard");
-            }();
+            });
+            const bool debug_guard = debug_guard_setting.get();
 
             if (got_analysis) {
                 // Use actual type information from analysis if available
@@ -7217,11 +7220,12 @@ bool QoreIRLowering::needsNotNothingGuard(const QoreValue* expr, const QoreTypeI
 
 void QoreIRLowering::maybeInsertNotNothingGuard(QoreIRValue value, const QoreValue* expr,
         const QoreProgramLocation* loc, const QoreTypeInfo* target_type, bool allow_maybe_nothing) {
-    static bool debug_guard = [] {
+    static constinit QoreLazyValue<bool> debug_guard_setting([]() -> bool {
         QoreEnvironmentValue debug_env_holder("QORE_IR_DEBUG");
         const char* debug_env = debug_env_holder.c_str();
         return debug_env && strstr(debug_env, "guard");
-    }();
+    });
+    const bool debug_guard = debug_guard_setting.get();
 
     if (!value.isValid() || !needsNotNothingGuard(expr, target_type, allow_maybe_nothing)) {
         return;
@@ -7247,11 +7251,12 @@ void QoreIRLowering::maybeInsertNotNothingGuard(QoreIRValue value, const QoreVal
             }
 
             if (got_analysis) {
-                static bool debug_guard_type = [] {
+                static constinit QoreLazyValue<bool> debug_guard_type_setting([]() -> bool {
                     QoreEnvironmentValue debug_env_holder("QORE_IR_DEBUG");
                     const char* debug_env = debug_env_holder.c_str();
                     return debug_env && strstr(debug_env, "guard");
-                }();
+                });
+                const bool debug_guard_type = debug_guard_type_setting.get();
 
                 // Note: These checks are handled in needsNotNothingGuard()
                 // which returns bool, not here in maybeInsertNotNothingGuard() which is void
@@ -7380,11 +7385,12 @@ QoreIRLowering::GuardExceptionTargetOverrideScope::~GuardExceptionTargetOverride
 }
 
 bool QoreIRLowering::needsNotNothingGuard(const QoreValue& expr) const {
-    static bool debug_guard = [] {
+    static constinit QoreLazyValue<bool> debug_guard_setting([]() -> bool {
         QoreEnvironmentValue debug_env_holder("QORE_IR_DEBUG");
         const char* debug_env = debug_env_holder.c_str();
         return debug_env && strstr(debug_env, "guard");
-    }();
+    });
+    const bool debug_guard = debug_guard_setting.get();
 
     if (debug_guard) {
         fprintf(stderr, "[GUARD-SINGLE-ARG] Entry: expr type=%s, has_node=%d, parse_context=%p\n",

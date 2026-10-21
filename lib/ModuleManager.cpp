@@ -3282,11 +3282,12 @@ int QoreModuleManager::loadAOTBinaryModuleDependencies(ExceptionSink& xsink,
     on macOS), which a process loading a hundred modules would pay on every start.
 */
 static bool qore_verify_module_signatures() {
-    static const bool rv = []() -> bool {
+    static constinit QoreLazyValue<bool> rv_setting([]() -> bool {
         QoreEnvironmentValue v_holder("QORE_VERIFY_MODULE_SIGNATURES");
         const char* v = v_holder.c_str();
         return v && *v && strcmp(v, "0");
-    }();
+    });
+    const bool rv = rv_setting.get();
     return rv;
 }
 

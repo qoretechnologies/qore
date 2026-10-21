@@ -108,7 +108,8 @@ extern "C" uint64_t qore_rt_background_static_method_name_call_aot(const char* q
         uint64_t* args, int nargs, ExceptionSink* xsink);
 
 static bool qore_ir_interpreter_use_unique_hash_literal_insert() {
-    static const bool enabled = !q_env_is_set("QORE_DISABLE_IR_UNIQUE_HASH_LITERAL_INSERT");
+    static constinit QoreEnvFlag enabled_env("QORE_DISABLE_IR_UNIQUE_HASH_LITERAL_INSERT");
+    const bool enabled = !enabled_env.get();
     return enabled;
 }
 
@@ -174,7 +175,8 @@ static bool qore_ir_try_string_arg_pseudo_fast_path(bool pseudo, bool base_known
         int nargs, QoreValue& res, ExceptionSink* xsink) {
     // read the environment once per process, and only after the cheap guards: this runs on every
     // string pseudo-method call in the interpreter, and getenv() is a linear scan of the environment
-    static const bool disabled = q_env_is_set("QORE_DISABLE_IR_GUARDED_STRING_PSEUDO");
+    static constinit QoreEnvFlag disabled_env("QORE_DISABLE_IR_GUARDED_STRING_PSEUDO");
+    const bool disabled = disabled_env.get();
     if (!pseudo || !base_known_string || base.getType() != NT_STRING || disabled) {
         return false;
     }
@@ -1800,12 +1802,14 @@ static bool buildValueUseCounts(const QoreIRFunction& func,
 }
 
 static bool interpreterEffectSummaryDisabled() {
-    static const bool disabled = q_env_is_set("QORE_DISABLE_IR_EFFECT_SUMMARY");
+    static constinit QoreEnvFlag disabled_env("QORE_DISABLE_IR_EFFECT_SUMMARY");
+    const bool disabled = disabled_env.get();
     return disabled;
 }
 
 static bool interpreterEffectSummaryStatsEnabled() {
-    static const bool enabled = q_env_is_set("QORE_IR_EFFECT_SUMMARY_STATS");
+    static constinit QoreEnvFlag enabled_env("QORE_IR_EFFECT_SUMMARY_STATS");
+    const bool enabled = enabled_env.get();
     return enabled;
 }
 
@@ -2493,12 +2497,16 @@ static int8_t ensureInterpreterInlineIRFunctionState(QoreIRCallDirectInstruction
 }
 
 static bool interpreterNativeLeafInlineDisabled(QoreIRCallDirectInstruction::NativeLeafKind kind) {
-    static const bool all_disabled = q_env_is_set("QORE_DISABLE_IR_NATIVE_LEAF_INLINE");
-    static const bool int_disabled = q_env_is_set("QORE_DISABLE_IR_NATIVE_INT_LEAF_INLINE");
-    static const bool float_disabled = q_env_is_set("QORE_DISABLE_IR_NATIVE_FLOAT_LEAF_INLINE");
-    static const bool dynamic_disabled =
-        q_env_is_set("QORE_DISABLE_IR_NATIVE_DYNAMIC_LEAF_INLINE");
-    static const bool string_disabled = q_env_is_set("QORE_DISABLE_IR_NATIVE_STRING_LEAF_INLINE");
+    static constinit QoreEnvFlag all_disabled_env("QORE_DISABLE_IR_NATIVE_LEAF_INLINE");
+    const bool all_disabled = all_disabled_env.get();
+    static constinit QoreEnvFlag int_disabled_env("QORE_DISABLE_IR_NATIVE_INT_LEAF_INLINE");
+    const bool int_disabled = int_disabled_env.get();
+    static constinit QoreEnvFlag float_disabled_env("QORE_DISABLE_IR_NATIVE_FLOAT_LEAF_INLINE");
+    const bool float_disabled = float_disabled_env.get();
+    static constinit QoreEnvFlag dynamic_disabled_env("QORE_DISABLE_IR_NATIVE_DYNAMIC_LEAF_INLINE");
+    const bool dynamic_disabled = dynamic_disabled_env.get();
+    static constinit QoreEnvFlag string_disabled_env("QORE_DISABLE_IR_NATIVE_STRING_LEAF_INLINE");
+    const bool string_disabled = string_disabled_env.get();
     if (all_disabled) {
         return true;
     }
@@ -2513,29 +2521,29 @@ static bool interpreterNativeLeafInlineDisabled(QoreIRCallDirectInstruction::Nat
         case QoreIRCallDirectInstruction::NativeLeafKind::StringLength:
             return string_disabled;
         case QoreIRCallDirectInstruction::NativeLeafKind::IntProgram: {
-            static const bool program_disabled =
-                q_env_is_set("QORE_DISABLE_IR_NATIVE_INT_PROGRAM_INLINE");
+            static constinit QoreEnvFlag program_disabled_env("QORE_DISABLE_IR_NATIVE_INT_PROGRAM_INLINE");
+            const bool program_disabled = program_disabled_env.get();
             return int_disabled || program_disabled;
         }
         case QoreIRCallDirectInstruction::NativeLeafKind::ClosureIntIncrement: {
-            static const bool increment_disabled =
-                q_env_is_set("QORE_DISABLE_IR_NATIVE_CLOSURE_INCREMENT_INLINE");
+            static constinit QoreEnvFlag increment_disabled_env("QORE_DISABLE_IR_NATIVE_CLOSURE_INCREMENT_INLINE");
+            const bool increment_disabled = increment_disabled_env.get();
             return int_disabled || increment_disabled;
         }
         case QoreIRCallDirectInstruction::NativeLeafKind::ClosureIntBinary: {
-            static const bool binary_disabled =
-                q_env_is_set("QORE_DISABLE_IR_NATIVE_CLOSURE_BINARY_INLINE");
+            static constinit QoreEnvFlag binary_disabled_env("QORE_DISABLE_IR_NATIVE_CLOSURE_BINARY_INLINE");
+            const bool binary_disabled = binary_disabled_env.get();
             return int_disabled || binary_disabled;
         }
         case QoreIRCallDirectInstruction::NativeLeafKind::ClosureFloatBinary: {
-            static const bool binary_disabled =
-                q_env_is_set("QORE_DISABLE_IR_NATIVE_CLOSURE_FLOAT_BINARY_INLINE");
+            static constinit QoreEnvFlag binary_disabled_env("QORE_DISABLE_IR_NATIVE_CLOSURE_FLOAT_BINARY_INLINE");
+            const bool binary_disabled = binary_disabled_env.get();
             return float_disabled || binary_disabled;
         }
         case QoreIRCallDirectInstruction::NativeLeafKind::ClosureStringSize:
         case QoreIRCallDirectInstruction::NativeLeafKind::ClosureStringLength: {
-            static const bool closure_string_disabled =
-                q_env_is_set("QORE_DISABLE_IR_NATIVE_CLOSURE_STRING_INLINE");
+            static constinit QoreEnvFlag closure_string_disabled_env("QORE_DISABLE_IR_NATIVE_CLOSURE_STRING_INLINE");
+            const bool closure_string_disabled = closure_string_disabled_env.get();
             return string_disabled || closure_string_disabled;
         }
     }
@@ -2792,7 +2800,8 @@ static bool isInterpreterNativeIntProgram(const QoreIRFunction* ir,
 }
 
 static bool ensureInterpreterNativeLeafState(QoreIRCallDirectInstruction* inst, int nargs) {
-    static const bool all_disabled = q_env_is_set("QORE_DISABLE_IR_NATIVE_LEAF_INLINE");
+    static constinit QoreEnvFlag all_disabled_env("QORE_DISABLE_IR_NATIVE_LEAF_INLINE");
+    const bool all_disabled = all_disabled_env.get();
     if (all_disabled) {
         return false;
     }
@@ -5398,7 +5407,8 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
                 QoreValue idx = getIRValue(values, inv->operands[1]);
                 return getListAssignmentValue(rhs, idx.getAsBigInt());
             }
-            static const bool trace_lvmut = q_env_is_set("QORE_IR_TRACE_LVMUT_FALLBACK");
+            static constinit QoreEnvFlag trace_lvmut_env("QORE_IR_TRACE_LVMUT_FALLBACK");
+            const bool trace_lvmut = trace_lvmut_env.get();
             if (trace_lvmut) {
                 const QoreProgramLocation* loc = inv->loc;
                 fprintf(stderr, "[ir-lvmut-fallback] opcode=%u loc=%s:%d\n",
@@ -6527,8 +6537,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     size_t ip = 0;
     // execute() runs once per Qore function call, so these diagnostic flags must not re-scan the
     // environment per call; every other debug flag in this file is resolved once as well
-    static const bool trace_ir_refs = q_env_is_set("QORE_IR_TRACE_REFS");
-    static const bool trace_ir_refs_deep = q_env_is_set("QORE_IR_TRACE_REFS_DEEP");
+    static constinit QoreEnvFlag trace_ir_refs_env("QORE_IR_TRACE_REFS");
+    const bool trace_ir_refs = trace_ir_refs_env.get();
+    static constinit QoreEnvFlag trace_ir_refs_deep_env("QORE_IR_TRACE_REFS_DEEP");
+    const bool trace_ir_refs_deep = trace_ir_refs_deep_env.get();
     // Deep ref tracing intentionally dereferences object internals; leave it
     // off unless narrowing an IR lifetime/refcount bug under a debugger.
     auto traceIRRef = [&](const QoreIRInstruction* trace_inst, const char* event, uint32_t slot, QoreValue val,
@@ -6986,7 +6998,8 @@ next_instruction:
 
         // Verbose IR lowering diagnostics: enable with QORE_IR_DEBUG env var
         // Zero-cost when disabled: single static bool check only initialized once
-        static bool ir_verbose_enabled = (q_env_is_set("QORE_IR_DEBUG"));
+        static constinit QoreEnvFlag ir_verbose_enabled_env("QORE_IR_DEBUG");
+        const bool ir_verbose_enabled = ir_verbose_enabled_env.get();
 
         // Log instruction execution for diagnostics (zero-cost path when disabled)
         if (ir_verbose_enabled && func.name.find("monitor") != std::string::npos) {
@@ -10664,7 +10677,8 @@ load_local_done:
             case QoreIROpcode::UninstantiateLocal: {
                 auto* local_inst = static_cast<QoreIRLocalInstruction*>(inst);
                 // resolved once: this opcode runs at every block scope exit
-                static const bool debug_uninst = q_env_is_set("QORE_DEBUG_UNINST");
+                static constinit QoreEnvFlag debug_uninst_env("QORE_DEBUG_UNINST");
+                const bool debug_uninst = debug_uninst_env.get();
                 if (debug_uninst) {
                     bool ip2 = pre_instantiated && pre_instantiated->find(local_inst->local) != pre_instantiated->end();
                     fprintf(stderr, "UNINST: %s is_closure=%d slot=%d is_pre=%d\n",
@@ -12083,7 +12097,8 @@ load_local_done:
                 QoreValue value = getIRValue(values, guard_inst->operands.front());
 
                 // Verbose logging for guard failures (zero-cost when disabled)
-                static bool ir_guard_verbose = (q_env_is_set("QORE_IR_DEBUG"));
+                static constinit QoreEnvFlag ir_guard_verbose_env("QORE_IR_DEBUG");
+                const bool ir_guard_verbose = ir_guard_verbose_env.get();
                 if (ir_guard_verbose && func.name.find("monitor") != std::string::npos) {
                     uint32_t source_slot = guard_inst->operands.front().id;
                     fprintf(stderr, "[IR-GUARD-CHECK] func='%s' ip=%zu guard_op=%d value_slot=%u val_type='%s' val_is_nothing=%d\n",
@@ -12111,11 +12126,12 @@ load_local_done:
                         }
                         printd(2, "QoreIRInterpreter::execute() guard failed (%s) for '%s' "
                             "— falling back to AST\n", guard_type, func.name.c_str());
-                        static bool debug_guard = [] {
+                        static constinit QoreLazyValue<bool> debug_guard_setting([]() -> bool {
                             QoreEnvironmentValue debug_env_holder("QORE_IR_DEBUG");
                             const char* debug_env = debug_env_holder.c_str();
                             return debug_env && strstr(debug_env, "guard");
-                        }();
+                        });
+                        const bool debug_guard = debug_guard_setting.get();
                         if (debug_guard) {
                             fprintf(stderr, "[IR-GUARD-FAILED] execute() returning false (deopt) for '%s'\n",
                                     func.name.c_str());

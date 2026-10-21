@@ -4459,7 +4459,9 @@ int q_start_thread(ExceptionSink* xsink, q_thread_t f, void* arg) {
 
 size_t q_thread_stack_tls_size() {
 #if defined(__GLIBC__) && defined(HAVE_DLFCN_H)
-    static size_t tls_size = []() -> size_t {
+    // computed without a static initialization guard (see QoreLazyValue): threads are started while another thread
+    // forks
+    static constinit QoreLazyValue<size_t> tls_size_setting([]() -> size_t {
         // __pthread_get_minstack() returns the static TLS size, the guard size, and PTHREAD_STACK_MIN; it is a
         // GLIBC_PRIVATE symbol, so it is looked up at run time
         typedef size_t (*minstack_t)(const pthread_attr_t*);
@@ -4474,8 +4476,8 @@ size_t q_thread_stack_tls_size() {
         size_t min = minstack(&attr);
         pthread_attr_destroy(&attr);
         return min > static_cast<size_t>(PTHREAD_STACK_MIN) ? min - PTHREAD_STACK_MIN : 0;
-    }();
-    return tls_size;
+    });
+    return tls_size_setting.get();
 #else
     return 0;
 #endif

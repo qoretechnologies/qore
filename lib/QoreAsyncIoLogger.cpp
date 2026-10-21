@@ -136,15 +136,15 @@ void qore_async_io_logger_cleanup() {
 // --- Low-level C trace for async I/O debugging ---
 #if defined(DEBUG) || defined(DEBUG_ASYNC_IO)
 
+// read once, on the first call, without a static initialization guard (see QoreLazyValue); the I/O threads of
+// several controllers call this concurrently
+static constinit QoreLazyValue<bool> async_io_trace([]() -> bool {
+    QoreEnvironmentValue val("QORE_ASYNC_IO_TRACE");
+    return val && val.c_str()[0] == '1';
+});
+
 bool qore_async_io_trace_enabled() {
-    // initialized once, on the first call; the initialization of a local static is thread-safe, while the I/O threads
-    // of several controllers call this concurrently
-    static const bool enabled = [] () {
-        QoreEnvironmentValue val_holder("QORE_ASYNC_IO_TRACE");
-        const char* val = val_holder.c_str();
-        return val && val[0] == '1';
-    }();
-    return enabled;
+    return async_io_trace.get();
 }
 
 // the operating system's ID of the calling thread

@@ -1660,7 +1660,8 @@ static void qoreAOTAddClassLookupAliases(
 }
 
 static bool qoreAOTUseDeserializerReservations() {
-    static const bool enabled = !q_env_is_set("QORE_DISABLE_AOT_DESERIALIZER_RESERVATIONS");
+    static constinit QoreEnvFlag enabled_env("QORE_DISABLE_AOT_DESERIALIZER_RESERVATIONS");
+    const bool enabled = !enabled_env.get();
     return enabled;
 }
 
@@ -2322,8 +2323,8 @@ static bool skipAOTSerializedValue(const QoreAOTBinaryReader& reader,
 }
 
 QoreAOTStringRef QoreAOTBinaryDeserializer::makeDeferredStringRef(const char* value) {
-    static const bool use_reader_strings =
-        !q_env_is_set("QORE_DISABLE_AOT_BORROWED_STRING_REFS");
+    static constinit QoreEnvFlag use_reader_strings_env("QORE_DISABLE_AOT_BORROWED_STRING_REFS");
+    const bool use_reader_strings = !use_reader_strings_env.get();
     if (use_reader_strings) {
         return value;
     }
@@ -2340,8 +2341,8 @@ bool QoreAOTBinaryDeserializer::readDeferredValueBlob(const uint8_t*& ptr,
     if (!skipAOTSerializedValue(reader, ptr, end, error)) {
         return false;
     }
-    static const bool use_borrowed_blobs =
-        !q_env_is_set("QORE_DISABLE_AOT_BORROWED_DEFERRED_VALUES");
+    static constinit QoreEnvFlag use_borrowed_blobs_env("QORE_DISABLE_AOT_BORROWED_DEFERRED_VALUES");
+    const bool use_borrowed_blobs = !use_borrowed_blobs_env.get();
     if (use_borrowed_blobs) {
         value_blob.assign(start, ptr - start);
     } else {
@@ -5412,7 +5413,8 @@ static const BuiltinTypeEntry builtin_types[] = {
 };
 
 const QoreTypeInfo* QoreAOTTypeResolver::resolveBuiltin(const char* path) {
-    static const bool use_index = !q_env_is_set("QORE_DISABLE_AOT_BUILTIN_TYPE_INDEX");
+    static constinit QoreEnvFlag use_index_env("QORE_DISABLE_AOT_BUILTIN_TYPE_INDEX");
+    const bool use_index = !use_index_env.get();
     if (use_index) {
         using builtin_type_index_t = std::unordered_map<std::string_view, const QoreTypeInfo**>;
         static const builtin_type_index_t builtin_type_index = []() {
@@ -6377,8 +6379,8 @@ const QoreTypeInfo* QoreAOTTypeResolver::resolve(const char* path, std::string& 
     const QoreTypeInfo* result = resolveBuiltin(path);
 
     if (!result) {
-        static const bool use_shape_dispatch =
-            !q_env_is_set("QORE_DISABLE_AOT_TYPE_SHAPE_DISPATCH");
+        static constinit QoreEnvFlag use_shape_dispatch_env("QORE_DISABLE_AOT_TYPE_SHAPE_DISPATCH");
+        const bool use_shape_dispatch = !use_shape_dispatch_env.get();
         if (use_shape_dispatch) {
             const char* shape = *path == '*' ? path + 1 : path;
             if (!strncmp(shape, "hash<", 5)) {
@@ -14741,8 +14743,10 @@ static bool serializeIRInstruction(QoreAOTBinaryWriter& writer, const QoreIRInst
     record in the output.
 */
 static const char* aotTestFailIRSerialization() {
-    static const QoreEnvironmentValue name_holder("QORE_AOT_TEST_FAIL_IR_SERIALIZATION");
-    static const char* name = name_holder.c_str();
+    static constinit QoreLazyValue<QoreEnvironmentValue> name_setting([]() -> QoreEnvironmentValue {
+        return QoreEnvironmentValue("QORE_AOT_TEST_FAIL_IR_SERIALIZATION");
+    });
+    const char* name = name_setting.get().c_str();
     return name && *name ? name : nullptr;
 }
 
@@ -18144,8 +18148,8 @@ bool QoreAOTBinaryDeserializer::deserializeConstants(std::string& error) {
             preload_parse_constant_values ? std::move(parse_value_blob) : QoreAOTDeferredValueBlob()});
     }
 
-    static const bool use_pending_constant_lookup =
-        !q_env_is_set("QORE_DISABLE_AOT_PENDING_CONSTANT_LOOKUP");
+    static constinit QoreEnvFlag use_pending_constant_lookup_env("QORE_DISABLE_AOT_PENDING_CONSTANT_LOOKUP");
+    const bool use_pending_constant_lookup = !use_pending_constant_lookup_env.get();
     if (!use_pending_constant_lookup) {
         rebuildAOTRootIndexes(pgm);
     }
@@ -18830,7 +18834,8 @@ static bool readAndSetupVariantSignature(
         clock_gettime(CLOCK_MONOTONIC, &ts);
         return (uint64_t)ts.tv_sec * 1000000ULL + ts.tv_nsec / 1000ULL;
     };
-    static const bool time_on_sub = q_env_is_set("QORE_AOT_PHASE_TIMING");
+    static constinit QoreEnvFlag time_on_sub_env("QORE_AOT_PHASE_TIMING");
+    const bool time_on_sub = time_on_sub_env.get();
     uint64_t t_setup0 = time_on_sub ? now_us_fn() : 0;
 
     // Set up the variant's signature from metadata.  Only signature-

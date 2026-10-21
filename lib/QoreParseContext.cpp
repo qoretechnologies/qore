@@ -17,11 +17,12 @@ bool QoreParseContext::isLocalDefinitelyAssigned(LocalVar* local) const {
 }
 
 bool QoreParseContext::needsGuardForLocal(LocalVar* local) const {
-    static bool debug = [] {
+    static constinit QoreLazyValue<bool> debug_setting([]() -> bool {
         QoreEnvironmentValue debug_env_holder("QORE_IR_DEBUG");
         const char* debug_env = debug_env_holder.c_str();
         return debug_env && strstr(debug_env, "guard");
-    }();
+    });
+    const bool debug = debug_setting.get();
 
     if (!local) {
         return false;

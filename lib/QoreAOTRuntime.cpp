@@ -3423,9 +3423,9 @@ std::atomic<bool> g_aot_have_ranges{false};
 //! out with QORE_AOT_LOC_NO_LAZY (falls back to the eager runtime_loc). QORE_AOT_LOC_GATE
 //! still forces the build for diagnostic comparison. Validated lazy-active 789/789.
 inline bool aotLazyLocEnabled() {
-    static const bool enabled = !q_env_is_set("QORE_AOT_LOC_NO_LAZY")
-        || q_env_is_set("QORE_AOT_LOC_GATE");
-    return enabled;
+    static constinit QoreEnvFlag no_lazy_env("QORE_AOT_LOC_NO_LAZY");
+    static constinit QoreEnvFlag gate_env("QORE_AOT_LOC_GATE");
+    return !no_lazy_env.get() || gate_env.get();
 }
 
 // Load + cache the PC->loc trailer for `path`; returns null when absent/garbage.
@@ -3523,7 +3523,8 @@ thread_local AotPcArtifactCache* aot_pc_artifact_cache = nullptr;
 class AotPcArtifactCacheScope {
 public:
     AotPcArtifactCacheScope() {
-        static const bool enabled = !q_env_is_set("QORE_AOT_LOC_NO_ARTIFACT_CACHE");
+        static constinit QoreEnvFlag enabled_env("QORE_AOT_LOC_NO_ARTIFACT_CACHE");
+        const bool enabled = !enabled_env.get();
         if (enabled && aotLazyLocEnabled()) {
             previous = aot_pc_artifact_cache;
             aot_pc_artifact_cache = &cache;
@@ -3864,9 +3865,12 @@ const QoreProgramLocation* qore_aot_resolve_throw_location(const QoreProgramLoca
     // Lazy resolution is ON by default (Step 6, Phase A). Opt out with
     // QORE_AOT_LOC_NO_LAZY (returns nullptr -> eager). QORE_AOT_LOC_GATE forces the
     // comparison-only mode: compute + log the decision, but still return eager.
-    static const QoreEnvironmentValue gate_env_holder("QORE_AOT_LOC_GATE");
-    static const char* gate_env = gate_env_holder.c_str();
-    static const bool no_lazy = q_env_is_set("QORE_AOT_LOC_NO_LAZY");
+    static constinit QoreLazyValue<QoreEnvironmentValue> gate_env_setting([]() -> QoreEnvironmentValue {
+        return QoreEnvironmentValue("QORE_AOT_LOC_GATE");
+    });
+    const char* gate_env = gate_env_setting.get().c_str();
+    static constinit QoreEnvFlag no_lazy_env("QORE_AOT_LOC_NO_LAZY");
+    const bool no_lazy = no_lazy_env.get();
     if (!gate_env && no_lazy) {
         return nullptr;
     }
@@ -3953,7 +3957,8 @@ _Unwind_Reason_Code aotCollectCb(struct _Unwind_Context* uctx, void* arg) {
 
 size_t qore_aot_collect_backtrace_locs(std::vector<const QoreProgramLocation*>& out) {
     out.clear();
-    static const bool no_lazy = q_env_is_set("QORE_AOT_LOC_NO_LAZY");
+    static constinit QoreEnvFlag no_lazy_env("QORE_AOT_LOC_NO_LAZY");
+    const bool no_lazy = no_lazy_env.get();
     if (no_lazy) {
         return 0;
     }
@@ -7251,8 +7256,8 @@ static QoreAOTContext* buildContextFromSlotMap(
         // creates unreachable state and substantial startup allocation cost.
         // Keep an eager diagnostic mode for same-build performance and
         // compatibility comparisons.
-        static const bool eager_stmt_locs =
-            q_env_is_set("QORE_DISABLE_AOT_LAZY_STMT_LOCS");
+        static constinit QoreEnvFlag eager_stmt_locs_env("QORE_DISABLE_AOT_LAZY_STMT_LOCS");
+        const bool eager_stmt_locs = eager_stmt_locs_env.get();
         bool materialize_stmt_locs = pgm
             && (eager_stmt_locs || (pgm->getParseOptions() & PO_ALLOW_DEBUGGER));
         if (num_stmt_locs > 0 && materialize_stmt_locs) {
@@ -7426,7 +7431,8 @@ static QoreAOTContext* buildContextFromSlotMap(
     // are never called by a short-lived loader process, and the map is needed
     // only before this function can contribute a frame to an exception.
     ctx->pc_loc_fn = aot_func.fn_ptr;
-    static const bool eager_pc_loc_attach = q_env_is_set("QORE_AOT_LOC_EAGER_ATTACH");
+    static constinit QoreEnvFlag eager_pc_loc_attach_env("QORE_AOT_LOC_EAGER_ATTACH");
+    const bool eager_pc_loc_attach = eager_pc_loc_attach_env.get();
     if (eager_pc_loc_attach) {
         qore_aot_ensure_pc_loc_map(ctx);
     }
@@ -11828,8 +11834,10 @@ struct AOTDependencyLoadResult {
 static AOTDependencyLoadResult aotLoadModuleDependencies(ExceptionSink& xsink,
         const std::vector<std::string>& providers, const std::vector<std::string>& imports,
         bool imports_present, QoreProgram* local_pgm) {
-    static const bool force_legacy_imports = q_env_is_set("QORE_AOT_LEGACY_IMPORT_ALL");
-    static const bool trace_dependencies = q_env_is_set("QORE_AOT_DEP_TRACE");
+    static constinit QoreEnvFlag force_legacy_imports_env("QORE_AOT_LEGACY_IMPORT_ALL");
+    const bool force_legacy_imports = force_legacy_imports_env.get();
+    static constinit QoreEnvFlag trace_dependencies_env("QORE_AOT_DEP_TRACE");
+    const bool trace_dependencies = trace_dependencies_env.get();
     if (trace_dependencies) {
         fprintf(stderr, "[aot-deps] providers=%zu imports=%zu mode=%s\n", providers.size(), imports.size(),
             (!imports_present || force_legacy_imports) ? "legacy-import-all" : "provider/import-split");
@@ -12269,7 +12277,8 @@ struct AotModuleState {
 static std::unordered_map<std::string, AotModuleState> aot_module_map;
 
 static bool useAOTSharedInitMetadata() {
-    static const bool enabled = !q_env_is_set("QORE_DISABLE_AOT_SHARED_INIT_METADATA");
+    static constinit QoreEnvFlag enabled_env("QORE_DISABLE_AOT_SHARED_INIT_METADATA");
+    const bool enabled = !enabled_env.get();
     return enabled;
 }
 
@@ -12347,7 +12356,8 @@ static void inheritAOTModulePathLists(QoreProgram* local_pgm, QoreProgram* paren
 }
 
 static bool aotInitTraceEnabled() {
-    static const bool enabled = q_env_is_set("QORE_AOT_INIT_TRACE");
+    static constinit QoreEnvFlag enabled_env("QORE_AOT_INIT_TRACE");
+    const bool enabled = enabled_env.get();
     return enabled;
 }
 
@@ -12490,8 +12500,10 @@ static int aotModuleInitOwnerIntern(const qore_program_private* target_pp, const
     Program's pending module initializations exactly while the loading thread holds a freshly published claim.
 */
 static const char* aotTestInitClaimBarrierModule() {
-    static const QoreEnvironmentValue mod_holder("QORE_AOT_TEST_INIT_CLAIM_BARRIER");
-    static const char* mod = mod_holder.c_str();
+    static constinit QoreLazyValue<QoreEnvironmentValue> mod_setting([]() -> QoreEnvironmentValue {
+        return QoreEnvironmentValue("QORE_AOT_TEST_INIT_CLAIM_BARRIER");
+    });
+    const char* mod = mod_setting.get().c_str();
     return mod && *mod ? mod : nullptr;
 }
 
@@ -14867,7 +14879,8 @@ static AOTPendingConstantInit* aotRegisterPendingConstantInit(std::unique_ptr<AO
 
 //! Test hook: leave every AOT constant uninitialized at module load so the first-read path is always taken
 static bool aotDeferConstantInitTestHook() {
-    static const bool enabled = q_env_is_set("QORE_AOT_TEST_DEFER_CONSTANT_INIT");
+    static constinit QoreEnvFlag enabled_env("QORE_AOT_TEST_DEFER_CONSTANT_INIT");
+    const bool enabled = enabled_env.get();
     return enabled;
 }
 
@@ -15946,7 +15959,8 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v3(
     // load spends its budget — expectation is near-instant
     // deserialize + register, with any 5-second blocks indicating
     // AST fallback re-parse of the embedded source.
-    static const bool _aot_trace = q_env_is_set("QORE_AOT_LOAD_TRACE");
+    static constinit QoreEnvFlag _aot_trace_env("QORE_AOT_LOAD_TRACE");
+    const bool _aot_trace = _aot_trace_env.get();
     struct timespec _aot_t_start;
     struct timespec _aot_t_prev;
     if (_aot_trace) {
@@ -16279,8 +16293,8 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v3(
         // Keep the open reader and debug payload alive for deferred init instead
         // of copying the complete module metadata again.
         if (state.init_descriptors) {
-            static const bool cache_init_reader =
-                !q_env_is_set("QORE_DISABLE_AOT_INIT_READER_CACHE");
+            static constinit QoreEnvFlag cache_init_reader_env("QORE_DISABLE_AOT_INIT_READER_CACHE");
+            const bool cache_init_reader = !cache_init_reader_env.get();
             if (cache_init_reader) {
                 state.init_reader = std::make_shared<QoreAOTBinaryReader>(deserializer.takeReader());
                 state.init_reader->wrap_const_ref_in_rcr = false;

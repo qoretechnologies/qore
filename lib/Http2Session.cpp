@@ -57,13 +57,11 @@ extern qore_classid_t CID_ASYNCIOCONTROLLER;
 
 static std::atomic<uint64_t> http2_session_sync_exec_seq{0};
 
+// read once, on the first call, without a static initialization guard (see QoreEnvFlag)
+static constinit QoreEnvFlag http2_debug("QORE_HTTP2_DEBUG");
+
 static bool http2DebugEnabled() {
-    static std::once_flag flag;
-    static int enabled = 0;
-    std::call_once(flag, []() {
-        enabled = q_env_is_set("QORE_HTTP2_DEBUG") ? 1 : 0;
-    });
-    return enabled == 1;
+    return http2_debug.get();
 }
 
 // nghttp2 1.60.0 introduced nghttp2_session_mem_send2 with nghttp2_ssize
