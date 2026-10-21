@@ -4840,6 +4840,12 @@ while (*binary chunk = input.read(65536)) {
     - Fixed a crash in @ref Qore::ReadOnlyFile::startPollRead() "ReadOnlyFile::startPollRead()" when the path could
       not be converted to the @ref default_encoding "default character encoding"; the \c ENCODING-CONVERSION-ERROR
       exception is now raised
+    - A closed @ref Qore::File "File" has no descriptor:
+      @ref Qore::AbstractPollableIoObjectBase::getPollableDescriptor() "File::getPollableDescriptor()" returns -1 for
+      it, as documented, instead of the number of the descriptor it closed, which the system can give to another file.
+      In the C++ API, \c QoreFile::detachFd() leaves the object closed and without a descriptor, as documented: the
+      object closed the descriptor detached from it, which the caller owns, when it was closed, opened again or
+      destroyed, and a second detach returned the same descriptor again
     - Fixed a crash of @ref Qore::encode_url() "encode_url()" and @ref Qore::encode_uri_request()
       "encode_uri_request()" with a UTF-8 string that ends in the middle of a character, which read past the end of
       the string; such a string raises an \c INVALID-ENCODING exception

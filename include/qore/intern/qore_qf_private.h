@@ -199,6 +199,20 @@ struct qore_qf_private {
         assert(!event_queue);
      }
 
+    //! closes the file or, with @p detach, gives up its descriptor without closing it; call with the lock held
+    /** Either way the object is left closed and without a descriptor (\c fd is -1), so it can never close a
+        descriptor it no longer owns, and getFD() and getPollableDescriptor() return -1 as documented.  Special files
+        (stdin, stdout, stderr) are never closed or detached.
+
+        The close event is raised for a detach as well: it reports that the File object's channel is closed, which
+        is true once the object has given up its descriptor, and listeners that pair each EVENT_FILE_OPENED with an
+        EVENT_CHANNEL_CLOSED would otherwise see the file still open until the object is deleted.
+
+        @param detach if true, the descriptor is not closed; the caller of detachFd() owns it
+
+        @return 0 for success, -1 if the file is a special file, or the return value of close(2) if the descriptor
+        was closed
+    */
     DLLLOCAL int close_intern(bool detach = false) {
         filename.clear();
         decoder.reset();
@@ -207,12 +221,11 @@ struct qore_qf_private {
         if (is_open) {
             if (special_file) {
                 rc = -1;
-            } else if (!detach) {
-                rc = ::close(fd);
-                is_open = false;
-                do_close_event_unlocked();
             } else {
-               rc = 0;
+                rc = detach ? 0 : ::close(fd);
+                is_open = false;
+                fd = -1;
+                do_close_event_unlocked();
             }
         } else {
             rc = 0;
@@ -1301,7 +1314,9 @@ struct qore_qf_private {
         }
 
         int rc = fd;
-        // special files (stdout/stderr/stdin) are not closed anyway, so we don't mark the object closed in this case
+        // special files (stdout/stderr/stdin) are never closed, so they are not detached either: the object keeps its
+        // descriptor and stays open; any other file is left closed and without a descriptor, so it can never close the
+        // descriptor the caller now owns, and a second call returns -1
         if (!special_file) {
             close_intern(true);
         }

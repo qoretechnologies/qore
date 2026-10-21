@@ -611,7 +611,14 @@ public:
     DLLEXPORT bool isTty() const;
 
     //! detaches and returns the file descriptor
-    /** the file object is left with no descriptor after this call; the caller owns the descriptor returned
+    /** the file object is left closed and with no descriptor after this call; the caller owns the descriptor returned
+        and must close it.  The object never closes the descriptor afterwards, neither in close() nor when it is
+        destroyed; isOpen() returns false, getFD() and a second call to this function return -1, and the file can be
+        opened again.  A QORE_EVENT_CHANNEL_CLOSED event is raised as for close(), as the object's channel is closed,
+        although the descriptor is not.
+
+        Special files (\c stdin, \c stdout and \c stderr) are never detached: their descriptor is returned, but the
+        object keeps it and stays open, so the caller must not close it.
 
         @return the file descriptor, if open, or -1 if not
 

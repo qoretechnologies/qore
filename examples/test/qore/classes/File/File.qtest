@@ -28,6 +28,7 @@ class FileTest inherits QUnit::Test {
         addTestCase("File named calls", \namedCallTest());
         addTestCase("issue 3061", \issue3061());
         addTestCase("redirect test", \redirectTest());
+        addTestCase("a closed file has no descriptor", \closedFileDescriptorTest());
         set_return_value(main());
     }
 
@@ -207,5 +208,15 @@ class FileTest inherits QUnit::Test {
         stderr.write(data: "test2");
 
         assertEq("test2", ReadOnlyFile::readTextFile(file));
+    }
+
+    closedFileDescriptorTest() {
+        TmpFile tmp("qore-File-");
+        assertGe(0, tmp.file.getPollableDescriptor(), "an open file has a descriptor");
+        assertEq(0, tmp.file.close(), "the file is closed");
+        assertFalse(tmp.file.isOpen(), "the file is not open after File::close()");
+        assertEq(-1, tmp.file.getPollableDescriptor(), "a closed file has no descriptor");
+        tmp.file.open2(tmp.path, O_RDONLY);
+        assertGe(0, tmp.file.getPollableDescriptor(), "a reopened file has a descriptor");
     }
 }
