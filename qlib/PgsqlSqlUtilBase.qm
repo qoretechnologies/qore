@@ -286,8 +286,13 @@ $function$
       \c pg_sequence (PostgreSQL 10 and later) or from the sequence (earlier versions), with the minimum and the cycle
       option, which @ref PgsqlSqlUtilBase::PgsqlSequence "PgsqlSequence" has as the new members
       @ref PgsqlSqlUtilBase::PgsqlSequence::min "min" and @ref PgsqlSqlUtilBase::PgsqlSequence::cycle "cycle", and
-      gives in the SQL that creates the sequence; schema alignment creates a sequence that does not exist and does not
-      change one that exists, so a sequence is never created again nor restarted by it
+      gives in the SQL that creates the sequence; schema alignment creates a sequence that does not exist, and never
+      creates one again nor restarts it
+    - schema alignment aligns the increment, minimum, maximum and cycle option of an existing sequence with
+      <tt>ALTER SEQUENCE</tt>, which keeps its current value
+      (@ref PgsqlSqlUtilBase::PgsqlSequence::getAlterSql() "PgsqlSequence::getAlterSql()"); the starting value is not
+      changed, as that would reset the current value.  A new sequence is created with the minimum and cycle option
+      of its description, and a maximum or minimum of 0 is a value, not the default
     - fixed a function source whose body is on the same line as its dollar quotes (ex:
       <tt>returns integer language sql as $$select 1$$</tt>) losing its body, so that the function was created
       without it and compared as different from the function in the database
@@ -1626,6 +1631,21 @@ public class PgsqlSequence inherits SqlUtil::AbstractSequence {
         cycle = n_cycle;
     }
 
+    #! applies a sequence description, setting the minimum and cycle option that PostgreSQL supports
+    /** @param desc the sequence description (see
+            @ref SqlUtil::AbstractDatabase::SequenceDescriptionOptions "SequenceDescriptionOptions")
+
+        @since PgsqlSqlUtilBase 1.19
+    */
+    setDescription(hash<auto> desc) {
+        if (desc.hasKey("min")) {
+            min = desc.min;
+        }
+        if (desc.hasKey("cycle")) {
+            cycle = desc.cycle.toBool();
+        }
+    }
+
     #! returns a string that can be used to create the sequence in the database
     string getCreateSql(*hash opt) {
         string sql = sprintf("create sequence %s start with %d increment by %d ", pgsql_get_sql_object_name(name),
@@ -1657,6 +1677,71 @@ public class PgsqlSequence inherits SqlUtil::AbstractSequence {
     */
     string getDropSql(*hash<auto> opt) {
         return sprintf("drop sequence %s", pgsql_get_sql_object_name(name));
+    }
+
+    #! returns True if two optional numeric values differ, treating a present 0 as a value, not as no value
+    /** @since PgsqlSqlUtilBase 1.19
+    */
+    static bool valueDiffers(*number a, *number b) {
+        if (exists a != exists b) {
+            return True;
+        }
+        return exists a && a != b;
+    }
+
+    #! returns the SQL that alters the sequence to match the description, preserving its current value
+    /** The increment, minimum, maximum and cycle option are aligned with \c ALTER \c SEQUENCE; the starting value
+        is not changed, as \c ALTER \c SEQUENCE \c RESTART would reset the current value, and \c START \c WITH only
+        changes the value that a later \c RESTART uses.  PostgreSQL has no sequence cache in the SqlUtil model, so
+        the \c cache option is ignored.
+
+        @param desired the sequence description (see
+            @ref SqlUtil::AbstractDatabase::SequenceDescriptionOptions "SequenceDescriptionOptions")
+        @param opt this argument is ignored
+
+        @return the \c ALTER \c SEQUENCE statement for the parameters that differ, or NOTHING if none differ
+
+        @since PgsqlSqlUtilBase 1.19
+    */
+    *softlist<string> getAlterSql(hash<auto> desired, *hash<auto> opt) {
+        list<string> clauses = ();
+        if (exists desired.increment && desired.increment != increment) {
+            clauses += sprintf("increment by %d", desired.increment);
+        }
+        # the direction of the sequence after the alignment, for the default of a maximum or minimum
+        bool ascending = (exists desired.increment ? desired.increment : increment) > 0;
+        # the maximum: "max" or the legacy "end"; a value equal to the bigint default in the direction, or
+        # NOTHING, means the database default (no maximum), as getSequenceImpl() reports it, so neither alters
+        if (desired.hasKey("max") || desired.hasKey("end")) {
+            *int new_max = desired.hasKey("max") ? desired.max : desired.end;
+            if (exists new_max && new_max == (ascending ? 9223372036854775807 : -1)) {
+                remove new_max;
+            }
+            # compare and render with "exists", as a maximum of 0 is a valid explicit value (a descending
+            # sequence can have "maxvalue 0") that .val() would wrongly treat as no value
+            if (PgsqlSequence::valueDiffers(new_max, max)) {
+                clauses += exists new_max ? sprintf("maxvalue %d", new_max) : "no maxvalue";
+            }
+        }
+        if (desired.hasKey("min")) {
+            *int new_min = desired.min;
+            if (exists new_min && new_min == (ascending ? 1 : -9223372036854775807 - 1)) {
+                remove new_min;
+            }
+            if (PgsqlSequence::valueDiffers(new_min, min)) {
+                clauses += exists new_min ? sprintf("minvalue %d", new_min) : "no minvalue";
+            }
+        }
+        if (desired.hasKey("cycle")) {
+            bool new_cycle = desired.cycle.toBool();
+            if (new_cycle != cycle) {
+                clauses += new_cycle ? "cycle" : "no cycle";
+            }
+        }
+        if (!clauses) {
+            return;
+        }
+        return sprintf("alter sequence %s %s", pgsql_get_sql_object_name(name), clauses.join(" "));
     }
 }
 

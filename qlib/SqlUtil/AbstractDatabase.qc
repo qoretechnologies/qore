@@ -241,6 +241,17 @@ public class AbstractDatabase inherits AbstractSqlUtilBase {
             "start": Type::Int,
             "increment": Type::Int,
             "end": Type::Int,
+            # the maximum value (an alias for "end"); since SqlUtil 3.11.0
+            "max": Type::Int,
+            # the minimum value; since SqlUtil 3.11.0
+            "min": Type::Int,
+            # True if the sequence restarts at its minimum (or maximum) value when it reaches its maximum (or
+            # minimum); since SqlUtil 3.11.0
+            "cycle": Type::Boolean,
+            # the number of sequence values cached: a positive number caches that many values, 0 means no cache,
+            # and the key absent means the database default; not every database has a sequence cache (PostgreSQL
+            # has none in this model and ignores the option); since SqlUtil 3.11.0
+            "cache": Type::Int,
         );
 
         #! Options for computeStatistics()
@@ -507,11 +518,17 @@ list l = db.getAlignSql(schema_hash);
             hash<auto> sh = i.getValue();
             validateOptionsIntern("SEQUENCE-DESCRIPTION-ERROR", getSequenceDescriptionOptions(), \sh);
 
-            # see if sequence exists
-            if (getSequence(name))
+            # see if sequence exists; if it does, align its parameters by altering it, so that its current value
+            # is preserved (a driver that cannot alter a parameter raises a described exception; see getAlterSql())
+            *AbstractSequence existing = getSequence(name);
+            if (existing) {
+                *softlist<string> alter = existing.getAlterSql(sh, opt);
+                map l += AbstractDatabase::doCallback(opt, $1, AC_Modify, "sequence", name), alter;
                 continue;
+            }
 
-            AbstractSequence seq = makeSequence(name, sh.start, sh.increment, sh.end);
+            # the alignment options are not sequence creation options, so they are not passed on
+            AbstractSequence seq = makeSequenceFromDescription(name, sh);
             l += AbstractDatabase::doCallback(opt, seq.getCreateSql(), AC_Create, "sequence", name);
         }
 
@@ -783,7 +800,11 @@ AbstractSequence seq = db.makeSequence("seq_queues");
     AbstractSequence makeSequenceFromDescription(string name, *hash<auto> sh, *hash<auto> opts) {
         validateOptionsIntern("SEQUENCE-DESCRIPTION-ERROR", getSequenceDescriptionOptions(), \sh);
 
-        return makeSequence(name, sh.start, sh.increment, sh.end);
+        # "max" is an alias for "end"; the full description (min, cycle, cache) is applied with setDescription(),
+        # so that a sequence is created with all its parameters and a second alignment proposes no SQL
+        AbstractSequence seq = makeSequence(name, sh.start, sh.increment, sh.max ?? sh.end, opts);
+        seq.setDescription(sh);
+        return seq;
     }
 
     #! creates a database-specific AbstractTable object corresponding to the arguments

@@ -166,6 +166,16 @@ module SqlUtil {
       action drops and adds the constraint again.  A foreign constraint without actions is created and aligned
       exactly as before; an action that the database does not support is refused with
       \c FOREIGN-CONSTRAINT-ERROR
+    - schema alignment aligns the parameters of an existing sequence with \c ALTER \c SEQUENCE, which keeps its
+      current value (@ref SqlUtil::AbstractSequence::getAlterSql() "AbstractSequence::getAlterSql()"); before, a
+      sequence that existed was never changed.  A sequence description can give \c min, \c max, \c cycle and
+      \c cache as well; which parameters can be altered depends on the database, and the starting value is never
+      changed, as that would reset the current value.  A new sequence is created with every parameter of its
+      description (@ref SqlUtil::AbstractSequence::setDescription() "AbstractSequence::setDescription()")
+    - fixed a descending sequence that starts below its maximum being refused with \c SEQUENCE-ERROR, and a
+      sequence that starts above its maximum, or with a maximum of 0 below its start, being accepted, so that the
+      database refused it when it was created; the starting value is checked against the maximum in both
+      directions
     - fixed @ref SqlUtil::AbstractTable::setupTable() "AbstractTable::setupTable()" requesting the DDL that adds a
       foreign constraint to an existing table while constructing an in-memory table description, as it did for a
       primary key before 3.2.0; a description of a table with foreign constraints can now be set up on a database
@@ -10094,11 +10104,12 @@ string sql = constraint.getDeferrabilitySql();
             max = n_max;
             if (!increment)
                 throw "SEQUENCE-ERROR", sprintf("sequence %y: increment cannot be zero", name);
-            if (max) {
-                if (increment > 0 && max < start)
-                    throw "SEQUENCE-ERROR", sprintf("ascending sequence %y increment %d: max value %d is less than the starting value: %d", name, increment, max, start);
-                if (increment < 0 && max > start)
-                    throw "SEQUENCE-ERROR", sprintf("descending sequence %y increment %d: max value %d is less than the starting value: %d", name, increment, max, start);
+            # the starting value must not be above the maximum in either direction, as every database requires
+            # (min <= start <= max); a maximum of 0 is a value too.  A descending sequence that starts below its
+            # maximum was refused, and one that starts above it, which the database refuses, was accepted
+            if (exists max && max < start) {
+                throw "SEQUENCE-ERROR", sprintf("%s sequence %y increment %d: max value %d is less than the starting "
+                    "value: %d", increment > 0 ? "ascending" : "descending", name, increment, max, start);
             }
         }
 
@@ -10117,6 +10128,50 @@ string sql = constraint.getDeferrabilitySql();
             @param opt drop options (if supported by the driver and object)
          */
         abstract softlist<auto> getRenameSql(string new_name, *hash<auto> opt);
+
+        #! applies a sequence description to the object, setting any parameters beyond the starting value,
+        #! increment and maximum that the driver supports (minimum, cycle, cache)
+        /** Called when a sequence is created from a description (see
+            @ref SqlUtil::AbstractDatabase::makeSequenceFromDescription() "makeSequenceFromDescription()"), so that
+            a sequence is created with all of its parameters and a later alignment of the same description proposes
+            no SQL.  This base implementation does nothing (the starting value, increment and maximum are already
+            set from the constructor); a driver that has a minimum, cycle option or cache overrides it to set them
+            from the description.
+
+            @param desc the sequence description (see
+                @ref SqlUtil::AbstractDatabase::SequenceDescriptionOptions "SequenceDescriptionOptions")
+
+            @since SqlUtil 3.11.0
+        */
+        setDescription(hash<auto> desc) {
+        }
+
+        #! returns the SQL that alters the sequence in the database to match the given description, preserving its
+        #! current value, or NOTHING if the sequence does not differ or the driver does not align sequences
+        /** Called by @ref SqlUtil::AbstractDatabase::getAlignSql() "getAlignSql()" for a sequence that already
+            exists.  A parameter difference (increment, minimum, maximum, cycle or cache, as each database allows)
+            is applied with \c ALTER \c SEQUENCE so that the sequence keeps its current value, instead of being
+            dropped and recreated.  The starting value is never changed, as that would reset the current value; a
+            driver documents any parameter that it cannot alter.
+
+            This base implementation returns NOTHING: a driver that does not override it does not align sequence
+            parameters, as before SqlUtil 3.11.0.
+
+            @param desired the sequence description (see
+                @ref SqlUtil::AbstractDatabase::SequenceDescriptionOptions "SequenceDescriptionOptions"): the keys
+                \c start, \c increment, \c end or \c max, \c min, \c cycle and \c cache
+            @param opt alignment options
+
+            @return the \c ALTER \c SEQUENCE SQL for the parameters that differ, or NOTHING if none differ or the
+                driver does not align sequences
+
+            @throw SEQUENCE-ERROR the description changes a parameter that the database cannot alter
+
+            @since SqlUtil 3.11.0
+        */
+        *softlist<string> getAlterSql(hash<auto> desired, *hash<auto> opt) {
+            return;
+        }
     }
 
     #! base class for views
