@@ -5045,13 +5045,14 @@ while (*binary chunk = input.read(65536)) {
     - Fixed child processes created with @ref Qore::fork() "fork()" that hung forever when other threads were running
       in the parent: a child created while another thread started or exited hung in @ref Qore::fork() "fork()"
       itself, and children could also hang when they started a thread, changed a signal handler, used sockets, read
-      a time zone or a character encoding.
+      a time zone or a character encoding, or exited after native code had been compiled in the background.
       @ref Qore::fork() "fork()" now briefly waits for threads that hold the library's process-wide locks, and the
       child process gets them free and repairs the state of the threads that do not exist in it; this also applies
-      to a \c fork() made by native code.  Objects that another thread was using at the moment of the fork, such
-      as a locked mutex, still cannot be used in the child.  Native code must not hold the environment lock
-      (\c QoreEnvironmentReadLock, \c AtomicEnvironmentSetter) while it calls \c fork(); the child gets a
-      consistent copy of the environment without it
+      to a \c fork() made by native code.  In a child created while another thread was compiling code to native
+      code, code is not compiled to native code and runs in the IR tier.  Objects that another thread was using at
+      the moment of the fork, such as a locked mutex, still cannot be used in the child.  Native code must not hold
+      the environment lock (\c QoreEnvironmentReadLock, \c AtomicEnvironmentSetter) while it calls \c fork(); the
+      child gets a consistent copy of the environment without it
     - Fixed a deadlock when the thread initialization code of a Program (see
       @ref Qore::set_thread_init() "set_thread_init()") started a thread or read the call stacks of all threads
     - Fixed the warnings of the files of a separated user module other than its \c .qm file: each was parsed with the

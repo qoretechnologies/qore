@@ -1042,6 +1042,8 @@ if (pid = fork()) {
       process was copied: fork() waits for threads that briefly hold the library's process-wide locks; an object
       that another thread was using at that moment (for example a locked @ref Qore::Thread::Mutex "Mutex") cannot be
       used in the child
+    - in a child process created while another thread was compiling code to native code, code is not compiled to
+      native code and runs in the IR tier
     - on some platforms, after a fork(), the only safe call is @ref exec(), many system calls are not async-signal
       safe, including pthread_create() which is used to start new threads; on these platforms, the %Qore process will
       crash if unsafe operations are called after a fork()

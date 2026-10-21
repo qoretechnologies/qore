@@ -97,8 +97,9 @@ starts such an initialization then blocks inside the guard.
   set) and `QoreLazyValue<T>` (a value computed from the environment), both in `QoreLibIntern.h`. Threads that read
   one for the first time at the same time can all compute it; they all return the value that the first of them
   stored. `constinit` makes the compiler reject one that would need a guard.
-- One-time initializations of libraries (c-ares, the layered TLS BIO method, the QUIC TLS backend) run in
-  `qore_init()`, before any other thread exists: `qore_network_init_once()`.
+- One-time initializations of libraries (c-ares, the layered TLS BIO method, the QUIC TLS backend) and the JIT
+  object run in `qore_init()`, before any other thread exists: `qore_network_init_once()`, `QoreJIT::init()`.
+- The JIT initializes LLVM under its compile lock instead of a once flag.
 
 ## What the child repairs
 
@@ -118,6 +119,10 @@ Besides the locks:
   new one. A block set by another thread's Qore `fork()` is lifted.
 - **Condition waker, external thread reaper**: their threads do not exist in the child; they are started again
   when they are needed.
+- **JIT**: the background compiler's thread does not exist in the child; it is forgotten (its work in progress is
+  lost, and that function stays in the tier it is in) and started again with the next background compilation. If
+  another thread held the compile lock, the LLVM objects can be inconsistent: the JIT compiles nothing in the child
+  (the code runs in the IR tier), and its LLVM objects are not destroyed there.
 - **Async I/O**: the default controller of the parent is abandoned (its I/O threads and workers do not exist, and on
   Linux its descriptors are shared with the parent): it is neither stopped nor freed in the child, and a new default
   controller is created when it is first needed (outside the singleton lock, since its constructor reads the

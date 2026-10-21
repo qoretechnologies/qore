@@ -921,16 +921,29 @@ static void qore_jit_shutdown_at_exit() {
 // released late by shutdown() after normal qore_cleanup() has destroyed module Programs.  On a
 // direct exit(), only the compiler is stopped and the operating system reclaims the execution
 // engine after all process callbacks have finished.
+//
+// The object is created when the library is initialized (see init()), but the stop at process exit is still
+// registered on the first use of the JIT, so that it keeps its place in the teardown order.
+static QoreJIT* qore_jit_singleton = nullptr;
+//! true once the stop at process exit is registered
+static std::atomic<bool> qore_jit_atexit_registered{false};
+
+void QoreJIT::init() {
+    if (!qore_jit_singleton) {
+        qore_jit_singleton = new QoreJIT;
+    }
+}
+
 QoreJIT& QoreJIT::instance() {
-    static QoreJIT* jit = [] {
-        QoreJIT* rv = new QoreJIT;
+    assert(qore_jit_singleton);
+    if (!qore_jit_atexit_registered.load(std::memory_order_acquire)
+            && !qore_jit_atexit_registered.exchange(true, std::memory_order_acq_rel)) {
         if (atexit(qore_jit_shutdown_at_exit)) {
             printd(0, "QoreJIT::instance(): failed to register the atexit JIT shutdown handler; "
                 "the background compile thread will not be stopped before process exit\n");
         }
-        return rv;
-    }();
-    return *jit;
+    }
+    return *qore_jit_singleton;
 }
 
 bool QoreJIT::isEnabled() const {
@@ -1053,17 +1066,23 @@ bool QoreJIT::registerRuntimeSymbols(std::string& error) {
     return true;
 }
 
-bool QoreJIT::compileFunction(const QoreIRFunction& func, std::string& error,
-        void* deopt_counter) {
-    // Thread-safe initialization using std::call_once
-    std::call_once(init_flag, [this]() {
+bool QoreJIT::initializeLocked(std::string& error) {
+    // initialized under compile_mutex rather than with std::call_once(): a child process created with fork() while
+    // another thread was initializing the JIT would wait forever for the once flag (musl, macOS), while
+    // compile_mutex has a fork handler (see forkChild())
+    if (!init_done) {
         init_success = initialize(init_error);
-    });
+        init_done = true;
+    }
     if (!init_success) {
         error = init_error;
         return false;
     }
+    return true;
+}
 
+bool QoreJIT::compileFunction(const QoreIRFunction& func, std::string& error,
+        void* deopt_counter) {
     // Check if already compiled (fast path without compile lock)
     {
         std::lock_guard<std::mutex> lock(cache_mutex);
@@ -1078,6 +1097,9 @@ bool QoreJIT::compileFunction(const QoreIRFunction& func, std::string& error,
     // Serialize the entire compilation pipeline: LLVM's code generation (MCStreamer,
     // DWARF emission, debugger support) is not thread-safe for concurrent compilations.
     std::lock_guard<std::mutex> compile_lock(compile_mutex);
+    if (!initializeLocked(error)) {
+        return false;
+    }
 
     bool rc = compileFunctionInternal(func, error, deopt_counter);
     // synchronous compilations (top-level code with JIT execution) are traced like background ones, so that the
@@ -1094,12 +1116,7 @@ bool QoreJIT::compileFunction(const QoreIRFunction& func, std::string& error,
 
 bool QoreJIT::compileFunctionLocked(const QoreIRFunction& func, std::string& error,
         void* deopt_counter, const std::string* symbol_name) {
-    // Thread-safe initialization using std::call_once
-    std::call_once(init_flag, [this]() {
-        init_success = initialize(init_error);
-    });
-    if (!init_success) {
-        error = init_error;
+    if (!initializeLocked(error)) {
         return false;
     }
 
@@ -1253,15 +1270,6 @@ bool QoreJIT::compileFunctionInternal(const QoreIRFunction& func, std::string& e
 bool QoreJIT::compileFunctionBatch(const QoreIRFunction& root_func, std::string& error,
         void* root_deopt_counter,
         const std::vector<BatchCallee>& callees) {
-    // Thread-safe initialization using std::call_once
-    std::call_once(init_flag, [this]() {
-        init_success = initialize(init_error);
-    });
-    if (!init_success) {
-        error = init_error;
-        return false;
-    }
-
     // Check if already compiled (fast path without compile lock)
     {
         std::lock_guard<std::mutex> lock(cache_mutex);
@@ -1272,6 +1280,9 @@ bool QoreJIT::compileFunctionBatch(const QoreIRFunction& root_func, std::string&
 
     // Serialize the entire compilation pipeline
     std::lock_guard<std::mutex> compile_lock(compile_mutex);
+    if (!initializeLocked(error)) {
+        return false;
+    }
 
     return compileFunctionBatchInternal(root_func, error, root_deopt_counter, callees);
 }
@@ -1279,12 +1290,7 @@ bool QoreJIT::compileFunctionBatch(const QoreIRFunction& root_func, std::string&
 bool QoreJIT::compileFunctionBatchLocked(const QoreIRFunction& root_func, std::string& error,
         void* root_deopt_counter,
         const std::vector<BatchCallee>& callees) {
-    // Thread-safe initialization using std::call_once
-    std::call_once(init_flag, [this]() {
-        init_success = initialize(init_error);
-    });
-    if (!init_success) {
-        error = init_error;
+    if (!initializeLocked(error)) {
         return false;
     }
 
@@ -1958,27 +1964,27 @@ void QoreJIT::bgCompileThreadLoop() {
             bg_in_progress = &work;
         }
 
+        // Acquire compile lock (blocking is OK here — this is a dedicated background thread)
+        std::lock_guard<std::mutex> lock(compile_mutex);
+
         // Tiered execution can reach a hot function before any synchronous JIT
         // compilation has initialized LLVM.  Initialize it here so that the
         // first background promotion can make progress; otherwise enqueueing
         // rejects the work and resets the variant's compile state, causing every
         // subsequent call above the threshold to repeat batch discovery and IR
         // lowering indefinitely.
-        std::call_once(init_flag, [this]() {
-            init_success = initialize(init_error);
-        });
-        if (!init_success) {
-            if (work.uvb) {
-                UserVariantBase* mutable_uvb = const_cast<UserVariantBase*>(work.uvb);
-                mutable_uvb->jit_compile_failed.store(true, std::memory_order_release);
-                mutable_uvb->jit_compile_state.store(2, std::memory_order_release);
+        {
+            std::string init_err;
+            if (!initializeLocked(init_err)) {
+                if (work.uvb) {
+                    UserVariantBase* mutable_uvb = const_cast<UserVariantBase*>(work.uvb);
+                    mutable_uvb->jit_compile_failed.store(true, std::memory_order_release);
+                    mutable_uvb->jit_compile_state.store(2, std::memory_order_release);
+                }
+                finishBgCompileWork(work);
+                continue;
             }
-            finishBgCompileWork(work);
-            continue;
         }
-
-        // Acquire compile lock (blocking is OK here — this is a dedicated background thread)
-        std::lock_guard<std::mutex> lock(compile_mutex);
 
         // Pre-copy function names before any LLVM operations.
         // LLVM 21's addIRModule()/lookup() corrupts adjacent heap memory
@@ -2327,7 +2333,13 @@ void QoreJIT::shutdown() {
     // Acquiring compile_mutex also documents and enforces serialization with compilation even if
     // shutdown() is called independently of the normal two-phase qore_cleanup() path.
     std::lock_guard<std::mutex> compile_lock(compile_mutex);
-    jit.reset();
+    if (unusable_after_fork) {
+        // in a child process created with fork() while another thread of the parent was compiling, the LLVM
+        // objects can be inconsistent, so they are not destroyed; the process is exiting
+        (void)jit.release();
+    } else {
+        jit.reset();
+    }
     symbols_registered = false;
     {
         std::lock_guard<std::mutex> lock(cache_mutex);
@@ -2336,6 +2348,32 @@ void QoreJIT::shutdown() {
         defined_fast_entry_abi.clear();
     }
     init_success = false;
+}
+
+void QoreJIT::forkChild(bool compile_lock_acquired) noexcept {
+    // runs in the child process in its only thread, with no lock held; cache_mutex, bg_queue_mutex and its
+    // conditions are already initialized again
+    if (!compile_lock_acquired) {
+        // another thread of the parent was compiling or initializing LLVM: the LLVM objects that it was changing can
+        // be inconsistent, so nothing is compiled in the child, and the code runs in the IR tier; compiled code and
+        // the caches stay valid, since they are only changed under cache_mutex
+        unusable_after_fork = true;
+        init_done = true;
+        init_success = false;
+        try {
+            init_error = "the JIT is not available in a child process created with fork() while another thread was "
+                "compiling";
+        } catch (...) {
+            // the error message stays empty; the JIT is still disabled
+        }
+    }
+    // the background compile thread does not exist in the child; it is started again with the next background
+    // compilation.  The work it had taken from the queue is lost with it: the function stays in the tier it is in.
+    bg_thread_running.store(false, std::memory_order_relaxed);
+    bg_compile_thread.abandonAfterFork();
+    bg_in_progress = nullptr;
+    // only the queued work is pending in the child
+    bg_active_work.store(static_cast<int>(bg_compile_queue.size()), std::memory_order_relaxed);
 }
 
 bool QoreJIT::tryAcquireCompileLock() {

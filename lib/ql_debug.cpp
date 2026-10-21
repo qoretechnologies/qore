@@ -71,6 +71,7 @@
 #include "qore/intern/qore_thread_intern.h"
 #include "qore/intern/QoreForkHandlers.h"
 #include "qore/intern/QoreSignal.h"
+#include "qore/intern/QoreJIT.h"
 
 #include <openssl/evp.h>
 #include <openssl/x509.h>
@@ -946,7 +947,7 @@ static void ut_fork_waits_for_lock_holders(UnitTestCounters& c) {
         "program_registry", "program_cleanup", "breakpoints", "constant_value_locks", "opaque_target_shards",
         "encodings", "utc_offset_zones", "module_options", "app_registry", "complex_types", "external_types",
         "aot_deferred_types", "builtin_locations", "class_ids", "scan_waits", "node_watches", "async_io_logger",
-        "cipher_cache", "digest_cache", "environment",
+        "cipher_cache", "digest_cache", "jit_cache", "jit_bg_queue", "environment",
         nullptr,
     };
     for (const char** name = names; *name; ++name) {
@@ -1042,6 +1043,79 @@ static void ut_fork_signal_block_waiter(UnitTestCounters& c) {
     // returns only if the waiter was woken
     waiter.join();
     UT_ASSERT(c, rc == 0, "a thread waiting for the fork() block is woken and completes its change");
+}
+
+//! fork() does not wait for a JIT compilation in another thread, and the JIT compiles nothing in the child
+/** The compile lock is held across LLVM compilations, so fork() only tries it; a child created while another thread
+    compiled got the lock held by a thread that does not exist in it, and its exit waited forever for the lock
+*/
+static void ut_fork_jit_compile_in_progress(UnitTestCounters& c) {
+    QoreJIT& jit = QoreJIT::instance();
+    std::mutex m;
+    std::condition_variable cv;
+    bool held = false;
+    bool release = false;
+    // compiles, as far as the lock is concerned
+    std::thread holder([&]() {
+        jit.lockCompileForTest();
+        std::unique_lock<std::mutex> ul(m);
+        held = true;
+        cv.notify_all();
+        cv.wait(ul, [&] { return release; });
+        ul.unlock();
+        jit.releaseCompileLock();
+    });
+    {
+        std::unique_lock<std::mutex> ul(m);
+        cv.wait(ul, [&] { return held; });
+    }
+    pid_t pid = fork();
+    if (!pid) {
+        int rc = 0;
+        // the lock is free in the child
+        if (!jit.tryAcquireCompileLock()) {
+            rc |= 1;
+        } else {
+            jit.releaseCompileLock();
+        }
+        // the LLVM state can be inconsistent: the JIT is disabled
+        if (!jit.isUnusableAfterFork()) {
+            rc |= 2;
+        }
+        // as at the exit of the child
+        jit.stopBackgroundCompiler();
+        _exit(rc);
+    }
+    {
+        std::lock_guard<std::mutex> lg(m);
+        release = true;
+        cv.notify_all();
+    }
+    holder.join();
+    UT_ASSERT(c, pid > 0, "fork() succeeds");
+    if (pid > 0) {
+        UT_ASSERT_EQ(c, 0, ut_wait_child(pid), "the JIT compile lock is free in the child, and the JIT is disabled");
+    }
+    UT_ASSERT(c, !jit.isUnusableAfterFork(), "the JIT stays usable in the parent");
+}
+
+//! A child process created with fork() after the JIT background compiler started can stop it
+/** The compiler's thread does not exist in the child; stopping it at the child's exit joined that thread and waited
+    forever
+*/
+static void ut_fork_jit_background_compiler(UnitTestCounters& c) {
+    QoreJIT& jit = QoreJIT::instance();
+    UT_ASSERT(c, jit.startBackgroundCompilerForTest(), "the background compiler runs");
+    pid_t pid = fork();
+    if (!pid) {
+        // as at the exit of the child
+        jit.stopBackgroundCompiler();
+        _exit(0);
+    }
+    UT_ASSERT(c, pid > 0, "fork() succeeds");
+    if (pid > 0) {
+        UT_ASSERT_EQ(c, 0, ut_wait_child(pid), "the child stopped the background compiler");
+    }
 }
 
 //! A value that another thread was computing for the first time when the process was forked is computed in the child
@@ -9354,6 +9428,8 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     ut_cond_wait_cancel_in_window(c);
     ut_fork_waits_for_lock_holders(c);
     ut_fork_signal_block_waiter(c);
+    ut_fork_jit_compile_in_progress(c);
+    ut_fork_jit_background_compiler(c);
     ut_fork_lazy_value_in_first_use(c);
     Http3ClientResponseRegistrationTest::run(c);
     ut_fast_real_deref_releases_last(c);

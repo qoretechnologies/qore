@@ -10,6 +10,7 @@
 %requires cppapiuser
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
+%requires ../../ExecModeHarness.qm
 
 %exec-class ForkThreadChurnTest
 
@@ -27,8 +28,9 @@
     child that waits forever makes the test wait forever, which is how the failure shows (the test runner's time
     limit is only a guard).
 
-    The other case covers the I/O threads of the default async I/O controller, which do not exist in a child: a
-    child's first socket operation waited for them.
+    The other cases cover the services whose threads do not exist in a child: the JIT background compiler, which a
+    child's exit stopped by waiting for its thread, and the I/O threads of the default async I/O controller, which a
+    child's first socket operation waited for.
 */
 class ForkThreadChurnTest inherits QUnit::Test {
     #! the number of threads that start threads while the children are created
@@ -42,6 +44,7 @@ class ForkThreadChurnTest inherits QUnit::Test {
         addTestCase("fork() while threads start and exit", \testForkChurn());
         addTestCase("fork() without other threads", \testForkQuiet());
         addTestCase("a fork() outside Qore's fork() leaves signal handling usable", \testForeignFork());
+        addTestCase("a child exits after the JIT background compiler ran in the parent", \testForkAfterBgJit());
         addTestCase("a child uses socket I/O after the parent did", \testForkSocketIo());
         set_return_value(main());
     }
@@ -99,6 +102,24 @@ class ForkThreadChurnTest inherits QUnit::Test {
         on_exit remove_signal_handler(SIGUSR2);
         kill(getpid(), SIGUSR2);
         assertEq(SIGUSR2, q.get(), "the parent's signal handler ran");
+    }
+
+    testForkAfterBgJit() {
+        if (!Option::HAVE_FORK) {
+            testSkip("fork() is not available");
+        }
+        # the thread of the JIT background compiler does not exist in the child: stopping the compiler at the child's
+        # exit waited forever for it
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string scenario = get_script_dir() + DirSep + "ForkAfterBgJitScenario.qr";
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s --exec-mode=tiered %s",
+            qore_bin, scenario));
+        on_error printf("scenario output:\n%s\n", r.out);
+        # the symbol of a compiled function is its name followed by a suffix that makes it unique
+        assertTrue((select r.trace, $1 =~ /^\[BG-JIT\] compiled 'hot[@']/).size() > 0,
+            "the background compiler compiled a function before fork()");
+        assertEq(0, r.rc, "the scenario exited normally");
+        assertEq("child-status=0", trim(r.stdout), "the child exited normally");
     }
 
     testForkSocketIo() {

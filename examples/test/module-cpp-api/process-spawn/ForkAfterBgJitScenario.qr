@@ -1,0 +1,25 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# Run by fork-thread-churn.qtest with tiered execution and synchronous, traced native compilation (see
+# ExecModeHarness): hot() is compiled to native code by the JIT background compiler before fork() is called, so the
+# compiler's thread runs in the parent.  The child exits, which stops the background compiler, and the parent prints
+# the exit status of the child.
+
+# provides cpp_api_wait_child()
+%requires cppapiuser
+
+int sub hot(int x) {
+    return x * 2 + 1;
+}
+
+int sum = 0;
+for (int i = 0; i < 10; ++i) {
+    sum += hot(i);
+}
+int pid = fork();
+if (!pid) {
+    exit(sum == 100 ? 0 : 1);
+}
+printf("child-status=%d\n", cpp_api_wait_child(pid));

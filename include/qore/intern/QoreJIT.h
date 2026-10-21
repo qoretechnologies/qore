@@ -49,6 +49,7 @@
 #include <qore/QoreValue.h>
 #include <qore/Restrictions.h>
 #include "qore/intern/qore_aot_deps.h"
+#include "qore/intern/QoreForkHandlers.h"
 
 class ExceptionSink;
 class LocalVar;
@@ -113,6 +114,11 @@ public:
 
     //! Waits for the thread to exit
     DLLLOCAL void join();
+
+    //! Forgets the thread in a child process created with fork(), where it does not exist
+    DLLLOCAL void abandonAfterFork() {
+        started = false;
+    }
 
 private:
     pthread_t tid;
@@ -621,7 +627,16 @@ public:
         FallbackToInterpreter,
         DisableJit,
     };
+    //! Returns the process-wide JIT
+    /** It is created by init() when the library is initialized
+    */
     static QoreJIT& instance();
+
+    //! Creates the process-wide JIT; called once when the library is initialized
+    /** It is created then, with no other thread running, so that its fork handlers (see QoreForkHandlers.h) are
+        registered while no lock is held; it creates no LLVM objects before the first compilation
+    */
+    static void init();
 
     bool isEnabled() const;
     bool initialize(std::string& error);
@@ -730,6 +745,27 @@ public:
     //! Release the compilation mutex after a successful tryAcquireCompileLock().
     void releaseCompileLock();
 
+    //! Returns true in a child process created with fork() while another thread of the parent was compiling
+    /** The JIT compiles nothing in such a child; see forkChild()
+    */
+    bool isUnusableAfterFork() const {
+        return unusable_after_fork;
+    }
+
+#ifdef DEBUG
+    //! For tests: waits for and takes the compilation mutex, as a compilation does
+    /** Release it with releaseCompileLock()
+    */
+    void lockCompileForTest() {
+        compile_mutex.lock();
+    }
+
+    //! For tests: starts the background compilation thread
+    bool startBackgroundCompilerForTest() {
+        return startBackgroundThread();
+    }
+#endif
+
     //! Compile an IR function to native code, assuming compile_mutex is already held.
     //! Use after tryAcquireCompileLock() returns true.
     //! @param symbol_name the name of the native function, if not func.name; the compiled function is looked up
@@ -786,9 +822,22 @@ private:
     std::unordered_set<std::string> defined_batch_symbols;
     //! The ABI of each defined fast entry; a later batch can only call one whose ABI matches its own analysis
     std::unordered_map<std::string, std::string> defined_fast_entry_abi;
-    std::once_flag init_flag;
+    //! true once initialize() has run; protected by compile_mutex
+    bool init_done = false;
+    //! the result of initialize(); protected by compile_mutex
     bool init_success = false;
+    //! the reason why the JIT cannot compile when init_success is false; protected by compile_mutex
     std::string init_error;
+    //! true in a child process created with fork() while another thread of the parent was compiling
+    /** The LLVM state that the other thread was changing can be inconsistent, so the JIT compiles nothing in the
+        child (the code runs in the IR tier) and is not released by shutdown(); see forkChild()
+    */
+    bool unusable_after_fork = false;
+
+    //! Runs initialize() the first time; assumes compile_mutex is held
+    /** @return true if the JIT can compile; if not, \a error is set to the reason
+    */
+    bool initializeLocked(std::string& error);
     DeoptPolicy deopt_policy = DeoptPolicy::FallbackToInterpreter;
 
     //! Tiered compilation thresholds
@@ -850,6 +899,42 @@ private:
 
     //! Background thread worker loop
     void bgCompileThreadLoop();
+
+    //! Repairs the JIT in a child process created with fork(), where only the forking thread exists
+    /** Called by the fork handler of compile_mutex after the fork handlers of cache_mutex and bg_queue_mutex have
+        initialized those locks and their conditions again
+
+        @param compile_lock_acquired true if compile_mutex was acquired before fork(): no other thread was compiling
+    */
+    void forkChild(bool compile_lock_acquired) noexcept;
+
+    //! The fork handler of compile_mutex (see QoreForkHandlers.h)
+    /** compile_mutex is held across LLVM compilations, which can take a long time, so fork() does not wait for it
+        (QFLM_TRY); see forkChild()
+    */
+    class CompileForkHandler : public QoreForkStdMutex {
+    public:
+        DLLLOCAL CompileForkHandler(QoreJIT& jit)
+                : QoreForkStdMutex(jit.compile_mutex, QFLR_JIT_COMPILE, "jit_compile", QFLM_TRY), jit(jit) {
+        }
+
+        DLLLOCAL void child() noexcept override {
+            QoreForkStdMutex::child();
+            jit.forkChild(wasAcquired());
+        }
+
+    private:
+        QoreJIT& jit;
+    };
+
+    // the fork handlers are declared last: they are registered after the locks they refer to are created, and
+    // unregistered before the locks are destroyed
+    //! the JIT caches are only accessed under cache_mutex, which is a leaf lock
+    QoreForkStdMutex cache_fork_handler{cache_mutex, QFLR_LEAF, "jit_cache"};
+    //! the queue of the background compiler; its conditions are created again in the child
+    QoreForkStdMutex bg_queue_fork_handler{bg_queue_mutex, QFLR_LEAF, "jit_bg_queue", QFLM_ACQUIRE,
+        {&bg_queue_cv, &bg_queue_empty_cv}};
+    CompileForkHandler compile_fork_handler{*this};
 
     //! Initialize and start the background compilation thread if work is still accepted.
     //! @return true if work can be enqueued
