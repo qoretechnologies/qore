@@ -198,7 +198,8 @@ hash<auto> desc = {
       option) and statistics updates (@ref SqlUtil::AbstractDatabase::computeStatistics()
       "AbstractDatabase::computeStatistics()"), which gave identifiers as bind values as well
     - added foreign constraint referential actions: \c on_delete and \c on_update, which are described from the
-      database and aligned (see @ref mssql_fk_actions)
+      database and aligned; \c RESTRICT, which SQL Server does not have, is refused with
+      \c FOREIGN-CONSTRAINT-ERROR, as is any action on Sybase (see @ref mssql_fk_actions)
     - added sequence alignment: the increment, minimum, maximum, cycle option and cache of an existing sequence are
       changed with \c ALTER \c SEQUENCE, keeping its current value, and a sequence is created with them (see
       @ref mssql_sequences)

@@ -155,6 +155,9 @@ module SqlUtil {
       ordinary names is unchanged, so existing schemas and alignment do not change (see @ref sql_identifiers).
       Added @ref SqlUtil::AbstractSqlUtilBase::getSqlIdentifier() "getSqlIdentifier()" and
       @ref SqlUtil::AbstractTable::getAliasSqlName() "getAliasSqlName()"
+    - the table, column and sequence names of an auto-trigger configuration (see @ref auto_trigger_config) must be
+      plain names of ASCII letters, digits, underscores and dollar signs, as they are written in the SQL of the
+      generated triggers; any other name is refused with \c AUTO-TRIGGER-ERROR
     - Added @ref SqlUtil::AbstractDatabase::getCurrentSchemaPhysicalSize()
       "AbstractDatabase::getCurrentSchemaPhysicalSize()", which measures the physical size of the schema that
       unqualified names resolve to on the connection, without the cost of measuring the whole database, on
@@ -9937,6 +9940,10 @@ AbstractForeignConstraint ix = fcs.fk_jobs_job_defs;
             ForeignConstraintTarget target;
 
             #! @ref True "True" if constraint checks can be deferred until transaction commit
+            /** Only the PostgreSQL and Oracle drivers create deferrable foreign constraints; the other drivers refuse
+                the \c deferrable option (see @ref SqlUtil::AbstractTable::ForeignConstraintOptions
+                "ForeignConstraintOptions"), and their SQL does not give this member
+            */
             bool deferrable;
 
             #! @ref True "True" if constraint checks are deferred by default; only valid when \c deferrable is

@@ -157,7 +157,8 @@ table.addForeignConstraint("fk_order_lines_order", "order_id", "orders", "id", {
     @section xdbcfirebird_relnotes Release Notes
 
     @subsection xdbcfirebirdsqlutilbasev_0_2 XdbcFirebirdSqlUtilBase Module v0.2
-    - added support for the \c on_delete and \c on_update referential actions of foreign constraints (see
+    - added support for the \c on_delete and \c on_update referential actions of foreign constraints; \c RESTRICT,
+      which Firebird has no clause for, is refused with \c FOREIGN-CONSTRAINT-ERROR (see
       @ref xdbcfirebird_fk_actions)
     - fixed describing the foreign constraints of a table: none were described, so schema alignment added the
       foreign constraints of a template to a table that had them already; they are now described from the database,

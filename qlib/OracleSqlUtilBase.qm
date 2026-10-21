@@ -333,8 +333,9 @@ hash schema = (
       the SQL statement that it is part of; such a name is quoted in upper case, as Oracle stores an unquoted name,
       and a name that Oracle cannot have in an identifier (with a double quote or a NUL character) or a database
       link name with characters other than letters, digits, \c "_", \c "$", \c "#", \c "." and \c "@" is refused
-      with \c IDENTIFIER-ERROR; ordinary names and reserved words are given in SQL as before; see
-      @ref ora_identifiers
+      with \c IDENTIFIER-ERROR; ordinary names and reserved words are given in SQL as before, except that a schema
+      whose name is a reserved word (such as \c USER) is now quoted in the name of a table, as a column name is;
+      see @ref ora_identifiers
     - fixed the names of sequences in the @ref SqlUtil::cop_seq() "cop_seq()", @ref SqlUtil::cop_seq_currval()
       "cop_seq_currval()", @ref SqlUtil::uop_seq() "uop_seq()" and @ref SqlUtil::uop_seq_currval()
       "uop_seq_currval()" operators and in @ref SqlUtil::AbstractDatabase::getNextSequenceValue()
@@ -343,11 +344,13 @@ hash schema = (
       given
     - added support for the \c on_delete foreign constraint option (<tt>ON DELETE CASCADE</tt> and
       <tt>ON DELETE SET NULL</tt>), which is also read from the database, so that a schema alignment changes a
-      foreign constraint's action; Oracle has no <tt>ON UPDATE</tt> action, so the \c on_update option is
-      refused; see @ref ora_fk_actions
+      foreign constraint's action; Oracle has no <tt>ON UPDATE</tt> action and no <tt>ON DELETE RESTRICT</tt> or
+      <tt>ON DELETE SET DEFAULT</tt>, so the \c on_update option and these actions are refused with
+      \c FOREIGN-CONSTRAINT-ERROR; see @ref ora_fk_actions
     - an existing sequence is aligned with <tt>ALTER SEQUENCE</tt> for its increment, maximum, minimum, cycle
       option and cache, keeping its current value, and the \c min, \c cycle and \c cache sequence options are
-      supported; the starting value of an existing sequence is not changed; see @ref ora_sequences
+      supported; the starting value of an existing sequence is not changed, and a cache of 1, which Oracle does not
+      accept, is refused with \c SEQUENCE-ERROR; see @ref ora_sequences
     - fixed describing a descending sequence with the default maximum value, which failed with
       \c SEQUENCE-ERROR
     - fixed describing the foreign constraints of a table in another user's schema, which were not found, and of

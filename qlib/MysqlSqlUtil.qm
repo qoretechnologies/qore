@@ -195,8 +195,13 @@ hash<auto> desc = {
       the same string; before, a string value was given in a string literal with its single quotes doubled, and a
       backslash, which MySQL reads as an escape character unless the session's \c sql_mode has
       \c NO_BACKSLASH_ESCAPES, could end the literal, so that a value, as the argument of a prepend or append
-      operator, could inject SQL; a column comment with a backslash is refused, as MySQL cannot read a hex literal
-      in a comment (see @ref mysql_identifiers)
+      operator, could inject SQL; a column comment with a backslash, and a default value with a backslash of a
+      \c TEXT or \c BLOB column, are refused with \c VALUE-ERROR, as the servers cannot read a hex literal there
+      correctly, and an emulated sequence name with a backslash is refused with \c IDENTIFIER-ERROR (see
+      @ref mysql_identifiers)
+    - the \c engine, \c collation and \c table_encoding table options must be names of letters, digits and
+      underscores, as they are written in the SQL that creates the table; any other value is refused with
+      \c OPTION-ERROR
     - added support for the \c on_delete and \c on_update referential actions of foreign constraints; \c SET
       \c DEFAULT, which InnoDB enforces as \c RESTRICT, is refused (see @ref mysql_fk_actions)
     - documented that schema alignment does not change an emulated sequence that exists (see

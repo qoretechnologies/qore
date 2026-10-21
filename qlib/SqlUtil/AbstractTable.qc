@@ -89,7 +89,13 @@ public class AbstractTable inherits AbstractSqlUtilBase {
             - \c table_cache: (@ref SqlUtil::Tables "Tables") an optional table cache for maintaining cached tables
               and foreign key relationships between tables
             - \c deferrable: (@ref bool_type) if @ref True "True", constraint checks can be deferred until
-              transaction commit; unsupported drivers reject this option
+              transaction commit; only the PostgreSQL and Oracle drivers support deferrable foreign constraints
+              (see @ref SqlUtil::AbstractTable::supportsDeferrableForeignConstraints()
+              "supportsDeferrableForeignConstraints()"), which create, describe and compare them; every other
+              driver (MySQL, SQL Server and Sybase, SQLite and Firebird) refuses this option with
+              \c FOREIGN-CONSTRAINT-ERROR.  The SQL of a foreign constraint object gives deferrability only on
+              PostgreSQL and Oracle, so a @ref SqlUtil::AbstractForeignConstraint::deferrable "deferrable" member
+              set directly on a foreign constraint of another driver has no effect
             - \c initially_deferred: (@ref bool_type) if @ref True "True", constraint checks are deferred by
               default; requires \c deferrable to be @ref True "True"
         */
