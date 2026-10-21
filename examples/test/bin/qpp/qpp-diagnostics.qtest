@@ -51,6 +51,8 @@ qclass TestCls [arg=void* p; ns=Qore];
         addTestCase("undecorated function needs no long comment", \testNoFlagsNoLongComment());
         addTestCase("platform availability is a warning", \testPlatformAvailabilityWarning());
         addTestCase("invalid hashdecl fails", \testInvalidHashDecl());
+        addTestCase("hashdecl member without a doc comment fails", \testUndocumentedHashDeclMember());
+        addTestCase("hashdecl comments are allowed", \testHashDeclComments());
         addTestCase("unbalanced preprocessor directive fails", \testUnbalancedDirective());
         addTestCase("unsupported type fails", \testUnsupportedType());
         addTestCase("invalid class property fails", \testInvalidClassProperty());
@@ -269,6 +271,77 @@ hashdecl TestHash<T, T> {
 ");
         assertFailed(r, "hashdecl with a duplicate type parameter");
         assertRegex("hashdecl 'TestHash' has duplicate type parameter 'T'", r.out);
+    }
+
+    #! a hashdecl member without a //! comment was left out of the hashdecl and of its documentation, silently
+    testUndocumentedHashDeclMember() {
+        hash<auto> r = runQpp("//! test hashdecl
+/** a test hashdecl
+*/
+hashdecl TestHash {
+    //! a documented member
+    int b;
+    int undocumented;
+    // a comment
+    string c = \"x\";
+}
+");
+        assertFailed(r, "hashdecl members without a doc comment");
+        assertRegex("flagtest\\.qpp:7: hashdecl 'TestHash': every member declaration needs a //! comment; this line "
+            "would be left out of the hashdecl: int undocumented;", r.out, "the diagnostic names the line");
+        assertRegex("flagtest\\.qpp:9: hashdecl 'TestHash': .*: string c = \"x\";", r.out,
+            "every undocumented member is reported");
+        assertEq(2, countErrors(r.out), "the comment is not an error: " + r.out);
+    }
+
+    #! comments and blank lines between hashdecl members are not members, so they are allowed
+    testHashDeclComments() {
+        hash<auto> r = runQpp("//! test hashdecl
+/** a test hashdecl
+*/
+hashdecl TestHash {
+    // a line comment
+    /* a block comment on one line */
+
+    //! a documented member
+    int b;
+    /* a block comment
+       on several lines
+    */
+    //! another documented member
+    /** with a long comment
+    */
+    string c = \"x\";
+    /* a comment */ int d;
+}
+");
+        # a member after a comment on its line still needs a doc comment
+        assertFailed(r, "member declaration after a block comment");
+        assertRegex("flagtest\\.qpp:17: hashdecl 'TestHash': .*: int d;", r.out);
+        assertEq(1, countErrors(r.out), "comments and blank lines are not errors: " + r.out);
+
+        r = runQpp("//! test hashdecl
+/** a test hashdecl
+*/
+hashdecl TestHash {
+    // a line comment
+    /* a block comment on one line */
+
+    //! a documented member
+    int b;
+    /* a block comment
+       on several lines
+    */
+    //! another documented member
+    /** with a long comment
+    */
+    string c = \"x\";
+}
+");
+        assertEq(0, r.status, "comments and blank lines between members are accepted: " + r.out);
+        assertNRegex("ERROR", r.out);
+        assertRegex("int b;", r.dox_text, "the first member is documented");
+        assertRegex("string c = \"x\";", r.dox_text, "the second member is documented");
     }
 
     testUnbalancedDirective() {

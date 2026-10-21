@@ -5456,6 +5456,8 @@ public:
             return;
         }
 
+        // true while reading a block comment that is not a member's documentation
+        bool in_comment = false;
         while (true) {
             std::string line;
 
@@ -5465,7 +5467,37 @@ public:
                 return;
             }
 
+            unsigned line_no = read_line_number(line, lineNumber);
             trim(line);
+
+            if (in_comment) {
+                size_t end = line.find("*/");
+                if (end == std::string::npos) {
+                    continue;
+                }
+                in_comment = false;
+                // any text after the comment is checked below
+                line.erase(0, end + 2);
+                trim(line);
+                if (line.empty()) {
+                    continue;
+                }
+            }
+
+            // block comments are allowed between member declarations
+            if (!line.compare(0, 2, "/*")) {
+                size_t end = line.find("*/", 2);
+                if (end == std::string::npos) {
+                    in_comment = true;
+                    continue;
+                }
+                // any text after the comment is checked below
+                line.erase(0, end + 2);
+                trim(line);
+                if (line.empty()) {
+                    continue;
+                }
+            }
 
             // got a declaration
             if (!line.compare(0, 3, "//!")) {
@@ -5533,6 +5565,17 @@ public:
             if (line == "}") {
                 break;
             }
+
+            // blank lines and line comments are allowed between member declarations
+            if (line.empty() || !line.compare(0, 2, "//")) {
+                continue;
+            }
+
+            // anything else, such as a member declaration without a "//!" comment, would be left out of the
+            // hashdecl
+            error("%s:%u: hashdecl '%s': every member declaration needs a //! comment; this line would be left out "
+                "of the hashdecl: %s\n", fileName, line_no, name.c_str(), line.c_str());
+            valid = false;
         }
     }
 

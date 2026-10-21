@@ -209,6 +209,9 @@ Use Doxygen-style comments:
 - A function or method with functional domains (`dom=...`) or code flags (`flags=...`) needs a long comment (the
   `/** ... */` block after the `//!` line): qpp inserts the `@par Restrictions:` and `@par Code Flags:` paragraphs
   into it, and fails if it is missing (see [Diagnostics and Exit Status](#diagnostics-and-exit-status))
+- Every member declaration of a `hashdecl` needs a `//!` comment (optionally followed by a `/** ... */` long
+  comment); a member line without one is an error, since it would be left out of the hashdecl.  Blank lines and
+  `//` and `/* ... */` comments between the members are allowed
 
 ### Domain Flags
 

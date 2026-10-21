@@ -6543,6 +6543,8 @@ while (*binary chunk = input.read(65536)) {
       (<tt>--javadoc</tt>), the Java files of the second and later classes of a file were written to a directory
       nested in the Java output directory, and the output files written after the Java files, such as the metadata
       (<tt>--metadata</tt>), were written to the Java output directory
+    - \c qpp reports an error for a member declaration of a hashdecl in a <tt>.qpp</tt> file that has no
+      <tt>//!</tt> comment; such a member was left out of the hashdecl and of its documentation without a message
 
     @section qore_2_2_1 Qore 2.2.1
 
