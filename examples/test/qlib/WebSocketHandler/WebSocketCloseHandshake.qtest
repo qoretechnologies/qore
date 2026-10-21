@@ -324,7 +324,7 @@ public class WebSocketCloseHandshakeTest inherits QUnit::Test {
     #! Starts an HTTP/1.1 server with the handler; returns its port
     private int startServer(HttpServer server, TestWsHandler handler) {
         server.setDefaultHandler("ws", handler);
-        int port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
         server.waitForAsyncIo();
         return port;
     }
@@ -414,6 +414,7 @@ public class WebSocketCloseHandshakeTest inherits QUnit::Test {
     private int startTlsServer(HttpServer server, TestWsHandler handler) {
         server.setDefaultHandler("ws", handler);
         int port = server.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
             "service": 0,
             "cert": new SSLCertificate(CertPem),
             "key": new SSLPrivateKey(KeyPem),
