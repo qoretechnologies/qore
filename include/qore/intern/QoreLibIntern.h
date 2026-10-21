@@ -1119,6 +1119,8 @@ DLLLOCAL void init_lib_intern(char* env[]);
 DLLLOCAL void qore_network_init_once();
 //! runs the one-time initializations of the QUIC code (see qore_network_init_once())
 DLLLOCAL void qore_quic_init_once();
+//! runs the one-time initializations of the AOT runtime when the library is initialized (see QoreForkHandlers.h)
+DLLLOCAL void qore_aot_runtime_init_once();
 
 //! returns true if the given environment variable is set, even to an empty value
 /** Reads the environment under the process environment lock (see SystemEnvironment); never call \c getenv()

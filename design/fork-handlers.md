@@ -58,7 +58,7 @@ cannot deadlock with a thread that keeps to the order.
 | 510 | condition waker (`cond_waker.lck`) | ACQUIRE | — |
 | 520 | stack lock (`stack_lck`) | ACQUIRE | — (only `pthread_create()`) |
 | 900 | AOT PC map attach lock (`g_aot_pc_attach_lock`) | ACQUIRE | AOT PC map lock, environment |
-| 1000 | leaf locks: caches and registries | ACQUIRE | environment, debug output, allocation tracking |
+| 1000 | leaf locks: caches and registries (among them the JIT caches and queue, the AOT PC map, the AOT pending constants and the AOT regex cache) | ACQUIRE | environment, debug output, allocation tracking |
 | 1500 | environment (`SystemEnvironment`) | ACQUIRE | debug output, allocation tracking |
 | 1900 | debug output (`printd()`) | ACQUIRE | allocation tracking |
 | 1950 | allocation tracking (only with `ENABLE_ALLOC_TRACKING`) | ACQUIRE | — |
@@ -84,6 +84,12 @@ which the stripes alone would reach, so TSan builds only initialize them again i
 - No user code runs while a registered `ACQUIRE` lock is held. The thread list lock used to be held while a
   Program's thread initialization code ran (`QoreThreadList::activate()`); that code now runs after the lock is
   released.
+- A `RESET` lock that can be held across `fork()` by the forking thread itself must count its holds per thread, so
+  that the child can take it again as often (the AOT lazy constant initialization lock runs compiled initializers,
+  which can call `fork()`).
+- A recursive lock must not be created during static initialization: the recursive mutex attributes are only
+  initialized by `qore_init()`, and a `QoreRecursiveThreadLock` created before is not recursive. Locks that a handler
+  needs before their first use are created in `qore_init()` (`qore_aot_runtime_init_once()`).
 
 ## One-time initialization
 
@@ -123,6 +129,12 @@ Besides the locks:
   lost, and that function stays in the tier it is in) and started again with the next background compilation. If
   another thread held the compile lock, the LLVM objects can be inconsistent: the JIT compiles nothing in the child
   (the code runs in the IR tier), and its LLVM objects are not destroyed there.
+- **AOT modules**: module initializations and shadow Program populations claimed by other threads are released, as
+  if they had failed, so that they are run again instead of waited for (a failed pass leaves only pending entries,
+  which the next pass fills); the per-module shadow build locks are initialized again. The lazy constant
+  initialization lock is initialized again and held again as often as the forking thread held it; an initializer
+  that another thread was running stays marked as running, so a read of its constant reports
+  `AOT-PENDING-CONSTANT` instead of running it twice or waiting for it.
 - **Async I/O**: the default controller of the parent is abandoned (its I/O threads and workers do not exist, and on
   Linux its descriptors are shared with the parent): it is neither stopped nor freed in the child, and a new default
   controller is created when it is first needed (outside the singleton lock, since its constructor reads the

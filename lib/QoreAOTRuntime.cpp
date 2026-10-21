@@ -42,6 +42,7 @@
 #include <qore/QoreSandboxManager.h>
 #include "qore/intern/QoreAOT.h"
 #include "qore/intern/QoreAOTBinary.h"
+#include "qore/intern/QoreForkHandlers.h"
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/Variable.h"
 #include "qore/intern/GlobalVariableList.h"
@@ -205,6 +206,11 @@
 #include <dlfcn.h>
 #include <mutex>
 #include <unwind.h>
+#ifdef DEBUG
+#include <condition_variable>
+#include <thread>
+#include <sys/wait.h>
+#endif
 #ifdef __GLIBC__
 #include <link.h>
 #endif
@@ -3404,6 +3410,11 @@ struct AotPcRange {
 
 QoreThreadLock g_aot_pcmap_lock;  // guards all registry state below
 QoreThreadLock g_aot_pc_attach_lock;  // serializes first-execution attachment per context
+// the registry can be used in a child process created with fork() (see QoreForkHandlers.h): it is only changed under
+// g_aot_pcmap_lock, a leaf lock; the attachment lock is held while an artifact's location data is read from its file
+// and registered
+QoreForkThreadLock g_aot_pcmap_fork_handler(g_aot_pcmap_lock, QFLR_LEAF, "aot_pc_map");
+QoreForkThreadLock g_aot_pc_attach_fork_handler(g_aot_pc_attach_lock, QFLR_AOT_PC_ATTACH, "aot_pc_attach");
 //! One symbol's lazy PC->loc data: the (offset -> loc-index) rows plus the literal locations that
 //! indices at or above the function's loc-table size address (code inlined from another function).
 struct AotSymEntry {
@@ -3745,11 +3756,13 @@ static void aotAttachPcLocMap(AotFunctionPtr fn_ptr, const QoreAOTContext* ctx) 
            const std::pair<uint32_t, const QoreProgramLocation*>& b) {
             return a.first < b.first;
         });
+    // read before the leaf lock is taken
+    bool loc_debug = q_env_is_set("QORE_AOT_LOC_DEBUG");
     AutoLocker al(g_aot_pcmap_lock);
     g_aot_pc_ranges.push_back(std::move(range));
     g_aot_pc_ranges_sorted = false;
     g_aot_have_ranges.store(true, std::memory_order_release);
-    if (q_env_is_set("QORE_AOT_LOC_DEBUG")) {
+    if (loc_debug) {
         fprintf(stderr, "AOT-LOC: registered PC range base=0x%lx sym=%s entries=%zu (total=%zu)\n",
             (unsigned long)fn_start, info.dli_sname ? info.dli_sname : "(symtab)",
             g_aot_pc_ranges.back().offmap.size(),
@@ -12361,11 +12374,6 @@ static bool aotInitTraceEnabled() {
     return enabled;
 }
 
-QoreRecursiveThreadLock& qore_aot_get_init_execution_lock() {
-    static QoreRecursiveThreadLock lock;
-    return lock;
-}
-
 // Depth of module-load lock acquisitions held by the current thread.  The lock is recursive, so
 // this can be > 1 when a module load re-enters module loading (e.g. an AOT module initializer
 // loading another module).  Maintained in all builds so that the debug assertion below can tell
@@ -12517,6 +12525,168 @@ static QoreCondition& get_aot_test_foreign_init_pass_cond() {
     static QoreCondition cond;
     return cond;
 }
+
+namespace {
+//! The fork handler of the AOT module state (see QoreForkHandlers.h)
+/** The state lock is only held in short critical sections (its waits release it), so it is acquired before fork();
+    in the child, the module initializations that other threads of the parent had claimed are released as if they
+    had failed, so that they are run again instead of being waited for: a failed initialization pass only leaves
+    entries pending, which the next pass fills.
+*/
+class AotModuleStateForkHandler : public QoreForkThreadLock {
+public:
+    AotModuleStateForkHandler() : QoreForkThreadLock(get_aot_module_state_lock(), QFLR_AOT_MODULE_STATE,
+            "aot_module_state", QFLM_ACQUIRE, false, {&get_aot_shadow_init_cond(), &get_aot_module_init_claim_cond(),
+            &get_aot_test_foreign_init_pass_cond()}) {
+    }
+
+    void child() noexcept override {
+        QoreForkThreadLock::child();
+        int tid = qore_fork_get_tid();
+        for (auto i = aot_module_init_owners.begin(), e = aot_module_init_owners.end(); i != e;) {
+            if (i->second == tid) {
+                ++i;
+                continue;
+            }
+            // the claim's Program is not const; the key only identifies it
+            const_cast<qore_program_private*>(i->first.first)->initializing_aot_modules.erase(i->first.second);
+            i = aot_module_init_owners.erase(i);
+        }
+        for (auto& i : aot_module_map) {
+            AotModuleState& ms = i.second;
+            if (ms.shadow_init_state == AotModuleState::SHADOW_IN_PROGRESS && ms.shadow_init_tid != tid) {
+                ms.shadow_init_state = AotModuleState::SHADOW_NOT_STARTED;
+                ms.shadow_init_tid = 0;
+            }
+            // held only while a module's initialization contexts are built, which runs no Qore code, so the forking
+            // thread cannot hold it; a thread that held it does not exist in the child
+            if (ms.shadow_build_lock) {
+                ms.shadow_build_lock->reinitAfterFork(&ma_recursive);
+            }
+        }
+    }
+};
+
+AotModuleStateForkHandler aot_module_state_fork_handler;
+
+#ifdef DEBUG
+//! returns the exit status of a child process, or -1 if it did not exit normally
+int aot_ut_wait_child(pid_t pid) {
+    int status = 0;
+    while (waitpid(pid, &status, 0) < 0) {
+        if (errno != EINTR) {
+            return -2;
+        }
+    }
+    return WIFEXITED(status) ? WEXITSTATUS(status) : -1;
+}
+
+//! a thread that holds a lock until it is released; for the fork unit tests
+class AotUtLockHolder {
+public:
+    AotUtLockHolder(std::function<void()> lock, std::function<void()> unlock) {
+        t = std::thread([this, lock, unlock]() {
+            lock();
+            std::unique_lock<std::mutex> ul(m);
+            held = true;
+            cv.notify_all();
+            cv.wait(ul, [this] { return release; });
+            ul.unlock();
+            unlock();
+        });
+        std::unique_lock<std::mutex> ul(m);
+        cv.wait(ul, [this] { return held; });
+    }
+
+    ~AotUtLockHolder() {
+        {
+            std::lock_guard<std::mutex> lg(m);
+            release = true;
+            cv.notify_all();
+        }
+        t.join();
+    }
+
+private:
+    std::mutex m;
+    std::condition_variable cv;
+    bool held = false;
+    bool release = false;
+    std::thread t;
+};
+#endif
+}
+
+#ifdef DEBUG
+int qore_aot_ut_fork_module_state(QoreProgram* pgm) {
+    static const char* other_mod = "<fork unit test: other thread>";
+    static const char* own_mod = "<fork unit test: forking thread>";
+    qore_program_private* pp = qore_program_private::get(*pgm);
+    int tid = q_gettid();
+    // a thread ID that is not the forking thread's
+    int other_tid = tid + 1000000;
+    std::shared_ptr<QoreRecursiveThreadLock> build_lock;
+    {
+        AutoLocker al(get_aot_module_state_lock());
+        AotModuleState& other = aot_module_map[other_mod];
+        other.shadow_init_state = AotModuleState::SHADOW_IN_PROGRESS;
+        other.shadow_init_tid = other_tid;
+        build_lock = other.shadow_build_lock;
+        pp->initializing_aot_modules.insert(other_mod);
+        aot_module_init_owners[std::make_pair(pp, std::string(other_mod))] = other_tid;
+        AotModuleState& own = aot_module_map[own_mod];
+        own.shadow_init_state = AotModuleState::SHADOW_IN_PROGRESS;
+        own.shadow_init_tid = tid;
+        pp->initializing_aot_modules.insert(own_mod);
+        aot_module_init_owners[std::make_pair(pp, std::string(own_mod))] = tid;
+    }
+    int rc;
+    {
+        // another thread builds the initialization contexts of the module whose initialization it claimed
+        AotUtLockHolder holder([build_lock]() { build_lock->lock(); }, [build_lock]() { build_lock->unlock(); });
+        pid_t pid = fork();
+        if (!pid) {
+            int crc = 0;
+            {
+                AutoLocker al(get_aot_module_state_lock());
+                AotModuleState& other = aot_module_map[other_mod];
+                // the claims of the other thread are released
+                if (other.shadow_init_state != AotModuleState::SHADOW_NOT_STARTED || other.shadow_init_tid) {
+                    crc |= 1;
+                }
+                if (pp->initializing_aot_modules.count(other_mod)
+                        || aot_module_init_owners.count(std::make_pair(pp, std::string(other_mod)))) {
+                    crc |= 2;
+                }
+                // the claims of the forking thread are kept
+                AotModuleState& own = aot_module_map[own_mod];
+                if (own.shadow_init_state != AotModuleState::SHADOW_IN_PROGRESS || own.shadow_init_tid != tid
+                        || !pp->initializing_aot_modules.count(own_mod)
+                        || aotModuleInitOwnerIntern(pp, own_mod) != tid) {
+                    crc |= 4;
+                }
+            }
+            // the build lock that the other thread held is free
+            if (build_lock->trylock()) {
+                crc |= 8;
+            } else {
+                build_lock->unlock();
+            }
+            _exit(crc);
+        }
+        rc = pid > 0 ? aot_ut_wait_child(pid) : -1;
+    }
+    {
+        AutoLocker al(get_aot_module_state_lock());
+        for (const char* mod : {other_mod, own_mod}) {
+            aot_module_map.erase(mod);
+            pp->initializing_aot_modules.erase(mod);
+            aot_module_init_owners.erase(std::make_pair(pp, std::string(mod)));
+        }
+    }
+    return rc;
+}
+#endif
 
 //! Extract dependency module names from source \%requires directives
 /** Parses the source to find all \%requires directives and extracts the module names.
@@ -14816,6 +14986,11 @@ static QoreThreadLock& aotPendingConstantInitLock() {
     return lck;
 }
 
+//! the recovery records can be used in a child process created with fork() (see QoreForkHandlers.h); the lock is a
+//! leaf lock
+static QoreForkThreadLock aot_pending_constant_init_fork_handler(aotPendingConstantInitLock(), QFLR_LEAF,
+    "aot_pending_constants");
+
 //! Owns every constant recovery record for the life of the process
 /** A record is reachable from any number of ConstantEntry objects — a module imported into several Programs gets a
     copy of each entry, and the copy carries the pointer — so records are never freed individually.  One record
@@ -14885,10 +15060,132 @@ static bool aotDeferConstantInitTestHook() {
 }
 
 //! Serializes lazy constant initialization; recursive so an initializer can initialize its own dependencies
+/** Only take it with AotLazyConstantInitLockHelper
+*/
 static QoreRecursiveThreadLock& aotLazyConstantInitLock() {
     static QoreRecursiveThreadLock lck;
     return lck;
 }
+
+//! how many times the current thread holds aotLazyConstantInitLock()
+static thread_local unsigned aot_lazy_constant_init_depth = 0;
+
+namespace {
+//! Holds aotLazyConstantInitLock() and counts the hold, so that a child process created with fork() can restore it
+class AotLazyConstantInitLockHelper {
+public:
+    AotLazyConstantInitLockHelper() {
+        aotLazyConstantInitLock().lock();
+        ++aot_lazy_constant_init_depth;
+    }
+
+    ~AotLazyConstantInitLockHelper() {
+        assert(aot_lazy_constant_init_depth);
+        --aot_lazy_constant_init_depth;
+        aotLazyConstantInitLock().unlock();
+    }
+
+    AotLazyConstantInitLockHelper(const AotLazyConstantInitLockHelper&) = delete;
+    AotLazyConstantInitLockHelper& operator=(const AotLazyConstantInitLockHelper&) = delete;
+};
+
+//! The fork handler of the lazy constant initialization lock (see QoreForkHandlers.h)
+/** The lock is held while compiled initializers run, which can do anything, so fork() does not wait for it
+    (QFLM_RESET).  In the child it is initialized again and held again as often as the forking thread held it (an
+    initializer can call fork()).  An initializer that another thread was running stays marked as running in the
+    child, so a read of its constant there reports the constant as not initialized (\c AOT-PENDING-CONSTANT)
+    instead of running it a second time or waiting for it.
+*/
+class AotLazyConstantInitForkHandler : public QoreForkHandler {
+public:
+    AotLazyConstantInitForkHandler() : QoreForkHandler(QFLR_AOT_LAZY_CONSTANT, "aot_lazy_constants") {
+    }
+
+    void prepare() noexcept override {
+    }
+
+    void parent() noexcept override {
+    }
+
+    void child() noexcept override {
+        QoreRecursiveThreadLock& l = aotLazyConstantInitLock();
+        l.reinitAfterFork(&ma_recursive);
+        for (unsigned i = 0; i < aot_lazy_constant_init_depth; ++i) {
+            l.lock();
+        }
+    }
+};
+
+AotLazyConstantInitForkHandler aot_lazy_constant_init_fork_handler;
+}
+
+void qore_aot_runtime_init_once() {
+    // the lock is created when the library is initialized: it is recursive, which needs the mutex attributes that
+    // init_qore_threads() initializes (a recursive lock created during static initialization is not recursive), and
+    // a child process created with fork() must not inherit its creation in progress (see QoreForkHandlers.h)
+    (void)aotLazyConstantInitLock();
+}
+
+#ifdef DEBUG
+int qore_aot_ut_fork_lazy_constant_lock() {
+    int rc = 0;
+    {
+        // another thread runs an initializer
+        AotUtLockHolder holder([]() { aotLazyConstantInitLock().lock(); },
+            []() { aotLazyConstantInitLock().unlock(); });
+        pid_t pid = fork();
+        if (!pid) {
+            // the lock is free: the thread that held it does not exist
+            {
+                AotLazyConstantInitLockHelper lazy_al;
+            }
+            _exit(0);
+        }
+        if (pid < 0 || aot_ut_wait_child(pid)) {
+            rc |= 1;
+        }
+    }
+    {
+        // the forking thread runs an initializer that runs a nested one
+        std::unique_ptr<AotLazyConstantInitLockHelper> outer(new AotLazyConstantInitLockHelper);
+        std::unique_ptr<AotLazyConstantInitLockHelper> inner(new AotLazyConstantInitLockHelper);
+        pid_t pid = fork();
+        if (!pid) {
+            int crc = 0;
+            auto other_thread_gets_lock = []() -> bool {
+                bool got = false;
+                std::thread t([&got]() {
+                    if (!aotLazyConstantInitLock().trylock()) {
+                        got = true;
+                        aotLazyConstantInitLock().unlock();
+                    }
+                });
+                t.join();
+                return got;
+            };
+            // the forking thread still holds the lock in the child
+            if (other_thread_gets_lock()) {
+                crc |= 1;
+            }
+            inner.reset();
+            if (other_thread_gets_lock()) {
+                crc |= 2;
+            }
+            // released as often as it was held, the lock is free
+            outer.reset();
+            if (!other_thread_gets_lock()) {
+                crc |= 4;
+            }
+            _exit(crc);
+        }
+        int crc = pid > 0 ? aot_ut_wait_child(pid) : -1;
+        if (crc) {
+            rc |= crc < 0 ? 0x80 : (crc << 1);
+        }
+    }
+    return rc;
+}
+#endif
 
 //! Target Programs visible only while this thread is eagerly initializing their constants
 /** Recovery records cannot retain an importing Program because the Program can be destroyed before the
@@ -14928,10 +15225,16 @@ public:
     ~AotScriptPendingConstantState() {
         // taken in the same order as qore_aot_run_pending_constant_init, so a concurrent first-read either
         // finishes before the contexts go or never sees them
-        AutoLocker lazy_al(aotLazyConstantInitLock());
-        AutoLocker al(aotPendingConstantInitLock());
+        AotLazyConstantInitLockHelper lazy_al;
+        {
+            AutoLocker al(aotPendingConstantInitLock());
+            for (AOTPendingConstantInit* rec : records) {
+                rec->fn_ptr = nullptr;
+            }
+        }
+        // the contexts are deleted outside the leaf lock: their destructors release values; a script record's
+        // context is only used with the lazy initialization lock held, which this thread holds
         for (AOTPendingConstantInit* rec : records) {
-            rec->fn_ptr = nullptr;
             delete rec->ctx;
             rec->ctx = nullptr;
         }
@@ -14959,7 +15262,7 @@ int qore_aot_run_pending_constant_init(ConstantEntry* ce, ExceptionSink* xsink) 
     // Serialize lazy initialization process-wide: initializers run compiled code that mutates module state, and
     // two threads reading the same pending constant must not run it twice.  The lock is recursive, so an
     // initializer that reads another pending constant initializes it one level deeper on this thread.
-    AutoLocker lazy_al(aotLazyConstantInitLock());
+    AotLazyConstantInitLockHelper lazy_al;
 
     // another thread may have populated the constant while this thread waited for the lock
     if (ce->hasValue()) {

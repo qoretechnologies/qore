@@ -39,6 +39,7 @@
 #include "qore/intern/QoreIterateOperatorNode.h"
 #include "qore/intern/QoreAOT.h"
 #include "qore/intern/QoreHashKeyHelper.h"
+#include "qore/intern/QoreForkHandlers.h"
 #include "qore/intern/QoreAsciiCompatStringHelper.h"
 #include "qore/intern/qore_number_private.h"
 
@@ -15445,6 +15446,13 @@ struct AOTRegexCacheKeyHash {
         return key.global ? ~h : h;
     }
 };
+
+//! the compiled regexes of AOT pattern operands; see qore_rt_get_cached_aot_regex()
+std::unordered_map<AOTRegexCacheKey, std::unique_ptr<QoreRegex>, AOTRegexCacheKeyHash> aot_regex_cache;
+//! protects aot_regex_cache; a leaf lock
+std::mutex aot_regex_cache_mutex;
+//! the cache can be used in a child process created with fork() (see QoreForkHandlers.h)
+QoreForkStdMutex aot_regex_cache_fork_handler(aot_regex_cache_mutex, QFLR_LEAF, "aot_regex_cache");
 }
 
 //! Returns a compiled regex for an AOT pattern operand, compiling it at most once per process
@@ -15461,13 +15469,10 @@ struct AOTRegexCacheKeyHash {
 */
 static const QoreRegex* qore_rt_get_cached_aot_regex(const char* pattern, int64_t options, bool global,
         ExceptionSink* xsink) {
-    static std::mutex cache_mutex;
-    static std::unordered_map<AOTRegexCacheKey, std::unique_ptr<QoreRegex>, AOTRegexCacheKeyHash> cache;
-
     AOTRegexCacheKey key{pattern ? pattern : "", options, global};
-    std::lock_guard<std::mutex> lock(cache_mutex);
-    auto i = cache.find(key);
-    if (i != cache.end()) {
+    std::lock_guard<std::mutex> lock(aot_regex_cache_mutex);
+    auto i = aot_regex_cache.find(key);
+    if (i != aot_regex_cache.end()) {
         return i->second.get();
     }
     QoreString pat_str(key.pattern.c_str());
@@ -15478,7 +15483,7 @@ static const QoreRegex* qore_rt_get_cached_aot_regex(const char* pattern, int64_
     if (global) {
         regex->setGlobal();
     }
-    return cache.emplace(std::move(key), std::move(regex)).first->second.get();
+    return aot_regex_cache.emplace(std::move(key), std::move(regex)).first->second.get();
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_regex_op_by_pattern(int32_t opcode, const char* pattern,

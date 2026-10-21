@@ -72,6 +72,7 @@
 #include "qore/intern/QoreForkHandlers.h"
 #include "qore/intern/QoreSignal.h"
 #include "qore/intern/QoreJIT.h"
+#include "qore/intern/QoreAOT.h"
 
 #include <openssl/evp.h>
 #include <openssl/x509.h>
@@ -942,12 +943,13 @@ int ut_wait_child(pid_t pid) {
 */
 static void ut_fork_waits_for_lock_holders(UnitTestCounters& c) {
     static const char* names[] = {
-        "signal_manager", "async_io_singleton", "plugin_registry", "time_zones",
+        "signal_manager", "async_io_singleton", "aot_module_state", "plugin_registry", "time_zones",
         "thread_counters", "thread_list", "cond_waker", "stack_lck", "external_thread_reaper", "u_tld_seq",
         "program_registry", "program_cleanup", "breakpoints", "constant_value_locks", "opaque_target_shards",
         "encodings", "utc_offset_zones", "module_options", "app_registry", "complex_types", "external_types",
         "aot_deferred_types", "builtin_locations", "class_ids", "scan_waits", "node_watches", "async_io_logger",
-        "cipher_cache", "digest_cache", "jit_cache", "jit_bg_queue", "environment",
+        "cipher_cache", "digest_cache", "jit_cache", "jit_bg_queue", "aot_pc_map", "aot_pc_attach",
+        "aot_pending_constants", "aot_regex_cache", "environment",
         nullptr,
     };
     for (const char** name = names; *name; ++name) {
@@ -1116,6 +1118,21 @@ static void ut_fork_jit_background_compiler(UnitTestCounters& c) {
     if (pid > 0) {
         UT_ASSERT_EQ(c, 0, ut_wait_child(pid), "the child stopped the background compiler");
     }
+}
+
+//! The AOT module initializations that other threads claimed are released in a child process
+static void ut_fork_aot_module_state(UnitTestCounters& c) {
+    QoreProgram* pgm = getProgram();
+    if (!pgm) {
+        return;
+    }
+    UT_ASSERT_EQ(c, 0, qore_aot_ut_fork_module_state(pgm),
+        "the child releases the claims of other threads and keeps those of the forking thread");
+}
+
+//! The lazy AOT constant initialization lock is free in the child, or held by the forking thread as before
+static void ut_fork_aot_lazy_constant_lock(UnitTestCounters& c) {
+    UT_ASSERT_EQ(c, 0, qore_aot_ut_fork_lazy_constant_lock(), "the lazy constant initialization lock in the child");
 }
 
 //! A value that another thread was computing for the first time when the process was forked is computed in the child
@@ -9430,6 +9447,8 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     ut_fork_signal_block_waiter(c);
     ut_fork_jit_compile_in_progress(c);
     ut_fork_jit_background_compiler(c);
+    ut_fork_aot_module_state(c);
+    ut_fork_aot_lazy_constant_lock(c);
     ut_fork_lazy_value_in_first_use(c);
     Http3ClientResponseRegistrationTest::run(c);
     ut_fast_real_deref_releases_last(c);

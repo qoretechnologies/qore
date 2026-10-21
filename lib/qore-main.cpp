@@ -370,6 +370,7 @@ void qore_init(qore_license_t license, const char* def_charset, bool show_module
 
     // create the JIT, which registers its fork handlers
     QoreJIT::init();
+    qore_aot_runtime_init_once();
 
 #ifdef _Q_WINDOWS
     // do windows socket initialization
