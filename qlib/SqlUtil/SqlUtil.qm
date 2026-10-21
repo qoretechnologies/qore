@@ -268,6 +268,9 @@ module SqlUtil {
     - an expression that has no SQL on the database, such as a regular expression on Firebird or SQL Server, is
       refused with \c SQLUTIL-EXPRESSION-NOT-PUSHDOWNABLE also when it is a column or an argument of another
       expression, as in a where clause; before, it raised \c PSEUDO-METHOD-DOES-NOT-EXIST
+    - a column operator can be given the query and the column that it is applied to, with the \c "withcolumn" key
+      of its description, so that its SQL can depend on the type of the column (see
+      @ref SqlUtil::AbstractTable::addCustomCopOperator() "AbstractTable::addCustomCopOperator()")
 
     @subsection sqlutilv3_10_0 SqlUtil v3.10.0
     - Added an offline table rewrite transaction that limits only lock waits, for single schema statements

@@ -1,0 +1,104 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires SqlUtil
+%requires Sqlite3SqlUtil
+
+%try-module sqlite3
+%define NoSqlite3
+%endtry
+
+%exec-class SqlUtilCopWithColumnTest
+
+#! Tests a column operator that is given the query and the column that it is applied to (the "withcolumn" key)
+/** Such an operator can use the type of its column, of the table or of a joined table, as the Firebird driver does
+    for the average of an integer column; an operator without the key is called as before
+*/
+class SqlUtilCopWithColumnTest inherits QUnit::Test {
+    private {
+        *Datasource ds;
+
+        #! the arguments that the operator was called with
+        list<hash<auto>> calls = ();
+    }
+
+    constructor() : Test("SqlUtilCopWithColumn", "1.0", \ARGV) {
+        addTestCase("a column operator with \"withcolumn\" is given the query and the column", \withColumn());
+        addTestCase("a column operator without \"withcolumn\" is called as before", \withoutColumn());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+%ifndef NoSqlite3
+        ds = new Datasource("sqlite3:x@:memory:");
+        ds.exec("create table cwc_t (id integer not null primary key, amount integer, label varchar(20))");
+        ds.exec("create table cwc_o (id integer not null primary key, price real)");
+        ds.exec("insert into cwc_t values (1, 10, 'a')");
+        ds.exec("insert into cwc_o values (1, 2.5)");
+        ds.commit();
+%endif
+    }
+
+    private Datasource getDatasource() {
+%ifdef NoSqlite3
+        testSkip("no sqlite3 module");
+%endif
+        return ds;
+    }
+
+    #! returns a table with an operator that records the arguments that it is called with
+    private Sqlite3Table getTable() {
+        Sqlite3Table t(getDatasource(), "cwc_t");
+        t.addCustomCopOperator("typed", {
+            "withcolumn": True,
+            "code": string sub (string cve, auto arg, hash<QueryInfo> info, auto column) {
+                # the type of the column, from the table or from a joined table
+                *string type;
+                if (column.typeCode() == NT_STRING) {
+                    *string alias = (column =~ x/^(\w+)\./)[0];
+                    AbstractTable tbl = alias ? info.join_map{alias} : info.table;
+                    string name = alias ? column.substr(alias.size() + 1) : column;
+                    type = tbl.describe(){name}.qore_type;
+                }
+                calls += {"cve": cve, "arg": arg, "column": column, "type": type};
+                return cve;
+            },
+        });
+        t.addCustomCopOperator("plain", {
+            "code": string sub (string cve, auto arg) {
+                calls += {"cve": cve, "arg": arg, "argc": argv.size()};
+                return cve;
+            },
+        });
+        return t;
+    }
+
+    withColumn() {
+        Sqlite3Table t = getTable();
+        Sqlite3Table other(getDatasource(), "cwc_o");
+        calls = ();
+        hash<auto> row = t.selectRow({"columns": (
+            cop_as(make_cop("typed", "amount", "x"), "amount"),
+            cop_as(make_cop("typed", "o.price", NOTHING), "price"),
+            cop_as(make_cop("typed", cop_upper("label"), NOTHING), "label"),
+        ), "join": join_inner(other, "o", {"id": "id"})});
+        assertEq({"amount": 10, "price": 2.5, "label": "A"}, row);
+        assertEq((
+            {"cve": "cwc_t.amount", "arg": "x", "column": "amount", "type": "integer"},
+            {"cve": "o.price", "arg": NOTHING, "column": "o.price", "type": "float"},
+            {"cve": "upper(cwc_t.label)", "arg": NOTHING, "column": cop_upper("label"), "type": NOTHING},
+        ), calls);
+    }
+
+    withoutColumn() {
+        Sqlite3Table t = getTable();
+        calls = ();
+        assertEq({"amount": 10}, t.selectRow({"columns": (cop_as(make_cop("plain", "amount", "y"), "amount"),)}));
+        assertEq(({"cve": "amount", "arg": "y", "argc": 0},), calls);
+    }
+}

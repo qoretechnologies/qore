@@ -151,10 +151,12 @@ class FirebirdAverageTest inherits QUnit::Test {
         assertEq("select avg(cast(o.n as decfloat(34))), avg(o.f) from fbavg_t inner join fbavg_o o on "
             "(fbavg_t.id = o.id)", selectSql(t, {"columns": (exp(COP_AVG, (fld("o.n"),)),
                 exp(COP_AVG, (fld("o.f"),))), "join": join_inner(other, "o", {"id": "id"})}));
-        # with a column operator, a column of the table in a join, and a column of the joined table as before
-        assertEq("select avg(cast(fbavg_t.n as decfloat(34))), avg(o.n) from fbavg_t inner join fbavg_o o on "
-            "(fbavg_t.id = o.id)", selectSql(t, {"columns": (cop_avg("n"), cop_avg("o.n")),
-                "join": join_inner(other, "o", {"id": "id"})}));
+        # with a column operator, a column of the table in a join, and the columns of the joined table
+        assertEq("select avg(cast(fbavg_t.n as decfloat(34))), avg(cast(o.n as decfloat(34))), avg(o.f) from fbavg_t "
+            "inner join fbavg_o o on (fbavg_t.id = o.id)", selectSql(t, {"columns": (cop_avg("n"), cop_avg("o.n"),
+                cop_avg("o.f")), "join": join_inner(other, "o", {"id": "id"})}));
+        # the average of another column operator, of no known type, is as Firebird gives it
+        assertEq("select avg(char_length(s)) from fbavg_t", selectSql(t, {"columns": (cop_avg(cop_length("s")),)}));
     }
 
     avgSqlFirebird3() {
@@ -212,5 +214,8 @@ class FirebirdAverageTest inherits QUnit::Test {
         )}));
         assertEq({"id": 1.5n, "n": 1.875n, "f": 1.5}, t.selectRow({"columns": (cop_as(cop_avg("id"), "id"),
             cop_as(cop_avg("n"), "n"), cop_as(cop_avg("f"), "f"))}));
+        # the columns of a joined table, here the table itself
+        assertEq({"id": 1.5n, "n": 1.875n, "f": 1.5}, t.selectRow({"columns": (cop_as(cop_avg("o.id"), "id"),
+            cop_as(cop_avg("o.n"), "n"), cop_as(cop_avg("o.f"), "f")), "join": join_inner(t, "o", {"id": "id"})}));
     }
 }

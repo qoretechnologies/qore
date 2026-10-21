@@ -6057,7 +6057,8 @@ string sql = table.getSelectSql(sh, \args);
                         "(value: %y)", getDesc(), key, value[0].type(), value[0]);
                 }
                 *hash<auto> psch_copy = info.pseudo_column_map;
-                string hstr = doColumnOperatorIntern(\info, value[0], NOTHING, getColumnExpressionIntern(\info, key));
+                string hstr = doColumnOperatorIntern(\info, value[0], NOTHING, getColumnExpressionIntern(\info, key),
+                    key);
                 if (psch_copy != info.pseudo_column_map) {
                     throw "HAVING-ERROR", sprintf("%s: cannot use column operator functions in the having clause "
                         "with column alias specifications", getDesc());
@@ -6372,10 +6373,12 @@ string sql = table.getSelectSql(sh, \args);
 
     private string doColumnOperatorIntern(reference<hash<QueryInfo>> info, hash<auto> cvc) {
         return doColumnOperatorIntern(\info, cvc.cop, cvc.arg,
-            (cvc.column ? getColumnExpressionIntern(\info, cvc.column) : NOTHING));
+            (cvc.column ? getColumnExpressionIntern(\info, cvc.column) : NOTHING), cvc.column);
     }
 
-    private string doColumnOperatorIntern(reference<hash<QueryInfo>> info, auto cop, auto arg, *string cve) {
+    # "column" is the column designator of the operator as given, for an operator with "withcolumn"
+    private string doColumnOperatorIntern(reference<hash<QueryInfo>> info, auto cop, auto arg, *string cve,
+            auto column) {
         if (cop.typeCode() != NT_STRING) {
             throw "SELECT-ERROR", sprintf("%s: invalid column operator code %y; use column operator functions to "
                 "create valid column specifications with supported column operators", getDesc(), cop);
@@ -6443,6 +6446,9 @@ string sql = table.getSelectSql(sh, \args);
                 case NT_HASH: arg.as = getAliasSqlName(arg.as); break;
             }
             return cmd.code(cve, arg, \info.pseudo_column_map);
+        } else if (cmd.withcolumn) {
+            # the operator is given the query and the column designator, so it can use the type of the column
+            return cmd.code(cve, arg, info, column);
         } else {
             return cmd.code(cve, arg);
         }
@@ -12459,7 +12465,11 @@ string sql = table.getAlignSqlString(table2);
         statements.
 
         @param name a string with operator name. It has to be unique in the driver
-        @param operator an operator has as expected by @ref SqlUtil::make_cop() function
+        @param operator an operator has as expected by @ref SqlUtil::make_cop() function; with a \c "withcolumn" key
+        set to @ref True "True", the \c "code" closure is called with two more arguments: the
+        @ref SqlUtil::QueryInfo "QueryInfo" hash of the query, and the column designator of the operator as it is
+        given (a column name, with a table alias for a column of a joined table, or a column operator hash), so that
+        it can use the type of the column (since %SqlUtil 3.11.0)
 
         @throw CUSTOM-OPERATOR-ERROR in case when user tries to register
                 already existing operator with \c name or if the \c operator

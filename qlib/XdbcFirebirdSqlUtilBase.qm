@@ -228,8 +228,8 @@ table.addForeignConstraint("fk_order_lines_order", "order_id", "orders", "id", {
     is 1.  The average of a column of an integer or an exact numeric type, and of an expression that returns an
     integer or a number, is therefore exact, as on other databases: it is computed in \c DECFLOAT(34) and is a
     number from Firebird 4 on, and in <tt>DOUBLE PRECISION</tt> on Firebird 3, which has no \c DECFLOAT, so that it is a
-    float.  The average of a float is as Firebird gives it, a float.  The average of an expression of no known type,
-    and @ref SqlUtil::cop_avg() "cop_avg()" of a column of a joined table, are as Firebird gives them.
+    float.  The average of a float is as Firebird gives it, a float, as is the average of an expression of no known
+    type, such as an alias or, with @ref SqlUtil::cop_avg() "cop_avg()", another column operator.
 
     @section xdbcfirebird_relnotes Release Notes
 
@@ -2635,23 +2635,6 @@ string sql = db.getSqlIdentifier("Order Date");
                 "decimal"));
         }
 
-        #! returns if the SQL of a column of the table, as a column operator gives it, has an integer or an exact numeric type
-        /** @return @ref True "True" or @ref False "False" for a column of the table, no value for any other SQL, such
-            as a column of a joined table or an expression, of which the type is not known
-        */
-        private *bool isExactNumericColumnSql(string cve) {
-            # a column of the table has the name of the table in a join
-            string prefix = getSqlName() + ".";
-            if (cve.substr(0, prefix.size()) == prefix) {
-                cve = cve.substr(prefix.size());
-            }
-            foreach AbstractColumn c in (columns.iterator()) {
-                if (getColumnSqlName(c.name) == cve) {
-                    return XdbcFirebirdTable::isExactNumericColumn(c);
-                }
-            }
-        }
-
         #! returns the SQL that casts an expression to a type
         /** @param exp the SQL of the expression
             @param type a Qore type name, such as \c "string", or a Firebird type
@@ -2739,7 +2722,7 @@ string sql = db.getSqlIdentifier("Order Date");
         #! returns the column operator map for this object
         /** @since XdbcFirebirdSqlUtilBase 0.2 \c cop_cast() gives a character type without a size the largest size
             of the default character set of the database (see getCastSql()), and \c cop_avg() of an integer or exact
-            numeric column of the table is exact (see getAvgSql())
+            numeric column of the table or of a joined table is exact (see getAvgSql())
         */
         private hash getColumnOperatorMapImpl() {
             return XdbcFirebirdCopMap + {
@@ -2748,10 +2731,14 @@ string sql = db.getSqlIdentifier("Order Date");
                         return getCastSql(cve, args[0], args[1], args[2]);
                     },
                 },
-                # the average of an integer or an exact numeric column of the table is exact (see getAvgSql())
+                # the average of an integer or an exact numeric column of the table or of a joined table is exact
+                # (see getAvgSql()); the type of the column is given by the column designator of the operator
                 COP_AVG: DefaultCopMap{COP_AVG} + {
-                    "code": string sub (string cve, auto arg) {
-                        return getAvgSql(cve, isExactNumericColumnSql(cve));
+                    "withcolumn": True,
+                    "code": string sub (string cve, auto arg, hash<QueryInfo> info, auto column) {
+                        return getAvgSql(cve, column.typeCode() == NT_STRING
+                            ? isExactNumericArg(info, <DataProviderFieldReference>{"field": column})
+                            : NOTHING);
                     },
                 },
             };
