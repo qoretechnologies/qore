@@ -69,6 +69,7 @@
 #include <qore/QoreHttpClientObject.h>
 #include <qore/QoreSandboxManager.h>
 #include "qore/intern/qore_thread_intern.h"
+#include "qore/intern/QoreSignal.h"
 
 #include <openssl/evp.h>
 #include <openssl/x509.h>
@@ -888,6 +889,56 @@ static void ut_rsection_try_notify_does_not_block_on_writer(UnitTestCounters& c)
     lock.clearFakeWriterAndNotify();
     UT_ASSERT(c, !notifier.setp, "writer release clears registered notification");
 }
+
+#ifdef DEBUG
+//! A thread waiting for the block of another thread's fork() is woken when the block is lifted
+/** QoreSignalManager::postFork() lifted the block without the lock and without waking the waiters, so a thread that
+    changed a signal handler during a fork() waited forever
+*/
+static void ut_fork_signal_block_waiter(UnitTestCounters& c) {
+    if (!QSM.running()) {
+        // signal handling is disabled: there is no signal thread and no block
+        return;
+    }
+    static std::mutex m;
+    static std::condition_variable cv;
+    static bool waiting;
+    waiting = false;
+    struct HookHelper {
+        HookHelper() {
+            qore_qsm_block_wait_hook = []() {
+                std::lock_guard<std::mutex> lg(m);
+                waiting = true;
+                cv.notify_all();
+            };
+        }
+        ~HookHelper() {
+            qore_qsm_block_wait_hook = nullptr;
+        }
+    } hook_helper;
+
+    // stops the signal thread and blocks signal handler changes, as Qore's fork() does before fork()
+    QSM.preFork();
+    std::atomic<int> rc{-2};
+    std::thread waiter([&rc]() {
+        ExceptionSink xsink;
+        rc = QSM.removeHandler(SIGUSR2, &xsink);
+        xsink.clear();
+    });
+    {
+        std::unique_lock<std::mutex> ul(m);
+        cv.wait(ul, [] { return waiting; });
+    }
+    ExceptionSink xsink;
+    QSM.postFork(false, &xsink);
+    UT_ASSERT(c, !xsink, "the signal thread is started again");
+    xsink.clear();
+    // returns only if the waiter was woken
+    waiter.join();
+    UT_ASSERT(c, rc == 0, "a thread waiting for the fork() block is woken and completes its change");
+}
+
+#endif
 
 #ifdef DEBUG
 namespace {
@@ -9141,6 +9192,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     AsyncIoStoppingThreadTest::run(c);
     AsyncIoFrameSendTest::run(c);
     ut_cond_wait_cancel_in_window(c);
+    ut_fork_signal_block_waiter(c);
     Http3ClientResponseRegistrationTest::run(c);
     ut_fast_real_deref_releases_last(c);
     ut_superseded_snapshot_lock_free_release(c);

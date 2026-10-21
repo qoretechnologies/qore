@@ -290,17 +290,30 @@ void QoreSignalManager::wait_signal_thread_stopped() {
     }
 }
 
+#ifdef DEBUG
+std::atomic<void (*)()> qore_qsm_block_wait_hook{nullptr};
+#endif
+
+void QoreSignalManager::waitForBlockUnlocked() {
+    while (block) {
+        ++waiting;
+#ifdef DEBUG
+        if (void (*hook)() = qore_qsm_block_wait_hook.load()) {
+            hook();
+        }
+#endif
+        cond.wait(&mutex);
+        --waiting;
+    }
+}
+
 void QoreSignalManager::preFork() {
     SafeLocker sl(&mutex);
     if (!running())
         return;
 
     // if another block is already in progress then wait for it to complete
-    while (block) {
-        ++waiting;
-        cond.wait(&mutex);
-        --waiting;
-    }
+    waitForBlockUnlocked();
     block = true;
     stop_signal_thread_unlocked();
 
@@ -316,8 +329,12 @@ void QoreSignalManager::postFork(bool new_process, ExceptionSink *xsink) {
         return;
     }
 
+    AutoLocker al(mutex);
+    // the block is lifted under the lock, and the threads of this process that wait for it are woken
     block = false;
-    assert(!waiting);
+    if (!new_process && waiting) {
+        cond.broadcast();
+    }
 
     // set new default signal mask for new process
 #if !defined(__linux__) && !defined(__APPLE__)
@@ -335,7 +352,6 @@ void QoreSignalManager::postFork(bool new_process, ExceptionSink *xsink) {
     printd(5, "QoreSignalManager::postFork() pid: %d, new_process: %d, starting signal thread\n", getpid(),
         new_process);
 
-    AutoLocker al(mutex);
     start_signal_thread(xsink);
 }
 
@@ -571,11 +587,7 @@ int QoreSignalManager::setHandler(int sig, const ResolvedCallReferenceNode *fr, 
             return 0;
 
         // wait for any blocks to be lifted
-        while (block) {
-            ++waiting;
-            cond.wait(&mutex);
-            --waiting;
-        }
+        waitForBlockUnlocked();
 
         sig_map_t::iterator i = fmap.find(sig);
         if (i != fmap.end()) {
@@ -643,11 +655,7 @@ int QoreSignalManager::removeHandler(int sig, ExceptionSink *xsink) {
             return 0;
 
         // wait for any blocks to be lifted
-        while (block) {
-            ++waiting;
-            cond.wait(&mutex);
-            --waiting;
-        }
+        waitForBlockUnlocked();
 
         if (!handlers[sig].isSet())
             return 0;
@@ -688,11 +696,7 @@ QoreStringNode* QoreSignalManager::reassignSignal(int sig, const char* name, boo
     }
 
     // wait for any blocks to be lifted
-    while (block) {
-        ++waiting;
-        cond.wait(&mutex);
-        --waiting;
-    }
+    waitForBlockUnlocked();
 
     if (handlers[sig].isSet()) {
         QoreStringNode* err = new QoreStringNodeMaker("the Qore library cannot reassign signal %d because a handler "
@@ -734,11 +738,7 @@ QoreStringNode* QoreSignalManager::reassignSignals(const sig_vec_t& sig_vec, con
     }
 
     // wait for any blocks to be lifted
-    while (block) {
-        ++waiting;
-        cond.wait(&mutex);
-        --waiting;
-    }
+    waitForBlockUnlocked();
 
     for (auto& sig : sig_vec) {
         assert(sig > 0);

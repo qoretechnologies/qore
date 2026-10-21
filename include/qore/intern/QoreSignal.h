@@ -148,6 +148,11 @@ public:
 // map of signals to module names
 typedef std::map<int, std::string> sig_map_t;
 
+#ifdef DEBUG
+//! a test hook called by a thread that starts waiting for a fork() block to be lifted, with the mutex held
+DLLLOCAL extern std::atomic<void (*)()> qore_qsm_block_wait_hook;
+#endif
+
 class QoreSignalManager {
    friend class QoreSignalManagerBusyHelper;
 
@@ -163,6 +168,8 @@ private:
    bool handler_running = false;
 
    DLLLOCAL void reload();
+   //! waits while another thread's fork() blocks changes; the mutex must be held
+   DLLLOCAL void waitForBlockUnlocked();
    DLLLOCAL void wake_signal_thread_unlocked();
    DLLLOCAL void stop_signal_thread_unlocked();
    DLLLOCAL int start_signal_thread(ExceptionSink* xsink);
