@@ -27,14 +27,14 @@ default:
 
 variables:
   REPO_NAME: qore
-  POSTGRES_PASSWORD: omq
-  POSTGRES_PASSWORD_MAP: pgsql=omq
+  POSTGRES_PASSWORD: qore
+  POSTGRES_PASSWORD_MAP: pgsql=qore
   TZ: 'Europe/Prague'
   PGTZ: 'Europe/Prague'
   TDSVER: "7.3"
-  MYSQL_DATABASE: omq
-  MYSQL_ROOT_PASSWORD: omq
-  QORE_DB_CONNSTR_MYSQL: 'mysql:root/omq@omq(UTF8)%mysql'
+  MYSQL_DATABASE: qore
+  MYSQL_ROOT_PASSWORD: qore
+  QORE_DB_CONNSTR_MYSQL: 'mysql:root/qore@qore(UTF8)%mysql'
   MEMCACHED_URL: 'memcached://memcached:11211'
   REDIS_URL: 'redis://redis:6379'
   MONGODB_URL: 'mongodb://mongodb:27017'
