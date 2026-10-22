@@ -39,6 +39,7 @@
 %requires HttpServerUtil
 %requires HttpServer
 %requires ../../TestCertificates.qm
+%requires ../../PortHolder.qm
 
 %exec-class HttpServerWildcardBindTest
 
@@ -51,7 +52,7 @@ class WildcardBindHandler inherits AbstractHttpRequestHandler {
 
 class HttpServerWildcardBindTest inherits QUnit::Test {
     public {
-        #! the number of consecutive ports held for the system-assigned port test
+        #! the number of free ports held after the next system-assigned port for the system-assigned port test
         const HeldPorts = 64;
 
         #! the test certificate and its key
@@ -71,17 +72,6 @@ class HttpServerWildcardBindTest inherits QUnit::Test {
     private static Socket listener(string address, int port = 0) {
         Socket s();
         s.bindINET(address, port, True, AF_INET);
-        s.listen();
-        return s;
-    }
-
-    #! returns a listening TCP socket on the given IPv4 address and port that no other socket uses
-    /** The socket does not reuse the address, so the bind is refused if any socket uses the port, also one on which
-        only connections remain; with SO_REUSEADDR, macOS allows a bind of 127.0.0.1 on such a port.
-    */
-    private static Socket holder(string address, int port) {
-        Socket s();
-        s.bindINET(address, port, False, AF_INET);
         s.listen();
         return s;
     }
@@ -115,26 +105,14 @@ class HttpServerWildcardBindTest inherits QUnit::Test {
     }
 
     systemPortTest() {
-        # hold the ports after the next system-assigned port, alternately on 127.0.0.1 and on 0.0.0.0; a system that
-        # assigns ports in sequence (macOS) would give the listener one of them if it did not avoid them.  These are
-        # the ports that the system assigns next to concurrent programs too, so a port that another socket uses is
-        # not held: its program's clients would reach the holder instead
-        hash<string, Socket> held();
+        # hold the next system-assigned port and the HeldPorts free ports after it, in the order of the system's
+        # assignment; a system that assigns ports in sequence (macOS) would give the listener one of them if it did not
+        # avoid them.  Concurrent programs, which take the ports that the system assigns next too, do not change how
+        # many are held (see PortHolder::hold_next_free_ports())
+        hash<string, Socket> held = PortHolder::hold_next_free_ports(HeldPorts);
         on_exit map $1.close(), held.iterator();
-        int first;
-        {
-            Socket probe = listener("127.0.0.1");
-            first = probe.getSocketInfo(False).port;
-            held{first} = probe;
-        }
-        for (int port = first + 1; port <= first + HeldPorts && port < 65536; ++port) {
-            try {
-                held{port} = holder((port % 2) ? "127.0.0.1" : "0.0.0.0", port);
-            } catch (hash<ExceptionInfo> ex) {
-                # a port in use by another program cannot be held, and is not given to the listener either
-            }
-        }
-        assertGt(HeldPorts / 2, held.size(), "most of the ports after the next system-assigned port are held");
+        assertEq(HeldPorts + 1, held.size(), sprintf("the next system-assigned port and the %d free ports after it "
+            "are held (system-assigned ports: %y)", HeldPorts, PortHolder::ephemeral_range()));
         HttpServer server();
         on_exit server.stop();
         server.setDefaultHandler("test", new WildcardBindHandler());
