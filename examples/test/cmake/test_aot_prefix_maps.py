@@ -556,6 +556,42 @@ try {
             outputs.append(output.read_bytes())
         self.assertEqual(*outputs)
 
+    def test_prefixes_match_canonical_source_paths(self):
+        # qcc names its inputs by their canonical paths, so a prefix that names the source directory through a
+        # symbolic link (as a temporary directory on macOS does: /var is a link to /private/var), with a relative
+        # path, as a partial name or with a trailing separator must match the canonical path as well
+        real = self.root / "real checkout"
+        source = real / "source"
+        source.mkdir(parents=True)
+        (source / "ReproProbe.qm").write_text(HEADER + FUNCTIONS)
+        physical = source.resolve()
+        link = self.root / "linked checkout"
+        link.symlink_to(real, target_is_directory=True)
+        module = link / "source" / "ReproProbe.qm"
+        line = next(i for i, text in enumerate(module.read_text().splitlines(), 1)
+                    if 'throw "MAPPED-LOCATION"' in text)
+        for case, old, new, cwd, expected in (
+            ("symbolic link", str(link / "source"), "/mapped", self.root, "/mapped/ReproProbe.qm"),
+            ("relative", "source", "/relative", link, "/relative/ReproProbe.qm"),
+            ("partial name", str(link / "sou"), "/partial-", self.root, "/partial-rce/ReproProbe.qm"),
+            ("trailing separator", str(link / "source") + "/", "/slash/", self.root, "/slash/ReproProbe.qm"),
+            # a prefix of another directory maps nothing
+            ("unrelated", str(self.root / "elsewhere"), "/unrelated", self.root, str(physical / "ReproProbe.qm")),
+        ):
+            with self.subTest(case):
+                output = self.root / ("output " + case)
+                output.mkdir()
+                artifact = output / "ReproProbe.qmod"
+                self.run_tool(QCC, "-m", "-O3", f"--file-prefix-map={old}={new}", "-o", artifact, module, cwd=cwd)
+                index = json.loads(self.run_tool(QCC, "--dump-index-json", artifact))
+                self.assertEqual(expected, index["source"])
+                self.env["QORE_MODULE_DIR"] = str(output)
+                result = self.run_tool(QORE, "-l", "ReproProbe", "-e", 'printf("%s\\n", repro_location());')
+                self.assertEqual(f"{expected}:{line}\n", result)
+                if case != "unrelated":
+                    self.assertNotIn(str(physical), json.dumps(index))
+                    self.assertNotIn(str(physical).encode(), artifact.read_bytes())
+
     def test_relative_maps_and_old_prefix_with_equals(self):
         first = self.compile_module("first=checkout", mapped_prefix=".")
         second = self.compile_module("different=checkout", mapped_prefix=".")

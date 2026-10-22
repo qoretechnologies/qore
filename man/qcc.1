@@ -33,6 +33,10 @@ Replace the matching prefix of emitted source paths when building a final
 single-source executable or whole module. Repeat the option to define multiple
 mappings; the last matching mapping wins. The last equals sign separates the
 prefixes, and OLD must be nonempty.
+Source paths are emitted in their canonical form, without symbolic links, so OLD
+also matches the canonical form of the path it names: a mapping of a source
+directory given through a symbolic link (such as /tmp on macOS) or with a
+relative path applies to the files in it.
 Native debug information, Qore exception locations, module labels, and symbol
 index paths use the mapped names. Physical input files and dependency files
 retain their original paths; source text and user string values are unchanged.
