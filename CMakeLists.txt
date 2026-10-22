@@ -4146,6 +4146,16 @@ qore_finalize_user_module_dependencies()
 qore_finalize_catalog_install()
 
 get_property(QORE_QM_METADATA_TARGETS GLOBAL PROPERTY QORE_QM_METADATA_TARGETS)
+# The metadata extractor loads QoreApiMetadata from the source qlib, which holds a link to the module's AOT qmod once
+# it is built.  The qmod is compiled again when one of its sources changes, including the binary modules it requires
+# (astparser, reflection, json, yaml): a metadata step that ran meanwhile found the qmod out of date and loaded the
+# source module instead, with a warning.  The steps therefore wait for the qmod, which also lets them run its compiled
+# code; the qmod is not installed with the bootstrap component.
+if (TARGET QoreApiMetadata-qmod)
+    foreach(_qore_qm_metadata_target ${QORE_QM_METADATA_TARGETS})
+        add_dependencies(${_qore_qm_metadata_target} QoreApiMetadata-qmod)
+    endforeach()
+endif()
 add_custom_target(qore-bootstrap
     DEPENDS
         qore
