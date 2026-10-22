@@ -32844,6 +32844,14 @@ void buildAOTSlotMap(const QoreIRFunction& func, AOTSlotMap& slots, bool seed_ir
                                 && step.ref_ptr) {
                             int32_t sid = slots.getLocalSlot(step.ref_ptr);
                             step.slot_id = static_cast<uint32_t>(sid);
+                        } else if (step.kind == LVPathStepKind::Cast) {
+                            // the cast operator is an expression slot, which the runtime resolves to the operator
+                            assert(step.cast_node);
+                            QoreValue cast_val(const_cast<QoreCastOperatorNode*>(step.cast_node));
+                            uint64_t bits;
+                            memcpy(&bits, &cast_val, sizeof(bits));
+                            step.slot_id = static_cast<uint32_t>(slots.getExprSlot(bits,
+                                "lvalue path cast step"));
                         }
                     }
                     // Register LValuePath slot for AOT codegen

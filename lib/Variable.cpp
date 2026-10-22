@@ -898,8 +898,7 @@ int LValueHelper::doListLValue(const QoreSquareBracketsOperatorNode* op, bool fo
     if (*vl.xsink)
         return -1;
 
-    if (rh->getType() == NT_LIST) {
-        vl.xsink->raiseException("ILLEGAL-SLICE", "slices are not supported in internal lvalue expressions");
+    if (qore_check_lvalue_key_not_slice(*rh, vl.xsink)) {
         return -1;
     }
 
@@ -1034,8 +1033,7 @@ int LValueHelper::doListLValue(const QoreSquareBracketsOperatorNode* op, Runtime
         return -1;
     }
 
-    if (rh->getType() == NT_LIST) {
-        vl.xsink->raiseException("ILLEGAL-SLICE", "slices are not supported in internal lvalue expressions");
+    if (qore_check_lvalue_key_not_slice(*rh, vl.xsink)) {
         return -1;
     }
 
@@ -1310,6 +1308,11 @@ int LValueHelper::doHashObjLValue(const QoreHashObjectDereferenceOperatorNode* o
         return -1;
     }
 
+    // a list of keys is a slice, which is not an lvalue, as doListLValue() checks for a list of indexes
+    if (qore_check_lvalue_key_not_slice(*rh, vl.xsink)) {
+        return -1;
+    }
+
     // convert to default character encoding
     QoreHashKeyHelper mem(*rh, vl.xsink);
     if (*vl.xsink) {
@@ -1336,6 +1339,11 @@ int LValueHelper::doHashObjLValue(const QoreHashObjectDereferenceOperatorNode* o
 int LValueHelper::doHashObjLValue(const QoreHashObjectDereferenceOperatorNode* op, RuntimeConfig& rc, bool for_remove) {
     ValueEvalOptimizedRefHolder rh(op->getRight(), vl.xsink);
     if (*vl.xsink) {
+        return -1;
+    }
+
+    // a list of keys is a slice, which is not an lvalue, as doListLValue() checks for a list of indexes
+    if (qore_check_lvalue_key_not_slice(*rh, vl.xsink)) {
         return -1;
     }
 
@@ -1785,6 +1793,12 @@ int LValueHelper::navigatePath(const LVPathStep* steps, uint32_t num_steps, bool
         switch (step.kind) {
             case LVPathStepKind::HashKeyConst:
             case LVPathStepKind::HashKey: {
+                // a list of keys is a slice, which is not an lvalue (remove and delete take a slice at the end of
+                // the path without navigating it), as doHashObjLValue() checks
+                if (step.slice_values.size() == 1
+                        && qore_check_lvalue_key_not_slice(step.slice_values[0], vl.xsink)) {
+                    return -1;
+                }
                 // Check if the target is an object — use doObjLValue instead of doHashLValue
                 QoreObject* o = nullptr;
                 if (t == NT_WEAKREF) {
@@ -1804,6 +1818,11 @@ int LValueHelper::navigatePath(const LVPathStep* steps, uint32_t num_steps, bool
                 break;
             }
             case LVPathStepKind::ListIndex: {
+                // a list of indexes is a slice, as doListLValue() checks
+                if (step.slice_values.size() == 1
+                        && qore_check_lvalue_key_not_slice(step.slice_values[0], vl.xsink)) {
+                    return -1;
+                }
                 int64_t idx = step.index;
                 int64_t original_idx = idx;
                 bool negative_offsets = runtime_check_parse_option(PO_NEGATIVE_OFFSETS);
@@ -1897,6 +1916,14 @@ int LValueHelper::navigatePath(const LVPathStep* steps, uint32_t num_steps, bool
                 }
                 break;
             }
+            case LVPathStepKind::Cast:
+                // the value so far must have the cast's type, as doLValue() checks a cast in an lvalue
+                assert(step.cast_node);
+                if (step.cast_node->checkValue(vl.xsink, val ? val->getValue() : *qv, true)) {
+                    clearPtr();
+                    return -1;
+                }
+                break;
             default:
                 vl.xsink->raiseException("LVALUE-ERROR",
                     "invalid navigation step kind %d in lvalue path", (int)step.kind);

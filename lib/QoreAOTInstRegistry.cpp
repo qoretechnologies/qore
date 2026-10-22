@@ -3334,6 +3334,12 @@ static bool writeLValuePath(AOTInstWriteCtx& ctx) {
             for (uint32_t sid : step.slice_operand_ids) {
                 ctx.writer.writeU32(sid);
             }
+        } else if (step.kind == LVPathStepKind::Cast) {
+            // the cast operator whose type the step checks
+            assert(step.cast_node);
+            if (!ctx.writeExpr(ctx.writer, QoreValue(const_cast<QoreCastOperatorNode*>(step.cast_node)))) {
+                return false;
+            }
         }
     }
     return true;
@@ -3397,6 +3403,25 @@ static std::unique_ptr<QoreIRInstruction> readLValuePath(
                     return nullptr;
                 }
                 step.slice_operand_ids.push_back(QoreAOTBinaryReader::readU32(ctx.ptr));
+            }
+        } else if (step.kind == LVPathStepKind::Cast) {
+            std::string error;
+            QoreValue cast_val = ctx.readExpr(ctx.reader, ctx.ptr, ctx.end, error);
+            if (!error.empty() || !cast_val.hasNode()) {
+                cast_val.discard(nullptr);
+                ctx.error = error.empty() ? std::string("lvalue path cast step without a cast operator") : error;
+                delete pi;
+                return nullptr;
+            }
+            AbstractQoreNode* cast_node = cast_val.takeNode();
+            // the instruction owns the operator
+            pi->owned_cast_nodes.push_back(cast_node);
+            step.cast_node = dynamic_cast<const QoreCastOperatorNode*>(cast_node);
+            if (!step.cast_node) {
+                ctx.error = std::string("lvalue path cast step with a '") + cast_node->getTypeName()
+                    + "' instead of a cast operator";
+                delete pi;
+                return nullptr;
             }
         }
         // Resolve ref_ptr for debug/cached IR paths. The native AOT context

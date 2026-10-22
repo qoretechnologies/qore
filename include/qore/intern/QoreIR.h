@@ -67,6 +67,7 @@ class QoreMethod;
 class QoreClass;
 class qore_class_private;
 class QoreVarInfo;
+class QoreCastOperatorNode;
 class AbstractQoreFunctionVariant;
 class QoreClosureParseNode;
 class RuntimeConstantRefNode;
@@ -1586,6 +1587,7 @@ enum class LVPathStepKind : uint8_t {
     HashKeySlice   = 9,  //!< Multi-key hash slice h{"a","b",...} — terminal step only
     ListIndexSlice = 10, //!< Multi-index list/string/binary slice l[1,3,5,...] — terminal step only
     ListRangeSlice = 11, //!< Range list/string/binary slice l[1..3] — terminal step only
+    Cast           = 12, //!< cast<T>(lvalue): checks the value navigated to so far against the cast's type
 };
 
 //! A single step in an lvalue navigation path
@@ -1636,6 +1638,13 @@ struct LVPathStep {
 
     // Type info for type checking at this step
     const QoreTypeInfo* type_info = nullptr;
+
+    //! Cast steps: the cast operator whose type the value navigated to so far must have
+    /** The value is checked as the AST checks a cast in an lvalue (QoreCastOperatorNode::checkValue() with
+        \a lvalue = true); the position in the lvalue does not change.  The node belongs to the parsed code, to
+        the AOT context (an expression slot) or to the instruction (QoreIRLValuePathInstruction::owned_cast_nodes).
+    */
+    const QoreCastOperatorNode* cast_node = nullptr;
 };
 
 //! Sub-operation type for LValuePathCompound
@@ -1682,6 +1691,9 @@ public:
         for (auto* node : owned_static_var_refs) {
             node->deref(nullptr);
         }
+        for (auto* node : owned_cast_nodes) {
+            node->deref(nullptr);
+        }
     }
 
     std::vector<LVPathStep> path;  //!< Root step + navigation steps
@@ -1707,6 +1719,9 @@ public:
 
     //! StaticClassVarRefNode objects reconstructed while deserializing AOT LValuePath roots.
     std::vector<AbstractQoreNode*> owned_static_var_refs;
+
+    //! Cast operator nodes of Cast steps reconstructed while deserializing serialized IR
+    std::vector<AbstractQoreNode*> owned_cast_nodes;
 
     //! Whether the return value of the operation is used (from QoreOperatorNode::ref_rv)
     bool ref_rv = true;

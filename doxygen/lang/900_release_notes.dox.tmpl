@@ -712,6 +712,16 @@
     top-level local variable has the same name, as it is when a global variable has it; use a different name for the
     top-level local variable.
 
+    @par A Slice Is an Lvalue Only of remove and delete
+    A slice (\c h{"a", "b"}, \c l[1, 2], \c l[1..2], or a key or index expression whose type is a list) used as an
+    lvalue anywhere but as the whole lvalue of @ref remove "remove" or @ref delete "delete" is a parse error, also
+    inside a longer lvalue (\c h{"a", "b"}.x) and for a reference (\c \\h{"a", "b"}); a key or index that is a list
+    only at runtime raises an \c ILLEGAL-SLICE exception.  A slice is a new container, not a part of the lvalue: an
+    assignment, @ref trim "trim", @ref push "push", the regular expression operators and the other operators that
+    modify an lvalue modified a member named after the empty string when given a hash slice (\c trim h{"a", "b"}
+    added a key \c "" to \c h), and raised \c ILLEGAL-SLICE for a list slice and \c RUNTIME-TYPE-ERROR for a
+    range at runtime.
+
     @par Stream Conversions Raise an Error for a Character the Target Encoding Cannot Hold
     @ref Qore::EncodingConversionInputStream "EncodingConversionInputStream" and
     @ref Qore::EncodingConversionOutputStream "EncodingConversionOutputStream" raise an \c ENCODING-CONVERSION-ERROR

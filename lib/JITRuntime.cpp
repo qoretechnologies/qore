@@ -5878,6 +5878,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_hash_key_store_dynamic_cow(
         LocalVar* var, uint64_t hash_bits, uint64_t key_bits,
         uint64_t value_bits, ExceptionSink* xsink) {
     QoreValue key_val = fromBits(key_bits);
+    // a list is a slice, which is not an lvalue
+    if (qore_check_lvalue_key_not_slice(key_val, xsink)) {
+        return toBits(QoreValue());
+    }
     QoreHashKeyHelper key_str(key_val, xsink);
     if (*xsink) {
         return toBits(QoreValue());
@@ -5891,6 +5895,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_hash_key_store_dynamic_cow_aot(
         uint64_t hash_bits, uint64_t key_bits,
         uint64_t value_bits, ExceptionSink* xsink) {
     QoreValue key_val = fromBits(key_bits);
+    // a list is a slice, which is not an lvalue
+    if (qore_check_lvalue_key_not_slice(key_val, xsink)) {
+        return toBits(QoreValue());
+    }
     QoreHashKeyHelper key_str(key_val, xsink);
     if (*xsink) {
         return toBits(QoreValue());
@@ -12582,6 +12590,9 @@ static int patchLVPath(std::vector<LVPathStep>& path_copy,
             step.name.assign(key_str.c_str(), key_str.size());
         } else if (step.kind == LVPathStepKind::ListIndex && step.operand_idx != UINT32_MAX) {
             QoreValue idx_val = fromBits(dyn_vals[dyn_idx++]);
+            // keep the value: a list is a slice, which only remove and delete accept
+            step.slice_values.clear();
+            step.slice_values.push_back(idx_val);
             step.index = idx_val.getAsBigInt();
         } else if (step.kind == LVPathStepKind::HashKeySlice
                 || step.kind == LVPathStepKind::ListIndexSlice
@@ -13481,7 +13492,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary(
         bool last_is_hash_slice = (last_step.kind == LVPathStepKind::HashKeySlice);
         bool last_is_hash_list = last_is_hash && last_step.slice_values.size() == 1
                 && last_step.slice_values[0].getType() == NT_LIST;
-        bool last_is_list_slice = (last_step.kind == LVPathStepKind::ListIndexSlice);
+        // a list of indexes, given in the code or by the value of the index expression
+        bool last_is_list_slice = (last_step.kind == LVPathStepKind::ListIndexSlice)
+            || (last_is_list && last_step.slice_values.size() == 1
+                && last_step.slice_values[0].getType() == NT_LIST);
         bool last_is_list_range = (last_step.kind == LVPathStepKind::ListRangeSlice);
         if (last_is_hash || last_is_list || last_is_hash_slice || last_is_hash_list || last_is_list_slice
                 || last_is_list_range) {
@@ -13518,7 +13532,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary(
                     pending_delete_finish = true;
                 }
                 handled_multistep_remove = true;
-            } else if (last_is_list && ct == NT_LIST) {
+            } else if (last_is_list && !last_is_list_slice && ct == NT_LIST) {
                 lvh.ensureUnique();
                 QoreListNode* l = lvh.getValue().get<QoreListNode>();
                 int64_t idx = last_step.index;

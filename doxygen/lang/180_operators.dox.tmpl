@@ -180,6 +180,12 @@ string str = foldl $1 + ", " + $2, (map $1.desc, get_iterator(), $1.type == Exte
     |<em>@ref expressions "expression"</em>|- @ref list "list": if the expression evaluates to a list, then a slice of the hash or object is returned as a hash containing keys given in the list that are present in the hash or object. If the key as given in the list (converted to a string if necessary) is not present in the hash or object, then it is also not present in the hash returned; if none of the given keys exist in the hash, an empty hash is returned.\n- anything other than @ref list "list": the expression is converted to a string (if necessary); the value of the hash key corresponding to this string will be returned; if the key or member does not exist, then no value is returned
 
     @throw PRIVATE-MEMBER Attempt to access a private member outside the class
+    @throw ILLEGAL-SLICE the key expression of an lvalue that is not the whole lvalue of the @ref remove "remove" or
+    @ref delete "delete" operators evaluates to a list
+
+    @note a slice is not an lvalue: it can be the whole lvalue of the @ref remove "remove" and
+    @ref delete "delete" operators, and using it with any other operator that modifies an lvalue is a parse error,
+    or raises an \c ILLEGAL-SLICE exception when the key expression is a list only at runtime
 
     <hr>
     @subsection dot_operator Hash Element or Object Member Literal Dereference Operator (.)
@@ -267,7 +273,10 @@ string str = foldl $1 + ", " + $2, (map $1.desc, get_iterator(), $1.type == Exte
 
     This operator does not throw any exceptions; if the first expression does not evaluate to either a list, string, binary, or buffer, then no value (@ref nothing) is returned.
 
-    @note this operator cannot be used on the left-hand side of an assignment expression with multiple values between square brackets
+    @note a slice (several values or a range between the square brackets, or a list given by an expression) is not an
+    lvalue: it can be the whole lvalue of the @ref remove "remove" and @ref delete "delete" operators, and using it
+    with any other operator that modifies an lvalue is a parse error, or raises an \c ILLEGAL-SLICE exception when
+    the expression is a list only at runtime
 
     @note The @ref no-string-index-char "%no-string-index-char" parse directive preserves the historical single-index string behavior where \c string[i] returns \c *string instead of \c *char.
 

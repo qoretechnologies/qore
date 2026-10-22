@@ -6243,6 +6243,9 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 step.name.assign(key_str.c_str(), key_str.size());
             } else if (step.kind == LVPathStepKind::ListIndex && step.operand_idx != UINT32_MAX) {
                 QoreValue idx_val = getIRValue(values, QoreIRValue(step.operand_idx));
+                // keep the value: a list is a slice, which only remove and delete accept
+                step.slice_values.clear();
+                step.slice_values.push_back(idx_val);
                 step.index = idx_val.getAsBigInt();
             } else if (step.kind == LVPathStepKind::HashKeySlice
                     || step.kind == LVPathStepKind::ListIndexSlice
@@ -8760,6 +8763,8 @@ load_local_done:
                 QoreValue val      = getIRValue(values, hksd_inst->operands[1]);
                 QoreValue key_val  = getIRValue(values, hksd_inst->operands[2]);
                 ValueHolder val_holder(val.refSelf(), xsink);
+                // a list is a slice, which is not an lvalue; the store below then does nothing
+                qore_check_lvalue_key_not_slice(key_val, xsink);
                 // hash keys are stored in the default encoding
                 QoreHashKeyHelper key_str(key_val, xsink);
                 // every error exit of the store returns from this function, so that the exception is dispatched to an
@@ -13221,6 +13226,15 @@ load_local_done:
                                         lvh.removedValue(res);
                                         pending_delete_finish = true;
                                     }
+                                } else if ((last_step.kind == LVPathStepKind::ListIndexSlice
+                                        || (last_step.kind == LVPathStepKind::ListIndex
+                                            && last_step.slice_values.size() == 1
+                                            && last_step.slice_values[0].getType() == NT_LIST))
+                                        && (ct == NT_LIST || ct == NT_STRING || ct == NT_BINARY)) {
+                                    // a list of indexes, given in the code or by the value of the index expression
+                                    res = executeLVListIndexSliceRemove(lvh, ct, last_step,
+                                            path_inst->unary_op, xsink);
+                                    pending_delete_finish = pending_delete_direct_list = true;
                                 } else if (last_step.kind == LVPathStepKind::ListIndex && ct == NT_LIST) {
                                     lvh.ensureUnique();
                                     QoreListNode* l = lvh.getValue().get<QoreListNode>();
@@ -13241,11 +13255,6 @@ load_local_done:
                                         && (ct == NT_HASH || ct == NT_OBJECT || ct == NT_WEAKREF)) {
                                     res = executeLVHashKeySliceRemove(lvh, ct, last_step,
                                             path_inst->unary_op, xsink);
-                                } else if (last_step.kind == LVPathStepKind::ListIndexSlice
-                                        && (ct == NT_LIST || ct == NT_STRING || ct == NT_BINARY)) {
-                                    res = executeLVListIndexSliceRemove(lvh, ct, last_step,
-                                            path_inst->unary_op, xsink);
-                                    pending_delete_finish = pending_delete_direct_list = true;
                                 } else if (last_step.kind == LVPathStepKind::ListRangeSlice
                                         && (ct == NT_LIST || ct == NT_STRING || ct == NT_BINARY)) {
                                     res = executeLVListRangeSliceRemove(lvh, ct, last_step,

@@ -159,9 +159,9 @@ public:
         return true;
     }
 
-    DLLLOCAL int checkLValue(QoreValue exp, int pflag, bool assignment = true) {
+    DLLLOCAL int checkLValue(QoreValue exp, int pflag, bool assignment = true, bool allow_slice = false) {
         if (exp) {
-            int lvalue_err = check_lvalue(exp, assignment);
+            int lvalue_err = check_lvalue(exp, assignment, allow_slice);
             if (lvalue_err) {
                 if (lvalue_err == -1) {
                     parse_error(*loc, "expecting lvalue for %s, got '%s' instead", getTypeName(),

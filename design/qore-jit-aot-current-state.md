@@ -215,6 +215,28 @@ AOT artifacts require complete serialized metadata. Source text can be embedded
 for diagnostics or inspection, but it is not a runtime fallback for missing AOT
 metadata.
 
+### Lvalues
+
+Every lvalue that `check_lvalue()` accepts is lowered to an lvalue path
+(`extractLValuePath()` in `lib/QoreIRLowering.cpp`, executed by
+`LValueHelper::navigatePath()`): a root (local, closure-bound, global, thread-local
+or static variable, or a member of `self`), then navigation steps (a hash key or object
+member, a list index) and `Cast` steps, which check the value navigated to so far as the
+AST checks `cast<T>(lvalue)` and keep the position. Every operator that modifies an
+lvalue, apart from the fast paths for plain locals and their subscripts, emits an
+`LValuePath*` instruction; if the path cannot be built, lowering fails. Lowering emits no
+AST-evaluated lvalue operation (`StoreLValue`, `AddAssignLValue`, ...): those only
+evaluated the lvalue's AST, keys included, at runtime.
+
+A slice (a hash slice, a list slice or a range) is an lvalue only as the whole lvalue of
+`remove` and `delete`, which take it as the terminal step of the path; `check_lvalue()`
+rejects any other slice lvalue at parse time, and a key or index that is a list only at
+runtime raises `ILLEGAL-SLICE` in every engine (`qore_check_lvalue_key_not_slice()`).
+
+An expression statement is lowered as any other expression, also in a try block: the
+operators that can raise an exception there are lowered with their own opcodes by
+`lowerExprOpOrInvoke()`.
+
 ## Variables Other Threads Can Change
 
 A global variable, and a local variable that is passed by reference or captured by a
@@ -225,7 +247,7 @@ read the variable again for every access. Every engine must give the same guaran
 
 - IR lowering never lowers such an operation on such a variable as a load followed by a
   store (`isSharedVar()` in `lib/QoreIRLowering.cpp`). The compound assignment operators
-  take the lvalue path (`LValuePathCompound`, or the AST-evaluated lvalue operation),
+  take the lvalue path (`LValuePathCompound`),
   typed integer pre- and post-increments and decrements take `IncrementLocalInt` (for a
   captured local, which every engine applies under the variable's lock) or
   `LValuePathUnary`, and the subscript fast paths (`isConstKeyHashSubscript()`,

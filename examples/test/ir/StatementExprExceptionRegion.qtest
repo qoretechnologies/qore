@@ -1,0 +1,196 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+
+%exec-class StatementExprExceptionRegionTest
+
+#! Tests expression statements in a try block in every execution mode
+/** An expression statement in a try block (or another exception region) was lowered by pre-evaluating the
+    operands of its operator and then evaluating the whole operator again as a generic AST instruction: the right
+    operand of \c && and \c || was evaluated regardless of the left one, and the instruction then raised
+    IR-AST-FALLBACK-ERROR, which the try block caught instead of the operator's own result or exception; qcc could
+    not compile such a function.  Closures were not affected.
+*/
+class StatementExprExceptionRegionTest inherits QUnit::Test {
+    public {
+        const ModuleSource = "%modern
+%allow-statement-no-effect
+module StmtChecks {
+    version = \"1.0\";
+    desc = \"expression statement checks\";
+    author = \"Qore Technologies, s.r.o.\";
+    url = \"https://qore.org\";
+    license = \"MIT\";
+}
+
+public namespace StmtChecks {
+class A {}
+class B {}
+class Log {
+    public {
+        static list<string> l = ();
+    }
+}
+
+bool sub t(string s) { Log::l += s; return True; }
+bool sub f(string s) { Log::l += s; return False; }
+int sub n(string s) { Log::l += s; return 1; }
+auto sub thr(string s) { Log::l += s; throw \"T-\" + s; }
+
+# operators that do not raise: each operand is evaluated once, and && and || short-circuit
+sub operators() {
+    try {
+        f(\"and-l\") && t(\"and-r\");
+        t(\"or-l\") || t(\"or-r\");
+        n(\"nc-l\") ?? n(\"nc-r\");
+        !t(\"not\");
+        n(\"plus-l\") + n(\"plus-r\");
+        exists n(\"exists\");
+        -n(\"neg\");
+        (n(\"list-1\"), n(\"list-2\"));
+    } catch (hash<ExceptionInfo> ex) {
+        Log::l += \"operators \" + ex.err;
+    }
+}
+
+# an operand raises
+sub short_circuit_raise() {
+    try {
+        f(\"or-l\") || thr(\"or-r\");
+        Log::l += \"not reached\";
+    } catch (hash<ExceptionInfo> ex) {
+        Log::l += \"or \" + ex.err;
+    }
+}
+
+# the operator itself raises
+sub cast_raise() {
+    object o = new A();
+    try {
+        cast<B>(o);
+        Log::l += \"not reached\";
+    } catch (hash<ExceptionInfo> ex) {
+        Log::l += \"cast \" + ex.err;
+    }
+}
+
+sub keys_raise() {
+    try {
+        keys thr(\"keys\");
+    } catch (hash<ExceptionInfo> ex) {
+        Log::l += \"keys \" + ex.err;
+    }
+}
+
+sub regex_ops() {
+    string s = \"abc\";
+    try {
+        s =~ s/b/x/;
+        s =~ /x/;
+        s =~ x/(a)/;
+        Log::l += s;
+    } catch (hash<ExceptionInfo> ex) {
+        Log::l += \"regex \" + ex.err;
+    }
+}
+
+sub list_raise() {
+    try {
+        (n(\"list-a\"), thr(\"list-b\"), n(\"list-c\"));
+    } catch (hash<ExceptionInfo> ex) {
+        Log::l += \"list \" + ex.err;
+    }
+}
+
+public string sub run() {
+    Log::l = ();
+    operators();
+    short_circuit_raise();
+    cast_raise();
+    keys_raise();
+    regex_ops();
+    list_raise();
+    return Log::l.join(\",\");
+}
+}
+";
+
+        #! the worker printing the results, three times so tiered execution runs native code
+        const Worker = "%modern
+%requires StmtChecks
+for (int i = 0; i < 3; ++i) {
+    print(StmtChecks::run() + \"\\n\");
+}
+";
+
+        const Expected = "and-l,or-l,nc-l,not,plus-l,plus-r,exists,neg,list-1,list-2,or-l,or-r,or T-or-r,"
+            "cast RUNTIME-CAST-ERROR,keys,keys T-keys,axc,list-a,list-b,list T-list-b";
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+    }
+
+    constructor() : QUnit::Test("StatementExprExceptionRegion", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+
+        addTestCase("each execution mode", \testExecModes());
+        addTestCase("compiled module", \testCompiledModule());
+
+        set_return_value(main());
+    }
+
+    testExecModes() {
+        TmpDir tmp("qore-stmt-expr-src-");
+        writeSources(tmp.path);
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            checkOutput(mode, ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b "
+                "--exec-mode=%s %s", libqore_dir, tmp.path, qore_bin, mode, tmp.path + DirSep + "worker.q")));
+        }
+    }
+
+    testCompiledModule() {
+        TmpDir tmp("qore-stmt-expr-");
+        writeSources(tmp.path);
+        string mod_dir = tmp.path + DirSep + "modules";
+        mkdir(mod_dir);
+        string qmod = mod_dir + DirSep + "StmtChecks.qmod";
+        string out = backquote(sprintf("QORE_LIBDIR=%s %s -b --compile-module --strip-source --output %s %s 2>&1",
+            libqore_dir, qore_bin, qmod, tmp.path + DirSep + "StmtChecks.qm"));
+        assertTrue(is_file(qmod), "compiled the module: " + out);
+
+        # the directory holds only the compiled module, so the worker cannot load the source instead
+        checkOutput("aot", ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b %s",
+            libqore_dir, mod_dir, qore_bin, tmp.path + DirSep + "worker.q")));
+    }
+
+    private writeSources(string dir) {
+        writeFile(dir + DirSep + "StmtChecks.qm", ModuleSource);
+        writeFile(dir + DirSep + "worker.q", Worker);
+    }
+
+    private writeFile(string path, string data) {
+        File f();
+        f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(data);
+        f.close();
+    }
+
+    private checkOutput(string label, string out) {
+        list<string> lines = (map $1, out.split("\n"), $1.val());
+        assertEq(3, lines.size(), label + ": rounds: " + out);
+        foreach string line in (lines) {
+            assertEq(Expected, line, sprintf("%s: round %d", label, $#));
+        }
+    }
+}

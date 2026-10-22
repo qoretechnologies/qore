@@ -872,8 +872,11 @@ typedef std::list<qore_conditional_block_exit_statement_t> block_list_t;
 
 #define DAH_TEXT(d) (d == DAH_RELEASE ? "RELEASE" : (d == DAH_ACQUIRE ? "ACQUIRE" : "NOCHANGE"))
 
-DLLLOCAL int check_lvalue(QoreValue n, bool assign = true);
-DLLLOCAL int check_lvalue(AbstractQoreNode* n, bool assign = true);
+//! checks an lvalue expression; returns 0 for OK, -1 if it is not an lvalue, -2 for an error already reported
+/** @param allow_slice true if the expression may be a slice (the remove and delete operators)
+*/
+DLLLOCAL int check_lvalue(QoreValue n, bool assign = true, bool allow_slice = false);
+DLLLOCAL int check_lvalue(AbstractQoreNode* n, bool assign = true, bool allow_slice = false);
 DLLLOCAL bool parse_is_readonly_receiver_expression(QoreValue n, int pflag);
 DLLLOCAL int check_const_method_lvalue(const QoreProgramLocation* loc, QoreValue n);
 DLLLOCAL int check_readonly_receiver_method_call(const QoreProgramLocation* loc, const char* name,

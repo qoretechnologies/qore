@@ -200,7 +200,9 @@ constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x44524F51;
 //!      locals bind to the variables of the enclosing context.  A v9-v19 file has no such instruction.  The
 //!      on_block_exit handlers of a compiled function are native functions of the function, so a function record has
 //!      no statement slots (num_stmts is 0, and no handler IR follows its LValuePath entries); a record of an older
-//!      version with statement slots is refused.
+//!      version with statement slots is refused.  An lvalue path can have Cast steps (LVPathStepKind::Cast, for a
+//!      cast<T>(lvalue)): in a function record the step's slot_id is the expression slot of its cast operator, and
+//!      in serialized IR the cast operator follows the step as an expression.
 constexpr uint16_t QORE_AOT_BINARY_MIN_VERSION = 9;
 constexpr uint16_t QORE_AOT_BINARY_VERSION = 20;
 //! First format version in which a serialized background instruction can be of the helper kind.

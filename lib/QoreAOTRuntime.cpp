@@ -7038,6 +7038,18 @@ static QoreAOTContext* buildContextFromSlotMap(
                         step.aot_static_var_info = qore_find_static_var_by_path(*owner_pgm, step.name,
                             sv_name);
                     }
+                } else if (step.kind == LVPathStepKind::Cast) {
+                    // the cast operator is the expression slot that the step names
+                    if (step.slot_id < static_cast<uint32_t>(num_exprs)) {
+                        step.cast_node = dynamic_cast<const QoreCastOperatorNode*>(
+                            fromBits(ctx->exprs[step.slot_id]).getInternalNode());
+                    }
+                    if (!step.cast_node) {
+                        setBuildError("lvalue path cast step " + std::to_string(s) + " has no cast operator in "
+                            "expression slot " + std::to_string(step.slot_id));
+                        delete ctx;
+                        return nullptr;
+                    }
                 }
                 pi->path.push_back(std::move(step));
             }

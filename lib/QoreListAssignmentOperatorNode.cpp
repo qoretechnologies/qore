@@ -55,13 +55,14 @@ int QoreListAssignmentOperatorNode::parseInitImpl(QoreValue& val, QoreParseConte
         const QoreTypeInfo* prototypeInfo = parse_context.typeInfo;
         //printd(5, "QoreListAssignmentOperatorNode::parseInitImpl() paI: '%s' (%s)\n", QoreTypeInfo::getName(prototypeInfo),
         //    v.getFullTypeName());
-        if (check_lvalue(v)) {
-            if (!li.hasError()) {
+        if (int lvalue_err = check_lvalue(v)) {
+            // -2: the error has been reported
+            if (lvalue_err == -1 && !li.hasError()) {
                 parse_error(*loc, "expecting lvalue in position %d of left-hand-side list in list assignment, got " \
                     "'%s' instead", li.index() + 1, v.getTypeName());
-                if (!err) {
-                    err = -1;
-                }
+            }
+            if (!err) {
+                err = -1;
             }
         } else if ((parse_context.pflag & PF_BACKGROUND) && v.getType() == NT_VARREF
             && v.get<const VarRefNode>()->getType() == VT_LOCAL) {

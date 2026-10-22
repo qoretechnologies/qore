@@ -41,6 +41,24 @@
 #include <memory>
 #include <string>
 
+//! Checks the runtime value of the key or index of an lvalue: a list is a slice, which is not an lvalue
+/** Remove and delete take a slice at the end of their lvalue (see check_lvalue()) and handle it before it would be
+    checked here; any other lvalue with a list as a key or index raises \c ILLEGAL-SLICE in every execution engine,
+    as LValueHelper::doListLValue() does in the AST.
+
+    @param key the key or index value
+    @param xsink receives the \c ILLEGAL-SLICE exception
+
+    @return 0 for OK, -1 if an exception was raised
+*/
+DLLLOCAL inline int qore_check_lvalue_key_not_slice(const QoreValue& key, ExceptionSink* xsink) {
+    if (key.getType() == NT_LIST) {
+        xsink->raiseException("ILLEGAL-SLICE", "slices are not supported in internal lvalue expressions");
+        return -1;
+    }
+    return 0;
+}
+
 //! Provides the hash key or object member name for a runtime value, in the default character encoding
 /** Hash keys and object member names are stored in the default character encoding (QCS_DEFAULT); every execution
     engine (AST, IR, JIT, tiered, AOT) turns a runtime key value into a key through this class, so that a key given
