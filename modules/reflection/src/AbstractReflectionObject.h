@@ -101,7 +101,7 @@ DLLLOCAL const QoreNamespace* reflection_program_namespace(QoreProgram* pgm, con
         ExceptionSink* xsink);
 
 //! returns the Program used to resolve reflection lookups: the call's RuntimeConfig Program, else the current one
-DLLLOCAL static inline QoreProgram* get_reflection_lookup_program(RuntimeConfig& runtime_cfg) {
+static inline QoreProgram* get_reflection_lookup_program(RuntimeConfig& runtime_cfg) {
     QoreProgram* pgm = runtime_cfg.getProgram();
     return pgm ? pgm : getProgram();
 }
