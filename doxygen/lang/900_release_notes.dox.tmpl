@@ -1138,10 +1138,10 @@
     @par Parse Depth Limit
     @parblock
     The parser supports up to 1000 nested syntax elements, counting each operator in an expression, and raises a
-    \c PARSE-EXCEPTION for code that is nested more deeply.  For example, an expression that adds more than
-    about 1000 terms with \c + is rejected.  Such code could crash the parser or the program in previous versions,
-    depending on the stack size of the thread.  Long lists, hashes, argument lists, statement lists and adjacent
-    string literals are not nested and are not limited.
+    \c PARSE-EXCEPTION for code that is nested more deeply, or more deeply than the stack of the parsing thread
+    allows.  For example, an expression that adds more than about 1000 terms with \c + is rejected.  Such code could
+    crash the parser or the program in previous versions, depending on the stack size of the thread.  Long lists,
+    hashes, argument lists, statement lists and adjacent string literals are not nested and are not limited.
     @endparblock
 
     @par Complex Type Nesting Limit
@@ -4876,10 +4876,6 @@ while (*binary chunk = input.read(65536)) {
       parse resolved the shared builtin class's hierarchy and initialized it then; builtin classes are now resolved
       and initialized when they are registered
 
-    - Fixed a crash parsing deeply nested code in a thread with a small stack: the parser accepts up to 1000 nested
-      syntax elements whatever the thread's stack size, and parse initialization overflowed a small stack before
-      reaching that limit; it now raises a parse exception while enough stack remains
-
     - Fixed a crash releasing a long chain of closures, each capturing a variable that holds the next one: each
       closure was released recursively, so a chain of a few thousand closures exhausted a thread's stack; closures
       are now released iteratively beyond a depth of 16, together with objects, in the same order as before
@@ -4999,9 +4995,8 @@ while (*binary chunk = input.read(65536)) {
     - Fixed a crash evaluating a deeply nested expression with the AST interpreter on a thread with a small stack, or
       near the end of a thread's stack, such as nested arguments of function, method, static method and closure
       calls, chained assignments and long arithmetic expressions: evaluation recursed once for each level of
-      nesting, which the parser accepts up to 1000 levels deep whatever the stack of the thread that runs the code,
-      and the stack was only checked by statements and calls; parse initialization now marks every 16th level of
-      nesting, whose evaluation checks the stack and raises \c STACK-LIMIT-EXCEEDED
+      nesting, and the stack was only checked by statements and calls; parse initialization now marks every 16th
+      level of nesting, whose evaluation checks the stack and raises \c STACK-LIMIT-EXCEEDED
 
     - Fixed @ref Qore::set_default_thread_stack_size() "set_default_thread_stack_size()" accepting a stack size no
       larger than the stack reserved at the end of each thread's stack for the stack guard (80KB on x86_64 and
