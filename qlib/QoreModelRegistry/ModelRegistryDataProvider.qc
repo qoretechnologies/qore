@@ -375,7 +375,7 @@ class ModelRegistryDataProviderHelper {
     fields such as \c artifact_count, \c runtime, \c tokenizer_json, and
     \c entry_artifact.
 
-    @since QoreModelRegistry 2.0
+    @since QoreModelRegistry 1.0.0
 */
 public class ModelRegistryDataProvider inherits AbstractDataProvider {
     public {
@@ -576,7 +576,7 @@ public class ModelRegistryDataProvider inherits AbstractDataProvider {
     @ref ModelVersionArtifactsDataProvider that lists and accepts named
     artifacts for that version.
 
-    @since QoreModelRegistry 2.0
+    @since QoreModelRegistry 1.0.0
 */
 public class ModelVersionsDataProvider inherits AbstractDataProvider {
     public {
@@ -715,7 +715,7 @@ public class ModelVersionsDataProvider inherits AbstractDataProvider {
     \c executable, \c checksum, \c path_hint, and \c metadata override the
     inferred artifact metadata before it is stored.
 
-    @since QoreModelRegistry 2.2
+    @since QoreModelRegistry 1.0.0
 */
 public class ModelVersionArtifactsDataProvider inherits AbstractDataProvider {
     public {
@@ -814,7 +814,7 @@ public class ModelVersionArtifactsDataProvider inherits AbstractDataProvider {
 }
 
 #! Simple record iterator wrapping a list iterator
-/** @since QoreModelRegistry 2.0
+/** @since QoreModelRegistry 1.0.0
 */
 public class DefaultRecordIterator inherits AbstractDataProviderRecordIterator<hash<auto>> {
     private {

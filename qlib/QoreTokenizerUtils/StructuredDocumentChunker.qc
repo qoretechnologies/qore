@@ -84,7 +84,7 @@ foreach hash<StructuredChunkInfo> chunk in (chunks) {
 }
     @endcode
 
-    @since QoreTokenizerUtils 1.1
+    @since QoreTokenizerUtils 1.0.0
 */
 public class StructuredDocumentChunker inherits DocumentChunker {
     private {

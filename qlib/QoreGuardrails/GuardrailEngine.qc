@@ -143,7 +143,7 @@ foreach hash<RuleTypeInfo> info in (registry.iterator()) {
 }
         @endcode
 
-        @since QoreGuardrails 1.1
+        @since QoreGuardrails 1.0.0
     */
     public static hash<string, hash<RuleTypeInfo>> getRuleTypeRegistry() {
         return {

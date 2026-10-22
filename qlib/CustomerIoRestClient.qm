@@ -551,7 +551,7 @@ public class CustomerIoRestConnection inherits RestClient::RestConnection {
     }
 
     #! Returns an async-I/O-capable connection object
-    /** @since CustomerIoRestClient 1.1
+    /** @since CustomerIoRestClient 1.0
     */
     private object getAsyncImpl(bool connect = True, *hash<auto> rtopts) {
         return new CustomerIoRestClientIo(getConnectionOptions(rtopts));

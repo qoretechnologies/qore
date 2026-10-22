@@ -27,7 +27,7 @@ public namespace QoreOnnxTools {
 /** Builds and normalizes standard ONNX preprocessing and postprocessing
     contract metadata for package manifests and registry execution plans.
 
-    @since QoreOnnxTools 1.1
+    @since QoreOnnxTools 1.0.0
 */
 public class OnnxProcessingSpecs {
     /** Builds standard preprocessing and postprocessing contracts for an ONNX

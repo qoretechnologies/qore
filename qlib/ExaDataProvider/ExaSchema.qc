@@ -76,7 +76,7 @@ public hashdecl ExaSchemaProvenanceInfo {
 /** The schema is pruned to the exported operations and the transitive closure of everything they
     reference.  It is parsed once, when the module loads and registers its actions, which are built from it.
 
-    @since %ExaDataProvider 1.1
+    @since %ExaDataProvider 1.0
 */
 public class ExaSchema {
     public {

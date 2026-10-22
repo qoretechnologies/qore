@@ -408,7 +408,7 @@ public class KitRestConnection inherits RestClient::RestConnection {
     }
 
     #! Returns an async-I/O-capable connection object
-    /** @since KitRestClient 1.1
+    /** @since KitRestClient 1.0
     */
     private object getAsyncImpl(bool connect = True, *hash<auto> rtopts) {
         return new KitRestClientIo(getConnectionOptions(rtopts));

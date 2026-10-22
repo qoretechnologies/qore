@@ -3609,7 +3609,7 @@ printf("%d connection(s) migrated\n", migrated);
 
         @return @ref True if a race is still in flight and \a candidate is one of its two candidates
 
-        @since HttpClientIo 1.1
+        @since HttpClientIo 1.0
     */
     bool isUnresolvedRaceLeg(*HttpClientConnection candidate) {
         if (!candidate) {

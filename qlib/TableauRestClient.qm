@@ -561,7 +561,7 @@ public class TableauRestConnection inherits RestClient::RestConnection {
     }
 
     #! Returns an async-I/O-capable connection object
-    /** @since TableauRestClient 1.1
+    /** @since TableauRestClient 1.0
     */
     private object getAsyncImpl(bool connect = True, *hash<auto> rtopts) {
         return new TableauRestClientIo(getConnectionOptions(rtopts));

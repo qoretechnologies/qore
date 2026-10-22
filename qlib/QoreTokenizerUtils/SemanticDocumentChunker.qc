@@ -55,7 +55,7 @@ SemanticDocumentChunker chunker(tok_config, emb_config, {
 list<hash<StructuredChunkInfo>> chunks = chunker.chunkTextSemantic(long_document);
     @endcode
 
-    @since QoreTokenizerUtils 1.1
+    @since QoreTokenizerUtils 1.0.0
 */
 public class SemanticDocumentChunker inherits StructuredDocumentChunker {
     private {

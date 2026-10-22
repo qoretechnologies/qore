@@ -833,7 +833,7 @@ public class DataStreamClientIo inherits RestClientIo::RestClientIo {
         @return the started @ref HttpClientIo::HttpClientStreamHandle for interleaved
         @ref HttpClientIo::HttpClientStreamHandle::sendData() / @ref HttpClientIo::HttpClientStreamHandle::readData()
 
-        @since DataStreamClientIo 1.1
+        @since DataStreamClientIo 1.0
     */
     public HttpClientIo::HttpClientStreamHandle openConnectInteractiveStream(string method, string path,
             *hash<auto> hdr) {

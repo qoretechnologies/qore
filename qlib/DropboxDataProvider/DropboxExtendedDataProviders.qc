@@ -60,7 +60,7 @@ public class DropboxAsyncOperationBase inherits DropboxDataProviderBase {
 
         @return the entries
 
-        @since DropboxDataProvider 1.1
+        @since DropboxDataProvider 1.0
     */
     static list<auto> getEntries(hash<auto> body) {
         if (body.entries.typeCode() == NT_LIST) {
@@ -82,7 +82,7 @@ public class DropboxAsyncOperationBase inherits DropboxDataProviderBase {
 
         @return the entry in this module's representation
 
-        @since DropboxDataProvider 1.1
+        @since DropboxDataProvider 1.0
     */
     static hash<auto> getEntryResult(auto entry) {
         if (entry.typeCode() != NT_HASH) {

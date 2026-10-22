@@ -50,7 +50,7 @@ public namespace QoreModelRegistry {
     └── ...
     @endverbatim
 
-    @since QoreModelRegistry 2.0
+    @since QoreModelRegistry 1.0.0
 */
 public class FilesystemBackend inherits AbstractModelRegistryBackend {
     private {

@@ -527,7 +527,7 @@ public class ShipStationRestConnection inherits RestClient::RestConnection {
     }
 
     #! Returns an async-I/O-capable connection object
-    /** @since ShipStationRestClient 1.1
+    /** @since ShipStationRestClient 1.0
     */
     private object getAsyncImpl(bool connect = True, *hash<auto> rtopts) {
         return new ShipStationRestClientIo(getConnectionOptions(rtopts));

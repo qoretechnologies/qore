@@ -85,7 +85,7 @@ public class ExaDataProviderCommon inherits DataProvider::AbstractDataProvider {
 /** Every action is generated from the vendored Exa Public API description, so the root is the action set
     itself; see @ref ExaDataProvider::ExaManifest "ExaManifest" for what is exported and why.
 
-    @since %ExaDataProvider 1.1
+    @since %ExaDataProvider 1.0
 */
 public class ExaDataProvider inherits RestSchemaActions::RestSchemaActionSetDataProvider {
     public {

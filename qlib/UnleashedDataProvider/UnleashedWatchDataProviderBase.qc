@@ -124,7 +124,7 @@ public class UnleashedWatchDataProviderBase inherits UnleashedDataProviderBase,
         @return the lower bound as configured, which is @ref NOTHING when the provider starts from
         the time it was created
 
-        @since UnleashedDataProvider 1.1
+        @since UnleashedDataProvider 1.0
     */
     private *hash<auto> getWatchStreamIdentityImpl() {
         return {

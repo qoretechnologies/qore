@@ -115,7 +115,7 @@ public class BaseLinkerWatchDataProviderBase inherits BaseLinkerDataProviderBase
         scan and must start a new cursor.  The poll interval is excluded: it changes how often the
         same journal is read, not which entries it covers.
 
-        @since BaseLinkerDataProvider 1.1
+        @since BaseLinkerDataProvider 1.0
     */
     private *hash<auto> getWatchStreamIdentityImpl() {
         return {

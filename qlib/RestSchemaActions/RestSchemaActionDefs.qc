@@ -148,7 +148,7 @@ public hashdecl RestSchemaFlatFieldInfo {
 
     @see @ref RestSchemaActions::RestSchemaRecordQueryInfo::option "RestSchemaRecordQueryInfo::option"
 
-    @since RestSchemaActions 1.1
+    @since RestSchemaActions 1.0
 */
 public hashdecl RestSchemaRawValue {
     #! The value to place in the request unchanged

@@ -77,7 +77,7 @@ list<float> vec = emb.embed("Hello world");
 printf("Embedding dimension: %d\n", vec.size());
     @endcode
 
-    @since QoreTokenizerUtils 1.1
+    @since QoreTokenizerUtils 1.0.0
 */
 public class EmbeddingModel {
     private {
@@ -220,7 +220,7 @@ public class EmbeddingModel {
         }
         @endcode
 
-        @since QoreTokenizerUtils 1.2
+        @since QoreTokenizerUtils 1.0.0
     */
     *ML::Tensor embedBatchTensor(list<string> texts) {
         if (!texts) {

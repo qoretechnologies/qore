@@ -56,9 +56,7 @@ public namespace QoreModelRegistry {
     auto reg = new ModelRegistry({"backend": backend});
     @endcode
 
-    @since QoreModelRegistry 1.0 (filesystem-only)
-    @since QoreModelRegistry 2.0 (pluggable backends)
-    @since QoreModelRegistry 2.1 (\c backend_type dispatch on constructor)
+    @since QoreModelRegistry 1.0.0
 */
 public class ModelRegistry {
     private {
@@ -81,7 +79,7 @@ public class ModelRegistry {
 
         @throw ML-REGISTRY-ERROR if required options are missing for the chosen backend
 
-        @since QoreModelRegistry 2.1 (\c backend_type dispatch)
+        @since QoreModelRegistry 1.0.0
     */
     constructor(hash<auto> options) {
         backend = ModelRegistry::createBackend(options);
@@ -99,7 +97,7 @@ public class ModelRegistry {
 
         @throw ML-REGISTRY-ERROR if required backend-specific options are missing
 
-        @since QoreModelRegistry 2.1
+        @since QoreModelRegistry 1.0.0
     */
     static AbstractModelRegistryBackend createBackend(hash<auto> options) {
         if (options.backend instanceof AbstractModelRegistryBackend) {
@@ -152,7 +150,7 @@ public class ModelRegistry {
     #! Returns the storage backend
     /** @return the backend instance
 
-        @since QoreModelRegistry 2.0
+        @since QoreModelRegistry 1.0.0
     */
     AbstractModelRegistryBackend getBackend() {
         return backend;
@@ -236,7 +234,7 @@ public class ModelRegistry {
 
         @throw ML-REGISTRY-ERROR if the package cannot be inspected or registered
 
-        @since QoreModelRegistry 2.2
+        @since QoreModelRegistry 1.0.0
     */
     string registerPackage(string package_path, hash<auto> options) {
         *string name = options.name;
@@ -333,7 +331,7 @@ public class ModelRegistry {
 
         @throw ML-REGISTRY-ERROR if the version has no local execution plan
 
-        @since QoreModelRegistry 2.2
+        @since QoreModelRegistry 1.0.0
     */
     object loadExecutable(string name, *string version_id) {
         if (!version_id.val() || version_id == "latest") {
@@ -376,7 +374,7 @@ public class ModelRegistry {
 
         @throw ML-REGISTRY-ERROR if the version has no local execution plan
 
-        @since QoreModelRegistry 2.3
+        @since QoreModelRegistry 1.0.0
     */
     ModelExecutableAdapter loadExecutableAdapter(string name, *string version_id) {
         hash<ModelVersionInfo> manifest = getVersionManifest(name, version_id);
@@ -400,7 +398,7 @@ public class ModelRegistry {
         @throw ML-REGISTRY-ERROR if the artifact is missing, is not executable
             ONNX/ORT, or provider metadata does not match the requested provider
 
-        @since QoreModelRegistry 2.4
+        @since QoreModelRegistry 1.0.0
     */
     object loadOnnxArtifactExecutable(string name, *string version_id, string artifact_name,
             *hash<ML::OnnxSessionConfig> session_config) {
@@ -432,7 +430,7 @@ public class ModelRegistry {
 
         @return model executable adapter
 
-        @since QoreModelRegistry 2.4
+        @since QoreModelRegistry 1.0.0
     */
     ModelExecutableAdapter loadOnnxArtifactAdapter(string name, *string version_id,
             string artifact_name, *hash<ML::OnnxSessionConfig> session_config) {
@@ -453,7 +451,7 @@ public class ModelRegistry {
 
         @throw ML-REGISTRY-ERROR if the model or version is not found
 
-        @since QoreModelRegistry 2.0
+        @since QoreModelRegistry 1.0.0
     */
     binary loadArtifact(string name, *string version_id) {
         if (!version_id.val() || version_id == "latest") {
@@ -475,7 +473,7 @@ public class ModelRegistry {
         @param artifact artifact binary data
         @param metadata optional artifact metadata
 
-        @since QoreModelRegistry 2.2
+        @since QoreModelRegistry 1.0.0
     */
     nothing registerNamedArtifact(string name, string version_id, string artifact_name,
             binary artifact, *hash<ModelArtifactInfo> metadata) {
@@ -512,7 +510,7 @@ public class ModelRegistry {
         @throw ML-REGISTRY-ERROR if the source version is not an ONNX Runtime model
             or if the artifact name is invalid
 
-        @since QoreModelRegistry 2.4
+        @since QoreModelRegistry 1.0.0
     */
     hash<ModelArtifactInfo> registerOptimizedOnnxArtifact(string name, *string version_id,
             string artifact_name, *hash<QoreOnnxTools::OnnxOptimizationOptions> options) {
@@ -575,7 +573,7 @@ public class ModelRegistry {
         @throw QORE-ONNX-TOOLS-ERROR if quantization dependencies are unavailable
             or ONNX Runtime quantization fails
 
-        @since QoreModelRegistry 2.4
+        @since QoreModelRegistry 1.0.0
     */
     hash<ModelArtifactInfo> registerQuantizedOnnxArtifact(string name, *string version_id,
             string artifact_name, *hash<QoreOnnxTools::OnnxQuantizationOptions> options) {
@@ -648,7 +646,7 @@ public class ModelRegistry {
 
         @return ONNX inspection metadata
 
-        @since QoreModelRegistry 2.5
+        @since QoreModelRegistry 1.0.0
     */
     hash<auto> inspectOnnxVersion(string name, *string version_id,
             *string artifact_name, *hash<ML::OnnxSessionConfig> session_config) {
@@ -669,7 +667,7 @@ public class ModelRegistry {
 
         @return structured ONNX validation diagnostics
 
-        @since QoreModelRegistry 2.5
+        @since QoreModelRegistry 1.0.0
     */
     hash<QoreOnnxTools::OnnxValidationResult> validateOnnxVersion(string name,
             *string version_id, *string artifact_name,
@@ -691,7 +689,7 @@ public class ModelRegistry {
 
         @return benchmark result
 
-        @since QoreModelRegistry 2.5
+        @since QoreModelRegistry 1.0.0
     */
     hash<QoreOnnxTools::OnnxBenchmarkResult> benchmarkOnnxVersion(string name,
             *string version_id, *string artifact_name,
@@ -717,7 +715,7 @@ public class ModelRegistry {
 
         @return ONNX output/latency comparison result
 
-        @since QoreModelRegistry 2.5
+        @since QoreModelRegistry 1.0.0
     */
     hash<QoreOnnxTools::OnnxCompareResult> compareOnnxVersions(string name,
             string source_version_id, string candidate_version_id,
@@ -739,7 +737,7 @@ public class ModelRegistry {
 
         @return ONNX output/latency comparison result
 
-        @since QoreModelRegistry 2.5
+        @since QoreModelRegistry 1.0.0
     */
     hash<QoreOnnxTools::OnnxCompareResult> compareOnnxVersionArtifacts(string name,
             *string version_id, string source_artifact_name, string candidate_artifact_name,
@@ -758,7 +756,7 @@ public class ModelRegistry {
 
         @return artifact binary data
 
-        @since QoreModelRegistry 2.2
+        @since QoreModelRegistry 1.0.0
     */
     binary loadNamedArtifact(string name, *string version_id, string artifact_name) {
         if (!version_id.val() || version_id == "latest") {
@@ -781,7 +779,7 @@ public class ModelRegistry {
 
         @throw ML-REGISTRY-ERROR if the artifact is not a JSON artifact or cannot be parsed
 
-        @since QoreModelRegistry 2.2
+        @since QoreModelRegistry 1.0.0
     */
     hash<auto> loadJsonArtifact(string name, *string version_id, string artifact_name) {
         binary data = loadNamedArtifact(name, version_id, artifact_name);
@@ -809,7 +807,7 @@ public class ModelRegistry {
 
         @throw ML-REGISTRY-ERROR if no tokenizer artifact is available
 
-        @since QoreModelRegistry 2.2
+        @since QoreModelRegistry 1.0.0
     */
     hash<auto> loadTokenizerConfig(string name, *string version_id, *string artifact_name) {
         hash<ModelVersionInfo> manifest = getVersionManifest(name, version_id);
@@ -847,7 +845,7 @@ public class ModelRegistry {
         @throw ML-REGISTRY-ERROR if no tokenizer artifact is available or a
             companion JSON artifact cannot be parsed
 
-        @since QoreModelRegistry 2.3
+        @since QoreModelRegistry 1.0.0
     */
     hash<auto> loadTokenizerPackageConfig(string name, *string version_id,
             *string artifact_name) {
@@ -880,7 +878,7 @@ public class ModelRegistry {
 
         @return list of artifact metadata hashes
 
-        @since QoreModelRegistry 2.2
+        @since QoreModelRegistry 1.0.0
     */
     list<hash<ModelArtifactInfo>> listArtifacts(string name, *string version_id) {
         if (!version_id.val() || version_id == "latest") {
@@ -899,7 +897,7 @@ public class ModelRegistry {
 
         @return version manifest metadata
 
-        @since QoreModelRegistry 2.2
+        @since QoreModelRegistry 1.0.0
     */
     hash<ModelVersionInfo> getVersionManifest(string name, *string version_id) {
         if (!version_id.val() || version_id == "latest") {
@@ -968,7 +966,7 @@ public class ModelRegistry {
         @throw ML-REGISTRY-ERROR if no version with the tag is found or the version
             has no local execution plan
 
-        @since QoreModelRegistry 2.2
+        @since QoreModelRegistry 1.0.0
     */
     object loadExecutableByTag(string name, string tag_name) {
         list<hash<ModelVersionInfo>> versions = backend.listVersions(name);
@@ -990,7 +988,7 @@ public class ModelRegistry {
         @throw ML-REGISTRY-ERROR if no version with the tag is found or the version
             has no local execution plan
 
-        @since QoreModelRegistry 2.3
+        @since QoreModelRegistry 1.0.0
     */
     ModelExecutableAdapter loadExecutableAdapterByTag(string name, string tag_name) {
         list<hash<ModelVersionInfo>> versions = backend.listVersions(name);
@@ -1069,7 +1067,7 @@ public class ModelRegistry {
 
         @throw ML-REGISTRY-ERROR if the tenant is not found or deletion fails
 
-        @since QoreModelRegistry 2.0
+        @since QoreModelRegistry 1.0.0
     */
     nothing deleteTenantStorage(string tid) {
         backend.deleteTenantStorage(tid);

@@ -67,7 +67,7 @@ public const DefaultMaxCacheEntries = 100;
     auto reg = new ModelRegistry({"backend": backend});
     @endcode
 
-    @since QoreModelRegistry 2.0
+    @since QoreModelRegistry 1.0.0
 */
 public class RestBackend inherits AbstractModelRegistryBackend {
     private {

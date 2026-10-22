@@ -70,7 +70,7 @@ public const string EVENT_SSE_CONNECTED = "sse-connected-event";
     Delivered to observers only when @ref SseObservable is configured with
     \c emit_heartbeat = \c True (the default).
 
-    @since %HttpClientStreamingIo 1.0.1
+    @since %HttpClientStreamingIo 1.0
 */
 public const string EVENT_SSE_HEARTBEAT = "sse-heartbeat-event";
 

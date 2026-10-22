@@ -671,7 +671,7 @@ public class ZohoInventoryRestConnection inherits RestClient::RestConnection {
     }
 
     #! Returns an async-I/O-capable connection object
-    /** @since ZohoInventoryRestClient 1.1
+    /** @since ZohoInventoryRestClient 1.0
     */
     private object getAsyncImpl(bool connect = True, *hash<auto> rtopts) {
         return new ZohoInventoryRestClientIo(getConnectionOptions(rtopts));

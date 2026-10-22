@@ -30,7 +30,7 @@ public namespace QoreOnnxTools {
     QoreModelRegistry, and DataProviderML can expose the same actionable
     deployment hints without sharing a rigid result type.
 
-    @since QoreOnnxTools 1.1
+    @since QoreOnnxTools 1.0.0
 */
 public class OnnxDiagnostics {
     /** Builds a compact diagnostic summary from \c OnnxModelTools::inspect().

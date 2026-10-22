@@ -90,7 +90,7 @@ public class LlamaParseDataProviderCommon inherits DataProvider::AbstractDataPro
     - \c parse-document parses a document and waits for the result, where the generated
       \c parse-file returns as soon as the job is started
 
-    @since %LlamaParseDataProvider 1.1
+    @since %LlamaParseDataProvider 1.0
 */
 public class LlamaParseDataProvider inherits RestSchemaActions::RestSchemaActionSetDataProvider {
     public {

@@ -541,7 +541,7 @@ public class GoHighLevelRestConnection inherits RestClient::RestConnection {
     }
 
     #! Returns an async-I/O-capable connection object
-    /** @since GoHighLevelRestClient 1.1
+    /** @since GoHighLevelRestClient 1.0
     */
     private object getAsyncImpl(bool connect = True, *hash<auto> rtopts) {
         return new GoHighLevelRestClientIo(getConnectionOptions(rtopts));

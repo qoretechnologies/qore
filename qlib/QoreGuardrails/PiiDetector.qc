@@ -198,7 +198,7 @@ public class PiiDetector inherits AbstractGuardrailRule {
         PII detection rule without hard-coding knowledge of the PII detector's
         internals.
 
-        @since QoreGuardrails 1.1
+        @since QoreGuardrails 1.0.0
     */
     public static hash<string, hash<DataProviderOptionInfo>> getConfigSchema() {
         return {

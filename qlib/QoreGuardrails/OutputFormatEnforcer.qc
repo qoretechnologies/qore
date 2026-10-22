@@ -81,7 +81,7 @@ public class OutputFormatEnforcer inherits AbstractGuardrailRule {
     }
 
     #! Returns the DataProvider-option schema for this rule's \c params hash
-    /** @since QoreGuardrails 1.1 */
+    /** @since QoreGuardrails 1.0.0 */
     public static hash<string, hash<DataProviderOptionInfo>> getConfigSchema() {
         return {
             "max_length": <DataProviderOptionInfo>{

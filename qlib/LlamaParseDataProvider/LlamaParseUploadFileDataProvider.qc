@@ -160,7 +160,7 @@ public class LlamaParseUploadFileResponseDataType inherits HashDataType {
     once and then referred to by ID, so parsing, extracting and classifying the same document costs one
     transfer rather than three.
 
-    @since %LlamaParseDataProvider 1.1
+    @since %LlamaParseDataProvider 1.0
 */
 public class LlamaParseUploadFileDataProvider inherits DataProvider::AbstractDataProvider {
     public {

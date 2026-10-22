@@ -403,7 +403,7 @@ public class SquareRestConnection inherits RestClient::RestConnection {
     }
 
     #! Returns an async-I/O-capable connection object
-    /** @since SquareRestClient 1.1
+    /** @since SquareRestClient 1.0
     */
     private object getAsyncImpl(bool connect = True, *hash<auto> rtopts) {
         return new SquareRestClientIo(getConnectionOptions(rtopts));

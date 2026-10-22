@@ -416,7 +416,7 @@ public class LinearRestConnection inherits RestClient::RestConnection {
     }
 
     #! Returns an async-I/O-capable connection object
-    /** @since LinearRestClient 1.1
+    /** @since LinearRestClient 1.0
     */
     private object getAsyncImpl(bool connect = True, *hash<auto> rtopts) {
         return new LinearRestClientIo(getConnectionOptions(rtopts));
