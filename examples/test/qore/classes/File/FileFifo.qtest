@@ -9,6 +9,10 @@
 # end of a named pipe.  A wait on a pipe whose writer does not write still times out and can still be cancelled,
 # also on a descriptor above FD_SETSIZE (1024 on macOS), which a fixed-size select(2) set cannot hold.
 #
+# On macOS, select(2) reports the end of a named pipe only until a read has returned it, while read(2) returns the
+# end again as long as the pipe has no writer: a read after the end, as in a loop that reads until a read returns
+# no data, waited forever, in every order of the opens of the reader and the writer.
+#
 # A wait that misses the end never ends, so these tests fail by hanging (the test runner's time limit is the guard):
 # the waits that must see the end have a timeout of an hour, and isDataAvailable() one of a minute, after which it
 # reports that no data is available.
@@ -36,6 +40,16 @@ class FileFifoTest inherits QUnit::Test {
 
         #! the data written to the pipes
         const Data = <64617461>;
+
+        #! the data written for the reads after the end: two lines, the second without an end of line
+        const Lines = "line1\nline2";
+
+        #! the readers of the reads after the end
+        const AfterEndReaders = (
+            "ReadOnlyFile::readBinary()", "ReadOnlyFile::read()", "ReadOnlyFile::readShortBinary()",
+            "ReadOnlyFile::readLine()", "File::readBinary()", "File::read()", "File::readShortBinary()",
+            "File::readLine()", "FileInputStream::read()", "InputStreamLineIterator::next()",
+        );
     }
 
     private {
@@ -56,6 +70,8 @@ class FileFifoTest inherits QUnit::Test {
         addTestCase("Socket::poll() and a poll read see the end", \testSocketPoll());
         addTestCase("Socket::sendFromInputStream() sends the data up to the end", \testSendFromInputStream());
         addTestCase("descriptors above FD_SETSIZE", \testHighDescriptors());
+        addTestCase("reads after the end return the end again, in every order of the opens", \testReadsAfterEnd());
+        addTestCase("a new writer's data is read after the end", \testNewWriterAfterEnd());
         set_return_value(main());
     }
 
@@ -335,6 +351,160 @@ class FileFifoTest inherits QUnit::Test {
             assertThrows("FILE-READ-TIMEOUT", \r.readShortBinary(), (4096, 50ms), "a read times out");
             assertEq("THREAD-CANCELLED", cancelBlocked(sub () { r.readBinary(-1); }), "a read is cancelled");
         }
+    }
+
+    testReadsAfterEnd() {
+        foreach string order in (("together", "reader first", "writer first")) {
+            foreach bool close_first in ((True, False)) {
+                foreach string reader in (AfterEndReaders) {
+                    readAfterEnd(order, close_first, reader, sprintf("%s, the writer closes %s the first read: %s",
+                        order, close_first ? "before" : "after", reader));
+                }
+            }
+        }
+    }
+
+    testNewWriterAfterEnd() {
+        foreach string reader in (AfterEndReaders) {
+            string path = makeFifo();
+            Counter closed(1);
+            background sub () {
+                on_exit closed.dec();
+                File w();
+                w.open2(path, O_WRONLY);
+                w.write(Lines);
+            }();
+            hash<auto> r = openReader(reader, path);
+            closed.waitForZero();
+            assertEq(r.line ? "line1line2" : Lines, readToEnd(r), reader + ": the first writer's data");
+            assertEq(NOTHING, r.next(), reader + ": the end again");
+            # the reader is open, so the new writer's open does not wait
+            File w();
+            w.open2(path, O_WRONLY);
+            w.write("line3\n");
+            w.close();
+            assertEq(r.line ? "line3" : "line3\n", readToEnd(r), reader + ": the new writer's data");
+            assertEq(NOTHING, r.next(), reader + ": the end after the new writer's data");
+        }
+    }
+
+    #! reads a named pipe after its end with the reader, with the reader and the writer opened in the given order
+    /** @param order \c "together": the writer's open in a background thread and the reader's in this thread wait
+        for each other; \c "reader first": a holder of the pipe that reads and writes lets the reader open before the
+        writer; \c "writer first": a holder that reads without waiting lets the writer open before the reader
+        @param close_first true if the writer closes before the reader's first read, false if after it
+    */
+    private readAfterEnd(string order, bool close_first, string reader, string label) {
+        string path = makeFifo();
+        Queue writer_open();
+        Queue may_close();
+        Counter closed(1);
+        bool writer_started;
+        *File holder;
+        on_exit {
+            if (writer_started) {
+                may_close.push(True);
+                closed.waitForZero();
+            }
+            if (holder) {
+                holder.close();
+            }
+        }
+        code start_writer = sub () {
+            writer_started = True;
+            background sub () {
+                on_exit closed.dec();
+                File w();
+                w.open2(path, O_WRONLY);
+                writer_open.push(True);
+                w.write(Lines);
+                may_close.get();
+            }();
+        };
+        if (order == "reader first") {
+            holder = new File();
+            holder.open2(path, O_RDWR);
+        } else if (order == "writer first") {
+            holder = new File();
+            holder.open2(path, O_RDONLY | O_NONBLOCK);
+            start_writer();
+            writer_open.get();
+        } else {
+            start_writer();
+        }
+        hash<auto> r = openReader(reader, path);
+        if (order == "reader first") {
+            start_writer();
+            writer_open.get();
+        }
+        if (holder) {
+            # the reader and the writer are open: the end of the pipe follows the writer's close
+            holder.close();
+            remove holder;
+        }
+        if (close_first) {
+            may_close.push(True);
+            closed.waitForZero();
+        }
+        string first = r.first();
+        assertEq(r.line ? "line1" : "line1\n", first, label + ": the first line");
+        if (!close_first) {
+            may_close.push(True);
+        }
+        assertEq("line2", readToEnd(r), label + ": the rest, up to the end");
+        assertEq(NOTHING, r.next(), label + ": the end again");
+        assertEq(NOTHING, r.next(), label + ": the end once more");
+        if (r.file) {
+            assertTrue(r.file.isDataAvailable(1m), label + ": isDataAvailable() reports the end");
+        }
+    }
+
+    #! opens the reader of a named pipe: \c first reads the first line, \c next the next data or NOTHING at the end
+    /** \c line is true if the reader returns lines without their end of line, and \c file is the file, if any
+    */
+    private hash<auto> openReader(string reader, string path) {
+        if (*list<*string> m = (reader =~ x/^(ReadOnlyFile|File)::(.*)\(\)$/)) {
+            ReadOnlyFile f;
+            if (m[0] == "File") {
+                File rw();
+                rw.open2(path, O_RDONLY);
+                f = rw;
+            } else {
+                f = new ReadOnlyFile(path);
+            }
+            switch (m[1]) {
+                case "readBinary":
+                    return {"file": f, "first": auto sub () { return f.readBinary(6).toString(); },
+                        "next": auto sub () { *binary b = f.readBinary(4096); return b ? b.toString() : NOTHING; }};
+                case "read":
+                    return {"file": f, "first": auto sub () { return f.read(6); },
+                        "next": auto sub () { return f.read(4096); }};
+                case "readShortBinary":
+                    return {"file": f, "first": auto sub () { return f.readShortBinary(6).toString(); },
+                        "next": auto sub () { *binary b = f.readShortBinary(4096); return b ? b.toString() : NOTHING; }};
+                case "readLine":
+                    return {"file": f, "first": auto sub () { return f.readLine(); },
+                        "next": auto sub () { return f.readLine(); }};
+            }
+            throw "TEST-ERROR", sprintf("unknown reader %y", reader);
+        }
+        FileInputStream is(path);
+        if (reader == "FileInputStream::read()") {
+            return {"first": auto sub () { return is.read(6).toString(); },
+                "next": auto sub () { *binary b = is.read(4096); return b ? b.toString() : NOTHING; }};
+        }
+        InputStreamLineIterator it(is);
+        return {"line": True, "first": auto sub () { return it.next() ? it.getValue() : NOTHING; },
+            "next": auto sub () { return it.next() ? it.getValue() : NOTHING; }};
+    }
+
+    #! reads with the reader until a read returns no data, and returns the data read
+    private static *string readToEnd(hash<auto> r) {
+        *string data;
+        while (*string d = r.next()) {
+            data += d;
+        }
+        return data;
     }
 
     #! makes a named pipe and returns its path

@@ -40,6 +40,7 @@
 #include "qore/intern/StringReaderHelper.h"
 #include "qore/intern/qore_string_private.h"
 #include "qore/AbstractPollState.h"
+#include "qore/intern/QorePollCompat.h"
 #include <qore/QoreSandboxManager.h>
 
 #include <algorithm>
@@ -190,6 +191,14 @@ struct qore_qf_private {
     //! if data should be included in file events
     bool event_data = false;
     bool in_non_block = false;
+    //! true once a read of the descriptor, a named pipe on Darwin, has returned the end of the pipe
+    /** select(2), the wait that reports the end of a named pipe on Darwin (see QorePollCompat.h), reports it only
+        until a read has returned it, while read(2) returns the end again as long as the pipe has no writer; while
+        this is set, a read with a wait therefore returns the end again unless select(2) reports data at once, and a
+        check for data reports the end at once (see readData()).  Cleared by a read that returns data, by a
+        nonblocking read that finds a new writer, and with the descriptor
+    */
+    mutable bool fifo_end_read = false;
     //! keeps the shift state of text in a stateful encoding between reads of characters; protected by the lock
     QoreStatefulTextDecoder decoder;
 
@@ -220,6 +229,7 @@ struct qore_qf_private {
     DLLLOCAL int close_intern(bool detach = false) {
         filename.clear();
         decoder.reset();
+        fifo_end_read = false;
 
         int rc;
         if (is_open) {
@@ -289,6 +299,7 @@ struct qore_qf_private {
         do_open_event_unlocked(fn, flags, mode, cs);
 
         fd = ::open(fn, flags, mode);
+        fifo_end_read = false;
         if (fd < 0)
             return fd;
 
@@ -383,6 +394,13 @@ struct qore_qf_private {
 
 #if defined HAVE_POLL
     DLLLOCAL int poll_intern(int timeout_ms, bool read, const char* mname, ExceptionSink* xsink) const {
+#ifdef DARWIN
+        // select(2) does not report the end of a named pipe again once a read has returned it, while a read returns
+        // the end again at once (see fifo_end_read)
+        if (read && fifo_end_read) {
+            return 1;
+        }
+#endif
         // the wait ends at once when the thread is cancelled or its Program is interrupted; EINTR is handled by
         // qore_cancellable_poll(), which also waits on a named pipe with select(2) on Darwin, where poll(2) misses
         // the end of the pipe (see QorePollCompat.h)
@@ -512,12 +530,28 @@ struct qore_qf_private {
             if (rc >= 0 || errno != EINTR)
                 break;
         }
+        noteReadResult(rc, bs);
 
         if (rc > 0)
             do_read_event_unlocked(rc, rc, bs);
 
         return rc;
     }
+
+    //! records whether a read of @a limit bytes that returned @a rc read the end of a named pipe (see fifo_end_read)
+    DLLLOCAL void noteReadResult(ssize_t rc, size_t limit) const {
+#ifdef DARWIN
+        if (rc > 0) {
+            fifo_end_read = false;
+        } else if (!rc && limit && !fifo_end_read && qore_fd_poll_misses_hangup(fd)) {
+            fifo_end_read = true;
+        }
+#else
+        (void)rc;
+        (void)limit;
+#endif
+    }
+
 
     // unlocked, assumes file is open
     DLLLOCAL ssize_t writeCheck(const void* buf, size_t len, ExceptionSink* xsink) const {
@@ -606,6 +640,7 @@ struct qore_qf_private {
                 qore_offset_t rc = ::read(fd, dest, limit);
                 int read_errno = errno;
                 if (rc >= 0) {
+                    noteReadResult(rc, limit);
                     read_deadline.resetBackoff();
                     return rc;
                 }
@@ -617,6 +652,8 @@ struct qore_qf_private {
                         || read_errno == EWOULDBLOCK
 #endif
                 ) {
+                    // the pipe has a writer again: the wait below reports its data and the end of the pipe
+                    fifo_end_read = false;
                     break;
                 }
 
@@ -629,6 +666,32 @@ struct qore_qf_private {
                 return -1;
             }
         }
+
+#ifdef DARWIN
+        // select(2) does not report the end of a named pipe again once a read has returned it (see fifo_end_read):
+        // the end is returned again unless the pipe has data at once (a new writer's).  A read would return the end
+        // without waiting while the pipe has no writer, but would wait for a new writer that has written nothing,
+        // which cannot be told apart without making the descriptor nonblocking, which its other holders would see
+        // (see FileStreamIo.h); the end is returned then too, and the new writer's data once select(2) reports it.
+        // A nonblocking descriptor has been read above
+        if (fifo_end_read) {
+            if (qore_check_cancel(xsink, "file read")) {
+                return -1;
+            }
+            pollfd pfd = {fd, POLLIN, 0};
+            int ready;
+            while ((ready = qore_select_poll(&pfd, 1, 0)) < 0 && errno == EINTR) {
+            }
+            if (ready < 0) {
+                xsink->raiseErrnoException("FILE-SELECT-ERROR", errno, "select(2) returned an error in call to "
+                    "File::%s()", mname);
+                return -1;
+            }
+            if (!ready) {
+                return 0;
+            }
+        }
+#endif
 #endif
 
         while (true) {
@@ -661,6 +724,7 @@ struct qore_qf_private {
             qore_offset_t rc = ::read(fd, dest, limit);
             int read_errno = errno;
             if (rc >= 0) {
+                noteReadResult(rc, limit);
                 read_deadline.resetBackoff();
                 return rc;
             }
