@@ -1380,6 +1380,14 @@ public namespace Mime {
         return force_encoding(str, encoding);
     }
 
+    #! @cond nodoc
+    # returns the charset parameter of a Content-Type value, if any; the parameter was taken with any parameters
+    # after it (ex: "ISO-8859-1; format=flowed"), which named no character encoding
+    *string sub mime_get_charset(*string ct) {
+        return (ct =~ x/charset="?([^";\s]+)"?/i)[0];
+    }
+    #! @endcond
+
     #! decodes data according to the given encoding
     /** @param mime_data the data to decode
         @param enc the decoding to use; see @ref MimeContentTransferEncodingConstants for possible values (case is
@@ -1390,14 +1398,6 @@ public namespace Mime {
 
         @throw MIME-TRANSFER-ENCODING-ERROR unknown transfer encoding
      */
-    #! @cond nodoc
-    # returns the charset parameter of a Content-Type value, if any; the parameter was taken with any parameters
-    # after it (ex: "ISO-8859-1; format=flowed"), which named no character encoding
-    *string sub mime_get_charset(*string ct) {
-        return (ct =~ x/charset="?([^";\s]+)"?/i)[0];
-    }
-    #! @endcond
-
     public data sub mime_decode_transfer_data(data mime_data, string enc, *string ct, *bool is_body) {
         enc = enc.lwr();
         switch (enc) {

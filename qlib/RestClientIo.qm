@@ -2803,9 +2803,24 @@ hash<RestClient::RestResponseInfo> resp = client.restDoRequestWithResponseLimit(
         }
 
         #! Starts an async raw HTTP request operation with event-driven Negotiate retry support
-        /** @param request_timeout_ms a positive timeout for this request only, in milliseconds, replacing the
+        /** @param method the HTTP method
+            @param path the request path
+            @param body the request body, if any: serialized with the client's data serialization unless \a raw is
+            \c True
+            @param hdr the request headers, if any
+            @param raw if \c True, the body and headers are sent as they are, without serialization (see
+            prepareRawRequest())
+            @param skip_ensure_token if \c True, the OAuth2 token is not checked before the request is submitted
+            @param completion_notifier signaled when the response is complete, if set
+            @param shdr the name of the header that receives the signature computed by \a signer, if any
+            @param signer computes the signature of the request, if set with \a shdr; receives a hash with \c path,
+            \c body and \c hdr keys
+            @param request_timeout_ms a positive timeout for this request only, in milliseconds, replacing the
                 client's request timeout as the operation's transport deadline; when not set, the client's
                 request timeout applies
+
+            @return a hash with \c future (the Future that resolves to the response) and \c operation (the
+            RestClientIoAsyncRequestOperation)
         */
         private hash<auto> startAsyncRequestOperation(string method, string path, auto body,
                 *hash<auto> hdr, bool raw, *bool skip_ensure_token,

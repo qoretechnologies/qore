@@ -240,11 +240,11 @@ int max = max_conn ? atoi(max_conn.c_str()) : 10;
     function and removes them with qore_unregister_fork_handler() in its delete function (not while static objects
     are constructed or destroyed, when the dynamic loader holds its lock).  The rank places the lock in the order of
     the library's locks (see @ref QoreForkRank):
-    - @ref QFR_MODULE_LEAF: the lock's holders take no lock but the library's leaf locks (they only allocate memory
+    - @ref QFR_MODULE_LEAF "QFR_MODULE_LEAF": the lock's holders take no lock but the library's leaf locks (they only allocate memory
       and work with strings and containers)
-    - @ref QFR_MODULE_CANCELLABLE: the lock is taken while no other registered lock is held, and its holders can check
+    - @ref QFR_MODULE_CANCELLABLE "QFR_MODULE_CANCELLABLE": the lock is taken while no other registered lock is held, and its holders can check
       for cancellation (qore_check_cancel()) or raise exceptions, but do not start threads or wait for them
-    - @ref QFR_MODULE_RESET: the lock is held while user code runs or while a thread waits for input, so \c fork()
+    - @ref QFR_MODULE_RESET "QFR_MODULE_RESET": the lock is held while user code runs or while a thread waits for input, so \c fork()
       must not wait for it: register only a child handler, which initializes the lock again; if a thread can call
       \c fork() while it holds the lock (for example from a callback), the module counts its holds per thread and
       the child handler takes the lock again as often as the forking thread held it

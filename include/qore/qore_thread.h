@@ -582,7 +582,7 @@ struct pollfd;
     - 0: the timeout expired
     - -1: poll(2) failed; \c errno is set and no exception has been raised (\c EINTR is handled internally: the wait
       resumes for the rest of the timeout)
-    - @ref QORE_POLL_CANCELLED: an exception has been raised: \c THREAD-CANCELLED, \c PROGRAM-INTERRUPTED, or
+    - @ref QORE_POLL_CANCELLED "QORE_POLL_CANCELLED": an exception has been raised: \c THREAD-CANCELLED, \c PROGRAM-INTERRUPTED, or
       \c THREAD-ERROR if the wakeup channel could not be created (for example because no descriptors are left)
 
     While cancellation is deferred (@ref qore_push_cancel_deferral()), and on a thread that is not registered with
