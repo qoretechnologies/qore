@@ -96,6 +96,11 @@ hash<auto> sub run_child(softint child_po, string probe_func) {
         addTestCase("a sandboxed Program cannot navigate another Program's reflection object", \sandboxedNavRefused());
         addTestCase("navigation stays in the reflection object's own Program", \navStaysInProgram());
         addTestCase("the creator of a Program can navigate and read it", \creatorAllowed());
+        addTestCase("the creator of an independent Program can navigate and read it", \independentCreatorAllowed());
+        addTestCase("the creator of the creator of an independent Program can navigate it",
+            \independentCreatorChainAllowed());
+        addTestCase("a less privileged Program that did not create an independent Program cannot navigate it",
+            \independentOtherRefused());
         addTestCase("an equally privileged caller can navigate another Program", \privilegedAllowed());
         addTestCase("a trusted caller reads a static member of an object's class", \trustedMemberAccess());
         set_return_value(main());
@@ -162,6 +167,50 @@ hash<auto> sub run_child(softint child_po, string probe_func) {
         Namespace root = Namespace::forName(child, "::");
         list<string> globals = map $1.getName(), root.getGlobalVars();
         assertEq(True, inlist("child_var", globals));
+    }
+
+    #! returns an independent Program that allows the debugger, which this Program does not, with a global
+    private Program independentProgram() {
+        Program pgm(BaseOptions | PO_ALLOW_DEBUGGER, True);
+        pgm.parse("our string independent_var = \"independent-value\";", "independent");
+        pgm.run();
+        return pgm;
+    }
+
+    independentCreatorAllowed() {
+        # this Program created the independent Program, so it may navigate it although the Program allows a domain
+        # that this Program does not, and inherits nothing from it
+        Program pgm = independentProgram();
+        Namespace root = Namespace::forName(pgm, "::");
+        list<string> globals = map $1.getName(), root.getGlobalVars();
+        assertEq(True, inlist("independent_var", globals));
+        GlobalVar v = GlobalVar::forName(pgm, "independent_var");
+        assertEq("independent-value", v.getValue());
+    }
+
+    independentCreatorChainAllowed() {
+        # a Program that this Program created creates the independent Program
+        Program creator(BaseOptions);
+        creator.parse("Program sub make() {\n"
+            "    Program pgm(PO_NEW_STYLE | PO_ALLOW_DEBUGGER, True);\n"
+            "    pgm.parse(\"our string chain_var = 'chain-value';\", \"chain\");\n"
+            "    pgm.run();\n"
+            "    return pgm;\n"
+            "}", "creator");
+        Program pgm = creator.callFunction("make");
+        GlobalVar v = GlobalVar::forName(pgm, "chain_var");
+        assertEq("chain-value", v.getValue());
+    }
+
+    independentOtherRefused() {
+        # a Program that did not create the independent Program and does not allow the debugger is less privileged
+        Program pgm = independentProgram();
+        Program other(BaseOptions);
+        other.parse("%requires reflection\n"
+            "auto sub nav(Namespace ns) { try { return ns.getGlobalVars(); } catch (hash<ExceptionInfo> ex) { "
+            "return ex.err; } }", "other");
+        Namespace root = Namespace::forName(pgm, "::");
+        assertEq("REFLECTION-ACCESS-ERROR", other.callFunction("nav", root));
     }
 
     privilegedAllowed() {

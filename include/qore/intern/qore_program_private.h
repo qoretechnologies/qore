@@ -1099,10 +1099,17 @@ protected:
 
     DLLLOCAL void setParent(QoreProgram* p_pgm, const QoreParseOptions& n_parse_options);
 
+    //! Records the Program that created this Program and the Programs that created it (see creator_ids)
+    /** Called once, by setParent() or for an independent Program created by %Qore code
+        (qore_program_private::setCreator())
+    */
+    DLLLOCAL void setCreatorChain(const QoreProgram& creator);
+
     //! The IDs of the Programs that created this Program: its creator first, then the creator's creator, and so on
-    /** Set once by setParent() and never changed; empty for an independent Program, a module Program, or a Program
-        created by C++ code without a parent.  Reflection allows a Program that created another Program to navigate
-        it; see design/reflection-caller-privilege.md.
+    /** Set once, by setParent() or, for an independent Program created by %Qore code (the \c Program constructor), by
+        qore_program_private::setCreator(), and never changed; empty for a module Program or a Program created by C++
+        code without a parent.  Reflection allows a Program that created another Program to navigate it; see
+        design/reflection-caller-privilege.md.
     */
     std::vector<unsigned> creator_ids;
 
@@ -3032,6 +3039,14 @@ public:
     //! Returns true if the Program with the given ID created \a pgm, directly or through Programs it created
     DLLLOCAL static bool programCreatedBy(const QoreProgram& pgm, unsigned pgm_id) {
         return pgm.priv->isCreatedBy(pgm_id);
+    }
+
+    //! Records the Program whose code created the independent Program \a pgm
+    /** An independent Program inherits nothing from the code that creates it, but that code holds it and controls
+        it like any Program it creates, so reflection lets it navigate the Program (see creator_ids)
+    */
+    DLLLOCAL static void setCreator(QoreProgram& pgm, const QoreProgram& creator) {
+        pgm.priv->setCreatorChain(creator);
     }
 
     // called when thread startup fails after preregistration

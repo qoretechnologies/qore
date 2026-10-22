@@ -1269,6 +1269,14 @@ void qore_program_private_base::newProgram() {
 #endif
 }
 
+void qore_program_private_base::setCreatorChain(const QoreProgram& creator) {
+    assert(creator_ids.empty());
+    // the creator chain: the creator first, then the Programs that created it
+    creator_ids.reserve(creator.priv->creator_ids.size() + 1);
+    creator_ids.push_back(creator.priv->getProgramId());
+    creator_ids.insert(creator_ids.end(), creator.priv->creator_ids.begin(), creator.priv->creator_ids.end());
+}
+
 void qore_program_private_base::setParent(QoreProgram* p_pgm, const QoreParseOptions& n_parse_options) {
     //printd(5, "qore_program_private_base::setParent() this: %p parent: %p (parent lvl: %p) this: %p (this pgm: %p) "
     //    "parent po: %lld new po: %lld parent no_child_po_restrictions: %d\n", this, p_pgm,
@@ -1277,10 +1285,7 @@ void qore_program_private_base::setParent(QoreProgram* p_pgm, const QoreParseOpt
 
     TZ = p_pgm->currentTZ();
 
-    // the creator chain: the parent first, then the Programs that created it
-    creator_ids.reserve(p_pgm->priv->creator_ids.size() + 1);
-    creator_ids.push_back(p_pgm->priv->getProgramId());
-    creator_ids.insert(creator_ids.end(), p_pgm->priv->creator_ids.begin(), p_pgm->priv->creator_ids.end());
+    setCreatorChain(*p_pgm);
 
     // if children inherit restrictions, then set all child restrictions
     if (!(p_pgm->priv->pwo.parse_options & PO_NO_CHILD_PO_RESTRICTIONS)) {

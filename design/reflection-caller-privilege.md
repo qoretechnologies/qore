@@ -65,7 +65,9 @@ allowed through a reflection object of **another** Program only when (`QoreRefle
 
 - the caller runs in that Program; or
 - the caller's Program created that Program, directly or through Programs it created (the creator chain recorded in
-  `qore_program_private_base::creator_ids` when a Program is created, `lib/QoreProgram.cpp`); or
+  `qore_program_private_base::creator_ids` when a Program is created, `lib/QoreProgram.cpp`; for an independent Program,
+  which has no parent, the `Program` constructor records the Program whose code creates it, `lib/QC_Program.qpp`, as
+  that code holds and controls it like any Program it creates — `QoreRepl` creates its REPL Program that way); or
 - the caller is **at least as privileged** as that Program: its runtime parse options restrict no functional domain
   the target allows, allow every domain the target allows explicitly, and no sandbox manager governs the caller
   other than the target's own.

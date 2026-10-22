@@ -46,6 +46,18 @@
 #include "qore/intern/ModuleInfo.h"
 extern QoreModuleManager QMM;
 
+// records the Program whose code creates an independent Program: it inherits nothing from that code, but that code
+// holds it and controls it like any Program it creates (see design/reflection-caller-privilege.md)
+static void program_set_independent_creator(QoreProgram& pgm, bool independent) {
+    if (!independent) {
+        return;
+    }
+    const QoreProgram* creator = getProgram();
+    if (creator) {
+        qore_program_private::setCreator(pgm, *creator);
+    }
+}
+
 #ifndef WARN_MODULES
 // needed so that the Qore default argument value in sinatures below will match a C++ value
 #define WARN_MODULES QP_WARN_MODULES
@@ -1326,6 +1338,7 @@ Program::constructor(softint parse_options = PO_DEFAULT, *bool independent)
     QoreProgram* pgm = new QoreProgram(independent ? nullptr : getProgram(), parse_options);
     //pgm->registerQoreObject(self, xsink);
     assert(!xsink->isEvent());
+    program_set_independent_creator(*pgm, independent);
 
     self->setPrivate(CID_PROGRAM, pgm);
     printd(5, "Program::constructor() pgm: %p, pgmid: %d, self: %p\n", pgm, pgm->getProgramId(), self);
@@ -1351,6 +1364,7 @@ Program::constructor(ParseOptions[QoreParseOptionsData] parse_options, *bool ind
         [dom=EMBEDDED_LOGIC; flags=NAMED_ARGS] {
     QoreProgram* pgm = new QoreProgram(independent ? nullptr : getProgram(), parse_options->get());
     assert(!xsink->isEvent());
+    program_set_independent_creator(*pgm, independent);
 
     self->setPrivate(CID_PROGRAM, pgm);
     printd(5, "Program::constructor() pgm: %p, pgmid: %d, self: %p\n", pgm, pgm->getProgramId(), self);

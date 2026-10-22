@@ -74,6 +74,32 @@
     @ref Qore::Reflection::AbstractMember::isEqual() "AbstractMember::isEqual()", or
     @ref Qore::Reflection::Namespace::isEqual() "Namespace::isEqual()", among others.
 
+    @section reflection_caller_privilege Reflection and the Privileges of the Calling Code
+
+    Reflection follows the privileges of the code that uses it, not those of the reflection module:
+    - calling a function or method, or constructing an object, through a reflection object is checked against the
+      @ref sandboxing "sandboxing restrictions" of the calling code and of the @ref Qore::Program "Program" that the
+      code belongs to, by the same rule as code written directly; a @ref Qore::Reflection::AbstractVariant "variant"
+      obtained from a reflection object is checked the same way
+    - reading or writing a member, constant or global variable through a reflection object is checked against the
+      functional domain of its class in the same way
+    - navigating the namespaces, classes, functions, constants or values of another @ref Qore::Program "Program"
+      through a reflection object, or reading or writing its values, is allowed only:
+      - from that @ref Qore::Program "Program";
+      - from a @ref Qore::Program "Program" that created it, directly or through @ref Qore::Program "Program"
+        objects that it created, including one created as an independent @ref Qore::Program "Program" (with the
+        \c independent argument of the @ref Qore::Program::constructor() "Program constructor"), which inherits
+        nothing from the code that creates it but is controlled by it; or
+      - from code at least as privileged as it: code whose restrictions forbid no functional domain that the target
+        allows, that allows every functional domain that the target must allow explicitly (for example the debugger
+        domain with @ref Qore::PO_ALLOW_DEBUGGER "PO_ALLOW_DEBUGGER"), and that no sandbox other than the target's own
+        governs
+
+      otherwise \c REFLECTION-ACCESS-ERROR is raised
+    - a class, typed hash or enum declared in one @ref Qore::Program "Program" and inherited by or imported into
+      another one keeps no path into the declaring @ref Qore::Program "Program": its namespace, as returned by
+      reflection, is the namespace with the same path in the @ref Qore::Program "Program" of the reflection object
+
     @section reflectionqlibmodules Qore User Modules
 
     - @ref connectionproviderintro "ConnectionProvider" — API for pluggable connection providers to Qore
