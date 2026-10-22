@@ -12,10 +12,12 @@
 %exec-class AOTLinkedModuleStaleTest
 
 # A build tree links the AOT modules it builds into the source qlib directory, where the module path finds them
-# before the module sources.  A linked module that is older than one of its sources, as listed in the depfile that qcc
-# wrote next to it (or, without one, its own sources), is not loaded: the source module is loaded instead, with a
-# warning that the AOT module must be rebuilt.  Before, the old AOT module was loaded without any sign of it.  A
-# module that is not a symbolic link, such as an installed one, is loaded as before.
+# before the module sources.  A linked module one of whose sources, as listed in the depfile that qcc wrote next to it
+# (or, without one, its own sources), has changed since it was compiled is not loaded: the source module is loaded
+# instead, with a warning that the AOT module must be rebuilt.  A source has changed if its content differs from the
+# content that qcc recorded in the fingerprint file next to the depfile; a source with only a new modification time,
+# as after a checkout or a copy of a build tree, has not.  Without a fingerprint, a source that is newer than the
+# module has changed.  A module that is not a symbolic link, such as an installed one, is not checked.
 class AOTLinkedModuleStaleTest inherits QUnit::Test {
     private {
         string qore_bin;
@@ -36,11 +38,19 @@ class AOTLinkedModuleStaleTest inherits QUnit::Test {
         env = sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir);
 
         addTestCase("a current linked module is loaded", \currentTest());
-        addTestCase("a linked module older than its source is not loaded", \staleSourceTest());
-        addTestCase("a linked module older than a dependency is not loaded", \staleDependencyTest());
+        addTestCase("a linked module whose source changed is not loaded", \staleSourceTest());
+        addTestCase("a linked module whose source changed size is not loaded", \staleSourceSizeTest());
+        addTestCase("a linked module whose dependency changed is not loaded", \staleDependencyTest());
+        addTestCase("a linked module whose sources only have new modification times is loaded",
+            \touchedSourcesTest());
+        addTestCase("the fingerprint file lists the sources of the module", \fingerprintFileTest());
+        addTestCase("a linked module without a fingerprint file is checked by modification time",
+            \noFingerprintTest());
         addTestCase("a linked module without a depfile is checked against its sources", \noDepfileTest());
         addTestCase("a linked split module is checked against its component files", \splitModuleTest());
         addTestCase("a module that is not a link is loaded", \copiedModuleTest());
+        addTestCase("a Program that cannot access the filesystem does not check a linked module",
+            \noFilesystemTest());
         set_return_value(main());
     }
 
@@ -95,11 +105,16 @@ class AOTLinkedModuleStaleTest inherits QUnit::Test {
         }
     }
 
+    #! returns the source fingerprint file that qcc writes next to the depfile of the Linked module
+    private string fingerprintFile() {
+        return build_dir + "/Linked.qmod.d.fingerprints";
+    }
+
     #! returns the output of a script that loads the module and prints its value and the file it was loaded from
-    private string runLinked() {
-        return trim(run(sprintf("%s QORE_MODULE_DIR=%s %s -ne '%%requires Linked\n"
+    private string runLinked(string opts = "") {
+        return trim(run(sprintf("%s QORE_MODULE_DIR=%s %s %s -ne '%%requires Linked\n"
             "printf(\"%%s %%s\\n\", Linked::value(), basename(get_module_hash().Linked.filename));'", env, src_dir,
-            qore_bin)));
+            qore_bin, opts)));
     }
 
     currentTest() {
@@ -121,8 +136,22 @@ class AOTLinkedModuleStaleTest inherits QUnit::Test {
         string out = runLinked();
         list<string> lines = out.split("\n");
         assertEq("v2-dep Linked.qm", lines.last(), out);
-        assertRegex("AOT module '.*/Linked\\.qmod' for feature 'Linked' is older than its source '.*/Linked\\.qm'; "
-            "loading source module '.*/Linked\\.qm' instead; rebuild the AOT module", out);
+        assertRegex("AOT module '.*/Linked\\.qmod' for feature 'Linked' is out of date: its source '.*/Linked\\.qm' "
+            "has changed since it was compiled; loading source module '.*/Linked\\.qm' instead; rebuild the AOT "
+            "module", out);
+    }
+
+    staleSourceSizeTest() {
+        TmpDir tmp = initDirs();
+        writeDep();
+        writeLinked("v1");
+        compileLinked();
+        # the new source has another size: it has changed whatever its modification time
+        writeLinked("v100");
+        touchLater(src_dir + "/Linked.qm");
+        string out = runLinked();
+        assertEq("v100-dep Linked.qm", out.split("\n").last(), out);
+        assertRegex("its source '.*/Linked\\.qm' has changed since it was compiled", out);
     }
 
     staleDependencyTest() {
@@ -130,11 +159,75 @@ class AOTLinkedModuleStaleTest inherits QUnit::Test {
         writeDep();
         writeLinked("v1");
         compileLinked();
-        # the module that Linked depends on is in its depfile
+        # the module that Linked depends on is in its depfile; its new content has the same size
+        write(src_dir + "/Dep.qm", "%modern\nmodule Dep { version = \"1.0\"; desc = \"dep\"; author = \"Qore\"; "
+            "license = \"MIT\"; }\npublic namespace Dep { public string sub tag() { return \"dex\"; } }\n");
+        touchLater(src_dir + "/Dep.qm");
+        string out = runLinked();
+        assertEq("v1-dex Linked.qm", out.split("\n").last(), out);
+        assertRegex("its source '.*/Dep\\.qm' has changed since it was compiled", out);
+    }
+
+    touchedSourcesTest() {
+        TmpDir tmp = initDirs();
+        writeDep();
+        writeLinked("v1");
+        compileLinked();
+        # a checkout or a copy of the build tree gives the sources new modification times without changing them
+        touchLater(src_dir + "/Linked.qm");
+        touchLater(src_dir + "/Dep.qm");
+        string out = runLinked();
+        assertEq("v1-dep Linked.qmod", out);
+        assertFalse(out =~ /out of date/, "no warning: " + out);
+        # an edit after that is found as before
+        writeLinked("v2");
+        out = runLinked();
+        assertEq("v2-dep Linked.qm", out.split("\n").last(), out);
+        assertRegex("its source '.*/Linked\\.qm' has changed since it was compiled", out);
+    }
+
+    fingerprintFileTest() {
+        TmpDir tmp = initDirs();
+        writeDep();
+        writeLinked("v1");
+        compileLinked();
+        assertTrue(is_file(fingerprintFile()), "fingerprint file written");
+        list<string> lines = ReadOnlyFile::readTextFile(fingerprintFile()).split("\n");
+        assertEq("# qore AOT module source fingerprints 1", lines[0]);
+        hash<string, list<string>> by_path;
+        foreach string line in (lines) {
+            # the first line is the header
+            if (!$# || !line.val()) {
+                continue;
+            }
+            *list<*string> f = (line =~ x/^([0-9]+) ([0-9]+) ([0-9a-f]{16}) (.+)$/);
+            assertEq(4, f.size(), "fingerprint line: " + line);
+            by_path{f[3]} = f;
+        }
+        foreach string name in (("Linked.qm", "Dep.qm")) {
+            string path = realpath(src_dir + "/" + name);
+            assertTrue(exists by_path{path}, name + " has a fingerprint: " + lines.join("\n"));
+            assertEq(hstat(path).size, by_path{path}[0].toInt(), name + " size");
+        }
+        # the depfile and the fingerprint file list the same sources
+        string depfile = ReadOnlyFile::readTextFile(build_dir + "/Linked.qmod.d");
+        foreach string path in (keys by_path) {
+            assertTrue(depfile.find(path) >= 0, path + " is in the depfile");
+        }
+    }
+
+    noFingerprintTest() {
+        TmpDir tmp = initDirs();
+        writeDep();
+        writeLinked("v1");
+        compileLinked();
+        unlink(fingerprintFile());
+        assertEq("v1-dep Linked.qmod", runLinked());
+        # without the recorded content, a source that is newer than the module has changed
         touchLater(src_dir + "/Dep.qm");
         string out = runLinked();
         assertEq("v1-dep Linked.qm", out.split("\n").last(), out);
-        assertRegex("is older than its source '.*/Dep\\.qm'", out);
+        assertRegex("its source '.*/Dep\\.qm' has changed since it was compiled", out);
     }
 
     noDepfileTest() {
@@ -148,7 +241,7 @@ class AOTLinkedModuleStaleTest inherits QUnit::Test {
         touchLater(src_dir + "/Linked.qm");
         string out = runLinked();
         assertEq("v2-dep Linked.qm", out.split("\n").last(), out);
-        assertRegex("is older than its source '.*/Linked\\.qm'", out);
+        assertRegex("its source '.*/Linked\\.qm' has changed since it was compiled", out);
     }
 
     splitModuleTest() {
@@ -172,7 +265,21 @@ class AOTLinkedModuleStaleTest inherits QUnit::Test {
         touchLater(mod_dir + "/Part.qc");
         out = trim(run(cmd));
         assertEq("v2 Split.qm", out.split("\n").last(), out);
-        assertRegex("is older than its source '.*/Split/Part\\.qc'", out);
+        assertRegex("its source '.*/Split/Part\\.qc' has changed since it was compiled", out);
+    }
+
+    noFilesystemTest() {
+        TmpDir tmp = initDirs();
+        writeDep();
+        writeLinked("v1");
+        compileLinked();
+        writeLinked("v2");
+        touchLater(src_dir + "/Linked.qm");
+        # the check reads files, which such a Program cannot: the module it finds is loaded
+        string out = runLinked("-pno-filesystem");
+        assertEq("v1-dep Linked.qmod", out);
+        # without the restriction, the changed source is found
+        assertEq("v2-dep Linked.qm", runLinked().split("\n").last());
     }
 
     copiedModuleTest() {

@@ -43,6 +43,9 @@
 #include "qore/intern/QoreDir.h"
 #include "qore/intern/QoreHashNodeIntern.h"
 #include "qore/intern/QoreAOT.h"
+#include "qore/intern/QoreAOTBinary.h"
+#include "qore/intern/QoreModuleSourceFingerprints.h"
+#include "qore/intern/xxhash.h"
 #include "qore/intern/QorePluginRegistry.h"
 
 // dlopen() flags
@@ -68,6 +71,9 @@
 #include <cstdlib>
 #include <cstring>
 #include <map>
+#include <memory>
+#include <mutex>
+#include <tuple>
 #include <set>
 #include <string>
 #include <sys/stat.h>
@@ -243,6 +249,72 @@ static bool qore_module_file_newer(const std::string& path, int64 mtime_ns) {
     return !stat(path.c_str(), &sb) && S_ISREG(sb.st_mode) && qore_module_stat_mtime_ns(sb) > mtime_ns;
 }
 
+//! the content hashes of the sources of linked AOT modules computed by this process, by path, size and modification
+//! time, so that a source that many modules depend on is hashed once
+static std::mutex qore_aot_source_hash_mutex;
+static std::map<std::tuple<std::string, uint64_t, uint64_t>, uint64_t> qore_aot_source_hashes;
+static QoreForkStdMutex qore_aot_source_hash_fork_handler(qore_aot_source_hash_mutex, QFLR_LEAF,
+    "aot_module_source_hashes");
+
+//! Returns the content hash of a file whose size and modification time are given, from the cache or computed
+static bool qore_module_source_hash(const std::string& path, const QoreAOTSourceStatFingerprint& st, uint64_t& hash,
+        ExceptionSink& xsink) {
+    std::tuple<std::string, uint64_t, uint64_t> key(path, st.size, st.mtime_ns);
+    {
+        std::lock_guard<std::mutex> lck(qore_aot_source_hash_mutex);
+        auto i = qore_aot_source_hashes.find(key);
+        if (i != qore_aot_source_hashes.end()) {
+            hash = i->second;
+            return true;
+        }
+    }
+    // the file is hashed without the lock
+    if (!qore_aot_file_content_hash(path.c_str(), hash, &xsink)) {
+        return false;
+    }
+    // a file that changed while it was hashed is not cached
+    QoreAOTSourceStatFingerprint after;
+    if (getAOTSourceStatFingerprint(path.c_str(), after) && after.size == st.size && after.mtime_ns == st.mtime_ns) {
+        std::lock_guard<std::mutex> lck(qore_aot_source_hash_mutex);
+        qore_aot_source_hashes.emplace(std::move(key), hash);
+    }
+    return true;
+}
+
+//! Returns true if a source of a linked AOT module has changed since the module was compiled
+/** The size and modification time that qcc recorded for the source decide first: if both are unchanged, the source
+    is unchanged, and it is not read.  A source with another size has changed.  A source with the same size and
+    another modification time, as after a checkout, an artifact copy or a package extraction, has changed only if its
+    content hash differs from the recorded one.
+
+    @param path the source
+    @param fingerprint the size, modification time and content hash that qcc recorded for it
+    @param qmod_mtime the modification time of the module, to compare a source that cannot be read with
+    @param xsink for cancellation
+
+    @return true if the source has changed
+*/
+static bool qore_module_source_changed(const std::string& path, const QoreAOTModuleSourceFingerprint& fingerprint,
+        int64 qmod_mtime, ExceptionSink& xsink) {
+    QoreAOTSourceStatFingerprint st;
+    // a source that does not exist is not checked, as without a fingerprint
+    if (!getAOTSourceStatFingerprint(path.c_str(), st)) {
+        return false;
+    }
+    if (st.size == fingerprint.size && st.mtime_ns == fingerprint.mtime_ns) {
+        return false;
+    }
+    if (st.size != fingerprint.size) {
+        return true;
+    }
+    uint64_t hash;
+    if (!qore_module_source_hash(path, st, hash, xsink)) {
+        // a source that cannot be read is compared by its modification time, as without a fingerprint
+        return !xsink && qore_module_file_newer(path, qmod_mtime);
+    }
+    return hash != fingerprint.hash;
+}
+
 //! Returns the prerequisites of a Make-style dependency file written by qcc (\c --depfile)
 /** The file has one rule, <tt>target: prerequisite...</tt>; a space or backslash in a path is escaped with a
     backslash, and a backslash before a line break continues the rule
@@ -314,16 +386,176 @@ static bool qore_read_module_depfile(const std::string& path, std::vector<std::s
 }
 #endif
 
-//! Returns true if an AOT module linked into a source tree is older than one of its sources
+bool qore_aot_file_content_hash(const char* path, uint64_t& hash, ExceptionSink* xsink) {
+    std::unique_ptr<FILE, int (*)(FILE*)> fp(fopen(path, "rb"), fclose);
+    if (!fp) {
+        return false;
+    }
+    XXH64_state_t state;
+    XXH64_reset(&state, 0);
+    std::vector<char> buf(65536);
+    size_t len;
+    size_t blocks = 0;
+    while ((len = fread(buf.data(), 1, buf.size(), fp.get())) > 0) {
+        XXH64_update(&state, buf.data(), len);
+        if (xsink && !(++blocks % 100) && qore_check_cancel(xsink, "AOT module source hash")) {
+            return false;
+        }
+    }
+    if (ferror(fp.get())) {
+        return false;
+    }
+    hash = XXH64_digest(&state);
+    return true;
+}
+
+bool qore_aot_write_module_source_fingerprints(const std::string& depfile, const std::vector<std::string>& deps,
+        std::string& error) {
+    std::string content = QORE_AOT_MODULE_FINGERPRINT_HEADER "\n";
+    ExceptionSink xsink;
+    for (size_t i = 0; i < deps.size(); ++i) {
+        if (i && !(i % 100) && qore_check_cancel(&xsink, "AOT module source fingerprints")) {
+            break;
+        }
+        const std::string& dep = deps[i];
+        if (dep.empty() || dep.find_first_of("\r\n") != std::string::npos) {
+            continue;
+        }
+        QoreAOTSourceStatFingerprint st;
+        if (!getAOTSourceStatFingerprint(dep.c_str(), st)) {
+            continue;
+        }
+        uint64_t hash;
+        if (!qore_aot_file_content_hash(dep.c_str(), hash, &xsink)) {
+            if (xsink) {
+                break;
+            }
+            continue;
+        }
+        // a file that changed while it was hashed is not recorded
+        QoreAOTSourceStatFingerprint after;
+        if (!getAOTSourceStatFingerprint(dep.c_str(), after) || after.size != st.size
+                || after.mtime_ns != st.mtime_ns) {
+            continue;
+        }
+        char fields[64];
+        snprintf(fields, sizeof fields, "%llu %llu %016llx ", static_cast<unsigned long long>(st.size),
+            static_cast<unsigned long long>(st.mtime_ns), static_cast<unsigned long long>(hash));
+        content += fields;
+        content += dep;
+        content += '\n';
+    }
+    if (xsink) {
+        xsink.clear();
+        error = "operation cancelled while writing the AOT module source fingerprints for '" + depfile + "'";
+        return false;
+    }
+
+    std::string path = depfile + QORE_AOT_MODULE_FINGERPRINT_SUFFIX;
+    std::string tmp = path + ".tmp." + std::to_string(static_cast<long long>(getpid()));
+    {
+        std::unique_ptr<FILE, int (*)(FILE*)> fp(fopen(tmp.c_str(), "wb"), fclose);
+        if (!fp) {
+            error = "cannot open '" + tmp + "' for writing: " + strerror(errno);
+            return false;
+        }
+        if (fwrite(content.data(), 1, content.size(), fp.get()) != content.size()) {
+            error = "cannot write '" + tmp + "': " + strerror(errno);
+            fp.reset();
+            unlink(tmp.c_str());
+            return false;
+        }
+        if (fclose(fp.release())) {
+            error = "cannot close '" + tmp + "': " + strerror(errno);
+            unlink(tmp.c_str());
+            return false;
+        }
+    }
+    if (rename(tmp.c_str(), path.c_str())) {
+        error = "cannot replace '" + path + "': " + strerror(errno);
+        unlink(tmp.c_str());
+        return false;
+    }
+    return true;
+}
+
+bool qore_aot_read_module_source_fingerprints(const std::string& path,
+        std::map<std::string, QoreAOTModuleSourceFingerprint>& fingerprints) {
+    std::unique_ptr<FILE, int (*)(FILE*)> fp(fopen(path.c_str(), "rb"), fclose);
+    if (!fp) {
+        return false;
+    }
+    std::string content;
+    char buf[4096];
+    size_t len;
+    // a fingerprint file is small; one that is larger than any qcc writes is not read
+    static constexpr size_t max_size = 64 * 1024 * 1024;
+    while ((len = fread(buf, 1, sizeof buf, fp.get())) > 0) {
+        content.append(buf, len);
+        if (content.size() > max_size) {
+            return false;
+        }
+    }
+    if (ferror(fp.get())) {
+        return false;
+    }
+    fp.reset();
+
+    size_t eol = content.find('\n');
+    if (eol == std::string::npos || content.compare(0, eol, QORE_AOT_MODULE_FINGERPRINT_HEADER)) {
+        return false;
+    }
+    std::map<std::string, QoreAOTModuleSourceFingerprint> rv;
+    for (size_t start = eol + 1; start < content.size(); start = eol + 1) {
+        eol = content.find('\n', start);
+        if (eol == std::string::npos) {
+            // a line without its line break is incomplete
+            return false;
+        }
+        std::string line = content.substr(start, eol - start);
+        const char* p = line.c_str();
+        QoreAOTModuleSourceFingerprint f;
+        char* end;
+        errno = 0;
+        f.size = strtoull(p, &end, 10);
+        if (end == p || *end != ' ' || errno) {
+            return false;
+        }
+        p = end + 1;
+        f.mtime_ns = strtoull(p, &end, 10);
+        if (end == p || *end != ' ' || errno) {
+            return false;
+        }
+        p = end + 1;
+        f.hash = strtoull(p, &end, 16);
+        if (end - p != 16 || *end != ' ' || errno) {
+            return false;
+        }
+        p = end + 1;
+        if (!*p) {
+            return false;
+        }
+        rv[p] = f;
+    }
+    fingerprints.swap(rv);
+    return true;
+}
+
+//! Returns true if a source of an AOT module linked into a source tree has changed since the module was compiled
 /** A build tree links the AOT modules it builds into the source \c qlib directory (\c QORE_AOT_LINK_SOURCE_MODULES),
     where the in-tree tests find them before the module sources; without this check, a module built before one of its
     sources was changed would run the old code without any sign of it.  Only a module that is a symbolic link is
     checked, so an installed module is never checked.
 
     The sources are the files listed in the dependency file that qcc wrote next to the module it links to
-    (<tt>\<module\>.d</tt>), which include the sources of the modules it depends on.  Without a dependency file, the
-    main source of the module and, for a module in a directory of its own, the module sources in that directory are
-    checked.
+    (<tt>\<module\>.d</tt>), which include the sources of the modules it depends on.  A source has changed if its
+    content differs from the content it had when the module was compiled, as recorded by qcc in the fingerprint file
+    next to the dependency file (see QoreModuleSourceFingerprints.h): a source whose size and modification time are those
+    recorded is not read, and one with only another modification time, as after a checkout or a copy of a build tree,
+    is compared by its content hash.  A source that has no fingerprint, or a module without a fingerprint file, is
+    compared by its modification time: a source that is newer than the module has changed.  Without a dependency
+    file, the main source of the module and, for a module in a directory of its own, the module sources in that
+    directory are compared by their modification time.
 
     The check is skipped if the Program cannot access the filesystem; a file that the filesystem policy of a sandbox
     does not allow to be read is not checked.
@@ -332,10 +564,10 @@ static bool qore_read_module_depfile(const std::string& path, std::vector<std::s
     @param source_dir the module directory where the source of the module was found
     @param name the name of the module
     @param pgm the Program loading the module, if any
-    @param stale_source set to a source that is newer than the module
+    @param stale_source set to a source that has changed since the module was compiled
     @param xsink for cancellation
 
-    @return true if a source is newer than the module
+    @return true if a source has changed since the module was compiled
 */
 static bool qore_linked_aot_module_is_stale(const char* qmod_path, const std::string& source_dir, const char* name,
         const QoreProgram* pgm, std::string& stale_source, ExceptionSink& xsink) {
@@ -382,11 +614,29 @@ static bool qore_linked_aot_module_is_stale(const char* qmod_path, const std::st
 
     std::vector<std::string> deps;
     if (qore_read_module_depfile(depfile, deps)) {
+        // the size, modification time and content hash of each source when the module was compiled, as qcc recorded
+        // them next to the dependency file; without them, or for a source without one, a source that is newer than
+        // the module has changed
+        std::map<std::string, QoreAOTModuleSourceFingerprint> fingerprints;
+        std::string fingerprint_file = depfile + QORE_AOT_MODULE_FINGERPRINT_SUFFIX;
+        if (allowed(fingerprint_file)) {
+            qore_aot_read_module_source_fingerprints(fingerprint_file, fingerprints);
+        }
         for (size_t i = 0; i < deps.size(); ++i) {
             if (i && !(i % 100) && qore_check_cancel(&xsink, "AOT module source check")) {
                 return false;
             }
-            if (allowed(deps[i]) && qore_module_file_newer(deps[i], qmod_mtime)) {
+            if (!allowed(deps[i])) {
+                continue;
+            }
+            auto fi = fingerprints.find(deps[i]);
+            bool changed = fi == fingerprints.end()
+                ? qore_module_file_newer(deps[i], qmod_mtime)
+                : qore_module_source_changed(deps[i], fi->second, qmod_mtime, xsink);
+            if (xsink) {
+                return false;
+            }
+            if (changed) {
                 stale_source = deps[i];
                 return true;
             }
@@ -430,12 +680,12 @@ static bool qore_linked_aot_module_is_stale(const char* qmod_path, const std::st
 #endif
 }
 
-//! Raises the warning for an AOT module that is not loaded because one of its sources is newer
+//! Raises the warning for an AOT module that is not loaded because one of its sources has changed
 static void qore_warn_stale_aot_module(ExceptionSink& xsink, ExceptionSink& wsink, int warning_mask,
         const char* name, const char* qmod_path, const char* source_path, const char* stale_source) {
-    QoreStringNode* warn_desc = new QoreStringNodeMaker("AOT module '%s' for feature '%s' is older than its source "
-        "'%s'; loading source module '%s' instead; rebuild the AOT module", qmod_path, name, stale_source,
-        source_path);
+    QoreStringNode* warn_desc = new QoreStringNodeMaker("AOT module '%s' for feature '%s' is out of date: its source "
+        "'%s' has changed since it was compiled; loading source module '%s' instead; rebuild the AOT module",
+        qmod_path, name, stale_source, source_path);
     // the warning is always reported, as the module that is run is not the one the build tree provides
     if (!warning_mask || &xsink == &wsink) {
         printe("warning: %s\n", warn_desc->c_str());
@@ -1945,7 +2195,7 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
             load_opt & QMLO_REINJECT ? mpgm : path_pgm, load_opt, warning_mask);
     };
 
-    // an AOT module that a build tree links into a source tree is not loaded if one of its sources is newer: the
+    // an AOT module that a build tree links into a source tree is not loaded if one of its sources has changed: the
     // source module is loaded instead, with a warning that the AOT module must be rebuilt
     auto load_source_for_stale_aot_module = [&](const char* qmod_path, const std::string& source_dir,
             QoreAbstractModule*& rv) -> bool {

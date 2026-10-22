@@ -1446,10 +1446,12 @@ val = "string";      # OK
 
     @par Stale In-Tree AOT Modules
     A build tree links the @ref exec_mode_aot "AOT" \c .qmod files that it builds into the source \c qlib
-    directory, where the in-tree tests find them before the module sources.  A linked \c .qmod that is older than one
-    of its sources, as listed in the dependency file that @ref qcc_tool "qcc" wrote next to it, is not loaded: the
-    source module is loaded instead, with a warning that the \c .qmod must be rebuilt.  Installed modules are not
-    links, and are always loaded.
+    directory, where the in-tree tests find them before the module sources.  A linked \c .qmod one of whose sources,
+    as listed in the dependency file that @ref qcc_tool "qcc" wrote next to it, has changed since it was compiled is
+    not loaded: the source module is loaded instead, with a warning that the \c .qmod must be rebuilt.  A source has
+    changed if its content differs from the content that \c qcc recorded with the dependency file (in
+    <tt>\<module\>.qmod.d.fingerprints</tt>); a source that only has a new modification time, as after a checkout or a
+    copy of a build tree, has not.  Installed modules are not links, and are always loaded.
 
     @par Autotools Build System Removed
     @parblock

@@ -39,6 +39,7 @@
 #include "qore/intern/QoreAOTExprSlotRegistry.h"
 #include "qore/intern/QoreIR.h"
 #include "qore/intern/xxhash.h"
+#include "qore/intern/QoreModuleSourceFingerprints.h"
 
 #include <algorithm>
 #include <cctype>
@@ -430,9 +431,13 @@ static bool write_depfile_atomic(const char* path, const std::string& content) {
     return true;
 }
 
+// Writes the depfile of a module compile; for a .qmod (fingerprints true), also the source fingerprint file next to
+// it (QoreModuleSourceFingerprints.h): the size, modification time and content hash of each file it lists, with which
+// the module loader decides whether a .qmod linked into a source tree is older than its sources by their content
 static bool write_depfile(const char* path, const std::string& output,
                           const std::string& source, const char* context,
-                          const std::vector<std::string>* extra_deps = nullptr) {
+                          const std::vector<std::string>* extra_deps = nullptr,
+                          bool fingerprints = false) {
     // Canonicalize so the relative vs absolute spelling of the same file
     // (e.g. primary passed by qcc as realpath + same file re-emerging
     // from an opendir(context) scan with a relative prefix) dedupes
@@ -537,7 +542,17 @@ static bool write_depfile(const char* path, const std::string& output,
         content += escape(dep);
     }
     content += '\n';
-    return write_depfile_atomic(path, content);
+    if (!write_depfile_atomic(path, content)) {
+        return false;
+    }
+    if (fingerprints) {
+        std::string error;
+        if (!qore_aot_write_module_source_fingerprints(path, deps, error)) {
+            fprintf(stderr, "error: --depfile: %s\n", error.c_str());
+            return false;
+        }
+    }
+    return true;
 }
 
 // Write a Make-style depfile from an explicit, already-canonicalized
@@ -1067,6 +1082,12 @@ static bool save_temps = false;
 // different convention override via `-e <fn>`.
 static const char* entry_fn = "main";
 
+//! returns true if the output of a compile is an AOT module (.qmod), whose depfile gets the source fingerprints
+static bool qcc_output_is_qmod(const std::string& output) {
+    static constexpr const char ext[] = ".qmod";
+    return output.size() > sizeof(ext) - 1 && !output.compare(output.size() - (sizeof(ext) - 1), sizeof(ext) - 1, ext);
+}
+
 static std::string qcc_depfile_target(const std::string& output) {
     return depfile_target_path ? std::string(depfile_target_path) : output;
 }
@@ -1133,7 +1154,11 @@ static void print_usage(const char* prog) {
            "                         cmake's `add_custom_command(... DEPFILE ...)` so\n"
            "                         incremental builds retrigger on sibling-file edits.\n"
            "                         With --link-qo and --script-aggregate, lists the\n"
-           "                         aggregate object's direct input files.\n");
+           "                         aggregate object's direct input files.  For a .qmod,\n"
+           "                         FILE.fingerprints records the size, modification\n"
+           "                         time and content hash of each file listed, so that\n"
+           "                         the module loader checks a .qmod linked into a source\n"
+           "                         tree against the content of its sources.\n");
     printf("      --depfile-target=FILE\n"
            "                         Override the Make depfile target written before the\n"
            "                         colon.  Requires --depfile=FILE and is intended\n"
@@ -10218,7 +10243,7 @@ int main(int argc, char** argv) {
         // this fallback.  Write empty-source + context depfile.
         if (depfile_path
                 && !write_depfile(depfile_path, qcc_depfile_target(output),
-                    std::string(), context_dir)) {
+                    std::string(), context_dir, nullptr, qcc_output_is_qmod(output))) {
             qore_cleanup();
             return 1;
         }
@@ -11185,7 +11210,7 @@ int main(int argc, char** argv) {
             if (depfile_path
                     && !write_depfile(depfile_path, qcc_depfile_target(output),
                                       source_file, context_dir,
-                                      &module_deps)) {
+                                      &module_deps, qcc_output_is_qmod(output))) {
                 rc = 1;
             }
         }
@@ -11221,7 +11246,7 @@ int main(int argc, char** argv) {
             if (depfile_path
                     && !write_depfile(depfile_path, qcc_depfile_target(output),
                                       std::string(), source_file,
-                                      &module_deps)) {
+                                      &module_deps, qcc_output_is_qmod(output))) {
                 rc = 1;
             }
         }
@@ -11254,7 +11279,7 @@ int main(int argc, char** argv) {
                 qcc_module_depfile_inputs(dep_module_files);
             if (depfile_path && !write_depfile(depfile_path, qcc_depfile_target(output),
                                                source_file, nullptr,
-                                               &module_deps)) {
+                                               &module_deps, qcc_output_is_qmod(output))) {
                 rc = 1;
             }
         }
