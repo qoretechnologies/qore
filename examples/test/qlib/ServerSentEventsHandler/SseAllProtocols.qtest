@@ -74,6 +74,14 @@ class RecordingSseHandler inherits ServerSentEventHandler::ServerSentEventHandle
 
         #! Guards @ref setup_gate so releaseSetupGate() is idempotent
         Mutex gate_lock();
+
+        #! When set, the next HTTP/2 connection releases its stream as the server does when the handler is done
+        bool release_h2_stream;
+    }
+
+    public {
+        #! Set once the stream of the connection has been released (see releaseHttp2StreamOnRegister())
+        bool h2_stream_released;
     }
 
     # "data": "none" — SSE payloads are already-formed strings, no re-serialization
@@ -92,6 +100,18 @@ class RecordingSseHandler inherits ServerSentEventHandler::ServerSentEventHandle
         last_conn = NOTHING;
         AutoLock al(gate_lock);
         setup_gate = NOTHING;
+        release_h2_stream = False;
+        h2_stream_released = False;
+    }
+
+    #! Makes the next HTTP/2 connection release its stream before it is registered
+    /** The server releases its record of the stream (Socket::cleanupHttp2Stream()) when the handler that set up the
+        connection is done, while the SSE response stream stays open; releasing it before the connection is
+        registered puts a peer stream reset deterministically after the release.
+    */
+    releaseHttp2StreamOnRegister() {
+        AutoLock al(gate_lock);
+        release_h2_stream = True;
     }
 
     #! Arms the setup gate so the next SSE setup parks until releaseSetupGate() is called
@@ -110,6 +130,22 @@ class RecordingSseHandler inherits ServerSentEventHandler::ServerSentEventHandle
         if (setup_gate && setup_gate.getCount() > 0) {
             setup_gate.dec();
         }
+    }
+
+    HttpServerAsyncIo::Http2SseStream setupAsyncSseConnectionHttp2(Socket sock, hash<auto> cx, hash<auto> hdr,
+            string cid, int stream_id, *code<nothing()> wake_callback) {
+        bool release;
+        {
+            AutoLock al(gate_lock);
+            release = release_h2_stream;
+            release_h2_stream = False;
+        }
+        if (release) {
+            sock.cleanupHttp2Stream(stream_id);
+            h2_stream_released = True;
+        }
+        return ServerSentEventHandler::ServerSentEventHandler::setupAsyncSseConnectionHttp2(sock, cx, hdr, cid,
+            stream_id, wake_callback);
     }
 
     connectionRegisteredImpl(ServerSentEventHandler::ServerSentEventConnection conn) {
@@ -620,6 +656,8 @@ l50Xb2GWQesIt9k5jF5IOw==
             \testHttp3SseDeregisterOnStreamReset());
         addTestCase("H2 SSE stream reset before the close notifier registers is not lost",
             \testHttp2SseDeregisterOnStreamResetBeforeListener());
+        addTestCase("H2 SSE connection is deregistered when the stream is reset after the handler is done",
+            \testHttp2SseDeregisterOnStreamResetAfterHandler());
         addTestCase("H3 SSE stream reset before the close notifier registers is not lost",
             \testHttp3SseDeregisterOnStreamResetBeforeListener());
         set_return_value(main());
@@ -1466,6 +1504,37 @@ l50Xb2GWQesIt9k5jF5IOw==
             label + ": no connections remain registered");
     }
 
+    #! Asserts that a peer stream reset after the handler is done with the stream deregisters the connection
+    /** The server releases its record of an HTTP/2 stream when the handler that set up the SSE connection is done,
+        but the SSE response stream stays open: the reset by the peer must still be reported for it, or the
+        connection stays registered forever.  The handler releases the stream itself before the connection is
+        registered, so the reset that the test sends once the connection is registered arrives after the release.
+    */
+    private runSseDeregisterOnStreamResetAfterHandlerFlow(string label, string url) {
+        handler.reset();
+        handler.releaseHttp2StreamOnRegister();
+
+        HttpClientIo::HttpClientConnectionManager mgr = makeManager("h2");
+        on_exit delete mgr;
+
+        HttpClientIo::HttpClientStreamHandle stream = mgr.acquireAndStartStreaming(
+            url, "GET", "/", {"Accept": "text/event-stream"});
+
+        assertEq(0, handler.registered.waitForZero(SseTestTimeout),
+            label + ": connection should register on server");
+        assertTrue(handler.h2_stream_released, label + ": the stream was released before the connection registered");
+
+        stream.cancel();
+
+        hash<auto> resp = mgr.request(url, "GET", "/ping");
+        assertEq(200, resp.status_code, label + ": connection still serves other requests");
+
+        assertEq(0, handler.deregistered.waitForZero(SseTestTimeout),
+            label + ": connection should be deregistered after the stream is reset");
+        assertEq((), handler.getConnectionIds() ?? (),
+            label + ": no connections remain registered");
+    }
+
     #! Creates a connection manager pinned to the given protocol
     private HttpClientIo::HttpClientConnectionManager makeManager(string proto) {
         hash<HttpClientIo::HttpClientConnectionManagerOptions> opts =
@@ -1508,6 +1577,11 @@ l50Xb2GWQesIt9k5jF5IOw==
     testHttp2SseDeregisterOnStreamResetBeforeListener() {
         runSseDeregisterOnStreamResetBeforeListenerFlow(
             "H2 SSE stream-reset-before-listener deregister", "h2",
+            sprintf("https://127.0.0.1:%d", h2_port));
+    }
+
+    testHttp2SseDeregisterOnStreamResetAfterHandler() {
+        runSseDeregisterOnStreamResetAfterHandlerFlow("H2 SSE stream-reset-after-handler deregister",
             sprintf("https://127.0.0.1:%d", h2_port));
     }
 

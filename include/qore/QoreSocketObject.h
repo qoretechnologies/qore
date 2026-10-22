@@ -813,6 +813,18 @@ if (accepted) {
     */
     DLLLOCAL void releaseHttp2Stream(int32_t stream_id);
 
+    //! Marks an HTTP/2 server stream whose request body is delivered to a Queue that the handler registers
+    /** See Http2Session::setStreamBodyConsumer(); a no-op if the socket has no HTTP/2 session.  Not for an I/O thread
+        that holds the lock of the socket.
+    */
+    DLLLOCAL void setHttp2StreamBodyConsumer(int32_t stream_id);
+
+    //! Releases the body consumer of an HTTP/2 server stream once its Queue has received the end of the body
+    /** See Http2Session::releaseStreamBodyConsumer(); a no-op if the socket has no HTTP/2 session.  Not for an I/O
+        thread that holds the lock of the socket.
+    */
+    DLLLOCAL void releaseHttp2StreamBodyConsumer(int32_t stream_id);
+
     //! Releases the records that a QUIC session of the socket keeps for a stream that the caller is done with
     /** See QuicSession::releaseStream(); a no-op if the socket has no such session.  Not for an I/O thread that
         holds the lock of the socket.

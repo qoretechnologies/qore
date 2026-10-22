@@ -6044,6 +6044,20 @@ void QoreSocketObject::releaseHttp2Stream(int32_t stream_id) {
     }
 }
 
+void QoreSocketObject::setHttp2StreamBodyConsumer(int32_t stream_id) {
+    Http2SessionPtr h2 = qore_socket_object_get_h2_session(this);
+    if (h2) {
+        h2->setStreamBodyConsumer(stream_id);
+    }
+}
+
+void QoreSocketObject::releaseHttp2StreamBodyConsumer(int32_t stream_id) {
+    Http2SessionPtr h2 = qore_socket_object_get_h2_session(this);
+    if (h2) {
+        h2->releaseStreamBodyConsumer(stream_id);
+    }
+}
+
 void QoreSocketObject::releaseQuicStream(int64_t session_id, int64_t stream_id) {
     std::shared_ptr<QuicSession> session = qore_socket_object_get_quic_session(this, session_id);
     if (session) {

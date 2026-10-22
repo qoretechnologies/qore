@@ -492,6 +492,12 @@ void Http2PollOperationPriv::registerStreamQueue(int32_t stream_id, Queue* queue
     // resumeMultiplexedReading() after this returns, which submits the
     // h2op to the controller; the next continueReadPoll cycle then drains
     // any buffered DATA into the queue and pushes NOTHING on END_STREAM.
+    // A stream whose request body a Queue receives is kept by the session until the Queue has received the end of
+    // the body, even once the handler is done with it (Http2Session::cleanupStream()); marked before the
+    // registration is visible to the I/O thread, so that the drain cannot complete the Queue before
+    if (request_body) {
+        sock->setHttp2StreamBodyConsumer(stream_id);
+    }
     {
         AutoLocker al(sq_lock);
         // Race with shutdown: HttpServer.stop() → asyncIo.stop() iterates
@@ -522,6 +528,9 @@ void Http2PollOperationPriv::registerStreamQueue(int32_t stream_id, Queue* queue
             }
             if (notifier_obj) {
                 notifier_obj->deref(nullptr);
+            }
+            if (request_body) {
+                sock->releaseHttp2StreamBodyConsumer(stream_id);
             }
             return;
         }
@@ -840,6 +849,7 @@ void Http2PollOperationPriv::drainStreamQueues(ExceptionSink* xsink) {
     for (int32_t sid : completed) {
         auto it = stream_queues.find(sid);
         if (it != stream_queues.end()) {
+            bool request_body = it->second.request_body;
             // In frame-state mode the Queue ref is owned by the frame state
             // (its destructor derefs it when the shared_ptr drops).  Skip the
             // direct Queue deref to avoid a double-free.
@@ -854,6 +864,11 @@ void Http2PollOperationPriv::drainStreamQueues(ExceptionSink* xsink) {
                 it->second.notifier_obj->deref(xsink);
             }
             stream_queues.erase(it);
+            // the Queue has received the end of the request body: the session can remove the stream once its
+            // handler is done with it and it is closed
+            if (request_body) {
+                sock->releaseHttp2StreamBodyConsumer(sid);
+            }
         }
     }
 }
@@ -889,6 +904,9 @@ void Http2PollOperationPriv::clearStreamQueues(ExceptionSink* xsink) {
         }
         if (info.notifier_obj) {
             info.notifier_obj->deref(xsink);
+        }
+        if (info.request_body) {
+            sock->releaseHttp2StreamBodyConsumer(stream_id);
         }
     }
     stream_queues.clear();

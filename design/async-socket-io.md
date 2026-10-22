@@ -1061,8 +1061,21 @@ A session serves any number of streams, so it keeps nothing per finished stream:
   server in `cleanupStream()` (the handler is done); an HTTP/2 record also by the first send that reports it.
 - The one-shot reports of peer resets (`pending_peer_reset_reports`) are kept on server sessions only, whose poll
   operations drain them.
+- An HTTP/2 server stream can outlive its handler: a response body sent from an InputStream or by a dedicated sender
+  (a Server-Sent Events connection) is sent after the handler returns, and the request body can be delivered to a
+  Queue that the handler registered (full-duplex streaming, as in Bedrock's bidirectional event streams).  So
+  `Http2Session::cleanupStream()` (the handler is done) removes a stream only once it is closed and no registered
+  Queue still has to receive the end of its request body; until then it marks it (`Http2StreamInfo::handler_done`),
+  and the stream is removed when it closes (`onStreamCloseCallback()`, which also queues the report of a reset for
+  the poll operation) or when the poll operation has delivered the end of the body to the Queue
+  (`releaseStreamBodyConsumer()`; the Queue's registration marks the stream with `setStreamBodyConsumer()` before
+  the handler is done), whichever is last.  The rest of a request body that no Queue receives is discarded once the
+  handler is done.  Removing the stream when the handler returned discarded the rest of a streamed request body, ended
+  the response of a full-duplex stream, and lost the report of a reset that arrived afterwards, so a Server-Sent
+  Events connection stayed registered (`HttpServerHttp2StreamAfterHandler.qtest`, `SseAllProtocols.qtest`).
 - `dbg_socket_stream_records()` (library-debug builds) returns the size of each kind of record of a session;
-  `HttpClientIoStreamRecords.qtest` checks that none grows with the number of requests made on one connection.
+  `HttpClientIoStreamRecords.qtest` checks that none grows with the number of requests made on one connection,
+  including full-duplex streams that outlive their handlers.
 
 ## HTTP/2 and HTTP/3 Server: Incomplete Request Bodies
 

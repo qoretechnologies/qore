@@ -131,6 +131,25 @@ struct Http2StreamInfo {
         the stream
     */
     bool released = false;
+    //! True once the handler that the stream was dispatched to is done with it (Http2Session::cleanupStream())
+    /** The stream can outlive its handler: a response body sent from an InputStream or by a dedicated sender (such as
+        a Server-Sent Events connection) is sent after the handler returns, a request body can be delivered to a
+        Queue that the handler registered (@ref body_consumer), and a reset by the peer is reported to the server's
+        poll operation only for a stream that has a record when it closes.  The record is erased once the stream is
+        closed and no consumer still has to receive the end of its request body.
+    */
+    bool handler_done = false;
+    //! True while a Queue registered for the request body has not yet received the end of the body
+    /** Set by Http2Session::setStreamBodyConsumer() when the handler registers the Queue, and cleared by
+        Http2Session::releaseStreamBodyConsumer() when the server's poll operation has delivered the end of the body;
+        the rest of the request body of a stream whose handler is done is discarded unless it is set.
+    */
+    bool body_consumer = false;
+    //! True once the application has reset the stream (Http2Session::submitRstStream())
+    /** cleanupStream() removes such a stream at once, as nothing is sent or received on it any more, so that its
+        close is not taken for a reset by the peer
+    */
+    bool rst_submitted = false;
     bool marked_complete = false;  //!< True if already added to completed_streams (prevents duplicates)
     bool dispatched = false;       //!< True after headers-only dispatch (stream stays in map for DATA accumulation)
     bool headers_end_stream = false; //!< True if END_STREAM was on the initial HEADERS frame (no body expected)
@@ -637,10 +656,34 @@ public:
     //! Remove stream from map (cleanup after handler finishes)
     /** Also releases the records of the stream; see releaseStream()
 
+        A stream that is still in use when its handler is done is not removed now: one that is not closed yet (its
+        response or the rest of its request body may still be on the way, and a reset by the peer must still be
+        reported), and one whose request body a registered Queue has not received the end of yet
+        (setStreamBodyConsumer()).  It is marked (Http2StreamInfo::handler_done) and removed when it closes or when its
+        body consumer is released, whichever is last; meanwhile the rest of a request body that no Queue receives is
+        discarded.  A stream that the application has reset (submitRstStream()) is removed at once.  An active CONNECT
+        tunnel is kept until the session ends.
+
         @param stream_id the stream to remove
         @since %Qore 3.0
     */
     DLLLOCAL void cleanupStream(int32_t stream_id);
+
+    //! Marks a server stream whose request body is delivered to a Queue that the handler registered
+    /** Called when the handler registers the Queue, before it is done with the stream, so that cleanupStream() keeps
+        the stream until the Queue has received the end of the body; see releaseStreamBodyConsumer().  A no-op for a
+        stream without a record.
+
+        @param stream_id the HTTP/2 stream ID
+    */
+    DLLLOCAL void setStreamBodyConsumer(int32_t stream_id);
+
+    //! Releases the body consumer of a server stream once its Queue has received the end of the request body
+    /** Removes the stream if its handler is done and the stream is closed; see cleanupStream()
+
+        @param stream_id the HTTP/2 stream ID
+    */
+    DLLLOCAL void releaseStreamBodyConsumer(int32_t stream_id);
 
     //! Marks a stream as streaming for subsequent data delivery
     /** Used by client multiplex to mark a CONNECT stream as streaming after

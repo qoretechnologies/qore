@@ -94,6 +94,74 @@ class OkHandler inherits AbstractHttpRequestHandler {
     }
 }
 
+#! A response body that returns the chunks of a request body delivered to a Queue
+class QueueEchoBody inherits InputStream {
+    private {
+        Queue input;
+        binary pending = binary();
+        bool eof = False;
+    }
+
+    constructor(Queue input) {
+        self.input = input;
+    }
+
+    *binary read(int limit) {
+        fill();
+        if (!pending.size()) {
+            return NOTHING;
+        }
+        binary rv = pending.size() > limit ? pending[0..limit - 1] : pending;
+        pending = pending[rv.size()..];
+        return rv;
+    }
+
+    int peek() {
+        fill();
+        return pending.size() ? pending[0] : -1;
+    }
+
+    private fill() {
+        if (pending.size() || eof) {
+            return;
+        }
+        # a chunk of the body, NOTHING for the end of the body, or an error hash for a body that ended otherwise
+        auto chunk = input.get(30s);
+        if (chunk instanceof binary) {
+            pending = chunk;
+            return;
+        }
+        eof = True;
+        if (chunk.typeCode() == NT_HASH) {
+            throw chunk.err, chunk.desc;
+        }
+    }
+}
+
+#! Echoes the request body in a response that is sent after the handler returns (full-duplex streaming)
+/** The stream outlives the handler: the request body arrives and the response is sent after the handler is done
+*/
+class EchoHandler inherits AbstractHttpRequestHandler {
+    private {
+        SessionRecorder recorder;
+    }
+
+    constructor(SessionRecorder recorder) {
+        self.recorder = recorder;
+    }
+
+    bool wantsBodyStreaming(hash<auto> cx, hash<auto> hdr) {
+        return True;
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        recorder.record(cx);
+        Queue input(-1);
+        cx."header-info".register_body_queue(input);
+        return makeResponse(200, new QueueEchoBody(input), {"Content-Type": MimeTypeOctetStream});
+    }
+}
+
 #! Resets every request and answers 400: HTTP/3 stops reading the request with an error; HTTP/2 resets the stream
 class ResetHandler inherits AbstractHttpRequestHandler {
     private {
@@ -150,6 +218,7 @@ public class HttpClientIoStreamRecordsTest inherits QUnit::Test {
         addTestCase("HTTP/3: reset requests leave no records", \h3ResetRequestsTest());
         addTestCase("HTTP/2: finished requests leave no records", \h2RequestsTest());
         addTestCase("HTTP/2: reset requests leave no records", \h2ResetRequestsTest());
+        addTestCase("HTTP/2: streams that outlive their handlers leave no records", \h2EchoRequestsTest());
         set_return_value(main());
     }
 
@@ -163,6 +232,7 @@ public class HttpClientIoStreamRecordsTest inherits QUnit::Test {
         });
         server.setHandler("ok", "/ok", NOTHING, new OkHandler(recorder));
         server.setHandler("reset", "/reset", NOTHING, new ResetHandler(recorder));
+        server.setHandler("echo", "/echo", NOTHING, new EchoHandler(recorder));
         h2_url = sprintf("https://127.0.0.1:%d", server.addListener(<HttpListenerOptionInfo>{
             "node": "127.0.0.1",
             "service": 0,
@@ -282,6 +352,37 @@ public class HttpClientIoStreamRecordsTest inherits QUnit::Test {
         checkConnectionRecords(mgr, url, protocol);
     }
 
+    #! Makes full-duplex requests whose request body arrives and whose response is sent after the handler is done
+    private echoRequestsImpl(string protocol, string url) {
+        HttpClientConnectionManager mgr = getManager(protocol);
+        on_exit mgr.closeAll();
+        for (int i = 0; i < Requests; ++i) {
+            HttpClientStreamHandle stream = mgr.acquireStream(url);
+            stream.startStreaming("POST", "/echo", {"content-type": "application/octet-stream"}, True);
+            binary chunk = binary(sprintf("request %d", i));
+            stream.sendData(chunk);
+            binary echoed = binary();
+            while (echoed.size() < chunk.size()) {
+                auto ev = stream.readData(HangGuard);
+                if (!exists ev) {
+                    throw "TIMEOUT", sprintf("no stream event within %y", HangGuard);
+                }
+                if (ev.typeCode() == NT_HASH) {
+                    if (ev.end_stream || ev.error) {
+                        fail(sprintf("request %d: the stream ended before the body came back: %y", i, ev));
+                    }
+                    continue;
+                }
+                echoed += binary(ev);
+            }
+            assertEq(chunk, echoed, sprintf("request %d: the body comes back", i));
+            stream.writesDone();
+            readToEnd(stream);
+            assertEq(200, stream.getResponse().status_code);
+        }
+        checkConnectionRecords(mgr, url, protocol);
+    }
+
     h3RequestsTest() {
         checkAvailable(True);
         requestsImpl("h3", h3_url);
@@ -300,5 +401,10 @@ public class HttpClientIoStreamRecordsTest inherits QUnit::Test {
     h2ResetRequestsTest() {
         checkAvailable();
         resetRequestsImpl("h2", h2_url);
+    }
+
+    h2EchoRequestsTest() {
+        checkAvailable();
+        echoRequestsImpl("h2", h2_url);
     }
 }
