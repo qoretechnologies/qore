@@ -57,6 +57,20 @@ check-third-party-sources:
   script:
     - cmake -DQORE_THIRD_PARTY_MIRROR="${QORE_THIRD_PARTY_MIRROR}" -P cmake/QoreCheckThirdPartySources.cmake
 
+# The release notes of each module begin with "- initial release" only and have no bullets before the first release
+# section; the checker's own tests run first
+check-module-release-notes:
+  stage: build
+  image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:develop
+  tags:
+    - k8s
+    - amd64
+  services: []
+  before_script: []
+  script:
+    - python3 examples/test/cmake/test_module_release_notes.py
+    - git ls-files -z 'qlib/*.qm' 'qlib/**/*.qm' 'modules/*/docs/*.dox.tmpl' | xargs -0 python3 -I doxygen/check-module-release-notes.py
+
 # Build stage - compile once per platform, save build/ as artifact
 build-ubuntu-amd64:
   stage: build
