@@ -63,15 +63,24 @@ public namespace AOTNestedConstantRefMod {
 ";
     }
 
-    private bool haveJniModule() {
-        string out = backquote(sprintf("LD_LIBRARY_PATH=%s:$LD_LIBRARY_PATH %s -b -l jni -ne 'printf(\"ok\");' 2>&1",
-            libqore_dir, qore_bin));
-        return out == "ok";
+    #! returns why the jni module cannot be loaded, or nothing if it can
+    /** Only the standard output of the child is compared: the JVM writes a banner such as
+        "Picked up JAVA_TOOL_OPTIONS: ..." to the standard error when JAVA_TOOL_OPTIONS is set, as the CI images set it.
+    */
+    private *string jniUnavailable() {
+        TmpDir tmp("qore-aot-jni-probe-");
+        string err_path = tmp.path + "/stderr";
+        string out = backquote(sprintf("LD_LIBRARY_PATH=%s:$LD_LIBRARY_PATH %s -b -l jni -ne 'printf(\"ok\");' 2>%s",
+            libqore_dir, qore_bin, err_path));
+        if (out == "ok") {
+            return;
+        }
+        return sprintf("output %y, error output %y", out, ReadOnlyFile::readTextFile(err_path) ?? "");
     }
 
     testAotJniNestedConstantRefs() {
-        if (!haveJniModule()) {
-            testSkip("jni module not available");
+        if (*string why = jniUnavailable()) {
+            testSkip("jni module not available: " + why);
         }
 
         TmpDir tmp("qore-aot-nested-const-ref-");
