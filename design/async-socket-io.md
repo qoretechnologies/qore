@@ -1077,6 +1077,25 @@ A session serves any number of streams, so it keeps nothing per finished stream:
   `HttpClientIoStreamRecords.qtest` checks that none grows with the number of requests made on one connection,
   including full-duplex streams that outlive their handlers.
 
+## HTTP/2 Client: Stream Queue Registrations and Listener Signals
+
+A WebSocket client over HTTP/2 (RFC 8441) registers its stream's queue on its own thread
+(`Http2ClientPollOperationPriv::registerStreamQueue()`): the registration is pending
+(`pending_stream_registrations`, under `sq_lock`) until the connection's I/O thread applies it in
+`drainStreamQueues()`, which runs at the end of a read cycle, after the responses of the cycle have been dispatched
+(so the end of a stream reported in its queue follows the stream's last data).  The stream's data is decoded into the
+queue by its frame state when the I/O thread dispatches it, and `drainStreamQueues()` does not read the data of such
+a registration (`StreamQueueInfo::frame_state`), so it never signals it: the stream's listener (`notifyIo()`, through
+`onStreamData()`) is told of decoded data only by the dispatch, if the stream is registered then.  A pending
+registration counts as one: it was made before the data was dispatched.  Otherwise data that arrives before the next
+drain after the registration (the answer to the client's first message can arrive in the first read cycle after it)
+reaches the queue unsignaled and waits for the stream's next data, such as the answer to the heartbeat PING 20 seconds
+later (WebSocketH2Scan.qtest, CI pipeline 61208, 0.2% of its runs on macOS).
+
+Debug builds expose `dbg_h2_client_hold_stream_registrations(bool)` (in `lib/ql_debug.cpp`), which keeps every HTTP/2
+client stream queue registration pending while it is set;
+`examples/test/qlib/WebSocketClient/WebSocketH2PendingRegistration.qtest` uses it.
+
 ## HTTP/2 and HTTP/3 Server: Incomplete Request Bodies
 
 A request body ends cleanly only when the client ends the stream: `END_STREAM` (HTTP/2) or `FIN` (HTTP/3).  A stream

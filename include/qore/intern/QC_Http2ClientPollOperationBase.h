@@ -745,4 +745,15 @@ DLLLOCAL QoreClass* initHttp2ClientPollOperationBaseClass(QoreNamespace& qorens)
 //! the generated .cpp file, initialised from the registered class).
 DLLLOCAL extern qore_classid_t CID_HTTP2CLIENTPOLLOPERATIONBASE;
 
+#ifdef DEBUG
+//! Debug-only: holds the stream queue registrations of HTTP/2 client connections pending, or applies them again
+/** Called by the dbg_h2_client_hold_stream_registrations() test hook.  While held, the I/O thread does not apply the
+    stream queue registrations made by application threads (Http2ClientPollOperationPriv::registerStreamQueue()):
+    they stay pending, as when no read cycle has drained the stream queues since they were made.
+
+    @param hold true to hold the registrations pending from now on, false to apply them again
+*/
+DLLLOCAL void qore_dbg_h2_client_hold_stream_registrations(bool hold);
+#endif
+
 #endif // _QORE_CLASS_HTTP2CLIENTPOLLOPERATIONBASE_H

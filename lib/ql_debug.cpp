@@ -40,6 +40,7 @@
 #include "qore/intern/ql_type.h"
 #include "qore/intern/qore_string_private.h"
 #include "qore/intern/AsyncIoControllerPriv.h"
+#include "qore/intern/QC_Http2ClientPollOperationBase.h"
 
 #include <map>
 #include "qore/intern/QC_Counter.h"
@@ -10204,6 +10205,16 @@ static QoreValue f_dbg_socket_check_idle_data(const QoreListNode* params, Runtim
     return *xsink ? QoreValue() : QoreValue(static_cast<int64>(rv));
 }
 
+//! Debug-only: holds the stream queue registrations of HTTP/2 client connections pending, or applies them again
+/** Tests use this to make data arrive on an HTTP/2 client stream whose queue registration has not been applied yet
+    by the I/O thread, deterministically.  A test must stop holding them (also when it fails).
+ */
+static QoreValue f_dbg_h2_client_hold_stream_registrations(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    qore_dbg_h2_client_hold_stream_registrations(get_param_value(params, 0).getAsBool());
+    return QoreValue();
+}
+
 //! Debug-only: holds the references that the async I/O threads release on callback workers, or releases them
 /** Tests use this to make an object outlive the delivery of an operation's result deterministically: while
     @a hold is true, the references that an I/O thread releases off the I/O thread (the poll operation of a
@@ -11859,6 +11870,9 @@ void init_debug_functions(QoreNamespace& qns) {
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
         QC_SOCKET->getTypeInfo(), QORE_PARAM_NO_ARG, "sock");
     qns.addBuiltinVariant("dbg_async_io_hold_releases", f_dbg_async_io_hold_releases,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
+        boolTypeInfo, QORE_PARAM_NO_ARG, "hold");
+    qns.addBuiltinVariant("dbg_h2_client_hold_stream_registrations", f_dbg_h2_client_hold_stream_registrations,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
         boolTypeInfo, QORE_PARAM_NO_ARG, "hold");
     qns.addBuiltinVariant("dbg_socket_check_idle_data", f_dbg_socket_check_idle_data,

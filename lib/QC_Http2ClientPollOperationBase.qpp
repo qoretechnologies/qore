@@ -868,6 +868,15 @@ QoreHashNode* Http2ClientPollOperationPriv::handleReading(ExceptionSink* xsink) 
                     ASYNC_IO_TRACE("H2Client handleReading: stream=%d queues=%d is_end=%d\n",
                         sid32, (int)stream_queues.size(), (int)is_end);
                     registered = stream_queues.find(sid32) != stream_queues.end();
+                    if (!registered) {
+                        // a registration that the drain below has not applied yet is a registration: it was made
+                        // before this data was dispatched, and the drain, which follows the dispatch, does not
+                        // signal data that a frame state wrote to the stream's queue (WebSocket over HTTP/2)
+                        AutoLocker al(sq_lock);
+                        registered = std::any_of(pending_stream_registrations.begin(),
+                            pending_stream_registrations.end(),
+                            [sid32](const std::pair<int32_t, StreamQueueInfo>& i) { return i.first == sid32; });
+                    }
                 }
                 if (registered) {
                     ASYNC_IO_TRACE("H2Client handleReading: signaling stream=%d\n", sid32);
@@ -1266,9 +1275,21 @@ void Http2ClientPollOperationPriv::drainStreamQueues(ExceptionSink* xsink) {
     releaseStreamQueueInfos(released, xsink);
 }
 
+#ifdef DEBUG
+// set by the dbg_h2_client_hold_stream_registrations() test hook; see qore_dbg_h2_client_hold_stream_registrations()
+static std::atomic<bool> dbg_hold_h2_client_stream_registrations{false};
+
+void qore_dbg_h2_client_hold_stream_registrations(bool hold) {
+    dbg_hold_h2_client_stream_registrations.store(hold, std::memory_order_release);
+}
+#endif
+
 void Http2ClientPollOperationPriv::drainStreamQueuesLocked(std::vector<StreamQueueInfo>& released,
         ExceptionSink* xsink) {
     // Apply pending registrations from app threads (under sq_lock briefly)
+#ifdef DEBUG
+    if (!dbg_hold_h2_client_stream_registrations.load(std::memory_order_acquire))
+#endif
     {
         AutoLocker al(sq_lock);
         for (auto& [sid, info] : pending_stream_registrations) {
