@@ -2029,7 +2029,7 @@ public class MssqlTable inherits SqlUtil::AbstractTable {
         /** SQL Server always validates partition switch constraints, so c validate may be omitted or set to
             @ref True "True"; @ref False "False" is rejected.
 
-            @since MssqlSqlUtilBase 3.0.0
+            @since MssqlSqlUtilBase 1.1
         */
         const MssqlPartitionExchangeOptions = AbstractTable::PartitionExchangeOptions;
 
@@ -3337,7 +3337,7 @@ tc.constraint_name, c1.ordinal_position", schema, name);
     }
 
     #! Returns True if the exception was raised because of a duplicate row / key error
-    /** @since MssqlSqlUtilBase 1.4.1
+    /** @since MssqlSqlUtilBase 1.0
     */
     private bool isDuplicateRowErrorImpl(hash<ExceptionInfo> ex) {
         return (ex.desc =~ /Cannot insert duplicate/);

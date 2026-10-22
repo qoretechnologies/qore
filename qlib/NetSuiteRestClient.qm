@@ -40,7 +40,7 @@
 %requires(reexport) ConnectionProvider >= 1.4
 
 module NetSuiteRestClient {
-    version = "1.0";
+    version = "1.1";
     desc = "user module for calling Oracle NetSuite REST API services";
     author = "David Nichols <david@qore.org>";
     url = "https://qore.org";
@@ -56,7 +56,7 @@ module NetSuiteRestClient {
 
     @section netsuiterestclientintro NetSuiteRestClient Introduction
 
-    The %YetSuiteRestClient module provides an API for calling Oracle NetSuite REST API services.
+    The %NetSuiteRestClient module provides an API for calling Oracle NetSuite REST API services.
 
     To use this module, use \c "%requires NetSuiteRestClient" in your code.
 
@@ -85,6 +85,12 @@ printf("%Y\n", ans.body);
     @endcode
 
     @section NetSuiterestclientrelnotes Release Notes
+
+    @subsection NetSuiterestclientv1_1 NetSuiteRestClient v1.1
+    - added the @ref NetSuiteRestClient::NetSuiteRestClientIo "NetSuiteRestClientIo" class, which makes the
+      module's requests with the async I/O of the @ref restclientiointro "RestClientIo" module;
+      @ref ConnectionProvider::AbstractConnection::getAsync() "getAsync()" of a
+      @ref NetSuiteRestClient::NetSuiteRestConnection "NetSuiteRestConnection" returns it
 
     @subsection NetSuiterestclientv1_0 NetSuiteRestClient v1.0
     - initial release

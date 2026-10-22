@@ -489,7 +489,7 @@ hash<WsMsgInfo> h = ws_read_message(sock);
         enough data to determine the frame size (need at least 2 bytes for header, plus extended length bytes
         if applicable)
 
-        @since WebSocketUtil 1.7
+        @since WebSocketUtil 1.6
     */
     public *int sub ws_get_frame_size(binary buf) {
         int len = buf.size();

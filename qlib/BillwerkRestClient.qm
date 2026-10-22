@@ -31,7 +31,7 @@
 %requires(reexport) ConnectionProvider >= 2.0
 
 module BillwerkRestClient {
-    version = "1.1";
+    version = "1.2";
     desc = "user module for calling billwerk.com REST services";
     author = "David Nichols <david.nichols@qoretechnologies.com>";
     url = "http://qore.org";
@@ -91,6 +91,12 @@ printf("Response body: %Y\n", response.body);
     @endcode
 
     @section Billwerkrestclientrelnotes Release Notes
+
+    @subsection billwerkrestclientv1_2 BillwerkRestClient v1.2
+    - added the @ref BillwerkRestClient::BillwerkRestClientIo "BillwerkRestClientIo" class, which makes the
+      module's requests with the async I/O of the @ref restclientiointro "RestClientIo" module;
+      @ref ConnectionProvider::AbstractConnection::getAsync() "getAsync()" of a
+      @ref BillwerkRestClient::BillwerkRestConnection "BillwerkRestConnection" returns it
 
     @subsection billwerkrestclientv1_1 BillwerkRestClient v1.1
     - implemented support for a data provider scheme cache and rich option information for connections

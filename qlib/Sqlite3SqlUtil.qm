@@ -1152,7 +1152,7 @@ string sql = pk.getTableConstraintSql();
         #! Returns @ref True if the driver requires a scale to support decimal values in numeric or decimal columns
         /** @return @ref True if the driver requires a scale to support decimal values in numeric or decimal columns
 
-            @since %Sqlite3SqlUtil 1.4.3
+            @since %Sqlite3SqlUtil 1.0
         */
         bool requiresScale() {
             return False;
@@ -1161,7 +1161,7 @@ string sql = pk.getTableConstraintSql();
         #! Returns the maximum precision for numeric or decimal columns
         /** @return -1 means, no maximum
 
-            @since %Sqlite3SqlUtil 1.4.3
+            @since %Sqlite3SqlUtil 1.0
         */
         int getMaximumPrecision() {
             return 0;
@@ -2128,7 +2128,7 @@ string sql = pk.getTableConstraintSql();
         }
 
         #! Returns True if the exception was raised because of a duplicate row / key error
-        /** @since Sqlite3SqlUtil 1.4.2
+        /** @since Sqlite3SqlUtil 1.0
         */
         private bool isDuplicateRowErrorImpl(hash<ExceptionInfo> ex) {
             # the sqlite3 driver reports SQLite's extended result code: a primary key or unique constraint

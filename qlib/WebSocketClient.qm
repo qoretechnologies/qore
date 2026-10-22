@@ -3407,7 +3407,7 @@ ws.setEventQueue();
         connection-error retry budget so the WebSocket path is no less resilient than any
         other request path through the manager.
 
-        @since WebSocketClient 2.6
+        @since WebSocketClient 2.5
     */
     private int getHcioMaxConnectRetries() {
         return http_opts.max_request_retries ?? HttpClientIo::DefaultMaxRequestRetries;

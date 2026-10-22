@@ -2813,7 +2813,7 @@ public class OracleTable inherits SqlUtil::AbstractTable {
               \c EXCLUDING \c INDEXES
             - \c update_indexes: append \c UPDATE \c INDEXES so usable global indexes are maintained
 
-            @since OracleSqlUtilBase 3.0.0
+            @since OracleSqlUtilBase 1.7
         */
         const OraclePartitionExchangeOptions = AbstractTable::PartitionExchangeOptions + {
             "including_indexes": Type::Boolean,

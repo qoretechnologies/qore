@@ -676,14 +676,14 @@ public namespace RestHandler {
 
             @param body_cancel the cancel closure, or @ref nothing to clear a previously-registered closure
 
-            @since RestHandler 1.8
+            @since RestHandler 1.6.7
         */
         setBodyCancel(*code<nothing()> body_cancel) {
             self.body_cancel = body_cancel;
         }
 
         #! returns the currently-registered inbound body cancel callback, or @ref nothing
-        /** @since RestHandler 1.8 */
+        /** @since RestHandler 1.6.7 */
         *code<nothing()> getBodyCancel() {
             return body_cancel;
         }
@@ -714,7 +714,7 @@ public namespace RestHandler {
 
             @see HttpServer::AbstractStreamRequest::wantsInteractiveStreaming()
 
-            @since RestHandler 1.8
+            @since RestHandler 1.6.7
         */
         bool wantsInteractiveStreaming() {
             return False;
@@ -730,7 +730,7 @@ public namespace RestHandler {
         #! Returns @ref True if a receive error has been detected
         /** @return @ref True if a receive error occurred (an exception was caught during recv processing)
 
-            @since RestHandler 1.8
+            @since RestHandler 1.6.7
         */
         bool hasError() {
             return exists ex;
@@ -823,7 +823,7 @@ public namespace RestHandler {
 
         #! delegates to the stream handler's wantsInteractiveStreaming() method
         /** @see AbstractRestStreamRequestHandler::wantsInteractiveStreaming()
-            @since RestHandler 1.8
+            @since RestHandler 1.6.7
         */
         bool wantsInteractiveStreaming() {
             return stream.wantsInteractiveStreaming();
@@ -836,7 +836,7 @@ public namespace RestHandler {
 
             @return @ref True if a receive error has been detected
 
-            @since RestHandler 1.8
+            @since RestHandler 1.6.7
         */
         bool hasRecvError() {
             return stream.hasError();
@@ -886,7 +886,7 @@ public namespace RestHandler {
 
             @param body_cancel the cancel closure, or @ref nothing to clear
 
-            @since RestHandler 1.8
+            @since RestHandler 1.6.7
         */
         setBodyCancel(*code<nothing()> body_cancel) {
             stream.setBodyCancel(body_cancel);
@@ -1306,7 +1306,7 @@ public namespace RestHandler {
 
             @return @ref True for HTTP/2/3 body streaming with Connect or DataStream content types
 
-            @since RestHandler 1.8
+            @since RestHandler 1.6.7
         */
         bool wantsBodyStreaming(hash<auto> cx, hash<auto> hdr) {
             if (!(cx."header-info".body_streaming ?? False)) {

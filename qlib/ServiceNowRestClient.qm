@@ -520,14 +520,14 @@ public class ServiceNowRestConnection inherits RestClient::RestConnection {
     }
 
     #! Returns the OAuth2 option name for this connection
-    /** @since %ServiceNowRestClient 2.0
+    /** @since %ServiceNowRestClient 1.2
     */
     string getOAuth2OptionName(string opt) {
         return OAuth2StandardToServiceNowOptionMap{opt} ?? opt;
     }
 
     #! Returns OAuth2 options in a standard format
-    /** @since %ServiceNowRestClient 2.0
+    /** @since %ServiceNowRestClient 1.2
     */
     hash<auto> getOAuth2Options() {
         hash<auto> rv;
@@ -560,7 +560,7 @@ public class ServiceNowRestConnection inherits RestClient::RestConnection {
     }
 
     #! Returns an async-I/O-capable connection object
-    /** @since ServiceNowRestClient 1.4
+    /** @since ServiceNowRestClient 1.3
     */
     private object getAsyncImpl(bool connect = True, *hash<auto> rtopts) {
         return new ServiceNowRestClientIo(getConnectionOptions(rtopts));

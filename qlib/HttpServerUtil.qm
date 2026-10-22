@@ -512,13 +512,13 @@ public hashdecl HttpResponseInfo {
 
     #! set to @ref True to indicate this is a streaming response (SSE or WebSocket)
     /** When this is set, the connection will be handled as a dedicated socket.
-        @since HttpServerUtil 2.1
+        @since HttpServerUtil 1.6
     */
     softbool streaming = False;
 
     #! the type of streaming connection: "sse" or "websocket"
     /** Only used when \c streaming is @ref True.
-        @since HttpServerUtil 2.1
+        @since HttpServerUtil 1.6
     */
     *string stream_type;
 
@@ -527,7 +527,7 @@ public hashdecl HttpResponseInfo {
         When @ref True, the server will not apply compression to the response body, even if the client accepts it and
         the body exceeds the compression threshold.
 
-        @since HttpServerUtil 2.1
+        @since HttpServerUtil 1.6
     */
     softbool no_content_encoding = False;
 
@@ -540,7 +540,7 @@ public hashdecl HttpResponseInfo {
         \c Content-Length header is given, the data is sent as-is and the connection is closed after the message
         body (see @ref HttpServer::http_send_streamed_response() "http_send_streamed_response()").
 
-        @since HttpServerUtil 2.1
+        @since HttpServerUtil 1.6
 
         @see send_timeout
     */
@@ -550,7 +550,7 @@ public hashdecl HttpResponseInfo {
     /** Used with @ref send_callback to set the send timeout for
         @ref Qore::Socket::sendHTTPResponseWithCallback() "sendHTTPResponseWithCallback()".
 
-        @since HttpServerUtil 2.1
+        @since HttpServerUtil 1.6
 
         @see send_callback
     */
@@ -644,13 +644,13 @@ public hashdecl HttpHandlerResponseInfo {
 
     #! set to @ref True to indicate this is a streaming response (SSE or WebSocket)
     /** When this is set, the connection will be handled as a dedicated socket.
-        @since HttpServerUtil 2.1
+        @since HttpServerUtil 1.6
     */
     softbool streaming = False;
 
     #! the type of streaming connection: "sse" or "websocket"
     /** Only used when \c streaming is @ref True.
-        @since HttpServerUtil 2.1
+        @since HttpServerUtil 1.6
     */
     *string stream_type;
 
@@ -659,7 +659,7 @@ public hashdecl HttpHandlerResponseInfo {
         When @ref True, the server will not apply gzip, deflate, brotli, zstd, or bzip2 compression to the response
         body, even if the client accepts it and the body exceeds the compression threshold.
 
-        @since HttpServerUtil 2.1
+        @since HttpServerUtil 1.6
     */
     softbool no_content_encoding = False;
 
@@ -672,7 +672,7 @@ public hashdecl HttpHandlerResponseInfo {
         \c Content-Length header is given, the data is sent as-is and the connection is closed after the message
         body (see @ref HttpServer::http_send_streamed_response() "http_send_streamed_response()").
 
-        @since HttpServerUtil 2.1
+        @since HttpServerUtil 1.6
 
         @see send_timeout
     */
@@ -682,7 +682,7 @@ public hashdecl HttpHandlerResponseInfo {
     /** Used with @ref send_callback to set the send timeout for
         @ref Qore::Socket::sendHTTPResponseWithCallback() "sendHTTPResponseWithCallback()".
 
-        @since HttpServerUtil 2.1
+        @since HttpServerUtil 1.6
 
         @see send_callback
     */
@@ -2104,7 +2104,7 @@ public class AbstractStreamRequest {
 
         @return @ref True if the server should apply content encoding, @ref False if the handler manages its own encoding
 
-        @since HttpServerUtil 2.1
+        @since HttpServerUtil 1.6
     */
     bool needsContentEncoding() {
         return True;
@@ -2115,7 +2115,7 @@ public class AbstractStreamRequest {
 
         @return @ref True if recv processing detected an error, @ref False otherwise
 
-        @since HttpServerUtil 2.2
+        @since HttpServerUtil 1.6
     */
     bool hasRecvError() {
         return False;
@@ -2153,7 +2153,7 @@ public class AbstractStreamRequest {
         @return @ref True "True" to drive an interactive bidirectional stream on HTTP/2 or HTTP/3,
         @ref False "False" (the default) to use the legacy recv-all-then-send model
 
-        @since HttpServerUtil 2.4
+        @since HttpServerUtil 1.6
     */
     bool wantsInteractiveStreaming() {
         return False;
@@ -2176,7 +2176,7 @@ public class AbstractStreamRequest {
 
         @param body_cancel the cancel closure, or @ref nothing to clear a previously-registered closure
 
-        @since HttpServerUtil 2.3
+        @since HttpServerUtil 1.6
     */
     setBodyCancel(*code<nothing()> body_cancel) {
     }
@@ -2504,7 +2504,7 @@ public class AbstractStreamRequest {
         @return a response hash with \c reply_sent set so the server leaves the (now half-closed)
         stream alone
 
-        @since HttpServerUtil 2.4
+        @since HttpServerUtil 1.6
     */
     private hash<HttpHandlerResponseInfo> handleInteractiveStream() {
         bool http3 = cx."header-info".http3 ?? False;
@@ -2818,7 +2818,7 @@ private logChunk(bool send, int size) {
     @note When the callback returns a hash (HTTP chunked trailers), it is treated as end-of-stream
     since the @ref Qore::InputStream API has no way to express HTTP trailers.
 
-    @since HttpServerUtil 2.1
+    @since HttpServerUtil 1.6
 */
 public class CallbackInputStream inherits InputStream {
     private {
@@ -2969,7 +2969,7 @@ public class CallbackInputStream inherits InputStream {
     releases the affinity and decrements the @c done Counter so callers can
     wait for completion.
 
-    @since HttpServerUtil 2.3
+    @since HttpServerUtil 1.6
 */
 public class StreamResponseProducer {
     public {
@@ -3349,7 +3349,7 @@ public class AbstractHttpRequestHandler {
         @see @ref Qore::Socket::readQuicStreamDataBlock()
         @see HttpConnectionInfo::header_info::register_body_queue
 
-        @since HttpServerUtil 2.1
+        @since HttpServerUtil 1.6
     */
     bool wantsBodyStreaming(hash<auto> cx, hash<auto> hdr) {
         return False;
@@ -3437,7 +3437,7 @@ public class AbstractHttpRequestHandler {
         the idle TTL expires; @ref False "False" (the default) to release the
         dedicated thread as soon as persistence clears
 
-        @since HttpServerUtil 2.1
+        @since HttpServerUtil 1.6
     */
     bool keepPersistentConnectionDedicated() {
         return False;
@@ -3463,7 +3463,7 @@ public class AbstractHttpRequestHandler {
 
         @return @ref True "True" if this request ends the persistent session
 
-        @since HttpServerUtil 2.1
+        @since HttpServerUtil 1.6
     */
     bool isPersistentSessionEndRequest(hash<auto> hdr) {
         return False;

@@ -173,7 +173,7 @@ public class AbstractDataStreamRequestHandler inherits RestHandler::AbstractRest
         code<auto()> scb;
 
         #! the interactive send callback (Connect mode, lazily created); used when @ref wantsInteractiveStreaming() is @ref True "True"
-        /** @since DataStreamRequestHandler 1.3
+        /** @since DataStreamRequestHandler 1.2
         */
         *code<auto()> interactive_scb;
 
@@ -202,7 +202,7 @@ public class AbstractDataStreamRequestHandler inherits RestHandler::AbstractRest
             reports back to the client via the DataStream-Content-Encoding
             header. Equals @c cx.encoding for Connect mode and for HTTP/1.x.
 
-            @since DataStreamRequestHandler 1.3
+            @since DataStreamRequestHandler 1.2
         */
         *string effective_encoding;
     }
@@ -258,7 +258,7 @@ public class AbstractDataStreamRequestHandler inherits RestHandler::AbstractRest
     /** Multiplexed transports have no chunked transfer-encoding, so the server
         must avoid per-record content-encoding for the DataStream v1 protocol.
 
-        @since DataStreamRequestHandler 1.3
+        @since DataStreamRequestHandler 1.2
     */
     private bool isMultiplexedTransport() {
         *string hv = cx.hdr.http_version;
@@ -486,7 +486,7 @@ public class AbstractDataStreamRequestHandler inherits RestHandler::AbstractRest
 
         @see HttpServer::AbstractStreamRequest::wantsInteractiveStreaming()
 
-        @since DataStreamRequestHandler 1.3
+        @since DataStreamRequestHandler 1.2
     */
     bool wantsInteractiveStreaming() {
         return False;
@@ -496,7 +496,7 @@ public class AbstractDataStreamRequestHandler inherits RestHandler::AbstractRest
     /** Used by the interactive Connect send callback to decide when the terminal EndStreamResponse
         frame may be emitted; the stream is only closed after the client half-closes it.
 
-        @since DataStreamRequestHandler 1.3
+        @since DataStreamRequestHandler 1.2
     */
     private bool isInteractiveStreamEnded() {
         return recv_done;

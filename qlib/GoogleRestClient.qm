@@ -90,6 +90,15 @@ printf("%Y\n", ans.body);
     @section Googlerestclientrelnotes Release Notes
 
     @subsection Googlerestclientv1_0_1 GoogleRestClient v1.0.1
+    - added the @ref GoogleRestClient::GoogleRestClientIo "GoogleRestClientIo" class, which makes the module's
+      requests with the async I/O of the @ref restclientiointro "RestClientIo" module;
+      @ref ConnectionProvider::AbstractConnection::getAsync() "getAsync()" of a
+      @ref GoogleRestClient::GoogleRestConnection "GoogleRestConnection" returns it
+    - @ref GoogleRestClient::GoogleDriveRestConnection "GoogleDriveRestConnection" transfers files of file locations
+      through Google Drive itself (see
+      @ref ConnectionProvider::AbstractConnection::getFileLocationHandler() "getFileLocationHandler()"): an upload is
+      streamed with a resumable upload instead of being held in memory, and a download is the response body instead
+      of a base64-encoded JSON field
     - fixed platform-generated connection URLs by declaring
       @ref GoogleRestClient::GoogleRestConnection::DefaultConnectionUrl "GoogleRestConnection::DefaultConnectionUrl"
 
@@ -423,7 +432,7 @@ public class GoogleRestConnection inherits RestClient::RestConnection {
     }
 
     #! Returns an async-I/O-capable connection object
-    /** @since GoogleRestClient 1.1
+    /** @since GoogleRestClient 1.0.1
     */
     private object getAsyncImpl(bool connect = True, *hash<auto> rtopts) {
         return new GoogleRestClientIo(getConnectionOptions(rtopts));
@@ -675,7 +684,7 @@ public class GoogleDriveRestConnection inherits GoogleRestConnection {
 
         @see @ref getFileLocationHandlerImpl()
 
-        @since %GoogleRestClient 2.1
+        @since %GoogleRestClient 1.0.1
     */
     private bool supportsFileLocationsImpl() {
         return True;
@@ -688,7 +697,7 @@ public class GoogleDriveRestConnection inherits GoogleRestConnection {
         @note The data provider module is loaded dynamically to avoid a circular module dependency, exactly as
         @ref getDataProvider() does
 
-        @since %GoogleRestClient 2.1
+        @since %GoogleRestClient 1.0.1
     */
     private object getFileLocationHandlerImpl() {
         load_module("GoogleDriveDataProvider");
