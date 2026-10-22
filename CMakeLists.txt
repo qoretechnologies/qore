@@ -487,7 +487,6 @@ set(QORE_DOX_TMPL_SRC
     doxygen/lang/255_keywords.dox.tmpl
     doxygen/lang/258_common_pitfalls.dox.tmpl
     doxygen/lang/900_release_notes.dox.tmpl
-    doxygen/lang/Doxyfile.tmpl
 )
 
 # qore interpreter
