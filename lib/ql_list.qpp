@@ -197,7 +197,7 @@ list<auto> nl = sort(l, sort_func);
     - sort_descending_stable(list, code)
     - sort_descending(list, code)
 
-    @since %Qore 2.1 for typed code parameter
+    @since %Qore 3.0 for typed code parameter
 */
 list<auto> sort(list<auto> values, code<int(auto, auto)> comparator) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
    return values->sort(comparator, xsink);
@@ -396,7 +396,7 @@ list<auto> nl = sort_descending(l, sort_func);
     - sort(list, code)
 
     @since %Qore 0.8.12 as a replacement for deprecated camel-case sortDescending()
-    @since %Qore 2.1 for typed code parameter
+    @since %Qore 3.0 for typed code parameter
 */
 list<auto> sort_descending(list<auto> values, code<int(auto, auto)> comparator) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
    return values->sortDescending(comparator, xsink);
@@ -577,7 +577,7 @@ list<auto> nl = sort_stable(l, sort_func);
     - sort_descending_stable(list, code)
 
     @since %Qore 0.8.12 as a replacement for deprecated camel-case sortStable()
-    @since %Qore 2.1 for typed code parameter
+    @since %Qore 3.0 for typed code parameter
 */
 list<auto> sort_stable(list<auto> values, code<int(auto, auto)> comparator) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
    return values->sortStable(comparator, xsink);
@@ -768,7 +768,7 @@ list<auto> nl = sort_descending_stable(l, sort_func);
     - sort(list, code)
 
     @since %Qore 0.8.12 as a replacement for deprecated camel-case sortDescendingStable()
-    @since %Qore 2.1 for typed code parameter
+    @since %Qore 3.0 for typed code parameter
 */
 list<auto> sort_descending_stable(list<auto> values, code<int(auto, auto)> comparator) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
    return values->sortDescendingStable(comparator, xsink);
@@ -852,7 +852,7 @@ auto v = min(l, cmp_func);
 
     @see max(list, code)
 
-    @since %Qore 2.1 for typed code parameter
+    @since %Qore 3.0 for typed code parameter
 */
 auto min(list<auto> values, code<int(auto, auto)> comparator) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
    return values->min(comparator, xsink);
@@ -955,7 +955,7 @@ auto v = max(l, cmp_func);
 
     @see min(list, code)
 
-    @since %Qore 2.1 for typed code parameter
+    @since %Qore 3.0 for typed code parameter
 */
 auto max(list<auto> values, code<int(auto, auto)> comparator) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
    return values->max(comparator, xsink);

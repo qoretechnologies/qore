@@ -46,7 +46,7 @@ class ExceptionSink;
 class QoreEnumDecl;
 
 //! Represents an enum member with name and value
-/** @since %Qore 2.1
+/** @since %Qore 3.0
 */
 class QoreEnumMember {
     friend class qore_enum_decl_private;
@@ -69,7 +69,7 @@ private:
 };
 
 //! Enum declaration
-/** @since %Qore 2.1
+/** @since %Qore 3.0
 */
 class QoreEnumDecl {
     friend class qore_enum_decl_private;
@@ -144,7 +144,7 @@ DLLEXPORT extern const QoreEnumDecl* enumHTTP3Mode;
 DLLEXPORT extern const QoreEnumDecl* enumExecMode;
 
 //! allows for temporary storage of a QoreEnumDecl pointer
-/** @since %Qore 2.1
+/** @since %Qore 3.0
 */
 class QoreEnumDeclHolder {
     friend class qore_enum_decl_private;
@@ -184,7 +184,7 @@ private:
 };
 
 //! Iterator for enum members
-/** @since %Qore 2.1
+/** @since %Qore 3.0
 */
 class QoreEnumMemberIterator {
 public:

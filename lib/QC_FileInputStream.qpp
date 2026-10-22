@@ -136,7 +136,7 @@ int FileInputStream::peek() {
 /**
     @return @ref True
 
-    @since %Qore 2.2
+    @since %Qore 3.0
 */
 bool FileInputStream::supportsNonBlockingIo() [flags=CONSTANT] {
     return true;
@@ -146,7 +146,7 @@ bool FileInputStream::supportsNonBlockingIo() [flags=CONSTANT] {
 /**
     @return the file descriptor
 
-    @since %Qore 2.2
+    @since %Qore 3.0
 */
 int FileInputStream::getPollableDescriptor() [flags=CONSTANT] {
     return is->getPollableDescriptor();
@@ -162,7 +162,7 @@ int FileInputStream::getPollableDescriptor() [flags=CONSTANT] {
     @throw FILE-READ-ERROR if an I/O error occurs
     @throw STREAM-THREAD-ERROR this exception is thrown if this method is called from any thread other than the thread that created the object
 
-    @since %Qore 2.2
+    @since %Qore 3.0
 */
 *binary FileInputStream::readNonBlock(int limit) [flags=NAMED_ARGS] {
     return is->readNonBlockHelper(limit, xsink);
@@ -183,7 +183,7 @@ int FileInputStream::getPollableDescriptor() [flags=CONSTANT] {
     @throw THREAD-CANCELLED the thread was cancelled during the wait
     @throw PROGRAM-INTERRUPTED the thread's Program was interrupted during the wait
 
-    @since %Qore 2.2
+    @since %Qore 3.0
 */
 *binary FileInputStream::readWithTimeout(int limit, int timeout_ms) [flags=NAMED_ARGS] {
     return is->readWithTimeoutHelper(limit, timeout_ms, xsink);

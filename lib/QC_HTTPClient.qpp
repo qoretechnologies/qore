@@ -358,7 +358,7 @@ printf("%s\n", info."effective-url");    # http://127.0.0.1:8080/base/send
     - @ref isHttp2Active()
     - @ref isHttp2Enabled()
 
-    @since %Qore 2.2
+    @since %Qore 3.0
 
     @section httpclient_http3 HTTP/3 Support
 
@@ -689,7 +689,7 @@ if (httpclient.isHttp2Enabled()) {
 }
     @endcode
 
-    @since %Qore 2.2
+    @since %Qore 3.0
 */
 bool HTTPClient::isHttp2Enabled() [flags=CONSTANT] {
     return client->isHttp2Enabled();
@@ -708,7 +708,7 @@ httpclient.setHttp2Enabled(True);
 
     @note HTTP/2 requires TLS; enabling HTTP/2 on a non-TLS connection has no effect
 
-    @since %Qore 2.2
+    @since %Qore 3.0
 */
 nothing HTTPClient::setHttp2Enabled(softbool enabled = True) [flags=NAMED_ARGS] {
     client->setHttp2Enabled(enabled);
@@ -741,7 +741,7 @@ httpclient.setHttp2Mode("h2c");
 
     @throw HTTP2-MODE-ERROR invalid mode value, or the mode contains a NUL character
 
-    @since %Qore 2.2
+    @since %Qore 3.0
 
     @see getHttp2Mode()
     @see setHTTPVersion()
@@ -796,7 +796,7 @@ printf("HTTP/2 mode: %s\n", mode);
 
     @note This is a convenience method; the same information can be obtained from getHTTPVersion()
 
-    @since %Qore 2.2
+    @since %Qore 3.0
 
     @see setHttp2Mode()
     @see getHTTPVersion()
@@ -828,7 +828,7 @@ if (httpclient.isHttp2Active()) {
 }
     @endcode
 
-    @since %Qore 2.2
+    @since %Qore 3.0
 */
 bool HTTPClient::isHttp2Active() [flags=CONSTANT] {
     return client->isHttp2Active();
@@ -853,7 +853,7 @@ if (settings) {
 }
     @endcode
 
-    @since %Qore 2.2
+    @since %Qore 3.0
 */
 *hash<auto> HTTPClient::getHttp2Settings() [flags=CONSTANT] {
     return client->getHttp2Settings();
@@ -870,7 +870,7 @@ httpclient.setHttp2Settings({
 });
     @endcode
 
-    @since %Qore 2.2
+    @since %Qore 3.0
 */
 nothing HTTPClient::setHttp2Settings(*hash<auto> settings) [flags=NAMED_ARGS] {
     client->setHttp2Settings(settings, xsink);
@@ -890,7 +890,7 @@ httpclient.setHttp2StreamPriority(5, 32, 3);
 
     @throw HTTP2-ERROR if HTTP/2 is not active or the operation fails
 
-    @since %Qore 2.2
+    @since %Qore 3.0
 */
 nothing HTTPClient::setHttp2StreamPriority(int stream_id, int weight = 16, int dependency = 0,
         softbool exclusive = False) [flags=NAMED_ARGS] {
@@ -928,7 +928,7 @@ if (resp.status_code == 200) {
     @note This method is used for WebSocket over HTTP/2 (RFC 8441) and other protocols
     that use extended CONNECT with the :protocol pseudo-header
 
-    @since %Qore 2.2
+    @since %Qore 3.0
 */
 *hash<auto> HTTPClient::sendHttp2Connect(string path, *hash<auto> headers, string protocol,
         *reference<hash<auto>> info) [flags=NAMED_ARGS] {
@@ -981,7 +981,7 @@ if (resp.status_code == 200) {
     @note This method is used for WebSocket over HTTP/3 (RFC 9220) and other protocols
     that use extended CONNECT with the :protocol pseudo-header
 
-    @since %Qore 2.2
+    @since %Qore 3.0
 */
 *hash<auto> HTTPClient::sendHttp3Connect(string path, *hash<auto> headers, string protocol,
         *reference<hash<auto>> info) [flags=NAMED_ARGS] {
@@ -1016,7 +1016,7 @@ httpclient.sendHttp2StreamData(stream_id, frame);
 
     @note This method is used for bidirectional streaming protocols like WebSocket over HTTP/2
 
-    @since %Qore 2.2
+    @since %Qore 3.0
 */
 nothing HTTPClient::sendHttp2StreamData(int stream_id, *binary data, softbool end_stream = False,
         *int timeout_ms) [flags=NAMED_ARGS] {
@@ -1044,7 +1044,7 @@ if (data) {
 
     @note This method is used for bidirectional streaming protocols like WebSocket over HTTP/2
 
-    @since %Qore 2.2
+    @since %Qore 3.0
 */
 *binary HTTPClient::readHttp2StreamData(int stream_id, *int timeout_ms) [flags=NAMED_ARGS] {
     int timeout = timeout_ms ? (int)timeout_ms : client->getTimeout();
@@ -1068,7 +1068,7 @@ httpclient.sendHttp3StreamData(stream_id, frame);
 
     @note This method is used for bidirectional streaming protocols like WebSocket over HTTP/3
 
-    @since %Qore 2.2
+    @since %Qore 3.0
 */
 nothing HTTPClient::sendHttp3StreamData(int stream_id, *binary data, softbool end_stream = False,
         *int timeout_ms) [flags=NAMED_ARGS] {
@@ -1096,7 +1096,7 @@ if (data) {
 
     @note This method is used for bidirectional streaming protocols like WebSocket over HTTP/3
 
-    @since %Qore 2.2
+    @since %Qore 3.0
 */
 *binary HTTPClient::readHttp3StreamData(int stream_id, *int timeout_ms) [flags=NAMED_ARGS] {
     int timeout = timeout_ms ? (int)timeout_ms : client->getTimeout();
@@ -1115,7 +1115,7 @@ if (stream_id > 0) {
 }
     @endcode
 
-    @since %Qore 2.2
+    @since %Qore 3.0
 */
 int HTTPClient::getHttp2StreamId() [flags=CONSTANT] {
     return client->getHttp2StreamId();
@@ -1218,7 +1218,7 @@ string proto = httpclient.getHttpVersion();
 printf("Using protocol: %s\n", proto);
     @endcode
 
-    @since %Qore 2.2
+    @since %Qore 3.0
 */
 string HTTPClient::getHttpVersion() [flags=CONSTANT] {
     return client->getHttpVersion();

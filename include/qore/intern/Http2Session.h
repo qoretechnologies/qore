@@ -335,7 +335,7 @@ public:
         @param xsink Exception sink for error reporting
         @return 0 on success, -1 on error
 
-        @since Qore 2.2
+        @since Qore 3.0
     */
     DLLLOCAL int submitResponseStreaming(int32_t stream_id, int status_code,
         const qore_http_header_pairs_t& headers, ExceptionSink* xsink);
@@ -381,7 +381,7 @@ public:
         @param xsink Exception sink for error reporting
         @return 0 on success, -1 on error
 
-        @since Qore 2.2
+        @since Qore 3.0
     */
     DLLLOCAL int submitPriority(int32_t stream_id, int32_t dependency, int32_t weight,
         bool exclusive, ExceptionSink* xsink);
@@ -484,7 +484,7 @@ public:
     /** This is a lightweight check (no I/O, no SSL operations) that checks internal counters.
         Used by isHttp2DataAvailable() to detect buffered data without holding the socket lock.
         @return true if there is buffered data available for reading
-        @since Qore 2.1
+        @since Qore 3.0
     */
     DLLLOCAL bool hasSocketBufferedData() const;
 

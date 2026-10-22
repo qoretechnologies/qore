@@ -1164,7 +1164,7 @@ DLLEXPORT QoreValue qore_get_module_option(std::string mod, std::string opt);
     @param key the registry key
     @param val the value to store; must be already referenced for the assignment; NOTHING removes the key
 
-    @since %Qore 2.2
+    @since %Qore 3.0
 */
 DLLEXPORT void qore_set_app_registry(std::string key, QoreValue val);
 
@@ -1173,7 +1173,7 @@ DLLEXPORT void qore_set_app_registry(std::string key, QoreValue val);
 
     @return the referenced value; if a value is returned here, it must be dereferenced
 
-    @since %Qore 2.2
+    @since %Qore 3.0
 */
 DLLEXPORT QoreValue qore_get_app_registry(std::string key);
 
@@ -1220,7 +1220,7 @@ DLLEXPORT size_t q_thread_stack_used();
 
     @note this function does nothing if the Qore library was not compiled with stack management support
 
-    @since %Qore 2.1
+    @since %Qore 3.0
 */
 DLLEXPORT int q_check_stack(ExceptionSink* xsink);
 

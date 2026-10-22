@@ -12303,7 +12303,7 @@ string sql = table.getAlignSqlString(table2);
         @param data the hash of column data (column name → values; lists for array columns, scalars for constants)
         @return the transformed bind arguments as a flat list
 
-        @since %Qore 2.1
+        @since %Qore 3.0
     */
     list<auto> transformBulkBindArgs(hash<auto> data) {
         return data.values();

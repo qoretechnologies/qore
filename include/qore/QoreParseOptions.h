@@ -48,7 +48,7 @@
 
     @note There is intentionally no operator int64() to prevent silent loss of extended bits.
 
-    @since %Qore 2.1
+    @since %Qore 3.0
 */
 class QoreParseOptions {
 public:
@@ -162,22 +162,22 @@ public:
     }
 
     //! extended option: disallow class definitions (bit 64)
-    /** @since %Qore 2.1
+    /** @since %Qore 3.0
     */
     DLLEXPORT static const QoreParseOptions NO_CLASS_DEFS;
 
     //! extended option: disallow constant definitions (bit 65)
-    /** @since %Qore 2.1
+    /** @since %Qore 3.0
     */
     DLLEXPORT static const QoreParseOptions NO_CONSTANT_DEFS;
 
     //! extended option: disallow namespace definitions (bit 66)
-    /** @since %Qore 2.1
+    /** @since %Qore 3.0
     */
     DLLEXPORT static const QoreParseOptions NO_NAMESPACE_DEFS;
 
     //! extended option: disallow the 'new' keyword (bit 67)
-    /** @since %Qore 2.1
+    /** @since %Qore 3.0
     */
     DLLEXPORT static const QoreParseOptions NO_NEW;
 

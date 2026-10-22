@@ -84,6 +84,7 @@ public:
         @param po new parse options for the new namespace
 
         @since %Qore 1.0
+        @since %Qore 3.0 \a po is a QoreParseOptions object; earlier versions took an \c int64 parse option mask
     */
     DLLEXPORT QoreNamespace(const QoreNamespace& old, const QoreParseOptions& po);
 
@@ -298,7 +299,7 @@ public:
     DLLEXPORT const TypedHashDecl* findLocalTypedHash(const char* name) const;
 
     //! find an enum in the current namespace; returns nullptr if not found
-    /** @since %Qore 2.1
+    /** @since %Qore 3.0
     */
     DLLEXPORT const QoreEnumDecl* findLocalEnum(const char* name) const;
 
@@ -726,7 +727,7 @@ private:
 };
 
 //! allows enums in a namespace to be iterated
-/** @since %Qore 2.1
+/** @since %Qore 3.0
 */
 class QoreNamespaceEnumIterator {
 public:

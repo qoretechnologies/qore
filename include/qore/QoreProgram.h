@@ -804,7 +804,7 @@ public:
     DLLEXPORT const TypedHashDecl* findHashDecl(const char* path, const QoreNamespace*& pns) const;
 
     //! search for the given enum in the program; can be a simple enum name or a namespace-prefixed path (ex: "NamespaceName::EnumName")
-    /** @since %Qore 2.1
+    /** @since %Qore 3.0
     */
     DLLEXPORT const QoreEnumDecl* findEnum(const char* path, const QoreNamespace*& pns) const;
 
@@ -1060,7 +1060,7 @@ public:
         (calls ref()), and releases it when the program is destroyed or a new
         sandbox manager is set
 
-        @since %Qore 2.1
+        @since %Qore 3.0
     */
     DLLEXPORT void setSandboxManager(QoreSandboxManager* sm);
 

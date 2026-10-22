@@ -2655,7 +2655,7 @@ AbstractPollOperation<auto> Socket::startPollSend(binary data) [flags=NAMED_ARGS
 
     @see @ref Socket::sendHTTPResponse()
 
-    @since %Qore 2.2
+    @since %Qore 3.0
 */
 AbstractPollOperation<auto> Socket::startPollSendHttpResponse(int status_code, string status_description,
         string http_version, *hash<auto> headers, *data body) [flags=NAMED_ARGS] {
@@ -6398,7 +6398,7 @@ if (proto == "h2") {
 
     @return The negotiated protocol string, or @ref nothing if no ALPN protocol was negotiated or the connection is not encrypted
 
-    @since %Qore 2.2
+    @since %Qore 3.0
 */
 *string Socket::getAlpnProtocol() [flags=CONSTANT] {
     return s->getAlpnProtocol(xsink);
@@ -6414,7 +6414,7 @@ if (sock.isHttp2()) {
 
     @return @ref True if the connection is using HTTP/2, @ref False otherwise
 
-    @since %Qore 2.2
+    @since %Qore 3.0
 */
 bool Socket::isHttp2() [flags=CONSTANT] {
     return s->isHttp2(xsink);
@@ -7072,7 +7072,7 @@ int Socket::getConnectionId() [flags=CONSTANT] {
 
     @param max_body_size maximum body size in bytes; 0 means unlimited
 
-    @since %Qore 2.1
+    @since %Qore 3.0
 */
 Socket::setMaxChunkedBodySize(int max_body_size) [flags=NAMED_ARGS] {
     s->setMaxChunkedBodySize(max_body_size);
@@ -7081,7 +7081,7 @@ Socket::setMaxChunkedBodySize(int max_body_size) [flags=NAMED_ARGS] {
 //! Returns the maximum body size for chunked HTTP reads
 /** @return the maximum body size in bytes; 0 means unlimited
 
-    @since %Qore 2.1
+    @since %Qore 3.0
 */
 int Socket::getMaxChunkedBodySize() [flags=CONSTANT] {
     return s->getMaxChunkedBodySize();
@@ -7093,7 +7093,7 @@ int Socket::getMaxChunkedBodySize() [flags=CONSTANT] {
 
     @param max_request_body_size maximum body size in bytes; 0 means unlimited
 
-    @since %Qore 2.1
+    @since %Qore 3.0
 */
 Socket::setHttp2MaxRequestBodySize(int max_request_body_size) [flags=NAMED_ARGS] {
     s->setHttp2MaxRequestBodySize(max_request_body_size);
@@ -7102,7 +7102,7 @@ Socket::setHttp2MaxRequestBodySize(int max_request_body_size) [flags=NAMED_ARGS]
 //! Returns the maximum request body size for HTTP/2 streams
 /** @return the maximum body size in bytes; 0 means unlimited
 
-    @since %Qore 2.1
+    @since %Qore 3.0
 */
 int Socket::getHttp2MaxRequestBodySize() [flags=CONSTANT] {
     return s->getHttp2MaxRequestBodySize();
@@ -7239,7 +7239,7 @@ static list<hash<SocketPollInfo>> Socket::poll(
 
     @see isHttp2()
 
-    @since %Qore 2.1 (headers_only option added in %Qore 3.0)
+    @since %Qore 3.0 (headers_only option added in %Qore 3.0)
 */
 AbstractPollOperation<auto> Socket::startPollReadHttp2Request(*hash<auto> options) [flags=NAMED_ARGS] {
     s->ref();
@@ -7295,7 +7295,7 @@ AbstractPollOperation<auto> Socket::startPollReadHttp2Request(*hash<auto> option
     @throw SOCKET-NOT-OPEN The socket is not connected
     @throw HTTP2-ERROR HTTP/2 response submission failed
 
-    @since %Qore 2.1
+    @since %Qore 3.0
 */
 AbstractPollOperation<auto> Socket::startPollSendHttp2Response(int stream_id, int status_code, *hash<auto> headers,
         *data body) [flags=NAMED_ARGS] {
@@ -7344,7 +7344,7 @@ AbstractPollOperation<auto> Socket::startPollSendHttp2Response(int stream_id, in
     @throw SOCKET-NOT-OPEN The socket is not connected
     @throw HTTP2-ERROR if no HTTP/2 session is available
 
-    @since %Qore 2.2
+    @since %Qore 3.0
 */
 AbstractPollOperation<auto> Socket::startPollSendHttp2StreamingResponse(int stream_id, int status_code,
         *hash<auto> headers, InputStream[InputStream] body, *int chunk_size) [flags=NAMED_ARGS] {
@@ -7412,7 +7412,7 @@ AbstractPollOperation<auto> Socket::startPollSendHttp2StreamingResponse(int stre
     @note Server Push can be disabled by clients; check if the push was successful by verifying
     the return value is positive.
 
-    @since %Qore 2.2
+    @since %Qore 3.0
 */
 int Socket::submitHttp2PushPromise(int stream_id, string path, *hash<auto> headers) [flags=NAMED_ARGS] {
     // the path is sent as a C string, which would be cut at a NUL character
@@ -7435,7 +7435,7 @@ int Socket::submitHttp2PushPromise(int stream_id, string path, *hash<auto> heade
 
     @throw HTTP2-ERROR no HTTP/2 session active or submission failed
 
-    @since %Qore 2.2
+    @since %Qore 3.0
 */
 nothing Socket::submitHttp2Response(int stream_id, int status_code, *hash<auto> headers,
         *data body) [flags=NAMED_ARGS] {

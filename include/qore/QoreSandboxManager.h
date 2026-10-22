@@ -106,7 +106,7 @@ class QoreHashNode;
     fsm.addDeniedPath("/home/sandbox/secrets", xsink);
     @endcode
 
-    @since Qore 2.1
+    @since Qore 3.0
 */
 class QoreFilesystemSecurityManager : public AbstractPrivateData {
 public:
@@ -263,7 +263,7 @@ private:
     nsm.addAllowedPort(443, QSEC_NET_TCP);
     @endcode
 
-    @since Qore 2.1
+    @since Qore 3.0
 */
 class QoreNetworkSecurityManager : public AbstractPrivateData {
 public:
@@ -481,7 +481,7 @@ private:
     pgm->setSandboxManager(&sm);
     @endcode
 
-    @since Qore 2.1
+    @since Qore 3.0
 */
 class QoreSandboxManager : public AbstractPrivateData {
 public:
@@ -782,7 +782,7 @@ private:
     }
     @endcode
 
-    @since Qore 2.1
+    @since Qore 3.0
 */
 class DLLEXPORT QoreSandboxManagerHelper {
 public:
@@ -803,7 +803,7 @@ public:
         default behavior of the no-argument constructor) for anything else, notably
         interrupt/force-terminate checks, which must never be suppressed by a barrier
 
-        @since Qore 2.2
+        @since Qore 3.0
     */
     QoreSandboxManagerHelper(Purpose purpose);
 
@@ -875,7 +875,7 @@ private:
 
     @see design/module-sandboxing-audit-guide.md
 
-    @since Qore 2.2
+    @since Qore 3.0
 */
 class DLLEXPORT QoreSandboxPolicyBarrierHelper {
 public:

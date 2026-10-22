@@ -33,7 +33,7 @@ public namespace HttpServerAsyncIo {
     The stream is kept open (no END_STREAM flag) until explicitly closed,
     allowing the server to send events incrementally.
 
-    @since Qore 2.1
+    @since Qore 3.0
 */
 public class Http3SseStream inherits AbstractSseConnection {
     private {

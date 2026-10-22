@@ -419,7 +419,7 @@ public:
         @param sourceTypeInfo the type of the source expression (e.g., hash<string, int>)
         @return the element type info (QoreTypeInfo pointer), or nullptr if unknown
 
-        @since Qore 2.1
+        @since Qore 3.0
     */
     DLLLOCAL static const QoreTypeInfo* getIteratorElementType(const QoreClass* iteratorClass,
         const QoreTypeInfo* sourceTypeInfo);
@@ -432,7 +432,7 @@ public:
         @param iteratorTypeInfo the type info of the iterator expression
         @return the implicit argument type for the iterator, or nullptr if unknown
 
-        @since Qore 2.1
+        @since Qore 3.0
     */
     DLLLOCAL static const QoreTypeInfo* getImplicitArgTypeForIterator(const QoreValue& iteratorExpr,
         const QoreTypeInfo* iteratorTypeInfo);
@@ -441,7 +441,7 @@ public:
     /** @param valueType the type for the "value" member
         @return the KeyValueInfo type with the specified value type
 
-        @since Qore 2.1
+        @since Qore 3.0
     */
     DLLLOCAL static const QoreTypeInfo* getHashPairType(const QoreTypeInfo* valueType);
 
@@ -875,7 +875,7 @@ public:
         those are what type narrowing produces; nothing/null represent the absence of a value
         rather than a narrowed type.
 
-        @since %Qore 2.1
+        @since %Qore 3.0
     */
     DLLLOCAL bool isSimpleTypeNarrowed() const {
         return this == bigIntTypeInfo || this == stringTypeInfo || this == floatTypeInfo

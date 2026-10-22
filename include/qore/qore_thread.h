@@ -474,7 +474,7 @@ DLLEXPORT int q_remove_thread_local_data(int key, q_user_tld& data, bool run_des
     The target thread receives a \c THREAD-CANCELLED exception at the next cancellation point
     (loop iteration, blocking wait, sleep, I/O operation).
 
-    @since %Qore 2.2
+    @since %Qore 3.0
 */
 ///@{
 
@@ -488,7 +488,7 @@ DLLEXPORT int q_remove_thread_local_data(int key, q_user_tld& data, bool run_des
 
     @return true if cancelled/interrupted (exception raised), false otherwise
 
-    @since %Qore 2.2
+    @since %Qore 3.0
 */
 DLLEXPORT bool qore_check_cancel(ExceptionSink* xsink, const char* operation = "operation");
 
@@ -530,7 +530,7 @@ DLLEXPORT bool qore_check_io_interrupt(ExceptionSink* xsink, const char* operati
 
     @return 0 if the request was delivered, -1 if the thread was not found or not active
 
-    @since %Qore 2.2
+    @since %Qore 3.0
 */
 DLLEXPORT int qore_cancel_thread(int tid, const char* reason = nullptr);
 
@@ -539,7 +539,7 @@ DLLEXPORT int qore_cancel_thread(int tid, const char* reason = nullptr);
     running (e.g., to complete cleanup operations without re-triggering at the next
     cancellation point).
 
-    @since %Qore 2.2
+    @since %Qore 3.0
 */
 DLLEXPORT void qore_clear_thread_cancel();
 
@@ -552,7 +552,7 @@ DLLEXPORT void qore_clear_thread_cancel();
 
     @return true if cancellation has been requested
 
-    @since %Qore 2.2
+    @since %Qore 3.0
 */
 DLLEXPORT bool qore_is_thread_cancel_requested();
 

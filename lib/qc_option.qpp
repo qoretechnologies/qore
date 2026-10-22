@@ -306,17 +306,17 @@ const HAVE_STATVFS = bool(QORE_CONST_Q_HAVE_STATVFS);
 const HAVE_SETSID = bool(QORE_CONST_HAVE_SETSID);
 
 //! Indicates if Brotli compression support is available (brotli(), unbrotli_to_string(), unbrotli_to_binary())
-/** @since %Qore 2.1
+/** @since %Qore 3.0
  */
 const HAVE_BROTLI = bool(QORE_CONST_HAVE_BROTLI);
 
 //! Indicates if Zstandard compression support is available (zstd(), unzstd_to_string(), unzstd_to_binary())
-/** @since %Qore 2.1
+/** @since %Qore 3.0
  */
 const HAVE_ZSTD = bool(QORE_CONST_HAVE_ZSTD);
 
 //! Indicates if LZ4 compression support is available (lz4(), unlz4_to_string(), unlz4_to_binary())
-/** @since %Qore 2.1
+/** @since %Qore 3.0
  */
 const HAVE_LZ4 = bool(QORE_CONST_HAVE_LZ4);
 

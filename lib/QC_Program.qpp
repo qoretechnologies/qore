@@ -1358,7 +1358,7 @@ Program pgm(opts);
 
     @throw PROGRAM-OPTION-ERROR invalid parse options used
 
-    @since %Qore 2.1
+    @since %Qore 3.0
  */
 Program::constructor(ParseOptions[QoreParseOptionsData] parse_options, *bool independent)
         [dom=EMBEDDED_LOGIC; flags=NAMED_ARGS] {
@@ -2142,7 +2142,7 @@ if (po.hasAny("no-class-defs")) {
 }
     @endcode
 
-    @since %Qore 2.1
+    @since %Qore 3.0
 */
 ParseOptions Program::getFullParseOptions() [flags=CONSTANT] {
     QoreObject* obj = new QoreObject(QC_PARSEOPTIONS, getProgram());
@@ -2200,7 +2200,7 @@ pgm.setParseOptions(opts);
 
     @throw OPTIONS-LOCKED Parse options have been locked and cannot be changed
 
-    @since %Qore 2.1
+    @since %Qore 3.0
 */
 nothing Program::setParseOptions(ParseOptions[QoreParseOptionsData] parse_options) [flags=NAMED_ARGS] {
     p->setParseOptions(parse_options->get(), xsink);
@@ -2242,7 +2242,7 @@ pgm.disableParseOptions(opts);
 
     @throw OPTIONS-LOCKED Parse options have been locked and cannot be changed
 
-    @since %Qore 2.1
+    @since %Qore 3.0
 */
 nothing Program::disableParseOptions(ParseOptions[QoreParseOptionsData] parse_options) [flags=NAMED_ARGS] {
     p->disableParseOptions(parse_options->get(), xsink);
@@ -2466,7 +2466,7 @@ pgm.setSandboxManager(sm);
     @note Once set, the sandbox manager restricts filesystem and network access for code
     running in this program.
 
-    @since Qore 2.1
+    @since Qore 3.0
  */
 nothing Program::setSandboxManager(SandboxManager[QoreSandboxManager] sandbox_manager) [flags=NAMED_ARGS] {
    // setSandboxManager() takes its own strong reference; ReferenceHolder from QPP macro handles the arg ref
@@ -2484,7 +2484,7 @@ if (sm) {
 }
     @endcode
 
-    @since Qore 2.1
+    @since Qore 3.0
  */
 *SandboxManager Program::getSandboxManager() [flags=CONSTANT] {
    QoreSandboxManager* sm = qore_program_private::get(*p)->getSandboxManagerRef();

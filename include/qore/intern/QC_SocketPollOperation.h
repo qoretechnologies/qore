@@ -840,7 +840,7 @@ private:
     - SS_FLUSH: Flush pending data to socket
     - SS_DONE: Goal reached
 
-    @since Qore 2.2
+    @since Qore 3.0
 */
 class SocketHttp2SendStreamingResponsePollOperation : public SocketPollSocketOperationBase {
 public:

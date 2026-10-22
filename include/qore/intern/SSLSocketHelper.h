@@ -209,24 +209,24 @@ public:
     //! Sets ALPN protocols for client-side negotiation (must be called before connect)
     /** @param protocols list of protocol strings in preference order (e.g., {"h2", "http/1.1"})
         @return 0 on success, -1 on error
-        @since Qore 2.1
+        @since Qore 3.0
     */
     DLLLOCAL int setAlpnProtocols(const std::vector<std::string>& protocols);
 
     //! Sets supported ALPN protocols for server-side negotiation (must be called before accept)
     /** @param protocols list of protocol strings the server supports
-        @since Qore 2.1
+        @since Qore 3.0
     */
     DLLLOCAL void setServerAlpnProtocols(const std::vector<std::string>& protocols);
 
     //! Returns the negotiated ALPN protocol after connection
     /** @return the selected protocol string, or empty string if ALPN was not negotiated
-        @since Qore 2.1
+        @since Qore 3.0
     */
     DLLLOCAL std::string getAlpnProtocol() const;
 
     //! Returns true if HTTP/2 ("h2") was negotiated via ALPN
-    /** @since Qore 2.1
+    /** @since Qore 3.0
     */
     DLLLOCAL bool isHttp2() const;
 
@@ -237,7 +237,7 @@ public:
 
         @return number of readable bytes buffered in the SSL object, 0 if none
 
-        @since Qore 2.1
+        @since Qore 3.0
     */
     DLLLOCAL int pending() const;
 

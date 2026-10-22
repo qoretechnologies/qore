@@ -57,13 +57,13 @@
     |@ref correct-varargs "%correct-varargs"|revert the effect of the @ref broken-varargs "%broken-varargs" parse option
     |@ref define "%define"|Creates and optionally sets a value for a @ref conditional_parsing "parse define" <br/><br/>Since %Qore 0.8.3
     |@ref disable-all-warnings "%disable-all-warnings"|Turns off all @ref warnings "warnings"
-    |@ref disable-debug "%disable-debug"|Disables @@assert and @@debug statements (they are skipped at parse time); reverts the effect of @ref enable-debug "%enable-debug"<br/><br/>Since %Qore 2.1
+    |@ref disable-debug "%disable-debug"|Disables @@assert and @@debug statements (they are skipped at parse time); reverts the effect of @ref enable-debug "%enable-debug"<br/><br/>Since %Qore 3.0
     |@ref disable-warning "%disable-warning" <em>@ref warnings "warning-code"</em>|Disables the named @ref warnings "warning" until @ref enable-warning "%enable-warning" is encountered with the same code or @ref enable-all-warnings "%enable-all-warnings" is encountered
     |@ref elif "%elif" <em>expression</em>|Allows for testing additional conditions in a @ref conditional_parsing "conditionally-parsed" block started by @ref parse_if "%if"; uses the same expression syntax as @ref parse_if "%if"
     |@ref else "%else"|Allows for parsing an alternate block when used with the @ref parse_if "%if", @ref ifdef "%ifdef", or @ref ifndef "%ifndef" parse directives (for @ref conditional_parsing "conditional parsing based on parse defines") <br/><br/>Since %Qore 0.8.3
     |@ref enable-all-warnings "%enable-all-warnings"|Turns on all non-strict @ref warnings "warnings"
     |@ref strict-warnings "%strict-warnings"|Enables strict warnings (ambiguous resolution and likely language traps)<br/><br/>Since %Qore 3.0
-    |@ref enable-debug "%enable-debug"|Enables @@assert and @@debug statements; without this directive, these statements are skipped at parse time with no runtime overhead; equivalent to parse option @ref Qore::PO_ENABLE_DEBUG<br/><br/>Since %Qore 2.1
+    |@ref enable-debug "%enable-debug"|Enables @@assert and @@debug statements; without this directive, these statements are skipped at parse time with no runtime overhead; equivalent to parse option @ref Qore::PO_ENABLE_DEBUG<br/><br/>Since %Qore 3.0
     |@ref enable-warning "%enable-warning" <em>@ref warnings "warning-code"</em>|Enables the named @ref warnings "warning"
     |@ref endif "%endif"|Closes a @ref conditional_parsing "conditionally-parsed" block started by the @ref parse_if "%if", @ref ifdef "%ifdef", or @ref ifndef "%ifndef" parse directives <br/><br/>Since %Qore 0.8.3
     |@ref endtry "%endtry"|Closes a @ref try-module "%try-module" or @ref try-reexport-module "%try-reexport-module" block <br/><br/>Since %Qore 0.8.6
@@ -1280,7 +1280,7 @@ sub validate_input(int value, int max_value) {
 }
     @endcode
 
-    @since %Qore 2.1
+    @since %Qore 3.0
 
     @see @ref disable-debug "%disable-debug"
 
@@ -1301,7 +1301,7 @@ sub validate_input(int value, int max_value) {
     When debugging is disabled, both statement types are completely skipped at parse time, providing
     zero runtime overhead.
 
-    @since %Qore 2.1
+    @since %Qore 3.0
 
     @see @ref enable-debug "%enable-debug"
 

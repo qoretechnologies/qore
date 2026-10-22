@@ -183,7 +183,7 @@ public:
 
         @return QORE_COND_RESULT_SUCCESS (0) if signaled, QORE_COND_RESULT_INTERRUPTED if interrupted
 
-        @since Qore 2.1
+        @since Qore 3.0
     */
     DLLEXPORT int waitWithInterrupt(pthread_mutex_t* m, ExceptionSink* xsink = nullptr);
 
@@ -198,7 +198,7 @@ public:
 
         @return QORE_COND_RESULT_SUCCESS (0) if signaled, QORE_COND_RESULT_TIMEOUT if timed out, QORE_COND_RESULT_INTERRUPTED if interrupted
 
-        @since Qore 2.1
+        @since Qore 3.0
     */
     DLLEXPORT int waitWithInterrupt(pthread_mutex_t* m, int64 timeout_ms, ExceptionSink* xsink = nullptr);
 
@@ -210,7 +210,7 @@ public:
 
         @return QORE_COND_RESULT_SUCCESS (0) if signaled, QORE_COND_RESULT_INTERRUPTED if interrupted
 
-        @since Qore 2.1
+        @since Qore 3.0
     */
     DLLLOCAL int waitWithInterrupt(QoreThreadLock* l, ExceptionSink* xsink = nullptr) {
         return waitWithInterrupt(&l->ptm_lock, xsink);
@@ -225,7 +225,7 @@ public:
 
         @return QORE_COND_RESULT_SUCCESS (0) if signaled, QORE_COND_RESULT_TIMEOUT if timed out, QORE_COND_RESULT_INTERRUPTED if interrupted
 
-        @since Qore 2.1
+        @since Qore 3.0
     */
     DLLLOCAL int waitWithInterrupt(QoreThreadLock* l, int64 timeout_ms, ExceptionSink* xsink = nullptr) {
         return waitWithInterrupt(&l->ptm_lock, timeout_ms, xsink);
@@ -239,7 +239,7 @@ public:
 
         @return QORE_COND_RESULT_SUCCESS (0) if signaled, QORE_COND_RESULT_INTERRUPTED if interrupted
 
-        @since Qore 2.1
+        @since Qore 3.0
     */
     DLLLOCAL int waitWithInterrupt(QoreThreadLock& l, ExceptionSink* xsink = nullptr) {
         return waitWithInterrupt(&l, xsink);
@@ -254,7 +254,7 @@ public:
 
         @return QORE_COND_RESULT_SUCCESS (0) if signaled, QORE_COND_RESULT_TIMEOUT if timed out, QORE_COND_RESULT_INTERRUPTED if interrupted
 
-        @since Qore 2.1
+        @since Qore 3.0
     */
     DLLLOCAL int waitWithInterrupt(QoreThreadLock& l, int64 timeout_ms, ExceptionSink* xsink = nullptr) {
         return waitWithInterrupt(&l, timeout_ms, xsink);

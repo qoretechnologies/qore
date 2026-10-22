@@ -555,7 +555,7 @@ if (accepted) {
 
         @note This method must be called before connecting or upgrading to SSL/TLS
 
-        @since %Qore 2.2
+        @since %Qore 3.0
     */
     DLLEXPORT void setAlpnProtocols(const QoreListNode* protocols, ExceptionSink* xsink);
     DLLLOCAL void setAlpnProtocolsForAsyncPoll(const QoreListNode* protocols, ExceptionSink* xsink);
@@ -577,7 +577,7 @@ if (accepted) {
     //! Returns the negotiated ALPN protocol after a TLS connection is established
     /** @return The negotiated protocol string, or nullptr if no protocol was negotiated
 
-        @since %Qore 2.2
+        @since %Qore 3.0
     */
     DLLEXPORT QoreStringNode* getAlpnProtocol() const;
     DLLLOCAL QoreStringNode* getAlpnProtocol(ExceptionSink* xsink) const;
@@ -586,13 +586,13 @@ if (accepted) {
     //! Returns true if the connection is using HTTP/2 (negotiated via ALPN)
     /** @return true if HTTP/2, false otherwise
 
-        @since %Qore 2.2
+        @since %Qore 3.0
     */
     DLLEXPORT bool isHttp2() const;
     DLLLOCAL bool isHttp2(ExceptionSink* xsink) const;
 
     //! Submits an HTTP/2 PUSH_PROMISE frame for server push
-    /** @since %Qore 2.2
+    /** @since %Qore 3.0
     */
     DLLEXPORT int32_t submitHttp2PushPromise(int32_t stream_id, const char* path,
         const QoreHashNode* headers, ExceptionSink* xsink);

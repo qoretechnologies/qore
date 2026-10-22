@@ -57,7 +57,7 @@ constexpr int64 URL_MASK_PASSWORD  = URL_NORMAL | UC_MASK_PASSWORD;
 class Queue;
 
 //! HTTP/2 protocol mode options
-/** @since %Qore 2.2
+/** @since %Qore 3.0
 */
 enum Http2Mode {
     HTTP2_MODE_DISABLED = 0,  //!< HTTP/1.x only, never use HTTP/2
@@ -201,7 +201,7 @@ public:
     //! Returns true if HTTP/2 support is enabled
     /** @return true if HTTP/2 support is enabled (will try to use h2 via ALPN)
 
-        @since %Qore 2.2
+        @since %Qore 3.0
     */
     DLLEXPORT bool isHttp2Enabled() const;
 
@@ -213,14 +213,14 @@ public:
 
         @note HTTP/2 requires TLS; enabling HTTP/2 on a non-TLS connection has no effect
 
-        @since %Qore 2.2
+        @since %Qore 3.0
     */
     DLLEXPORT void setHttp2Enabled(bool enable);
 
     //! Returns true if the connection is currently using HTTP/2
     /** @return true if HTTP/2 is active on the current connection
 
-        @since %Qore 2.2
+        @since %Qore 3.0
     */
     DLLEXPORT bool isHttp2Active() const;
 
@@ -235,7 +235,7 @@ public:
         - \c max_frame_size: maximum frame size
         - \c max_header_list_size: maximum header list size
 
-        @since %Qore 2.2
+        @since %Qore 3.0
     */
     DLLEXPORT QoreHashNode* getHttp2Settings() const;
 
@@ -243,7 +243,7 @@ public:
     /** @param settings a hash with HTTP/2 settings to apply
         @param xsink if an error occurs, the Qore-language exception information will be added here
 
-        @since %Qore 2.2
+        @since %Qore 3.0
     */
     DLLEXPORT void setHttp2Settings(const QoreHashNode* settings, ExceptionSink* xsink);
 
@@ -254,7 +254,7 @@ public:
         @param exclusive if true, becomes exclusive dependency
         @param xsink if an error occurs, the Qore-language exception information will be added here
 
-        @since %Qore 2.2
+        @since %Qore 3.0
     */
     DLLEXPORT void setHttp2StreamPriority(int32_t stream_id, int32_t weight, int32_t dependency,
         bool exclusive, ExceptionSink* xsink);
@@ -262,7 +262,7 @@ public:
     //! Returns the negotiated HTTP protocol version string
     /** @return "HTTP/2" if HTTP/2 is active, otherwise "HTTP/1.1" or "HTTP/1.0"
 
-        @since %Qore 2.2
+        @since %Qore 3.0
     */
     DLLEXPORT QoreStringNode* getHttpVersion() const;
 
@@ -272,14 +272,14 @@ public:
 
         @note The default mode is HTTP2_MODE_AUTO, which uses HTTP/2 if available via ALPN
 
-        @since %Qore 2.2
+        @since %Qore 3.0
     */
     DLLEXPORT void setHttp2Mode(int mode, ExceptionSink* xsink);
 
     //! Returns the current HTTP/2 protocol mode
     /** @return the current HTTP/2 mode: HTTP2_MODE_DISABLED, HTTP2_MODE_AUTO, or HTTP2_MODE_REQUIRED
 
-        @since %Qore 2.2
+        @since %Qore 3.0
     */
     DLLEXPORT int getHttp2Mode() const;
 
@@ -293,7 +293,7 @@ public:
 
         @note This method is used for WebSocket over HTTP/2 (RFC 8441)
 
-        @since %Qore 2.2
+        @since %Qore 3.0
     */
     DLLEXPORT QoreHashNode* sendHttp2Connect(const char* path, const QoreHashNode* headers,
         const char* protocol, QoreHashNode* info, ExceptionSink* xsink);
@@ -308,7 +308,7 @@ public:
 
         @note This method is used for WebSocket over HTTP/3 (RFC 9220)
 
-        @since %Qore 2.2
+        @since %Qore 3.0
     */
     DLLEXPORT QoreHashNode* sendHttp3Connect(const char* path, const QoreHashNode* headers,
         const char* protocol, QoreHashNode* info, ExceptionSink* xsink);
@@ -323,7 +323,7 @@ public:
 
         @note This is used for bidirectional streaming protocols like WebSocket over HTTP/2
 
-        @since %Qore 2.2
+        @since %Qore 3.0
     */
     DLLEXPORT int sendHttp2StreamData(int32_t stream_id, const BinaryNode* data,
         bool end_stream, int timeout_ms, ExceptionSink* xsink);
@@ -336,14 +336,14 @@ public:
 
         @note This is used for bidirectional streaming protocols like WebSocket over HTTP/2
 
-        @since %Qore 2.2
+        @since %Qore 3.0
     */
     DLLEXPORT BinaryNode* readHttp2StreamData(int32_t stream_id, int timeout_ms, ExceptionSink* xsink);
 
     //! Returns the HTTP/2 stream ID for the current request
     /** @return the stream ID, or 0 if not in HTTP/2 mode
 
-        @since %Qore 2.2
+        @since %Qore 3.0
     */
     DLLEXPORT int32_t getHttp2StreamId() const;
 
@@ -398,7 +398,7 @@ public:
 
         @note This is used for bidirectional streaming protocols like WebSocket over HTTP/3
 
-        @since %Qore 2.2
+        @since %Qore 3.0
     */
     DLLEXPORT int sendHttp3StreamData(int64_t stream_id, const BinaryNode* data,
         bool end_stream, int timeout_ms, ExceptionSink* xsink);
@@ -411,7 +411,7 @@ public:
 
         @note This is used for bidirectional streaming protocols like WebSocket over HTTP/3
 
-        @since %Qore 2.2
+        @since %Qore 3.0
     */
     DLLEXPORT BinaryNode* readHttp3StreamData(int64_t stream_id, int timeout_ms, ExceptionSink* xsink);
 

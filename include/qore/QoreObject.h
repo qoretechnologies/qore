@@ -897,7 +897,7 @@ protected:
 /** Calls realRef() in the constructor and realDeref() in the destructor.
     Used to keep an object alive during a method call on it.
 
-    @since %Qore 2.1
+    @since %Qore 3.0
 */
 class QoreObjectRealRefHelper {
 public:

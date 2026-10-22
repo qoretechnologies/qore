@@ -46,7 +46,7 @@
     @note This class is used internally by QoreValue64 and should not
     normally be used directly in user code.
 
-    @since Qore 2.0 (QoreValue64 implementation)
+    @since Qore 3.0 (QoreValue64 implementation)
 */
 class QoreBigIntNode : public SimpleValueQoreNode {
 private:

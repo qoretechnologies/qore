@@ -161,7 +161,7 @@ sm.setWallTimeLimit(30000);            # 30 seconds
 sm.setMaxThreads(4);
     @endcode
 
-    @since Qore 2.1
+    @since Qore 3.0
 */
 qclass SandboxManager [arg=QoreSandboxManager* sm; ns=Qore];
 
@@ -679,7 +679,7 @@ auto rv = SandboxManager::callWithSystemPolicy(\read_credential(), path);
 
     @see design/module-sandboxing-audit-guide.md
 
-    @since Qore 2.2
+    @since Qore 3.0
 */
 static auto SandboxManager::callWithSystemPolicy(code call, *softlist<auto> call_args)
         [dom=UNCONTROLLED_API] {
