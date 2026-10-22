@@ -3768,24 +3768,24 @@ sub write_parquet(string path) {
         # the table exists: SqlUtil writes the rows
         SqlRecordingDatasource ds(True);
         plain.toTable(ds, "t");
-        assertEq(("insert into t (a,`order`) values (%v,%v)",), ds.sql,
+        assertEq(("insert into t (a,\"order\") values (%v,%v)",), ds.sql,
             "toTable() writes through SqlUtil, which quotes a reserved word");
         ds = new SqlRecordingDatasource(True);
         plain.toTable(ds, "main.t");
-        assertEq(("insert into main.t (a,`order`) values (%v,%v)",), ds.sql,
+        assertEq(("insert into main.t (a,\"order\") values (%v,%v)",), ds.sql,
             "toTable() writes a table qualified by a schema through SqlUtil");
 
         # SqlUtil does not see the table (ex: a temporary table): the rows are written with a prepared statement made
         # with the SQL names of the driver
         ds = new SqlRecordingDatasource(False);
         plain.toTable(ds, "t");
-        assertEq(("INSERT INTO t (a, `order`) VALUES (%v, %v)",), ds.prepared,
+        assertEq(("INSERT INTO t (a, \"order\") VALUES (%v, %v)",), ds.prepared,
             "the INSERT statement for a table SqlUtil does not see quotes a reserved word as SqlUtil does");
         assertEq(((1, 2),), ds.executed, "the INSERT statement is executed with the row values");
         assertEq((), ds.sql, "no SQL is executed directly");
         ds = new SqlRecordingDatasource(False);
         plain.toTable(ds, "main.order");
-        assertEq(("INSERT INTO main.`order` (a, `order`) VALUES (%v, %v)",), ds.prepared,
+        assertEq(("INSERT INTO main.\"order\" (a, \"order\") VALUES (%v, %v)",), ds.prepared,
             "the INSERT statement quotes a table name that is a reserved word");
 
         # names that are not plain identifiers are refused before the datasource is used
@@ -3831,11 +3831,12 @@ sub write_parquet(string path) {
             }
         }
 
-        # identifiers with letters other than ASCII letters and with '$' and '#' are plain identifiers
+        # identifiers with letters other than ASCII letters and with '$' and '#' are plain identifiers; SqlUtil quotes
+        # the one with '#', which is not an ordinary SQLite identifier
         DataFrame::DataFrame unicode({"größe": (1,), "_n$#1": (2,)});
         ds = new SqlRecordingDatasource(True);
         unicode.toTable(ds, "maße");
-        assertEq(("insert into maße (größe,_n$#1) values (%v,%v)",), ds.sql,
+        assertEq(("insert into maße (größe,\"_n$#1\") values (%v,%v)",), ds.sql,
             "toTable() accepts identifiers with letters other than ASCII letters, '$' and '#'");
     }
 
