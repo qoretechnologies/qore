@@ -6,6 +6,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
+%requires FsUtil
 
 %exec-class EnvironmentTest
 
@@ -49,6 +50,7 @@ class EnvironmentTest inherits QUnit::Test {
         addTestCase("a new process gets a consistent copy of the changing environment", \testChildCopy());
         addTestCase("negative: invalid names", \testInvalid());
         addTestCase("negative: exec() of a missing program", \testExecFailure());
+        addTestCase("negative: exec() of a program in PATH that is not executable", \testExecSearchError());
         set_return_value(main());
     }
 
@@ -138,13 +140,11 @@ class EnvironmentTest inherits QUnit::Test {
 %ifdef Windows
         testSkip("Windows");
 %endif
-        # the program is searched in PATH with the environment lock held; the error number of execvp() is reported
-        *hash<ExceptionInfo> ex;
-        try {
-            exec(prefix + "missing-program");
-        } catch (hash<ExceptionInfo> e) {
-            ex = e;
-        }
+        # the program is searched in PATH with the environment lock held; the error number of execvp() is reported.
+        # PATH is one empty directory that can be searched: execvp() reports EACCES instead of ENOENT when PATH has a
+        # directory that cannot be searched, like /root/.cargo/bin in the PATH of a CI test run as another user
+        TmpDir dir("qore-env-exec-");
+        *hash<ExceptionInfo> ex = execWithPath(dir.path, prefix + "missing-program");
         assertEq("EXEC-ERROR", ex.err);
         assertEq(Err::ENOENT, ex.arg);
         # the lock has been released
@@ -152,6 +152,43 @@ class EnvironmentTest inherits QUnit::Test {
         on_exit unsetenv(name);
         assertEq(0, setenv(name, "value"));
         assertEq("value", getenv(name));
+    }
+
+    testExecSearchError() {
+%ifdef Windows
+        testSkip("Windows");
+%endif
+        # the program is found in PATH, but it is not executable (by any user, also the root user): execvp() reports
+        # EACCES
+        TmpDir dir("qore-env-exec-");
+        string program = prefix + "not-executable";
+        File f();
+        f.open2(dir.path + "/" + program, O_CREAT | O_WRONLY | O_TRUNC, 0644);
+        f.write("#!/bin/sh\nexit 0\n");
+        f.close();
+        *hash<ExceptionInfo> ex = execWithPath(dir.path, program);
+        assertEq("EXEC-ERROR", ex.err);
+        assertEq(Err::EACCES, ex.arg);
+    }
+
+    #! returns the exception of an exec() of the given command with the given PATH; PATH is restored afterwards
+    private *hash<ExceptionInfo> execWithPath(string path, string command) {
+        *string old_path = getenv("PATH");
+        on_exit {
+            if (exists old_path) {
+                setenv("PATH", old_path);
+            } else {
+                unsetenv("PATH");
+            }
+        }
+        assertEq(0, setenv("PATH", path));
+        *hash<ExceptionInfo> ex;
+        try {
+            exec(command);
+        } catch (hash<ExceptionInfo> e) {
+            ex = e;
+        }
+        return ex;
     }
 
     #! returns the errors that the given number of threads reported
