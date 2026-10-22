@@ -43,6 +43,31 @@ class YamlHandler inherits AbstractHttpRequestHandler {
     }
 }
 
+#! Answers DataStream requests as the DataStreamRequestHandler of releases before Qore 3.0 (module-yaml 1.0.0) did
+/** It refuses a request whose \c DataStream-Accept header is not exactly \c "text/x-yaml" with 406, and a message
+    body of a type other than the YAML types it knows (\c "text/x-yaml" and \c "application/x-yaml") with 415, and
+    it sends its response with the \c "text/x-yaml" type, the only one that a client of those releases reads as YAML.
+*/
+class ReleasedDataStreamServer inherits AbstractHttpRequestHandler {
+    hash<auto> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        if (hdr."datastream-accept" != "text/x-yaml") {
+            return makeResponse(406, sprintf("cannot accept DataStream request with header DataStream-Accept: %y; "
+                "expecting \"text/x-yaml\"", hdr."datastream-accept"), {"Content-Type": MimeTypeText});
+        }
+        auto parsed;
+        if (body) {
+            string ct = hdr."content-type" ?? "";
+            ct =~ s/;.*//;
+            if (ct != "text/x-yaml" && ct != "application/x-yaml") {
+                return makeResponse(415, sprintf("cannot deserialize request body; content-type is: %y",
+                    hdr."content-type"), {"Content-Type": MimeTypeText});
+            }
+            parsed = parse_yaml(body.typeCode() == NT_BINARY ? body.toString("utf-8") : body);
+        }
+        return makeResponse(200, make_yaml({"received": parsed}), {"Content-Type": "text/x-yaml"});
+    }
+}
+
 #! Dual-protocol handler that stores/retrieves DataStream records.
 /** Detects Connect (DataStream 2.0) vs plain YAML requests from headers
     and responds in the matching protocol framing.
@@ -230,6 +255,7 @@ class DataStreamClientTest inherits QUnit::Test {
         addTestCase("DS v1 recvDataStream", \testDSv1RecvDataStream());
         addTestCase("protocol mode accessors", \testProtocolModeAccessors());
         addTestCase("max message size", \testMaxMessageSize());
+        addTestCase("a server of a release before Qore 3.0 accepts DataStream requests", \testReleasedServer());
 
         Logger logger("test", LoggerLevel::getLevelInfo());
         if (m_options.verbose > 2) {
@@ -244,12 +270,29 @@ class DataStreamClientTest inherits QUnit::Test {
         m_http.setHandler("/yaml", "/yaml", MimeTypeYaml, new YamlHandler(MimeTypeYaml));
         m_http.setHandler("/ds-echo", "/ds-echo", MimeTypeYaml, new DataStreamEchoHandler());
         m_http.setHandler("/ds-error", "/ds-error", MimeTypeYaml, new DataStreamErrorHandler());
+        m_http.setHandler("/released", "/released", NOTHING, new ReleasedDataStreamServer());
         port = m_http.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
 
         # Return for compatibility with test harness that checks return value.
         set_return_value(main());
 
         delete m_http;
+    }
+
+    testReleasedServer() {
+        # with the protocol chosen and with the default, where the server's 406 to the Connect attempt makes the
+        # client fall back to DataStream
+        foreach string protocol in (("datastream", "auto")) {
+            DataStreamClient client({"url": "http://localhost:" + port, "timeout": 30000, "protocol": protocol},
+                True);
+            hash<auto> info;
+            hash<auto> rv = client.post("/released", {"a": 1, "b": ("x", "y")}, \info);
+            assertEq(200, info."response-code", protocol + ": the request is accepted");
+            assertEq({"received": {"a": 1, "b": ("x", "y")}}, rv.body,
+                protocol + ": the server read the request body and the client read the response");
+            assertEq("text/x-yaml", info.headers{DataStreamAccept}, protocol + ": DataStream-Accept");
+            assertRegex("^text/x-yaml(;|$)", info.headers."Content-Type", protocol + ": request Content-Type");
+        }
     }
 
     testDataStreamClient() {

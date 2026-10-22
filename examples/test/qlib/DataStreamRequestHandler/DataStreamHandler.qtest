@@ -90,6 +90,8 @@ class DataStreamRequestHandlerTest inherits QUnit::Test {
         addTestCase("Connect response headers", \testConnectResponseHeaders());
         addTestCase("Connect error response", \testConnectErrorResponse());
         addTestCase("missing accept header DS v1", \testMissingAcceptHeaderDSv1());
+        addTestCase("a client of a release before Qore 3.0 is answered", \testReleasedClient());
+        addTestCase("any YAML media type is accepted in DataStream-Accept", \testYamlAcceptTypes());
         addTestCase("handler isConnectProtocol accessor", \testIsConnectProtocol());
 
         # Return for compatibility with test harness that checks return value.
@@ -338,6 +340,43 @@ class DataStreamRequestHandlerTest inherits QUnit::Test {
         # For Connect mode, error should be JSON format
         if (error) {
             assertTrue(error.hasKey("code"), "Connect error: has code");
+        }
+    }
+
+    testReleasedClient() {
+        # the headers that the DataStreamClient of releases before Qore 3.0 (module-yaml 1.0.0) sends; it reads a
+        # response as YAML only with the "text/x-yaml" type
+        hash<auto> cx = {
+            "socketobject": new Socket(),
+            "hdr": {
+                DataStreamAccept.lwr(): "text/x-yaml",
+                "content-type": "text/x-yaml;charset=utf8",
+            },
+        };
+        TestDataStreamRequestHandler handler(cx);
+        assertEq(NOTHING, handler.getErrorResponse(), "the request is accepted");
+        hash<auto> response = handler.getResponseHeaderMessageImpl();
+        assertEq(200, response.code);
+        assertRegex("^text/x-yaml(;|$)", response.hdr{DataStreamContentType}, "the response chunks are text/x-yaml");
+    }
+
+    testYamlAcceptTypes() {
+        foreach string t in (("text/x-yaml", "application/yaml", "application/x-yaml", "text/yaml",
+                "TEXT/X-YAML;charset=utf8")) {
+            hash<auto> cx = {
+                "socketobject": new Socket(),
+                "hdr": {DataStreamAccept.lwr(): t},
+            };
+            TestDataStreamRequestHandler handler(cx);
+            assertEq(NOTHING, handler.getErrorResponse(), t + " is accepted");
+        }
+        foreach string t in (("application/json", "text/plain")) {
+            hash<auto> cx = {
+                "socketobject": new Socket(),
+                "hdr": {DataStreamAccept.lwr(): t},
+            };
+            TestDataStreamRequestHandler handler(cx);
+            assertEq(406, handler.getErrorResponse().code, t + " is refused");
         }
     }
 

@@ -147,7 +147,9 @@ client.setMaxMessageSize(8 * 1024 * 1024);  # 8 MB
     @section datastreamclientrelnotes Release Notes
 
     @subsection datastreamclient_v1_5_1 DataStreamClient v1.5.1
-    - accept the official \c "application/yaml" MIME type (RFC 9512) in non-DataStream responses
+    - a response is read as YAML with any YAML media type: \c "application/yaml" (RFC 9512),
+      \c "application/x-yaml", \c "text/x-yaml" or \c "text/yaml"; requests are sent with \c "text/x-yaml", the
+      YAML media type of the DataStream protocol, which the servers of earlier releases require
 
     @subsection datastreamclient_v1_5 DataStreamClient v1.5
     - added Connect protocol (DataStream 2.0) support with auto-negotiation: the client tries
@@ -200,7 +202,7 @@ public class DataStreamClient inherits RestClient::RestClient {
         #! default HTTP headers
         const DefaultHeaders = RestClient::DefaultHeaders + {
             "User-Agent": DataStreamClient::VersionString,
-            DataStreamAccept: MimeTypeYaml,
+            DataStreamAccept: DataStreamMimeTypeYaml,
         };
     }
 
@@ -859,9 +861,9 @@ hash<auto> h = rest.sendRawStream(sender, "POST", uri_path, 20s);
     hash<auto> sendRawStream(code scb, string method, *string path, timeout timeout_ms = 0,
             *reference<hash<auto>> info, *hash<auto> hdr) {
         if (!hdr.Accept)
-            hdr.Accept = MimeTypeYaml;
+            hdr.Accept = DataStreamMimeTypeYaml;
         hash<auto> h = sendWithSendCallback(scb, method, path, hdr, timeout_ms, False, \info);
-        if ((h."content-type" == MimeTypeYaml || h."content-type" == MimeTypeYamlApp) && h.body) {
+        if (ds_is_yaml_type(h."content-type") && h.body) {
             h.body = parse_yaml(h.body.typeCode() == NT_BINARY ? h.body.toString("utf-8") : h.body);
         }
         return h;
@@ -873,7 +875,7 @@ hash<auto> h = rest.sendRawStream(sender, "POST", uri_path, 20s);
 hash<auto> h = rest.getRawStream(recv, "GET", uri_path, 20s);
         @endcode
 
-        Any message body will be serialized as YAML and the \c "Content-Type" header will be set to \c "application/x-yaml".
+        Any message body will be serialized as YAML and the \c "Content-Type" header will be set to \c "text/x-yaml".
 
         @param recv_callback The receive callback for the data received; first this method is called with a hash of the message headers, and then with any message body; if a chunked HTTP message is received, then the callback is called once for each chunk; when the message has been received, then the receive callback is called with a hash representing any trailer data received in a chunked transfer or @ref nothing if the data was received in a normal message body or if there was no trailer data in a chunked transfer.  The argument to this callback is always a hash; data calls have the following keys:
         - \c "data": the string or binary data
@@ -913,7 +915,7 @@ hash<auto> h = rest.getRawStream(recv, "GET", uri_path, 20s);
         };
         if (exists body) {
             body = make_yaml(body);
-            hdr."Content-Type" = MimeTypeYaml;
+            hdr."Content-Type" = DataStreamMimeTypeYaml;
         }
         sendWithRecvCallback(mrecv_callback, body, method, path, hdr, timeout_ms, False, \info);
         return rvhdr;
@@ -1018,6 +1020,10 @@ rest.setContentEncoding("gzip");
     private nothing prepareMsg(string method, string path, reference<auto> body, reference<hash<auto>> hdr,
             string ct = "Content-Type") {
         RestClient::prepareMsg(method, path, \body, \hdr, ct);
+        # a YAML message body is sent with the YAML media type of the DataStream protocol, which every release accepts
+        if (ds_is_yaml_type(hdr{ct})) {
+            hdr{ct} = DataStreamMimeTypeYaml;
+        }
         ds_set_non_chunked_headers(\hdr, seh.ce, True);
     }
 

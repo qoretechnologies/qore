@@ -139,6 +139,9 @@ private nothing recvDataImpl(auto data) {
     @section datastreamrequesthandlerrelnotes Release Notes
 
     @subsection datastreamrequesthandler_v1_2 DataStreamRequestHandler v1.2
+    - a request is accepted with any YAML media type in its \c DataStream-Accept header (\c "application/yaml",
+      \c "application/x-yaml", \c "text/x-yaml" or \c "text/yaml"); responses are sent with \c "text/x-yaml",
+      which the clients of earlier releases require
     - added automatic Connect protocol (DataStream 2.0) detection: the handler now accepts
       both Connect-framed and DataStream v1 chunked requests without any changes to subclasses
     - added @ref DataStreamRequestHandler::AbstractDataStreamRequestHandler::isConnectProtocol()
@@ -331,12 +334,13 @@ public class AbstractDataStreamRequestHandler inherits RestHandler::AbstractRest
             }
         } else {
             # DataStream v1 mode
-            if (cx.hdr{DataStreamAccept.lwr()} != MimeTypeYaml) {
+            # any YAML media type is accepted; peers before Qore 3.0 send "text/x-yaml"
+            if (!ds_is_yaml_type(cx.hdr{DataStreamAccept.lwr()})) {
                 return {
                     "code": (err = 406),
                     "body": sprintf("cannot accept DataStream request with header %s: %y; "
                         "expecting %y", DataStreamAccept,
-                        cx.hdr{DataStreamAccept.lwr()}, MimeTypeYaml),
+                        cx.hdr{DataStreamAccept.lwr()}, DataStreamMimeTypeYaml),
                     "hdr": {"Content-Type": MimeTypeText},
                 };
             }
@@ -353,7 +357,7 @@ public class AbstractDataStreamRequestHandler inherits RestHandler::AbstractRest
                 return {
                     "code": (err = 409),
                     "body": make_yaml(ex),
-                    "hdr": {"Content-Type": MimeTypeYaml},
+                    "hdr": {"Content-Type": DataStreamMimeTypeYaml},
                     "close": True,
                 };
             }

@@ -302,12 +302,15 @@ message: "Hello, Hello, World!!"
     @section datastreamutilrelnotes Release Notes
 
     @subsection datastreamutil_v1_4 DataStreamUtil v1.4
+    - added @ref DataStreamUtil::DataStreamMimeTypeYaml "DataStreamMimeTypeYaml", the YAML media type that DataStream
+      messages are sent with (\c "text/x-yaml", as before), and @ref DataStreamUtil::ds_is_yaml_type()
+      "ds_is_yaml_type()", which tells whether a received media type is a YAML media type
     - @ref DataStreamUtil::ds_set_chunked_headers() "ds_set_chunked_headers()" and
       @ref DataStreamUtil::ds_set_non_chunked_headers() "ds_set_non_chunked_headers()" label DataStream data with
       the registered charset name \c utf-8 instead of the alias \c utf8; receivers accept both
 
     @subsection datastreamutil_v1_3_1 DataStreamUtil v1.3.1
-    - added the official \c "application/yaml" MIME type (RFC 9512) to
+    - added the official \c "application/yaml" MIME type (RFC 9512) and \c "text/yaml" to
       @ref DataStreamUtil::DataStreamDeserializationSupport "DataStreamDeserializationSupport"
 
     @subsection datastreamutil_v1_3 DataStreamUtil v1.3
@@ -354,6 +357,15 @@ public namespace DataStreamUtil {
 
     #! HTTP header for the data stream Accept header equivalent where each HTTP chunk is encoded/decoded separately
     public const DataStreamAccept = "DataStream-Accept";
+
+    #! The YAML media type of the DataStream protocol
+    /** DataStream messages are sent with this media type in the \c DataStream-Accept, \c Content-Type and
+        \c DataStream-Content-Type headers, as the protocol defines and as every release requires; receivers accept
+        any YAML media type (see ds_is_yaml_type()).
+
+        @since DataStreamUtil 1.4
+    */
+    public const DataStreamMimeTypeYaml = "text/x-yaml";
 
     #! HTTP header for the data stream Accept-Encoding header equivalent where each HTTP chunk is encoded/decoded separately
     public const DataStreamAcceptEncoding = "DataStream-Accept-Encoding";
@@ -411,6 +423,7 @@ public namespace DataStreamUtil {
         - \c "application/x-yaml": YAML deserialization
         - \c "text/x-yaml": YAML deserialization
         - \c "application/yaml": YAML deserialization (RFC 9512)
+        - \c "text/yaml": YAML deserialization
         - \c "application/json": JSON deserialization (if json module is available)
         - \c "text/xml": XML deserialization (if xml module is available)
         - \c "application/xml": XML deserialization (if xml module is available)
@@ -419,6 +432,7 @@ public namespace DataStreamUtil {
         MimeTypeYamlRpc: DataStreamDeserializeYaml,
         MimeTypeYaml: DataStreamDeserializeYaml,
         "text/x-yaml": DataStreamDeserializeYaml,
+        "text/yaml": DataStreamDeserializeYaml,
 %ifndef NoJson
         MimeTypeJson: {
             "code": "json",
@@ -431,6 +445,33 @@ public namespace DataStreamUtil {
 %endif
     };
     #/@}
+
+    #! Returns @ref True if the media type is a YAML media type, ignoring its parameters and case
+    /** @param mime_type a media type as given in a \c Content-Type, \c DataStream-Content-Type or
+        \c DataStream-Accept header value, such as \c "text/x-yaml;charset=utf8"
+
+        @return @ref True if the media type without its parameters is \c "application/yaml", \c "application/x-yaml",
+        \c "text/x-yaml" or \c "text/yaml" (see @ref Mime::YamlMimeTypes "YamlMimeTypes"), in any case
+
+        DataStream messages are sent with @ref DataStreamUtil::DataStreamMimeTypeYaml "DataStreamMimeTypeYaml", and
+        receivers accept any YAML media type, so peers that send another one interoperate.
+
+        @par Example:
+        @code{.py}
+bool yaml = ds_is_yaml_type(hdr."content-type");
+        @endcode
+
+        @since DataStreamUtil 1.4
+    */
+    public bool sub ds_is_yaml_type(*string mime_type) {
+        if (!mime_type) {
+            return False;
+        }
+        string t = mime_type;
+        t =~ s/;.*$//;
+        trim t;
+        return YamlMimeTypes.hasKey(t.lwr());
+    }
 
     #! returns a @ref call_reference "call reference" (or @ref nothing) based on an optional \c "Content-Encoding" header value for decoding HTTP encoded data
     /** @par Example:
@@ -998,7 +1039,7 @@ ds_set_chunked_headers(\hdr, "bzip");
             hdr."Content-Type" = MimeTypeOctetStream;
 
         if (!hdr{DataStreamContentType})
-            hdr{DataStreamContentType} = MimeTypeYaml + ";charset=utf-8";
+            hdr{DataStreamContentType} = DataStreamMimeTypeYaml + ";charset=utf-8";
         else if (hdr{DataStreamContentType} !~ /; ?charset=utf-?8/i)
             hdr{DataStreamContentType} += ";charset=utf-8";
 
@@ -1033,7 +1074,7 @@ ds_set_non_chunked_headers(\hdr, "bzip");
     */
     public nothing sub ds_set_non_chunked_headers(reference<hash<auto>> hdr, *string content_encoding, *softbool req) {
         if (!hdr."Content-Type")
-            hdr."Content-Type" = MimeTypeYaml + ";charset=utf-8";
+            hdr."Content-Type" = DataStreamMimeTypeYaml + ";charset=utf-8";
         else if (hdr."Content-Type" !~ /; ?charset=utf-?8/i)
             hdr."Content-Type" += ";charset=utf-8";
 
@@ -1538,11 +1579,11 @@ namespace DataStreamUtilPrivate {
     # private function
     sub ds_do_request_headers(reference<hash<auto>> hdr) {
         if (!hdr.Accept) {
-            hdr.Accept = MimeTypeYaml + "," + MimeTypeOctetStream;
+            hdr.Accept = DataStreamMimeTypeYaml + "," + MimeTypeOctetStream;
         }
 
         if (!hdr{DataStreamAccept}) {
-            hdr{DataStreamAccept} = MimeTypeYaml;
+            hdr{DataStreamAccept} = DataStreamMimeTypeYaml;
         }
 
         # get DataStream-Accept-Encoding headers

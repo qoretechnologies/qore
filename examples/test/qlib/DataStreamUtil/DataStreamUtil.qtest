@@ -16,6 +16,7 @@
 class DataStreamUtilTest inherits QUnit::Test {
     constructor() : Test("DataStreamUtil test", "1.0") {
         addTestCase("base test", \testDataStreamUtil());
+        addTestCase("YAML media types", \testYamlMediaTypes());
         addTestCase("content encoding", \testContentEncoding());
         addTestCase("content decoding", \testContentDecoding());
         addTestCase("x-prefix decoding", \testXPrefixDecoding());
@@ -59,6 +60,31 @@ class DataStreamUtilTest inherits QUnit::Test {
         set_return_value(main());
     }
 
+    testYamlMediaTypes() {
+        # the protocol sends the type that releases before Qore 3.0 require
+        assertEq("text/x-yaml", DataStreamMimeTypeYaml);
+        hash<auto> hdr;
+        ds_set_chunked_headers(\hdr, NOTHING, True);
+        assertEq("text/x-yaml;charset=utf-8", hdr{DataStreamContentType});
+        assertEq("text/x-yaml", hdr{DataStreamAccept});
+        hdr = {};
+        ds_set_non_chunked_headers(\hdr, NOTHING, True);
+        assertEq("text/x-yaml;charset=utf-8", hdr."Content-Type");
+        assertEq("text/x-yaml", hdr{DataStreamAccept});
+        # receivers accept every YAML media type, with parameters and in any case
+        foreach string t in (("text/x-yaml", "application/yaml", "application/x-yaml", "text/yaml",
+                "text/x-yaml;charset=utf8", "Application/YAML; charset=UTF-8")) {
+            assertTrue(ds_is_yaml_type(t), t);
+        }
+        foreach *string t in (("application/json", "text/plain", "application/octet-stream", "", NOTHING)) {
+            assertFalse(ds_is_yaml_type(t), sprintf("%y", t));
+        }
+        # each YAML type has a deserializer
+        foreach string t in (keys YamlMimeTypes) {
+            assertEq("yaml", DataStreamDeserializationSupport{t}.code, t);
+        }
+    }
+
     testDataStreamUtil() {
         *code c = ds_get_content_decode();
         assertEq(NOTHING, c);
@@ -76,7 +102,7 @@ class DataStreamUtilTest inherits QUnit::Test {
 
         delete hdr;
         ds_set_non_chunked_headers(\hdr);
-        assertEq(True, regex(hdr."Content-Type", MimeTypeYaml));
+        assertEq(True, regex(hdr."Content-Type", DataStreamMimeTypeYaml));
 
         assertEq(True, ds_get_ds_accept_enc_header() =~ /deflate/);
     }
@@ -422,11 +448,11 @@ class DataStreamUtilTest inherits QUnit::Test {
         ds_set_chunked_headers(\hdr, NOTHING, True);
 
         # Check Accept header
-        assertTrue(hdr.Accept.find(MimeTypeYaml) >= 0);
+        assertTrue(hdr.Accept.find(DataStreamMimeTypeYaml) >= 0);
         assertTrue(hdr.Accept =~ /application\/octet-stream/);
 
         # Check DataStream-Accept header
-        assertEq(MimeTypeYaml, hdr{DataStreamAccept});
+        assertEq(DataStreamMimeTypeYaml, hdr{DataStreamAccept});
 
         # Check DataStream-Accept-Encoding header
         assertTrue(hdr{DataStreamAcceptEncoding} =~ /gzip/);
@@ -436,7 +462,7 @@ class DataStreamUtilTest inherits QUnit::Test {
         # Test non-chunked request headers
         hdr = {};
         ds_set_non_chunked_headers(\hdr, NOTHING, True);
-        assertEq(MimeTypeYaml, hdr{DataStreamAccept});
+        assertEq(DataStreamMimeTypeYaml, hdr{DataStreamAccept});
     }
 
     # ---- Connect framing tests ----

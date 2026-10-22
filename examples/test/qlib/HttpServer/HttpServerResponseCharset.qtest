@@ -300,7 +300,7 @@ class ResponseCharsetTest inherits QUnit::Test {
         # chunked DataStream data is labeled with the registered charset name
         hash<auto> hdr = {};
         ds_set_chunked_headers(\hdr);
-        assertEq(MimeTypeYaml + ";charset=utf-8", hdr{DataStreamContentType});
+        assertEq(DataStreamMimeTypeYaml + ";charset=utf-8", hdr{DataStreamContentType});
         assertEq(MimeTypeOctetStream, hdr."Content-Type");
         # a type without a charset receives one
         hdr = {DataStreamContentType: MimeTypeYaml};
@@ -313,7 +313,7 @@ class ResponseCharsetTest inherits QUnit::Test {
 
         hdr = {};
         ds_set_non_chunked_headers(\hdr);
-        assertEq(MimeTypeYaml + ";charset=utf-8", hdr."Content-Type");
+        assertEq(DataStreamMimeTypeYaml + ";charset=utf-8", hdr."Content-Type");
         hdr = {"Content-Type": MimeTypeYaml};
         ds_set_non_chunked_headers(\hdr);
         assertEq(MimeTypeYaml + ";charset=utf-8", hdr."Content-Type");
