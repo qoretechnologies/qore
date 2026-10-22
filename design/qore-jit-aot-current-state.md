@@ -3891,3 +3891,29 @@ Java/develop comparisons. Selected Release/Debug integration and native ownershi
 tests pass; named unavailable checks are excluded and 125 Release aliases restored.
 No full-suite/sanitizer, Java parity or global-ceiling claim.
 See RESULTS.md and `results-aot-inline-public-base-macos-arm64.json` for measurements, qualification and all 62 audit items.
+
+
+## Optimized post-merge/package-update checkpoint (2026-10-22)
+
+Fresh isolated Release `-O3 -DNDEBUG` builds compare feature `5b3fdbe22` and
+develop `d704a0126`, each using `qcc -O3`, against fresh Temurin 25.0.2+10/JMH1.37.
+All 1865 runs / 5595 windows and three fixed layouts pass independent replay.
+Whole-workload ns/item: direct 1.546 versus Java 1.008; method 1.607 versus 0.997;
+indirect 6.897 versus 1.706; polymorphic 22.186 versus 2.611; plain closure 16.710
+versus 1.704; captured closure 22.555 versus 1.781. These are same-Program
+workloads, not isolated call latencies or cross-Program measurements.
+
+Mixed processing is 1.14x to 3.58x faster than develop. List mutation remains
+about 46x Java time; temporary hashes about 21x and 1.954% slower than develop.
+All adverse layouts and separately labelled getter controls are retained. Neither
+Java parity, production throughput nor a global maximum is established.
+
+The interrupted pre-update campaign is fully excluded. Fresh dependency hashes
+and per-process identity checks remained stable; all child exits are recorded
+before result parsing. Fresh references pass; earlier selected Release/Debug
+merge qualification is historical source evidence, not identical-artifact reuse
+after the rebuild. No runtime change is retained in this evidence checkpoint.
+See RESULTS and `results-aot-post-packages-checkpoint-macos-arm64.json` for all
+numbers, raw evidence, profiling, limitations and all62 audit items. Next pursue
+a distinct measured dispatch specialization while preserving live checks and
+observable frame/ownership/cancellation semantics; rejected shortcuts stay rejected.

@@ -19823,3 +19823,175 @@ plan; no ownership elision or Java parity is implied.
 
 All raw runs, code evidence, selected qualification logs, drivers and 62 audit
 items: [results-aot-inline-public-base-macos-arm64.json](results-aot-inline-public-base-macos-arm64.json).
+
+
+## Optimized post-merge and package-update checkpoint (2026-10-22)
+
+Feature `5b3fdbe22` versus merged develop `d704a0126` and fresh warmed
+Temurin 25.0.2+10 / JMH 1.37. Both Qore revisions were freshly built in isolated
+worktrees after the package updates, with matching Release `-O3 -DNDEBUG`,
+allocation tracking disabled, LLVM 22.1.8 and each runtime's own `qcc -O3`.
+
+All 1865 runs / 5595 measured windows passed independent replay: 55 Qore
+workloads, three fixed layouts, five forks, three warmup and three measured
+300-ms windows, 4096 items, seed 7 and order seed 211229. Qore summaries are
+the median of three layout medians of five fork means; Java uses the median
+of five fresh fork means. No samples or layouts were excluded.
+
+These are whole-workload ns/item, not isolated call latencies. Kernels stay
+within one QoreProgram; cross-Program calls are not measured. Java direct/final
+calls may inline; dynamic/callback compiler hints are preserved.
+
+|!Workload|!Develop AOT ns/item|!Feature AOT ns/item|!Java JIT ns/item|!Develop / feature time|!Feature / Java time
+|arithmetic|7.722|1.534|0.973|5.035x|1.576x
+|direct_call|7.700|1.546|1.008|4.981x|1.534x
+|method_call|7.677|1.607|0.997|4.776x|1.612x
+|indirect_call|232.069|6.897|1.706|33.650x|4.043x
+|polymorphic_call|321.093|22.186|2.611|14.472x|8.498x
+|polymorphic_expression_call|135.030|10.860|2.649|12.434x|4.100x
+|monomorphic_call|12.503|3.471|1.717|3.602x|2.021x
+|optional_method_call|208.952|10.908|1.706|19.155x|6.394x
+|polymorphic_float_call|343.063|22.609|2.653|15.174x|8.523x
+|polymorphic_float_expression_call|156.357|10.902|2.594|14.343x|4.203x
+|monomorphic_float_call|12.479|3.493|1.701|3.573x|2.053x
+|optional_float_method_call|214.898|10.897|1.709|19.721x|6.377x
+|boxed_float_method_call|249.897|20.433|2.644|12.230x|7.728x
+|dynamic_int_result_call|198.966|10.758|3.187|18.496x|3.376x
+|dynamic_int_result_fallback|461.714|22.152|3.003|20.843x|7.377x
+|boxed_int_method_call|226.713|16.894|2.613|13.420x|6.465x
+|boxed_int_method_fallback|277.394|31.413|2.621|8.831x|11.984x
+|boxed_float_method_fallback|322.009|33.361|2.625|9.652x|12.711x
+|boxed_int_method_effect|383.204|89.859|1.893|4.265x|47.477x
+|dynamic_float_result_call|219.120|11.783|3.394|18.597x|3.472x
+|indirect_wide|275.032|6.925|1.717|39.713x|4.033x
+|indirect_float|234.677|6.585|1.695|35.636x|3.886x
+|indirect_int_result|201.690|6.354|1.935|31.740x|3.284x
+|indirect_float_result|208.503|7.352|2.841|28.359x|2.588x
+|indirect_tagged_float|279.302|6.711|1.679|41.619x|3.998x
+|indirect_branch_float|243.512|6.712|1.690|36.282x|3.972x
+|indirect_affine|228.745|6.900|1.657|33.152x|4.163x
+|indirect_affine_wide|275.665|6.888|1.669|40.023x|4.126x
+|indirect_branch_int|233.244|6.969|1.715|33.469x|4.063x
+|dispatch_control|8.028|1.630|1.025|4.926x|1.590x
+|list_read|9.265|2.798|0.290|3.311x|9.656x
+|list_build|111.357|26.986|3.045|4.126x|8.863x
+|list_mutate|211.852|193.470|4.210|1.095x|45.951x
+|temporary_list|142.001|1.624|1.248|87.442x|1.301x
+|temporary_hash|330.307|336.760|16.046|0.981x|20.987x
+|closure_call|141.501|16.710|1.704|8.468x|9.808x
+|closure_capture|163.282|22.555|1.781|7.239x|12.668x
+
+Direct and simple method workloads are 1.53x/1.61x Java time, not parity.
+Indirect calls remain 4.04x, polymorphic calls 8.50x, plain closures 9.81x and
+captured closures 12.67x Java time. List mutation remains about 46x Java time.
+Temporary hashes are 21x Java time and 1.954% slower than develop; that adverse
+result is retained, not dismissed because the five-fork ranges overlap.
+
+### Getter and fallback probes
+
+|!Workload|!Develop AOT ns/item|!Feature AOT ns/item|!Time change
+|object_loop|624.573|172.876|-72.321%
+|object_short|1529.776|1111.637|-27.333%
+|float_loop|670.496|179.612|-73.212%
+|float_short|1585.636|1116.417|-29.592%
+|string_loop|524.243|373.427|-28.768%
+|string_short|1385.243|1270.754|-8.265%
+|effect_loop|763.877|344.849|-54.855%
+|effect_short|1696.935|1325.644|-21.880%
+|two_read_loop|734.772|381.081|-48.136%
+|two_read_short|1661.606|1340.944|-19.298%
+|default_loop|893.727|698.041|-21.895%
+|default_short|1827.877|1674.279|-8.403%
+|string_result_loop|700.856|412.470|-41.148%
+|string_result_short|1644.248|1383.906|-15.834%
+
+Getter loops include three receivers per operation, two reads with an intervening
+callback per item, setup and dispatch. Qore uses auto receivers and a name-based
+call_function entry per 4096 items; Java uses typed final receivers and direct
+entry. Plain Java is unrestricted; boundary controls prevent getter/callback
+inlining; read-lock controls additionally use nonfair ReentrantReadWriteLock.
+None reproduces Qore's complete locking/deletion/lookup/frame/cancellation contract.
+
+|!Workload|!Java control|!Java ns/item|!Feature / Java time|!Java allocated bytes/item
+|object_loop|plain|0.900|192.134x|0.000020
+|object_loop|boundary|3.237|53.405x|0.017652
+|object_loop|read-lock|8.459|20.436x|0.105661
+|float_loop|plain|0.935|192.183x|0.000021
+|float_loop|boundary|3.798|47.290x|0.017664
+|float_loop|read-lock|8.503|21.124x|0.105661
+
+No Java equivalence is claimed for the remaining twelve probes. Allocation is
+observed JVM allocation, not retained memory.
+
+### Mixed processing and adverse layouts
+
+|!Workload|!Develop ms / 4096 records|!Feature ms / 4096 records|!Speedup|!Time change
+|csv_report|4.512|3.953|1.141x|-12.386%
+|object_orders|8.818|7.573|1.164x|-14.116%
+|callback_pipeline|1.244|0.348|3.576x|-72.037%
+|text_index|7.125|5.547|1.284x|-22.140%
+
+Mixed processing is 1.14x to 3.58x faster than develop. These synthetic workloads
+include parsing, transformation, allocation, aggregation and formatting, excluding
+input generation/startup/compilation. They are neither production throughput nor
+a Java comparison nor a single overall Qore score.
+
+Every adverse feature/develop layout is retained below. Observed fork ranges
+are descriptive, not confidence intervals; host load, thermals and CPU frequency
+were uncontrolled. This measures cumulative branch impact, not one new change.
+
+|!Workload|!Layout|!Feature time change vs develop|!Disjoint adverse fork ranges
+|temporary_hash|default|+1.777%|no
+|temporary_hash|reverse|+1.742%|no
+|temporary_hash|shuffle-487|+2.053%|no
+
+### Reliability, qualification and next work
+
+The earlier interrupted campaign is excluded in full: a package update replaced
+MPFR during attempted run 1190, invalidating all 1189 completed runs / 3567 windows.
+No missing samples were filled. The fresh run fingerprints 591 dependency files,
+including actual loaded external libraries, compiler dependencies and the complete
+installed JDK. Full hashes are checked before/after phases, stat identity before
+and after each timed process; actual child exits are saved before parsing/asserting.
+System shared-cache images are recorded by 545 dyld UUIDs rather than file hashes.
+Eight owned-fixture tests cover stable/changed/missing/symlink dependencies and
+successful, failed, timed-out and dependency-changing children.
+
+Fresh builds pass 555 IR and 555 AOT references each. Prepared executables pass
+4698 AOT and 1566 IR references; Java passes 555 micro and 72 getter references.
+Separate getter diagnostics add 1200 cross-formula checks and confirm bytecode
+and intended inlining. Instrumented Java and sampled Qore durations are excluded.
+
+No runtime code changes in this checkpoint. The audited merge's selected
+Release/Debug qualification remains historical source-level evidence, not reused
+binary qualification: these optimized binaries were freshly rebuilt after package
+updates. This is not a new full-suite/sanitizer/cross-platform run. All 125 main
+Release qmod aliases remain unchanged.
+
+Fresh ordinary indirect-call samples concentrate in the reusable dispatch helper, generated caller and stack-location restoration. ARM64 confirms live Program/debugger/body/readiness and sink/stack checks, frame publication, indirect native entry and reader-safe restoration. There is no TLS lookup in the inspected reusable helper; removing more TLS alone cannot eliminate this work.
+
+Fresh polymorphic samples show pinned-class assignment/clear, object reference accounting, exact-class admission and native dispatch around tiny method bodies. Do not remove actual receiver ownership or mutable class/body checks.
+
+Plain and captured closure samples still show native admission, live metadata decoding, signature checks, deferred context cleanup and stack checks. Captures add synchronized reads. These are not permission to revive the rejected signature-proof or borrowed-node-decoder candidates unchanged.
+
+List mutation still reaches generic lvalue navigation/compound assignment, local publication and QoreValue retain/discard/type handling. This workload includes list construction and reads; its roughly46x Java ratio is not an indexed-add-only measurement.
+
+Temporary hashes show allocator/free, QoreValue cleanup and typed-hash assignment/input validation in both runtimes. Sampling does not establish a cause for the fresh1.954% feature/develop loss; all three adverse layouts remain reported.
+
+Integer/float getter loops still combine ordinary name-based routing, local reload/refcounting and checked member reads with native getter admission. Their large gap includes the documented semantic and entry/setup differences.
+
+The inspected indirect caller sets generic cleanup temporaries to zero on a successful native call but rejoins code containing generic cleanup tag tests. This suggests a distinct compiler-side success-continuation specialization, not deleting runtime admission guards. First establish exact SSA/lifetime proof and inspect emitted code; no benefit or implementation is claimed yet.
+
+Next audit a distinct compiler-side native-success continuation: the emitted
+indirect caller zeros generic cleanup temporaries on success but rejoins generic
+tag tests. Prove the exact SSA/lifetime conditions before prototyping; retain all
+nonempty cleanup and runtime admission/frame checks. Require before/after and
+disabled-control measurements and broad regression gates. Do not retry rejected signature-proof,
+borrowed-closure, warm-stack-guard or object-release shortcuts unchanged. Preserve
+live Program/debugger/body/receiver checks, ownership, capture synchronization,
+observable frames, cancellation and cleanup. Java parity and a global ceiling
+remain unestablished.
+
+All raw windows, references, drivers, profiles, dependency checks, exclusions and
+the 62-item audit are preserved in
+[results-aot-post-packages-checkpoint-macos-arm64.json](results-aot-post-packages-checkpoint-macos-arm64.json).
