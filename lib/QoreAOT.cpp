@@ -23345,6 +23345,19 @@ static bool quoteAOTLinkArgument(const std::string& value, std::string& quoted, 
     return false;
 }
 
+//! Appends the options that make an executable linked for the host depend only on its object on macOS
+/** The object an executable is linked from is deleted when it has been linked, so the debug map, in which the Mach-O
+    linker records the path and modification time of the object for a debugger, only made the executable depend on
+    where and when it was compiled; it is left out, as for a module (see appendAOTModuleLinkOptions()).
+
+    @param cmd the link command to append the options to
+*/
+static void appendAOTExecutableLinkOptions(std::string& cmd) {
+#ifdef __APPLE__
+    cmd += " -Xlinker -S";
+#endif
+}
+
 //! Link an object file into a standalone executable
 /** @param obj_path path to the object file
     @param exe_path path for the output executable
@@ -23394,6 +23407,7 @@ static bool linkExecutable(const std::string& obj_path, const std::string& exe_p
             return false;
         }
         cmd = compiler + " -o " + output + " " + object + " " + archive;
+        appendAOTExecutableLinkOptions(cmd);
         if (!config.target_flags.empty()) {
             cmd += " " + config.target_flags;
         }
@@ -23408,6 +23422,7 @@ static bool linkExecutable(const std::string& obj_path, const std::string& exe_p
     } else {
         // Dynamic link: use CXX compiler from config, link -lqore + system libs
         cmd = compiler + " -o " + output + " " + object + " -L" + libdir + " -lqore";
+        appendAOTExecutableLinkOptions(cmd);
         if (config.emit_rpath) {
             cmd += " -Xlinker -rpath -Xlinker " + libdir;
         }
@@ -25928,26 +25943,30 @@ static std::string createAOTModuleVersionScript(const std::string& so_path, std:
 //! Appends the options that make a module linked for the host depend only on its objects on macOS
 /** A module is linked to a temporary file that is renamed when it is complete, so that a module being linked is never
     loaded, and its object files are deleted when it has been linked.  On Mach-O:
-    - the linker takes the install name (LC_ID_DYLIB) from the output file, and the temporary file's name has the
-      process id in it; the module gets its final path as its install name instead
+    - the linker takes the install name (LC_ID_DYLIB) from the output file, whose name has the process id in it, and
+      whose directory is where the module was built; the module gets its file name as its install name instead
     - the linker records the object files and their modification times in a debug map, which a debugger reads the
       debug information from; the objects are deleted, so the map only made the module depend on when and by which
       process it was compiled (the parts of a split module have the process id in their names), and it is left out
+      (see appendAOTExecutableLinkOptions())
 
-    Each made every link of the same objects give a different module (the UUID derived from the contents and the code
-    signature differed as well).  The install name of a module loaded with dlopen() has no other use.  ELF modules are
-    linked without a soname, and their debug information is in the module itself.
+    Each made every link of the same objects give a different module, and a module built in another directory differed
+    from it (the UUID derived from the contents and the code signature differed as well).  The install name of a
+    module loaded with dlopen() has no other use.  ELF modules are linked without a soname, and their debug
+    information is in the module itself.
 
     @param cmd the link command to append the options to
     @param so_path the final path of the module
-    @param error set if the path cannot be given to the linker
+    @param error set if the name cannot be given to the linker
 
     @return true for success
 */
 static bool appendAOTModuleLinkOptions(std::string& cmd, const std::string& so_path, std::string& error) {
 #ifdef __APPLE__
+    size_t separator = so_path.find_last_of('/');
     std::string install_name;
-    if (!quoteAOTLinkArgument(so_path, install_name, error)) {
+    if (!quoteAOTLinkArgument(separator == std::string::npos ? so_path : so_path.substr(separator + 1),
+            install_name, error)) {
         return false;
     }
     cmd += " -Xlinker -install_name -Xlinker " + install_name + " -Xlinker -S";
