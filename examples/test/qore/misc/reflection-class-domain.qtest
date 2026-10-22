@@ -17,10 +17,13 @@
 public class Watcher inherits DebugProgram {
     public {
         string id;
+        #! the number of objects whose constructor has run
+        static int constructed = 0;
     }
 
     constructor(string n_id) {
         id = n_id;
+        ++constructed;
     }
 
     onAttach(ProgramControl pgm, reference rs, reference rtn) {}
@@ -36,10 +39,13 @@ public class Watcher inherits DebugProgram {
 public class Guard inherits Mutex {
     public {
         string id;
+        #! the number of objects whose constructor has run
+        static int constructed = 0;
     }
 
     constructor(string n_id) {
         id = n_id;
+        ++constructed;
     }
 }
 
@@ -116,19 +122,28 @@ hash<string, string> sub construct(string cls_name) {
     allowedDebuggerTest() {
         # the test Program itself allows the debugger, as Programs running a debugger do
         assertNeq(0, get_parse_options() & PO_ALLOW_DEBUGGER);
+        int before = Watcher::constructed;
         assertEq(Constructed, construct(BaseOptions | PO_ALLOW_DEBUGGER, "Watcher"));
+        assertEq(before + Constructed.size(), Watcher::constructed, "each construction ran the constructor");
     }
 
     excludedDebuggerTest() {
+        int before = Watcher::constructed;
         assertEq(refused("Watcher"), construct(BaseOptions, "Watcher"));
+        assertEq(before, Watcher::constructed, "no refused construction ran the constructor");
     }
 
     unrestrictedThreadClassTest() {
+        int before = Guard::constructed;
         assertEq(Constructed, construct(BaseOptions, "Guard"));
+        assertEq(before + Constructed.size(), Guard::constructed, "each construction ran the constructor");
     }
 
     restrictedThreadClassTest() {
+        int before = Guard::constructed;
         assertEq(refused("Guard"), construct(BaseOptions | PO_NO_THREAD_CLASSES, "Guard"));
+        # Qore 2.2.1 raised CREATE-OBJECT-ERROR for create_object() and then ran the constructor anyway
+        assertEq(before, Guard::constructed, "no refused construction ran the constructor");
     }
 
     #! Returns the result of every construction of the given class in a new Program with the given parse options

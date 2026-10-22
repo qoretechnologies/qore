@@ -5125,7 +5125,9 @@ while (*binary chunk = input.read(65536)) {
       checking a class from a domain that a Program has to allow explicitly, such as a
       @ref Qore::DebugProgram "DebugProgram" subclass (allowed with \c %%allow-debugger), the wrong way round: the
       object was refused with \c CREATE-OBJECT-ERROR in exactly the Programs that allow the domain, and created in a
-      Program that does not, which bypassed the Program's sandboxing restrictions
+      Program that does not, which bypassed the Program's sandboxing restrictions; also, a class that a Program's
+      sandboxing restrictions refuse was still constructed: \c CREATE-OBJECT-ERROR was raised, but the class's
+      constructor ran anyway
     - Fixed creating objects with the @ref reflectionintro "reflection" module in a domain that a Program has to
       allow explicitly, such as a @ref Qore::DebugProgram "DebugProgram" subclass:
       @ref Qore::Reflection::Class::newObject() "Class::newObject()",
