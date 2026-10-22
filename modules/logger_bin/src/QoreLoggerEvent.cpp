@@ -29,6 +29,7 @@
 */
 
 #include "qore_logger.h"
+#include "QC_LoggerEvent.h"
 #include "QC_LoggerLevel.h"
 #include "QoreLoggerEvent.h"
 

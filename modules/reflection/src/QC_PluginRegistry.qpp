@@ -7,6 +7,7 @@
 */
 
 #include "qore_reflection.h"
+#include "AbstractReflectionObject.h"
 #include "QC_PluginRegistry.h"
 #include "QC_Type.h"
 
