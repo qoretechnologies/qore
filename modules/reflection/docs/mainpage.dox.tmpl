@@ -93,7 +93,10 @@
       - from code at least as privileged as it: code whose restrictions forbid no functional domain that the target
         allows, that allows every functional domain that the target must allow explicitly (for example the debugger
         domain with @ref Qore::PO_ALLOW_DEBUGGER "PO_ALLOW_DEBUGGER"), and that no sandbox other than the target's own
-        governs
+        governs; the code of a user module is not less privileged for lacking a domain that a
+        @ref Qore::Program "Program" must allow explicitly, as such options belong to the programs that use the
+        module, so a program with @ref allow-injection "%allow-injection" or @ref allow-debugger "%allow-debugger"
+        can hand its types to modules such as @ref dataproviderintro "DataProvider"
 
       otherwise \c REFLECTION-ACCESS-ERROR is raised
     - a class, typed hash or enum declared in one @ref Qore::Program "Program" and inherited by or imported into

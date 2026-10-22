@@ -70,7 +70,14 @@ allowed through a reflection object of **another** Program only when (`QoreRefle
   that code holds and controls it like any Program it creates — `QoreRepl` creates its REPL Program that way); or
 - the caller is **at least as privileged** as that Program: its runtime parse options restrict no functional domain
   the target allows, allow every domain the target allows explicitly, and no sandbox manager governs the caller
-  other than the target's own.
+  other than the target's own.  The code of a user module (a caller whose Program has `PO_IN_MODULE`, a system option
+  that user code cannot set) is not less privileged for lacking a domain that a Program must allow explicitly
+  (`PO_ALLOW_INJECTION`, `PO_ALLOW_DEBUGGER`): those options belong to the Programs that use the module, one module
+  Program serves every Program that loads it, and an AOT-compiled module does not inherit the options of the Program
+  that loads it (a module loaded from source does, from the first Program that loads it).  Without this, a Program
+  with `%allow-injection` or `%allow-debugger` could not hand its types to the `DataProvider` module: its
+  `HashDeclDataType` reads the default values of a typed hash's members (`ir/AOTDataProviderExecutable.qtest`).  The
+  restricting domains are compared for module code as for any other caller.
 
 Otherwise `REFLECTION-ACCESS-ERROR` is raised (D2/(i)+(b), David 2026-10-21).
 

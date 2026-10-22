@@ -1,0 +1,115 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# The DataProvider module reads the members of the typed hashes that the programs using it hand it (HashDeclDataType
+# reads their default values through reflection).  Reflection allows code to read the values of another Program only
+# from code at least as privileged as it, and a Program that allows the debugger or code injection allows a domain
+# that the module's Program does not allow: one module Program serves every Program that loads it, and an AOT-compiled
+# module does not inherit the options of the Program that loads it.  The code of a user module is not less privileged
+# for lacking such a domain, so a Program with %allow-debugger or %allow-injection can hand its types to the module
+# (ir/AOTDataProviderExecutable.qtest failed with REFLECTION-ACCESS-ERROR); code outside modules that lacks the domain
+# still cannot read the values of such a Program.
+#
+# The module is loaded by this test, which allows neither domain, so its Program allows neither, whether it is loaded
+# from source or as an AOT module; the Programs that hand it their types are children that allow them.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires DataProvider
+%requires reflection
+
+%exec-class HashDeclDataTypeCallerPrivilegeTest
+
+class HashDeclDataTypeCallerPrivilegeTest inherits QUnit::Test {
+    public {
+        const BaseOptions = PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS;
+
+        #! a Program that hands the DataProvider module a type with a typed hash of its own and one of the builtin ones
+        const UserSource = "%requires DataProvider
+%requires reflection
+hashdecl Order {
+    int count = 7;
+    string name = \"n\";
+}
+
+auto sub user_default() {
+    return AbstractDataProviderType::get(new Type(\"hash<Order>\")).getField(\"count\").getDefaultValue();
+}
+
+auto sub builtin_field() {
+    return AbstractDataProviderType::get(new Type(\"hash<StatInfo>\")).getField(\"size\").getType().getName();
+}
+
+list<string> sub fields() {
+    return keys AbstractDataProviderType::get(new Type(\"hash<Order>\")).getFields();
+}
+
+TypedHashMember sub member() {
+    return TypedHash::forName(\"Order\").getMember(\"count\");
+}
+";
+
+        #! code outside modules that reads the default value of a member of another Program's typed hash
+        const ReaderSource = "%requires reflection
+auto sub read(TypedHashMember m) {
+    try {
+        return m.getDefaultValue();
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+";
+    }
+
+    constructor() : QUnit::Test("HashDeclDataTypeCallerPrivilegeTest", "1.0") {
+        addTestCase("a Program that allows the debugger hands its types to the module", \debuggerProgram());
+        addTestCase("a Program that allows code injection hands its types to the module", \injectionProgram());
+        addTestCase("the module reads the types of a Program with the same options as before", \plainProgram());
+        addTestCase("code outside modules that does not allow the debugger cannot read the values",
+            \nonModuleRefused());
+        set_return_value(main());
+    }
+
+    #! returns a Program with the given options that hands its types to the DataProvider module
+    private Program userProgram(int po) {
+        Program pgm(BaseOptions | po);
+        pgm.parse(UserSource, "user");
+        return pgm;
+    }
+
+    private checkModuleReads(int po) {
+        Program pgm = userProgram(po);
+        assertEq(7, pgm.callFunction("user_default"));
+        assertEq("int", pgm.callFunction("builtin_field"));
+        assertEq(("count", "name"), pgm.callFunction("fields"));
+    }
+
+    debuggerProgram() {
+        checkModuleReads(PO_ALLOW_DEBUGGER);
+    }
+
+    injectionProgram() {
+        checkModuleReads(PO_ALLOW_INJECTION);
+    }
+
+    plainProgram() {
+        checkModuleReads(0);
+    }
+
+    nonModuleRefused() {
+        Program pgm = userProgram(PO_ALLOW_DEBUGGER);
+        TypedHashMember m = pgm.callFunction("member");
+        Program reader(BaseOptions);
+        reader.parse(ReaderSource, "reader");
+        # the reader is not module code, did not create the Program, and does not allow the debugger
+        assertEq("REFLECTION-ACCESS-ERROR", reader.callFunction("read", m));
+        # with the debugger allowed, it is as privileged as the Program
+        Program privileged_reader(BaseOptions | PO_ALLOW_DEBUGGER);
+        privileged_reader.parse(ReaderSource, "privileged_reader");
+        assertEq(7, privileged_reader.callFunction("read", m));
+    }
+}

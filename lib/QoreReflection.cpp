@@ -676,10 +676,15 @@ int QoreReflectionCaller::checkProgramAccess(const QoreProgram* target, const ch
     }
     // a caller at least as privileged as the target: it restricts no domain the target allows (PO_IN_MODULE only
     // marks module code and is not a privilege), it allows every domain the target allows explicitly, and no sandbox
-    // other than the target's own governs it
+    // other than the target's own governs it.  The code of a user module is not less privileged for lacking a domain
+    // that a Program must allow explicitly (PO_ALLOW_INJECTION, PO_ALLOW_DEBUGGER): those options belong to the
+    // Programs that use the module, one module Program serves every Program that loads it, and an AOT-compiled module
+    // does not inherit them from the Program that loads it; so module code such as the DataProvider module can read
+    // the types of the Programs that hand them to it (PO_IN_MODULE is a system option that user code cannot set)
     QoreParseOptions tpo = target->getParseOptions();
     QoreParseOptions compared = qore_restricting_domains & ~QoreParseOptions(QDOM_IN_MODULE);
-    bool privileged = !((po & compared) & ~tpo) && !((tpo & qore_positive_domains) & ~po);
+    bool module_code = pgm && pgm->getParseOptions().hasAny(QoreParseOptions(PO_IN_MODULE));
+    bool privileged = !((po & compared) & ~tpo) && (module_code || !((tpo & qore_positive_domains) & ~po));
     if (privileged && sm) {
         QoreSandboxManager* target_sm = qore_program_private::get(*const_cast<QoreProgram*>(target))
             ->getSandboxManagerRef();
