@@ -48,6 +48,7 @@
 #include <vector>
 #include <qore/QoreValue.h>
 #include <qore/QoreEnumDecl.h>
+#include <qore/SystemEnvironment.h>
 #include <qore/TypedHashDecl.h>
 #include "qore/intern/qore_aot_deps.h"
 
@@ -3390,7 +3391,7 @@ class QoreAOTBinaryMultiDeserializer {
     static bool timingEnabled() {
         static int cached = -1;
         if (cached < 0) {
-            cached = q_env_is_set("QORE_AOT_PHASE_TIMING") ? 1 : 0;
+            cached = SystemEnvironment::isSet("QORE_AOT_PHASE_TIMING") ? 1 : 0;
         }
         return cached != 0;
     }
