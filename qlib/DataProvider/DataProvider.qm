@@ -1557,26 +1557,16 @@ fetch
       \c [*] and not \c {*}.  A type without known fields offers no keys.  The new
       @ref DataProvider::DpqlSerializer::fieldReferenceForPath() "DpqlSerializer::fieldReferenceForPath()" and
       @ref DataProvider::DpqlSerializer::memberNameForKey() "DpqlSerializer::memberNameForKey()" give these forms
-    - the \c INVALID-EXPRESSION error of
-      @ref DataProvider::DataProvider::renderExpression() "DataProvider::renderExpression()" names the expression
-      that is not in the expression map also when it is an argument of another expression, where it named none
-    - @ref DataProvider::DataProvider::renderExpression() "DataProvider::renderExpression()" describes a field
-      reference, and the accessors and wildcards on it, as the DPQL serializer writes them: \c @pos,
-      <tt>\@"create.order-id"</tt>, <tt>\@"Unit\\.Price"</tt>, <tt>\@orders[*].id</tt>, where it wrote \c {pos} and
-      the accessors as calls, so that the description and the DPQL of an expression read the same; template
-      references are written as before (<tt>$static:{x}</tt>); the new
-      @ref DataProvider::DpqlSerializer::fieldReference() "DpqlSerializer::fieldReference()" and
-      @ref DataProvider::DpqlSerializer::accessorForm() "DpqlSerializer::accessorForm()" give these forms
-    - each element of a list given for a list option of fields is one field, as it is given: a field whose name has
-      a comma (\c "Price, USD") can be given in a list; a single string is still a comma-separated list
-      (@ref DataProvider::AbstractDataProvider::parseFieldList() "AbstractDataProvider::parseFieldList()"); the
-      processors read the string given for such an option with the new
-      @ref DataProvider::AbstractDataProvider::getFieldListOption() "AbstractDataProvider::getFieldListOption()",
-      as the option type makes a single string a list of one string
-    - each part that @ref DataProvider::AbstractDataProvider::splitPushdownableExpression()
-      "AbstractDataProvider::splitPushdownableExpression()" gives is an expression: a field reference that was the only
-      condition of a part was given alone, and a database table read it as a where hash, so that
-      <tt>\@active && \@name =~ /x/</tt> searched for the rows whose column \c field held \c "active"
+    - added @ref DataProvider::DpqlSerializer::fieldReference() "DpqlSerializer::fieldReference()" and
+      @ref DataProvider::DpqlSerializer::accessorForm() "DpqlSerializer::accessorForm()", which give the forms in
+      which @ref DataProvider::DataProvider::renderExpression() "DataProvider::renderExpression()" and the DPQL
+      serializer write a field reference and the accessors and wildcards on it: \c @pos,
+      <tt>\@"create.order-id"</tt>, <tt>\@"Unit\\.Price"</tt>, <tt>\@orders[*].id</tt>
+    - added @ref DataProvider::AbstractDataProvider::getFieldListOption() "AbstractDataProvider::getFieldListOption()",
+      with which the processors read a list option of fields: each element of a list is one field, as it is given,
+      so a field whose name has a comma (\c "Price, USD") can be given in a list, and a single string is a
+      comma-separated list (@ref DataProvider::AbstractDataProvider::parseFieldList()
+      "AbstractDataProvider::parseFieldList()")
     - @ref DataProvider::AbstractDataProvider::splitPushdownableExpression()
       "AbstractDataProvider::splitPushdownableExpression()" and
       @ref DataProvider::AbstractDataProvider::expressionPushdownable()
@@ -1605,122 +1595,44 @@ fetch
       it is set for @ref DataProvider::DP_FUNC_WILDCARD_ITEM "DP_FUNC_WILDCARD_ITEM", the item of a list
       wildcard, so that user interfaces can leave it out of their lists of expressions; DPQL completion does not
       offer internal expressions
-    - DPQL serialization (@ref DataProvider::DataProvider::serializeDpqlExpression() "serializeDpqlExpression()")
-      writes a single key that is a name, after an accessor, as the member that it is read from:
-      <tt>\@create.items[0].id</tt> is written as it is; it was written <tt>\@create.items[0]{id}</tt> (see
-      @ref dpql_round_trip)
-    - fixed DPQL serialization of an accessor whose index or key is a field or template reference
-      (<tt>index(\@items, \@i)</tt>), which raised \c RUNTIME-OVERLOAD-ERROR; it is written as a call
-    - fixed DPQL serialization of an accessor of a value after which DPQL does not read accessors: a wildcard, a
-      template reference, a literal, a call or an operation; it was written as an accessor that did not parse
-      (<tt>(\@a + \@b){c}</tt>), or, for a wildcard, that parsed as another expression
-      (<tt>\@orders[*].a[0]</tt> for the first list of the wildcard's results); it is written as a call
-      (<tt>index(\@orders[*].a, 0)</tt>)
-    - fixed DPQL parsing of a list literal as an argument of a call or a prefix operator, or as an operand of
-      \c || or \c &&: its elements were taken for separate arguments, so that <tt>coalesce(\@a, (1, 2))</tt> had
-      three arguments and <tt>map \@value * 2, (1, 2)</tt> failed with an internal parser error; the list is one
-      argument
-    - \c format_number applies the defaults it documents to an argument that is missing or has no value, as
-      Qorus does: the thousands separator \c ",", the decimal separator \c "." and \c 2 decimals, so
-      <tt>format_number(\@n)</tt> gives <tt>1,234.50</tt> for \c 1234.5; with fewer than four arguments it
-      raised \c RUNTIME-TYPE-ERROR.  <b>Behavior change</b>: a thousands separator with no value is \c ","; it
-      gave no thousands separator, which is written \c "?" or as an empty string: <tt>format_number(1234567.891,
-      "", ".", 2)</tt> gives <tt>1234567.89</tt> (an empty separator gave <tt>1.234.568</tt>).  A separator that is
-      not a single character and a negative precision raise \c FORMAT-NUMBER-ERROR; they gave wrong text such as
-      <tt>1a234a568</tt>.  The decimal separator and precision arguments are typed as optional, so \c null passes
-      validation
-    - <b>behavior change</b>: \c findIn gives the results that Qorus's \c findIn gives:
-      -# when no element matches by location, the value itself is returned if it is an element of the list:
-         <tt>findIn(2, (1, 2, 3), "id")</tt> is \c 2; it was no value
-      -# an escaped dot is part of a key: <tt>findIn(2, ({"a.b": 2},), "a\\.b")</tt> finds the element; a location
-         with \c "\\." found nothing unless a key ended with a backslash
-      -# an escaped backslash is one backslash of a key, as in a field path (@ref dpql_field_paths), so a key ending
-         with a backslash can be followed by another: <tt>findIn(2, ({"a\\": {"b": 2}},), "a\\\\.b")</tt> finds the
-         element; a location joined from keys escaped with
-         @ref DataProvider::AbstractDataProvider::escapeFieldPathKey() "AbstractDataProvider::escapeFieldPathKey()"
-         reads them back; an escaped bracket is a bracket of a key and not an offset:
-         <tt>findIn(1, ({"tags[0]": 1},), "tags\\[0]")</tt> finds the element; it read the key \c "tags\\" and the
-         offset \c 0
-      -# <tt>[n]</tt> or <tt>[-n]</tt> after a key reads an element of a list: <tt>findIn("y", ({"tags": ("x", "y")},),
-         "tags[-1]")</tt> finds the element; it read a key named \c "tags[-1]"
-      -# a key in quotes, or with \c "\\ " for a space, is the key without the quotes or with the space:
-         <tt>findIn(1, ({"a b": 1},), "'a b'")</tt> finds the element; it read a key named \c "'a b'"
-      -# a key that reads a list of more than one hash before the last step gives the list of the values read in
-         each hash: <tt>findIn((1, 2), ({"o": ({"v": 1}, {"v": 2})},), "o.v")</tt> finds the element; it found
-         nothing
-      .
-      The list argument accepts no value (which finds nothing) and any other value, as a soft list
-      (@ref DataProvider::DataProviderSignatureOptionalSoftListType "DataProviderSignatureOptionalSoftListType"),
-      so <tt>findIn(1, null)</tt> passes validation
     - added the DPQL operator @ref dpql_exists "exists" (@ref DP_OP_EXISTS): <tt>exists \@field</tt> is \c true
       when the record has the field, also with no value, and \c false when it does not, without the error that a
       field reference to a missing field raises, so records of different shapes can be tested, as with
       <tt>exists \@type && \@type == "return"</tt>; the field reference can have accessors that read one key or
       one position (<tt>exists \@a.b</tt>, <tt>exists \@a[0].b</tt>); it is offered by completion, written back by
       the serializer, typed as \c bool, and evaluated locally, as databases cannot search with it
-    - <b>behavior change</b>: in a quoted DPQL field name, \c \\. is a dot that is part of a key
-      (<tt>\@"Unit\\.Price"</tt> is the key \c Unit.Price), as in a Qorus \c $record:{...} path; its backslash was
-      dropped, so it separated the parts of the path.  Dots separate the parts of a field path in quoted names as in
-      unquoted ones (@ref dpql_field_paths); quotes are only for characters that an unquoted name cannot hold.  An
-      escape that field names do not have (other than \c \\", \c \\\\, \c \\., \c \\n, \c \\r and \c \\t) is the
-      error \c DPQL-E003; its backslash was dropped.  The serializer writes an escaped dot as \c \\. and reads it
-      back the same, field completion and the GraphQL data provider bridge escape the dots of a field name, and the
-      new @ref DataProvider::DpqlSerializer::fieldReferenceForKey() "DpqlSerializer::fieldReferenceForKey()" and
-      @ref DataProvider::AbstractDataProvider::getFieldPath() "AbstractDataProvider::getFieldPath()" write the field
-      reference to a key and give the keys of a field path
+    - added @ref DataProvider::DpqlSerializer::fieldReferenceForKey() "DpqlSerializer::fieldReferenceForKey()" and
+      @ref DataProvider::AbstractDataProvider::getFieldPath() "AbstractDataProvider::getFieldPath()", which write the
+      field reference to a key and give the keys of a field path
     - fixed a backslash followed by any character other than a dot in a field path being read as a dot: the key
       <tt>p\\q</tt> was read as <tt>p.</tt>.  In a field path, <tt>\\.</tt> is a dot and <tt>\\\\</tt> a
       backslash of a key, and any other backslash is itself, so a key ending with a backslash can be followed by more
       keys (<tt>a\\\\.b</tt> is the keys <tt>a\\</tt> and \c b); the new
       @ref DataProvider::AbstractDataProvider::escapeFieldPathKey() "AbstractDataProvider::escapeFieldPathKey()"
-      escapes a key as one part of a path, and a path joined from escaped keys reads them back exactly.  DPQL
-      validation reads the first key of a path with an escaped dot as evaluation does, and
-      @ref DataProvider::AbstractDataProvider::getFieldValue() "AbstractDataProvider::getFieldValue()", which the
-      processors read their field options with, reads an escaped dot as part of a key; the new
+      escapes a key as one part of a path, and a path joined from escaped keys reads them back exactly; the new
       @ref DataProvider::AbstractDataProvider::isPlainFieldPath() "AbstractDataProvider::isPlainFieldPath()" tells
-      whether a field path is the one key it is written as, and the processors read a column of a column block by a
-      field name directly only then, so a field path with a backslash is no longer read as a column with the
-      backslashes in its name
-    - @ref DataProvider::AbstractDataProviderType::getFieldNamesAsAllowedValues()
-      "AbstractDataProviderType::getFieldNamesAsAllowedValues()" gives the field path of each field as its value,
-      with the keys escaped by
-      @ref DataProvider::AbstractDataProvider::escapeFieldPathKey() "AbstractDataProvider::escapeFieldPathKey()", so
-      that a processor reads the field it names: the field \c Unit.Price is the value <tt>Unit\\.Price</tt>, and the
-      field \c id of \c order is \c order.id; the display name is the names of the path as they are written
-      (\c Unit.Price, \c order.id).  The value was the names joined with dots, which a processor read as a path, so
-      a field whose name has a dot could not be picked
+      whether a field path is the one key it is written as
     - added @ref DataProvider::AbstractDataProvider::setFieldValue() "AbstractDataProvider::setFieldValue()", which
       sets the value at a field path as
       @ref DataProvider::AbstractDataProvider::getFieldValue() "AbstractDataProvider::getFieldValue()" reads it,
       creating the hashes on the path that are missing; \c search-replace writes the value back at the path of its
-      field: it added a top-level key named by the path (\c order.name or <tt>Unit\\.Price</tt>) and left the field
-      unchanged
+      field
     - added @ref DataProvider::AbstractDataProvider::removeFieldValue() "AbstractDataProvider::removeFieldValue()",
       which removes the value at a field path, leaving the hashes on the path in place; a path with no value is left
       as it is; \c remove-fields reads each of its fields as a field path, so \c address.city removes the key
-      \c city of \c address (it removed nothing), and <tt>Unit\\.Price</tt> removes the key \c Unit.Price; its
-      output type does not have the fields removed, also from a nested hash type
+      \c city of \c address, and <tt>Unit\\.Price</tt> removes the key \c Unit.Price; its output type does not
+      have the fields removed, also from a nested hash type
     - added @ref DataProvider::AbstractDataProvider::getFieldPathDisplayName()
       "AbstractDataProvider::getFieldPathDisplayName()", which gives a field path as it is written (the display name
       of its allowed value); \c select-fields outputs a field that is not renamed, and \c group-by a group-by field,
       under that name (<tt>Unit\\.Price</tt> as \c Unit.Price), and so is the field in the default name of a
       \c group-by aggregate; two fields, or a field and an aggregate, that give the same output name are refused when
-      the processor is created, as are two aggregates with the same name, which were accumulated into one
+      the processor is created, as are two aggregates with the same name
     - added @ref DataProvider::AbstractDataProvider::checkFieldPathOption()
       "AbstractDataProvider::checkFieldPathOption()": a field option of a processor names one field by its path, and
       the processors whose options take fields of the input (\c select-fields, \c remove-fields, \c search-replace,
       \c group-by, \c correlation, \c cross-correlation and the analytics processors) refuse a field with a DPQL
-      wildcard (<tt>[*]</tt> or <tt>{*}</tt>) when they are created; it was read as a key with the wildcard in its
-      name, which matched nothing
-    - the \c correlation processor refuses fields that would give two pairs the same key of the
-      @ref DataProvider::CorrelationEventInfo "correlations" of its events when it is created, naming both pairs: the
-      key of a pair is its two fields joined with \c _, so \c a with \c b_c and \c a_b with \c c both gave
-      \c a_b_c, and one correlation replaced the other; a field given more than once is one field, where its values
-      were read once for each time it was given, which made the correlations of the window wrong
-    - fixed @ref DataProvider::DataProviderActionCatalog::getActionOptionFromFields() "getActionOptionFromFields()"
-      dropping the \c input_field_names marker, so the options of the registered processor actions that take field
-      names of the input (such as \c group_by of \c group-by and \c fields of \c select-fields) did not have it, and
-      host applications did not offer the field names of the input as their values
+      wildcard (<tt>[*]</tt> or <tt>{*}</tt>) when they are created
     - fixed @ref DataProvider::DataProviderActionCatalog::getTypeForActionOptions() "getTypeForActionOptions()"
       returning a hash type without fields: the type of the options of an action has a field for each option, with
       its type (mandatory for a required option), description, default value and allowed values; other keys are
@@ -1736,17 +1648,6 @@ fetch
       and \c getDataProviderForAction() no longer build deferred output types, so loading one provider module and
       reading one action no longer builds the output types of every action of every loaded module
 
-    @subsection dataprovider_v3_10_2 DataProvider v3.10.2
-    - the editor token spans of @ref DataProvider::DpqlActionSession "DpqlActionSession" (\c dpql-get-tokens and
-      \c dpql-parse in the \c token-span format) give the arithmetic operators (\c +, \c -, \c *, \c /, \c %),
-      \c !~, the range \c .. and the wildcard \c * the type \c operator, and brackets, braces and the dot of a
-      member access the type \c punctuation; they had the type \c identifier, which editors show as a function
-    - those editor token spans type a word by where it is: a member or key name (<tt>\@a[*].b</tt>,
-      <tt>\@x{map}</tt>, and the string and number keys of a key accessor) is a \c field, a word operator
-      (\c between, \c and, \c in, \c not in, \c like and the other infix comparisons) and a prefix operator
-      (\c map, \c select, \c count, ...) is an \c operator, an unquoted value (\c omq in
-      <tt>\@domain == omq</tt>) is a \c string, and only the name of a function call stays an \c identifier
-
     @subsection dataprovider_v3_10_1 DataProvider v3.10.1
     - <b>behavior change</b>: a field reference whose path goes through a value that is not a hash or an object
       now has no value: <tt>\@a.b</tt> is no value when \c a is \c 5, a string, a list or no value, as documented
@@ -1756,11 +1657,6 @@ fetch
       wherever an expression is evaluated, including searches filtered by the client, \c filter-records and
       mappers that use expressions, and to the paths read by \c map and the wildcards
       (<tt>\@prices{*}.cur.code</tt>)
-    - a key that is \c true, \c false or \c null (in any case), or an empty key, is written quoted when an
-      expression is serialized (<tt>\@r{"true"}</tt>) and when completion inserts it, so that it parses back;
-      completion also escapes a quote or backslash in a key correctly
-    - a quoted field name after an accessor (<tt>\@r[0].\@"x y"</tt>) is the key \c x \c y; the quotes were kept as
-      part of the key
     - added @ref DataProvider::DpqlParser::isItemScopedArg() "DpqlParser::isItemScopedArg()", which tells whether an
       argument of an expression is evaluated for each item of a source (the body and filter of \c map, the
       predicates of the streaming operators, the expression after a wildcard), so that code that collects or
@@ -1774,21 +1670,6 @@ fetch
       (@ref DataProvider::DP_FUNC_LIST_WILDCARD "DP_FUNC_LIST_WILDCARD",
       @ref DataProvider::DP_FUNC_HASH_WILDCARD "DP_FUNC_HASH_WILDCARD",
       @ref DataProvider::DP_FUNC_WILDCARD_ITEM "DP_FUNC_WILDCARD_ITEM", \c DPQL_TOK_WILDCARD)
-    - \c map, \c select, \c take, \c drop, \c takewhile, \c takeuntil and slice accessors (<tt>\@x[0..1]</tt>)
-      keep an element that is a list as one element: <tt>map \@items, \@orders</tt> gives a list with the list of
-      items of each order, and <tt>\@matrix[0..1]</tt> the first two rows; they flattened such elements into the
-      result, so that \c take also counted their elements
-    - DPQL validation
-      (@ref DataProvider::DataProvider::validateDpqlExpression() "validateDpqlExpression()") no longer reports the
-      fields of the items in the body and filter of \c map, the key, value and filter of \c hash_map and the
-      predicates of the streaming operators as unknown fields of the record
-
-    @subsection dataprovider_v3_9_1 DataProvider v3.9.1
-    - a bracketed DPQL template value (<tt>$context:{...}</tt>) is no longer cut short at a brace that is escaped
-      with a backslash or inside a quoted string: <tt>$record:{c.a\\}b}</tt> has the value <tt>c.a\\}b</tt> and
-      <tt>$record:{c."x}y"}</tt> the value <tt>c."x}y"</tt>, and a <tt>$qore-expr:{...}</tt> expression whose string
-      literal contains a brace keeps its whole expression; the parser now ends the value where the tokenizer
-      does
 
     @subsection dataprovider_v3_9 DataProvider v3.9
     - an expression has one type wherever it is used: DPQL validation, expression verification
@@ -1801,12 +1682,6 @@ fetch
       \c DPQL-E050 error, and still evaluates to %Qore's result
     - expression verification checks literal values and template references against the types of their
       arguments too, as DPQL validation does (\c DPQL-W004)
-    - the arguments of the math functions and of the arithmetic operators that take numbers
-      (@ref DataProvider::DataProviderSignatureNumberType "DataProviderSignatureNumberType") take an integer, a
-      float or a number, as documented, and are reported (\c DPQL-W004) and refused when an expression is verified
-      otherwise; the arguments that take a string or binary data
-      (@ref DataProvider::DataProviderSignatureDataType "DataProviderSignatureDataType") take only those; the
-      values are not converted
     - the messages about conditions and expressions are written in plain language: the errors of expression
       verification, the DPQL diagnostics \c DPQL-E040, \c DPQL-E042, \c DPQL-E043, \c DPQL-W004, \c DPQL-W006 and
       \c DPQL-E100, and the descriptions of the condition operators and of the filter options; the codes and
@@ -1815,37 +1690,20 @@ fetch
       arithmetic operands that the operator cannot combine (\c DPQL-E050), such as a hash plus a number, which
       evaluates to the number, and comparisons whose result is the same for every record (\c DPQL-W006), such as
       <tt>\@price > \@price</tt>; see @ref dpql_validation
-    - the \c dpql-parse action fails an expression only for a validation error, as parsing does, and no longer for a
-      validation warning
-    - the \c dpql-parse and \c dpql-eval actions report each diagnostic of parsing once; they were reported twice
-      when the expression was validated against fields
     - added @ref ConnectionProvider::connection_option_override() "connection_option_override()" to derive a
-      connection option from the option of another connection scheme: adding a hash cast to
-      @ref ConnectionProvider::ConnectionOptionInfo "ConnectionOptionInfo" to a base option also set every member
-      that the cast did not give to its default value, so that an option derived from a sensitive option (ex: a
-      password or a client secret) was no longer sensitive; the connection schemes of the modules delivered with
-      %Qore derive their options with the new function
-    - @ref DataProvider::QoreDataType::getInfo() "QoreDataType::getInfo()" keeps the members of the base type info
-      that it does not set
-    - fixed DPQL serialization (@ref DataProvider::DataProvider::serializeDpqlExpression() "serializeDpqlExpression()")
-      of a \c + or \c * expression with more than two arguments, such as a text concatenation of three values:
-      only the first two were written, so text saved from the serialized form lost the others; all arguments are
-      now written in order, and an operator that takes two arguments but has more raises \c DPQL-SERIALIZE-ERROR
-      instead of dropping them
+      connection option from the option of another connection scheme without resetting the members that are not
+      changed: adding a hash cast to @ref ConnectionProvider::ConnectionOptionInfo "ConnectionOptionInfo" to a base
+      option sets every member that the cast does not give to its default value, so that an option derived from a
+      sensitive option (ex: a password or a client secret) would no longer be sensitive; the connection schemes of
+      the modules delivered with %Qore derive their options with the new function
     - @ref DataProvider::AbstractDataProviderFactory::create() "AbstractDataProviderFactory::create()" and
       @ref DataProvider::AbstractDataProviderFactory::createWithTemplate() "createWithTemplate()" report that a data
       provider does not support a constructor from an option hash only when its class really has no such
       constructor; any other error raised while looking up the constructor (for example \c PROGRAM-ERROR when the
       @ref Qore::Program "Program" holding the class has been deleted) is now raised unchanged instead of being
       hidden behind that message
-    - fixed the polling thread of @ref DataProvider::AbstractWatchDataProviderBase "AbstractWatchDataProviderBase"
-      dying with an unhandled \c THREAD-CANCELLED exception when polling was stopped while the thread was between
-      the statements of its polling loop; the thread now always ends cleanly
     - a DPQL field name can be written without quotes in any script: <tt>\@menge_bestätigt</tt> and
-      <tt>\@größe</tt> are read like <tt>\@name</tt>, and the serializer and completion write such names bare;
-      a non-ASCII field name was read byte by byte, so it failed with a parse error whose message held a single
-      byte of a character, and that error could not be encoded as UTF-8 text; an unexpected character is now
-      reported whole, and token and diagnostic columns count characters instead of bytes
+      <tt>\@größe</tt> are read like <tt>\@name</tt>, and the serializer and completion write such names bare
     - in DPQL and generic expression evaluation, a float combined with a number by an arithmetic operator, a
       comparison, or \c toNumber() is converted to the number that its 15 significant digits give, so
       <tt>\@price * 1.19</tt> for a number field gives the same number as with the number literal \c 1.19n
@@ -1875,6 +1733,13 @@ fetch
         (ex: <tt>\@status == "open"</tt> or <tt>\@x != ""</tt>)
       - other arguments need a result of a type that they accept, so <tt>lwr(size(\@a))</tt> is rejected
       - a result of any type, such as from \c ternary or \c coalesce, is accepted everywhere
+
+      the DPQL argument type warning \c DPQL-W004 uses the same rules, and is also given for \c !; added
+      @ref DataProvider::AbstractDataProvider::isConditionType() "AbstractDataProvider::isConditionType()",
+      @ref DataProvider::AbstractDataProvider::isArgTypeCompatible() "AbstractDataProvider::isArgTypeCompatible()"
+      and @ref DataProvider::AbstractDataProvider::getFieldReferenceType()
+      "AbstractDataProvider::getFieldReferenceType()"; expressions are prepared for evaluation without checking
+      argument types, so that expressions saved before still run
     - the \c a member of an RGB color (@ref DataProvider::RgbColorDataType "RgbColorDataType") is its opacity, as
       every user interface stores it: a number from \c 0 (transparent) to \c 1 (opaque), which is \c 1 when it is
       missing or null (\c NOTHING or \c NULL); an opacity outside of this range is rejected, and the opacity is
@@ -1885,13 +1750,6 @@ fetch
       was accepted as \c 255); the components are described by the new
       @ref DataProvider::RgbColorDataTypeBase::ComponentType "RgbColorDataTypeBase::ComponentType", an \c int type
       with the range as its validation constraints
-
-      the DPQL argument type warning \c DPQL-W004 uses the same rules, and is also given for \c !; added
-      @ref DataProvider::AbstractDataProvider::isConditionType() "AbstractDataProvider::isConditionType()",
-      @ref DataProvider::AbstractDataProvider::isArgTypeCompatible() "AbstractDataProvider::isArgTypeCompatible()"
-      and @ref DataProvider::AbstractDataProvider::getFieldReferenceType()
-      "AbstractDataProvider::getFieldReferenceType()"; expressions are prepared for evaluation without checking
-      argument types, so that expressions saved before still run
     - the tabular profile reads numbers stored as text with a currency symbol or ISO 4217 code before or after the
       number, \c "%", parentheses or a trailing minus (such as <tt>1.234,56 €</tt>, <tt>12,5 %</tt>,
       <tt>(1,234.00)</tt> or <tt>1.234,56-</tt>) as numbers, and reports how a column writes them in
@@ -1905,43 +1763,14 @@ fetch
       to describe how an option interacts with other options (a conflict, a default that depends on another option,
       an option that is ignored or needs another option) in the option's \c metadata, which is carried into action
       options and the data provider index
-    - the \c contains and \c contains-any expressions are @ref True "True" for an empty substring, such as
-      <tt>contains(\@name, "")</tt>, following <tt>string::contains()</tt> in %Qore 3.0, in generic and columnar
-      evaluation alike (columnar evaluation of a \c DataFrame was already @ref True "True")
-    - the \c dpql_where option of the \c filter-records action and of
-      @ref DataProvider::QoreFilterRecordsProcessor "QoreFilterRecordsProcessor" has \c supports_expressions set to
-      @ref False, so that DPQL text is not evaluated or template-expanded before it is parsed, which broke DPQL's own
-      \c $ctx:value template references and backslash escapes; added \c supports_expressions to
-      @ref DataProvider::DataProviderOptionBaseInfo "DataProviderOptionBaseInfo", which is passed on to action
-      options; it has no value unless set (meaning that the option supports expressions), so option hashes still
-      convert to other option hashdecls such as \c ConnectionOptionInfo
-    - fixed the string \c "0" being @ref True "True" as a condition when a \c filter-records expression or another
-      DPQL filter is evaluated on DataFrame or columnar data, such as <tt>\@code && \@id > 1</tt> for a \c code of
-      \c "0", while it is @ref False "False" when the expression is evaluated on records; the \c has-value
-      expression, which is @ref True "True" for \c "0", is unchanged
-    - a search operator with one argument given without a value, such as \c dp_op_ne() for \c != \c NOTHING, gives an
-      expression with the @ref nothing argument instead of none, so the expression has all its arguments
-    - fixed <tt>not in</tt> with more than one value, such as <tt>\@id not in (2, 4)</tt>, comparing only the first
-      value in generic evaluation
-    - fixed DPQL prefix expression operators (\c map, \c hash_map, \c select, \c first, \c any, \c all,
-      \c count, \c take, \c drop, \c takewhile, \c takeuntil) with more than one argument inside parentheses,
-      such as <tt>(count \@age > 28, \@users) > 1</tt>, being parsed as a list of strings
-    - fixed DPQL prefix expression operators whose first argument starts with parentheses, such as
-      <tt>map (\@value + 1) * 2, \@list</tt>, being rejected as function-call syntax
-    - fixed DPQL serialization of a prefix expression operator used as an operand or before another argument
-      leaving out the parentheses it needs, so that <tt>(count \@users) > 1</tt> was serialized as
-      <tt>count \@users > 1</tt>, which is a different expression; added @ref DataProvider::DPQL_PREC_PREFIX
-      "DPQL_PREC_PREFIX" and @ref DataProvider::DpqlSerializer::getListElementContext()
-      "DpqlSerializer::getListElementContext()"
-    - fixed the DPQL argument count warning (\c DPQL-W002) being raised when optional arguments of functions such
-      as \c trim(), \c digest(), \c encrypt(), and \c regex-subst() are omitted, and not being raised for
-      arguments given to functions that take none, such as \c now();
-      @ref DataProvider::DataProviderSignatureOptionalDataType "DataProviderSignatureOptionalDataType" now has
-      type \c *data, declaring its argument optional
-    - fixed DPQL string literals and quoted field names containing multibyte characters retaining a closing
-      quote; accent-removal expressions such as \c unaccent("café") now receive the correct string value
-    - fixed DPQL serialization of multibyte strings raising \c RUNTIME-TYPE-ERROR and embedded double quotes
-      being escaped twice
+    - added \c supports_expressions to @ref DataProvider::DataProviderOptionBaseInfo "DataProviderOptionBaseInfo",
+      which is passed on to action options; it has no value unless set (meaning that the option supports
+      expressions), so option hashes still convert to other option hashdecls such as \c ConnectionOptionInfo; the
+      \c dpql_where option of the \c filter-records action and of
+      @ref DataProvider::QoreFilterRecordsProcessor "QoreFilterRecordsProcessor" sets it to @ref False, so that DPQL
+      text is not evaluated or template-expanded before it is parsed
+    - added @ref DataProvider::DPQL_PREC_PREFIX "DPQL_PREC_PREFIX" and
+      @ref DataProvider::DpqlSerializer::getListElementContext() "DpqlSerializer::getListElementContext()"
     - @ref DataProvider::DataProviderActionCatalog::sealDiscovery() "DataProviderActionCatalog::sealDiscovery()"
       takes an optional \c record_app_failures argument, with which the failures of individual apps and actions do
       not block a discovery generation, but are returned in the new \c unavailable member of
@@ -1965,9 +1794,6 @@ fetch
       or JSON document generated in memory, with
       @ref DataProvider::GeneratedDataOutputDataType "GeneratedDataOutputDataType" and
       @ref DataProvider::GeneratedDataInfo "GeneratedDataInfo" describing the generated data
-    - fixed create and upsert actions of data providers with an open record type losing their \c recs option
-    - fixed creating or upserting an empty list of records failing with a \c PROCESSOR-SHAPE-ERROR about a record
-      with no value; an empty list creates no records, and a missing \c recs option is reported as such
     - errors caught while determining action options or request types are now logged with the global data provider
       logger when the data provider has no logger of its own, and no longer log option or request values, which can
       hold credentials
@@ -2000,11 +1826,7 @@ fetch
       examples, and try later union alternatives when an example does not satisfy the union
     - stopping a watch data provider cancels its polling thread, which ends a blocking operation in it, such as an
       HTTP request, at once; observer notifications and checkpoint persistence run with cancellation deferred, so
-      they are not interrupted.  The watch data providers of the REST-based modules no longer close their REST
-      client to cancel an in-flight request: the client is shared with the other data providers of the connection,
-      and closing a @ref restclientiointro "RestClientIo" shuts down its connection manager
-      for good, so every later request failed with \c HTTPCLIENT-SHUTDOWN once a watch data provider had been
-      stopped or destroyed (<a href="https://github.com/qoretechnologies/qore/issues/5469">issue 5469</a>)
+      they are not interrupted (<a href="https://github.com/qoretechnologies/qore/issues/5469">issue 5469</a>)
     - added @ref DataProvider::DataProviderStaticMetadataHelper "DataProviderStaticMetadataHelper", which marks the
       current thread as reading static metadata, so that fields do not run context-dependent dynamic type, default
       value, or example value callbacks
@@ -2050,12 +1872,9 @@ fetch
     - a type description whose type is known only in the program defining it, such as a type based on a custom Qore
       type, is restored from the value type it returns and the values it accepts instead of failing, and keeps the
       name and presentation it is described with
-    - simulating a write to an empty table works: the table's example record falls back to data generated from its
-      record type instead of failing with a runtime type error, so a simulated test step can create a record in a
-      table that has no rows yet
-    - the default bulk record adapter appends each field value as one column cell; a list-valued field
-      previously had its elements concatenated into the column, so a block of records with nested lists
-      reported more column values than records and was rejected as malformed
+    - the default bulk record adapter appends each field value as one column cell; a list-valued field had its
+      elements concatenated into the column, and a field without a value was left out, so the columns of a block
+      did not line up with its records
       (<a href="https://github.com/qoretechnologies/qorus/issues/542">Qorus issue 542</a>)
     - optional @ref DataProvider::SoftListDataType "soft lists" preserve absent collections as NOTHING;
       collection defaults are validated item by item, while explicit NULL and missing-valued list items
@@ -2067,17 +1886,14 @@ fetch
     - environment-driven provider discovery now returns typed registration and provider-module failures to
       ProviderIndex qualification; failed modules remain retryable instead of being marked loaded and then silently
       skipped by later discovery generations
-    - provider presentation catalogs now recursively extract structured option fields, list elements, union branches,
-      and nested allowed values with stable bounded IDs while preserving existing flat IDs; anonymous nested types
-      are action-scoped and include any stable producer schema path so equal-shaped objects with different semantics
-      cannot silently share translations. New static
-      @ref DataProvider::AbstractDataField::getPresentationInfo() "presentation metadata" and
+    - provider presentation catalogs recursively extract structured option fields, list elements, union branches, and
+      nested allowed values with stable bounded IDs; anonymous nested types are action-scoped and include any stable
+      producer schema path so equal-shaped objects with different semantics cannot silently share translations. New
+      static @ref DataProvider::AbstractDataField::getPresentationInfo() "presentation metadata" and
       @ref DataProvider::AbstractDataField::getDeclaredType() "declared types" keep extraction deterministic without
       invoking context-dependent dynamic type, default, or example callbacks
     - fixed allowed list-element choices to use converted values for both scalar and structured items;
       replacing choices now clears stale membership rules, and a failed replacement preserves the previous choices
-    - distinguish absent required fields from explicitly supplied null values, and clear requiredness
-      when making an already nullable field optional
     - fixed short descriptions containing quoted parameter names or numbers to preserve ordinary words
       and literal braces while ignoring sentence punctuation inside quoted spans
     - fixed @ref DataProvider::QoreStringDataTypeBase "QoreStringDataTypeBase" to honor the value conversion
@@ -2091,45 +1907,22 @@ fetch
       produce the same display names as upper-case ones (ex: \c "api_key" -> \c "API Key",
       \c "saas_provider" -> \c "SaaS Provider", \c "ipv4_address" -> \c "IPv4 Address"); the renderings are
       given by @ref DataProvider::AbstractDataField::WordRenderings "AbstractDataField::WordRenderings"
-    - fixed @ref DataProvider::AbstractDataField::getDisplayName() "AbstractDataField::getDisplayName()" to
-      stop treating short English function words in upper-case technical names as acronyms
-      (ex: \c "CREATED_AT" previously yielded \c "Created AT" and now yields \c "Created At"); such words
-      are listed in @ref DataProvider::AbstractDataField::FunctionWords "AbstractDataField::FunctionWords"
-      and are written in lower case in the middle of a display name in accordance with English title case
-      (ex: \c "wait_for_active_shards" -> \c "Wait for Active Shards")
+    - @ref DataProvider::AbstractDataField::getDisplayName() "AbstractDataField::getDisplayName()" writes short
+      English function words, which are listed in
+      @ref DataProvider::AbstractDataField::FunctionWords "AbstractDataField::FunctionWords", in lower case in the
+      middle of a display name in accordance with English title case, and does not take them for acronyms in
+      upper-case technical names (ex: \c "wait_for_active_shards" -> \c "Wait for Active Shards",
+      \c "CREATED_AT" -> \c "Created At")
     - @ref DataProvider::AbstractDataField::getDisplayName() "AbstractDataField::getDisplayName()" now
       produces a single word break for consecutive word separators instead of one space per separator
-    - fixed @ref DataProvider::AbstractDataField::getDisplayName() "AbstractDataField::getDisplayName()" to
-      case-fold words in upper case that contain a lower-case letter with no single-character upper-case form,
-      such as the German sharp s or a typographic ligature; such a letter is the only form it has and said
-      nothing about the case the word was written in, but it suppressed case folding and then introduced a
-      spurious word break (ex: \c "STRAßE_NAME" previously yielded \c "STRAß E Name" and now yields
-      \c "Straße Name")
-    - fixed expression rendering to parenthesize an argument only where the grouping requires it, in both
-      @ref DataProvider::DataProvider::renderExpression() "DataProvider::renderExpression()" and
-      @ref DataProvider::DpqlSerializer "DpqlSerializer", which answered the question separately and were each
-      wrong in a different direction; the description parenthesized every nested operator, so the left-nested
-      tree for \c "1 + 2 + 3" was described as \c "(1 + 2) + 3", and the serializer parenthesized none at equal
-      precedence, so \c "1 - (2 - 3)" was serialized as \c "1 - 2 - 3", which parses as \c "(1 - 2) - 3" and is
-      a different expression (2 serialized as -4); both now use
-      @ref DataProvider::DpqlSerializer::getArgumentContext() "DpqlSerializer::getArgumentContext()", which
-      leaves the first argument bare (parsing restores that grouping) and parenthesizes a later one unless the
-      operator is listed in @ref DataProvider::DpqlAssociativeOperators "DpqlAssociativeOperators"; \c + is
-      deliberately not listed, as it concatenates when an operand is a string
-      (\c "1 + (2 + \"a\")" is \c "12a" where \c "1 + 2 + \"a\"" is \c "3a")
-    - fixed @ref DataProvider::DataProvider::renderExpression() "DataProvider::renderExpression()" to
-      render a \c value expression as the literal it holds; the expression carries no symbol, so every
-      literal was rendered with a leading space (\c " 0", \c " \"x\"") and an explicit null rendered as a
-      single space and nothing else — which is what an author writing \c null in a DPQL editor produces,
-      so "no value" was the one literal the rendering could not state
-    - fixed @ref DataProvider::DpqlSerializer "DpqlSerializer" to serialize SQL \c NULL as the \c null
-      literal; it fell through to the string branch, where \c string(NULL) is empty, so a NULL serialized
-      to \c "" and parsed back as an empty string — "there is nothing here" became "there is a string here
-      and it is empty"
-    - made the DPQL operator precedence levels (@ref DPQL_PREC_PRIMARY etc),
-      @ref DataProvider::DpqlOperatorPrecedence "DpqlOperatorPrecedence" and
-      @ref DataProvider::DpqlAssociativeOperators "DpqlAssociativeOperators" public, and added
-      @ref DataProvider::DpqlSerializer::getOperatorPrecedence() "DpqlSerializer::getOperatorPrecedence()" and
+    - fixed @ref DataProvider::AbstractDataField::getDisplayName() "AbstractDataField::getDisplayName()"
+      inserting a spurious word break after a lower-case letter with no single-character upper-case form, such as
+      the German sharp s or a typographic ligature, in a word in upper case, which is case-folded like any other
+      word in upper case (ex: \c "STRAßE_NAME" yielded \c "STRAß E NAME" and now yields \c "Straße Name")
+    - added the DPQL operator precedence levels (@ref DPQL_PREC_PRIMARY etc),
+      @ref DataProvider::DpqlOperatorPrecedence "DpqlOperatorPrecedence",
+      @ref DataProvider::DpqlAssociativeOperators "DpqlAssociativeOperators",
+      @ref DataProvider::DpqlSerializer::getOperatorPrecedence() "DpqlSerializer::getOperatorPrecedence()", and
       @ref DataProvider::DpqlSerializer::getArgumentContext() "DpqlSerializer::getArgumentContext()", so that
       any renderer can parenthesize expressions by the same rule the parser reads them by
     - fixed @ref DataProvider::AbstractDataProviderType::getSoftType() "soft type conversion" to convert each
@@ -2139,18 +1932,9 @@ fetch
     - soft type conversion now converts the element type of a @ref DataProvider::ListDataType "list type"; a type
       reachable only through a list was left strict, so a soft record could still reject values it was meant to
       accept
-    - fixed @ref DataProvider::ListDataType::copyWithElementType() "ListDataType::copyWithElementType()" and
-      @ref DataProvider::ListDataType::updateElementType() "updateElementType()" to regenerate the %Qore type, the
-      accepted and returned type hashes, and a generated name from the new element type; the list went on
-      describing - and accepting - values of the element type it no longer had.  A list whose element type is
-      replaced therefore reports the type it actually holds, which changes the generated presentation identity of
-      such a list, and with it the message IDs of the translation catalogs that describe it; the affected
-      catalogs have been regenerated
-    - fixed @ref DataProvider::SoftListDataType "SoftListDataType" to fall back to an untyped \b soft list when
-      its element type has no single %Qore type - one produced by an OpenAPI \c anyOf or \c oneOf, say - instead
-      of a plain untyped list; the plain list advertised that a single value could not be given in place of a
-      list, which is the one thing a soft list always accepts, and which
-      @ref DataProvider::SoftListDataType::acceptsValue() "SoftListDataType::acceptsValue()" accepted anyway
+    - fixed @ref DataProvider::SoftListDataType "SoftListDataType" with an element type that has no single %Qore
+      type - one produced by an OpenAPI \c anyOf or \c oneOf, say -, which raised an error; its %Qore type is then
+      an untyped \b soft list, since a soft list always accepts a single value in place of a list
 
     @subsection dataprovider_v3_7 DataProvider v3.7
     - generated date examples now use a fixed UTC sample instead of the current time, making repeated metadata
@@ -2159,15 +1943,10 @@ fetch
       mandatory field; record metadata now retains mandatory status independently of field insertion order
     - added source-owned native i18n catalog metadata and deterministic message identities for localized application,
       action, and option presentation without changing technical identities
-    - fixed provider catalog composition when the same module owner is installed in multiple catalog search roots;
-      the highest-precedence installation is now used instead of treating stale shadowed copies as independent
-      contributions
-    - provider presentation catalogs read and parse each discovered catalog file exactly once, and owner-fragment
-      collisions are detected by \c I18n::MessageCatalog while it composes the catalog instead of in a separate pass
-      over every message; the new static method
-      @ref DataProvider::DataProviderPresentationCatalog::buildDomainCatalogs() "buildDomainCatalogs()" builds the
-      catalogs for several locales of one domain while parsing the files they share, such as \c root.json, only once,
-      and @ref DataProvider::DataProviderPresentationCatalog::forEachDomainCatalog() "forEachDomainCatalog()" does
+    - added the static method
+      @ref DataProvider::DataProviderPresentationCatalog::buildDomainCatalogs() "buildDomainCatalogs()", which builds
+      the catalogs for several locales of one domain while parsing the files they share, such as \c root.json, only
+      once, and @ref DataProvider::DataProviderPresentationCatalog::forEachDomainCatalog() "forEachDomainCatalog()" does
       the same while holding only one catalog at a time
     - @ref DataProvider::DataProviderPresentationCatalog "DataProviderPresentationCatalog" accepts an optional
       \c I18n::CatalogDiscoveryIndex so that an operation building catalogs for many domains and locales reads
@@ -2176,6 +1955,7 @@ fetch
     - fixed app and action module ownership when a deferred initialization closure loads another module; apps and
       actions registered by the loaded module while its own initializer runs were attributed to the module whose
       pending app was being initialized, so
+      @ref DataProvider::DataProviderActionCatalog::getModulePathsForApp() reported the wrong module for them, and
       @ref DataProvider::DataProviderActionCatalog::getPresentationContributionsForModule() reported foreign
       presentation strings as owned by that module
 
@@ -2211,9 +1991,8 @@ fetch
       implements the common "records changed since <i>t</i>" cursor on top of the shared template, using a
       durable timestamp plus the record IDs delivered at that timestamp so the cursor is safe at its own
       boundary
-    - a watch cycle now <b>stops at the first dispatch failure</b> instead of continuing with later items;
-      continuing advanced the monotonic cursor past the failed item and dropped it permanently on what may
-      well have been a transient error
+    - a watch cycle <b>stops at the first dispatch failure</b>, so that the monotonic cursor never advances past
+      an item that was not delivered, which would drop it permanently on what may well be a transient error
     - @ref DataProvider::Observable::notifyObservers() "notifyObservers()" now notifies <b>every</b>
       subscribed observer and reports any failures as a single aggregate \c OBSERVER-NOTIFICATION-ERROR
       exception carrying the individual exceptions; previously the first observer that threw silently
@@ -2223,15 +2002,10 @@ fetch
       reach the event source, and that an observer must not swallow a processing failure: a watch
       provider reads a clean return as proof of delivery, advances its durable cursor, and runs any
       post-dispatch removal, so a swallowed failure loses the source item silently
-    - a watch cycle now reports the items its durable cursor discarded, with the highest discarded
-      ordering key and the cursor position, instead of dropping them with no log line at all — a cycle
-      that listed items and then did nothing was indistinguishable from a hung poller
     - added
       @ref DataProvider::AbstractOrderedWatchDataProvider::setWatchItemBlockedHandler() "setWatchItemBlockedHandler()",
       which reports an item that has failed a configurable number of consecutive cycles and is therefore
-      holding up the whole feed, and reports again when that item is finally delivered; stopping at the
-      first failure is what keeps the item from being lost, but without this the resulting stall had no
-      signal at all
+      holding up the whole feed, and reports again when that item is finally delivered
     - added an explicit dispatch-order contract: every watch provider declares how its upstream feed is
       ordered with @ref DataProvider::AbstractWatchDataProviderBase::getSourceOrdering() "getSourceOrdering()"
       and whether its events arrive oldest-first with
@@ -2243,9 +2017,6 @@ fetch
       their payloads are retrieved
     - added an optional per-cycle dispatch budget, applied from the oldest end so that the durable cursor still
       advances contiguously and the remainder is delivered by later cycles rather than skipped
-    - documented that checkpoint persistence is what makes delivery at-least-once across host reloads, that
-      without it a provider's restart behavior is provider-specific, and that watch options which remove the
-      source item act on event <b>dispatch</b> and not on consumer <b>processing</b>
     - @ref DataProvider::AbstractDataField::getDisplayName() "AbstractDataField::getDisplayName()" now case-folds
       words in all upper case, so that technical names in upper case produce readable display names (ex:
       \c "PAYMENT-DISPUTE-ADJUDICATE-28" -> \c "Payment Dispute Adjudicate 28"); acronyms are preserved, and an
@@ -2269,18 +2040,10 @@ fetch
       @ref DataProvider::DataProvider "DataProvider" facade
     - made limited and exhausted @ref DataProvider::DefaultRecordIterator "DefaultRecordIterator" instances
       release wrapped iterators immediately, including their database transaction resources
-    - update and delete implementations must return affected-row counts, ensuring the public mutation APIs always
-      return an integer and allowing uniform \c max_records and \c requires_result enforcement
     - @ref DataProvider::DefaultRecordIterator "DefaultRecordIterator" now prepares typed expressions once at
       construction for efficient repeated evaluation
-    - record update and delete APIs now enforce \c max_records against affected-row counts and preserve
-      \c MAX-RECORDS-EXCEEDED instead of wrapping it in a generic mutation error
-    - bulk record-shape validation now rejects heterogeneous record field sets and unequal list or buffer column
-      lengths before provider mutation; scalar hash-of-lists values remain supported as row broadcasts
-    - fixed the generic \c "in" expression to accept both the canonical \c (field, list) form and the
-      variadic \c (field, v1, v2, ...) form produced by the DPQL parser, and to compare each value
-      individually; previously the variadic form was rejected as having too many arguments and the
-      in-memory implementation only compared against the first value
+    - record update and delete APIs enforce the \c max_records search option against the affected-row count and
+      raise \c MAX-RECORDS-EXCEEDED when it is exceeded
     - added @ref DataProvider::DataProviderShape "DataProviderShape" and shape-aware pipeline APIs on
       @ref DataProvider::AbstractDataProcessor "AbstractDataProcessor" for row records, hash-of-lists bulk blocks,
       dense buffer-column blocks, and DataFrame blocks
@@ -2312,8 +2075,6 @@ fetch
       correctness for these expressions through generic row evaluation when no dense mask lowering is available
     - updated @ref DataProvider::QoreGroupByProcessor "QoreGroupByProcessor" to process hash-of-lists,
       \c BufferColumns, and DataFrame blocks directly and preserve shaped aggregate blocks on pipeline flush
-    - optimized @ref DataProvider::QoreGroupByProcessor "QoreGroupByProcessor" to lower \c avg(field)
-      to the native DataFrame \c mean aggregate when the aggregate block can stay columnar
     - updated @ref DataProvider::QoreSelectFieldsProcessor "QoreSelectFieldsProcessor",
       @ref DataProvider::QoreRemoveFieldsProcessor "QoreRemoveFieldsProcessor", and
       @ref DataProvider::QoreRecordLimitProcessor "QoreRecordLimitProcessor" to preserve shaped
@@ -2321,8 +2082,6 @@ fetch
     - updated @ref DataProvider::QoreSetFieldsProcessor "QoreSetFieldsProcessor" and
       @ref DataProvider::QoreSearchReplaceProcessor "QoreSearchReplaceProcessor" to preserve shaped
       \c DataFrameBlock and \c BufferColumns values for top-level constant-field and string-column updates
-    - optimized \c ColumnarResult projection and simple-update processors to rebuild output blocks from referenced
-      column containers directly, avoiding intermediate DataFrame construction
     - updated analytics processors, including @ref DataProvider::QoreCorrelationProcessor
       "QoreCorrelationProcessor" and @ref DataProvider::QoreCrossCorrelationProcessor
       "QoreCrossCorrelationProcessor", to accept \c DataFrameBlock and \c BufferColumns input and preserve
@@ -2397,8 +2156,6 @@ fetch
       side-effect-free dry-run execution
     - added @ref DataProvider::AbstractDataProvider::getSimulationVolatileFields()
       "AbstractDataProvider::getSimulationVolatileFields()" for simulation signature hashing
-    - updated the DPQL \c map and \c hash_map expressions to be operators with Qore-style prefix syntax,
-      allowing their body, key, value, and filter subexpressions to be evaluated per source element
 
     @subsection dataprovider_v3_3 DataProvider v3.3
     - added 67 generic DPQL expressions for use in data-driven contexts (arithmetic, string
@@ -2436,28 +2193,11 @@ fetch
     - added @ref DataProvider::AbstractDataProvider::parseFieldList()
       "AbstractDataProvider::parseFieldList()" static method for backward-compatible parsing of
       field lists from both comma-separated strings and string lists
-    - changed multi-field processor options (\c fields, \c group_by) from \c string to
-      \c softlist<string> for multi-select UI support; all processors accept both formats for
-      backward compatibility
+    - multi-field processor options (\c fields, \c group_by) take a \c softlist<string> for multi-select UI
+      support, or a comma-separated string
     - added \c input_field_names marker to single-field options (\c field, \c field_x, \c field_y,
       \c target_field) for dynamic allowed value population
-    - all field-name-based processor options now support dot-notation for nested field access
-    - fixed @ref DataProvider::DataProviderPipeline "DataProviderPipeline"
-      @ref DataProvider::PipelineMetricsSnapshot "PipelineMetricsSnapshot".\c total_records_submitted
-      always being 0 in fan-out topologies where queue 0's first element is a fan-out list
-    - fixed @ref DataProvider::DataProviderPipeline "DataProviderPipeline"
-      @ref DataProvider::PipelineMetricsSnapshot "PipelineMetricsSnapshot".\c total_records_completed
-      to count the sum of output records from the last processor of each terminal queue; in fan-out
-      topologies each child queue contributes its own terminal output to this total
-    - removed \c total_records_dropped from
-      @ref DataProvider::PipelineMetricsSnapshot "PipelineMetricsSnapshot" and \c records_dropped
-      from @ref DataProvider::PipelineMetricsDelta "PipelineMetricsDelta" — pipeline processors can
-      add or remove records arbitrarily, so a conservation model does not hold; per-element
-      \c records_processed / \c records_output provides the actual detail
-    - removed \c records_in_flight from
-      @ref DataProvider::PipelineMetricsSnapshot "PipelineMetricsSnapshot" — the conservation
-      formula it relied on (\c submitted \c = \c completed \c + \c dropped) does not hold when
-      processors change record counts
+    - all field-name-based processor options support dot-notation for nested field access
     - added 11 streaming analytics and statistical pipeline processors:
       - @ref DataProvider::QoreRunningStatsProcessor "running-stats": compute running statistics
         (count, sum, avg, min, max, stddev, variance) over windows of records

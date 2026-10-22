@@ -59,12 +59,14 @@ module GoogleDocumentAiRestClient {
     Authentication uses @ref gcpauthintro "GcpAuth" — either an
     explicit service-account or authorized-user JSON file, Application Default Credentials,
     or Google metadata credentials. The compatibility option \c gcp_sa_json_path accepts either
-    supported file type. OAuth tokens and credential JSON are not connection form fields.
+    supported file type. OAuth tokens and credential JSON are not connection form fields. Synchronous,
+    asynchronous, raw, copied, and generic API requests are all authenticated.
 
     Connections require the resource project. The optional quota project is independent and is
     sent in \c x-goog-user-project. Ping performs an authenticated, bounded processor listing;
     an empty valid result succeeds, while invalid credentials or malformed responses fail.
 
+    Connections belong to the Google Document AI app and offer the service locations as choices.
     Endpoints default to the selected location. Explicit HTTPS origins are trusted configuration;
     HTTP is accepted only for loopback tests. Redirects and copies to another origin are rejected.
 
@@ -97,12 +99,6 @@ printf("Text: %s\n", resp.body.document.text);
     @section GoogleDocumentAiRestClientRelnotes Release Notes
 
     @subsection GoogleDocumentAiRestClientv1_1 GoogleDocumentAiRestClient v1.1
-    - authenticated synchronous, asynchronous, raw, copied, and generic API requests through GcpAuth
-    - added service-authenticated ping, quota-project handling, regional choices, and app association
-    - corrected constructor parity, regional URL persistence, and sensitive credential options
-    - verified project ID/number aliases for canonical resource names without relaxing parent scope
-
-    @subsection GoogleDocumentAiRestClientv1_0 GoogleDocumentAiRestClient v1.0
     - initial release
 */
 

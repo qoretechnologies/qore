@@ -76,18 +76,20 @@ msg.addTO("My Best Friend <you@friend.com>");
     @section mailmessage_relnotes MailMessage Release Notes
 
     @subsection mailmessage_v1_5_1 MailMessage 1.5.1
-    - Added backward-compatible constant declarations for deprecated encoding constants:
-      - @ref MailMessage::EncDefault "EncDefault", @ref MailMessage::EncNone "EncNone",
-        @ref MailMessage::EncBase64 "EncBase64", @ref MailMessage::EncQuotedPrintable "EncQuotedPrintable"
-      - These constants are deprecated; use the @ref MailMessage::ContentEncoding "ContentEncoding" enum instead
+    - Added the @ref MailMessage::ContentEncoding "ContentEncoding" enum for content transfer encodings; the
+      encoding constants @ref MailMessage::EncDefault "EncDefault", @ref MailMessage::EncNone "EncNone",
+      @ref MailMessage::EncBase64 "EncBase64" and @ref MailMessage::EncQuotedPrintable "EncQuotedPrintable" are
+      deprecated; use the enum instead
     - Added @ref MailMessage::Message::serializeRaw() "Message::serializeRaw()": serializes the message as it is
       stored or uploaded (for example with the IMAP \c APPEND command), with no \c "." added at the start of the
       lines that start with \c "."
     - Added @ref MailMessage::Message::encodeSmtpData() "Message::encodeSmtpData()": gives message text SMTP
       transparency for the SMTP \c DATA command
-    - @ref MailMessage::Message::serialize() "Message::serialize()" in SMTP mode writes every CR or LF character
-      that is not part of a CRLF line break as CRLF before it adds a \c "." to the lines that start with \c ".",
-      since a server can take a bare CR or LF as a line ending
+    - @ref MailMessage::Message::serialize() "Message::serialize()" in SMTP mode gives the message SMTP
+      transparency: every CR or LF character that is not part of a CRLF line break is written as CRLF, since a
+      server can take a bare CR or LF as a line ending, and a \c "." is added at the start of every line that starts
+      with \c "."; before, only a line with a single \c "." was changed, so the server removed the first \c "." of
+      the other lines that start with \c "."
     - A message parsed from raw message text now returns the sender's email address from
       @ref MailMessage::Message::getFrom() "Message::getFrom()" and the \c From header from
       @ref MailMessage::Message::getSender() "Message::getSender()", as a message created to be sent does; they were
@@ -95,8 +97,7 @@ msg.addTO("My Best Friend <you@friend.com>");
     - A header name with a NUL, CR or LF character raises \c HEADER-ERROR when the message is serialized, and so
       does such a header value when headers are not encoded; a header value with a CR or LF character is encoded,
       so that it cannot end the header line (it was written with a line break before, see Mime 1.9)
-    - The headers given for an attachment are now added to its MIME part; they were dropped.  The \c Content-ID of
-      a part is found in its headers in any case
+    - The headers given for an attachment are now added to its MIME part; they were dropped
     - @ref MailMessage::Message::getEmailAddress() "Message::getEmailAddress()" returns the address in angle brackets
       at the end of the string when there is one, so that text in a display name that looks like an address is not
       taken as the sender's or a recipient's address
@@ -119,9 +120,8 @@ msg.addTO("My Best Friend <you@friend.com>");
     - @ref MailMessage::Message::getInfo() "Message::getInfo()" of a parsed message returns the \c From header as
       \c from and the sender's email address as \c sender, as documented; they were swapped
     - A message is serialized in the character encoding of its body, so that a body written as it is keeps the bytes
-      of the charset that its \c Content-Type declares; it was converted to UTF-8 with the headers, and
-      @ref MailMessage::Message::encodeSmtpData() "Message::encodeSmtpData()" converted it to UTF-8 as well.  A
-      charset is added to the \c Content-Type of a body with non-ASCII characters if it has none.
+      of the charset that its \c Content-Type declares; it was converted to UTF-8 with the headers.  A charset is
+      added to the \c Content-Type of a body with non-ASCII characters if it has none.
     - @ref MailMessage::Message::getHeaderString() "Message::getHeaderString()" and
       @ref MailMessage::Message::serialize() "Message::serialize()" no longer change the message: a \c Content-Type
       header was removed or taken as the type of the body, and the body encoding of a message with attachments was

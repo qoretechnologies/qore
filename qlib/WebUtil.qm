@@ -74,33 +74,21 @@ module WebUtil {
     @section webutil_relnotes Release Notes
 
     @subsection webutil_v1_8_1 WebUtil v1.8.1
-    - Static files compressed on the fly use the compression level of the server for responses compressed on the
-      fly (see @ref HttpServer::HttpServerOptionInfo::compression_levels "compression_levels"); a large file was
-      compressed with the default level of the algorithm, which for Brotli is the maximum quality and takes
-      seconds for a file of a few megabytes.
-    - Among the encodings that a client accepts with the same weight, the pre-compressed variant served is the
-      smallest one (Brotli, then Zstandard, gzip, and bzip2), as documented; the variant was chosen in the order of
-      preference of the server.
-    - Large static files are compressed while streaming, with bounded memory use. The
-      \c max_compress_size option now controls the buffering limit, not compression eligibility.
-    - Conditional responses preserve the selected file's cache policy and encoding variation.
-    - Compressed and identity representations have distinct validators; byte ranges remain uncompressed.
-    - Stale pre-compressed sidecars are ignored when the original file is newer.
-
-    @subsection webutil_v1_8 WebUtil v1.8
     - @ref WebUtil::FileHandler "FileHandler" file-serving performance and functionality improvements:
       - added HTTP caching headers: \c ETag (size+mtime based), \c Last-Modified, configurable
-        \c Cache-Control (default and per-extension)
+        \c Cache-Control (default and per-extension); compressed and identity representations have distinct
+        \c ETag values
       - added conditional request handling: \c If-None-Match and \c If-Modified-Since return
         304 Not Modified (RFC 7232 compliant)
       - added automatic pre-compressed file serving: checks for \c .br, \c .zst, \c .gz, \c .bz2
         variants on the filesystem and serves them with the appropriate \c Content-Encoding header;
-        preference order: brotli > zstd > gzip > bzip2
+        preference order: brotli > zstd > gzip > bzip2; a variant older than the original file is ignored
       - added HTTP Range request support: single byte-range requests return 206 Partial Content
-        with \c Content-Range; supports \c If-Range for conditional ranges
-      - added on-the-fly compression for small/medium files: files below \c max_compress_size
-        (default 10MB) without pre-compressed variants are read into memory so the HTTP server
-        transport layer can apply automatic compression
+        with \c Content-Range, uncompressed; supports \c If-Range for conditional ranges
+      - added on-the-fly compression for files without pre-compressed variants, with the compression level of
+        the server (see @ref HttpServer::HttpServerOptionInfo::compression_levels "compression_levels"): files up
+        to \c max_compress_size (default 10MB) are read into memory so the HTTP server transport layer can apply
+        automatic compression, and larger files are compressed while streaming, with bounded memory use
       - added optional file stat caching with configurable TTL via \c stat_cache_ttl
       - new constructor options: \c enable_etag, \c enable_last_modified, \c default_cache_control,
         \c cache_control_by_ext, \c serve_precompressed, \c enable_range, \c max_compress_size,

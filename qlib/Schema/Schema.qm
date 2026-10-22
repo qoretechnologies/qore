@@ -908,21 +908,6 @@ module Schema {
     - added @ref Schema::AbstractSchema::alignWithInfoInTransaction()
       for alignment with caller-controlled commit or rollback; DataSchema
       rejects migration actions that commit independently in this mode
-    - a \c populate expression binds its values: a value in the expression, such as the \c 1 of
-      <tt>{exp: "+", args: [{field: amount}, 1]}</tt>, was not bound, and the column was filled with \c NULL
-    - \c populate names the column it fills, and a column it reads, as the database requires: a reserved word such as
-      \c order or \c group is quoted; the \c field of a \c populate field reference, also in a \c populate
-      expression, is a field path of one key, the column of that name; a path of more than one key, or a key with a
-      dot, is refused with \c POPULATE-ERROR
-    - the top level of a data schema, a table, its \c auto_triggers, reference data, and shorthand columns no
-      longer ignore unknown keys: they are rejected with an error that names the key and, where it belongs
-      elsewhere, where it belongs (e.g. \c sequence_columns on a table instead of under \c auto_triggers, which
-      previously lost the sequence binding silently, or a top-level \c constraints or \c auto_triggers, which
-      are declared per table)
-    - the alignment of a data schema keeps the indexes that its \c reconcile_table migrations created: the unique
-      index on the canonical key of a table that keeps its legacy primary key and the reviewed indexes of the
-      contract are added to the description of the table once the migration has created them, as table alignment
-      drops an index that the description of its table does not have (SqlUtil 3.11.0)
 
     @subsection schema_v1_8_0 Schema Module v1.8.0
     - added shared \c columns and \c indexes definitions at the top level of a data schema: a
@@ -951,14 +936,10 @@ module Schema {
     - added \c insert_only key to the \c auto_triggers configuration for insert-only tables
     - added \c schema.datasource metadata field for oload integration (declares the target
       datasource name so oload can resolve it without a \c get_datasource_name() function)
-    - driver-only column definitions now supported (no top-level \c type required when \c driver
+    - added driver-only column definitions (no top-level \c type is required when \c driver
       overrides are provided — useful for pgvector and other extension types)
-    - user-provided \c driver overrides on column definitions are now merged with the base type's
-      driver block (allows combining \c type shorthand with driver-specific tweaks)
-    - pgvector column \c size is now routed to \c driver.pgsql.size (matching PgsqlSqlUtilBase
-      conventions) rather than the top level
-    - PostgreSQL schema alignment now creates the \c vector extension before table DDL when a
-      schema template uses pgvector native types and the extension is missing
+    - \c driver overrides on column definitions are merged with the base type's driver block, so that a
+      \c type shorthand can be combined with driver-specific tweaks
     - added \c min_source_version and \c max_source_version source-version gating on migrations and
       on individual migration steps (both inclusive, compared against the current/source database
       version) — lets a migration that operates on objects introduced in a later schema version be
@@ -968,7 +949,6 @@ module Schema {
       @ref Schema::MigrationExecutor::stepApplies()
 
     @subsection schema_v1_5_0 Schema Module v1.5.0
-    - separated module into individual \c .qc files for better maintainability
     - added @ref Schema::DataSchema "DataSchema" class for pure data schema definitions from
       YAML (\c .ysm) or JSON (\c .jsm) files — no Qore code required
     - added @ref Schema::DataSchemaLoader "DataSchemaLoader" class for loading, validating, and

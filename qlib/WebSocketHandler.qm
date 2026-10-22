@@ -144,8 +144,7 @@ printf("HTTP/3 WebSocket server listening on port 8443\n");
       the stop waits at most the close timeout in total.  The close code and reason reported for a connection are
       those of the client's close frame
     - a CLOSE frame without a status code, which is reported with the close code 1005 (RFC 6455 section 7.1.5), is
-      answered with a CLOSE frame without a status code; it was answered with the status code 1005, which is never
-      sent (RFC 6455 section 7.4.1)
+      answered with a CLOSE frame without a status code; before, the connection was closed without an answer
     - a message sent on a connection that is closing raises \c WEBSOCKET-CLOSING-ERROR instead of being discarded
       without notice: no data frame may follow a close frame (RFC 6455 section 5.5.1);
       @ref WebSocketHandler::WebSocketHandler::sendAll() "sendAll()" skips the connections that are closing
@@ -168,42 +167,16 @@ printf("HTTP/3 WebSocket server listening on port 8443\n");
       HTTP/2 and HTTP/3 the connection is closed as soon as the stream send buffer reports backpressure (a
       non-blocking send is used instead of waiting for the buffer to drain).  Dropped frames are never sent on a
       live connection — the whole connection is closed so the peer never sees a gap in the message stream
-    - without an outbound queue limit, a message sent to an HTTP/2 client while more than 1 MB sent before it was
-      still waiting to be delivered was dropped, and the connection closed with it; the send now waits for the
-      stream to drain, as on HTTP/1.1 and HTTP/3, for at most the send timeout (see
-      @ref WebSocketHandler::WebSocketHandler::setSendTimeout() "setSendTimeout()"), and a client that does not read
-      in that time is disconnected; HTTP/3 sends are bounded by the send timeout too
     - added an idle timeout (the \c idle_timeout handler option and
       @ref WebSocketHandler::WebSocketHandler::setIdleTimeout() "setIdleTimeout()"): a connection with no
       inbound activity for the configured number of seconds is closed, reclaiming slots/resources held by idle
       clients; enforced for HTTP/1.1 (async poll op), HTTP/2, and HTTP/3 WebSocket transports
-    - fixed HTTP/2 and HTTP/3 WebSocket connections surviving the death of their peer forever: heartbeat PINGs
-      were sent but no answer was ever required, so a peer that vanished without a close handshake left its
-      handler thread parked for the life of the server, leaking a thread per dead client and blocking server
-      shutdown indefinitely.  A stream whose peer misses two consecutive heartbeat PINGs (any inbound frame
-      counts as the answer) is now closed.  This is the only liveness check on these transports unless an idle
-      timeout is configured: an HTTP/3 peer that dies sends no reset (QUIC runs over UDP), and the PING is
-      queued asynchronously and so never reports an error to the sender.  HTTP/1.1 was unaffected: its poll
-      operation already detects the close
-    - AsyncAPI is now a hard module dependency so AOT-compiled WebSocketHandler
-      metadata always resolves the typed AsyncAPI validator members and methods
+    - the module requires the AsyncApi module
     - added \c asyncapi, \c validator, and \c asyncapi_channel constructor options to configure an AsyncAPI
       validator once on a @ref WebSocketHandler::WebSocketHandler "WebSocketHandler" and apply it automatically
       to every new @ref WebSocketHandler::WebSocketConnection "WebSocketConnection"
-    - HTTP/2 WebSocket connections now thread an \c io_wake closure into
-      the @ref AsyncSocketIo::Http2StreamContext "Http2StreamContext"
-      they hand to the @ref WebSocketHandler::WebSocketConnection
-      "WebSocketConnection".  Outbound DATA / trailers go through the
-      async-safe \c Socket HTTP/2 methods and the wake closure nudges the
-      I/O thread to flush, matching the existing HTTP/3 path.
     - added @ref WebSocketHandler::WebSocketConnection::setEchoMode()
       "WebSocketConnection::setEchoMode()" for automatic echo of received frames
-    - fixed a teardown deadlock where a WebSocket connection whose handler thread started around the
-      moment its listener was stopped could register in the handler's connection hash after the
-      listener-stop sweep had already run, so it was never signaled to stop; its async transport was
-      never closed, its handler thread blocked forever, and the listener's shutdown (and therefore
-      server shutdown) hung.  New connections now observe the listener-stopped flag when they register
-      and self-close if the sweep missed them
 
     @subsection websockethandler_v2_7 Version 2.7
     - added @ref WebSocketHandler::WebSocketConnection::setWsPollOp()
@@ -222,10 +195,10 @@ printf("HTTP/3 WebSocket server listening on port 8443\n");
       "WebSocketConnection::pollData()" in favor of the event-driven model
 
     @subsection websockethandler_v2_5 Version 2.5
-    - replaced frame-dropping behavior on transport backpressure with a per-connection pending
-      send buffer that retains frames and drains them at each handler loop iteration
+    - frames that cannot be sent at once because of transport backpressure are kept in a per-connection pending
+      send buffer that is drained at each handler loop iteration
       - HTTP/2 flow control (\c HTTP2-FLOW-CONTROL) and HTTP/1.1 async contention
-        (\c SOCKET-NON-BLOCK-ERROR) now queue frames instead of dropping them
+        (\c SOCKET-NON-BLOCK-ERROR) queue frames
       - natural backpressure to the application layer: the Channel is not polled while the
         pending send buffer has data, so @ref WebSocketHandler::WebSocketConnection::send()
         "WebSocketConnection::send()" blocks when the Channel fills up
@@ -236,36 +209,18 @@ printf("HTTP/3 WebSocket server listening on port 8443\n");
       "MaxDrainFramesPerIteration" constant to cap drain time per loop iteration
 
     @subsection websockethandler_v2_4 Version 2.4
+    - added support for WebSocket over HTTP/2 (RFC 8441 — Extended CONNECT)
     - added support for WebSocket over HTTP/3 (RFC 9220 — Extended CONNECT over QUIC)
       - server-side detection of HTTP/3 CONNECT requests with \c :protocol=websocket
       - bidirectional WebSocket frame exchange over QUIC streams
       - backpressure handling via QUIC flow control with I/O controller wake integration
       - explicit QUIC stream close on WebSocket handler exit (essential for stream multiplexing)
-    - refactored to use @ref AsyncSocketIo::AbstractStreamContext "AbstractStreamContext" for
-      protocol-agnostic WebSocket I/O, eliminating per-protocol branching in \c handleRequest(),
-      \c startImpl(), and \c sendFrame()
     - added @ref WebSocketHandler::WebSocketConnection::setStreamContext()
       "WebSocketConnection::setStreamContext()" and
       @ref WebSocketHandler::WebSocketConnection::getStreamContext()
       "WebSocketConnection::getStreamContext()" methods for unified stream context management
-    - deprecated @ref WebSocketHandler::WebSocketConnection::setHttp2StreamContext()
-      "WebSocketConnection::setHttp2StreamContext()",
-      @ref WebSocketHandler::WebSocketConnection::getHttp2StreamContext()
-      "WebSocketConnection::getHttp2StreamContext()",
-      @ref WebSocketHandler::WebSocketConnection::setHttp3StreamContext()
-      "WebSocketConnection::setHttp3StreamContext()", and
-      @ref WebSocketHandler::WebSocketConnection::getHttp3StreamContext()
-      "WebSocketConnection::getHttp3StreamContext()" — use \c setStreamContext() /
-      \c getStreamContext() instead
 
     @subsection websockethandler_v2_3 Version 2.3
-    - fixed @ref WebSocketHandler::WebSocketHandler::sendAll() "WebSocketHandler::sendAll()" to apply
-      per-connection extension transforms (e.g., permessage-deflate) instead of pre-encoding a single frame
-      for all connections
-    - fixed server-side extension negotiation to properly propagate negotiated extensions from
-      @ref WebSocketHandler::WebSocketHandler::handleRequest() "handleRequest()" to
-      @ref WebSocketHandler::WebSocketHandler "startImpl()" so that per-connection extension transforms
-      (e.g., permessage-deflate compression/decompression) are actually applied
     - added WebSocket extension support (RFC 6455 Section 9) with permessage-deflate (RFC 7692)
       (<a href="https://github.com/qoretechnologies/qore/issues/5065">issue 5065</a>)
     - added @ref WebSocketHandler::WebSocketHandler "WebSocketHandler" constructor option \c "extensions" to enable

@@ -138,7 +138,8 @@ module AwsTextractDataProvider {
     service model are exposed as typed actions, together with the shared generic API-call action.
     The original <tt>detect-document-text</tt> and <tt>analyze-document</tt> option names remain compatible.
     Other actions use the native AWS field names, including nested document, query, adapter,
-    notification, training, tagging, and output settings.
+    notification, training, tagging, and output settings. Requests are validated before they are sent; document
+    bytes are given as binary data or as canonical base64-encoded data.
 
     Synchronous documents are limited to 10 MB, including S3 references; PDF and TIFF must have
     one page. Async PDF/TIFF documents support up to 500 MB and 3,000 pages; JPEG/PNG remain
@@ -169,11 +170,6 @@ module AwsTextractDataProvider {
     @section AwsTextractDataProviderRelnotes Release Notes
 
     @subsection AwsTextractDataProviderv1_1 AwsTextractDataProvider v1.1
-    - all 25 native AWS operations with complete nested types and structured choices
-    - strict request validation, binary/base64 encoding, paginated adapter references
-    - authenticated connection checks and shared discovery and presentation qualification
-
-    @subsection AwsTextractDataProviderv1_0 AwsTextractDataProvider v1.0
     - initial release
 */
 

@@ -95,9 +95,8 @@ printf("%Y\n", ans.body);
     @section Awsrestclientrelnotes Release Notes
 
     @subsection awsrestclientv1_4 AwsRestClient v1.4
-    - preserve fractional milliseconds in signed response waits to avoid premature timeouts and extra retries
     - the data provider of a connection uses an @ref AwsRestClient::AwsRestClientIo "AwsRestClientIo" and is
-      created without connecting to the server; before, creating the data provider failed without a schema
+      created without connecting to the server
     - added incremental signed event-stream sessions with response validation, cancellation, and timeouts
     - supports full-duplex uploads with chained SigV4 event signatures and signed terminal envelopes
     - added signed raw-body requests to @ref AwsRestClient::AwsRestClientIo "AwsRestClientIo" so schema-driven
@@ -105,8 +104,6 @@ printf("%Y\n", ans.body);
     - added @ref AwsRestClient::AwsRestClientIo::restDoEncodedRawRequest()
       "AwsRestClientIo::restDoEncodedRawRequest()" for schema-driven requests whose URI path variables are
       already percent-encoded, preserving the exact encoded path in AWS Signature Version 4 canonical requests
-    - preserved AWS configuration in @ref RestClient::AbstractRestClient::copyWithUrl() "copyWithUrl()" copies
-      of @ref AwsRestClient::AwsRestClientIo "AwsRestClientIo"
 
     @subsection awsrestclientv1_3 AwsRestClient v1.3
     - added @ref AwsRestClient::AwsS3RestConnection "AwsS3RestConnection" for Amazon S3, which needs no URL -
@@ -115,11 +112,9 @@ printf("%Y\n", ans.body);
     - added @ref AwsRestClient::AwsS3CompatibleRestConnection "AwsS3CompatibleRestConnection" for S3-compatible
       storage that is not Amazon, such as MinIO and Ceph, which is reached at a URL of its own
       (<a href="https://github.com/qoretechnologies/qore/issues/5386">issue 5386</a>)
-    - bounded the IMDS credential probe with its own timeout (\c aws_imds_timeout, default
-      @ref AwsRestClient::AwsRestClientBase::ImdsTimeoutMs "ImdsTimeoutMs"); off AWS the
-      link-local metadata address is routed rather than rejected on some platforms, so the probe
-      previously blocked for the full 60-second HTTP connect timeout whenever
-      @ref AwsRestClient::AwsRestClientBase::isEc2Compute() "isEc2Compute()" could not answer
+    - added the AWS credential chain, which tries \c AWS_* environment variables, the ECS task role and IMDSv2
+      instance credentials, and then STS \c AssumeRole; the IMDS probe has its own timeout (\c aws_imds_timeout,
+      default @ref AwsRestClient::AwsRestClientBase::ImdsTimeoutMs "ImdsTimeoutMs")
     - added \c prepareAsyncSend() override for AWS Signature V4 signing in async REST requests
 
     @subsection awsrestclientv2_0 AwsRestClient v1.2

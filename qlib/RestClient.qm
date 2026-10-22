@@ -143,6 +143,9 @@ printf("%Y\n", ans.body);
     @section restclientrelnotes Release Notes
 
     @subsection restclientv2_7 RestClient v2.7
+    - added support for the OAuth2 \c implicit grant type, and the
+      @ref RestClient::RestConnection::RCF_OAUTH2_IMPLICIT "oauth2-implicit" and
+      @ref RestClient::RestConnection::RCF_OAUTH2_AUTH "oauth2-auth" connection features
     - <b>security</b>: a credential sent in a header with a name of its own, such as \c Qorus-Token, no longer appears
       in exception arguments, the request information (\c info) of a failed request or debug messages, nor where
       a server echoes it in an error: headers whose names contain \c token, \c secret, \c api-key or \c apikey,
@@ -158,7 +161,8 @@ printf("%Y\n", ans.body);
       the ping debug message gives the URL without its password
     - synchronous requests with \c error_passthru enabled retain the normal bounded OAuth2 token
       refresh and retry behavior on authentication errors, including generic API calls with status policies
-    - restored the documented \c oauth2_auto_refresh default of \c True when the option is omitted
+    - the \c oauth2_auto_refresh option is \c True as documented when it is omitted; before, OAuth2 tokens were not
+      refreshed automatically unless the option was set
     - explicit \c Authorization headers take precedence over generated bearer headers when constructing a client
       with a saved token, preserving combined credentials such as Trello's consumer key and token
     - added the \c status_message, \c effective_url, and \c redirects keys to
@@ -178,9 +182,6 @@ printf("%Y\n", ans.body);
     - added @ref RestClient::RestClient::getConstructorOptions() "RestClient::getConstructorOptions()", which
       returns the options a client was created with, as \c getConstructorOptions() of
       @ref restclientiointro "RestClientIo" does
-    - a response read with a \c max_response_body_size is decoded by the rules shared by all HTTP clients (see
-      @ref Qore::decode_http_body() "decode_http_body()"), and the \c assume_encoding option applies to every HTTP
-      version
     - redact authentication headers and echoed rejected credentials from blocking and polling error diagnostics
     - @ref RestClient::RestRequestPollOperation::getInfo() "RestRequestPollOperation::getInfo()" reports the same
       request information as a blocking request, including \c response-headers-raw, the redirects followed
@@ -196,16 +197,13 @@ printf("%Y\n", ans.body);
     - clearing the connection path also clears the default path so opening a socket cannot restore
       the API prefix on a ping that addresses the host root
     - renews expiring client-credentials tokens by acquiring another token when no refresh token is issued
-    - fixed a connection using an OAuth2 grant with no authorization step reporting that it has nothing to
-      do with OAuth2; the only OAuth2 features published were the two interactive flows and the general
-      \c oauth2-auth flag, so a fully configured \c client_credentials connection was indistinguishable
-      from one using no OAuth2 at all.  Connections now claim
-      @ref RestClient::RestConnection::RCF_OAUTH2 "RCF_OAUTH2" for every grant type,
-      @ref RestClient::RestConnection::RCF_OAUTH2_CLIENT_CREDENTIALS "RCF_OAUTH2_CLIENT_CREDENTIALS" and
-      @ref RestClient::RestConnection::RCF_OAUTH2_PASSWORD "RCF_OAUTH2_PASSWORD" for the grants with no
+    - connections claim the @ref RestClient::RestConnection::RCF_OAUTH2 "RCF_OAUTH2" feature for every OAuth2
+      grant type, and @ref RestClient::RestConnection::RCF_OAUTH2_CLIENT_CREDENTIALS "RCF_OAUTH2_CLIENT_CREDENTIALS"
+      and @ref RestClient::RestConnection::RCF_OAUTH2_PASSWORD "RCF_OAUTH2_PASSWORD" for the grants with no
       authorization step, and publish the grant type itself in
-      @ref RestClient::RestConnection::getExtendedInfo() "getExtendedInfo()"; \c oauth2-auth keeps its
-      meaning of "there is an authorization step to offer".  The features are derived from the new
+      @ref RestClient::RestConnection::getExtendedInfo() "getExtendedInfo()", so that a connection using OAuth2 can
+      be told apart from one using no OAuth2 at all; \c oauth2-auth means that there is an authorization step to
+      offer.  The features are derived from the new
       @ref RestClient::RestConnection::getOAuth2GrantType() "getOAuth2GrantType()" hook, which connection
       classes configuring OAuth2 through options of their own can override
       (<a href="https://github.com/qoretechnologies/qore/issues/5441">issue 5441</a>)
@@ -213,38 +211,19 @@ printf("%Y\n", ans.body);
       \c charset is not defined for multipart types, and appending it after the \c boundary
       parameter breaks strict multipart parsers.  @ref Qore::HTTPClient "HTTPClient" already
       applied this rule when adding the charset itself, so the two disagreed
-    - fixed connections that always use the authorization code grant reporting that they cannot be
-      authorized; their \c checkAuthCodeFeature() overrides set only the authorization code feature
-      and not the general \c oauth2-auth feature a UI reads to offer an \c Authorize control, so
-      Dynamics, Salesforce, OneDrive, ServiceNow, Dropbox, and LinkedIn connections could not be
-      authorized from the UI at all.  Both features are now set together in
-      @ref RestClient::RestConnection::setOAuth2AuthFeature() "setOAuth2AuthFeature()"
-    - fixed pings swallowing every failure acquiring the async client and silently retrying the
-      whole ping synchronously; only \c CONNECTION-ASYNC-UNSUPPORTED and \c LOAD-MODULE-ERROR
-      fall back now, so a real failure such as an OAuth2 login error is reported as-is instead of
-      being replaced by the second attempt's error
-    - fixed pings with a \c ping_path given as an absolute URL; the client is now retargeted at
-      that URL with @ref RestClient::AbstractRestClient::copyWithUrl() "copyWithUrl()" instead of
-      the URL being sent to the connection's own host as a request path, which made every
-      @ref SalesforceRestClient::SalesforceRestConnection "SalesforceRestConnection"
-      synchronous ping fail deserializing the resulting HTML error page
-    - fixed @ref RestClient::AbstractRestClient::copyWithUrl() "copyWithUrl()" silently returning a
-      generic @ref RestClient::RestClient "RestClient" when called on a subclass; a client that
-      customizes authentication or headers &mdash; @ref awsrestclientintro "AwsRestClient", whose \c signRequest() applies AWS SigV4 signing &mdash; lost that
-      behaviour on the copy, and its requests went out unsigned.  The copy is now constructed from
-      the object's own class through the new
-      @ref RestClient::RestClient::copySelf() "copySelf()" hook
+    - added @ref RestClient::RestConnection::setOAuth2AuthFeature() "setOAuth2AuthFeature()", which sets the
+      feature of an OAuth2 authorization flow together with the general \c oauth2-auth feature that a UI reads to
+      offer an \c Authorize control; a \c checkAuthCodeFeature() override must call it instead of setting the
+      authorization code feature directly
+    - added @ref RestClient::AbstractRestClient::copyWithUrl() "copyWithUrl()", which returns a copy of the client
+      for another URL; the copy is constructed from the object's own class through the new
+      @ref RestClient::RestClient::copySelf() "copySelf()" hook, so a subclass that customizes authentication or
+      headers, such as @ref awsrestclientintro "AwsRestClient", keeps that behaviour on the copy
       (<a href="https://github.com/qoretechnologies/qore/issues/5365">issue 5365</a>)
 
     @subsection restclientv2_6 RestClient v2.6
     - added @ref RestClient::RestClient::doRequestWithResponseLimit()
       "RestClient::doRequestWithResponseLimit()" for memory-safe bounded REST responses
-
-    @subsection restclientv2_5 RestClient v2.5
-    - added \c deserialized_body member to @ref RestResponseInfo "RestResponseInfo" hashdecl
-      to fix \c INVALID-MEMBER crashes when error responses from \c RestClientIo-based data
-      providers are accessed
-      (<a href="https://github.com/qoretechnologies/qorus/issues/69">issue 69</a>)
 
     @subsection restclientv2_4 RestClient v2.4
     - added CBOR serialization support (\c "cbor" data option) when the \c json module

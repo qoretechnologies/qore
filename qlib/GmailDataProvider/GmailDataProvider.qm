@@ -737,8 +737,8 @@ module GmailDataProvider {
     @section gmaildataprovider_relnotes Release Notes
 
     @subsection gmaildataprovider_v1_2 GmailDataProvider v1.2
-    - the \c send-message and \c create-draft actions upload the message as it is; a line of the message that
-      starts with \c "." was given another \c "." as for the SMTP \c DATA command, which Gmail stored and showed
+    - the \c send-message action uploads the message as it is; a line of the message with a single \c "." was
+      given another \c "." as for the SMTP \c DATA command, which Gmail stored and showed
     - added the \c create-draft, \c list-drafts, \c get-draft, \c send-draft, and \c delete-draft actions for
       working with drafts; \c get-draft, \c send-draft, and \c delete-draft offer the account's drafts as
       reference data
@@ -762,9 +762,9 @@ module GmailDataProvider {
       been raised and every handler has returned without an exception; a handler that works in the
       delivery thread therefore protects the message, while a handler that hands the event off to another
       thread, queue, or process does not
-    - the watch no longer retrieves a listed message that its cursor has already covered: Gmail's \c after:
-      operator has day granularity, so every cycle re-lists the messages already delivered earlier the same
-      day, and each of them was being retrieved in full only to be discarded
+    - the watch skips a listed message that its cursor has already covered without retrieving it: Gmail's
+      \c after: operator has day granularity, so every cycle re-lists the messages already delivered earlier the
+      same day
     - the watch now follows \c nextPageToken and processes every page of matching messages in one polling
       cycle; previously only the first page was ever seen, so a backlog larger than one page was never
       fully delivered

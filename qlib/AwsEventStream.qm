@@ -64,6 +64,14 @@ module AwsEventStream {
     bool true/false, byte, short, integer, long, byte-array, string, timestamp
     (epoch ms), and UUID.
 
+    @ref AwsEventStream::AwsEventStreamEncoder "AwsEventStreamEncoder" encodes messages and typed headers without
+    state, for example for the input events of signed bidirectional streams.
+    @ref AwsEventStream::AwsEventStreamDecoder "AwsEventStreamDecoder" validates both CRCs and rejects frames that
+    exceed the protocol size limits (@ref AwsEventStream::EventStreamMaxPayload "EventStreamMaxPayload" and
+    @ref AwsEventStream::EventStreamMaxHeaders "EventStreamMaxHeaders"), duplicate header names and truncated header
+    values; @ref AwsEventStream::AwsEventStreamDecoder::finish() "AwsEventStreamDecoder::finish()" rejects a partial
+    frame at the end of the stream.
+
     @par Streaming usage
 
     @code{.py}
@@ -85,10 +93,6 @@ dec.finish();  # reject truncated data at EOF
     @section awseventstreamrelnotes Release Notes
 
     @subsection awseventstream_v1_1 AwsEventStream v1.1
-    - adds stateless encoding of messages and typed headers for signed bidirectional streams
-    - validates protocol size limits, duplicate headers, truncated header values, and partial frames at EOF
-
-    @subsection awseventstream_v1_0 AwsEventStream v1.0
     - initial release
 */
 

@@ -94,9 +94,9 @@ http.waitStop();
     @section jsonrpchandler_relnotes JsonRpcHandler Release Notes
 
     @subsection jsonrpchandler_2_0_1 JsonRpcHandler v2.0.1
-    - a \c GET request whose query has a parameter name that decodes to a string with a NUL character (such as
-      \c "a%00b") is answered with status 400 (Bad Request); before, it was handled with the name cut at the NUL
-      character (\c "a")
+    - the query parameter names and values of a \c GET request are URL-decoded, as
+      @ref Util::parse_uri_query() "parse_uri_query()" decodes them; a request whose query has a parameter name
+      that decodes to a string with a NUL character (such as \c "a%00b") is answered with status 400 (Bad Request)
 
     @subsection jsonrpchandler_2_0 JsonRpcHandler v2.0
     - updated to use the Logger module

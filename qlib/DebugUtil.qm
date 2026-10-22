@@ -50,7 +50,6 @@ module DebugUtil {
     - added string enums: @ref DebugUtil::DebugResponseType, @ref DebugUtil::DebugRunStateName, @ref DebugUtil::DebugFlowName,
       @ref DebugUtil::DebugPolicyName, @ref DebugUtil::DebugEventCmd for type-safe debug protocol constants
     - added @ref DebugUtil::ResponseSync class for thread-safe single-response synchronization
-    - updated mapping constants to use enum keys
 
     @subsection du_v0_1_1 v0.1.1
     - fixed issues with debug logging

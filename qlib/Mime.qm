@@ -196,7 +196,7 @@ printf("%y: header word b: %y\n", mime_decode_header(mime_encode_header_word_b(s
     - @ref Mime::MultiPartMessage::serializeHeaders() "MultiPartMessage::serializeHeaders()" serializes a list
       value, which is how @ref Mime::MultiPartMessage::parseBody() "MultiPartMessage::parseBody()" returns a
       repeated header field, as a repeated header field; such a header was serialized with an empty value
-    - a name with a NUL character, which cannot be a hash key, no longer raises \c HASH-KEY-ERROR: a part header
+    - a name with a NUL character, which cannot be a hash key, is no longer cut at the NUL character: a part header
       name with one raises \c MULTIPART-PARSEBODY-ERROR in
       @ref Mime::MultiPartMessage::parseBody() "MultiPartMessage::parseBody()", a form-data part name with one raises
       \c MULTIPART-FORMDATA-MESSAGE-ERROR when a message is parsed and \c PART-ERROR when a part is added, and
@@ -204,7 +204,7 @@ printf("%y: header word b: %y\n", mime_decode_header(mime_encode_header_word_b(s
       malformed; values with a NUL character are kept
     - @ref Mime::mime_parse_form_urlencoded_string() "mime_parse_form_urlencoded_string()" raises
       \c URLENCODED-PARSE-ERROR for a parameter name that decodes to a string with a NUL character (such as
-      \c "a%00b"), instead of \c HASH-KEY-ERROR; a value with one is kept
+      \c "a%00b"), which was cut at the NUL character; a value with one is kept
 
     @subsection mime_1_8 v1.8
     - added @ref Mime::YamlMimeTypes "YamlMimeTypes" constant: set of all equivalent YAML MIME types

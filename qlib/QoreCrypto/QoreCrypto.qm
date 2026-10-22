@@ -193,27 +193,6 @@ string plaintext = cipher.decryptToString(
 
     @section qorecrypto_relnotes QoreCrypto Module Release Notes
 
-    @subsection qorecrypto_1_1 QoreCrypto Module Version 1.1
-    - added key rotation support:
-      - @ref QoreCrypto::StaticKeyProvider "StaticKeyProvider" and
-        @ref QoreCrypto::FileKeyProvider "FileKeyProvider" hold a keyring of KEK
-        generations, so retired generations stay available for unwrapping
-      - @ref QoreCrypto::EnvelopeCipher::rewrap() "EnvelopeCipher::rewrap()" and
-        @ref QoreCrypto::EnvelopeCipher::rewrapAcross() "rewrapAcross()" rotate
-        stored ciphertext without decrypting record content
-      - @ref QoreCrypto::EnvelopeCipher::reencrypt() "EnvelopeCipher::reencrypt()"
-        handles rotations that change AAD
-      - @ref QoreCrypto::EnvelopeCipher::needsRewrap() "EnvelopeCipher::needsRewrap()"
-        reports rotation progress from envelope metadata alone
-    - added @ref QoreCrypto::BlindIndex "BlindIndex" for equality lookups over
-      encrypted columns, with independently rotatable keys
-    - added @ref QoreCrypto::ResilientKeyProvider "ResilientKeyProvider"
-      providing bounded retry with backoff and a fail-closed per-key circuit
-      breaker
-    - documented @ref qorecrypto_aad_stability "AAD field stability",
-      @ref qorecrypto_zeroization "zeroization limits", and
-      @ref qorecrypto_fips "FIPS posture"
-
-    @subsection qorecrypto_1_0 QoreCrypto Module Version 1.0
+    @subsection qorecrypto_1_1 QoreCrypto Module Version 1.1.0
     - initial release
 */

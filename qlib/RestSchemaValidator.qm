@@ -80,7 +80,8 @@ module RestSchemaValidator {
       type build of a schema as one transaction: the type builds of the schema are serialized, and a build that
       fails part of the way through leaves the schema's type caches as they were; OpenAPI 3 schemas build their
       types through it
-    - prefer valid schema examples when describing fields and omit generated examples that violate the field type
+    - schema fields give the schema's example or default value as their example value when it is valid for the
+      field type, and give no generated example that the field type would reject
     - JSON and YAML response bodies in another encoding than UTF-8 are converted to UTF-8 before they are parsed,
       instead of relabeling ISO-8859-1 text as UTF-8; HTTP bodies are decoded with their actual encoding (see
       @ref Qore::decode_http_body() "decode_http_body()"), and YAML with a UTF-16 byte order mark is parsed correctly
@@ -92,7 +93,6 @@ module RestSchemaValidator {
     - preserve decimal numeric boundaries so exact fractional endpoints validate consistently
       (public minimum/maximum and numeric exclusive bounds now use Qore numbers instead of floats)
     - accept opaque GLB model responses as binary media
-    - retain supplied enumeration labels and descriptions in structured field choices
     - enforce boolean enumerations and preserve false values in generated enumeration examples
     - preserve opaque audio, image, and video response bytes in the null schema validator
     - retain nullable value types and independent presence requirements across cached field uses
@@ -111,11 +111,6 @@ module RestSchemaValidator {
     - fixed a parameter description being joined to its schema's when one already contains the other, which
       published a repeated sentence such as \c "Agent run ID.: Agent run ID. New run IDs are returned with
       the \c agent_run_ prefix."; whichever says more is now kept
-    - fixed a bug where a response with a non-text \c Content-Type and a binary body raised
-      \c DESERIALIZATION-ERROR; the check assumed every body arrives as a string, which holds for the synchronous
-      \c HTTPClient path but not for the asynchronous transport used by the \c RestClientIo module, making binary
-      responses impossible over that client
-      (<a href="https://github.com/qoretechnologies/qore/issues/5386">issue 5386</a>)
     - added abstract \c check() method to @ref RestSchemaValidator::AbstractSchemaObject "AbstractSchemaObject"
     - added CBOR serialization/deserialization support (\c "application/cbor") when the \c json module
       version 1.12+ is available (RFC 8949)

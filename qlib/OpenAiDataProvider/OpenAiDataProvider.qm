@@ -817,8 +817,6 @@ hash<auto> items = conversations.getChildProvider("items").getChildProvider("lis
       Assistants API run cancel and run steps endpoints
     - added the \c conversation field to create-response requests and responses, binding a response to a
       server-side conversation
-    - fixed conversation context propagation: the server-side conversation ID is read from the \c conversation
-      object returned by the API instead of a non-existent \c conversation_id response field
     - added \c function_call_output input items to create-response requests, so function tool results can be
       returned to the model; this replaces the deprecated Assistants API \c submit_tool_outputs endpoint
     - deprecated all \c assistants, \c threads, and \c runs data providers ahead of OpenAI's 2026-08-26 removal
@@ -828,12 +826,12 @@ hash<auto> items = conversations.getChildProvider("items").getChildProvider("lis
     - added OpenAiResponseActionSession for action-based response creation and streaming
     - added typed response output items for tool calls, tool results, and output content parts
     - added response stream data provider for Server-Sent Events streaming
-    - response stream requests now accept a model argument for responses API compatibility
-    - action session text normalization now tolerates missing output format hints
     - added conversation context store hooks for response continuity
     - added action catalog entry for streaming responses
     - added responses API input content support for text, image, audio, and file parts
     - added conversation context helpers for response continuity
+
+    @subsection openaidataprovider_v1_4 OpenAiDataProvider v1.4
     - missing APIs and actions to handle image analysis
       (<a href="https://github.com/qoretechnologies/qore/issues/4947">issue 4947</a>)
     - added APIs to handle image generation

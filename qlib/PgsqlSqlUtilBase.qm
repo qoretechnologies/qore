@@ -260,9 +260,6 @@ $function$
       \c public schema only, and @ref PgsqlSqlUtilBase::PgsqlDatabase::listTypes() "PgsqlDatabase::listTypes()"
       listing the types of every schema; both list the objects of the schemas of the connection's \c search_path,
       named as tables are
-    - fixed the partitions of a table in a schema other than \c public being named with their schema, so that they
-      differed from the unqualified partition names of a template; a partition in <tt>current_schema()</tt> is named
-      by its name alone
     - fixed trigger functions named with their schema or with a quoted identifier by the trigger that executes them
       (ex: <tt>execute function "my schema"."F"()</tt>, as PostgreSQL names a function that the \c search_path does
       not resolve) not being read, so that they were missing from the SQL that creates, aligns, and drops the table;
@@ -337,57 +334,39 @@ $function$
     @subsection pgsqlsqlutilbasev112 PgsqlSqlUtilBase v1.12
     - added explicit non-key update row locking through the SqlUtil @c forupdate_no_key select option;
       independent foreign-key checks can complete while other writers, deletes and key changes remain excluded
-    - Fixed bulk timestamp, date, and time writes in a different input time zone so they use the same
-      calendar conversion as scalar writes, including prepared bulk update predicates and upserts.
-    - atomic empty-partition removal now detaches the leaf in the same transaction before dropping it;
-      foreign keys referencing the partitioned parent remain enforced, and a failed drop restores attachment
-    - direct dependencies on the leaf still reject removal without cascading changes
 
     @subsection pgsqlsqlutilbasev111 PgsqlSqlUtilBase v1.11
-    - supports atomic empty-partition removal through SqlUtil; parent and leaf locks exclude routed and direct
-      writers, catalog OIDs reject replaced relations, and READ COMMITTED visibility prevents stale emptiness
-      proofs; row-level security cannot silently hide retained rows
+    - supports atomic empty-partition removal through SqlUtil; the leaf is detached and dropped in the same
+      transaction, so foreign keys that reference the partitioned table remain enforced, and a failed drop leaves
+      the leaf attached; parent and leaf locks exclude routed and direct writers, catalog OIDs reject replaced
+      relations, and READ COMMITTED visibility prevents stale emptiness proofs; row-level security cannot silently
+      hide retained rows
     - discovery exposes runtime parent/leaf OIDs and relation kind in PartitionInfo::driver; these identities
       are not portable schema definitions and must not be reused after a restore or relation replacement
     - nested and foreign partitions are rejected; dependency errors never trigger a cascading drop, and
       successful calls restore caller timeout and row-security settings
 
     @subsection pgsqlsqlutilbasev110 PgsqlSqlUtilBase v1.10
-    - tables, views, sequences, and materialized views are listed only from the schemas of the connection's
-      \c search_path, as on Oracle and MySQL, instead of from every schema in the database; an object in
-      <tt>current_schema()</tt> is listed unqualified and one in any other \c search_path schema as
-      \c "schema.name" (see @ref pgsql_schema_scope)
+    - tables, sequences, and materialized views are listed only from the schemas of the connection's
+      \c search_path, as views already were and as on Oracle and MySQL, instead of from every schema in the
+      database; an object in <tt>current_schema()</tt> is listed unqualified and one in any other \c search_path
+      schema, also a view, as \c "schema.name" (see @ref pgsql_schema_scope)
     - fixed \c listMaterializedViews(), which listed the ordinary tables of every schema instead of materialized
       views
     - preserve partial predicates, INCLUDE columns, NULLS NOT DISTINCT, and per-key sort/null order in
       index introspection, DDL, schema descriptions, and alignment (issue 5470)
-    - parse nested and quoted index expressions without confusing embedded text with storage options
     - foreign-key creation now preserves quoted local and referenced column names, including reserved
       words such as \c user and \c order
     - added temporary-table support (\c "create temporary table ... on commit drop"); see
       @ref SqlUtil::AbstractDatabase::createTempTable() "AbstractDatabase::createTempTable()"
-    - \c date, \c timestamp, and \c timestamptz partition bounds are now parsed from the catalog as Qore dates,
-      using the same time zone rules the driver uses to convert column values of the same type: a literal with an
-      explicit UTC offset identifies a point in time on its own, and a literal without one is read in the
-      datasource's time zone.  Such bounds previously stayed strings, so a range partition created from typed
-      date bounds could never be resolved again by those bounds and every structural bound-specification
-      lifecycle call on it failed with \c PARTITION-ERROR
-    - the targeted single-partition catalog lookup now loads the table's columns before parsing bounds, so
-      \c getPartition() reports the same typed bounds as \c listPartitions(); without them every bound it
-      returned stayed an unparsed string, which also broke name-bearing bound specifications
-    - a bound for a \c date column is now canonicalized to the calendar day that contains it, in the
-      datasource's time zone, on both the specification and catalog sides; a \c date column has no time of day,
-      so a bound that kept one could never match the day the database stores
-    - fixed introspection of a text bound containing the cast separator (\c "::"): the literal was truncated at
-      the first occurrence, which discarded both bounds of the partition
     - fixed a failed native upsert writing the database error, the SQL statement, and its bind arguments to
       standard output before the exception reached the caller; the statement and arguments are now only added to
       the exception description, and the original error code, exception argument (including the SQLSTATE), and
       exception chain are preserved
 
     @subsection pgsqlsqlutilbasev19 PgsqlSqlUtilBase v1.9
-    - native PostgreSQL UNNEST optimizations now require the native \c pgsql driver; JDBC retains its
-      batch-statement bind format for inserts, bulk updates, and bulk upserts
+    - the UNNEST bulk DML below is used with the native \c pgsql driver only; with JDBC, bulk DML uses batch
+      statements
     - \c hasArrayBind() now checks the @ref Qore::SQL::DBI_CAP_HAS_ARRAY_BIND capability flag
       at runtime to detect driver support (requires pgsql driver v3.3+)
     - added UNNEST-based bulk insert SQL generation in \c insertIntern(): when bulk data (hash-of-lists)
@@ -400,8 +379,6 @@ $function$
       COPY protocol
     - added a \c PgsqlTable::bulkInsert() override using the PostgreSQL COPY protocol for pure
       hash-of-lists input without insert options
-    - added \c PgsqlTable::doReturningImpl() override that correctly returns all rows for bulk RETURNING
-      results (base class only returns the first row)
     - fixed \c PgsqlTable handling of session temporary tables so unqualified table names and the
       \c pg_temp schema alias resolve to the backend's active temporary schema
     - fixed the resolution of unqualified table and view names, which were always assumed to be in the
@@ -415,7 +392,9 @@ $function$
       connection cannot reach. Aligning a schema in a database holding more than one schema with the
       same sequence names therefore failed
     - implemented PostgreSQL range partition support for %SqlUtil table creation, introspection, lookup, ensure,
-      add, drop, truncate, and detach operations
+      add, drop, truncate, and detach operations; \c date, \c timestamp, and \c timestamptz partition bounds are
+      Qore dates, read from the catalog with the time zone rules that the driver uses for column values of the same
+      type, and a bound for a \c date column is the calendar day that contains it in the datasource's time zone
     - added targeted canonical-name partition metadata lookup without loading the complete child-relation catalog
     - added portable list and explicit modulus/remainder hash partitioning, recursive subpartition creation and
       introspection, and catalog-estimated row-count / allocated-size metadata

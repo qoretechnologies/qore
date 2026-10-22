@@ -427,8 +427,6 @@ while (i.next()) {
     @section csvutil_relnotes Release Notes
 
     @subsection csvutil_v1_12 Version 1.12
-    - an empty CSV input can return its example record and field description after a search has finished,
-      including an input with no columns
     - a header name with a NUL character, which cannot be the key of a field in a record, raises
       \c ABSTRACTCSVITERATOR-ERROR when the headers are read; before, the name was cut at the NUL character
     - added the \c write-data action, which returns the CSV data created from the records given to it and the
@@ -479,10 +477,7 @@ while (i.next()) {
       \c FIELD-VALUE-ERROR for a value with decimals (ex: \c "1.234,5" with \c ".,"), which was truncated to an
       integer
     - the CSV readers skip a byte order mark at the start of UTF-8 file, stream, binary, and string input, so the first
-      header of a file saved as "CSV UTF-8" by a spreadsheet program matches its field name, as the CSV profiler
-      already read it (see @ref csvutil_bom)
-    - the CSV profiler and the \c profile action take a \c quote option for files quoted with another character
-      than \c "\""; the profile's text format reports the quote character
+      header of a file saved as "CSV UTF-8" by a spreadsheet program matches its field name (see @ref csvutil_bom)
     - completed the option metadata of the read data provider and the \c read and \c read-data actions, so tools
       and agents learn the reader from the action catalog and the data provider index: the defaults of
       \c ignore_empty, \c ignore_whitespace (both \c true) and \c header_lines (\c 0) are declared, common
@@ -492,7 +487,9 @@ while (i.next()) {
       @ref DataProvider::DataProviderOptionInteraction "DataProviderOptionInteraction" metadata
     - added @ref CsvUtil::CsvProfiler "CsvProfiler", which detects the separator, encoding, byte order mark, and
       line ending of delimited text data and profiles its layout and column types with
-      @ref DataProvider::TabularProfiler "TabularProfiler", and the \c profile application action
+      @ref DataProvider::TabularProfiler "TabularProfiler", and the \c profile application action; both take a
+      \c quote option for files quoted with another character than \c "\"", and the profile's text format reports
+      the quote character
     - the read data provider's \c path option is now tagged
       @ref DataProvider::DTT_FromLocation "DTT_FromLocation", advertising that the
       value (already resolved with \c FileLocationHandler::getBinaryStreamFromLocation())
@@ -500,8 +497,6 @@ while (i.next()) {
     - the \c read-data application action no longer offers the \c stream option; its input is the \c data option
     - the read data provider's \c data option and the \c read-data application action accept binary data, which
       is decoded with the \c encoding option (default \c UTF-8), as file and stream input is
-    - fixed example data for CSV data without data rows: the read data provider's record type is kept once read,
-      so asking for it after a search no longer uses the iterator the search released
 
     @subsection csvutil_v1_11 Version 1.11
     - added support for data provider application actions

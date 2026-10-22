@@ -409,14 +409,6 @@ Content-Length: 16
     - the resource name \c "0" is routed as a nonempty path segment in HTTP and internal dispatch
     - REST resource names preserve percent-encoded separators such as slashes and question marks;
       URI path segments are decoded individually after routing boundaries and query arguments are parsed
-    - removed the \c Socket::setHttp2ActiveStream(stream_id) /
-      \c setHttp2ActiveStream(-1) pair previously wrapped around
-      @ref RestHandler::AbstractRestClass::handleRequest()
-      "AbstractRestClass::handleRequest()".  REST responses on HTTP/2
-      already use the async-safe H2 @c Socket primitives via the
-      \c HttpServerAsyncIo controller; no REST
-      handler relied on the \c Socket::send() / \c Socket::recv()
-      redirection that the active-stream bridge enabled.
     - dropped the per-response "raw body" log entry from DEBUG to TRACE; at DEBUG level it flooded
       the HTTP log with multi-MB response bodies (e.g. vector scrolls) and caused logger contention
       under load.  Operators who need the raw serialized body for protocol-level debugging can

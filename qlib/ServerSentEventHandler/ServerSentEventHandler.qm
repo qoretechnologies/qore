@@ -93,10 +93,6 @@ hash<HttpHandlerResponseInfo> getEvents(hash<auto> cx, *hash<auto> ah) {
       sent, and so is a negative retry value; before, a line break in an event type or ID started a field or an
       event of its own, and a client ignored an ID with a NUL character.  A line break (CRLF, CR or LF) in a comment
       or in the serialized data of an event starts another line of the field
-    - fixed SSE connections over HTTP/2 and HTTP/3 never being deregistered when the peer disconnected: those
-      transports multiplex, so neither a socket close nor a failed write reports the death of one response
-      stream, and the connection stayed registered (and heartbeated) forever.  The transport now reports the
-      teardown explicitly, for a reset of the single stream as well as for the loss of the whole connection
     - added the internal @ref ServerSentEventHandler::ServerSentEventHandler::createConnectionIntern()
       "createConnectionIntern()" seam so that a handler needing a specific connection type for certain requests
       cannot be displaced by a subclass customizing the documented
@@ -122,8 +118,8 @@ hash<HttpHandlerResponseInfo> getEvents(hash<auto> cx, *hash<auto> ah) {
       I/O controller, replacing the legacy synchronous \c startImpl() entry point
     - \c startImpl() now throws \c SSE-SYNC-NOT-SUPPORTED; all SSE connections are managed by
       the async I/O controller
-    - async SSE heartbeats are enabled by default across HTTP/1.x, HTTP/2, and
-      HTTP/3; set the handler \c heartbeat option to \c 0 to opt out
+    - SSE heartbeats are sent by default on HTTP/1.x, HTTP/2, and HTTP/3 connections; the handler \c heartbeat
+      option accepts \c 0 to disable them
 
     @subsection serversenteventhandler_v1_0_2 Version 1.0.2
     - added support for customizable heartbeat messages to support JSON-RPC requests as heartbeat message in MCP

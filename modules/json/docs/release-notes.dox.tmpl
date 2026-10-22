@@ -6,13 +6,9 @@
 
     @section json_v3_0_0 json Module Version 3.0.0
 
-    - a key with a NUL character in a JSON, CBOR or TOON document, which a hash key cannot hold, raises the parse
-      error of the format (\c JSON-PARSE-ERROR, \c CBOR-PARSE-ERROR or \c TOON-PARSE-ERROR), which gives the key
-      and the byte offset of the NUL character: the key was cut at the NUL character and could replace the value of
-      another key; a TOON key written without quotes is refused too; a JSON Pointer with a NUL character raises
-      \c JSON-POINTER-ERROR
-    - @ref Qore::Json::JsonSchema::load() "JsonSchema::load()" raises \c JSON-SCHEMA-ERROR for a location with a NUL
-      character instead of reading the file named by the location cut at the NUL character
+    - a key with a NUL character in a JSON document, which a hash key cannot hold, raises \c JSON-PARSE-ERROR, which
+      gives the key and the byte offset of the NUL character: the key was cut at the NUL character and could replace
+      the value of another key
     - the json module is now delivered with %Qore itself and versions with it; it was previously
       maintained in a separate \c module-json repository
     - the JSON parser and serializer are published to other binary modules as a versioned C++ API

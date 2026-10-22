@@ -66,9 +66,6 @@ module WebSocketUtil {
     @section websocketutil_relnotes WebSocketUtil Module Release History
 
     @subsection wsu_v16 v1.6
-    - fixed @ref WebSocketUtil::PerMessageDeflateExtension::transformIncoming()
-      "PerMessageDeflateExtension::transformIncoming()" to return string (not binary) for text frames after
-      decompression, preserving the correct message type for \c gotMessage() dispatch
     - added pluggable WebSocket extension framework
       (<a href="https://github.com/qoretechnologies/qore/issues/5065">issue 5065</a>)
       - added @ref WsExtensionParamInfo hashdecl for extension parameters

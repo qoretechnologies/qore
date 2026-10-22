@@ -331,9 +331,8 @@ hash<FileResourceResult> import = FileLocationHandler::getResourceFromLocation(i
 
     @subsection filelocationhandler_v3_0 FileLocationHandler v3.0
     - location errors give the location without its password
-    - binary streams and stream readers of \c ftp(s):// locations deliver the file as it is received instead of
-      reading the whole file into memory first, and an error in an FTP or SFTP transfer is raised by the stream
-      instead of ending it as if the file were complete
+    - an error in the transfer of a binary stream or stream reader of an \c ftp(s):// or \c sftp:// location is
+      raised by the stream instead of ending it as if the file were complete
     - the stream readers of HTTP locations decode the text in the encoding determined from the response, like text
       reads do (see @ref Qore::get_http_body_encoding() "get_http_body_encoding()"), with the \c encoding option as
       the assumed encoding; the option was used for every response
@@ -347,8 +346,6 @@ hash<FileResourceResult> import = FileLocationHandler::getResourceFromLocation(i
       metadata: the effective location it was retrieved from, its media type and character encoding, and for
       HTTP locations the final response headers and the redirects followed; see
       @ref filelocationhandler_resources
-    - implemented support for non-blocking I/O from file handlers
-      (<a href="https://github.com/qoretechnologies/qore/issues/4764">issue 4764</a>)
     - \c "sftp://" locations (and \c conn:// locations resolving to them) support non-blocking reads with
       @ref FileLocationHandler::AbstractFileLocationHandler::getIoPollerForLocation()
       "getIoPollerForLocation()"; requires the \c ssh2 module with
@@ -380,13 +377,17 @@ hash<FileResourceResult> import = FileLocationHandler::getResourceFromLocation(i
         when the stream is opened instead of returning an empty stream
       - stream writes report an error response from \c OutputStreamWrapper::waitForIo()
       - the \c http_version option accepts \c "2.0" and \c "3.0"
-    - @ref FileLocationHandler::FileLocationHandler::getHttpHandlerForClient()
-      "FileLocationHandler::getHttpHandlerForClient()" also binds a handler to an
-      \c HttpClientIo::HttpClientConnectionManager with a URL, and
+    - added @ref FileLocationHandler::FileLocationHandler::getHttpHandlerForClient()
+      "FileLocationHandler::getHttpHandlerForClient()", which returns a handler bound to an already-authenticated
+      @ref Qore::HTTPClient "HTTPClient" or to an \c HttpClientIo::HttpClientConnectionManager with a URL, and
       @ref FileLocationHandler::FileLocationHandler::getRestHandlerForClient()
-      "FileLocationHandler::getRestHandlerForClient()" drives a \c RestClientIo::RestClientIo client, or one created
-      from a synchronous \c RestClient::RestClient
+      "FileLocationHandler::getRestHandlerForClient()", which returns a handler bound to a
+      \c RestClientIo::RestClientIo client, or to one created from a synchronous \c RestClient::RestClient
       (<a href="https://github.com/qoretechnologies/qore/issues/5469">issue 5469</a>)
+
+    @subsection filelocationhandler_v2_3 FileLocationHandler v2.3
+    - implemented support for non-blocking I/O from file handlers
+      (<a href="https://github.com/qoretechnologies/qore/issues/4764">issue 4764</a>)
 
     @subsection filelocationhandler_v2_2_1 FileLocationHandler v2.2.1
     - allow handler information to be returned

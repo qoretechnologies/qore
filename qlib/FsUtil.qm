@@ -85,7 +85,6 @@ module FsUtil {
       instead of incorrectly returning \c True
     - fixed @ref FsUtil::remove_tree() "remove_tree()" to properly handle symlinks (by removing them with
       \c unlink() instead of trying \c rmdir()) and to throw \c REMOVE-TREE-ERROR on \c rmdir() failure
-    - fixed @ref FsUtil::move_path() "move_path()" to throw \c MOVE-PATH-ERROR on \c rename() failure
     - fixed @ref FsUtil::copy_path() "copy_path()" and @ref FsUtil::copy_tree() "copy_tree()" to properly
       pass the \c depth parameter through the function chain
 

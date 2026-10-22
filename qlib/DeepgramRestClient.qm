@@ -102,12 +102,6 @@ f.write(resp.body);
     @section DeepgramRestClientRelnotes Release Notes
 
     @subsection DeepgramRestClientv1_1 DeepgramRestClient v1.1
-    - the <tt>Authorization: Token &lt;key&gt;</tt> header built from the <tt>apikey</tt> option is now placed in the <tt>headers</tt>
-      option read by the REST clients; it was previously put in an unread <tt>default_headers</tt> option, so
-      requests and the connection ping were sent without authentication and failed with HTTP 401
-      (<a href="https://github.com/qoretechnologies/qorus/issues/523">qorus#523</a>)
-
-    @subsection DeepgramRestClientv1_0 DeepgramRestClient v1.0
     - initial release
 */
 

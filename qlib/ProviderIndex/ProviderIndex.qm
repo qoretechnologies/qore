@@ -61,16 +61,8 @@ module ProviderIndex {
     @section providerindex_relnotes Release Notes
 
     @subsection providerindex_v1_4 ProviderIndex v1.4
-    - static metadata context now covers module loading, worker setup, and deferred output-type resolution
-    - unresolved output-schema callbacks are reported as unavailable actions, even though the index does not store
-      output types; every build attempts them again through the catalog before it takes its snapshot, so repaired
-      providers can qualify without re-registration, and an action whose callback still fails is reported once,
-      with the callback's error
-
-    @subsection providerindex_v1_3 ProviderIndex v1.3
-    - On Linux, index workers terminate when their launching builder thread exits, including crashes and
-      forced shutdown. Worker builds now require process 2.2 or later. Other platforms retain explicit
-      worker cancellation through @ref ProviderIndex::ProviderIndex::cancelWorkers().
+    - added @ref ProviderIndex::ProviderIndexCreateOptions "ProviderIndexCreateOptions" to allow callers to
+      create scoped, deterministic indices without loading external provider discovery sources
 
     @subsection providerindex_v1_2 ProviderIndex v1.2
     - added @ref ProviderIndex::ProviderIndex::cancelWorkers() "ProviderIndex::cancelWorkers()" to stop the worker
@@ -86,9 +78,10 @@ module ProviderIndex {
       (@ref ProviderIndex::ProviderIndexCreateOptions::workers "ProviderIndexCreateOptions::workers"): each worker
       loads a batch of the provider modules and writes the metadata of their apps, and the calling process merges,
       qualifies, and publishes the index, so the memory used no longer grows with the number of providers, and
-      batches are indexed in parallel; the index written is identical to one built in a single process; worker
-      builds require the \c process module 2.1 or later and MessagePack support; without MessagePack, the index is
-      built in the calling process
+      batches are indexed in parallel; the index written is identical to one built in a single process; on Linux,
+      index workers terminate when the thread that launched them exits, including on a crash or a forced shutdown;
+      worker builds require the \c process module 2.2 or later and MessagePack support; without MessagePack, the
+      index is built in the calling process
     - an index build never reads the index that it replaces (see
       @ref ProviderIndexUtil::ProviderIndexUtil::setBuildMode() "ProviderIndexUtil::setBuildMode()")
     - building an index no longer runs the dynamic type and default value callbacks of action options, which ran
@@ -96,26 +89,22 @@ module ProviderIndex {
     - each action option's type is published as its complete plain-data description in \c type_info, including
       nested fields, unions, allowed values, and tags, so that reading the index never loads the provider modules
       that define the types
-    - output types are not indexed, since no index consumer uses them
     - an option type whose description does not restore an equivalent type is reported in the
       \c type_info_mismatches key of the index summary
     - action metadata that is not plain data blocks publication with structured action evidence
     - indexes are published without the canonical index file (\c qore-data-index.yaml) unless
       @ref ProviderIndex::ProviderIndexCreateOptions::write_canonical_yaml "ProviderIndexCreateOptions::write_canonical_yaml"
       is set
-    - an app or action that cannot be initialized no longer fails the build: its failure is recorded in the index
+    - the failure of an app or action that cannot be initialized is recorded in the index
       (see @ref ProviderIndexUtil::ProviderIndexUtil::getIndexedFailures() "ProviderIndexUtil::getIndexedFailures()")
       and logged, the build summary reports the numbers of failed apps and actions (\c failed_apps and
       \c failed_actions), and the failures are in the \c unavailable member of the qualification report, which is
       then not complete; an app that registered its info and connection scheme before failing is indexed with them;
-      failures that are not those of individual apps or actions still fail the build, and an index worker whose
-      apps or actions failed indexes the others and succeeds
+      failures that are not those of individual apps or actions fail the build, and an index worker whose apps or
+      actions failed indexes the others and succeeds
     - indexes written by this version require ProviderIndexUtil 1.2 or later
 
     @subsection providerindex_v1_1 ProviderIndex v1.1
-    - rebuilding an existing index now includes provider inventories introduced during deferred initialization,
-      without incorrectly rejecting the rebuild as stale; inventory changes during qualification still block
-      publication and preserve the previous index
     - index dependencies now use exact registered module names rather than source or compiled artifact paths,
       so installing an equivalent compiled module does not change its dependency identity
     - explicit seeded paths are resolved against loaded module metadata; unresolved paths fail before publication

@@ -8,6 +8,10 @@
 
     @section linenoise_3_0 linenoise Module Version 3.0
     - @ref Qore::Linenoise::history_save() "history_save()" and @ref Qore::Linenoise::history_load() "history_load()"
-      are subject to the filesystem sandbox of the calling program: they raise \c FILESYSTEM-ACCESS-DENIED for a
-      file the sandbox does not allow to be written or read
+      have the \c FILESYSTEM functional domain and respect its parse option
+      (@ref Qore::PO_NO_FILESYSTEM "PO_NO_FILESYSTEM"), and are subject to the filesystem sandbox of the calling
+      program: they raise \c FILESYSTEM-ACCESS-DENIED for a file the sandbox does not allow to be written or read
+    - @ref Qore::Linenoise::history_save() "history_save()" and @ref Qore::Linenoise::history_load() "history_load()"
+      refuse a file name with a NUL character with \c LINENOISE-HISTORY-SAVE-ERROR or
+      \c LINENOISE-HISTORY-LOAD-ERROR instead of using the file named by the name cut at the NUL character
 */

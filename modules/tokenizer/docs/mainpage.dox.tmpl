@@ -12,6 +12,10 @@
     as the Python \c transformers library. This enables local text tokenization for ONNX
     model inference without a Python dependency.
 
+    Encoding text and building the vocabulary returned by
+    @ref Qore::Tokenizer::HFTokenizer::getVocab() "getVocab()" are cancellation points, so a long operation can be
+    interrupted with @ref Qore::cancel_thread() or a @ref Qore::SandboxManager "SandboxManager" interrupt.
+
     Supported tokenization models:
     - <b>BPE</b> (Byte-Pair Encoding) — used by GPT-2, RoBERTa, Llama, Mistral
     - <b>WordPiece</b> — used by BERT, DistilBERT, ALBERT, sentence-transformers

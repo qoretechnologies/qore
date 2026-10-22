@@ -163,10 +163,9 @@ rc.bulkJobClose(h.id);
       @ref SalesforceRestClient::SalesforceRestClientBase "SalesforceRestClientBase", so the blocking and async
       clients share one implementation
       (<a href="https://github.com/qoretechnologies/qore/issues/5365">issue 5365</a>)
-    - @ref SalesforceRestClient::SalesforceRestClientIo "SalesforceRestClientIo" now captures the org identity from
-      the OAuth2 token response; @ref restclientiointro "RestClientIo" stores only the generic OAuth2 fields,
-      so the Salesforce-specific \c instance_url and \c id fields were previously discarded on the async path.  A
-      refresh that moves the org to another instance is followed
+    - @ref SalesforceRestClient::SalesforceRestClientIo "SalesforceRestClientIo" takes the org identity
+      (\c instance_url and \c id) from the OAuth2 token response, as the blocking client does, and follows a
+      refresh that moves the org to another instance
       (<a href="https://github.com/qoretechnologies/qore/issues/5365">issue 5365</a>)
 
     @subsection salesforcerestclientv2_0_1 SalesforceRestClient v2.0.1

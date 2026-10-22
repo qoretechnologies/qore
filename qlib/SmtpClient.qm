@@ -194,9 +194,9 @@ smtp.sendMessage(msg);@endcode
         @ref SmtpClient::SmtpConnection "SmtpConnection"
       - The mechanism is selected from the mechanisms the server advertises, never from the hostname; a
         specific mechanism can be forced with the \c auth_mechanism option
-      - A bearer-token failure is reported with the server's own error rather than being mistaken for
-        success: servers answer \c 334 with a base64 payload instead of an error code and will not report
-        the real failure until the client sends an empty line, which the authentication sequence now does
+      - A bearer-token failure is reported with the server's own error: servers answer \c 334 with a base64
+        payload instead of an error code and report the real failure only after the client sends an empty line,
+        which the authentication sequence does
     - Fixed the SMTP handshake to re-issue \c EHLO after \c STARTTLS as required by
       <a href="https://datatracker.ietf.org/doc/html/rfc3207">RFC 3207</a> §4.2; the capability list
       learned before the TLS upgrade was previously kept, even though servers commonly advertise their
@@ -213,8 +213,6 @@ smtp.sendMessage(msg);@endcode
       read as SMTP commands, and a bare LF before such a line was sent as it was, which a server that accepts a
       bare LF as a line ending took the same way (SMTP smuggling); see
       @ref SmtpClient::SmtpSendPollOperation::getData() "SmtpSendPollOperation::getData()"
-    - The end-of-data line follows the last line break of the message; an empty line was added at the end of
-      every message
     - A sender or recipient address with a NUL, CR or LF character, which would end the \c MAIL \c FROM or
       \c RCPT \c TO command and start another one, raises \c MESSAGE-ERROR before anything is sent; the sender
       address of a parsed message was its whole decoded \c From header, which could contain a line break (fixed

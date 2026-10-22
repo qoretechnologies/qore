@@ -70,6 +70,19 @@ module RestSchemaDataProvider {
         @ref RestSchemaDataProvider::RestSchemaRequestDataProvider "RestSchemaRequestDataProvider" object where the
         request and response messages can be queried and requests can be sent to the server
 
+    Requests are sent with @ref RestClientIo::RestClientIo "RestClientIo", which supports HTTP/1.x, HTTP/2, and
+    HTTP/3 with concurrent request multiplexing; operation bodies that are already serialized are sent with
+    @ref RestClientIo::RestClientIo::restDoRawRequest() "restDoRawRequest()", so they are not validated twice.
+    The \c rest_client request option of
+    @ref RestSchemaDataProvider::RestSchemaRequestDataProvider "RestSchemaRequestDataProvider" sends one request on
+    another client, for example on a client copied from the connection's own for a host resolved per request,
+    without changing anything else about the request.
+
+    OpenAPI parameters with \c content are serialized, including JSON objects and arrays, before they are
+    URI-escaped. OpenAPI multipart binary request fields accept raw binary data or named <tt>FileDataType</tt>
+    values, keeping their file name and media type. Empty hashes, empty lists, zero, and false response bodies are
+    returned as received. The data provider description gives the URL without its password.
+
     The following classes are provided by this module:
     - @ref RestSchemaDataProvider::RestSchemaDataProvider "RestSchemaDataProvider"
     - @ref RestSchemaDataProvider::RestSchemaDataProviderBase "RestSchemaDataProviderBase"
@@ -79,23 +92,6 @@ module RestSchemaDataProvider {
     @section restschemamdataprovider_relnotes Release Notes
 
     @subsection restschemamdataprovider_v2_4 RestSchemaDataProvider v2.4
-    - the data provider description gives the URL without its password
-    - serialize OpenAPI parameter \c content before URI escaping, including JSON objects and arrays
-    - OpenAPI multipart binary request fields accept named <tt>FileDataType</tt> values without losing
-      filename or media type metadata; existing raw binary inputs remain supported
-    - preserve empty hashes, empty lists, zero, and false response bodies
-    - migrated from @ref restclientintro "RestClient" (synchronous HTTP/1.x) to
-      @ref RestClientIo::RestClientIo "RestClientIo" (async HTTP/1.x, HTTP/2, and HTTP/3) as the
-      default REST transport; this enables HTTP/2 and HTTP/3 support with concurrent request
-      multiplexing against REST servers, and uses
-      @ref RestClientIo::RestClientIo::restDoRawRequest() "restDoRawRequest()" to pass
-      pre-serialized operation bodies through without triggering double schema validation
-    - added the \c rest_client request option to
-      @ref RestSchemaDataProvider::RestSchemaRequestDataProvider "RestSchemaRequestDataProvider", so that a
-      caller that has resolved a per-request host can send one request on a client copied from the
-      connection's own without changing anything else about the request
-
-    @subsection restschemamdataprovider_v2_3 RestSchemaDataProvider v2.3
     - initial release
 */
 

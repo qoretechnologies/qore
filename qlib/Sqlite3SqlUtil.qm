@@ -248,8 +248,7 @@ hash<auto> desc = {
       the new name
     - a string column with a size, as in a portable description (<tt>{"qore_type": "string", "size": 96}</tt>), is
       accepted: SQLite does not limit the length of text, so the size is not part of the column; it raised
-      \c COLUMN-ERROR, so that such a description, such as the quarantine table of a DataSchema \c reconcile_table
-      migration, could not be used on SQLite (see @ref sqlite3_type_mapping)
+      \c COLUMN-ERROR, so that such a description could not be used on SQLite (see @ref sqlite3_type_mapping)
     - a column's \c NOT \c NULL constraint can be set or dropped on SQLite 3.53.0 and later, as by
       @ref SqlUtil::AbstractTable::getModifyColumnSql() "AbstractTable::getModifyColumnSql()" or table alignment;
       every column change raised \c UNSUPPORTED before.  A change that SQLite cannot make, or a \c NOT \c NULL
@@ -286,12 +285,6 @@ hash<auto> desc = {
       described as an index of the table, added to an existing table as a unique index, and aligned by its columns;
       a unique index is also a unique constraint of its table, as in SQLite; dropping or changing a unique constraint
       that a table was created with raises \c UNSUPPORTED with a description; see @ref sqlite3_unique_constraints
-    - fixed table alignment reporting a different refusal on an SQLite library older than 3.53.0 than on a newer
-      one: a template that made a change that no SQLite version can make, such as adding a primary key, and changed
-      a column's \c NOT \c NULL constraint, such as by declaring the key's column \c NOT \c NULL, raised
-      \c UNSUPPORTED for the \c NOT \c NULL constraint on the older library; the changes that no SQLite version can
-      make are now refused before a column is changed, so an alignment reports the same change with every SQLite
-      version; see @ref sqlite3_alignment_refusals
     - fixed describing indexes: a table with an automatic index (a composite primary key or a unique
       constraint) failed, a unique index created in lower case was reported as not unique, and quoted column
       names kept their quotes; indexes are now described from SQLite's index pragmas instead of their SQL
@@ -302,7 +295,7 @@ hash<auto> desc = {
       @ref SqlUtil::AbstractDatabase::createTempTable() "AbstractDatabase::createTempTable()"
     - made SQL \c like, \c contains, \c startsWith, and \c endsWith expression behavior honor the
       DataProvider case-sensitivity contract instead of inheriting SQLite's case-insensitive ASCII \c LIKE
-      behavior; SQL LIKE wildcard translation now also preserves literal SQLite GLOB metacharacters
+      behavior; a \c "[", \c "*" or \c "?" in a \c like pattern matches itself
 
     @subsection sqlite3sqlutilv11 Sqlite3SqlUtil_1_1 Sqlite3SqlUtil Module v1.1
     - implemented support for generating queries based on generic expressions using the DataProvider module's generic

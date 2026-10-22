@@ -144,7 +144,7 @@ $env:QORE_CONNECTION_PROVIDERS="MyConnectionProvider;OtherConnectionProvider"
       @c DataProvider module with @ref ConnectionProvider::ConnectionOptionInfo "ConnectionOptionInfo") to derive a
       connection option from the option of another connection scheme without resetting the members that are not
       changed; adding a hash cast to @ref ConnectionProvider::ConnectionOptionInfo "ConnectionOptionInfo" to a base
-      option also set every member that the cast did not give to its default value (ex: \c sensitive to
+      option sets every member that the cast does not give to its default value (ex: \c sensitive to
       @ref False "False")
     - made the default ping timings public so that connections monitored on a dedicated thread can bound
       their own pings with the same values:
@@ -178,22 +178,10 @@ $env:QORE_CONNECTION_PROVIDERS="MyConnectionProvider;OtherConnectionProvider"
       registered scheme (\c file://, \c http(s)://, \c sftp://, ...)
     - the HTTP connection \c ssl_key_data option (X.509 private key material) is
       now marked \c sensitive so it is masked in user interfaces and logs
-    - the HTTP connection \c negotiate_keytab option is no longer marked
-      \c sensitive; it is a keytab file location (not secret material, which lives
-      in the keytab file itself), consistent with the other file-location options
     - fixed @ref ConnectionProvider::HttpConnection::getDataProvider() "HttpConnection::getDataProvider()", which
       loaded a nonexistent \c HttpDataProvider module and always failed; it returns an \c HttpClientDataProvider
       object that makes its requests with the connection's asynchronous
       @ref HttpClientIo::HttpClientConnectionManager "HttpClientConnectionManager"
-      (<a href="https://github.com/qoretechnologies/qore/issues/5469">issue 5469</a>)
-    - @ref ConnectionProvider::HttpPingPollOperation "HttpPingPollOperation" and
-      @ref ConnectionProvider::HttpRequestPollOperation "HttpRequestPollOperation" (used by the polling pings and
-      the async request API of @ref ConnectionProvider::HttpConnection "HttpConnection" and
-      @ref ConnectionProvider::HttpBasedConnection "HttpBasedConnection") make their requests with non-blocking
-      @ref HttpClientIo::HttpClientConnectionManager "HttpClientConnectionManager" I/O instead of the HTTP/1.1-only
-      \c HTTPClient poll operations, supporting HTTP/2 and HTTP/3; the goals, output, and errors are unchanged
-      (a connection refused is still \c SOCKET-CONNECT-ERROR), the connection's \c timeout option now raises
-      \c SOCKET-TIMEOUT, and the states are \c "connecting", \c "receiving", \c "completed", and \c "aborted"
       (<a href="https://github.com/qoretechnologies/qore/issues/5469">issue 5469</a>)
     - added @ref ConnectionProvider::HttpClientIoPollOperation "HttpClientIoPollOperation" (with
       @ref ConnectionProvider::HttpClientIoPollOptions "HttpClientIoPollOptions"), a non-blocking HTTP request poll
@@ -212,9 +200,14 @@ $env:QORE_CONNECTION_PROVIDERS="MyConnectionProvider;OtherConnectionProvider"
       @ref ConnectionProvider::AbstractConnection::startPollRequest()
       "AbstractConnection::startPollRequest()" for async HTTP request support
     - added @ref ConnectionProvider::HttpRequestPollOperation "HttpRequestPollOperation" for async HTTP
-      requests via non-blocking I/O
-    - documented that raw @ref ConnectionProvider::HttpConnection "HttpConnection" / \c HTTPClient paths reject
-      \c negotiate_auth; REST connection types consume the Kerberos/SPNEGO HTTP Negotiate options
+      requests via non-blocking I/O; it and @ref ConnectionProvider::HttpPingPollOperation "HttpPingPollOperation"
+      (used by the polling pings of HTTP and HTTP-based connections) make their requests with
+      @ref HttpClientIo::HttpClientConnectionManager "HttpClientConnectionManager", supporting HTTP/2 and HTTP/3
+      (<a href="https://github.com/qoretechnologies/qore/issues/5469">issue 5469</a>)
+    - added the Kerberos/SPNEGO HTTP Negotiate options (\c negotiate_auth and the other \c negotiate_* options) to
+      @ref ConnectionProvider::HttpConnection "HttpConnection" for the REST connection types, which consume them;
+      with \c negotiate_auth enabled, raw @ref ConnectionProvider::HttpConnection "HttpConnection" / \c HTTPClient
+      paths raise \c HTTP-NEGOTIATE-AUTH-ERROR
     - refactored @ref ConnectionProvider::PollingConnectionMonitor "PollingConnectionMonitor" to use
       per-connection timers via the \c AsyncIoController timer API instead of a dedicated timer thread;
       ping operations are dispatched to the thread pool via \c submitTask() to keep the I/O thread responsive

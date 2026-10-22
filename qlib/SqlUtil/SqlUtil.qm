@@ -155,9 +155,6 @@ module SqlUtil {
       ordinary names is unchanged, so existing schemas and alignment do not change (see @ref sql_identifiers).
       Added @ref SqlUtil::AbstractSqlUtilBase::getSqlIdentifier() "getSqlIdentifier()" and
       @ref SqlUtil::AbstractTable::getAliasSqlName() "getAliasSqlName()"
-    - the table, column and sequence names of an auto-trigger configuration (see @ref auto_trigger_config) must be
-      plain names of ASCII letters, digits, underscores and dollar signs, as they are written in the SQL of the
-      generated triggers; any other name is refused with \c AUTO-TRIGGER-ERROR
     - Added @ref SqlUtil::AbstractDatabase::getCurrentSchemaPhysicalSize()
       "AbstractDatabase::getCurrentSchemaPhysicalSize()", which measures the physical size of the schema that
       unqualified names resolve to on the connection, without the cost of measuring the whole database, on
@@ -183,9 +180,9 @@ module SqlUtil {
       database refused it when it was created; the starting value is checked against the maximum in both
       directions
     - fixed @ref SqlUtil::AbstractTable::setupTable() "AbstractTable::setupTable()" requesting the DDL that adds a
-      foreign constraint to an existing table while constructing an in-memory table description, as it did for a
-      primary key before 3.2.0; a description of a table with foreign constraints can now be set up on a database
-      that cannot add a foreign constraint with \c ALTER \c TABLE, such as SQLite
+      foreign constraint to an existing table while constructing an in-memory table description; a description of
+      a table with foreign constraints can now be set up on a database that cannot add a foreign constraint with
+      \c ALTER \c TABLE, such as SQLite
     - fixed @ref SqlUtil::AbstractTable::setupTable() "AbstractTable::setupTable()" requesting the DDL that adds a
       unique constraint to an existing table while constructing an in-memory table description, also for the unique
       constraint of a unique index on a database whose unique indexes are unique constraints, as for primary keys and
@@ -250,7 +247,7 @@ module SqlUtil {
       the template, or the alignment leaves out the indexes with the \c omit option (see
       @ref SqlUtil::AbstractTable::AlignTableOptions "AlignTableOptions")
     - fixed table alignment dropping and creating a unique index twice when its columns change on a database whose
-      unique indexes are unique constraints, such as SQLite: the unique constraint of a unique index is added,
+      unique indexes are unique constraints, such as MySQL: the unique constraint of a unique index is added,
       recreated and dropped with the index only
     - a constraint is renamed, never dropped and added again under another name: table alignment and
       @ref SqlUtil::AbstractTable::renameConstraint() "AbstractTable::renameConstraint()" take a constraint that the
@@ -321,12 +318,9 @@ module SqlUtil {
       and aligned for unrelated field changes without attempting unsupported \c ALTER \c TABLE operations
     - fixed \c getPrimaryKey() on manually described tables without a primary key returning no value instead
       of the documented empty primary-key object
-    - @ref SqlUtil::AbstractTable::getBulkUpdateClosure() "AbstractTable::getBulkUpdateClosure()" executes a single
-      statement for all rows passed to the closure on drivers that support array binds, instead of one statement
-      per row; the columns passed to such a closure are bound by name and must match those of the example rows
-    - fixed the bulk update closure returned by
-      @ref SqlUtil::AbstractTable::getBulkUpdateClosure() "AbstractTable::getBulkUpdateClosure()" executing an
-      unrestricted \c select on the table in each call that updated more than one row row by row
+    - added @ref SqlUtil::AbstractTable::getBulkUpdateClosure() "AbstractTable::getBulkUpdateClosure()", whose
+      closure executes a single statement for all rows passed to it on drivers that support array binds; the columns
+      passed to the closure are bound by name and must match those of the example rows
     - added driver-native bulk-load capability discovery and begin/rows/end dispatch hooks to
       @ref SqlUtil::AbstractTable "AbstractTable" for opt-in use by BulkSqlUtil
     - added @ref SqlUtil::RestartableTransaction "RestartableTransaction" for
@@ -344,21 +338,6 @@ module SqlUtil {
     - fixed @ref SqlUtil::AbstractColumn::getDescriptionHash() "AbstractColumn::getDescriptionHash()" to report the
       column scale; without it, rebuilding a table from its own description hash truncated the scale of every
       numeric column
-    - fixed @ref SqlUtil::AbstractTable::dropPartition() "AbstractTable::dropPartition()",
-      @ref SqlUtil::AbstractTable::detachPartition() "AbstractTable::detachPartition()", and
-      @ref SqlUtil::AbstractTable::addPartition() "AbstractTable::addPartition()" deciding whether to issue DDL
-      from the \c inDb cache flag as read before the partition was resolved; on a table object created by name
-      that flag is still @ref False "False" at that point, so the call returned successfully without executing
-      anything and the commit wrapper committed an empty transaction - a partition drop reported success and left
-      the partition in place.  Lifecycle methods now resolve an object that has not been loaded against the
-      database before deciding, and objects with manual edits keep their description-only behavior
-    - fixed @ref SqlUtil::AbstractTable::dropPartition() "dropPartition()" and
-      @ref SqlUtil::AbstractTable::detachPartition() "detachPartition()" discarding the entire partition cache on
-      a table object that maintains its description locally; for such an object that cache <i>is</i> the
-      description, so dropping one partition dropped every other partition's description as well
-    - fixed typed partition bound coercion to load the table's columns first; a specification passed to a lookup
-      or lifecycle call on a table object that had not been loaded yet was coerced with no column metadata at
-      all, so it could not be compared against the bounds read back from the catalog
     - added a driver hook for canonicalizing typed partition bounds, so a driver whose native column type cannot
       represent everything a Qore value carries (a date column with no time of day, for example) reduces the
       caller's specification and the catalog bound to the same representation
@@ -394,14 +373,6 @@ module SqlUtil {
     - table alignment now skips driver-specific column modification for identical definitions and keeps logical and
       quoted DDL names synchronized after column renames, allowing a rename and a definition change in one alignment
       operation
-    - corrected the expression metadata for \c contains, \c startsWith, and \c endsWith so the optional
-      case-insensitive argument and its default case-sensitive behavior match the implementation
-    - fixed the advanced-expression \c "in" and \c "not in" operators to bind each value to its own
-      placeholder; previously a \c (field, list) value list was bound to a single placeholder, which
-      failed or silently mismatched on backends without native list-bind support (for example numeric
-      columns on PostgreSQL or any value on SQLite3).  Both the canonical \c (field, list) form and the
-      variadic \c (field, v1, v2, ...) form produced by the DPQL parser are now accepted and generate
-      correct SQL
     - added DPQL helpers and execution wrappers for SQL select projections, search conditions, update
       assignment expressions, and delete conditions in @ref SqlUtil::AbstractTable "AbstractTable";
       canonical DPQL value and arithmetic expressions are now supported by the default SQL expression map

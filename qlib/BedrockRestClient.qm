@@ -70,7 +70,22 @@ module BedrockRestClient {
     Native <tt>ConverseStream</tt> and <tt>InvokeModelWithResponseStream</tt> responses are delivered incrementally by
     @ref BedrockRestClient::BedrockRestClientIo "BedrockRestClientIo". Full-duplex
     <tt>InvokeModelWithBidirectionalStream</tt> sessions support concurrent
-    model input and output over HTTP/2, chained event signatures, and upload half-close.
+    model input and output over HTTP/2, chained event signatures, and upload half-close. Every event-stream frame is
+    checked against its CRCs, and streams support timeouts and cancellation.
+    @ref BedrockRestClient::BedrockLlmProvider::chatStream() "BedrockLlmProvider::chatStream()" emits Converse text
+    and tool-call fragments as they arrive, followed by the stop reason and usage metadata.
+
+    Requests for the Claude models that reject a temperature (Claude Opus 4.7 and later, Claude Sonnet 5 and later,
+    Claude Haiku 5.5, Claude Fable and Claude Mythos) are sent without one. A reasoning token budget of zero or
+    @ref QoreLlmUtils::LlmRequestOptions::disable_reasoning "disable_reasoning" turns thinking off on the Claude 4.5
+    and later models and selects the least thinking of the Claude models that cannot turn it off;
+    @ref BedrockRestClient::BedrockLlmProviderFactory::getModelInfo() "BedrockLlmProviderFactory::getModelInfo()"
+    reports which models cannot turn reasoning off and which reject a forced tool choice. The error of a rejected
+    request includes the message of the error response, such as the reason that the model rejected it.
+
+    Bedrock connections belong to the AWS Bedrock app of the BedrockDataProvider module; their runtime endpoint is
+    derived from the configured AWS region, and the connection ping verifies the credentials by listing the
+    foundation models, without inference.
 
     SigV4 signing, region detection, and the standard AWS credential
     resolution chain (static -> env vars -> ECS task-role -> IMDSv2 ->
@@ -123,29 +138,6 @@ hash<ChatResponse> r = p.chat((
     @section bedrockrestclientrelnotes Release Notes
 
     @subsection bedrockrestclient_v1_1 BedrockRestClient v1.1
-    - implements all three native runtime event-stream operations with CRC validation, timeouts, and cancellation
-    - emits incremental Converse text and tool-call fragments, with final stop reason and usage metadata
-    - signs bidirectional input events and terminal envelopes over HTTP/2 without buffering either direction
-    - associates Bedrock connections with the AWS Bedrock data provider app
-    - derives persistent runtime endpoints from the configured AWS region
-    - verifies credentials without inference by listing foundation models
-    - signs the encoded model identifiers in Converse and embedding requests without extra URI escaping
-    - the provider factory reports, with @ref BedrockRestClient::BedrockLlmProviderFactory::getModelInfo()
-      "BedrockLlmProviderFactory::getModelInfo()", which models cannot turn hidden reasoning off
-      (\c reasoning_always_on): DeepSeek-R1, the GPT-OSS models, Claude Fable 5 and 5.1, Claude Mythos 5, 5.1 and
-      Preview, Claude Opus 5.5 and Claude Sonnet 5.5
-    - a reasoning token budget of zero or
-      @ref QoreLlmUtils::LlmRequestOptions::disable_reasoning "disable_reasoning" turns thinking off on the Claude
-      4.5 and later models in \c additionalModelRequestFields, and selects the least thinking of the Claude models
-      that cannot turn it off; requests for other models are unchanged
-    - the provider factory reports which Claude models reject a forced tool choice
-      (\c rejects_forced_tool_choice): Claude Opus 5.5, Claude Sonnet 5.5, Claude Fable 5.1 and Claude Mythos 5.1
-    - no temperature is sent to the Claude models that reject it (Claude Opus 4.7 and later, Claude Sonnet 5 and
-      later, Claude Haiku 5.5, Claude Fable and Claude Mythos), whose requests failed with HTTP 400
-    - a request error includes the message of the error response, such as the reason that the model rejected the
-      request
-
-    @subsection bedrockrestclient_v1_0 BedrockRestClient v1.0
     - initial release
 */
 
@@ -1266,9 +1258,11 @@ public class BedrockLlmProviderFactory inherits QoreLlmUtils::AbstractLlmProvide
 
         @param model the model ID or inference profile ID that calls are made with
 
-        @note This provider does not map reasoning options: a call uses the model's default reasoning, and Claude
-        Opus 5 and Claude Sonnet 5 think by default ("Adaptive thinking is on by default on Claude Sonnet 5 and Claude
-        Opus 5")
+        @note A reasoning token budget of zero or
+        @ref QoreLlmUtils::LlmRequestOptions::disable_reasoning "disable_reasoning" turns thinking off on the Claude
+        4.5 and later models (in \c additionalModelRequestFields) and selects the least thinking of the Claude models
+        that cannot turn it off; other calls use the model's default reasoning, and Claude Opus 5 and Claude Sonnet 5
+        think by default ("Adaptive thinking is on by default on Claude Sonnet 5 and Claude Opus 5")
 
         @since BedrockRestClient 1.1
     */

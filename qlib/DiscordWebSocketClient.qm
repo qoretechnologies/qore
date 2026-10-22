@@ -86,11 +86,6 @@ module DiscordWebSocketClient {
       "DiscordWebSocketConnection::DefaultConnectionUrl"
     - fixed a bug where a @ref DiscordWebSocketClient::DiscordWebSocketConnection "DiscordWebSocketConnection" created
       without a URL did not use the discovered gateway URL
-    - the HELLO and RESUME watchdog timers are now armed with a stable per-instance owner tag, and the
-      destructor drains them via @ref AsyncSocketIo::AsyncSocketIoController::flushCallbacksByOwner()
-      "flushCallbacksByOwner()" after cancelling, closing the teardown race where a watchdog timer fires
-      and its callback is dispatched to a worker just as the client is destroyed (previously survived only
-      via \c OBJECT-ALREADY-DELETED guards in the watchdog callbacks)
     - fixed a bug where a server-initiated \c Heartbeat request (gateway opcode 1) caused an unhandled
       \c DISCORD-ERROR exception, killing the gateway connection and silently stopping event delivery;
       the client now responds immediately with a heartbeat as required by the Discord gateway protocol

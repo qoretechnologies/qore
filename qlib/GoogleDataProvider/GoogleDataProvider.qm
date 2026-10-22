@@ -82,8 +82,9 @@ AbstractDataProviderType event = GoogleDataProviderBase::getResponseTypeForSchem
     @section googledataprovider_relnotes Release Notes
 
     @subsection googledataprovider_v2_2 GoogleDataProvider v2.2
-    - ship complete Calendar v3 and Gmail v1 Discovery documents for deterministic offline metadata resolution
-    - reject unavailable static schemas explicitly instead of repeatedly attempting live discovery during indexing
+    - ship complete Calendar v3 and Gmail v1 Discovery documents for deterministic offline metadata resolution;
+      while static metadata such as the data provider index is read, live discovery is not used, and the schemas of
+      other Google APIs are reported as unavailable (\c GOOGLE-SCHEMA-UNAVAILABLE)
     - runtime discovery does not hold the shared type-cache mutex while waiting for HTTP
 
     @subsection googledataprovider_v2_1 GoogleDataProvider v2.1

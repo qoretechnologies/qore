@@ -375,12 +375,11 @@ module CdsRestDataProvider {
     @subsection cdsrestdataprovider_v2_2 CdsRestDataProvider v2.2
     - added polling event providers for Dynamics 365 entities, replacing the triggers of the
       TypeScript application of the same name
-      - one generic provider watches any Dataverse table, where the application it replaces
-        hardcoded seven and added a custom-entity special case for everything else
+      - one generic provider watches any Dataverse table
       - each event takes a @c condition option selecting whether it fires once when a record is
         created or again on every subsequent change
       - the custom-entity event resolves the entity set and primary key from the organisation's own
-        entity definition rather than deriving them from the logical name's spelling
+        entity definition
     - API calls are made with an asynchronous @ref CdsRestClient::CdsRestClientIo "CdsRestClientIo" from the
       connection's \c getAsync() or created from the options
       (<a href="https://github.com/qoretechnologies/qore/issues/5469">issue 5469</a>)
@@ -393,20 +392,16 @@ module CdsRestDataProvider {
         @ref CdsRestClient::CdsRestClientIo "CdsRestClientIo"
       - the exception argument of an error response includes the response (\c status_code, \c headers, and
         \c body) instead of the \c response-code and \c response-body keys
-    - OData \c \@odata.nextLink values, which are absolute URLs, are followed with their path and query using
-      @ref CdsRestDataProvider::CdsRestDataProviderBase::getRequestPath() "CdsRestDataProviderBase::getRequestPath()";
-      request paths are percent-encoded with
-      @ref CdsRestDataProvider::CdsRestDataProviderBase::encodeRequestPath() "CdsRestDataProviderBase::encodeRequestPath()"
+    - search results that span more than one page are retrieved by following the OData \c \@odata.nextLink of each
+      page; added
+      @ref CdsRestDataProvider::CdsRestDataProviderBase::getRequestPath() "CdsRestDataProviderBase::getRequestPath()",
+      which returns the request path and query of such a link, and
+      @ref CdsRestDataProvider::CdsRestDataProviderBase::encodeRequestPath() "CdsRestDataProviderBase::encodeRequestPath()",
+      which percent-encodes a request path
     - fixed passing a REST client in the \c cdsrestclient option, which always failed with
       \c METHOD-DOES-NOT-EXIST, and the option is now also used by
-      @ref CdsRestDataProvider::BcRestDataProvider "BcRestDataProvider",
-      @ref CdsRestDataProvider::BcCompaniesDataProvider "BcCompaniesDataProvider", and
       @ref CdsRestDataProvider::CdsRestTablesDataProvider "CdsRestTablesDataProvider", which ignored it; a client of
       another class raises \c CONSTRUCTOR-ERROR
-    - fixed the entity set name heuristic for a \c 403 response to the entity definition request, which was never
-      applied
-    - stopping a Dynamics event provider aborts an in-flight polling request without closing the REST client, which
-      may be shared with other data providers
     - the field of a search expression and a key of a search hash are field paths: a path of more than one key is
       written as an OData property
       path (\c primarycontactid/fullname), where it was written with dots, which OData reads as a cast to a type;

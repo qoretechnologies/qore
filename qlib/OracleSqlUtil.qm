@@ -79,8 +79,6 @@ module OracleSqlUtil {
 
     @subsection oraclesqlutil_v1_6 OracleSqlUtil v1.6
     - updated to use the @ref oraclesqlutilbaseintro module for the base implementation
-    - load the base implementation by module-path source filename so source-tree tests use the local
-      @ref oraclesqlutilbaseintro implementation
 
     @subsection oraclesqlutil_v1_5 OracleSqlUtil v1.5
     - implemented support for generating queries based on generic expressions using the DataProvider module's generic

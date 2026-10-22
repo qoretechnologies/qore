@@ -362,14 +362,9 @@ hash schema = (
     - added the size of the current schema (see @ref SqlUtil::AbstractDatabase::getCurrentSchemaPhysicalSize()
       "AbstractDatabase::getCurrentSchemaPhysicalSize()"): the segments of the user's own schema, or, when the
       session's current schema is another one, that schema's segments if the user can read \c dba_segments
-    - fixed an ordered \c forupdate select with \c limit or \c offset so that its cost no longer grows with the
-      size of the table: the rows of the page were selected with a <tt>rowid in (subquery)</tt> predicate, which
-      the optimizer could execute as a full scan of the table or of an index, and a plan chosen while the table
-      was empty or had no statistics stayed cached as the table grew; the page is now joined to the table by
-      \c ROWID and only the table's rows are locked
-    - fixed the sort direction of a select with \c limit or \c offset when \c forupdate is used or the server
-      is older than Oracle 12c: a \c "-column" \c orderby was sorted ascending, and the \c desc option sorted
-      only the last \c orderby column descending
+    - fixed the sort direction of a select with \c limit or \c offset on a server older than Oracle 12c: a
+      \c "-column" \c orderby was sorted ascending, and the \c desc option sorted only the last \c orderby column
+      descending
     - fixed modifying a column named like a clause of <tt>ALTER TABLE ... MODIFY</tt>, such as \c scope, in table
       alignment: the column is now given in parentheses, since Oracle otherwise fails with \c ORA-03050
     - added temporary-table support: pre-created global temporary tables (the \c "precreated" option; no runtime
@@ -378,6 +373,12 @@ hash schema = (
       @ref SqlUtil::AbstractDatabase::createTempTable() "AbstractDatabase::createTempTable()"
     - fixed a \c cast data provider expression with a size, or with a precision and a scale: the size was ignored
       and the precision was given as the scale, so that the cast failed or changed the value
+    - added portable list-partition creation, introspection, lookup, lifecycle, and schema round-trip support
+    - added statistics-dependent estimated partition row counts to partition introspection
+    - implemented range-partitioned table DDL, introspection, and lifecycle operations through the generic
+      @ref SqlUtil::AbstractTable "AbstractTable" partition APIs
+    - implemented the generic validated named-partition select qualifier for primary and joined table references
+    - added targeted canonical-name partition metadata lookup with the preceding range bound
 
     @subsection oracle161 OracleSqlUtilBase v1.6.1
     - fixed a bug where a select combining \c forupdate with \c limit or \c offset and an \c orderby failed with
@@ -387,12 +388,6 @@ hash schema = (
       where Oracle ignores it as a plain comment
 
     @subsection oracle16 OracleSqlUtilBase v1.6
-    - added portable list-partition creation, introspection, lookup, lifecycle, and schema round-trip support
-    - added statistics-dependent estimated partition row counts to partition introspection
-    - implemented range-partitioned table DDL, introspection, and lifecycle operations through the generic
-      @ref SqlUtil::AbstractTable "AbstractTable" partition APIs
-    - implemented the generic validated named-partition select qualifier for primary and joined table references
-    - added targeted canonical-name partition metadata lookup with the preceding range bound
     - fixed a bug in the IN operator
       (<a href="https://github.com/qoretechnologies/qore/issues/4901">issue 4901</a>)
     - fixed space management on Oracle

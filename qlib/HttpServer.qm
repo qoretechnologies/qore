@@ -229,12 +229,10 @@ log("started listener on %s", lh.desc);
     - response bodies are compressed on the fly with levels suited to compressing them for each request, set with the
       new \c compression_levels server option and @ref HttpServer::HttpServer::setCompressionLevels()
       "setCompressionLevels()" (defaults: Brotli quality 5, Zstandard level 3, gzip and deflate level 6, bzip2 level
-      3; see @ref HttpServer::HttpServer::DefaultCompressionLevels "DefaultCompressionLevels"); a body was compressed
-      with the default level of each algorithm, which for Brotli is the maximum quality 11: a JSON response or a
-      static file of a few megabytes took 5 - 10 seconds to compress, for each request
+      3; see @ref HttpServer::HttpServer::DefaultCompressionLevels "DefaultCompressionLevels")
     - among the content encodings that a client accepts with the same weight, the cheapest one to compress is used
       (Zstandard, then Brotli, gzip, deflate, and bzip2; see @ref HttpServer::HttpServer::ContentEncodingPreference
-      "ContentEncodingPreference"); weights and exclusions in \c Accept-Encoding are honored as before
+      "ContentEncodingPreference"); weights and exclusions in \c Accept-Encoding are honored
     - generated response charset parameters use canonical encoding names such as \c utf-8,
       including default content types and error responses
     - text is sent in the character encoding that the response declares: a string or a
@@ -247,8 +245,7 @@ log("started listener on %s", lh.desc);
       encoding as before, binary data (including a binary stream) as \c application/octet-stream without a charset,
       and a body produced by a \c send_callback without a \c Content-Type (RFC 9110 section 8.3); binary data was
       labeled as HTML text in the response encoding, and a stream body had no type; error responses are labeled
-      the same way in the synchronous and asynchronous I/O modes, and no charset is added to the type of a binary
-      error message
+      the same way, and no charset is added to the type of a binary error message
     - request bodies are decoded by the rules shared by all HTTP clients and servers (see
       @ref Qore::decode_http_body() "decode_http_body()") whether they are read from the socket, buffered, or
       received over HTTP/2 or HTTP/3; the default text encoding (@ref HttpServer::HttpServer::setDefaultTextEncoding()
@@ -267,8 +264,6 @@ log("started listener on %s", lh.desc);
       @ref HttpServer::HttpServer::setMaxDecodedBodySize() "HttpServer::setMaxDecodedBodySize()"), listener option,
       or handler setting, the \c max_request_body_size of the listener when none is set, and otherwise
       @ref HttpServer::DefaultMaxDecodedBodySize "DefaultMaxDecodedBodySize" (128 MiB)
-    - fixed an automatically created HTTP/3 (QUIC) listener ignoring the \c max_request_body_size of its TCP
-      listener; HTTP/3 requests were limited by the server option only
     - a listener added with a service or port and no address listens on all interfaces in both address families
       with one dual-stack socket, so a client reaches it through any address of the host, including \c ::1, which
       \c "localhost" resolves to first; it was bound on the IPv4 wildcard address only, so such a client could
@@ -279,12 +274,8 @@ log("started listener on %s", lh.desc);
       \c Content-Type, \c Date, \c Server, or \c Connection field, and a configured header was not replaced by
       the handler's; header names are now matched case-insensitively (see
       @ref HttpServer::http_canonicalize_reply_header_names() "http_canonicalize_reply_header_names()")
-    - ending an HTTP/1 persistent session preserves a replacement session on the same connection, even
-      when cleanup of the earlier session finishes after the replacement has registered its request queue
-    - buffered HTTP/1 request text retains its declared charset, matching direct socket reads;
-      Latin-1 and UTF-16 bodies no longer acquire a UTF-8 encoding label.  A multipart body is
-      delivered to the handler as binary data, since the request charset describes neither the
-      container nor the parts inside it, each of which carries its own encoding
+    - a multipart request body is delivered to the handler as binary data, since the request charset describes
+      neither the container nor the parts inside it, each of which carries its own encoding
     - response compression honors Accept-Encoding quality values, exclusions, aliases, wildcard preferences,
       and explicit identity preferences consistently across HTTP/1, HTTP/2, and HTTP/3
     - @ref HttpServer::HttpServer::waitStop() "waitStop()" accepts an optional timeout and returns whether all
@@ -301,71 +292,24 @@ log("started listener on %s", lh.desc);
       @ref HttpServer::HttpServer::sendHttpError() "sendHttpError()" sends a streamed error message to an HTTP/1.0
       client with a \c Content-Length, and sends no message body in a response to a \c HEAD request
     - new @ref HttpServer::HttpServer::acceptsHttpMethod() "acceptsHttpMethod()" method
-    - an HTTP/2 request whose body exceeds the maximum request body size is always answered with 413; the stream
-      is no longer reset with \c REFUSED_STREAM (which discarded the response and told the client that the
-      request could be retried) when the body arrived faster than the handler thread read it
-    - an HTTP/2 response sent before the complete request is followed by \c RST_STREAM(NO_ERROR), so the client
-      stops sending a request body that is not read (RFC 9113 section 8.1)
     - an HTTP/1.x connection that the server closes after a response is closed with a lingering close (see the new
       \c lingering_close_timeout option in @ref HttpServer::HttpServerOptionInfo "HttpServerOptionInfo"), so a
       client that is still sending data the server did not read, such as the rest of a request body answered with
       an error, receives the response instead of a connection reset; the new
       @ref HttpServer::HttpServer::closeConnectionAfterResponse() "closeConnectionAfterResponse()" method closes a
       connection in this way after a response sent by a handler thread
-    - the maximum request body size now applies to HTTP/3 listeners as well; a body that exceeded it while it was
-      buffered before dispatch was cleared and the request was dispatched with an empty body; it is now answered
-      with 413, and a streaming read of it fails with \c HTTP-BODY-TOO-LARGE
-    - an HTTP/3 request that the handler finished without reading to its end is followed by
-      \c STOP_SENDING(H3_NO_ERROR) (RFC 9114 section 4.1.2); before, a client that did not finish such a request
-      left the stream half-open, and after 100 of them no other request could be opened on the connection
+    - allow the listener class to be overridden and added \c "listener-name" to the context hash
 
     @subsection http1_6 HttpServer 1.6
-    - fixed a regression where @ref HttpServer::HttpServer::listenerStarted() "listenerStarted()" was no longer
-      called after the migration to event-driven async I/O removed per-listener accept threads; the notification
-      (which subclasses use to report when listeners are actually accepting connections) is now issued
-      synchronously from \c addListenerIntern() right after the listener is registered with the async I/O
-      controller, restoring listener-started reporting during server startup
-    - persistent (dedicated-thread) handler sessions are now <b>stream-scoped on
-      multiplexed transports</b> (HTTP/2 and HTTP/3).  The connection-scoped
-      multi-request session model is an HTTP/1.x carry-over that is wrong for
-      multiplexed transports: those connections carry many independent streams and
-      are pooled/reused, so the connection-close that ends an HTTP/1.x session
-      never arrives, and a parked dedicated thread could only be released by a
-      best-effort end-of-session request — if that was lost the thread stayed
-      parked forever and its thread-pinned resources (e.g. an open DB transaction)
-      leaked.  A handler that calls \c AbstractHttpRequestHandler::setPersistent()
-      on a multiplexed connection is now released immediately after its response,
-      its thread-local context torn down deterministically (so it cannot leak); a
-      genuine cross-request session on HTTP/2 or HTTP/3 must instead be expressed
-      as a single bidirectional streaming request, whose teardown rides the
-      transport-deterministic stream lifecycle (\c END_STREAM / \c RST_STREAM /
-      \c RESET_STREAM+\c STOP_SENDING / connection-close).  HTTP/1.x retains the
-      connection-scoped model (there \c connection \c == \c stream, which is
-      already correct).
+    - persistent (dedicated-thread) handler sessions are stream-scoped on HTTP/2 and HTTP/3, which carry many
+      independent streams on one connection: a handler that calls \c AbstractHttpRequestHandler::setPersistent()
+      on such a connection is released after its response, and its thread-local context is torn down; a session
+      across requests on HTTP/2 or HTTP/3 must be a single bidirectional streaming request.  HTTP/1.x sessions are
+      connection-scoped
       (<a href="https://github.com/qoretechnologies/qore/issues/5351">issue 5351</a>)
     - fixed request path decoding so the resource path is URL-decoded while the query string remains encoded until
       parsed with @ref HttpServer::parse_uri_query() "parse_uri_query()", preventing encoded query separators such as
       \c "%26", \c "%3D", and \c "%3B" from corrupting query parameters
-    - HTTP/2 server-side request and response handling fully migrated to
-      the async-safe @c Socket HTTP/2 primitives under the
-      @ref HttpServerAsyncIo "HttpServerAsyncIo" controller.  The handler
-      thread no longer holds the socket wrapper lock during HTTP/2 frame
-      submission, eliminating the close-vs-poll lock inversion and the
-      handler-vs-I/O-thread contention that drove the long tail of
-      sync/async impedance bugs.
-      - body-streaming handlers drain inbound DATA via the new
-        \c cx."header-info".register_body_queue closure (the I/O thread
-        pushes binary chunks to a Qore Queue and a NOTHING sentinel at
-        END_STREAM)
-      - response paths (regular, send_callback, InputStream, SSE setup)
-        all use \c sendHttp2StreamData() /
-        \c submitHttp2StreamingResponseHeaders() /
-        \c sendHttp2Trailers(), which delegate enqueue/wake handling to
-        the async I/O controller
-      - the \c Socket::setHttp2ActiveStream() bridge that redirected
-        \c Socket::send() / \c Socket::recv() to HTTP/2 DATA frames was
-        removed from \c handleRequest(); every H2 response site already
-        branches on protocol explicitly
     - added HTTP/3 (QUIC) support with automatic listener creation for TLS listeners
     - added per-listener \c Alt-Svc header support for advertising HTTP/3 availability; each TCP
       listener only advertises its own QUIC counterpart to prevent browsers from confusing origins
@@ -379,17 +323,10 @@ log("started listener on %s", lh.desc);
       - responses can be compressed with Brotli or Zstd when clients send appropriate \c Accept-Encoding headers
       - requires Qore built with Brotli and/or Zstd support
     - return HTTP 204 when a handler returns code 200 with no response body
-    - fixed I/O thread blocking on \c Socket::getPeerInfo() calls that could cause the server to become unresponsive
-      - async server request contexts now get numeric \c "peer-info" immediately without reverse DNS
-      - reverse DNS is dispatched in parallel and exposed as optional \c "peer-info-future" for handlers that need it
-      - moved peer info refresh to after SSL handshake completion when socket is stable
+    - request contexts get numeric \c "peer-info" without a reverse DNS lookup; the reverse DNS lookup is made in
+      parallel and is available in the optional \c "peer-info-future" key for handlers that need it
     - added @ref HttpServer::HttpServer::addListenerAsync() "addListenerAsync()" and
       @ref HttpServer::HttpServer::addListenersAsync() "addListenersAsync()" methods for Future-based listener setup
-      and routed synchronous listener methods through the same async setup path
-    - HTTP/1.x persistent handlers now keep handler-thread affinity while subsequent request reads are driven by
-      the async I/O controller and routed through a persistent queue
-    - removed high-frequency INFO log messages from async I/O hot paths to reduce log spam
-    - fixed async I/O cache leak when clients disconnect during SSL handshake
     - fixed a shutdown crash when HttpServer instances created with the deprecated logger callback constructor were
       torn down while async logging was still active
 
@@ -397,7 +334,6 @@ log("started listener on %s", lh.desc);
     - introduced async I/O for HttpServer (now the only mode)
 
     @subsection http1_4 HttpServer 1.4
-    - allow the listener class to be overridden and added \c "listener-name" to the context hash
     - allow authentication methods to set the call context
       (<a href="https://github.com/qoretechnologies/qore/issues/4970">issue 4970</a>)
 

@@ -10,24 +10,12 @@
       key and the byte offset of the NUL character: the key was cut at the NUL character and could replace the value
       of another key
     - bundled the native YAML module and all twelve user modules with Qore
-    - @ref Qore::YAML::YamlDocumentIterator "YamlDocumentIterator" and @ref Qore::YAML::YamlSaxParser "YamlSaxParser"
-      read a stream in an encoding other than UTF-8 with @ref Qore::StreamReader "StreamReader": text was converted
-      chunk by chunk, so a character split between chunks failed or was corrupted, and the byte order mark of a
-      \c "UTF-16" stream applied only to its first chunk; data in the other byte order than its UTF-16 or UTF-32
-      encoding raises \c ENCODING-BYTE-ORDER-ERROR, and an exception raised while reading the stream is raised with
-      its own code and description instead of \c STREAM-READ-ERROR
-    - @ref Qore::YAML::YamlStreamWriter "YamlStreamWriter" and @ref Qore::YAML::YamlDocumentIterator
-      "YamlDocumentIterator" reference their stream, and an iterator the @ref Qore::StreamReader "StreamReader" it
-      reads text in another encoding than UTF-8 with, where the garbage collector can follow the references: a stream
-      referencing its writer or iterator was never collected
-    - fixed overflow when parsing timestamps with more than six fractional-second digits
+    - fixed parsing timestamps with more than nine fractional-second digits, which could overflow
     - added cancellation checks to scalar scanning and merge expansion
-    - fixed a crash generating or parsing deeply nested YAML with @ref Qore::YAML::make_yaml() "make_yaml()",
-      @ref Qore::YAML::parse_yaml() "parse_yaml()",
-      @ref Qore::YAML::YamlStreamWriter::write() "YamlStreamWriter::write()" and
-      @ref Qore::YAML::YamlDocumentIterator "YamlDocumentIterator": each level of nesting was processed recursively
-      without checking the stack, so data or a document nested more deeply than the thread's stack allows
-      overflowed it; a \c STACK-LIMIT-EXCEEDED exception is now raised instead
+    - fixed a crash generating or parsing deeply nested YAML with @ref Qore::YAML::make_yaml() "make_yaml()" and
+      @ref Qore::YAML::parse_yaml() "parse_yaml()": each level of nesting was processed recursively without checking
+      the stack, so data or a document nested more deeply than the thread's stack allows overflowed it; a
+      \c STACK-LIMIT-EXCEEDED exception is now raised instead
 
     <b>New Features</b>
     - added @ref Qore::YAML::parse_yaml(string, int) "parse_yaml(string, int)" and the
@@ -113,16 +101,11 @@
       resolution and explicit \c !!float parsing; invalid explicitly tagged floats now raise a parser error
       instead of converting a partial value or aborting on empty input
     - fixed implicit type resolution incorrectly converting literal and folded block scalar text to other types
-    - fixed implicit type resolution converting plain scalars that only look like ISO 8601 durations to a zero
-      duration: \c P, \c PT (the country code of Portugal), and \c P1DT have no duration component or no time
-      component after \c T and now remain strings, so plain country code lists in documents such as OpenAPI
-      schemas keep their values
-    - fixed an emitter bug where date-only timestamps whose day ended in \c '0' were
-      truncated by an unconditional \c trim_trailing('0') intended only for the
-      microseconds component (e.g. \c "2026-04-10" was emitted as \c "2026-04-1"); the
-      fractional-seconds trim is now skipped when the formatted string contains no decimal
-      point, so date-only values round-trip exactly
-    - fixed errno handling in integer parsing (was set after \c strtoll instead of before)
+    - fixed implicit type resolution converting plain scalars that only look like ISO 8601 durations to durations:
+      \c PT (the country code of Portugal) and \c P1DT have no duration component or no time component after \c T
+      and now remain strings, so plain country code lists in documents such as OpenAPI schemas keep their values
+    - fixed serializing date-only values whose day ends in \c 0, which lost that digit (for example
+      \c "2026-04-10" was emitted as \c "2026-04-1"); date-only values now round-trip exactly
     - fixed error message in YAML parser to show proper line/column and error description
 
     @section yaml_1_0_0 yaml Module Version 1.0.0

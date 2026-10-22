@@ -92,21 +92,20 @@ printf("%Y\n", ans.body);
     <tt>accounts/&lt;owner&gt;/models/&lt;name&gt;</tt> format.  See the
     <a href="https://fireworks.ai/models">Fireworks model catalog</a>.
 
+    Fireworks connections belong to the Fireworks AI app. The connection ping verifies the API key with the account
+    listing, without generating tokens; saved connections that ping the model listing are switched to the account
+    listing when they are loaded.
+
+    @ref FireworksRestClient::FireworksLlmProviderFactory::getModelInfo()
+    "FireworksLlmProviderFactory::getModelInfo()" reports which models cannot turn hidden reasoning off
+    (\c reasoning_always_on): the GPT-OSS models and MiniMax M2. A reasoning token budget of zero or
+    @ref QoreLlmUtils::LlmRequestOptions::disable_reasoning "disable_reasoning" turns reasoning off on GLM 4.7
+    (reasoning effort \c none) and selects the lowest effort, \c low, of the GPT-OSS models and MiniMax M2;
+    requests for models whose reasoning controls have not been verified are sent as given.
+
     @section FireworksRestClientRelnotes Release Notes
 
     @subsection FireworksRestClientv1_1 FireworksRestClient v1.1
-    - preserve the inference URL prefix in synchronous and asynchronous REST requests
-    - verify authentication with the account listing endpoint without generating tokens
-    - repair previously saved ping paths and automatic connection URLs on load
-    - associate connections with the Fireworks AI application
-    - the provider factory reports, with @ref FireworksRestClient::FireworksLlmProviderFactory::getModelInfo()
-      "FireworksLlmProviderFactory::getModelInfo()", which models cannot turn hidden reasoning off (\c
-      reasoning_always_on): the GPT-OSS models and MiniMax M2
-    - a reasoning token budget of zero or @ref QoreLlmUtils::LlmRequestOptions::disable_reasoning "disable_reasoning"
-      turns reasoning off on GLM 4.7 (reasoning effort \c none) and selects the lowest effort, \c low, of the GPT-OSS
-      models and MiniMax M2; requests for models whose reasoning controls have not been verified are unchanged
-
-    @subsection FireworksRestClientv1_0 FireworksRestClient v1.0
     - initial release
 */
 

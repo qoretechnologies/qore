@@ -120,8 +120,6 @@ module BulkSqlUtil {
     @subsection bulksqlutil_v1_6 BulkSqlUtil v1.6
     - added the opt-in \c "bulk_load" policy and \c "bulk_load_options" for driver-native inserts; see
       @ref native_bulk_load
-    - native paths now own bounded-stream reporting while the ordinary fallback retains the driver-neutral Phase 1
-      reporting, preventing duplicate stream events
 
     @subsection bulksqlutil_v1_5 BulkSqlUtil v1.5
     - bulk operations now report themselves as bounded streams to a datasource mutation observer, so that an
@@ -133,16 +131,14 @@ module BulkSqlUtil {
       widened from \c hash<string, int> to \c hash<string, auto> to carry the boolean \c "stream_bounds" default
 
     @subsection bulksqlutil_v1_4 BulkSqlUtil v1.4
-    - bulk inserts now forward caller-requested \c returning columns through every flush block and deliver each
-      returned row to the configured row callback
+    - added the \c "returning" option to @ref BulkSqlUtil::BulkInsertOperation "BulkInsertOperation": the given
+      columns are retrieved for every inserted row and given to the \c "rowcode" callback
     - bulk queues now validate record field sets and list or buffer column lengths before initializing or modifying
       the queue, preventing malformed input from shifting values between rows; record field order is no longer
       significant
     - added @ref BulkSqlUtil::AbstractBulkOperation::queueData() "AbstractBulkOperation::queueData()" support for
       @ref Qore::SQL::ColumnarResult "ColumnarResult", hash-of-\c buffer<T> column blocks, and \c DataFrame input
       for bulk insert and upsert operations
-    - dense column inputs are converted in \c block_size chunks, reducing peak memory use when DBI drivers require
-      hash-of-lists compatibility data
 
     @subsection bulksqlutil_v1_3_1 BulkSqlUtil v1.3.1
     - fixed a bug executing bulk upsert operations with constant data

@@ -102,24 +102,23 @@ printf("%Y\n", ans.body);
     directly off the parsed response body or off the \c raw payload of
     @ref QoreLlmUtils::ChatStreamEvent.
 
+    @ref DeepSeekRestClient::DeepSeekLlmProvider "DeepSeekLlmProvider" preserves thinking controls and reasoning
+    history across synchronous, streaming, and tool turns. A reasoning token budget of zero or
+    @ref QoreLlmUtils::LlmRequestOptions::disable_reasoning "disable_reasoning" turns thinking off
+    (\c thinking \c {"type": "disabled"}) on the DeepSeek V4 models; requests for models whose reasoning controls
+    have not been verified are sent as given.
+    @ref DeepSeekRestClient::DeepSeekRestClientBase::getModelReasoningEfforts()
+    "DeepSeekRestClientBase::getModelReasoningEfforts()" returns the reasoning settings of the current models, and
+    the default chat model is \c deepseek-flash. Forced tool calls are supported in non-thinking mode, and strict
+    tool schemas are sent to the beta endpoint. Requested output schemas are applied in JSON mode with schema
+    instructions, and strict output is validated locally. An explicit \c user_id is passed on for cache and
+    scheduling isolation.
+
+    DeepSeek connections belong to the DeepSeek app, and the connection ping verifies the API key.
+
     @section DeepSeekRestClientRelnotes Release Notes
 
     @subsection DeepSeekRestClientv1_2 DeepSeekRestClient v1.2
-    - Preserve thinking controls and reasoning history across synchronous, streaming and tool turns.
-    - Expose current model reasoning profiles and default to DeepSeek V4.1 Flash.
-    - Support forced tools in non-thinking mode and strict tool schemas through the beta endpoint.
-    - Adapt requested output schemas to JSON mode with schema instructions and validate strict output locally.
-    - Preserve explicit user IDs for cache and scheduling isolation.
-    - a reasoning token budget of zero or @ref QoreLlmUtils::LlmRequestOptions::disable_reasoning "disable_reasoning"
-      turns thinking off (\c thinking \c {"type": "disabled"}) on the DeepSeek V4 models; requests for models whose
-      reasoning controls have not been verified are unchanged
-
-    @subsection DeepSeekRestClientv1_1 DeepSeekRestClient v1.1
-    - Fixed automatic connection URLs, associated connections with the DeepSeek app, and enabled explicit JSON encoding.
-    - Updated the default chat model and API/model selections; verified valid and invalid API-key pings.
-    - Honored immediate versus deferred connection construction for the synchronous client.
-
-    @subsection DeepSeekRestClientv1_0 DeepSeekRestClient v1.0
     - initial release
 */
 

@@ -122,9 +122,10 @@ stream.close();
     @section OpenAiRestClientRelnotes Release Notes
 
     @subsection OpenAiRestClientv1_2 OpenAiRestClient v1.2
-
-    - OpenAI-compatible LLM providers preserve API root prefixes ending in \c /v1 (with an optional trailing
-      slash) for Chat Completions and Responses, including streaming, without adding a second \c /v1.
+    - the OpenAI-compatible LLM providers send Chat Completions and Responses requests, including streams, to paths
+      beneath the path of the endpoint URL: a path that ends in \c /v1, with or without a trailing slash (such as
+      that of \c https://gateway.example.com/project/v1), is used as it is, and \c /v1 is appended to any other
+      path; a provider that publishes at its own path, such as Perplexity, keeps it
     - Preserve reasoning-only stream frames for compatible providers such as DeepSeek.
     - the provider factory reports, with @ref OpenAiRestClient::OpenAiLlmProviderFactory::getModelInfo()
       "OpenAiLlmProviderFactory::getModelInfo()", which OpenAI models cannot turn hidden reasoning off
@@ -132,38 +133,30 @@ stream.close();
       pro models, \c gpt-6-astra and \c gpt-6.1-sol;
       @ref OpenAiRestClient::OpenAiLlmProvider::getLowestReasoningEffort()
       "OpenAiLlmProvider::getLowestReasoningEffort()" returns their lowest reasoning effort
-    - the reasoning effort \c none is no longer refused for \c gpt-6-luna and \c gpt-6-sol, which accept it; it is
-      refused before the request is sent for every model that does not accept it
+    - the reasoning effort \c none is refused before the request is sent for every model that does not accept it
     - a reasoning token budget of zero or
       @ref QoreLlmUtils::LlmRequestOptions::disable_reasoning "disable_reasoning" turns reasoning off with the
       reasoning effort \c none on the models that accept it, and selects the lowest effort of the models that cannot
       turn reasoning off (@ref OpenAiRestClient::OpenAiLlmProvider::getOffReasoningEffort()
-      "OpenAiLlmProvider::getOffReasoningEffort()"); requests for other models are unchanged
-    - a tool call whose arguments are not a JSON object no longer raises \c JSON-PARSE-ERROR, which lost the response
-      and its usage: its arguments are kept in the \c _raw key, as those of a streamed call are
+      "OpenAiLlmProvider::getOffReasoningEffort()")
+    - the arguments of a tool call that are not a JSON object are kept in the \c _raw key, as those of a streamed
+      call are
     - the finish reason \c model_length (the model's context length was reached) is an output limit, as \c length
       is: the stop reason is \c max_tokens, and no tool call of the unfinished response is given
 
     @subsection OpenAiRestClientv1_1 OpenAiRestClient v1.1
-
     - an \c allowed_tools tool choice restricts the tools a call may use without changing the tools it
       declares, also on the Responses API: keeping the declared tools unchanged keeps the provider's prompt
       cache across calls that allow different tools
-    - saved connections keep a custom endpoint URL such as a data-residency host or a gateway; only an
-      automatically generated URL is still replaced with the default endpoint
-    - Per-call LLM timeouts now govern synchronous requests and stream setup;
-      explicit streaming deadlines include all response chunks without changing
-      concurrent calls' client settings.
-    - Interrupted chat streams without a completion frame now raise an error
-      instead of returning a successful partial answer.
+    - a saved connection whose URL was generated automatically is given the default endpoint URL; a custom
+      endpoint URL such as a data-residency host or a gateway is kept
     - strict LLM output and tool schemas automatically adapt optional fields to
       OpenAI's required nullable representation; returned JSON and tool arguments
       restore the caller's original optional-field semantics
     - adapted structured streams emit their JSON after it is complete so callers
-      never receive temporary null placeholders; ordinary text streams are unchanged
+      never receive temporary null placeholders
     - unsupported strict-schema constraints report a local error before an API call
     - added SSE helper for streaming responses
-    - fixed streaming chat completions to preserve function-call-only deltas
 
     @subsection OpenAiRestClientv1_0 OpenAiRestClient v1.0
     - initial release

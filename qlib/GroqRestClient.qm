@@ -103,21 +103,19 @@ printf("%Y\n", ans.body);
     @ref grokrestclientintro "GrokRestClient" (xAI's Grok product) —
     note the spelling: Groq (LPU inference, OSS models) vs. Grok (xAI).
 
+    Groq connections belong to the Groq app and use the Groq service URL; the connection ping verifies the API key
+    with the authenticated model listing.
+
+    @ref GroqRestClient::GroqLlmProviderFactory::getModelInfo() "GroqLlmProviderFactory::getModelInfo()" reports
+    which models cannot turn hidden reasoning off (\c reasoning_always_on): \c openai/gpt-oss-20b and
+    <tt>openai/gpt-oss-120b</tt>. A reasoning token budget of zero or
+    @ref QoreLlmUtils::LlmRequestOptions::disable_reasoning "disable_reasoning" turns reasoning off on the Qwen3
+    models (reasoning effort \c none) and selects the lowest effort, \c low, of the GPT-OSS models; requests for
+    models whose reasoning controls have not been verified are sent as given.
+
     @section GroqRestClientRelnotes Release Notes
 
     @subsection groqrestclientv1_1 GroqRestClient v1.1
-    - automatic connections use the canonical Groq URL and identify the Groq app
-    - synchronous clients honor deferred connection requests
-    - JSON request serialization is explicit for synchronous and asynchronous clients
-    - API version choices and authentication checks match the live service
-    - the provider factory reports, with @ref GroqRestClient::GroqLlmProviderFactory::getModelInfo()
-      "GroqLlmProviderFactory::getModelInfo()", which models cannot turn hidden reasoning off (\c reasoning_always_on):
-      \c openai/gpt-oss-20b and \c openai/gpt-oss-120b
-    - a reasoning token budget of zero or @ref QoreLlmUtils::LlmRequestOptions::disable_reasoning "disable_reasoning"
-      turns reasoning off on the Qwen3 models (reasoning effort \c none) and selects the lowest effort, \c low, of the
-      GPT-OSS models; requests for models whose reasoning controls have not been verified are unchanged
-
-    @subsection GroqRestClientv1_0 GroqRestClient v1.0
     - initial release
 */
 

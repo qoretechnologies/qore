@@ -119,26 +119,23 @@ module Util {
       \c "/../etc" returned the relative path \c "etc", and \c "C:\\..\\x" lost its drive
     - added @ref Util::get_free_port() "get_free_port()" so that code needing a port where nothing is listening,
       or a port to start a server on, does not have to hard-code one
-    - fixed @ref Util::parse_uri_query() "parse_uri_query()" to split URI query strings before URL-decoding
-      keys and values, so encoded separators such as \c "%26", \c "%3D", and \c "%3B" inside values are handled
-      correctly
+    - @ref Util::parse_uri_query() "parse_uri_query()" URL-decodes the keys and values of the query after splitting
+      the query string into its parameters, so encoded separators such as \c "%26", \c "%3D", and \c "%3B" are part
+      of a key or value; it returned them as they appear in the query string, so code that decodes them itself must
+      no longer do so
     - updated @ref Util::make_uri_query() "make_uri_query()" to URL-encode query keys and values when serializing
       query strings
     - fixed @ref Util::get_bit_string() "get_bit_string()" to properly prepend padding zeros instead of
       overwriting the result
-    - fixed @ref Util::lpad() "lpad()" to correctly truncate by keeping the rightmost characters and
-      handle zero/negative length
-    - fixed @ref Util::rpad() "rpad()" to correctly truncate by keeping the leftmost characters and
-      handle zero/negative length
     - fixed @ref Util::parse_ranges() "parse_ranges()" to properly handle negative numbers, zero values,
       and reverse ranges (e.g., "5-3" returns (5, 4, 3))
     - fixed @ref Util::substitute_env_vars() "substitute_env_vars()" to properly handle \c "${VAR}" and
       \c "$(VAR)" syntax by correctly stripping delimiters
     - added @ref Util::parse_to_qore_value_with_yaml() "parse_to_qore_value_with_yaml()" for command-line
       values that should accept either the legacy Qore value syntax or YAML / JSON-compatible YAML
-    - @ref Util::parse_uri_query() "parse_uri_query()" raises \c URI-QUERY-ERROR for a parameter name that decodes to
-      a string with a NUL character (such as \c "a%00b"), which cannot be a hash key; before, a name with a NUL
-      character was cut at the NUL character
+    - @ref Util::parse_uri_query() "parse_uri_query()" raises \c URI-QUERY-ERROR for a parameter name that is or
+      decodes to a string with a NUL character (such as \c "a%00b"), which cannot be a hash key; before, a name with
+      a NUL character was cut at the NUL character
 
     @subsection util_2_2 Util 2.2
     - added @ref Util::TerminalColor "TerminalColor" class for ANSI terminal color output

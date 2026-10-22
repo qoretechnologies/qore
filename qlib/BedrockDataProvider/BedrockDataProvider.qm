@@ -104,6 +104,12 @@ module BedrockDataProvider {
     the curated embedding action, and the generic API-call action. Requests and responses are recursively
     typed from pinned AWS botocore service descriptions.
 
+    Options offer the enumerated choices of the service model and dropdowns of models, guardrails, and inference
+    profiles; missing, null, empty, union, list, and document values are passed through as given. Control-plane
+    and runtime calls are sent to the regional endpoint of the connection's AWS region with the same SigV4
+    credentials. Action names and descriptions are provided in English, Czech, German, Spanish, French, Italian,
+    Japanese, Korean, Polish, Slovak, Ukrainian, Traditional Chinese, and Taiwanese Traditional Chinese.
+
     @par Action families
 
     Inference, asynchronous inference, foundation models, guardrails, inference profiles, custom and imported
@@ -137,16 +143,7 @@ qdp 'bedrock{aws_region=us-east-1}/converse' \
     @section bedrockdataproviderrelnotes Release Notes
 
     @subsection bedrockdataprovider_v1_0 BedrockDataProvider v1.0
-    - exports all 108 control-plane and eight completed-response runtime operations from pinned AWS service models
-    - provides recursive typed options and outputs, enum choices, model/guardrail/profile reference data, and
-      explicit mutation metadata, plus the existing curated embedding action
-    - publishes an exact lightweight discovery inventory before schema materialization
-    - preserves missing, null, empty, union, list, document, and wire-choice values through the schema boundary
-    - routes control-plane and runtime calls to the correct regional endpoint with shared SigV4 credentials,
-      retaining the source client's connection manager for the lifetime of derived providers
-    - ships complete English presentation metadata and exact catalogs in Czech, German, Spanish, French, Italian,
-      Japanese, Korean, Polish, Slovak, Ukrainian, Traditional Chinese, and Taiwanese Traditional Chinese
-
+    - initial release
 */
 
 #! Contains all public definitions in the BedrockDataProvider module

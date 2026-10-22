@@ -131,6 +131,8 @@ if (*hash<ProviderIndexFailureInfo> failure = ProviderIndexUtil::tryGetActionFai
     @section providerindexutil_relnotes Release Notes
 
     @subsection providerindexutil_v1_2 ProviderIndexUtil v1.2
+    - added a versioned, app-sharded MessagePack metadata cache with per-shard integrity validation and canonical
+      YAML fallback
     - added @ref ProviderIndexUtil::ProviderIndexUtil::reloadIndex() "ProviderIndexUtil::reloadIndex()", which
       makes a running process use an index published since the process read it, and reports the apps that were
       added, removed, or changed (see @ref providerindexutil_reload); the index is replaced atomically for concurrent
@@ -157,31 +159,29 @@ if (*hash<ProviderIndexFailureInfo> failure = ProviderIndexUtil::tryGetActionFai
       without reading any app's metadata;
       @ref ProviderIndexUtil::ProviderIndexUtil::hasConnectionAlternatives() "ProviderIndexUtil::hasConnectionAlternatives()"
       reports whether an index published by an earlier version records them; such indexes are still read
-    - the metadata cache is written in format version 7 (routing index version 4): each metadata cache file is
-      named after the digest of its contents, so that publishing an index never changes a file that the previous
-      index references, and the routing index, which is written last, publishes the new index atomically; the files
-      that it no longer references are then removed; the info of the indexed data provider factories is in a file
-      of its own that the manifest references with its size and digest, and that only the factory APIs read
+    - each metadata cache file is named after the digest of its contents, so that publishing an index never changes a
+      file that the previous index references, and the routing index, which is written last, publishes the new index
+      atomically; the files that it no longer references are then removed; the info of the indexed data provider
+      factories is in a file of its own that the manifest references with its size and digest, and that only the factory
+      APIs read
       (@ref ProviderIndexUtil::ProviderIndexUtil::tryGetIndexedFactoryInfo() "ProviderIndexUtil::tryGetIndexedFactoryInfo()"
-      and @ref ProviderIndexUtil::ProviderIndexUtil::getIndexedFactoryInfoMap() "ProviderIndexUtil::getIndexedFactoryInfoMap()";
+      and
+      @ref ProviderIndexUtil::ProviderIndexUtil::getIndexedFactoryInfoMap() "ProviderIndexUtil::getIndexedFactoryInfoMap()";
       @ref ProviderIndexUtil::ProviderIndexUtil::getIndexedFactories() "ProviderIndexUtil::getIndexedFactories()"
       returns the indexed factories from the routing index, and
       @ref ProviderIndexUtil::ProviderIndexUtil::hasIndexedFactoryInfo() "ProviderIndexUtil::hasIndexedFactoryInfo()"
-      reports whether an index records their info), so the factories can be listed with their info without loading
-      their modules, while the routing index and the manifest do not grow with it; factory info that cannot be read
-      is reported by @ref ProviderIndexUtil::ProviderIndexUtil::getIndexReadError() "ProviderIndexUtil::getIndexReadError()",
-      and the factory modules are then loaded to get it; each distinct option type description and field
-      description of an app is stored once in the app's metadata, and descriptions refer to the descriptions nested in
-      them, so the descriptions of record types that refer to each other, which repeat the same nested descriptions
-      many times, are read and restored in time and memory in proportion to their distinct descriptions; the action
-      summaries of every app are in a file of their own (format version 8, see @ref providerindexutil_summaries);
-      the apps and actions that could not be initialized when the index was built are recorded in a file of their
-      own (format version 9, see @ref providerindexutil_failures);
-      indexes written with metadata cache versions 4 to 8 are still read, those written with versions 4 and 5
-      without factory info, and those written with versions 4 to 8 without failures; earlier versions of this
-      module cannot read an index written in format 6 or later, and an index must be recreated after upgrading to
-      record the factory info, to store each type description once, to record the action summaries, and to record
-      the failures
+      reports whether an index records their info), so the factories can be listed with their info without loading their
+      modules, while the routing index and the manifest do not grow with it; factory info that cannot be read is
+      reported by
+      @ref ProviderIndexUtil::ProviderIndexUtil::getIndexReadError() "ProviderIndexUtil::getIndexReadError()", and the
+      factory modules are then loaded to get it; each distinct option type description and field description of an app
+      is stored once in the app's metadata, and descriptions refer to the descriptions nested in them, so the
+      descriptions of record types that refer to each other, which repeat the same nested descriptions many times, are
+      read and restored in time and memory in proportion to their distinct descriptions; the action summaries of every
+      app are in a file of their own (see @ref providerindexutil_summaries); the apps and actions that could not be
+      initialized when the index was built are recorded in a file of their own (see @ref providerindexutil_failures); an
+      index written by an earlier version of this module must be recreated to record the factory info, to store each
+      type description once, to record the action summaries, and to record the failures
     - added @ref ProviderIndexUtil::ProviderIndexUtil::getIndexedFailures() "ProviderIndexUtil::getIndexedFailures()",
       @ref ProviderIndexUtil::ProviderIndexUtil::tryGetAppFailure() "ProviderIndexUtil::tryGetAppFailure()",
       @ref ProviderIndexUtil::ProviderIndexUtil::tryGetActionFailure() "ProviderIndexUtil::tryGetActionFailure()",
@@ -199,8 +199,6 @@ if (*hash<ProviderIndexFailureInfo> failure = ProviderIndexUtil::tryGetActionFai
       @ref ProviderIndexUtil::ProviderIndexMaxCanonicalSizeEnvVar "QORE_PROVIDER_INDEX_MAX_CANONICAL_BYTES"
       environment variable) is not read, since it takes several times its size in memory to parse; this is
       reported as a \c PROVIDER-INDEX-TOO-LARGE error
-    - @ref ProviderIndexUtil::ProviderIndexUtil::readDataProviderIndex() "ProviderIndexUtil::readDataProviderIndex()"
-      reads the index currently published, instead of the metadata cache of an index that the process read earlier
     - added index build mode
       (@ref ProviderIndexUtil::ProviderIndexUtil::setBuildMode() "ProviderIndexUtil::setBuildMode()" and the
       @ref ProviderIndexUtil::ProviderIndexBuildEnvVar "QORE_PROVIDER_INDEX_BUILD" environment variable), in which
@@ -217,14 +215,9 @@ if (*hash<ProviderIndexFailureInfo> failure = ProviderIndexUtil::tryGetActionFai
       and @ref ProviderIndexUtil::ProviderIndexUtil::getSerializedDataProviderIndexSource() "ProviderIndexUtil::getSerializedDataProviderIndexSource()",
       which read and verify a published index from its compact routing index and metadata cache instead of the much
       larger canonical index file, and identify it by the digest of its routing index
-    - the canonical index file, which can be hundreds of megabytes, is no longer read to validate the routing index
-      unless it may have changed since the routing index was written (its size is different, or it is newer than
-      the routing index); it was read in full by every process that used the index; when it is read, it is read as
-      binary data
-    - listing the apps of a published index reads only the metadata cache manifest, which now holds the info of
-      each app, instead of reading the metadata of every app with its actions, which took about 1 GB of memory for
-      a large index; the metadata cache format version is 4, so a cache written by an earlier version is not used
-      until the index is updated
+    - listing the apps of a published index reads only the metadata cache manifest, which holds the info of each
+      app, instead of reading the metadata of every app with its actions, which took about 1 GB of memory for a
+      large index
     - added @ref ProviderIndexUtil::ProviderIndexUtil::hasMessagePack() "ProviderIndexUtil::hasMessagePack()",
       which reports if the compact index files can be written and read, and index workers used
     - indexed actions are returned as \c DataProvider::DataProviderIndexedActionInfo hashes, in which each
@@ -239,16 +232,13 @@ if (*hash<ProviderIndexFailureInfo> failure = ProviderIndexUtil::tryGetActionFai
       @ref ProviderIndexUtil::ProviderIndexUtil::getAllActionSummaries() "ProviderIndexUtil::getAllActionSummaries()",
       and @ref ProviderIndexUtil::ProviderIndexUtil::selectActionSummaries() "ProviderIndexUtil::selectActionSummaries()";
       see @ref providerindexutil_summaries); the action searches match the summaries and restore only the actions
-      that match, and removing an app from the cache no longer restores its actions
+      that match
     - added @ref ProviderIndexUtil::ProviderIndexUtil::tryGetActionMetadataForApp() "ProviderIndexUtil::tryGetActionMetadataForApp()"
       and @ref ProviderIndexUtil::ProviderIndexUtil::tryGetActionMetadata() "ProviderIndexUtil::tryGetActionMetadata()";
       they replace \c tryGetApproximateActionsForApp() and \c tryGetApproximateAppAction(), which returned
       action types restored from the index and have been removed
-    - primitive option type names from earlier indexes are converted to type descriptions; types serialized by
-      development versions of this module are not restored, and such indexes must be recreated
-    - an action whose metadata cannot be read is logged and omitted instead of being returned in serialized form
-    - fixed a complete load of a deferred index bringing back metadata for apps that had already been loaded,
-      which returned the actions of removed apps
+    - primitive option type names from earlier indexes are converted to type descriptions
+    - an action whose metadata cannot be read is logged and omitted
     - fixed @ref ProviderIndexUtil::ProviderIndexUtil::removeCachedApp() "ProviderIndexUtil::removeCachedApp()"
       leaving the removed app's actions available
 

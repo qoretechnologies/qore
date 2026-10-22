@@ -179,38 +179,21 @@ module HttpServerUtil {
       listener reference when \c startImpl() returns; previously only exceptions and externally managed completion
       callbacks released the reference, so normal WebSocket connection closures leaked the count and could leave the
       listener-stop flag set permanently
-    - documented that request paths have URL decoding applied only to the resource path; the query string remains
-      percent-encoded until parsed with @ref HttpServer::parse_uri_query() "parse_uri_query()"
+    - request paths in the context hash (\c orig_path, \c masked_path and \c url.path) have URL decoding applied
+      only to the resource path; the query string remains percent-encoded until parsed with
+      @ref HttpServer::parse_uri_query() "parse_uri_query()"
     - added @ref HttpServer::mask_sensitive_url_query_values() "mask_sensitive_url_query_values()" so HTTP server
       diagnostics can log request targets without exposing authentication secrets in query parameters
     - @ref HttpServer::http_set_reply_headers() "http_set_reply_headers()" sets \c "Connection: close" when the
       request requires the connection to be closed after the response, whatever the handler returned
     - added @ref HttpServer::http_send_streamed_response() "http_send_streamed_response()" to send an HTTP/1.x
       response with a streamed message body framed as the response headers declare
+    - added the @ref HttpServer::CookieHelper "CookieHelper" class with cookie utility methods; it is deprecated:
+      use @ref HttpUtil::set_cookie_header() and @ref HttpUtil::CookieInfo directly
 
     @subsection httputil1_5 HttpServerUtil 1.5
     - added extension points to @ref HttpServer::AbstractAuthenticator "AbstractAuthenticator" for
       \c Authorization: \c Negotiate request handling and optional \c WWW-Authenticate: \c Negotiate challenges
-    - HTTP/2 server-side body-streaming reads in
-      @ref HttpServer::AbstractStreamRequest "AbstractStreamRequest"
-      now drive inbound DATA via the
-      \c cx."header-info".register_body_queue closure (the I/O thread
-      pushes binary chunks to a Queue and a NOTHING sentinel at
-      END_STREAM); the removed sync \c readHttp2StreamDataBlock() loop is
-      no longer used.
-    - @ref HttpServer::StreamResponseProducer "StreamResponseProducer"
-      now uses \c sendHttp2StreamData() and
-      \c resetHttp2Stream() for HTTP/2 outbound DATA + RST_STREAM through
-      async-safe Socket methods that wake the owning controller.
-    - the streaming-handler example in
-      @ref HttpServer::AbstractHttpRequestHandler::wantsBodyStreaming()
-      "AbstractHttpRequestHandler::wantsBodyStreaming()" was rewritten
-      to demonstrate the HTTP/2 \c register_body_queue path alongside
-      the HTTP/3 sync QUIC stream path.
-    - made the \c owner argument of @ref HttpServer::CallbackInputStream::constructor() "CallbackInputStream::constructor()"
-      optional to support plain closure callbacks that do not need an owner pin to prevent garbage collection;
-      this fixes a \c RUNTIME-OVERLOAD-ERROR when HTTP/2 handlers returned a \c send_callback response in a
-      context where no socket object was available to pass as the owner
 
     @subsection httputil1_4 HttpServerUtil 1.4
     - added HTTP/3 (QUIC) listener configuration support (\c enable_h3, \c alt_svc_max_age, \c no_bind)
@@ -222,7 +205,6 @@ module HttpServerUtil {
     @subsection httputil1_3 HttpServerUtil 1.3
     - allow authentication methods to set the call context
       (<a href="https://github.com/qoretechnologies/qore/issues/4970">issue 4970</a>)
-    - added utility functionality for cookies
 
     @subsection httputil1_2 HttpServerUtil 1.2
     - allow handlers to remove thread-local auth information after requests have been handled

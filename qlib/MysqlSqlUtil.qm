@@ -234,18 +234,15 @@ hash<auto> desc = {
       trigger, so it is dropped and created under the new name
     - fixed a \c cast data provider expression with a size, or with a precision and a scale: the size was ignored
       and the precision was given as the scale, so that the cast failed or changed the value
-
-    @subsection mysqlsqlutilv15 MysqlSqlUtil v1.5
-    - fixed case-sensitive regular-expression matching on MySQL 8.0.22+ and current MySQL releases by using an
-      explicit UTF-8 binary collation instead of a binary-character-set operand; the generated SQL remains
-      compatible with MySQL 5.7 and current MariaDB releases
-    - added portable c LIST c COLUMNS partition creation, introspection, lookup, lifecycle, and schema round-trip
+    - added portable \c LIST \c COLUMNS partition creation, introspection, lookup, lifecycle, and schema round-trip
       support
     - added catalog-estimated row-count and allocated-size partition metadata
     - implemented MySQL/MariaDB range-partitioned table DDL, introspection, and lifecycle operations through the
       generic @ref SqlUtil::AbstractTable "AbstractTable" partition APIs
     - implemented the generic validated named-partition select qualifier for primary and joined table references
     - added targeted canonical-name partition metadata lookup with the preceding range bound
+
+    @subsection mysqlsqlutilv15 MysqlSqlUtil v1.5
     - fixed the prepend and append column operators
       (<a href="https://github.com/qoretechnologies/qore/issues/4548">issue 4548</a>)
     - implemented support for generating queries based on generic expressions using the DataProvider module's generic

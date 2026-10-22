@@ -152,18 +152,14 @@ module BflDataProvider {
 
     The compatible <tt>generate-image</tt> retains job/result metadata and adds downloaded media.
     The historical <tt>flux-1.1-pro-video</tt> alias is retired; select <tt>flux-3-video</tt> explicitly.
-    Unsupported <tt>negative_prompt</tt> is rejected. Regional connection URLs are preserved.
+    Unsupported <tt>negative_prompt</tt> is rejected. Regional connection URLs are preserved. Model-specific null,
+    empty, false, and zero values and structured video inputs are sent as given.
     Public beta and legacy fine-tune availability are described per action. Uploads, training,
     and sharing are not invented API operations; use the documented Dashboard/local workflows.
 
     @section BflDataProviderRelnotes Release Notes
 
     @subsection BflDataProviderv1_1 BflDataProvider v1.1
-    - complete the typed image/video/job/account action catalog
-    - authenticate connection ping, retain regional routing, and verify downloaded media
-    - preserve model-specific null, empty, false, zero, and structured video inputs
-
-    @subsection BflDataProviderv1_0 BflDataProvider v1.0
     - initial release
 */
 

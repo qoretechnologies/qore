@@ -69,15 +69,11 @@ module BflRestClient {
     - <tt>bfl</tt> image generator (FLUX models)
     - <tt>bfl</tt> video generator (FLUX video models)
 
-    @section BflRestClientRelnotes Release Notes
-
-    @subsection BflRestClientv1_1 BflRestClient v1.1
-    - add the pinned image, video, tool, fine-tune, job, credit, and licensing contracts
-    - validate the authenticated credit response for connection ping, including a zero balance
-    - preserve regional endpoints and route each independent wait through the returned polling URL
-    - bound setup, submission, validation, polling, and downloads by one overall timeout
-    - verify image/video MIME, size, and container metadata with credential-free delivery downloads
-    - replace the unsupported <tt>flux-1.1-pro-video</tt> alias with explicit <tt>flux-3-video</tt> selection
+    The module includes the pinned image, video, tool, fine-tune, job, credit, and licensing API contracts. The
+    connection ping validates the authenticated credit response, also for a zero balance. Regional endpoints are
+    preserved, and each wait polls the polling URL returned for its job. One overall timeout bounds setup,
+    submission, validation, polling, and downloads. Downloaded images and videos are checked for their MIME type,
+    size, and container metadata; delivery downloads are sent without credentials.
 
     @par Example: Create a product image and retain its bytes
     @code{.py}
@@ -97,7 +93,9 @@ binary image = job.media.data;
     LoRA beta base variants expose only the common fields documented by BFL. Pinned source hashes,
     normalization details, and source/license attribution are installed in <tt>bfl-provenance.json</tt>.
 
-    @subsection BflRestClientv1_0 BflRestClient v1.0
+    @section BflRestClientRelnotes Release Notes
+
+    @subsection BflRestClientv1_1 BflRestClient v1.1
     - initial release
 */
 
