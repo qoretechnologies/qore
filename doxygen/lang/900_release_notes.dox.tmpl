@@ -1474,6 +1474,19 @@ val = "string";      # OK
       while it has no descriptor
     @endparblock
 
+    @par C++ API: The Data of a Binary Module Is Copied for a Child Program Without the Program's Lock
+    @parblock
+    \c AbstractQoreProgramExternalData::copy(), which gives a child @ref Qore::Program "Program" the data that a
+    binary module keeps in its parent, is now called without the parent Program's lock, so it can run in several
+    threads at the same time for the same data, once for each child being created; before, the copies of a parent's
+    data were made one at a time.  \c QoreProgram::removeExternalData() now waits until the copies in progress have
+    been made.  See "Data of a Module in a Program" in the module development guide of the C++ API documentation.
+
+    <b>Workarounds:</b>
+    - A \c copy() that changes the data it copies must synchronize the changes itself
+    - Do not call \c QoreProgram::removeExternalData() while holding a lock that \c copy() takes
+    @endparblock
+
     @par C++ API: No Value Is Returned With an Exception Raised by Builtin Code
     @parblock
     Builtin functions and methods may still raise an exception and return a value, but the value is now released
@@ -5755,6 +5768,10 @@ while (*binary chunk = input.read(65536)) {
       constant group in a <tt>.qpp</tt> file; it was read as part of the group description without a message, so a
       misspelled group start lost the group's constants or functions, and a namespace declaration placed before the
       group start was lost
+    - Fixed a deadlock when a @ref Qore::Program "Program" was created from a Program in which a binary module keeps
+      data, such as the \c python module, while another thread used the module: the module's data was copied for the
+      new Program with the parent Program's lock held, and a thread of the module that held the module's lock waited
+      for the Program's lock
 
     @section qore_2_2_1 Qore 2.2.1
 

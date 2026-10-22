@@ -678,6 +678,13 @@ public:
     //! removes a pointer to external data in the Program; does not dereference the data
     /** @param owner a unique string identifying the owner of the data; for modules this should be the module name
 
+        @return the data removed, or nullptr if no data was set for \a owner
+
+        @note while a child Program created from this Program copies the external data (see
+        AbstractQoreProgramExternalData::copy()), this call waits until the copies have been made, so that the data
+        stays valid while it is copied; it must therefore not be called while holding a lock that a copy() of the
+        Program's external data takes, nor from such a copy()
+
         @since %Qore 0.9.5
     */
     DLLEXPORT AbstractQoreProgramExternalData* removeExternalData(const char* owner);
@@ -1187,8 +1194,17 @@ public:
 
         @param pgm the new (child) QoreProgram object after setup
 
-        @note this function is called with the program parse lock held; use init() for any operations that need to be
-        called unlocked
+        @return the data of the child Program, or nullptr if the child does not inherit this data
+
+        @note
+        - this function is called without the lock of the parent Program (or of the child): it can take the module's
+          own locks and call the %Qore API, including the API of the parent Program, while other threads of the
+          parent use the module; the data stays valid during the call: QoreProgram::removeExternalData() on the
+          parent waits until the copies have been made
+        - it can be called in several threads at the same time for the same object, once for each child Program
+          created from the parent, so it must only read this object, or synchronize its changes itself
+        - before %Qore 3.0, it was called with the parent Program's lock held, which deadlocked with a thread of the
+          module that took the module's lock before the Program's
     */
     virtual AbstractQoreProgramExternalData* copy(QoreProgram* pgm) const = 0;
 

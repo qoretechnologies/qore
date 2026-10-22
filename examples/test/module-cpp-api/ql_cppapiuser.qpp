@@ -30,6 +30,7 @@
 #include <atomic>
 #include <cerrno>
 #include <climits>
+#include <condition_variable>
 #include <dlfcn.h>
 #include <cstring>
 #include <fcntl.h>
@@ -185,6 +186,40 @@ private:
     std::future<void> release_future;
     std::thread holder;
     bool released = false;
+};
+
+// the owner of the external data that tests the lock order of the copy of a Program's external data
+constexpr const char* ExtDataOwner = "cppapiuser-lock-order";
+
+// the lock of the module that copy() takes, as a module's copy() takes its own locks
+std::mutex ext_data_module_lock;
+
+// the state of the copies, so that a test knows when a copy() is running
+struct ExtDataCopyState {
+    std::mutex m;
+    std::condition_variable cv;
+    bool in_copy = false;
+    int copies = 0;
+};
+ExtDataCopyState ext_data_copy_state;
+
+// external data whose copy() takes the module's lock
+class LockingExtData : public AbstractQoreProgramExternalData {
+public:
+    AbstractQoreProgramExternalData* copy(QoreProgram* pgm) const override {
+        {
+            std::lock_guard<std::mutex> lg(ext_data_copy_state.m);
+            ext_data_copy_state.in_copy = true;
+            ++ext_data_copy_state.copies;
+            ext_data_copy_state.cv.notify_all();
+        }
+        std::lock_guard<std::mutex> lg(ext_data_module_lock);
+        return new LockingExtData;
+    }
+
+    void doDeref() override {
+        delete this;
+    }
 };
 }
 
@@ -1139,6 +1174,72 @@ int cpp_api_wait_child(int pid) [dom=PROCESS] {
 */
 bool cpp_api_active_exception() [dom=THREAD_CONTROL] {
     return q_active_exception();
+}
+
+//! sets the external data of the current Program whose copy() takes a lock of the module
+/** A child Program created from the current Program copies it; see cpp_api_ext_data_read_while_copying().
+
+    @throw EXT-DATA-ERROR the data is already set
+*/
+nothing cpp_api_ext_data_set() [dom=PROCESS] {
+    QoreProgram* pgm = getProgram();
+    if (pgm->getExternalData(ExtDataOwner)) {
+        xsink->raiseException("EXT-DATA-ERROR", "the external data is already set");
+        return QoreValue();
+    }
+    pgm->setExternalData(ExtDataOwner, new LockingExtData);
+    std::lock_guard<std::mutex> lg(ext_data_copy_state.m);
+    ext_data_copy_state.in_copy = false;
+    ext_data_copy_state.copies = 0;
+}
+
+//! removes the external data set by cpp_api_ext_data_set() from the current Program
+/** @return True if the data was set
+*/
+bool cpp_api_ext_data_remove() [dom=PROCESS] {
+    AbstractQoreProgramExternalData* data = getProgram()->removeExternalData(ExtDataOwner);
+    if (!data) {
+        return false;
+    }
+    data->doDeref();
+    return true;
+}
+
+//! returns the number of copies of the external data set by cpp_api_ext_data_set() made since it was set
+/** @return the number of copies
+*/
+int cpp_api_ext_data_copies() [flags=RET_VALUE_ONLY] {
+    std::lock_guard<std::mutex> lg(ext_data_copy_state.m);
+    return ext_data_copy_state.copies;
+}
+
+//! holds the module's lock that copy() takes, waits until a copy() runs, and reads the Program's external data
+/** Another thread creates a child Program of the current Program, whose copy() of the external data set by
+    cpp_api_ext_data_set() waits for the module's lock held here; reading the external data then takes the lock of
+    the Program, which deadlocked if the copy was made with the Program's lock held.
+
+    @return True if the external data was found
+*/
+bool cpp_api_ext_data_read_while_copying() [dom=PROCESS] {
+    std::lock_guard<std::mutex> module_lock(ext_data_module_lock);
+    {
+        std::unique_lock<std::mutex> ul(ext_data_copy_state.m);
+        ext_data_copy_state.cv.wait(ul, [] { return ext_data_copy_state.in_copy; });
+        ext_data_copy_state.in_copy = false;
+    }
+    return getProgram()->getExternalData(ExtDataOwner) != nullptr;
+}
+
+//! reads the Program's external data while holding the module's lock that copy() takes
+/** The lock order of a module that takes its lock and then the Program's lock, as cpp_api_ext_data_read_while_copying()
+    does without waiting for a copy: a lock-order checker (ThreadSanitizer) reports an inversion when a child Program
+    is then created in the same process and the copy is made with the Program's lock held.
+
+    @return True if the external data was found
+*/
+bool cpp_api_ext_data_read_while_locked() [dom=PROCESS] {
+    std::lock_guard<std::mutex> module_lock(ext_data_module_lock);
+    return getProgram()->getExternalData(ExtDataOwner) != nullptr;
 }
 
 ///@}

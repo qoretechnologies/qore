@@ -226,6 +226,47 @@ int max = max_conn ? atoi(max_conn.c_str()) : 10;
     that code change the environment while other threads may use it, and should pass values to it some other way
     than through the environment.
 
+    @subsection module_program_external_data Data of a Module in a Program
+
+    A module keeps its data for a @ref Qore::Program "Program" as external data of the Program
+    (QoreProgram::setExternalData(), QoreProgram::getExternalData() and QoreProgram::removeExternalData(), with a
+    subclass of AbstractQoreProgramExternalData).  When a Program is created from a parent Program that has external
+    data, the child gets its own data from AbstractQoreProgramExternalData::copy(), called on the data of the parent
+    once the child is set up, and then from AbstractQoreProgramExternalData::init() on the child's data.
+
+    - \c copy() runs without the lock of either Program: it can take the module's own locks and call the %Qore API,
+      including that of the parent Program, while other threads of the parent use the module.  It can run in several
+      threads at the same time for the same data of the parent, once for each child being created, so it only reads
+      that data, or synchronizes its changes itself.
+    - The data of the parent stays valid while it is copied: QoreProgram::removeExternalData() on the parent waits
+      until the copies have been made, so a module must not call it while it holds a lock that its \c copy() takes,
+      nor from its \c copy().
+    - Before %Qore 3.0, \c copy() was called with the parent Program's lock held, and a thread of the module that
+      took the Program's lock while it held the module's lock (to parse, for example) could deadlock with a thread
+      creating a child Program.
+
+    @code{.cpp}
+// the data of the module in a Program, created by the module's ns_init() function
+class MyModProgramData : public AbstractQoreProgramExternalData {
+public:
+    MyModProgramData(QoreProgram* pgm) : pgm(pgm) {
+    }
+
+    // a child Program gets its own data; the module's lock can be taken here
+    AbstractQoreProgramExternalData* copy(QoreProgram* child) const override {
+        AutoLocker al(mymod_lock);
+        return new MyModProgramData(child);
+    }
+
+    void doDeref() override {
+        delete this;
+    }
+
+private:
+    QoreProgram* pgm;
+};
+    @endcode
+
     @subsection qore_module_fork_handlers Process-Wide Locks and fork()
 
     A child process created with \c fork() runs only the thread that called \c fork(): a lock that another thread
