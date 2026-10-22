@@ -84,12 +84,17 @@ class SocketBindNameReservationTest inherits QUnit::Test {
         (string addr, int family) = SocketBindNameReservationTest::otherLoopback(info.family);
         Socket other();
         on_exit other.close();
-        # SO_REUSEADDR does not allow binding a port that the reservation holds
         if (bindable) {
             other.bindINET(addr, info.port, True, family);
             assertEq(info.port, other.getSocketInfo(False).port, msg);
-        } else {
-            assertThrows("SOCKET-BIND-ERROR", \other.bindINET(), (addr, info.port, True, family), msg);
+            return;
+        }
+        # a bind of a port that the reservation holds is refused; with SO_REUSEADDR also on Linux, while macOS allows
+        # it for a program of the same user on a port that only a connection holds, as the reservation does there
+        assertThrows("SOCKET-BIND-ERROR", \other.bindINET(), (addr, info.port, False, family), msg);
+        if (PlatformOS != "Darwin") {
+            assertThrows("SOCKET-BIND-ERROR", \other.bindINET(), (addr, info.port, True, family),
+                msg + " (SO_REUSEADDR)");
         }
     }
 
@@ -100,10 +105,18 @@ class SocketBindNameReservationTest inherits QUnit::Test {
         hash<auto> info = listenLocalhost(s);
         assertOtherBindable(info, False, "the port is held in the other address family");
 
-        # a connection to the other loopback address is refused, as no socket listens there
+        # a connection to the other loopback address is refused at once, as no socket listens there; it must not time
+        # out, as a client of the name that tries that address first would wait for it
         (string addr, int family) = SocketBindNameReservationTest::otherLoopback(info.family);
         Socket c();
-        assertThrows("SOCKET-CONNECT-ERROR", \c.connectINET(), (addr, info.port, 10s, family));
+        *hash<ExceptionInfo> err;
+        try {
+            c.connectINET(addr, info.port, 10s, family);
+        } catch (hash<ExceptionInfo> ex) {
+            err = ex;
+        }
+        assertEq("SOCKET-CONNECT-ERROR", err.err, "the connection fails");
+        assertRegex(strerror(ECONNREFUSED), err.desc ?? "", "the connection is refused");
     }
 
     connectByNameTest() {

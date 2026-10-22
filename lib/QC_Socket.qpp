@@ -3972,11 +3972,13 @@ nothing Socket::bindUNIX(string path, softint socket_type = SOCK_STREAM,
     address instead to avoid it.
 
     A stream socket bound to a host name, such as \c "localhost", whose addresses are in more than one address
-    family, is bound on one address and holds its port on the name's addresses in the other address families with
-    sockets that are bound but not listening, until the socket is closed.  A client that connects to the name tries
-    its IPv6 addresses first (RFC 8305), and a port number is allocated per address family, so without this, another
-    listener with the same port number on such an address would receive the connection.  A connection to such an
-    address is refused instead, and the client falls back to the bound address.  When the port is assigned by the
+    family, is bound on one address and holds its port on the name's addresses in the other address families until
+    the socket is closed: with sockets that are bound but not listening, and on macOS, which drops a connection
+    request to such a socket instead of refusing it, with a connection to the port.  A client that connects to the
+    name tries its IPv6 addresses first (RFC 8305), and a port number is allocated per address family, so without
+    this, another listener with the same port number on such an address would receive the connection.  A connection
+    to such an address is refused at once instead, and the client falls back to the bound address.  On macOS, a
+    program of the same user can still bind such an address and port with \c SO_REUSEADDR.  When the port is assigned by the
     system (port \c 0), a port that is free in all of the name's address families is chosen.
 
     If any errors occur, an exception is thrown.

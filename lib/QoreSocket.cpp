@@ -12892,11 +12892,110 @@ int qore_socket_bind_unshadowed(int sock, const struct sockaddr* addr, size_t ad
     return ::bind(sock, addr, addrlen);
 }
 
+#ifdef DARWIN
+//! The time a reservation waits for the connection that holds its port to arrive, in milliseconds
+static constexpr int QORE_BIND_RESERVATION_CONNECT_TIMEOUT_MS = 1000;
+
+//! Holds the port of a socket bound to an address by a connection to it, so that a connection to the port is refused
+/** macOS drops a connection request to a socket that is bound but not listening instead of refusing it, so a client
+    that tries the address first would wait for its connect timeout.  The socket listens, a socket of this function
+    connects to it, and the listening socket is no longer needed once the connection is accepted: the connection holds
+    the port, a connection request to the port finds no listening socket and is refused at once, and a bind of the
+    port without SO_REUSEADDR is refused (with SO_REUSEADDR, macOS allows a bind by a program of the same user).  Both
+    ends close with an abortive close, so a released reservation leaves no connection in TIME_WAIT on the port.
+    The connection is made only to the socket that this function bound, so it needs no network sandbox check.
+
+    @param lfd the socket bound to the address, which the caller closes in any case
+    @param family the address family
+    @param addr the bound address
+    @param addrlen the length of @a addr
+    @param held the two ends of the connection holding the port, if 0 is returned; the caller owns them
+
+    @return 0 if the connection holds the port, -1 if not, in which case no descriptor is added to @a held; @a lfd
+    may then listen, so it must not hold the port
+*/
+static int qore_socket_hold_port_by_connection(int lfd, int family, const struct sockaddr* addr, socklen_t addrlen,
+        std::vector<int>& held) {
+    if (::listen(lfd, 1) == QORE_SOCKET_ERROR) {
+        return -1;
+    }
+    int cfd = socket(family, SOCK_STREAM, 0);
+    if (cfd == QORE_INVALID_SOCKET) {
+        return -1;
+    }
+    struct Closer {
+        int& fd;
+        ~Closer() {
+            if (fd != QORE_INVALID_SOCKET) {
+                qore_socket_private::closeDescriptor(fd);
+            }
+        }
+    } cfd_closer{cfd};
+    // the connect is completed by the system, as the socket listens on a local address; it is not waited for here
+    int flags = fcntl(cfd, F_GETFL);
+    if (flags == -1 || fcntl(cfd, F_SETFL, flags | O_NONBLOCK) == -1) {
+        return -1;
+    }
+    if (::connect(cfd, addr, addrlen) == QORE_SOCKET_ERROR && sock_get_raw_error() != EINPROGRESS) {
+        return -1;
+    }
+    struct pollfd pfd = {lfd, POLLIN, 0};
+    int rc;
+    do {
+        rc = ::poll(&pfd, 1, QORE_BIND_RESERVATION_CONNECT_TIMEOUT_MS);
+    } while (rc == -1 && sock_get_raw_error() == EINTR);
+    if (rc <= 0 || !(pfd.revents & POLLIN)) {
+        return -1;
+    }
+    // reserved before the accept, so that adding the descriptors cannot fail (the caller reserves it in advance)
+    held.reserve(held.size() + 2);
+    int afd = ::accept(lfd, nullptr, nullptr);
+    if (afd == QORE_INVALID_SOCKET) {
+        return -1;
+    }
+    struct linger l = {1, 0};
+    setsockopt(afd, SOL_SOCKET, SO_LINGER, &l, sizeof(l));
+    setsockopt(cfd, SOL_SOCKET, SO_LINGER, &l, sizeof(l));
+    held.push_back(afd);
+    held.push_back(cfd);
+    cfd = QORE_INVALID_SOCKET;
+    return 0;
+}
+#endif
+
+//! Returns a socket bound to the given address of a bind-name reservation, or QORE_INVALID_SOCKET with @a err set
+/** The socket is bound without SO_REUSEADDR, so that no other socket can bind the port on the address while it is
+    held, and an IPv6 socket holds only its IPv6 address.
+*/
+static int qore_socket_bind_reservation(const SocketResolvedAddrInfo& ai, const struct sockaddr_storage& addr,
+        int& err) {
+    int fd = socket(ai.family, ai.socktype, ai.protocol);
+    if (fd == QORE_INVALID_SOCKET) {
+        err = sock_get_raw_error();
+        return QORE_INVALID_SOCKET;
+    }
+#ifdef IPV6_V6ONLY
+    if (ai.family == AF_INET6) {
+        // only the IPv6 address itself is held, not the IPv4 address that a dual-stack socket would also hold
+        int opt = 1;
+        setsockopt(fd, IPPROTO_IPV6, IPV6_V6ONLY, (SETSOCKOPT_ARG_4)&opt, sizeof(int));
+    }
+#endif
+    if (::bind(fd, reinterpret_cast<const struct sockaddr*>(&addr), ai.addrlen) == QORE_SOCKET_ERROR) {
+        err = sock_get_raw_error();
+        qore_socket_private::closeDescriptor(fd);
+        return QORE_INVALID_SOCKET;
+    }
+    return fd;
+}
+
 //! Holds the port of a TCP socket bound to one address of a name on the name's addresses in other address families
 /** A client that connects to the name tries the name's addresses in turn (IPv6 first, RFC 8305), and a port number
     is allocated per address family, so another listener with the same port number on an address of another family
-    would receive the connection instead of the bound socket.  A socket bound to such an address, but not
-    listening, refuses the connection, and the client falls back to the address of the bound socket.
+    would receive the connection instead of the bound socket.  The port is held so that a connection to it is refused,
+    and the client falls back to the address of the bound socket: by a socket bound to the address but not
+    listening, which Linux refuses a connection to, and on macOS, which drops such a connection request instead, by
+    a connection to the port (see qore_socket_hold_port_by_connection()).
 
     @param addrs the addresses of the name
     @param bound_family the address family of the bound address
@@ -12910,6 +13009,9 @@ int qore_socket_bind_unshadowed(int sock, const struct sockaddr* addr, size_t ad
 static int qore_socket_reserve_bind_port(const std::vector<SocketResolvedAddrInfo>& addrs, int bound_family,
         int port, QoreSandboxManager* sandbox_manager, std::vector<int>& fds) {
     assert(fds.empty());
+    // reserved before any socket is created, so that adding a descriptor cannot fail; on macOS a connection holds
+    // the port with two descriptors
+    fds.reserve(addrs.size() * 2);
     for (size_t i = 0, e = addrs.size(); i < e; ++i) {
         const SocketResolvedAddrInfo& ai = addrs[i];
         if (ai.family == bound_family || ai.socktype != SOCK_STREAM
@@ -12930,21 +13032,9 @@ static int qore_socket_reserve_bind_port(const std::vector<SocketResolvedAddrInf
                 continue;
             }
         }
-        // without SO_REUSEADDR, so that no other socket can bind the port on the address while it is held
-        int fd = socket(ai.family, ai.socktype, ai.protocol);
+        int err = 0;
+        int fd = qore_socket_bind_reservation(ai, addr, err);
         if (fd == QORE_INVALID_SOCKET) {
-            continue;
-        }
-#ifdef IPV6_V6ONLY
-        if (ai.family == AF_INET6) {
-            // only the IPv6 address itself is held, not the IPv4 address that a dual-stack socket would also hold
-            int opt = 1;
-            setsockopt(fd, IPPROTO_IPV6, IPV6_V6ONLY, (SETSOCKOPT_ARG_4)&opt, sizeof(int));
-        }
-#endif
-        if (::bind(fd, reinterpret_cast<const struct sockaddr*>(&addr), ai.addrlen) == QORE_SOCKET_ERROR) {
-            int err = sock_get_raw_error();
-            qore_socket_private::closeDescriptor(fd);
 #ifdef _Q_WINDOWS
             bool in_use = err == WSAEADDRINUSE;
 #else
@@ -12960,6 +13050,21 @@ static int qore_socket_reserve_bind_port(const std::vector<SocketResolvedAddrInf
             // an address that cannot be bound, such as an IPv6 address on a system without IPv6, needs no reservation
             continue;
         }
+#ifdef DARWIN
+        // the connection holds the port; the bound socket is closed in any case, as it may listen
+        int rc = qore_socket_hold_port_by_connection(fd, ai.family, reinterpret_cast<const struct sockaddr*>(&addr),
+            static_cast<socklen_t>(ai.addrlen), fds);
+        qore_socket_private::closeDescriptor(fd);
+        if (!rc) {
+            continue;
+        }
+        // without the connection, the port is held as on other systems, by a socket that is bound but not
+        // listening, although a connection request to it then times out instead of being refused
+        fd = qore_socket_bind_reservation(ai, addr, err);
+        if (fd == QORE_INVALID_SOCKET) {
+            continue;
+        }
+#endif
         fds.push_back(fd);
     }
     return 0;
