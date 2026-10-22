@@ -1028,6 +1028,19 @@
     listed without loading their modules.
     @endparblock
 
+    @par ProviderIndexUtil Returns Indexed Actions Without Type Objects
+    @parblock
+    The \c ProviderIndexUtil::tryGetApproximateActionsForApp() and \c ProviderIndexUtil::tryGetApproximateAppAction()
+    methods are removed.  They returned indexed actions with type objects restored from the index, which loaded the
+    modules of the providers.  Use
+    @ref ProviderIndexUtil::ProviderIndexUtil::tryGetActionMetadataForApp() "ProviderIndexUtil::tryGetActionMetadataForApp()"
+    and @ref ProviderIndexUtil::ProviderIndexUtil::tryGetActionMetadata() "ProviderIndexUtil::tryGetActionMetadata()"
+    instead: they return the same actions with their option types described by plain data in each option's
+    \c type_info, and without output types; a type object can be created from a \c type_info with
+    \c DataProvider::AbstractDataProviderType::get(), and the exact types are available from the registered action
+    with \c DataProvider::DataProviderActionCatalog::getAppAction(), which loads the app's modules.
+    @endparblock
+
     @par PostgreSQL Lists Only the Connection's Schemas
     @parblock
     On PostgreSQL, @ref SqlUtil::AbstractDatabase::listTables() "AbstractDatabase::listTables()" and
@@ -1214,7 +1227,19 @@ val = "string";      # OK
     <b>Impact:</b>
     - Code using @ref strict-types "%strict-types" will parse without error but the directive has no effect
     - Code checking \c PO_STRICT_TYPES will always evaluate to false
-    - Variables will not be auto-initialized with default values based on type
+    - Variables will not be auto-initialized with default values based on type, except static class variables of a
+      non-optional hash or list type (see below)
+    @endparblock
+
+    @par Static Class Variables of Hash and List Types Start Empty
+    @parblock
+    A static class variable declared with a non-optional hash or list type and no initializer, such as
+    <tt>static hash<string, int> counts;</tt> or <tt>static list<auto> items;</tt>, now starts as an empty hash or
+    list of its type, and one of a @ref hashdecl "hashdecl" type as a hash with the hashdecl's member defaults; it
+    started as @ref nothing "NOTHING", as other variables without an initializer still do.  Code that tests such a
+    variable with @ref exists "exists" or compares it with @ref nothing "NOTHING" to find out whether it has been
+    set must test whether it is empty instead.  Instance members, global and local variables, and variables of an
+    optional type (such as <tt>*hash<string, int></tt>) still start as @ref nothing "NOTHING".
     @endparblock
 
     @par C++20 Required

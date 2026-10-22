@@ -1,0 +1,127 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class StaticVarDefaultsTest
+
+#! The initial value of a variable that is declared without an initializer
+/** A static class variable of a non-optional hash or list type starts as an empty hash or list of its type, and one
+    of a hashdecl type as a hash with the hashdecl's member defaults; every other variable without an initializer
+    starts as NOTHING.  Qore before 3.0 started all of them as NOTHING (see the 3.0.0 release notes, "Static Class
+    Variables of Hash and List Types Start Empty").
+*/
+
+hashdecl StaticVarDefaultsDecl {
+    int a = 1;
+    string b = "x";
+}
+
+class StaticVarDefaultsHolder {
+    public {
+        static hash<string, int> typed_hash;
+        static list<int> typed_list;
+        static hash<auto> auto_hash;
+        static hash plain_hash;
+        static list<auto> auto_list;
+        static list plain_list;
+        static hash<StaticVarDefaultsDecl> decl_hash;
+        static *hash<string, int> optional_hash;
+        static *list<int> optional_list;
+        static int scalar;
+        static string str;
+        static hash<string, int> initialized = {"z": 26};
+
+        hash<string, int> member_hash;
+        list<int> member_list;
+    }
+}
+
+our hash<string, int> StaticVarDefaultsGlobalHash;
+our list<int> StaticVarDefaultsGlobalList;
+
+class StaticVarDefaultsTest inherits QUnit::Test {
+    constructor() : QUnit::Test("static variable defaults", "1.0", \ARGV) {
+        addTestCase("a static variable of a non-optional container type starts empty", \emptyContainers());
+        addTestCase("a static hashdecl hash starts with the member defaults", \hashdeclDefaults());
+        addTestCase("the empty container keeps the declared type", \typeEnforced());
+        addTestCase("other variables without an initializer start as NOTHING", \nothingOtherwise());
+        addTestCase("a static variable with an initializer has its value", \initializerWins());
+        addTestCase("a static variable in a parsed Program starts empty", \parsedProgram());
+        set_return_value(main());
+    }
+
+    emptyContainers() {
+        assertEq({}, StaticVarDefaultsHolder::typed_hash);
+        assertEq("hash<string, int>", StaticVarDefaultsHolder::typed_hash.fullType());
+        assertEq((), StaticVarDefaultsHolder::typed_list);
+        assertEq("list<int>", StaticVarDefaultsHolder::typed_list.fullType());
+        assertEq({}, StaticVarDefaultsHolder::auto_hash);
+        assertEq(NT_HASH, StaticVarDefaultsHolder::plain_hash.typeCode());
+        assertEq(0, StaticVarDefaultsHolder::plain_hash.size());
+        assertEq((), StaticVarDefaultsHolder::auto_list);
+        assertEq(NT_LIST, StaticVarDefaultsHolder::plain_list.typeCode());
+        assertEq(0, StaticVarDefaultsHolder::plain_list.size());
+        # the change that existing code can notice
+        assertTrue(exists StaticVarDefaultsHolder::typed_hash, "the variable exists before it is assigned");
+    }
+
+    hashdeclDefaults() {
+        assertEq({"a": 1, "b": "x"}, StaticVarDefaultsHolder::decl_hash);
+        assertEq("hash<StaticVarDefaultsDecl>", StaticVarDefaultsHolder::decl_hash.fullType());
+    }
+
+    typeEnforced() {
+        StaticVarDefaultsHolder::typed_list += 1;
+        assertEq((1,), StaticVarDefaultsHolder::typed_list);
+        # the value is not known at parse time, so the hash's element type refuses it at runtime
+        auto value = "not an int";
+        assertThrows("RUNTIME-TYPE-ERROR", sub () { StaticVarDefaultsHolder::typed_hash.k = value; });
+        assertEq({}, StaticVarDefaultsHolder::typed_hash, "a refused assignment leaves the hash empty");
+    }
+
+    nothingOtherwise() {
+        assertEq(NOTHING, StaticVarDefaultsHolder::optional_hash);
+        assertEq(NOTHING, StaticVarDefaultsHolder::optional_list);
+        assertEq(NOTHING, StaticVarDefaultsHolder::scalar);
+        assertEq(NOTHING, StaticVarDefaultsHolder::str);
+        StaticVarDefaultsHolder h();
+        assertEq(NOTHING, h.member_hash);
+        assertEq(NOTHING, h.member_list);
+        assertEq(NOTHING, StaticVarDefaultsGlobalHash);
+        assertEq(NOTHING, StaticVarDefaultsGlobalList);
+        hash<string, int> local_hash;
+        list<int> local_list;
+        assertEq(NOTHING, local_hash);
+        assertEq(NOTHING, local_list);
+    }
+
+    initializerWins() {
+        assertEq({"z": 26}, StaticVarDefaultsHolder::initialized);
+    }
+
+    parsedProgram() {
+        Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS);
+        p.parse("
+class P {
+    public {
+        static hash<string, int> h;
+        static list<string> l;
+        static *hash<string, int> oh;
+    }
+}
+list<auto> sub get() { return (P::h, P::l, P::oh); }
+", "static-var-defaults");
+        list<auto> l = p.callFunction("get");
+        assertEq({}, l[0]);
+        assertEq("hash<string, int>", l[0].fullType());
+        assertEq((), l[1]);
+        assertEq("list<string>", l[1].fullType());
+        assertEq(NOTHING, l[2]);
+    }
+}
