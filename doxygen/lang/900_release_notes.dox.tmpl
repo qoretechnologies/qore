@@ -1449,6 +1449,22 @@ val = "string";      # OK
     the proxy's certificate is verified against the proxy's host name.
     @endparblock
 
+    @par URI Query Strings Are Decoded When Parsed and Encoded When Made
+    @parblock
+    @ref Util::parse_uri_query() "parse_uri_query()" URL-decodes the name and value of each parameter after it
+    splits the query string into its parameters, so that an encoded separator such as \c "%26", \c "%3D" or \c "%3B"
+    is part of a name or value; it returned them as they appear in the query string.  Code that decodes the names or
+    values that it returns, for example with @ref Qore::decode_url() "decode_url()", must no longer do so, or a value
+    such as \c "100%25" is decoded twice.  In turn, @ref Util::make_uri_query() "make_uri_query()" URL-encodes the
+    names and values that it serializes, so code that encodes them before passing them must no longer do so.
+
+    The @ref httpserverintro "HttpServer" module URL-decodes only the resource path of a request, and the query
+    string in the \c path of the request header and context hashes that handlers receive is encoded until it is
+    parsed, by @ref Util::parse_uri_query() "parse_uri_query()" or by the handlers that call it, such as those of
+    the @ref resthandlerintro "RestHandler" module; it decoded the whole path, so encoded separators corrupted the
+    parameters.  A handler that splits the query string of the path itself must decode the names and values it gets.
+    @endparblock
+
     @par Strings in Stateful Encodings Are Handled by Their Characters
     @parblock
     A string in a stateful encoding, in which the bytes of a character depend on the characters before it (such as
