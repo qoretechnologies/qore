@@ -500,3 +500,31 @@ test-perf:
     paths:
       - crash-dumps/
     expire_in: 7 days
+
+# The build-system tests (examples/test/cmake): the CMake macros and scripts, qpp, qcc and the documentation toolchain,
+# with real CMake, Doxygen and compilers, against the build job's build/
+test-cmake-ubuntu-amd64:
+  stage: test
+  timeout: 30 minutes
+  needs: [build-ubuntu-amd64]
+  image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:develop
+  tags:
+    - k8s
+    - amd64
+  services: []
+  before_script: []
+  script:
+    - test/docker_test/test-cmake.sh
+
+test-cmake-alpine-amd64:
+  stage: test
+  timeout: 30 minutes
+  needs: [build-alpine-amd64]
+  image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:develop-alpine
+  tags:
+    - k8s
+    - amd64
+  services: []
+  before_script: []
+  script:
+    - test/docker_test/test-cmake.sh
