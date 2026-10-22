@@ -43,8 +43,8 @@ public namespace Connect {
     @note Relative dates (durations) are serialized as ISO 8601 duration strings.
     NaN and Inf number values are serialized as null.
 
-    This codec is only available when the \c json module version 1.12+ is
-    installed (which provides the \c make_cbor() and \c parse_cbor() functions).
+    The codec uses the \c make_cbor() and \c parse_cbor() functions of the \c json module (version 1.12 or later),
+    which the Connect module requires.
 */
 public class CborConnectCodec inherits AbstractConnectCodec {
     #! Returns the codec name

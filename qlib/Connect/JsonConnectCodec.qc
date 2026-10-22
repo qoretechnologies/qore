@@ -41,7 +41,7 @@ public namespace Connect {
     binary values are base64-encoded.  Use the YAML codec when type fidelity is
     required.
 
-    This codec is only available when the \c json module is installed.
+    The codec uses the \c json module, which the Connect module requires.
 */
 public class JsonConnectCodec inherits AbstractConnectCodec {
     #! Returns the codec name

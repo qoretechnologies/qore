@@ -942,7 +942,7 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
                 @ref RestClient::RestDiagnostics "RestDiagnostics", which applies these rules wherever this client
                 reports headers.
 
-                @since RestClientIo 1.1
+                @since RestClientIo 1.0
             */
             const SensitiveRequestHeaders = {
                 "authorization": True,
@@ -3646,7 +3646,7 @@ hash<RestClient::RestResponseInfo> resp = client.restDoRequestWithResponseLimit(
             @ref RestClient::RestDiagnostics "RestDiagnostics") replaced by \c "<redacted>"; the header names are kept,
             because knowing that a request carried authorization is diagnostic while the credential itself is not
 
-            @since RestClientIo 1.1
+            @since RestClientIo 1.0
         */
         static *hash<auto> redactHeaders(*hash<auto> hdr, *hash<string, bool> extra) {
             return RestClient::RestDiagnostics::headers(hdr, extra);

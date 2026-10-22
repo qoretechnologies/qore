@@ -244,14 +244,14 @@ public class CdsRestClientBase {
         #! The placeholder an API profile's scopes use for the connection URL
         /** @see @ref resolveProfileScopes()
 
-            @since CdsRestClient 1.1
+            @since CdsRestClient 2.2
         */
         const UrlPlaceholder = "{url}";
 
         #! The host of Microsoft's Global Discovery Service
         /** @see @ref cdsrestclient_discovery
 
-            @since CdsRestClient 1.1
+            @since CdsRestClient 2.2
         */
         const GlobalDiscoveryHost = "globaldisco.crm.dynamics.com";
 
@@ -267,12 +267,12 @@ public class CdsRestClientBase {
 
             @see @ref cdsrestclient_discovery
 
-            @since CdsRestClient 1.1
+            @since CdsRestClient 2.2
         */
         const DefaultUrl = "dynamics://" + GlobalDiscoveryHost;
 
         #! The Global Discovery Service path listing the environments a credential reaches
-        /** @since CdsRestClient 1.1
+        /** @since CdsRestClient 2.2
         */
         const DiscoveryInstancesPath = "/api/discovery/v2.0/Instances";
 
@@ -449,7 +449,7 @@ public class CdsRestClientBase {
 
         @param url the URL to check
 
-        @since CdsRestClient 1.1
+        @since CdsRestClient 2.2
     */
     static bool isDiscoveryUrl(*string url) {
         if (!url.val()) {
@@ -471,7 +471,7 @@ public class CdsRestClientBase {
 
         @see @ref cdsrestclient_discovery
 
-        @since CdsRestClient 1.1
+        @since CdsRestClient 2.2
     */
     static *hash<auto> discoverInstanceOptions(string token, *string org, *LoggerInterface logger) {
         RestClientIo::RestClientIo rest({
@@ -500,7 +500,7 @@ public class CdsRestClientBase {
 
         @return the connection options to update, or @ref nothing when no environment could be chosen
 
-        @since CdsRestClient 1.1
+        @since CdsRestClient 2.2
     */
     static *hash<auto> getInstanceOptions(auto body, *string org, *LoggerInterface logger) {
         *list<auto> instances = body.value;
@@ -568,7 +568,7 @@ public class CdsRestClientBase {
 
         @see @ref cdsrestclient_discovery
 
-        @since CdsRestClient 1.1
+        @since CdsRestClient 2.2
     */
     static *hash<auto> discoverAfterLogin(*hash<auto> new_opts, hash<auto> h, string url, *string org,
             *LoggerInterface logger, *code set_url) {
@@ -614,7 +614,7 @@ public class CdsRestClientBase {
 
         @return the scopes, resolved against \a url
 
-        @since CdsRestClient 1.1
+        @since CdsRestClient 2.2
     */
     static list<string> resolveProfileScopes(*softlist<string> templates, *softlist<string> scopes,
             *string url) {
@@ -639,7 +639,7 @@ public class CdsRestClientBase {
 
         @see @ref resolveProfileScopes()
 
-        @since CdsRestClient 1.1
+        @since CdsRestClient 2.2
     */
     static string resolveProfileScope(*softlist<string> templates, string scope, string url) {
         foreach string t in (templates) {
@@ -1195,7 +1195,7 @@ public class CdsRestConnection inherits RestClient::RestConnection {
     }
 
     #! Returns an async-I/O-capable connection object
-    /** @since CdsRestClient 2.3
+    /** @since CdsRestClient 2.2
     */
     private object getAsyncImpl(bool connect = True, *hash<auto> rtopts) {
         return new CdsRestClientIo(getConnectionOptions(rtopts));
