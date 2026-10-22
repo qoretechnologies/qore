@@ -54,6 +54,7 @@
 #include "qore/intern/QC_Socket.h"
 #include "qore/intern/QC_SocketPollOperation.h"
 #include "qore/intern/AsyncIoControllerPriv.h"
+#include "qore/intern/qore_thread_intern.h"
 #include "qore/intern/FileInputStream.h"
 #include "qore/intern/FileOutputStream.h"
 #include "qore/intern/QorePollCompat.h"
@@ -10096,6 +10097,8 @@ QoreListNode* qore_socket_private::poll(const QoreListNode* poll_list, int timeo
             int events;
         };
         std::vector<PollTarget> extra_targets;
+        //! false for an object that had no descriptor when the poll started (see the setup below)
+        bool has_descriptor;
     };
 
     struct PollObjectCleanup {
@@ -10168,12 +10171,6 @@ QoreListNode* qore_socket_private::poll(const QoreListNode* poll_list, int timeo
                 new QoreSocketPollListPollable(fd));
             cleanup.objects.push_back(poll_obj);
         }
-        if (fd < 0) {
-            xsink->raiseException("SOCKET-NOT-OPEN", "element %zu/%zu (starting from 1) references a " \
-                "pollable object that is not open", li.index() + 1, poll_list->size());
-            return nullptr;
-        }
-
         std::vector<PollEntry::PollTarget> extra_targets;
         QoreValue extra_value = h->getKeyValue("extra_fds");
         if (extra_value.getType() == NT_LIST) {
@@ -10222,13 +10219,26 @@ QoreListNode* qore_socket_private::poll(const QoreListNode* poll_list, int timeo
             }
         }
 
-        if (!(events & (SOCK_POLLIN | SOCK_POLLOUT)) && extra_targets.empty()) {
+        if (fd < 0) {
+            // an object that has no descriptor yet, such as a socket whose connection resolves the name of its host,
+            // has nothing to wait for itself: the element waits for its extra descriptors and its poll timeout, as
+            // the I/O controller and the event loop wait for it, and no events are reported for the object; with
+            // neither, the object is closed
+            if (extra_targets.empty() && poll_timeout_value.isNullOrNothing()) {
+                xsink->raiseException("SOCKET-NOT-OPEN", "element %zu/%zu (starting from 1) references a " \
+                    "pollable object that is not open and has no extra descriptors or poll timeout", li.index() + 1,
+                    poll_list->size());
+                return nullptr;
+            }
+            events = 0;
+        } else if (!(events & (SOCK_POLLIN | SOCK_POLLOUT)) && extra_targets.empty()) {
             xsink->raiseException("SOCKET-POLL-ERROR", "element %zu/%zu (starting from 1) has an invalid " \
                 "'events' value; neither SOCK_POLLIN nor SOCK_POLLOUT is set", li.index() + 1, poll_list->size());
             return nullptr;
         }
 
-        entries.push_back({li.index(), events, obj, poll_obj, static_cast<bool>(io), std::move(extra_targets)});
+        entries.push_back({li.index(), events, obj, poll_obj, static_cast<bool>(io), std::move(extra_targets),
+            fd >= 0});
     }
 
     std::map<size_t, int> result_events;
@@ -10357,7 +10367,10 @@ QoreListNode* qore_socket_private::poll(const QoreListNode* poll_list, int timeo
 
     std::map<size_t, std::pair<QoreObject*, bool>> entry_objects;
     for (const PollEntry& entry : entries) {
-        entry_objects[entry.index] = {entry.original_obj, entry.original_is_pollable};
+        // an object without a descriptor when the poll started is not closed by the poll's end without one
+        if (entry.has_descriptor) {
+            entry_objects[entry.index] = {entry.original_obj, entry.original_is_pollable};
+        }
     }
 
     auto entry_closed = [&](size_t index) -> bool {
@@ -10609,6 +10622,21 @@ QoreListNode* qore_socket_private::poll(const QoreListNode* poll_list, int timeo
             }
             return build_results();
         }
+    }
+
+    if (!submitted) {
+        // only objects without a descriptor and without extra descriptors: the poll waits for the shortest of their
+        // poll timeouts, or for its own timeout if shorter, and reports nothing
+        assert(poll_timeout_hint_ms >= 0);
+        int64 wait_ms = timeout_ms >= 0 && timeout_ms < poll_timeout_hint_ms ? timeout_ms : poll_timeout_hint_ms;
+        // the wait ends at once when the thread is cancelled or its Program is interrupted
+        if (wait_ms > 0) {
+            qore_cancellable_sleep(wait_ms * 1000, xsink, "Socket::poll");
+            if (*xsink) {
+                return nullptr;
+            }
+        }
+        return rv.release();
     }
 
     cancel_owner();

@@ -7172,7 +7172,15 @@ l = Socket::poll(l, 2s);
 
     @throw SOCKET-POLL-ERROR \a socket value in the \a items argument is not assigned or there was an error in the
     poll operation
-    @throw SOCKET-NOT-OPEN \a socket value in the \a items argument is closed
+    @throw SOCKET-NOT-OPEN \a socket value in the \a items argument has no descriptor (it is closed), and its element
+    has neither \c extra_fds nor \c poll_timeout_ms
+
+    @note An element whose \a socket has no descriptor yet, such as a socket whose connection resolves the name of
+    its host (see the \c extra_fds and \c poll_timeout_ms of the poll info of its operation), waits for its
+    \c extra_fds and at most for its \c poll_timeout_ms, as the @ref Qore::AsyncIoController "AsyncIoController"
+    waits for it; no events are reported for the object itself, and the element is reported with the events of its
+    extra descriptors.  When no element has a descriptor to wait for, the poll waits for the shortest
+    \c poll_timeout_ms (or for \a timeout_ms, if shorter) and returns an empty list
 
     @note If a socket being polled is closed or deleted in a background thread, the poll operation is not interrupted
     on Linux; other platforms behave differently (macOS / Darwin interrupts the polling process in this case); for
@@ -7180,6 +7188,7 @@ l = Socket::poll(l, 2s);
     being polled is deleted in a background thread.
 
     @since %Qore 0.9.11
+    @since %Qore 3.0 an element whose object has no descriptor waits for its \c extra_fds and \c poll_timeout_ms
 */
 static list<hash<SocketPollInfo>> Socket::poll(
         list<hash<SocketPollInfo>> items, timeout timeout_ms) [flags=NAMED_ARGS] {
