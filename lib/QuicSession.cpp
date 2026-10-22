@@ -45,6 +45,7 @@
 #include "qore/intern/QoreAsyncIoLogger.h"
 #include "qore/intern/WebSocketStreamFrameState.h"
 #include "qore/intern/AsyncIoControllerPriv.h"
+#include "qore/intern/QoreForkHandlers.h"
 
 #include <unordered_set>
 
@@ -2032,6 +2033,13 @@ void QuicSession::closeIdleLocked() {
 }
 
 #ifdef DEBUG
+//! the last value of QORE_QUIC_TEST_IDLE_CLOSE_AT_SUBMIT that closed a session, under its lock
+static std::mutex quic_test_idle_close_lock;
+static std::string quic_test_idle_close_last_token;
+// a leaf lock: its holder only compares and copies the string; a test process can fork (see QoreForkHandlers.h)
+static QoreForkStdMutex quic_test_idle_close_fork_handler(quic_test_idle_close_lock, QFLR_LEAF,
+    "quic_test_idle_close_at_submit");
+
 //! Test hook: idle-closes the session of the next client request submitted after QORE_QUIC_TEST_IDLE_CLOSE_AT_SUBMIT
 //! got a new value, as if its idle timer had expired between connect and submit
 /** It fires once per value, so that a request retried on a new connection finds it open; the variable is read on
@@ -2045,13 +2053,11 @@ static bool quic_test_idle_close_at_submit() {
     if (!token || !*token) {
         return false;
     }
-    static std::mutex last_token_lock;
-    static std::string last_token;
-    std::lock_guard<std::mutex> lock(last_token_lock);
-    if (last_token == token) {
+    std::lock_guard<std::mutex> lock(quic_test_idle_close_lock);
+    if (quic_test_idle_close_last_token == token) {
         return false;
     }
-    last_token = token;
+    quic_test_idle_close_last_token = token;
     return true;
 }
 #endif
