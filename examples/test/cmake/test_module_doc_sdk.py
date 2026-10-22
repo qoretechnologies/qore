@@ -9,6 +9,7 @@ import shutil
 import subprocess
 import tempfile
 import unittest
+import xml.etree.ElementTree as ET
 
 ROOT = Path(__file__).resolve().parents[3]
 CMAKE = os.environ.get("CMAKE_EXECUTABLE", "cmake")
@@ -23,7 +24,7 @@ class ModuleDocSdkTest(unittest.TestCase):
         self.assertNotIn("error:", result.stderr.lower())
         return result
 
-    def make_tag(self, root, name):
+    def make_tag(self, root, name, case_sense_names=None):
         source = root / (name + ".dox")
         source.write_text(f"/** @page {name} {name} reference */\n")
         config = root / (name + ".Doxyfile")
@@ -33,7 +34,7 @@ INPUT = "{source}"
 GENERATE_HTML = NO
 GENERATE_LATEX = NO
 GENERATE_TAGFILE = "{tag}"
-''')
+''' + (f"CASE_SENSE_NAMES = {case_sense_names}\n" if case_sense_names else ""))
         self.run_command(["doxygen", str(config)], root)
         return tag
 
@@ -94,7 +95,7 @@ file(APPEND "${{CMAKE_BINARY_DIR}}/Doxyfile" "\\nWARN_AS_ERROR = YES\\n")
             self.assertIn("does not exist", result.stderr)
 
     def configure(self, root, *, language_tag=True, image_dirs=(), two_phase=False, module_indexes=False,
-                  provider_icon=False):
+                  provider_icon=False, module_index_case_sense_names=None):
         source = root / "module source"
         source.mkdir(exist_ok=True)
         icon = source / "qlib/ExampleDataProvider/app.svg"
@@ -109,7 +110,7 @@ file(APPEND "${{CMAKE_BINARY_DIR}}/Doxyfile" "\\nWARN_AS_ERROR = YES\\n")
         if two_phase:
             self.make_tag(root, "child")
         if module_indexes:
-            self.make_tag(root, "SdkDependency")
+            self.make_tag(root, "SdkDependency", module_index_case_sense_names)
         input_file = source / "module.dox"
         input_file.write_text("/** @page module Module\n"
                               + ("See @ref language and " if language_tag else "See ")
@@ -183,10 +184,21 @@ qore_binary_module_two_phase_docs(module "child")
             self.assertIn("../../child/html/child.html", html)
 
     def test_selected_installed_module_indexes_resolve_links(self):
-        with tempfile.TemporaryDirectory(prefix="qore installed module indexes ") as directory:
-            html, config, _ = self.configure(Path(directory), module_indexes=True, two_phase=True)
-            self.assertIn("https://example.invalid/modules/SdkDependency/html/SdkDependency.html", html)
-            self.assertNotIn("Unavailable.tag", config)
+        # A module's index names the files of its pages as its own documentation was generated: with
+        # CASE_SENSE_NAMES = NO (the default on a case-insensitive file system, as on macOS) a page name's capitals
+        # are escaped ("_sdk_dependency.html"), so a link must use the file name in the index
+        for case_sense_names in ("YES", "NO"):
+            with self.subTest(case_sense_names=case_sense_names), tempfile.TemporaryDirectory(
+                    prefix="qore installed module indexes ") as directory:
+                root = Path(directory)
+                html, config, _ = self.configure(root, module_indexes=True, two_phase=True,
+                                                 module_index_case_sense_names=case_sense_names)
+                page = ET.parse(root / "SdkDependency.tag").find("./compound[@kind='page'][name='SdkDependency']")
+                filename = page.findtext("filename")
+                self.assertEqual("SdkDependency.html" if case_sense_names == "YES" else "_sdk_dependency.html",
+                                 filename)
+                self.assertIn("https://example.invalid/modules/SdkDependency/html/" + filename, html)
+                self.assertNotIn("Unavailable.tag", config)
 
     def test_module_index_installation_is_optional_and_preserves_content(self):
         with tempfile.TemporaryDirectory(prefix="qore install module indexes ") as directory:

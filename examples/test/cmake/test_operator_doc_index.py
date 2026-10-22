@@ -11,7 +11,8 @@ import unittest
 import xml.etree.ElementTree as ET
 
 ROOT = Path(__file__).resolve().parents[3]
-QPP = os.environ.get('QORE_QPP_EXECUTABLE', shutil.which('qpp'))
+# the build's qpp, like the other tests: a qpp found in the PATH is an installed one, which may be of another version
+QPP = os.environ.get('QORE_QPP_EXECUTABLE', str(ROOT / 'build/qpp') if (ROOT / 'build/qpp').is_file() else None)
 
 
 @unittest.skipUnless(QPP and shutil.which('doxygen'), 'requires qpp and Doxygen')

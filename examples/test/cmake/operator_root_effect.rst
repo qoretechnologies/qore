@@ -36,9 +36,14 @@ built runtime. The four changed template bodies always come from this checkout.
 ``QORE_TEST_OUTPUT_DIR`` retains compilation commands and raw outputs.
 
 The targeted compile uses ``-Werror=address`` and restores the former bodies in
-an isolated header overlay as a negative control. The old source must fail with
-exactly eight address diagnostics; the corrected source must compile silently
-and pass 449 native checks. This compile probe does not replace full RPM compiler
+an isolated header overlay as a negative control. With GCC, the old source must
+fail with exactly eight address diagnostics; Clang has no such diagnostic for
+the old bodies, so the negative control is skipped with it. With any compiler,
+the corrected source must compile silently and pass 449 native checks. The
+program targets the build's platform version (``CMAKE_OSX_DEPLOYMENT_TARGET`` on
+macOS) and takes the include directories of the third-party headers that the
+internal headers include from the build's CMake cache (see
+``qore_build_flags.py``). This compile probe does not replace full RPM compiler
 flags or native package qualification. It changes neither the shipped compiler
 policy nor runtime behavior. Valgrind is opt-in locally; qualification runs it
 with signals disabled through ``QLO_DISABLE_SIGNAL_HANDLING``.

@@ -6,10 +6,14 @@ import os
 from pathlib import Path
 import shlex
 import subprocess
+import sys
 import tempfile
 import unittest
 
 ROOT = Path(__file__).resolve().parents[3]
+# a linker option of the system's linker that a pkg-config interface exports: the linker of macOS (ld64) has no
+# --as-needed, and -dead_strip_dylibs is what it has for the same purpose
+AS_NEEDED = "-dead_strip_dylibs" if sys.platform == "darwin" else "--as-needed"
 
 
 class AotLinkConfigTest(unittest.TestCase):
@@ -65,13 +69,13 @@ set_target_properties(Imported PROPERTIES IMPORTED_CONFIGURATIONS RELEASE
     IMPORTED_LOCATION_RELEASE [==[{library}]==])
 add_library(PkgConfig::Probe INTERFACE IMPORTED)
 set_target_properties(PkgConfig::Probe PROPERTIES INTERFACE_LINK_LIBRARIES Imported
-    INTERFACE_LINK_OPTIONS "LINKER:--as-needed")
+    INTERFACE_LINK_OPTIONS "LINKER:{AS_NEEDED}")
 qore_aot_link_arguments(static PkgConfig::Probe)
 qore_aot_link_arguments(dynamic m)
 ''')
         config = self.generate()
         self.assertEqual(["-lm"], shlex.split(config["dynamic_libs"]))
-        self.assertEqual(["-Wl,--as-needed", str(library)], shlex.split(config["static_libs"]))
+        self.assertEqual(["-Wl," + AS_NEEDED, str(library)], shlex.split(config["static_libs"]))
         command = shlex.join(["cc", str(self.source / "main.c"), "-o", str(self.root / "program")])
         self.run_tool("sh", "-ec", command + " " + config["static_libs"])
         self.run_tool(self.root / "program")

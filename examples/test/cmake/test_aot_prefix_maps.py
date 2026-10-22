@@ -45,7 +45,12 @@ public int sub repro_value(int value) {
 
 
 def ar_members(data):
-    """Returns the member headers of a System V (GNU) ar archive with their resolved names"""
+    """Returns the member headers of an ar archive with their resolved names
+
+    Both formats qcc writes are read: the System V (GNU) one, and the BSD (Darwin) one it writes on macOS, whose
+    long names (#1/<length>) precede the member data and whose symbol table is named __.SYMDEF (or __.SYMDEF_64);
+    the symbol table is named "/" in either.  The body of a BSD member is padded to 8 bytes with newlines.
+    """
     if not data.startswith(b"!<arch>\n"):
         raise ValueError("not an ar archive")
     members = []
@@ -58,7 +63,13 @@ def ar_members(data):
         size = int(header[48:58])
         name = header[:16].decode().rstrip()
         body = data[pos + 60:pos + 60 + size]
-        if name == "//":
+        if name.startswith("#1/"):
+            length = int(name[3:])
+            name = body[:length].rstrip(b"\0").decode()
+            body = body[length:]
+            if name.startswith("__.SYMDEF"):
+                name = "/"
+        elif name == "//":
             long_names = body
         elif name != "/" and name.startswith("/"):
             offset = int(name[1:])
@@ -334,16 +345,23 @@ public class Zeta inherits Alpha {
         self.assertIn(b"qore_qoa_register_all", symbols["body"], "the symbol table indexes the entry point")
         for obj in objects:
             member = next(m for m in members if m["name"] == obj.name)
-            self.assertEqual(obj.read_bytes(), member["body"])
+            data = obj.read_bytes()
+            self.assertEqual(data, member["body"][:len(data)])
+            # only the padding of a BSD member follows the object
+            padding = member["body"][len(data):]
+            self.assertLess(len(padding), 8)
+            self.assertEqual(b"\n" * len(padding), padding)
 
         # the archive is a static library for the system's tools: ar lists it, and a host links its entry point
         ar = shutil.which("ar")
         if ar:
+            # the ar of macOS lists the symbol table as well
             self.assertEqual(["ReproProbe.qoa.agg.o", "ReproProbe.qm.qo", "functions.qc.qo"],
-                             self.run_tool(ar, "t", archive).split())
+                             [name for name in self.run_tool(ar, "t", archive).split()
+                              if not name.startswith("__.SYMDEF")])
         cxx = shutil.which("c++")
         libqore_dir = QCC.parent
-        if cxx and (libqore_dir / "libqore.so").exists():
+        if cxx and ((libqore_dir / "libqore.so").exists() or (libqore_dir / "libqore.dylib").exists()):
             host = self.root / "host.cpp"
             host.write_text('extern "C" void qore_qoa_register_all(void*);\n'
                             "int main(int argc, char**) { if (argc > 99) { qore_qoa_register_all(nullptr); }"
