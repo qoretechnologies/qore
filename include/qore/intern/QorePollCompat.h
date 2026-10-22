@@ -65,6 +65,10 @@ DLLLOCAL bool qore_poll_needs_select(const struct pollfd* fds, nfds_t nfds);
     readers have closed, so that the write fails with EPIPE) and POLLPRI for exceptional conditions, each only when
     requested; a closed descriptor is reported with POLLNVAL, as poll(2) does.  Negative descriptors are ignored.
 
+    select(2) reports the end of a named pipe only until a read has returned it (see qore_fifo_end_read_set()): a
+    descriptor whose end a read of its File has returned is reported readable at once, with the others as they are
+    then, without waiting.
+
     @param fds the descriptors and their requested events; \c revents is set for each
     @param nfds the number of descriptors
     @param timeout_ms the timeout in milliseconds; negative for none
@@ -76,6 +80,28 @@ DLLLOCAL int qore_select_poll(struct pollfd* fds, nfds_t nfds, int timeout_ms);
 
 //! qore_select_poll() with a timeout in microseconds; negative for none (Darwin only)
 DLLLOCAL int qore_select_poll_us(struct pollfd* fds, nfds_t nfds, int64_t timeout_us);
+
+//! Records that a read of the descriptor, a named pipe of a File, returned the end of the pipe (Darwin only)
+/** select(2) reports the end of a named pipe only until a read has returned it: the kernel clears the pipe's end
+    condition when read(2) returns 0, so that a new writer can connect, while read(2) returns 0 again without waiting
+    as long as the pipe has no writer.  The waits on the descriptor (qore_select_poll() and the event loop) then report
+    it readable at once, as a wait on Linux reports the hang-up, until qore_fifo_end_read_clear() is called for it: a
+    File clears it when a read returns data, and when it closes or changes its descriptor.  The descriptor's device and
+    inode are recorded, so that another descriptor that is given the same number is not taken for it.
+
+    The registry is process-wide, under a leaf lock with a fork handler; a process that never reads the end of a named
+    pipe through a File never takes the lock.
+*/
+DLLLOCAL void qore_fifo_end_read_set(int fd);
+
+//! Forgets that a read returned the end of the descriptor (see qore_fifo_end_read_set()) (Darwin only)
+DLLLOCAL void qore_fifo_end_read_clear(int fd);
+
+//! Returns 1 if the descriptor is readable now, 0 if not, -1 with errno set for an error (Darwin only)
+/** A check with select(2) and no timeout that does not report the ends recorded with qore_fifo_end_read_set(): a
+    File whose read returned the end of a named pipe uses it to tell a new writer's data from the end
+*/
+DLLLOCAL int qore_fd_readable_now(int fd);
 #endif
 
 //! poll(2), or qore_select_poll() when a descriptor is a named pipe on Darwin (see qore_fd_poll_misses_hangup())

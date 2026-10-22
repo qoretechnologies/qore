@@ -85,6 +85,8 @@ public:
                 to_read);
 
             if (rc >= 0) {
+                // the end of a named pipe is recorded for the file's later waits (see qore_qf_private::fifo_end_read)
+                file->noteReadResult(rc, to_read);
                 received += rc;
                 if (received == size || !rc) {
                     bin->setSize(received);
@@ -109,6 +111,8 @@ public:
                 || errno == EWOULDBLOCK
     #endif
             ) {
+                // a named pipe whose end a read returned has a writer again
+                file->clearFifoEndRead();
                 return SOCK_POLLIN;
             }
             xsink->raiseErrnoException("FILE-READ-ERROR", errno, "error while executing non-blocking read");

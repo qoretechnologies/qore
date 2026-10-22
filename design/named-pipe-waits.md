@@ -46,13 +46,27 @@ closed descriptor.
 ## Reads after the end
 
 `qore_qf_private` records that a read of a named pipe on Darwin returned the end (`fifo_end_read`; a read that
-returns data clears it).  While it is set, a read with a wait (`readData()`) returns the end again unless `select(2)`
-reports data at once (a new writer's), and `File::isDataAvailable()` reports the end at once.  The end is then also
-returned while a new writer has connected but written nothing, where Linux would wait; its data is read once
-`select(2)` reports it.  A nonblocking descriptor is read without a wait first, which tells the cases apart.
+returns data clears it, as do closing the file and changing its descriptor).  Every read of a file's descriptor
+records it: `readData()`, the character reads of `readLine()`, the poll read of `ReadOnlyFile::startPollRead()`
+(`FileReadPollState`) and `FileInputStream::readNonBlock()`.  While it is set:
 
-Not covered: an `EventLoop`, `Socket::poll()` or a stream wait (`InputStream::readWithTimeout()`) on a named pipe
-whose end a read has already returned waits for a new writer, as the kernel's `select(2)` does.
+- a read with a wait (`readData()`) and `FileInputStream::readNonBlock()` return the end again unless the pipe has
+  data at once, which `qore_fd_readable_now()` tells without the registry below; `File::isDataAvailable()` reports
+  the end at once;
+- the descriptor is in a process-wide registry (`qore_fifo_end_read_set()`, `QorePollCompat.cpp`; a leaf lock with
+  a fork handler, keyed by descriptor and checked against its device and inode), and `qore_select_poll()` reports a
+  registered descriptor readable at once, with the other descriptors as they are then; so do the waits built on it:
+  `qore_cancellable_poll()` (also in binary modules), `qore_poll_compat()` (`InputStream::readWithTimeout()`, the
+  stream pumps of sockets, `Socket::poll()`), and `QoreEventLoop` (`EventLoop`, `Socket::poll()`, the
+  AsyncIoController), as a wait on Linux reports the hang-up.
+
+The end is also returned while a new writer has connected but written nothing, where Linux would wait; its data is
+read once the pipe has it.  A nonblocking descriptor is read without a wait first, which tells the cases apart.
+
+Not covered (the kernel limit): a wait on a descriptor that no File has read, such as an `EventLoop` or a binary
+module's `qore_cancellable_poll()` given a plain descriptor, or `Socket::poll()` on a pollable object of a binary
+module, after a read of the descriptor outside a File returned the end; it waits until a new writer connects and
+writes or closes.
 
 ## Wait sites
 

@@ -663,6 +663,9 @@ public:
     DLLLOCAL QoreStringNode* readUntilText(const QoreString& eol, bool incl_eol, ExceptionSink* xsink);
 
 protected:
+    //! the file input stream reads the descriptor itself, and records the end of a named pipe in the file
+    friend class FileInputStream;
+
     //! private implementation
     struct qore_qf_private *priv;
 

@@ -48,7 +48,8 @@ class FileFifoTest inherits QUnit::Test {
         const AfterEndReaders = (
             "ReadOnlyFile::readBinary()", "ReadOnlyFile::read()", "ReadOnlyFile::readShortBinary()",
             "ReadOnlyFile::readLine()", "File::readBinary()", "File::read()", "File::readShortBinary()",
-            "File::readLine()", "FileInputStream::read()", "InputStreamLineIterator::next()",
+            "File::readLine()", "FileInputStream::read()", "FileInputStream::readWithTimeout()",
+            "InputStreamLineIterator::next()",
         );
     }
 
@@ -72,6 +73,8 @@ class FileFifoTest inherits QUnit::Test {
         addTestCase("descriptors above FD_SETSIZE", \testHighDescriptors());
         addTestCase("reads after the end return the end again, in every order of the opens", \testReadsAfterEnd());
         addTestCase("a new writer's data is read after the end", \testNewWriterAfterEnd());
+        addTestCase("a poll read to the end leaves its file at the end", \testPollReadToEnd());
+        addTestCase("Socket::sendFromInputStream() after the end sends nothing", \testSendFromInputStreamAfterEnd());
         set_return_value(main());
     }
 
@@ -388,6 +391,99 @@ class FileFifoTest inherits QUnit::Test {
         }
     }
 
+    testPollReadToEnd() {
+        foreach bool close_first in ((True, False)) {
+            string label = sprintf("the writer closes %s the poll read", close_first ? "before" : "during");
+            string path = makeFifo();
+            Queue written();
+            Queue may_close();
+            Counter closed(1);
+            background sub () {
+                on_exit closed.dec();
+                File w();
+                w.open2(path, O_WRONLY);
+                w.write(Lines);
+                written.push(True);
+                may_close.get();
+            }();
+            # the poll read opens the pipe itself, so another reader lets the writer open first
+            File holder();
+            holder.open2(path, O_RDONLY | O_NONBLOCK);
+            written.get();
+            File f();
+            AbstractPollOperation op = f.startPollRead(path, False);
+            holder.close();
+            bool signalled;
+            if (close_first) {
+                may_close.push(True);
+                closed.waitForZero();
+                signalled = True;
+            }
+            on_exit {
+                if (!signalled) {
+                    may_close.push(True);
+                }
+                closed.waitForZero();
+            }
+            while (!op.goalReached()) {
+                *hash<SocketPollInfo> info = op.continuePoll();
+                if (info) {
+                    if (!signalled) {
+                        may_close.push(True);
+                        signalled = True;
+                    }
+                    Socket::poll((info,), Long);
+                }
+            }
+            assertEq(binary(Lines), op.getOutput(), label + ": the data, up to the end");
+            # the file is left open at the end of the pipe
+            assertEq(NOTHING, f.readShortBinary(4096), label + ": a read returns the end again");
+            assertEq(NOTHING, f.readBinary(4096), label + ": readBinary() returns the end again");
+            checkWaitsAtEnd(f, label);
+        }
+    }
+
+    testSendFromInputStreamAfterEnd() {
+        string path = makeFifo();
+        Counter closed(1);
+        background sub () {
+            on_exit closed.dec();
+            File w();
+            w.open2(path, O_WRONLY);
+            w.write(Data);
+        }();
+        FileInputStream is(path);
+        closed.waitForZero();
+        assertEq(Data, is.read(4096), "the data");
+        assertEq(NOTHING, is.read(4096), "the end");
+
+        string sock_path = tmp_location() + DirSep + "qore-fifo-" + get_random_string(12);
+        on_exit unlink(sock_path);
+        Socket server();
+        server.bindUNIX(sock_path);
+        server.listen();
+        Queue received();
+        background sub () {
+            try {
+                Socket peer = server.accept(Long);
+                *binary b = peer.recvBinary(-1, Long);
+                received.push(b ?? binary());
+            } catch (hash<ExceptionInfo> ex) {
+                received.push(ex);
+            }
+        }();
+        Socket client();
+        client.connectUNIX(sock_path);
+        # the stream is at the end of the pipe already, so nothing is sent
+        client.sendFromInputStream(is, -1, Long);
+        client.close();
+        auto rv = received.get();
+        if (rv.typeCode() == NT_HASH) {
+            throw rv.err, rv.desc, rv.arg;
+        }
+        assertEq(binary(), rv, "nothing is sent after the end");
+    }
+
     #! reads a named pipe after its end with the reader, with the reader and the writer opened in the given order
     /** @param order \c "together": the writer's open in a background thread and the reader's in this thread wait
         for each other; \c "reader first": a holder of the pipe that reads and writes lets the reader open before the
@@ -455,8 +551,23 @@ class FileFifoTest inherits QUnit::Test {
         assertEq(NOTHING, r.next(), label + ": the end again");
         assertEq(NOTHING, r.next(), label + ": the end once more");
         if (r.file) {
-            assertTrue(r.file.isDataAvailable(1m), label + ": isDataAvailable() reports the end");
+            checkWaitsAtEnd(r.file, label);
         }
+    }
+
+    #! checks that the waits on a file whose read returned the end of its named pipe report the end at once
+    private checkWaitsAtEnd(ReadOnlyFile f, string label) {
+        assertTrue(f.isDataAvailable(1m), label + ": isDataAvailable() reports the end");
+        list<hash<SocketPollInfo>> l = Socket::poll((<SocketPollInfo>{"events": SOCK_POLLIN, "socket": f},), Long);
+        assertEq(1, l.size(), label + ": Socket::poll() reports the end");
+        assertEq(SOCK_POLLIN, l[0].events & SOCK_POLLIN, label + ": Socket::poll(): read readiness at the end");
+        EventLoop loop();
+        loop.add(f, SOCK_POLLIN);
+        on_exit loop.del(f);
+        *list<hash<EventPollInfo>> el = loop.poll(Long);
+        assertEq(1, el.size(), label + ": the EventLoop reports the end");
+        assertEq(SOCK_POLLIN, el[0].events & SOCK_POLLIN, label + ": EventLoop: read readiness at the end");
+        assertEq(NOTHING, f.readShortBinary(4096), label + ": the end after the waits");
     }
 
     #! opens the reader of a named pipe: \c first reads the first line, \c next the next data or NOTHING at the end
@@ -492,6 +603,13 @@ class FileFifoTest inherits QUnit::Test {
         if (reader == "FileInputStream::read()") {
             return {"first": auto sub () { return is.read(6).toString(); },
                 "next": auto sub () { *binary b = is.read(4096); return b ? b.toString() : NOTHING; }};
+        }
+        if (reader == "FileInputStream::readWithTimeout()") {
+            return {"first": auto sub () { return is.readWithTimeout(6, LongMs).toString(); },
+                "next": auto sub () {
+                    *binary b = is.readWithTimeout(4096, LongMs);
+                    return b ? b.toString() : NOTHING;
+                }};
         }
         InputStreamLineIterator it(is);
         return {"line": True, "first": auto sub () { return it.next() ? it.getValue() : NOTHING; },
