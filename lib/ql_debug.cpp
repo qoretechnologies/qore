@@ -3795,6 +3795,9 @@ public:
         runListenOrder(c);
         runReusePort(c);
         runMappedAddress(c);
+#ifdef DARWIN
+        runCancelledScan(c);
+#endif
     }
 
 private:
@@ -3829,7 +3832,9 @@ private:
     }
 
     //! binds the socket to the address and port with qore_socket_bind_unshadowed(); returns 0 or the error number
-    static int bindTo(int fd, int family, const char* address, int port) {
+    /** @param xsink if given, the scan of the socket table is a cancellation point
+    */
+    static int bindTo(int fd, int family, const char* address, int port, ExceptionSink* xsink = nullptr) {
         struct sockaddr_storage ss = {};
         socklen_t len;
         if (family == AF_INET) {
@@ -3848,13 +3853,15 @@ private:
 #ifdef DARWIN
         ss.ss_len = len;
 #endif
-        return qore_socket_bind_unshadowed(fd, reinterpret_cast<struct sockaddr*>(&ss), len, SOCK_STREAM, nullptr)
-            ? errno : 0;
+        return qore_socket_bind_unshadowed(fd, reinterpret_cast<struct sockaddr*>(&ss), len, SOCK_STREAM, nullptr,
+            xsink) ? errno : 0;
     }
 
     //! puts the socket in the listening state with qore_socket_listen_unshadowed(); returns 0 or the error number
-    static int listenOn(int fd) {
-        return qore_socket_listen_unshadowed(fd, 5) ? errno : 0;
+    /** @param xsink if given, the scan of the socket table is a cancellation point
+    */
+    static int listenOn(int fd, ExceptionSink* xsink = nullptr) {
+        return qore_socket_listen_unshadowed(fd, 5, xsink) ? errno : 0;
     }
 
     //! returns the port of the bound socket, or -1
@@ -3867,6 +3874,73 @@ private:
         return ss.ss_family == AF_INET ? ntohs(reinterpret_cast<struct sockaddr_in*>(&ss)->sin_port)
             : ntohs(reinterpret_cast<struct sockaddr_in6*>(&ss)->sin6_port);
     }
+
+#ifdef DARWIN
+    //! clears the cancellation request of the running thread when it goes out of scope
+    struct CancelRequestClearer {
+        DLLLOCAL ~CancelRequestClearer() {
+            qore_clear_thread_cancel();
+        }
+    };
+
+    //! asserts that the sink holds the cancellation of the scan of the socket table
+    static void assertScanCancelled(UnitTestCounters& c, ExceptionSink& xsink, const char* what) {
+        UT_ASSERT(c, xsink.isException(), what);
+        if (!xsink.isException()) {
+            return;
+        }
+        {
+            QoreStringValueHelper err(xsink.getExceptionErr());
+            QoreStringValueHelper desc(xsink.getExceptionDesc());
+            UT_ASSERT(c, !strcmp(err->c_str(), "THREAD-CANCELLED"),
+                "specific bind: the cancelled scan raises THREAD-CANCELLED");
+            UT_ASSERT(c, strstr(desc->c_str(), "reading the system's socket table"),
+                "specific bind: the exception names the scan of the socket table");
+        }
+        xsink.clear();
+    }
+
+    //! The scan of the socket table by a bind or a listen is a cancellation point when it is given an exception sink
+    /** The scan checks for cancellation at the first record of the table, so a pending request is raised by any scan;
+        the socket listening on the loopback address is a record of the table.  Without a sink, the scan is no
+        cancellation point, and the port check gives its result.
+    */
+    static void runCancelledScan(UnitTestCounters& c) {
+        Fd h{open(AF_INET, false, true)};
+        Fd s{open(AF_INET, false, true)};
+        Fd l{open(AF_INET, false, true)};
+        UT_ASSERT(c, h.fd >= 0 && s.fd >= 0 && l.fd >= 0, "specific bind: the cancellation sockets are opened");
+        if (h.fd < 0 || s.fd < 0 || l.fd < 0) {
+            return;
+        }
+        UT_ASSERT_EQ(c, 0, bindTo(h.fd, AF_INET, "127.0.0.1", 0), "specific bind: the holder is bound");
+        UT_ASSERT_EQ(c, 0, listenOn(h.fd), "specific bind: the holder listens");
+        int port = portOf(h.fd);
+        UT_ASSERT(c, port > 0, "specific bind: the holder has a port");
+        UT_ASSERT_EQ(c, 0, bindTo(l.fd, AF_INET, "127.0.0.1", 0), "specific bind: the socket to listen is bound");
+        if (port <= 0) {
+            return;
+        }
+
+        CancelRequestClearer clearer;
+        UT_ASSERT_EQ(c, 0, qore_cancel_thread(q_gettid(), "socket table scan test"),
+            "specific bind: the running thread accepts a cancellation request");
+
+        ExceptionSink xsink;
+        UT_ASSERT_EQ(c, ECANCELED, bindTo(s.fd, AF_INET, "127.0.0.1", port, &xsink),
+            "specific bind: a bind whose scan is cancelled fails with ECANCELED");
+        assertScanCancelled(c, xsink, "specific bind: the cancelled bind raises an exception");
+        UT_ASSERT_EQ(c, ECANCELED, listenOn(l.fd, &xsink),
+            "specific bind: a listen whose scan is cancelled fails with ECANCELED");
+        assertScanCancelled(c, xsink, "specific bind: the cancelled listen raises an exception");
+
+        // without a sink, the request stays pending and the scan finds the holder
+        UT_ASSERT_EQ(c, EADDRINUSE, bindTo(s.fd, AF_INET, "127.0.0.1", port),
+            "specific bind: a bind without a sink is checked against the socket table");
+        UT_ASSERT(c, qore_is_thread_cancel_requested(),
+            "specific bind: a scan without a sink leaves the cancellation request pending");
+    }
+#endif
 
     //! returns true if a socket can be bound to the IPv6 loopback address
     static bool hasIpv6() {

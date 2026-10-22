@@ -195,11 +195,14 @@ DLLLOCAL int qore_socket_bind_family_sockaddr_direct(QoreSocket* s, int family, 
     @param socktype the socket type
     @param sandbox_manager the sandbox manager checking binds, if any; an address that it does not allow is not used
     for a check
+    @param xsink if given, the scan of the socket table is a cancellation point: when the thread is cancelled or its
+    program interrupted, the exception is raised in it, and \c QORE_SOCKET_ERROR is returned with the error number
+    \c ECANCELED
 
     @return 0 for success, \c QORE_SOCKET_ERROR for an error, with the system error number set
 */
 DLLLOCAL int qore_socket_bind_unshadowed(int sock, const struct sockaddr* addr, size_t addrlen, int socktype,
-    QoreSandboxManager* sandbox_manager);
+    QoreSandboxManager* sandbox_manager, ExceptionSink* xsink = nullptr);
 
 //! Puts a TCP socket in the listening state so that, on macOS, it never shares its port with another listener
 /** Two sockets that reuse the address can be bound to overlapping addresses of a port, such as \c 0.0.0.0 and
@@ -211,9 +214,15 @@ DLLLOCAL int qore_socket_bind_unshadowed(int sock, const struct sockaddr* addr, 
 
     On other systems, it is \c listen().
 
+    @param sock the socket descriptor
+    @param backlog the length of the queue of pending connections
+    @param xsink if given, the scan of the socket table is a cancellation point: when the thread is cancelled or its
+    program interrupted, the exception is raised in it, and \c QORE_SOCKET_ERROR is returned with the error number
+    \c ECANCELED
+
     @return 0 for success, \c QORE_SOCKET_ERROR for an error, with the system error number set
 */
-DLLLOCAL int qore_socket_listen_unshadowed(int sock, int backlog);
+DLLLOCAL int qore_socket_listen_unshadowed(int sock, int backlog, ExceptionSink* xsink = nullptr);
 DLLLOCAL int sock_get_error();
 DLLLOCAL void sock_set_raw_error(int rc);
 DLLLOCAL QoreListNode* qore_socket_resolve_addrinfo_asyncio(ExceptionSink* xsink, const char* node,
@@ -2555,7 +2564,11 @@ struct qore_socket_private : public QoreReferenceCounter {
         hdr.concat("\r\n");
     }
 
-    DLLLOCAL int listen(int backlog = 20) {
+    //! Puts the socket in the listening state
+    /** @param backlog the length of the queue of pending connections
+        @param xsink if given, a cancellation point; see qore_socket_listen_unshadowed()
+    */
+    DLLLOCAL int listen(int backlog = 20, ExceptionSink* xsink = nullptr) {
         if (sock == QORE_INVALID_SOCKET)
             return QSE_NOT_OPEN;
         if (in_op >= 0)
@@ -2569,7 +2582,7 @@ struct qore_socket_private : public QoreReferenceCounter {
         listening = true;
         return 0;
 #else
-        int rc = qore_socket_listen_unshadowed(sock, backlog);
+        int rc = qore_socket_listen_unshadowed(sock, backlog, xsink);
         if (!rc) {
             listening = true;
         }
@@ -3237,19 +3250,23 @@ struct qore_socket_private : public QoreReferenceCounter {
 
     // the only place where xsink is optional; the caller checks the bind against the sandbox, with the manager it
     // resolved on the thread that requested the bind, which it also passes for the bind's own checks of the port; see
-    // qore_socket_bind_unshadowed()
+    // qore_socket_bind_unshadowed().  A caller that gives no xsink can give cancel_xsink, which only receives the
+    // exception of a cancellation of the bind (the error number is then ECANCELED)
     DLLLOCAL int bindIntern(struct sockaddr* ai_addr, size_t ai_addrlen, int prt, bool reuseaddr,
-            QoreSandboxManager* sandbox_manager, ExceptionSink* xsink = nullptr) {
+            QoreSandboxManager* sandbox_manager, ExceptionSink* xsink = nullptr,
+            ExceptionSink* cancel_xsink = nullptr) {
         reuse(reuseaddr);
 
-        if (qore_socket_bind_unshadowed(sock, ai_addr, ai_addrlen, stype, sandbox_manager) == QORE_SOCKET_ERROR) {
+        if (qore_socket_bind_unshadowed(sock, ai_addr, ai_addrlen, stype, sandbox_manager,
+                xsink ? xsink : cancel_xsink) == QORE_SOCKET_ERROR) {
             // capture the bind() errno before close(), which invokes ::shutdown()
             // on the not-yet-connected socket and clobbers errno with ENOTCONN —
             // hiding the real reason (EADDRINUSE, EACCES, EAFNOSUPPORT, ...) from
             // callers that read errno via sock_get_raw_error() after we return
             // (e.g. qore_socket_bind_inet_resolved_direct's multi-address loop).
             int bind_errno = sock_get_raw_error();
-            if (xsink)
+            // a cancelled bind has raised its exception
+            if (xsink && !(bind_errno == ECANCELED && *xsink))
                 qore_socket_error(xsink, "SOCKET-BIND-ERROR", "error in bind()", 0, 0, 0, ai_addr);
             close();
             sock_set_raw_error(bind_errno);
