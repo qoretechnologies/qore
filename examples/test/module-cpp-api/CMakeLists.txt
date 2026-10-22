@@ -61,3 +61,32 @@ if (CMAKE_HOST_APPLE)
     target_link_options(cppapitest PRIVATE -Wl,-undefined -Wl,dynamic_lookup)
     target_link_options(cppapiuser PRIVATE -Wl,-undefined -Wl,dynamic_lookup)
 endif()
+
+# --- the modules with exit-time code that is not safe in a child created with fork() -------------
+# (see fork-exit/forkexit-module.cpp): one source built twice, with an atexit() handler (forkexita, whose fork
+# handler has a leaf rank) and with a static destructor (forkexitb, whose fork handler has the reset rank)
+
+foreach(_forkexit_module forkexita forkexitb)
+    add_library(${_forkexit_module} MODULE fork-exit/forkexit-module.cpp)
+    add_dependencies(${_forkexit_module} libqore)
+    target_include_directories(${_forkexit_module} PRIVATE
+        ${CMAKE_BINARY_DIR}
+        ${CMAKE_BINARY_DIR}/include
+        ${CMAKE_SOURCE_DIR}/include)
+    target_compile_definitions(${_forkexit_module} PRIVATE
+        BUILDING_DLL=1
+        HAVE_UNIX_CONFIG_H
+        PACKAGE_VERSION="${VERSION}"
+        FORKEXIT_ID=${_forkexit_module}
+        FORKEXIT_NAME="${_forkexit_module}"
+        $<$<BOOL:${HAVE_GCC_VISIBILITY}>:HAVE_GCC_VISIBILITY=1>)
+    set_target_properties(${_forkexit_module} PROPERTIES
+        PREFIX ""
+        SUFFIX "${_cppapi_test_module_suffix}"
+        LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/modules/${_forkexit_module}")
+    if (CMAKE_HOST_APPLE)
+        target_link_options(${_forkexit_module} PRIVATE -Wl,-undefined -Wl,dynamic_lookup)
+    endif()
+endforeach()
+target_compile_definitions(forkexita PRIVATE FORKEXIT_NS="ForkExitA" FORKEXIT_ATEXIT=1 FORKEXIT_RANK=QFR_MODULE_LEAF)
+target_compile_definitions(forkexitb PRIVATE FORKEXIT_NS="ForkExitB" FORKEXIT_ATEXIT=0 FORKEXIT_RANK=QFR_MODULE_RESET)

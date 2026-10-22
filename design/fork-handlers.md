@@ -110,6 +110,42 @@ callbacks run, so it is only reset in the child, which takes it again as often a
 handlers would run before all of the library's, and their handlers cannot be removed when a module is unloaded on
 musl or macOS.
 
+## Children that exit without exit-time handlers
+
+A child created with `fork()` exits with `exit()`, which runs the `atexit()` handlers and C++ static destructors of
+every library in the process. Third-party libraries have exit-time code that assumes the process that loaded them:
+libnode's libuv joins its thread-pool threads (a hang in the child) and Node's static `SigintWatchdogHelper`
+destroys a Mach semaphore that a macOS child does not have (an abort); nats.c's `natsLib_Destructor()` takes a lock
+that a parent thread can hold; the Oracle Instant Client frees OpenSSL state under such locks. A module cannot change
+that code, so it requests a quick exit from its child handler with `qore_fork_child_exit_quickly()`
+(`include/qore/QoreForkHandler.h`).
+
+- **The flag:** `qore_fork_quick_exit_generation` holds the fork generation (`qore_fork_generation`, incremented
+  first in the child handler of the registry) in which a request was made, 0 for none. A request only counts while
+  the registry runs the child handlers (`qore_fork_in_child_handlers`), so it is never in effect in the parent,
+  where the generation is 0, and any number of modules can make it in handlers of any rank. A child that this
+  child creates with `fork()` has the next generation, so it exits quickly only if a module requests it again in
+  that `fork()`; `exec()` replaces the process memory, so a program it starts begins without the request.
+  `qore_fork_child_exits_quickly()` compares the two generations; it takes no lock and allocates nothing.
+- **The exits:** `qore_fork_child_quick_exit(rc)` flushes the standard I/O streams and calls `_exit(rc)` if the
+  request is in effect, and returns otherwise.
+  - `qore_main_intern()` calls it after `qore_cleanup()`, so programs, threads and module delete functions are torn
+    down as in any process (an uncaught exception gives exit status 3 there).
+  - `qore_exit_process()` (`exit()`, `GetOpt` errors) calls it where it called `exit(rc)`: in a single-threaded
+    process, after stopping the signal thread, the JIT background compiler, the external thread reaper and the
+    condition waker. No program is torn down there in any process. With other threads running (or from the signal
+    thread, for a `SIGTERM` without a handler), it already ends with `_Exit(rc)`, without flushing.
+  - Embedding programs that return from `main()` call it themselves after `qore_cleanup()`. The `main()` that `qcc`
+    generates for executables does not call it: that code is in `qcc-main.cpp`, one of the `_qcc_format_sources`, so
+    an AOT executable honors the request in `exit()` but not when its main program ends.
+- **What is skipped:** every `atexit()` handler and C++ static destructor, of every library and module, including the
+  library's own (`qore_jit_shutdown_at_exit()` is not needed: the background compiler is stopped before).
+
+Tests: `examples/test/module-cpp-api/fork-exit/fork-exit.qtest` with the `forkexita` (an `atexit()` handler that
+blocks forever in a child) and `forkexitb` (a static destructor that aborts in a child) test modules, whose child
+handlers (at `QFR_MODULE_LEAF` and `QFR_MODULE_RESET`) request a quick exit twice each. The exit-time code writes a
+marker to a pipe before it blocks or aborts, so the scenario sees whether it ran without waiting for time.
+
 ## One-time initialization
 
 A function-local static is initialized under a guard of the C++ runtime (and `std::call_once()` under its once

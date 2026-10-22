@@ -319,4 +319,55 @@ static void mymod_module_delete() {
     acquire any lock but their own, or allocate memory in the child.  Code that calls \c fork() must not hold a
     lock that a prepare handler acquires (it would wait for itself) nor the environment lock (see
     @ref module_environment).
+
+    @subsection qore_module_fork_exit Exit-Time Code of Third-Party Libraries in a Child Process
+
+    A child process created with \c fork() exits with \c exit(), which runs the \c atexit() handlers and the C++
+    static destructors of every library in the process.  Exit-time code of a third-party library that assumes the
+    process that loaded it is not safe in a child: it hangs the child when it joins the library's worker threads
+    (they exist only in the parent) or takes a lock that one of those threads held when the process was copied, and
+    it aborts the child when it destroys a kernel object that the child does not inherit (such as a Mach port on
+    macOS).  The module cannot change that code, so it calls qore_fork_child_exit_quickly() in its child fork
+    handler: the child then ends with \c _exit() after %Qore's own cleanup, and no exit-time handler runs.  Any number
+    of modules can call it, from handlers of any rank; one call is enough, and further calls have no effect.
+
+    @code{.cpp}
+// the exit-time code of the library joins its worker threads and takes its global lock
+static void mymod_fork_child(void* arg) {
+    qore_fork_child_exit_quickly();
+}
+
+static void mymod_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
+    mymod_exit_reg = qore_register_fork_handler(QFR_MODULE_LEAF, "mymod_exit", nullptr, nullptr, mymod_fork_child,
+        nullptr);
+    if (!mymod_exit_reg) {
+        xsink.outOfMemory();
+        return;
+    }
+    // ...
+}
+    @endcode
+
+    In a child in which a module requested it, the exits made through %Qore are:
+    - the end of the main program of the \c qore and \c qr programs, including one with an exception that was not
+      caught (exit status 3): the program and its threads are torn down and the delete functions of the modules run,
+      as in any process; then the standard I/O streams are flushed and the process ends with \c _exit() and the
+      program's exit status.  An embedding program that returns from \c main() calls qore_fork_child_quick_exit()
+      with its exit status after qore_cleanup()
+    - @ref Qore::exit() "exit()" and qore_exit_process() (also used for a @ref Qore::GetOpt "GetOpt" error): as in
+      any process, no program is torn down and no module delete function runs; the library's helper threads are
+      stopped, and if only the calling thread is left, the standard I/O streams are flushed and the process ends with
+      \c _exit() and the given status instead of \c exit().  With other threads running, the process ends with
+      \c _Exit() and the given status, without flushing, as in any process
+    - a \c SIGTERM with no %Qore handler ends the process with \c _Exit() and status 143, as in any process
+
+    The exit status is the one the process would have had.  Termination by a signal, \c abort() and \c _exit() are
+    not affected.  The request is never in effect in the parent: it only takes effect when made from a child handler
+    of a \c fork(), and only in the child created by that \c fork(); a child that this child creates with \c fork()
+    exits quickly only if a module requests it again in that \c fork(), and a program started with
+    @ref Qore::exec() "exec()" starts without it.
+
+    Since no exit-time handler of any library or module runs in such a child, a module must not rely on an
+    \c atexit() handler or a static destructor for cleanup that has to happen in a child process: it does it in its
+    delete function (which runs at the end of the main program) or in its child fork handler.
  */

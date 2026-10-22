@@ -3769,6 +3769,9 @@ void qore_exit_process(int rc) {
         qore_stop_external_thread_reaper();
         // as is the condition waker; no other thread can be waiting any more
         qore_stop_cond_waker();
+        // in a child process whose modules use libraries with exit-time code that is not safe after fork(), the
+        // process ends with _exit() after the standard I/O streams are flushed (see qore_fork_child_exit_quickly())
+        qore_fork_child_quick_exit(rc);
         exit(rc);
     }
     // do not call exit here since it will try to execute cleanup, which will cause crashes

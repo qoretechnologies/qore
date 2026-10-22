@@ -35,7 +35,8 @@
 #include <qore/common.h>
 
 /** @file QoreForkHandler.h
-    Fork handlers for the process-wide locks of binary modules; see @ref qore_module_fork_handlers
+    Fork handlers for the process-wide locks of binary modules, and child processes that exit without running exit-time
+    handlers; see @ref qore_module_fork_handlers and @ref qore_module_fork_exit
 */
 
 class QoreThreadLock;
@@ -146,5 +147,83 @@ DLLEXPORT void qore_fork_child_thread_lock(void* lock);
     @since %Qore 3.0
 */
 DLLEXPORT void qore_fork_reinit_recursive_thread_lock(QoreRecursiveThreadLock& lock);
+
+//! defined if qore_fork_child_exit_quickly(), qore_fork_child_exits_quickly() and qore_fork_child_quick_exit() are available
+/** @since %Qore 3.0
+*/
+#define _QORE_HAS_FORK_CHILD_QUICK_EXIT 1
+
+//! requests that the child process created by the current \c fork() ends without running exit-time handlers
+/** For modules that use a third-party library whose exit-time code is not safe in a child process created with
+    \c fork(): \c atexit() handlers and C++ static destructors that join the threads that the library started in the
+    parent, take locks that one of those threads can hold while the process is copied, or use kernel objects that the
+    child does not inherit (such as Mach ports on macOS) hang or abort the child when it exits.  The module calls this
+    function from the child handler that it registers with qore_register_fork_handler(); any number of modules can
+    call it, in any rank and order, and calling it again has no further effect.
+
+    In such a child, each exit made through %Qore does %Qore's own cleanup for that exit and then ends the process
+    with \c _exit() instead of \c exit(), so that no \c atexit() handler and no C++ static destructor of any library
+    runs (see @ref qore_module_fork_exit for the details):
+    - the end of the main program of the \c qore and \c qr programs, including an exception that was not caught
+      (exit status 3): the program, its threads and the modules are torn down as usual (module delete functions run),
+      then the standard I/O streams are flushed and the process ends with \c _exit() and the program's exit status
+    - @ref Qore::exit() "exit()", qore_exit_process(), a \c SIGTERM with no %Qore handler (exit status 143) and a
+      @ref Qore::GetOpt "GetOpt" parse error: as before, no program or module is torn down; the helper threads of the
+      library are stopped, then the standard I/O streams are flushed if only the calling thread is left, and the
+      process ends with \c _exit() and the given status (with other threads running, %Qore already ends the process
+      with \c _Exit(), without flushing, as in any process)
+    - an embedding program that returns from \c main() calls qore_fork_child_quick_exit() after qore_cleanup()
+
+    Only the child process created by the current \c fork() is affected: the request is recorded for the fork
+    generation of the process, so it is never in effect in the parent, a child process that this child creates with
+    \c fork() exits quickly only if a module requests it again in that \c fork(), and a program started with
+    \c exec() starts without it.  A call outside of the child handlers of a \c fork() has no effect.
+
+    Exit-time code of other libraries and modules does not run in such a child: a module that must clean up in a
+    child process does it in its delete function or in its own child handler, not in an \c atexit() handler.
+    Process termination by a signal (other than a \c SIGTERM that %Qore handles), \c abort() and \c _exit() are not
+    affected.
+
+    It takes no lock and allocates no memory, as required in a child handler.
+
+    @par Example:
+    @code{.cpp}
+// the exit-time code of the library joins its worker threads, which exist only in the parent
+static void mymod_fork_child(void* arg) {
+    qore_fork_child_exit_quickly();
+}
+
+static void mymod_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
+    mymod_fork_reg = qore_register_fork_handler(QFR_MODULE_LEAF, "mymod_exit", nullptr, nullptr, mymod_fork_child,
+        nullptr);
+    // ...
+}
+    @endcode
+
+    @see qore_fork_child_exits_quickly()
+
+    @since %Qore 3.0
+*/
+DLLEXPORT void qore_fork_child_exit_quickly();
+
+//! returns true if the current process is a child process created with \c fork() that ends without running exit-time handlers
+/** @return true if qore_fork_child_exit_quickly() was called in the child handlers of the \c fork() that created the
+    current process
+
+    @since %Qore 3.0
+*/
+DLLEXPORT bool qore_fork_child_exits_quickly();
+
+//! ends the process with \c _exit() if it is a child process that exits quickly; returns otherwise
+/** For an embedding program that ends by returning from \c main(): call this function after qore_cleanup(), with the
+    exit status that \c main() returns.  If qore_fork_child_exits_quickly() is true, it flushes the standard I/O
+    streams and ends the process with \c _exit() and @p rc, so that no exit-time handler runs; otherwise it returns.
+    The \c qore and \c qr programs call it at the end of their main program.
+
+    @param rc the exit status of the process
+
+    @since %Qore 3.0
+*/
+DLLEXPORT void qore_fork_child_quick_exit(int rc);
 
 #endif

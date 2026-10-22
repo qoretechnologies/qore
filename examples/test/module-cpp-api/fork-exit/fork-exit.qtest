@@ -1,0 +1,114 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# The forkexita, forkexitb and cppapiuser test modules (examples/test/module-cpp-api) are built into the build tree
+# and never installed, so QORE_MODULE_DIR must include the build tree (run_tests.sh does this)
+
+%modern
+
+%requires ../../ExecModeHarness.qm
+%requires QUnit
+
+%exec-class ForkExitTest
+
+#! Tests child processes created with fork() whose modules request a quick exit with qore_fork_child_exit_quickly()
+/** A third-party library whose exit-time code is not safe in a child process created with fork() (an atexit()
+    handler or a static destructor that joins a thread of the parent, takes a lock that a thread of the parent held,
+    or destroys a kernel object that the child does not have) hangs or aborts the child when it exits.  The forkexita
+    and forkexitb test modules have such exit-time code (forkexita: an atexit() handler that blocks forever, forkexitb:
+    a static destructor that aborts) and request a quick exit from child fork handlers of different ranks.  Each case
+    runs ForkExitScenario.qr in every execution mode; the exit-time code writes a marker before it blocks or aborts,
+    so a case sees deterministically whether it ran.
+*/
+class ForkExitTest inherits QUnit::Test {
+    private {
+        #! the interpreter that runs the scenario
+        string qore_bin;
+        #! the scenario
+        string scenario;
+    }
+
+    constructor() : QUnit::Test("fork child exit", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        scenario = get_script_dir() + DirSep + "ForkExitScenario.qr";
+
+        addTestCase("exit() in a child that exits quickly", \testExit());
+        addTestCase("the end of the main program of a child that exits quickly", \testEnd());
+        addTestCase("an uncaught exception in a child that exits quickly", \testUncaught());
+        addTestCase("SIGTERM in a child that exits quickly", \testSigterm());
+        addTestCase("the exit-time code runs in a child that does not exit quickly", \testControl());
+        addTestCase("a child of a child exits quickly only if requested again", \testGrandchild());
+        addTestCase("a program started with exec() runs its exit-time code", \testExec());
+        addTestCase("a request outside of a fork handler has no effect", \testParentRequest());
+        set_return_value(main());
+    }
+
+    testExit() {
+        checkCase("exit", "", 7);
+    }
+
+    testEnd() {
+        checkCase("end", "", 5);
+    }
+
+    testUncaught() {
+        checkCase("uncaught", "", 3);
+    }
+
+    testSigterm() {
+        checkCase("sigterm", "", 128 + SIGTERM);
+    }
+
+    testControl() {
+        # without the request, the exit-time code runs: the atexit() handler blocks, the static destructor aborts
+        checkCase("control-a", "forkexita-hang", -1);
+        checkCase("control-b", "forkexitb-abort", -1);
+        checkCase("control-end-a", "forkexita-hang", -1);
+    }
+
+    testGrandchild() {
+        checkCase("grandchild", "", 6, "grandchild markers= status=4");
+        checkCase("grandchild-unrequested", "", 6, "grandchild markers=forkexita-hang status=-1");
+    }
+
+    testExec() {
+        checkCase("exec", "", 0, ("exec-child exits_quickly=False", "forkexitb-parent", "forkexita-parent"));
+    }
+
+    testParentRequest() {
+        checkCase("parent-request", "", 7, "parent exits_quickly=False");
+    }
+
+    #! returns True if the list has the line
+    private static bool has(list<string> l, string line) {
+        return (select l, $1 == line).size() > 0;
+    }
+
+    #! runs the scenario for the case in every execution mode and checks its output
+    /** @param test_case the case
+        @param markers the markers of the child's exit-time code
+        @param status the exit status of the child
+        @param lines other lines that the output must contain
+    */
+    private checkCase(string test_case, string markers, int status, softlist<string> lines = ()) {
+        if (!Option::HAVE_FORK) {
+            testSkip("fork() is not available");
+        }
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s --exec-mode=%s %s %s %s "
+                "%s", qore_bin, mode, scenario, test_case, qore_bin, mode));
+            on_error printf("%s %s output:\n%s\n", test_case, mode, r.out);
+            list<string> out = r.stdout.split("\n");
+            assertEq(0, r.rc, sprintf("%s %s: the scenario exited normally", test_case, mode));
+            assertEq(1, (select out, $1 == sprintf("child markers=%s status=%d", markers, status)).size(),
+                sprintf("%s %s: the child", test_case, mode));
+            foreach string line in (lines) {
+                assertTrue(has(out, line), sprintf("%s %s: %s", test_case, mode, line));
+            }
+            # the exit-time code of the parent runs
+            assertTrue(has(out, "forkexita-parent"), sprintf("%s %s: the parent's atexit() handler", test_case, mode));
+            assertTrue(has(out, "forkexitb-parent"), sprintf("%s %s: the parent's static destructor", test_case, mode));
+        }
+    }
+}

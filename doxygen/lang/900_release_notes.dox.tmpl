@@ -4760,6 +4760,13 @@ while (*binary chunk = input.read(65536)) {
       was not counted on the thread that adopted it, so a later assimilation of that sink (for example across the
       sink of a destructor) failed an assertion in debug builds, and an exception assimilated into such a sink stayed
       counted on the thread that raised it; the counts now move with the exceptions
+    - Binary modules that use third-party libraries with exit-time code that is not safe in a child process created
+      with @ref Qore::fork() "fork()" (an \c atexit() handler or static destructor that joins the library's threads,
+      takes a lock that one of them held, or destroys a kernel object that the child does not have) can make the
+      child end without running exit-time handlers with the new C++ API function \c qore_fork_child_exit_quickly(),
+      called from their child fork handler: such a child ends with \c _exit() and its exit status after %Qore's own
+      cleanup, from @ref Qore::exit() "exit()" and at the end of its main program, so that it no longer hangs or
+      aborts when it exits; embedding programs call the new \c qore_fork_child_quick_exit() after \c qore_cleanup()
     - Fixed a deadlock when the thread initialization code of a Program (see
       @ref Qore::set_thread_init() "set_thread_init()") started a thread or read the call stacks of all threads
     - Fixed waits on named pipes (FIFOs) on macOS that did not see the end of the pipe once its writers had closed:
