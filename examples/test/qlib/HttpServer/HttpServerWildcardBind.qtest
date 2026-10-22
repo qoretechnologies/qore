@@ -26,6 +26,10 @@
     127.0.0.1, since that program, not the server, would receive the IPv4 clients of the port: a given port is
     refused, and a system-assigned port is one that no IPv4 socket uses.  The UDP socket of an HTTP/3 listener on all
     interfaces is refused such a port as well.
+
+    The tests can run at the same time as other programs: a port is never released before the test binds it again,
+    and the ports held at given numbers are bound without SO_REUSEADDR, so that none is a port that another program
+    uses.
 */
 
 %modern
@@ -71,6 +75,18 @@ class HttpServerWildcardBindTest inherits QUnit::Test {
         return s;
     }
 
+    #! returns a listening TCP socket on the given IPv4 address and port that no other socket uses
+    /** The socket does not reuse the address, so the bind is refused if any socket uses the port; with
+        SO_REUSEADDR, macOS allows a bind of 127.0.0.1 on a port that another program's socket uses on all interfaces,
+        or that only connections use, and the socket then receives that program's IPv4 clients of 127.0.0.1.
+    */
+    private static Socket holder(string address, int port) {
+        Socket s();
+        s.bindINET(address, port, False, AF_INET);
+        s.listen();
+        return s;
+    }
+
     #! returns the response body of a GET request from an IPv4 client of the port
     private static string get(int port) {
         Socket s();
@@ -101,7 +117,9 @@ class HttpServerWildcardBindTest inherits QUnit::Test {
 
     systemPortTest() {
         # hold the ports after the next system-assigned port, alternately on 127.0.0.1 and on 0.0.0.0; a system that
-        # assigns ports in sequence (macOS) would give the listener one of them if it did not avoid them
+        # assigns ports in sequence (macOS) would give the listener one of them if it did not avoid them.  These are
+        # the ports that the system assigns next to concurrent programs too, so a port that another socket uses is
+        # not held: its program's clients would reach the holder instead
         hash<string, Socket> held();
         on_exit map $1.close(), held.iterator();
         int first;
@@ -112,7 +130,7 @@ class HttpServerWildcardBindTest inherits QUnit::Test {
         }
         for (int port = first + 1; port <= first + HeldPorts && port < 65536; ++port) {
             try {
-                held{port} = listener((port % 2) ? "127.0.0.1" : "0.0.0.0", port);
+                held{port} = holder((port % 2) ? "127.0.0.1" : "0.0.0.0", port);
             } catch (hash<ExceptionInfo> ex) {
                 # a port in use by another program cannot be held, and is not given to the listener either
             }
@@ -127,21 +145,40 @@ class HttpServerWildcardBindTest inherits QUnit::Test {
     }
 
     http3Test() {
-        # a given port that is free for TCP and held for UDP on 0.0.0.0, the address that receives the IPv4
-        # datagrams of the port instead of the HTTP/3 listener on all interfaces
+        # a given port on which no socket listens for TCP, held for UDP on 0.0.0.0, the address that receives the
+        # IPv4 datagrams of the port instead of the HTTP/3 listener on all interfaces.  A connection to a listener
+        # that is then closed holds the TCP port, so that no other program can take it before the listener binds it
+        # (a bind that reuses the address, as the listener's does, is allowed on a port that only connections use)
         Socket udp();
         on_exit udp.close();
+        *Socket held_client;
+        *Socket held_peer;
+        on_exit {
+            if (held_client) {
+                held_client.close();
+            }
+            if (held_peer) {
+                held_peer.close();
+            }
+        }
         int port;
         for (int attempt = 0; attempt < 16 && !port; ++attempt) {
             Socket probe = listener("127.0.0.1");
             int candidate = probe.getSocketInfo(False).port;
+            Socket client();
+            client.connect(sprintf("127.0.0.1:%d", candidate), 5s);
+            Socket peer = probe.accept(5s);
             probe.close();
             try {
                 # all-interfaces: the other program's socket on all interfaces
                 udp.bindINET("0.0.0.0", candidate, False, AF_INET, SOCK_DGRAM);
                 port = candidate;
+                held_client = client;
+                held_peer = peer;
             } catch (hash<ExceptionInfo> ex) {
                 # the port is in use for UDP; try another one
+                client.close();
+                peer.close();
             }
         }
         assertGt(0, port, "a TCP port is held for UDP");

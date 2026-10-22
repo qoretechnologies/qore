@@ -27,6 +27,10 @@
     refuses such a bind; macOS allowed it for the dual-stack IPv6 wildcard socket that a bind on all interfaces
     opens, and for an IPv4 wildcard socket with SO_REUSEADDR, and its system-assigned ports for the IPv6 wildcard
     address did not avoid ports held for IPv4.
+
+    The tests can run at the same time as other programs: a port is never released before the test binds it again,
+    and the ports held at given numbers are bound without SO_REUSEADDR, so that none is a port that another program
+    uses.
 */
 
 %modern
@@ -49,7 +53,7 @@ class SocketWildcardBindTest inherits QUnit::Test {
         addTestCase("a server restarted on its port while its connections are in TIME_WAIT binds the port",
             \timeWaitTest());
         addTestCase("a datagram socket on all interfaces is refused a port held for IPv4", \datagramTest());
-        addTestCase("a free given port is bound and serves IPv4 clients", \freePortTest());
+        addTestCase("a given port on which no socket listens is bound and serves IPv4 clients", \freePortTest());
         set_return_value(main());
     }
 
@@ -59,6 +63,33 @@ class SocketWildcardBindTest inherits QUnit::Test {
         s.bindINET(address, port, True, AF_INET);
         s.listen();
         return s;
+    }
+
+    #! returns a listening TCP socket on the given IPv4 address and port that no other socket uses
+    /** The socket does not reuse the address, so the bind is refused if any socket uses the port; with
+        SO_REUSEADDR, macOS allows a bind of 127.0.0.1 on a port that another program's socket uses on all interfaces,
+        or that only connections use, and the socket then receives that program's IPv4 clients of 127.0.0.1.
+    */
+    private static Socket holder(string address, int port) {
+        Socket s();
+        s.bindINET(address, port, False, AF_INET);
+        s.listen();
+        return s;
+    }
+
+    #! returns the port of a connection to a listener on 127.0.0.1 that is then closed, and the connection's sockets
+    /** No socket listens on the port, the system assigns the port to no other socket while the connection holds it,
+        and a bind of the port is refused unless it reuses the address, as the bind of a server restarted on its port
+        does.  A port that is released before it is bound again could be taken by a concurrent program first.
+    */
+    private static list<auto> connectionHeldPort() {
+        Socket probe = listener("127.0.0.1");
+        on_exit probe.close();
+        int port = probe.getSocketInfo(False).port;
+        Socket client();
+        client.connect(sprintf("127.0.0.1:%d", port), 5s);
+        Socket peer = probe.accept(5s);
+        return (port, client, peer);
     }
 
     #! returns a bound datagram socket on the given IPv4 address
@@ -132,7 +163,9 @@ class SocketWildcardBindTest inherits QUnit::Test {
 
     systemPortTest() {
         # hold the ports after the next system-assigned port, alternately on 127.0.0.1 and on 0.0.0.0; a system that
-        # assigns ports in sequence (macOS) would give the next bind one of them if it did not avoid them
+        # assigns ports in sequence (macOS) would give the next bind one of them if it did not avoid them.  These are
+        # the ports that the system assigns next to concurrent programs too, so a port that another socket uses is
+        # not held: its program's clients would reach the holder instead
         hash<string, Socket> held();
         on_exit map $1.close(), held.iterator();
         int first;
@@ -143,7 +176,7 @@ class SocketWildcardBindTest inherits QUnit::Test {
         }
         for (int port = first + 1; port <= first + HeldPorts && port < 65536; ++port) {
             try {
-                held{port} = listener((port % 2) ? "127.0.0.1" : "0.0.0.0", port);
+                held{port} = holder((port % 2) ? "127.0.0.1" : "0.0.0.0", port);
             } catch (hash<ExceptionInfo> ex) {
                 # a port in use by another program cannot be held, and is not given to the bind either
             }
@@ -222,12 +255,11 @@ class SocketWildcardBindTest inherits QUnit::Test {
     }
 
     freePortTest() {
-        # a port that is free: take a system-assigned port and release it
-        int port;
-        {
-            Socket probe = listener("127.0.0.1");
-            port = probe.getSocketInfo(False).port;
-            probe.close();
+        # a port on which no socket listens, which a connection holds so that no other program can take it first
+        (int port, Socket held_client, Socket held_peer) = connectionHeldPort();
+        on_exit {
+            held_client.close();
+            held_peer.close();
         }
         Socket s();
         on_exit s.close();
