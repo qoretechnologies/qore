@@ -83,7 +83,7 @@ class QoreProgram;
 struct QorePluginModuleHandle;
 
 //! Context passed to the module init callback
-/** @since %Qore 2.0
+/** @since %Qore 3.0 (module API 2.0)
 */
 struct QoreModuleInitContext {
     //! path to the module itself
@@ -93,12 +93,12 @@ struct QoreModuleInitContext {
 };
 
 //! signature of the module constructor/initialization function
-/** @since %Qore 2.0: changed from returning QoreStringNode* to void with ExceptionSink
+/** @since %Qore 3.0 (module API 2.0): changed from returning QoreStringNode* to void with ExceptionSink
 */
 typedef void (*qore_module_init_t)(QoreModuleInitContext& ctx, ExceptionSink& xsink);
 
 //! signature of the module namespace change/delta function
-/** @since %Qore 2.0: added ExceptionSink parameter
+/** @since %Qore 3.0 (module API 2.0): added ExceptionSink parameter
 */
 typedef void (*qore_module_ns_init_t)(QoreNamespace* root_ns, QoreNamespace* qore_ns, ExceptionSink& xsink);
 
@@ -115,7 +115,7 @@ typedef std::vector<std::string> strvec_t;
 
 //! Qore module info
 /** @since %Qore 0.9.5
-    @since %Qore 2.0: removed init_info field; init callback signature changed
+    @since %Qore 3.0 (module API 2.0): removed init_info field; init callback signature changed
 */
 struct QoreModuleInfo {
     QoreString name;
@@ -267,7 +267,7 @@ public:
         @param desc_fn the module descriptor function pointer
         @param path a label used for diagnostics; defaults to "<aot-static>"
         @return 0 on success, -1 if an exception was raised
-        @since %Qore 2.x (Phase 4 .qo support)
+        @since %Qore 3.0
     */
     DLLEXPORT static int registerAOTStaticModule(ExceptionSink* xsink, QoreProgram* tpgm,
         qore_binary_module_desc_t desc_fn, const char* path = "<aot-static>");
