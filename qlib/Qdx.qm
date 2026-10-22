@@ -1704,6 +1704,12 @@ string doxygen_output = proc.process();
             string source_text = "";
             #! Document table helper for processing tables in doc comments
             DocumentTableHelper dth();
+            #! The source lines of the <tt>\@cond</tt> ... <tt>\@endcond</tt> sections
+            /** Each element is a list of the index in #lines of the <tt>\@cond</tt> marker and of its
+                <tt>\@endcond</tt> marker (0-based, as the lines of the locations of the nodes); a section without
+                an end marker ends at the end of the source
+            */
+            list<list<int>> cond_sections = ();
         }
 
         #! Creates an AstProcessor for the given AST nodes
@@ -1725,7 +1731,65 @@ string doxygen_output = proc.process();
             if (self.opts.source) {
                 self.source_text = self.opts.source;
                 self.lines = self.source_text.split("\n");
+                findCondSections();
             }
+        }
+
+        #! Finds the <tt>\@cond</tt> sections of the source
+        /** Doxygen leaves out what a section without an enabled section label holds, and the documentation of
+            %Qore code enables none, so the declarations of every section are left out of the output (see
+            inCondSection()).  The markers cannot be passed on: the output holds only the declarations and the
+            documentation comments attached to them, so a marker that follows the last declaration of a scope would
+            be lost, and the sections would no longer be balanced.  Sections can be nested.
+        */
+        private findCondSections() {
+            list<int> open_lines = ();
+            for (int i = 0; i < lines.size(); ++i) {
+                string line = lines[i];
+                if (isCondMarker(line, False)) {
+                    push open_lines, i;
+                } else if (isCondMarker(line, True) && open_lines) {
+                    int start = pop open_lines;
+                    # an enclosing section covers a nested one
+                    if (!open_lines) {
+                        push cond_sections, (start, i);
+                    }
+                }
+            }
+            # a section without an end marker ends at the end of the source, as for Doxygen
+            if (open_lines) {
+                push cond_sections, (open_lines[0], lines.size());
+            }
+        }
+
+        #! Returns True if the line is a <tt>\@cond</tt> marker, or with @a end an <tt>\@endcond</tt> marker
+        /** A marker is the command that begins the text of a documentation comment line (<tt>#!</tt>,
+            <tt>//!</tt> or <tt>///</tt>) or of a line of a block comment; prose that names the command, as here, is
+            not one
+        */
+        private static bool isCondMarker(string line, bool end) {
+            return end
+                ? line =~ /^\s*(#!|\/\/!|\/\/\/|\/\*\*|\/\*!|\*)?\s*[@\\]endcond\b/
+                : line =~ /^\s*(#!|\/\/!|\/\/\/|\/\*\*|\/\*!|\*)?\s*[@\\]cond\b/;
+        }
+
+        #! Returns True if the whole declaration is in a <tt>\@cond</tt> section of the source
+        /** A declaration that a section only begins or ends, such as a namespace whose opening line in a source file
+            of a module is in a section of its own so that the namespace is documented once, is not left out; its
+            declarations are checked one by one
+        */
+        private bool inCondSection(hash<auto> node) {
+            if (!cond_sections || !node.loc) {
+                return False;
+            }
+            int start = node.loc.start_line;
+            int end = node.loc.end_line ?? start;
+            foreach list<int> section in (cond_sections) {
+                if (start > section[0] && end < section[1]) {
+                    return True;
+                }
+            }
+            return False;
         }
 
         #! Returns and clears the documentation table format warnings accumulated so far
@@ -1806,6 +1870,9 @@ string doxygen_output = proc.process();
 
         #! Processes a declaration node
         private processDeclaration(hash<auto> decl) {
+            if (inCondSection(decl)) {
+                return;
+            }
             switch (decl.kind) {
                 case QoreCodeFormat::ADK_Namespace:
                     processNamespace(decl);
@@ -1920,6 +1987,9 @@ string doxygen_output = proc.process();
 
         #! Processes a class member (method, variable, etc.)
         private processClassMember(hash<auto> member) {
+            if (inCondSection(member)) {
+                return;
+            }
             switch (member.kind) {
                 case QoreCodeFormat::ADK_Function:
                     processMethod(member);
@@ -2524,8 +2594,9 @@ string doxygen_output = proc.process();
                     }
                 }
                 line = rendered;
-                # Drop @cond/@endcond so Doxygen does not hide all members
-                if (line =~ /@cond\b/ || line =~ /@endcond\b/) {
+                # the declarations of a conditional section are left out of the output (see findCondSections()),
+                # so a marker is dropped from the comment of the declaration that follows it
+                if (isCondMarker(line, False) || isCondMarker(line, True)) {
                     continue;
                 }
                 # Join table row continuations; a table row may span multiple lines as long as each
