@@ -15,15 +15,17 @@
 /** run_tests.sh fails a test that leaves processes running, and the CI scripts fail a job that does, except for the
     watcher that BusyBox timeout leaves for up to a second after its command ended.  The processes are found first and
     examined afterwards, so a process can end in between, like such a watcher: it is not running, and does not fail
-    the test (CI job 213457 failed IRExecModeSmoke.qtest, whose tests had all passed, for a process that was gone when
-    it was examined).
+    the test, whether it is gone (CI job 213457 failed IRExecModeSmoke.qtest, whose tests had all passed, for a
+    process that was gone when it was examined) or a zombie that has not been reaped yet (CI job 213573 failed
+    StackGuardCompiled.qtest the same way for a zombie).
 
     The function reads the /proc directory given in QORE_CI_PROC, so the cases are made with a directory tree of
     their own, where each process ID is a directory with the files that the function reads.
 */
 class RunningProcessesTest inherits QUnit::Test {
     constructor() : QUnit::Test("RunningProcessesTest", "1.0", \ARGV) {
-        addTestCase("running processes, BusyBox timeout watchers, and processes that are gone", \testStates());
+        addTestCase("running processes, BusyBox timeout watchers, and processes that are gone or zombies",
+            \testStates());
         addTestCase("no process", \testNone());
         set_return_value(main());
     }
@@ -42,20 +44,28 @@ class RunningProcessesTest inherits QUnit::Test {
         return "'" + replace(str, "'", "'\\''") + "'";
     }
 
-    #! makes the directory of a process with the given executable and command line (each omitted if NOTHING)
-    private makeProcess(string proc, int pid, *string exe, *list<string> args) {
+    #! makes the directory of a process with the given executable, command line and state (each omitted if NOTHING)
+    /** The state is written as /proc/<pid>/stat has it: after the command name in parentheses
+    */
+    private makeProcess(string proc, int pid, *string exe, *list<string> args, *string state, string name = "proc") {
         string dir = sprintf("%s/%d", proc, pid);
         assertEq(0, mkdir(dir));
         if (exe) {
             symlink(exe, dir + "/exe");
         }
-        if (args) {
+        if (exists args) {
             File f();
             f.open2(dir + "/cmdline", O_CREAT | O_WRONLY | O_TRUNC);
             foreach string arg in (args) {
                 f.write(arg);
                 f.write(binary(chr(0)));
             }
+        }
+        if (state) {
+            File f();
+            f.open2(dir + "/stat", O_CREAT | O_WRONLY | O_TRUNC);
+            f.printf("%d (%s) %s 1 %d %d 0 -1 4194560 151 0 0 0 0 0 0 0 20 0 1 0 1234 5000000 300\n", pid, name, state,
+                pid, pid);
         }
     }
 
@@ -65,25 +75,36 @@ class RunningProcessesTest inherits QUnit::Test {
 %endif
         TmpDir proc("qore-running-processes-");
         # a process that is running
-        makeProcess(proc.path, 101, "/usr/bin/sleep", ("sleep", "60"));
+        makeProcess(proc.path, 101, "/usr/bin/sleep", ("sleep", "60"), "S", "sleep");
         # the watcher of BusyBox timeout
-        makeProcess(proc.path, 102, "/bin/busybox", ("timeout", "-s", "TERM", "600", "qore", "x.qtest"));
+        makeProcess(proc.path, 102, "/bin/busybox", ("timeout", "-s", "TERM", "600", "qore", "x.qtest"), "S",
+            "timeout");
         # the same, started with a path
-        makeProcess(proc.path, 103, "/bin/busybox", ("/usr/bin/timeout", "5", "sh"));
+        makeProcess(proc.path, 103, "/bin/busybox", ("/usr/bin/timeout", "5", "sh"), "S", "timeout");
         # another BusyBox command
-        makeProcess(proc.path, 104, "/bin/busybox", ("sh", "-c", "sleep 60"));
+        makeProcess(proc.path, 104, "/bin/busybox", ("sh", "-c", "sleep 60"), "R", "sh");
         # a process of another user, whose executable cannot be read
-        makeProcess(proc.path, 105, NOTHING, ("qore", "server.q"));
+        makeProcess(proc.path, 105, NOTHING, ("qore", "server.q"), "S", "qore");
         # 106: a process that had ended when it was examined
         # a process that ended after its executable was read
         makeProcess(proc.path, 107, "/bin/busybox");
+        # a process that has ended, but that its parent has not reaped yet: a zombie has no command line (CI job
+        # 213573 failed StackGuardCompiled.qtest, whose cases had all passed, for a zombie "pid 33059: ")
+        makeProcess(proc.path, 108, NOTHING, (), "Z", "timeout");
+        # the same, dead
+        makeProcess(proc.path, 109, NOTHING, (), "X", "timeout");
+        # a process whose command name has parentheses and spaces
+        makeProcess(proc.path, 110, "/usr/bin/qore", ("qore", "t.q"), "S", "a) Z (b");
+        # a process that ended after its command line was read
+        makeProcess(proc.path, 111, "/usr/bin/qore", ("qore", "u.q"));
 
-        string out = runningProcesses(proc.path, (101, 102, 103, 104, 105, 106, 107));
+        string out = runningProcesses(proc.path, (101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111));
         assertEq("running 101 sleep 60 \n"
             "watcher 102\n"
             "watcher 103\n"
             "running 104 sh -c sleep 60 \n"
-            "running 105 qore server.q \n", out);
+            "running 105 qore server.q \n"
+            "running 110 qore t.q \n", out);
     }
 
     testNone() {

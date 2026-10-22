@@ -13,9 +13,11 @@
 #   whether the command is still running, so it can still be there for up to a second after the command ended; the
 #   caller ends it without counting it (the command, if it is still running, is listed itself)
 # - "running <pid> <command line>": any other process
-# Nothing is printed for a process that is gone: one that was listed but ended before it was examined here, such as a
-# watcher whose command had ended, is not running.  The executable is read before the command line, so a process
-# that ends in between is not taken for a process other than a watcher.  /proc is ${QORE_CI_PROC} if set.
+# Nothing is printed for a process that has ended: one that was listed but ended before it was examined here, such
+# as a watcher whose command had ended, is not running, whether it is gone or a zombie that its parent has not reaped
+# yet (an orphaned watcher waits for the process with PID 1 to reap it).  The executable is read before the command
+# line and the state, so a process that ends in between is not taken for a process other than a watcher.  /proc is
+# ${QORE_CI_PROC} if set.
 qore_ci_running_processes() {
     _qore_ci_proc=${QORE_CI_PROC:-/proc}
     for _qore_ci_rp in "$@"; do
@@ -24,6 +26,15 @@ qore_ci_running_processes() {
         if ! _qore_ci_rp_cmd=$(tr '\0' ' ' 2>/dev/null < "${_qore_ci_proc}/${_qore_ci_rp}/cmdline"); then
             continue
         fi
+        # the state follows the command name, which is in parentheses and can contain spaces and parentheses itself;
+        # a zombie (Z) or dead (X) process has ended
+        if ! _qore_ci_rp_stat=$(cat 2>/dev/null < "${_qore_ci_proc}/${_qore_ci_rp}/stat"); then
+            continue
+        fi
+        _qore_ci_rp_state=${_qore_ci_rp_stat##*) }
+        case "${_qore_ci_rp_state%% *}" in
+            Z|X|x) continue ;;
+        esac
         case "${_qore_ci_rp_exe}" in
             */busybox)
                 _qore_ci_rp_arg0=${_qore_ci_rp_cmd%% *}
