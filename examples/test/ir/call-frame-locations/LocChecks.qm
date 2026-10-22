@@ -42,6 +42,16 @@ int sub via_static() {
     return C::s();
 }
 
+int sub ok() {
+    int x = 1;
+    return x;
+}
+
+# raises an exception on the line of a call that returned
+int sub via_same_line() {
+    int v = ok(); throw "ERR", "after the call " + v;
+}
+
 int sub via_closure() {
     code c = int sub () { return bad(); };
     return c();
@@ -49,13 +59,14 @@ int sub via_closure() {
 
 public string sub run() {
     list<string> out;
-    foreach code f in ((\via_function(), \via_method(), \via_static(), \via_closure())) {
+    foreach code f in ((\via_function(), \via_method(), \via_static(), \via_closure(), \via_same_line())) {
         try {
             f();
         } catch (hash<ExceptionInfo> ex) {
-            # the frames of this module, innermost first, without the call of f() itself
-            out += (map sprintf("%s:%d", $1.function, $1.line), ex.callstack,
-                $1.file =~ /LocChecks/ && $1.function != "run").join(",");
+            # where the exception was raised, then the frames of this module, innermost first, without the call of
+            # f() itself
+            out += ((sprintf("@%d", ex.line),) + (map sprintf("%s:%d", $1.function, $1.line), ex.callstack,
+                $1.file =~ /LocChecks/ && $1.function != "run")).join(",");
         }
     }
     return out.join("|");

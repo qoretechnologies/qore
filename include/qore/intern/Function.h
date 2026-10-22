@@ -878,6 +878,9 @@ protected:
     const QoreFunction* source_qf = nullptr;
     // for "synchronized" functions
     VRMutex* gate;
+    //! the name of the call stack frame of a call of the variant; see getCallName()
+    mutable std::string call_name;
+    mutable std::once_flag call_name_once;
 
 public:
     QoreProgram* pgm;
@@ -1035,6 +1038,12 @@ public:
     DLLLOCAL UserSignature* getUserSignature() const {
         return const_cast<UserSignature*>(&signature);
     }
+
+    //! Returns the name of the call stack frame of a call of the variant, as an AST call names it
+    /** The name of the function, qualified with its class for a method (see CodeEvaluationHelper::setCallName());
+        built once, it is valid as long as the variant exists, so native code can push frames with it.
+    */
+    DLLLOCAL const std::string& getCallName() const;
 
     DLLLOCAL void setTypeParameters(std::vector<QoreGenericTypeParam>&& type_params) {
         signature.setTypeParameters(std::move(type_params));

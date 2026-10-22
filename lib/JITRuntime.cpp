@@ -474,6 +474,10 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_lv_path_binary_mut_aot", reinterpret_cast<void*>(&qore_rt_lv_path_binary_mut_aot) },
     { "qore_rt_lv_path_ternary_aot", reinterpret_cast<void*>(&qore_rt_lv_path_ternary_aot) },
     { "qore_rt_push_compiled_handler_aot", reinterpret_cast<void*>(&qore_rt_push_compiled_handler_aot) },
+    { "qore_rt_get_thread_data_for_native_calls",
+        reinterpret_cast<void*>(&qore_rt_get_thread_data_for_native_calls) },
+    { "qore_rt_push_native_call_frame", reinterpret_cast<void*>(&qore_rt_push_native_call_frame) },
+    { "qore_rt_pop_native_call_frame", reinterpret_cast<void*>(&qore_rt_pop_native_call_frame) },
     { "qore_rt_call_fast_with_target", reinterpret_cast<void*>(&qore_rt_call_fast_with_target) },
     { "qore_rt_call_with_args", reinterpret_cast<void*>(&qore_rt_call_with_args) },
     { "qore_rt_call_function_with_base",
@@ -9851,6 +9855,86 @@ private:
     // last: pushes this location once it is fully constructed and pops it before any member is destroyed
     QoreProgramStackLocationHelper stack_helper{this, saved_stmt, saved_pgm};
 };
+
+//! The call stack frame of a call that native code makes directly to a native entry of user code
+/** Native code calls the fast entry of a function compiled with it without a runtime helper, so it pushes the
+    frame of the call itself, in storage of its own frame (qore_rt_push_native_call_frame() and
+    qore_rt_pop_native_call_frame()), as a runtime helper or an AST call pushes it: the frame's location is where
+    the call is made, the caller's current location when the frame is pushed.  The callee changes the thread's
+    runtime location; the frame restores the caller's when it is popped.  The caller gets the thread's data once
+    when it is entered, so pushing and popping, which happen on every such call, make no thread-local lookup.
+*/
+class QoreNativeCallStackLocation : public QoreStackLocation {
+public:
+    DLLLOCAL QoreNativeCallStackLocation(void* thread_data, const std::string& call_name,
+            const StatementBlock* statements) : thread_data(thread_data), call_name(call_name), statements(statements) {
+        prev = push_native_call_stack_location(thread_data, this, saved_stmt, saved_pgm, loc, runtime_loc_sp);
+    }
+
+    //! Pops the frame and restores the caller's runtime location, which the callee changed
+    DLLLOCAL ~QoreNativeCallStackLocation() {
+        pop_native_call_stack_location(thread_data, prev, saved_stmt, loc, runtime_loc_sp);
+    }
+
+    DLLLOCAL const QoreProgramLocation& getLocation() const override {
+        return loc ? *loc : loc_builtin;
+    }
+
+    DLLLOCAL const std::string& getCallName() const override {
+        return call_name;
+    }
+
+    DLLLOCAL qore_call_t getCallType() const override {
+        return CT_USER;
+    }
+
+    DLLLOCAL QoreProgram* getProgram() const override {
+        return saved_pgm;
+    }
+
+    DLLLOCAL const AbstractStatement* getStatement() const override {
+        return statements;
+    }
+
+private:
+    //! the data of the thread, which the caller got once (qore_rt_get_thread_data_for_native_calls())
+    void* thread_data;
+    const std::string& call_name;
+    const StatementBlock* statements;
+    // the members below are written by push_native_call_stack_location() before the location is pushed
+    //! the caller's location: the location of the frame, restored when the frame is popped
+    const QoreProgramLocation* loc;
+    //! the caller's statement, restored when the frame is popped
+    const AbstractStatement* saved_stmt;
+    QoreProgram* saved_pgm;
+    //! the caller's innermost non-AOT frame marker, restored when the frame is popped
+    uintptr_t runtime_loc_sp;
+    //! the location that this one replaces on the thread's call stack
+    const QoreStackLocation* prev;
+};
+
+size_t qore_rt_native_call_frame_size() {
+    return sizeof(QoreNativeCallStackLocation);
+}
+
+size_t qore_rt_native_call_frame_align() {
+    return alignof(QoreNativeCallStackLocation);
+}
+
+extern "C" DLLEXPORT void* qore_rt_get_thread_data_for_native_calls() {
+    return get_thread_data_for_native_calls();
+}
+
+extern "C" DLLEXPORT void qore_rt_push_native_call_frame(void* storage, void* thread_data,
+        const std::string* call_name, const StatementBlock* statements) {
+    assert(storage && thread_data && call_name);
+    new (storage) QoreNativeCallStackLocation(thread_data, *call_name, statements);
+}
+
+extern "C" DLLEXPORT void qore_rt_pop_native_call_frame(void* storage) {
+    assert(storage);
+    static_cast<QoreNativeCallStackLocation*>(storage)->~QoreNativeCallStackLocation();
+}
 
 /** Handle body local instantiation before JIT execution and deopt/cleanup after.
 

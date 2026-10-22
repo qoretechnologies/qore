@@ -9023,6 +9023,38 @@ bool QoreIRToLLVM::tryEmitBackgroundMetadata(const QoreIRBackgroundInstruction* 
     return false;
 }
 
+llvm::CallInst* QoreIRToLLVM::emitNativeCall(llvm::FunctionCallee fn, llvm::ArrayRef<llvm::Value*> args,
+        const AbstractQoreFunctionVariant* callee, llvm::Module& module, llvm::Function* llvm_func,
+        const llvm::Twine& name) {
+    const UserVariantBase* callee_uvb = callee ? callee->getUserVariantBase() : nullptr;
+    assert(callee_uvb);
+    if (!native_call_frame_storage) {
+        // the storage and the thread's data, which the function gets once, in its entry block
+        llvm::BasicBlock& entry = llvm_func->getEntryBlock();
+        llvm::IRBuilder<> ab(&entry, entry.getFirstInsertionPt());
+        llvm::AllocaInst* storage = ab.CreateAlloca(llvm::Type::getInt8Ty(ctx),
+                llvm::ConstantInt::get(i64_type, qore_rt_native_call_frame_size()), "native_call_frame");
+        storage->setAlignment(llvm::Align(qore_rt_native_call_frame_align()));
+        native_call_frame_storage = storage;
+        native_call_thread_data = ab.CreateCall(module.getOrInsertFunction(
+                "qore_rt_get_thread_data_for_native_calls", llvm::FunctionType::get(ptr_type, {}, false)), {},
+                "thread_data");
+    }
+    // the frame's name and statements are the callee's, which live as long as the native code
+    auto make_ptr = [this](const void* p) {
+        return builder->CreateIntToPtr(llvm::ConstantInt::get(i64_type, reinterpret_cast<uint64_t>(p)), ptr_type);
+    };
+    builder->CreateCall(module.getOrInsertFunction("qore_rt_push_native_call_frame",
+            llvm::FunctionType::get(void_type, {ptr_type, ptr_type, ptr_type, ptr_type}, false)),
+            {native_call_frame_storage, native_call_thread_data, make_ptr(&callee_uvb->getCallName()),
+             make_ptr(callee_uvb->getStatementBlock())});
+    llvm::CallInst* call = builder->CreateCall(fn, args, name);
+    builder->CreateCall(module.getOrInsertFunction("qore_rt_pop_native_call_frame",
+            llvm::FunctionType::get(void_type, {ptr_type}, false)),
+            {native_call_frame_storage});
+    return call;
+}
+
 llvm::Function* QoreIRToLLVM::lowerNestedFunction(const QoreIRFunction& func, const std::string& name,
         llvm::Module& module, std::string& error) {
     QoreIRToLLVM nested_lowering(ctx);
@@ -9712,6 +9744,8 @@ bool QoreIRToLLVM::checkNoAotExecutableExprFallback(llvm::Function* llvm_func, s
 
 bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& module, std::string& error) {
     native_handler_cache_cancelled = false;
+    native_call_frame_storage = nullptr;
+    native_call_thread_data = nullptr;
     bg_helper_count = 0;
     obe_handler_count = 0;
     obe_handler_fns.clear();
@@ -16336,7 +16370,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                                         boxed_args, module));
                             }
                             call_args.push_back(xsink_arg);
-                            result = builder->CreateCall(fast_fn, call_args);
+                            result = emitNativeCall(fast_fn, call_args, call->getVariant(), module,
+                                    llvm_func);
                             // a native scalar result must not be treated as a NaN-boxed value
                             invoke_return_kind = callee_info.return_kind;
                             if (has_arg_cleanups) {
@@ -19916,7 +19951,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                                 i, raw_args, raw_arg_ids, boxed_args, module));
                     }
                     call_args.push_back(xsink_arg);
-                    call_result = builder->CreateCall(fast_fn, call_args);
+                    call_result = emitNativeCall(fast_fn, call_args, direct_inst->variant, module,
+                            llvm_func);
                     call_return_kind = callee_info.return_kind;
                     if (has_arg_cleanups) {
                         auto clear_helper = module.getOrInsertFunction(
@@ -24694,8 +24730,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                             capture_cleanups.push_back(capture_cleanup);
                         }
                         call_args.push_back(xsink_arg);
-                        llvm::Value* result = builder->CreateCall(fast_fn, call_args,
-                            "jit_native_closure_result");
+                        llvm::Value* result = emitNativeCall(fast_fn, call_args, immediate_variant, module,
+                            llvm_func, "jit_native_closure_result");
                         auto decref = module.getOrInsertFunction("qore_rt_decref",
                             llvm::FunctionType::get(void_type,
                                 {i64_type, ptr_type}, false));

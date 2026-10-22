@@ -2439,6 +2439,35 @@ const QoreStackLocation* update_get_runtime_stack_builtin_location(QoreStackLoca
     return publish_pushed_stack_location(td, stack_loc);
 }
 
+void* get_thread_data_for_native_calls() {
+    return thread_data.get();
+}
+
+const QoreStackLocation* push_native_call_stack_location(void* thread_data_ptr, QoreStackLocation* stack_loc,
+        const AbstractStatement*& current_stmt, QoreProgram*& current_pgm,
+        const QoreProgramLocation*& runtime_loc, uintptr_t& runtime_loc_sp) {
+    ThreadData* td = static_cast<ThreadData*>(thread_data_ptr);
+    assert(td == thread_data.get());
+
+    // written before the location is pushed: other threads can read it from then on
+    current_pgm = td->current_pgm;
+    current_stmt = td->runtime_statement;
+    runtime_loc = td->runtime_loc;
+    runtime_loc_sp = td->runtime_loc_sp;
+
+    return publish_pushed_stack_location(td, stack_loc);
+}
+
+void pop_native_call_stack_location(void* thread_data_ptr, const QoreStackLocation* stack_loc,
+        const AbstractStatement* runtime_stmt, const QoreProgramLocation* runtime_loc, uintptr_t runtime_loc_sp) {
+    ThreadData* td = static_cast<ThreadData*>(thread_data_ptr);
+    assert(td == thread_data.get());
+    td->runtime_statement = runtime_stmt;
+    td->runtime_loc = runtime_loc;
+    td->runtime_loc_sp = runtime_loc_sp;
+    publish_popped_stack_location(td, stack_loc);
+}
+
 // called when restoring the previous location, and by RuntimeConfigStackHelper to push one it has already linked
 void update_runtime_stack_location(const QoreStackLocation* stack_loc) {
     publish_popped_stack_location(thread_data.get(), stack_loc);

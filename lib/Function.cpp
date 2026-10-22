@@ -5475,6 +5475,20 @@ static bool irBlockHasTerminatorFunc(const QoreIRBasicBlock* block) {
     return isTerminator(block->instructions.back()->opcode);
 }
 
+const std::string& UserVariantBase::getCallName() const {
+    std::call_once(call_name_once, [this]() {
+        const AbstractQoreFunctionVariant* variant = getAbstractFunctionVariant();
+        if (const char* class_name = variant ? variant->className() : nullptr) {
+            call_name = class_name;
+            call_name += "::";
+        }
+        if (source_qf) {
+            call_name += source_qf->getName();
+        }
+    });
+    return call_name;
+}
+
 QoreIRFunction* UserVariantBase::lowerIRFunction(const char* name, const std::string& unique_name,
         const QoreTypeInfo* specialization_receiver_type_info,
         const QoreTypeParamInstantiation* specialization_type_param_instantiation,
@@ -5482,9 +5496,14 @@ QoreIRFunction* UserVariantBase::lowerIRFunction(const char* name, const std::st
     assert(pgm);
     assert(statements);
 
-    QoreIRFunction* func = new QoreIRFunction(unique_name.c_str());
+    // the display name is the name of the call stack frames of the code, as an AST call names them
+    // (CodeEvaluationHelper::setCallName()): a method is qualified with its class
+    const AbstractQoreFunctionVariant* variant = getAbstractFunctionVariant();
+    const char* class_name = variant ? variant->className() : nullptr;
+    QoreIRFunction* func = new QoreIRFunction(unique_name.c_str(),
+        class_name ? std::string(class_name) + "::" + name : std::string());
     func->source_qf = source_qf;
-    func->source_variant = getAbstractFunctionVariant();
+    func->source_variant = variant;
     // Owning program for the per-Program background-compile drain (set unconditionally).
     func->pgm = pgm;
     // Debug-step hook context (issue #5352): record the top-level StatementBlock and

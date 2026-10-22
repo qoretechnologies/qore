@@ -1371,6 +1371,25 @@ private:
     bool emitBackgroundHelper(const QoreIRBackgroundInstruction* inst, llvm::Module& module,
             llvm::Function* llvm_func, llvm::Value** result, std::string& error);
 
+    //! Emits a call that native code makes directly to a native entry of user code, with the frame of the call
+    /** A native entry called directly (a fast entry) pushes no call stack frame; the caller pushes it around the
+        call (qore_rt_push_native_call_frame()) in storage of its own frame, and pops it when the call returns, with
+        or without an exception (native entries report exceptions by returning), before the exception is checked.
+
+        @param fn the native entry
+        @param args the arguments of the call
+        @param callee the variant called, which names the frame
+    */
+    llvm::CallInst* emitNativeCall(llvm::FunctionCallee fn, llvm::ArrayRef<llvm::Value*> args,
+            const AbstractQoreFunctionVariant* callee, llvm::Module& module, llvm::Function* llvm_func,
+            const llvm::Twine& name = "");
+
+    //! The storage of the frames of the native calls of the function being lowered, created by the first one
+    /** One is enough: a native call's frame is popped before the function makes another call. */
+    llvm::AllocaInst* native_call_frame_storage = nullptr;
+    //! The current thread's data for the frames of the native calls, got once in the entry block
+    llvm::Value* native_call_thread_data = nullptr;
+
     //! The number of background helpers emitted for the function being lowered
     unsigned bg_helper_count = 0;
     //! The number of on_block_exit handlers emitted for the function being lowered

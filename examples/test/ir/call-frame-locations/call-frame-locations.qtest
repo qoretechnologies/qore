@@ -17,17 +17,21 @@
     called directly the location of the callee's declaration instead, and it pushed no frame at all for a closure
     whose IR it ran directly (from the second call of the closure on).
 
-    Native code (JIT and AOT) does not push a frame for a call of compiled code from compiled code, so it is not
-    tested here yet.
+    Native code (JIT) pushed no frame for a call that it made directly to a function compiled with it (a fast
+    entry), so the callee was missing from the call stack, and the caller's location stayed the callee's after the
+    call returned, so an exception raised later on the line of the call was reported in the callee; and the frames
+    that runtime helpers pushed for methods were named without their class.
 */
 class CallFrameLocationsTest inherits QUnit::Test {
     public {
-        #! the frames of LocChecks::run(): the function of each frame and the line it was called from
+        #! the results of LocChecks::run(): where the exception was raised, then the function of each frame and the
+        #! line it was called from
         const Expected = (
-            "bad:32,via_function:54",
-            "bad:20,C::m:38,via_method:54",
-            "bad:24,C::s:42,via_static:54",
-            "bad:46,<anonymous closure>:47,via_closure:54",
+            "@15,bad:32,via_function:64",
+            "@15,bad:20,C::m:38,via_method:64",
+            "@15,bad:24,C::s:42,via_static:64",
+            "@15,bad:56,<anonymous closure>:57,via_closure:64",
+            "@52,via_same_line:64",
         );
     }
 
@@ -47,8 +51,7 @@ class CallFrameLocationsTest inherits QUnit::Test {
 
     testExecModes() {
         string worker = get_script_dir() + DirSep + "call-frame-locations-worker.q";
-        # the interpreted modes; see the native code note above
-        foreach string mode in (("ast", "ir")) {
+        foreach string mode in (ExecModeHarness::ExecModes) {
             string out = ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --exec-mode=%s %s",
                 libqore_dir, get_script_dir(), qore_bin, mode, worker));
             list<string> lines = (map $1, out.split("\n"), $1.val());

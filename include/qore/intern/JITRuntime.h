@@ -684,6 +684,27 @@ struct QoreAOTContext;
 void qore_rt_push_compiled_handler_aot(QoreAOTContext* ctx, int type,
         uint64_t (*aot_fn)(QoreAOTContext*, ExceptionSink*));
 
+//! Pushes the call stack frame of a call that native code makes directly to a native entry of user code
+/** @param storage storage of the size and alignment given by qore_rt_native_call_frame_size() and
+    qore_rt_native_call_frame_align() in the caller's native frame
+    @param thread_data the current thread's data, which the caller gets once when it is entered
+    (qore_rt_get_thread_data_for_native_calls())
+    @param call_name the name of the frame: the callee's UserVariantBase::getCallName(), which lives as long as the
+    native code
+    @param statements the callee's statement block
+
+    The frame's location is the caller's current location; qore_rt_pop_native_call_frame() pops the frame when the
+    call returns, with or without an exception, and restores the caller's runtime location.
+*/
+void qore_rt_push_native_call_frame(void* storage, void* thread_data, const std::string* call_name,
+        const StatementBlock* statements);
+
+//! Returns the current thread's data for qore_rt_push_native_call_frame()
+void* qore_rt_get_thread_data_for_native_calls();
+
+//! Pops the call stack frame pushed by qore_rt_push_native_call_frame() in the same storage
+void qore_rt_pop_native_call_frame(void* storage);
+
 //! AOT slot-indexed variant of qore_rt_sync_local().
 void qore_rt_sync_local_aot(QoreAOTContext* ctx, int32_t idx, uint64_t value);
 
@@ -1856,5 +1877,10 @@ uint64_t qore_rt_call_closure_fast_consume_args(uint64_t ref_bits, uint64_t* arg
         uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink);
 
 } // extern "C"
+
+//! Returns the size of the storage of a call stack frame for qore_rt_push_native_call_frame()
+DLLLOCAL size_t qore_rt_native_call_frame_size();
+//! Returns the alignment of the storage of a call stack frame for qore_rt_push_native_call_frame()
+DLLLOCAL size_t qore_rt_native_call_frame_align();
 
 #endif

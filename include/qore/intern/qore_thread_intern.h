@@ -341,6 +341,24 @@ DLLLOCAL const QoreStackLocation* update_get_runtime_stack_builtin_location(Qore
 DLLLOCAL void update_runtime_stack_location(const QoreStackLocation* stack_loc);
 DLLLOCAL void update_runtime_stack_location(const QoreStackLocation* stack_loc, const QoreProgramLocation* runtime_loc);
 
+//! Returns the current thread's data, for push_native_call_stack_location() and pop_native_call_stack_location()
+/** Native code gets it once when a function is entered, so a direct call makes no thread-local lookup. */
+DLLLOCAL void* get_thread_data_for_native_calls();
+//! Pushes the call stack location of a call that native code makes directly to native code
+/** Returns the thread's current statement and program for the location, and its runtime location and innermost
+    non-AOT frame marker (the caller's), which pop_native_call_stack_location() restores.
+
+    @param thread_data_ptr the current thread's data (get_thread_data_for_native_calls())
+
+    @return the location that the pushed one replaces, to restore with pop_native_call_stack_location()
+*/
+DLLLOCAL const QoreStackLocation* push_native_call_stack_location(void* thread_data_ptr, QoreStackLocation* stack_loc,
+        const AbstractStatement*& current_stmt, QoreProgram*& current_pgm,
+        const QoreProgramLocation*& runtime_loc, uintptr_t& runtime_loc_sp);
+//! Pops a location pushed by push_native_call_stack_location() and restores the caller's runtime location
+DLLLOCAL void pop_native_call_stack_location(void* thread_data_ptr, const QoreStackLocation* stack_loc,
+        const AbstractStatement* runtime_stmt, const QoreProgramLocation* runtime_loc, uintptr_t runtime_loc_sp);
+
 DLLLOCAL const QoreProgramLocation* get_runtime_location();
 DLLLOCAL int swap_runtime_statement_location(ExceptionSink* xsink, const AbstractStatement* stmt,
         const QoreProgramLocation* loc, QoreParseOptions po, const AbstractStatement*& old_stmt,
