@@ -42,6 +42,13 @@ struct ExtraWaitFd {
     bool want_write;  //!< true = wait for POLLOUT
 };
 
+//! The state of a non-blocking socket action, such as a connection, that is advanced with continuePoll()
+/** The caller, such as the poll operation of a module, waits for the events that continuePoll() returns on the
+    socket's descriptor, for the descriptors that getExtraWaitFds() returns, and at most for the time that
+    getPollTimeoutMs() returns, and then calls continuePoll() again.  While the socket has no descriptor (it returns
+    -1 as its descriptor), as while the host name of a connection is resolved, only the extra descriptors and the
+    timeout can continue the action, and the caller waits for no events of the socket.
+*/
 class AbstractPollState {
 public:
     DLLLOCAL virtual ~AbstractPollState() = default;
@@ -51,6 +58,8 @@ public:
         - SOCK_POLLOUT = wait for write and call this again
         - 0 = done
         - < 1 = error (exception raised)
+
+        The events are those of the socket's descriptor; see the class description for a socket that has none.
     */
     DLLLOCAL virtual int continuePoll(ExceptionSink* xsink) = 0;
 
@@ -65,9 +74,42 @@ public:
         default implementation returns an empty vector.
 
         @return a vector of ExtraWaitFd entries; empty if no extras are needed
+
+        @note the descriptors can change with each call of continuePoll(), so they are read again after each call
      */
     DLLLOCAL virtual std::vector<ExtraWaitFd> getExtraWaitFds() {
         return {};
+    }
+
+    //! Returns the time after which continuePoll() must be called again, also if no descriptor is ready
+    /** The default implementation returns -1.
+
+        @return the time in milliseconds, or -1 if only the descriptors continue the state
+
+        @par Example:
+        @code{.cpp}
+// waits for the next step of a connection made with QoreSocket::startConnect()
+int rc = state->continuePoll(xsink);
+if (rc > 0) {
+    std::vector<struct pollfd> fds;
+    // there is no socket descriptor while the host name is resolved
+    if (sock.getSocket() >= 0) {
+        short events = ((rc & SOCK_POLLIN) ? POLLIN : 0) | ((rc & SOCK_POLLOUT) ? POLLOUT : 0);
+        fds.push_back({sock.getSocket(), events, 0});
+    }
+    for (const ExtraWaitFd& extra : state->getExtraWaitFds()) {
+        short events = (extra.want_read ? POLLIN : 0) | (extra.want_write ? POLLOUT : 0);
+        fds.push_back({extra.fd, events, 0});
+    }
+    poll(fds.data(), fds.size(), state->getPollTimeoutMs());
+    // ... and call continuePoll() again
+}
+        @endcode
+
+        @since %Qore 3.0
+     */
+    DLLLOCAL virtual int getPollTimeoutMs() const {
+        return -1;
     }
 };
 

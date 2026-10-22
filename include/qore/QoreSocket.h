@@ -171,6 +171,12 @@ public:
 
         @return a socket poll state object or nullptr in case of an exception or an immediate connection
 
+        @note An Internet connection resolves the host name asynchronously and races the connection attempts to its
+        addresses (RFC 8305): until the name is resolved the socket has no descriptor, and the descriptors of the
+        resolver and of the other attempts are reported by AbstractPollState::getExtraWaitFds(); the caller waits for
+        them and for the time of AbstractPollState::getPollTimeoutMs() as well as for the events that
+        AbstractPollState::continuePoll() returns for the socket's descriptor, if it has one
+
         @since %Qore 1.12
     */
     DLLEXPORT AbstractPollState* startConnect(ExceptionSink* xsink, const char* name);
@@ -184,6 +190,8 @@ public:
         @param protocol protocol number
 
         @return a socket poll state object or nullptr in case of an exception or an immediate connection
+
+        @note see startConnect() for what the caller waits for
 
         @since %Qore 3.0
     */

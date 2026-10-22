@@ -88,6 +88,7 @@
 #include <cstring>
 #include <fcntl.h>
 #include <netinet/in.h>
+#include <poll.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -3316,6 +3317,461 @@ public:
 class QoreCaresSocketsTest {
 public:
     static void run(UnitTestCounters& c) {
+    }
+};
+#endif
+
+#if defined(DEBUG) && !defined(_Q_WINDOWS)
+//! A connection made with QoreSocket::startConnect() reports everything that a module's operation must wait for
+/** A module's poll operation that makes a connection with the poll state that QoreSocket::startConnect() returns,
+    as module-ssh2's SftpPollOperation does, can only wait for what the state's public API reports: the events that
+    continuePoll() returns for the socket's descriptor, the descriptors of AbstractPollState::getExtraWaitFds() and
+    the time of AbstractPollState::getPollTimeoutMs().  The happy-eyeballs connection reported the descriptors of its
+    resolver and of its other connection attempts, and its timers, only to %Qore's own poll operations: while a host
+    name was resolved asynchronously the socket had no descriptor and the module had nothing to wait for, and while
+    attempts raced the module waited for the first one only, so a first address that does not answer stalled it.
+
+    The connection drives the state as a module does, and its lookups ask a DNS server that the test runs
+    (dbg_cares_set_servers()), which holds its answers until the connection first waits while its socket has no
+    descriptor, so that the lookup is answered over the network while the connection waits for it: an answer to
+    every query, answers after the server dropped the first query, which only the resolver's timer sends again, and
+    answers with an IPv6 address first whose listener drops the connection requests (its accept queue is full), so
+    that only the RFC 8305 connection attempt delay and the descriptor of the second attempt connect it.  The last case needs an IPv6 loopback address that drops the
+    requests; on a host without one, the connection is made to the IPv6 address and the case checks only that.
+*/
+class HappyEyeballsLayeredConnectTest {
+public:
+    static void run(UnitTestCounters& c) {
+        runCase(c, Case::Answered);
+        runCase(c, Case::LostQuery);
+        runCase(c, Case::Racing);
+    }
+
+private:
+    enum class Case {
+        //! the server answers every query
+        Answered,
+        //! the server drops the first query
+        LostQuery,
+        //! the server answers with an IPv6 address that drops connection requests, and an IPv4 one
+        Racing,
+    };
+
+    //! the name that is resolved; the server answers every name
+    static constexpr const char* Name = "qore-layered-connect.test";
+
+    //! the longest wait for which nothing would continue the connection: a hang guard only
+    static constexpr int HangGuardMs = 30000;
+
+    //! A DNS server on the IPv4 loopback address that answers the A and AAAA queries for any name
+    /** The answers are held until release() is called, and then sent at once
+    */
+    class DnsServer {
+    public:
+        DLLLOCAL ~DnsServer() {
+            stop();
+        }
+
+        /** @param a the IPv4 address of the answers to A queries
+            @param aaaa the IPv6 address of the answers to AAAA queries, or nullptr to answer them with no address
+            @param drop the number of queries to drop before the server answers
+
+            @return 0 for success, -1 for failure
+        */
+        DLLLOCAL int start(const char* a, const char* aaaa, int drop) {
+            if (inet_pton(AF_INET, a, a_addr) != 1 || (aaaa && inet_pton(AF_INET6, aaaa, aaaa_addr) != 1)) {
+                return -1;
+            }
+            has_aaaa = aaaa != nullptr;
+            to_drop = drop;
+            fd = socket(AF_INET, SOCK_DGRAM, 0);
+            if (fd < 0 || pipe(stop_pipe) || pipe(release_pipe)) {
+                return -1;
+            }
+            struct sockaddr_in sin = {};
+            sin.sin_family = AF_INET;
+            sin.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+            socklen_t len = sizeof sin;
+            if (::bind(fd, reinterpret_cast<struct sockaddr*>(&sin), sizeof sin)
+                    || getsockname(fd, reinterpret_cast<struct sockaddr*>(&sin), &len)) {
+                return -1;
+            }
+            port = ntohs(sin.sin_port);
+            th = std::thread([this]() {
+                serve();
+            });
+            return 0;
+        }
+
+        //! Sends the answers held so far, and the answers to the queries received from now on at once
+        DLLLOCAL void release() {
+            notifyPipe(release_pipe[1]);
+        }
+
+        DLLLOCAL void stop() {
+            if (th.joinable()) {
+                notifyPipe(stop_pipe[1]);
+                th.join();
+            }
+            for (int* p : {&fd, &stop_pipe[0], &stop_pipe[1], &release_pipe[0], &release_pipe[1]}) {
+                if (*p >= 0) {
+                    close(*p);
+                    *p = -1;
+                }
+            }
+        }
+
+        DLLLOCAL int getPort() const {
+            return port;
+        }
+
+        DLLLOCAL int getQueries() const {
+            return queries.load();
+        }
+
+    private:
+        //! An answer that the server holds until release()
+        struct Held {
+            std::vector<unsigned char> answer;
+            struct sockaddr_storage to;
+            socklen_t to_len;
+        };
+
+        int fd = -1;
+        int stop_pipe[2] = {-1, -1};
+        int release_pipe[2] = {-1, -1};
+        int port = 0;
+        unsigned char a_addr[4] = {};
+        unsigned char aaaa_addr[16] = {};
+        bool has_aaaa = false;
+        int to_drop = 0;
+        std::atomic<int> queries{0};
+        //! the answers held until release(); used by the server's thread only
+        std::vector<Held> held;
+        //! true once release() was called; used by the server's thread only
+        bool released = false;
+        std::thread th;
+
+        //! Writes a byte to the pipe whose write end is given
+        /** A write to a pipe whose read end is open fails only when a signal interrupts it
+        */
+        DLLLOCAL static void notifyPipe(int pipe_fd) {
+            char b = 0;
+            while (write(pipe_fd, &b, 1) < 0 && errno == EINTR) {
+            }
+        }
+
+        DLLLOCAL void serve() {
+            while (true) {
+                struct pollfd fds[3] = {{fd, POLLIN, 0}, {stop_pipe[0], POLLIN, 0}, {release_pipe[0], POLLIN, 0}};
+                if (poll(fds, 3, -1) < 0) {
+                    if (errno == EINTR) {
+                        continue;
+                    }
+                    return;
+                }
+                if (fds[1].revents) {
+                    return;
+                }
+                if (fds[2].revents & POLLIN) {
+                    char b;
+                    if (read(release_pipe[0], &b, 1) == 1 && !released) {
+                        released = true;
+                        for (const Held& h : held) {
+                            sendto(fd, h.answer.data(), h.answer.size(), 0,
+                                reinterpret_cast<const struct sockaddr*>(&h.to), h.to_len);
+                        }
+                        held.clear();
+                    }
+                }
+                if (!(fds[0].revents & POLLIN)) {
+                    continue;
+                }
+                unsigned char q[512];
+                struct sockaddr_storage from;
+                socklen_t from_len = sizeof from;
+                ssize_t n = recvfrom(fd, q, sizeof q, 0, reinterpret_cast<struct sockaddr*>(&from), &from_len);
+                if (n < 12) {
+                    continue;
+                }
+                ++queries;
+                if (to_drop > 0) {
+                    --to_drop;
+                    continue;
+                }
+                unsigned char r[sizeof q + 28];
+                size_t r_len = answer(q, static_cast<size_t>(n), r);
+                if (!r_len) {
+                    continue;
+                }
+                if (released) {
+                    sendto(fd, r, r_len, 0, reinterpret_cast<struct sockaddr*>(&from), from_len);
+                } else {
+                    held.push_back({std::vector<unsigned char>(r, r + r_len), from, from_len});
+                }
+            }
+        }
+
+        //! Makes the answer to the query; returns its size, or 0 if the query is not answered
+        DLLLOCAL size_t answer(const unsigned char* q, size_t n, unsigned char* r) const {
+            // a single question
+            if (q[4] || q[5] != 1) {
+                return 0;
+            }
+            size_t pos = 12;
+            while (pos < n && q[pos]) {
+                if (q[pos] > 63) {
+                    return 0;
+                }
+                pos += q[pos] + 1;
+            }
+            // the root label, the type and the class
+            if (pos + 5 > n) {
+                return 0;
+            }
+            ++pos;
+            int qtype = (q[pos] << 8) | q[pos + 1];
+            size_t q_end = pos + 4;
+            memcpy(r, q, q_end);
+            // a response to a standard query, recursion desired as asked and available, no error
+            r[2] = 0x80 | (q[2] & 0x01);
+            r[3] = 0x80;
+            const unsigned char* addr = nullptr;
+            unsigned char addr_len = 0;
+            if (qtype == 1) {
+                addr = a_addr;
+                addr_len = 4;
+            } else if (qtype == 28 && has_aaaa) {
+                addr = aaaa_addr;
+                addr_len = 16;
+            }
+            // one answer or none; no authority or additional records
+            r[6] = 0;
+            r[7] = addr ? 1 : 0;
+            memset(r + 8, 0, 4);
+            size_t len = q_end;
+            if (addr) {
+                // the name of the question, the type of the question, class IN, a TTL of 60 seconds
+                const unsigned char rr[] = {0xc0, 0x0c, q[pos], q[pos + 1], 0, 1, 0, 0, 0, 60, 0, addr_len};
+                memcpy(r + len, rr, sizeof rr);
+                len += sizeof rr;
+                memcpy(r + len, addr, addr_len);
+                len += addr_len;
+            }
+            return len;
+        }
+    };
+
+    //! What the connection waited for
+    struct Waits {
+        //! waits for descriptors while the socket had none
+        int resolving = 0;
+        //! waits for more than one descriptor while the socket had one
+        int racing = 0;
+        //! waits that the poll timeout ended
+        int timed = 0;
+    };
+
+    //! The results of drive()
+    enum class Drive {
+        Connected,
+        Error,
+        NothingToWaitFor,
+        HangGuard,
+    };
+
+    //! Drives the connection as a module's poll operation does: with the poll state's public API only
+    /** @param dns the DNS server, whose answers are released when the connection waits while the socket has no
+        descriptor
+    */
+    static Drive drive(QoreSocket& client, AbstractPollState* state, DnsServer& dns, Waits& waits,
+            ExceptionSink& xsink) {
+        // the number of steps is a hang guard only
+        for (int i = 0; i < 100000; ++i) {
+            int rc = state->continuePoll(&xsink);
+            if (xsink || rc < 0) {
+                return Drive::Error;
+            }
+            if (!rc) {
+                return Drive::Connected;
+            }
+            std::vector<struct pollfd> fds;
+            int sock = client.getSocket();
+            if (sock >= 0) {
+                fds.push_back({sock, static_cast<short>(((rc & SOCK_POLLIN) ? POLLIN : 0)
+                    | ((rc & SOCK_POLLOUT) ? POLLOUT : 0)), 0});
+            }
+            for (const ExtraWaitFd& extra : state->getExtraWaitFds()) {
+                short events = (extra.want_read ? POLLIN : 0) | (extra.want_write ? POLLOUT : 0);
+                fds.push_back({extra.fd, events ? events : static_cast<short>(POLLIN), 0});
+            }
+            int timeout = state->getPollTimeoutMs();
+            if (fds.empty() && timeout < 0) {
+                return Drive::NothingToWaitFor;
+            }
+            if (sock < 0) {
+                // the lookup is answered while the connection waits for it
+                dns.release();
+                if (!fds.empty()) {
+                    ++waits.resolving;
+                }
+            } else if (fds.size() > 1) {
+                ++waits.racing;
+            }
+            bool guard = timeout < 0 || timeout > HangGuardMs;
+            int n = poll(fds.data(), fds.size(), guard ? HangGuardMs : timeout);
+            if (n < 0 && errno != EINTR) {
+                xsink.raiseErrnoException("POLL-ERROR", errno, "poll() failed");
+                return Drive::Error;
+            }
+            if (!n) {
+                if (guard) {
+                    return Drive::HangGuard;
+                }
+                ++waits.timed;
+            }
+        }
+        return Drive::HangGuard;
+    }
+
+    //! An IPv6 loopback listener that drops connection requests, and an IPv4 loopback listener on the same port
+    struct Listeners {
+        int v4 = -1;
+        int v6 = -1;
+        int filler = -1;
+        int port = 0;
+
+        DLLLOCAL ~Listeners() {
+            for (int fd : {v4, v6, filler}) {
+                if (fd >= 0) {
+                    close(fd);
+                }
+            }
+        }
+
+        //! Makes the IPv4 listener, on a free port or on \a port; returns 0 for success
+        DLLLOCAL int listenV4(int on_port) {
+            v4 = socket(AF_INET, SOCK_STREAM, 0);
+            int on = 1;
+            struct sockaddr_in sin = {};
+            sin.sin_family = AF_INET;
+            sin.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+            sin.sin_port = htons(on_port);
+            socklen_t len = sizeof sin;
+            if (v4 < 0 || setsockopt(v4, SOL_SOCKET, SO_REUSEADDR, &on, sizeof on)
+                    || ::bind(v4, reinterpret_cast<struct sockaddr*>(&sin), sizeof sin) || ::listen(v4, 20)
+                    || getsockname(v4, reinterpret_cast<struct sockaddr*>(&sin), &len)) {
+                return -1;
+            }
+            port = ntohs(sin.sin_port);
+            return 0;
+        }
+
+        //! Makes the IPv6 listener with a full accept queue and the IPv4 listener; returns 0 for success
+        DLLLOCAL int listenRacing() {
+            v6 = socket(AF_INET6, SOCK_STREAM, 0);
+            int on = 1;
+            struct sockaddr_in6 sin6 = {};
+            sin6.sin6_family = AF_INET6;
+            sin6.sin6_addr = in6addr_loopback;
+            socklen_t len = sizeof sin6;
+            if (v6 < 0 || setsockopt(v6, IPPROTO_IPV6, IPV6_V6ONLY, &on, sizeof on)
+                    || ::bind(v6, reinterpret_cast<struct sockaddr*>(&sin6), sizeof sin6) || ::listen(v6, 0)
+                    || getsockname(v6, reinterpret_cast<struct sockaddr*>(&sin6), &len)) {
+                return -1;
+            }
+            if (listenV4(ntohs(sin6.sin6_port))) {
+                return -1;
+            }
+            // a connection that is never accepted fills the accept queue, if the system does not drop it already
+            filler = socket(AF_INET6, SOCK_STREAM, 0);
+            if (filler < 0 || fcntl(filler, F_SETFL, fcntl(filler, F_GETFL) | O_NONBLOCK)) {
+                return -1;
+            }
+            if (connect(filler, reinterpret_cast<struct sockaddr*>(&sin6), sizeof sin6) && errno != EINPROGRESS) {
+                return -1;
+            }
+            return 0;
+        }
+    };
+
+    static void runCase(UnitTestCounters& c, Case which) {
+        const char* what = which == Case::Answered
+            ? "answered lookup"
+            : (which == Case::LostQuery ? "lookup whose first query is lost" : "racing attempts");
+        printf("  layered connect: %s\n", what);
+
+        Listeners listeners;
+        if (which == Case::Racing ? listeners.listenRacing() : listeners.listenV4(0)) {
+            if (which == Case::Racing) {
+                printf("  layered connect: the IPv6 and IPv4 loopback listeners cannot be made on one port; the "
+                    "racing case is skipped\n");
+                return;
+            }
+            UT_ASSERT(c, false, "layered connect: the listener is made");
+            return;
+        }
+
+        DnsServer dns;
+        int rc = dns.start("127.0.0.1", which == Case::Racing ? "::1" : nullptr, which == Case::LostQuery ? 1 : 0);
+        UT_ASSERT_EQ(c, 0, rc, "layered connect: the DNS server starts");
+        if (rc) {
+            return;
+        }
+
+        // a local class: its members take no visibility attribute
+        struct ServersHelper {
+            ServersHelper(int port) : prev(qore_dbg_cares_set_servers("127.0.0.1:" + std::to_string(port))) {
+            }
+            ~ServersHelper() {
+                qore_dbg_cares_set_servers(prev);
+            }
+            std::string prev;
+        } servers(dns.getPort());
+
+        ExceptionSink xsink;
+        QoreSocket client;
+        std::string target = std::string(Name) + ":" + std::to_string(listeners.port);
+        std::unique_ptr<AbstractPollState> state(client.startConnect(&xsink, target.c_str()));
+        UT_ASSERT(c, !xsink && state, "layered connect: the connection starts");
+        if (xsink || !state) {
+            xsink.clear();
+            return;
+        }
+
+        Waits waits;
+        Drive result = drive(client, state.get(), dns, waits, xsink);
+        if (xsink) {
+            QoreStringValueHelper err(xsink.getExceptionErr());
+            QoreStringValueHelper desc(xsink.getExceptionDesc());
+            printf("  layered connect: %s: %s\n", err->c_str(), desc->c_str());
+            xsink.clear();
+        }
+        printf("  layered connect: result %d, %d resolving waits, %d racing waits, %d timed waits, %d queries\n",
+            static_cast<int>(result), waits.resolving, waits.racing, waits.timed, dns.getQueries());
+        UT_ASSERT(c, result == Drive::Connected, "layered connect: the connection is made with the public API");
+        UT_ASSERT(c, dns.getQueries() > 0, "layered connect: the name is resolved by the DNS server");
+        UT_ASSERT(c, waits.resolving > 0,
+            "layered connect: the resolver's descriptors are reported while the socket has no descriptor");
+        if (which == Case::LostQuery) {
+            UT_ASSERT(c, waits.timed > 0, "layered connect: the resolver's timer sends the lost query again");
+            UT_ASSERT(c, dns.getQueries() >= 3, "layered connect: the lost query is sent again");
+        }
+        if (result != Drive::Connected) {
+            return;
+        }
+        ReferenceHolder<QoreHashNode> peer(client.getPeerInfo(&xsink), &xsink);
+        QoreStringValueHelper address(peer ? peer->getKeyValue("address") : QoreValue());
+        xsink.clear();
+        if (which == Case::Racing) {
+            if (!strcmp(address->c_str(), "::1")) {
+                printf("  layered connect: the IPv6 listener accepted the connection; the attempts did not race\n");
+                return;
+            }
+            UT_ASSERT(c, waits.racing > 0, "layered connect: the other connection attempts are reported");
+            UT_ASSERT(c, waits.timed > 0, "layered connect: the connection attempt delay continues the connection");
+        }
+        UT_ASSERT(c, !strcmp(address->c_str(), "127.0.0.1"), "layered connect: the IPv4 listener is connected");
     }
 };
 #endif
@@ -11294,6 +11750,9 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     AsyncIoDescriptorHoldTest::runRefusedExtraFd(c);
     QoreCaresSocketsTest::run(c);
 #ifndef _Q_WINDOWS
+    HappyEyeballsLayeredConnectTest::run(c);
+#endif
+#ifndef _Q_WINDOWS
     SpecificBindTest::run(c);
 #endif
     AsyncIoAbandonedSubmitTest::run(c);
@@ -12411,6 +12870,20 @@ static QoreValue f_dbg_cares_lose_query(const QoreListNode* params, RuntimeConfi
     }
     return static_cast<int64>(qore_dbg_cares_lost_query_count.exchange(static_cast<int>(count)));
 }
+
+//! makes the c-ares channels made from now on ask the given DNS servers
+/** Name, reverse and name-info lookups then ask a DNS server that a test runs, so their answers come over the
+    network, asynchronously, from a server whose answers the test controls.
+
+    @param servers the servers as for ares_set_servers_ports_csv(), such as \c "127.0.0.1:5353"; an empty string
+    restores the system's servers
+
+    @return the previous setting
+*/
+static QoreValue f_dbg_cares_set_servers(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    HARD_QORE_VALUE_PARAM(servers, const QoreStringNode, params, 0);
+    return new QoreStringNode(qore_dbg_cares_set_servers(servers->c_str()));
+}
 #endif
 
 //! functional domain for debug and unit-test hooks
@@ -12530,6 +13003,8 @@ void init_debug_functions(QoreNamespace& qns) {
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "port", QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "released");
     qns.addBuiltinVariant("dbg_cares_lose_query", f_dbg_cares_lose_query, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         bigIntTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "count");
+    qns.addBuiltinVariant("dbg_cares_set_servers", f_dbg_cares_set_servers, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        stringTypeInfo, 1, stringTypeInfo, QORE_PARAM_NO_ARG, "servers");
     qns.addBuiltinVariant("dbg_register_user_module_from_source", f_dbg_register_user_module_from_source,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 2, stringTypeInfo, QORE_PARAM_NO_ARG, "name",
         stringTypeInfo, QORE_PARAM_NO_ARG, "src");

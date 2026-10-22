@@ -689,13 +689,23 @@ public:
         - 0 = done
         - < 0 = error (exception raised)
     */
-    DLLLOCAL virtual int continuePoll(ExceptionSink* xsink);
+    DLLLOCAL virtual int continuePoll(ExceptionSink* xsink) override;
 
     //! Returns extra fds that need to be polled for write readiness (connect completion)
     DLLLOCAL void getExtraFds(std::vector<std::pair<int, int>>& fds) const;
 
+    //! Returns the descriptors of getExtraFds() for the public API: the resolver's, then the other attempts'
+    /** A module's operation that makes the connection with QoreSocket::startConnect() waits only for what the public
+        API reports; while the host name is resolved the socket has no descriptor, and the resolver's descriptors are
+        the only ones that continue the connection
+    */
+    DLLLOCAL virtual std::vector<ExtraWaitFd> getExtraWaitFds() override;
+
     //! Returns the operation-specific poll timeout, or -1 when no timeout is needed
-    DLLLOCAL int getPollTimeoutMs() const;
+    /** The resolver's timer while the host name is resolved, the RFC 8305 connection attempt delay while an address
+        waits for its attempt
+    */
+    DLLLOCAL virtual int getPollTimeoutMs() const override;
 
     //! Returns the primary socket events to poll for the current state
     DLLLOCAL int getPrimaryPollEvents(int rc) const;

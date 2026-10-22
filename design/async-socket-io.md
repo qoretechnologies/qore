@@ -624,6 +624,18 @@ loop refuses (a descriptor that epoll cannot wait for, or a number that a close 
 not waited for: `updateExtraFds()` removes any registration of the operation's for it and releases its hold
 (`runRefusedExtraFd()`).
 
+%Qore's own connect operations read these descriptors and the state's timers from the happy-eyeballs state directly
+(`getExtraFds()`, `getPollTimeoutMs()`, `getPrimaryPollEvents()`).  A module's operation that makes a connection with
+`QoreSocket::startConnect()` sees only the public `AbstractPollState` API, so the state reports them there as well:
+`getExtraWaitFds()` returns the resolver's sockets while the host name is resolved, when the socket has no
+descriptor, and the other attempts while they race, and `getPollTimeoutMs()` the resolver's retransmission timer and
+the RFC 8305 connection attempt delay.  Before, the public API reported neither, so a module's operation had nothing to
+wait for while the name was resolved asynchronously (module-ssh2's `SftpPollOperation` failed), and waited for the first
+attempt only while they raced.  `HappyEyeballsLayeredConnectTest` in the C++ unit tests drives a connection with the
+public API only, against a DNS server that the test runs (`dbg_cares_set_servers()`, which also gives the channels a
+fixed timeout and number of tries): a lookup answered at once, one whose first query the server drops, and an IPv6
+address whose listener drops the connection requests before the IPv4 one.
+
 `AsyncIoRegistrationCloseTest` in the C++ unit tests closes the socket from another thread at the point where the
 event loop is about to register its descriptor (the debug hook `QoreEventLoop::dbgSetBeforeRegister()`), for the
 first registration and for a change of the registered events, and checks that the descriptor is still the

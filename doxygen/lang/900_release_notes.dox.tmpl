@@ -1453,6 +1453,26 @@ val = "string";      # OK
       <tt>ReferenceHolder&lt;QoreHttpClientObject&gt; client(new QoreHttpClientObject, xsink);</tt>
     @endparblock
 
+    @par C++ API: Non-Blocking Internet Connections Resolve Host Names Asynchronously
+    @parblock
+    The poll state that \c QoreSocket::startConnect(), \c QoreSocket::startConnectINET() and
+    \c QoreSocketObject::startConnect() return for an Internet connection now resolves the host name without blocking
+    and races the connection attempts to its addresses (<a href="https://datatracker.ietf.org/doc/html/rfc8305">RFC
+    8305</a>).  Until the name is resolved the socket has no descriptor (\c QoreSocket::getSocket() returns -1) although
+    \c continuePoll() asks to wait, so a binary module that waits only for the socket's descriptor has nothing to wait
+    for; while the attempts race, the socket's descriptor is that of the first attempt only.  The state reports the
+    descriptors of the resolver and of the other attempts with \c AbstractPollState::getExtraWaitFds(), and the time
+    after which it must be continued in any case (the resolver's retransmission timer, the connection attempt delay)
+    with the new \c AbstractPollState::getPollTimeoutMs().
+
+    <b>Workarounds:</b>
+    - Wait for the socket's descriptor only if it has one, and also for the descriptors of
+      \c AbstractPollState::getExtraWaitFds() and at most for the time of \c AbstractPollState::getPollTimeoutMs(),
+      which are read again after each call of \c continuePoll(); a poll operation of the async I/O controller puts
+      them in the \c extra_fds and \c poll_timeout_ms keys of its poll info and reports no events for the socket
+      while it has no descriptor
+    @endparblock
+
     @par C++ API: No Value Is Returned With an Exception Raised by Builtin Code
     @parblock
     Builtin functions and methods may still raise an exception and return a value, but the value is now released

@@ -167,6 +167,8 @@ public:
 
         @return a socket poll state object or nullptr in case of an exception or an immediate connection
 
+        @note see QoreSocket::startConnect() for what the caller waits for
+
         @since %Qore 1.12
     */
     DLLEXPORT AbstractPollState* startConnect(ExceptionSink* xsink, const char* name);

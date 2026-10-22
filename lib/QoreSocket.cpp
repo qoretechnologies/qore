@@ -6718,7 +6718,49 @@ void qore_network_init_once() {
 
 #ifdef DEBUG
 std::atomic<int> qore_dbg_cares_lost_query_count{0};
+
+//! guards @ref qore_dbg_cares_servers
+static std::mutex qore_dbg_cares_servers_lock;
+//! the DNS servers of the c-ares channels made from now on; empty for the system's servers
+static std::string qore_dbg_cares_servers;
+
+std::string qore_dbg_cares_set_servers(const std::string& servers) {
+    std::lock_guard<std::mutex> lg(qore_dbg_cares_servers_lock);
+    std::string prev = std::move(qore_dbg_cares_servers);
+    qore_dbg_cares_servers = servers;
+    return prev;
+}
 #endif
+
+//! Returns the DNS servers that dbg_cares_set_servers() set for new c-ares channels, if any
+/** With servers set, the channel is also given a timeout of a second and three tries, so that a lookup that a test
+    makes does not depend on the options of the host's resolver configuration.
+
+    @param options the options of the channel to make
+    @param optmask the mask of the options set in \a options
+*/
+static std::string qore_cares_debug_servers(struct ares_options& options, int& optmask) {
+#ifdef DEBUG
+    std::string servers;
+    {
+        std::lock_guard<std::mutex> lg(qore_dbg_cares_servers_lock);
+        servers = qore_dbg_cares_servers;
+    }
+    if (!servers.empty()) {
+        options.timeout = 1000;
+        options.tries = 3;
+        optmask |= ARES_OPT_TIMEOUTMS | ARES_OPT_TRIES;
+    }
+    return servers;
+#else
+    return std::string();
+#endif
+}
+
+//! Makes a new c-ares channel ask the DNS servers that qore_cares_debug_servers() returned; returns an ARES_* status
+static int qore_cares_set_debug_servers(ares_channel_t* channel, const std::string& servers) {
+    return servers.empty() ? ARES_SUCCESS : ares_set_servers_ports_csv(channel, servers.c_str());
+}
 
 //! The number of times a lookup is started again after c-ares lost its query before it fails
 static constexpr unsigned QORE_CARES_MAX_LOST_QUERY_RESTARTS = 3;
@@ -7108,12 +7150,14 @@ int QoreCaresAddrInfoResolver::start(ExceptionSink* xsink) {
     struct ares_options options = {};
     options.sock_state_cb = sockStateCallback;
     options.sock_state_cb_data = this;
+    int optmask = ARES_OPT_SOCK_STATE_CB;
+    std::string debug_servers = qore_cares_debug_servers(options, optmask);
 
     int rc;
     {
         // c-ares reads the LOCALDOMAIN and RES_OPTIONS environment variables when it creates a channel
         QoreEnvironmentReadLock env_lock;
-        rc = ares_init_options(&channel, &options, ARES_OPT_SOCK_STATE_CB);
+        rc = ares_init_options(&channel, &options, optmask);
     }
     if (rc != ARES_SUCCESS) {
         xsink->raiseException("QOREADDRINFO-GETINFO-ERROR", "ares_init_options() failed: %s",
@@ -7129,6 +7173,12 @@ int QoreCaresAddrInfoResolver::start(ExceptionSink* xsink) {
         return -1;
     }
 #endif
+    rc = qore_cares_set_debug_servers(channel, debug_servers);
+    if (rc != ARES_SUCCESS) {
+        xsink->raiseException("QOREADDRINFO-GETINFO-ERROR", "ares_set_servers_ports_csv() failed: %s",
+            ares_strerror(rc));
+        return -1;
+    }
 
     struct ares_addrinfo_hints hints = {};
     // POSIX AI_* and c-ares ARES_AI_* flags have different values, including across operating systems.
@@ -7707,12 +7757,14 @@ private:
         struct ares_options options = {};
         options.sock_state_cb = sockStateCallback;
         options.sock_state_cb_data = this;
+        int optmask = ARES_OPT_SOCK_STATE_CB;
+        std::string debug_servers = qore_cares_debug_servers(options, optmask);
 
         int rc;
         {
             // c-ares reads the LOCALDOMAIN and RES_OPTIONS environment variables when it creates a channel
             QoreEnvironmentReadLock env_lock;
-            rc = ares_init_options(&channel, &options, ARES_OPT_SOCK_STATE_CB);
+            rc = ares_init_options(&channel, &options, optmask);
         }
         if (rc != ARES_SUCCESS) {
             xsink->raiseException("GETHOSTBYADDR-ERROR", "ares_init_options() failed: %s", ares_strerror(rc));
@@ -7727,6 +7779,12 @@ private:
             return -1;
         }
 #endif
+        rc = qore_cares_set_debug_servers(channel, debug_servers);
+        if (rc != ARES_SUCCESS) {
+            xsink->raiseException("GETHOSTBYADDR-ERROR", "ares_set_servers_ports_csv() failed: %s",
+                ares_strerror(rc));
+            return -1;
+        }
 
         void* raw_addr = qore_get_in_addr(reinterpret_cast<struct sockaddr*>(&addr));
         info.length = addr.ss_family == AF_INET ? sizeof(struct in_addr) : sizeof(struct in6_addr);
@@ -8278,12 +8336,14 @@ int QoreCaresNameInfoResolver::start(ExceptionSink* xsink) {
     struct ares_options options = {};
     options.sock_state_cb = sockStateCallback;
     options.sock_state_cb_data = this;
+    int optmask = ARES_OPT_SOCK_STATE_CB;
+    std::string debug_servers = qore_cares_debug_servers(options, optmask);
 
     int rc;
     {
         // c-ares reads the LOCALDOMAIN and RES_OPTIONS environment variables when it creates a channel
         QoreEnvironmentReadLock env_lock;
-        rc = ares_init_options(&channel, &options, ARES_OPT_SOCK_STATE_CB);
+        rc = ares_init_options(&channel, &options, optmask);
     }
     if (rc != ARES_SUCCESS) {
         xsink->raiseException("QOREADDRINFO-GETNAMEINFO-ERROR", "ares_init_options() failed: %s",
@@ -8299,6 +8359,12 @@ int QoreCaresNameInfoResolver::start(ExceptionSink* xsink) {
         return -1;
     }
 #endif
+    rc = qore_cares_set_debug_servers(channel, debug_servers);
+    if (rc != ARES_SUCCESS) {
+        xsink->raiseException("QOREADDRINFO-GETNAMEINFO-ERROR", "ares_set_servers_ports_csv() failed: %s",
+            ares_strerror(rc));
+        return -1;
+    }
 
     started = true;
     ares_socklen_t alen = len ? static_cast<ares_socklen_t>(len)
@@ -8533,6 +8599,17 @@ void SocketConnectInetHappyEyeballsPollState::getExtraFds(std::vector<std::pair<
             fds.push_back({a.fd, SOCK_POLLOUT});
         }
     }
+}
+
+std::vector<ExtraWaitFd> SocketConnectInetHappyEyeballsPollState::getExtraWaitFds() {
+    std::vector<std::pair<int, int>> fds;
+    getExtraFds(fds);
+    std::vector<ExtraWaitFd> rv;
+    rv.reserve(fds.size());
+    for (const auto& [fd, events] : fds) {
+        rv.push_back({fd, (events & SOCK_POLLIN) != 0, (events & SOCK_POLLOUT) != 0});
+    }
+    return rv;
 }
 
 int SocketConnectInetHappyEyeballsPollState::getPollTimeoutMs() const {
