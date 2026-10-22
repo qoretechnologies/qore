@@ -659,6 +659,11 @@ printf("Response: %s\n", result.content);
     @endcode
 */
 public class LlmBackend {
+    public {
+        #! Caller-owned controls consumed by the OpenAI-compatible facade, never sent to a provider
+        /** Callers can inspect this contract before relying on a control to bound billed work. */
+        const SupportedFacadeControls = ("max_retries", "tool_repair_enabled");
+    }
     private {
         #! Minimum visible-output budget for a schema-constrained forced-tool retry
         const ForcedToolJsonRetryMinOutputTokens = 2048;
@@ -1091,6 +1096,11 @@ if (resp.stop_reason == "tool_use") {
             facade extension. It is consumed as a per-call transport retry
             override and is never forwarded in the provider-native wire body.
 
+        @note Set the optional boolean \c tool_repair_enabled to \c False when the caller owns the budget for
+            additional requests. The original response and usage are returned without automatic JSON or tool
+            repair. The default is \c True. This facade control is separate from transport \c max_retries and is
+            never forwarded to the provider. Supported controls are listed in \ref SupportedFacadeControls.
+
         @note A request that forces a tool but receives no tool call is
             repaired with a bounded retry sequence, reported in the response
             under \c provider_diagnostics.forced_tool_retry. A repair that the
@@ -1102,8 +1112,10 @@ if (resp.stop_reason == "tool_use") {
         @return OpenAI-compatible chat-completions response
 
         @throw LLM-ERROR the backend call failed
+        @throw LLM-REQUEST-ERROR \c tool_repair_enabled is present and is not a boolean
     */
     hash<auto> chatCompletions(hash<auto> body) {
+        bool tool_repair_enabled = toolRepairEnabled(body);
         hash<auto> parsed = parseOpenAiChatCompletionsRequest(body);
         list<hash<ChatMessage>> messages =
             cast<list<hash<ChatMessage>>>(parsed.messages);
@@ -1116,7 +1128,7 @@ if (resp.stop_reason == "tool_use") {
         hash<auto> rv = synthesizeOpenAiForcedToolCall(chatResponseToOpenAi(
             response, options.model ?? provider.getModel(), tools),
             forced_tool_name, tools);
-        if (shouldRetryForcedToolAsJson(rv, forced_tool_name)) {
+        if (tool_repair_enabled && shouldRetryForcedToolAsJson(rv, forced_tool_name)) {
             *hash<auto> retry = retryForcedToolAsJson(messages, tools, options,
                 forced_tool_name,
                 "The previous forced function-call response was malformed.");
@@ -1131,7 +1143,7 @@ if (resp.stop_reason == "tool_use") {
                     False, "malformed_function_call");
             }
         }
-        if (shouldRetryRequiredToolNoOutput(rv, body, tools)) {
+        if (tool_repair_enabled && shouldRetryRequiredToolNoOutput(rv, body, tools)) {
             *hash<auto> retry = retryRequiredToolNoOutput(messages, tools,
                 options, forced_tool_name, rv);
             if (retry) {
@@ -1157,6 +1169,11 @@ if (resp.stop_reason == "tool_use") {
         @param body OpenAI-compatible chat-completions request
         @param delta_cb callback receiving OpenAI-compatible stream chunks
 
+        @note Set the optional boolean \c tool_repair_enabled to \c False when the caller owns the budget for
+            additional requests. The original response and usage are returned without automatic JSON or tool
+            repair. The default is \c True. This facade control is separate from transport \c max_retries and is
+            never forwarded to the provider. Supported controls are listed in \ref SupportedFacadeControls.
+
         @note A request that forces a tool but receives no tool call is
             repaired with a bounded retry sequence, reported in the response
             under \c provider_diagnostics.forced_tool_retry. A repair that the
@@ -1168,9 +1185,11 @@ if (resp.stop_reason == "tool_use") {
         @return accumulated OpenAI-compatible final response
 
         @throw LLM-ERROR the backend call failed
+        @throw LLM-REQUEST-ERROR \c tool_repair_enabled is present and is not a boolean
     */
     hash<auto> chatCompletionsStream(hash<auto> body,
             code<nothing(hash<auto>)> delta_cb) {
+        bool tool_repair_enabled = toolRepairEnabled(body);
         hash<auto> parsed = parseOpenAiChatCompletionsRequest(body);
         list<hash<ChatMessage>> messages =
             cast<list<hash<ChatMessage>>>(parsed.messages);
@@ -1190,7 +1209,7 @@ if (resp.stop_reason == "tool_use") {
             streamStateToOpenAiResponse(state),
             getForcedOpenAiToolName(body, tools), tools);
         *string forced_tool_name = getForcedOpenAiToolName(body, tools);
-        if (shouldRetryForcedToolAsJson(rv, forced_tool_name)) {
+        if (tool_repair_enabled && shouldRetryForcedToolAsJson(rv, forced_tool_name)) {
             *hash<auto> retry = retryForcedToolAsJson(messages, tools, options,
                 forced_tool_name,
                 "The previous forced function-call response was malformed.");
@@ -1205,7 +1224,7 @@ if (resp.stop_reason == "tool_use") {
                     False, "malformed_function_call");
             }
         }
-        if (shouldRetryRequiredToolNoOutput(rv, body, tools)) {
+        if (tool_repair_enabled && shouldRetryRequiredToolNoOutput(rv, body, tools)) {
             *hash<auto> retry = retryRequiredToolNoOutput(messages, tools,
                 options, forced_tool_name, rv);
             if (retry) {
@@ -1293,6 +1312,15 @@ if (resp.stop_reason == "tool_use") {
             }
         }
         return (text.length() + 3) / 4;
+    }
+
+    #! Validates the caller's automatic tool-repair policy before any provider request
+    private static bool toolRepairEnabled(hash<auto> body) {
+        if (!exists body.tool_repair_enabled) { return True; }
+        if (body.tool_repair_enabled.typeCode() != NT_BOOLEAN) {
+            throw "LLM-REQUEST-ERROR", "tool_repair_enabled must be a boolean";
+        }
+        return body.tool_repair_enabled;
     }
 
     #! Parses an OpenAI-compatible request for provider-native dispatch

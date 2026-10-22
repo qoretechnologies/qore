@@ -103,6 +103,12 @@ module QoreLlmUtils {
     providers may downgrade priority traffic. Usage metadata (including cache-write
     counts and Anthropic \c inference_geo) is preserved without reinterpretation.
 
+    Applications that budget each provider attempt can set \c tool_repair_enabled to \c False on the
+    OpenAI-compatible facade. Empty or malformed tool responses then return with their original usage, without
+    automatically requesting a repair. Transport retries remain independently controlled by \c max_retries.
+    The default tool-repair behavior is unchanged; \ref QoreLlmUtils::LlmBackend::SupportedFacadeControls lists
+    the controls the installed facade supports.
+
     Reasoning models may consume their output budget before producing visible
     text. Size @c max_output_tokens (or @c max_tokens) for both reasoning and
     the answer, not just the requested answer length. Use supported reasoning

@@ -4,6 +4,10 @@
 
     @section qore_3_0_0 Qore 3.0.0
 
+    Applications using the OpenAI-compatible LLM facade can disable automatic tool-response repairs when they
+    need to approve each additional model request against their own cost budget. Ordinary requests retain
+    automatic repair behavior.
+
     The new @ref discard_statement "@@discard(expression);" statement explicitly discards an expression's
     result without an unused-result warning or a dummy local variable. It preserves evaluation, exceptions,
     and temporary-value cleanup in all execution modes and remains active when debugging is disabled.
