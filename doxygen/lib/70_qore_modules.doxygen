@@ -349,9 +349,10 @@ static void mymod_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) 
     @endcode
 
     In a child in which a module requested it, the exits made through %Qore are:
-    - the end of the main program of the \c qore and \c qr programs, including one with an exception that was not
-      caught (exit status 3): the program and its threads are torn down and the delete functions of the modules run,
-      as in any process; then the standard I/O streams are flushed and the process ends with \c _exit() and the
+    - the end of the main program of the \c qore and \c qr programs and of executables compiled with \c qcc,
+      including one with an exception that was not caught (exit status 3; 1 in an executable that \c qcc links from
+      script objects): the program and its threads are torn down and the delete functions of the modules run, as in
+      any process; then the standard I/O streams are flushed and the process ends with \c _exit() and the
       program's exit status.  An embedding program that returns from \c main() calls qore_fork_child_quick_exit()
       with its exit status after qore_cleanup()
     - @ref Qore::exit() "exit()" and qore_exit_process() (also used for a @ref Qore::GetOpt "GetOpt" error): as in

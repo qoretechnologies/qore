@@ -164,9 +164,10 @@ DLLEXPORT void qore_fork_reinit_recursive_thread_lock(QoreRecursiveThreadLock& l
     In such a child, each exit made through %Qore does %Qore's own cleanup for that exit and then ends the process
     with \c _exit() instead of \c exit(), so that no \c atexit() handler and no C++ static destructor of any library
     runs (see @ref qore_module_fork_exit for the details):
-    - the end of the main program of the \c qore and \c qr programs, including an exception that was not caught
-      (exit status 3): the program, its threads and the modules are torn down as usual (module delete functions run),
-      then the standard I/O streams are flushed and the process ends with \c _exit() and the program's exit status
+    - the end of the main program of the \c qore and \c qr programs and of executables compiled with \c qcc,
+      including an exception that was not caught (exit status 3; 1 in an executable that \c qcc links from script
+      objects): the program, its threads and the modules are torn down as usual (module delete functions run), then
+      the standard I/O streams are flushed and the process ends with \c _exit() and the program's exit status
     - @ref Qore::exit() "exit()", qore_exit_process(), a \c SIGTERM with no %Qore handler (exit status 143) and a
       @ref Qore::GetOpt "GetOpt" parse error: as before, no program or module is torn down; the helper threads of the
       library are stopped, then the standard I/O streams are flushed if only the calling thread is left, and the

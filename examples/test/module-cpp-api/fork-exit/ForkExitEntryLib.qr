@@ -1,0 +1,28 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# Compiled by fork-exit.qtest with ForkExitEntry.qr into one executable with qcc (see ForkExitEntry.qr)
+
+const HangGuard = 10m;
+
+#! reads the marker lines from the pipe until its end; kills the process when a module's exit-time code blocks
+string sub read_markers(ReadOnlyFile r, int pid) {
+    list<string> markers = ();
+    while (True) {
+        if (!r.isDataAvailable(HangGuard)) {
+            markers += "hang-guard";
+            kill(pid, SIGKILL);
+            break;
+        }
+        *string line = r.readLine(False);
+        if (!line) {
+            break;
+        }
+        markers += line;
+        if (line =~ /-hang$/) {
+            # the exit-time code blocks forever after it has written its marker
+            kill(pid, SIGKILL);
+        }
+    }
+    return markers.join(",");
+}

@@ -135,16 +135,19 @@ that code, so it requests a quick exit from its child handler with `qore_fork_ch
     process, after stopping the signal thread, the JIT background compiler, the external thread reaper and the
     condition waker. No program is torn down there in any process. With other threads running (or from the signal
     thread, for a `SIGTERM` without a handler), it already ends with `_Exit(rc)`, without flushing.
-  - Embedding programs that return from `main()` call it themselves after `qore_cleanup()`. The `main()` that `qcc`
-    generates for executables does not call it: that code is in `qcc-main.cpp`, one of the `_qcc_format_sources`, so
-    an AOT executable honors the request in `exit()` but not when its main program ends.
+  - The executables that `qcc` compiles call it after `qore_cleanup()` too: the runtime entry points of their
+    generated `main()` (`qore_aot_run()`, `qore_aot_run_v2()` and `qore_aot_run_v3()` in `QoreAOTRuntime.cpp`) and the
+    `main()` that `qcc` writes for executables linked from script objects (`qcc-main.cpp`).
+  - Embedding programs that return from `main()` call it themselves after `qore_cleanup()`.
 - **What is skipped:** every `atexit()` handler and C++ static destructor, of every library and module, including the
   library's own (`qore_jit_shutdown_at_exit()` is not needed: the background compiler is stopped before).
 
 Tests: `examples/test/module-cpp-api/fork-exit/fork-exit.qtest` with the `forkexita` (an `atexit()` handler that
 blocks forever in a child) and `forkexitb` (a static destructor that aborts in a child) test modules, whose child
 handlers (at `QFR_MODULE_LEAF` and `QFR_MODULE_RESET`) request a quick exit twice each. The exit-time code writes a
-marker to a pipe before it blocks or aborts, so the scenario sees whether it ran without waiting for time.
+marker to a pipe before it blocks or aborts, so the scenario sees whether it ran without waiting for time. The
+scenario also runs compiled with `qcc` as an AOT executable, and `ForkExitEntryLib.qr` and `ForkExitEntry.qr` are
+linked into one executable from script objects, whose children end their main program.
 
 ## One-time initialization
 

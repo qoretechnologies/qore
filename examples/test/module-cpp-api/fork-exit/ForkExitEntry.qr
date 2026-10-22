@@ -1,0 +1,42 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# Compiled by fork-exit.qtest with ForkExitEntryLib.qr into one executable with qcc, whose generated main() calls
+# main() below and ends the process with status 0 when main() returns and 1 when it raises an exception.  main()
+# creates two children with fork(): one returns from main(), the other raises an exception that main() does not
+# catch, so in each child the generated main() of the executable ends the child, which exits quickly, as the modules
+# request; for each child, the script prints, as ForkExitScenario.qr does:
+#   child <case> markers=<markers> status=<exit status of the child, -1 if it did not exit normally>
+# and, at its own exit, the markers of its own exit-time code on stdout (which must run in the parent).
+
+# provides cpp_api_wait_child()
+%requires cppapiuser
+%requires forkexita
+%requires forkexitb
+
+sub main() {
+    foreach string c in (("return", "uncaught")) {
+        hash<PipeInfo> p = File::getPipe();
+        int fd = p.write.getPollableDescriptor();
+        ForkExitA::arm(fd, True);
+        ForkExitB::arm(fd, True);
+        flush();
+
+        int pid = fork();
+        if (!pid) {
+            # the end of main() in the child
+            if (c == "uncaught") {
+                throw "FORK-EXIT-ENTRY", "an exception that main() does not catch";
+            }
+            return;
+        }
+
+        # the parent's exit-time code writes its markers to stdout when this program exits
+        ForkExitA::arm(1, False);
+        ForkExitB::arm(1, False);
+        p.write.close();
+        string markers = read_markers(p.read, pid);
+        printf("child %s markers=%s status=%d\n", c, markers, cpp_api_wait_child(pid));
+        flush();
+    }
+}

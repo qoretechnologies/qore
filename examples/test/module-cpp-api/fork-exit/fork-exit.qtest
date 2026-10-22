@@ -9,6 +9,7 @@
 
 %requires ../../ExecModeHarness.qm
 %requires QUnit
+%requires FsUtil
 
 %exec-class ForkExitTest
 
@@ -19,7 +20,9 @@
     and forkexitb test modules have such exit-time code (forkexita: an atexit() handler that blocks forever, forkexitb:
     a static destructor that aborts) and request a quick exit from child fork handlers of different ranks.  Each case
     runs ForkExitScenario.qr in every execution mode; the exit-time code writes a marker before it blocks or aborts,
-    so a case sees deterministically whether it ran.
+    so a case sees deterministically whether it ran.  The last two cases end the main program of a child of an
+    executable compiled with qcc: ForkExitScenario.qr as an AOT executable, and ForkExitEntryLib.qr and
+    ForkExitEntry.qr linked into one executable from script objects.
 */
 class ForkExitTest inherits QUnit::Test {
     private {
@@ -27,11 +30,22 @@ class ForkExitTest inherits QUnit::Test {
         string qore_bin;
         #! the scenario
         string scenario;
+        #! the compiler of AOT executables
+        string qcc_bin;
+        #! the directory of the library
+        string libqore_dir;
+        #! the environment of qcc and of the executables that it compiles: the library of the build
+        string env;
     }
 
     constructor() : QUnit::Test("fork child exit", "1.0", \ARGV) {
         qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
         scenario = get_script_dir() + DirSep + "ForkExitScenario.qr";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + DirSep + "qcc") ? libqore_dir + DirSep + "qcc" : "qcc");
+        env = sprintf("QORE_LIBDIR='%s' LD_LIBRARY_PATH='%s' DYLD_LIBRARY_PATH='%s'", libqore_dir, libqore_dir,
+            libqore_dir);
 
         addTestCase("exit() in a child that exits quickly", \testExit());
         addTestCase("the end of the main program of a child that exits quickly", \testEnd());
@@ -41,6 +55,9 @@ class ForkExitTest inherits QUnit::Test {
         addTestCase("a child of a child exits quickly only if requested again", \testGrandchild());
         addTestCase("a program started with exec() runs its exit-time code", \testExec());
         addTestCase("a request outside of a fork handler has no effect", \testParentRequest());
+        addTestCase("the end of the main program of a child of an AOT executable", \testAotExecutable());
+        addTestCase("the end of main() in a child of an executable linked from script objects",
+            \testLinkedExecutable());
         set_return_value(main());
     }
 
@@ -78,6 +95,59 @@ class ForkExitTest inherits QUnit::Test {
 
     testParentRequest() {
         checkCase("parent-request", "", 7, "parent exits_quickly=False");
+    }
+
+    testAotExecutable() {
+        # the scenario compiled to an executable: its generated main() runs the program and then ends the process
+        if (!Option::HAVE_FORK) {
+            testSkip("fork() is not available");
+        }
+        TmpDir tmp("qore-fork-exit-aot-");
+        string exe = tmp.path + DirSep + "fork-exit-scenario";
+        compile(sprintf("%s -o '%s' '%s'", qcc_bin, exe, scenario), exe);
+        foreach hash<auto> c in ((
+            {"case": "end", "status": 5},
+            {"case": "exit", "status": 7},
+            {"case": "uncaught", "status": 3},
+        )) {
+            checkOutput(ExecModeHarness::run_command(sprintf("%s '%s' %s", env, exe, c."case")),
+                c."case" + " (AOT executable)", sprintf("child markers= status=%d", c.status));
+        }
+    }
+
+    testLinkedExecutable() {
+        # an executable linked from the objects of two sources: the main() that qcc writes calls main() of the script
+        if (!Option::HAVE_FORK) {
+            testSkip("fork() is not available");
+        }
+        TmpDir tmp("qore-fork-exit-qo-");
+        string exe = tmp.path + DirSep + "fork-exit-entry";
+        string sdir = get_script_dir() + DirSep;
+        compile(sprintf("%s -o '%s' '%sForkExitEntryLib.qr' '%sForkExitEntry.qr'", qcc_bin, exe, sdir, sdir), exe);
+        # the generated main() ends the process with 0 when main() returns and with 1 when it raises an exception
+        checkOutput(ExecModeHarness::run_command(sprintf("%s '%s'", env, exe)),
+            "main() (executable from script objects)",
+            ("child return markers= status=0", "child uncaught markers= status=1"));
+    }
+
+    #! compiles an executable with qcc
+    private compile(string cmd, string exe) {
+        string out = backquote(sprintf("%s %s 2>&1; echo EXIT=$?", env, cmd));
+        on_error printf("%s:\n%s\n", cmd, out);
+        assertTrue(out.regex("EXIT=0\n?$"), "the executable is compiled");
+        assertTrue(is_file(exe), "the executable exists");
+    }
+
+    #! checks the output of an executable: the line of each child with its markers and status, and the parent's markers
+    private checkOutput(hash<ExecModeHarness::ModeRunResult> r, string label, softlist<string> children) {
+        on_error printf("%s output:\n%s\n", label, r.out);
+        list<string> out = r.stdout.split("\n");
+        assertEq(0, r.rc, sprintf("%s: the executable exited normally", label));
+        foreach string child in (children) {
+            assertEq(1, (select out, $1 == child).size(), sprintf("%s: %s", label, child));
+        }
+        assertTrue(has(out, "forkexita-parent"), sprintf("%s: the parent's atexit() handler", label));
+        assertTrue(has(out, "forkexitb-parent"), sprintf("%s: the parent's static destructor", label));
     }
 
     #! returns True if the list has the line

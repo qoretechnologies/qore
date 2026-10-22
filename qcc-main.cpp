@@ -9510,6 +9510,7 @@ static int link_script_objects_to_executable(const std::string& output,
         "    if (!pgm) {\n"
         "        fprintf(stderr, \"qore_create_program failed\\n\");\n"
         "        qore_cleanup();\n"
+        "        qore_fork_child_quick_exit(1);\n"
         "        return 1;\n"
         "    }\n"
         "    qore_aot_script_begin_batch(pgm);\n",
@@ -9526,6 +9527,7 @@ static int link_script_objects_to_executable(const std::string& output,
         "            qore_last_error(pgm));\n"
         "        qore_destroy_program(pgm);\n"
         "        qore_cleanup();\n"
+        "        qore_fork_child_quick_exit(1);\n"
         "        return 1;\n"
         "    }\n"
         "    rc = qore_run_callable(pgm, \"%s\", NULL);\n"
@@ -9535,6 +9537,9 @@ static int link_script_objects_to_executable(const std::string& output,
         "    }\n"
         "    qore_destroy_program(pgm);\n"
         "    qore_cleanup();\n"
+        "    // a child process created with fork() whose modules requested it ends without running exit-time\n"
+        "    // handlers, as when the main program of qore and qr ends (see qore_fork_child_exit_quickly())\n"
+        "    qore_fork_child_quick_exit(rc);\n"
         "    return rc;\n"
         "}\n",
         entry, entry);
