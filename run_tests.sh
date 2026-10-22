@@ -463,16 +463,9 @@ if [ -r /proc/self/environ ]; then
     done
 fi
 
-# Returns 0 if the given process is the watcher BusyBox timeout leaves while it runs its command: it checks once a second
-# whether the command is still running, so it can still be there for up to a second after the command ended
-busybox_timeout_watcher() {
-    case "`readlink /proc/$1/exe 2>/dev/null`" in
-        */busybox) ;;
-        *) return 1 ;;
-    esac
-    arg0=`tr '\0' '\n' < /proc/$1/cmdline 2>/dev/null | head -1`
-    [ "${arg0##*/}" = timeout ]
-}
+# qore_ci_running_processes(): tells the processes a test left running from a BusyBox timeout watcher and from one
+# that has ended meanwhile
+. "$BASE_TEST_PATH/docker_test/ci-job-processes.sh"
 
 # Sets TEST_SURVIVORS to the processes the current test started that are still running (Linux only).  Every process a
 # test starts, and every process those start, inherits QORE_TEST_PROCESS_MARK in its environment, also when it
@@ -759,21 +752,31 @@ for test in $TESTS; do
     # A test must end every process it starts: one still running keeps the output of the tests open, so that a CI job
     # running them does not end until its time limit, and it can interfere with the tests that follow
     find_test_survivors "$TEST_PROCESS_MARK"
+    # a BusyBox timeout watcher is ended without failing the test: the command it watches, if still running, is a
+    # survivor of its own; a process that has ended since it was found is not running
     TEST_LEFTOVERS=""
-    for pid in $TEST_SURVIVORS; do
-        # a BusyBox timeout watcher is ended without failing the test: the command it watches, if still running, is
-        # a survivor of its own
-        if busybox_timeout_watcher $pid; then
-            kill -KILL $pid 2>/dev/null
-        else
-            TEST_LEFTOVERS="$TEST_LEFTOVERS $pid"
-        fi
-    done
+    TEST_LEFTOVER_LINES=""
+    TEST_SURVIVOR_STATES=""
+    if [ -n "$TEST_SURVIVORS" ]; then
+        TEST_SURVIVOR_STATES=`qore_ci_running_processes $TEST_SURVIVORS`
+    fi
+    while read -r kind pid cmd; do
+        case "$kind" in
+            watcher)
+                kill -KILL $pid 2>/dev/null
+                ;;
+            running)
+                TEST_LEFTOVERS="$TEST_LEFTOVERS $pid"
+                TEST_LEFTOVER_LINES="$TEST_LEFTOVER_LINES  pid $pid: $cmd
+"
+                ;;
+        esac
+    done <<EOF
+$TEST_SURVIVOR_STATES
+EOF
     if [ -n "$TEST_LEFTOVERS" ]; then
         echo "*** FAILURE: the test left processes running; they are killed: ***"
-        for pid in $TEST_LEFTOVERS; do
-            echo "  pid $pid: `tr '\0' ' ' < /proc/$pid/cmdline 2>/dev/null`"
-        done
+        printf '%s' "$TEST_LEFTOVER_LINES"
         kill -KILL $TEST_LEFTOVERS 2>/dev/null
         if [ $test_exit -eq 0 ]; then
             test_exit=1
