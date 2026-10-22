@@ -554,6 +554,7 @@ class AsyncIoControllerPriv : public AbstractPrivateData {
     friend class AsyncIoOpCacheTest;
     friend class AsyncIoAbandonedSubmitTest;
     friend class AsyncIoRegistrationCloseTest;
+    friend class AsyncIoClosedPollableTest;
     friend class AsyncIoStaleReadinessTest;
     friend class AsyncIoStoppingThreadTest;
     friend class AsyncIoFrameSendTest;
@@ -1108,6 +1109,11 @@ private:
         */
         QoreObject* cached_sock_obj = nullptr;
         uint64_t last_queued_gen = 0;   //!< Phase 1 generation when last queued (duplicate prevention)
+        //! The number of the operation's last waits in a row for events of an object that has no descriptor
+        /** The object was closed before its descriptor could be registered; see updateEventLoopRegistration() and
+            makeDescriptorlessWaitException()
+        */
+        unsigned descriptorless_waits = 0;
         //! The ID the operation cache gave this operation; see OpCache
         uint64_t op_id = 0;
         //! The sandbox context of the submitter, applied to the operation's steps on callback workers
@@ -1861,11 +1867,34 @@ private:
     DLLLOCAL static bool refreshSocketWaitGeneration(PollInfo& pinfo, QoreHashNode* poll_info);
 
     //! Update EventLoop registration for an operation
-    /** @param op_id the operation's ID; see OpCache
+    /** When the object has no descriptor although an operation waits for its events, it was closed before its
+        descriptor could be registered, and no event can come for it: its operations run again and see the close, as
+        when the hold of a descriptor fails (see addSocketFd()).
+
+        @param op_id the operation's ID; see OpCache
+
+        @return true if the operation waits for events of an object that has no descriptor
     */
-    DLLLOCAL void updateEventLoopRegistration(IoThreadContext& t, uint64_t op_id,
+    DLLLOCAL bool updateEventLoopRegistration(IoThreadContext& t, uint64_t op_id,
         QoreObject* socket, const std::string& sock_hash, int events, bool force_fd_reregister,
         ExceptionSink* xsink);
+
+    //! Changes the event loop registration of the object for the operation; see updateEventLoopRegistration()
+    DLLLOCAL void updateEventLoopRegistrationIntern(IoThreadContext& t, uint64_t op_id, int ev_flags,
+        QoreObject* socket, const std::string& sock_hash, bool force_fd_reregister, ExceptionSink* xsink);
+
+    //! Records whether the operation's last wait was for events of an object that has no descriptor
+    /** @param waits_without_descriptor the return value of updateEventLoopRegistration() for the wait
+    */
+    DLLLOCAL static void noteDescriptorlessWait(PollInfo& pinfo, bool waits_without_descriptor) {
+        pinfo.descriptorless_waits = waits_without_descriptor ? pinfo.descriptorless_waits + 1 : 0;
+    }
+
+    //! Returns SOCKET-CLOSED if the operation waited for an object without a descriptor again after it ran again
+    /** An operation whose object was closed before its descriptor could be registered runs again to see the close
+        (see updateEventLoopRegistration()); one that waits for the object again would only run again and again.
+    */
+    DLLLOCAL static QoreHashNode* makeDescriptorlessWaitException(PollInfo& pinfo, ExceptionSink* xsink);
 
     //! Unregister an operation from the EventLoop
     /** @param op_id the operation's ID; see OpCache

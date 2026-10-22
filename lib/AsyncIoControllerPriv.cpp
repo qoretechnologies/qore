@@ -5776,6 +5776,17 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                 poll_results.push_back(std::move(result));
                 continue;
             }
+            if (node->second.descriptorless_waits > 1) {
+                // the operation ran again after its object was closed, and waited for the closed object again: it
+                // would only run again and again
+                result.ex_hash = makeDescriptorlessWaitException(node->second, xsink);
+                if (result.ex_hash) {
+                    // the close is the terminal reason, also if the operation's timeout expired meanwhile
+                    result.timed_out = false;
+                    poll_results.push_back(std::move(result));
+                    continue;
+                }
+            }
 
             if (op.timed_out) {
                 // Create timeout exception hash
@@ -6190,9 +6201,12 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                         QoreValue sock_v = result.new_poll_info->getKeyValue("socket");
                         QoreObject* new_sock_obj = sock_v.getType() == NT_OBJECT
                             ? sock_v.get<QoreObject>() : nullptr;
+                        // an operation that waited for an object without a descriptor waits for it again: it is
+                        // seen again if the object still has none (see updateEventLoopRegistration())
                         bool needs_full_update = pinfo.cached_sock_hash.empty()
                             || events != pinfo.cached_events
-                            || new_sock_obj != pinfo.cached_sock_obj;
+                            || new_sock_obj != pinfo.cached_sock_obj
+                            || pinfo.descriptorless_waits;
                         // also takes the fd snapshot for the next wait; nothing below changes the socket's fd
                         bool force_fd_reregister = refreshSocketWaitGeneration(pinfo,
                             result.new_poll_info);
@@ -6233,8 +6247,8 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                                 pinfo.cached_sock_obj = poll_sock;
                                 ASYNC_IO_TRACE("Phase3 UPDATE key='%s' sock='%s' events=%d\n",
                                     key.c_str(), sock_hash.c_str(), events);
-                                updateEventLoopRegistration(t, result.op_id, poll_sock, sock_hash,
-                                    events, force_fd_reregister, xsink);
+                                noteDescriptorlessWait(pinfo, updateEventLoopRegistration(t, result.op_id,
+                                    poll_sock, sock_hash, events, force_fd_reregister, xsink));
                                 pinfo.submit_route_sock_hash.clear();
                                 pinfo.submit_route_thread_idx = -1;
                                 updateExtraFds(t, result.op_id, poll_sock, result.new_poll_info,
@@ -7917,8 +7931,8 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                                     pinfo.cached_sock_hash = sock_hash;
                                     pinfo.cached_events = events;
                                     pinfo.cached_sock_obj = poll_sock;
-                                    updateEventLoopRegistration(t, pinfo.op_id, poll_sock,
-                                        sock_hash, events, force_fd_reregister, xsink);
+                                    noteDescriptorlessWait(pinfo, updateEventLoopRegistration(t, pinfo.op_id,
+                                        poll_sock, sock_hash, events, force_fd_reregister, xsink));
                                     updateExtraFds(t, pinfo.op_id, poll_sock,
                                         cmd.continue_poll_result, xsink);
                                 }
@@ -8097,7 +8111,7 @@ void AsyncIoControllerPriv::deliverBackstopCompletionIfUndelivered(PollInfo& pin
         pinfo.owner, pinfo.sandbox_ctx);
 }
 
-void AsyncIoControllerPriv::updateEventLoopRegistration(IoThreadContext& t, uint64_t op_id,
+bool AsyncIoControllerPriv::updateEventLoopRegistration(IoThreadContext& t, uint64_t op_id,
         QoreObject* socket, const std::string& sock_hash, int events, bool force_fd_reregister,
         ExceptionSink* xsink) {
     // Convert SOCK_POLLIN/SOCK_POLLOUT to QORE_EV_READ/QORE_EV_WRITE
@@ -8112,6 +8126,51 @@ void AsyncIoControllerPriv::updateEventLoopRegistration(IoThreadContext& t, uint
     // Track per-key events
     t.key_events[op_id] = ev_flags;
 
+    updateEventLoopRegistrationIntern(t, op_id, ev_flags, socket, sock_hash, force_fd_reregister, xsink);
+
+    // the descriptor of an object whose operations wait for its events is registered, unless the object has none
+    if (!computeEventUnion(t, sock_hash) || t.registered_fds.count(sock_hash)) {
+        return false;
+    }
+    AbstractPollableIoObjectBase* s = static_cast<AbstractPollableIoObjectBase*>(
+        socket->getReferencedPrivateDataIfExists(CID_ABSTRACTPOLLABLEIOOBJECTBASE));
+    if (!s) {
+        // a deleted object; its operations are ended for it (see makeSocketWaitGenerationException())
+        return false;
+    }
+    int fd = s->getPollableDescriptor();
+    s->deref(xsink);
+    if (fd >= 0) {
+        // the hold of the descriptor failed: the object was closed or its descriptor replaced after it was read, and
+        // its operations run again (see addSocketFd())
+        return false;
+    }
+    // the object was closed before its descriptor could be registered, by a thread that closed it without the
+    // controller (a module's object closed by its own API, for example), so no event can come for it, and the
+    // operations waiting for it would wait until their timeout: they run again and see the close
+    ASYNC_IO_TRACE("updateEventLoop[%d]: op=%llu sock='%s' has no descriptor\n", t.thread_idx,
+        (unsigned long long)op_id, sock_hash.c_str());
+    t.wake_socket_hashes.insert(sock_hash);
+    return ev_flags != 0;
+}
+
+QoreHashNode* AsyncIoControllerPriv::makeDescriptorlessWaitException(PollInfo& pinfo, ExceptionSink* xsink) {
+    QoreValue v = pinfo.poll_info ? pinfo.poll_info->getKeyValue("socket") : QoreValue();
+    const QoreObject* obj = v.getType() == NT_OBJECT ? v.get<const QoreObject>() : nullptr;
+    ReferenceHolder<QoreHashNode> ex(new QoreHashNode(hashdeclExceptionInfo, xsink), xsink);
+    if (!*xsink) {
+        SimpleRefHolder<QoreStringNode> desc(new QoreStringNode);
+        desc->sprintf("the %s object that the operation waits for was closed before Socket async I/O could wait for "
+            "it, and the operation waited for it again after the close", obj ? obj->getClassName() : "I/O");
+        ex->setKeyValue("err", new QoreStringNode("SOCKET-CLOSED"), xsink);
+        ex->setKeyValue("desc", desc.release(), xsink);
+        ex->setKeyValue("type", new QoreStringNode("User"), xsink);
+    }
+    return *xsink ? nullptr : ex.release();
+}
+
+void AsyncIoControllerPriv::updateEventLoopRegistrationIntern(IoThreadContext& t, uint64_t op_id, int ev_flags,
+        QoreObject* socket, const std::string& sock_hash, bool force_fd_reregister, ExceptionSink* xsink) {
     // Get previous socket for this key
     auto prev_it = t.registered_sockets.find(op_id);
     QoreObject* prev_sock = prev_it != t.registered_sockets.end() ? prev_it->second : nullptr;
@@ -8125,8 +8184,8 @@ void AsyncIoControllerPriv::updateEventLoopRegistration(IoThreadContext& t, uint
         }
     }
 
-    ASYNC_IO_TRACE("updateEventLoop op=%llu sock='%s' events=%d prev_sock=%p\n",
-        (unsigned long long)op_id, sock_hash.c_str(), events, (void*)prev_sock);
+    ASYNC_IO_TRACE("updateEventLoop op=%llu sock='%s' ev_flags=%d prev_sock=%p\n",
+        (unsigned long long)op_id, sock_hash.c_str(), ev_flags, (void*)prev_sock);
 
     if (prev_sock && prev_sock_hash == sock_hash) {
         // Same socket object - check if underlying fd changed (e.g., reconnection to
@@ -8371,6 +8430,10 @@ void AsyncIoControllerPriv::applyEventUnion(IoThreadContext& t, QoreObject* sock
                     }
                     if (fd >= 0) {
                         addSocketFd(t, s, socket, sock_hash, fd, union_events, xsink);
+                    } else {
+                        // the object was closed before its descriptor could be registered: the operations waiting
+                        // for it run again and see the close (see updateEventLoopRegistration())
+                        t.wake_socket_hashes.insert(sock_hash);
                     }
                 }
                 s->deref(xsink);

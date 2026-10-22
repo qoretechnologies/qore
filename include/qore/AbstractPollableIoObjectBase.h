@@ -74,6 +74,16 @@ public:
     */
     DLLEXPORT AbstractPollableIoObjectBase();
 
+    //! Returns the descriptor that the async I/O controller waits on for the object's operations
+    /** @return the descriptor, or -1 if the object has none, as once it is closed
+
+        An operation that waits for events of an object without a descriptor cannot be woken by them: the controller
+        runs it again at once, also when another thread closed the object without the controller before the I/O
+        thread could register its descriptor, so that the operation sees the close and ends (for example with an
+        exception); an operation that waits for the closed object again ends with a \c SOCKET-CLOSED exception.  An
+        operation that waits only for its extra descriptors or for its poll timeout while the object has no
+        descriptor, as while a host name is resolved before a connection is made, reports no events for the object.
+    */
     virtual int getPollableDescriptor() const = 0;
 
     //! Keeps the pollable descriptor open while the async I/O controller has it registered in an event loop

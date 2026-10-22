@@ -5050,6 +5050,303 @@ private:
     }
 };
 
+//! An operation waiting for a module's pollable object that was closed before it was registered ends at once
+/** A module's pollable I/O object, such as an SSH connection, can be closed by another thread without the async I/O
+    controller (a disconnect) at any point of an operation that waits for it.  Its descriptor is held while it is
+    registered (AbstractPollableIoObjectBase::holdPollableDescriptor()), so a close after the registration shuts the
+    descriptor down, which wakes the operation, and a close after the I/O thread read the descriptor makes the hold
+    fail, so the operation runs again and sees the close.  When the object was closed before the I/O thread read its
+    descriptor, it had none: nothing was registered, nothing woke the operation, and it waited until its timeout, or
+    forever without one.  The operation now runs again then as well, and an operation that waits for the closed
+    object once more ends with SOCKET-CLOSED.
+
+    The registration cases drive the registration of an I/O thread context on this thread: the first registration
+    of the object, a registration made again by the operation, and a registration of an object whose descriptor
+    another operation has registered (the change of the registered events finds the object closed, and the other
+    operation must not be left waiting for a registration that is removed).  The operation cases submit operations
+    to a running controller, on its I/O thread and on a worker, that close the object after they returned their wait
+    and before the I/O thread registers it.
+*/
+class AsyncIoClosedPollableTest {
+public:
+    static void run(UnitTestCounters& c) {
+        runRegistration(c, Registration::First);
+        runRegistration(c, Registration::Again);
+        runRegistration(c, Registration::Shared);
+        runOperation(c, false, true);
+        runOperation(c, true, true);
+        runOperation(c, false, false);
+        runOperation(c, true, false);
+    }
+
+private:
+    //! A module's pollable object: a listening socket that another thread can close without the controller
+    class ModulePollable : public AbstractPollableIoObjectBase {
+    public:
+        //! Makes the object listen on a port of the IPv4 loopback address; returns 0 for success
+        DLLLOCAL int listen(ExceptionSink* xsink) {
+            if (socket.bindINET("127.0.0.1", "0", true, Q_AF_INET, Q_SOCK_STREAM, 0, xsink)) {
+                return -1;
+            }
+            return socket.listen(5);
+        }
+
+        DLLLOCAL virtual int getPollableDescriptor() const override {
+            return socket.getSocket();
+        }
+
+        DLLLOCAL virtual int holdPollableDescriptor(int fd, std::shared_ptr<void>& hold) const override {
+            return socket.holdDescriptor(fd, hold);
+        }
+
+        DLLLOCAL virtual void closeIo(ExceptionSink*) override {
+            socket.close();
+        }
+
+        //! Closes the object in another thread without the controller, as a disconnect does
+        DLLLOCAL void closeFromAnotherThread() {
+            std::thread closer([this]() {
+                socket.close();
+            });
+            closer.join();
+        }
+
+        DLLLOCAL bool isOpen() const {
+            return socket.isOpen();
+        }
+
+    private:
+        QoreSocket socket;
+    };
+
+    //! The registration made for the operation after the object was closed
+    enum class Registration {
+        //! the operation's first registration of the object
+        First,
+        //! the operation registered the open object before and registers it again
+        Again,
+        //! another operation registered the open object before
+        Shared,
+    };
+
+    static void runRegistration(UnitTestCounters& c, Registration reg) {
+        const char* what = reg == Registration::First
+            ? "the first registration"
+            : (reg == Registration::Again ? "a registration made again" : "a registration shared with another "
+                "operation");
+        ExceptionSink xsink;
+        ReferenceHolder<AsyncIoControllerPriv> ctrl(new AsyncIoControllerPriv(false, &xsink), &xsink);
+        UT_ASSERT(c, !xsink, "closed-pollable controller construction succeeds");
+        if (xsink) {
+            xsink.clear();
+            return;
+        }
+        // an I/O thread context that the test drives itself, on this thread
+        std::unique_ptr<AsyncIoControllerPriv::IoThreadContext> tp(new AsyncIoControllerPriv::IoThreadContext);
+        AsyncIoControllerPriv::IoThreadContext& t = *tp;
+        t.loop = new QoreEventLoop(&xsink);
+        UT_ASSERT(c, !xsink && t.loop->isValid(), "closed-pollable event loop construction succeeds");
+        if (xsink) {
+            xsink.clear();
+            return;
+        }
+
+        ModulePollable* p = new ModulePollable;
+        ReferenceHolder<QoreObject> obj(new QoreObject(QC_ABSTRACTPOLLABLEIOOBJECTBASE, getProgram(), p), &xsink);
+        int rc = p->listen(&xsink);
+        UT_ASSERT(c, !rc && !xsink, "the module's object listens");
+        if (rc || xsink) {
+            xsink.clear();
+            return;
+        }
+
+        const uint64_t op_id = 1;
+        const uint64_t other_op_id = 2;
+        const std::string sock_hash = AsyncIoControllerPriv::getSocketHash(p);
+        if (reg != Registration::First) {
+            ctrl->updateEventLoopRegistration(t, reg == Registration::Again ? op_id : other_op_id, *obj, sock_hash,
+                SOCK_POLLIN, false, &xsink);
+            UT_ASSERT(c, !xsink && t.registered_fds.count(sock_hash), "the open object's descriptor is registered");
+            xsink.clear();
+            UT_ASSERT(c, t.wake_socket_hashes.empty(), "the operation waiting for the open object is not run again");
+            t.wake_socket_hashes.clear();
+        }
+
+        p->closeFromAnotherThread();
+        UT_ASSERT(c, !p->isOpen(), "the module's object is closed");
+
+        // a shared registration changes the registered events
+        ctrl->updateEventLoopRegistration(t, op_id, *obj, sock_hash, reg == Registration::Shared ? SOCK_POLLOUT
+            : SOCK_POLLIN, false, &xsink);
+        UT_ASSERT(c, !xsink, "the registration of the closed object raises no exception");
+        xsink.clear();
+        UT_ASSERT(c, !t.registered_fds.count(sock_hash), "the closed object has no registered descriptor");
+        if (!t.wake_socket_hashes.count(sock_hash)) {
+            printf("  closed-pollable: the operations are not run again after %s\n", what);
+        }
+        UT_ASSERT(c, t.wake_socket_hashes.count(sock_hash),
+            "the operations of an object closed before its registration run again and see the close");
+
+        ctrl->unregisterFromEventLoop(t, op_id, &xsink);
+        if (reg == Registration::Shared) {
+            ctrl->unregisterFromEventLoop(t, other_op_id, &xsink);
+        }
+        UT_ASSERT(c, !xsink, "the operations are unregistered");
+        xsink.clear();
+    }
+
+    //! Waits for the module's object, which another thread closes after the operation returned its first wait
+    class WaitOp : public SocketPollOperationBase {
+    public:
+        /** @param worker true if continuePoll() runs on a worker of the controller, false for the I/O thread
+            @param sees_close true if the operation ends when it runs after the close, false if it waits again
+        */
+        DLLLOCAL WaitOp(QoreObject* obj, ModulePollable* p, bool worker, bool sees_close) : obj(obj), p(p),
+                worker(worker), sees_close(sees_close) {
+        }
+
+        DLLLOCAL virtual bool goalReached() const override {
+            return false;
+        }
+
+        DLLLOCAL virtual void abort(ExceptionSink*) override {
+        }
+
+        DLLLOCAL virtual bool needsWorkerDispatch() const override {
+            return worker;
+        }
+
+        DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink) override {
+            int n = ++calls;
+            if (n > 1 && sees_close && !p->isOpen()) {
+                xsink->raiseException("MODULE-CLOSED", "the module's object was closed");
+                return nullptr;
+            }
+            ReferenceHolder<QoreHashNode> info(new QoreHashNode(hashdeclSocketPollInfo, xsink), xsink);
+            info->setKeyValue("events", SOCK_POLLIN, xsink);
+            info->setKeyValue("socket", obj->objectRefSelf(), xsink);
+            if (*xsink) {
+                return nullptr;
+            }
+            if (n == 1) {
+                // the object is closed after the operation has returned its wait, before the I/O thread registers
+                // its descriptor
+                p->closeFromAnotherThread();
+            }
+            return info.release();
+        }
+
+        DLLLOCAL virtual QoreValue getOutput() const override {
+            return calls.load();
+        }
+
+        DLLLOCAL int getCalls() const {
+            return calls.load();
+        }
+
+        DLLLOCAL virtual const char* getStateImpl() const override {
+            return "waiting";
+        }
+
+    private:
+        QoreObject* obj;
+        ModulePollable* p;
+        bool worker;
+        bool sees_close;
+        std::atomic<int> calls{0};
+    };
+
+    static void runOperation(UnitTestCounters& c, bool worker, bool sees_close) {
+        printf("  closed-pollable operation: %s, %s\n", worker ? "worker" : "I/O thread",
+            sees_close ? "sees the close" : "waits again");
+        ExceptionSink xsink;
+        ReferenceHolder<AsyncIoControllerPriv> ctrl(new AsyncIoControllerPriv(false, &xsink), &xsink);
+        UT_ASSERT(c, !xsink, "closed-pollable controller construction succeeds");
+        if (xsink) {
+            xsink.clear();
+            return;
+        }
+        struct Cleanup {
+            AsyncIoControllerPriv* ctrl;
+            ExceptionSink& xsink;
+            UnitTestCounters& c;
+
+            ~Cleanup() {
+                xsink.clear();
+                ctrl->stopClear(&xsink);
+                UT_ASSERT(c, !xsink, "closed-pollable controller cleanup succeeds");
+                xsink.clear();
+            }
+        } cleanup{*ctrl, xsink, c};
+
+        ctrl->setMaxIoThreads(1, &xsink);
+        ctrl->start(&xsink);
+        UT_ASSERT(c, !xsink, "closed-pollable controller starts");
+        if (xsink) {
+            return;
+        }
+
+        ModulePollable* p = new ModulePollable;
+        ReferenceHolder<QoreObject> obj(new QoreObject(QC_ABSTRACTPOLLABLEIOOBJECTBASE, getProgram(), p), &xsink);
+        int rc = p->listen(&xsink);
+        UT_ASSERT(c, !rc && !xsink, "the module's object listens");
+        if (rc || xsink) {
+            return;
+        }
+
+        WaitOp* op = new WaitOp(*obj, p, worker, sees_close);
+        ReferenceHolder<QoreObject> op_obj(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), op), &xsink);
+        op->setSelf(*op_obj);
+        op_obj->setValue("sock", obj->objectRefSelf(), &xsink);
+        op_obj->setValue("goal", new QoreStringNode("closed-pollable"), &xsink);
+        ReferenceHolder<QoreHashNode> info(new QoreHashNode(hashdeclSocketPollOperationInfo, &xsink), &xsink);
+        info->setKeyValue("sock", obj->objectRefSelf(), &xsink);
+        info->setKeyValue("spop", op_obj->objectRefSelf(), &xsink);
+        info->setKeyValue("owner", new QoreStringNode("closed-pollable-unit-test"), &xsink);
+        // the operation's timeout; it must end before, for the close
+        info->setKeyValue("to", 5000, &xsink);
+        UT_ASSERT(c, !xsink, "closed-pollable submission info is initialized");
+        if (xsink) {
+            return;
+        }
+        ReferenceHolder<QoreObject> queue_obj(ctrl->submit(nullptr, info.release(), false, &xsink), &xsink);
+        UT_ASSERT(c, !xsink && queue_obj, "closed-pollable operation is submitted with a result queue");
+        if (xsink || !queue_obj) {
+            return;
+        }
+        ReferenceHolder<Queue> queue(static_cast<Queue*>(queue_obj->getReferencedPrivateData(CID_QUEUE, &xsink)),
+            &xsink);
+        UT_ASSERT(c, queue && !xsink, "closed-pollable result queue is valid");
+        if (!queue || xsink) {
+            return;
+        }
+        // a hang guard only: the operation ends with its timeout at the latest
+        bool timed_out = false;
+        ValueHolder result(queue->shift(&xsink, 30000, &timed_out), &xsink);
+        UT_ASSERT(c, !timed_out && !xsink && result->getType() == NT_HASH, "the closed-pollable operation ends");
+        const QoreHashNode* h = result->getType() == NT_HASH ? result->get<const QoreHashNode>() : nullptr;
+        QoreValue ex = h ? h->getKeyValue("ex") : QoreValue();
+        std::string err;
+        if (ex.getType() == NT_HASH) {
+            QoreStringValueHelper str(ex.get<const QoreHashNode>()->getKeyValue("err"));
+            err = str->c_str();
+        }
+        const char* expected = sees_close ? "MODULE-CLOSED" : "SOCKET-CLOSED";
+        if (err != expected) {
+            printf("  closed-pollable: the operation ended with %s, not %s\n", err.empty() ? "no error"
+                : err.c_str(), expected);
+        }
+        UT_ASSERT(c, err == expected, sees_close
+            ? "an operation that sees the close ends with its own error when it runs after the close"
+            : "an operation that waits for the closed object again ends with SOCKET-CLOSED");
+        UT_ASSERT_EQ(c, 2, op->getCalls(), "the operation runs once more after the close");
+        xsink.clear();
+        SimpleRefHolder<QoreStringNode> owner(new QoreStringNode("closed-pollable-unit-test"));
+        ctrl->cancelByOwner(*owner, &xsink);
+        xsink.clear();
+    }
+};
+
 //! A native operation whose poll timeout hint is 0 is continued at once
 /** A hint of 0 means that the operation's timer is due now, as when its own deadline expires while its continuePoll()
     runs: SocketQuicClientPollOperation returns 0 when its handshake deadline passes during the call.  The I/O thread
@@ -11001,6 +11298,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
 #endif
     AsyncIoAbandonedSubmitTest::run(c);
     AsyncIoRegistrationCloseTest::run(c);
+    AsyncIoClosedPollableTest::run(c);
     AsyncIoZeroPollHintTest::run(c);
     AsyncIoStaleReadinessTest::run(c);
     AsyncIoAbandonedCommandLockTest::run(c);
