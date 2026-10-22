@@ -440,7 +440,7 @@ public:
     DLLLOCAL ~SocketAcceptPollSocketOperationBase() {
     }
 
-    DLLLOCAL virtual void abort(ExceptionSink* xsink) {
+    DLLLOCAL virtual void abort(ExceptionSink* xsink) override {
         // NOTE: we do not close the socket here in any case
         if (set_non_block_accept) {
             set_non_block_accept = false;
