@@ -205,15 +205,11 @@ printf("%y: header word b: %y\n", mime_decode_header(mime_encode_header_word_b(s
     - @ref Mime::mime_parse_form_urlencoded_string() "mime_parse_form_urlencoded_string()" raises
       \c URLENCODED-PARSE-ERROR for a parameter name that decodes to a string with a NUL character (such as
       \c "a%00b"), which was cut at the NUL character; a value with one is kept
-
-    @subsection mime_1_8 v1.8
     - added @ref Mime::YamlMimeTypes "YamlMimeTypes" constant: set of all equivalent YAML MIME types
       (\c "text/x-yaml", \c "application/x-yaml", \c "application/yaml", \c "text/yaml") for normalization
     - added @ref Mime::mime_check_equivalent_type() "mime_check_equivalent_type()" function to check if a
       content type has an equivalent match in a set of accepted MIME types (currently handles YAML MIME type
       equivalence)
-
-    @subsection mime_1_7 v1.7
     - added new multipart message classes:
       - @ref Mime::MultiPartDigestMessage "MultiPartDigestMessage": for email digests (RFC 2046 section 5.1.5)
       - @ref Mime::MultiPartByteRangesMessage "MultiPartByteRangesMessage": for HTTP 206 partial content responses

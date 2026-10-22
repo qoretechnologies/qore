@@ -193,8 +193,6 @@ $env:QORE_CONNECTION_PROVIDERS="MyConnectionProvider;OtherConnectionProvider"
     - added @ref ConnectionProvider::HttpConnection::getAsyncConnectionManager()
       "HttpConnection::getAsyncConnectionManager()"; timeout options given as relative dates are accepted
       (<a href="https://github.com/qoretechnologies/qore/issues/5469">issue 5469</a>)
-
-    @subsection connectionprovider_3_0 ConnectionProvider 3.0
     - added @ref ConnectionProvider::AbstractConnection::supportsAsyncRequestApi()
       "AbstractConnection::supportsAsyncRequestApi()" and
       @ref ConnectionProvider::AbstractConnection::startPollRequest()
@@ -215,12 +213,8 @@ $env:QORE_CONNECTION_PROVIDERS="MyConnectionProvider;OtherConnectionProvider"
       accepting an explicit \c AsyncSocketIoController; the original constructor signature is preserved and uses
       the global async I/O controller singleton
     - added \c AsyncSocketIo module dependency
-
-    @subsection connectionprovider_2_2 ConnectionProvider 2.2
     - omit sensitive declared connection options from ping and connection diagnostics
     - added async HTTP ping polling support for HTTP and HTTP-based connections
-
-    @subsection connectionprovider_2_1 ConnectionProvider 2.1
     - added the @ref ConnectionProvider::RestartableIoHelper "RestartableIoHelper" class
 
     @subsection connectionprovider_2_0_1 ConnectionProvider 2.0.1

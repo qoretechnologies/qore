@@ -753,8 +753,6 @@ module GmailDataProvider {
     - message watch events carry the \c In-Reply-To header, and attachment watch events carry the \c thread_id
       of the source message
     - the \c list, \c get, and \c get-attachment actions are declared read-only
-
-    @subsection gmaildataprovider_v1_1 GmailDataProvider v1.1
     - added the \c trash-message and \c delete-message actions, so a consumer can clear a source message
       itself once it has finished processing it
     - attachment watch events carry the \c message_id of the source message, so a consumer can address it

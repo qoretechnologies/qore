@@ -220,18 +220,12 @@ printf("%Y\n", ans.body);
       @ref RestClient::RestClient::copySelf() "copySelf()" hook, so a subclass that customizes authentication or
       headers, such as @ref awsrestclientintro "AwsRestClient", keeps that behaviour on the copy
       (<a href="https://github.com/qoretechnologies/qore/issues/5365">issue 5365</a>)
-
-    @subsection restclientv2_6 RestClient v2.6
     - added @ref RestClient::RestClient::doRequestWithResponseLimit()
       "RestClient::doRequestWithResponseLimit()" for memory-safe bounded REST responses
-
-    @subsection restclientv2_4 RestClient v2.4
     - added CBOR serialization support (\c "cbor" data option) when the \c json module
       version 1.12+ is available (RFC 8949)
     - added the official \c "application/yaml" MIME type (RFC 9512) to the accepted content types
       for inbound responses
-
-    @subsection restclientv2_3_3 RestClient v2.3.3
     - fixed non-blocking polling with connections that use basic auth
       (<a href="https://github.com/qoretechnologies/qore/issues/5001">issue 5001</a>)
 

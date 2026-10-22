@@ -299,16 +299,10 @@ $function$
       the whole database with \c pg_database_size().
     - fixed a \c cast data provider expression with a size, or with a precision and a scale: the size was ignored
       and the precision was given as the scale, so that the cast failed or changed the value
-
-    @subsection pgsqlsqlutilbasev118 PgsqlSqlUtilBase v1.18
     - Added offline table rewrite transactions that limit only lock waits on PostgreSQL 17 and later,
       preserving stricter session statement and transaction timeouts.
-
-    @subsection pgsqlsqlutilbasev117 PgsqlSqlUtilBase v1.17
     - Added bounded direct-child partition catalog pages with parent-bound identity cursors,
       including nested and pending-detach identities without recursive inspection.
-
-    @subsection pgsqlsqlutilbasev116 PgsqlSqlUtilBase v1.16
     - a negative number default value of a column, which PostgreSQL returns quoted (ex: \c "'-1'::integer"), compares
       equal to its declared value: schema alignment changed the default value of such a column on every run
     - a column declared with the long name of a type that PostgreSQL returns in a short form (ex:
@@ -316,26 +310,16 @@ $function$
       read from the server: schema alignment changed the type of such a column on every run
     - Added targeted column-migration metadata for resumable offline upgrades, including
       relation identity, dependent objects, and UPDATE trigger functions.
-
-    @subsection pgsqlsqlutilbasev115 PgsqlSqlUtilBase v1.15
     - bounded maintenance starts with fresh READ COMMITTED snapshots and refuses silently hidden rows,
       while preserving stricter deadlines and restoring session defaults on transaction completion
-
-    @subsection pgsqlsqlutilbasev114 PgsqlSqlUtilBase v1.14
     - measures text and binary column byte lengths from their uncompressed length metadata,
       without transferring or decompressing large values; ambiguous selections are rejected
-
-    @subsection pgsqlsqlutilbasev113 PgsqlSqlUtilBase v1.13
     - supports SqlUtil physical-placement updates with a context scoped to the exact live table and
       transaction, including partition movement's source DELETE and destination INSERT trigger calls
     - successful statements clear the context before ordinary writes resume; failed statements preserve
       their original error and require the owning transaction to roll back
-
-    @subsection pgsqlsqlutilbasev112 PgsqlSqlUtilBase v1.12
     - added explicit non-key update row locking through the SqlUtil @c forupdate_no_key select option;
       independent foreign-key checks can complete while other writers, deletes and key changes remain excluded
-
-    @subsection pgsqlsqlutilbasev111 PgsqlSqlUtilBase v1.11
     - supports atomic empty-partition removal through SqlUtil; the leaf is detached and dropped in the same
       transaction, so foreign keys that reference the partitioned table remain enforced, and a failed drop leaves
       the leaf attached; parent and leaf locks exclude routed and direct writers, catalog OIDs reject replaced
@@ -345,8 +329,6 @@ $function$
       are not portable schema definitions and must not be reused after a restore or relation replacement
     - nested and foreign partitions are rejected; dependency errors never trigger a cascading drop, and
       successful calls restore caller timeout and row-security settings
-
-    @subsection pgsqlsqlutilbasev110 PgsqlSqlUtilBase v1.10
     - tables, sequences, and materialized views are listed only from the schemas of the connection's
       \c search_path, as views already were and as on Oracle and MySQL, instead of from every schema in the
       database; an object in <tt>current_schema()</tt> is listed unqualified and one in any other \c search_path
@@ -363,8 +345,6 @@ $function$
       standard output before the exception reached the caller; the statement and arguments are now only added to
       the exception description, and the original error code, exception argument (including the SQLSTATE), and
       exception chain are preserved
-
-    @subsection pgsqlsqlutilbasev19 PgsqlSqlUtilBase v1.9
     - the UNNEST bulk DML below is used with the native \c pgsql driver only; with JDBC, bulk DML uses batch
       statements
     - \c hasArrayBind() now checks the @ref Qore::SQL::DBI_CAP_HAS_ARRAY_BIND capability flag

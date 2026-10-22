@@ -86,8 +86,6 @@ AbstractDataProviderType event = GoogleDataProviderBase::getResponseTypeForSchem
       while static metadata such as the data provider index is read, live discovery is not used, and the schemas of
       other Google APIs are reported as unavailable (\c GOOGLE-SCHEMA-UNAVAILABLE)
     - runtime discovery does not hold the shared type-cache mutex while waiting for HTTP
-
-    @subsection googledataprovider_v2_1 GoogleDataProvider v2.1
     - date values in query arguments are serialized as RFC 3339 timestamps (ex: <tt>2026-09-02T10:00:00+02:00</tt>),
       as Google APIs require for arguments such as <tt>timeMin</tt> / <tt>timeMax</tt>, instead of an unparseable digit string
 

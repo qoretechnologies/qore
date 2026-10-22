@@ -74,8 +74,6 @@ module WebSocketUtil {
       - added @ref WebSocketUtil::WebSocketExtensionRegistry "WebSocketExtensionRegistry" factory class
       - added @ref WebSocketUtil::PerMessageDeflateExtension "PerMessageDeflateExtension" implementing
         <a href="http://tools.ietf.org/html/rfc7692">RFC 7692</a>
-
-    @subsection wsu_v15 v1.5
     - added RSV bit support for WebSocket extensions
       (<a href="https://github.com/qoretechnologies/qore/issues/5065">issue 5065</a>)
       - added @ref WS_RSV1, @ref WS_RSV2, @ref WS_RSV3 constants

@@ -105,8 +105,6 @@ module DiscordWebSocketClient {
       unconditionally, so both messages went out per reconnect, which the gateway treats as
       ambiguous and can silently drop the session; the IDENTIFY/RESUME decision now happens only
       after \c HELLO arrives, so exactly one of them is sent per connection
-
-    @subsection discordwebsocketclientv1_1 DiscordWebSocketClient v1.1
     - added \c disconnect() override to stop the heartbeat thread before disconnecting, preventing
       service shutdown hangs when the heartbeat thread is started via \c start_thread
 

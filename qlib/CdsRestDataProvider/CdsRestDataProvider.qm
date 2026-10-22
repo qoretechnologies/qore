@@ -406,8 +406,6 @@ module CdsRestDataProvider {
       written as an OData property
       path (\c primarycontactid/fullname), where it was written with dots, which OData reads as a cast to a type;
       a field whose key has a dot or a slash, which no OData property name has, raises \c WHERE-ERROR
-
-    @subsection cdsrestdataprovider_v2_1 CdsRestDataProvider v2.1
     - added support for Microsoft Dynamics 365 Business Central
       - new data provider classes for Business Central CRUD operations
       - company-scoped entity access

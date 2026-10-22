@@ -63,8 +63,6 @@ module Qdx {
     @subsection qdx_1_1_3 Qdx v1.1.3
     - render MIME wildcards and URL paths literally in prose, code examples and verbatim blocks
     - respect conditional parse directives during documentation builds using QORE_DOC_DEFINES
-
-    @subsection qdx_1_1_2 Qdx v1.1.2
     - added formatted astparser diagnostics for tooling that consumes Qore source
 
     @subsection qdx_1_1_1 Qdx v1.1.1

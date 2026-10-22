@@ -133,8 +133,6 @@ printf("%Y\n", ans.body);
       see @ref cdsrestclient_discovery
     - an API profile's scopes are resolved against the connection URL again when the URL changes, so a
       connection moved to another environment no longer authorizes against the old one
-
-    @subsection cdsrestclientv2_1 CdsRestClient v2.1
     - added support for Microsoft Dynamics 365 Business Central
       - new \c BusinessCentralRestConnection class for BC connections
       - API profile support for BC-specific URL construction and OAuth2 scopes

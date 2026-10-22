@@ -120,8 +120,6 @@ module BulkSqlUtil {
     @subsection bulksqlutil_v1_6 BulkSqlUtil v1.6
     - added the opt-in \c "bulk_load" policy and \c "bulk_load_options" for driver-native inserts; see
       @ref native_bulk_load
-
-    @subsection bulksqlutil_v1_5 BulkSqlUtil v1.5
     - bulk operations now report themselves as bounded streams to a datasource mutation observer, so that an
       observer can stop an operation that exceeds what it will admit before the transaction commits; see
       @ref bulk_bounded_streams
@@ -129,8 +127,6 @@ module BulkSqlUtil {
       \c "stream_bounds" option
     - the type of @ref BulkSqlUtil::AbstractBulkOperation::OptionDefaults "AbstractBulkOperation::OptionDefaults"
       widened from \c hash<string, int> to \c hash<string, auto> to carry the boolean \c "stream_bounds" default
-
-    @subsection bulksqlutil_v1_4 BulkSqlUtil v1.4
     - added the \c "returning" option to @ref BulkSqlUtil::BulkInsertOperation "BulkInsertOperation": the given
       columns are retrieved for every inserted row and given to the \c "rowcode" callback
     - bulk queues now validate record field sets and list or buffer column lengths before initializing or modifying

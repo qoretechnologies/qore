@@ -136,11 +136,7 @@ module Util {
     - @ref Util::parse_uri_query() "parse_uri_query()" raises \c URI-QUERY-ERROR for a parameter name that is or
       decodes to a string with a NUL character (such as \c "a%00b"), which cannot be a hash key; before, a name with
       a NUL character was cut at the NUL character
-
-    @subsection util_2_2 Util 2.2
     - added @ref Util::TerminalColor "TerminalColor" class for ANSI terminal color output
-
-    @subsection util_2_1_1 Util 2.1.1
     - fixed the @ref Util::glob_to_regex() "glob_to_regex()" function
       (<a href="https://github.com/qoretechnologies/qore/issues/4996">issue 4996</a>)
 

@@ -143,8 +143,6 @@ stream.close();
       call are
     - the finish reason \c model_length (the model's context length was reached) is an output limit, as \c length
       is: the stop reason is \c max_tokens, and no tool call of the unfinished response is given
-
-    @subsection OpenAiRestClientv1_1 OpenAiRestClient v1.1
     - an \c allowed_tools tool choice restricts the tools a call may use without changing the tools it
       declares, also on the Responses API: keeping the declared tools unchanged keeps the provider's prompt
       cache across calls that allow different tools

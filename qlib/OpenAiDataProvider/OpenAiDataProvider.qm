@@ -808,8 +808,6 @@ hash<auto> items = conversations.getChildProvider("items").getChildProvider("lis
       audio transcription (speech-to-text) API; the audio file is uploaded as \c multipart/form-data and the
       \c gpt-4o-transcribe, \c gpt-4o-mini-transcribe, and \c whisper-1 models are supported with the \c json,
       \c text, \c srt, \c verbose_json, and \c vtt response formats
-
-    @subsection openaidataprovider_v1_6 OpenAiDataProvider v1.6
     - added the \c conversations data provider tree implementing the OpenAI Conversations API
       (create, get, update, delete, and item list/create/get/delete), replacing the deprecated Assistants API
       threads
@@ -821,8 +819,6 @@ hash<auto> items = conversations.getChildProvider("items").getChildProvider("lis
       returned to the model; this replaces the deprecated Assistants API \c submit_tool_outputs endpoint
     - deprecated all \c assistants, \c threads, and \c runs data providers ahead of OpenAI's 2026-08-26 removal
       of the Assistants API
-
-    @subsection openaidataprovider_v1_5 OpenAiDataProvider v1.5
     - added OpenAiResponseActionSession for action-based response creation and streaming
     - added typed response output items for tool calls, tool results, and output content parts
     - added response stream data provider for Server-Sent Events streaming

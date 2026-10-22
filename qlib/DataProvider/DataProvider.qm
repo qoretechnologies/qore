@@ -1647,8 +1647,6 @@ fetch
       application getters (\c getAllApps(), \c getApp(), \c getAppEx(), \c searchAppRegex(), \c searchAppSubstr())
       and \c getDataProviderForAction() no longer build deferred output types, so loading one provider module and
       reading one action no longer builds the output types of every action of every loaded module
-
-    @subsection dataprovider_v3_10_1 DataProvider v3.10.1
     - <b>behavior change</b>: a field reference whose path goes through a value that is not a hash or an object
       now has no value: <tt>\@a.b</tt> is no value when \c a is \c 5, a string, a list or no value, as documented
       for @ref DataProvider::AbstractDataProvider::evalGenericExpressionValue() "evalGenericExpressionValue()";
@@ -1661,8 +1659,6 @@ fetch
       argument of an expression is evaluated for each item of a source (the body and filter of \c map, the
       predicates of the streaming operators, the expression after a wildcard), so that code that collects or
       validates the fields of a record can leave out the fields of the items, as DPQL validation does
-
-    @subsection dataprovider_v3_10 DataProvider v3.10
     - added the DPQL @ref dpql_wildcards "wildcard accessors" \c [*] and \c {*}, which take a value from each item
       of a list or each value of a hash: <tt>\@orders[*].id</tt> is <tt>map \@id, \@orders</tt>,
       <tt>\@prices{*}.amount</tt> is <tt>map \@value.amount, \@prices</tt>, and <tt>\@orders[*].items[*].sku</tt>
@@ -1670,8 +1666,6 @@ fetch
       (@ref DataProvider::DP_FUNC_LIST_WILDCARD "DP_FUNC_LIST_WILDCARD",
       @ref DataProvider::DP_FUNC_HASH_WILDCARD "DP_FUNC_HASH_WILDCARD",
       @ref DataProvider::DP_FUNC_WILDCARD_ITEM "DP_FUNC_WILDCARD_ITEM", \c DPQL_TOK_WILDCARD)
-
-    @subsection dataprovider_v3_9 DataProvider v3.9
     - an expression has one type wherever it is used: DPQL validation, expression verification
       (@ref DataProvider::AbstractDataProvider::verifyExpression() "AbstractDataProvider::verifyExpression()") and
       other users of expression types work out the type of an expression with the new
@@ -1814,8 +1808,6 @@ fetch
       read at run time with their formulas recognize totals rows as the profile does; a \c SUM, \c SUBTOTAL, or
       \c AGGREGATE formula marks a totals row only when it totals the rows above it in its own column, so a line
       total across a data row does not
-
-    @subsection dataprovider_v3_8 DataProvider v3.8
     - added @ref DataProvider::DataProvider::listKnownFactories() "DataProvider::listKnownFactories()", which returns
       the factories registered, in the data provider index, or known to the module, without loading any module, and
       @ref DataProvider::DataProvider::tryGetFactoryInfoAsData() "DataProvider::tryGetFactoryInfoAsData()", which
@@ -1935,8 +1927,6 @@ fetch
     - fixed @ref DataProvider::SoftListDataType "SoftListDataType" with an element type that has no single %Qore
       type - one produced by an OpenAPI \c anyOf or \c oneOf, say -, which raised an error; its %Qore type is then
       an untyped \b soft list, since a soft list always accepts a single value in place of a list
-
-    @subsection dataprovider_v3_7 DataProvider v3.7
     - generated date examples now use a fixed UTC sample instead of the current time, making repeated metadata
       reads and nested examples reproducible; explicitly supplied examples, defaults and allowed values are unchanged
     - fixed \c HashDataType required-field tracking when an optional field with a default is added after a
@@ -1958,8 +1948,6 @@ fetch
       @ref DataProvider::DataProviderActionCatalog::getModulePathsForApp() reported the wrong module for them, and
       @ref DataProvider::DataProviderActionCatalog::getPresentationContributionsForModule() reported foreign
       presentation strings as owned by that module
-
-    @subsection dataprovider_v3_6 DataProvider v3.6
     - added a declarative single-file read/write mapping so that generic consumers can read and write a file
       through any application without knowing its action and option names, which differ from application to
       application; used by the \c "conn://" scheme in the \c FileLocationHandler module:
@@ -2032,8 +2020,6 @@ fetch
     - class-backed named types (\c file, \c rgbcolor, and the new semantic string types) are now resolvable
       by name through @ref DataProvider::AbstractDataProviderType::get() "AbstractDataProviderType::get()",
       so fields and options can reference them by name
-
-    @subsection dataprovider_v3_5 DataProvider v3.5
     - added explicit expression pushdown capability metadata so action sessions and database providers can
       distinguish backend-native expressions from generic client implementations
     - added template context, template value, and template type-resolution forwarding methods to the public
@@ -2149,15 +2135,11 @@ fetch
       unbounded memory growth under repeated app/connection registration and deregistration
     - fixed a memory leak where registering a dynamic app at runtime left an undischarged
       module-initialization rollback closure on the per-thread implicit module transaction list
-
-    @subsection dataprovider_v3_4 DataProvider v3.4
     - added @ref DataProvider::AbstractSimulationRecorder "AbstractSimulationRecorder" and
       @ref DataProvider::AbstractDataProvider::simulateRequest() "AbstractDataProvider::simulateRequest()" for
       side-effect-free dry-run execution
     - added @ref DataProvider::AbstractDataProvider::getSimulationVolatileFields()
       "AbstractDataProvider::getSimulationVolatileFields()" for simulation signature hashing
-
-    @subsection dataprovider_v3_3 DataProvider v3.3
     - added 67 generic DPQL expressions for use in data-driven contexts (arithmetic, string
       operations, type conversions, encoding, cryptographic operations, regex, date/time,
       collection operations, and serialization functions)

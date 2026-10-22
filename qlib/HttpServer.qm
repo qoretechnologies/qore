@@ -299,8 +299,6 @@ log("started listener on %s", lh.desc);
       @ref HttpServer::HttpServer::closeConnectionAfterResponse() "closeConnectionAfterResponse()" method closes a
       connection in this way after a response sent by a handler thread
     - allow the listener class to be overridden and added \c "listener-name" to the context hash
-
-    @subsection http1_6 HttpServer 1.6
     - persistent (dedicated-thread) handler sessions are stream-scoped on HTTP/2 and HTTP/3, which carry many
       independent streams on one connection: a handler that calls \c AbstractHttpRequestHandler::setPersistent()
       on such a connection is released after its response, and its thread-local context is torn down; a session
@@ -329,8 +327,6 @@ log("started listener on %s", lh.desc);
       @ref HttpServer::HttpServer::addListenersAsync() "addListenersAsync()" methods for Future-based listener setup
     - fixed a shutdown crash when HttpServer instances created with the deprecated logger callback constructor were
       torn down while async logging was still active
-
-    @subsection http1_5 HttpServer 1.5
     - introduced async I/O for HttpServer (now the only mode)
 
     @subsection http1_4 HttpServer 1.4

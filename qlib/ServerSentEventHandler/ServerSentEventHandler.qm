@@ -101,8 +101,6 @@ hash<HttpHandlerResponseInfo> getEvents(hash<auto> cx, *hash<auto> ah) {
       @ref ServerSentEventHandler::ServerSentEventHandler::setMaxQueueSize() "setMaxQueueSize()"): a slow or
       non-reading client whose outbound event queue reaches the limit is dropped instead of growing server memory
       without bound; protects servers exposed to untrusted clients
-
-    @subsection serversenteventhandler_v1_1_0 Version 1.1.0
     - added AsyncAPI 3.0 validation support for outbound SSE event data via the \c asyncapi,
       \c validator, and \c asyncapi_channel handler and bridge options
     - added @ref ServerSentEventHandler::SseObservableBridge and the
@@ -111,8 +109,6 @@ hash<HttpHandlerResponseInfo> getEvents(hash<auto> cx, *hash<auto> ah) {
       SSE response from a REST handler (or any other handler that returns
       an @ref HttpServer::HttpHandlerResponseInfo "HttpHandlerResponseInfo"),
       with no extra threads required
-
-    @subsection serversenteventhandler_v1_1 Version 1.1
     - added @ref ServerSentEventHandler::ServerSentEventHandler::setupAsyncSseConnection()
       "ServerSentEventHandler::setupAsyncSseConnection()" for async SSE connection setup via the
       I/O controller, replacing the legacy synchronous \c startImpl() entry point

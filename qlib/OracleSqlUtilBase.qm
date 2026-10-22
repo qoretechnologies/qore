@@ -379,8 +379,6 @@ hash schema = (
       @ref SqlUtil::AbstractTable "AbstractTable" partition APIs
     - implemented the generic validated named-partition select qualifier for primary and joined table references
     - added targeted canonical-name partition metadata lookup with the preceding range bound
-
-    @subsection oracle161 OracleSqlUtilBase v1.6.1
     - fixed a bug where a select combining \c forupdate with \c limit or \c offset and an \c orderby failed with
       \c ORA-02014; the rows of the page are now located and locked in the base table with their \c ROWIDs, as
       Oracle cannot lock rows selected through an inline view

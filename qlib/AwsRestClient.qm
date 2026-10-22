@@ -104,8 +104,6 @@ printf("%Y\n", ans.body);
     - added @ref AwsRestClient::AwsRestClientIo::restDoEncodedRawRequest()
       "AwsRestClientIo::restDoEncodedRawRequest()" for schema-driven requests whose URI path variables are
       already percent-encoded, preserving the exact encoded path in AWS Signature Version 4 canonical requests
-
-    @subsection awsrestclientv1_3 AwsRestClient v1.3
     - added @ref AwsRestClient::AwsS3RestConnection "AwsS3RestConnection" for Amazon S3, which needs no URL -
       the endpoint is derived from the region - and offers the AWS regions as a list
       (<a href="https://github.com/qoretechnologies/qore/issues/5386">issue 5386</a>)

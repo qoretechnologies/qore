@@ -241,8 +241,6 @@ if (*hash<ProviderIndexFailureInfo> failure = ProviderIndexUtil::tryGetActionFai
     - an action whose metadata cannot be read is logged and omitted
     - fixed @ref ProviderIndexUtil::ProviderIndexUtil::removeCachedApp() "ProviderIndexUtil::removeCachedApp()"
       leaving the removed app's actions available
-
-    @subsection providerindexutil_v1_1 ProviderIndexUtil v1.1
     - loaded dependency filtering recognizes exact module names and loaded artifact paths, including compiled
       modules with API-version suffixes; legacy explicit-path indexes remain readable
 

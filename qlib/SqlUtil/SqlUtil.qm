@@ -268,41 +268,25 @@ module SqlUtil {
     - a column operator can be given the query and the column that it is applied to, with the \c "withcolumn" key
       of its description, so that its SQL can depend on the type of the column (see
       @ref SqlUtil::AbstractTable::addCustomCopOperator() "AbstractTable::addCustomCopOperator()")
-
-    @subsection sqlutilv3_10_0 SqlUtil v3.10.0
     - Added an offline table rewrite transaction that limits only lock waits, for single schema statements
       such as column type changes whose duration is proportional to the table size
       (@ref SqlUtil::AbstractTable::beginOfflineRewriteTransaction() "AbstractTable::beginOfflineRewriteTransaction()").
-
-    @subsection sqlutilv3_9_0 SqlUtil v3.9.0
     - Added a separate finite offline-maintenance transaction budget for large schema cutovers,
       preserving statement limits, stricter session settings and the online maintenance limits.
-
-    @subsection sqlutilv3_8_0 SqlUtil v3.8.0
     - Added bounded, read-only partition catalog paging for allocation inventory without recursive
       partition inspection or table-data scans.
-
-    @subsection sqlutilv3_7_0 SqlUtil v3.7.0
     - Added getColumnMigrationInfo() for inspecting dependencies and relation identity before
       resumable column replacement without scanning table data.
-
-    @subsection sqlutilv3_6_0 SqlUtil v3.6.0
     - bounded maintenance transactions establish fresh statement snapshots and complete-row visibility
       before locking, without changing session defaults or weakening database deadlines
-
-    @subsection sqlutilv3_5_0 SqlUtil v3.5.0
     - added capability-checked AbstractTable::getColumnByteSizes() for measuring text and binary
       values without transferring or decompressing payloads; ambiguous row selections fail
-
-    @subsection sqlutilv3_4_0 SqlUtil v3.4.0
     - fixed trigger removal when a driver returns its SQL as a statement list
     - added AbstractTable::updatePhysicalPlacement() and cooperative trigger guards for relocating
       admitted rows without changing business timestamps or emitting duplicate business statistics;
       foreign-key constraints remain enforced and normal writes retain their trigger behavior
     - physical placement uses a table-scoped, transaction-local context; failed statements require
       rollback, and unsupported database drivers reject the operation without changing data
-
-    @subsection sqlutilv3_3_0 SqlUtil v3.3.0
     - added explicit capability-checked non-key update row locks: status writers can permit independent
       foreign-key checks while continuing to exclude competing writers, deletes and key changes
     - added capability-checked @ref SqlUtil::AbstractTable::dropEmptyPartition()
@@ -311,8 +295,6 @@ module SqlUtil {
     - callers must supply current catalog discovery, use a dedicated transaction, and reconcile ambiguous
       results before retrying; PostgreSQL supplies the first implementation, with bounded lock waits and
       statement execution, while other drivers fail closed
-
-    @subsection sqlutilv3_2_0 SqlUtil v3.2.0
     - fixed @ref SqlUtil::AbstractTable::setupTable() "AbstractTable::setupTable()" requesting primary-key DDL
       while constructing an in-memory table description; SQLite tables with primary keys can now be described
       and aligned for unrelated field changes without attempting unsupported \c ALTER \c TABLE operations
@@ -358,8 +340,6 @@ module SqlUtil {
       object that the caller cannot reach
     - fixed an exception raised by an @ref sql_callback "sql_callback" for a list of SQL statements writing the
       failed statement to standard output; the statement is only passed to the @ref error_callback "error_callback"
-
-    @subsection sqlutilv3_1_0 SqlUtil v3.1.0
     - added a portable temporary-table abstraction: @ref SqlUtil::AbstractDatabase::supportsTempTables()
       "AbstractDatabase::supportsTempTables()" and @ref SqlUtil::AbstractDatabase::createTempTable()
       "AbstractDatabase::createTempTable()" create a temporary table from an in-memory column description (no
@@ -368,8 +348,6 @@ module SqlUtil {
       provides the temporary-table join mechanism recommended as an alternative to large \c "in" operator argument
       lists.  Driver support: PostgreSQL, Oracle (pre-created global temporary tables on all versions, private
       temporary tables on 18c+), MySQL, SQL Server, and SQLite3
-
-    @subsection sqlutilv3_0_0 SqlUtil v3.0.0
     - table alignment now skips driver-specific column modification for identical definitions and keeps logical and
       quoted DDL names synchronized after column renames, allowing a rename and a definition change in one alignment
       operation

@@ -124,8 +124,6 @@ module RestSchemaValidator {
       - @ref RestSchemaValidator::AbstractRestSchemaValidator::getTypeForReference() "AbstractRestSchemaValidator::getTypeForReference()"
       - @ref RestSchemaValidator::AbstractRestSchemaValidator::replaceTypeForReference() "AbstractRestSchemaValidator::replaceTypeForReference()"
       along with @ref RestSchemaValidator::AbstractRestSchemaObject::replaceType() "AbstractRestSchemaObject::replaceType()"
-
-    @subsection restschemavalidator_2_4 RestSchemaValidator v2.4
     - added @ref RestSchemaValidator::RestSchemaLoader "RestSchemaLoader" class for auto-detecting and loading
       Swagger 2.0 or OpenAPI 3.x schemas without needing to know the format in advance
       (<a href="https://github.com/qorelanguage/qore/issues/5006">issue 5006</a>)
@@ -134,8 +132,6 @@ module RestSchemaValidator {
       - @ref RestSchemaValidator::AbstractRestSchemaValidator::getFieldFromSchema() "AbstractRestSchemaValidator::getFieldFromSchema()"
       - @ref RestSchemaValidator::AbstractRestSchemaValidator::getFieldForHeaders() "AbstractRestSchemaValidator::getFieldForHeaders()"
       (<a href="https://github.com/qorelanguage/qore/issues/5006">issue 5006</a>)
-
-    @subsection restschemavalidator_2_3 RestSchemaValidator v2.3
     - added abstract base classes for REST schema objects to enable polymorphic usage:
       - @ref RestSchemaValidator::AbstractSchemaBase "AbstractSchemaBase": base class for schema validation constraints
       - @ref RestSchemaValidator::AbstractSchemaObject "AbstractSchemaObject": base class for JSON schema objects

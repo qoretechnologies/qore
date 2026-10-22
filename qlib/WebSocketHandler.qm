@@ -177,24 +177,18 @@ printf("HTTP/3 WebSocket server listening on port 8443\n");
       to every new @ref WebSocketHandler::WebSocketConnection "WebSocketConnection"
     - added @ref WebSocketHandler::WebSocketConnection::setEchoMode()
       "WebSocketConnection::setEchoMode()" for automatic echo of received frames
-
-    @subsection websockethandler_v2_7 Version 2.7
     - added @ref WebSocketHandler::WebSocketConnection::setWsPollOp()
       "WebSocketConnection::setWsPollOp()" and
       @ref WebSocketHandler::WebSocketConnection::setStreamProcessor()
       "WebSocketConnection::setStreamProcessor()" for async I/O integration
     - added @ref WebSocketHandler::WebSocketStreamProcessor "WebSocketStreamProcessor" class
       for HTTP/2 and HTTP/3 WebSocket stream processing on worker threads
-
-    @subsection websockethandler_v2_6 Version 2.6
     - added async I/O event-driven model: @ref WebSocketHandler::WebSocketConnection::notifyIo()
       "WebSocketConnection::notifyIo()" and
       @ref WebSocketHandler::WebSocketConnection::waitForIoEvent()
       "WebSocketConnection::waitForIoEvent()" for non-polling WebSocket I/O
     - deprecated @ref WebSocketHandler::WebSocketConnection::pollData()
       "WebSocketConnection::pollData()" in favor of the event-driven model
-
-    @subsection websockethandler_v2_5 Version 2.5
     - frames that cannot be sent at once because of transport backpressure are kept in a per-connection pending
       send buffer that is drained at each handler loop iteration
       - HTTP/2 flow control (\c HTTP2-FLOW-CONTROL) and HTTP/1.1 async contention
@@ -207,8 +201,6 @@ printf("HTTP/3 WebSocket server listening on port 8443\n");
       "MaxPendingSendBytes" constant (4 MB safety limit)
     - added @ref WebSocketHandler::WebSocketHandler::MaxDrainFramesPerIteration
       "MaxDrainFramesPerIteration" constant to cap drain time per loop iteration
-
-    @subsection websockethandler_v2_4 Version 2.4
     - added support for WebSocket over HTTP/2 (RFC 8441 — Extended CONNECT)
     - added support for WebSocket over HTTP/3 (RFC 9220 — Extended CONNECT over QUIC)
       - server-side detection of HTTP/3 CONNECT requests with \c :protocol=websocket
@@ -219,8 +211,6 @@ printf("HTTP/3 WebSocket server listening on port 8443\n");
       "WebSocketConnection::setStreamContext()" and
       @ref WebSocketHandler::WebSocketConnection::getStreamContext()
       "WebSocketConnection::getStreamContext()" methods for unified stream context management
-
-    @subsection websockethandler_v2_3 Version 2.3
     - added WebSocket extension support (RFC 6455 Section 9) with permessage-deflate (RFC 7692)
       (<a href="https://github.com/qoretechnologies/qore/issues/5065">issue 5065</a>)
     - added @ref WebSocketHandler::WebSocketHandler "WebSocketHandler" constructor option \c "extensions" to enable
@@ -229,8 +219,6 @@ printf("HTTP/3 WebSocket server listening on port 8443\n");
       "WebSocketConnection::hasPerMessageDeflate()" method
     - added @ref WebSocketHandler::WebSocketConnection::getActiveExtensions()
       "WebSocketConnection::getActiveExtensions()" method
-
-    @subsection websockethandler_v2_2 Version 2.2
     - added optional AsyncAPI validation support via @ref WebSocketHandler::WebSocketConnection::setAsyncApiValidator()
       "WebSocketConnection::setAsyncApiValidator()" for validating WebSocket messages against AsyncAPI schemas
       (<a href="https://github.com/qoretechnologies/qore/issues/5014">issue 5014</a>)

@@ -377,8 +377,6 @@ module DbDataProvider {
     - added the SqlUtil \c partition search option to
       @ref DbDataProvider::DbTableDataProvider "DbTableDataProvider" reads and DB \c find / \c find_single actions;
       bulk reads now forward all validated search options to SqlUtil
-
-    @subsection dbdataprovider_v2_4 DbDataProvider v2.4
     - added the @ref DbDataProvider::DbVendorInfo "DbVendorInfo" hashdecl for per-vendor database app configuration
     - added @ref DbDataProvider::registerDbVendorApp() "registerDbVendorApp()" for registering per-vendor database
       applications with individual connection form fields (driver, host, port, db, user, pass, etc.)
@@ -386,8 +384,6 @@ module DbDataProvider {
     - added per-vendor database applications for CockroachDB, Amazon Redshift, MariaDB, Snowflake, ClickHouse, and H2
     - added @c jdbc_jar field to @ref DbDataProvider::DbVendorInfo "DbVendorInfo" for JDBC auto-classpath support
     - added SVG logos for CockroachDB, Amazon Redshift, MariaDB, Snowflake, ClickHouse, and H2
-
-    @subsection dbdataprovider_v2_3 DbDataProvider v2.3
     - added the @ref DbDataProvider::DatasourceConnection "DatasourceConnection" class providing database connectivity
       using the @c db:// URL scheme with automatic connection scheme registration
     - added per-database-driver SVG logo registry with logos for PostgreSQL, MySQL, Oracle, SQL Server (FreeTDS),

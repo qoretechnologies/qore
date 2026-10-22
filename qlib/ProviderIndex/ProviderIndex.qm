@@ -63,8 +63,6 @@ module ProviderIndex {
     @subsection providerindex_v1_4 ProviderIndex v1.4
     - added @ref ProviderIndex::ProviderIndexCreateOptions "ProviderIndexCreateOptions" to allow callers to
       create scoped, deterministic indices without loading external provider discovery sources
-
-    @subsection providerindex_v1_2 ProviderIndex v1.2
     - added @ref ProviderIndex::ProviderIndex::cancelWorkers() "ProviderIndex::cancelWorkers()" to stop the worker
       processes of the index builds in progress, which run in their own process groups and are therefore not stopped
       with the process that builds the index; a cancelled build fails with \c PROVIDER-INDEX-CANCELLED
@@ -103,8 +101,6 @@ module ProviderIndex {
       failures that are not those of individual apps or actions fail the build, and an index worker whose apps or
       actions failed indexes the others and succeeds
     - indexes written by this version require ProviderIndexUtil 1.2 or later
-
-    @subsection providerindex_v1_1 ProviderIndex v1.1
     - index dependencies now use exact registered module names rather than source or compiled artifact paths,
       so installing an equivalent compiled module does not change its dependency identity
     - explicit seeded paths are resolved against loaded module metadata; unresolved paths fail before publication

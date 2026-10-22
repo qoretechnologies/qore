@@ -126,8 +126,6 @@ msg.addTO("My Best Friend <you@friend.com>");
       @ref MailMessage::Message::serialize() "Message::serialize()" no longer change the message: a \c Content-Type
       header was removed or taken as the type of the body, and the body encoding of a message with attachments was
       changed from \c none to \c 7bit
-
-    @subsection mailmessage_v1_5 MailMessage 1.5
     - Enhanced attachment handling:
       - Added RFC 2231 filename encoding for non-ASCII filenames
       - Added RFC 2231 filename decoding for incoming messages

@@ -190,12 +190,8 @@ module HttpServerUtil {
       response with a streamed message body framed as the response headers declare
     - added the @ref HttpServer::CookieHelper "CookieHelper" class with cookie utility methods; it is deprecated:
       use @ref HttpUtil::set_cookie_header() and @ref HttpUtil::CookieInfo directly
-
-    @subsection httputil1_5 HttpServerUtil 1.5
     - added extension points to @ref HttpServer::AbstractAuthenticator "AbstractAuthenticator" for
       \c Authorization: \c Negotiate request handling and optional \c WWW-Authenticate: \c Negotiate challenges
-
-    @subsection httputil1_4 HttpServerUtil 1.4
     - added HTTP/3 (QUIC) listener configuration support (\c enable_h3, \c alt_svc_max_age, \c no_bind)
     - added maximum HTTP request body size enforcement (\c max_request_body_size)
     - added \c sync option to allow non-blocking listener addition in async I/O mode

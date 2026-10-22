@@ -269,8 +269,6 @@ foreach hash<DataProviderDebugInfo> debug in (info) {
     - a data message sent after the close handshake started raises \c WEBSOCKET-CLOSING-ERROR: no data frame may
       follow a CLOSE frame (RFC 6455 section 5.5.1)
     - the connect and reconnect log messages give the URL without its password
-
-    @subsection wsc_v2_4 v2.4
     - the module requires the AsyncApi module
     - @ref WebSocketClient::WebSocketClientWithSerialization "WebSocketClientWithSerialization" now validates
       deserialized incoming payloads against the configured AsyncAPI receive schema before raising
