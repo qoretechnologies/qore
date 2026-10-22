@@ -25,6 +25,13 @@ if (NOT DEFINED QORE_QDX_COMMAND)
 endif ()
 option(QORE_GENERATE_JAVA_BINDINGS "Generate Java bindings with module documentation (requires JNI)" ON)
 
+# the binary modules that the documentation tools load: qdx requires astparser and Qdx, whose Util module requires
+# yaml, json and reflection, and qjar requires reflection; a documentation target built in the same tree as these
+# modules depends on them, as the tools cannot run before the modules are built
+if (NOT DEFINED QORE_DOC_TOOL_MODULES)
+    set(QORE_DOC_TOOL_MODULES astparser reflection yaml json)
+endif ()
+
 if (NOT DEFINED QORE_QJAR_COMMAND)
     if (QORE_IN_BUILD_TREE)
         set(QORE_QJAR_COMMAND ${QORE_EXECUTABLE} ${QORE_QJAR_EXECUTABLE})
@@ -3488,7 +3495,7 @@ MACRO (QORE_USER_MODULE _module_file)
 
         # Fast documentation skips docs-lang, which normally builds these
         # native tool dependencies before qdx and qjar can load them.
-        foreach(_qore_doc_tool astparser reflection)
+        foreach(_qore_doc_tool ${QORE_DOC_TOOL_MODULES})
             if (TARGET ${_qore_doc_tool})
                 add_dependencies(docs-fast-${f} ${_qore_doc_tool})
             endif()
