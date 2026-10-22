@@ -38,10 +38,41 @@
 #include <memory>
 #include <string>
 
+//! The private data of a builtin class whose objects have a descriptor that can be polled for I/O readiness
+/** A builtin class whose private data derives this class declares \c vparent=AbstractPollableIoObjectBase in its
+    \c .qpp file: its objects can then be passed as the \c socket of a @ref Qore::SocketPollInfo "SocketPollInfo"
+    hash and as the I/O object of an operation submitted to the @ref Qore::AsyncIoController "AsyncIoController", and
+    the async I/O controller keeps their descriptor open while it has it registered (see holdPollableDescriptor()).
+    Classes in binary modules can derive it as well as the classes of the library.
+
+    @par Example:
+    @code{.cpp}
+// the private data of a module class whose objects wrap a socket
+class MyConnection : public AbstractPollableIoObjectBase {
+public:
+    int getPollableDescriptor() const override {
+        return socket.getSocket();
+    }
+
+    int holdPollableDescriptor(int fd, std::shared_ptr<void>& hold) const override {
+        return socket.holdDescriptor(fd, hold);
+    }
+
+    void closeIo(ExceptionSink* xsink) override {
+        socket.close();
+    }
+
+private:
+    QoreSocket socket;
+};
+    @endcode
+*/
 class AbstractPollableIoObjectBase : public AbstractPrivateData {
 public:
     //! Default constructor — assigns a unique hash for stable identity
-    DLLLOCAL AbstractPollableIoObjectBase();
+    /** @since %Qore 3.0 exported, so that the classes of binary modules can derive this class
+    */
+    DLLEXPORT AbstractPollableIoObjectBase();
 
     virtual int getPollableDescriptor() const = 0;
 

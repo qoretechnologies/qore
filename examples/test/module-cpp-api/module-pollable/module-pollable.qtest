@@ -1,0 +1,136 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  module-pollable.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+# the "cppapiuser" test module is built into the build tree by examples/test/module-cpp-api/CMakeLists.txt and is
+# not installed, so QORE_MODULE_DIR must include the build tree (run_tests.sh does this)
+%requires cppapiuser
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class ModulePollableTest
+
+#! The bound on every blocking wait in this test: a hang guard only, never a timing assertion
+const HangGuard = 60s;
+
+#! A poll operation that waits once for its pollable object to become readable
+class WaitOnceOperation inherits AbstractPollOperation<auto> {
+    private {
+        AbstractPollableIoObjectBase io;
+        bool waited = False;
+        bool done = False;
+    }
+
+    constructor(AbstractPollableIoObjectBase io) {
+        self.io = io;
+    }
+
+    string getGoal() {
+        return "wait-once";
+    }
+
+    string getState() {
+        return done ? "done" : "waiting";
+    }
+
+    bool goalReached() {
+        return done;
+    }
+
+    *hash<SocketPollInfo> continuePoll() {
+        if (!waited) {
+            waited = True;
+            return <SocketPollInfo>{
+                "events": SOCK_POLLIN,
+                "socket": io,
+            };
+        }
+        done = True;
+        return NOTHING;
+    }
+}
+
+#! Tests that a class in a binary module can implement the C++ pollable I/O interface
+/** AbstractPollableIoObjectBase's constructor was not exported, so no binary module could derive the class: a
+    module's pollable objects could only implement the %Qore-level interface, whose descriptor
+    @ref Qore::Socket::poll() "Socket::poll()" waits on by number, with no hold, so a close made by another thread
+    while the async I/O controller had the number registered let another file or socket reuse it.
+*/
+class ModulePollableTest inherits QUnit::Test {
+    constructor() : QUnit::Test("module-pollable", "1.0", \ARGV) {
+        addTestCase("a module class derives the C++ pollable base class", \deriveTest());
+        addTestCase("Socket::poll() waits on a module pollable with the module's hold", \socketPollTest());
+        addTestCase("a module pollable closed while the controller waits on it keeps its descriptor until the "
+            "controller stops waiting", \closeWhileRegisteredTest());
+        set_return_value(main());
+    }
+
+    deriveTest() {
+        CppApiTest::PollableProbe probe();
+        on_exit probe.close();
+        assertTrue(probe instanceof AbstractPollableIoObjectBase, "the module class is a C++ pollable");
+        assertGe(0, probe.getPollableDescriptor(), "the module object reports its descriptor");
+    }
+
+    socketPollTest() {
+        CppApiTest::PollableProbe probe();
+        on_exit probe.close();
+        probe.signal();
+        list<hash<SocketPollInfo>> ready = Socket::poll((<SocketPollInfo>{
+            "events": SOCK_POLLIN,
+            "socket": probe,
+        },), HangGuard);
+        assertEq(1, ready.size(), "the readable module pollable is reported");
+        assertEq(SOCK_POLLIN, ready[0].events & SOCK_POLLIN, "the module pollable is readable");
+        assertGt(0, probe.getHoldCount(), "the async I/O controller registered the descriptor with the module's hold");
+    }
+
+    closeWhileRegisteredTest() {
+        CppApiTest::PollableProbe probe();
+        on_exit probe.close();
+        WaitOnceOperation op(probe);
+        Queue<hash<SocketPollResultInfo>> rq = AsyncIoController::submit(<SocketPollOperationInfo>{
+            "sock": probe,
+            "spop": op,
+            "owner": sprintf("module-pollable-%d", getpid()),
+            "to": -1,
+        });
+
+        # the controller takes the hold when it registers the descriptor; nothing makes the pipe readable, so the
+        # registration stays until the pipe is signaled below
+        assertTrue(probe.waitForHold(HangGuard), "the controller registered the descriptor with the module's hold");
+        probe.close();
+        assertEq(-1, probe.getPollableDescriptor(), "the closed object has no descriptor");
+        assertFalse(probe.isDescriptorClosed(),
+            "the descriptor stays open while the controller has it registered, so its number cannot be reused");
+
+        # the event ends the operation, and the controller removes the registration and releases its hold
+        probe.signal();
+        hash<SocketPollResultInfo> result = rq.get(HangGuard);
+        assertNothing(result.ex, "the operation completed without an error");
+        assertTrue(op.goalReached(), "the operation saw the event");
+        assertTrue(probe.isDescriptorClosed(), "the descriptor is closed once the controller stopped waiting on it");
+    }
+}

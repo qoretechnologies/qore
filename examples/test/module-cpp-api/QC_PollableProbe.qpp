@@ -1,0 +1,157 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/** @file QC_PollableProbe.qpp a pollable I/O object implemented in a binary module */
+/*
+    Qore Programming Language
+
+    Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+#include "cppapiuser-module.h"
+#include "QC_PollableProbe.h"
+
+#include <cerrno>
+#include <chrono>
+#include <fcntl.h>
+#include <unistd.h>
+
+PollableProbeDescriptor::~PollableProbeDescriptor() {
+    ::close(fd);
+    closed->store(true);
+}
+
+PollableProbe::PollableProbe(ExceptionSink* xsink) {
+    int fds[2];
+    if (pipe(fds)) {
+        xsink->raiseErrnoException("POLLABLE-PROBE-ERROR", errno, "pipe() failed");
+        return;
+    }
+    read_end = std::make_shared<PollableProbeDescriptor>(fds[0], closed);
+    write_fd = fds[1];
+}
+
+PollableProbe::~PollableProbe() {
+    if (write_fd >= 0) {
+        ::close(write_fd);
+    }
+}
+
+int PollableProbe::getPollableDescriptor() const {
+    std::lock_guard<std::mutex> l(m);
+    return read_end ? read_end->fd : -1;
+}
+
+int PollableProbe::holdPollableDescriptor(int fd, std::shared_ptr<void>& hold) const {
+    std::lock_guard<std::mutex> l(m);
+    if (!read_end || read_end->fd != fd) {
+        // the object was closed after its descriptor was read
+        return -1;
+    }
+    hold = read_end;
+    ++holds;
+    hold_cond.notify_all();
+    return 0;
+}
+
+bool PollableProbe::waitForHold(int64 timeout_ms) const {
+    std::unique_lock<std::mutex> l(m);
+    return hold_cond.wait_for(l, std::chrono::milliseconds(timeout_ms), [this] () { return holds > 0; });
+}
+
+int PollableProbe::signal() {
+    char c = 'x';
+    return write(write_fd, &c, 1) == 1 ? 0 : -1;
+}
+
+void PollableProbe::close() {
+    std::shared_ptr<PollableProbeDescriptor> old;
+    {
+        std::lock_guard<std::mutex> l(m);
+        old.swap(read_end);
+    }
+    // the descriptor is closed here unless a hold keeps it open
+}
+
+//! the read end of a pipe, implemented in a binary module as a C++ pollable I/O object
+/** Used by examples/test/module-cpp-api/module-pollable/module-pollable.qtest to check that a class in a binary
+    module can derive the C++ pollable base class, and that the async I/O controller keeps the descriptor of such an
+    object open with the module's own hold while it waits on it.
+*/
+qclass PollableProbe [arg=PollableProbe* probe; ns=Qore::CppApiTest; vparent=AbstractPollableIoObjectBase];
+
+//! creates the pipe
+/**
+    @throw POLLABLE-PROBE-ERROR the pipe cannot be created
+ */
+PollableProbe::constructor() {
+    ReferenceHolder<PollableProbe> probe(new PollableProbe(xsink), xsink);
+    if (*xsink) {
+        return;
+    }
+    self->setPrivate(CID_POLLABLEPROBE, probe.release());
+}
+
+//! returns the read end of the pipe, or -1 once the object has been closed
+/** @return the read end of the pipe, or -1 once the object has been closed
+*/
+int PollableProbe::getPollableDescriptor() [flags=CONSTANT] {
+    return probe->getPollableDescriptor();
+}
+
+//! writes a byte to the pipe, so that its read end becomes readable
+/**
+    @throw POLLABLE-PROBE-ERROR the byte cannot be written
+*/
+nothing PollableProbe::signal() {
+    if (probe->signal()) {
+        xsink->raiseErrnoException("POLLABLE-PROBE-ERROR", errno, "write() failed");
+    }
+}
+
+//! releases the object's reference to the read end of the pipe
+/** The descriptor is closed now, or, if the async I/O controller holds it, when the controller has stopped waiting on
+    it
+*/
+nothing PollableProbe::close() {
+    probe->close();
+}
+
+//! returns the number of holds that the object has given the async I/O controller
+/** @return the number of holds that the object has given the async I/O controller
+*/
+int PollableProbe::getHoldCount() [flags=CONSTANT] {
+    return probe->getHoldCount();
+}
+
+//! waits until the async I/O controller has taken a hold of the descriptor to register it
+/** @param timeout_ms the maximum time to wait
+
+    @return @ref True "True" if a hold was taken, @ref False "False" if the timeout expired first
+*/
+bool PollableProbe::waitForHold(timeout timeout_ms) [flags=NAMED_ARGS] {
+    return probe->waitForHold(timeout_ms);
+}
+
+//! returns @ref True "True" if the read end of the pipe has been closed
+/** @return @ref True "True" if the read end of the pipe has been closed
+*/
+bool PollableProbe::isDescriptorClosed() [flags=CONSTANT] {
+    return probe->isDescriptorClosed();
+}

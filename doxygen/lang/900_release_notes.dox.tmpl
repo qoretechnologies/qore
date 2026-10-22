@@ -202,6 +202,12 @@
     cancellation is requested.  Modules no longer need to poll in <tt>QORE_IO_POLL_INTERVAL_MS</tt> slices, which is
     deprecated; <tt>_QORE_HAS_CANCELLABLE_POLL</tt> is defined when the API is available.
 
+    Classes in binary modules can now implement the C++ pollable I/O interface
+    (<tt>AbstractPollableIoObjectBase</tt>, whose constructor was not exported), so their objects can be polled with
+    @ref Qore::Socket::poll() "Socket::poll()" and used with the @ref Qore::AsyncIoController "AsyncIoController",
+    which keeps their descriptor open while it waits on it: a module object closed by another thread meanwhile can
+    no longer have its descriptor number reused by another file or socket while the controller still waits on it.
+
     A thread cancelled with @ref Qore::cancel_thread() "cancel_thread()", or whose @ref Qore::Program "Program" was
     interrupted, just as it started to wait on a condition — for example in
     @ref Qore::Thread::Semaphore::acquire() "Semaphore::acquire()" — could miss the request and wait until the
