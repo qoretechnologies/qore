@@ -261,11 +261,7 @@ public class ConnectHelper {
             }
             obj.error = err_obj;
         }
-%ifdef NoJson
-        string json = ConnectError::simpleJsonEncode(obj);
-%else
         string json = make_json(obj);
-%endif
         return ConnectHelper::frameMessage(binary(json), CONNECT_FLAG_END_STREAM);
     }
 
@@ -276,11 +272,7 @@ public class ConnectHelper {
     static hash<ConnectEndStreamInfo> parseEndStream(binary data) {
         string json = data.toString("utf-8");
         hash<auto> obj;
-%ifdef NoJson
-        obj = ConnectError::simpleJsonDecode(json);
-%else
         obj = parse_json(json);
-%endif
         hash<ConnectEndStreamInfo> result();
         if (obj.metadata) {
             result.metadata = obj.metadata;

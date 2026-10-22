@@ -25,8 +25,6 @@
 #! @see CborConnectCodec
 public namespace Connect;
 
-%ifndef NoCbor
-
 public namespace Connect {
 
 #! CBOR codec implementation for the Connect protocol
@@ -72,5 +70,3 @@ public class CborConnectCodec inherits AbstractConnectCodec {
 }
 
 } # namespace Connect
-
-%endif

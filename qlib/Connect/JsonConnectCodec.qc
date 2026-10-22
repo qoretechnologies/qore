@@ -25,8 +25,6 @@
 #! @see JsonConnectCodec
 public namespace Connect;
 
-%ifndef NoJson
-
 public namespace Connect {
 
 #! JSON codec implementation for the Connect protocol
@@ -69,5 +67,3 @@ public class JsonConnectCodec inherits AbstractConnectCodec {
 }
 
 } # namespace Connect
-
-%endif
