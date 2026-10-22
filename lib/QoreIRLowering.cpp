@@ -4484,6 +4484,8 @@ QoreIRFunction* QoreIRLowering::compileHandlerToIR(
 
     // Create temporary lowering context for the handler body
     QoreIRLowering handler_lowering(handler_builder, parse_context, constant_reverse_map);
+    // background helper parameter names are unique within the function the handler belongs to
+    handler_lowering.bg_helper_count = bg_helper_count;
 
     // Lower the handler body into the handler IR function
     if (!handler_lowering.lowerStatementBlock(handler_code, error)) {
@@ -4568,6 +4570,8 @@ int QoreIRLowering::compileBlockHandlerIRs(const std::vector<InlineHandler>& han
 
         // Create temporary lowering context for the handler body
         QoreIRLowering handler_lowering(handler_builder, parse_context, constant_reverse_map);
+        // background helper parameter names are unique within the function the handler belongs to
+        handler_lowering.bg_helper_count = bg_helper_count;
 
         // Lower the handler body into the handler IR function.  Any failure
         // here is an outer-function lowering failure — we no longer keep an
@@ -4684,6 +4688,8 @@ int QoreIRLowering::compileAllHandlerIRs(std::string& error) {
         // Create temporary lowering context for the handler body
         // This will use the pre-seeded local_var_slots for scope access
         QoreIRLowering handler_lowering(handler_builder, parse_context, constant_reverse_map);
+        // background helper parameter names are unique within the function the handler belongs to
+        handler_lowering.bg_helper_count = bg_helper_count;
 
         // Lower the handler body into the handler IR function.  Any failure
         // is now reported as an outer-function lowering failure — the
@@ -5548,6 +5554,14 @@ QoreIRValue QoreIRLowering::lowerExpression(const QoreValue& expr, std::string& 
     if (!registry_error.empty()) {
         error = registry_error;
         return QoreIRValue();
+    }
+
+    // a value that a background expression takes when the thread starts is a parameter of its helper
+    if (bg_helper) {
+        QoreIRValue leaf_rv;
+        if (lowerBackgroundLeaf(expr, leaf_rv, error)) {
+            return leaf_rv;
+        }
     }
 
     QoreIRValue plugin_lowered = tryPluginLowering(expr, error);
@@ -11008,6 +11022,53 @@ QoreIRValue QoreIRLowering::lowerTransliteration(const QoreValue& expr, std::str
     return lowerExprOpOrInvoke(opcode, expr, operands, op->loc, error);
 }
 
+//! Returns true if a background expression takes the value of the given expression when the thread starts
+/** Immediate values, local variables, references and the implicit arguments of the starting code: evaluating such an
+    expression in the starting code is the same as evaluating it in the new thread.
+*/
+static bool qore_ir_is_background_start_value(const QoreValue& v) {
+    if (!v.hasNode() || !v.needsEval()) {
+        return true;
+    }
+    const AbstractQoreNode* node = v.getInternalNode();
+    if (auto* var = dynamic_cast<const VarRefNode*>(node)) {
+        qore_var_t type = var->getType();
+        // a thread-local variable is read in the starting thread, as any variable that is not global
+        if (type == VT_THREAD_LOCAL) {
+            return true;
+        }
+        return (type == VT_LOCAL || type == VT_CLOSURE || type == VT_LOCAL_TS) && var->ref.id
+            && !QoreTypeInfo::isReference(var->ref.id->getTypeInfo());
+    }
+    // a reference is taken when the thread starts, and the call is made with it
+    return dynamic_cast<const QoreImplicitArgumentNode*>(node) || dynamic_cast<const QoreImplicitElementNode*>(node)
+        || dynamic_cast<const ParseReferenceNode*>(node);
+}
+
+//! Returns true if all arguments of a call are values that a background expression takes when the thread starts
+static bool qore_ir_background_args_are_start_values(const QoreParseListNode* parse_args, const QoreListNode* args) {
+    if (parse_args) {
+        if (parse_args->hasNamedArgs()) {
+            return false;
+        }
+        for (size_t i = 0, e = parse_args->size(); i < e; ++i) {
+            if (!qore_ir_is_background_start_value(parse_args->get(i))) {
+                return false;
+            }
+        }
+        return true;
+    }
+    if (args) {
+        ConstListIterator li(args);
+        while (li.next()) {
+            if (!qore_ir_is_background_start_value(li.getValue())) {
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
 QoreIRValue QoreIRLowering::lowerBackground(const QoreValue& expr, std::string& error) {
     const AbstractQoreNode* node = expr.getInternalNode();
     auto* op = dynamic_cast<const QoreBackgroundOperatorNode*>(node);
@@ -11015,39 +11076,44 @@ QoreIRValue QoreIRLowering::lowerBackground(const QoreValue& expr, std::string& 
         return QoreIRValue();
     }
 
-    // Decomposed paths — pre-evaluate args (and receiver/callref where applicable)
-    // so the spawned thread's code runs with IR-evaluated operands instead of
-    // depending on a raw ParseNode*.
+    // The whole expression is evaluated in the new thread (issue #5482).  A call whose target and arguments are all
+    // values that the expression takes when the thread starts (see qore_ir_is_background_start_value()) is
+    // decomposed: they are evaluated by the starting code, which is the same, and the thread only makes the call.
+    // Any other expression is evaluated by a helper function in the new thread (lowerBackgroundHelper()).
     //
-    // Operand layouts by inner-expression type:
+    // Operand layouts of the decomposed calls by inner-expression type:
     //   SelfFunctionCallNode       → [arg...] or [ConstNothing] sentinel for zero args
     //   FunctionCallNode           → [arg...] or [ConstNothing] sentinel for zero args
     //   StaticMethodCallNode       → [arg...] or [ConstNothing] sentinel for zero args
     //   QoreDotEvalOperatorNode    → [receiver, arg...]  (always ≥ 1 operand)
     //   CallReferenceCallNode      → [callref, arg...]   (always ≥ 1 operand)
-    //
-    // An empty operand list is rejected by LLVM/AOT lowering; no AST fallback is emitted.
     QoreValue inner_expr = op->getExp();
     if (inner_expr.hasNode()) {
         const AbstractQoreNode* inner = inner_expr.getInternalNode();
 
         // background self.method(args)
         if (auto* sfcn = dynamic_cast<const SelfFunctionCallNode*>(inner)) {
-            if (sfcn->getMethod() && !sfcn->getMethod()->isStatic()) {
+            if (sfcn->getMethod() && !sfcn->getMethod()->isStatic()
+                    && qore_ir_background_args_are_start_values(sfcn->getParseArgs(), sfcn->getArgs())) {
                 std::vector<QoreIRValue> operands;
                 if (lowerCallArgs(sfcn->getParseArgs(), sfcn->getArgs(), operands, error)) {
                     if (operands.empty()) {
                         operands.push_back(builder.createConstNothing(op->loc)->result);
                     }
+                    // a nested background expression calls a method of the object in the thread of its helper
+                    if (bg_helper) {
+                        bg_helper->uses_self = true;
+                    }
                     return lowerExprOpOrInvoke(QoreIROpcode::BackgroundInt, expr,
                         operands, op->loc, error);
                 }
-                error.clear();
+                return QoreIRValue();
             }
         }
         // background foo(args) — free function call
         else if (auto* fcn = dynamic_cast<const FunctionCallNode*>(inner)) {
-            if (fcn->getFunction()) {
+            if (fcn->getFunction()
+                    && qore_ir_background_args_are_start_values(fcn->getParseArgs(), fcn->getArgs())) {
                 std::vector<QoreIRValue> operands;
                 if (lowerCallArgs(fcn->getParseArgs(), fcn->getArgs(), operands, error)) {
                     if (operands.empty()) {
@@ -11056,13 +11122,14 @@ QoreIRValue QoreIRLowering::lowerBackground(const QoreValue& expr, std::string& 
                     return lowerExprOpOrInvoke(QoreIROpcode::BackgroundInt, expr,
                         operands, op->loc, error);
                 }
-                error.clear();
+                return QoreIRValue();
             }
         }
         // background Class::staticMethod(args)
         else if (auto* smcn = dynamic_cast<const StaticMethodCallNode*>(inner)) {
             std::string class_path = smcn->getClassPath();
-            if (smcn->getMethod() || !class_path.empty()) {
+            if ((smcn->getMethod() || !class_path.empty())
+                    && qore_ir_background_args_are_start_values(smcn->getParseArgs(), smcn->getArgs())) {
                 std::vector<QoreIRValue> operands;
                 if (lowerCallArgs(smcn->getParseArgs(), smcn->getArgs(), operands, error)) {
                     if (!smcn->getMethod()) {
@@ -11083,52 +11150,241 @@ QoreIRValue QoreIRLowering::lowerBackground(const QoreValue& expr, std::string& 
                     return lowerExprOpOrInvoke(QoreIROpcode::BackgroundInt, expr,
                         operands, op->loc, error);
                 }
-                error.clear();
+                return QoreIRValue();
             }
         }
         // background obj.method(args)
         else if (auto* devn = dynamic_cast<const QoreDotEvalOperatorNode*>(inner)) {
             MethodCallNode* m = devn->getMethodCall();
-            if (m && m->getName()) {
+            if (m && m->getName() && qore_ir_is_background_start_value(devn->getExpression())
+                    && qore_ir_background_args_are_start_values(m->getParseArgs(), m->getArgs())) {
                 QoreIRValue receiver_val = lowerExpression(devn->getExpression(), error);
-                if (receiver_val.isValid()) {
-                    std::vector<QoreIRValue> operands;
-                    operands.push_back(receiver_val);
-                    if (lowerCallArgs(m->getParseArgs(), m->getArgs(), operands, error)) {
-                        auto* inst = builder.createBackground(QoreIRBackgroundKind::DotEval,
-                            m->getName(), expr, operands, op->loc);
-                        if (!exception_stack.empty()) {
-                            inst->exception_target = exception_stack.back();
-                        }
-                        maybeInsertNotNothingGuard(inst->result, &expr, op->loc, nullptr);
-                        return inst->result;
-                    }
-                    error.clear();
-                } else {
-                    error.clear();
+                if (!receiver_val.isValid()) {
+                    return QoreIRValue();
                 }
+                std::vector<QoreIRValue> operands;
+                operands.push_back(receiver_val);
+                if (!lowerCallArgs(m->getParseArgs(), m->getArgs(), operands, error)) {
+                    return QoreIRValue();
+                }
+                auto* inst = builder.createBackground(QoreIRBackgroundKind::DotEval,
+                    m->getName(), expr, operands, op->loc);
+                if (!exception_stack.empty()) {
+                    inst->exception_target = exception_stack.back();
+                }
+                maybeInsertNotNothingGuard(inst->result, &expr, op->loc, nullptr);
+                return inst->result;
             }
         }
         // background callref(args) — closure / call-ref / method-ref invocation
         else if (auto* crcn = dynamic_cast<const CallReferenceCallNode*>(inner)) {
-            QoreIRValue callee_val = lowerExpression(crcn->getExp(), error);
-            if (callee_val.isValid()) {
+            if (qore_ir_is_background_start_value(crcn->getExp())
+                    && qore_ir_background_args_are_start_values(crcn->getParseArgs(), crcn->getArgs())) {
+                QoreIRValue callee_val = lowerExpression(crcn->getExp(), error);
+                if (!callee_val.isValid()) {
+                    return QoreIRValue();
+                }
                 std::vector<QoreIRValue> operands;
                 operands.push_back(callee_val);
-                if (lowerCallArgs(crcn->getParseArgs(), crcn->getArgs(), operands, error)) {
-                    return lowerExprOpOrInvoke(QoreIROpcode::BackgroundInt, expr,
-                        operands, op->loc, error);
+                if (!lowerCallArgs(crcn->getParseArgs(), crcn->getArgs(), operands, error)) {
+                    return QoreIRValue();
                 }
-                error.clear();
-            } else {
-                error.clear();
+                return lowerExprOpOrInvoke(QoreIROpcode::BackgroundInt, expr,
+                    operands, op->loc, error);
             }
         }
     }
 
-    // Fallback: full AST evaluation path
+    return lowerBackgroundHelper(expr, op, error);
+}
+
+bool QoreIRLowering::lowerBackgroundLeaf(const QoreValue& expr, QoreIRValue& rv, std::string& error) {
+    assert(bg_helper);
+    const AbstractQoreNode* node = expr.getInternalNode();
+    if (!node) {
+        return false;
+    }
+
+    // the values that the expression takes when the thread starts, as copy_value_and_resolve_lvar_refs() does in the
+    // AST interpreter; local variables are taken as the helper's parameters themselves (see lowerBackgroundHelper())
+    std::string key;
+    const QoreProgramLocation* loc = nullptr;
+    if (auto* impl_arg = dynamic_cast<const QoreImplicitArgumentNode*>(node)) {
+        // an implicit argument of an operator in the expression that binds its own is evaluated in the new thread
+        if (virtual_implicit.active) {
+            return false;
+        }
+        key = "arg:" + std::to_string(impl_arg->getOffset());
+        loc = impl_arg->loc;
+    } else if (auto* impl_elem = dynamic_cast<const QoreImplicitElementNode*>(node)) {
+        if (virtual_implicit.active) {
+            return false;
+        }
+        key = "element";
+        loc = impl_elem->loc;
+    } else if (auto* self_ref = dynamic_cast<const SelfVarrefNode*>(node)) {
+        key = std::string("member:") + self_ref->str;
+        loc = self_ref->loc;
+    } else if (auto* var = dynamic_cast<const VarRefNode*>(node);
+            var && (var->getType() == VT_THREAD_LOCAL || var->getType() == VT_IMMEDIATE)) {
+        // a variable that is not global and not a local variable of the starting code: its value in the starting
+        // thread (a thread-local variable has another value in the new thread)
+        key = "var:" + std::to_string(reinterpret_cast<uintptr_t>(var->ref.var));
+        loc = var->loc;
+    } else if (auto* parse_ref = dynamic_cast<const ParseReferenceNode*>(node)) {
+        // the reference is taken when the thread starts and held by a parameter of the reference type; the helper
+        // uses a reference to the parameter, which refers to the same lvalue, as a reference to a reference parameter
+        // does.  The parameter is closure-bound, so that the reference outlives the helper's frame if the code it calls
+        // keeps it, as for any local variable that a reference is taken to.
+        size_t index = bg_helper->leaves.size();
+        std::string name = "%background_" + std::to_string(bg_helper_index) + "_" + std::to_string(index);
+        std::unique_ptr<LocalVar, QoreIROwnedLocalVarDeleter> param_holder(
+            new LocalVar(name.c_str(), parse_ref->getTypeInfo()));
+        LocalVar* param = param_holder.get();
+        bg_helper->params.push_back(std::move(param_holder));
+        bg_helper->leaves.push_back(expr);
+        bg_helper->leaf_index.emplace("node:" + std::to_string(index), index);
+
+        // a local variable that a reference is taken to, as the parser makes it (ParseReferenceNode::parseInit())
+        VarRefNode* param_var = new VarRefNode(parse_ref->loc, param->getName(), param, false);
+        param_var->setThreadSafe();
+        QoreValue param_ref(new ParseReferenceNode(parse_ref->loc, param_var, parse_ref->getTypeInfo()));
+        // the reference to the parameter is not itself a value taken when the thread starts
+        BackgroundHelperLowering* saved_bg_helper = bg_helper;
+        bg_helper = nullptr;
+        rv = lowerExpression(param_ref, error);
+        bg_helper = saved_bg_helper;
+        // the instruction holds the reference node if it was lowered
+        param_ref.discard(nullptr);
+        if (!rv.isValid() && error.empty()) {
+            error = "the reference to a background helper parameter produced no IR value";
+        }
+        return true;
+    } else if (dynamic_cast<const FindNode*>(node) || dynamic_cast<const QoreClosureParseNode*>(node)
+            || dynamic_cast<const QoreClosureBase*>(node)) {
+        // each is a distinct value: a closure is created each time it is evaluated
+        key = "node:" + std::to_string(bg_helper->leaves.size());
+        auto* parse_node = dynamic_cast<const ParseNode*>(node);
+        loc = parse_node ? parse_node->loc : nullptr;
+    } else {
+        return false;
+    }
+
+    size_t index;
+    auto i = bg_helper->leaf_index.find(key);
+    if (i != bg_helper->leaf_index.end()) {
+        index = i->second;
+    } else {
+        index = bg_helper->leaves.size();
+        // the parameter holds whatever value the starting code had; its name cannot be a Qore identifier, so it
+        // never shadows or is shadowed by a variable of the code
+        std::string name = "%background_" + std::to_string(bg_helper_index) + "_" + std::to_string(index);
+        std::unique_ptr<LocalVar, QoreIROwnedLocalVarDeleter> param(new LocalVar(name.c_str(), autoTypeInfo));
+        bg_helper->params.push_back(std::move(param));
+        bg_helper->leaves.push_back(expr);
+        bg_helper->leaf_index.emplace(std::move(key), index);
+    }
+    rv = builder.createLoadLocal(bg_helper->params[index].get(), loc)->result;
+    return true;
+}
+
+QoreIRValue QoreIRLowering::lowerBackgroundHelper(const QoreValue& expr, const QoreBackgroundOperatorNode* op,
+        std::string& error) {
+    QoreIRFunction* starting_func = builder.getFunction();
+    unsigned helper_index = (*bg_helper_count)++;
+    // the name is deterministic, since serialized IR carries it; it is the number of the helper in the function, the
+    // native helper's symbol is named after the function (see QoreIRToLLVM::emitBackgroundHelper())
+    auto helper = std::make_unique<QoreIRFunction>("background_helper_" + std::to_string(helper_index));
+    helper->pgm = starting_func ? starting_func->pgm : nullptr;
+
+    QoreIRBuilder helper_builder(helper.get());
+    helper_builder.setBlock(helper->createBlock("entry"));
+    QoreIRLowering helper_lowering(helper_builder, parse_context, constant_reverse_map);
+    helper_lowering.bg_helper_count = bg_helper_count;
+    helper_lowering.bg_helper_index = helper_index;
+    BackgroundHelperLowering state;
+    helper_lowering.bg_helper = &state;
+
+    QoreIRValue rv = helper_lowering.lowerExpression(op->getExp(), error);
+    if (!rv.isValid()) {
+        if (error.empty()) {
+            error = "background expression produced no IR value";
+        }
+        error = "background helper lowering failed: " + error;
+        return QoreIRValue();
+    }
+    // the value of the expression is released by the new thread, as it is with AST execution
+    helper_builder.createReturn(rv, op->loc);
+    helper->computeSlotIdsAndEmbed();
+
+    // the helper's parameters: the local variables of the starting code that the expression uses, in slot order so
+    // that they are deterministic, then the parameters holding the other values the expression takes when the thread
+    // starts; every local variable of the helper is one of them, since the expression declares none of its own
+    std::unordered_set<const LocalVar*> leaf_params;
+    for (const auto& p : state.params) {
+        leaf_params.insert(p.get());
+    }
+    std::vector<std::pair<uint32_t, LocalVar*>> local_params;
+    for (const auto& [lv, slot_id] : helper->local_var_slots) {
+        if (lv && !leaf_params.count(lv)) {
+            local_params.emplace_back(slot_id, const_cast<LocalVar*>(lv));
+        }
+    }
+    std::sort(local_params.begin(), local_params.end(),
+        [](const auto& a, const auto& b) { return a.first < b.first; });
+
+    std::vector<LocalVar*> params;
+    params.reserve(local_params.size() + state.params.size());
+    for (const auto& i : local_params) {
+        params.push_back(i.second);
+    }
+    for (const auto& p : state.params) {
+        params.push_back(p.get());
+    }
+    for (LocalVar* lv : params) {
+        helper->reserveLocalSlot(lv);
+        helper->pre_instantiated_locals.insert(reinterpret_cast<const void*>(lv));
+        helper->pre_instantiated_cache.insert(lv);
+    }
+    if (!QoreIRVerifier::verify(*helper, error)) {
+        error = "background helper verification failed: " + error;
+        return QoreIRValue();
+    }
+
+    // the starting code evaluates the values of the parameters
     std::vector<QoreIRValue> operands;
-    return lowerExprOpOrInvoke(QoreIROpcode::BackgroundInt, expr, operands, op->loc, error);
+    operands.reserve(params.size());
+    for (const auto& i : local_params) {
+        LocalVar* lv = i.second;
+        operands.push_back(lv->closureUse()
+            ? builder.createLoadClosure(lv, op->loc)->result
+            : builder.createLoadLocal(lv, op->loc)->result);
+    }
+    for (const QoreValue& leaf : state.leaves) {
+        QoreIRValue v = lowerExpression(leaf, error);
+        if (!v.isValid()) {
+            if (error.empty()) {
+                error = "background expression start value produced no IR value";
+            }
+            return QoreIRValue();
+        }
+        operands.push_back(v);
+    }
+
+    auto* inst = builder.createBackground(QoreIRBackgroundKind::Helper, std::string(), expr, operands, op->loc);
+    inst->helper_ir = std::move(helper);
+    inst->helper_params = std::move(params);
+    inst->owned_params = std::move(state.params);
+    inst->helper_uses_self = state.uses_self;
+    if (!exception_stack.empty()) {
+        inst->exception_target = exception_stack.back();
+    }
+    // a helper nested in another one starts its thread in the thread of the outer one
+    if (bg_helper && state.uses_self) {
+        bg_helper->uses_self = true;
+    }
+    maybeInsertNotNothingGuard(inst->result, &expr, op->loc, nullptr);
+    return inst->result;
 }
 
 QoreIRValue QoreIRLowering::lowerListAssignment(const QoreValue& expr, std::string& error) {
@@ -13489,6 +13745,10 @@ QoreIRValue QoreIRLowering::lowerSelfCall(const QoreValue& expr, std::string& er
         }
         return result;
     };
+    // a background expression calling a method of the object runs with the object in the new thread
+    if (bg_helper && (!call->getMethod() || !call->getMethod()->isStatic())) {
+        bg_helper->uses_self = true;
+    }
     std::vector<QoreIRValue> operands;
     if (!lowerCallArgs(call->getParseArgs(), call->getArgs(), operands, error)) {
         return QoreIRValue();

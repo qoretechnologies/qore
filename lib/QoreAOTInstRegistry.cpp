@@ -1021,6 +1021,25 @@ static bool writeBackground(AOTInstWriteCtx& ctx) {
     ctx.writer.writeU8(static_cast<uint8_t>(bi->kind));
     ctx.writer.writeStringRef(bi->name.c_str());
     ctx.writer.writeU8(bi->has_ref_args ? 1 : 0);
+    if (bi->kind == QoreIRBackgroundKind::Helper) {
+        // the helper (QORE_AOT_BACKGROUND_HELPER_VERSION): whether it runs with the object, its parameters by slot
+        // in the helper, and the helper's IR, whose locals bind to the variables of the enclosing context
+        if (!bi->helper_ir) {
+            return false;
+        }
+        ctx.writer.writeU8(bi->helper_uses_self ? 1 : 0);
+        ctx.writer.writeU32(static_cast<uint32_t>(bi->helper_params.size()));
+        for (LocalVar* lv : bi->helper_params) {
+            auto i = bi->helper_ir->local_var_slots.find(lv);
+            if (i == bi->helper_ir->local_var_slots.end()) {
+                return false;
+            }
+            ctx.writer.writeU32(i->second);
+        }
+        if (!serializeIRFunction(ctx.writer, *bi->helper_ir, ctx.writeExpr)) {
+            return false;
+        }
+    }
     return true;
 }
 
@@ -1033,8 +1052,53 @@ static std::unique_ptr<QoreIRInstruction> readBackground(
         static_cast<QoreIRBackgroundKind>(QoreAOTBinaryReader::readU8(ctx.ptr));
     const char* name = ctx.reader.readStringRef(ctx.ptr);
     bool has_ref_args = QoreAOTBinaryReader::readU8(ctx.ptr) != 0;
+    std::unique_ptr<QoreIRFunction> helper_ir;
+    std::vector<LocalVar*> helper_params;
+    bool helper_uses_self = false;
+    if (kind == QoreIRBackgroundKind::Helper) {
+        helper_uses_self = QoreAOTBinaryReader::readU8(ctx.ptr) != 0;
+        uint32_t num_params = QoreAOTBinaryReader::readU32(ctx.ptr);
+        if (num_params != operands.size()) {
+            ctx.error = "background helper parameter count differs from its operand count";
+            return nullptr;
+        }
+        std::vector<uint32_t> param_slots;
+        param_slots.reserve(num_params);
+        for (uint32_t i = 0; i < num_params; ++i) {
+            param_slots.push_back(QoreAOTBinaryReader::readU32(ctx.ptr));
+        }
+        // the helper's locals bind to the variables of the enclosing context (its parameters are all such), as the
+        // locals of a nested on_block_exit handler do; see readOnBlockExit()
+        assert(ctx.slot_to_local);
+        helper_ir = deserializeIRFunction(ctx.reader, ctx.ptr, ctx.end, ctx.pgm, ctx.readExpr,
+            &ctx.local_map, ctx.error, ctx.parent_locals_arr, ctx.num_parent_locals, nullptr, false, nullptr,
+            ctx.local_owner_pgm, false, nullptr, ctx.enclosing_body_locals, ctx.slot_to_local);
+        if (!helper_ir) {
+            ctx.error = "failed to deserialize background helper IR: " + ctx.error;
+            return nullptr;
+        }
+        helper_ir->computeSlotIdsAndEmbed();
+        std::unordered_map<uint32_t, LocalVar*> helper_slots;
+        for (const auto& [lv, slot_id] : helper_ir->local_var_slots) {
+            helper_slots.emplace(slot_id, const_cast<LocalVar*>(lv));
+        }
+        helper_params.reserve(num_params);
+        for (uint32_t slot : param_slots) {
+            auto i = helper_slots.find(slot);
+            if (i == helper_slots.end() || !i->second) {
+                ctx.error = "background helper parameter slot " + std::to_string(slot) + " has no local variable";
+                return nullptr;
+            }
+            helper_params.push_back(i->second);
+            helper_ir->pre_instantiated_locals.insert(reinterpret_cast<const void*>(i->second));
+            helper_ir->pre_instantiated_cache.insert(i->second);
+        }
+    }
     auto* bi = new QoreIRBackgroundInstruction(kind, name ? name : "", QoreValue());
     bi->has_ref_args = has_ref_args;
+    bi->helper_ir = std::move(helper_ir);
+    bi->helper_params = std::move(helper_params);
+    bi->helper_uses_self = helper_uses_self;
     bi->result = QoreIRValue(result_id);
     bi->operands = operands;
     bi->exception_target = exc_target;

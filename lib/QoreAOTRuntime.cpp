@@ -3782,6 +3782,19 @@ void qore_aot_ensure_pc_loc_map(QoreAOTContext* ctx) {
     ctx->pc_loc_map_attached.store(true, std::memory_order_release);
 }
 
+// the native helpers whose PC-to-source maps have been attached; guarded by g_aot_pc_attach_lock
+static std::unordered_set<uintptr_t> g_aot_attached_helpers;
+
+void qore_aot_ensure_helper_pc_loc_map(QoreAOTContext* ctx, AotFunctionPtr helper_fn) {
+    if (!ctx || !helper_fn) {
+        return;
+    }
+    AutoLocker al(g_aot_pc_attach_lock);
+    if (g_aot_attached_helpers.insert(reinterpret_cast<uintptr_t>(helper_fn)).second) {
+        aotAttachPcLocMap(helper_fn, ctx);
+    }
+}
+
 namespace {
 // Sort the registry by base and fill any missing upper bounds. Call with the lock
 // held. A range whose precise size was unavailable (no ELF symbol size) is bounded

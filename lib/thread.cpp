@@ -1263,6 +1263,59 @@ tid_node::~tid_node() {
     }
 }
 
+//! The helper of a background expression and the values of its parameters, for the thread that runs it
+class BGThreadHelper {
+public:
+    QoreBackgroundHelperCode code;
+    //! the helper's parameters
+    std::vector<LocalVar*> params;
+    //! the value of each parameter: referenced, owned until the thread instantiates the parameters
+    std::vector<QoreValue> values;
+
+    DLLLOCAL BGThreadHelper(const QoreBackgroundHelperCode& code) : code(code) {
+    }
+
+    DLLLOCAL ~BGThreadHelper() {
+        assert(values.empty());
+    }
+
+    //! releases the values of the parameters, if they have not been instantiated
+    DLLLOCAL void discardValues(ExceptionSink* xsink) {
+        for (QoreValue& v : values) {
+            v.discard(xsink);
+        }
+        values.clear();
+    }
+
+    //! runs the helper with its parameters instantiated with the values, which they take
+    DLLLOCAL QoreValue run(ExceptionSink* xsink) {
+        assert(params.size() == values.size());
+        size_t num = params.size();
+        for (size_t i = 0; i < num; ++i) {
+            params[i]->instantiate(values[i]);
+        }
+        values.clear();
+        // the parameters are uninstantiated in reverse order however the helper returns
+        class ParamUninstantiator {
+        public:
+            ParamUninstantiator(const std::vector<LocalVar*>& params, ExceptionSink* xsink)
+                    : params(params), xsink(xsink) {
+            }
+
+            ~ParamUninstantiator() {
+                for (size_t i = params.size(); i; --i) {
+                    params[i - 1]->uninstantiate(xsink);
+                }
+            }
+
+        private:
+            const std::vector<LocalVar*>& params;
+            ExceptionSink* xsink;
+        } param_uninstantiator(params, xsink);
+        return qore_run_background_helper(code, xsink);
+    }
+};
+
 class BGThreadParams {
 private:
     // call_obj: get and reference the current stack object, if any, for the new call stack
@@ -1276,6 +1329,8 @@ public:
     const qore_class_private* class_ctx;
 
     QoreValue fc;
+    //! the helper and the values of its parameters, for a background expression evaluated by a helper
+    std::unique_ptr<BGThreadHelper> helper;
     QoreProgram* pgm;
     std::vector<QoreObject*> closure_objs;
     //! the sandbox of the starting code, which governs the new thread as its outermost caller, or nullptr
@@ -1302,13 +1357,9 @@ public:
         //    call_obj ? call_obj->getClassName() : "n/a", class_ctx, class_ctx ? class_ctx->name.c_str() : "n/a",
         //    fc->getType());
 
-        // first try to preregister the new thread
-        if (qore_program_private::preregisterNewThread(*pgm, xsink)) {
-            call_obj = nullptr;
+        if (preregister(xsink)) {
             return;
         }
-
-        registered = true;
 
         qore_type_t fctype = fc.getType();
         if (fctype == NT_SELF_CALL) {
@@ -1341,6 +1392,52 @@ public:
         if (call_obj) {
             call_obj->tRef();
         }
+    }
+
+    //! creates the parameters of a thread evaluating a background expression with its helper
+    /** @param n_helper the helper and the values of its parameters
+        @param uses_self true if the helper calls methods of the object of the starting code, which the thread then
+        holds while it runs
+    */
+    DLLLOCAL BGThreadParams(std::unique_ptr<BGThreadHelper>&& n_helper, bool uses_self, int t,
+            std::vector<QoreObject*>&& n_closure_objs, std::unique_ptr<QoreInheritedSandbox>&& n_sandbox,
+            ExceptionSink* xsink)
+        : helper(std::move(n_helper)), pgm(getProgram()), closure_objs(std::move(n_closure_objs)),
+            sandbox(std::move(n_sandbox)), tid(t) {
+        assert(xsink);
+        {
+            ThreadData* td = thread_data.get();
+            call_obj = td->current_obj;
+            class_ctx = td->current_class;
+            loc = td->runtime_loc ? td->runtime_loc : &loc_builtin;
+        }
+
+        if (preregister(xsink)) {
+            return;
+        }
+
+        // the object is held for the thread's duration, as for a background call of a method of the object
+        // (issue #2653: only when a method of the object is called)
+        if (uses_self && call_obj) {
+            obj = call_obj;
+            obj->realRef();
+            call_obj = nullptr;
+        }
+
+        if (call_obj) {
+            call_obj->tRef();
+        }
+    }
+
+    //! preregisters the new thread in the Program; returns -1 if an exception was raised
+    DLLLOCAL int preregister(ExceptionSink* xsink) {
+        if (qore_program_private::preregisterNewThread(*pgm, xsink)) {
+            call_obj = nullptr;
+            return -1;
+        }
+
+        registered = true;
+        return 0;
     }
 
     DLLLOCAL void del() {
@@ -1376,6 +1473,9 @@ public:
 
     DLLLOCAL void cleanup(ExceptionSink* xsink) {
         fc.discard(xsink);
+        if (helper) {
+            helper->discardValues(xsink);
+        }
         derefClosureObjs(xsink);
         derefObj(xsink);
         derefCallObj();
@@ -1405,9 +1505,15 @@ public:
 
     DLLLOCAL QoreValue exec(ExceptionSink* xsink) {
         //printd(5, "BGThreadParams::exec() this: %p fc: %p (%s %d)\n", this, fc, fc->getTypeName(), fc->getType());
-        QoreValue rv = fc.eval(xsink);
-        fc.discard(xsink);
-        fc = QoreValue();
+        QoreValue rv;
+        if (helper) {
+            rv = helper->run(xsink);
+            helper.reset();
+        } else {
+            rv = fc.eval(xsink);
+            fc.discard(xsink);
+            fc = QoreValue();
+        }
         derefClosureObjs(xsink);
         return rv;
     }
@@ -4440,6 +4546,75 @@ QoreValue do_op_background(RuntimeConfig& rc, const QoreValue left, ExceptionSin
 
     BGThreadParams* tp = new BGThreadParams(nl.release(), tid, closure_capture.takeObjects(), std::move(sandbox),
         xsink);
+    if (*xsink) {
+        tp->cleanup(xsink);
+        tp->del();
+        deregister_thread(tid);
+        return QoreValue();
+    }
+
+    thread_counter.inc();
+
+    int rc_thread = q_create_native_thread(op_background_thread, tp);
+    if (rc_thread) {
+        tp->cleanup(xsink);
+        tp->del();
+
+        thread_counter.dec();
+        deregister_thread(tid);
+        xsink->raiseErrnoException("THREAD-CREATION-FAILURE", rc_thread, "could not create thread");
+        return QoreValue();
+    }
+    return tid;
+}
+
+QoreValue do_op_background_helper(const QoreBackgroundHelperCode& code, LocalVar* const* params,
+        const QoreValue* values, size_t num, bool uses_self, ExceptionSink* xsink) {
+    // the new thread inherits the sandbox of the starting code; capturing it counts the thread against the sandbox's
+    // thread limit before anything else is done
+    std::unique_ptr<QoreInheritedSandbox> sandbox;
+    if (QoreInheritedSandbox::capture(xsink, sandbox)) {
+        return QoreValue();
+    }
+
+    // the values the expression takes when the thread starts are checked as the AST interpreter checks them when it
+    // copies the expression (copy_value_and_resolve_lvar_refs())
+    BackgroundClosureCaptureHelper closure_capture(xsink);
+    std::unique_ptr<BGThreadHelper> helper(new BGThreadHelper(code));
+    helper->params.assign(params, params + num);
+    helper->values.reserve(num);
+    // the values are released if the thread is not started
+    class ValueReleaser {
+    public:
+        ValueReleaser(std::unique_ptr<BGThreadHelper>& helper, ExceptionSink* xsink)
+                : helper(helper), xsink(xsink) {
+        }
+
+        ~ValueReleaser() {
+            if (helper) {
+                helper->discardValues(xsink);
+            }
+        }
+
+    private:
+        std::unique_ptr<BGThreadHelper>& helper;
+        ExceptionSink* xsink;
+    } value_releaser(helper, xsink);
+    for (size_t i = 0; i < num; ++i) {
+        helper->values.push_back(background_check_value_capture(values[i].refSelf(), xsink));
+        if (*xsink) {
+            return QoreValue();
+        }
+    }
+
+    int tid = get_thread_entry();
+    if (tid == -1) {
+        xsink->raiseException("THREAD-CREATION-FAILURE", "thread list is full with %d threads", MAX_QORE_THREADS);
+        return QoreValue();
+    }
+
+    BGThreadParams* tp = new BGThreadParams(std::move(helper), uses_self, tid, closure_capture.takeObjects(),
+        std::move(sandbox), xsink);
     if (*xsink) {
         tp->cleanup(xsink);
         tp->del();

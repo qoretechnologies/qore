@@ -244,6 +244,65 @@ protected:
 DLLLOCAL QoreValue do_op_background(const QoreValue left, ExceptionSink* xsink);
 DLLLOCAL QoreValue do_op_background(RuntimeConfig& rc, const QoreValue left, ExceptionSink* xsink);
 
+class QoreIRFunction;
+struct QoreAOTContext;
+
+//! The code that evaluates a background expression in the new thread; see do_op_background_helper()
+struct QoreBackgroundHelperCode {
+    //! the helper's IR, executed by the IR interpreter when there is no native code
+    const QoreIRFunction* ir = nullptr;
+    //! the helper's native code compiled by the JIT, if any
+    uint64_t (*jit_fn)(ExceptionSink*) = nullptr;
+    //! the helper's native code in a compiled module, if any; it runs with \a aot_ctx
+    uint64_t (*aot_fn)(QoreAOTContext*, ExceptionSink*) = nullptr;
+    //! the AOT context of the function that starts the thread, which the helper shares
+    QoreAOTContext* aot_ctx = nullptr;
+};
+
+//! Starts a thread evaluating a background expression with its helper (QoreIRBackgroundInstruction)
+/** The starting code has evaluated the values that the expression takes when the thread starts.  The new thread
+    instantiates the helper's parameters with them, runs the helper and releases its value, as the AST interpreter's
+    background thread does with the copy of the expression.
+
+    @param code the helper to run
+    @param params the helper's parameters
+    @param values the value of each parameter, borrowed: the thread takes references of its own
+    @param num the number of parameters and values
+    @param uses_self true if the thread runs with the object of the starting code, which it holds while it runs
+    @param xsink for exceptions raised starting the thread
+
+    @return the TID of the new thread, or NOTHING if an exception was raised
+*/
+DLLLOCAL QoreValue do_op_background_helper(const QoreBackgroundHelperCode& code, LocalVar* const* params,
+        const QoreValue* values, size_t num, bool uses_self, ExceptionSink* xsink);
+
+//! Runs a background helper in the thread started by do_op_background_helper(), with its parameters instantiated
+/** Defined with the JIT runtime, which owns the native calling conventions.
+*/
+DLLLOCAL QoreValue qore_run_background_helper(const QoreBackgroundHelperCode& code, ExceptionSink* xsink);
+
+class QoreIRBackgroundInstruction;
+
+//! Starts a thread running the helper of a background expression with the IR interpreter
+/** @param inst the instruction starting the thread
+    @param values the value of each of the helper's parameters, borrowed
+    @param xsink for exceptions raised starting the thread
+
+    @return the TID of the new thread, or NOTHING if an exception was raised
+*/
+DLLLOCAL QoreValue qore_ir_start_background_helper(const QoreIRBackgroundInstruction& inst, const QoreValue* values,
+        ExceptionSink* xsink);
+
+//! Applies the background operator's closure capture rules to a value taken when the thread starts
+/** Must be called with a BackgroundClosureCaptureHelper in scope; see copy_value_and_resolve_lvar_refs().
+
+    @param v the value, referenced; released if an exception is raised
+    @param xsink for the exception raised for an invalid capture
+
+    @return the value, or NOTHING if an exception was raised
+*/
+DLLLOCAL QoreValue background_check_value_capture(QoreValue v, ExceptionSink* xsink);
+
 // updates the active exception count
 DLLLOCAL void inc_active_exceptions(int diff);
 

@@ -9027,6 +9027,115 @@ bool QoreIRToLLVM::tryEmitBackgroundMetadata(const QoreIRBackgroundInstruction* 
     return false;
 }
 
+bool QoreIRToLLVM::emitBackgroundHelper(const QoreIRBackgroundInstruction* bg_inst, llvm::Module& module,
+        llvm::Function* llvm_func, llvm::Value** result_out, std::string& error) {
+    assert(bg_inst && bg_inst->kind == QoreIRBackgroundKind::Helper);
+    if (!bg_inst->helper_ir || bg_inst->helper_params.size() != bg_inst->operands.size()) {
+        error = "background helper instruction without its helper";
+        return false;
+    }
+
+    // the helper is a native function of its own in this module: it runs in the new thread
+    std::string helper_name = llvm_func->getName().str() + "_bg_" + std::to_string(bg_helper_count++);
+    QoreIRToLLVM helper_lowering(ctx);
+    helper_lowering.setSymbolName(helper_name);
+    if (aot_mode) {
+        // the helper shares the starting function's AOT context: its slot tables and location table
+        helper_lowering.setAOTMode(aot_slots);
+        helper_lowering.setAOTDirectClosureFastEntry(aot_direct_closure_fast_entry);
+        helper_lowering.setAOTLocTableBase(aot_loc_base + static_cast<int32_t>(aot_loc_table.size()));
+    }
+    if (active_di_builder && di_cu) {
+        helper_lowering.setSharedDebugInfo(active_di_builder, di_cu);
+    }
+    helper_lowering.setEmitDebugInfo(emit_debug_info);
+    helper_lowering.setDeferredExceptionChecking(deferred_exception_checking);
+    if (batch_callees) {
+        helper_lowering.setBatchCallees(batch_callees);
+    }
+    std::string helper_error;
+    if (!helper_lowering.lowerFunction(*bg_inst->helper_ir, module, helper_error)) {
+        error = "background helper '" + helper_name + "' lowering failed: " + helper_error;
+        return false;
+    }
+    llvm::Function* helper_fn = module.getFunction(helper_name);
+    if (!helper_fn) {
+        error = "background helper '" + helper_name + "' was not emitted";
+        return false;
+    }
+    if (aot_mode) {
+        // the helper's location indices address the starting function's table after its own entries so far
+        for (const auto& loc : helper_lowering.getAOTLocTable()) {
+            aot_loc_table.push_back(loc);
+        }
+    }
+
+    // the values of the helper's parameters
+    std::string error_dummy;
+    int nvalues = static_cast<int>(bg_inst->operands.size());
+    llvm::Value* values_array;
+    if (!nvalues) {
+        values_array = llvm::ConstantPointerNull::get(llvm::cast<llvm::PointerType>(ptr_type));
+    } else {
+        values_array = builder->CreateAlloca(i64_type, llvm::ConstantInt::get(i32_type, nvalues));
+        for (int i = 0; i < nvalues; ++i) {
+            const QoreIRValue& op = bg_inst->operands[i];
+            llvm::Value* val = getVal(op.id, error_dummy);
+            if (!val) {
+                error = "background helper operand has no value";
+                return false;
+            }
+            builder->CreateStore(boxValue(val, op.id),
+                builder->CreateGEP(i64_type, values_array, llvm::ConstantInt::get(i32_type, i)));
+        }
+    }
+    llvm::Value* nvalues_val = llvm::ConstantInt::get(i32_type, nvalues);
+
+    if (aot_mode) {
+        // the parameters are local variables of the shared context, identified by their slots
+        llvm::Value* slots_ptr;
+        if (!nvalues) {
+            slots_ptr = llvm::ConstantPointerNull::get(llvm::cast<llvm::PointerType>(ptr_type));
+        } else {
+            std::vector<llvm::Constant*> slot_consts;
+            slot_consts.reserve(nvalues);
+            for (LocalVar* lv : bg_inst->helper_params) {
+                auto it = aot_slots->local_slots.find(lv);
+                if (it == aot_slots->local_slots.end()) {
+                    error = std::string("background helper parameter '") + lv->getName()
+                        + "' has no AOT local slot";
+                    return false;
+                }
+                slot_consts.push_back(llvm::ConstantInt::get(i32_type, it->second));
+            }
+            auto* slots_type = llvm::ArrayType::get(i32_type, nvalues);
+            auto* slots_gv = new llvm::GlobalVariable(module, slots_type, true,
+                llvm::GlobalValue::PrivateLinkage, llvm::ConstantArray::get(slots_type, slot_consts),
+                helper_name + "_params");
+            slots_ptr = slots_gv;
+        }
+        auto ft = llvm::FunctionType::get(i64_type,
+            {ptr_type, ptr_type, ptr_type, ptr_type, i32_type, i32_type, ptr_type}, false);
+        auto helper = module.getOrInsertFunction("qore_rt_background_helper_aot", ft);
+        auto helper_throwing = module.getOrInsertFunction("qore_rt_background_helper_aot_throwing", ft);
+        *result_out = emitMaybeInvoke(helper, helper_throwing,
+            {aot_ctx_arg, helper_fn, slots_ptr, values_array, nvalues_val,
+             llvm::ConstantInt::get(i32_type, bg_inst->helper_uses_self ? 1 : 0), xsink_arg},
+            module, llvm_func, bg_inst);
+        return true;
+    }
+
+    // JIT: the instruction gives the parameters and the IR; it lives as long as the code
+    llvm::Value* inst_ptr = builder->CreateIntToPtr(
+        llvm::ConstantInt::get(i64_type, reinterpret_cast<uint64_t>(bg_inst)), ptr_type);
+    auto ft = llvm::FunctionType::get(i64_type, {ptr_type, ptr_type, ptr_type, i32_type, ptr_type}, false);
+    auto helper = module.getOrInsertFunction("qore_rt_background_helper", ft);
+    auto helper_throwing = module.getOrInsertFunction("qore_rt_background_helper_throwing", ft);
+    *result_out = emitMaybeInvoke(helper, helper_throwing,
+        {inst_ptr, helper_fn, values_array, nvalues_val, xsink_arg}, module, llvm_func, bg_inst);
+    return true;
+}
+
 void QoreIRToLLVM::finalizeFunctionUnwindLP(llvm::Module& module) {
     if (!function_unwind_lp) {
         return;
@@ -9599,6 +9708,7 @@ bool QoreIRToLLVM::checkNoAotExecutableExprFallback(llvm::Function* llvm_func, s
 
 bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& module, std::string& error) {
     native_handler_cache_cancelled = false;
+    bg_helper_count = 0;
     current_ir_func = &func;
     current_module = &module;
     initTypes();
@@ -10109,10 +10219,12 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
         active_di_builder->getOrCreateTypeArray({}));
 
     // Create subprogram for this function
+    // the native function's own name, which differs from the IR function's for a fast entry or a function compiled
+    // under another symbol, such as the helper of a background expression
     di_sp = active_di_builder->createFunction(
         di_file,                        // scope
-        func.name,                      // name
-        func.name,                      // linkage name
+        fn_name,                        // name
+        fn_name,                        // linkage name
         di_file,                        // file
         func_line,                      // line number
         di_func_type,                   // type
@@ -29390,7 +29502,12 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             const auto* expr_inst = static_cast<const QoreIRExprInstruction*>(inst);
             llvm::Value* result = nullptr;
             const auto* bg_inst = dynamic_cast<const QoreIRBackgroundInstruction*>(inst);
-            if (bg_inst && aot_mode
+            if (bg_inst && bg_inst->kind == QoreIRBackgroundKind::Helper) {
+                // the expression is evaluated by its helper in the new thread
+                if (!emitBackgroundHelper(bg_inst, module, llvm_func, &result, error)) {
+                    return false;
+                }
+            } else if (bg_inst && aot_mode
                     && tryEmitBackgroundMetadata(bg_inst, module, llvm_func,
                         /*throwing_ok*/true, &result)) {
                 // Native AOT background metadata path; no EXPR_TREE slot needed.

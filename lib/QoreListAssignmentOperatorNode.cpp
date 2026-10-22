@@ -70,6 +70,13 @@ int QoreListAssignmentOperatorNode::parseInitImpl(QoreValue& val, QoreParseConte
             if (!err) {
                 err = -1;
             }
+        } else if ((parse_context.pflag & PF_BACKGROUND) && v.getType() == NT_SELF_VARREF) {
+            // the expression takes the member's value when the thread starts, as it does for local variables
+            parse_error(*loc, "illegal member modification with the background operator in position %d of " \
+                "left-hand-side list in list assignment", li.index() + 1);
+            if (!err) {
+                err = -1;
+            }
         }
 
         // check for illegal assignment to $self

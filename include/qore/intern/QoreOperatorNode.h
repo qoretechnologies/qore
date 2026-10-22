@@ -175,6 +175,10 @@ public:
                 parse_error(*loc, "illegal local variable modification with the background operator in %s",
                     getTypeName());
                 return -1;
+            } else if ((pflag & PF_BACKGROUND) && exp.getType() == NT_SELF_VARREF) {
+                // the expression takes the member's value when the thread starts, as it does for local variables
+                parse_error(*loc, "illegal member modification with the background operator in %s", getTypeName());
+                return -1;
             }
         }
         return 0;

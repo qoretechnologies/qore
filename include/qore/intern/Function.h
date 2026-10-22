@@ -55,6 +55,11 @@ struct QoreAOTLazyFunctionIR;
 using JitFunctionPtr = uint64_t (*)(ExceptionSink*);
 using AotFunctionPtr = uint64_t (*)(QoreAOTContext*, ExceptionSink*);
 DLLLOCAL void qore_aot_ensure_pc_loc_map(QoreAOTContext* ctx);
+//! Attaches the PC-to-source map of a native helper sharing a context, before it first runs
+/** The helper of a background expression is a native function of its own that uses the location table of the
+    function that starts it; its program counters are attached to that function's context once.
+*/
+DLLLOCAL void qore_aot_ensure_helper_pc_loc_map(QoreAOTContext* ctx, AotFunctionPtr helper_fn);
 
 // these data structures are all private to the library
 

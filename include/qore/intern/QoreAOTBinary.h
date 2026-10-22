@@ -195,8 +195,13 @@ constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x44524F51;
 //!      and type was bound to the top-level variable (and a handler's or closure's reference to an outer
 //!      variable to a same-named local of the function).  A v9-v18 file carries no binding and is resolved by
 //!      name and type as before.
+//! v20: a serialized background instruction can be of the helper kind (issue #5482): the record carries whether
+//!      the helper runs with the object of the starting code, the helper's parameters and the helper's IR, whose
+//!      locals bind to the variables of the enclosing context.  A v9-v19 file has no such instruction.
 constexpr uint16_t QORE_AOT_BINARY_MIN_VERSION = 9;
-constexpr uint16_t QORE_AOT_BINARY_VERSION = 19;
+constexpr uint16_t QORE_AOT_BINARY_VERSION = 20;
+//! First format version in which a serialized background instruction can be of the helper kind.
+constexpr uint16_t QORE_AOT_BACKGROUND_HELPER_VERSION = 20;
 //! First format version identifying the variable each local slot record binds to (see
 //! QORE_AOT_LOCAL_SLOT_TOP_LEVEL and AOTIRLocalBinding).
 constexpr uint16_t QORE_AOT_LOCAL_BINDING_VERSION = 19;

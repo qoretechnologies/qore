@@ -1332,7 +1332,9 @@ public:
     @param func the IR function to walk
     @param slots output slot map
 */
-void buildAOTSlotMap(const QoreIRFunction& func, AOTSlotMap& slots);
+//! @param seed_ir_local_slots true to give the function's locals their IR slot ids; false for the helper of a
+//! background expression, which shares the slot table of the function containing it
+void buildAOTSlotMap(const QoreIRFunction& func, AOTSlotMap& slots, bool seed_ir_local_slots = true);
 
 //! Build a QoreAOTContext by walking a freshly-lowered IR function in the same order.
 /** The fresh IR must have been produced from the same source as the compile-time IR,

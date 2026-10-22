@@ -2192,9 +2192,26 @@ public:
 enum class QoreIRBackgroundKind : uint8_t {
     DotEval = 1,  //!< background obj.method(args), receiver in operand 0
     StaticMethod = 2,  //!< background Class::method(args), args in operands
+    //! the whole expression is evaluated by a helper function in the new thread; see QoreIRBackgroundInstruction
+    Helper = 3,
+};
+
+//! Deletes a local variable that an IR instruction owns
+/** Defined where LocalVar is complete, so that QoreIR.h does not need its definition.
+*/
+struct QoreIROwnedLocalVarDeleter {
+    DLLLOCAL void operator()(LocalVar* lv) const;
 };
 
 //! Native background-call instruction metadata.
+/** With QoreIRBackgroundKind::Helper, the expression given to \c background is evaluated in the new thread by
+    \a helper_ir, a compiler-private IR function lowered from the expression.  The values that the expression takes
+    when the thread starts - the local variables, implicit arguments, member reads, find expressions, closures and
+    references it uses - are the instruction's operands, evaluated by the starting code; operand \a i is the value of
+    \a helper_params[i], a local variable of the helper that the new thread instantiates before calling it, as a
+    call instantiates its parameters.  A local variable of the starting code is its own parameter; any other value is
+    held by one of \a owned_params.
+*/
 class QoreIRBackgroundInstruction : public QoreIRExprInstruction {
 public:
     QoreIRBackgroundInstruction(QoreIRBackgroundKind n_kind, std::string n_name,
@@ -2206,6 +2223,17 @@ public:
 
     QoreIRBackgroundKind kind;
     std::string name;
+
+    //! Helper only: the function that evaluates the expression in the new thread
+    std::unique_ptr<QoreIRFunction> helper_ir;
+    //! Helper only: the local variables of the helper that the new thread instantiates with the operands
+    std::vector<LocalVar*> helper_params;
+    //! Helper only: the parameters that hold values other than the starting code's local variables
+    std::vector<std::unique_ptr<LocalVar, QoreIROwnedLocalVarDeleter>> owned_params;
+    //! Helper only: true if the new thread runs with the object of the starting code, for calls of its methods
+    /** The object is held for the thread's duration, as with a background call of a method of the object.
+    */
+    bool helper_uses_self = false;
 };
 
 //! @name Inline call-state cache publication

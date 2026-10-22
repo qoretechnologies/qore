@@ -38,6 +38,8 @@
 
 class ExceptionSink;
 class QoreIRFunction;
+class QoreIRBackgroundInstruction;
+struct QoreAOTContext;
 class QoreIRLValuePathInstruction;
 class QoreValue;
 class QoreVarInfo;
@@ -232,6 +234,27 @@ uint64_t qore_rt_background_call_ref_value_aot(uint64_t callee_bits, uint64_t* a
 //! Throwing wrapper for EH paths.
 uint64_t qore_rt_background_call_ref_value_aot_throwing(uint64_t callee_bits,
     uint64_t* args, int nargs, ExceptionSink* xsink);
+
+//! Starts a thread running the native (JIT) helper of a background expression with its parameter values
+uint64_t qore_rt_background_helper(const QoreIRBackgroundInstruction* inst,
+    uint64_t (*helper_fn)(ExceptionSink*), uint64_t* values, int nvalues, ExceptionSink* xsink);
+
+//! Throwing wrapper for EH paths.
+uint64_t qore_rt_background_helper_throwing(const QoreIRBackgroundInstruction* inst,
+    uint64_t (*helper_fn)(ExceptionSink*), uint64_t* values, int nvalues, ExceptionSink* xsink);
+
+//! Starts a thread running the native (AOT) helper of a background expression with its parameter values
+/** The parameters are the local variables of \a ctx with the given slots; the helper shares the context of the
+    function that starts the thread.
+*/
+uint64_t qore_rt_background_helper_aot(QoreAOTContext* ctx,
+    uint64_t (*helper_fn)(QoreAOTContext*, ExceptionSink*), const int32_t* param_slots, uint64_t* values,
+    int nvalues, int uses_self, ExceptionSink* xsink);
+
+//! Throwing wrapper for EH paths.
+uint64_t qore_rt_background_helper_aot_throwing(QoreAOTContext* ctx,
+    uint64_t (*helper_fn)(QoreAOTContext*, ExceptionSink*), const int32_t* param_slots, uint64_t* values,
+    int nvalues, int uses_self, ExceptionSink* xsink);
 
 //! Returns 1 if the sink holds a thread_exit, else 0; CatchException branches past the catch block when it does.
 //! An exception pending with the thread_exit is caught and deleted, as TryStatement::execImpl() does when the

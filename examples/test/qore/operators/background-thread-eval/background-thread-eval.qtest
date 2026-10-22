@@ -1,0 +1,272 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%include background-thread-eval-checks.qi
+%requires ../../../ExecModeHarness.qm
+
+%exec-class BackgroundThreadEvalTest
+
+#! Tests that the whole expression given to background is evaluated in the new thread (issue #5482)
+/** The checks in background-thread-eval-checks.qi run in this program, in each execution mode, and from a compiled
+    module: the AST interpreter, the IR tiers and compiled code each start the thread.
+*/
+class BackgroundThreadEvalTest inherits QUnit::Test {
+    public {
+        const Expected = {
+            "function-arg": "new-thread",
+            "callref-expr": "new-thread",
+            "callref-arg": "new-thread",
+            "object-expr": "same-thread",
+            "self-call-arg": "new-thread",
+            "self-call-map": "3,6,9",
+            "static-method-arg": "new-thread",
+            "blocking-arg": "not-blocked",
+            "local-snapshot": "1",
+            "member-snapshot": "3",
+            "member-path-snapshot": "44",
+            "map-implicit-arg": "10,20,30",
+            "map-implicit-index": "0,1,2",
+            "function-implicit-arg": "85",
+            "bound-implicit-arg": "3,4",
+            "bound-foldl": "6",
+            "local-twice": "25",
+            "assignment": "new-thread",
+            "map-expression": "2,3",
+            "map-select-expression": "8,10",
+            "ternary": "big",
+            "closure": "51",
+            "reference-param": "5",
+            "reference-pass": "12",
+            "thread-local": "21,42",
+            "self-path": "6",
+            "nested-background": "8",
+            "closure-body": "3,6,103",
+        };
+
+        #! a top-level script whose local is used in a loop and in a background call
+        const DumpScript = "%modern
+sub f(int v) {}
+int x = 0;
+for (int i = 0; i < 3; ++i) {
+    x += i;
+}
+background f(x + 1);
+";
+
+        #! the same script with a closure capturing the local: the control for the dump check
+        const DumpClosureScript = "%modern
+sub f(int v) {}
+int x = 0;
+for (int i = 0; i < 3; ++i) {
+    x += i;
+}
+code c = sub () { f(x); };
+";
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+    }
+
+    constructor() : QUnit::Test("BackgroundThreadEvalTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+
+        addTestCase("checks in this program", \testInProgram());
+        addTestCase("each execution mode", \testExecModes());
+        addTestCase("exceptions in each execution mode", \testExceptionsExecModes());
+        addTestCase("compiled module", \testCompiledModule());
+        addTestCase("module linked from per-file objects", \testModuleFromObjects());
+        addTestCase("a local used by background stays a frame local", \testLocalNotClosureBound());
+        addTestCase("a member cannot be modified by a background expression", \testMemberModification());
+
+        set_return_value(main());
+    }
+
+    testInProgram() {
+        checkResults("in-program", BackgroundThreadEvalChecks::get_results());
+    }
+
+    testExecModes() {
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            checkWorkerOutput(mode, runWorker("background-thread-eval-worker.q", get_script_dir(),
+                "--exec-mode=" + mode));
+        }
+    }
+
+    testExceptionsExecModes() {
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            foreach string which in ("arg", "target") {
+                checkExceptionOutput(mode, which, runWorker("background-thread-eval-worker.q", get_script_dir(),
+                    "--exec-mode=" + mode, which, ExecModeHarness::NativeCheck::Jit), True);
+            }
+        }
+    }
+
+    testCompiledModule() {
+        TmpDir tmp("qore-background-thread-eval-");
+        string qmod_path = tmp.path + DirSep + "BackgroundThreadEvalChecks.qmod";
+        string src_path = get_script_dir() + DirSep + "BackgroundThreadEvalChecks.qm";
+        string compile_out = backquote(sprintf("QORE_LIBDIR=%s %s -b --compile-module --strip-source --output "
+            "%s %s 2>&1", libqore_dir, qore_bin, qmod_path, src_path));
+        assertTrue(is_file(qmod_path), "compiled checks module: " + compile_out);
+
+        # the directory holds only the compiled module, so the worker cannot load the source instead
+        checkWorkerOutput("aot", runWorker("background-thread-eval-module-worker.q", tmp.path));
+        # closures run from their serialized IR, read when first called and when the module is loaded: the background
+        # helpers in them are read back with it
+        checkWorkerOutput("aot closure IR", runWorker("background-thread-eval-module-worker.q", tmp.path, "", "",
+            NOTHING, "QORE_DISABLE_AOT_NATIVE_CLOSURES=1"));
+        checkWorkerOutput("aot eager closure IR", runWorker("background-thread-eval-module-worker.q", tmp.path, "",
+            "", NOTHING, "QORE_DISABLE_AOT_NATIVE_CLOSURES=1 QORE_DISABLE_AOT_LAZY_CLOSURE_IR=1"));
+        foreach string which in ("arg", "target") {
+            # compiled code makes direct calls without a call stack frame of their own
+            checkExceptionOutput("aot", which, runWorker("background-thread-eval-module-worker.q", tmp.path, "",
+                which), False);
+        }
+    }
+
+    #! the checks as a module with its code in a file of its own, compiled to per-file objects and then linked
+    /** The link writes the module's metadata without lowering its code again (qcc -m --from-objects), so the slots
+        that the native code of the background expressions uses must be assigned by the slot map alone.
+    */
+    testModuleFromObjects() {
+        TmpDir tmp("qore-background-thread-eval-objects-");
+        string ctx_dir = tmp.path + DirSep + "BackgroundThreadEvalChecks";
+        string obj_dir = tmp.path + DirSep + "objects";
+        string mod_dir = tmp.path + DirSep + "modules";
+        foreach string dir in ((ctx_dir, obj_dir, mod_dir)) {
+            mkdir(dir);
+        }
+        string qm = ReadOnlyFile::readTextFile(get_script_dir() + DirSep + "BackgroundThreadEvalChecks.qm");
+        # the parse directives of a separated module are in its .qm file only
+        qm = "%modern\n" + replace(qm, "%include background-thread-eval-checks.qi\n", "");
+        writeFile(ctx_dir + DirSep + "BackgroundThreadEvalChecks.qm", qm);
+        writeFile(ctx_dir + DirSep + "Checks.qc",
+            ReadOnlyFile::readTextFile(get_script_dir() + DirSep + "background-thread-eval-checks.qi"));
+
+        list<string> objs = ();
+        foreach string file in (("BackgroundThreadEvalChecks.qm", "Checks.qc")) {
+            string obj = obj_dir + DirSep + file + ".qo";
+            string out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s %s -c --context=%s -o %s %s 2>&1",
+                libqore_dir, libqore_dir, qcc_bin, ctx_dir, obj, ctx_dir + DirSep + file));
+            assertTrue(is_file(obj), "compiled " + file + ": " + out);
+            objs += obj;
+        }
+        string qmod = mod_dir + DirSep + "BackgroundThreadEvalChecks.qmod";
+        string out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s %s -m --from-objects --context=%s -o %s %s "
+            "2>&1", libqore_dir, libqore_dir, qcc_bin, ctx_dir, qmod, objs.join(" ")));
+        assertTrue(is_file(qmod), "linked the module: " + out);
+        checkWorkerOutput("aot from objects", runWorker("background-thread-eval-module-worker.q", mod_dir));
+    }
+
+    #! writes a file
+    private writeFile(string path, string data) {
+        File f();
+        f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(data);
+        f.close();
+    }
+
+    #! a local variable used in a background expression is taken as a value: it is not made closure-bound
+    testLocalNotClosureBound() {
+        TmpDir tmp("qore-background-thread-eval-dump-");
+        string out = dumpIR(tmp.path, "bg.q", DumpScript);
+        assertRegex("store\\.local @x ", out);
+        assertRegex("add\\.assign\\.local\\.int", out);
+        # the starting code takes the value of x, and the helper evaluates x + 1 in the new thread
+        assertRegex("background\\.int helper @background_helper_[0-9]+ params\\(@x\\)", out);
+        assertRegex("func @background_helper_[0-9]+\n(.*\n)*  load\\.local @x .*\n  const\\.int [^\n]*\n  add\\.int", out);
+        assertNRegex("store\\.closure @x", out);
+        assertNRegex("load\\.closure @x", out);
+        assertNRegex("lvalue\\.path\\.compound", out);
+
+        # the control: a closure capturing the local makes it closure-bound
+        out = dumpIR(tmp.path, "closure.q", DumpClosureScript);
+        assertRegex("store\\.closure @x", out);
+    }
+
+    #! a background expression takes the members it uses when the thread starts, so it cannot modify one directly
+    testMemberModification() {
+        foreach string expr in ("x = 1", "x += 1", "x++", "(x, y) = (1, 2)") {
+            Program p(PO_NEW_STYLE);
+            assertThrows("PARSE-EXCEPTION", "illegal member modification with the background operator",
+                \p.parse(), ("class C { public { int x; int y; } m() { background (" + expr + "); } }",
+                "member-modification"), expr);
+        }
+    }
+
+    #! writes the script and returns its IR dump
+    private string dumpIR(string dir, string name, string script) {
+        string path = dir + DirSep + name;
+        writeFile(path, script);
+        return backquote(sprintf("LD_LIBRARY_PATH=%s %s -b --exec-mode=ir --ir-dump %s 2>&1", libqore_dir, qore_bin,
+            path));
+    }
+
+    #! runs a worker with the given module directory and options and returns its output
+    private string runWorker(string worker_name, string module_dir, string opts = "", string args = "",
+            *ExecModeHarness::NativeCheck check, string env = "") {
+        string worker = get_script_dir() + DirSep + worker_name;
+        string cmd = sprintf("%s LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b %s %s %s", env, libqore_dir, module_dir,
+            qore_bin, opts, worker, args);
+        return ExecModeHarness::run_any(cmd, check);
+    }
+
+    #! parses the "name=value" lines printed by the worker and compares them with the expected results
+    private checkWorkerOutput(string label, string out) {
+        hash<string, string> results = {};
+        foreach string line in (out.split("\n")) {
+            *list<*string> parts = (line =~ x/^([-a-z]+)=(.*)$/);
+            if (!parts) {
+                if (line.val()) {
+                    fail(sprintf("%s: unexpected worker output: %y", label, out));
+                }
+                continue;
+            }
+            results{parts[0]} = parts[1];
+        }
+        checkResults(label, results);
+    }
+
+    #! checks that the exception of the argument or the call target was an exception of the new thread
+    /** @param call_frame true if the call stack must have the frame of the function raising the exception
+    */
+    private checkExceptionOutput(string label, string which, string out, bool call_frame) {
+        label += " " + which;
+        # the starting code caught nothing
+        assertRegex("(?m)^" + which + "-caught=0$", out, label + ": exception not raised to the caller");
+        # the called code did not run
+        assertNRegex("must-not-run", out, label + ": called code not run");
+        # the thread ended with the exception, raised in the new thread: the thread's call stack starts with the
+        # thread start and has no frame between it and the code that raised the exception
+        string func = which == "arg" ? "bad" : "bad_ref";
+        string err = which == "arg" ? "ARG-ERROR: raised by an argument" : "TARGET-ERROR: raised by the call target";
+        if (call_frame) {
+            assertRegex("unhandled QORE User exception thrown in TID [0-9]+ .* in " + func + "\\(\\) .*\n" + err
+                + "\ncall stack:\n  2: " + func + "\\(\\) [^\n]*\n  1: \\*thread start\\*", out,
+                label + ": exception in the new thread");
+        } else {
+            assertRegex("unhandled QORE User exception thrown in TID [0-9]+ .*\n" + err
+                + "\ncall stack:\n  1: \\*thread start\\*", out, label + ": exception in the new thread");
+        }
+    }
+
+    private checkResults(string label, hash<string, string> results) {
+        assertEq(sort(keys Expected), sort(keys results), label + ": checks run");
+        foreach hash<auto> i in (Expected.pairIterator()) {
+            assertEq(i.value, results{i.key}, sprintf("%s: %s", label, i.key));
+        }
+    }
+}

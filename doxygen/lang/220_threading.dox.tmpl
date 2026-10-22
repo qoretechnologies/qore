@@ -53,7 +53,7 @@ new T();
     |!Background expression|!Object's lifetime prolonged|!Reason
     |<tt><b>background</b> method()</tt>, <tt><b>background</b> self.method()</tt>|yes|an in-object call to a non-static method takes a reference on the object for the duration of the thread
     |<tt><b>background</b> sub () { ... }()</tt> capturing object scope|yes|captured object scope is validated and referenced before the thread is started
-    |<tt><b>background</b> obj.method()</tt>, <tt><b>background</b> (<b>new</b> T()).method()</tt>|yes|the new thread holds an ordinary reference to the object: a local variable such as \c obj is evaluated before the thread is started; an object expression such as <tt><b>new</b> T()</tt> is evaluated in the new thread with @ref exec_mode_ast "AST execution" and in the starting thread in the other execution modes (see the @ref background "background operator")
+    |<tt><b>background</b> obj.method()</tt>, <tt><b>background</b> (<b>new</b> T()).method()</tt>|yes|the new thread holds an ordinary reference to the object: a local variable such as \c obj is evaluated before the thread is started, and an object expression such as <tt><b>new</b> T()</tt> is evaluated in the new thread (see the @ref background "background operator")
     |<tt><b>background</b> f(self)</tt>, <tt><b>background</b> T::sm(self)</tt>|yes|the object is an ordinary reference in the evaluated argument list
     |<tt><b>background</b> c()</tt> where \c c is a @ref call_reference "call reference" to a method|no|call references do not prolong the lifetime of an object
     |<tt><b>background</b> T::sm()</tt>|not applicable|a static method call has no object

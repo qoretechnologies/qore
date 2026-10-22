@@ -15447,9 +15447,22 @@ load_local_done:
                 auto* bg_inst = dynamic_cast<const QoreIRBackgroundInstruction*>(inst);
                 auto* bg_op = dynamic_cast<const QoreBackgroundOperatorNode*>(
                     expr_inst->expr.getInternalNode());
-                auto [matched, bg_result] = bg_inst && !bg_op
-                    ? runBackgroundMetadata(bg_inst, values, xsink)
-                    : runDecomposedBackground(bg_op, expr_inst->operands, values, xsink);
+                bool matched;
+                QoreValue bg_result;
+                if (bg_inst && bg_inst->kind == QoreIRBackgroundKind::Helper) {
+                    // the expression is evaluated by its helper in the new thread
+                    std::vector<QoreValue> helper_values;
+                    helper_values.reserve(bg_inst->operands.size());
+                    for (const QoreIRValue& operand : bg_inst->operands) {
+                        helper_values.push_back(getIRValue(values, operand));
+                    }
+                    bg_result = qore_ir_start_background_helper(*bg_inst, helper_values.data(), xsink);
+                    matched = true;
+                } else {
+                    std::tie(matched, bg_result) = bg_inst && !bg_op
+                        ? runBackgroundMetadata(bg_inst, values, xsink)
+                        : runDecomposedBackground(bg_op, expr_inst->operands, values, xsink);
+                }
                 if (matched) {
                     res = bg_result;
                 } else {

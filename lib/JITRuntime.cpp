@@ -165,6 +165,11 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
         reinterpret_cast<void*>(&qore_rt_background_static_method_name_call_aot) },
     { "qore_rt_background_static_method_name_call_aot_throwing",
         reinterpret_cast<void*>(&qore_rt_background_static_method_name_call_aot_throwing) },
+    { "qore_rt_background_helper", reinterpret_cast<void*>(&qore_rt_background_helper) },
+    { "qore_rt_background_helper_throwing", reinterpret_cast<void*>(&qore_rt_background_helper_throwing) },
+    { "qore_rt_background_helper_aot", reinterpret_cast<void*>(&qore_rt_background_helper_aot) },
+    { "qore_rt_background_helper_aot_throwing",
+        reinterpret_cast<void*>(&qore_rt_background_helper_aot_throwing) },
     { "qore_rt_background_call_ref_value_aot",
         reinterpret_cast<void*>(&qore_rt_background_call_ref_value_aot) },
     { "qore_rt_background_call_ref_value_aot_throwing",
@@ -19089,6 +19094,125 @@ extern "C" DLLEXPORT uint64_t qore_rt_background_call_ref_call_aot(
     QoreValue result = doBackgroundWithLocation(bg_op->loc, QoreValue(call_node), xsink);
     QoreValue(call_node).discard(xsink);
     return toBits(result);
+}
+
+// --- background helpers (QoreIRBackgroundInstruction with QoreIRBackgroundKind::Helper) ---
+
+QoreValue qore_run_background_helper(const QoreBackgroundHelperCode& code, ExceptionSink* xsink) {
+    if (code.aot_fn || code.jit_fn) {
+        // restore the innermost-non-AOT-frame marker after native code; see UserVariantBase::evalTiered()
+        struct SpGuard {
+            uintptr_t saved_sp;
+            ~SpGuard() {
+                set_runtime_loc_sp(saved_sp);
+            }
+        } sp_guard{get_runtime_loc_sp()};
+        uint64_t result_bits;
+        // native code reports an exception by unwinding to the boundary with the C++ caller; the exception is
+        // already in xsink
+        try {
+            if (code.aot_fn) {
+                assert(code.aot_ctx);
+                qore_aot_ensure_pc_loc_map(code.aot_ctx);
+                qore_aot_ensure_helper_pc_loc_map(code.aot_ctx, code.aot_fn);
+                result_bits = code.aot_fn(code.aot_ctx, xsink);
+            } else {
+                result_bits = code.jit_fn(xsink);
+            }
+        } catch (const QoreJITException&) {
+            result_bits = 0;
+        }
+        // a helper is compiled without speculative guards, so it never requests a deoptimization; there is no other
+        // tier to run it on
+        if (qore_jit_deopt_requested() && !*xsink) {
+            xsink->raiseException("BACKGROUND-HELPER-ERROR", "internal error: the native code of a background "
+                "expression requested a deoptimization");
+        }
+        if (*xsink) {
+            return QoreValue();
+        }
+        return fromBits(result_bits);
+    }
+
+    assert(code.ir);
+    QoreValue rv;
+    QoreIRInterpreter::execute(*code.ir, rv, xsink, nullptr, nullptr, nullptr, &code.ir->pre_instantiated_cache);
+    return rv;
+}
+
+//! starts a background helper thread with the values given by native or interpreted starting code
+static uint64_t qore_background_helper_start(const QoreBackgroundHelperCode& code, LocalVar* const* params,
+        const uint64_t* values, int nvalues, bool uses_self, ExceptionSink* xsink) {
+    assert(nvalues >= 0);
+    std::vector<QoreValue> vals;
+    vals.reserve(nvalues);
+    for (int i = 0; i < nvalues; ++i) {
+        vals.push_back(fromBits(values[i]));
+    }
+    // the thread records the location of the code that starts it
+    const QoreProgramLocation* loc = get_runtime_location();
+    QoreProgramLocationHelper loc_helper(loc ? loc : &loc_builtin);
+    return toBits(do_op_background_helper(code, params, vals.empty() ? nullptr : vals.data(), vals.size(),
+        uses_self, xsink));
+}
+
+QoreValue qore_ir_start_background_helper(const QoreIRBackgroundInstruction& inst, const QoreValue* values,
+        ExceptionSink* xsink) {
+    assert(inst.kind == QoreIRBackgroundKind::Helper && inst.helper_ir);
+    QoreBackgroundHelperCode code;
+    code.ir = inst.helper_ir.get();
+    return do_op_background_helper(code, inst.helper_params.data(), values, inst.helper_params.size(),
+        inst.helper_uses_self, xsink);
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_background_helper(const QoreIRBackgroundInstruction* inst,
+        uint64_t (*helper_fn)(ExceptionSink*), uint64_t* values, int nvalues, ExceptionSink* xsink) {
+    assert(inst && inst->kind == QoreIRBackgroundKind::Helper && helper_fn);
+    assert(static_cast<size_t>(nvalues) == inst->helper_params.size());
+    QoreBackgroundHelperCode code;
+    code.ir = inst->helper_ir.get();
+    code.jit_fn = helper_fn;
+    return qore_background_helper_start(code, inst->helper_params.data(), values, nvalues, inst->helper_uses_self,
+        xsink);
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_background_helper_aot(QoreAOTContext* ctx,
+        uint64_t (*helper_fn)(QoreAOTContext*, ExceptionSink*), const int32_t* param_slots, uint64_t* values,
+        int nvalues, int uses_self, ExceptionSink* xsink) {
+    assert(ctx && helper_fn);
+    // the helper's parameters are local variables of the starting function's context, which the helper shares
+    std::vector<LocalVar*> params;
+    params.reserve(nvalues);
+    for (int i = 0; i < nvalues; ++i) {
+        assert(param_slots[i] >= 0 && param_slots[i] < ctx->num_locals && ctx->locals[param_slots[i]]);
+        params.push_back(ctx->locals[param_slots[i]]);
+    }
+    QoreBackgroundHelperCode code;
+    code.aot_fn = helper_fn;
+    code.aot_ctx = ctx;
+    return qore_background_helper_start(code, params.empty() ? nullptr : params.data(), values, nvalues,
+        uses_self != 0, xsink);
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_background_helper_throwing(
+        const QoreIRBackgroundInstruction* inst, uint64_t (*helper_fn)(ExceptionSink*), uint64_t* values,
+        int nvalues, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_background_helper(inst, helper_fn, values, nvalues, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_background_helper_aot_throwing(
+        QoreAOTContext* ctx, uint64_t (*helper_fn)(QoreAOTContext*, ExceptionSink*), const int32_t* param_slots,
+        uint64_t* values, int nvalues, int uses_self, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_background_helper_aot(ctx, helper_fn, param_slots, values, nvalues, uses_self,
+        xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
 }
 
 // --- Phase 2B Step 5: specialized helpers throwing wrappers ---

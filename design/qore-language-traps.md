@@ -420,7 +420,7 @@ This is the same weak reference that breaks a call reference taken on a temporar
 |---|---|---|
 | `background method()`, `background self.method()` | yes | a non-static self call takes a real reference on the object for the thread's duration |
 | `background sub () { ... }()` capturing object scope | yes | captured object scope is checked and referenced before the thread starts |
-| `background obj.method()`, `background (new T()).method()` | yes | the thread holds a strong reference to the object: a local variable such as `obj` is captured when the thread starts, in every execution mode; an object expression such as `new T()` is evaluated in the *new* thread in AST mode, and in the *starting* thread in IR, JIT and tiered mode and in AOT-compiled code (see below) |
+| `background obj.method()`, `background (new T()).method()` | yes | the thread holds a strong reference to the object: a local variable such as `obj` is captured when the thread starts, and an object expression such as `new T()` is evaluated in the *new* thread (see below) |
 | `background f(self)`, `background T::sm(self)` | yes | `self` is an ordinary strong reference in the evaluated argument list |
 | `background c()` where `c` is `\method()` or `\obj.method()` | **no** | a method call reference holds a weak reference only |
 | `background call_function_args(\method(), args)` | **no** | same — the call reference is the only link to the object |
@@ -428,15 +428,14 @@ This is the same weak reference that breaks a call reference taken on a temporar
 
 `background T::staticMethod()` correctly takes no reference: a static call has no object.
 
-Where a `background` expression is evaluated depends on the execution mode today. In every mode, local variables,
-find expressions and the implicit arguments (`$1`, `$$`, `$#`) of the starting code are captured before the thread
-starts. The rest of the expression - the call's arguments and its target (the object of a method call, or the
-expression giving the call reference) - is evaluated in the new thread in AST mode, so an exception raised by it is an
-unhandled exception of the new thread; in IR, JIT and tiered mode and in AOT-compiled code it is evaluated in the
-starting thread before the thread starts, so `background f(gettid())` passes the starting thread's TID and an exception
-raised by an argument reaches the code that starts the thread. Those tiers start only a call (of a function, a method,
-a static method or a call reference); any other expression raises `IR-AST-FALLBACK-ERROR`, and `qcc` cannot compile it.
-This is planned to change so that the whole expression, target included, is evaluated in the new thread in every mode.
+The whole `background` expression is evaluated in the new thread, in every execution mode: the call's arguments and its
+target (the object of a method call, or the expression giving the call reference), so `background f(gettid())` passes
+the new thread's TID, and an exception raised by an argument or the target is an unhandled exception of the new thread
+that the starting code cannot catch. What the expression takes from the starting code is captured when the thread
+starts: its local and thread-local variables, the members of `self` it reads, find expressions, closures, references and its implicit
+arguments (`$1`, `$$`, `$#`); a later change to a local variable by the starting code is not seen. The compiled tiers
+evaluate the expression with a compiler-private helper function (see `design/background-helpers.md`), so any
+expression can be started, not only a call.
 
 The failure is timing-dependent — it appears only when the object's last ordinary reference goes away
 before the thread finishes, so a test that keeps the object in scope passes and production fails. When a

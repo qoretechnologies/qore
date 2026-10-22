@@ -430,8 +430,9 @@ QoreValue AbstractMethodCallNode::exec(QoreObject* o, const char* c_str, const q
         // CodeEvaluationHelper with const args, which calls evalList() and dereferences
         // ReferenceNodes.
         if (tmp_args) {
-            return qore_method_private::evalTmpArgs(*method, xsink, rc, o, args, ctx, variant, nullptr,
-                explicit_inst);
+            ReferenceHolder<QoreListNode> args_copy(xsink);
+            return qore_method_private::evalTmpArgs(*method, xsink, rc, o, getEvalTmpArgs(args_copy), ctx, variant,
+                nullptr, explicit_inst);
         }
         return variant
             ? qore_method_private::evalNormalVariant(*method, xsink, rc, o,
@@ -451,7 +452,9 @@ QoreValue AbstractMethodCallNode::exec(QoreObject* o, const char* c_str, const q
             return QoreValue();
         }
         if (w) {
-            return qore_method_private::evalTmpArgs(*w, xsink, rc, o, args, ctx, nullptr, nullptr, explicit_inst);
+            ReferenceHolder<QoreListNode> args_copy(xsink);
+            return qore_method_private::evalTmpArgs(*w, xsink, rc, o, getEvalTmpArgs(args_copy), ctx, nullptr,
+                nullptr, explicit_inst);
         }
     }
     return qore_class_private::get(*o->getClass())->evalMethod(o, c_str, args, ctx, rc, xsink, explicit_inst);
@@ -829,9 +832,11 @@ QoreValue SelfFunctionCallNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, E
 
     assert(method);
 
-    return tmp_args
-        ? qore_method_private::evalTmpArgs(*method, xsink, rc, self, args)
-        : qore_method_private::eval(*method, xsink, rc, self, args);
+    if (tmp_args) {
+        ReferenceHolder<QoreListNode> args_copy(xsink);
+        return qore_method_private::evalTmpArgs(*method, xsink, rc, self, getEvalTmpArgs(args_copy));
+    }
+    return qore_method_private::eval(*method, xsink, rc, self, args);
 }
 
 int SelfFunctionCallNode::parseInitCall(QoreValue& val, QoreParseContext& parse_context) {
@@ -973,8 +978,11 @@ QoreValue SetSelfFunctionCallNode::evalImpl(RuntimeConfig& rc, bool& needs_deref
     RuntimeConfigObjectHelper rc_obj_helper(rc, self, cls);
     ObjectSubstitutionHelper osh(self, cls);
     QoreValue rv = SelfFunctionCallNode::evalImpl(rc, needs_deref, xsink);
-    self->deref(xsink);
-    deref_self = false;
+    // a copy evaluated more than once keeps the object until it is released (derefImpl())
+    if (!reusable_tmp_args) {
+        self->deref(xsink);
+        deref_self = false;
+    }
     return rv;
 }
 
@@ -1035,11 +1043,13 @@ QoreValue FunctionCallNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, Excep
     // cross-Program privilege model).  A normal call (no explicit Program) keeps the default, so the
     // dom check is evaluated against the function's own Program.
     const bool defer_domain_po = (pgm != nullptr);
-    return tmp_args
-        ? func->evalFunctionTmpArgs(variant, args, call_pgm, rc, xsink, getExplicitTypeParamInstantiation(),
-            defer_domain_po)
-        : func->evalFunction(variant, args, call_pgm, rc, xsink, getExplicitTypeParamInstantiation(),
-            defer_domain_po);
+    if (tmp_args) {
+        ReferenceHolder<QoreListNode> args_copy(xsink);
+        return func->evalFunctionTmpArgs(variant, getEvalTmpArgs(args_copy), call_pgm, rc, xsink,
+            getExplicitTypeParamInstantiation(), defer_domain_po);
+    }
+    return func->evalFunction(variant, args, call_pgm, rc, xsink, getExplicitTypeParamInstantiation(),
+        defer_domain_po);
 }
 
 int FunctionCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_context) {
@@ -1841,8 +1851,9 @@ QoreValue StaticMethodCallNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, E
     const qore_class_private* cctx = qore_class_private::get(*qore_method_private::get(*method)->parent_class);
     const QoreTypeParamInstantiation* explicit_inst = getExplicitTypeParamInstantiation();
     if (tmp_args) {
-        return qore_method_private::evalTmpArgs(*method, xsink, rc, nullptr, args, cctx, variant, receiver_type_info,
-            explicit_inst);
+        ReferenceHolder<QoreListNode> args_copy(xsink);
+        return qore_method_private::evalTmpArgs(*method, xsink, rc, nullptr, getEvalTmpArgs(args_copy), cctx, variant,
+            receiver_type_info, explicit_inst);
     }
     return variant
         ? qore_method_private::evalNormalVariant(*method, xsink, rc, nullptr,

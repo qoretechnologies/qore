@@ -66,6 +66,7 @@ class QoreHashMapSelectOperatorNode;
 class QoreStreamingOperatorNode;
 class QoreIROnBlockExitInstruction;
 class ForEachStatement;
+class QoreBackgroundOperatorNode;
 
 class QoreIRLowering;
 
@@ -681,6 +682,47 @@ private:
         bool active = false;   //!< true when virtual context is in effect
     };
     VirtualImplicitContext virtual_implicit;
+
+    //! The state of the lowering of a background helper function; see lowerBackgroundHelper()
+    struct BackgroundHelperLowering {
+        //! the values other than local variables that the expression takes when the thread starts
+        /** Implicit arguments of the starting code, member reads, find expressions, closures and references; each is
+            held by the parameter with the same index in \a params
+        */
+        std::vector<QoreValue> leaves;
+        //! the parameter that holds each value in \a leaves
+        std::vector<std::unique_ptr<LocalVar, QoreIROwnedLocalVarDeleter>> params;
+        //! maps the key of a value in \a leaves to its index, so that a value used twice is taken once
+        std::unordered_map<std::string, size_t> leaf_index;
+        //! true if the expression calls a method of the object of the starting code
+        bool uses_self = false;
+    };
+    //! Set while the expression of a background helper is lowered, null otherwise
+    BackgroundHelperLowering* bg_helper = nullptr;
+
+    //! The number of background helpers lowered by this lowering and the lowerings nested in it
+    unsigned bg_helper_count_own = 0;
+    //! Counts background helpers for the outermost lowering, so that the names of their parameters are unique and
+    //! deterministic within the function; nested lowerings (handlers, helpers) share their parent's counter
+    unsigned* bg_helper_count = &bg_helper_count_own;
+    //! The number of the background helper this lowering lowers, if any (see bg_helper)
+    unsigned bg_helper_index = 0;
+
+    //! Lowers a value that a background expression takes when the thread starts, while lowering its helper
+    /** @param expr the expression to lower
+        @param rv the load of the parameter holding the value (for a reference, a reference to the parameter), if
+        \a expr is such a value; invalid if an error was raised
+        @param error the error message, if lowering the use of the parameter fails
+
+        @return true if \a expr is such a value, false if not
+    */
+    bool lowerBackgroundLeaf(const QoreValue& expr, QoreIRValue& rv, std::string& error);
+
+    //! Lowers a background expression to a helper function and the instruction starting the thread with it
+    /** See QoreIRBackgroundInstruction.
+    */
+    QoreIRValue lowerBackgroundHelper(const QoreValue& expr, const QoreBackgroundOperatorNode* op,
+        std::string& error);
 
     //! Counter for AST-delegated instructions (Call/Invoke with expr, DotEval* except
     //! DotEvalMethodDirect/HashKeyAccess).  Used by lowerMapNative to determine whether

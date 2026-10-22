@@ -1358,6 +1358,22 @@ private:
             bool throwing_ok,
             llvm::Value** result);
 
+    //! Emits the helper of a background expression and the call starting the thread with it
+    /** The helper (QoreIRBackgroundInstruction::helper_ir) is lowered to a native function in the same module, named
+        after the function that starts the thread (<function>_bg_<n>), and shares its AOT context in AOT mode.
+
+        @param inst the background instruction, with QoreIRBackgroundKind::Helper
+        @param result the value of the instruction (the TID of the new thread)
+        @param error the error, if the helper cannot be lowered
+
+        @return true if the code was emitted
+    */
+    bool emitBackgroundHelper(const QoreIRBackgroundInstruction* inst, llvm::Module& module,
+            llvm::Function* llvm_func, llvm::Value** result, std::string& error);
+
+    //! The number of background helpers emitted for the function being lowered
+    unsigned bg_helper_count = 0;
+
     // Phase 5b: Try to emit a specialized list index access instead of qore_rt_invoke_expr.
     // Returns true if specialized code was emitted, false to fall through to generic path.
     bool tryEmitListIndexAccess(const QoreIRInstruction* inst, llvm::Module& module,

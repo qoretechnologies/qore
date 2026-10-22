@@ -4922,6 +4922,15 @@ while (*binary chunk = input.read(65536)) {
       the values of the code that starts the thread
     - Fixed a crash when the @ref background "background operator" raises an exception preparing an expression of the
       @ref map "map", @ref select "select", @ref foldl "foldl" or @ref foldr "foldr" operator for the new thread
+    - Fixed a call in an expression of the @ref map "map", @ref select "select", @ref foldl "foldl" or
+      @ref foldr "foldr" operator in a @ref background "background" expression being made with no arguments for every
+      element after the first: for example <tt><b>background</b> (map f(q, $1), list)</tt> called <tt>f()</tt> with
+      @ref nothing for \a q from the second element on, and a call of a method of the object in such an expression
+      used the object after releasing its reference to it
+    - Fixed a crash when a @ref background "background" expression assigns or modifies a member of the object of the
+      code that starts the thread directly (such as <tt><b>background</b> (x = 1)</tt> in a method of a class with
+      member \c x); since the expression takes the member's value when the thread starts, as it does for a local
+      variable, such an expression now raises a parse exception, as the modification of a local variable does
     - Fixed calling the methods implemented by the abstract classes
       @ref Qore::SQL::AbstractDatasource "AbstractDatasource",
       @ref Qore::SQL::AbstractSQLStatement "AbstractSQLStatement",

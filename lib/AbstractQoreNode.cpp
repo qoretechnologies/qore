@@ -109,6 +109,11 @@ static QoreValue check_background_closure_capture(QoreValue v, ExceptionSink* xs
     return v;
 }
 
+QoreValue background_check_value_capture(QoreValue v, ExceptionSink* xsink) {
+    assert(background_closure_capture_helper);
+    return check_background_closure_capture(v, xsink);
+}
+
 AbstractQoreNode::AbstractQoreNode(qore_type_t t, bool n_value, bool n_needs_eval, bool n_there_can_be_only_one,
         bool n_custom_reference_handlers) : type(t), value(n_value), needs_eval_flag(n_needs_eval),
         there_can_be_only_one(n_there_can_be_only_one), custom_reference_handlers(n_custom_reference_handlers),
@@ -541,12 +546,25 @@ static AbstractQoreNode* crlr_hash_copy(RuntimeConfig& rc, const QoreParseHashNo
     return *xsink ? nullptr : h.release();
 }
 
+//! Marks a copied call evaluated more than once, if the copy is in such an operand, and returns it
+/** A call copied in an operand that an operator of the background expression evaluates for each element (see
+    copy_value_and_resolve_lvar_refs_bound_implicit()) is evaluated once per element, so it must not consume its
+    argument list
+*/
+template <class T>
+static T* crlr_call_copy_done(T* call) {
+    if (background_closure_capture_helper && background_closure_capture_helper->inBoundImplicit()) {
+        call->setReusableTmpArgs();
+    }
+    return call;
+}
+
 static AbstractQoreNode* crlr_selfcall_copy(RuntimeConfig& rc, const SelfFunctionCallNode* n, ExceptionSink* xsink) {
     QoreListNode* na = const_cast<QoreListNode*>(n->getArgs());
     if (na) {
         na = crlr_list_copy(rc, na, xsink);
     }
-    return new SetSelfFunctionCallNode(*n, na);
+    return crlr_call_copy_done(new SetSelfFunctionCallNode(*n, na));
 }
 
 static AbstractQoreNode* crlr_fcall_copy(RuntimeConfig& rc, const FunctionCallNode* n, ExceptionSink* xsink) {
@@ -554,7 +572,7 @@ static AbstractQoreNode* crlr_fcall_copy(RuntimeConfig& rc, const FunctionCallNo
     if (na) {
         na = crlr_list_copy(rc, na, xsink);
     }
-    return new FunctionCallNode(*n, na);
+    return crlr_call_copy_done(new FunctionCallNode(*n, na));
 }
 
 static AbstractQoreNode* crlr_mcall_copy(RuntimeConfig& rc, const MethodCallNode* m, ExceptionSink* xsink) {
@@ -567,7 +585,7 @@ static AbstractQoreNode* crlr_mcall_copy(RuntimeConfig& rc, const MethodCallNode
         }
         args = args_holder.release();
     }
-    return new MethodCallNode(*m, args);
+    return crlr_call_copy_done(new MethodCallNode(*m, args));
 }
 
 static AbstractQoreNode* crlr_smcall_copy(RuntimeConfig& rc, const StaticMethodCallNode* m, ExceptionSink* xsink) {
@@ -580,7 +598,7 @@ static AbstractQoreNode* crlr_smcall_copy(RuntimeConfig& rc, const StaticMethodC
         }
         args = args_holder.release();
     }
-    return new StaticMethodCallNode(*m, args);
+    return crlr_call_copy_done(new StaticMethodCallNode(*m, args));
 }
 
 static AbstractQoreNode* call_ref_call_copy(RuntimeConfig& rc, const CallReferenceCallNode* n, ExceptionSink* xsink) {

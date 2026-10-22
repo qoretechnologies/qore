@@ -642,7 +642,13 @@ bool QoreIRVerifier::verify(const QoreIRFunction& func, std::string& error) {
                     || inst->opcode == QoreIROpcode::DotEvalObject) {
                 auto* expr_inst = dynamic_cast<const QoreIRExprInstruction*>(inst.get());
                 auto* bg_inst = dynamic_cast<const QoreIRBackgroundInstruction*>(inst.get());
-                if (bg_inst) {
+                if (bg_inst && bg_inst->kind == QoreIRBackgroundKind::Helper) {
+                    if (!bg_inst->helper_ir || bg_inst->helper_params.size() != bg_inst->operands.size()) {
+                        error = "background helper instruction missing its helper or with a parameter count "
+                            "different from its operand count";
+                        return false;
+                    }
+                } else if (bg_inst) {
                     if ((bg_inst->kind != QoreIRBackgroundKind::DotEval
                                 && bg_inst->kind != QoreIRBackgroundKind::StaticMethod)
                             || bg_inst->name.empty()

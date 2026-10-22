@@ -21565,12 +21565,45 @@ static void buildAOTPcLocMaps(const std::string& path,
         func_slots[i].pc_loc_map.clear();
     }
 
+    // The helpers of background expressions (<function>_bg_<n>, see QoreIRToLLVM::emitBackgroundHelper()) are
+    // native functions of their own whose loc-indices address the table of the function that starts them, and
+    // which run with its context: each gets a PC map of its own, keyed by its symbol, with that function's table
+    const size_t num_funcs = func_slots.size();
+    size_t helper_scan_count = 0;
+    for (const auto& f : funcs) {
+        if (++helper_scan_count % 100 == 0 && qore_check_cancel(nullptr, "AOT background helper PC map scan")) {
+            return;
+        }
+        const std::string& sym = is_macho && !f.second.empty() && f.second[0] == '_'
+            ? f.second.substr(1) : f.second;
+        if (sym_to_fws.count(sym)) {
+            continue;
+        }
+        size_t pos = sym.rfind("_bg_");
+        if (pos == std::string::npos || pos + 4 == sym.size()
+                || sym.find_first_not_of("0123456789", pos + 4) != std::string::npos) {
+            continue;
+        }
+        auto owner = sym_to_fws.find(sym.substr(0, pos));
+        if (owner == sym_to_fws.end() || owner->second >= num_funcs) {
+            continue;
+        }
+        AOTCompiledFuncWithSlots helper;
+        helper.name = func_slots[owner->second].name + " (background helper)";
+        helper.llvm_symbol = sym;
+        helper.aot_locs = func_slots[owner->second].aot_locs;
+        func_slots.push_back(std::move(helper));
+        sym_to_fws[sym] = func_slots.size() - 1;
+    }
+
     // Module-wide index of every function's serialized locations, keyed by start line.  Used to
     // recover the exact location of a row whose DWARF column addresses another function's loc table
     // (LLVM inlined that function's body here) — the callee's own table holds the entry, so the file
     // and end line are recovered exactly instead of being approximated from the line table alone.
+    // The background helpers' tables are copies of their functions' and are not indexed again.
     std::unordered_map<int32_t, std::vector<const AOTCompiledFuncWithSlots::AOTLocEntry*>> locs_by_line;
-    for (const auto& fws : func_slots) {
+    for (size_t fi = 0; fi < num_funcs; ++fi) {
+        const AOTCompiledFuncWithSlots& fws = func_slots[fi];
         for (const auto& loc : fws.aot_locs) {
             if (loc.start_line > 0) {
                 locs_by_line[loc.start_line].push_back(&loc);
@@ -32136,6 +32169,22 @@ static bool isNativelyLoweredAOTCallRef(const QoreValue& expr) {
     return fcr && fcr->getFunction();
 }
 
+//! Returns true if the native code of a decomposed background call refers to the background expression by its slot
+/** QoreIRToLLVM::tryEmitDecomposedBackground() passes the expression slot of a function, static method, object
+    method or call reference call to the runtime, which builds the call from the expression; a call of a method of the
+    object is made by name.  The slot must be assigned by the slot map walk, not on demand when the code is lowered:
+    a metadata-only compile (qcc -m --from-objects) assigns the slots without lowering the code.
+*/
+static bool qoreAOTDecomposedBackgroundUsesExprSlot(const QoreValue& expr) {
+    const auto* bg_op = dynamic_cast<const QoreBackgroundOperatorNode*>(expr.getInternalNode());
+    if (!bg_op) {
+        return false;
+    }
+    const AbstractQoreNode* inner = bg_op->getExp().getInternalNode();
+    return dynamic_cast<const FunctionCallNode*>(inner) || dynamic_cast<const StaticMethodCallNode*>(inner)
+        || dynamic_cast<const QoreDotEvalOperatorNode*>(inner) || dynamic_cast<const CallReferenceCallNode*>(inner);
+}
+
 static bool shouldSkipInvokeExprSlot(const QoreIRInvokeInstruction* ii) {
     // Pure computation opcodes with pre-evaluated operands
     if ((!ii->operands.empty() && getOpcodeIsBinaryInvoke(
@@ -32185,9 +32234,9 @@ static bool shouldSkipInvokeExprSlot(const QoreIRInvokeInstruction* ii) {
             && dynamic_cast<const QoreCastOperatorNode*>(ii->expr.getInternalNode())) {
         return true;
     }
-    // BackgroundInt with pre-evaluated args (method name embedded as string constant)
+    // BackgroundInt with pre-evaluated args: only a call of a method of the object (by name) needs no slot
     if (ii->invoke_opcode == QoreIROpcode::BackgroundInt && !ii->operands.empty()) {
-        return true;
+        return !qoreAOTDecomposedBackgroundUsesExprSlot(ii->expr);
     }
     // Method references are emitted from the method name and the evaluated object context.
     if (ii->invoke_opcode == QoreIROpcode::CreateMethodRef
@@ -32238,6 +32287,9 @@ static bool shouldSkipInvokeExprSlot(const QoreIRInvokeInstruction* ii) {
 static bool shouldSkipExprInstructionExprSlot(const QoreIRExprInstruction* ei) {
     if (dynamic_cast<const QoreIRBackgroundInstruction*>(ei)) {
         return true;
+    }
+    if (ei->opcode == QoreIROpcode::BackgroundInt && !ei->operands.empty()) {
+        return !qoreAOTDecomposedBackgroundUsesExprSlot(ei->expr);
     }
     if (ei->opcode == QoreIROpcode::ListAssignAny && ei->operands.size() >= 2) {
         return true;
@@ -32327,7 +32379,7 @@ static void registerLValueBaseVars(const QoreValue& lvalue, AOTSlotMap& slots) {
     }
 }
 
-void buildAOTSlotMap(const QoreIRFunction& func, AOTSlotMap& slots) {
+void buildAOTSlotMap(const QoreIRFunction& func, AOTSlotMap& slots, bool seed_ir_local_slots) {
     auto makeOpcodeSource = [](QoreIROpcode opcode) {
         std::string source = "IR opcode ";
         source += getOpcodeName(static_cast<int>(opcode));
@@ -32384,9 +32436,11 @@ void buildAOTSlotMap(const QoreIRFunction& func, AOTSlotMap& slots) {
     // ctx->locals[slot_id] for those parent slots.  If AOT local slots are
     // allocated by instruction-walk order instead, handlers can inherit the
     // wrong parent value when the two orders diverge.
-    for (const auto& [lv, slot_id] : func.local_var_slots) {
-        if (lv) {
-            slots.local_slots[reinterpret_cast<const void*>(lv)] = static_cast<int32_t>(slot_id);
+    if (seed_ir_local_slots) {
+        for (const auto& [lv, slot_id] : func.local_var_slots) {
+            if (lv) {
+                slots.local_slots[reinterpret_cast<const void*>(lv)] = static_cast<int32_t>(slot_id);
+            }
         }
     }
 
@@ -32399,6 +32453,18 @@ void buildAOTSlotMap(const QoreIRFunction& func, AOTSlotMap& slots) {
     // to assign slot indices for each unique process-specific pointer.
     for (auto& block : func.blocks) {
         for (auto& inst : block->instructions) {
+            // the helper of a background expression is native code that shares this function's context: its
+            // parameters and everything its code refers to take slots of this function, so that a metadata-only
+            // compile assigns the same slots without lowering it
+            if (inst->opcode == QoreIROpcode::BackgroundInt) {
+                auto* bg_inst = dynamic_cast<const QoreIRBackgroundInstruction*>(inst.get());
+                if (bg_inst && bg_inst->kind == QoreIRBackgroundKind::Helper && bg_inst->helper_ir) {
+                    for (LocalVar* lv : bg_inst->helper_params) {
+                        slots.getLocalSlot(reinterpret_cast<const void*>(lv));
+                    }
+                    buildAOTSlotMap(*bg_inst->helper_ir, slots, false);
+                }
+            }
             switch (inst->opcode) {
                 case QoreIROpcode::LoadLocal:
                 case QoreIROpcode::StoreLocal: {
@@ -36316,6 +36382,14 @@ static void collectAOTStaticVarRefs(const QoreIRFunction& func, std::vector<AOTS
                         const auto* obei = static_cast<const QoreIROnBlockExitInstruction*>(inst.get());
                         if (obei->handler_ir) {
                             walk(*obei->handler_ir);
+                        }
+                        break;
+                    }
+                    case QoreIROpcode::BackgroundInt: {
+                        // the helper of a background expression is compiled with the function
+                        const auto* bg_inst = dynamic_cast<const QoreIRBackgroundInstruction*>(inst.get());
+                        if (bg_inst && bg_inst->helper_ir) {
+                            walk(*bg_inst->helper_ir);
                         }
                         break;
                     }
