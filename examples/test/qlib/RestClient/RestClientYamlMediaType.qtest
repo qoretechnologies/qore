@@ -1,0 +1,188 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    The servers of Qore releases before 3.0 decode a YAML request body only as "text/x-yaml" or "application/x-yaml",
+    and refuse another media type with DESERIALIZATION-ERROR; their clients send "text/x-yaml" and accept
+    "text/x-yaml" and "application/x-yaml".  Mime::MimeTypeYaml is now the RFC 9512 type "application/yaml", so
+    RestClient sends YAML request bodies with "text/x-yaml", and the REST servers of this release accept both.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Mime
+%requires yaml
+%requires json
+%requires HttpServerUtil
+%requires HttpServer
+%requires RestHandler
+%requires RestClient
+%requires RestClientIo
+
+%exec-class RestClientYamlMediaTypeTest
+
+#! The decoding of a REST server of Qore 2.2.1: the request media types, without parameters, that it decodes as YAML
+const Released221YamlRequestTypes = {
+    "text/x-yaml": True,
+    "application/x-yaml": True,
+};
+
+#! The Accept header of a RestClient of Qore 2.2.1
+const Released221Accept = "text/x-yaml,application/x-yaml,text/xml,application/xml,application/json,"
+    "application/x-www-form-urlencoded,text/plain,application/octet-stream";
+
+#! The response media types, without parameters, that a RestClient of Qore 2.2.1 decodes
+const Released221ResponseTypes = {
+    "application/x-www-form-urlencoded": True,
+    "application/json": True,
+    "application/x-yaml": True,
+    "text/x-yaml": True,
+    "text/xml": True,
+    "application/xml": True,
+    "text/plain": True,
+    "application/octet-stream": True,
+};
+
+#! A server that decodes requests as a REST server of Qore 2.2.1 does, and answers with YAML
+class Released221Handler inherits AbstractHttpRequestHandler {
+    public {
+        #! the Content-Type of the last request
+        *string content_type;
+    }
+
+    hash<auto> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        content_type = hdr."content-type";
+        *string ct = hdr."content-type";
+        ct =~ s/[;,].*$//;
+        if (!Released221YamlRequestTypes{ct}) {
+            return makeResponse(400, sprintf("DESERIALIZATION-ERROR: cannot deserialize request body; content-type "
+                "is: %y", ct), {"Content-Type": MimeTypeText});
+        }
+        auto v = parse_yaml(body.typeCode() == NT_BINARY ? body.toString("utf-8") : body);
+        return makeResponse(200, make_yaml(v), {"Content-Type": "text/x-yaml"});
+    }
+}
+
+#! A REST server of this release that echoes the request body
+class EchoRestHandler inherits RestHandler {
+    #! the handler serves the paths below "/rest"
+    removeRootPath(reference<string> path) {
+        path =~ s/^\/?rest(\/|$)//;
+    }
+
+    hash<HttpHandlerResponseInfo> putEcho(hash<auto> cx, *hash<auto> ah) {
+        return RestHandler::makeResponse(200, cx.body);
+    }
+}
+
+class RestClientYamlMediaTypeTest inherits QUnit::Test {
+    public {
+        const Data = {"a": 1, "b": "x", "c": (1, 2)};
+    }
+
+    private {
+        HttpServer server;
+        Released221Handler released();
+        int port;
+    }
+
+    constructor() : QUnit::Test("RestClientYamlMediaTypeTest", "1.0") {
+        server = new HttpServer();
+        # path prefixes, so that the REST handler gets the path below its prefix
+        server.setHandler("released", "/released", NOTHING, released, NOTHING, False);
+        server.setHandler("rest", "/rest", NOTHING, new EchoRestHandler(), NOTHING, False);
+        port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+
+        addTestCase("RestClient sends YAML with the type that every release decodes", \restClientTest());
+        addTestCase("RestClientIo sends YAML with the type that every release decodes", \restClientIoTest());
+        addTestCase("the REST server accepts every YAML request type", \serverAcceptsTest());
+        addTestCase("the REST server answers a client of 2.2.1 with a type that it decodes", \released221ClientTest());
+        addTestCase("the REST server refuses a media type that it cannot decode", \serverRefusesTest());
+        set_return_value(main());
+    }
+
+    destructor() {
+        server.stop();
+    }
+
+    restClientTest() {
+        assertEq("text/x-yaml", RestClient::DataSerializationSupport.yaml);
+        RestClient rest({"url": "http://127.0.0.1:" + port, "data": "yaml"});
+        hash<auto> info;
+        hash<auto> resp = rest.post("/released", Data, \info);
+        assertEq(200, resp.status_code);
+        assertRegex("^text/x-yaml", released.content_type, "a released server decodes the request");
+        assertEq(Data, resp.body, "the client reads the released server's YAML response");
+    }
+
+    restClientIoTest() {
+        RestClientIo rest({"url": "http://127.0.0.1:" + port, "data": "yaml"});
+        on_exit rest.close();
+        hash<auto> resp = rest.restPost("/released", Data);
+        assertEq(200, resp.status_code);
+        assertRegex("^text/x-yaml", released.content_type, "a released server decodes the request");
+        assertEq(Data, resp.body);
+    }
+
+    serverAcceptsTest() {
+        foreach string ct in (("text/x-yaml", "application/yaml", "application/x-yaml", "text/x-yaml;charset=utf-8",
+                "application/yaml; charset=utf-8")) {
+            hash<auto> resp = request("PUT", "/rest/echo", make_yaml(Data), {"Content-Type": ct,
+                "Accept": MimeTypeJson});
+            assertEq(200, resp.status_code, ct);
+            assertEq(Data, parse_json(resp.body), ct);
+        }
+    }
+
+    released221ClientTest() {
+        hash<auto> resp = request("PUT", "/rest/echo", make_yaml(Data), {"Content-Type": "text/x-yaml",
+            "Accept": Released221Accept});
+        assertEq(200, resp.status_code);
+        string ct = resp."content-type";
+        ct =~ s/[;,].*$//;
+        assertTrue(Released221ResponseTypes{ct}, sprintf("a client of 2.2.1 decodes %y", ct));
+        assertEq(Data, parse_yaml(resp.body));
+    }
+
+    serverRefusesTest() {
+        hash<auto> resp = request("PUT", "/rest/echo", make_yaml(Data), {"Content-Type": "application/x-unknown"});
+        assertTrue(resp.status_code >= 400 && resp.status_code < 500, sprintf("status %d", resp.status_code));
+    }
+
+    #! sends a request with the given headers and body and returns the response, without raising an error for a status
+    private hash<auto> request(string method, string path, string body, hash<auto> hdr) {
+        HTTPClient hc({"url": "http://127.0.0.1:" + port});
+        on_exit hc.disconnect();
+        hash<auto> info;
+        try {
+            return hc.send(body, method, path, hdr, False, \info);
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.arg.status_code) {
+                return ex.arg;
+            }
+            rethrow;
+        }
+    }
+}

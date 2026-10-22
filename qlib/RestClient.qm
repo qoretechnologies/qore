@@ -90,7 +90,10 @@ module RestClient {
     - \c "url": message bodies are encoded in URL form encoded format (see
       <a href="https://tools.ietf.org/html/rfc1738">RFC 2738 2.2</a>)
     - \c "xml": using the \c "xml" module; message bodies are encoded using XML-RPC value encoding
-    - \c "yaml": using the \c "yaml" module; message bodies are encoded using YAML
+    - \c "yaml": using the \c "yaml" module; message bodies are encoded using YAML and sent with the media type
+      \c "text/x-yaml", which the servers of all %Qore releases decode (servers of releases before %Qore 3.0 do not
+      decode the RFC 9512 type \c "application/yaml"); a response is read with any YAML media type, and the media
+      type of a response is negotiated with the \c Accept header
     - \c "text": message bodies are not serialized, plain text value is used
     - \c "bin": message bodies are not serialized, binary data is used instead
 
@@ -143,6 +146,9 @@ printf("%Y\n", ans.body);
     @section restclientrelnotes Release Notes
 
     @subsection restclientv2_7 RestClient v2.7
+    - YAML request bodies (the \c "yaml" serialization option) are sent with the media type \c "text/x-yaml", as by
+      earlier releases, also now that @ref Mime::MimeTypeYaml "MimeTypeYaml" is the RFC 9512 type
+      \c "application/yaml", which the servers of %Qore releases before 3.0 do not decode
     - added support for the OAuth2 \c implicit grant type, and the
       @ref RestClient::RestConnection::RCF_OAUTH2_IMPLICIT "oauth2-implicit" and
       @ref RestClient::RestConnection::RCF_OAUTH2_AUTH "oauth2-auth" connection features
@@ -1011,7 +1017,9 @@ public class RestClient inherits Qore::HTTPClient, Logger::LoggerWrapper, Connec
 
         const hash<auto> DataSerializationSupport = {
             "json": MimeTypeJson,
-            "yaml": MimeTypeYaml,
+            # the YAML media type that the servers of every release decode; Mime::MimeTypeYaml is the RFC 9512 type
+            # "application/yaml", which servers of Qore releases before 3.0 refuse
+            "yaml": "text/x-yaml",
 %ifndef NoXml
             "xml": MimeTypeXml,
             "rawxml": MimeTypeXmlApp,

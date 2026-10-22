@@ -107,6 +107,9 @@ printf("%y: header word b: %y\n", mime_decode_header(mime_encode_header_word_b(s
     @section mimereleasenotes Release Notes
 
     @subsection mime_1_9 v1.9
+    - <b>changes that can affect backwards compatibility</b>: @ref Mime::MimeTypeYaml "MimeTypeYaml" is the RFC 9512
+      type \c "application/yaml"; it was \c "text/x-yaml", which peers of %Qore releases before 3.0 require (see
+      @ref qore_3_0_0_compatibility "Changes That Can Affect Backwards-Compatibility")
     - added @ref Mime::mime_parse_header_value() "mime_parse_header_value()" for parsing header values with
       parameters, such as \c Content-Type and \c Content-Disposition values, including extended parameters
     - added @ref Mime::mime_decode_ext_value() "mime_decode_ext_value()" for decoding
@@ -401,6 +404,10 @@ public namespace Mime {
     public const string MimeTypeSoapXml = "application/soap+xml";
 
     #! Mime type for yaml data files (RFC 9512)
+    /** @since Mime 1.8 the value is \c "application/yaml" (RFC 9512); it was \c "text/x-yaml", which peers of %Qore
+        releases before 3.0 require, and which @ref Mime::YamlMimeTypes "YamlMimeTypes" and
+        @ref Mime::mime_check_equivalent_type() "mime_check_equivalent_type()" treat as equivalent
+    */
     public const string MimeTypeYaml = "application/yaml";
 
     #! Mime type for plain (human-readable) xml files

@@ -1272,6 +1272,17 @@ val = "string";      # OK
     when the checkout moves.  Recorded \c Qore::CFLAGS preserve reusable compiler options and their quoting,
     excluding build-machine file/debug/macro prefix maps.
 
+    @par Mime::MimeTypeYaml Is the RFC 9512 Type application/yaml
+    @parblock
+    @ref Mime::MimeTypeYaml "Mime::MimeTypeYaml" is \c "application/yaml", the media type of RFC 9512; it was
+    \c "text/x-yaml".  The peers of %Qore releases before 3.0 decode YAML only as \c "text/x-yaml" or
+    \c "application/x-yaml", so the YAML messages of the @ref restclientintro "RestClient" and DataStream modules
+    are still sent as \c "text/x-yaml", and the servers and clients of this release accept every YAML media type.
+    Code that sends YAML to a server of an earlier release with \c MimeTypeYaml as its \c Content-Type must send
+    \c "text/x-yaml" instead, and code that compares a received media type with \c MimeTypeYaml must accept the
+    other YAML media types too, for example with @ref Mime::YamlMimeTypes "Mime::YamlMimeTypes".
+    @endparblock
+
     @par JSON Numbers Must Have the Form That RFC 8259 Defines
     @parblock
     @ref Qore::Json::parse_json() "parse_json()" raises \c JSON-PARSE-ERROR for a number that does not have the form
