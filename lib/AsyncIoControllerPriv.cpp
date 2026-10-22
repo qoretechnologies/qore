@@ -635,7 +635,9 @@ struct AsyncIoDebugHeldReleases {
     std::vector<std::unique_ptr<AsyncIoDeferredRelease>> held;
 
     //! Returns the state, which is never destroyed: an I/O thread can still release references at process exit
-    DLLLOCAL static AsyncIoDebugHeldReleases& get() {
+    /** No visibility attribute: the type has internal linkage (gcc ignores the attribute with a warning)
+    */
+    static AsyncIoDebugHeldReleases& get() {
         static AsyncIoDebugHeldReleases* state = new AsyncIoDebugHeldReleases;
         return *state;
     }
