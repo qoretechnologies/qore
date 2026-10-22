@@ -1066,14 +1066,15 @@ bool expand_module_path_macros(const std::string& in, std::string& out, std::str
                 expansion = owned.c_str();
             } else {
                 QoreEnvironmentValue env_val_holder(name.c_str());
-                const char* env_val = env_val_holder.c_str();
-                if (!env_val) {
+                if (!env_val_holder) {
                     err = "undefined variable '";
                     err += name;
                     err += "' in path argument";
                     return false;
                 }
-                expansion = env_val;
+                // the value is copied: the holder's copy of it ends with this block, before it is appended
+                owned = env_val_holder.str();
+                expansion = owned.c_str();
             }
             out.append(expansion);
             i = j + 1;
