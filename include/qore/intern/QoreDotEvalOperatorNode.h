@@ -69,9 +69,24 @@ public:
     }
 
     DLLLOCAL ~QoreDotEvalOperatorNode() {
+        // only a node deleted without being released holds values here; see derefImpl()
         left.discard(nullptr);
-        if (m)
+        if (m) {
             m->deref(nullptr);
+        }
+    }
+
+    //! Releases the expression and the method call with the caller's exception sink
+    /** See QoreSingleExpressionOperatorNode::derefImpl().
+    */
+    DLLLOCAL virtual bool derefImpl(ExceptionSink* xsink) {
+        left.discard(xsink);
+        left = QoreValue();
+        if (m) {
+            m->deref(xsink);
+            m = nullptr;
+        }
+        return QoreOperatorNode::derefImpl(xsink);
     }
 
     DLLLOCAL QoreValue getExpression() const {

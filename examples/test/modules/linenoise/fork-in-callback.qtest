@@ -1,0 +1,115 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# A child process created with fork() in a completion callback, which runs with the module lock held, can use the
+# module: the child initializes the lock again and takes it as often as the forking thread held it.  Without the
+# module's fork handler, the child got the lock owned by the thread of the parent and its first history call waited
+# forever (the test runner's time limit is only a guard).
+#
+# The callback only runs when the line is read from a terminal, so the scenario runs in a terminal that script(1)
+# creates: util-linux (or BusyBox) script on Linux, BSD script on macOS and the BSDs.  Without script(1), the test is
+# skipped.  The test types the input once the prompt has appeared in the terminal's output, when linenoise reads the
+# terminal in raw mode: input sent earlier could reach the terminal, with its end, before linenoise switched it to raw
+# mode, and linenoise then read no line.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+
+%requires QUnit
+%requires Util
+%requires FsUtil
+
+%exec-class LinenoiseForkTest
+
+class LinenoiseForkTest inherits QUnit::Test {
+    constructor() : QUnit::Test("linenoise fork in a callback", "1.0", \ARGV) {
+        addTestCase("fork() in a completion callback", \testForkInCompletionCallback());
+        set_return_value(main());
+    }
+
+    testForkInCompletionCallback() {
+        if (!Option::HAVE_FORK) {
+            testSkip("fork() is not available");
+        }
+        if (system("command -v script > /dev/null 2>&1")) {
+            testSkip("script(1) is not available to run the scenario in a terminal");
+        }
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string scenario = get_script_dir() + DirSep + "ForkInCallbackScenario.qr";
+        string dir = make_tmp_dir("linenoise-fork");
+        on_exit remove_tree(dir);
+        string result_path = join_paths(dir, "result.txt");
+        # the terminal's input and output go through named pipes; the test holds both ends of each, so no open waits
+        # for the other end
+        string in_path = join_paths(dir, "in");
+        string out_path = join_paths(dir, "out");
+        if (mkfifo(in_path) || mkfifo(out_path)) {
+            throw "MKFIFO-ERROR", strerror();
+        }
+        File input_pipe();
+        input_pipe.open2(in_path, O_RDWR);
+        on_exit input_pipe.close();
+        File output_pipe();
+        output_pipe.open2(out_path, O_RDWR);
+
+        string inner = sprintf("TERM=xterm %s %s %s", shell_quote(qore_bin), shell_quote(scenario),
+            shell_quote(result_path));
+        # the util-linux and BusyBox script take the command with -c; BSD script takes it as its last arguments
+        string script_cmd = PlatformOS == "Linux"
+            ? sprintf("script -q -c %s /dev/null", shell_quote(inner))
+            : sprintf("script -q /dev/null sh -c %s", shell_quote(inner));
+        # BSD script needs its input from a pipe, not a named pipe, so cat relays it; the shell opens the named pipe
+        # before it starts anything, so the input written to it is never lost, and does not wait for cat, which ends
+        # when the test closes the input
+        string cmd = sprintf("exec 3< %s > %s 2>&1; (cat <&3 3<&- &) | %s 3<&-", shell_quote(in_path),
+            shell_quote(out_path), script_cmd);
+        # the output has no end of file, since the test holds its write end too: the end of the session is marked in
+        # the output with its exit status, after everything that script(1) wrote, even if system() throws
+        string end_mark = "end of the session " + get_random_string(32);
+        background sub () {
+            int rc = -1;
+            on_exit {
+                File end_pipe();
+                end_pipe.open2(out_path, O_WRONLY);
+                end_pipe.printf("\n%s %d\n", end_mark, rc);
+            }
+            rc = system(cmd);
+        }();
+
+        string output;
+        bool prompted;
+        *int rc;
+        while (True) {
+            *binary data = output_pipe.readShortBinary(4096);
+            if (!data) {
+                break;
+            }
+            output += data.toString("ISO-8859-1");
+            # the input is typed once the prompt is displayed: linenoise is then reading the terminal in raw mode, so
+            # the tab runs the completion callback; the end of the input comes after it
+            if (!prompted && output =~ /fork> /) {
+                prompted = True;
+                input_pipe.write("ab\t\n");
+                input_pipe.close();
+            }
+            *list<string> status = regex_extract(output, "\n" + end_mark + " (-?[0-9]+)\n");
+            if (status) {
+                rc = status[0].toInt();
+                break;
+            }
+        }
+        on_error printf("script output (rc %y):\n%s\n", rc, output);
+        assertEq(0, rc, "the session ended");
+        assertTrue(prompted, "the scenario displayed the prompt in the terminal");
+        assertTrue(is_file(result_path), "the scenario wrote its result");
+        assertEq("line=abc child=0\n", ReadOnlyFile::readTextFile(result_path),
+            "the completion callback forked, and the child used the history functions");
+    }
+
+    #! returns the string quoted for the shell
+    private static string shell_quote(string str) {
+        return "'" + replace(str, "'", "'\\''") + "'";
+    }
+}

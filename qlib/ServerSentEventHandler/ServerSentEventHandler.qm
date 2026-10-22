@@ -89,6 +89,10 @@ hash<HttpHandlerResponseInfo> getEvents(hash<auto> cx, *hash<auto> ah) {
     @section serversenteventhandler_relnotes ServerSentEventHandler Release History
 
     @subsection serversenteventhandler_v1_2_0 Version 1.2.0
+    - an event type or ID with a line break or a NUL character is refused with \c SSE-EVENT-ERROR before anything is
+      sent, and so is a negative retry value; before, a line break in an event type or ID started a field or an
+      event of its own, and a client ignored an ID with a NUL character.  A line break (CRLF, CR or LF) in a comment
+      or in the serialized data of an event starts another line of the field
     - fixed SSE connections over HTTP/2 and HTTP/3 never being deregistered when the peer disconnected: those
       transports multiplex, so neither a socket close nor a failed write reports the death of one response
       stream, and the connection stayed registered (and heartbeated) forever.  The transport now reports the

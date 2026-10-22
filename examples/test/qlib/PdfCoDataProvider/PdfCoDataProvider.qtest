@@ -695,7 +695,7 @@ public class PdfCoDataProviderTest inherits QUnit::Test {
             "logger": new Logger("server", LoggerLevel::getLevelError()),
         });
         on_exit server.stop();
-        int port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
         FakePdfCoHandler handler();
         server.setHandler("pdfco", "", NOTHING, handler);
         server.setDefaultHandler("pdfco", handler);
@@ -737,7 +737,7 @@ public class PdfCoDataProviderTest inherits QUnit::Test {
             "logger": new Logger("server", LoggerLevel::getLevelError()),
         });
         on_exit server.stop();
-        int port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
         FakePdfCoHandler handler();
         server.setHandler("pdfco", "", NOTHING, handler);
         server.setDefaultHandler("pdfco", handler);

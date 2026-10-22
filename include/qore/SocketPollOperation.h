@@ -121,6 +121,14 @@ public:
     */
     DLLEXPORT virtual void abort(ExceptionSink* xsink) override;
 
+    //! Releases the operation's claim on the socket without using the socket's descriptor
+    /** The async I/O controller calls this before it delivers the result of an operation that it ends without
+        aborting it, because the descriptor that the operation waited on was closed or replaced, or the socket was
+        deleted; abort() is not called then, as it can close the descriptor that the socket has now.  The code that
+        gets the result can then use the socket at once, although the operation object is released only later.
+    */
+    DLLLOCAL void releaseSocketClaim();
+
 protected:
     std::unique_ptr<AbstractPollState> poll_state;
     QoreSocketObject* sock = nullptr;

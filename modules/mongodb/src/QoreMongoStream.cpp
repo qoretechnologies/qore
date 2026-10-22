@@ -42,7 +42,8 @@
 #include <vector>
 
 static bool qore_mongoc_verbose_enabled() {
-    const char* env = getenv("QORE_MONGODB_VERBOSE");
+    QoreEnvironmentValue env_holder("QORE_MONGODB_VERBOSE");
+    const char* env = env_holder.c_str();
     if (!env || !*env) {
         return false;
     }

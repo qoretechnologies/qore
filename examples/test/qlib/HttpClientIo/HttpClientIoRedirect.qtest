@@ -210,7 +210,7 @@ public class HttpClientIoRedirectTest inherits QUnit::Test {
             "logger": logger,
         };
         mServer = new HttpServer(http_opts);
-        hash<auto> linfo = mServer.addListener(<HttpListenerOptionInfo>{"service": 0});
+        hash<auto> linfo = mServer.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0});
         port = linfo.port;
         RedirectHandler handler(port);
         mServer.setHandler("redirect-handler", "", NOTHING, handler);
@@ -226,7 +226,7 @@ public class HttpClientIoRedirectTest inherits QUnit::Test {
             "node": "127.0.0.1", "service": 0}).port);
         server_c = new HttpServer(<HttpServerOptionInfo>{"logger": logger});
         server_c.setDefaultHandler("c", peer_c);
-        port_c = server_c.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        port_c = server_c.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
 
         on_exit {
             mServer.stop();

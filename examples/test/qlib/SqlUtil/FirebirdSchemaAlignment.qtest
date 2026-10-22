@@ -1,0 +1,483 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires SqlUtil
+%requires XdbcFirebirdSqlUtilBase
+
+%exec-class FirebirdSchemaAlignmentTest
+
+#! a datasource that answers catalog queries with given results and records the SQL that it is given, so foreign
+#! constraints and sequences are generated and described without a Firebird server
+class FirebirdCatalogDatasource inherits Qore::SQL::AbstractDatasource {
+    public {
+        #! each statement given, with the method and the arguments
+        list<hash<auto>> log = ();
+    }
+
+    private {
+        # the results of select() by a regular expression of the SQL and the first argument
+        list<hash<auto>> results = ();
+        # the rows of selectRow() by a regular expression of the SQL and the first argument
+        list<hash<auto>> rows = ();
+    }
+
+    #! gives the result of select() for SQL matching a regular expression with the given first argument
+    addResult(string pattern, *string arg, hash<auto> result) {
+        results += {"pattern": pattern, "arg": arg, "value": result};
+    }
+
+    #! gives the row of selectRow() for SQL matching a regular expression with the given first argument
+    addRow(string pattern, *string arg, hash<auto> row) {
+        rows += {"pattern": pattern, "arg": arg, "value": row};
+    }
+
+    #! returns the statements recorded since the last call and clears the log
+    list<hash<auto>> take() {
+        on_exit log = ();
+        return log;
+    }
+
+    private static auto find(list<hash<auto>> l, string sql, *softlist<auto> args) {
+        foreach hash<auto> i in (l) {
+            if (regex(sql, i.pattern) && (!exists i.arg || i.arg == args[0])) {
+                return i.value;
+            }
+        }
+    }
+
+    private record(string m, string sql, *softlist<auto> args) {
+        log += {"method": m, "sql": sql, "args": args};
+    }
+
+    *string getPassword() {}
+    *string getOSEncoding() {}
+    *string getDBName() { return "fbtest"; }
+    *string getUserName() { return "fbuser"; }
+    *string getHostName() {}
+    *int getPort() {}
+    *string getDBEncoding() {}
+    string getDriverName() { return "jni"; }
+    auto getServerVersion() {}
+    auto getClientVersion() {}
+    string getConfigString() { return ""; }
+    hash<auto> getConfigHash() { return {}; }
+    bool inTransaction() { return False; }
+    bool currentThreadInTransaction() { return False; }
+    nothing beginTransaction() {}
+    nothing commit() {}
+    nothing rollback() {}
+
+    auto exec(string sql, ...) { record("exec", sql, argv); return 0; }
+    auto vexec(string sql, *softlist<auto> vargs) { record("vexec", sql, vargs); return 0; }
+    auto execRaw(string sql) { record("execRaw", sql); return 0; }
+    auto select(string sql, ...) { return vselect(sql, argv); }
+    auto vselect(string sql, *softlist<auto> vargs) {
+        record("select", sql, vargs);
+        # a query without rows gives a hash without columns
+        return FirebirdCatalogDatasource::find(results, sql, vargs) ?? {};
+    }
+    auto selectRow(string sql, ...) { return vselectRow(sql, argv); }
+    auto vselectRow(string sql, *softlist<auto> vargs) {
+        record("selectRow", sql, vargs);
+        return FirebirdCatalogDatasource::find(rows, sql, vargs);
+    }
+    auto selectRows(string sql, ...) { record("selectRows", sql, argv); }
+    auto vselectRows(string sql, *softlist<auto> vargs) { record("selectRows", sql, vargs); }
+    auto selectTyped(string sql, ...) {}
+    auto vselectTyped(string sql, *softlist<auto> vargs) {}
+    auto selectRowsTyped(string sql, ...) {}
+    auto vselectRowsTyped(string sql, *softlist<auto> vargs) {}
+}
+
+class FirebirdSchemaAlignmentTest inherits QUnit::Test {
+    public {
+        #! the catalog query that describes the columns of a table
+        const ColumnQuery = "rdb\\$relation_fields";
+        #! the catalog query that describes the foreign constraints of a table
+        const ForeignConstraintQuery = "rdb\\$ref_constraints";
+        #! the catalog query that describes a sequence
+        const SequenceQuery = "from rdb\\$generators";
+
+        #! the rows of the column query for the order_lines table: id bigint not null, order_id bigint,
+        #! item_group varchar(20), item_id bigint
+        const OrderLinesColumns = {
+            "name": ("id", "order_id", "item_group", "item_id"),
+            "length": (8, 8, 20, 8),
+            "precision": (NOTHING, NOTHING, NOTHING, NOTHING),
+            "scale": (0, 0, 0, 0),
+            "type": (16, 16, 37, 16),
+            "subtype": (0, 0, 0, 0),
+            "null_flag": (1, NOTHING, NOTHING, NOTHING),
+            "default_value": (NOTHING, NOTHING, NOTHING, NOTHING),
+            "comment": (NOTHING, NOTHING, NOTHING, NOTHING),
+        };
+
+        #! the order_lines table as a template
+        const OrderLinesTemplate = {
+            "columns": {
+                "id": {"qore_type": "integer", "notnull": True},
+                "order_id": {"qore_type": "integer"},
+                "item_group": {"qore_type": "string", "size": 20},
+                "item_id": {"qore_type": "integer"},
+            },
+        };
+    }
+
+    constructor() : Test("FirebirdSchemaAlignmentTest", "1.0", \ARGV) {
+        addTestCase("foreign constraints are created with their referential actions", \createdActions());
+        addTestCase("RESTRICT is refused", \restrictRefused());
+        addTestCase("catalog rules are referential actions", \catalogRules());
+        addTestCase("foreign constraints are described with their referential actions", \describedActions());
+        addTestCase("alignment of a foreign constraint without actions proposes no SQL", \alignDefault());
+        addTestCase("alignment of a changed referential action adds the constraint again", \alignChangedAction());
+        addTestCase("sequences are created with their starting value and increment", \sequenceCreate());
+        addTestCase("sequence parameters that Firebird does not have are refused", \sequenceUnsupported());
+        addTestCase("sequences are described with their starting value and increment", \sequenceDescribe());
+        addTestCase("sequence alignment changes the increment and keeps the value", \sequenceAlign());
+        addTestCase("sequences are listed", \sequenceList());
+        set_return_value(main());
+    }
+
+    private static XdbcFirebirdTable getTemplate(FirebirdCatalogDatasource ds, string name, hash<auto> desc,
+            *hash<auto> opt) {
+        XdbcFirebirdTable t(ds, name);
+        t.setupTable(desc, opt);
+        return t;
+    }
+
+    # returns a table cache with the referenced tables: orders (id) and items (item_group, id), with a primary key
+    private static Tables getTargetTables(FirebirdCatalogDatasource ds) {
+        Tables cache();
+        cache.add("orders", FirebirdSchemaAlignmentTest::getTemplate(ds, "orders", {
+            "columns": {"id": {"qore_type": "integer", "notnull": True}},
+            "primary_key": {"name": "pk_orders", "columns": ("id",)},
+        }));
+        cache.add("items", FirebirdSchemaAlignmentTest::getTemplate(ds, "items", {
+            "columns": {
+                "item_group": {"qore_type": "string", "size": 20, "notnull": True},
+                "id": {"qore_type": "integer", "notnull": True},
+            },
+            "primary_key": {"name": "pk_items", "columns": ("item_group", "id")},
+        }));
+        return cache;
+    }
+
+    # returns a datasource that describes the order_lines table with the given foreign constraint rows
+    private static FirebirdCatalogDatasource getOrderLinesDatasource(hash<auto> fk_rows) {
+        FirebirdCatalogDatasource ds();
+        # the table exists
+        ds.addRow("rdb\\$relation_type = 0 and a\\.rdb\\$relation_name = %v", "ORDER_LINES", {"name": "ORDER_LINES"});
+        ds.addResult(ColumnQuery, "ORDER_LINES", OrderLinesColumns);
+        ds.addResult(ForeignConstraintQuery, "ORDER_LINES", fk_rows);
+        return ds;
+    }
+
+    createdActions() {
+        FirebirdCatalogDatasource ds();
+        Tables cache = FirebirdSchemaAlignmentTest::getTargetTables(ds);
+        XdbcFirebirdTable t = FirebirdSchemaAlignmentTest::getTemplate(ds, "order_lines", OrderLinesTemplate);
+        string prefix = "alter table order_lines add constraint ";
+
+        hash<string, hash<auto>> cases = {
+            # the default: no clause, as before
+            "fk_none": {"opt": {}, "sql": ""},
+            "fk_no_action": {"opt": {"on_delete": FK_NO_ACTION, "on_update": "no action"}, "sql": ""},
+            "fk_cascade": {"opt": {"on_delete": FK_CASCADE}, "sql": " on delete cascade"},
+            "fk_set_null": {"opt": {"on_update": "set null"}, "sql": " on update set null"},
+            "fk_set_default": {"opt": {"on_delete": FK_SET_DEFAULT, "on_update": FK_CASCADE},
+                "sql": " on delete set default on update cascade"},
+        };
+        foreach hash<auto> i in (cases.pairIterator()) {
+            string sql;
+            AbstractForeignConstraint fk = t.addForeignConstraint(i.key, "order_id", "orders", "id",
+                i.value.opt + {"table_cache": cache}, \sql);
+            assertEq(prefix + i.key + " foreign key (order_id) references orders (id)" + i.value.sql, sql, i.key);
+            assertEq(sql, fk.getCreateSql("order_lines"), i.key);
+        }
+
+        # a composite foreign constraint keeps the order of its columns, and the actions follow them
+        string sql;
+        t.addForeignConstraint("fk_item", ("item_group", "item_id"), "items", ("item_group", "id"),
+            {"on_delete": "cascade", "on_update": "set_null", "table_cache": cache}, \sql);
+        assertEq(prefix + "fk_item foreign key (item_group, item_id) references items (item_group, id) "
+            "on delete cascade on update set null", sql);
+
+        # an action that is not a referential action
+        assertThrows("FOREIGN-CONSTRAINT-ERROR", "invalid on_delete referential action",
+            \t.addForeignConstraint(), ("fk_bad", "order_id", "orders", "id",
+                {"on_delete": "explode", "table_cache": cache}));
+    }
+
+    restrictRefused() {
+        FirebirdCatalogDatasource ds();
+        Tables cache = FirebirdSchemaAlignmentTest::getTargetTables(ds);
+        XdbcFirebirdTable t = FirebirdSchemaAlignmentTest::getTemplate(ds, "order_lines", OrderLinesTemplate);
+
+        # as an option of a foreign constraint
+        assertThrows("FOREIGN-CONSTRAINT-ERROR", "Firebird does not support the on_delete referential action "
+            "\"RESTRICT\"", \t.addForeignConstraint(), ("fk_restrict", "order_id", "orders", "id",
+                {"on_delete": FK_RESTRICT, "table_cache": cache}));
+        assertThrows("FOREIGN-CONSTRAINT-ERROR", "Firebird does not support the on_update referential action "
+            "\"RESTRICT\"", \t.addForeignConstraint(), ("fk_restrict", "order_id", "orders", "id",
+                {"on_update": "restrict", "table_cache": cache}));
+        assertFalse(t.getForeignConstraints().hasKey("fk_restrict"));
+
+        # in a table description
+        XdbcFirebirdTable desc_table(ds, "order_lines");
+        assertThrows("FOREIGN-CONSTRAINT-ERROR", "Firebird does not support the on_delete referential action",
+            \desc_table.setupTable(), (OrderLinesTemplate + {"foreign_constraints": {"fk_restrict": {
+                "columns": "order_id", "table": "orders", "target_columns": "id", "on_delete": "restrict",
+            }}}, {"table_cache": cache}));
+
+        # given to the constructor; created by name, so that the test runs on a driver without the actions
+        Columns cols = t.describe();
+        assertThrows("FOREIGN-CONSTRAINT-ERROR", "on_update referential action \"RESTRICT\"", sub () {
+            create_object("XdbcFirebirdForeignConstraint", "fk_restrict", new Columns({"order_id": cols.order_id}),
+                new ForeignConstraintTarget("orders", cache.orders.describe().subset("id")), NOTHING, FK_RESTRICT);
+        });
+
+        # set on the object: no SQL is given for it
+        XdbcFirebirdForeignConstraint fk("fk_member", new Columns({"order_id": cols.order_id}),
+            new ForeignConstraintTarget("orders", cache.orders.describe().subset("id")));
+        fk.on_delete = FK_RESTRICT;
+        assertThrows("FOREIGN-CONSTRAINT-ERROR", "on_delete referential action \"RESTRICT\"", \fk.getCreateSql(),
+            "order_lines");
+    }
+
+    catalogRules() {
+        # Firebird records RESTRICT for an action that was not given; rdb$ref_constraints gives CHAR(11) values
+        hash<string, *string> expected = {
+            "RESTRICT": NOTHING,
+            "RESTRICT   ": NOTHING,
+            "NO ACTION": NOTHING,
+            "NO ACTION  ": NOTHING,
+            "CASCADE    ": FK_CASCADE,
+            "SET NULL   ": FK_SET_NULL,
+            "SET DEFAULT": FK_SET_DEFAULT,
+        };
+        # called by name, so that the test runs on a driver without the method
+        code action = auto sub (*string rule) {
+            return call_static_method("XdbcFirebirdForeignConstraint", "actionFromCatalog", rule);
+        };
+        foreach hash<auto> i in (expected.pairIterator()) {
+            assertEq(i.value, action(i.key), i.key);
+        }
+        assertEq(NOTHING, action());
+        assertThrows("FOREIGN-CONSTRAINT-ERROR", action, "EXPLODE");
+    }
+
+    describedActions() {
+        FirebirdCatalogDatasource ds = FirebirdSchemaAlignmentTest::getOrderLinesDatasource({
+            "constraint_name": ("fk_item", "fk_item", "fk_order", "fk_order_set_default"),
+            "column_name": ("item_group", "item_id", "order_id", "order_id"),
+            "target_table": ("items", "items", "orders", "orders"),
+            "target_column": ("item_group", "id", "id", "id"),
+            "delete_rule": ("CASCADE", "CASCADE", "RESTRICT", "SET DEFAULT"),
+            "update_rule": ("SET NULL", "SET NULL", "RESTRICT", "NO ACTION"),
+        });
+        Tables cache = FirebirdSchemaAlignmentTest::getTargetTables(ds);
+        XdbcFirebirdTable t(ds, "order_lines");
+        ForeignConstraints fks = t.getForeignConstraints({"table_cache": cache});
+
+        assertEq(("fk_item", "fk_order", "fk_order_set_default"), fks.keys());
+        hash<string, hash<auto>> expected = {
+            "fk_item": {"columns": ("item_group", "item_id"), "table": "items", "target_columns": ("item_group", "id"),
+                "on_delete": FK_CASCADE, "on_update": FK_SET_NULL},
+            "fk_order": {"columns": ("order_id",), "table": "orders", "target_columns": ("id",),
+                "on_delete": NOTHING, "on_update": NOTHING},
+            "fk_order_set_default": {"columns": ("order_id",), "table": "orders", "target_columns": ("id",),
+                "on_delete": FK_SET_DEFAULT, "on_update": NOTHING},
+        };
+        foreach hash<auto> i in (expected.pairIterator()) {
+            AbstractForeignConstraint fk = fks{i.key};
+            assertEq("XdbcFirebirdForeignConstraint", fk.className(), i.key);
+            assertEq(i.value, {
+                "columns": fk.keys(),
+                "table": fk.target.table,
+                "target_columns": fk.target.columns.keys(),
+                "on_delete": fk.on_delete,
+                "on_update": fk.on_update,
+            }, i.key);
+        }
+        # the columns are those of the table
+        assertEq("bigint", fks.fk_order.getHash().order_id.native_type);
+
+        # the constraints of the table are looked up by its name in upper case, as Firebird keeps it
+        list<hash<auto>> fk_queries = select ds.take(), $1.sql =~ /rdb\$ref_constraints/;
+        assertEq(1, fk_queries.size());
+        assertEq(("ORDER_LINES",), fk_queries[0].args);
+        assertRegex("rc\\.rdb\\$constraint_type = 'FOREIGN KEY' and rc\\.rdb\\$relation_name = %v", fk_queries[0].sql);
+    }
+
+    alignDefault() {
+        # a foreign constraint created without actions: Firebird records RESTRICT for both
+        FirebirdCatalogDatasource ds = FirebirdSchemaAlignmentTest::getOrderLinesDatasource({
+            "constraint_name": ("fk_item", "fk_item", "fk_order"),
+            "column_name": ("item_group", "item_id", "order_id"),
+            "target_table": ("items", "items", "orders"),
+            "target_column": ("item_group", "id", "id"),
+            "delete_rule": ("CASCADE", "CASCADE", "RESTRICT"),
+            "update_rule": ("NO ACTION", "NO ACTION", "RESTRICT"),
+        });
+        # the referenced tables of the database and of the template
+        Tables cache = FirebirdSchemaAlignmentTest::getTargetTables(ds);
+        Tables template_cache = FirebirdSchemaAlignmentTest::getTargetTables(ds);
+        XdbcFirebirdTable db_table(ds, "order_lines");
+        db_table.getForeignConstraints({"table_cache": cache});
+
+        XdbcFirebirdTable template = FirebirdSchemaAlignmentTest::getTemplate(ds, "order_lines", OrderLinesTemplate
+            + {"foreign_constraints": {
+                "fk_order": {"columns": "order_id", "table": "orders", "target_columns": "id"},
+                "fk_item": {"columns": ("item_group", "item_id"), "table": "items",
+                    "target_columns": ("item_group", "id"), "on_delete": "cascade", "on_update": FK_NO_ACTION},
+            }}, {"table_cache": template_cache});
+        foreach string name in ("fk_order", "fk_item") {
+            assertTrue(template.getForeignConstraints(){name}.equal(db_table.getForeignConstraints(){name}), name);
+        }
+        assertEq((), db_table.getAlignSql(template, {"table_cache": cache}));
+    }
+
+    alignChangedAction() {
+        FirebirdCatalogDatasource ds = FirebirdSchemaAlignmentTest::getOrderLinesDatasource({
+            "constraint_name": ("fk_order",),
+            "column_name": ("order_id",),
+            "target_table": ("orders",),
+            "target_column": ("id",),
+            "delete_rule": ("RESTRICT",),
+            "update_rule": ("RESTRICT",),
+        });
+        Tables cache = FirebirdSchemaAlignmentTest::getTargetTables(ds);
+        Tables template_cache = FirebirdSchemaAlignmentTest::getTargetTables(ds);
+        XdbcFirebirdTable db_table(ds, "order_lines");
+        db_table.getForeignConstraints({"table_cache": cache});
+
+        XdbcFirebirdTable template = FirebirdSchemaAlignmentTest::getTemplate(ds, "order_lines", OrderLinesTemplate
+            + {"foreign_constraints": {
+                "fk_order": {"columns": "order_id", "table": "orders", "target_columns": "id",
+                    "on_delete": FK_CASCADE},
+            }}, {"table_cache": template_cache});
+        assertFalse(template.getForeignConstraints().fk_order.equal(db_table.getForeignConstraints().fk_order));
+        assertEq((
+            "alter table order_lines drop constraint fk_order",
+            "alter table order_lines add constraint fk_order foreign key (order_id) references orders (id) "
+                "on delete cascade",
+        ), db_table.getAlignSql(template, {"table_cache": cache}));
+    }
+
+    sequenceCreate() {
+        FirebirdCatalogDatasource ds();
+        XdbcFirebirdDatabase db(ds);
+        # the defaults: no clause, as before
+        assertEq("create sequence seq_orders", new XdbcFirebirdSequence("seq_orders").getCreateSql());
+        assertEq("create sequence seq_orders start with 1000",
+            new XdbcFirebirdSequence("seq_orders", 1000).getCreateSql());
+        assertEq("create sequence seq_orders increment by 10",
+            new XdbcFirebirdSequence("seq_orders", 1, 10).getCreateSql());
+        assertEq("create sequence seq_orders start with 1000 increment by 10",
+            new XdbcFirebirdSequence("seq_orders", 1000, 10).getCreateSql());
+        assertEq("create sequence seq_down start with -1 increment by -1",
+            new XdbcFirebirdSequence("seq_down", -1, -1).getCreateSql());
+
+        # from a description, as schema alignment creates a sequence
+        assertEq("create sequence seq_orders start with 100 increment by 5",
+            db.makeSequenceFromDescription("seq_orders", {"start": 100, "increment": 5}).getCreateSql());
+        # a cache of 0 and no cycle are as Firebird sequences are
+        assertEq("create sequence seq_orders start with 100",
+            db.makeSequenceFromDescription("seq_orders", {"start": 100, "cycle": False, "cache": 0}).getCreateSql());
+
+        # a sequence that does not exist is created with its parameters by schema alignment
+        assertEq(("create sequence seq_new start with 50 increment by 2",),
+            db.getAlignSql({"sequences": {"seq_new": {"start": 50, "increment": 2}}}));
+    }
+
+    sequenceUnsupported() {
+        FirebirdCatalogDatasource ds();
+        XdbcFirebirdDatabase db(ds);
+        hash<string, hash<auto>> cases = {
+            "min": {"min": 1},
+            "max": {"max": 1000},
+            "end": {"end": 1000},
+            "cycle": {"cycle": True},
+            "cache": {"cache": 20},
+        };
+        foreach hash<auto> i in (cases.pairIterator()) {
+            AbstractSequence seq = db.makeSequenceFromDescription("seq_orders", i.value);
+            assertThrows("SEQUENCE-ERROR", sprintf("cannot have the parameter \\[\"%s\"\\]", i.key),
+                \seq.getCreateSql(), NOTHING, i.key);
+            # the sequence can be dropped, as a schema is dropped
+            assertEq("drop sequence seq_orders", seq.getDropSql(), i.key);
+        }
+        AbstractSequence several = db.makeSequenceFromDescription("seq_orders", {"min": 1, "max": 9, "cycle": True});
+        assertThrows("SEQUENCE-ERROR", "cannot have the parameters \\[\"min\", \"max\", \"cycle\"\\]",
+            \several.getCreateSql());
+        # a maximum given to the constructor
+        XdbcFirebirdSequence with_max("seq_orders", 1, 1, 1000);
+        assertThrows("SEQUENCE-ERROR", "cannot have the parameter \\[\"max\"\\]", \with_max.getCreateSql());
+
+        # in the alignment of an existing sequence
+        XdbcFirebirdSequence existing("seq_orders", 1000, 10);
+        foreach hash<auto> i in (cases.pairIterator()) {
+            assertThrows("SEQUENCE-ERROR", sprintf("cannot have the parameter \\[\"%s\"\\]", i.key),
+                \existing.getAlterSql(), ({"increment": 10} + i.value), i.key);
+        }
+        assertThrows("SEQUENCE-ERROR", "increment cannot be zero", \existing.getAlterSql(), {"increment": 0});
+    }
+
+    sequenceDescribe() {
+        FirebirdCatalogDatasource ds();
+        ds.addRow(SequenceQuery, "SEQ_ORDERS", {"sequence": "SEQ_ORDERS", "start": 1000, "increment": 10});
+        XdbcFirebirdDatabase db(ds);
+        *AbstractSequence seq = db.getSequence("seq_orders");
+        assertEq("XdbcFirebirdSequence", seq.className());
+        assertEq({"name": "seq_orders", "start": 1000n, "increment": 10n}, {
+            "name": seq.name,
+            "start": seq.start,
+            "increment": seq.increment,
+        });
+        # looked up by its name in upper case, with its starting value and increment
+        list<hash<auto>> queries = ds.take();
+        assertEq(("SEQ_ORDERS",), queries[0].args);
+        assertRegex("rdb\\$initial_value", queries[0].sql);
+        assertRegex("rdb\\$generator_increment", queries[0].sql);
+        assertEq(NOTHING, db.getSequence("seq_missing"));
+    }
+
+    sequenceAlign() {
+        FirebirdCatalogDatasource ds();
+        ds.addRow(SequenceQuery, "SEQ_ORDERS", {"sequence": "SEQ_ORDERS", "start": 1000, "increment": 10});
+        ds.addRow(SequenceQuery, "SEQ\"Q", {"sequence": "SEQ\"Q", "start": 1, "increment": 1});
+        XdbcFirebirdDatabase db(ds);
+
+        # a changed increment is altered, which keeps the current value of the sequence
+        assertEq(("alter sequence seq_orders increment by 20",),
+            db.getAlignSql({"sequences": {"seq_orders": {"start": 1000, "increment": 20}}}));
+        # the name is an identifier
+        assertEq(("alter sequence \"SEQ\"\"Q\" increment by -1",),
+            db.getAlignSql({"sequences": {"seq\"q": {"increment": -1}}}));
+        # an unchanged increment, a changed starting value and a description without an increment need no SQL: the
+        # starting value of an existing sequence is never changed, as that would restart it
+        assertEq((), db.getAlignSql({"sequences": {"seq_orders": {"start": 1000, "increment": 10}}}));
+        assertEq((), db.getAlignSql({"sequences": {"seq_orders": {"start": 5, "increment": 10}}}));
+        assertEq((), db.getAlignSql({"sequences": {"seq_orders": {}}}));
+        assertThrows("SEQUENCE-ERROR", "cannot have the parameter \\[\"cache\"\\]",
+            \db.getAlignSql(), {"sequences": {"seq_orders": {"increment": 10, "cache": 20}}});
+    }
+
+    sequenceList() {
+        FirebirdCatalogDatasource ds();
+        ds.addResult("select lower\\(trim\\(rdb\\$generator_name\\)\\)", NOTHING,
+            {"name": ("seq_orders", "seq_items")});
+        XdbcFirebirdDatabase db(ds);
+        assertEq(("seq_items", "seq_orders"), db.listSequences());
+        # a generator of an identity column is not a sequence of the schema
+        assertRegex("rdb\\$system_flag = 0", ds.take()[0].sql);
+
+        FirebirdCatalogDatasource empty_ds();
+        assertEq((), new XdbcFirebirdDatabase(empty_ds).listSequences());
+    }
+}

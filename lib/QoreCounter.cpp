@@ -3,7 +3,7 @@
 
   Qore Programming Language
 
-  Copyright (C) 2005 - 2024 Qore Technologies, s.r.o.
+  Copyright (C) 2005 - 2026 Qore Technologies, s.r.o.
 
   Permission is hereby granted, free of charge, to any person obtaining a
   copy of this software and associated documentation files (the "Software"),
@@ -142,6 +142,24 @@ QoreCounter::QoreCounter(int nc) : priv(new qore_counter_private(nc)) {
 
 QoreCounter::~QoreCounter() {
     delete priv;
+}
+
+void QoreCounter::lockForFork() {
+    priv->l.lock();
+}
+
+void QoreCounter::unlockForFork() {
+    priv->l.unlock();
+}
+
+void QoreCounter::reinitAfterFork(int count) {
+    // the waiting threads do not exist in the child
+    priv->waiting = 0;
+    if (count >= 0) {
+        priv->cnt = count;
+    }
+    priv->cond.reinitAfterFork();
+    priv->l.reinitAfterFork();
 }
 
 void QoreCounter::destructor(ExceptionSink* xsink) {

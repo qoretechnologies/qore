@@ -1,0 +1,144 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# Reflection follows the caller-privilege model: a call made through a reflection object is checked against the
+# sandboxing restrictions of the CALLING code and of the Program the reflection object belongs to, not just the
+# latter.  So a restricted caller holding a reflection handle to a less-restricted Program cannot use it to reach a
+# builtin its own restrictions forbid or to construct a class its own restrictions forbid — including through the
+# variant path, which skipped the functional-domain check entirely.  A caller whose restrictions allow the target,
+# and trusted code building objects in a Program whose restrictions allow the class, keep working.
+
+%modern
+%allow-debugger
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%prepend-module-path "${SCRIPT_DIR}/../../../../build/modules/reflection"
+%requires QUnit
+%requires reflection
+
+%exec-class ReflectionCallerPrivilegeTest
+
+#! a class in the DEBUGGER functional domain, which a Program has to allow explicitly with PO_ALLOW_DEBUGGER
+public class Watcher inherits DebugProgram {
+    public { string id; }
+    constructor(string n_id) { id = n_id; }
+    onAttach(ProgramControl pgm, reference rs, reference rtn) {}
+    onDetach(ProgramControl pgm, reference rs, reference rtn) {}
+    onStep(ProgramControl pgm, int bsid, *int sid, *int bpid, reference flow, reference rs, reference rtn) {}
+    onFunctionEnter(ProgramControl pgm, int sid, reference rs, reference rtn) {}
+    onFunctionExit(ProgramControl pgm, int sid, reference rv, reference rs, reference rtn) {}
+    onException(ProgramControl pgm, int sid, hash ex, reference dismiss, reference rs, reference rtn) {}
+    onExit(ProgramControl pgm, int sid, reference rv, reference rs, reference rtn) {}
+}
+
+class ReflectionCallerPrivilegeTest inherits QUnit::Test {
+    public {
+        #! code that calls a function/variant or constructs a class through a reflection handle it is given
+        const CallerCode = "%new-style
+%require-types
+%strict-args
+%requires reflection
+
+auto sub cf(Function f) {
+    try {
+        return f.call();
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
+auto sub cv(FunctionVariant v) {
+    try {
+        return v.call();
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
+auto sub cc(Class cls) {
+    try {
+        return cls.newObject(\"x\").id;
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
+auto sub ccv(ConstructorMethodVariant v) {
+    try {
+        return v.call(\"x\").id;
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+";
+        const BaseOptions = PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS;
+    }
+
+    constructor() : QUnit::Test("ReflectionCallerPrivilegeTest", "1.0") {
+        addTestCase("a restricted caller cannot call a builtin through a reflection handle", \functionCallRefused());
+        addTestCase("a restricted caller cannot call a builtin through a variant handle", \functionVariantRefused());
+        addTestCase("an unrestricted caller reaches the builtin through the handle", \functionCallAllowed());
+        addTestCase("a caller that does not allow the debugger cannot construct a DEBUGGER class", \constructRefused());
+        addTestCase("the same through a constructor variant handle", \constructVariantRefused());
+        addTestCase("a caller that allows the debugger constructs the DEBUGGER class", \constructAllowed());
+        set_return_value(main());
+    }
+
+    #! an unrestricted "library" Program whose symbols a caller is handed a reflection handle to
+    private Program library() {
+        Program lib(BaseOptions | PO_ALLOW_DEBUGGER);
+        lib.parse("%new-style\nnothing sub dummy() {}", "lib");
+        return lib;
+    }
+
+    #! runs the named caller function in a Program with the given options, passing it the reflection handle
+    private auto inCaller(int po, string func, auto handle) {
+        Program caller(po);
+        caller.parse(CallerCode, "caller");
+        return caller.callFunction(func, handle);
+    }
+
+    functionCallRefused() {
+        # the handle belongs to the unrestricted library; the caller restricts EXTERNAL_INFO (gethostname's domain)
+        Program lib = library();
+        Function f = Function::forName(lib, "gethostname");
+        assertEq("INVALID-FUNCTION-ACCESS", inCaller(BaseOptions | PO_NO_EXTERNAL_INFO, "cf", f));
+    }
+
+    functionVariantRefused() {
+        # the variant path skipped the domain check entirely before this fix
+        Program lib = library();
+        Function f = Function::forName(lib, "gethostname");
+        FunctionVariant v = f.getVariants()[0];
+        assertEq("INVALID-FUNCTION-ACCESS", inCaller(BaseOptions | PO_NO_EXTERNAL_INFO, "cv", v));
+    }
+
+    functionCallAllowed() {
+        # an unrestricted caller may use the handle
+        Program lib = library();
+        Function f = Function::forName(lib, "gethostname");
+        auto rv = inCaller(BaseOptions, "cf", f);
+        assertEq(Type::String, rv.type());
+    }
+
+    constructRefused() {
+        Program lib = library();
+        Class cls = Class::forName(lib, "Watcher");
+        assertEq("CREATE-OBJECT-ERROR", inCaller(BaseOptions, "cc", cls));
+    }
+
+    constructVariantRefused() {
+        Program lib = library();
+        Class cls = Class::forName(lib, "Watcher");
+        ConstructorMethodVariant v = cls.getConstructorVariant(StringType);
+        assertEq("CREATE-OBJECT-ERROR", inCaller(BaseOptions, "ccv", v));
+    }
+
+    constructAllowed() {
+        Program lib = library();
+        Class cls = Class::forName(lib, "Watcher");
+        assertEq("x", inCaller(BaseOptions | PO_ALLOW_DEBUGGER, "cc", cls));
+    }
+}

@@ -227,8 +227,8 @@ string makeYAML(auto data, int flags = {Qore::YAML::Yaml1_2}QYE_VER_1_2, softint
 auto data = parse_yaml(yaml_string);
     @endcode
 
-    @throw YAML-PARSER-ERROR error parsing YAML string
-    @throw HASH-KEY-ERROR a key has a NUL character, which a hash key cannot contain
+    @throw YAML-PARSER-ERROR error parsing YAML string, or a mapping key has a NUL character, which a hash key
+    cannot hold
 
     @since yaml 0.5 as a replacement for deprecated camel-case parseYAML()
 
@@ -251,9 +251,9 @@ hash<auto> api = parse_yaml(text, YAML::ParseCoreSchema);
 
     @return Qore data as deserialized from the YAML string
 
-    @throw YAML-PARSER-ERROR error parsing YAML string, or an integer value is out of range
+    @throw YAML-PARSER-ERROR error parsing YAML string, an integer value is out of range, or a mapping key has a NUL
+    character, which a hash key cannot hold
     @throw YAML-OPTION-ERROR unknown parse option
-    @throw HASH-KEY-ERROR a key has a NUL character, which a hash key cannot contain
 
     @since yaml 1.3
  */

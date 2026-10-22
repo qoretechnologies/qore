@@ -683,7 +683,7 @@ public class FreshBooksDataProviderTest inherits QUnit::Test {
             "logger": new Logger("server", LoggerLevel::getLevelError()),
         });
         on_exit server.stop();
-        int port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
         FakeFreshBooksHandler handler();
         server.setHandler("freshbooks", "", NOTHING, handler);
         server.setDefaultHandler("freshbooks", handler);
@@ -842,7 +842,7 @@ public class FreshBooksDataProviderTest inherits QUnit::Test {
             "logger": new Logger("server", LoggerLevel::getLevelError()),
         });
         on_exit server.stop();
-        int port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
         FakeFreshBooksHandler handler();
         server.setHandler("freshbooks", "", NOTHING, handler);
         server.setDefaultHandler("freshbooks", handler);

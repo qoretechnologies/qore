@@ -118,13 +118,70 @@ module SqlUtil {
       driver-independent restart decisions for complete idempotent transaction
       bodies
 
+    @section sql_identifiers SQL Identifiers
+
+    The names of database objects (tables, columns, indexes, constraints, sequences, schemas, aliases) can come
+    from untrusted data, such as the keys of a hash read from a file or a data provider.  SqlUtil never pastes a
+    name into SQL as given; every name that reaches generated SQL is returned by
+    @ref SqlUtil::AbstractSqlUtilBase::getSqlIdentifier() "getSqlIdentifier()", which each database driver
+    overrides with its own rules:
+    - a name that the database reads as one ordinary unquoted identifier, and that is not a reserved word, is
+      returned as given, so that the SQL generated for ordinary names is the same as in earlier versions and
+      existing schemas and alignment do not change;
+    - any other name, such as one with spaces, quotes, semicolons, comment markers or other punctuation, is
+      quoted as a delimited identifier with the rules of the database (double quotes on PostgreSQL, Oracle,
+      SQLite and Firebird, backticks on MySQL, brackets on SQL Server), each delimiter character in the name
+      escaped, so that a name can never change the SQL statement that it is part of;
+    - a name that the database cannot represent as an identifier, such as an empty name, a name with a NUL
+      character, or a double quote on Oracle, is refused with \c IDENTIFIER-ERROR.
+
+    A driver whose quoting changes the case of a name (Oracle and Firebird quote in upper case, as unquoted names
+    are stored in upper case) returns a column alias (see @ref SqlUtil::cop_as() "cop_as()") in its exact case
+    through @ref SqlUtil::AbstractTable::getAliasSqlName() "getAliasSqlName()", so that an alias that works with the
+    database names the same result key as before.
+
+    @note Only driver-correct identifiers are quoted; a value is always bound, never pasted into SQL.  Code that
+    builds SQL itself, outside the per-database modules, and passes names to it is responsible for using
+    @ref SqlUtil::AbstractSqlUtilBase::getSqlIdentifier() "getSqlIdentifier()" for any name that can come from
+    untrusted data.
+
     @section sqlutil_relnotes Release Notes for the SqlUtil Module
 
     @subsection sqlutilv3_11_0 SqlUtil v3.11.0
+    - Security: the names of database objects that reach generated SQL (tables, columns, indexes, constraints,
+      sequences, schemas and column aliases) are quoted and escaped with the rules of the database when they are
+      not ordinary names, or refused with \c IDENTIFIER-ERROR when the database cannot represent them, so that a
+      name from untrusted data can never change the SQL statement that it is part of; the SQL generated for
+      ordinary names is unchanged, so existing schemas and alignment do not change (see @ref sql_identifiers).
+      Added @ref SqlUtil::AbstractSqlUtilBase::getSqlIdentifier() "getSqlIdentifier()" and
+      @ref SqlUtil::AbstractTable::getAliasSqlName() "getAliasSqlName()"
+    - the table, column and sequence names of an auto-trigger configuration (see @ref auto_trigger_config) must be
+      plain names of ASCII letters, digits, underscores and dollar signs, as they are written in the SQL of the
+      generated triggers; any other name is refused with \c AUTO-TRIGGER-ERROR
     - Added @ref SqlUtil::AbstractDatabase::getCurrentSchemaPhysicalSize()
       "AbstractDatabase::getCurrentSchemaPhysicalSize()", which measures the physical size of the schema that
       unqualified names resolve to on the connection, without the cost of measuring the whole database, on
       PostgreSQL, Oracle, MySQL/MariaDB and SQL Server.
+    - foreign constraints have referential actions: the \c on_delete and \c on_update options and members (see
+      @ref fk_actions) create the constraint with \c ON \c DELETE and \c ON \c UPDATE actions, which are read back
+      from the database, compared, and kept by
+      @ref SqlUtil::AbstractTable::getDescriptionHash() "getDescriptionHash()"; an alignment that changes an
+      action drops and adds the constraint again.  A foreign constraint without actions is created and aligned
+      exactly as before; an action that the database does not support is refused with
+      \c FOREIGN-CONSTRAINT-ERROR
+    - schema alignment aligns the parameters of an existing sequence with \c ALTER \c SEQUENCE, which keeps its
+      current value (@ref SqlUtil::AbstractSequence::getAlterSql() "AbstractSequence::getAlterSql()"); before, a
+      sequence that existed was never changed.  A sequence description can give \c min, \c max, \c cycle and
+      \c cache as well; which parameters can be altered depends on the database, and the starting value is never
+      changed, as that would reset the current value.  A new sequence is created with every parameter of its
+      description (@ref SqlUtil::AbstractSequence::setDescription() "AbstractSequence::setDescription()")
+    - fixed a descending \c orderby entry (<tt>"-column"</tt>) being sorted in ascending order for a column whose
+      name is a reserved word and for a column of the table in a join, with and without \c limit and \c offset, on
+      every database
+    - fixed a descending sequence that starts below its maximum being refused with \c SEQUENCE-ERROR, and a
+      sequence that starts above its maximum, or with a maximum of 0 below its start, being accepted, so that the
+      database refused it when it was created; the starting value is checked against the maximum in both
+      directions
     - fixed @ref SqlUtil::AbstractTable::setupTable() "AbstractTable::setupTable()" requesting the DDL that adds a
       foreign constraint to an existing table while constructing an in-memory table description, as it did for a
       primary key before 3.2.0; a description of a table with foreign constraints can now be set up on a database
@@ -207,6 +264,13 @@ module SqlUtil {
       before it aligns the columns, so a driver refuses the changes that its database cannot make with any version
       before a column change that only an older version of the database cannot make, and an alignment reports the
       same refusal with every version of the database, as on SQLite
+    - an expression that has no SQL on the database, such as a regular expression on Firebird or SQL Server, is
+      refused with \c SQLUTIL-EXPRESSION-NOT-PUSHDOWNABLE wherever it is used, as in a where clause, as a column or
+      as an argument of another expression; before, it was unknown to the database's module, and raised
+      \c SQLUTIL-EXPRESSION-ERROR or \c EXPRESSION-ERROR
+    - a column operator can be given the query and the column that it is applied to, with the \c "withcolumn" key
+      of its description, so that its SQL can depend on the type of the column (see
+      @ref SqlUtil::AbstractTable::addCustomCopOperator() "AbstractTable::addCustomCopOperator()")
 
     @subsection sqlutilv3_10_0 SqlUtil v3.10.0
     - Added an offline table rewrite transaction that limits only lock waits, for single schema statements
@@ -5350,7 +5414,7 @@ int rows_updated = t.update(("counter": uop_divide(2)));
                 string exp = info.table.getExpressionArg(\info, role, args[0], AbstractDataProviderTypeMap."any");
                 string arg = args[1];
                 info.pseudo_column_map{arg} = exp;
-                return sprintf("%s as %s", exp, info.table.getColumnSqlName(arg));
+                return sprintf("%s as %s", exp, info.table.getAliasSqlName(arg));
             },
         },
         COP_PREPEND: {
@@ -5759,7 +5823,10 @@ int rows_updated = t.update(("counter": uop_divide(2)));
                 "return_type": AbstractDataProviderTypeMap."any",
             },
             "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
-                string column_name = args[0];
+                # a column is given by its name, or as a field reference or an expression
+                string column_name = args[0].typeCode() == NT_STRING
+                    ? info.table.getColumnSqlName(args[0])
+                    : info.table.getExpressionArg(\info, role, args[0], AbstractDataProviderTypeMap."any");
                 *string partitionby = args[1];
                 *string orderby = args[2];
                 if (!exists partitionby && exists orderby) {
@@ -5775,6 +5842,8 @@ int rows_updated = t.update(("counter": uop_divide(2)));
                             throw "OVER-ERROR", sprintf("Argument 2 (partition by) %y is not an alias or an "
                                 "accessible column", partitionby);
                         }
+                        # a column is an identifier in SQL
+                        partitionby = info.table.getColumnSqlName(partitionby);
                     }
                     sql += sprintf("partition by %s", partitionby);
                 }
@@ -5782,11 +5851,12 @@ int rows_updated = t.update(("counter": uop_divide(2)));
                     if (!info.pseudo_column_map{orderby}) {
                         if (!cols) {
                             cols = info.table.describe();
-                            if (!exists cols{orderby}) {
-                                throw "OVER-ERROR", sprintf("Argument 3 (order by) %y is not an alias or an "
-                                    "accessible column", orderby);
-                            }
                         }
+                        if (!exists cols{orderby}) {
+                            throw "OVER-ERROR", sprintf("Argument 3 (order by) %y is not an alias or an "
+                                "accessible column", orderby);
+                        }
+                        orderby = info.table.getColumnSqlName(orderby);
                     }
                     sql += sprintf(" order by %s", orderby);
                 }
@@ -5827,7 +5897,10 @@ int rows_updated = t.update(("counter": uop_divide(2)));
                 "return_type": AbstractDataProviderTypeMap."any",
             },
             "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
-                return sprintf("first_value(%s)", args[0]);
+                # a column is given by its name, or as a field reference or an expression
+                return sprintf("first_value(%s)", args[0].typeCode() == NT_STRING
+                    ? info.table.getColumnSqlName(args[0])
+                    : info.table.getExpressionArg(\info, role, args[0], AbstractDataProviderTypeMap."any"));
             },
         ),
         COP_LAST_VALUE: (
@@ -5846,7 +5919,10 @@ int rows_updated = t.update(("counter": uop_divide(2)));
                 "return_type": AbstractDataProviderTypeMap."any",
             },
             "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
-                return sprintf("last_value(%s)", args[0]);
+                # a column is given by its name, or as a field reference or an expression
+                return sprintf("last_value(%s)", args[0].typeCode() == NT_STRING
+                    ? info.table.getColumnSqlName(args[0])
+                    : info.table.getExpressionArg(\info, role, args[0], AbstractDataProviderTypeMap."any"));
             },
         ),
         COP_NTILE: (
@@ -7509,6 +7585,17 @@ select * from schema.table where name = other_name and ((type = %v and validatio
     public const string IOP_SEQ_CURRVAL = "seq_currval";
 
     #! a hash of default insert operator descriptions (currently empty, all operators are driver-dependent)
+    /** Each driver's insert operator map gives an operator name a hash with these keys:
+        - \c arg: the type of the argument, if the operator takes one
+        - \c placeholder: the placeholder for the value in the SQL, if not \c "%v", such as \c "nextval(%v)"
+        - \c code: a closure called with the column name and the argument, whose return value is the value bound
+          for the placeholder, or, for an immediate operator, the SQL inserted into the query
+        - \c immediate: @ref True "True" if the value is SQL inserted into the query instead of a bound value; the
+          argument of an immediate operator is checked to be an identifier of ASCII letters, digits, dots and
+          underscores before the operator's \c code is called (since SqlUtil 3.11.0; before, the SQL that \c code
+          returned was checked), so \c code gets only such an identifier, and must build safe SQL from it, such as
+          <tt>seq.nextval</tt> or <tt>next value for [seq]</tt>
+    */
     public const hash<auto> DefaultIopMap = {};
     #/@}
 
@@ -9147,7 +9234,7 @@ AbstractIndex ix = indexes.pk_jobs;
 
         #! returns a string that can be used to drop the index from the database, by its name in the database
         string getDropSql(string table_name) {
-            return sprintf("drop index %s", getDbName());
+            return sprintf("drop index %s", AbstractSqlUtilBase::getPlainSqlName(getDbName(), self.className()));
         }
 
         #! returns @ref True "True" if the argument is equal to the current index, @ref False "False" if not
@@ -9374,7 +9461,8 @@ AbstractConstraint ix = constraints.uk_jobs;
 
         #! returns a string that can be used to drop the constraint from the database
         string getDropSql(string table_name) {
-            return sprintf("alter table %s drop constraint %s", table_name, name);
+            return sprintf("alter table %s drop constraint %s", table_name,
+                AbstractSqlUtilBase::getPlainSqlName(name, self.className()));
         }
 
         #! returns a list of SQL strings that can be used to rename the constraint in the database
@@ -9788,6 +9876,69 @@ AbstractForeignConstraint ix = fcs.fk_jobs_job_defs;
         }
     }
 
+    /** @defgroup fk_actions Foreign Constraint Referential Actions
+        The action a database takes on the rows of a foreign constraint's table when a referenced row is deleted
+        (\c ON \c DELETE) or its referenced columns are updated (\c ON \c UPDATE).  An action is set with the
+        \c on_delete and \c on_update @ref SqlUtil::AbstractTable::ForeignConstraintOptions "foreign constraint
+        options" or the @ref SqlUtil::AbstractForeignConstraint::on_delete "on_delete" and
+        @ref SqlUtil::AbstractForeignConstraint::on_update "on_update" members; NOTHING or @ref FK_NO_ACTION is the
+        database default, which emits no clause, so a foreign constraint without actions creates exactly as before.
+        Not every database supports every action; a driver refuses an action that its database does not support
+    */
+    #/@{
+    #! the database takes no action, and the constraint is checked at the end of the statement (the default)
+    public const FK_NO_ACTION = "NO ACTION";
+    #! the database takes no action, and the constraint is checked immediately (not deferrable)
+    public const FK_RESTRICT = "RESTRICT";
+    #! the rows of the foreign constraint's table are deleted (\c ON \c DELETE) or updated (\c ON \c UPDATE) with
+    #! the referenced row
+    public const FK_CASCADE = "CASCADE";
+    #! the foreign constraint's columns are set to @ref NULL
+    public const FK_SET_NULL = "SET NULL";
+    #! the foreign constraint's columns are set to their default values
+    public const FK_SET_DEFAULT = "SET DEFAULT";
+
+    #! the set of valid referential actions, keyed by the canonical (upper-case) action
+    public const ForeignConstraintActions = {
+        FK_NO_ACTION: True,
+        FK_RESTRICT: True,
+        FK_CASCADE: True,
+        FK_SET_NULL: True,
+        FK_SET_DEFAULT: True,
+    };
+    #/@}
+
+    #! normalizes a referential action: NOTHING and an empty string become NOTHING (the database default,
+    #! @ref FK_NO_ACTION), any other value is upper-cased and validated
+    /** @param action the action, such as \c "cascade" or @ref FK_SET_NULL, or NOTHING for the default
+        @param what a description for the exception message, such as \c "on_delete"
+        @return the canonical upper-case action, or NOTHING for the database default
+
+        @throw FOREIGN-CONSTRAINT-ERROR the action is not one of @ref fk_actions
+
+        @since SqlUtil 3.11.0
+    */
+    public *string sub normalize_fk_action(*string action, string what) {
+        if (!action.val()) {
+            return;
+        }
+        string rv = action.upr();
+        # accept "SETNULL"/"SET_NULL" and "NOACTION"/"NO_ACTION" spellings too
+        rv = replace(rv, "_", " ");
+        if (rv == "SETNULL") {
+            rv = FK_SET_NULL;
+        } else if (rv == "SETDEFAULT") {
+            rv = FK_SET_DEFAULT;
+        } else if (rv == "NOACTION") {
+            rv = FK_NO_ACTION;
+        }
+        if (!ForeignConstraintActions{rv}) {
+            throw "FOREIGN-CONSTRAINT-ERROR", sprintf("invalid %s referential action %y; expecting one of: %y, or "
+                "nothing for the database default (%y)", what, action, keys ForeignConstraintActions, FK_NO_ACTION);
+        }
+        return rv == FK_NO_ACTION ? NOTHING : rv;
+    }
+
     #! the base class for foreign key constraint information
     public class AbstractForeignConstraint inherits AbstractColumnConstraint {
         public {
@@ -9795,11 +9946,27 @@ AbstractForeignConstraint ix = fcs.fk_jobs_job_defs;
             ForeignConstraintTarget target;
 
             #! @ref True "True" if constraint checks can be deferred until transaction commit
+            /** Only the PostgreSQL and Oracle drivers create deferrable foreign constraints; the other drivers refuse
+                the \c deferrable option (see @ref SqlUtil::AbstractTable::ForeignConstraintOptions
+                "ForeignConstraintOptions"), and their SQL does not give this member
+            */
             bool deferrable;
 
             #! @ref True "True" if constraint checks are deferred by default; only valid when \c deferrable is
             #! @ref True "True"
             bool initially_deferred;
+
+            #! the \c ON \c DELETE referential action (see @ref fk_actions), or NOTHING for the database default
+            #! (@ref FK_NO_ACTION)
+            /** @since SqlUtil 3.11.0
+            */
+            *string on_delete;
+
+            #! the \c ON \c UPDATE referential action (see @ref fk_actions), or NOTHING for the database default
+            #! (@ref FK_NO_ACTION)
+            /** @since SqlUtil 3.11.0
+            */
+            *string on_update;
         }
 
         #! creates a foreign constraint
@@ -9809,12 +9976,19 @@ AbstractForeignConstraint ix = fcs.fk_jobs_job_defs;
             @param deferrable @ref True "True" if checks can be deferred until transaction commit
             @param initially_deferred @ref True "True" if checks are deferred by default; requires \a deferrable
                 to be @ref True "True"
+            @param on_delete the \c ON \c DELETE referential action (see @ref fk_actions), or NOTHING for the
+                database default
+            @param on_update the \c ON \c UPDATE referential action (see @ref fk_actions), or NOTHING for the
+                database default
 
             @throw FOREIGN-CONSTRAINT-ERROR \a initially_deferred is @ref True "True" and \a deferrable is
-                @ref False "False"
+                @ref False "False", or an invalid referential action
+
+            @note \a on_delete and \a on_update are available since SqlUtil 3.11.0
         */
         constructor(string name, Columns cols, ForeignConstraintTarget t, bool deferrable = False,
-                bool initially_deferred = False) : AbstractColumnConstraint(name, cols) {
+                bool initially_deferred = False, *string on_delete, *string on_update)
+                : AbstractColumnConstraint(name, cols) {
             if (initially_deferred && !deferrable) {
                 throw "FOREIGN-CONSTRAINT-ERROR", sprintf("foreign constraint %y: initially_deferred requires "
                     "deferrable", name);
@@ -9822,6 +9996,26 @@ AbstractForeignConstraint ix = fcs.fk_jobs_job_defs;
             target = t;
             self.deferrable = deferrable;
             self.initially_deferred = initially_deferred;
+            self.on_delete = normalize_fk_action(on_delete, "on_delete");
+            self.on_update = normalize_fk_action(on_update, "on_update");
+        }
+
+        #! returns the SQL clause for the referential actions, or an empty string for the database default on both
+        /** @return a leading-space clause such as <tt>" on delete cascade on update set null"</tt>, or an empty
+            string when both actions are the database default (@ref FK_NO_ACTION); an action is emitted only when it
+            is not the default, so a foreign constraint without actions creates exactly as before
+
+            @since SqlUtil 3.11.0
+        */
+        string getActionsSql() {
+            string sql = "";
+            if (on_delete.val()) {
+                sql += " on delete " + on_delete.lwr();
+            }
+            if (on_update.val()) {
+                sql += " on update " + on_update.lwr();
+            }
+            return sql;
         }
 
         #! returns the portable SQL clause representing the constraint's deferrability
@@ -9886,12 +10080,19 @@ string sql = constraint.getDeferrabilitySql();
         }
 
         #! returns @ref True "True" if the argument is equal to the current object, @ref False "False" if not
+        /** @note since SqlUtil 3.11.0 the referential actions are compared, with a missing action normalized to the
+            database default (@ref FK_NO_ACTION), so a template that changes an action is not equal to the foreign
+            constraint in the database, and a schema alignment drops and adds the constraint again with the new
+            action
+        */
         private bool equalImpl(AbstractConstraint con) {
             AbstractForeignConstraint c = cast<AbstractForeignConstraint>(con);
             return (h.keys() != c.h.keys())
                 || !target.equal(c.target)
                 || deferrable != c.deferrable
                 || initially_deferred != c.initially_deferred
+                || on_delete != c.on_delete
+                || on_update != c.on_update
                 ? False : True;
         }
     }
@@ -9920,11 +10121,12 @@ string sql = constraint.getDeferrabilitySql();
             max = n_max;
             if (!increment)
                 throw "SEQUENCE-ERROR", sprintf("sequence %y: increment cannot be zero", name);
-            if (max) {
-                if (increment > 0 && max < start)
-                    throw "SEQUENCE-ERROR", sprintf("ascending sequence %y increment %d: max value %d is less than the starting value: %d", name, increment, max, start);
-                if (increment < 0 && max > start)
-                    throw "SEQUENCE-ERROR", sprintf("descending sequence %y increment %d: max value %d is less than the starting value: %d", name, increment, max, start);
+            # the starting value must not be above the maximum in either direction, as every database requires
+            # (min <= start <= max); a maximum of 0 is a value too.  A descending sequence that starts below its
+            # maximum was refused, and one that starts above it, which the database refuses, was accepted
+            if (exists max && max < start) {
+                throw "SEQUENCE-ERROR", sprintf("%s sequence %y increment %d: max value %d is less than the starting "
+                    "value: %d", increment > 0 ? "ascending" : "descending", name, increment, max, start);
             }
         }
 
@@ -9935,7 +10137,7 @@ string sql = constraint.getDeferrabilitySql();
         /** @param opt drop options (if supported by the driver and object); in this generic base class method, this argument is ignored
          */
         string getDropSql(*hash<auto> opt) {
-            return sprintf("drop sequence %s", name);
+            return sprintf("drop sequence %s", AbstractSqlUtilBase::getPlainSqlName(name, self.className()));
         }
 
         #! returns a list of strings that can be used to rename the sequence in the database
@@ -9943,6 +10145,50 @@ string sql = constraint.getDeferrabilitySql();
             @param opt drop options (if supported by the driver and object)
          */
         abstract softlist<auto> getRenameSql(string new_name, *hash<auto> opt);
+
+        #! applies a sequence description to the object, setting any parameters beyond the starting value,
+        #! increment and maximum that the driver supports (minimum, cycle, cache)
+        /** Called when a sequence is created from a description (see
+            @ref SqlUtil::AbstractDatabase::makeSequenceFromDescription() "makeSequenceFromDescription()"), so that
+            a sequence is created with all of its parameters and a later alignment of the same description proposes
+            no SQL.  This base implementation does nothing (the starting value, increment and maximum are already
+            set from the constructor); a driver that has a minimum, cycle option or cache overrides it to set them
+            from the description.
+
+            @param desc the sequence description (see
+                @ref SqlUtil::AbstractDatabase::SequenceDescriptionOptions "SequenceDescriptionOptions")
+
+            @since SqlUtil 3.11.0
+        */
+        setDescription(hash<auto> desc) {
+        }
+
+        #! returns the SQL that alters the sequence in the database to match the given description, preserving its
+        #! current value, or NOTHING if the sequence does not differ or the driver does not align sequences
+        /** Called by @ref SqlUtil::AbstractDatabase::getAlignSql() "getAlignSql()" for a sequence that already
+            exists.  A parameter difference (increment, minimum, maximum, cycle or cache, as each database allows)
+            is applied with \c ALTER \c SEQUENCE so that the sequence keeps its current value, instead of being
+            dropped and recreated.  The starting value is never changed, as that would reset the current value; a
+            driver documents any parameter that it cannot alter.
+
+            This base implementation returns NOTHING: a driver that does not override it does not align sequence
+            parameters, as before SqlUtil 3.11.0.
+
+            @param desired the sequence description (see
+                @ref SqlUtil::AbstractDatabase::SequenceDescriptionOptions "SequenceDescriptionOptions"): the keys
+                \c start, \c increment, \c end or \c max, \c min, \c cycle and \c cache
+            @param opt alignment options
+
+            @return the \c ALTER \c SEQUENCE SQL for the parameters that differ, or NOTHING if none differ or the
+                driver does not align sequences
+
+            @throw SEQUENCE-ERROR the description changes a parameter that the database cannot alter
+
+            @since SqlUtil 3.11.0
+        */
+        *softlist<string> getAlterSql(hash<auto> desired, *hash<auto> opt) {
+            return;
+        }
     }
 
     #! base class for views
@@ -9974,7 +10220,7 @@ string sql = constraint.getDeferrabilitySql();
         /** @param opt drop options (if supported by the driver and object); in this generic base class method, this argument is ignored
          */
         string getDropSql(*hash<auto> opt) {
-            return sprintf("drop view %s", name);
+            return sprintf("drop view %s", AbstractSqlUtilBase::getPlainSqlName(name, self.className()));
         }
 
         #! returns a list with command(s) that can be used to rename the view in the database

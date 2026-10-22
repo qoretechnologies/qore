@@ -44,7 +44,8 @@ class BflAuthenticationTest inherits QUnit::Test {
         addTestCase("live read-only connection authentication", \liveTest());
         server = new HttpServer(<HttpServerOptionInfo>{"logger": new Logger::Logger("5423-auth", Logger::LoggerLevel::ERROR)});
         server.setDefaultHandler("fixture", handler);
-        endpoint = sprintf("http://127.0.0.1:%d", server.addListener(<HttpListenerOptionInfo>{"service": 0}).port);
+        endpoint = sprintf("http://127.0.0.1:%d",
+            server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port);
         options = {"url": endpoint, "apikey": "bfl-fixture-key", "timeout": 5s, "connect_timeout": 2s};
         set_return_value(main());
     }

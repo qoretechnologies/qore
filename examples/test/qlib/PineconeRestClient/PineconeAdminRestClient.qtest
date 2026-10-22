@@ -109,7 +109,7 @@ class PineconeAdminConnectionTest inherits QUnit::Test {
         server = new HttpServer(<HttpServerOptionInfo>{"logger": new Logger("pinecone-admin-test", LoggerLevel::getLevelError()), "debug": True});
         handler = new PineconeAdminHandler();
         server.setDefaultHandler("admin", handler);
-        int port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
         url = sprintf("http://127.0.0.1:%d", port);
     }
     tearDown() {

@@ -1,0 +1,204 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+#
+# The field lines of an HTTP/1.x header or chunked body trailer are parsed as RFC 9112 requires:
+# - a bare CR (one not followed by LF) is invalid (section 2.2)
+# - an obsolete line folding (a line that starts with whitespace) is refused in a request and replaced with spaces in
+#   a response or trailer (section 5.2); a whitespace line before the first field line is refused (section 2.2)
+# - whitespace in a field name, as between the name and the colon, is refused (section 5.1)
+# - a line without a colon is refused (section 5)
+# - a line may end with LF instead of CRLF (section 2.2)
+# Before, a bare CR was kept in the value, whitespace before the colon was kept in the field name, and an obsolete
+# line folding or a line without a colon ended the header: the field lines after it, such as Content-Length, were
+# dropped without an error.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class HttpFieldLinesTest
+
+public class HttpFieldLinesTest inherits QUnit::Test {
+    private {
+        Socket server();
+        hash<auto> server_info;
+    }
+
+    constructor() : Test("HttpFieldLines", "1.0", \ARGV) {
+        server.bind("localhost:0");
+        server.listen();
+        server_info = server.getSocketInfo(False);
+
+        addTestCase("invalid request field lines", \invalidRequest());
+        addTestCase("invalid response field lines", \invalidResponse());
+        addTestCase("obsolete line folding in a response", \responseObsFold());
+        addTestCase("lines that end with LF", \lfLines());
+        addTestCase("chunked body trailer", \chunkedTrailer());
+        addTestCase("HTTPClient", \httpClient());
+        set_return_value(main());
+    }
+
+    #! returns a connected client socket and the server end of the connection
+    list<Socket> connect() {
+        Socket client();
+        client.connectINET(server_info.address, server_info.port, 30s, server_info.family);
+        Socket conn = server.accept(30s);
+        return (client, conn);
+    }
+
+    #! reads a header with the given socket, synchronously or asynchronously
+    static hash<auto> readHeader(Socket sock, bool async) {
+        if (!async) {
+            return sock.readHTTPHeader(30s);
+        }
+        AbstractPollOperation op = sock.startPollReadHttpHeader();
+        while (*hash<SocketPollInfo> pi = op.continuePoll()) {
+            Socket::poll((pi,), 30s);
+        }
+        return op.getOutput().hdr;
+    }
+
+    #! reads a chunked body with the given socket, with the poll operation or with a callback for the chunks
+    static hash<auto> readChunkedBody(Socket sock, bool callback) {
+        if (!callback) {
+            return sock.readHTTPChunkedBodyBinary(30s);
+        }
+        binary body = binary();
+        hash<auto> trailers = {};
+        sock.readHTTPChunkedBodyBinaryWithCallback(sub (*hash<auto> h) {
+            if (h.hasKey("data")) {
+                body += h.data;
+            } else if (h.hdr) {
+                trailers += h.hdr;
+            }
+        }, 30s);
+        return trailers + {"body": body};
+    }
+
+    #! the field lines that a request and a response cannot have; offsets are from the start of the header
+    static list<hash<auto>> invalidLines(string start) {
+        int off = start.size();
+        return (
+            {"label": "bare CR in a value", "lines": "Host: x\r\nX-A: a\rb\r\nContent-Length: 0\r\n",
+                "err": sprintf("invalid HTTP header received with a bare CR character at byte offset %d; a CR is "
+                    "allowed only before the LF that ends a line \\(RFC 9112 section 2.2\\)", off + 15)},
+            {"label": "whitespace before the colon", "lines": "Host : x\r\nContent-Length: 0\r\n",
+                "err": sprintf("invalid HTTP header received with whitespace in the field name at byte offset %d "
+                    "\\(RFC 9112 section 5.1\\)", off + 4)},
+            {"label": "whitespace in a field name", "lines": "Host: x\r\nTransfer Encoding: chunked\r\n",
+                "err": sprintf("whitespace in the field name at byte offset %d", off + 17)},
+            {"label": "line without a colon", "lines": "Host: x\r\nX-A\r\nContent-Length: 0\r\n",
+                "err": sprintf("invalid HTTP header received with a line without a colon at byte offset %d "
+                    "\\(RFC 9112 section 5\\)", off + 9)},
+            {"label": "empty field name", "lines": "Host: x\r\n: v\r\n",
+                "err": sprintf("invalid HTTP header received with an empty field name at byte offset %d "
+                    "\\(RFC 9112 section 5\\)", off + 9)},
+            {"label": "whitespace before the first field line", "lines": " Host: x\r\nContent-Length: 0\r\n",
+                "err": sprintf("invalid HTTP header received with whitespace at the start of the first field line "
+                    "at byte offset %d \\(RFC 9112 section 2.2\\)", off)},
+        );
+    }
+
+    invalidRequest() {
+        string start = "POST / HTTP/1.1\r\n";
+        list<hash<auto>> cases = HttpFieldLinesTest::invalidLines(start);
+        # a request with an obsolete line folding is refused
+        push cases, {"label": "obsolete line folding", "lines": "Host: x\r\nX-A: a\r\n b\r\nContent-Length: 0\r\n",
+            "err": sprintf("invalid HTTP header received with an obsolete line folding at byte offset %d: a field "
+                "line starts with whitespace \\(RFC 9112 section 5.2\\)", start.size() + 17)};
+        push cases, {"label": "obsolete line folding with a tab", "lines": "Host: x\r\nX-A: a\r\n\tb\r\n",
+            "err": "obsolete line folding"};
+        foreach bool async in ((False, True)) {
+            foreach hash<auto> i in (cases) {
+                string label = sprintf("%s (%s)", i.label, async ? "async" : "sync");
+                (Socket client, Socket conn) = connect();
+                client.send(start + i.lines + "\r\n");
+                assertThrows("SOCKET-HTTP-ERROR", i.err, \HttpFieldLinesTest::readHeader(), (conn, async), label);
+            }
+        }
+    }
+
+    invalidResponse() {
+        string start = "HTTP/1.1 200 OK\r\n";
+        foreach bool async in ((False, True)) {
+            foreach hash<auto> i in (HttpFieldLinesTest::invalidLines(start)) {
+                string label = sprintf("%s (%s)", i.label, async ? "async" : "sync");
+                (Socket client, Socket conn) = connect();
+                conn.send(start + i.lines + "\r\n");
+                assertThrows("SOCKET-HTTP-ERROR", i.err, \HttpFieldLinesTest::readHeader(), (client, async),
+                    label);
+            }
+        }
+    }
+
+    responseObsFold() {
+        foreach bool async in ((False, True)) {
+            string label = async ? "async" : "sync";
+            (Socket client, Socket conn) = connect();
+            # each obsolete line folding is replaced with spaces, and the field lines after it are kept
+            conn.send("HTTP/1.1 200 OK\r\nX-A: a\r\n b\r\n\tc\r\nContent-Length: 2\r\n\r\nok");
+            hash<auto> hdr = HttpFieldLinesTest::readHeader(client, async);
+            assertEq("a", hdr."x-a".substr(0, 1), label);
+            assertEq("a b c", regex_subst(hdr."x-a", "[ \t]+", " ", RE_Global), label);
+            assertNothing(hdr."x-a".find("\r") >= 0 || hdr."x-a".find("\n") >= 0 ? True : NOTHING, label);
+            assertEq("2", hdr."content-length", label);
+            assertEq("ok", client.recv(2, 30s), label);
+        }
+    }
+
+    lfLines() {
+        foreach bool async in ((False, True)) {
+            string label = async ? "async" : "sync";
+            (Socket client, Socket conn) = connect();
+            # a line that ends with LF ends there, also before a line that ends with CRLF
+            client.send("POST / HTTP/1.1\nHost: x\nX-B: b\r\nContent-Length: 2\r\n\r\nok");
+            hash<auto> hdr = HttpFieldLinesTest::readHeader(conn, async);
+            assertEq("POST", hdr.method, label);
+            assertEq("/", hdr.path, label);
+            assertEq("x", hdr.host, label);
+            assertEq("b", hdr."x-b", label);
+            assertEq("2", hdr."content-length", label);
+        }
+    }
+
+    chunkedTrailer() {
+        foreach bool callback in ((False, True)) {
+            string label = callback ? "callback" : "poll operation";
+            (Socket client, Socket conn) = connect();
+            conn.send("2\r\nok\r\n0\r\nX-T : a\r\nX-U: 1\r\n\r\n");
+            assertThrows("READ-HTTP-CHUNK-ERROR", "invalid HTTP chunked body trailer received with whitespace in the "
+                "field name at byte offset 3 \\(RFC 9112 section 5.1\\)", \HttpFieldLinesTest::readChunkedBody(),
+                (client, callback), label);
+
+            # an obsolete line folding in a trailer is replaced with spaces
+            (client, conn) = connect();
+            conn.send("2\r\nok\r\n0\r\nX-T: a\r\n b\r\nX-U: 1\r\n\r\n");
+            hash<auto> body = HttpFieldLinesTest::readChunkedBody(client, callback);
+            assertEq(binary("ok"), body.body, label);
+            assertEq("a b", regex_subst(body."x-t", "[ \t]+", " ", RE_Global), label);
+            assertEq("1", body."x-u", label);
+        }
+    }
+
+    httpClient() {
+        # HTTPClient receives the error for a response with whitespace before the colon
+        HTTPClient hc({"url": sprintf("http://localhost:%d", server_info.port), "timeout": 30s});
+        Counter served(1);
+        background sub () {
+            on_exit served.dec();
+            Socket s = server.accept(30s);
+            s.readHTTPHeader(30s);
+            s.send("HTTP/1.1 200 OK\r\nTransfer-Encoding : chunked\r\nContent-Length: 2\r\n\r\nok");
+            # waits for the client to close the connection
+            try {
+                s.recv(1, 30s);
+            } catch (hash<ExceptionInfo> ex) {
+            }
+        }();
+        on_exit served.waitForZero(30s);
+        assertThrows("SOCKET-HTTP-ERROR", "whitespace in the field name", \hc.get(), "/");
+        hc.disconnect();
+    }
+}

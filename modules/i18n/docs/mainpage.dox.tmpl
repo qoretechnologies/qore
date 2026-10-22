@@ -49,7 +49,8 @@ printf("%s\n", catalog.t("Hello, {name}", "cs-CZ", {"name": "Petr"}));
     string: locales, \c Accept-Language headers, currency codes, string predicate operators, option values naming a
     style, skeleton, plural type or collation strength, catalog domains and paths, and the symbolic message ids
     and message states of message catalogs.  A message catalog looks up a source string used as its own message id
-    as text: with a NUL character, it matches no message and is returned as it is.
+    as text: with a NUL character, it matches no message and is returned as it is.  An object key with a NUL
+    character in catalog JSON, which a hash key cannot hold, raises \c I18N-CATALOG-JSON-ERROR.
 
     @section i18nscope Current Scope
 

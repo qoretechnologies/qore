@@ -656,8 +656,8 @@ int rows = db.exec("insert into table (varchar_col, timestamp_col, blob_col, num
     @par Datasource Transaction Locks
     %Datasource objects have an internal transaction lock which will be grabbed when the Datasource::exec(), Datasource::vexec() Datasource::execRaw(), or Datasource::beginTransaction() methods are executed and autocommit is not enabled. This enables a single datasource to be safely used for transaction management by several threads simultaneously. Note that an exception in a %Datasource method that would acquire the lock (such as the Datasource::exec() method) when it's not already held, will have the effect that the transaction lock is not acquired.\n\n
     Any thread attempting to do transaction-relevant actions on a %Datasource with auto-commit disabled while a transaction is in progress by another thread will block until the thread currently executing a transaction executes the Datasource::commit() or Datasource::rollback() methods (or the %Datasource is deleted, reset, or closed, in which case the lock is released and an exception is raised as well).\n\n
-    There is a timeout associated with the transaction lock; if a thread waits for the transaction lock for more than the timeout period, then an exception will be raised in the waiting thread. The timeout value can be read and changed with the Datasource::getTransactionLockTimeout() and Datasource::setTransactionLockTimeout() methods, respectively. The default transaction lock timeout value is 120 seconds.\n\n
-    Note that the @ref Qore::SQL::SQLStatement "SQLStatement" class also grabs the transaction lock when executing if it is created using a %Datasource object in the constructor; for more information see the  @ref Qore::SQL::SQLStatement "SQLStatement" class documentation.
+    There is a timeout associated with the transaction lock; if a thread waits for the transaction lock for more than the timeout period, then an exception will be raised in the waiting thread. The timeout value can be read and changed with the Datasource::getTransactionLockTimeout() and Datasource::setTransactionLockTimeout() methods, respectively; a value of 0 or less means no timeout. The default transaction lock timeout value is 120 seconds.\n\n
+    Note that the @ref Qore::SQL::SQLStatement "SQLStatement" class also grabs the transaction lock when executing if it is created using a %Datasource object in the constructor; for more information see the  @ref Qore::SQL::SQLStatement "SQLStatement" class documentation.  A statement destroyed in another thread than the one holding the transaction lock is closed by the thread holding the lock; see @ref Qore::SQL::SQLStatement::destructor() "SQLStatement::destructor()".
 
     @par Thread Resource Handling
     The Datasource class manages the transaction lock as a @ref thread_resources "thread resource"; if the
@@ -874,6 +874,9 @@ delete db;
 
     @throw DATASOURCE-TRANSACTION-EXCEPTION The Datasource was destroyed while a transaction was still in progress;
     the transaction will be automatically rolled back
+
+    @note An error closing the connection is raised as an exception by DBI drivers that can report one (since %Qore
+    3.0); see Datasource::close()
 */
 Datasource::destructor() {
     ds->destructor(xsink);
@@ -916,7 +919,15 @@ db.close();
 
     @throw TRANSACTION-LOCK-TIMEOUT Timeout trying to acquire the transaction lock
 
-    @note see the documentation for the DBI driver being used for additional possible exceptions
+    @note
+    - see the documentation for the DBI driver being used for additional possible exceptions
+    - the @ref Qore::SQL::SQLStatement "SQLStatement" objects prepared on the connection are closed with it (since
+      %Qore 3.0); they are prepared again on a new connection if they are used again
+    - DBI drivers that can report an error closing a connection raise it here (since %Qore 3.0); the datasource is
+      closed in any case.  When the connection is closed to clean up after another error - a lost connection, or a
+      connection option that failed as the connection was opened - such an error is not raised but reported as a
+      DBI warning event on the event queue (see Datasource::setEventQueue()), with the error code in the
+      \c "warning" key and its description in the \c "desc" key
 */
 nothing Datasource::close() {
     ds->close(xsink);
@@ -1535,7 +1546,10 @@ db.reset();
 
     @throw TRANSACTION-LOCK-TIMEOUT Timeout trying to acquire the transaction lock
 
-    @note see the documentation for the DBI driver being used for additional possible exceptions
+    @note
+    - see the documentation for the DBI driver being used for additional possible exceptions
+    - if the DBI driver raises an error closing the connection (see Datasource::close()), the connection is not
+      opened again; it is opened by the next operation that needs it
  */
 nothing Datasource::reset() {
     ds->reset(xsink);
@@ -1828,19 +1842,28 @@ string Datasource::getOSCharset() [flags=CONSTANT] {
 }
 
 //! Sets the transaction lock timeout value in milliseconds; set to 0 for no timeout
-/** @param timeout_ms the transaction lock timeout value in milliseconds; set to 0 for no timeout.  Like all %Qore functions and methods taking timeout values, a @ref relative_dates "relative date/time value" may be passed instead of an integer to make the timeout units clear (ex: \c 2500ms for 2.5 seconds).
+/** @param timeout_ms the transaction lock timeout value in milliseconds: a thread that waits longer than this for the
+    @ref transaction_lock "transaction lock" gets a \c TRANSACTION-LOCK-TIMEOUT exception; 0 (the default value of the
+    argument) or a negative value sets no timeout: the thread waits until the lock is released, or until it is
+    cancelled.  Like all %Qore functions and methods taking timeout values, a @ref relative_dates "relative date/time
+    value" may be passed instead of an integer to make the timeout units clear (ex: \c 2500ms for 2.5 seconds).
 
     @par Example:
     @code{.py}
 db.setTransactionLockTimeout(4s);
     @endcode
+
+    @note The default transaction lock timeout of a new datasource is 120 seconds.  In %Qore 2.1.1 to 2.2.1, a timeout
+    of 0 made a thread that found the lock held fail at once with \c TRANSACTION-LOCK-TIMEOUT; since %Qore 3.0 it means
+    no timeout again
 */
 nothing Datasource::setTransactionLockTimeout(timeout timeout_ms = 0) [flags=NAMED_ARGS] {
     ds->setTransactionLockTimeout((int)timeout_ms);
 }
 
 //! Retrieves the transaction lock timeout value as an integer in milliseconds
-/** @return the transaction lock timeout value as an integer in milliseconds
+/** @return the transaction lock timeout value as an integer in milliseconds; 0 or a negative value means no timeout
+    (see Datasource::setTransactionLockTimeout())
 
     @par Example:
     @code{.py}
@@ -1981,7 +2004,14 @@ hash<auto> Datasource::getOptionHash() [flags=RET_VALUE_ONLY] {
 /** @param option the option to set
     @param value the value to set
 
-    @note in order to ensure atomicity when dealing with Datasource options, the transaction lock is acquired before executing this method if it was not already owned by the calling thread
+    The value is set on the connection if the datasource is open, and it is kept to be set on every new connection
+    of the datasource.
+
+    @note
+    - in order to ensure atomicity when dealing with Datasource options, the transaction lock is acquired before executing this method if it was not already owned by the calling thread
+    - a value that is refused - an option that the driver does not have, or a value that the driver does not accept
+      on an open connection - is not kept: the option keeps its previous value, also on the next connection (since
+      %Qore 3.0)
 
     @throw DBI-OPTION-ERROR unknown or unsupported option passed to driver, or the option name or a string option value contains a NUL character (since %Qore 3.0); option values are not shown in the exception
     @throw DATASOURCE-ERROR the datasource must be open for this call
@@ -2055,6 +2085,11 @@ string Datasource::getConfigString() [flags=CONSTANT] {
     @param argument an argument to be included in the \c arg key of datasource events
 
     @throw QUEUE-ERROR the Queue passed has a maximum size set
+
+    @note DBI warning events also report errors that have no call to be raised to: an error closing a connection to
+    clean up after another error (see Datasource::close()), and an error closing a statement destroyed in another
+    thread when the thread holding the transaction lock releases it (see
+    @ref Qore::SQL::SQLStatement::destructor() "SQLStatement::destructor()")
 
     @since %Qore 0.8.9
 */

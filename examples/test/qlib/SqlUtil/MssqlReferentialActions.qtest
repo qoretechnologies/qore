@@ -1,0 +1,543 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires SqlUtil
+%requires MssqlSqlUtilBase
+%requires FreetdsSqlUtil
+
+%try-module freetds
+%define NO_FREETDS
+%endtry
+
+%exec-class MssqlReferentialActionsTest
+
+#! Foreign constraint referential actions and sequence alignment on SQL Server
+/** Each feature is checked with tables and sequences described in memory and a datasource that gives catalog rows
+    without connecting, and on the database given by \c QORE_DB_CONNSTR_FREETDS, where the SQL is run and the next
+    alignment needs none
+*/
+class MssqlReferentialActionsTest inherits QUnit::Test {
+    private {
+        #! the columns of the parent tables
+        const ParentColumns = {
+            "id": {"native_type": "int", "notnull": True},
+            "code": {"native_type": "varchar", "size": 10},
+        };
+
+        #! the columns of the child table
+        const ChildColumns = {
+            "id": {"native_type": "int", "notnull": True},
+            "a_id": {"native_type": "int"},
+            "b_id": {"native_type": "int", "default_value": "0", "default_value_native": True},
+            "a_ref": {"native_type": "int"},
+        };
+    }
+
+    constructor() : Test("MssqlReferentialActionsTest", "1.0", \ARGV) {
+        addTestCase("foreign constraint actions are given in the SQL", \actionSql());
+        addTestCase("RESTRICT is refused", \restrictRefused());
+        addTestCase("Sybase refuses referential actions", \sybaseRefused());
+        addTestCase("actions are described from the catalog", \actionDescription());
+        addTestCase("sequences are created with their description", \sequenceCreateSql());
+        addTestCase("sequence alignment alters the parameters that differ", \sequenceAlterSql());
+        addTestCase("sequences are described from the catalog", \sequenceDescription());
+        addTestCase("foreign constraint actions on the database", \actionsOnDatabase());
+        addTestCase("sequence alignment on the database", \sequencesOnDatabase());
+        set_return_value(main());
+    }
+
+    #! Returns a datasource that gives catalog rows and does not connect
+    private CatalogDatasource catalogDatasource(string version = "Microsoft SQL Server 2022 (RTM) - 16.0.1000.6") {
+%ifdef NO_FREETDS
+        testSkip("freetds module unavailable");
+%endif
+        return new CatalogDatasource(version);
+    }
+
+    #! Returns the description of the child table with the actions of its foreign constraints
+    private static hash<auto> childDescription(*string a_delete, *string a_update, *string b_delete,
+            *string b_update) {
+        return {
+            "columns": ChildColumns,
+            "primary_key": {"name": "pk_mra_child", "columns": ("id",)},
+            "foreign_constraints": {
+                "fk_mra_child_a": {"columns": ("a_id",), "table": "mra_parent_a", "target_columns": ("id",),
+                    "on_delete": a_delete, "on_update": a_update},
+                "fk_mra_child_b": {"columns": ("b_id",), "table": "mra_parent_b", "target_columns": ("id",),
+                    "on_delete": b_delete, "on_update": b_update},
+                # no actions: the default
+                "fk_mra_child_ref": {"columns": ("a_ref",), "table": "mra_parent_a", "target_columns": ("id",)},
+            },
+        };
+    }
+
+    #! Returns a cache with the parent tables described in memory
+    private static Tables parentCache(AbstractDatasource ds) {
+        Tables cache();
+        foreach string name in (("mra_parent_a", "mra_parent_b")) {
+            MssqlTable t(ds, name);
+            t.setupTable({"columns": ParentColumns, "primary_key": {"name": "pk_" + name, "columns": ("id",)}});
+            cache.add(name, t);
+        }
+        return cache;
+    }
+
+    actionSql() {
+        CatalogDatasource ds = catalogDatasource();
+        Tables cache = MssqlReferentialActionsTest::parentCache(ds);
+        MssqlTable t(ds, "mra_child");
+        t.setupTable(MssqlReferentialActionsTest::childDescription("cascade", "CASCADE", "set_null", "set default"),
+            {"table_cache": cache});
+        hash<string, AbstractForeignConstraint> fks = t.getForeignConstraints().getHash();
+        assertEq("alter table dbo.mra_child add constraint fk_mra_child_a foreign key (a_id) references mra_parent_a "
+            "(id) on delete cascade on update cascade", fks.fk_mra_child_a.getCreateSql("dbo.mra_child"));
+        assertEq("alter table dbo.mra_child add constraint fk_mra_child_b foreign key (b_id) references mra_parent_b "
+            "(id) on delete set null on update set default", fks.fk_mra_child_b.getCreateSql("dbo.mra_child"));
+        # a foreign constraint without actions is created as before
+        assertEq("alter table dbo.mra_child add constraint fk_mra_child_ref foreign key (a_ref) references "
+            "mra_parent_a (id)", fks.fk_mra_child_ref.getCreateSql("dbo.mra_child"));
+        # "no action" is the default, and is not given
+        assertEq("alter table dbo.mra_child add constraint fk_x foreign key (a_id) references mra_parent_a (id) "
+            "on update cascade", t.getAddForeignConstraintSql("fk_x", "a_id", "mra_parent_a", "id",
+                {"on_delete": "no action", "on_update": "cascade", "table_cache": cache}));
+        assertEq(FK_CASCADE, fks.fk_mra_child_a.on_delete);
+        assertEq(FK_SET_DEFAULT, fks.fk_mra_child_b.on_update);
+        assertNothing(fks.fk_mra_child_ref.on_delete);
+        MssqlTable invalid(ds, "mra_child");
+        assertThrows("FOREIGN-CONSTRAINT-ERROR", "invalid on_delete referential action", \invalid.setupTable(),
+            (MssqlReferentialActionsTest::childDescription("drop"),
+                {"table_cache": MssqlReferentialActionsTest::parentCache(ds)}));
+    }
+
+    restrictRefused() {
+        CatalogDatasource ds = catalogDatasource();
+        Tables cache = MssqlReferentialActionsTest::parentCache(ds);
+        MssqlTable t(ds, "mra_child");
+        assertThrows("FOREIGN-CONSTRAINT-ERROR", "\"RESTRICT\" is not supported by SQL Server", \t.setupTable(),
+            (MssqlReferentialActionsTest::childDescription(NOTHING, "restrict"), {"table_cache": cache}));
+        MssqlTable t2(ds, "mra_child");
+        t2.setupTable({"columns": ChildColumns});
+        assertThrows("FOREIGN-CONSTRAINT-ERROR", "on_delete referential action \"RESTRICT\" is not supported",
+            \t2.getAddForeignConstraintSql(), ("fk_x", "a_id", "mra_parent_a", "id",
+                {"on_delete": "RESTRICT", "table_cache": cache}));
+        Columns cols({"a_id": t2.describe().a_id});
+        assertThrows("FOREIGN-CONSTRAINT-ERROR", "is not supported by SQL Server", sub () {
+            new MssqlForeignConstraint("fk_x", cols, new ForeignConstraintTarget("mra_parent_a", cols), FK_RESTRICT);
+        });
+        # an action set on the constraint object is checked when its SQL is generated
+        MssqlForeignConstraint fk("fk_x", cols, new ForeignConstraintTarget("mra_parent_a", cols));
+        fk.on_update = FK_RESTRICT;
+        assertThrows("FOREIGN-CONSTRAINT-ERROR", "on_update referential action \"RESTRICT\"", \fk.getCreateSql(),
+            ("dbo.mra_child",));
+    }
+
+    sybaseRefused() {
+        CatalogDatasource ds = catalogDatasource("Adaptive Server Enterprise/16.0 SP04/EBF 30399");
+        Tables cache = MssqlReferentialActionsTest::parentCache(ds);
+        MssqlTable t(ds, "mra_child");
+        assertThrows("FOREIGN-CONSTRAINT-ERROR", "not supported by Sybase", \t.setupTable(),
+            (MssqlReferentialActionsTest::childDescription("cascade"), {"table_cache": cache}));
+        # a foreign constraint without actions is accepted
+        MssqlTable t2(ds, "mra_child");
+        t2.setupTable(MssqlReferentialActionsTest::childDescription(), {"table_cache": cache});
+        assertEq(("fk_mra_child_a", "fk_mra_child_b", "fk_mra_child_ref"),
+            keys t2.getForeignConstraints().getHash());
+        # Sybase has no sequences
+        MssqlDatabase db(ds);
+        assertNothing(db.getSequence("mra_seq"));
+        assertEq((), db.listSequences());
+    }
+
+    #! The actions of foreign constraints in the catalog are those of the template: no SQL; another action drops the
+    #! constraint and adds it again
+    actionDescription() {
+        CatalogDatasource ds = catalogDatasource();
+        # each table description records its foreign constraints in the tables it references, so each has its own
+        Tables cache = MssqlReferentialActionsTest::parentCache(ds);
+        ds.columns.mra_child = {
+            "column_name": ("id", "a_id", "b_id", "a_ref"),
+            "data_type": ("int", "int", "int", "int"),
+            "character_maximum_length": (NULL, NULL, NULL, NULL),
+            "numeric_precision": (10, 10, 10, 10),
+            "numeric_scale": (0, 0, 0, 0),
+            "is_nullable": ("NO", "YES", "YES", "YES"),
+            "column_default": (NULL, NULL, "((0))", NULL),
+            "character_octet_length": (NULL, NULL, NULL, NULL),
+        };
+        ds.foreign_keys.mra_child = {
+            "constraint_name": ("fk_mra_child_a", "fk_mra_child_b", "fk_mra_child_ref"),
+            "source_column": ("a_id", "b_id", "a_ref"),
+            "target_schema": ("dbo", "dbo", "dbo"),
+            "target_table": ("mra_parent_a", "mra_parent_b", "mra_parent_a"),
+            "target_column": ("id", "id", "id"),
+            "on_delete": ("CASCADE", "SET_NULL", "NO_ACTION"),
+            "on_update": ("CASCADE", "SET_DEFAULT", "NO_ACTION"),
+        };
+        ds.primary_keys.mra_child = {"constraint_name": "pk_mra_child", "column_name": "id"};
+
+        MssqlTable live(ds, "mra_child");
+        hash<string, AbstractForeignConstraint> fks = live.getForeignConstraints({"table_cache": cache}).getHash();
+        assertEq({"on_delete": FK_CASCADE, "on_update": FK_CASCADE}, fks.fk_mra_child_a.("on_delete", "on_update"));
+        assertEq({"on_delete": FK_SET_NULL, "on_update": FK_SET_DEFAULT},
+            fks.fk_mra_child_b.("on_delete", "on_update"));
+        # "NO_ACTION" is the default: no action, as a template without actions has
+        assertEq({"on_delete": NOTHING, "on_update": NOTHING}, fks.fk_mra_child_ref.("on_delete", "on_update"));
+
+        MssqlTable template(ds, "mra_child");
+        template.setupTable(MssqlReferentialActionsTest::childDescription("cascade", "cascade", "set null",
+            "set default"), {"table_cache": MssqlReferentialActionsTest::parentCache(ds)});
+        assertEq((), live.getAlignSql(template));
+
+        # another action: the constraint is dropped and added again with it
+        MssqlTable changed(ds, "mra_child");
+        changed.setupTable(MssqlReferentialActionsTest::childDescription("cascade", "cascade", "cascade"),
+            {"table_cache": MssqlReferentialActionsTest::parentCache(ds)});
+        assertEq((
+            "alter table dbo.mra_child drop constraint fk_mra_child_b",
+            "alter table dbo.mra_child add constraint fk_mra_child_b foreign key (b_id) references mra_parent_b (id) "
+                "on delete cascade",
+        ), live.getAlignSql(changed));
+    }
+
+    sequenceCreateSql() {
+        MssqlDatabase db(catalogDatasource());
+        # without the new parameters, the SQL is unchanged
+        assertEq(("create sequence mra_seq start with 1 increment by 1 no maxvalue",),
+            db.getAlignSql({"sequences": {"mra_seq": {}}}));
+        assertEq(("create sequence mra_seq start with 10 increment by 2 maxvalue 100 minvalue -50 cycle cache 20",),
+            db.getAlignSql({"sequences": {"mra_seq": {"start": 10, "increment": 2, "max": 100, "min": -50,
+                "cycle": True, "cache": 20}}}));
+        assertEq(("create sequence mra_seq start with 1 increment by 1 maxvalue 5 no cache",),
+            db.getAlignSql({"sequences": {"mra_seq": {"end": 5, "cache": 0}}}));
+        # a maximum of 0 was taken as no maximum
+        assertEq(("create sequence mra_seq start with -1 increment by -1 maxvalue 0",),
+            db.getAlignSql({"sequences": {"mra_seq": {"start": -1, "increment": -1, "max": 0}}}));
+        # the minimum of the type is the default
+        assertEq(("create sequence mra_seq start with 1 increment by 1 no maxvalue",),
+            db.getAlignSql({"sequences": {"mra_seq": {"min": MssqlSequence::MinBigint}}}));
+        assertThrows("SEQUENCE-ERROR", "cache value -1 is negative", \db.getAlignSql(),
+            ({"sequences": {"mra_seq": {"cache": -1}}},));
+    }
+
+    sequenceAlterSql() {
+        MssqlSequence seq("mra_seq", 1, 1);
+        assertNothing(seq.getAlterSql({"start": 1, "increment": 1}));
+        # the start is never changed: it can be changed only with RESTART, which resets the current value
+        assertNothing(seq.getAlterSql({"start": 100}));
+        assertEq(("alter sequence mra_seq increment by 5 maxvalue 1000 minvalue -10 cycle no cache",),
+            seq.getAlterSql({"increment": 5, "max": 1000, "min": -10, "cycle": True, "cache": 0}));
+        assertEq(("alter sequence mra_seq maxvalue 7",), seq.getAlterSql({"end": 7}));
+        # the limits of the type are the defaults
+        assertNothing(seq.getAlterSql({"max": MssqlSequence::MaxBigint, "min": MssqlSequence::MinBigint,
+            "cycle": False}));
+
+        MssqlSequence altered("mra_seq", 1, 5, 1000, -10, True, 0);
+        assertNothing(altered.getAlterSql({"increment": 5, "max": 1000, "min": -10, "cycle": True, "cache": 0}));
+        assertEq(("alter sequence mra_seq no maxvalue no minvalue no cycle cache 30",),
+            altered.getAlterSql({"max": MssqlSequence::MaxBigint, "min": NOTHING, "cycle": False, "cache": 30}));
+        # a key that is not given is not changed
+        assertNothing(altered.getAlterSql({}));
+        assertThrows("SEQUENCE-ERROR", "negative", \altered.getAlterSql(), ({"cache": -5},));
+
+        # an int sequence: the limits of int are the defaults
+        MssqlSequence int_seq("mra_seq", 1, 1);
+        int_seq.setTypeLimits(-2147483648n, 2147483647n);
+        assertNothing(int_seq.getAlterSql({"max": 2147483647, "min": -2147483648}));
+        assertEq(("alter sequence mra_seq maxvalue 9223372036854775807",),
+            int_seq.getAlterSql({"max": MssqlSequence::MaxBigint}));
+    }
+
+    sequenceDescription() {
+        CatalogDatasource ds = catalogDatasource();
+        MssqlDatabase db(ds);
+        assertNothing(db.getSequence("mra_none"));
+        ds.sequences.mra_seq = {
+            "start_value": "1", "increment": "5", "minimum_value": "-10", "maximum_value": "1000",
+            "is_cycling": True, "is_cached": False, "cache_size": NULL, "type_name": "bigint", "precision": 19,
+        };
+        ds.sequences.mra_def = {
+            "start_value": "1", "increment": "1", "minimum_value": "-9223372036854775808",
+            "maximum_value": "9223372036854775807", "is_cycling": False, "is_cached": True, "cache_size": NULL,
+            "type_name": "bigint", "precision": 19,
+        };
+        ds.sequences.mra_int = {
+            "start_value": "1", "increment": "1", "minimum_value": "-2147483648", "maximum_value": "2147483647",
+            "is_cycling": False, "is_cached": True, "cache_size": 15, "type_name": "int", "precision": 10,
+        };
+        ds.sequences.mra_dec = {
+            "start_value": "1", "increment": "1", "minimum_value": "-99999", "maximum_value": "99999",
+            "is_cycling": False, "is_cached": True, "cache_size": NULL, "type_name": "decimal", "precision": 5,
+        };
+
+        MssqlSequence seq = db.getSequence("mra_seq");
+        assertEq({"start": 1n, "increment": 5n, "max": 1000n, "min": -10n, "cycle": True, "cache": 0},
+            {"start": seq.start, "increment": seq.increment, "max": seq.max, "min": seq.min, "cycle": seq.cycle,
+                "cache": seq.cache});
+        MssqlSequence def = db.getSequence("mra_def");
+        assertEq({"max": NOTHING, "min": NOTHING, "cycle": False, "cache": NOTHING},
+            {"max": def.max, "min": def.min, "cycle": def.cycle, "cache": def.cache});
+        MssqlSequence int_seq = db.getSequence("mra_int");
+        assertEq({"max": NOTHING, "min": NOTHING, "cache": 15},
+            {"max": int_seq.max, "min": int_seq.min, "cache": int_seq.cache});
+        MssqlSequence dec = db.getSequence("mra_dec");
+        assertEq({"max": NOTHING, "min": NOTHING}, {"max": dec.max, "min": dec.min});
+
+        # the sequences need no SQL for their own description
+        assertEq((), db.getAlignSql({"sequences": {
+            "mra_seq": {"start": 1, "increment": 5, "max": 1000, "min": -10, "cycle": True, "cache": 0},
+            "mra_def": {"start": 1, "increment": 1},
+            "mra_int": {"max": 2147483647, "cache": 15},
+            "mra_dec": {"max": 99999, "min": -99999},
+        }}));
+        # a schema-qualified name is looked up in its schema
+        ds.sql = ();
+        db.getSequence("s1.mra_seq");
+        assertEq((("s1", "mra_seq"),), map $1.args, ds.sql, $1.sql =~ /sys\.sequences/);
+    }
+
+    #! The actions are created, described and changed on SQL Server; the database applies them
+    actionsOnDatabase() {
+        Datasource ds = datasource();
+        list<string> tables = ("mra_child", "mra_parent_a", "mra_parent_b");
+        on_exit dropTables(ds, tables);
+        dropTables(ds, tables);
+
+        Tables cache();
+        foreach string name in (("mra_parent_a", "mra_parent_b")) {
+            MssqlTable t(ds, name);
+            t.setupTable({"columns": ParentColumns, "primary_key": {"name": "pk_" + name, "columns": ("id",)}});
+            execSql(ds, t.getCreateSql());
+        }
+        hash<auto> desc = MssqlReferentialActionsTest::childDescription("cascade", "cascade", "set null",
+            "set default");
+        MssqlTable template(ds, "mra_child");
+        template.setupTable(desc);
+        execSql(ds, template.getCreateSql());
+
+        hash<string, AbstractForeignConstraint> fks = (new MssqlTable(ds, "mra_child")).getForeignConstraints()
+            .getHash();
+        assertEq({"on_delete": FK_CASCADE, "on_update": FK_CASCADE}, fks.fk_mra_child_a.("on_delete", "on_update"));
+        assertEq({"on_delete": FK_SET_NULL, "on_update": FK_SET_DEFAULT},
+            fks.fk_mra_child_b.("on_delete", "on_update"));
+        assertEq({"on_delete": NOTHING, "on_update": NOTHING}, fks.fk_mra_child_ref.("on_delete", "on_update"));
+        assertEq((), alignTable(ds, "mra_child", desc));
+
+        # the database applies the actions
+        {
+            on_success ds.commit();
+            on_error ds.rollback();
+            map ds.vexec("insert into dbo.mra_parent_a (id) values (%v)", $1), (1, 2);
+            map ds.vexec("insert into dbo.mra_parent_b (id) values (%v)", $1), (0, 5);
+            ds.exec("insert into dbo.mra_child (id, a_id, b_id) values (1, 1, 5), (2, 2, 5), (3, 2, 0)");
+            ds.exec("update dbo.mra_parent_a set id = 10 where id = 1");
+            ds.exec("delete from dbo.mra_parent_a where id = 2");
+            ds.exec("update dbo.mra_parent_b set id = 6 where id = 5");
+        }
+        assertEq({"id": (1,), "a_id": (10,), "b_id": (0,)},
+            ds.select("select id, a_id, b_id from dbo.mra_child order by id"));
+        {
+            on_success ds.commit();
+            on_error ds.rollback();
+            ds.exec("delete from dbo.mra_parent_b where id = 0");
+        }
+        assertEq({"id": (1,), "a_id": (10,), "b_id": (NULL,)},
+            ds.select("select id, a_id, b_id from dbo.mra_child order by id"));
+
+        # another action: the constraint is dropped and added again with it, and the next alignment needs no SQL
+        desc = MssqlReferentialActionsTest::childDescription("cascade", "cascade", "cascade");
+        assertEq((
+            "alter table dbo.mra_child drop constraint fk_mra_child_b",
+            "alter table dbo.mra_child add constraint fk_mra_child_b foreign key (b_id) references mra_parent_b (id) "
+                "on delete cascade",
+        ), alignTable(ds, "mra_child", desc));
+        assertEq({"on_delete": FK_CASCADE, "on_update": NOTHING},
+            (new MssqlTable(ds, "mra_child")).getForeignConstraints().getHash().fk_mra_child_b
+                .("on_delete", "on_update"));
+        assertEq((), alignTable(ds, "mra_child", desc));
+
+        # the description of the live table keeps the actions
+        hash<auto> live_desc = (new MssqlTable(ds, "mra_child")).getDescriptionHash();
+        assertEq(FK_CASCADE, live_desc.foreign_constraints.fk_mra_child_a.on_delete);
+    }
+
+    #! A sequence is aligned with ALTER SEQUENCE on SQL Server, keeping its current value
+    sequencesOnDatabase() {
+        Datasource ds = datasource();
+        on_exit dropSequence(ds, "mra_seq");
+        dropSequence(ds, "mra_seq");
+        MssqlDatabase db(ds);
+        assertNothing(db.getSequence("mra_seq"));
+
+        hash<auto> desc = {"start": 1, "increment": 1, "min": -10, "cycle": True, "cache": 20};
+        assertEq(("create sequence mra_seq start with 1 increment by 1 no maxvalue minvalue -10 cycle cache 20",),
+            alignSequence(ds, desc));
+        assertEq((), alignSequence(ds, desc));
+        assertTrue(inlist("mra_seq", db.listSequences()));
+        assertEq((1, 2, 3), map db.getNextSequenceValue("mra_seq"), xrange(3));
+
+        desc = {"start": 1, "increment": 5, "max": 1000, "min": -20, "cycle": False, "cache": 0};
+        assertEq(("alter sequence mra_seq increment by 5 maxvalue 1000 minvalue -20 no cycle no cache",),
+            alignSequence(ds, desc));
+        # the current value is kept
+        assertEq(8, db.getNextSequenceValue("mra_seq"));
+        assertEq(8, db.getCurrentSequenceValue("dbo.mra_seq"));
+        assertEq((), alignSequence(ds, desc));
+
+        # the defaults, and the start, which is not changed
+        desc = {"start": 50, "increment": 5, "max": MssqlSequence::MaxBigint, "cache": 10};
+        assertEq(("alter sequence mra_seq no maxvalue cache 10",), alignSequence(ds, desc));
+        assertEq((), alignSequence(ds, desc));
+        assertEq(13, db.getNextSequenceValue("mra_seq"));
+        MssqlSequence seq = db.getSequence("mra_seq");
+        assertEq({"start": 1n, "max": NOTHING, "min": -20n, "cycle": False, "cache": 10},
+            {"start": seq.start, "max": seq.max, "min": seq.min, "cycle": seq.cycle, "cache": seq.cache});
+    }
+
+    #! Returns a datasource to the database given by QORE_DB_CONNSTR_FREETDS
+    private Datasource datasource() {
+%ifdef NO_FREETDS
+        testSkip("freetds module unavailable");
+%endif
+        if (!ENV.QORE_DB_CONNSTR_FREETDS) {
+            testSkip("QORE_DB_CONNSTR_FREETDS is not set");
+        }
+        Datasource ds(ENV.QORE_DB_CONNSTR_FREETDS);
+        try {
+            ds.open();
+        } catch (hash<ExceptionInfo> ex) {
+            testSkip(sprintf("no DB connection: %s: %s", ex.err, ex.desc));
+        }
+        if (MssqlDatabase::isSybase(ds)) {
+            testSkip("the database is Sybase, not SQL Server");
+        }
+        if (!(new MssqlDatabase(ds)).supportsSequences()) {
+            testSkip("SQL Server 2012 or later is required for sequences");
+        }
+        return ds;
+    }
+
+    #! Runs SQL in a transaction
+    private static execSql(AbstractDatasource ds, list<auto> sql) {
+        on_success ds.commit();
+        on_error ds.rollback();
+        map ds.execRaw($1), sql;
+    }
+
+    #! Aligns the table in the database to a template with the description, runs the SQL and returns it
+    private static list<auto> alignTable(AbstractDatasource ds, string table, hash<auto> desc) {
+        MssqlTable template(ds, table);
+        template.setupTable(desc);
+        MssqlTable current(ds, table);
+        list<auto> sql = current.getAlignSql(template);
+        MssqlReferentialActionsTest::execSql(ds, sql);
+        return sql;
+    }
+
+    #! Aligns the sequence in the database to the description, runs the SQL and returns it
+    private static list<auto> alignSequence(AbstractDatasource ds, hash<auto> desc) {
+        MssqlDatabase db(ds);
+        list<auto> sql = db.getAlignSql({"sequences": {"mra_seq": desc}});
+        MssqlReferentialActionsTest::execSql(ds, sql);
+        return sql;
+    }
+
+    #! Drops the tables if they exist
+    private static dropTables(AbstractDatasource ds, list<string> tables) {
+        on_success ds.commit();
+        on_error ds.rollback();
+        foreach string table in (tables) {
+            ds.execRaw(sprintf("if object_id('dbo.%s', 'U') is not null drop table dbo.%s", table, table));
+        }
+    }
+
+    #! Drops the sequence if it exists
+    private static dropSequence(AbstractDatasource ds, string name) {
+        on_success ds.commit();
+        on_error ds.rollback();
+        ds.execRaw(sprintf("if object_id('dbo.%s', 'SO') is not null drop sequence dbo.%s", name, name));
+    }
+}
+
+#! A datasource that gives catalog rows for SQL Server descriptions and does not connect
+class CatalogDatasource inherits Datasource {
+    public {
+        #! the columns of tables, as information_schema.columns gives them, by table name
+        hash<auto> columns;
+
+        #! the foreign constraints of tables, as the sys.foreign_keys query gives them, by table name
+        hash<auto> foreign_keys;
+
+        #! the primary keys of tables, by table name
+        hash<auto> primary_keys;
+
+        #! the sequences, as the sys.sequences query gives them, by sequence name
+        hash<auto> sequences;
+
+        #! the catalog queries and their arguments
+        list<hash<auto>> sql = ();
+    }
+
+    private {
+        string version;
+    }
+
+    constructor(string version) : Datasource("freetds:user/pass@db") {
+        self.version = version;
+    }
+
+    auto getServerVersion() {
+        return version;
+    }
+
+    string getDriverRealName() {
+        return "mssql";
+    }
+
+    auto select(string s, ...) {
+        sql += {"sql": s, "args": argv};
+        if (s =~ /information_schema\.columns/) {
+            return columns{argv[1]} ?? {};
+        }
+        if (s =~ /sys\.foreign_keys/) {
+            return foreign_keys{argv[1]} ?? {};
+        }
+        # the columns of the primary key (the unique constraint query joins key_column_usage too)
+        if (s =~ /from information_schema\.key_column_usage where/) {
+            return primary_keys{argv[1]} ?? {};
+        }
+        return {};
+    }
+
+    auto selectRow(string s, ...) {
+        sql += {"sql": s, "args": argv};
+        if (s =~ /schema_name\(\)/) {
+            return {"schema": "dbo"};
+        }
+        if (s =~ /sys\.sequences/) {
+            return sequences{argv[1]};
+        }
+        # the existence of a table
+        if (s =~ /from sysobjects/) {
+            return columns{argv[1]} ? {"name": argv[1]} : NOTHING;
+        }
+        if (s =~ /constraint_type = 'PRIMARY KEY'/) {
+            return primary_keys{argv[1]} ? {"constraint_name": primary_keys{argv[1]}.constraint_name} : NOTHING;
+        }
+    }
+
+    auto selectRows(string s, ...) {
+        return ();
+    }
+
+    commit() {
+    }
+
+    rollback() {
+    }
+}

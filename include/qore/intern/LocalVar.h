@@ -1162,8 +1162,10 @@ public:
         const QoreTypeInfo* ti = getTypeInfoForLValue();
         assert(QoreTypeInfo::getUniqueReturnClass(ti) && !QoreTypeInfo::isComplex(ti)
             && !QoreTypeInfo::isReference(ti));
-        static const bool fast_class_accept = !std::getenv("QORE_DISABLE_AOT_CLASS_ACCEPT_FAST_PATH");
-        static const bool class_node_store = !std::getenv("QORE_DISABLE_AOT_CLASS_NODE_STORE");
+        static constinit QoreEnvFlag fast_class_accept_env("QORE_DISABLE_AOT_CLASS_ACCEPT_FAST_PATH");
+        const bool fast_class_accept = !fast_class_accept_env.get();
+        static constinit QoreEnvFlag class_node_store_env("QORE_DISABLE_AOT_CLASS_NODE_STORE");
+        const bool class_node_store = !class_node_store_env.get();
         bool accepted = fast_class_accept && ti->acceptsRequiredClassValueWithoutFilter(value);
         if (accepted && class_node_store && !slot->val.fixed_type) {
             // Acceptance proves a strong object, not just a pointer-tagged value.

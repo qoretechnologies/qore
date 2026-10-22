@@ -1,0 +1,109 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/SqlUtil
+%requires ../../../../qlib/Sqlite3SqlUtil.qm
+%requires ../../../../qlib/QUnit.qm
+
+%try-module sqlite3
+%define NoSqlite3
+%endtry
+
+%exec-class Sqlite3ForeignConstraintActionsTest
+
+#! Tests the foreign-constraint ON DELETE/ON UPDATE actions on SQLite
+class Sqlite3ForeignConstraintActionsTest inherits QUnit::Test {
+    private {
+        *Datasource ds;
+    }
+
+    constructor() : Test("Sqlite3ForeignConstraintActions", "1.0", \ARGV) {
+        addTestCase("FK actions are created with the table", \createSql());
+        addTestCase("FK actions are described and aligned without SQL", \describeAlign());
+        addTestCase("an FK action change is refused as any FK change", \changeRefused());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+%ifndef NoSqlite3
+        ds = new Datasource("sqlite3:x@:memory:");
+        ds.exec("create table parent (id integer not null primary key)");
+        ds.commit();
+%endif
+    }
+
+    globalTearDown() {
+        if (ds) {
+            ds.rollback();
+        }
+    }
+
+    private Datasource getDatasource() {
+%ifdef NoSqlite3
+        testSkip("no sqlite3 module");
+%endif
+        return ds;
+    }
+
+    private Sqlite3Table makeChild(string name, *string on_delete, *string on_update) {
+        Sqlite3Table t(getDatasource(), name);
+        t.setupTable({
+            "columns": {
+                "id": {"qore_type": "integer", "notnull": True},
+                "pid": {"qore_type": "integer"},
+            },
+            "primary_key": {"name": "pk_" + name, "columns": ("id",)},
+            "foreign_constraints": {
+                "fk_" + name: {
+                    "columns": ("pid",),
+                    "table": "parent",
+                    "target_columns": ("id",),
+                } + (on_delete ? {"on_delete": on_delete} : {})
+                  + (on_update ? {"on_update": on_update} : {}),
+            },
+        });
+        return t;
+    }
+
+    createSql() {
+        string sql = makeChild("c1", FK_CASCADE, FK_SET_NULL).getCreateTableSql();
+        assertRegex("references parent \\(id\\) on delete cascade on update set null", sql);
+        # a foreign constraint without actions is created exactly as before
+        string plain = makeChild("c2").getCreateTableSql();
+        assertRegex("references parent \\(id\\)\n", plain);
+        assertEq(-1, plain.find("on delete"));
+    }
+
+    describeAlign() {
+        Datasource ds = getDatasource();
+        on_exit ds.rollback();
+        foreach list<auto> actions in ((FK_CASCADE, FK_SET_NULL), (FK_SET_DEFAULT, FK_RESTRICT), (NOTHING, NOTHING)) {
+            string name = sprintf("c_da_%d", $#);
+            Sqlite3Table t = makeChild(name, actions[0], actions[1]);
+            t.create();
+            Sqlite3Table described(ds, name);
+            foreach AbstractForeignConstraint fk in (described.getForeignConstraints().iterator()) {
+                assertEq(actions[0], fk.on_delete, name + " on_delete");
+                assertEq(actions[1], fk.on_update, name + " on_update");
+            }
+            # the template with the same actions needs no SQL
+            assertEq((), described.getAlignSql(makeChild(name, actions[0], actions[1])), name);
+        }
+    }
+
+    changeRefused() {
+        Datasource ds = getDatasource();
+        on_exit ds.rollback();
+        makeChild("c_ch", FK_CASCADE).create();
+        Sqlite3Table described(ds, "c_ch");
+        # SQLite cannot drop or add a foreign constraint of an existing table, so an action change is refused
+        assertThrows("UNSUPPORTED", "cannot drop the foreign constraint", \described.getAlignSql(),
+            (makeChild("c_ch", FK_SET_NULL),));
+    }
+}

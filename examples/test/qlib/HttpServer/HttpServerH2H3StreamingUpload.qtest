@@ -259,6 +259,7 @@ l50Xb2GWQesIt9k5jF5IOw==
         server.waitForAsyncIo();
 
         hash<auto> h2info = server.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
             "service": 0,
             "cert": new SSLCertificate(CertPem),
             "key": new SSLPrivateKey(KeyPem),
@@ -281,6 +282,7 @@ l50Xb2GWQesIt9k5jF5IOw==
         server.waitForAsyncIo();
 
         hash<auto> info = server.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
             "service": 0,
             "cert": new SSLCertificate(CertPem),
             "key": new SSLPrivateKey(KeyPem),
@@ -579,6 +581,7 @@ l50Xb2GWQesIt9k5jF5IOw==
             }
         } else {
             int port = server.addListener(<HttpListenerOptionInfo>{
+                "node": "localhost",
                 "service": 0,
                 "cert": new SSLCertificate(CertPem),
                 "key": new SSLPrivateKey(KeyPem),

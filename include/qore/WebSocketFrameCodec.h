@@ -60,6 +60,12 @@ enum WsCloseCode : uint16_t {
     WSCC_PolicyViolation  = 1008,
     WSCC_MessageTooBig    = 1009,
     WSCC_InternalError    = 1011,
+    //! The close code reported for a received close frame without a status code (RFC 6455 section 7.1.5); never
+    //! sent in a close frame
+    WSCC_NoStatusRcvd     = 1005,
+    //! The close code reported when the connection closed without a close frame (RFC 6455 section 7.1.5); never
+    //! sent in a close frame
+    WSCC_AbnormalClosure  = 1006,
 };
 
 //! Parsed WebSocket frame

@@ -257,9 +257,22 @@ Namespace ns = var.getNamespace();
     @endcode
 
     @return the namespace for the global variable
+    @throw REFLECTION-ACCESS-ERROR the reflection object belongs to another Program that the calling code may not navigate the namespaces of (see @ref reflection_caller_privilege)
+    @throw UNKNOWN-NAMESPACE the namespace is not visible in the Program of the reflection object (see @ref reflection_caller_privilege)
  */
 Namespace GlobalVar::getNamespace() [flags=CONSTANT] {
-    return new QoreObject(QC_NAMESPACE, v->pgm, new QoreReflectionNamespace(v->pgm, v->ns));
+    // the calling code's privileges apply (see @ref reflection_caller_privilege)
+    QoreReflectionCaller caller;
+    if (reflection_check_program_access(caller, v->pgm, "navigate the namespaces of", xsink)) {
+        return QoreValue();
+    }
+    // the declaring namespace of an inherited symbol belongs to the declaring Program; navigation stays in the
+    // Program of the reflection object
+    const QoreNamespace* ns = reflection_program_namespace(v->pgm, v->ns, xsink);
+    if (!ns) {
+        return QoreValue();
+    }
+    return new QoreObject(QC_NAMESPACE, v->pgm, new QoreReflectionNamespace(v->pgm, ns));
 }
 
 //! Returns the value of the global variable
@@ -271,8 +284,14 @@ auto val = var.getValue();
     @return the value of the global variable
 
     @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the global variable has been destroyed
+    @throw REFLECTION-ACCESS-ERROR the reflection object belongs to another Program whose values the calling code may not read or write (see @ref reflection_caller_privilege)
 */
 auto GlobalVar::getValue() [flags=RET_VALUE_ONLY] {
+    // the calling code's privileges apply (see @ref reflection_caller_privilege)
+    QoreReflectionCaller caller;
+    if (reflection_check_program_access(caller, v->pgm, "read or write the values of", xsink)) {
+        return QoreValue();
+    }
     // get read access to program object
     QoreExternalProgramContextHelper tch(xsink, v->pgm);
     if (*xsink) {
@@ -293,8 +312,14 @@ var.setValue(val);
 
     @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the global variable has been destroyed
     @throw RUNTIME-TYPE-ERROR value type is not compatible with the global variable's type
+    @throw REFLECTION-ACCESS-ERROR the reflection object belongs to another Program whose values the calling code may not read or write (see @ref reflection_caller_privilege)
 */
 nothing GlobalVar::setValue(auto val) {
+    // the calling code's privileges apply (see @ref reflection_caller_privilege)
+    QoreReflectionCaller caller;
+    if (reflection_check_program_access(caller, v->pgm, "read or write the values of", xsink)) {
+        return QoreValue();
+    }
     // get read access to program object
     QoreExternalProgramContextHelper tch(xsink, v->pgm);
     if (*xsink) {
@@ -354,8 +379,14 @@ GlobalVar var = GlobalVar::forName(pgm, "::ENV");
     @throw UNKNOWN-GLOBAL-VAR cannot find a global variable with the given name or path, or the variable name contains a NUL character (since %Qore 3.0)
     @throw ENCODING-CONVERSION-ERROR this exception could be thrown if the string argument is not in the @ref default_encoding "default character
 encoding" and an error occurs during encoding conversion
+    @throw REFLECTION-ACCESS-ERROR the calling code may not look up symbols in the given Program (see @ref reflection_caller_privilege)
  */
 static GlobalVar GlobalVar::forName(Program[QoreProgram] pgm, string path) [flags=RET_VALUE_ONLY] {
+    // the calling code's privileges apply (see @ref reflection_caller_privilege)
+    QoreReflectionCaller caller;
+    if (reflection_check_program_access(caller, *pgm, "look up symbols in", xsink)) {
+        return QoreValue();
+    }
     // the name is looked up as a C string, which would be cut at a NUL character and name another variable
     if (q_check_no_nul(path->c_str(), path->size(), "variable name", "variable names", "UNKNOWN-GLOBAL-VAR", xsink)) {
         return QoreValue();
@@ -403,7 +434,13 @@ list<GlobalVar> l = GlobalVar::findAllRegex(pgm, "^E");
     @param re_opts see @ref regex_constants for possible values
 
     @return a list of global variables matching the regular expression pattern argument or an empty list if no global variables match
+    @throw REFLECTION-ACCESS-ERROR the calling code may not look up symbols in the given Program (see @ref reflection_caller_privilege)
 */
 static list<GlobalVar> GlobalVar::findAllRegex(Program[QoreProgram] pgm, string pattern, *int re_opts) [flags=RET_VALUE_ONLY] {
+    // the calling code's privileges apply (see @ref reflection_caller_privilege)
+    QoreReflectionCaller caller;
+    if (reflection_check_program_access(caller, *pgm, "look up symbols in", xsink)) {
+        return QoreValue();
+    }
     return find_all_gvars(*pattern, re_opts, *pgm, xsink);
 }

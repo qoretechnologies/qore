@@ -366,8 +366,14 @@ bool Namespace::isRoot() [flags=RET_VALUE_ONLY] {
     @return the parent namespace, if any (the root namespace has no parent); if the %Namespace has no parent, then @ref nothing is returned
 
     @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the namespace has been destroyed
+    @throw REFLECTION-ACCESS-ERROR the reflection object belongs to another Program that the calling code may not navigate the namespaces of (see @ref reflection_caller_privilege)
 */
 *Namespace Namespace::getParentNamespace() [flags=RET_VALUE_ONLY] {
+    // the calling code's privileges apply (see @ref reflection_caller_privilege)
+    QoreReflectionCaller caller;
+    if (reflection_check_program_access(caller, n->pgm, "navigate the namespaces of", xsink)) {
+        return QoreValue();
+    }
     // get read access to program object
     QoreExternalProgramContextHelper tch(xsink, n->pgm);
     if (*xsink) {
@@ -393,8 +399,14 @@ Constant con = n.getConstant(name);
     @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the namespace has been destroyed
     @throw UNKNOWN-CONSTANT thrown if the constant cannot be found, or the constant name contains a NUL character (since %Qore 3.0)
     @throw ENCODING-CONVERSION-ERROR this exception could be thrown if the string argument is not in the @ref default_encoding "default character encoding" and an error occurs during encoding conversion
+    @throw REFLECTION-ACCESS-ERROR the reflection object belongs to another Program that the calling code may not navigate the namespaces of (see @ref reflection_caller_privilege)
 */
 Constant Namespace::getConstant(string name) [flags=RET_VALUE_ONLY] {
+    // the calling code's privileges apply (see @ref reflection_caller_privilege)
+    QoreReflectionCaller caller;
+    if (reflection_check_program_access(caller, n->pgm, "navigate the namespaces of", xsink)) {
+        return QoreValue();
+    }
     // the name is looked up as a C string, which would be cut at a NUL character and name another constant
     if (q_check_no_nul(name->c_str(), name->size(), "constant name", "constant names", "UNKNOWN-CONSTANT", xsink)) {
         return QoreValue();
@@ -423,8 +435,14 @@ list<Constant> l = n.getConstants();
     @return a list of all declared constants in the namespace
 
     @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the namespace has been destroyed
+    @throw REFLECTION-ACCESS-ERROR the reflection object belongs to another Program that the calling code may not navigate the namespaces of (see @ref reflection_caller_privilege)
 */
 list<Constant> Namespace::getConstants() [flags=RET_VALUE_ONLY] {
+    // the calling code's privileges apply (see @ref reflection_caller_privilege)
+    QoreReflectionCaller caller;
+    if (reflection_check_program_access(caller, n->pgm, "navigate the namespaces of", xsink)) {
+        return QoreValue();
+    }
     // get read access to program object
     QoreExternalProgramContextHelper tch(xsink, n->pgm);
     if (*xsink) {
@@ -453,8 +471,14 @@ Namespace con = n.getNamespace(name);
     @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the namespace has been destroyed
     @throw UNKNOWN-NAMESPACE thrown if the namespace cannot be found, or the namespace name contains a NUL character (since %Qore 3.0)
     @throw ENCODING-CONVERSION-ERROR this exception could be thrown if the string argument is not in the @ref default_encoding "default character encoding" and an error occurs during encoding conversion
+    @throw REFLECTION-ACCESS-ERROR the reflection object belongs to another Program that the calling code may not navigate the namespaces of (see @ref reflection_caller_privilege)
 */
 Namespace Namespace::getNamespace(string name) [flags=RET_VALUE_ONLY] {
+    // the calling code's privileges apply (see @ref reflection_caller_privilege)
+    QoreReflectionCaller caller;
+    if (reflection_check_program_access(caller, n->pgm, "navigate the namespaces of", xsink)) {
+        return QoreValue();
+    }
     // the name is looked up as a C string, which would be cut at a NUL character and name another namespace
     if (q_check_no_nul(name->c_str(), name->size(), "namespace name", "namespace names", "UNKNOWN-NAMESPACE", xsink)) {
         return QoreValue();
@@ -483,8 +507,14 @@ list<Namespace> l = n.getNamespaces();
     @return a list of all declared namespaces in the namespace
 
     @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the namespace has been destroyed
+    @throw REFLECTION-ACCESS-ERROR the reflection object belongs to another Program that the calling code may not navigate the namespaces of (see @ref reflection_caller_privilege)
 */
 list<Namespace> Namespace::getNamespaces() [flags=RET_VALUE_ONLY] {
+    // the calling code's privileges apply (see @ref reflection_caller_privilege)
+    QoreReflectionCaller caller;
+    if (reflection_check_program_access(caller, n->pgm, "navigate the namespaces of", xsink)) {
+        return QoreValue();
+    }
     // get read access to program object
     QoreExternalProgramContextHelper tch(xsink, n->pgm);
     if (*xsink) {
@@ -512,8 +542,14 @@ Class cls = n.getClass(name);
     @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the namespace has been destroyed
     @throw UNKNOWN-CLASS thrown if the class cannot be found, or the class name contains a NUL character (since %Qore 3.0)
     @throw ENCODING-CONVERSION-ERROR this exception could be thrown if the string argument is not in the @ref default_encoding "default character encoding" and an error occurs during encoding conversion
+    @throw REFLECTION-ACCESS-ERROR the reflection object belongs to another Program that the calling code may not navigate the namespaces of (see @ref reflection_caller_privilege)
 */
 Class Namespace::getClass(string name) [flags=RET_VALUE_ONLY] {
+    // the calling code's privileges apply (see @ref reflection_caller_privilege)
+    QoreReflectionCaller caller;
+    if (reflection_check_program_access(caller, n->pgm, "navigate the namespaces of", xsink)) {
+        return QoreValue();
+    }
     // the name is looked up as a C string, which would be cut at a NUL character and name another class
     if (q_check_no_nul(name->c_str(), name->size(), "class name", "class names", "UNKNOWN-CLASS", xsink)) {
         return QoreValue();
@@ -543,8 +579,14 @@ list<Class> l = n.getClasses();
     @return a list of all declared classes in the namespace
 
     @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the namespace has been destroyed
+    @throw REFLECTION-ACCESS-ERROR the reflection object belongs to another Program that the calling code may not navigate the namespaces of (see @ref reflection_caller_privilege)
 */
 list<Class> Namespace::getClasses() [flags=RET_VALUE_ONLY] {
+    // the calling code's privileges apply (see @ref reflection_caller_privilege)
+    QoreReflectionCaller caller;
+    if (reflection_check_program_access(caller, n->pgm, "navigate the namespaces of", xsink)) {
+        return QoreValue();
+    }
     // get read access to program object
     QoreExternalProgramContextHelper tch(xsink, n->pgm);
     if (*xsink) {
@@ -575,8 +617,14 @@ Function f = n.getFunction(name);
     @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the namespace has been destroyed
     @throw UNKNOWN-FUNCTION thrown if the function cannot be found, or the function name contains a NUL character (since %Qore 3.0)
     @throw ENCODING-CONVERSION-ERROR this exception could be thrown if the string argument is not in the @ref default_encoding "default character encoding" and an error occurs during encoding conversion
+    @throw REFLECTION-ACCESS-ERROR the reflection object belongs to another Program that the calling code may not navigate the namespaces of (see @ref reflection_caller_privilege)
 */
 Function Namespace::getFunction(string name) [flags=RET_VALUE_ONLY] {
+    // the calling code's privileges apply (see @ref reflection_caller_privilege)
+    QoreReflectionCaller caller;
+    if (reflection_check_program_access(caller, n->pgm, "navigate the namespaces of", xsink)) {
+        return QoreValue();
+    }
     // the name is looked up as a C string, which would be cut at a NUL character and name another function
     if (q_check_no_nul(name->c_str(), name->size(), "function name", "function names", "UNKNOWN-FUNCTION", xsink)) {
         return QoreValue();
@@ -611,8 +659,14 @@ list<Function> l = n.getFunctions();
     @return a list of all declared functions in the namespace
 
     @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the namespace has been destroyed
+    @throw REFLECTION-ACCESS-ERROR the reflection object belongs to another Program that the calling code may not navigate the namespaces of (see @ref reflection_caller_privilege)
 */
 list<Function> Namespace::getFunctions() [flags=RET_VALUE_ONLY] {
+    // the calling code's privileges apply (see @ref reflection_caller_privilege)
+    QoreReflectionCaller caller;
+    if (reflection_check_program_access(caller, n->pgm, "navigate the namespaces of", xsink)) {
+        return QoreValue();
+    }
     // get read access to program object
     QoreExternalProgramContextHelper tch(xsink, n->pgm);
     if (*xsink) {
@@ -650,8 +704,14 @@ FunctionVariant v = n.getVariant(name, IntType, StringType);
     - getVariantArgs()
     - getExactVariant()
     - getExactVariantArgs()
+    @throw REFLECTION-ACCESS-ERROR the reflection object belongs to another Program that the calling code may not navigate the namespaces of (see @ref reflection_caller_privilege)
 */
 FunctionVariant Namespace::getVariant(string name, ...) [flags=RET_VALUE_ONLY] {
+    // the calling code's privileges apply (see @ref reflection_caller_privilege)
+    QoreReflectionCaller caller;
+    if (reflection_check_program_access(caller, n->pgm, "navigate the namespaces of", xsink)) {
+        return QoreValue();
+    }
     // the name is looked up as a C string, which would be cut at a NUL character and name another function
     if (q_check_no_nul(name->c_str(), name->size(), "function name", "function names", "UNKNOWN-FUNCTION", xsink)) {
         return QoreValue();
@@ -697,8 +757,14 @@ FunctionVariant v = n.getVariantArgs(name, (IntType, StringType));
     - getVariant()
     - getExactVariant()
     - getExactVariantArgs()
+    @throw REFLECTION-ACCESS-ERROR the reflection object belongs to another Program that the calling code may not navigate the namespaces of (see @ref reflection_caller_privilege)
 */
 FunctionVariant Namespace::getVariantArgs(string name, softlist<Type> argv) [flags=RET_VALUE_ONLY] {
+    // the calling code's privileges apply (see @ref reflection_caller_privilege)
+    QoreReflectionCaller caller;
+    if (reflection_check_program_access(caller, n->pgm, "navigate the namespaces of", xsink)) {
+        return QoreValue();
+    }
     // the name is looked up as a C string, which would be cut at a NUL character and name another function
     if (q_check_no_nul(name->c_str(), name->size(), "function name", "function names", "UNKNOWN-FUNCTION", xsink)) {
         return QoreValue();
@@ -733,8 +799,14 @@ list<FunctionVariant> l = n.getVariants();
     @return a list of all declared function variants in the namespace
 
     @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the namespace has been destroyed
+    @throw REFLECTION-ACCESS-ERROR the reflection object belongs to another Program that the calling code may not navigate the namespaces of (see @ref reflection_caller_privilege)
 */
 list<FunctionVariant> Namespace::getVariants() [flags=RET_VALUE_ONLY] {
+    // the calling code's privileges apply (see @ref reflection_caller_privilege)
+    QoreReflectionCaller caller;
+    if (reflection_check_program_access(caller, n->pgm, "navigate the namespaces of", xsink)) {
+        return QoreValue();
+    }
     // get read access to program object
     QoreExternalProgramContextHelper tch(xsink, n->pgm);
     if (*xsink) {
@@ -767,8 +839,14 @@ GlobalVar cls = n.getGlobalVar(name);
     @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the namespace has been destroyed
     @throw UNKNOWN-GLOBAL-VAR thrown if the global variable cannot be found, or the variable name contains a NUL character (since %Qore 3.0)
     @throw ENCODING-CONVERSION-ERROR this exception could be thrown if the string argument is not in the @ref default_encoding "default character encoding" and an error occurs during encoding conversion
+    @throw REFLECTION-ACCESS-ERROR the reflection object belongs to another Program that the calling code may not navigate the namespaces of (see @ref reflection_caller_privilege)
 */
 GlobalVar Namespace::getGlobalVar(string name) [flags=RET_VALUE_ONLY] {
+    // the calling code's privileges apply (see @ref reflection_caller_privilege)
+    QoreReflectionCaller caller;
+    if (reflection_check_program_access(caller, n->pgm, "navigate the namespaces of", xsink)) {
+        return QoreValue();
+    }
     // the name is looked up as a C string, which would be cut at a NUL character and name another variable
     if (q_check_no_nul(name->c_str(), name->size(), "variable name", "variable names", "UNKNOWN-GLOBAL-VAR", xsink)) {
         return QoreValue();
@@ -797,8 +875,14 @@ list<GlobalVar> l = n.getGlobalVars();
     @return a list of all declared global variables in the namespace
 
     @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the namespace has been destroyed
+    @throw REFLECTION-ACCESS-ERROR the reflection object belongs to another Program that the calling code may not navigate the namespaces of (see @ref reflection_caller_privilege)
 */
 list<GlobalVar> Namespace::getGlobalVars() [flags=RET_VALUE_ONLY] {
+    // the calling code's privileges apply (see @ref reflection_caller_privilege)
+    QoreReflectionCaller caller;
+    if (reflection_check_program_access(caller, n->pgm, "navigate the namespaces of", xsink)) {
+        return QoreValue();
+    }
     // get read access to program object
     QoreExternalProgramContextHelper tch(xsink, n->pgm);
     if (*xsink) {
@@ -826,8 +910,14 @@ TypedHash th = n.getTypedHash(name);
     @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the namespace has been destroyed
     @throw UNKNOWN-TYPED-HASH thrown if the @ref hashdecl "typed hash (hashdecl)" cannot be found, or the typed hash name contains a NUL character (since %Qore 3.0)
     @throw ENCODING-CONVERSION-ERROR this exception could be thrown if the string argument is not in the @ref default_encoding "default character encoding" and an error occurs during encoding conversion
+    @throw REFLECTION-ACCESS-ERROR the reflection object belongs to another Program that the calling code may not navigate the namespaces of (see @ref reflection_caller_privilege)
 */
 TypedHash Namespace::getTypedHash(string name) [flags=RET_VALUE_ONLY] {
+    // the calling code's privileges apply (see @ref reflection_caller_privilege)
+    QoreReflectionCaller caller;
+    if (reflection_check_program_access(caller, n->pgm, "navigate the namespaces of", xsink)) {
+        return QoreValue();
+    }
     // the name is looked up as a C string, which would be cut at a NUL character and name another typed
     if (q_check_no_nul(name->c_str(), name->size(), "typed hash name", "typed hash names", "UNKNOWN-TYPED-HASH", xsink)) {
         return QoreValue();
@@ -856,8 +946,14 @@ list<TypedHash> l = n.getTypedHashes();
     @return a list of all declared @ref hashdecl "typed hashes (hashdecls)" in the namespace
 
     @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the namespace has been destroyed
+    @throw REFLECTION-ACCESS-ERROR the reflection object belongs to another Program that the calling code may not navigate the namespaces of (see @ref reflection_caller_privilege)
 */
 list<TypedHash> Namespace::getTypedHashes() [flags=RET_VALUE_ONLY] {
+    // the calling code's privileges apply (see @ref reflection_caller_privilege)
+    QoreReflectionCaller caller;
+    if (reflection_check_program_access(caller, n->pgm, "navigate the namespaces of", xsink)) {
+        return QoreValue();
+    }
     // get read access to program object
     QoreExternalProgramContextHelper tch(xsink, n->pgm);
     if (*xsink) {
@@ -887,8 +983,14 @@ Enum e = n.getEnum(name);
     @throw ENCODING-CONVERSION-ERROR this exception could be thrown if the string argument is not in the @ref default_encoding "default character encoding" and an error occurs during encoding conversion
 
     @since %Qore 2.1
+    @throw REFLECTION-ACCESS-ERROR the reflection object belongs to another Program that the calling code may not navigate the namespaces of (see @ref reflection_caller_privilege)
 */
 Enum Namespace::getEnum(string name) [flags=RET_VALUE_ONLY] {
+    // the calling code's privileges apply (see @ref reflection_caller_privilege)
+    QoreReflectionCaller caller;
+    if (reflection_check_program_access(caller, n->pgm, "navigate the namespaces of", xsink)) {
+        return QoreValue();
+    }
     // the name is looked up as a C string, which would be cut at a NUL character and name another enum
     if (q_check_no_nul(name->c_str(), name->size(), "enum name", "enum names", "UNKNOWN-ENUM", xsink)) {
         return QoreValue();
@@ -919,8 +1021,14 @@ list<Enum> l = n.getEnums();
     @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the namespace has been destroyed
 
     @since %Qore 2.1
+    @throw REFLECTION-ACCESS-ERROR the reflection object belongs to another Program that the calling code may not navigate the namespaces of (see @ref reflection_caller_privilege)
 */
 list<Enum> Namespace::getEnums() [flags=RET_VALUE_ONLY] {
+    // the calling code's privileges apply (see @ref reflection_caller_privilege)
+    QoreReflectionCaller caller;
+    if (reflection_check_program_access(caller, n->pgm, "navigate the namespaces of", xsink)) {
+        return QoreValue();
+    }
     // get read access to program object
     QoreExternalProgramContextHelper tch(xsink, n->pgm);
     if (*xsink) {
@@ -982,8 +1090,14 @@ Namespace n = Namespace::forName(pgm, "Thread::Mutex");
 
     @throw UNKNOWN-NAMESPACE cannot find a namespace with the given name or path, or the namespace name contains a NUL character (since %Qore 3.0)
     @throw ENCODING-CONVERSION-ERROR this exception could be thrown if the string argument is not in the @ref default_encoding "default character encoding" and an error occurs during encoding conversion
+    @throw REFLECTION-ACCESS-ERROR the calling code may not look up symbols in the given Program (see @ref reflection_caller_privilege)
  */
 static Namespace Namespace::forName(Program[QoreProgram] pgm, string path) [flags=RET_VALUE_ONLY] {
+    // the calling code's privileges apply (see @ref reflection_caller_privilege)
+    QoreReflectionCaller caller;
+    if (reflection_check_program_access(caller, *pgm, "look up symbols in", xsink)) {
+        return QoreValue();
+    }
     // the name is looked up as a C string, which would be cut at a NUL character and name another namespace
     if (q_check_no_nul(path->c_str(), path->size(), "namespace name", "namespace names", "UNKNOWN-NAMESPACE", xsink)) {
         return QoreValue();
@@ -1030,7 +1144,13 @@ list<Namespace> l = Namespace::findAllRegex(pgm, "^g");
     @param re_opts see @ref regex_constants for possible values
 
     @return a list of namespaces matching the regular expression pattern argument or an empty list if no namespaces match
+    @throw REFLECTION-ACCESS-ERROR the calling code may not look up symbols in the given Program (see @ref reflection_caller_privilege)
 */
 static list<Namespace> Namespace::findAllRegex(Program[QoreProgram] pgm, string pattern, *int re_opts) [flags=RET_VALUE_ONLY] {
+    // the calling code's privileges apply (see @ref reflection_caller_privilege)
+    QoreReflectionCaller caller;
+    if (reflection_check_program_access(caller, *pgm, "look up symbols in", xsink)) {
+        return QoreValue();
+    }
     return find_all_namespaces(*pattern, re_opts, *pgm, xsink);
 }

@@ -96,7 +96,7 @@ public class VoyageRestClientTest inherits QUnit::Test {
             "logger": logger,
             "debug": False,
         });
-        port = http.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        port = http.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
         handler = new FakeVoyageHandler();
         http.setHandler("voyage", "/", MimeTypeJson, handler);
     }

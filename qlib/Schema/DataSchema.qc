@@ -497,7 +497,8 @@ public class DataSchema inherits AbstractVersionedSchema {
                     AbstractColumn target = table_cache{table_name}.describe(){col_name}.copy();
                     target.nullable = False;
                     foreach string sql in (table.describe(){col_name}.getModifySql(table, target)) {
-                        ds.exec(sql);
+                        # DDL has no arguments, so no placeholder is read in it
+                        ds.execRaw(sql);
                     }
                     if (verbose > 0) {
                         info_callback(sprintf("  NOT NULL constraint applied to %s.%s",

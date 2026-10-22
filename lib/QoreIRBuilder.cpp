@@ -216,7 +216,7 @@ static void qore_ir_set_opcode_value_facts(QoreIRFunction* func, QoreIRValue val
             qore_ir_set_native_value_facts(func, value, QoreIRValueRepresentation::NativeBool, boolTypeInfo);
             break;
         case QoreIROpcode::ToString:
-            if (!getenv("QORE_DISABLE_IR_ASSIGNED_STRING_CONVERSION_FACTS")) {
+            if (!q_env_is_set("QORE_DISABLE_IR_ASSIGNED_STRING_CONVERSION_FACTS")) {
                 QoreIRValueFacts facts;
                 facts.type_info = stringTypeInfo;
                 facts.assigned_state = QoreIRAssignedState::Assigned;

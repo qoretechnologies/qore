@@ -57,13 +57,11 @@ extern qore_classid_t CID_ASYNCIOCONTROLLER;
 
 static std::atomic<uint64_t> http2_session_sync_exec_seq{0};
 
+// read once, on the first call, without a static initialization guard (see QoreEnvFlag)
+static constinit QoreEnvFlag http2_debug("QORE_HTTP2_DEBUG");
+
 static bool http2DebugEnabled() {
-    static std::once_flag flag;
-    static int enabled = 0;
-    std::call_once(flag, []() {
-        enabled = getenv("QORE_HTTP2_DEBUG") ? 1 : 0;
-    });
-    return enabled == 1;
+    return http2_debug.get();
 }
 
 // nghttp2 1.60.0 introduced nghttp2_session_mem_send2 with nghttp2_ssize
@@ -112,6 +110,15 @@ public:
 
     DLLLOCAL virtual int getPollableDescriptor() const override {
         return sock->sock;
+    }
+
+    DLLLOCAL virtual int holdPollableDescriptor(int fd, std::shared_ptr<void>& hold) const override {
+        std::shared_ptr<qore_socket_private::DescriptorHold> h = qore_socket_private::DescriptorHold::take(*sock, fd);
+        if (!h) {
+            return -1;
+        }
+        hold = std::move(h);
+        return 0;
     }
 
     DLLLOCAL virtual const std::string& getIoIdentityHash() const override {
@@ -875,6 +882,14 @@ int Http2Session::submitResponseImpl(int32_t stream_id, int status_code,
     // Lock only for nghttp2 API calls and session state access
     std::lock_guard<std::recursive_mutex> lg(m);
 
+    // a stream that nghttp2 no longer knows was closed (reset) before the response: nghttp2 would drop the response
+    // when it sends it, and the response's body and data provider, which onStreamCloseCallback() releases for the
+    // streams it closes, would be kept for the session's lifetime
+    if (!nghttp2_session_find_stream(session, stream_id)) {
+        printd(5, "submitResponse() stream_id=%d closed before the response; not sent\n", stream_id);
+        return 0;
+    }
+
     if (body && body_len > 0) {
         pending_body_data[stream_id] = BodyData(body, body_len);
     }
@@ -932,6 +947,12 @@ int Http2Session::submitResponseStreaming(int32_t stream_id, int status_code,
 
     // Lock only for nghttp2 API calls and session state access
     std::lock_guard<std::recursive_mutex> lg(m);
+
+    // a stream that nghttp2 no longer knows was closed (reset) before the response; see submitResponseImpl()
+    if (!nghttp2_session_find_stream(session, stream_id)) {
+        printd(5, "submitResponseStreaming() stream_id=%d closed before the response; not sent\n", stream_id);
+        return 0;
+    }
 
     int rv = nghttp2_submit_response(session, stream_id, nva.data(), nva.size(),
         &provider_ctx->provider);
@@ -1010,6 +1031,10 @@ int Http2Session::submitRstStream(int32_t stream_id, uint32_t error_code, Except
                 nghttp2_strerror(rv));
         }
         return -1;
+    }
+    Http2StreamInfo* stream = getStream(stream_id);
+    if (stream) {
+        stream->rst_submitted = true;
     }
     return 0;
 }
@@ -1698,6 +1723,19 @@ void Http2Session::cleanupStream(int32_t stream_id) {
             }
             return;
         }
+        // the handler is done with the stream, but the stream outlives it while it is open (a response body sent
+        // from an InputStream or by a dedicated sender, the rest of a request body that a registered Queue receives,
+        // and the report of a reset by the peer need the record), and while a registered Queue has not received the
+        // end of the request body: it is removed when it closes or its body consumer is released, whichever is last
+        // (a stream that the application has reset is removed at once, as before its RST_STREAM is sent, so that
+        // its close is not taken for a reset by the peer)
+        if (!it->second->rst_submitted
+                && (it->second->state != Http2StreamState::Closed || it->second->body_consumer)) {
+            printd(5, "cleanupStream(%d) keeping the stream until it closes (closed: %d body consumer: %d)\n",
+                stream_id, it->second->state == Http2StreamState::Closed, it->second->body_consumer);
+            it->second->handler_done = true;
+            return;
+        }
         printd(5, "cleanupStream(%d) removing dispatched stream\n", stream_id);
         if (http2DebugEnabled()) {
             fprintf(stderr, "HTTP2 DEBUG: cleanupStream stream=%d removing dispatched stream\n",
@@ -1705,6 +1743,41 @@ void Http2Session::cleanupStream(int32_t stream_id) {
             fflush(stderr);
         }
         streams.erase(it);
+    }
+    // the handler is done with the stream, so it sends nothing more on it: the record of a reset by the peer is not
+    // needed any more (handlers that outlive their streams learn of resets from takePendingPeerResetReports())
+    peer_reset_streams.erase(stream_id);
+}
+
+void Http2Session::setStreamBodyConsumer(int32_t stream_id) {
+    std::lock_guard<std::recursive_mutex> lg(m);
+    Http2StreamInfo* stream = getStream(stream_id);
+    if (stream) {
+        stream->body_consumer = true;
+    }
+}
+
+void Http2Session::releaseStreamBodyConsumer(int32_t stream_id) {
+    std::lock_guard<std::recursive_mutex> lg(m);
+    auto it = streams.find(stream_id);
+    if (it == streams.end()) {
+        return;
+    }
+    it->second->body_consumer = false;
+    // the handler is done with the stream, and it is closed: nothing needs the record any more
+    if (it->second->handler_done && it->second->state == Http2StreamState::Closed) {
+        printd(5, "releaseStreamBodyConsumer(%d) removing the stream\n", stream_id);
+        streams.erase(it);
+    }
+}
+
+void Http2Session::releaseStream(int32_t stream_id) {
+    std::lock_guard<std::recursive_mutex> lg(m);
+    peer_reset_streams.erase(stream_id);
+    // a reset of a stream that is still open is not recorded when it arrives (onStreamCloseCallback())
+    Http2StreamInfo* stream = getStream(stream_id);
+    if (stream) {
+        stream->released = true;
     }
 }
 
@@ -2132,6 +2205,11 @@ int Http2Session::onDataChunkRecvCallback(nghttp2_session* session, uint8_t flag
         // can cancel that pending response.  The response's END_STREAM flag will
         // close the server half; the client will stop sending after receiving it.
         stream = h2->getStream(stream_id);
+        // the rest of the request body of a stream whose handler is done is discarded like that of a removed stream,
+        // unless a Queue that the handler registered receives it
+        if (stream && stream->handler_done && !stream->body_consumer) {
+            stream = nullptr;
+        }
         if (!stream) {
             printd(5, "onDataChunkRecvCallback: server stream %d already cleaned up, "
                 "discarding %zu bytes\n", stream_id, len);
@@ -2254,12 +2332,19 @@ int Http2Session::onStreamCloseCallback(nghttp2_session* session, int32_t stream
             // Record the peer-initiated reset in a standalone map so that
             // sendStreamData() can still surface HTTP2-STREAM-RESET after
             // the stream is erased from `streams` below (mirrors
-            // QuicSession::peer_reset_streams_).
-            h2->peer_reset_streams[stream_id] = error_code;
+            // QuicSession::peer_reset_streams_); not for a stream that the
+            // application has released or whose handler is done, which nothing
+            // sends on any more after its record is removed below
+            if (!stream->released && !stream->handler_done) {
+                h2->peer_reset_streams[stream_id] = error_code;
+            }
             // One-shot report so the H2 server poll operation can tear down a
             // persistent dedicated handler thread bound to this connection when
             // the client abandons a stream.  Runs under m (held during mem_recv).
-            h2->pending_peer_reset_reports.push_back(stream_id);
+            // Only a server's poll operation drains the reports.
+            if (h2->is_server) {
+                h2->pending_peer_reset_reports.push_back(stream_id);
+            }
         }
         // Mark as complete even if there was an error (including RST_STREAM without headers)
         stream->body_complete = true;
@@ -2267,12 +2352,16 @@ int Http2Session::onStreamCloseCallback(nghttp2_session* session, int32_t stream
         // markStreamComplete() keeps CONNECT, dispatched, and pre-dispatch
         // headers-only streams in the map. Only clean up pre-dispatch
         // streams that were closed before being dispatched (e.g. RST_STREAM
-        // before dispatch). Do NOT erase CONNECT streams (needed for continued
-        // tunnel I/O) or dispatched streams (handler thread may still be reading).
+        // before dispatch), and dispatched streams whose handler is done
+        // (cleanupStream()) and whose request body no registered Queue still
+        // has to receive the end of. Do NOT erase CONNECT streams (needed for
+        // continued tunnel I/O) or other dispatched streams (handler thread may
+        // still be reading).
         {
             auto it = h2->streams.find(stream_id);
-            if (it != h2->streams.end() && !it->second->dispatched
-                    && !it->second->is_connect) {
+            if (it != h2->streams.end() && !it->second->is_connect
+                    && (!it->second->dispatched
+                        || (it->second->handler_done && !it->second->body_consumer))) {
                 h2->streams.erase(it);
             }
         }
@@ -2678,6 +2767,25 @@ int Http2Session::sendStreamData(int32_t stream_id, const void* data, size_t len
 
     return 0;
 }
+
+#ifdef DEBUG
+QoreHashNode* Http2Session::dbgGetStreamRecordCounts() const {
+    std::lock_guard<std::recursive_mutex> lg(m);
+    ReferenceHolder<QoreHashNode> h(new QoreHashNode(bigIntTypeInfo), nullptr);
+    auto set = [&h](const char* key, size_t count) {
+        h->setKeyValue(key, static_cast<int64>(count), nullptr);
+    };
+    set("streams", streams.size());
+    set("peer_reset_streams", peer_reset_streams.size());
+    set("pending_peer_reset_reports", pending_peer_reset_reports.size());
+    set("response_send_watches", response_send_watches.size());
+    set("response_send_results", response_send_results.size());
+    set("pending_body_data", pending_body_data.size());
+    set("pending_data_providers", pending_data_providers.size());
+    set("stream_input_streams", stream_input_streams_.size());
+    return h.release();
+}
+#endif
 
 bool Http2Session::isClosedStreamIdUnlocked(int32_t stream_id) {
     assert(!getStream(stream_id));

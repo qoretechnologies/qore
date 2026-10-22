@@ -75,7 +75,8 @@ public class AwsTextractRestClientTest inherits QUnit::Test {
             "logger": new Logger("textract-fixture", LoggerLevel::getLevelInfo())});
         handler = new TextractWireHandler();
         server.setDefaultHandler("textract", handler);
-        endpoint = "http://localhost:" + server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        endpoint = "http://localhost:"
+            + server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
         set_return_value(main());
     }
 

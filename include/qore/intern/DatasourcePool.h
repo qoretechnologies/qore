@@ -184,7 +184,41 @@ protected:
     */
     DLLLOCAL SqlMutationContext* getOrCreateMutationContext();
 
+    //! holds the lock of a pool while it is copied; see the copy constructor
+    class CopyLock {
+    public:
+        DLLLOCAL explicit CopyLock(const DatasourcePool& p)
+                : lck(static_cast<QoreThreadLock*>(const_cast<DatasourcePool*>(&p))) {
+            lck->lock();
+        }
+
+        DLLLOCAL ~CopyLock() {
+            unlock();
+        }
+
+        CopyLock(const CopyLock&) = delete;
+        CopyLock& operator=(const CopyLock&) = delete;
+
+        //! releases the lock early
+        DLLLOCAL void unlock() {
+            if (lck) {
+                lck->unlock();
+                lck = nullptr;
+            }
+        }
+
+    private:
+        QoreThreadLock* lck;
+    };
+
+    //! copies the pool with the lock of the pool that is copied held, which the caller acquires with \a lock
+    DLLLOCAL DatasourcePool(const DatasourcePool& old, CopyLock&& lock, ExceptionSink* xsink);
+
     DLLLOCAL Datasource* getAllocatedDS();
+    //! returns the connection allocated to the current thread, or nullptr if it holds none
+    DLLLOCAL Datasource* findAllocatedDS();
+    //! closes all connections of the pool; called when the last reference to the pool is released
+    DLLLOCAL void closeConnections(ExceptionSink* xsink);
     DLLLOCAL Datasource* getDSIntern(bool& new_ds, int64& wait_total, ExceptionSink* xsink);
     DLLLOCAL Datasource* getDS(bool& new_ds, ExceptionSink* xsink);
     DLLLOCAL void freeDS(ExceptionSink* xsink);
@@ -209,6 +243,8 @@ public:
         // if the object is obliterated (due to a constructor error in a child class or a serialization error), make sure
         // it's destroyed properly
         if (ROdereference()) {
+            // the connections are closed here, where an error closing one can be raised
+            closeConnections(xsink);
             config.del(xsink);
             delete this;
         }
@@ -301,6 +337,26 @@ public:
         return getDS(new_transaction, xsink);
     }
 
+    DLLLOCAL virtual Datasource* helperStartActionNoConnectImpl(ExceptionSink* xsink, bool& new_transaction,
+            bool& connected) {
+        // only a connection that the thread already holds is used
+        new_transaction = false;
+        Datasource* ds = findAllocatedDS();
+        if (!ds) {
+            connected = false;
+        }
+        return ds;
+    }
+
+    DLLLOCAL virtual bool helperHeldByCurrentThreadImpl(Datasource* ds) {
+        return findAllocatedDS() == ds;
+    }
+
+    DLLLOCAL virtual void helperEndActionNoConnectImpl(bool new_transaction) {
+        // no connection was allocated for the action
+        assert(!new_transaction);
+    }
+
     DLLLOCAL virtual Datasource* helperEndActionImpl(char cmd, bool new_transaction, ExceptionSink* xsink) {
         //printd(5, "DatasourcePool::helperEndAction() cmd: %d '%s', nt: %d\n", cmd, DAH_TEXT(cmd), new_transaction);
         if (cmd == DAH_RELEASE) {
@@ -324,10 +380,13 @@ public:
     DLLLOCAL QoreHashNode* getUsageInfo() const;
 
     DLLLOCAL void setErrorTimeout(unsigned t_ms) {
+        // a thread waiting for a connection reads the timeout with the pool lock held
+        AutoLocker al(static_cast<QoreThreadLock*>(this));
         tl_timeout_ms = t_ms;
     }
 
     DLLLOCAL unsigned getErrorTimeout() const {
+        AutoLocker al(static_cast<QoreThreadLock*>(const_cast<DatasourcePool*>(this)));
         return tl_timeout_ms;
     }
 

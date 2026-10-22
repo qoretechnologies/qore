@@ -1,0 +1,223 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/OpenApi3.qm
+%requires json
+%exec-class OpenApi3TypeBuildRollbackTest
+
+#! A REST client stand-in whose request body defaults block a type build until the test releases it
+class BlockingRest {
+    public {
+        Queue entered();
+        Queue release();
+    }
+
+    *hash<auto> preprocessRequestBody() {
+        entered.push(True);
+        release.get();
+    }
+}
+
+#! Verifies that a schema type build that fails leaves the document's type caches as they were
+class OpenApi3TypeBuildRollbackTest inherits QUnit::Test {
+    constructor() : Test("OpenAPI type build rollback", "1.0", \ARGV) {
+        addTestCase("a build that fails part of the way through fails again and leaves no partial types",
+            \failedBuildTest());
+        addTestCase("a failing build and a good build of the same document, read again", \mixedBuildTest());
+        addTestCase("concurrent first builds of one document are serialized", \concurrentBuildTest());
+        addTestCase("a nested build joins the build in progress, and a failure undoes its writes",
+            \transactionTest());
+        set_return_value(main());
+    }
+
+    #! Returns a document whose \c BadNode type cannot be built, because a boolean enumerates a non-boolean
+    /** The failing property comes after recursive references, so the build fails while the placeholders cutting
+        the recursion are still incomplete.
+    */
+    private OpenApi3Schema document() {
+        return OpenApi3Loader::fromString(make_json({
+            "openapi": "3.0.3",
+            "info": {"title": "Rollback", "version": "1"},
+            "paths": {},
+            "components": {"schemas": {
+                "Node": {"type": "object", "properties": {
+                    "id": {"type": "string"},
+                    "children": {"type": "array", "items": {"\$ref": "#/components/schemas/Node"}},
+                    "parent": {"\$ref": "#/components/schemas/Node"},
+                }},
+                "Wrapper": {"type": "object", "properties": {
+                    "node": {"\$ref": "#/components/schemas/Node"},
+                    "label": {"type": "string"},
+                }},
+                "BadNode": {"type": "object", "properties": {
+                    "node": {"\$ref": "#/components/schemas/Node"},
+                    "self": {"\$ref": "#/components/schemas/BadNode"},
+                    "flag": {"type": "boolean", "enum": ("maybe",)},
+                    "after": {"type": "string"},
+                }},
+            }},
+        }), True);
+    }
+
+    #! Returns the structures of the types of component schemas built in that order in a document of their own
+    /** Types that share schemas depend on the order they are built in (a shared "or nothing" type is derived
+        from a mandatory one built first, and the other way around), so a type is compared with one built in the
+        same order.
+
+        @param names the component schemas, each prefixed with \c "field:" to build it as a body field
+    */
+    private list<hash<auto>> getFreshInfo(list<string> names) {
+        OpenApi3Schema doc = document();
+        list<hash<auto>> rv = ();
+        foreach string name in (names) {
+            if (name =~ /^field:/) {
+                rv += structure(doc.getFieldFromSchema("body", "the body",
+                    doc.components.schemas{name.substr(6)}).getType().getInfo());
+            } else {
+                rv += structure(cast<SchemaObject>(doc.components.schemas{name}).getDataType().getInfo());
+            }
+        }
+        return rv;
+    }
+
+    #! Removes the per-object identities from a type description, leaving its structure
+    private static auto structure(auto v) {
+        switch (v.typeCode()) {
+            case NT_HASH: {
+                hash<auto> rv = {};
+                foreach hash<auto> i in (v.pairIterator()) {
+                    if (i.key != "unique_key") {
+                        rv{i.key} = structure(i.value);
+                    }
+                }
+                return rv;
+            }
+            case NT_LIST:
+                return map structure($1), v;
+        }
+        return v;
+    }
+
+    #! Returns the exception thrown by building the body field from a component schema, if any
+    private *hash<ExceptionInfo> getBuildException(OpenApi3Schema doc, string name) {
+        try {
+            doc.getFieldFromSchema("body", "the body", doc.components.schemas{name});
+        } catch (hash<ExceptionInfo> ex) {
+            return ex;
+        }
+    }
+
+    failedBuildTest() {
+        OpenApi3Schema doc = document();
+        *hash<ExceptionInfo> ex = getBuildException(doc, "BadNode");
+        assertEq("RUNTIME-TYPE-ERROR", ex.err, "the first build fails");
+        ex = getBuildException(doc, "BadNode");
+        assertEq("RUNTIME-TYPE-ERROR", ex.err, "a second build fails the same way instead of returning a partial type");
+        ex = NOTHING;
+        try {
+            cast<SchemaObject>(doc.components.schemas.BadNode).getDataType();
+        } catch (hash<ExceptionInfo> ex0) {
+            ex = ex0;
+        }
+        assertEq("RUNTIME-TYPE-ERROR", ex.err, "the type of the schema fails too");
+
+        # the types the failed builds had started are built from scratch, as in a document of their own
+        AbstractDataProviderType node = cast<SchemaObject>(doc.components.schemas.Node).getDataType();
+        AbstractDataProviderType wrapper = cast<SchemaObject>(doc.components.schemas.Wrapper).getDataType();
+        assertEq(getFreshInfo(("Node", "Wrapper")), (structure(node.getInfo()), structure(wrapper.getInfo())),
+            "the types the failed build had started are complete");
+        assertEq(("children", "id", "parent"), sort(keys node.getFields()));
+        assertTrue(node.getFields().parent.getType().getFields().id instanceof AbstractDataField,
+            "the recursive reference has the real type");
+    }
+
+    mixedBuildTest() {
+        OpenApi3Schema doc = document();
+        AbstractDataProviderType good = cast<SchemaObject>(doc.components.schemas.Node).getDataType();
+        assertEq("RUNTIME-TYPE-ERROR", getBuildException(doc, "BadNode").err, "the failing build fails");
+        AbstractDataProviderType good_again = cast<SchemaObject>(doc.components.schemas.Node).getDataType();
+        assertTrue(good === good_again, "a type built before the failure is kept");
+        assertEq("RUNTIME-TYPE-ERROR", getBuildException(doc, "BadNode").err, "the failing build fails again");
+        assertTrue(good === cast<SchemaObject>(doc.components.schemas.Node).getDataType());
+        AbstractDataField wrapper = doc.getFieldFromSchema("body", "the body", doc.components.schemas.Wrapper);
+        assertEq(getFreshInfo(("Node", "field:Wrapper")), (structure(good.getInfo()),
+            structure(wrapper.getType().getInfo())), "the good type and a later build are complete");
+    }
+
+    concurrentBuildTest() {
+        OpenApi3Schema doc = document();
+        BlockingRest rest();
+        Queue results();
+        background sub () {
+            try {
+                results.push(doc.getFieldFromSchema("body", "the body", doc.components.schemas.Node, True, rest));
+            } catch (hash<ExceptionInfo> ex) {
+                results.push(ex);
+            }
+        }();
+        # the first build is in progress, and this thread is not part of it
+        rest.entered.get();
+        bool active = doc.isTypeBuildActive();
+        # a build of another document is not blocked by it
+        OpenApi3Schema other = document();
+        hash<auto> other_node = structure(cast<SchemaObject>(other.components.schemas.Node).getDataType().getInfo());
+        Queue second();
+        background sub () {
+            try {
+                second.push(cast<SchemaObject>(doc.components.schemas.Wrapper).getDataType());
+            } catch (hash<ExceptionInfo> ex) {
+                second.push(ex);
+            }
+        }();
+        rest.release.push(True);
+        auto first_result = results.get();
+        auto second_result = second.get();
+
+        assertFalse(active, "a thread that is not building is not part of the build in progress");
+        assertEq(getFreshInfo(("Node",)), (other_node,), "another document builds while one is building");
+        assertTrue(first_result instanceof AbstractDataField, "the first build succeeds");
+        assertTrue(second_result instanceof AbstractDataProviderType, "the second build succeeds");
+        assertEq(getFreshInfo(("field:Node", "Wrapper")), (structure(first_result.getType().getInfo()),
+            structure(second_result.getInfo())), "both builds are complete");
+    }
+
+    transactionTest() {
+        OpenApi3Schema doc = document();
+        list<string> log = ();
+        try {
+            doc.runTypeBuild(sub () {
+                assertTrue(doc.isTypeBuildActive());
+                doc.recordTypeBuildWrite(sub () { push log, "undo outer"; });
+                doc.runTypeBuild(sub () {
+                    doc.recordTypeBuildWrite(sub () { push log, "undo nested"; });
+                });
+                throw "TEST-ERROR", "the build fails";
+            });
+        } catch (hash<ExceptionInfo> ex) {
+            push log, ex.err;
+        }
+        assertEq(("undo nested", "undo outer", "TEST-ERROR"), log, "every write of the build is undone, latest first");
+        assertFalse(doc.isTypeBuildActive(), "the build lock is released");
+
+        log = ();
+        assertEq(1, doc.runTypeBuild(int sub () {
+            doc.recordTypeBuildWrite(sub () { push log, "undo"; });
+            return 1;
+        }));
+        assertEq((), log, "a build that succeeds keeps its writes");
+        doc.recordTypeBuildWrite(sub () { push log, "outside"; });
+        assertEq((), log, "a write outside a build is not recorded");
+        try {
+            doc.runTypeBuild(sub () {
+                throw "TEST-ERROR", "the build fails";
+            });
+        } catch (hash<ExceptionInfo> ex) {
+        }
+        assertEq((), log, "the writes of a build that succeeded are not undone by a later failure");
+    }
+}

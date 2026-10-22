@@ -8,6 +8,37 @@
     result without an unused-result warning or a dummy local variable. It preserves evaluation, exceptions,
     and temporary-value cleanup in all execution modes and remains active when debugging is disabled.
 
+    <b>Security</b>: a thread started on behalf of sandboxed code runs under the same @ref sandboxing "sandbox"
+    as the code that started it, so it can never do more than that code could: the @ref background "background"
+    operator, @ref Qore::call_async() "call_async()", @ref Qore::parallel_map() "parallel_map()",
+    @ref Qore::parallel_foreach() "parallel_foreach()", an @ref Qore::AsyncIoController "AsyncIoController" timer
+    callback, and threads that modules start on the caller's behalf all carry the caller's filesystem and network
+    policy, its program interrupts, its cancellation scope and its thread limit.  A thread that serves many callers
+    (a @ref Qore::Thread::ThreadPool "ThreadPool" worker, an async I/O thread) is instead governed per task by the
+    sandbox of the code that submitted that task.  @ref Qore::SandboxManager::setMaxThreads() "SandboxManager::setMaxThreads()"
+    limits the number of such threads running at once and raises \c THREAD-CREATION-FAILURE at the limit.
+
+    <b>Security</b>: @ref reflection "reflection" follows the privileges of the calling code.  Calling a function or
+    method, constructing an object, or reading or writing a member, constant or global variable through a reflection
+    object is checked against the sandboxing restrictions of the calling code and of the program the symbol belongs
+    to, by the same rule as code written directly; a @ref Qore::Reflection::AbstractVariant "variant" obtained from a
+    reflection object no longer skips that check.  Navigating namespaces, classes, functions, constants or values of
+    another program through a reflection object is allowed only from that program, from a program that created it, or
+    from code at least as privileged as it, so sandboxed code can no longer reach objects, constants, classes or
+    global variables outside its program by walking the namespace tree of a class it inherited.
+
+    <b>Security</b>: an open connection that a connection pool keeps for reuse is handed only to code whose
+    @ref sandboxing "network sandbox" allows where the connection leads, checked as a new connection would be, with
+    the sandbox as it is configured at that moment.  This applies to the connections of
+    @ref HttpClientIo::HttpClientConnectionManager "HttpClientConnectionManager" (and the clients built on it, such as
+    @ref RestClientIo::RestClientIo "RestClientIo" and @ref WebSocketClient::WebSocketClient "WebSocketClient"),
+    including the connection of a persistent session, and to the connections of a
+    @ref Qore::HTTPClient "HTTPClient" object (and of the clients built on it, such as
+    @ref RestClient::RestClient "RestClient"), over HTTP/1.1, HTTP/2, HTTP/3 and UNIX sockets, so sandboxed code
+    cannot send requests over a connection that other code opened to a destination its own sandbox denies.  A
+    connection made through a proxy leads to the proxy and to the destination the proxy connects to; a sandbox must
+    allow both, for a pooled connection and for a new one.
+
     <b>Security</b>: the steps of a poll operation that the async I/O controller runs on its callback workers,
     such as \c continuePoll() and \c onComplete() of an operation implemented in %Qore, are governed by the
     @ref sandboxing "sandbox" of the code that submitted the operation (see
@@ -80,6 +111,33 @@
     families to avoid, and reports the family of the connection with
     @ref Qore::Http3ClientPollOperationBase::getAddressFamily() "getAddressFamily()".
 
+    The new @ref Qore::AbstractHttpPollConnection::waitForStateChange() "waitForStateChange()" of
+    @ref httpclientiointro "HttpClientIo" connections waits until a connection changes state, so code that holds a
+    connection for a long time (a leased connection, a WebSocket, Server-Sent Events) sees it drain when the server
+    sends HTTP/2 or HTTP/3 \c GOAWAY.
+
+    A WebSocket close started by a @ref websocketclientintro "WebSocketClient" connection now waits for the server's
+    CLOSE frame, as <a href="https://datatracker.ietf.org/doc/html/rfc6455">RFC 6455</a> requires, and the close
+    code and reason reported after it are the server's; before, the client closed the connection as soon as its own
+    CLOSE frame was sent.  A server that does not answer within the connection's I/O timeout ends the connection with
+    code 1006 and the reason \c "close handshake timed out", on HTTP/1.1, HTTP/2 and HTTP/3.
+
+    A close started by a @ref websockethandlerintro "WebSocketHandler" server
+    (@ref WebSocketHandler::WebSocketConnection::stop() "WebSocketConnection::stop()", a server or listener stop, an
+    idle timeout, or a message that is too big) now waits for the client's CLOSE frame after it sends its own, at most
+    the handler's new close timeout (default: 5 seconds; the \c close_timeout option), before the server closes the
+    connection; before, the server closed the connection as soon as its CLOSE frame was sent.  A server or listener
+    stop closes all connections this way at the same time, so it waits at most the close timeout in total.  The close
+    code and reason reported by the server are those of the client's CLOSE frame.
+
+    A WebSocket CLOSE frame without a status code, which is reported with the close code 1005 (no status received)
+    as RFC 6455 section 7.1.5 defines, is now answered with a CLOSE frame without a status code, on the client and on
+    the server; it was answered with the status code 1005, which RFC 6455 section 7.4.1 does not allow to be sent.
+
+    A WebSocket message sent on a connection whose close handshake has started now raises
+    \c WEBSOCKET-CLOSING-ERROR, on the client and on the server: no data frame may follow a CLOSE frame (RFC 6455
+    section 5.5.1).  A server discarded such a message without notice; a client sent it after its CLOSE frame.
+
     LLM streaming requests accept a @ref QoreLlmUtils::LlmCancellation "LlmCancellation" token in
     @ref QoreLlmUtils::LlmRequestOptions::cancellation "LlmRequestOptions::cancellation". Cancelling the token
     closes an in-flight OpenAI-compatible, Anthropic, Gemini/Vertex AI, or Bedrock stream without polling and
@@ -144,6 +202,12 @@
     cancellation is requested.  Modules no longer need to poll in <tt>QORE_IO_POLL_INTERVAL_MS</tt> slices, which is
     deprecated; <tt>_QORE_HAS_CANCELLABLE_POLL</tt> is defined when the API is available.
 
+    Classes in binary modules can now implement the C++ pollable I/O interface
+    (<tt>AbstractPollableIoObjectBase</tt>, whose constructor was not exported), so their objects can be polled with
+    @ref Qore::Socket::poll() "Socket::poll()" and used with the @ref Qore::AsyncIoController "AsyncIoController",
+    which keeps their descriptor open while it waits on it: a module object closed by another thread meanwhile can
+    no longer have its descriptor number reused by another file or socket while the controller still waits on it.
+
     A thread cancelled with @ref Qore::cancel_thread() "cancel_thread()", or whose @ref Qore::Program "Program" was
     interrupted, just as it started to wait on a condition — for example in
     @ref Qore::Thread::Semaphore::acquire() "Semaphore::acquire()" — could miss the request and wait until the
@@ -165,6 +229,11 @@
     transaction lock, and @ref Qore::channel_select() "channel_select()" now end as soon as the thread is
     cancelled or its @ref Qore::Program "Program" is interrupted; \c channel_select() with a timeout previously
     noticed the request only when the timeout expired.
+
+    Reads with a timeout with @ref Qore::InputStream::readWithTimeout() "InputStream::readWithTimeout()" and
+    @ref Qore::FileInputStream::readWithTimeout() "FileInputStream::readWithTimeout()", and writes with a timeout
+    with the C++ API's <tt>OutputStream::writeWithTimeout()</tt>, end as soon as the thread is cancelled or its
+    @ref Qore::Program "Program" is interrupted.
 
     @ref Qore::Thread::Mutex::lock() "Mutex::lock()", @ref Qore::Thread::RWLock "RWLock" read and write locks,
     @ref Qore::Thread::Gate::enter() "Gate::enter()", @ref Qore::Thread::Condition::wait() "Condition::wait()" and
@@ -249,6 +318,12 @@
     Explicit <tt>exit()</tt> joins an idle signal thread before static destruction, preventing a signal
     wakeup from accessing the destroyed manager mutex. If a signal callback is still running, exit remains
     immediate so a callback waiting for the exiting thread cannot deadlock shutdown.
+
+    A signal callback whose handler is replaced while it runs, by another thread or by the callback itself, keeps
+    running safely: the callback and the values its closure captured are released when it returns, where they were
+    released at once and the process could crash.  A callback that removes its own handler twice no longer crashes
+    the process when it returns, and an exception raised by a destructor when a removed callback is released no
+    longer prevents the callback of the next signal from running.
 
     External module documentation locates shared HTML assets beside the installed
     SDK template, independently of the module's installation prefix. Custom SDK
@@ -384,6 +459,12 @@
     with the SDK; image lookup includes only existing module documentation directories.
     The final pass of a two-phase documentation build retains language and caller-provided
     reference indexes alongside user-module indexes, including paths containing spaces.
+    An external module configured against a %Qore build tree, without installing %Qore, documents
+    itself with the build tree's documentation template and language reference index.
+
+    The binary modules built with %Qore no longer export their internal symbols, only their entry
+    points, C++ APIs and the other symbols they declare for use by other code, as external modules
+    do; another module's internal symbol could otherwise be bound in place of one of their own.
 
     @par Release Summary
     @parblock
@@ -641,6 +722,13 @@
 
     @subsection qore_3_0_0_compatibility Changes That Can Affect Backwards-Compatibility
 
+    @par The Ends of File::getPipe() Are Closed
+    The ends of a pipe made by @ref Qore::File::getPipe() "File::getPipe()" now own their descriptors:
+    @ref Qore::ReadOnlyFile::close() "close()" closes the descriptor and returns 0 (it returned -1 and closed
+    nothing), and the descriptor is closed when the object is destroyed (it was never closed).  Code that destroys or
+    closes one end while it still uses the descriptor elsewhere, for example through a descriptor number given to
+    another API, must keep the object open as long as the descriptor is used.
+
     @par Thread-Local Data Is Freed With the Program That Owns It
     @parblock
     The thread-local data that @ref Qore::save_thread_data() "save_thread_data()" saves is shared by a family of
@@ -745,9 +833,17 @@
     which gives the key and the byte offset of its first NUL character.  A constant key of a hash literal is reported
     when the code is parsed; a key computed at run time is reported when the hash or object is read or written, in
     every execution mode.  The same error is raised by \c hash() from a list, \c has_key(), the thread-local data
-    functions, the slice of a hash or an object, deserialization, @ref Qore::TreeMap "TreeMap" paths, and the JSON,
-    CBOR, TOON, YAML and i18n catalog parsers; a JSON Pointer with a NUL character raises \c JSON-POINTER-ERROR.  C++
-    code that makes a key from a string with a length checks it with the new QoreHashNode::checkKey().
+    functions, the slice of a hash or an object, @ref Qore::TreeMap "TreeMap" paths, and a name that an object uses
+    as a hash key, such as a @ref Qore::ColumnarResult "ColumnarResult" column name; a JSON Pointer with a NUL
+    character raises \c JSON-POINTER-ERROR.  Data with such a key, which can come from a remote peer, cannot be
+    parsed to a hash, so the parsers raise their own parse error, which says which key of the data cannot be a hash
+    key: \c DESERIALIZATION-ERROR for a hash key in serialized data, \c JSON-PARSE-ERROR for an object key with
+    \c \\u0000, \c CBOR-PARSE-ERROR,
+    \c TOON-PARSE-ERROR, \c YAML-PARSER-ERROR, \c PROTOBUF-DECODE-ERROR for a protobuf map key,
+    \c I18N-CATALOG-JSON-ERROR, \c DATAFRAME-IO-ERROR for a Parquet or Arrow struct field name or map key, and
+    \c ABSTRACTCSVITERATOR-ERROR for a CSV header name.  A TOON key written without quotes, which was cut at the NUL
+    character, is refused too.  C++ code that makes a key from a string with a length checks it with the new
+    QoreHashNode::checkKey(), which raises \c HASH-KEY-ERROR or, for a parser, the parse error that it is given.
     @endparblock
 
     @par A Path Cannot Contain a NUL Character
@@ -871,6 +967,29 @@
     - character encoding names: a name with a NUL character is the name of an encoding that %Qore does not know (the
       whole name, with the NUL character escaped as \c \\x00), so converting to or from it raises
       \c ENCODING-CONVERSION-ERROR instead of using the encoding named by the part before the NUL character
+    - HTTP/1.x headers and chunked body trailers received: they were parsed as C strings, so a NUL character after
+      the request or status line cut the header block, and the header lines from it on, such as \c Content-Length or
+      \c Connection, were lost without an error; a header with a NUL character raises \c SOCKET-HTTP-ERROR, and a
+      trailer with one \c READ-HTTP-CHUNK-ERROR, with synchronous and asynchronous I/O.  The
+      @ref httpserverintro "HttpServer" answers a request with a NUL character in a header line with status 400 (Bad
+      Request) and closes the connection, as it already did for one in the request line; before, the request was
+      handled without the header lines from the NUL character on
+    - HTTP/1.x header and trailer field lines received are parsed with the stricter rules that RFC 9112 requires;
+      before, the header lines after an invalid line could be lost without an error, so that, for example,
+      \c Content-Length was ignored and the body was read as another message:
+      - a bare CR (one not followed by LF), whitespace in a field name (as in <tt>"Host : x"</tt>), a line without a
+        colon or with an empty field name, and a whitespace line before the first field line raise
+        \c SOCKET-HTTP-ERROR in a header and \c READ-HTTP-CHUNK-ERROR in a trailer; before, a bare CR and the
+        whitespace were kept, and a line without a colon ended the header
+      - an obsolete line folding (a field line that starts with whitespace) raises \c SOCKET-HTTP-ERROR in a request
+        and is replaced with spaces in a response or trailer; before, it ended the header
+      - a line that ends with LF instead of CRLF ends there; before, it was joined with the next line when a later
+        line ended with CRLF
+      - the @ref httpserverintro "HttpServer" answers a request with such a field line with status 400 (Bad Request)
+        and closes the connection, as RFC 9112 requires
+    - server-sent events received: an event ID with a NUL character is ignored, as the event stream format requires,
+      so that it is never sent back in the \c Last-Event-ID header, and a retry time is used only if all of it is
+      digits, so <tt>"10\\x00z"</tt> is no longer read as 10
     - keywords compared with a string: a string with a NUL character is no longer equal to the keyword before the
       NUL character (for example, the goal <tt>"connect\\x00x"</tt> given to
       @ref Qore::SocketPollOperation "SocketPollOperation" raises \c INVALID-GOAL, and a server-sent event field
@@ -1107,6 +1226,19 @@
     @ref SqlUtil::AbstractTable::dropEmptyPartition() "dropEmptyPartition()".
     @endparblock
 
+    @par A Datasource Transaction Lock Timeout of 0 Means No Timeout Again
+    @parblock
+    A @ref Qore::SQL::Datasource "Datasource" transaction lock timeout of 0, which
+    @ref Qore::SQL::Datasource::setTransactionLockTimeout() "Datasource::setTransactionLockTimeout()" also sets when
+    called without an argument, again means no timeout, as documented and as in %Qore up to 2.1.0: a thread that
+    finds the lock held waits until it is released, and the wait can be cancelled.  In %Qore 2.1.1 to 2.2.1, such a
+    thread failed at once with \c TRANSACTION-LOCK-TIMEOUT.  A negative timeout also means no timeout, and a positive
+    timeout and the default of 120 seconds are unchanged.
+
+    <b>Workarounds:</b>
+    - Set a small positive timeout where a thread should give up waiting for the lock
+    @endparblock
+
     @par PostgreSQL Lists Only the Connection's Schemas
     @parblock
     On PostgreSQL, @ref SqlUtil::AbstractDatabase::listTables() "AbstractDatabase::listTables()" and
@@ -1320,6 +1452,15 @@ val = "string";      # OK
     build input of the module's @ref exec_mode_aot "AOT" \c .qmod.  Previously a newly added file was only picked up by
     the next unrelated reconfigure, leaving it out of the installation and leaving the \c .qmod out
     of date with respect to a source that it compiles.
+
+    @par Stale In-Tree AOT Modules
+    A build tree links the @ref exec_mode_aot "AOT" \c .qmod files that it builds into the source \c qlib
+    directory, where the in-tree tests find them before the module sources.  A linked \c .qmod one of whose sources,
+    as listed in the dependency file that @ref qcc_tool "qcc" wrote next to it, has changed since it was compiled is
+    not loaded: the source module is loaded instead, with a warning that the \c .qmod must be rebuilt.  A source has
+    changed if its content differs from the content that \c qcc recorded with the dependency file (in
+    <tt>\<module\>.qmod.d.fingerprints</tt>); a source that only has a new modification time, as after a checkout or a
+    copy of a build tree, has not.  Installed modules are not links, and are always loaded.
 
     @par Autotools Build System Removed
     @parblock
@@ -1625,6 +1766,29 @@ val = "string";      # OK
     overline of JIS X 0201, not the backslash and tilde, and \c iconv implementations and variants map them
     differently, so their handling depended on the platform.  Strings in these encodings are now converted wherever
     text is parsed or used as a hash key, as for UTF-16, and they cannot be used as the default encoding.
+    @endparblock
+
+    @par On macOS, a Listener on All Interfaces Is Refused a Port That Another Program Uses for IPv4
+    @parblock
+    On macOS, a listener on all interfaces no longer starts on a port that another program already uses for IPv4 on
+    \c 0.0.0.0 or \c 127.0.0.1, whose IPv4 clients reached the other program instead of the server; the bind fails
+    with \c SOCKET-BIND-ERROR, as it does on Linux.  A port chosen by the system (port \c 0) is one that no IPv4
+    socket uses, and a server restarted on its port while connections of its earlier run are in \c TIME_WAIT still
+    starts.  This applies to binds of a @ref Qore::Socket "Socket" and to the listeners of
+    @ref httpserverintro "HttpServer", including the UDP socket of an HTTP/3 listener; see
+    @ref Qore::Socket::bindINET() "Socket::bindINET()".
+    @endparblock
+
+    @par qpp Fails the Build for Every Error It Reports
+    @parblock
+    \c qpp, the preprocessor that generates the C++ code and the documentation of binary modules from
+    <tt>.qpp</tt> files, now exits with an error status when it has reported an error, after it has reported all
+    errors in its input, so the build fails.  It reported some errors and still exited successfully, and the module
+    was built with incomplete documentation or code: for example, a function with functional domains
+    (<tt>dom=...</tt>) or code flags (<tt>flags=...</tt>) but no long comment (the block comment after its
+    <tt>//!</tt> line) was built without the restriction or code flag note in its documentation.  The output files of
+    a failed run are removed, so the next build runs \c qpp again.  A problem that leaves the output complete is
+    reported as a warning and does not fail the build.
     @endparblock
 
     @subsection qore_3_0_0_new_features New Features in Qore
@@ -2064,7 +2228,9 @@ dsp.setMutationObserver(*hash<SqlMutationDecisionInfo> sub (hash<SqlMutationEven
     - binary modules can have the garbage collector follow the values that the private data of their objects holds
       in C++ containers: private data derived from the new C++ class \c AbstractScannablePrivateData reports them to
       the collector with \c scanValues() while its object has registered it with
-      \c QoreObject::addPrivateDataScan(), so that a reference cycle through such a value is collected;
+      \c QoreObject::addPrivateDataScan(), so that a reference cycle through such a value is collected (a
+      \c scanValues() that finds its container's lock held calls \c QorePrivateDataScanner::contended(), so that the
+      object is scanned again once the lock is released);
       \c _QORE_HAS_SCANNABLE_PRIVATE_DATA is defined when the API is available
     - garbage collection no longer walks a graph that an earlier scan has already walked and that has not gained an
       edge since: storing a reference to a large, unchanged object graph in a new object now costs the same whatever
@@ -2582,6 +2748,37 @@ DataFrame::DataFrame df = DataFrame::DataFrame::fromColumnarResult(selected);
     Arrow, Flight, JDBC, and other binary modules through libqore's Arrow C Data Interface bridge (detected
     with \c QORE_HAVE_ARROW_C_DATA_INTEROP and \c QORE_HAVE_ARROW_C_DATA_TEMPORAL_BUFFERS) without depending
     on Arrow C++ in libqore itself.
+    @endparblock
+
+    @par DBI Drivers Can Report an Error Closing a Connection
+    @parblock
+    A DBI driver can now register a close method with an exception sink (\c QDBI_METHOD_CLOSE_SINK; see
+    \c q_dbi_close_sink_t in the C++ API) to report a connection that it could not close cleanly; the earlier close
+    method had no exception sink, and its return value was ignored.  The error is raised where the close was
+    requested: by @ref Qore::SQL::Datasource::close() "Datasource::close()",
+    @ref Qore::SQL::Datasource::reset() "Datasource::reset()", and the destruction of a
+    @ref Qore::SQL::Datasource "Datasource" or @ref Qore::SQL::DatasourcePool "DatasourcePool" object.  A close that
+    only cleans up after an error that is already being reported - a lost connection, or a connection option that
+    failed as the connection was opened - reports it as a DBI warning event on the datasource's event queue (see
+    @ref Qore::SQL::Datasource::setEventQueue() "Datasource::setEventQueue()") instead; it is discarded if no event
+    queue is set.  The datasource is closed in either case.
+
+    Drivers keep registering their earlier close method for earlier versions of %Qore, which call only that method.
+    In the C++ API, the new \c Datasource::close(ExceptionSink*) raises the error; \c Datasource::close() reports it
+    as a warning event.
+    @endparblock
+
+    @par C++ API: Module Threads and Callbacks Run Under the Caller's Sandbox
+    @parblock
+    A binary module can run work for sandboxed code on its own threads without leaving the caller's
+    @ref sandboxing "sandbox".  A thread that a module starts for one caller with \c q_start_thread() inherits that
+    caller's sandbox, so such a module needs no change.  A thread that runs work for many callers, such as a worker
+    pool or a callback thread that a native library owns, is started with the new \c q_start_thread() flag
+    \c QTF_NO_SANDBOX_INHERIT, captures each caller's sandbox with the new \c QoreSandboxCapture class when the work
+    is submitted or the callback is registered, and runs the work under it with the new \c QoreSandboxCaptureHelper
+    class; both classes are declared in \c qore/QoreSandboxManager.h.  See
+    @ref interruptible_io_sandbox_threads "Carrying the Caller's Sandbox onto Another Thread" in
+    @ref interruptible_io_module_guide "Interruptible I/O in Binary Modules".
     @endparblock
 
     @par Experimental Plugin-Type ABI
@@ -4814,6 +5011,59 @@ while (*binary chunk = input.read(65536)) {
     - Fixed a hang when opening an HTTP/2 or HTTP/3 WebSocket whose first buffered frames require a pong or close
       response; the hang could also prevent unrelated programs from finishing or shutting down
 
+    - @ref Qore::Socket::shutdown() "Socket::shutdown()" on a secure connection now sends the TLS \c close_notify
+      alert before it shuts down the connection, as @ref Qore::Socket::close() "Socket::close()" does (RFC 8446
+      section 6.1): a peer saw the end of the connection as a truncation, and some peers treat that as an attack or
+      end the TLS session without keeping it for resumption
+    - Fixed the \c comment key of a server-sent event received, parsed by
+      @ref Qore::Socket::parseServerSentEvent() "Socket::parseServerSentEvent()" and the SSE clients: it also held the
+      values of the fields that are not kept as strings, such as a retry time, and of unknown fields; only a line that
+      starts with a colon is a comment
+    - server-sent events received are interpreted as the WHATWG HTML event stream format requires: the event type,
+      the ID and the retry time are set by their last line (before, the event types and the IDs of an event were
+      joined with LF, and the first retry time was used), an empty ID is kept as an empty string, as it resets the
+      last event ID (before, it was ignored), and empty data lines are kept (before, a data line without a value was
+      dropped unless it was the first one)
+    - server-sent event streams received by @ref Qore::Socket::readServerSentEvent() "Socket::readServerSentEvent()"
+      and @ref Qore::HTTPClient::readServerSentEvent() "HTTPClient::readServerSentEvent()" are split into events as
+      the WHATWG HTML event stream format requires: one leading byte order mark (U+FEFF) of a stream is ignored
+      (before, it was read as part of the first field name, so the first field was lost), and a block without a field
+      that is kept, such as one with only unknown fields, is not returned as an event (before, it was returned as an
+      event)
+    - Fixed heap corruption and crashes when several threads use the process environment at the same time, for
+      example @ref Qore::setenv() "setenv()" called from two threads on Alpine Linux (musl), or
+      @ref Qore::getenv() "getenv()" called while another thread changes the environment, on any platform: every
+      access to the environment that %Qore makes, including its own settings read from the environment and the copy
+      of the environment that a new process gets from @ref Qore::system() "system()", the
+      @ref backquote_operator "backquote operator", @ref Qore::exec() "exec()" and @ref Qore::fork() "fork()", is
+      now serialized with one process-wide lock (reads run in parallel), where this was done only on HP-UX.  Binary
+      modules can take the same lock with the new C++ API classes \c QoreEnvironmentReadLock and
+      \c QoreEnvironmentValue and with \c SystemEnvironment::isSet(); code that uses the environment without %Qore's
+      API, such as a third-party library, is not serialized with it
+    - Fixed child processes created with @ref Qore::fork() "fork()" that hung forever when other threads were running
+      in the parent: a child created while another thread started or exited hung in @ref Qore::fork() "fork()"
+      itself, and children could also hang when they started a thread, changed a signal handler, or read a time
+      zone or a character encoding.  @ref Qore::fork() "fork()" now briefly waits for threads that hold the
+      library's process-wide locks, and the child process gets them free and repairs the state of the threads that
+      do not exist in it; this also applies to a \c fork() made by native code.  Objects that another thread was
+      using at the moment of the fork, such as a locked mutex, still cannot be used in the child.  Native code must
+      not hold the environment lock (\c QoreEnvironmentReadLock, \c AtomicEnvironmentSetter) while it calls
+      \c fork(); the child gets a consistent copy of the environment without it.  Binary modules can register fork
+      handlers for their own process-wide locks with the new C++ API function \c qore_register_fork_handler(); the
+      \c i18n, \c linenoise, \c logger_bin, \c ml and \c sshutil modules do, so that a child process can use them
+    - Fixed a deadlock when the thread initialization code of a Program (see
+      @ref Qore::set_thread_init() "set_thread_init()") started a thread or read the call stacks of all threads
+    - Fixed waits on named pipes (FIFOs) on macOS that did not see the end of the pipe once its writers had closed:
+      @ref Qore::ReadOnlyFile::isDataAvailable() "ReadOnlyFile::isDataAvailable()", reads with a timeout with
+      @ref Qore::ReadOnlyFile "File" and @ref Qore::FileInputStream "FileInputStream", and
+      @ref Qore::Socket::poll() "Socket::poll()" waited for their whole timeout, and a wait with
+      @ref Qore::Socket::poll() "Socket::poll()" to write to a full named pipe whose reader had closed did not end
+      either.  macOS does not report these conditions to the readiness wait that %Qore used; waits on named pipes
+      now use one that reports them, also for descriptors numbered 1024 and above, and still time out
+    - Fixed the ends of a pipe made by @ref Qore::File::getPipe() "File::getPipe()", which were never closed: each
+      call leaked two descriptors for the life of the process, @ref Qore::ReadOnlyFile::close() "close()" on an end
+      did nothing, and the reading end never got the end of the input; the ends now close their descriptors with
+      \c close() and when they are destroyed
     - Fixed the warnings of the files of a separated user module other than its \c .qm file: each was parsed with the
       warnings of the code loading the module (with \c qcc, the default warnings), not those the \c .qm file sets, so
       \c %%modern in the \c .qm file did not enable all warnings in the other files.  The module loader accepted an
@@ -4855,6 +5105,13 @@ while (*binary chunk = input.read(65536)) {
       In the C++ API, \c QoreFile::detachFd() leaves the object closed and without a descriptor, as documented: the
       object closed the descriptor detached from it, which the caller owns, when it was closed, opened again or
       destroyed, and a second detach returned the same descriptor again
+    - Fixed a crash when a binary module added to a namespace of a running Program while another thread imported a
+      user module from that Program: the public C++ namespace API (\c QoreNamespace::addNamespace() and the other
+      methods that add to a namespace) took no lock, so the import could read the namespace while it was being
+      changed.  This happened with the \c jni module, which adds its namespace to a module's Program the first time
+      Java code uses the module's classes, while other threads were starting.  In the C++ API,
+      \c ProgramRuntimeExternalParseContextHelper no longer releases parse ownership it could not acquire when the
+      Program is being deleted
     - Fixed a crash of @ref Qore::encode_url() "encode_url()" and @ref Qore::encode_uri_request()
       "encode_uri_request()" with a UTF-8 string that ends in the middle of a character, which read past the end of
       the string; such a string raises an \c INVALID-ENCODING exception
@@ -4863,6 +5120,14 @@ while (*binary chunk = input.read(65536)) {
       reached: the reference taken on the object was never released after the \c THREAD-CREATION-FAILURE exception,
       so the object was never destroyed and its destructor never ran, and the @ref Qore::Program "Program" that it
       belongs to was never freed
+    - Fixed the @ref implicit_arguments "implicit arguments" (<tt>$1</tt>, <tt>$$</tt> and <tt>$#</tt>) of the code
+      that starts a thread with the @ref background "background operator" having no value in the new thread with
+      @ref exec_mode_ast "AST execution": for example <tt>map <b>background</b> f($1), list</tt> called \c f() with
+      @ref nothing for each element; they have the values of the code that starts the thread, as in the other
+      execution modes
+    - Fixed a crash when the @ref background "background operator" with @ref exec_mode_ast "AST execution" raises an
+      exception preparing an expression of the @ref map "map", @ref select "select", @ref foldl "foldl" or
+      @ref foldr "foldr" operator for the new thread, for example a call with a closure created in a destructor
     - Fixed calling the methods implemented by the abstract classes
       @ref Qore::SQL::AbstractDatasource "AbstractDatasource",
       @ref Qore::SQL::AbstractSQLStatement "AbstractSQLStatement",
@@ -5022,6 +5287,79 @@ while (*binary chunk = input.read(65536)) {
       @ref Qore::SQL::DatasourcePool "DatasourcePool" opens: the driver's connection stayed attached to a
       datasource that was not open, so the next open or the datasource's destruction left it behind; the
       connection is now closed with the error
+
+    - Fixed @ref Qore::SQL::Datasource::close() "Datasource::close()" and
+      @ref Qore::SQL::Datasource::reset() "Datasource::reset()" leaving the transaction lock held by the calling
+      thread when no transaction was in progress: @ref Qore::SQL::Datasource::currentThreadInTransaction()
+      "Datasource::currentThreadInTransaction()" returned @ref True afterwards, other threads timed out waiting for
+      the lock, and destroying the datasource in another thread raised \c DATASOURCE-ERROR
+
+    - Fixed @ref Qore::SQL::Datasource::setOption() "Datasource::setOption()" keeping a value that was refused - an
+      option that the driver does not have, or a value that the driver did not accept on an open connection - so
+      that it was set again on the next connection, where a refused value made every open fail; a refused value is
+      no longer kept, and the option keeps its previous value.  The value that is kept for the next connection is the
+      one set on the connection, converted to the option's type where the option has a type that requires it, and
+      not the value as passed; a value that the driver accepts without raising an exception is kept as before
+
+    - Fixed data races reading the transaction lock state of a @ref Qore::SQL::Datasource "Datasource" in one thread
+      while another thread took or released the lock:
+      @ref Qore::SQL::Datasource::currentThreadInTransaction() "Datasource::currentThreadInTransaction()",
+      @ref Qore::SQL::Datasource::transactionTid() "Datasource::transactionTid()" and
+      @ref Qore::SQL::Datasource::inTransaction() "Datasource::inTransaction()" read it unsynchronized, and
+      @ref Qore::SQL::Datasource::setTransactionLockTimeout() "Datasource::setTransactionLockTimeout()" and
+      @ref Qore::SQL::DatasourcePool::setErrorTimeout() "DatasourcePool::setErrorTimeout()" changed a timeout that a
+      waiting thread was reading; their results are unchanged
+
+    - Fixed a data race reading the autocommit flag of a @ref Qore::SQL::Datasource "Datasource" (with
+      @ref Qore::SQL::Datasource::getAutoCommit() "Datasource::getAutoCommit()", and at the start of every operation)
+      while another thread set it with @ref Qore::SQL::Datasource::setAutoCommit() "Datasource::setAutoCommit()"
+
+    - Fixed copying a @ref Qore::SQL::DatasourcePool "DatasourcePool" with
+      @ref Qore::SQL::DatasourcePool::copy() "DatasourcePool::copy()" while another thread changed its warning
+      callback or event queue: the copy read them unsynchronized, and could keep the argument of a callback without
+      the callback, which aborted a debug build when the copy was destroyed
+
+    - Fixed using an @ref Qore::SQL::SQLStatement "SQLStatement" of a @ref Qore::SQL::DatasourcePool "DatasourcePool"
+      in more than one thread: its SQL, status and driver data were changed and read without synchronization, and two
+      threads could both use the statement on their own connections; the actions on a statement are now serialized,
+      and an action in another thread than the one whose connection the statement uses still raises
+      \c SQLSTATEMENT-ERROR
+
+    - Fixed destroying an @ref Qore::SQL::SQLStatement "SQLStatement" in another thread than the one using its
+      connection - a @ref Qore::SQL::DatasourcePool "DatasourcePool" connection, or the connection of a
+      @ref Qore::SQL::Datasource "Datasource" whose transaction lock the other thread holds: the statement was closed
+      in the destroying thread on a connection that the other thread was using at the same time.  The statement is
+      now closed by the thread using the connection, when that thread commits or rolls back its transaction, gives
+      up the connection or the transaction lock, or closes the connection; destroying the statement raises the same
+      exception as before.  An error closing the statement is raised by the commit, rollback or close that closes
+      it, as for the other statements of the connection, and is a warning event on the datasource's event queue
+      when the statement is closed as the transaction lock is released
+
+    - The statements of a @ref Qore::SQL::Datasource "Datasource" are closed when it is closed: closing or resetting
+      a datasource left the driver data of an @ref Qore::SQL::SQLStatement "SQLStatement" prepared on its connection
+      in place, so that the statement outlived the connection it belonged to, and destroying the statement later
+      opened a new connection only to free the statement against it
+
+    - Closing or destroying an @ref Qore::SQL::SQLStatement "SQLStatement", and its
+      @ref Qore::SQL::SQLStatement::getSQL() "getSQL()" and
+      @ref Qore::SQL::SQLStatement::currentThreadInTransaction() "currentThreadInTransaction()" methods, no longer
+      make a connection: on a closed @ref Qore::SQL::Datasource "Datasource" they opened the connection again, which
+      then stayed open for as long as the datasource object existed, and with a
+      @ref Qore::SQL::DatasourcePool "DatasourcePool" they gave the thread a connection, opening a new one if none
+      was free or waiting for one up to the pool's error timeout
+
+    - Fixed reference cycles closed by values held in a @ref Qore::Thread::Queue "Queue" sometimes never being
+      collected when the last reference to the cycle from outside it was released while another thread was using the
+      queue
+
+    - Fixed an exception raised by a destructor, when a @ref background "background" thread releases the last
+      reference to an object that its expression held (a variable captured by a closure, an argument of the call, an
+      operand of an operator, or an element of a list or hash), being raised outside of the thread's exception
+      handling, which aborted a debug build of Qore
+
+    - Fixed a possible crash when the @ref background "background operator" raises an exception preparing a key of
+      a hash in its expression for the new thread, for example a key that calls a function with a closure created in
+      a destructor
 
     - Fixed threads with a small stack size on Linux with glibc having less stack for their code than the size set
       with @ref Qore::set_default_thread_stack_size() "set_default_thread_stack_size()": glibc takes the static
@@ -6250,6 +6588,17 @@ while (*binary chunk = input.read(65536)) {
         repeats of the \c "xx" and \c "uu" codes rather than a field width, and produced a run of digits
         instead of milliseconds or microseconds.  Search servers reject or misindex such timestamps, and the
         affected data providers sent them to their remote APIs
+    - \c qpp, the preprocessor that builds binary modules from <tt>.qpp</tt> files, writes its output files where
+      their paths name them when the paths are relative: with a relative Java output directory
+      (<tt>--javadoc</tt>), the Java files of the second and later classes of a file were written to a directory
+      nested in the Java output directory, and the output files written after the Java files, such as the metadata
+      (<tt>--metadata</tt>), were written to the Java output directory
+    - \c qpp reports an error for a member declaration of a hashdecl in a <tt>.qpp</tt> file that has no
+      <tt>//!</tt> comment; such a member was left out of the hashdecl and of its documentation without a message
+    - \c qpp reports an error for anything other than a <tt>///@{</tt> line after the comment of a function or
+      constant group in a <tt>.qpp</tt> file; it was read as part of the group description without a message, so a
+      misspelled group start lost the group's constants or functions, and a namespace declaration placed before the
+      group start was lost
 
     @section qore_2_2_1 Qore 2.2.1
 

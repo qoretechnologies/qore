@@ -657,7 +657,7 @@ public class HttpServerTest inherits QUnit::Test {
         mServer.setHandler("/route/b", "/route/b", MimeTypeHtml, new SimpleStringHandler("/route/b"));
         mServer.setHandler("/route", "/route", MimeTypeHtml, new SimpleStringHandler("/route"));
         mServer.setDefaultHandler("my-handler", mHandler);
-        port = mServer.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        port = mServer.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
         url = "http://127.0.0.1:" + port;
         mServer.waitForAsyncIo();
 
@@ -673,11 +673,12 @@ public class HttpServerTest inherits QUnit::Test {
         mAsyncServer = new HttpServer(async_opts);
         mAsyncServer.setHandler("my-handler", "", MimeTypeHtml, new ReqHandler());
         mAsyncServer.setDefaultHandler("my-handler", new ReqHandler());
-        asyncPort = mAsyncServer.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        asyncPort = mAsyncServer.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
         asyncUrl = "http://127.0.0.1:" + asyncPort;
 
         # Add HTTPS listener for async server
         asyncSslPort = mAsyncServer.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
             "service": 0,
             "cert": new SSLCertificate(CertPem),
             "key": new SSLPrivateKey(KeyPem),
@@ -716,6 +717,7 @@ public class HttpServerTest inherits QUnit::Test {
         on_exit delete server;
         Queue q();
         server.setDefaultHandler("peer-info", new PeerInfoFutureHandler(q));
+        # all-interfaces: tests that a listener on all interfaces serves every address family
         hash<auto> linfo = server.addListener(<HttpListenerOptionInfo>{"service": 0});
 
         list<hash<auto>> targets = (
@@ -775,7 +777,7 @@ public class HttpServerTest inherits QUnit::Test {
         assertEq(0, server.getNotifications().size());
 
         # plain HTTP listener: notification must already be present when addListener() returns
-        hash<auto> hinfo = server.addListener(<HttpListenerOptionInfo>{"service": 0});
+        hash<auto> hinfo = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0});
         list<hash<auto>> nl = server.getNotifications();
         assertEq(1, nl.size());
         assertEq(hinfo.id, nl[0].id);
@@ -787,6 +789,7 @@ public class HttpServerTest inherits QUnit::Test {
 
         # HTTPS listener: a second notification with ssl = True
         hash<auto> sinfo = server.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
             "service": 0,
             "cert": new SSLCertificate(CertPem),
             "key": new SSLPrivateKey(KeyPem),
@@ -934,6 +937,7 @@ public class HttpServerTest inherits QUnit::Test {
 %endif
 
         hash<HttpListenerOptionInfo> opts({
+            "node": "127.0.0.1",
             "service": 0,
             "cert_loc": real_fn,
             "key_loc": key_fn,
@@ -1000,6 +1004,7 @@ public class HttpServerTest inherits QUnit::Test {
         # the inline objects to trigger H3 setup.  reloadListenerCertificate
         # uses the cert_loc/key_loc paths to re-read fresh material from disk.
         hash<auto> linfo = qServer.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
             "service": 0,
             "cert": new SSLCertificate(CertPem),
             "key": new SSLPrivateKey(KeyPem),
@@ -1503,7 +1508,7 @@ public class HttpServerTest inherits QUnit::Test {
         SimpleStringHandler handler("listener-async-ok");
         server.setHandler("ok", "/ok", MimeTypeText, handler);
 
-        Future listener_f = server.addListenerAsync(<HttpListenerOptionInfo>{"service": 0});
+        Future listener_f = server.addListenerAsync(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0});
         assertTrue(listener_f instanceof Future);
         hash<auto> info = listener_f.get(5s);
         assertTrue(info.port > 0);
@@ -1932,6 +1937,7 @@ public class HttpServerTest inherits QUnit::Test {
         certServer.setDefaultHandler("my-handler", new ReqHandler());
 
         int certPort = certServer.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
             "service": 0,
             "cert": new SSLCertificate(CertPem),
             "key": new SSLPrivateKey(KeyPem),
@@ -2011,6 +2017,7 @@ public class HttpServerTest inherits QUnit::Test {
 
         # Add HTTPS listener
         int authSslPort = authServer.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
             "service": 0,
             "cert": new SSLCertificate(CertPem),
             "key": new SSLPrivateKey(KeyPem),
@@ -2096,7 +2103,7 @@ public class HttpServerTest inherits QUnit::Test {
         PersistentTestHandler handler();
         persistServer.setHandler("persistent", "/persistent", MimeTypeHtml, handler);
         persistServer.setDefaultHandler("persistent", handler);
-        int persistPort = persistServer.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        int persistPort = persistServer.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
         string persistUrl = "http://127.0.0.1:" + persistPort;
 
         # Create client with keep-alive
@@ -2158,7 +2165,7 @@ public class HttpServerTest inherits QUnit::Test {
         PersistentTestHandler handler();
         epServer.setHandler("persistent", "/persistent", MimeTypeHtml, handler);
         epServer.setDefaultHandler("persistent", handler);
-        int epPort = epServer.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        int epPort = epServer.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
         string epUrl = "http://127.0.0.1:" + epPort;
 
         HTTPClient client({"url": epUrl, "timeout": 10s});
@@ -2227,7 +2234,7 @@ public class HttpServerTest inherits QUnit::Test {
         PersistentTestHandler handler();
         transServer.setHandler("persistent", "/persistent", MimeTypeHtml, handler);
         transServer.setDefaultHandler("persistent", handler);
-        int transPort = transServer.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        int transPort = transServer.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
         string transUrl = "http://127.0.0.1:" + transPort;
 
         HTTPClient client({"url": transUrl, "timeout": 10s});
@@ -2266,7 +2273,7 @@ public class HttpServerTest inherits QUnit::Test {
         PersistentTestHandler handler();
         closeServer.setHandler("persistent", "/persistent", MimeTypeHtml, handler);
         closeServer.setDefaultHandler("persistent", handler);
-        int closePort = closeServer.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        int closePort = closeServer.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
         string closeUrl = "http://127.0.0.1:" + closePort;
 
         {
@@ -2309,7 +2316,7 @@ public class HttpServerTest inherits QUnit::Test {
         PersistentTestHandler handler();
         errServer.setHandler("persistent", "/persistent", MimeTypeHtml, handler);
         errServer.setDefaultHandler("persistent", handler);
-        int errPort = errServer.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        int errPort = errServer.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
         string errUrl = "http://127.0.0.1:" + errPort;
 
         HTTPClient client({"url": errUrl, "timeout": 10s});
@@ -2356,7 +2363,7 @@ public class HttpServerTest inherits QUnit::Test {
         PersistentTestHandler handler();
         concServer.setHandler("persistent", "/persistent", MimeTypeHtml, handler);
         concServer.setDefaultHandler("persistent", handler);
-        int concPort = concServer.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        int concPort = concServer.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
         string concUrl = "http://127.0.0.1:" + concPort;
 
         # Create multiple clients
@@ -2410,7 +2417,7 @@ public class HttpServerTest inherits QUnit::Test {
         PersistentTestHandler handler();
         npServer.setHandler("persistent", "/persistent", MimeTypeHtml, handler);
         npServer.setDefaultHandler("persistent", handler);
-        int npPort = npServer.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        int npPort = npServer.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
         string npUrl = "http://127.0.0.1:" + npPort;
 
         HTTPClient client({"url": npUrl, "timeout": 10s});
@@ -2605,6 +2612,7 @@ public class HttpServerTest inherits QUnit::Test {
             # Create a new HTTPS listener that will be affected by the global mode
             # The async server's listeners are cached, so we need a new one to test
             hash<auto> linfo = mAsyncServer.addListener(<HttpListenerOptionInfo>{
+                "node": "127.0.0.1",
                 "service": 0,
                 "cert": new SSLCertificate(CertPem),
                 "key": new SSLPrivateKey(KeyPem),
@@ -2642,14 +2650,14 @@ public class HttpServerTest inherits QUnit::Test {
         on_exit server.stop();
         server.setHandler("my-handler", "", MimeTypeHtml, new ReqHandler());
         server.setDefaultHandler("my-handler", new ReqHandler());
-        server.addListener(<HttpListenerOptionInfo>{"service": 0});
+        server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0});
         server.waitForAsyncIo();
 
         server.stop();
 
         bool blocked = False;
         try {
-            server.addListener(<HttpListenerOptionInfo>{"service": 0});
+            server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0});
         } catch (hash<ExceptionInfo> ex) {
             blocked = ex.err == "CONTROLLER-ADD-LISTENER-ERROR";
         }
@@ -2670,7 +2678,7 @@ public class HttpServerTest inherits QUnit::Test {
 
         SimpleStringHandler handler("ok");
         server.setHandler("ok", "/ok", MimeTypeText, handler);
-        int test_port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        int test_port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
         assertTrue(server.waitForAsyncIo(5s), "async I/O should be ready");
 
         # Trigger the listener exception by sending a complete HTTP request
@@ -2711,7 +2719,7 @@ public class HttpServerTest inherits QUnit::Test {
         SlowHandler handler(started, 2s);
         server.setHandler("slow-handler", "", MimeTypeHtml, handler);
         server.setDefaultHandler("slow-handler", handler);
-        int port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
         assertTrue(server.waitForAsyncIo(5s), "async I/O should be ready");
 
         background sub () {
@@ -2744,7 +2752,7 @@ public class HttpServerTest inherits QUnit::Test {
         on_exit server1.stop();
         server1.setHandler("my-handler", "", MimeTypeHtml, new ReqHandler());
         server1.setDefaultHandler("my-handler", new ReqHandler());
-        int port1 = server1.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        int port1 = server1.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
         assertTrue(server1.waitForAsyncIo(15s), "async I/O should be ready after start");
 
         HTTPClient client1({"url": "http://127.0.0.1:" + port1, "timeout": 10s});
@@ -2762,7 +2770,7 @@ public class HttpServerTest inherits QUnit::Test {
         on_exit server2.stop();
         server2.setHandler("my-handler", "", MimeTypeHtml, new ReqHandler());
         server2.setDefaultHandler("my-handler", new ReqHandler());
-        int port2 = server2.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        int port2 = server2.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
         assertTrue(server2.waitForAsyncIo(15s), "async I/O should restart after stop");
 
         HTTPClient client2({"url": "http://127.0.0.1:" + port2, "timeout": 10s});
@@ -2809,7 +2817,7 @@ public class HttpServerTest inherits QUnit::Test {
         server.setHandler("slow-handler", "/slow", MimeTypeHtml, slow_handler);
         server.setDefaultHandler("slow-handler", slow_handler);
 
-        int test_port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        int test_port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
         assertTrue(server.waitForAsyncIo(5s), "async I/O should be ready");
 
         # Test 1: Basic inline handler response
@@ -2913,7 +2921,7 @@ public class HttpServerTest inherits QUnit::Test {
         InlineTestHandler inline_handler();
         server.setHandler("inline-handler", "/inline", MimeTypeText, inline_handler);
 
-        int test_port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        int test_port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
         assertTrue(server.waitForAsyncIo(5s), "async I/O should be ready");
 
         HTTPClient client({"url": "http://127.0.0.1:" + test_port, "timeout": 5s});
@@ -2955,6 +2963,7 @@ public class HttpServerTest inherits QUnit::Test {
         server.setDefaultHandler("prepared-handler", handler);
 
         hash<auto> h1_listener = server.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
             "service": 0,
             "enable_h3": False,
         });
@@ -2991,6 +3000,7 @@ public class HttpServerTest inherits QUnit::Test {
             "HTTP/1 preparation lifecycle is balanced");
 
         hash<auto> h2_listener = server.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
             "service": 0,
             "cert": new SSLCertificate(CertPem),
             "key": new SSLPrivateKey(KeyPem),
@@ -3055,6 +3065,7 @@ public class HttpServerTest inherits QUnit::Test {
         # isHttp2Active() then goes False (it's now H3-active) and the test's
         # H2 keep-alive assertion trips on what is really a valid H3 upgrade.
         hash<auto> linfo = server.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
             "service": 0,
             "cert": new SSLCertificate(CertPem),
             "key": new SSLPrivateKey(KeyPem),
@@ -3115,7 +3126,7 @@ public class HttpServerTest inherits QUnit::Test {
 
         server.setHandler("my-handler", "", MimeTypeHtml, new ReqHandler());
         server.setDefaultHandler("my-handler", new ReqHandler());
-        int test_port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        int test_port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
         assertTrue(server.waitForAsyncIo(5s), "async I/O should be ready");
 
         # Set a short TTL so the test doesn't take too long
@@ -3177,7 +3188,7 @@ public class HttpServerTest inherits QUnit::Test {
         InlineTestHandler inline_handler();
         server.setHandler("inline-handler", "/inline", MimeTypeText, inline_handler);
         server.setDefaultHandler("inline-handler", inline_handler);
-        int test_port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        int test_port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
         assertTrue(server.waitForAsyncIo(5s), "async I/O should be ready");
 
         # Test: HTTP/1.1 with Connection: close — server should close connection after response
@@ -3244,7 +3255,7 @@ public class HttpServerTest inherits QUnit::Test {
         InlineTestHandler inline_handler();
         server.setHandler("inline-handler", "/inline", MimeTypeText, inline_handler);
         server.setDefaultHandler("inline-handler", inline_handler);
-        int test_port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        int test_port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
         assertTrue(server.waitForAsyncIo(5s), "async I/O should be ready");
 
         # Test: HTTP/1.0 request without Connection: Keep-Alive — should close
@@ -3293,7 +3304,7 @@ public class HttpServerTest inherits QUnit::Test {
 
         InlineTestHandler inline_handler();
         server.setDefaultHandler("inline-handler", inline_handler);
-        int test_port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        int test_port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
         assertTrue(server.waitForAsyncIo(5s), "async I/O should be ready");
 
         assertFalse(server.acceptsHttpMethod("PRI"));
@@ -3342,7 +3353,7 @@ public class HttpServerTest inherits QUnit::Test {
         TestWsHandler ws_handler();
         server.setHandler("ws-handler", "", NOTHING, ws_handler);
         server.setDefaultHandler("ws-handler", ws_handler);
-        int test_port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        int test_port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
         assertTrue(server.waitForAsyncIo(5s), "async I/O should be ready");
 
         # Establish a WebSocket connection
@@ -3387,7 +3398,7 @@ public class HttpServerTest inherits QUnit::Test {
         ThrowingShutdownWsHandler ws_handler({"logger": logger});
         server.setHandler("ws-handler", "", NOTHING, ws_handler);
         server.setDefaultHandler("ws-handler", ws_handler);
-        int test_port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        int test_port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
         assertTrue(server.waitForAsyncIo(5s), "async I/O should be ready");
 
         WebSocketClient ws_client(sub (*data msg) {}, {"url": "ws://127.0.0.1:" + test_port});
@@ -3436,7 +3447,7 @@ public class HttpServerTest inherits QUnit::Test {
         TestWsHandler ws_handler();
         server.setHandler("ws-handler", "", NOTHING, ws_handler);
         server.setDefaultHandler("ws-handler", ws_handler);
-        int test_port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        int test_port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
         assertTrue(server.waitForAsyncIo(5s), "async I/O should be ready");
 
         # Establish multiple WebSocket connections
@@ -3483,7 +3494,7 @@ public class HttpServerTest inherits QUnit::Test {
         server.setHandler("ws-handler", "/ws", NOTHING, ws_handler);
         server.setHandler("http-handler", "/http", MimeTypeHtml, new ReqHandler());
         server.setDefaultHandler("ws-handler", ws_handler);
-        int test_port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        int test_port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
         assertTrue(server.waitForAsyncIo(5s), "async I/O should be ready");
 
         # Start a WebSocket connection (streaming)
@@ -3543,7 +3554,7 @@ public class HttpServerTest inherits QUnit::Test {
         # This exercises the accept replenishment path
         list<hash<auto>> listener_info = ();
         for (int i = 0; i < 5; ++i) {
-            hash<auto> info = server.addListener(<HttpListenerOptionInfo>{"service": 0});
+            hash<auto> info = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0});
             listener_info += info;
             # Make a request to ensure the listener is working
             HTTPClient client({"url": "http://127.0.0.1:" + info.port, "timeout": 2s});
@@ -3558,7 +3569,7 @@ public class HttpServerTest inherits QUnit::Test {
         }
 
         # Add a new listener - this should work if accept replenishment is correct
-        int final_port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        int final_port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
         assertTrue(server.waitForAsyncIo(5s), "async I/O should be ready after listener churn");
 
         # Make multiple concurrent requests to verify accept operations are working
@@ -3610,7 +3621,7 @@ public class HttpServerTest inherits QUnit::Test {
         server.setDefaultHandler("test-handler", new ReqHandler());
 
         # Add listener
-        int test_port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        int test_port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
         assertTrue(server.waitForAsyncIo(5s), "async I/O should be ready");
 
         # Drain pending worker-pool callbacks on the GLOBAL controller, then re-wait
@@ -3706,6 +3717,7 @@ public class HttpServerTest inherits QUnit::Test {
         {
             # Create HTTPS listener for HTTP/2
             hash<auto> ssl_info = server.addListener(<HttpListenerOptionInfo>{
+                "node": "127.0.0.1",
                 "service": 0,
                 "cert": new SSLCertificate(CertPem),
                 "key": new SSLPrivateKey(KeyPem),
@@ -3806,6 +3818,7 @@ public class HttpServerTest inherits QUnit::Test {
 
         # Create HTTPS listener
         hash<auto> ssl_info = server.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
             "service": 0,
             "cert": new SSLCertificate(CertPem),
             "key": new SSLPrivateKey(KeyPem),
@@ -3865,8 +3878,9 @@ public class HttpServerTest inherits QUnit::Test {
         server.setDefaultHandler("test-handler", new ReqHandler());
 
         # Test both HTTP and HTTPS
-        int http_port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        int http_port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
         hash<auto> ssl_info = server.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
             "service": 0,
             "cert": new SSLCertificate(CertPem),
             "key": new SSLPrivateKey(KeyPem),

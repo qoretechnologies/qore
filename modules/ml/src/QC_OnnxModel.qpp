@@ -954,11 +954,13 @@ bool OnnxSessionLease::isHeld() [flags=CONSTANT] {
     @ref Qore::cancel_thread() "cancel_thread()", every request it has taken and every request still queued is
     rejected with its \c THREAD-CANCELLED exception, and the next request starts a new leader.
 
-    @note The threads that run the requests of runAsync(), runTensorsAsync() and runBatchAsync() are started without
-    the calling @ref Qore::Program "Program", so an interrupt requested with
-    @ref Qore::SandboxManager::requestInterrupt() "SandboxManager::requestInterrupt()" for a sandboxed program does
-    not reach them: requests it has already submitted run to completion.  This is a current limitation; such a
-    request can be ended by cancelling its thread with @ref Qore::cancel_thread() "cancel_thread()".
+    The requests of runAsync(), runTensorsAsync() and runBatchAsync() are governed by the sandbox of the code that
+    submits them, as if they ran in the submitting thread: after an interrupt is requested with
+    @ref Qore::SandboxManager::requestInterrupt() "SandboxManager::requestInterrupt()" for a sandboxed program, a
+    request it has submitted fails with a \c PROGRAM-INTERRUPTED exception at its next cancellation point (while its
+    inputs are converted, before a batch runs, or while results are delivered).  With dynamic batching, the leader only
+    batches requests submitted under the same sandbox and runs each batch under that sandbox, so an interrupt ends the
+    batches of the interrupted sandbox only and the requests of other submitters go on.
 
     @par Example:
     @code{.py}
@@ -1102,7 +1104,7 @@ hash<auto> out = f.get(5s);
     With dynamic batching, the request is run by the pool's leader thread (see getPoolStats(),
     \c async_leader_tid); if the leader is cancelled, the Future is rejected with its \c THREAD-CANCELLED exception.
 
-    @note A sandbox interrupt does not reach the thread that runs the request; see @ref OnnxSessionPool
+    @note the request is governed by the sandbox of the calling code; see @ref OnnxSessionPool
 
     @throw THREAD-CREATION-FAILURE if the async worker thread cannot be created
     @throw ML-ONNX-POOL-BACKPRESSURE if the async coalescing queue is full

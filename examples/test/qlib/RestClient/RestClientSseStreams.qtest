@@ -178,7 +178,7 @@ public class RestClientSseStreamsTest inherits QUnit::Test {
         server = new HttpServer(<HttpServerOptionInfo>{
             "logger": new Logger("server", LoggerLevel::getLevelError()),
         });
-        int port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
         # the first event gives the path and the request body; line endings of all kinds
         handler = new SseStreamHandler("data: %s\n\nevent: e\r\ndata: one\r\n\r\ndata: two\r\rdata: three%h\n\n");
         server.setHandler("sse", "", NOTHING, handler);

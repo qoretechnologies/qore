@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -100,6 +100,24 @@ public:
     */
     DLLLOCAL int trylock() {
         return pthread_mutex_trylock(&ptm_lock);
+    }
+
+    //! initializes the lock again, unlocked, in a child process created with fork() (internal)
+    /** Only the thread that called fork() exists in the child, so a lock held by another thread of the parent would
+        stay locked forever; see QoreForkThreadLock
+
+        @param ma the attributes the lock was created with
+    */
+    DLLLOCAL void reinitAfterFork(const pthread_mutexattr_t* ma = nullptr) {
+        // reset to the static initializer first: an implementation may refuse to initialize a lock that is held
+        // (macOS does for read-write locks)
+        static const pthread_mutex_t unlocked = PTHREAD_MUTEX_INITIALIZER;
+        ptm_lock = unlocked;
+#ifndef NDEBUG
+        int rc =
+#endif
+        pthread_mutex_init(&ptm_lock, ma);
+        assert(!rc);
     }
 
 private:

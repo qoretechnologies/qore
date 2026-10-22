@@ -603,10 +603,7 @@ QoreStringNode* QoreHashKeyHelper::getConstKeyNulError(const QoreValue& n) {
     return strlen(str->c_str()) != str->size() ? getNulKeyDesc(str->c_str(), str->size()) : nullptr;
 }
 
-QoreStringNode* QoreHashKeyHelper::getNulKeyDesc(const char* key, size_t len) {
-    const char* nul = static_cast<const char*>(memchr(key, '\0', len));
-    assert(nul);
-    size_t offset = nul - key;
+void QoreHashKeyHelper::concatEscapedKey(QoreString& str, const char* key, size_t len) {
     // the key is shown with at most its first 64 characters, with control characters, quotes and backslashes
     // escaped, so that the NUL character and where it is can be seen
     static constexpr size_t max_chars = 64;
@@ -615,21 +612,28 @@ QoreStringNode* QoreHashKeyHelper::getNulKeyDesc(const char* key, size_t len) {
     if (invalid || show > len) {
         show = len < max_chars ? len : max_chars;
     }
-    QoreStringNode* desc = new QoreStringNode("key \"");
     for (size_t i = 0; i < show; ++i) {
         unsigned char c = static_cast<unsigned char>(key[i]);
         if (c < 0x20 || c == 0x7f) {
-            desc->sprintf("\\x%02x", c);
+            str.sprintf("\\x%02x", c);
         } else if (c == '"' || c == '\\') {
-            desc->concat('\\');
-            desc->concat(static_cast<char>(c));
+            str.concat('\\');
+            str.concat(static_cast<char>(c));
         } else {
-            desc->concat(static_cast<char>(c));
+            str.concat(static_cast<char>(c));
         }
     }
     if (show < len) {
-        desc->concat("...");
+        str.concat("...");
     }
+}
+
+QoreStringNode* QoreHashKeyHelper::getNulKeyDesc(const char* key, size_t len) {
+    const char* nul = static_cast<const char*>(memchr(key, '\0', len));
+    assert(nul);
+    size_t offset = nul - key;
+    QoreStringNode* desc = new QoreStringNode("key \"");
+    concatEscapedKey(*desc, key, len);
     desc->sprintf("\" contains a NUL character at byte offset %zu; a hash key or object member name cannot contain a "
         "NUL character", offset);
     return desc;
@@ -642,6 +646,22 @@ int QoreHashNode::checkKey(const char* key, size_t len, ExceptionSink* xsink) {
         return 0;
     }
     xsink->raiseException("HASH-KEY-ERROR", QoreHashKeyHelper::getNulKeyDesc(key, len));
+    return -1;
+}
+
+int QoreHashNode::checkKey(const char* key, size_t len, const char* err, const char* what, ExceptionSink* xsink) {
+    assert(xsink);
+    assert(err && what);
+    const char* nul = static_cast<const char*>(memchr(key, '\0', len));
+    if (!nul) {
+        return 0;
+    }
+    QoreStringNode* desc = new QoreStringNode;
+    desc->sprintf("%s \"", what);
+    QoreHashKeyHelper::concatEscapedKey(*desc, key, len);
+    desc->sprintf("\" contains a NUL character at byte offset %zu, which a Qore hash key cannot hold",
+        static_cast<size_t>(nul - key));
+    xsink->raiseException(err, desc);
     return -1;
 }
 

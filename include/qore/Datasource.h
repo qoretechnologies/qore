@@ -118,6 +118,8 @@ public:
     DLLEXPORT Datasource(const Datasource& old);
 
     //! the Datasource is closed if it's still open and the object is destroyed
+    /** an error closing the connection is reported as a DBI warning event; see close()
+    */
     DLLEXPORT virtual ~Datasource();
 
     //! returns the autocommit status
@@ -434,10 +436,30 @@ public:
     */
     DLLEXPORT int rollback(ExceptionSink* xsink);
 
-    //! closes the connection
+    //! closes the connection and the statements prepared on it
+    /** An error closing the connection or one of its statements cannot be raised here: it is reported as a DBI
+        warning event (@ref QDBI_EVENT_WARNING) on the datasource's event queue, and discarded if no event queue is
+        set; use close(ExceptionSink*) to receive it.
+
+        @return 0 if the connection was closed, -1 if it was not open
+    */
     DLLEXPORT int close();
 
+    //! closes the connection and the statements prepared on it, raising any error closing them
+    /** The connection is closed after the call in every case; an error closing it can only be reported by DBI
+        drivers that register a q_dbi_close_sink_t method.
+
+        @param xsink an error closing the connection or one of its statements is added here
+
+        @return 0 if the connection was closed without an error or was not open, -1 if an exception was raised
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT int close(ExceptionSink* xsink);
+
     //! closes and opens the connection
+    /** the connection is not opened again if an error closing it was raised; see close(ExceptionSink*)
+    */
     DLLEXPORT void reset(ExceptionSink* xsink);
 
     //! returns a QoreListNode object of all capability strings of the current driver, the caller owns the reference count in the object returned

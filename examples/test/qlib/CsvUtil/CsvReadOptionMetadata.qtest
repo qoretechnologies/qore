@@ -44,7 +44,18 @@ public class CsvReadOptionMetadataTest inherits QUnit::Test {
         addTestCase("declared interactions match the reader", \interactionTest());
         addTestCase("allowed values", \allowedValueTest());
         addTestCase("action options carry the metadata", \actionTest());
+        addTestCase("empty input example and record type survive exhausted search", \emptyExampleTest());
         set_return_value(main());
+    }
+
+    private emptyExampleTest() {
+        foreach hash<auto> options in (({}, {"data": ""}, {"data": "Name,City\n", "header_names": True})) {
+            CsvReadDataProvider prov(options);
+            auto type = prov.getOrNothingRecordTypeWithOptions();
+            hash<auto> example = prov.getExampleRecordDataWithOptions();
+            assertEq(sort(keys (type ?? {})), sort(keys example));
+            assertEq(type, prov.getOrNothingRecordTypeWithOptions());
+        }
     }
 
     #! Returns the records read with the given options, or the exception

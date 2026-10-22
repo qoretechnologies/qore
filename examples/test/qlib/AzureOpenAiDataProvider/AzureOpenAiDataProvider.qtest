@@ -211,7 +211,7 @@ public class AzureOpenAiDataProviderTest inherits QUnit::Test {
         http = new HttpServer(<HttpServerOptionInfo>{"logger": logger});
         handler = new FakeAzureHandler();
         http.setDefaultHandler("azure", handler);
-        port = http.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        port = http.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
     }
 
     globalTearDown() {

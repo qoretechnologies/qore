@@ -36,6 +36,7 @@
 
 #include "qore/intern/QoreChannel.h"
 #include "qore/intern/QoreEventNotifier.h"
+#include "qore/intern/SseEventFramer.h"
 #include "qore/intern/WebSocketStreamFrameState.h"
 #include "qore/QoreQueue.h"
 #include "qore/QoreString.h"
@@ -575,13 +576,14 @@ private:
     QoreEventNotifier* notifier = nullptr; //!< optional notifier for event wakeups
     QoreObject* notifier_obj = nullptr; //!< ref'd EventNotifier object keeping fd valid
     std::mutex mtx;         //!< serializes buffered replay with I/O-thread delivery
-    QoreString sse_buffer;  //!< accumulated SSE text (UTF-8)
+    //! splits the stream into events: line endings are normalized and a leading byte order mark is dropped
+    SseEventFramer framer;
     bool too_large = false; //!< true once an event exceeded MaxEventSize; the rest of the stream is discarded
-    //! the size of @ref sse_buffer that has been searched for an event boundary
-    /** only the data received since is searched, so that an event received in many chunks is not searched from the
-        start for each chunk
+
+    //! Adds received stream data to the event read so far, and pushes each complete event to the queue
+    /** @return true if an event was pushed
     */
-    size_t scanned = 0;
+    DLLLOCAL bool addData(const char* data, size_t len, ExceptionSink* xsink);
 };
 
 inline void ChannelAction::installSseState(Queue* queue, QoreEventNotifier* notifier,

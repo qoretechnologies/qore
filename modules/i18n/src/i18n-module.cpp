@@ -39,6 +39,9 @@ DLLLOCAL void preinitCatalogDiscoveryIndexClass();
 DLLLOCAL QoreClass* initCatalogDiscoveryIndexClass(QoreNamespace& ns);
 
 static void i18n_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
+    if (i18n_register_fork_handlers(&xsink)) {
+        return;
+    }
     preinitMessageCatalogClass();
     preinitCatalogDiscoveryIndexClass();
 
@@ -53,6 +56,7 @@ static void i18n_module_ns_init(QoreNamespace* rns, QoreNamespace* qns, Exceptio
 }
 
 static void i18n_module_delete() {
+    i18n_unregister_fork_handlers();
 }
 
 extern "C" DLLEXPORT void i18n_qore_module_desc(QoreModuleInfo& mod_info) {

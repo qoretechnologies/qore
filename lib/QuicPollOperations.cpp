@@ -34,6 +34,7 @@
 
 #include "qore/intern/QC_SocketPollOperation.h"
 #include "qore/intern/QoreAsyncIoLogger.h"
+#include "qore/intern/QorePollCompat.h"
 
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -544,6 +545,13 @@ int SocketQuicClientPollOperation::initializeResolved(ExceptionSink* xsink) {
         return -1;
     }
 
+    // the connection leads to the remote address; a connection migration later changes only the local address
+    {
+        std::shared_ptr<QoreConnectionDestinations> d = std::make_shared<QoreConnectionDestinations>();
+        d->add(host.c_str(), reinterpret_cast<const struct sockaddr*>(&remote_addr_), remote_addrlen_, QSEC_NET_UDP);
+        sock->priv->socket->priv->setConnectedDestinations(std::move(d));
+    }
+
     // Enlarge UDP receive buffer to prevent packet drops under burst traffic.
     // QUIC sends many small datagrams; the kernel default (~208KB on Linux) is
     // easily exhausted when the server sends large responses.  1MB matches
@@ -781,7 +789,8 @@ int SocketQuicClientPollOperation::sendPendingPackets(
     // Test hook: QORE_QUIC_TEST_DROP_CLIENT_DATAGRAMS=i[,j...] silently drops the listed datagrams of each
     // connection attempt (0-based), modelling datagrams lost on the path.  Read on every call because tests
     // scope the variable to one case in a shared test process.
-    if (const char* drop = getenv("QORE_QUIC_TEST_DROP_CLIENT_DATAGRAMS")) {
+    if (QoreEnvironmentValue drop_holder("QORE_QUIC_TEST_DROP_CLIENT_DATAGRAMS");
+            const char* drop = drop_holder.c_str()) {
         std::set<int> dropped;
         for (const char* p = drop; *p; ) {
             char* end;
@@ -1411,7 +1420,7 @@ QoreHashNode* SocketQuicClientPollOperation::continuePoll(ExceptionSink* xsink) 
     }
 }
 
-int SocketQuicClientPollOperation::migrateConnection(ExceptionSink* xsink) {
+int SocketQuicClientPollOperation::migrateConnection(ExceptionSink* xsink, bool* conn_id_blocked) {
     // Create a new connected UDP socket and swap the fd on the socket object.
     // The old fd is closed immediately — this removes it from epoll so the
     // controller's next continuePoll cycle re-adds the new fd cleanly.
@@ -1495,13 +1504,16 @@ int SocketQuicClientPollOperation::migrateConnection(ExceptionSink* xsink) {
     }
 
     // Initiate migration at the QUIC layer
-    if (quic_session->initiateMigration(
-            reinterpret_cast<const struct sockaddr*>(&new_local), new_local_len,
-            reinterpret_cast<const struct sockaddr*>(&remote_addr_), remote_addrlen_,
-            xsink) != 0) {
-        return -1;
+    int rc = quic_session->initiateMigration(
+        reinterpret_cast<const struct sockaddr*>(&new_local), new_local_len,
+        reinterpret_cast<const struct sockaddr*>(&remote_addr_), remote_addrlen_,
+        xsink, conn_id_blocked);
+    if (rc) {
+        // the new socket is closed by its guard; with no spare connection ID (rc == 1), nothing was changed
+        return rc;
     }
 
+    bool close_old = false;
     // Swap the fd under the socket lock to synchronize with any concurrent
     // I/O.  Since migrateConnection() is now called from the I/O thread
     // (via the migration_pending flag), there is no concurrent poll() on the
@@ -1511,7 +1523,7 @@ int SocketQuicClientPollOperation::migrateConnection(ExceptionSink* xsink) {
         // the swap also bumps fd_generation so any sync I/O helper mid-wait (lock released) returns QSE_NOT_OPEN on
         // re-acquire instead of operating on the pre-migration fd; a close that raced with the migration has already
         // released the old fd, so the new fd is not installed and closed by the guard instead
-        if (!sock->priv->socket->priv->replaceDescriptor(old_fd, new_fd)) {
+        if (!sock->priv->socket->priv->replaceDescriptor(old_fd, new_fd, close_old)) {
             xsink->raiseException("SOCKET-CLOSED", "the socket was closed during QUIC connection migration");
             return -1;
         }
@@ -1520,9 +1532,12 @@ int SocketQuicClientPollOperation::migrateConnection(ExceptionSink* xsink) {
         local_addrlen_ = new_local_len;
     }
 
-    // Close old fd outside the lock — safe because the socket object now
-    // points to new_fd, and only this thread owns the old one
-    ::close(old_fd);
+    // Close old fd outside the lock — safe because the socket object now points to new_fd, and only this thread owns
+    // the old one; while the controller still has it registered in its event loop, it closes it when it removes it
+    // (see qore_socket_private::DescriptorHold), so its number cannot be reused for another connection before then
+    if (close_old) {
+        ::close(old_fd);
+    }
 
     // Send PATH_CHALLENGE + pending request frames immediately so the server
     // learns the new source address before the next poll() cycle
@@ -2750,7 +2765,7 @@ QoreHashNode* SocketQuicSendResponsePollOperation::continuePoll(ExceptionSink* x
                         }
                         return poll_info;
                     }
-                    // Clean up the closed_streams_ entry if stream_close fired
+                    // the response is sent: release the records of the stream
                     quic_session->removeClosedStream(stream_id_);
                 }
 
@@ -3021,7 +3036,8 @@ QoreHashNode* SocketQuicSendStreamingResponsePollOperation::continuePollIntern(E
                     pfd.fd = stream_fd;
                     pfd.events = POLLIN;
                     pfd.revents = 0;
-                    int poll_rv = poll(&pfd, 1, 0);
+                    // a named pipe's end is reported by select(2) on Darwin (see QorePollCompat.h)
+                    int poll_rv = qore_poll_compat(&pfd, 1, 0);
                     if (poll_rv < 0) {
                         xsink->raiseException("QUIC-ERROR", "poll() on stream fd failed: %s",
                             strerror(errno));

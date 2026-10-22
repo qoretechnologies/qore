@@ -3257,6 +3257,22 @@ public class HttpAsyncSocketIoController {
             return;
         }
 
+        # an HTTP/1.x request header that cannot be read, such as one with a NUL character, is answered with 400
+        # (Bad Request), as RFC 9112 requires, and the connection is closed, as the rest of the request cannot be
+        # framed; before, the connection was closed without a response
+        if ((state == HttpConnectionState::Idle || state == HttpConnectionState::KeepAlive
+                || state == HttpConnectionState::ReadHeader
+                || state == HttpConnectionState::SendAndReadHeader)
+            && ex.err == "SOCKET-HTTP-ERROR"
+            && cinfo.sock.isOpen()) {
+            # the target's error callback closes the socket, so the bad request is logged here
+            log(LoggerLevel::WARN, "invalid HTTP request header received on %s: %s: %s; answering with 400 (Bad "
+                "Request)", uh, ex.err, ex.desc);
+            if (sendBadRequest(uh, cinfo, ex.desc)) {
+                return;
+            }
+        }
+
         {
             AutoWriteLock al(m);
             remove connections{uh};
@@ -3272,6 +3288,44 @@ public class HttpAsyncSocketIoController {
         if (state != HttpConnectionState::Http3 && state != HttpConnectionState::Http3Sending) {
             try { cinfo.sock.close(); } catch () {}
         }
+    }
+
+    #! Answers an HTTP/1.x request whose header could not be read with 400 (Bad Request), then closes the connection
+    /** @param uh the connection's unique hash
+        @param cinfo the connection
+        @param desc why the header could not be read; sent as the body of the response
+
+        @return @ref True if the response is being sent; the connection is closed after it is sent, with a lingering
+        close; @ref False if the response could not be started, in which case the caller closes the connection
+    */
+    private bool sendBadRequest(string uh, hash<HttpActiveConnectionInfo> cinfo, string desc) {
+        AbstractPollOperation op;
+        try {
+            op = cinfo.sock.startPollSendHttpResponse(400, "Bad Request", "1.1", {
+                "Content-Type": "text/plain;charset=utf-8",
+                "Connection": "close",
+            }, desc + "\n");
+        } catch (hash<ExceptionInfo> ex) {
+            log(LoggerLevel::DEBUG, "400 response to %s not started: %s: %s", uh, ex.err, ex.desc);
+            return False;
+        }
+        # with no pending stream and no callback after the response, the connection is closed once it is sent
+        hash<HttpActiveConnectionInfo> new_cinfo = <HttpActiveConnectionInfo>{
+            "sock": cinfo.sock,
+            "listener": cinfo.listener,
+            "cx": cinfo.cx,
+            "target": cinfo.target,
+            "state": HttpConnectionState::SendStreamResponse,
+            "stream_op": op,
+            "ssl": cinfo.ssl,
+            "return_to_idle_after_send": False,
+        };
+        {
+            AutoWriteLock al(m);
+            connections{uh} = new_cinfo;
+        }
+        submitConnectionOp(uh, new_cinfo);
+        return True;
     }
 
     #! Handles header read completion
@@ -4339,11 +4393,25 @@ public class HttpAsyncSocketIoController {
         # request reaches the live loop and is recognised generically via
         # AbstractHttpRequestHandler::isPersistentSessionEndRequest().
 
+        # Releases the session's record of a stream dispatched with its headers once the request has been handled
+        # (all headers-only dispatched streams, not just body_streaming ones, as on HTTP/3): the session keeps a
+        # dispatched stream for the handler until then, so without this a long-lived connection would keep one
+        # record for every request it served
+        bool headers_only = request.hdr.toBool();
+        code<nothing()> cleanup_stream = sub () {
+            if (headers_only) {
+                try {
+                    dispatch_sock.cleanupHttp2Stream(dispatch_stream_id);
+                } catch () {}
+            }
+        };
+
         # Give the target a protocol-independent admission point before the shared handler queue.
         try {
             *hash<HttpRequestResultInfo> prepared_result =
                 dispatch_target.prepareHttpRequest(conn_info);
             if (prepared_result) {
+                on_exit cleanup_stream();
                 if (body_streaming) {
                     resumeMultiplexedReading(dispatch_h2op, dispatch_uh,
                         HttpConnectionState::Http2);
@@ -4365,6 +4433,7 @@ public class HttpAsyncSocketIoController {
             } catch () {}
             wakeSocketIfPresent(dispatch_sock, dispatch_uh,
                 "HTTP/2 preparation error response");
+            cleanup_stream();
             return;
         }
 
@@ -4379,6 +4448,8 @@ public class HttpAsyncSocketIoController {
         # resumeMultiplexedReading() silently handles double-resume (catches STATE-ERROR).
         try {
             submitToHandlerPool(dispatch_target, sub () {
+                # NOTE: on_exit must be at closure scope, so that it runs when the request has been handled
+                on_exit cleanup_stream();
                 try {
                     hash<HttpRequestResultInfo> result = dispatch_target.onHttpRequest(conn_info);
                     if (body_streaming) {
@@ -4445,6 +4516,7 @@ public class HttpAsyncSocketIoController {
                     "Service Unavailable");
             } catch () {}
             wakeSocketIfPresent(dispatch_sock, dispatch_uh, "HTTP/2 submit failure response");
+            cleanup_stream();
         }
     }
 

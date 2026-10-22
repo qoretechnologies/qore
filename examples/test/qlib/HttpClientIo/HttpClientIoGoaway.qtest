@@ -31,6 +31,8 @@
     - HTTP/2: a GOAWAY ended the connection at once, failing the requests in progress that the server was answering
     - a request that the server refused without processing it (HTTP/2 REFUSED_STREAM, also used by nghttp2 for the
       streams a GOAWAY excludes) was reported as a stream reset and never sent again, whatever its method
+
+    The tests wait for a connection to drain with HttpClientConnection::waitForStateChange().
 */
 
 %modern
@@ -55,6 +57,11 @@ class OkHandler inherits AbstractHttpRequestHandler {
 }
 
 public class HttpClientIoGoawayTest inherits QUnit::Test {
+    private {
+        #! the bound of a wait that only guards against a hang
+        const HangGuard = 30s;
+    }
+
     constructor() : Test("HttpClientIoGoawayTest", "1.0") {
         addTestCase("HTTP/2: requests in progress when GOAWAY arrives are answered",
             \h2InProgressGoawayTest());
@@ -95,15 +102,15 @@ public class HttpClientIoGoawayTest inherits QUnit::Test {
         return rv;
     }
 
-    #! Polls until the condition is met
-    private waitForCondition(code<bool()> condition, string what, timeout to = 10s) {
-        date deadline = now_us() + to;
-        while (!condition()) {
-            if (now_us() >= deadline) {
-                throw "TIMEOUT", sprintf("%s: not met within %y", what, to);
-            }
-            usleep(5ms);
-        }
+    #! Returns the only connection of the pool, which must be ready
+    /** A stream on a ready connection that can take another one is acquired on that connection; the stream is
+        released when the handle goes out of scope, so the connection keeps its capacity
+    */
+    private HttpClientConnection getReadyConnection(HttpClientConnectionManager mgr, string url) {
+        HttpClientConnection conn = mgr.acquireStream(url).getConnection();
+        assertEq(1, getHostStats(mgr).connections, "the stream is on the connection of the pool");
+        assertEq(HttpClientConnectionState::Ready, conn.getConnectionState());
+        return conn;
     }
 
     #! Returns the pool statistics of the only host
@@ -130,10 +137,13 @@ public class HttpClientIoGoawayTest inherits QUnit::Test {
         RawHttp2Connection conn = srv.accept();
         on_exit conn.close();
         int stream_id = conn.readRequest();
+        HttpClientConnection client_conn = getReadyConnection(mgr, srv.getUrl());
         # the server accepted the request: it answers it after its GOAWAY
         conn.goaway(stream_id);
         # the connection takes no new request while the request is answered
-        waitForCondition(bool sub () { return getHostStats(mgr).draining == 1; }, "the connection drains");
+        assertEq(HttpClientConnectionState::Draining,
+            client_conn.waitForStateChange(HttpClientConnectionState::Ready, HangGuard), "the connection drains");
+        assertEq(1, getHostStats(mgr).draining);
         conn.respond(stream_id, "answered");
         hash<auto> resp = getResponse(q);
         assertEq(200, resp.status_code);
@@ -279,12 +289,15 @@ public class HttpClientIoGoawayTest inherits QUnit::Test {
         respondQuic(\ctx, req, "first");
         assertEq(200, getResponse(q).status_code);
 
+        HttpClientConnection client_conn = getReadyConnection(mgr, ctx.url);
         # GOAWAY without closing the session: the connection stays open
         resumeQuicServer(\ctx);
         ctx.sock.submitQuicShutdownNotice(req.session_id);
         ctx.ctrl.wakeSocket(ctx.sock);
-        waitForCondition(bool sub () { return getHostStats(mgr).draining == 1; }, "the connection drains");
+        assertEq(HttpClientConnectionState::Draining,
+            client_conn.waitForStateChange(HttpClientConnectionState::Ready, HangGuard), "the connection drains");
         hash<auto> host = getHostStats(mgr);
+        assertEq(1, host.draining);
         assertEq(1, host.connections, "the connection is still open");
         assertEq(0, host.usable_connections, "the connection takes no new request");
     }
@@ -303,15 +316,16 @@ public class HttpClientIoGoawayTest inherits QUnit::Test {
         # the final GOAWAY is queued while nothing is read or written on the server socket, so the client sends its
         # next request on a stream beyond the GOAWAY; the server rejects it when it reads it (RFC 9114 section 5.2)
         ctx.sock.submitQuicShutdown(req.session_id);
-        q = requestInBackground(mgr, ctx.url, "POST", "/second", "body");
-        waitForCondition(bool sub () { return mgr.getStats().total_active_streams == 1; }, "the request is sent");
+        # requestAsync() submits the request on the ready connection before it returns
+        HttpCancellableFuture f = mgr.requestAsync(ctx.url, "POST", "/second", NOTHING, "body");
+        assertEq(1, mgr.getStats().total_active_streams, "the request is on the connection");
         resumeQuicServer(\ctx);
         # the request is sent again on a new connection
         hash<auto> req2 = getQuicRequest(ctx);
         assertNeq(req.session_id, req2.session_id, "the request is sent again on another connection");
         assertEq("/second", req2.path);
         respondQuic(\ctx, req2, "second");
-        hash<auto> resp = getResponse(q);
+        hash<auto> resp = f.get(HangGuard);
         assertEq(200, resp.status_code);
         assertEq("second", resp.body);
     }

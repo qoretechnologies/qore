@@ -84,7 +84,8 @@ public class HttpClientIoRetiredConnectionTest inherits QUnit::Test {
         TestHandler handler();
         server.setHandler("test", "", NOTHING, handler);
         server.setDefaultHandler("test", handler);
-        url = "http://localhost:" + server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        url = "http://localhost:"
+            + server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
     }
 
     globalTearDown() {

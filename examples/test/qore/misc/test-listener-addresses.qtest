@@ -1,0 +1,730 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-listener-addresses.qtest Copyright (C) 2026 Qore Technologies, s.r.o.
+#
+# Fails when a test listens on all interfaces without saying why.  A test's clients connect to a loopback address or
+# to a host name, and a socket on all interfaces shares its port with any socket that another program binds to a more
+# specific address of the same port, which then receives those clients instead of the test's server; on macOS, a
+# program of the same user can do so after the test's server has started.  A test server therefore listens on the
+# host that its clients connect to, and a test that listens on all interfaces on purpose, for example to test such a
+# bind, says why with a comment on the line of the call, or on a comment line directly above it:
+#
+#     server.bindINET(NOTHING, 0, True);  # all-interfaces: a socket on all interfaces serves IPv6 clients too
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Util
+
+%exec-class TestListenerAddressesTest
+
+#! A call in a test source that listens on all interfaces without saying why
+hashdecl ListenerFinding {
+    #! the source file, relative to the scanned directory
+    string file;
+    #! the line of the call
+    int line;
+    #! the name of the call
+    string call;
+    #! why the call is reported
+    string reason;
+}
+
+#! The result of scanning test sources for listeners
+hashdecl ListenerScan {
+    #! the number of calls that listen
+    int calls = 0;
+    #! the number of calls that listen on all interfaces and say why
+    int marked = 0;
+    #! the calls that listen on all interfaces without saying why
+    list<hash<ListenerFinding>> findings = ();
+}
+
+#! A source with its comments blanked, and a copy with string and regular expression contents blanked too
+hashdecl LexedSource {
+    #! the characters of the source, with comments blanked
+    list<string> code;
+    #! the characters of the source, with comments, string contents and regular expression contents blanked
+    list<string> bare;
+}
+
+#! The receiver of a call
+hashdecl CallReceiver {
+    #! the name of the variable that the method is called on, if any
+    *string name;
+    #! true if the call is a call reference, whose arguments follow it
+    bool reference = False;
+}
+
+#! A call that listens
+hashdecl ListeningCall {
+    #! why the call listens on all interfaces; NOTHING if it names its host
+    *string reason;
+}
+
+#! Finds the calls in Qore test sources that listen on all interfaces without saying why
+/** The scanner recognizes:
+    - \c HttpServer::addListener() and \c HttpServer::addListenerAsync(), which take one argument: a listener option
+      hash without a \c "node" or with a wildcard \c "node", or an argument that is not an option hash (a port number
+      listens on all interfaces); an option hash in a variable is checked in the hash literals assigned to the
+      variable in the same file
+    - \c addListeners() with a bind string without a host or with a wildcard host, or with an option hash as above
+    - \c Socket::bindINET() without an address, with \c NOTHING or with a wildcard address
+    - \c Socket::bind() of a variable declared as a @ref Qore::Socket "Socket" in the file, or in a class that
+      inherits it, with an integer port or a bind string without a host or with a wildcard host
+
+    A call reference such as <tt>\\s.bindINET()</tt> whose arguments follow it, as in \c assertThrows(), is checked
+    with them.  Comments, string literals and regular expression literals are not code.  A call whose line, or the
+    comment line directly above it, has a comment starting with \c "all-interfaces:" and a reason is counted as
+    marked.
+*/
+class ListenerScanner {
+    public {
+        #! the addresses that mean all interfaces
+        const Wildcards = {"": True, "*": True, "0.0.0.0": True, "::": True, "[::]": True};
+
+        #! the calls that listen
+        const Calls = ("addListener", "addListenerAsync", "addListeners", "bindINET", "bind");
+
+        #! the source files scanned
+        const Sources = ("qtest", "qr", "qc", "qm", "q", "ql");
+
+        #! the comment of a call that listens on all interfaces on purpose
+        const Marker = "all-interfaces:";
+    }
+
+    #! scans the Qore sources under a directory, except AOT test copies and hidden directories
+    static hash<ListenerScan> scanDirectory(string dir) {
+        hash<ListenerScan> rv();
+        scanDirectoryIntern(dir, "", \rv);
+        return rv;
+    }
+
+    #! scans one source
+    /** @param file the name reported in findings
+        @param text the source
+        @param scan the scan result to add to
+    */
+    static scanSource(string file, string text, reference<hash<ListenerScan>> scan) {
+        hash<LexedSource> lexed = lex(text);
+        list<string> code = lexed.code;
+        list<string> bare = lexed.bare;
+        string bare_text = bare.join("");
+        string code_text = code.join("");
+        list<string> lines = text.split("\n");
+        list<hash<ListenerFinding>> findings = ();
+        foreach string call in (Calls) {
+            int pos = 0;
+            while ((pos = bare_text.find(call, pos)) >= 0) {
+                int start = pos;
+                pos += call.size();
+                if (start && bare[start - 1] =~ /^[A-Za-z0-9_]$/) {
+                    continue;
+                }
+                int open = skipSpace(bare, pos);
+                if (open == bare.size() || bare[open] != "(") {
+                    continue;
+                }
+                int close = matching(bare, open);
+                list<list<int>> args = split(bare, open + 1, close, ",");
+                # a call reference: its arguments follow it
+                hash<CallReceiver> receiver = receiverOf(bare, start);
+                if (receiver.reference && !args) {
+                    *list<list<int>> following = followingArgs(bare, close);
+                    if (!exists following) {
+                        continue;
+                    }
+                    args = following;
+                }
+                *hash<ListeningCall> listening = check(call, receiver.name, code, bare, code_text, args, start);
+                if (!listening) {
+                    continue;
+                }
+                ++scan.calls;
+                if (!listening.reason) {
+                    continue;
+                }
+                int line = 1;
+                for (int i = 0; i < start; ++i) {
+                    if (bare[i] == "\n") {
+                        ++line;
+                    }
+                }
+                *string why = markedReason(lines, line);
+                if (why) {
+                    ++scan.marked;
+                    continue;
+                }
+                push findings, <ListenerFinding>{
+                    "file": file,
+                    "line": line,
+                    "call": call,
+                    "reason": exists why
+                        ? "the all-interfaces comment gives no reason"
+                        : listening.reason + "; listen on the clients' host, or say why with an all-interfaces "
+                            "comment",
+                };
+            }
+        }
+        scan.findings += sort(findings, int sub (hash<ListenerFinding> l, hash<ListenerFinding> r) {
+            return l.line <=> r.line;
+        });
+    }
+
+    #! returns the source with comments blanked, and a copy with string and regular expression contents blanked too
+    /** Both keep every line break and the length of the source, so an offset in either is the same place in the
+        source.
+    */
+    static hash<LexedSource> lex(string text) {
+        list<string> src = ();
+        foreach string c in (text.iterator()) {
+            push src, c;
+        }
+        list<string> code = src;
+        list<string> bare = src;
+        int n = src.size();
+        int i = 0;
+        while (i < n) {
+            string c = src[i];
+            if (c == "#") {
+                for (; i < n && src[i] != "\n"; ++i) {
+                    code[i] = bare[i] = " ";
+                }
+                continue;
+            }
+            if (c == "/" && i + 1 < n && src[i + 1] == "*") {
+                int end = i + 2;
+                while (end + 1 < n && (src[end] != "*" || src[end + 1] != "/")) {
+                    ++end;
+                }
+                for (end = min(end + 2, n); i < end; ++i) {
+                    if (src[i] != "\n") {
+                        code[i] = bare[i] = " ";
+                    }
+                }
+                continue;
+            }
+            if (c == "\"" || c == "'") {
+                i = blankDelimited(src, \bare, i + 1, c);
+                continue;
+            }
+            if ((c == "=" || c == "!") && i + 1 < n && src[i + 1] == "~") {
+                i = blankRegex(src, \bare, i + 2);
+                continue;
+            }
+            ++i;
+        }
+        return <LexedSource>{"code": code, "bare": bare};
+    }
+
+    private static scanDirectoryIntern(string dir, string prefix, reference<hash<ListenerScan>> scan) {
+        Dir d();
+        d.chdir(dir);
+        foreach string name in (sort(d.listFiles())) {
+            *string ext = (name =~ x/\.([^.]+)$/)[0];
+            if (!inlist(ext, Sources) || name =~ /\.aot\.qtest$/) {
+                continue;
+            }
+            string text = ReadOnlyFile::readTextFile(dir + DirSep + name);
+            if (text =~ /(addListener|bindINET|bind)\s*\(/) {
+                scanSource(prefix + name, text, \scan);
+            }
+        }
+        foreach string name in (sort(d.listDirs())) {
+            if (name !~ /^\./) {
+                scanDirectoryIntern(dir + DirSep + name, prefix + name + "/", \scan);
+            }
+        }
+    }
+
+    #! returns the reason in the all-interfaces comment of the call on the line, "" if it gives none, or NOTHING
+    /** The comment is on the line of the call or on a comment line directly above it.
+    */
+    private static *string markedReason(list<string> lines, int line) {
+        foreach string candidate in ((lines[line - 1] ?? "", (line > 1) ? lines[line - 2] : "")) {
+            if ($# && candidate !~ /^\s*#/) {
+                break;
+            }
+            if (candidate =~ /#.*\ball-interfaces:/) {
+                return trim(regex_subst(candidate, "^.*#.*\\ball-interfaces:", ""));
+            }
+        }
+    }
+
+    #! returns the offset of the first character at or after the offset that is not whitespace
+    private static int skipSpace(list<string> bare, int i) {
+        while (i < bare.size() && bare[i] =~ /^\s$/) {
+            ++i;
+        }
+        return i;
+    }
+
+    #! returns the receiver of the call at the offset: its name, if any, and whether the call is a call reference
+    private static hash<CallReceiver> receiverOf(list<string> bare, int start) {
+        int i = start;
+        while (i && bare[i - 1] =~ /^[A-Za-z0-9_.:]$/) {
+            --i;
+        }
+        string path = i < start ? bare[i..start - 1].join("") : "";
+        *string name = (path =~ x/([A-Za-z_][A-Za-z0-9_]*)\.$/)[0];
+        return <CallReceiver>{"name": name, "reference": i && bare[i - 1] == "\\"};
+    }
+
+    #! returns the arguments that follow a call reference, as in assertThrows(err, \s.bindINET(), (args)), if any
+    private static *list<list<int>> followingArgs(list<string> bare, int close) {
+        int i = skipSpace(bare, close + 1);
+        if (i == bare.size() || bare[i] != ",") {
+            return;
+        }
+        i = skipSpace(bare, i + 1);
+        if (i == bare.size()) {
+            return;
+        }
+        if (bare[i] == "(") {
+            return split(bare, i + 1, matching(bare, i), ",");
+        }
+        # one argument, up to the next separator outside brackets
+        int end = i;
+        int depth = 0;
+        for (; end < bare.size(); ++end) {
+            string c = bare[end];
+            if (c == "(" || c == "[" || c == "{") {
+                ++depth;
+            } else if (c == ")" || c == "]" || c == "}") {
+                if (!depth) {
+                    break;
+                }
+                --depth;
+            } else if (!depth && (c == "," || c == ";")) {
+                break;
+            }
+        }
+        return ((i, end),);
+    }
+
+    #! blanks a quoted string's contents and returns the offset after its closing quote
+    private static int blankDelimited(list<string> src, reference<list<string>> bare, int i, string quote) {
+        int n = src.size();
+        while (i < n) {
+            string c = src[i];
+            if (c == quote) {
+                return i + 1;
+            }
+            if (c != "\n") {
+                bare[i] = " ";
+            }
+            if (c == "\\" && i + 1 < n) {
+                if (src[i + 1] != "\n") {
+                    bare[i + 1] = " ";
+                }
+                i += 2;
+                continue;
+            }
+            ++i;
+        }
+        return n;
+    }
+
+    #! blanks a regular expression literal after =~ or !~ and returns the offset after it
+    /** A match (\c /.../ or \c x/.../) has one part and a substitution (\c s/.../.../) or transliteration
+        (\c tr/.../.../) has two; the options after the last delimiter are kept.  Anything else after the operator,
+        such as a variable, is code, and the offset after the operator is returned.
+    */
+    private static int blankRegex(list<string> src, reference<list<string>> bare, int i) {
+        int n = src.size();
+        while (i < n && src[i] =~ /^\s$/) {
+            ++i;
+        }
+        int parts;
+        if (i < n && src[i] == "/") {
+            parts = 1;
+        } else if (i + 1 < n && src[i + 1] == "/" && (src[i] == "x" || src[i] == "s")) {
+            parts = src[i] == "x" ? 1 : 2;
+            ++i;
+        } else if (i + 2 < n && src[i] == "t" && src[i + 1] == "r" && src[i + 2] == "/") {
+            parts = 2;
+            i += 2;
+        } else {
+            return i;
+        }
+        for (int part = 0; part < parts; ++part) {
+            i = blankDelimited(src, \bare, i + 1, "/") - 1;
+        }
+        return i + 1;
+    }
+
+    #! returns the offset of the bracket that closes the bracket at the given offset, or the end of the source
+    private static int matching(list<string> bare, int open) {
+        int depth = 0;
+        for (int i = open, int n = bare.size(); i < n; ++i) {
+            string c = bare[i];
+            if (c == "(" || c == "[" || c == "{") {
+                ++depth;
+            } else if (c == ")" || c == "]" || c == "}") {
+                if (!--depth) {
+                    return i;
+                }
+            }
+        }
+        return bare.size();
+    }
+
+    #! splits the range at the separators outside brackets and returns the [start, end) range of each part
+    private static list<list<int>> split(list<string> bare, int start, int end, string sep) {
+        list<list<int>> rv = ();
+        int depth = 0;
+        int part = start;
+        for (int i = start; i < end; ++i) {
+            string c = bare[i];
+            if (c == "(" || c == "[" || c == "{") {
+                ++depth;
+            } else if (c == ")" || c == "]" || c == "}") {
+                --depth;
+            } else if (!depth && c == sep) {
+                push rv, (part, i);
+                part = i + 1;
+            }
+        }
+        if (part < end && trim(bare[part..end - 1].join("")) != "") {
+            push rv, (part, end);
+        }
+        return rv;
+    }
+
+    #! returns the code of a range with surrounding whitespace removed
+    private static string text(list<string> code, list<int> range) {
+        return range[0] < range[1] ? trim(code[range[0]..range[1] - 1].join("")) : "";
+    }
+
+    #! returns the value of a string literal, or NOTHING if the code is not a single string literal
+    private static *string literal(string code) {
+        *list<*string> m = code =~ x/^"([^"\\]*)"$/;
+        if (m) {
+            return m[0] ?? "";
+        }
+        m = code =~ x/^'([^'\\]*)'$/;
+        if (m) {
+            return m[0] ?? "";
+        }
+    }
+
+    #! returns the range of the hash literal at the range, if the range is one, optionally with a cast
+    private static *list<int> hashLiteral(list<string> bare, list<int> range) {
+        int i = skipSpace(bare, range[0]);
+        if (i < range[1] && bare[i] == "<") {
+            while (i < range[1] && bare[i] != ">") {
+                ++i;
+            }
+            i = skipSpace(bare, i + 1);
+        }
+        if (i >= range[1] || bare[i] != "{") {
+            return;
+        }
+        return (i, matching(bare, i));
+    }
+
+    #! returns why the listener option hash literal listens on all interfaces, or NOTHING if it names a host
+    private static *string checkOptions(list<string> code, list<string> bare, list<int> options) {
+        foreach list<int> entry in (split(bare, options[0] + 1, options[1], ",")) {
+            list<list<int>> kv = split(bare, entry[0], entry[1], ":");
+            if (kv.size() < 2 || literal(text(code, kv[0])) != "node") {
+                continue;
+            }
+            string value = text(code, (kv[1][0], entry[1]));
+            *string address = literal(value);
+            if (exists address && Wildcards{address}) {
+                return sprintf("the listener's \"node\" %y is a wildcard address", address);
+            }
+            return;
+        }
+        return "the listener options have no \"node\", so it listens on all interfaces";
+    }
+
+    #! returns the range of the hash literal last assigned to the variable before the offset, if any
+    /** An assignment (<tt>name = {...}</tt>) or a declaration with a constructor-style initializer
+        (<tt>hash<HttpListenerOptionInfo> name({...})</tt>), optionally with a cast.
+    */
+    private static *list<int> assignedLiteral(list<string> bare, string bare_text, string name, int before) {
+        *list<int> rv;
+        int pos = 0;
+        while ((pos = bare_text.find(name, pos)) >= 0 && pos < before) {
+            int start = pos;
+            pos += name.size();
+            if ((start && bare[start - 1] =~ /^[A-Za-z0-9_.]$/)
+                || (pos < bare.size() && bare[pos] =~ /^[A-Za-z0-9_]$/)) {
+                continue;
+            }
+            int i = skipSpace(bare, pos);
+            *list<int> assigned;
+            if (i + 1 < bare.size() && bare[i] == "=" && bare[i + 1] != "=") {
+                assigned = hashLiteral(bare, (i + 1, bare.size()));
+            } else if (i < bare.size() && bare[i] == "(") {
+                assigned = hashLiteral(bare, (i + 1, matching(bare, i)));
+            }
+            if (assigned) {
+                rv = assigned;
+            }
+        }
+        return rv;
+    }
+
+    #! returns why the listener options of a call listen on all interfaces, or NOTHING if they name a host
+    private static *string checkOptionsArg(list<string> code, list<string> bare, string code_text, list<int> range,
+            int call_pos, reference<bool> options) {
+        *list<int> hash_range = hashLiteral(bare, range);
+        if (hash_range) {
+            options = True;
+            return checkOptions(code, bare, hash_range);
+        }
+        string arg = text(code, range);
+        if (arg !~ /^[A-Za-z_][A-Za-z0-9_]*$/) {
+            options = False;
+            return;
+        }
+        # a variable: the hash literal last assigned to it before the call, or a "node" set in it
+        if (regex(code_text, "\\b" + arg + "(\\.node|\\{\"node\"\\})\\s*=[^=]")) {
+            options = True;
+            return;
+        }
+        *list<int> assigned = assignedLiteral(bare, bare.join(""), arg, call_pos);
+        if (!assigned) {
+            options = False;
+            return;
+        }
+        options = True;
+        *string reason = checkOptions(code, bare, assigned);
+        if (reason) {
+            return sprintf("%s (in the value of %y)", reason, arg);
+        }
+    }
+
+    #! returns why a bind string listens on all interfaces, or NOTHING if it names a host
+    private static *string checkBind(string bind) {
+        if (bind =~ /^[0-9]+$/) {
+            return sprintf("the bind %y has no host, so it listens on all interfaces", bind);
+        }
+        *list<*string> m = bind =~ x/^(.*):[0-9]+$/;
+        if (m && Wildcards{m[0] ?? ""}) {
+            return sprintf("the bind %y has a wildcard host", bind);
+        }
+    }
+
+    #! returns true if the receiver of a bind() call is a socket
+    private static bool isSocket(*string receiver, string code_text) {
+        if (!receiver || receiver == "self") {
+            return code_text =~ /\binherits\s+(Qore::)?Socket\b/;
+        }
+        return regex(code_text, "\\bSocket\\s+" + receiver + "\\b")
+            || regex(code_text, "\\b" + receiver + "\\s*=\\s*new\\s+(Qore::)?Socket\\b");
+    }
+
+    #! returns NOTHING if the call does not listen, or a hash with the reason why it listens on all interfaces
+    /** The \c reason is NOTHING if the call names its host.
+    */
+    private static *hash<ListeningCall> check(string call, *string receiver, list<string> code,
+            list<string> bare, string code_text, list<list<int>> args, int call_pos) {
+        switch (call) {
+            case "addListener":
+            case "addListenerAsync": {
+                # HttpServer::addListener() has one argument; other methods of this name register a socket
+                if (args.size() != 1) {
+                    return;
+                }
+                bool options;
+                *string reason = checkOptionsArg(code, bare, code_text, args[0], call_pos, \options);
+                if (!options) {
+                    return <ListeningCall>{"reason": sprintf("the argument %y is not a listener option hash with a "
+                        "\"node\"; a port number listens on all interfaces", text(code, args[0]))};
+                }
+                return <ListeningCall>{"reason": reason};
+            }
+            case "addListeners": {
+                if (!args) {
+                    return;
+                }
+                bool options;
+                *string reason = checkOptionsArg(code, bare, code_text, args[0], call_pos, \options);
+                if (options) {
+                    return <ListeningCall>{"reason": reason};
+                }
+                *string bind = literal(text(code, args[0]));
+                return <ListeningCall>{"reason": exists bind ? checkBind(bind) : NOTHING};
+            }
+            case "bindINET": {
+                if (!args) {
+                    return <ListeningCall>{"reason": "the call has no address, so it binds all interfaces"};
+                }
+                string node = text(code, args[0]);
+                *string address = literal(node);
+                if (node == "NOTHING") {
+                    return <ListeningCall>{"reason": "the address NOTHING binds all interfaces"};
+                }
+                if (exists address && Wildcards{address}) {
+                    return <ListeningCall>{"reason": sprintf("the address %y is a wildcard address", address)};
+                }
+                return <ListeningCall>{"reason": NOTHING};
+            }
+            case "bind": {
+                if (!args || !isSocket(receiver, code_text)) {
+                    return;
+                }
+                string arg = text(code, args[0]);
+                if (arg =~ /^[0-9]+$/) {
+                    return <ListeningCall>{"reason": sprintf("the port %s has no host, so the socket binds all "
+                        "interfaces", arg)};
+                }
+                *string bind = literal(arg);
+                # another argument is a host name, a path or an expression
+                return <ListeningCall>{"reason": exists bind ? checkBind(bind) : NOTHING};
+            }
+        }
+    }
+}
+
+public class TestListenerAddressesTest inherits QUnit::Test {
+    constructor() : Test("TestListenerAddressesTest", "1.0") {
+        addTestCase("Every way a test can listen on all interfaces is reported with its line", \wildcards());
+        addTestCase("A listener that names its host, and code that is not a listener, is not reported", \named());
+        addTestCase("A call that listens on all interfaces on purpose says why", \marked());
+        addTestCase("No test listens on all interfaces without saying why", \tests());
+        set_return_value(main());
+    }
+
+    private hash<ListenerScan> scan(list<string> lines) {
+        hash<ListenerScan> rv();
+        ListenerScanner::scanSource("sample", lines.join("\n"), \rv);
+        return rv;
+    }
+
+    private list<string> describe(list<hash<ListenerFinding>> findings) {
+        return map sprintf("%s:%d: %s(): %s", $1.file, $1.line, $1.call, $1.reason), findings;
+    }
+
+    #! the reason reported for a call without a marker
+    private static string why(string reason) {
+        return reason + "; listen on the clients' host, or say why with an all-interfaces comment";
+    }
+
+    wildcards() {
+        hash<ListenerScan> result = scan((
+            "server.addListener(0);",
+            "port = addListener(port).port;",
+            "server.addListener(<HttpListenerOptionInfo>{\"service\": 0});",
+            "server.addListener(<HttpListenerOptionInfo>{",
+            "    \"service\": 0,",
+            "    \"cert\": new SSLCertificate(ReadOnlyFile::readTextFile(dir + \"cert.pem\")),",
+            "});",
+            "server.addListener({\"node\": \"0.0.0.0\", \"service\": 0});",
+            "server.addListenerAsync(<HttpListenerOptionInfo>{\"node\": \"::\", \"service\": 0}).get();",
+            "server.addListeners(\"*:8080\", opts);",
+            "listener.bindINET(NOTHING, 0, True);",
+            "listener.bindINET(\"[::]\", 0, True);",
+            "listener.bindINET();",
+            "Socket s();",
+            "s.bind(8080);",
+            "s.bind(\"0\");",
+            "assertThrows(\"SOCKET-BIND-ERROR\", \\s.bindINET(), (NOTHING, port, False));",
+            "assertThrows(\"SOCKET-BIND-ERROR\", \\server.addListener(), port, \"addListener()\");",
+            "hash<HttpListenerOptionInfo> opts = <HttpListenerOptionInfo>{\"service\": 0};",
+            "server.addListener(opts);",
+        ));
+        assertEq(15, result.calls, "every call that listens is examined");
+        assertEq((
+            "sample:1: addListener(): " + why("the argument \"0\" is not a listener option hash with a \"node\"; a "
+                "port number listens on all interfaces"),
+            "sample:2: addListener(): " + why("the argument \"port\" is not a listener option hash with a \"node\"; "
+                "a port number listens on all interfaces"),
+            "sample:3: addListener(): " + why("the listener options have no \"node\", so it listens on all "
+                "interfaces"),
+            "sample:4: addListener(): " + why("the listener options have no \"node\", so it listens on all "
+                "interfaces"),
+            "sample:8: addListener(): " + why("the listener's \"node\" \"0.0.0.0\" is a wildcard address"),
+            "sample:9: addListenerAsync(): " + why("the listener's \"node\" \"::\" is a wildcard address"),
+            "sample:10: addListeners(): " + why("the bind \"*:8080\" has a wildcard host"),
+            "sample:11: bindINET(): " + why("the address NOTHING binds all interfaces"),
+            "sample:12: bindINET(): " + why("the address \"[::]\" is a wildcard address"),
+            "sample:13: bindINET(): " + why("the call has no address, so it binds all interfaces"),
+            "sample:15: bind(): " + why("the port 8080 has no host, so the socket binds all interfaces"),
+            "sample:16: bind(): " + why("the bind \"0\" has no host, so it listens on all interfaces"),
+            "sample:17: bindINET(): " + why("the address NOTHING binds all interfaces"),
+            "sample:18: addListener(): " + why("the argument \"port\" is not a listener option hash with a "
+                "\"node\"; a port number listens on all interfaces"),
+            "sample:20: addListener(): " + why("the listener options have no \"node\", so it listens on all "
+                "interfaces (in the value of \"opts\")"),
+        ), describe(result.findings));
+    }
+
+    named() {
+        hash<ListenerScan> result = scan((
+            "server.addListener(<HttpListenerOptionInfo>{\"node\": \"127.0.0.1\", \"service\": 0});",
+            "server.addListener(<HttpListenerOptionInfo>{\"node\": host, \"service\": port});",
+            "hash<HttpListenerOptionInfo> opts = {\"node\": \"localhost\", \"service\": 0};",
+            "server.addListener(opts);",
+            "hash<auto> opts = {\"url\": \"http://localhost\"};",
+            "hash<HttpListenerOptionInfo> tls({\"node\": \"127.0.0.1\", \"service\": 0});",
+            "server.addListener(tls);",
+            "listener.bindINET(\"127.0.0.1\", 0, True);",
+            "Socket s();",
+            "s.bind(\"127.0.0.1:0\");",
+            "assertThrows(\"SOCKET-BIND-ERROR\", \\s.bindINET(), (\"::1\", port, False, AF_INET6));",
+            "SQLStatement stmt(ds);",
+            "stmt.bind(1);",
+            "ctrl.addListener(listener, target);",
+            "private *hash<ExceptionInfo> addListener(Program p, HttpServer server, string bind) {",
+            "# server.addListener(0);",
+            "string doc = \"server.addListener(0)\";",
+            "string accept = \"*/*\"; s.bindINET(\"::1\", 0, True);",
+            "bool comment = text =~ /#\"/; s.bindINET(\"::1\", 0, True);",
+            "code c = \\server.addListener();",
+        ));
+        assertEq(9, result.calls, "every call that listens is examined");
+        assertEq((), describe(result.findings));
+    }
+
+    marked() {
+        hash<ListenerScan> result = scan((
+            "server.bindINET(NOTHING, 0, True);  # all-interfaces: a socket on all interfaces serves IPv6 too",
+            "# all-interfaces: the bind of a given port on all interfaces is the subject of the test",
+            "assertThrows(\"SOCKET-BIND-ERROR\", \\s.bindINET(), (NOTHING, port, True), \"refused\");",
+            "server.addListener(0); # all-interfaces:",
+            "# all-interfaces: a comment two lines above the call does not mark it",
+            "int port;",
+            "server.addListener(0);",
+        ));
+        assertEq(4, result.calls, "every call that listens is examined");
+        assertEq(2, result.marked, "the calls that say why are marked");
+        assertEq((
+            "sample:4: addListener(): the all-interfaces comment gives no reason",
+            "sample:7: addListener(): " + why("the argument \"0\" is not a listener option hash with a \"node\"; a "
+                "port number listens on all interfaces"),
+        ), describe(result.findings));
+    }
+
+    tests() {
+        # the tests in examples/test, and those of the binary modules
+        string root = normalize_dir(get_script_dir() + "/../../../..");
+        hash<ListenerScan> result = ListenerScanner::scanDirectory(root + "/examples/test");
+        Dir modules();
+        if (modules.chdir(root + "/modules")) {
+            foreach string name in (sort(modules.listDirs())) {
+                string dir = root + "/modules/" + name + "/test";
+                if (is_dir(dir)) {
+                    hash<ListenerScan> module_result = ListenerScanner::scanDirectory(dir);
+                    result.calls += module_result.calls;
+                    result.marked += module_result.marked;
+                    result.findings += map <ListenerFinding>{
+                        "file": "modules/" + name + "/test/" + $1.file,
+                        "line": $1.line,
+                        "call": $1.call,
+                        "reason": $1.reason,
+                    }, module_result.findings;
+                }
+            }
+        }
+        assertEq((), describe(result.findings));
+        # the test servers make hundreds of listening calls, so a scan that finds far fewer has stopped recognizing
+        # them
+        assertGt(500, result.calls, "listening calls examined");
+        assertGt(0, result.marked, "calls that listen on all interfaces on purpose");
+    }
+}

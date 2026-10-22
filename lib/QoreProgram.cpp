@@ -48,6 +48,7 @@
 #include "qore/intern/ModuleInfo.h"
 #include "qore/intern/QoreSerializable.h"
 #include "qore/intern/QoreJIT.h"
+#include "qore/intern/QoreForkHandlers.h"
 
 #include <string>
 #include <set>
@@ -58,6 +59,7 @@ extern bool threads_initialized;
 #include <algorithm>
 #include <functional>
 #include <memory>
+#include <new>
 #include <map>
 
 ParseOptionMaps pomaps;
@@ -81,6 +83,9 @@ static QoreThreadLock& program_cleanup_lock() {
     static QoreThreadLock* l = new QoreThreadLock;
     return *l;
 }
+
+// the cleanup callback list can be used in a child process created with fork() (see QoreForkHandlers.h)
+static QoreForkThreadLock program_cleanup_fork_handler(program_cleanup_lock(), QFLR_LEAF, "program_cleanup");
 
 typedef std::vector<qore_program_cleanup_callback_t> program_cleanup_callback_list_t;
 
@@ -413,6 +418,80 @@ qore_program_private::qore_program_to_object_map_t qore_program_private::qore_pr
 qore_program_private::programid_to_program_map_t qore_program_private::programid_to_program_map;
 QoreRWLock qore_program_private::lck_programMap;
 unsigned qore_program_private::programIdCounter = 1;
+
+void qore_program_private::fixupAfterFork(int tid, ThreadProgramData* tpd) {
+    plock.reinitAfterFork(&ma_recursive);
+    pcond.reinitAfterFork();
+    // the thread counts keep only the forking thread
+    unsigned own = 0;
+    ptid_map_t::iterator i = tidmap.find(tid);
+    if (i != tidmap.end()) {
+        own = i->second;
+    }
+    tidmap.clear();
+    if (own) {
+        tidmap[tid] = own;
+    }
+    thread_count = own;
+    thread_waiting = 0;
+    if (parse_tid != tid) {
+        // a thread of the parent was parsing; the parse does not go on in the child
+        parse_count = 0;
+        parse_tid = -1;
+    }
+    tlock.reinitAfterFork();
+    tcond.reinitAfterFork();
+    twaiting = 0;
+    if (tclear && tclear != tid) {
+        tclear = 0;
+    }
+    tld_lock.reinitAfterFork();
+    sm_lock.reinitAfterFork();
+    featureLock.reinitAfterFork();
+    new (&runtime_metadata_lock) std::recursive_mutex();
+    ir_fallback_lock.reinitAfterFork();
+    plugin_fallback_lock.reinitAfterFork();
+    debug_program_counter.reinitAfterFork();
+    lck_breakpoint.reinitAfterFork();
+    // the thread data of the parent's other threads remains registered; its lock can be held by its thread
+    for (ThreadProgramData* i : tld_registry) {
+        if (i != tpd) {
+            i->reinitLockAfterFork();
+        }
+    }
+}
+
+void qore_program_private::fixupAllAfterFork(int tid, ThreadProgramData* tpd) {
+    for (auto& i : programid_to_program_map) {
+        qore_program_private::get(*i.second)->fixupAfterFork(tid, tpd);
+    }
+}
+
+namespace {
+//! the fork handler of the Program registry: the Programs are made consistent in the child (see
+//! qore_program_private::fixupAfterFork())
+class QoreProgramRegistryForkHandler : public QoreForkHandler {
+public:
+    QoreProgramRegistryForkHandler() : QoreForkHandler(QFLR_LEAF, "program_registry") {
+    }
+
+    void prepare() noexcept override {
+        qore_program_private::getProgramMapLock().wrlock();
+    }
+
+    void parent() noexcept override {
+        qore_program_private::getProgramMapLock().unlock();
+    }
+
+    void child() noexcept override {
+        ThreadProgramData* tpd = get_thread_program_data_if_any();
+        qore_program_private::fixupAllAfterFork(qore_fork_get_tid(), tpd);
+        qore_program_private::getProgramMapLock().reinitAfterFork();
+    }
+};
+
+QoreProgramRegistryForkHandler program_registry_fork_handler;
+}
 
 qore_program_private::qore_program_private(QoreProgram* n_pgm, const QoreParseOptions& n_parse_options, QoreProgram* p_pgm)
         : qore_program_private_base(n_pgm, n_parse_options, p_pgm) {
@@ -986,14 +1065,16 @@ bool expand_module_path_macros(const std::string& in, std::string& out, std::str
                 owned = qore_module_api_version_str();
                 expansion = owned.c_str();
             } else {
-                const char* env_val = getenv(name.c_str());
-                if (!env_val) {
+                QoreEnvironmentValue env_val_holder(name.c_str());
+                if (!env_val_holder) {
                     err = "undefined variable '";
                     err += name;
                     err += "' in path argument";
                     return false;
                 }
-                expansion = env_val;
+                // the value is copied: the holder's copy of it ends with this block, before it is appended
+                owned = env_val_holder.str();
+                expansion = owned.c_str();
             }
             out.append(expansion);
             i = j + 1;
@@ -1189,6 +1270,14 @@ void qore_program_private_base::newProgram() {
 #endif
 }
 
+void qore_program_private_base::setCreatorChain(const QoreProgram& creator) {
+    assert(creator_ids.empty());
+    // the creator chain: the creator first, then the Programs that created it
+    creator_ids.reserve(creator.priv->creator_ids.size() + 1);
+    creator_ids.push_back(creator.priv->getProgramId());
+    creator_ids.insert(creator_ids.end(), creator.priv->creator_ids.begin(), creator.priv->creator_ids.end());
+}
+
 void qore_program_private_base::setParent(QoreProgram* p_pgm, const QoreParseOptions& n_parse_options) {
     //printd(5, "qore_program_private_base::setParent() this: %p parent: %p (parent lvl: %p) this: %p (this pgm: %p) "
     //    "parent po: %lld new po: %lld parent no_child_po_restrictions: %d\n", this, p_pgm,
@@ -1196,6 +1285,8 @@ void qore_program_private_base::setParent(QoreProgram* p_pgm, const QoreParseOpt
     //    p_pgm->priv->pwo.parse_options & PO_NO_CHILD_PO_RESTRICTIONS);
 
     TZ = p_pgm->currentTZ();
+
+    setCreatorChain(*p_pgm);
 
     // if children inherit restrictions, then set all child restrictions
     if (!(p_pgm->priv->pwo.parse_options & PO_NO_CHILD_PO_RESTRICTIONS)) {
@@ -2229,6 +2320,41 @@ void qore_program_private::exportGlobalVariable(ExceptionSink* xsink, const char
 }
 
 qore_program_private_base::OpaqueTargetShard qore_program_private_base::opaque_shards[1u << OpaqueTargetShardBits];
+
+namespace {
+//! the fork handler of the opaque target registry's shard locks, which are leaf locks never held together (see
+//! QoreForkHandlers.h)
+class OpaqueTargetShardsForkHandler : public QoreForkHandler {
+public:
+    OpaqueTargetShardsForkHandler() : QoreForkHandler(QFLR_LEAF, "opaque_target_shards") {
+    }
+
+    void prepare() noexcept override {
+        if (QFLM_STRIPED == QFLM_ACQUIRE) {
+            for (auto& shard : qore_program_private_base::opaque_shards) {
+                shard.lock.lock();
+            }
+        }
+    }
+
+    void parent() noexcept override {
+        if (QFLM_STRIPED == QFLM_ACQUIRE) {
+            constexpr unsigned count = 1u << qore_program_private_base::OpaqueTargetShardBits;
+            for (unsigned i = count; i; --i) {
+                qore_program_private_base::opaque_shards[i - 1].lock.unlock();
+            }
+        }
+    }
+
+    void child() noexcept override {
+        for (auto& shard : qore_program_private_base::opaque_shards) {
+            shard.lock.reinitAfterFork();
+        }
+    }
+};
+
+OpaqueTargetShardsForkHandler opaque_target_shards_fork_handler;
+}
 
 void qore_program_private_base::clearOpaqueTargets(ExceptionSink* xsink) {
     // take this Program's entries out of the registry under the lock, then do all the work outside
@@ -3963,6 +4089,13 @@ int QoreProgram::issueModuleCmd(const char* module, const char* cmd, ExceptionSi
 }
 
 QoreRWLock QoreBreakpoint::lck_breakpoint;
+// the breakpoint list can be used in a child process created with fork() (see QoreForkHandlers.h)
+QoreRWLock& qore_program_private::getBreakpointLockForFork() {
+    return QoreBreakpoint::lck_breakpoint;
+}
+
+static QoreForkRWLock breakpoint_fork_handler(qore_program_private::getBreakpointLockForFork(), QFLR_LEAF,
+    "breakpoints");
 QoreBreakpointList_t QoreBreakpoint::breakpointList;
 unsigned QoreBreakpoint::breakpointIdCounter = 1;
 

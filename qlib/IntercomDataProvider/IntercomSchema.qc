@@ -97,8 +97,7 @@ public hashdecl IntercomSchemaProvenanceInfo {
     \c x-qore-normalized.  \c "GET /tags", \c "GET /admins" and \c "GET /contacts/{contact_id}/tags" are
     left alone: they answer envelopes with no \c pages object at all, so they are genuinely unpaged.
 
-    The schema is parsed once, on first use, rather than when the module loads, so that a program that only
-    needs the connection does not pay for it.
+    The schema is parsed once, when the module loads and registers its actions, which are built from it.
 */
 public class IntercomSchema {
     public {

@@ -1,0 +1,170 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+#
+# A request path with an escaped NUL character (%00) is malformed: it names no resource and cannot be a key. The
+# server answers it with status 400 before it selects a handler, with only a default handler or with path handlers,
+# over HTTP/1.1, HTTP/2 and HTTP/3, and never drops the connection without a response.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Logger
+%requires HttpServerUtil
+%requires HttpServerAsyncIo
+%requires HttpServer
+%requires ../../TestCertificates.qm
+
+%exec-class HttpServerNulPathTest
+
+class CountingHandler inherits AbstractHttpRequestHandler {
+    public {
+        # the requests that reached the handler; the tests send them one at a time
+        int calls = 0;
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        ++calls;
+        return makeResponse(200, "path=" + cx.raw_path);
+    }
+}
+
+class HttpServerNulPathTest inherits QUnit::Test {
+    constructor() : QUnit::Test("HttpServer NUL path", "1.0") {
+        addTestCase("HTTP/1.1 with only a default handler", \http1DefaultHandler());
+        addTestCase("HTTP/1.1 with path handlers", \http1PathHandlers());
+        addTestCase("HTTP/2", \http2());
+        addTestCase("HTTP/3", \http3());
+        set_return_value(main());
+    }
+
+    private http1DefaultHandler() {
+        HttpServer server(<HttpServerOptionInfo>{});
+        on_exit server.stop();
+        CountingHandler handler();
+        server.setDefaultHandler("default", handler);
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+
+        hash<auto> response = rawRequest(port, "GET /a%00b HTTP/1.1\r\nHost: localhost\r\n\r\n");
+        assertEq(400, response.hdr.status_code);
+        assertEq("close", response.hdr.connection);
+        assertTrue(response.closed);
+        assertEq(0, handler.calls);
+
+        response = rawRequest(port, "GET /ab HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
+        assertEq(200, response.hdr.status_code);
+        assertEq("path=/ab", response.body);
+        assertEq(1, handler.calls);
+    }
+
+    private http1PathHandlers() {
+        HttpServer server(<HttpServerOptionInfo>{});
+        on_exit server.stop();
+        CountingHandler path_handler();
+        CountingHandler default_handler();
+        server.setHandler("path", "/a", NOTHING, path_handler);
+        server.setDefaultHandler("default", default_handler);
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+
+        # the handler lookup by path raised HASH-KEY-ERROR, and the connection was closed without a response
+        foreach string target in ("/a%00b", "/a/%00", "/%00?x=1") {
+            hash<auto> response = rawRequest(port, sprintf("GET %s HTTP/1.1\r\nHost: localhost\r\n\r\n", target));
+            assertEq(400, response.hdr.status_code, target);
+            assertTrue(response.closed, target);
+        }
+        # the body of the request is not read, so the connection is closed after the response
+        hash<auto> response = rawRequest(port, "POST /a%00b HTTP/1.1\r\nHost: localhost\r\nContent-Length: 5\r\n\r\n"
+            "hello");
+        assertEq(400, response.hdr.status_code);
+        assertTrue(response.closed);
+        assertEq(0, path_handler.calls + default_handler.calls);
+
+        response = rawRequest(port, "GET /a HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
+        assertEq(200, response.hdr.status_code);
+        assertEq(1, path_handler.calls);
+    }
+
+    private http2() {
+        HttpServer server(<HttpServerOptionInfo>{});
+        on_exit server.stop();
+        CountingHandler handler();
+        server.setHandler("path", "/a", NOTHING, handler);
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0,
+            "cert": new SSLCertificate(TestCertificates::CertPem), "key": new SSLPrivateKey(TestCertificates::KeyPem),
+            "enable_h3": False}).port;
+        server.waitForAsyncIo();
+
+        HTTPClient client({"url": sprintf("https://localhost:%d", port), "ssl_verify_cert": False,
+            "http_version": "2.0", "pre_encoded_urls": True, "timeout": 30s});
+        client.setHttp2Mode("required");
+        hash<auto> info = send(client, "/a%00b");
+        assertEq(400, info."response-headers".status_code);
+        assertEq(0, handler.calls);
+        # the stream is answered and the connection stays open for the next request
+        info = send(client, "/a");
+        assertEq(200, info."response-headers".status_code);
+        assertEq("2", info."response-headers".http_version ?? info.http_version);
+        assertEq(1, handler.calls);
+    }
+
+    private http3() {
+        HttpServer server(<HttpServerOptionInfo>{});
+        on_exit server.stop();
+        CountingHandler handler();
+        server.setHandler("path", "/a", NOTHING, handler);
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0,
+            "cert": new SSLCertificate(TestCertificates::CertPem), "key": new SSLPrivateKey(TestCertificates::KeyPem),
+            "enable_h3": True}).port;
+        server.waitForAsyncIo();
+
+        HTTPClient client({"url": sprintf("https://localhost:%d", port), "ssl_verify_cert": False,
+            "http3_mode": "required", "pre_encoded_urls": True, "timeout": 30s});
+        hash<auto> info = send(client, "/a%00b");
+        assertEq(400, info."response-headers".status_code);
+        assertEq(0, handler.calls);
+        info = send(client, "/a");
+        assertEq(200, info."response-headers".status_code);
+        assertTrue(client.isHttp3Active());
+        assertEq(1, handler.calls);
+    }
+
+    # sends a GET request with the given pre-encoded target; returns the request information hash
+    private static hash<auto> send(HTTPClient client, string target) {
+        hash<auto> info;
+        try {
+            client.send(NOTHING, "GET", target, NOTHING, False, \info);
+        } catch (hash<ExceptionInfo> ex) {
+            # an error status raises HTTP-CLIENT-RECEIVE-ERROR after the response information is set
+            if (ex.err != "HTTP-CLIENT-RECEIVE-ERROR") {
+                rethrow;
+            }
+        }
+        return info;
+    }
+
+    # sends the request as given over a socket, since HTTPClient would escape a percent sign; returns the response
+    # header, the body and whether the server closed the connection after the response
+    private static hash<auto> rawRequest(int port, string request) {
+        Socket socket();
+        socket.connect(sprintf("127.0.0.1:%d", port), 30s);
+        on_exit socket.close();
+        socket.send(request);
+        hash<auto> hdr = socket.readHTTPHeader(30s);
+        int len = hdr."content-length" ? int(hdr."content-length") : 0;
+        string body = len ? socket.recv(len, 30s) : "";
+        # reading to the end returns at once when the server has closed the connection; an open connection would
+        # time out instead
+        bool closed;
+        try {
+            closed = !socket.recvBinary(-1, 10s).size();
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err != "SOCKET-TIMEOUT") {
+                rethrow;
+            }
+            closed = False;
+        }
+        return {"hdr": hdr, "body": body, "closed": closed};
+    }
+}

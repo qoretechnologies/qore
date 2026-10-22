@@ -266,10 +266,12 @@ QoreValue TreeMapData::take(QoreObject* self, const QoreStringNode* key, Excepti
 }
 
 bool TreeMapData::scanMembers(RObject& obj, RSetHelper& rsh) {
-    // if we cannot lock the lock, then return false to ignore
-    // blocking here or returning true could cause a deadlock
+    // the lock is only tried: blocking here or returning true could cause a deadlock; a map whose lock is held cannot
+    // report its values, so the scan is made due again at its object (see design/dgc.md, "A container that a scan
+    // finds locked")
     QoreOptionalRWWriteLocker al(rwl);
     if (!al) {
+        rsh.containerContended(obj);
         return false;
     }
 

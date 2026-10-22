@@ -114,7 +114,7 @@ public class FileHandlerTest inherits QUnit::Test {
         FileHandler fh(tmpdir, "/", handler_opts);
         srv.setHandler("fh", "/", MimeTypeHtml, fh);
         srv.setDefaultHandler("fh", fh);
-        int p = srv.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        int p = srv.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
 
         HTTPClient c({"url": "http://localhost:" + p});
         c.connect();

@@ -35,6 +35,9 @@ public namespace AsyncSocketIo {
 */
 public class Http2StreamContext inherits AbstractStreamContext {
     private {
+        #! True once the end of the stream has been sent
+        bool ended = False;
+
         Socket sock;
         int stream_id;
         #! Queue for receiving data from the I/O controller
@@ -144,6 +147,9 @@ public class Http2StreamContext inherits AbstractStreamContext {
     */
     sendData(binary data, bool end_stream = False) {
         sock.sendHttp2StreamData(stream_id, data, end_stream);
+        if (end_stream) {
+            ended = True;
+        }
         if (wake_callback) {
             wake_callback();
         }
@@ -267,8 +273,30 @@ public class Http2StreamContext inherits AbstractStreamContext {
     */
     sendTrailers(hash<string, string> trailers) {
         sock.sendHttp2Trailers(stream_id, trailers);
+        # trailers end the stream
+        ended = True;
         if (wake_callback) {
             wake_callback();
+        }
+    }
+
+    #! Ends the stream by sending END_STREAM, unless it has been sent already
+    /** The orderly close of a stream (RFC 8441 section 5); errors are ignored, as the peer may have reset the stream
+        already
+
+        @since AsyncSocketIo 1.0
+    */
+    close() {
+        if (ended) {
+            return;
+        }
+        ended = True;
+        try {
+            sock.sendHttp2StreamData(stream_id, binary(), True);
+            if (wake_callback) {
+                wake_callback();
+            }
+        } catch (hash<ExceptionInfo> ex) {
         }
     }
 }

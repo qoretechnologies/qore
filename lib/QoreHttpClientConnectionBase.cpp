@@ -34,9 +34,49 @@
 #include <qore/HttpClientConnectionManager.h>
 #include <qore/AsyncCompletionAction.h>
 #include "qore/intern/SocketSyncPoll.h"
+#include "qore/intern/qore_socket_private.h"
 
 #include <cassert>
 #include <unordered_map>
+
+HttpClientConnectionBase::HttpClientConnectionBase() : opener_policy(qore_socket_ref_policy_sandbox_manager()) {
+}
+
+HttpClientConnectionBase::HttpClientConnectionBase(std::string target_host, int target_port, bool ssl_required)
+        : target_host(std::move(target_host)), target_port(target_port), ssl_required(ssl_required),
+            opener_policy(qore_socket_ref_policy_sandbox_manager()) {
+    int us = 0;
+    created_us_ = q_epoch_us(us) * 1000000LL + us;
+}
+
+HttpClientConnectionBase::~HttpClientConnectionBase() {
+    if (opener_policy) {
+        opener_policy->deref();
+    }
+}
+
+void HttpClientConnectionBase::inheritOpener(const HttpClientConnectionBase& from) {
+    if (from.opener_policy) {
+        from.opener_policy->ref();
+    }
+    if (opener_policy) {
+        opener_policy->deref();
+    }
+    opener_policy = from.opener_policy;
+}
+
+int HttpClientConnectionBase::checkSandboxUse(QoreSandboxManager* sm, ExceptionSink* xsink) const {
+    if (!sm) {
+        return 0;
+    }
+    std::shared_ptr<const QoreConnectionDestinations> d = getDestinations();
+    if (d) {
+        return d->check(*sm, xsink);
+    }
+    // the connection is still being made: its connect checks it against the sandbox it was opened for, so it can be
+    // used by code under the same sandbox only
+    return opener_policy == sm ? 0 : 1;
+}
 
 bool HttpClientConnectionBase::tryReserveStream(bool streaming_send) {
     AutoLocker al(reserve_lock);

@@ -64,7 +64,8 @@ public:
     }
 
     DLLLOCAL virtual QoreOperatorNode* copyBackground(ExceptionSink* xsink) const {
-        ValueHolder n_left(copy_value_and_resolve_lvar_refs(left, xsink), xsink);
+        // the predicate is evaluated for each element with the operator's implicit arguments
+        ValueHolder n_left(copy_value_and_resolve_lvar_refs_bound_implicit(left, xsink), xsink);
         if (*xsink) {
             return nullptr;
         }

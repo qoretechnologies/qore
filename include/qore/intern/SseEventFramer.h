@@ -34,10 +34,54 @@
 
 #include <string>
 
+//! Drops one leading UTF-8 byte order mark from a server-sent event stream
+/** The event stream format ignores one leading U+FEFF BYTE ORDER MARK of a stream; a byte order mark later in the
+    stream is data.  The bytes of the stream are passed through the filter one at a time; the bytes read as the start
+    of a byte order mark are passed on when the stream turns out not to start with one.
+*/
+class SseBomFilter {
+public:
+    //! Passes a byte of the stream through the filter
+    /** @param c the byte
+        @param process called with each byte that is data; returns true if the byte completed an event
+
+        @return true if a byte processed completed an event
+    */
+    template <typename F>
+    DLLLOCAL bool add(char c, F process) {
+        if (pos < BomSize) {
+            static const unsigned char bom[BomSize] = {0xef, 0xbb, 0xbf};
+            if (static_cast<unsigned char>(c) == bom[pos]) {
+                ++pos;
+                return false;
+            }
+            // the stream does not start with a byte order mark: the bytes read as its start are data; they are not
+            // line breaks, so they cannot complete an event
+            unsigned matched = pos;
+            pos = BomSize;
+            for (unsigned i = 0; i < matched; ++i) {
+                process(static_cast<char>(bom[i]));
+            }
+        }
+        return process(c);
+    }
+
+    //! Resets the filter for a new stream
+    DLLLOCAL void reset() {
+        pos = 0;
+    }
+
+private:
+    static constexpr unsigned BomSize = 3;
+    //! the number of bytes of the byte order mark read; BomSize once the start of the stream has been read
+    unsigned pos = 0;
+};
+
 //! Splits a server-sent event stream into events one byte at a time
 /** Line endings (CRLF, LF, or CR) are normalized to LF, and an event ends with an empty line, as with
     Socket::readServerSentEvent().  A CR that ends an event is remembered, so that the LF of a CRLF split across
-    events is not taken as an empty line of the next event.
+    events is not taken as an empty line of the next event.  One leading byte order mark of the stream is ignored, as
+    the event stream format requires.
 */
 class SseEventFramer {
 public:
@@ -45,24 +89,7 @@ public:
     /** @return true if the event is complete; see take()
     */
     DLLLOCAL bool add(char c) {
-        if (got_cr) {
-            got_cr = false;
-            if (c == '\n') {
-                return false;
-            }
-        }
-        if (c == '\r') {
-            event += '\n';
-            got_cr = true;
-            return ++eol_count == 2;
-        }
-        if (c == '\n') {
-            event += '\n';
-            return ++eol_count == 2;
-        }
-        eol_count = 0;
-        event += c;
-        return false;
+        return bom.add(c, [this](char b) { return addIntern(b); });
     }
 
     //! Returns the size of the event read so far in bytes
@@ -83,12 +110,35 @@ public:
         event.clear();
         eol_count = 0;
         got_cr = false;
+        bom.reset();
     }
 
 private:
     std::string event;
     int eol_count = 0;
     bool got_cr = false;
+    SseBomFilter bom;
+
+    DLLLOCAL bool addIntern(char c) {
+        if (got_cr) {
+            got_cr = false;
+            if (c == '\n') {
+                return false;
+            }
+        }
+        if (c == '\r') {
+            event += '\n';
+            got_cr = true;
+            return ++eol_count == 2;
+        }
+        if (c == '\n') {
+            event += '\n';
+            return ++eol_count == 2;
+        }
+        eol_count = 0;
+        event += c;
+        return false;
+    }
 };
 
 #endif

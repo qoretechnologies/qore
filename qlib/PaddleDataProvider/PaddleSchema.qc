@@ -68,8 +68,7 @@ public hashdecl PaddleSchemaProvenanceInfo {
     a couple of dozen operations.  237 of 519 component schemas survive pruning, because Paddle's entity
     types reference each other heavily.
 
-    The schema is parsed once, on first use, rather than when the module loads, so that a program that only
-    needs the connection does not pay for it.
+    The schema is parsed once, when the module loads and registers its actions, which are built from it.
 */
 public class PaddleSchema {
     public {

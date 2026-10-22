@@ -9,7 +9,7 @@
     |\c PROTOBUF-TYPE-ERROR|Message or enum type not found in schema, or a type name contains a NUL character
     |\c PROTOBUF-FIELD-ERROR|Unknown field name in hash during encoding
     |\c PROTOBUF-ENCODE-ERROR|Protobuf serialization failed
-    |\c PROTOBUF-DECODE-ERROR|Protobuf binary parsing failed
+    |\c PROTOBUF-DECODE-ERROR|Protobuf binary parsing failed, or a string map key in a message decoded or parsed from JSON contains a NUL character, which a hash key cannot hold
     |\c PROTOBUF-JSON-ERROR|JSON conversion or parsing failed
     |\c PROTOBUF-SYMBOL-NOT-FOUND|Symbol not found in schema (descriptor serialization), or the symbol contains a NUL character
     |\c PROTOBUF-FILE-NOT-FOUND|Proto file not found in schema (descriptor serialization), or the file name contains a NUL character

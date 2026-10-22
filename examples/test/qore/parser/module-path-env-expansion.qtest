@@ -1,0 +1,103 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Util
+
+%exec-class ModulePathEnvExpansionTest
+
+#! An environment variable in the path of %prepend-module-path or %append-module-path expands to its whole value
+/** The value of each variable is copied for the expansion; the expansion appended a pointer into a copy that had
+    already been released, so the path was the content of freed memory: garbage or an empty path ("empty path computed
+    from variable expansion"), found by module-path-directive.qtest on macOS in CI pipeline 61205.  Each case parses
+    the directives before anything else allocates the released memory again, which is when module-path-directive.qtest
+    failed on Linux and macOS when its environment variable case ran alone.
+*/
+class ModulePathEnvExpansionTest inherits QUnit::Test {
+    public {
+        #! a module that the directives must find
+        const ModuleSrc = "%new-style\n"
+            "module MpeHello {\n"
+            "    version = \"1.0\";\n"
+            "    desc = \"module path expansion test module\";\n"
+            "    author = \"test\";\n"
+            "    url = \"https://example.com\";\n"
+            "    license = \"MIT\";\n"
+            "}\n"
+            "public namespace MpeHello {\n"
+            "    public string sub hello() { return \"hello from MpeHello\"; }\n"
+            "}\n";
+    }
+
+    private {
+        #! the directory of the test, whose path is long enough that a copy of it is allocated
+        string tmpdir;
+        #! the module directory under it
+        string moddir;
+        #! the prefix of the names of the variables of this test (unique for the process)
+        string prefix = sprintf("QORE_MPE_TEST_%d_", getpid());
+    }
+
+    constructor() : QUnit::Test("ModulePathEnvExpansionTest", "1.0") {
+        addTestCase("prepend-module-path: a variable expands to its whole value", \testPrependVar());
+        addTestCase("append-module-path: a variable expands to its whole value", \testAppendVar());
+        addTestCase("a path with several variables and literal text", \testSeveralVars());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        tmpdir = sprintf("%s/qore-module-path-env-expansion-%d-%s", tmp_location(), getpid(),
+            get_random_string(16));
+        mkdir(tmpdir, 0700);
+        moddir = tmpdir + DirSep + "mods";
+        mkdir(moddir, 0700);
+        File f();
+        f.open2(moddir + DirSep + "MpeHello.qm", O_CREAT | O_TRUNC | O_WRONLY);
+        f.write(ModuleSrc);
+        f.close();
+    }
+
+    globalTearDown() {
+        unlink(moddir + DirSep + "MpeHello.qm");
+        rmdir(moddir);
+        rmdir(tmpdir);
+    }
+
+    #! parses and runs the given directive in a new Program, and returns what the module it loads returns
+    private string run(string directive) {
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS, True);
+        p.parse("%new-style\n" + directive + "\n%requires MpeHello\n"
+            "string sub driver() { return MpeHello::hello(); }\n", "<buffer>");
+        return p.callFunction("driver");
+    }
+
+    testPrependVar() {
+        string name = prefix + "DIR";
+        on_exit unsetenv(name);
+        assertEq(0, setenv(name, moddir));
+        assertEq("hello from MpeHello", run("%prepend-module-path \"${" + name + "}\""));
+    }
+
+    testAppendVar() {
+        string name = prefix + "DIR";
+        on_exit unsetenv(name);
+        assertEq(0, setenv(name, moddir));
+        assertEq("hello from MpeHello", run("%append-module-path \"${" + name + "}\""));
+    }
+
+    testSeveralVars() {
+        string root = prefix + "ROOT";
+        string leaf = prefix + "LEAF";
+        on_exit {
+            unsetenv(root);
+            unsetenv(leaf);
+        }
+        assertEq(0, setenv(root, tmpdir));
+        assertEq(0, setenv(leaf, "mods"));
+        assertEq("hello from MpeHello", run("%prepend-module-path \"${" + root + "}" + DirSep + "${" + leaf + "}\""));
+    }
+}

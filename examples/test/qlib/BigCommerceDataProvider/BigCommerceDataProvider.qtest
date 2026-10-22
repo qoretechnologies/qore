@@ -726,7 +726,7 @@ public class BigCommerceDataProviderTest inherits QUnit::Test {
             "logger": new Logger("server", LoggerLevel::getLevelError()),
         });
         on_exit server.stop();
-        int port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
         FakeBigCommerceHandler handler();
         FakeBigCommerceTokenHandler token_handler();
         server.setHandler("bigcommerce-token", "oauth2/token", NOTHING, token_handler);
@@ -822,7 +822,7 @@ public class BigCommerceDataProviderTest inherits QUnit::Test {
             "logger": new Logger("server", LoggerLevel::getLevelError()),
         });
         on_exit server.stop();
-        int port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
         FakeBigCommerceHandler handler();
         server.setHandler("bigcommerce", "", NOTHING, handler);
         server.setDefaultHandler("bigcommerce", handler);

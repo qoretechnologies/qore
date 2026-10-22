@@ -130,6 +130,12 @@ class SshUtilRegistryData : public AbstractPrivateData {
 
 class SshUtilRegistry {
 public:
+    //! registers the fork handler of the registry's lock; called by the module initialization
+    /** @return 0 for success, -1 if there was no memory for the registration (an exception is raised)
+    */
+    DLLLOCAL static int registerForkHandler(ExceptionSink* xsink);
+    //! removes the fork handler of the registry's lock; called when the module is deleted
+    DLLLOCAL static void unregisterForkHandler();
     DLLLOCAL static void clear(ExceptionSink* xsink);
     //! deregisters and releases the objects that belong to the Program, which is being destroyed
     /** called by the Program cleanup callback of the module, while the Program can still run the destructors of its

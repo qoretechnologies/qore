@@ -1,0 +1,508 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# A thread started on behalf of sandboxed code is governed by the sandbox of the code that started it, whatever
+# starts it: the background operator, call_async(), the workers of parallel_map() and parallel_foreach(), an async
+# I/O timer callback, or a thread started by trusted (module) code that the sandboxed code called.  The sandbox's
+# filesystem policy, program interrupts, cancellation scope and thread limit apply to the thread as they apply to the
+# code that started it, so a thread can never run with more privileges than that code.
+#
+# The trusted code is modeled by a Program with no sandbox (like a module Program); the sandboxed code by a Program
+# with a SandboxManager that denies the filesystem.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+
+%requires QUnit
+%requires Util
+
+%exec-class ThreadSandboxInheritanceTest
+
+class ThreadSandboxInheritanceTest inherits QUnit::Test {
+    private {
+        #! the test directory
+        string dir;
+        #! a file that the sandbox denies
+        string secret;
+    }
+
+    #! the content of the secret file
+    const SecretContent = "the secret content";
+
+    #! the trusted code: it reads a file on its caller's behalf, on the calling thread or on a thread it starts
+    const TrustedSource = "
+auto sub read_file(string path) {
+    try {
+        return ReadOnlyFile::readTextFile(path);
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
+code sub get_starter(string kind) {
+    switch (kind) {
+        case \"sync\":
+            return auto sub (string path) { return read_file(path); };
+        case \"background\":
+            return auto sub (string path) {
+                Queue q();
+                background q.push(read_file(path));
+                return q.get(60s);
+            };
+        case \"call_async\":
+            return auto sub (string path) { return call_async(\\read_file(), path).get(60s); };
+        case \"parallel_map\":
+            return auto sub (string path) { return parallel_map(\\read_file(), (path, path), 2); };
+        case \"parallel_foreach\":
+            return auto sub (string path) {
+                Queue q();
+                parallel_foreach(sub (string p) { q.push(read_file(p)); }, (path, path), 2);
+                return (q.get(60s), q.get(60s));
+            };
+        case \"timer\":
+            return auto sub (string path) {
+                Queue q();
+                AsyncIoController::addTimer(now_us(), sub () { q.push(read_file(path)); });
+                return q.get(60s);
+            };
+        case \"threadpool\":
+            return auto sub (string path) {
+                ThreadPool tp(2);
+                Queue q();
+                tp.submit(sub () { q.push(read_file(path)); });
+                auto rv = q.get(60s);
+                tp.stop();
+                return rv;
+            };
+        case \"nested\":
+            return auto sub (string path) {
+                Queue q();
+                background q.push(call_async(\\read_file(), path).get(60s));
+                return q.get(60s);
+            };
+    }
+    throw \"UNKNOWN-KIND\", kind;
+}
+
+# starts a thread that waits on a gate; the result queue receives how the wait ended
+list<auto> sub start_waiter(Queue gate) {
+    Queue result();
+    code f = sub () {
+        try {
+            result.push(gate.get(30s));
+        } catch (hash<ExceptionInfo> ex) {
+            result.push(ex.err);
+        }
+    };
+    int tid = background f();
+    return (tid, result);
+}
+
+# starts n threads that each wait on a gate; returns the TID of each or the exception that refused it
+list<auto> sub start_blocked(int n, Queue gate) {
+    list<auto> rv = ();
+    for (int i = 0; i < n; ++i) {
+        try {
+            rv += background gate.get(60s);
+        } catch (hash<ExceptionInfo> ex) {
+            rv += sprintf(\"%s: %s\", ex.err, ex.desc);
+        }
+    }
+    return rv;
+}
+
+# starts n call_async() calls that each wait on a gate; returns the Future of each or the exception that refused it
+list<auto> sub start_blocked_async(int n, Queue gate) {
+    list<auto> rv = ();
+    for (int i = 0; i < n; ++i) {
+        try {
+            rv += call_async(sub () { return gate.get(60s); });
+        } catch (hash<ExceptionInfo> ex) {
+            rv += sprintf(\"%s: %s\", ex.err, ex.desc);
+        }
+    }
+    return rv;
+}
+
+# runs n tasks in a ThreadPool that each wait on a gate; the pool's workers serve every submitter
+ThreadPool sub start_pool_tasks(int n, Queue gate, Counter running) {
+    ThreadPool tp(n);
+    for (int i = 0; i < n; ++i) {
+        running.inc();
+        tp.submit(sub () { running.dec(); gate.get(60s); });
+    }
+    return tp;
+}
+
+# runs a reader on a thread it starts
+auto sub background_call(code reader, string path) {
+    Queue q();
+    background q.push(reader(path));
+    return q.get(60s);
+}
+
+# returns a call reference to a function of this Program
+code sub get_function_ref(string name) {
+    switch (name) {
+        case \"read_file\": return \\read_file();
+        case \"start_waiter\": return \\start_waiter();
+        case \"start_blocked\": return \\start_blocked();
+        case \"start_blocked_async\": return \\start_blocked_async();
+        case \"start_pool_tasks\": return \\start_pool_tasks();
+        case \"run_pipeline\": return \\run_pipeline();
+        case \"background_call\": return \\background_call();
+    }
+    throw \"UNKNOWN-FUNCTION\", name;
+}
+
+# a data pipeline: one worker thread per stage, as DataProviderPipeline starts one per queue
+list<auto> sub run_pipeline(int stages, Queue gate) {
+    list<auto> rv = ();
+    for (int i = 0; i < stages; ++i) {
+        try {
+            rv += background gate.get(60s);
+        } catch (hash<ExceptionInfo> ex) {
+            rv += sprintf(\"%s: %s\", ex.err, ex.desc);
+        }
+    }
+    return rv;
+}
+";
+
+    #! the sandboxed code: it calls the trusted code
+    const SandboxedSource = "
+auto sub run(code starter, auto arg) {
+    return starter(arg);
+}
+
+list<auto> sub run_waiter(code starter, Queue gate) {
+    return starter(gate);
+}
+
+bool sub cancel(int tid) {
+    return cancel_thread(tid, \"cancelled by the sandboxed code\");
+}
+
+list<auto> sub start_blocked(int n, Queue gate) {
+    list<auto> rv = ();
+    for (int i = 0; i < n; ++i) {
+        try {
+            rv += background gate.get(60s);
+        } catch (hash<ExceptionInfo> ex) {
+            rv += sprintf(\"%s: %s\", ex.err, ex.desc);
+        }
+    }
+    return rv;
+}
+
+auto sub call(code c, auto a1, auto a2) {
+    return c(a1, a2);
+}
+
+auto sub call3(code c, auto a1, auto a2, auto a3) {
+    return c(a1, a2, a3);
+}
+
+auto sub read_here(string path) {
+    try {
+        return ReadOnlyFile::readTextFile(path);
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
+code sub get_reader() {
+    return \\read_here();
+}
+";
+
+    constructor() : QUnit::Test("thread sandbox inheritance", "1.0", \ARGV) {
+        addTestCase("trusted code reads for an unsandboxed caller on every thread kind", \testUnsandboxed());
+        addTestCase("the sandbox governs the trusted code on the calling thread", \testSync());
+        addTestCase("background", \testBackground());
+        addTestCase("call_async()", \testCallAsync());
+        addTestCase("parallel_map()", \testParallelMap());
+        addTestCase("parallel_foreach()", \testParallelForeach());
+        addTestCase("async I/O timer callback", \testTimer());
+        addTestCase("ThreadPool task", \testThreadPool());
+        addTestCase("a thread started by an inheriting thread", \testNested());
+        addTestCase("a Program with its own sandbox governs the code it runs in an inheriting thread",
+            \testInnermostSandbox());
+        addTestCase("a program interrupt reaches an inheriting thread", \testInterrupt());
+        addTestCase("the sandboxed code can cancel an inheriting thread", \testCancelInScope());
+        addTestCase("the sandboxed code cannot cancel a thread started for another caller", \testCancelOutOfScope());
+        addTestCase("thread limit: background in the sandboxed Program", \testLimitOwnBackground());
+        addTestCase("thread limit: threads trusted code starts for the sandboxed code", \testLimitTrustedBackground());
+        addTestCase("thread limit: call_async()", \testLimitCallAsync());
+        addTestCase("thread limit: shared ThreadPool workers do not count", \testLimitThreadPool());
+        addTestCase("thread limit: a thread stops counting when it ends", \testLimitRelease());
+        addTestCase("thread limit: unsandboxed code is not limited", \testLimitUnsandboxed());
+        addTestCase("thread limit: a preview driving a pipeline under a limit of 4", \testLimitPreviewPipeline());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        string tmp = tmp_location() + DirSep + "qore-thread-sandbox-" + get_random_string(8);
+        mkdir(tmp);
+        dir = realpath(tmp);
+        secret = dir + DirSep + "secret.txt";
+        File f();
+        f.open2(secret, O_CREAT | O_TRUNC | O_WRONLY);
+        f.write(SecretContent);
+        f.close();
+    }
+
+    globalTearDown() {
+        if (dir.val()) {
+            try {
+                unlink(secret);
+                rmdir(dir);
+            } catch (hash<ExceptionInfo> ex) {
+            }
+        }
+    }
+
+    #! releases n waiting threads
+    private static release(Queue gate, int n) {
+        for (int i = 0; i < n; ++i) {
+            gate.push(True);
+        }
+    }
+
+    #! returns the trusted code
+    private Program getTrusted() {
+        Program u(PO_NEW_STYLE);
+        u.parse(TrustedSource, "trusted");
+        return u;
+    }
+
+    #! returns a sandboxed Program whose manager denies the filesystem
+    private Program getSandboxed(*SandboxManager sm) {
+        Program p(PO_NEW_STYLE);
+        p.parse(SandboxedSource, "sandboxed");
+        if (!sm) {
+            sm = new SandboxManager();
+            sm.setFilesystemDefaultPolicy(False);
+        }
+        p.setSandboxManager(sm);
+        return p;
+    }
+
+    #! runs the trusted code of the given kind for the sandboxed code
+    private auto runSandboxed(string kind) {
+        Program u = getTrusted();
+        Program p = getSandboxed();
+        return p.callFunction("run", u.callFunction("get_starter", kind), secret);
+    }
+
+    testUnsandboxed() {
+        Program u = getTrusted();
+        foreach string kind in (("sync", "background", "call_async", "timer", "threadpool", "nested")) {
+            code starter = u.callFunction("get_starter", kind);
+            assertEq(SecretContent, starter(secret), kind);
+        }
+        assertEq((SecretContent, SecretContent), u.callFunction("get_starter", "parallel_map")(secret));
+        assertEq((SecretContent, SecretContent), u.callFunction("get_starter", "parallel_foreach")(secret));
+    }
+
+    testSync() {
+        assertEq("FILESYSTEM-ACCESS-DENIED", runSandboxed("sync"));
+    }
+
+    testBackground() {
+        assertEq("FILESYSTEM-ACCESS-DENIED", runSandboxed("background"));
+    }
+
+    testCallAsync() {
+        assertEq("FILESYSTEM-ACCESS-DENIED", runSandboxed("call_async"));
+    }
+
+    testParallelMap() {
+        assertEq(("FILESYSTEM-ACCESS-DENIED", "FILESYSTEM-ACCESS-DENIED"), runSandboxed("parallel_map"));
+    }
+
+    testParallelForeach() {
+        assertEq(("FILESYSTEM-ACCESS-DENIED", "FILESYSTEM-ACCESS-DENIED"), runSandboxed("parallel_foreach"));
+    }
+
+    testTimer() {
+        assertEq("FILESYSTEM-ACCESS-DENIED", runSandboxed("timer"));
+    }
+
+    testThreadPool() {
+        assertEq("FILESYSTEM-ACCESS-DENIED", runSandboxed("threadpool"));
+    }
+
+    testNested() {
+        assertEq("FILESYSTEM-ACCESS-DENIED", runSandboxed("nested"));
+    }
+
+    testInnermostSandbox() {
+        # the thread inherits a sandbox that allows the file
+        SandboxManager allow();
+        allow.setFilesystemDefaultPolicy(True);
+        Program p = getSandboxed(allow);
+        Program strict = getSandboxed();
+        Program u = getTrusted();
+        code background_call = u.callFunction("get_function_ref", "background_call");
+        # the trusted code reads the file on a thread started for the permissive sandbox
+        assertEq(SecretContent, p.callFunction("call", background_call, u.callFunction("get_function_ref",
+            "read_file"), secret));
+        # code of a Program with its own sandbox is governed by that sandbox on an inheriting thread
+        assertEq("FILESYSTEM-ACCESS-DENIED", p.callFunction("call", background_call, strict.callFunction("get_reader"),
+            secret));
+    }
+
+    testInterrupt() {
+        SandboxManager sm();
+        sm.setFilesystemDefaultPolicy(False);
+        Program p = getSandboxed(sm);
+        Program u = getTrusted();
+        Queue gate();
+        list<auto> l = p.callFunction("run_waiter", u.callFunction("get_function_ref", "start_waiter"), gate);
+        sm.requestInterrupt();
+        assertEq("PROGRAM-INTERRUPTED", l[1].get(60s));
+        sm.clearInterrupt();
+    }
+
+    testCancelInScope() {
+        Program p = getSandboxed();
+        Program u = getTrusted();
+        Queue gate();
+        list<auto> l = p.callFunction("run_waiter", u.callFunction("get_function_ref", "start_waiter"), gate);
+        assertTrue(p.callFunction("cancel", l[0]));
+        assertEq("THREAD-CANCELLED", l[1].get(60s));
+    }
+
+    testCancelOutOfScope() {
+        Program p = getSandboxed();
+        Program u = getTrusted();
+        Queue gate();
+        # trusted code starts the thread for this (unsandboxed) test, not for the sandboxed code
+        list<auto> l = u.callFunction("start_waiter", gate);
+        p.callFunction("cancel", l[0]);
+        gate.push("released");
+        assertEq("released", l[1].get(60s));
+    }
+
+    testLimitOwnBackground() {
+        SandboxManager sm();
+        sm.setMaxThreads(2);
+        Program p = getSandboxed(sm);
+        Queue gate();
+        list<auto> l = p.callFunction("start_blocked", 3, gate);
+        release(gate, 2);
+        assertEq(3, l.size());
+        assertEq(NT_INT, l[0].typeCode());
+        assertEq(NT_INT, l[1].typeCode());
+        assertEq("THREAD-CREATION-FAILURE: cannot start a thread: sandbox thread limit of 2 reached", l[2]);
+    }
+
+    testLimitTrustedBackground() {
+        SandboxManager sm();
+        sm.setMaxThreads(2);
+        Program p = getSandboxed(sm);
+        Program u = getTrusted();
+        Queue gate();
+        list<auto> l = p.callFunction("call", u.callFunction("get_function_ref", "start_blocked"), 3, gate);
+        release(gate, 2);
+        assertEq(3, l.size());
+        assertEq(NT_INT, l[0].typeCode());
+        assertEq(NT_INT, l[1].typeCode());
+        assertEq("THREAD-CREATION-FAILURE: cannot start a thread: sandbox thread limit of 2 reached", l[2]);
+    }
+
+    testLimitCallAsync() {
+        SandboxManager sm();
+        sm.setMaxThreads(1);
+        Program p = getSandboxed(sm);
+        Program u = getTrusted();
+        Queue gate();
+        list<auto> l = p.callFunction("call", u.callFunction("get_function_ref", "start_blocked_async"), 2, gate);
+        gate.push(True);
+        assertEq(2, l.size());
+        assertTrue(l[0] instanceof Future);
+        assertEq("THREAD-CREATION-FAILURE: cannot start a thread: sandbox thread limit of 1 reached", l[1]);
+        assertEq(True, l[0].get(60s));
+    }
+
+    testLimitThreadPool() {
+        SandboxManager sm();
+        sm.setMaxThreads(1);
+        Program p = getSandboxed(sm);
+        Program u = getTrusted();
+        Queue gate();
+        Counter running();
+        # three pool workers wait on the gate at the same time; they are not counted
+        ThreadPool tp = p.callFunction("call3", u.callFunction("get_function_ref", "start_pool_tasks"), 3, gate,
+            running);
+        running.waitForZero();
+        # the one thread the sandbox allows is still free
+        list<auto> l = p.callFunction("start_blocked", 2, gate);
+        release(gate, 4);
+        tp.stop();
+        assertEq(NT_INT, l[0].typeCode());
+        assertEq("THREAD-CREATION-FAILURE: cannot start a thread: sandbox thread limit of 1 reached", l[1]);
+    }
+
+    testLimitRelease() {
+        SandboxManager sm();
+        sm.setMaxThreads(2);
+        Program p = getSandboxed(sm);
+        {
+            Program u = getTrusted();
+            Queue gate();
+            list<auto> l = p.callFunction("call", u.callFunction("get_function_ref", "start_blocked"), 2, gate);
+            assertEq((NT_INT, NT_INT), (map $1.typeCode(), l));
+            release(gate, 2);
+            # deleting the Program waits for its threads to end
+            delete u;
+        }
+        Program u2 = getTrusted();
+        Queue gate();
+        list<auto> l = p.callFunction("call", u2.callFunction("get_function_ref", "start_blocked"), 2, gate);
+        release(gate, 2);
+        assertEq((NT_INT, NT_INT), (map $1.typeCode(), l));
+    }
+
+    testLimitUnsandboxed() {
+        Program u = getTrusted();
+        Queue gate();
+        list<auto> l = u.callFunction("start_blocked", 5, gate);
+        release(gate, 5);
+        assertEq(5, (select l, $1.typeCode() == NT_INT).size());
+    }
+
+    testLimitPreviewPipeline() {
+        # a preview Program as Qorus creates it for a draft: it cannot start threads itself, and its sandbox allows
+        # four threads; trusted code it calls runs a pipeline with one worker thread per stage
+        SandboxManager sm();
+        sm.setFilesystemDefaultPolicy(False);
+        sm.setMaxThreads(4);
+        Program p(PO_NEW_STYLE | PO_NO_THREAD_CONTROL | PO_NO_FILESYSTEM);
+        p.parse("auto sub call(code c, auto a1, auto a2) { return c(a1, a2); }", "preview");
+        p.setSandboxManager(sm);
+        Program u = getTrusted();
+        code pipeline = u.callFunction("get_function_ref", "run_pipeline");
+        {
+            Queue gate();
+            list<auto> l = p.callFunction("call", pipeline, 4, gate);
+            release(gate, 4);
+            assertEq((NT_INT, NT_INT, NT_INT, NT_INT), (map $1.typeCode(), l));
+        }
+        # a pipeline with more stages than the limit has its fifth stage refused
+        Program u2 = getTrusted();
+        Queue gate();
+        remove pipeline;
+        # deleting the Program waits for its threads to end
+        delete u;
+        list<auto> l = p.callFunction("call", u2.callFunction("get_function_ref", "run_pipeline"), 5, gate);
+        release(gate, 4);
+        assertEq(5, l.size());
+        assertEq(4, (select l, $1.typeCode() == NT_INT).size());
+        assertEq("THREAD-CREATION-FAILURE: cannot start a thread: sandbox thread limit of 4 reached", l[4]);
+    }
+}

@@ -729,7 +729,7 @@ public:
             AutoLocker al(ir_fallback_lock);
             ir_fallback_counts[reason]++;
         }
-        if (getenv("QORE_IR_TRACE_FALLBACK")) {
+        if (q_env_is_set("QORE_IR_TRACE_FALLBACK")) {
             fprintf(stderr, "[ir-fallback] %s\n", reason.c_str());
             fflush(stderr);
         }
@@ -1022,7 +1022,8 @@ public:
     // true, so all other extensions — .qr, .qc, .qm, .qtest, .qsd, .qfd, .qrd,
     // .qore, or no extension at all — automatically get PO_MODERN.
     DLLLOCAL static bool should_auto_enable_modern(const char* filename) {
-        const char* env = getenv("QORE_OLD_STYLE_DEFAULT");
+        QoreEnvironmentValue env_holder("QORE_OLD_STYLE_DEFAULT");
+        const char* env = env_holder.c_str();
         if (env && *env && strcmp(env, "0") != 0) {
             return false;
         }
@@ -1097,6 +1098,25 @@ protected:
     saved_obj_map_t saved_objects;
 
     DLLLOCAL void setParent(QoreProgram* p_pgm, const QoreParseOptions& n_parse_options);
+
+    //! Records the Program that created this Program and the Programs that created it (see creator_ids)
+    /** Called once, by setParent() or for an independent Program created by %Qore code
+        (qore_program_private::setCreator())
+    */
+    DLLLOCAL void setCreatorChain(const QoreProgram& creator);
+
+    //! The IDs of the Programs that created this Program: its creator first, then the creator's creator, and so on
+    /** Set once, by setParent() or, for an independent Program created by %Qore code (the \c Program constructor), by
+        qore_program_private::setCreator(), and never changed; empty for a module Program or a Program created by C++
+        code without a parent.  Reflection allows a Program that created another Program to navigate it; see
+        design/reflection-caller-privilege.md.
+    */
+    std::vector<unsigned> creator_ids;
+
+    //! Returns true if the Program with the given ID created this Program, directly or through Programs it created
+    DLLLOCAL bool isCreatedBy(unsigned pgm_id) const {
+        return std::find(creator_ids.begin(), creator_ids.end(), pgm_id) != creator_ids.end();
+    }
 
     //! copies the parent's external data into this Program and initializes it
     /** Called from qore_program_private's constructor rather than from setParent(), because
@@ -3016,6 +3036,19 @@ public:
         return pgm.priv->preregisterNewThread(xsink);
     }
 
+    //! Returns true if the Program with the given ID created \a pgm, directly or through Programs it created
+    DLLLOCAL static bool programCreatedBy(const QoreProgram& pgm, unsigned pgm_id) {
+        return pgm.priv->isCreatedBy(pgm_id);
+    }
+
+    //! Records the Program whose code created the independent Program \a pgm
+    /** An independent Program inherits nothing from the code that creates it, but that code holds it and controls
+        it like any Program it creates, so reflection lets it navigate the Program (see creator_ids)
+    */
+    DLLLOCAL static void setCreator(QoreProgram& pgm, const QoreProgram& creator) {
+        pgm.priv->setCreatorChain(creator);
+    }
+
     // called when thread startup fails after preregistration
     DLLLOCAL static void cancelPreregistration(QoreProgram& pgm) {
         pgm.priv->cancelPreregistration();
@@ -3876,6 +3909,30 @@ private:
     typedef std::unordered_map<unsigned, QoreProgram*> programid_to_program_map_t;
     static programid_to_program_map_t programid_to_program_map;
     static QoreRWLock lck_programMap; // to protect program list manipulation
+
+public:
+    //! makes the Program consistent in a child process created with fork(), where only the forking thread exists
+    /** Its locks can be held by threads that do not exist in the child, so they are initialized again, and its
+        thread counts keep only the forking thread, so that the end of the Program does not wait for the other
+        threads; see QoreForkHandlers.h
+
+        @param tid the TID of the thread that called fork(), or -1 for a thread unknown to Qore
+        @param tpd the forking thread's Program data, or nullptr
+    */
+    DLLLOCAL void fixupAfterFork(int tid, ThreadProgramData* tpd);
+
+    //! calls fixupAfterFork() for every Program; the Program registry lock is held (see QoreForkHandlers.h)
+    DLLLOCAL static void fixupAllAfterFork(int tid, ThreadProgramData* tpd);
+
+    //! the Program registry lock (lck_programMap), for the fork handlers
+    DLLLOCAL static QoreRWLock& getProgramMapLock() {
+        return lck_programMap;
+    }
+
+    //! the global breakpoint list lock, for the fork handlers
+    DLLLOCAL static QoreRWLock& getBreakpointLockForFork();
+
+private:
     static unsigned programIdCounter;   // to generate programId
     unsigned programId;
 };

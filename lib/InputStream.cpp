@@ -31,6 +31,13 @@
 
 #include <qore/Qore.h>
 #include <qore/InputStream.h>
+#include "qore/intern/FileStreamIo.h"
+
+#include <climits>
+
+#ifdef DEBUG
+std::atomic<void (*)(int)> qore_dbg_file_stream_io_hook{nullptr};
+#endif
 
 #ifdef HAVE_POLL
 #include <poll.h>
@@ -66,7 +73,13 @@ int64 InputStream::readWithTimeout(void* ptr, int64 limit, int64 timeout_ms, Exc
     pfd.events = POLLIN;
     pfd.revents = 0;
 
-    int rv = poll(&pfd, 1, static_cast<int>(timeout_ms));
+    // the wait ends at once when the thread is cancelled or its Program is interrupted; qore_cancellable_poll() also
+    // resumes it after EINTR and waits on a named pipe with select(2) on Darwin (see QorePollCompat.h)
+    int rv = qore_cancellable_poll(&pfd, 1, timeout_ms > INT_MAX ? INT_MAX : static_cast<int>(timeout_ms), xsink,
+        "stream read");
+    if (rv == QORE_POLL_CANCELLED) {
+        return -1;
+    }
     if (rv < 0) {
         xsink->raiseException("INPUT-STREAM-ERROR", "poll() failed: %s", strerror(errno));
         return -1;

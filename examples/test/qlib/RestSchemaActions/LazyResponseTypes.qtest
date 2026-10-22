@@ -1,0 +1,304 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires json
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/RestSchemaActions
+
+%exec-class LazyResponseTypesTest
+
+#! Verifies action sets that build their output types on first use
+class LazyResponseTypesTest inherits QUnit::Test {
+    private {
+        #! Distinguishes the catalog applications of the test cases
+        int app_id = 0;
+
+        #! The manifest entries whose output types can be built
+        const GoodManifest = (
+            <RestSchemaActionInfo>{"action": "get-node", "method": "GET", "path": "/nodes/{id}",
+                "display_name": "Get Node", "short_desc": "Get a node", "desc": "Gets a node."},
+            <RestSchemaActionInfo>{"action": "list-nodes", "method": "GET", "path": "/nodes",
+                "display_name": "List Nodes", "short_desc": "List nodes", "desc": "Lists nodes.",
+                "response_unwrap": "data"},
+            <RestSchemaActionInfo>{"action": "update-node", "method": "PATCH", "path": "/nodes/{id}",
+                "display_name": "Update Node", "short_desc": "Update a node", "desc": "Updates a node.",
+                "response_fields": {"label": {"display_name": "Node label"}}},
+            <RestSchemaActionInfo>{"action": "delete-node", "method": "DELETE", "path": "/nodes/{id}",
+                "display_name": "Delete Node", "short_desc": "Delete a node", "desc": "Deletes a node."},
+        );
+
+        #! A manifest entry whose output type fails part of the way through its schema build
+        const BadSchemaEntry = <RestSchemaActionInfo>{"action": "get-bad", "method": "GET", "path": "/bad",
+            "display_name": "Get Bad", "short_desc": "Get a bad node", "desc": "Gets a bad node."};
+
+        #! A manifest entry whose unwrap path names a field the response does not declare
+        const BadUnwrapEntry = <RestSchemaActionInfo>{"action": "get-wrapped", "method": "GET", "path": "/wrapped",
+            "display_name": "Get Wrapped", "short_desc": "Get a wrapped node", "desc": "Gets a wrapped node.",
+            "response_unwrap": "missing"};
+    }
+
+    constructor() : Test("RestSchemaActions lazy response types", "1.0", \ARGV) {
+        addTestCase("lazy output types are identical to eager ones", \equivalenceTest());
+        addTestCase("action definitions carry a callback that the catalog resolves", \catalogTest());
+        addTestCase("a set without the option still fails at construction", \eagerFailureTest());
+        addTestCase("a failing output type and a good one of the same document, read again", \failureTest());
+        addTestCase("concurrent first reads build each output type once", \concurrencyTest());
+        addTestCase("the eager override applies to sets constructed afterwards", \eagerOverrideTest());
+        set_return_value(main());
+    }
+
+    #! Returns a freshly parsed schema
+    private OpenApi3Schema schema() {
+        hash<auto> node_ref = {"\$ref": "#/components/schemas/Node"};
+        hash<auto> path_id = {"name": "id", "in": "path", "required": True, "schema": {"type": "string"}};
+        return OpenApi3Loader::fromString(make_json({
+            "openapi": "3.0.3",
+            "info": {"title": "Nodes", "version": "1"},
+            "servers": ({"url": "https://nodes.example.com/v1"},),
+            "paths": {
+                "/nodes/{id}": {
+                    "get": {"operationId": "getNode", "parameters": (path_id,), "responses": {"200": {
+                        "description": "the node", "content": {"application/json": {"schema": node_ref}}}}},
+                    "patch": {"operationId": "updateNode", "parameters": (path_id,), "requestBody": {"content": {
+                        "application/json": {"schema": {"type": "object", "properties": {
+                            "label": {"type": "string"}}}}}},
+                        "responses": {"200": {"description": "the node",
+                            "content": {"application/json": {"schema": node_ref}}}}},
+                    "delete": {"operationId": "deleteNode", "parameters": (path_id,),
+                        "responses": {"204": {"description": "deleted"}}},
+                },
+                "/nodes": {"get": {"operationId": "listNodes", "parameters": ({"name": "limit", "in": "query",
+                        "schema": {"type": "integer"}},),
+                    "responses": {"200": {"description": "the nodes", "content": {"application/json": {
+                        "schema": {"type": "object", "properties": {"data": {"type": "array",
+                            "items": node_ref}}}}}}}}},
+                "/bad": {"get": {"operationId": "getBad", "responses": {"200": {"description": "a bad node",
+                    "content": {"application/json": {"schema": {"\$ref": "#/components/schemas/BadNode"}}}}}}},
+                "/wrapped": {"get": {"operationId": "getWrapped", "responses": {"200": {"description": "wrapped",
+                    "content": {"application/json": {"schema": {"type": "object", "properties": {
+                        "node": node_ref}}}}}}}},
+            },
+            "components": {"schemas": {
+                "Node": {"type": "object", "properties": {
+                    "id": {"type": "string"},
+                    "label": {"type": "string"},
+                    "children": {"type": "array", "items": node_ref},
+                    "parent": node_ref,
+                }},
+                # a boolean enumerating a non-boolean fails when the type is built, after the recursion
+                # through Node has registered its placeholders
+                "BadNode": {"type": "object", "properties": {
+                    "node": node_ref,
+                    "self": {"\$ref": "#/components/schemas/BadNode"},
+                    "flag": {"type": "boolean", "enum": ("maybe",)},
+                }},
+            }},
+        }), True);
+    }
+
+    #! Returns a lazy set over a fresh schema
+    private RestSchemaActionSet lazySet(list<hash<RestSchemaActionInfo>> manifest = GoodManifest) {
+        return new RestSchemaActionSet(schema(), manifest, NOTHING, NOTHING, NOTHING,
+            <RestSchemaActionSetOptionInfo>{"lazy_response_types": True});
+    }
+
+    #! Returns the structure of an action's output type and options, comparable across documents
+    private *hash<auto> describe(RestSchemaActionSet set, string action) {
+        RestSchemaActionOperation op = set.getOperationEx(action);
+        hash<DataProviderActionInfo> info = set.getActionInfo("app", action);
+        hash<string, hash<auto>> options = {};
+        foreach hash<auto> i in (info.options.pairIterator()) {
+            options{i.key} = i.value - "type" + {"type": i.value.type.getInfo()};
+        }
+        return structure({
+            "output_type": op.getResponseType() ? op.getResponseType().getInfo() : NOTHING,
+            "options": options,
+            "info": info - ("output_type", "get_output_type", "options"),
+        });
+    }
+
+    #! Removes the per-object identities from a type description, leaving its structure
+    private static auto structure(auto v) {
+        switch (v.typeCode()) {
+            case NT_HASH: {
+                hash<auto> rv = {};
+                foreach hash<auto> i in (v.pairIterator()) {
+                    if (i.key != "unique_key") {
+                        rv{i.key} = structure(i.value);
+                    }
+                }
+                return rv;
+            }
+            case NT_LIST:
+                return map structure($1), v;
+        }
+        return v;
+    }
+
+    #! Registers a lazy set's actions under a new application
+    private string registerApp(RestSchemaActionSet set) {
+        string app = sprintf("QoreTestLazyResponseTypes%d", ++app_id);
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": app,
+            "display_name": "Lazy Response Types " + app_id,
+            "short_desc": "Lazy response types fixture",
+            "desc": "Lazy response types fixture",
+            "groups": (AppGroup::DataTransformation,),
+            "logo": "data",
+            "logo_mime_type": MimeTypeSvg,
+            "logo_file_name": "lazy.svg",
+        });
+        set.registerActions(app);
+        return app;
+    }
+
+    #! Returns the exception thrown by the given call, if any
+    private *hash<ExceptionInfo> getException(code c) {
+        try {
+            c();
+        } catch (hash<ExceptionInfo> ex) {
+            return ex;
+        }
+    }
+
+    equivalenceTest() {
+        RestSchemaActionSet eager(schema(), GoodManifest);
+        assertFalse(eager.hasLazyResponseTypes());
+        RestSchemaActionSet lazy = lazySet();
+        assertTrue(lazy.hasLazyResponseTypes());
+        # request types are built at construction either way
+        foreach hash<RestSchemaActionInfo> entry in (GoodManifest) {
+            assertFalse(eager.getOperationEx(entry.action).isResponseTypePending(), entry.action + " eager");
+        }
+        assertTrue(lazy.getOperationEx("get-node").isResponseTypePending(), "the lazy type is not built yet");
+        assertFalse(lazy.getOperationEx("delete-node").isResponseTypePending(), "a response with no body needs no build");
+        # the lazy types are built in the reverse order of the eager ones
+        foreach hash<RestSchemaActionInfo> entry in (reverse(GoodManifest)) {
+            assertEq(describe(eager, entry.action), describe(lazy, entry.action),
+                entry.action + ": the lazy output type and options equal the eager ones");
+        }
+        assertEq("Node label", lazy.getOperationEx("update-node").getResponseType().getFields().label.getDisplayName(),
+            "the response overlay applies");
+        assertNothing(lazy.getOperationEx("delete-node").getResponseType(), "no body, no output type");
+    }
+
+    catalogTest() {
+        RestSchemaActionSet lazy = lazySet();
+        hash<DataProviderActionInfo> info = lazy.getActionInfo("app", "get-node");
+        assertTrue(exists info.get_output_type, "a deferred output type is a callback");
+        assertFalse(exists info.output_type);
+        assertTrue(info.get_output_type === lazy.getActionInfo("app", "get-node").get_output_type,
+            "every definition of an action has the same callback");
+        assertFalse(exists lazy.getActionInfo("app", "delete-node").get_output_type, "no body, no callback");
+
+        string app = registerApp(lazy);
+        hash<string, hash<DataProviderActionInfo>> stored = map {$1.action: $1},
+            DataProviderActionCatalog::getActionsNoInit(app);
+        assertTrue(exists stored."get-node".get_output_type, "registration builds no output type");
+        assertTrue(lazy.getOperationEx("get-node").isResponseTypePending(), "registration builds no output type");
+
+        hash<DataProviderActionInfo> action = DataProviderActionCatalog::getAppActionEx(app, "get-node");
+        assertTrue(action.output_type === lazy.getOperationEx("get-node").getResponseType(),
+            "the catalog publishes the operation's output type");
+        assertTrue(lazy.getOperationEx("list-nodes").isResponseTypePending(), "other actions are not built");
+
+        # the definitions generated after the build are the same as before
+        assertTrue(info.get_output_type === lazy.getActionInfo("app", "get-node").get_output_type);
+    }
+
+    eagerFailureTest() {
+        *hash<ExceptionInfo> ex = getException(sub () {
+            RestSchemaActionSet set(schema(), GoodManifest + BadSchemaEntry);
+        });
+        assertEq("RUNTIME-TYPE-ERROR", ex.err, "a schema that cannot be built fails at construction");
+        ex = getException(sub () {
+            RestSchemaActionSet set(schema(), GoodManifest + BadUnwrapEntry);
+        });
+        assertEq("REST-SCHEMA-ACTION-ERROR", ex.err, "an unwrap path that does not apply fails at construction");
+        assertRegex("cannot unwrap response field \"missing\"", ex.desc);
+    }
+
+    failureTest() {
+        RestSchemaActionSet lazy = lazySet(GoodManifest + (BadSchemaEntry, BadUnwrapEntry));
+        string app = registerApp(lazy);
+
+        # a type that fails part of the way through its schema build
+        *hash<ExceptionInfo> ex = getException(sub () { lazy.getOperationEx("get-bad").getResponseType(); });
+        assertEq("RUNTIME-TYPE-ERROR", ex.err);
+        assertRegex("while building the output type of action \"get-bad\"", ex.desc);
+        AbstractDataProviderType good = lazy.getOperationEx("get-node").getResponseType();
+        ex = getException(sub () { lazy.getOperationEx("get-bad").getResponseType(); });
+        assertEq("RUNTIME-TYPE-ERROR", ex.err, "the failing type fails again");
+        assertTrue(lazy.getOperationEx("get-bad").isResponseTypePending(), "the failing type is still to be built");
+        assertTrue(good === lazy.getOperationEx("get-node").getResponseType(), "the good type is built once");
+        RestSchemaActionSet eager(schema(), GoodManifest);
+        assertEq(describe(eager, "get-node"), describe(lazy, "get-node"),
+            "the good type is complete after the failures");
+        assertEq(describe(eager, "list-nodes"), describe(lazy, "list-nodes"),
+            "a type built after the failures is complete");
+
+        # a manifest entry that does not apply, reported by the catalog for exactly that action
+        ex = getException(sub () { DataProviderActionCatalog::getAppActionEx(app, "get-wrapped"); });
+        assertEq("ACTION-OUTPUT-TYPE-ERROR", ex.err);
+        assertEq("REST-SCHEMA-ACTION-ERROR", ex.arg[0].error);
+        assertRegex("cannot unwrap response field \"missing\"", ex.arg[0].description);
+        assertTrue(DataProviderActionCatalog::getAppActionEx(app, "get-node").output_type === good);
+        list<hash<DataProviderInitializationFailureInfo>> failures
+            = DataProviderActionCatalog::getInitializationFailures((app,));
+        assertEq(("get-wrapped",), (map $1.action, failures), "the failure is retained for the action");
+    }
+
+    concurrencyTest() {
+        RestSchemaActionSet lazy = lazySet();
+        Counter start(1);
+        Queue results();
+        list<string> actions = ("get-node", "list-nodes", "get-node", "update-node", "list-nodes", "get-node");
+        foreach string action in (actions) {
+            background readType(lazy, action, start, results);
+        }
+        start.dec();
+        hash<string, list<auto>> types = {};
+        for (int i = 0; i < actions.size(); ++i) {
+            hash<auto> result = results.get();
+            types{result.action} += result.ex ?? result.type;
+        }
+        RestSchemaActionSet eager(schema(), GoodManifest);
+        foreach hash<auto> i in (types.pairIterator()) {
+            assertTrue(i.value[0] instanceof AbstractDataProviderType, i.key + " is built");
+            foreach auto type in (i.value) {
+                assertTrue(type === i.value[0], i.key + " is built once");
+            }
+            assertEq(describe(eager, i.key), describe(lazy, i.key), i.key + " equals the eager type");
+        }
+    }
+
+    #! Reads an output type once the start counter reaches zero, and queues the result
+    private static readType(RestSchemaActionSet set, string action, Counter start, Queue results) {
+        try {
+            start.waitForZero();
+            results.push({"action": action, "type": set.getOperationEx(action).getResponseType()});
+        } catch (hash<ExceptionInfo> ex) {
+            results.push({"action": action, "ex": ex});
+        }
+    }
+
+    eagerOverrideTest() {
+        RestSchemaActionSet::setEagerResponseTypes(True);
+        on_exit RestSchemaActionSet::setEagerResponseTypes(False);
+        RestSchemaActionSet set = lazySet();
+        assertFalse(set.hasLazyResponseTypes(), "the override makes a lazy set eager");
+        assertFalse(set.getOperationEx("get-node").isResponseTypePending());
+        assertTrue(set.getActionInfo("app", "get-node").output_type instanceof AbstractDataProviderType);
+        *hash<ExceptionInfo> ex = getException(sub () {
+            new RestSchemaActionSet(schema(), GoodManifest + BadSchemaEntry, NOTHING, NOTHING, NOTHING,
+                <RestSchemaActionSetOptionInfo>{"lazy_response_types": True});
+        });
+        assertEq("RUNTIME-TYPE-ERROR", ex.err, "an eager set validates every output type at construction");
+    }
+}

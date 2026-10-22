@@ -1489,6 +1489,42 @@ protected:
         RuntimeNamespaceWriteGuard& operator=(const RuntimeNamespaceWriteGuard&) = delete;
     };
 
+    //! RuntimeNamespaceWriteGuard for a namespace that may not be attached to a root namespace
+    /** A namespace that no Program's root namespace contains has no reader in another thread, so with no root no
+        lock is taken.  Used by the public QoreNamespace API, which binary modules call on namespaces of running
+        Programs, including a user module's shared Program that other threads copy from when they import it.
+    */
+    class OptionalRuntimeNamespaceWriteGuard {
+    public:
+        DLLLOCAL OptionalRuntimeNamespaceWriteGuard(qore_root_ns_private* root) : root(root) {
+            if (root) {
+                root->runtimeNamespaceWriteLock();
+            }
+        }
+
+        DLLLOCAL ~OptionalRuntimeNamespaceWriteGuard() {
+            if (root) {
+                root->runtimeNamespaceWriteUnlock();
+            }
+        }
+
+    private:
+        qore_root_ns_private* root;
+
+        OptionalRuntimeNamespaceWriteGuard(const OptionalRuntimeNamespaceWriteGuard&) = delete;
+        OptionalRuntimeNamespaceWriteGuard& operator=(const OptionalRuntimeNamespaceWriteGuard&) = delete;
+    };
+
+public:
+#ifdef DEBUG
+    //! Returns true if the current thread holds this root's runtime namespace write lock (debug builds only)
+    DLLLOCAL bool runtimeNamespaceWriteLockHeld() const {
+        return runtime_namespace_writer_tid.load(std::memory_order_acquire) == q_gettid();
+    }
+#endif
+
+protected:
+
     typedef std::vector<deferred_new_check_t> deferred_new_check_vec_t;
     deferred_new_check_vec_t deferred_new_check_vec;
 

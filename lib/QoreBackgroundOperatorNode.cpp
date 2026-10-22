@@ -3,7 +3,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -41,10 +41,12 @@ QoreValue QoreBackgroundOperatorNode::evalImpl(bool& needs_deref, ExceptionSink*
 
 QoreValue QoreBackgroundOperatorNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
     static int bg_eval_count = 0;
-    static bool debug_bg = [] {
-        const char* debug_env = getenv("QORE_IR_DEBUG");
+    static constinit QoreLazyValue<bool> debug_bg_setting([]() -> bool {
+        QoreEnvironmentValue debug_env_holder("QORE_IR_DEBUG");
+        const char* debug_env = debug_env_holder.c_str();
         return debug_env && strstr(debug_env, "bg");
-    }();
+    });
+    const bool debug_bg = debug_bg_setting.get();
     if (debug_bg) {
         int eval_num = ++bg_eval_count;
         fprintf(stderr, "[BG_EVAL %d] TID=%d expr=%p\n", eval_num, q_gettid(), exp.getInternalNode());

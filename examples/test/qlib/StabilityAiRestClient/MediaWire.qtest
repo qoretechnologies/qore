@@ -59,7 +59,8 @@ class StabilityMediaWireTest inherits QUnit::Test {
         addTestCase("concurrent waits enforce independent request deadlines", \concurrentTest());
         server = new HttpServer(<HttpServerOptionInfo>{"logger": new Logger::Logger("5422-media", Logger::LoggerLevel::ERROR)});
         server.setDefaultHandler("fixture", handler);
-        endpoint = sprintf("http://127.0.0.1:%d", server.addListener(<HttpListenerOptionInfo>{"service": 0}).port);
+        endpoint = sprintf("http://127.0.0.1:%d",
+            server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port);
         options = {"url": endpoint, "apikey": "fixture-media-key", "organization": "org-media", "timeout": 5s};
         set_return_value(main());
     }

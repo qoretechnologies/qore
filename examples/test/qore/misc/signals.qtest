@@ -1,6 +1,8 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
 %modern
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
@@ -8,13 +10,176 @@
 
 %exec-class SignalTest
 
+#! records the life of a signal callback: the callback finishing, and the destruction of what its closure captured
+class SignalCallbackTracker {
+    private {
+        Queue events;
+        bool throw_in_destructor;
+    }
+
+    constructor(Queue events, bool throw_in_destructor = False) {
+        self.events = events;
+        self.throw_in_destructor = throw_in_destructor;
+    }
+
+    destructor() {
+        events.push("destroyed");
+        if (throw_in_destructor) {
+            throw "SIGNAL-CALLBACK-TRACKER-ERROR", "raised by the destructor of an object a signal callback captured";
+        }
+    }
+
+    finished() {
+        events.push("finished");
+    }
+}
+
 class SignalTest inherits QUnit::Test {
     constructor() : QUnit::Test("Signal test", "1.0") {
         addTestCase("signal neg test", \signalNegTest());
         addTestCase("signal test", \signalTest());
         addTestCase("signal handler re-register", \signalReregisterTest());
         addTestCase("signal handler rapid re-register", \signalRapidReregisterTest());
+        addTestCase("a callback replaced by another thread while it runs keeps its closure",
+            \signalReplaceWhileRunningTest());
+        addTestCase("a callback that replaces its own handler keeps its closure", \signalReplaceOwnHandlerTest());
+        addTestCase("a callback that removes its own handler and sets another keeps its closure",
+            \signalRemoveReplaceOwnHandlerTest());
+        addTestCase("a callback that removes its own handler", \signalRemoveOwnHandlerTest());
+        addTestCase("a callback that removes its own handler twice", \signalRemoveOwnHandlerTwiceTest());
+        addTestCase("an exception releasing a removed callback does not stop the next callback",
+            \signalReleaseExceptionTest());
         set_return_value(main());
+    }
+
+    #! installs a SIGUSR1 handler whose callback calls the given code and then uses what its closure captured
+    /** only the callback's closure references its tracker
+    */
+    private static installHandler(Queue events, code<nothing()> change, bool throw_in_destructor = False) {
+        SignalCallbackTracker tracker(events, throw_in_destructor);
+        set_signal_handler(SIGUSR1, sub (int sig) {
+            change();
+            tracker.finished();
+        });
+    }
+
+    #! raises SIGUSR1 for the handler installHandler() installed
+    /** asserts that what the callback's closure captured is destroyed only after the callback has returned
+    */
+    private checkCallback(code<nothing()> change, bool throw_in_destructor = False) {
+        Queue events();
+        installHandler(events, change, throw_in_destructor);
+        kill(getpid(), SIGUSR1);
+        assertEq("finished", events.get());
+        assertEq("destroyed", events.get());
+    }
+
+    #! asserts that SIGUSR1 is handled by a newly installed handler
+    private checkNextCallback() {
+        Queue q();
+        set_signal_handler(SIGUSR1, sub (int sig) { q.push(sig); });
+        on_exit remove_signal_handler(SIGUSR1);
+        kill(getpid(), SIGUSR1);
+        assertEq(SIGUSR1, q.get());
+    }
+
+    signalReplaceWhileRunningTest() {
+        if (!HAVE_SIGNAL_HANDLING) {
+            testSkip("no signal handling on this platform");
+        }
+
+        on_exit remove_signal_handler(SIGUSR1);
+        Queue events();
+        Queue ready();
+        Queue release();
+        installHandler(events, sub () {
+            ready.push(True);
+            release.get();
+        });
+        kill(getpid(), SIGUSR1);
+        ready.get();
+        {
+            # the callback must return even when the assertion fails
+            on_exit release.push(True);
+            # replacing a handler does not wait for its running callback
+            set_signal_handler(SIGUSR1, sub (int sig) {});
+            assertEq(0, events.size(), "the running callback's closure is still referenced");
+        }
+        assertEq("finished", events.get());
+        # the callback's closure is released once it has returned
+        assertEq("destroyed", events.get());
+
+        checkNextCallback();
+    }
+
+    signalReplaceOwnHandlerTest() {
+        if (!HAVE_SIGNAL_HANDLING) {
+            testSkip("no signal handling on this platform");
+        }
+
+        on_exit remove_signal_handler(SIGUSR1);
+        Queue q();
+        checkCallback(sub () {
+            set_signal_handler(SIGUSR1, sub (int sig) { q.push(sig); });
+        });
+
+        # the replacement is the installed handler
+        kill(getpid(), SIGUSR1);
+        assertEq(SIGUSR1, q.get());
+    }
+
+    signalRemoveReplaceOwnHandlerTest() {
+        if (!HAVE_SIGNAL_HANDLING) {
+            testSkip("no signal handling on this platform");
+        }
+
+        on_exit remove_signal_handler(SIGUSR1);
+        Queue q();
+        checkCallback(sub () {
+            remove_signal_handler(SIGUSR1);
+            set_signal_handler(SIGUSR1, sub (int sig) { q.push(sig); });
+        });
+
+        # the handler set after the removal stays installed
+        kill(getpid(), SIGUSR1);
+        assertEq(SIGUSR1, q.get());
+    }
+
+    signalRemoveOwnHandlerTest() {
+        if (!HAVE_SIGNAL_HANDLING) {
+            testSkip("no signal handling on this platform");
+        }
+
+        checkCallback(sub () {
+            remove_signal_handler(SIGUSR1);
+        });
+        checkNextCallback();
+    }
+
+    signalRemoveOwnHandlerTwiceTest() {
+        if (!HAVE_SIGNAL_HANDLING) {
+            testSkip("no signal handling on this platform");
+        }
+
+        # the second removal finds the handler already removed
+        checkCallback(sub () {
+            remove_signal_handler(SIGUSR1);
+            remove_signal_handler(SIGUSR1);
+        });
+        checkNextCallback();
+    }
+
+    signalReleaseExceptionTest() {
+        if (!HAVE_SIGNAL_HANDLING) {
+            testSkip("no signal handling on this platform");
+        }
+
+        # the destructor of the object that the removed callback captured raises an exception when the signal
+        # thread releases the callback; the signal thread reports it on stderr, and the next callback runs
+        checkCallback(sub () {
+            remove_signal_handler(SIGUSR1);
+        }, True);
+        checkNextCallback();
     }
 
     signalNegTest() {

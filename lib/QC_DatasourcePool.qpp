@@ -211,7 +211,7 @@ static void DatasourcePool_deserializer(QoreObject& self, const QoreHashNode* sd
     The connection is released to the pool when DatasourcePool::commit() or DatasourcePool::rollback() are called (or in the case the thread terminates, in which case an exception is raised as well).\n\n
     To begin a transaction with one of the select methods (for example, with \c "select for update"), call DatasourcePool::beginTransaction() first to manually dedicate a Datasource to the thread before calling the select method. Otherwise statements that should be in the same transaction may be executed in different connections.\n\n
     Executing a %DatasourcePool method while not in a transaction is realized by allocating a temporary connection to the calling thread which is re-released when the method returns. No explicit commits are executed by the class, therefore it is an error to execute transaction-relevant commands without first calling DatasourcePool::exec(), DatasourcePool::vexec(), DatasourcePool::execRaw(), or DatasourcePool::beginTransaction().\n\n
-    Note that the @ref Qore::SQL::SQLStatement "SQLStatement" class also grabs allocates a persistent connection to the calling thread when executing if it is created using a %DatasourcePool object in the constructor; when connections are returned to the pool, all SQLStatement objects using the allocated datasource are closed automatically; for more information see the @ref Qore::SQL::SQLStatement "SQLStatement" class documentation.
+    Note that the @ref Qore::SQL::SQLStatement "SQLStatement" class also grabs allocates a persistent connection to the calling thread when executing if it is created using a %DatasourcePool object in the constructor; when connections are returned to the pool, all SQLStatement objects using the allocated datasource are closed automatically; for more information see the @ref Qore::SQL::SQLStatement "SQLStatement" class documentation.  A statement destroyed in another thread than the one holding its connection is closed by the thread holding the connection; see @ref Qore::SQL::SQLStatement::destructor() "SQLStatement::destructor()".
 
     @par Thread Resource Handling
     The DatasourcePool class manages connection allocations as a @ref thread_resources "thread resource"; if the
@@ -389,10 +389,14 @@ delete db;
     @endcode
 
     @throw DATASOURCEPOOL-ERROR The destructor was called while a transaction was still in progress
+
+    @note The connections of the pool are closed when the object is destroyed and no other thread is using the pool;
+    an error closing a connection is raised as an exception by DBI drivers that can report one (since %Qore 3.0)
  */
 DatasourcePool::destructor() {
    ds->destructor(xsink);
-   ds->deref();
+   // the last reference closes the pool's connections, where an error closing one is raised
+   ds->deref(xsink);
 }
 
 //! Creates a new Datasource object with the same driver as the original and copies of all the connection parameters

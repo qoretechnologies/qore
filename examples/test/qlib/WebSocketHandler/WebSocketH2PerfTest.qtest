@@ -162,6 +162,7 @@ class WebSocketH2PerfTest inherits QUnit::Test {
             SSLCertificate cert(CertPem);
             SSLPrivateKey key(KeyPem);
             h2info = mServer.addListener(<HttpListenerOptionInfo>{
+                "node": "localhost",
                 "service": 0,
                 "cert": cert,
                 "key": key,
@@ -824,6 +825,7 @@ class WebSocketH2PerfTest inherits QUnit::Test {
             SSLCertificate cert(CertPem);
             SSLPrivateKey key(KeyPem);
             hash<auto> extra_listener = mServer.addListener(<HttpListenerOptionInfo>{
+                "node": "localhost",
                 "service": 0,
                 "cert": cert,
                 "key": key,

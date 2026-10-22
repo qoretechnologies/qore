@@ -264,6 +264,8 @@ public class HttpWebSocketPollOperation inherits HttpWebSocketPollOperationBase,
         bool deleted = False;
         # the connection that processed the frames, if any
         auto conn;
+        # the handler of the connection, which logs an error of the connection's destructor
+        auto log_handler;
         # the deferred onComplete() result, if any
         *hash<SocketPollResultInfo> result;
         bool released = False;
@@ -279,6 +281,7 @@ public class HttpWebSocketPollOperation inherits HttpWebSocketPollOperationBase,
             {
                 AutoLock al(dispatch_mutex);
                 conn = wsc;
+                log_handler = handler;
                 if (!deleted && exists conn && hasReceivedFrames()) {
                     frame = getReceivedFrame();
                 }
@@ -307,6 +310,10 @@ public class HttpWebSocketPollOperation inherits HttpWebSocketPollOperationBase,
             }
         }
         if (exists result) {
+            # the drainer gives the connection up before it ends the operation: the handler thread, which
+            # finishCompletion() releases, then holds the last reference, so the connection's destructor runs there,
+            # and its error is handled there, as when no frame arrives after the close
+            releaseConnection(\conn, log_handler);
             finishCompletion(result);
             return;
         }
@@ -314,6 +321,28 @@ public class HttpWebSocketPollOperation inherits HttpWebSocketPollOperationBase,
         # close echoes) that processServerFrame() pushed to send_queue.
         if (!deleted && exists conn) {
             conn.notifyIo();
+        }
+        releaseConnection(\conn, log_handler);
+    }
+
+    #! Releases a drainer's reference to the connection
+    /** The handler thread holds the last reference to the connection until the operation has ended; when the
+        operation ended meanwhile (for example by @ref forceClose()) and the handler thread has released its
+        reference, the connection's destructor runs here, and its error is logged with the connection's handler.
+
+        @param conn the drainer's reference, which is cleared
+        @param log_handler the connection's handler, if any
+    */
+    private static releaseConnection(reference<auto> conn, auto log_handler) {
+        try {
+            conn = NOTHING;
+        } catch (hash<ExceptionInfo> ex) {
+            if (log_handler) {
+                try {
+                    log_handler.logError("WebSocket connection destructor error: %s", get_exception_string(ex));
+                } catch () {
+                }
+            }
         }
     }
 

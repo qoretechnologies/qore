@@ -1,0 +1,168 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  HttpHeaderNul.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# An HTTP/1.x header is parsed as a C string, so a NUL character cut it off: every header line after the NUL
+# character, such as Content-Length, was lost without an error, and the rest of the message was read as the body or
+# as another message.  A header or chunked body trailer with a NUL character is refused, with synchronous and
+# asynchronous I/O, for requests and responses.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class HttpHeaderNulTest
+
+public class HttpHeaderNulTest inherits QUnit::Test {
+    private {
+        Socket server();
+        hash<auto> server_info;
+    }
+
+    constructor() : Test("HttpHeaderNul", "1.0", \ARGV) {
+        server.bind("localhost:0");
+        server.listen();
+        server_info = server.getSocketInfo(False);
+
+        addTestCase("request header", \requestHeader());
+        addTestCase("response header", \responseHeader());
+        addTestCase("chunked body trailer", \chunkedTrailer());
+        addTestCase("header without a NUL character", \headerWithoutNul());
+        set_return_value(main());
+    }
+
+    #! returns a connected client socket and the server end of the connection
+    list<Socket> connect() {
+        Socket client();
+        client.connectINET(server_info.address, server_info.port, 30s, server_info.family);
+        Socket conn = server.accept(30s);
+        return (client, conn);
+    }
+
+    #! reads a header with the given socket, synchronously or asynchronously
+    static hash<auto> readHeader(Socket sock, bool async) {
+        if (!async) {
+            return sock.readHTTPHeader(30s);
+        }
+        AbstractPollOperation op = sock.startPollReadHttpHeader();
+        while (*hash<SocketPollInfo> pi = op.continuePoll()) {
+            Socket::poll((pi,), 30s);
+        }
+        return op.getOutput().hdr;
+    }
+
+    #! reads a chunked body with the given socket, with the poll operation or with a callback for the chunks
+    static hash<auto> readChunkedBody(Socket sock, bool callback) {
+        if (!callback) {
+            return sock.readHTTPChunkedBodyBinary(30s);
+        }
+        # each chunk is passed in the "data" key of a hash, then any trailers in the "hdr" key of a hash
+        binary body = binary();
+        hash<auto> trailers = {};
+        sock.readHTTPChunkedBodyBinaryWithCallback(sub (*hash<auto> h) {
+            if (h.hasKey("data")) {
+                body += h.data;
+            } else if (h.hdr) {
+                trailers += h.hdr;
+            }
+        }, 30s);
+        return trailers + {"body": body};
+    }
+
+    requestHeader() {
+        foreach bool async in ((False, True)) {
+            foreach hash<auto> i in (
+                    # in a header value before Content-Length, in a header name, and in the request line
+                    {"label": "header value", "req": "POST / HTTP/1.1\r\nHost: x\r\nX-A: a\x00b\r\n"
+                        "Content-Length: 5\r\n\r\nhello", "offset": 32},
+                    {"label": "header name", "req": "GET / HTTP/1.1\r\nHost: x\r\nX-\x00A: 1\r\n\r\n", "offset": 27},
+                    {"label": "request line", "req": "GET /a\x00b HTTP/1.1\r\nHost: x\r\n\r\n", "offset": 6},
+                ) {
+                string label = sprintf("%s (%s)", i.label, async ? "async" : "sync");
+                (Socket client, Socket conn) = connect();
+                client.send(i.req);
+                assertThrows("SOCKET-HTTP-ERROR", sprintf("invalid HTTP header received with a NUL character at byte "
+                    "offset %d; an HTTP header cannot contain NUL characters", i.offset),
+                    \HttpHeaderNulTest::readHeader(), (conn, async), label);
+            }
+        }
+    }
+
+    responseHeader() {
+        foreach bool async in ((False, True)) {
+            string label = async ? "async" : "sync";
+            (Socket client, Socket conn) = connect();
+            conn.send("HTTP/1.1 200 OK\r\nX-A: a\x00b\r\nContent-Length: 2\r\n\r\nok");
+            assertThrows("SOCKET-HTTP-ERROR", "NUL character at byte offset 23",
+                \HttpHeaderNulTest::readHeader(), (client, async), label);
+        }
+
+        # HTTPClient receives the same error for the response
+        HTTPClient hc({"url": sprintf("http://localhost:%d", server_info.port), "timeout": 30s});
+        Counter served(1);
+        background sub () {
+            on_exit served.dec();
+            Socket s = server.accept(30s);
+            s.readHTTPHeader(30s);
+            s.send("HTTP/1.1 200 OK\r\nX-A: a\x00b\r\nContent-Length: 2\r\n\r\nok");
+            # waits for the client to close the connection
+            try {
+                s.recv(1, 30s);
+            } catch (hash<ExceptionInfo> ex) {
+            }
+        }();
+        on_exit served.waitForZero(30s);
+        assertThrows("SOCKET-HTTP-ERROR", "NUL character", \hc.get(), "/");
+        hc.disconnect();
+    }
+
+    chunkedTrailer() {
+        foreach bool callback in ((False, True)) {
+            string label = callback ? "callback" : "poll operation";
+            (Socket client, Socket conn) = connect();
+            # a trailer with a NUL character, then one that is lost when the trailer text is cut at it
+            conn.send("2\r\nok\r\n0\r\nX-T: a\x00b\r\nX-Lost: 1\r\n\r\n");
+            assertThrows("READ-HTTP-CHUNK-ERROR", "invalid HTTP chunked body trailer received with a NUL character "
+                "at byte offset 6; an HTTP chunked body trailer cannot contain NUL characters",
+                \HttpHeaderNulTest::readChunkedBody(), (client, callback), label);
+        }
+    }
+
+    headerWithoutNul() {
+        foreach bool async in ((False, True)) {
+            string label = async ? "async" : "sync";
+            (Socket client, Socket conn) = connect();
+            client.send("POST / HTTP/1.1\r\nHost: x\r\nX-A: ab\r\nContent-Length: 5\r\n\r\nhello");
+            hash<auto> hdr = HttpHeaderNulTest::readHeader(conn, async);
+            assertEq("ab", hdr."x-a", label);
+            assertEq("5", hdr."content-length", label);
+            assertEq("hello", conn.recv(5, 30s), label);
+
+            conn.send("2\r\nok\r\n0\r\nX-T: ab\r\n\r\n");
+            hash<auto> body = HttpHeaderNulTest::readChunkedBody(client, async);
+            assertEq(binary("ok"), body.body, label);
+            assertEq("ab", body."x-t", label);
+        }
+    }
+}

@@ -31,11 +31,23 @@
 
 #include <qore/Qore.h>
 #include "qore/intern/QoreEventLoop.h"
+#include "qore/intern/QorePollCompat.h"
 
 #include <cerrno>
+#include <climits>
 #include <cstring>
+#include <new>
 #include <unistd.h>
 #include <poll.h>
+#include <time.h>
+#if defined(__linux__)
+#include <sys/syscall.h>
+#endif
+#ifdef DARWIN
+#include <sys/ioctl.h>
+#endif
+
+#include <atomic>
 
 //! Returns the current wall-clock time in microseconds since the Unix epoch (CLOCK_REALTIME).
 /** Used only for comparing against user-supplied absolute deadlines (\c addTimer() deadlines
@@ -49,6 +61,48 @@ static int64_t q_epoch_us_fast() {
     int64_t secs = q_epoch_us(us);
     return secs * 1000000LL + us;
 }
+
+//! Sets @p ts to a wait of @p us microseconds
+static void q_wait_us_to_timespec(int64_t us, struct timespec& ts) {
+    ts.tv_sec = static_cast<time_t>(us / 1000000);
+    ts.tv_nsec = static_cast<long>((us % 1000000) * 1000);
+}
+
+//! Returns a wait of @p us microseconds in milliseconds, rounded up, for a call that only waits whole milliseconds
+/** A timer must never fire early: a wait rounded down ends before the timer is due, and the loop then polls again
+    without blocking until it is, busy-looping its thread.  A wait rounded up ends late by less than the resolution.
+*/
+static int q_wait_us_to_ms(int64_t us) {
+    int64_t ms = us / 1000 + (us % 1000 ? 1 : 0);
+    return ms > INT_MAX ? INT_MAX : static_cast<int>(ms);
+}
+
+#if defined(__linux__) && (defined(HAVE_EPOLL_PWAIT2) || (defined(SYS_epoll_pwait2) && defined(__LP64__)))
+#define QORE_HAVE_EPOLL_NS_WAIT 1
+//! Set when the system does not provide epoll_pwait2() (Linux before 5.11, or a seccomp filter refusing it)
+static std::atomic<bool> q_epoll_pwait2_unavailable{false};
+
+//! Waits for epoll events with nanosecond resolution: @p ts is the wait
+/** @return the result of the call, or -2 if epoll_pwait2() is not available, in which case the caller waits with
+    epoll_wait()
+*/
+static int q_epoll_pwait2(int epfd, struct epoll_event* events, int maxevents, const struct timespec* ts) {
+    if (q_epoll_pwait2_unavailable.load(std::memory_order_relaxed)) {
+        return -2;
+    }
+#ifdef HAVE_EPOLL_PWAIT2
+    int rc = epoll_pwait2(epfd, events, maxevents, ts, nullptr);
+#else
+    // the C library has no wrapper (musl): on a 64-bit system struct timespec is the kernel's __kernel_timespec
+    int rc = static_cast<int>(syscall(SYS_epoll_pwait2, epfd, events, maxevents, ts, nullptr, 0));
+#endif
+    if (rc < 0 && (errno == ENOSYS || errno == EPERM)) {
+        q_epoll_pwait2_unavailable.store(true, std::memory_order_relaxed);
+        return -2;
+    }
+    return rc;
+}
+#endif
 
 QoreEventLoop::QoreEventLoop(ExceptionSink* xsink) {
 #ifdef DARWIN
@@ -108,9 +162,177 @@ QoreEventLoop::~QoreEventLoop() {
 }
 
 int QoreEventLoop::add(int fd, int events, void* udata, ExceptionSink* xsink) {
-    // Store in our map
-    fd_map[fd] = {events, udata};
+    return addRegistration(fd, 0, events, udata, xsink);
+}
 
+int QoreEventLoop::modify(int fd, int events, ExceptionSink* xsink) {
+    auto it = fd_map.find(fd);
+    if (it == fd_map.end()) {
+        xsink->raiseException("EVENT-LOOP-ERROR", "fd %d is not registered", fd);
+        return -1;
+    }
+    auto rit = it->second.regs.find(0);
+    if (rit == it->second.regs.end()) {
+        xsink->raiseException("EVENT-LOOP-ERROR", "fd %d is not registered", fd);
+        return -1;
+    }
+    return addRegistration(fd, 0, events, rit->second.udata, xsink);
+}
+
+int QoreEventLoop::remove(int fd, ExceptionSink* xsink) {
+    return removeRegistration(fd, 0, xsink);
+}
+
+int QoreEventLoop::addRegistration(int fd, uint64_t key, int events, void* udata, ExceptionSink* xsink) {
+    auto it = fd_map.find(fd);
+    if (it == fd_map.end()) {
+#ifdef DEBUG
+        if (dbg_before_register) {
+            dbg_before_register(fd);
+        }
+#endif
+        // a named pipe is watched with select(2) in poll() instead of by kqueue (see fifo_count)
+        bool fifo = false;
+#ifdef DARWIN
+        fifo = qore_fd_poll_misses_hangup(fd);
+#endif
+        if (!fifo && kernelAdd(fd, events, udata, xsink)) {
+            return -1;
+        }
+        FdInfo& info = fd_map[fd];
+        info.events = events;
+        info.udata = udata;
+        info.regs[key] = {events, udata};
+#ifdef DARWIN
+        if (fifo) {
+            info.fifo = true;
+            ++fifo_count;
+        }
+#endif
+        return 0;
+    }
+
+    FdInfo& info = it->second;
+    auto rit = info.regs.find(key);
+    const bool existed = rit != info.regs.end();
+    const Registration prev = existed ? rit->second : Registration{0, nullptr};
+    info.regs[key] = {events, udata};
+    int all = 0;
+    for (const auto& [k, reg] : info.regs) {
+        all |= reg.events;
+    }
+#ifdef DEBUG
+    if (dbg_before_register) {
+        dbg_before_register(fd);
+    }
+#endif
+    // the system is given the union of the events again also when it is unchanged: the system drops a descriptor
+    // that is closed, and a registration without a hold of its descriptor can have outlived it (see kernelModify());
+    // a named pipe is watched for info.events by poll()
+    if (!info.fifo && kernelModify(fd, all, info.udata, xsink)) {
+        if (existed) {
+            info.regs[key] = prev;
+        } else {
+            info.regs.erase(key);
+        }
+        return -1;
+    }
+    info.events = all;
+    return 0;
+}
+
+int QoreEventLoop::removeRegistration(int fd, uint64_t key, ExceptionSink* xsink) {
+    auto it = fd_map.find(fd);
+    if (it == fd_map.end()) {
+        // Not an error - fd might have been closed and auto-removed
+        return 0;
+    }
+    FdInfo& info = it->second;
+    auto rit = info.regs.find(key);
+    if (rit == info.regs.end()) {
+        return 0;
+    }
+    void* removed_udata = rit->second.udata;
+    info.regs.erase(rit);
+    if (info.regs.empty()) {
+        const bool fifo = info.fifo;
+        fd_map.erase(it);
+#ifdef DEBUG
+        if (dbg_before_remove) {
+            dbg_before_remove(fd);
+        }
+#endif
+        if (fifo) {
+            // a named pipe is not registered with kqueue
+#ifdef DARWIN
+            assert(fifo_count);
+            --fifo_count;
+#endif
+            return 0;
+        }
+        return kernelRemove(fd, xsink);
+    }
+
+    // the other registrations stay: the descriptor is polled for their events
+    if (info.udata == removed_udata) {
+        info.udata = info.regs.begin()->second.udata;
+    }
+    int all = 0;
+    for (const auto& [k, reg] : info.regs) {
+        all |= reg.events;
+    }
+    if (all == info.events) {
+        return 0;
+    }
+    info.events = all;
+    // a named pipe is watched for info.events by poll()
+    return info.fifo ? 0 : kernelModify(fd, all, info.udata, xsink);
+}
+
+bool QoreEventLoop::hasRegistration(int fd, uint64_t key) const {
+    auto it = fd_map.find(fd);
+    return it != fd_map.end() && it->second.regs.count(key);
+}
+
+void QoreEventLoop::forEachRegistration(int fd, const std::function<void(uint64_t key, int events)>& f) const {
+    auto it = fd_map.find(fd);
+    if (it == fd_map.end()) {
+        return;
+    }
+    for (const auto& [key, reg] : it->second.regs) {
+        f(key, reg.events);
+    }
+}
+
+void QoreEventLoop::expandRegistrations(std::vector<QoreEventInfo>& events) {
+    expand_buf.clear();
+    for (const QoreEventInfo& e : events) {
+        if (e.fd < 0) {
+            // user events (EVFILT_USER) and io_uring completions are not descriptor registrations
+            expand_buf.push_back(e);
+            continue;
+        }
+        auto it = fd_map.find(e.fd);
+        if (it == fd_map.end()) {
+            // the descriptor was removed after the system reported it
+            continue;
+        }
+        for (const auto& [key, reg] : it->second.regs) {
+            int ev = e.events & (reg.events | QORE_EV_ERROR);
+            if (!ev) {
+                continue;
+            }
+            if (!(ev & (QORE_EV_READ | QORE_EV_WRITE))) {
+                // an error is reported with the events the registration waits for, so its operation runs and sees it
+                ev |= reg.events & (QORE_EV_READ | QORE_EV_WRITE);
+            }
+            expand_buf.emplace_back(e.fd, ev, reg.udata, 0, key);
+        }
+    }
+    events.swap(expand_buf);
+}
+
+int QoreEventLoop::kernelAdd(int fd, int events, void* udata, ExceptionSink* xsink) {
 #ifdef DARWIN
     // kqueue: register events using kevent()
     // We may need up to 2 events (read + write)
@@ -132,7 +354,6 @@ int QoreEventLoop::add(int fd, int events, void* udata, ExceptionSink* xsink) {
         struct timespec ts = {0, 0};
         int rc = kevent(event_fd, changes, nchanges, nullptr, 0, &ts);
         if (rc < 0) {
-            fd_map.erase(fd);
             xsink->raiseErrnoException("EVENT-LOOP-ERROR", errno, "kevent() failed to add fd %d", fd);
             return -1;
         }
@@ -158,14 +379,12 @@ int QoreEventLoop::add(int fd, int events, void* udata, ExceptionSink* xsink) {
             // unregister skipped the epoll_ctl(DEL) because the socket
             // appeared closed at that moment).  Fall back to MOD.
             if (epoll_ctl(event_fd, EPOLL_CTL_MOD, fd, &ev) < 0) {
-                fd_map.erase(fd);
                 xsink->raiseErrnoException("EVENT-LOOP-ERROR", errno,
                     "epoll_ctl(MOD after ADD EEXIST) failed for fd %d", fd);
                 return -1;
             }
             return 0;
         }
-        fd_map.erase(fd);
         xsink->raiseErrnoException("EVENT-LOOP-ERROR", errno, "epoll_ctl(ADD) failed for fd %d", fd);
         return -1;
     }
@@ -177,16 +396,7 @@ int QoreEventLoop::add(int fd, int events, void* udata, ExceptionSink* xsink) {
 #endif
 }
 
-int QoreEventLoop::modify(int fd, int events, ExceptionSink* xsink) {
-    auto it = fd_map.find(fd);
-    if (it == fd_map.end()) {
-        xsink->raiseException("EVENT-LOOP-ERROR", "fd %d is not registered", fd);
-        return -1;
-    }
-
-    void* udata = it->second.udata;
-    it->second.events = events;
-
+int QoreEventLoop::kernelModify(int fd, int events, void* udata, ExceptionSink* xsink) {
 #ifdef DARWIN
     // kqueue: need to remove old events and add new ones
     // Use level-triggered mode (no EV_CLEAR)
@@ -257,14 +467,7 @@ int QoreEventLoop::modify(int fd, int events, ExceptionSink* xsink) {
 #endif
 }
 
-int QoreEventLoop::remove(int fd, ExceptionSink* xsink) {
-    auto it = fd_map.find(fd);
-    if (it == fd_map.end()) {
-        // Not an error - fd might have been closed and auto-removed
-        return 0;
-    }
-    fd_map.erase(it);
-
+int QoreEventLoop::kernelRemove(int fd, ExceptionSink* xsink) {
 #ifdef DARWIN
     // kqueue: remove both filters (ignore errors if not registered)
     struct kevent changes[2];
@@ -325,6 +528,109 @@ int QoreEventLoop::removeUserEvent(uintptr_t ident, ExceptionSink* xsink) {
     kevent(event_fd, &ev, 1, nullptr, 0, &ts);
     return 0;
 }
+
+int QoreEventLoop::waitWithFifos(int64_t wait_us, std::vector<struct kevent>& kevents,
+        std::vector<QoreEventInfo>& fifo_events, ExceptionSink* xsink) {
+    assert(fifo_count);
+    // the kqueue descriptor, which is readable when kqueue has events, then the named pipes
+    std::vector<struct pollfd> pfds;
+    try {
+        pfds.reserve(fifo_count + 1);
+        fifo_events.reserve(fifo_count);
+    } catch (std::bad_alloc&) {
+        xsink->outOfMemory();
+        return -1;
+    }
+    pfds.push_back({event_fd, POLLIN, 0});
+    for (const auto& [fd, info] : fd_map) {
+        if (!info.fifo) {
+            continue;
+        }
+        short ev = 0;
+        if (info.events & QORE_EV_READ) {
+            ev |= POLLIN;
+        }
+        if (info.events & QORE_EV_WRITE) {
+            ev |= POLLOUT;
+        }
+        if (ev) {
+            // within the reserved capacity
+            pfds.push_back({fd, ev, 0});
+        }
+    }
+
+    // select(2) waits in microseconds, like kevent() in poll(); the monotonic clock gives the EINTR-retry deadline
+    int64_t deadline_us = wait_us > 0 ? q_get_monotonic_us() + wait_us : 0;
+    int64_t remaining_us = wait_us;
+    int rc;
+    while (true) {
+        rc = qore_select_poll_us(pfds.data(), pfds.size(), remaining_us);
+        if (rc >= 0 || errno != EINTR) {
+            break;
+        }
+        if (wait_us > 0) {
+            remaining_us = deadline_us - q_get_monotonic_us();
+            if (remaining_us <= 0) {
+                rc = 0;
+                break;
+            }
+        }
+    }
+    if (rc < 0) {
+        xsink->raiseErrnoException("EVENT-LOOP-ERROR", errno, "select() failed");
+        return -1;
+    }
+
+    int nkevents = 0;
+    if (pfds[0].revents & POLLIN) {
+        struct timespec ts = {0, 0};
+        while (true) {
+            nkevents = kevent(event_fd, nullptr, 0, kevents.data(), kevents.size(), &ts);
+            if (nkevents >= 0 || errno != EINTR) {
+                break;
+            }
+        }
+        if (nkevents < 0) {
+            xsink->raiseErrnoException("EVENT-LOOP-ERROR", errno, "kevent() failed");
+            return -1;
+        }
+    }
+
+    for (size_t i = 1; i < pfds.size(); ++i) {
+        short re = pfds[i].revents;
+        if (!re) {
+            continue;
+        }
+        int fd = pfds[i].fd;
+        auto it = fd_map.find(fd);
+        assert(it != fd_map.end() && it->second.fifo);
+        if (it == fd_map.end()) {
+            continue;
+        }
+        if (re & POLLNVAL) {
+            // closed without being removed: kqueue drops a closed descriptor, and so does this
+            fd_map.erase(it);
+            --fifo_count;
+            continue;
+        }
+        int ev = 0;
+        if (re & POLLIN) {
+            ev |= QORE_EV_READ;
+            // readable with nothing to read: the writers have closed; epoll reports this with EPOLLHUP, and kqueue
+            // with EV_EOF for an anonymous pipe
+            int avail = 0;
+            if (!ioctl(fd, FIONREAD, &avail) && !avail) {
+                ev |= QORE_EV_ERROR;
+            }
+        }
+        if (re & POLLOUT) {
+            ev |= QORE_EV_WRITE;
+        }
+        // within the reserved capacity
+        fifo_events.push_back({fd, ev, it->second.udata});
+    }
+    return nkevents;
+}
 #endif
 
 int64_t QoreEventLoop::addTimer(int64_t deadline_us, void* udata, int64_t preset_id) {
@@ -351,20 +657,17 @@ bool QoreEventLoop::cancelTimer(int64_t id) {
 }
 
 int QoreEventLoop::poll(std::vector<QoreEventInfo>& events, int timeout_ms, ExceptionSink* xsink) {
-    // Clamp timeout based on earliest timer deadline
-    int effective_timeout_ms = timeout_ms;
+    // The wait in microseconds, -1 for no limit, clamped to the earliest timer deadline.  It is kept in microseconds
+    // and waited for with the resolution the system provides (kevent()'s timespec, epoll_pwait2(), ppoll()), and
+    // rounded up where only whole milliseconds can be waited for: a timer due in less than a millisecond used to make
+    // the wait 0, so the loop polled without blocking until the timer was due, busy-looping its thread.
+    int64_t wait_us = timeout_ms < 0 ? -1 : static_cast<int64_t>(timeout_ms) * 1000;
     if (!timer_set.empty()) {
-        int64_t now_us = q_epoch_us_fast();
-        int64_t remaining_us = timer_set.begin()->deadline_us - now_us;
+        int64_t remaining_us = timer_set.begin()->deadline_us - q_epoch_us_fast();
         if (remaining_us <= 0) {
-            effective_timeout_ms = 0;
-        } else {
-            int timer_ms = (int)(remaining_us / 1000);
-            // Sub-millisecond deadline: poll immediately (truncation to 0
-            // is correct — don't oversleep by rounding up to 1ms)
-            if (effective_timeout_ms < 0 || timer_ms < effective_timeout_ms) {
-                effective_timeout_ms = timer_ms;
-            }
+            wait_us = 0;
+        } else if (wait_us < 0 || remaining_us < wait_us) {
+            wait_us = remaining_us;
         }
     }
 
@@ -384,10 +687,18 @@ int QoreEventLoop::poll(std::vector<QoreEventInfo>& events, int timeout_ms, Exce
         return 0;
     }
 
-    // Timer-only mode: sleep using portable poll(nullptr, 0, timeout)
+    // Timer-only mode: sleep until the earliest timer is due (wait_us >= 0, as there is a timer)
     if (!has_fds) {
-        if (effective_timeout_ms > 0) {
-            ::poll(nullptr, 0, effective_timeout_ms);
+        if (wait_us > 0) {
+#ifdef HAVE_NANOSLEEP
+            struct timespec ts, rem;
+            q_wait_us_to_timespec(wait_us, ts);
+            while (nanosleep(&ts, &rem) && errno == EINTR) {
+                ts = rem;
+            }
+#else
+            ::poll(nullptr, 0, q_wait_us_to_ms(wait_us));
+#endif
         }
         // Collect expired timers only
         events.clear();
@@ -402,46 +713,53 @@ int QoreEventLoop::poll(std::vector<QoreEventInfo>& events, int timeout_ms, Exce
     // - plus 1 per user event (EVFILT_USER)
     std::vector<struct kevent> kevents(fd_map.size() * 2 + user_event_map.size());
 
-    struct timespec ts;
-    struct timespec* pts = nullptr;
-    int64_t deadline_us = 0;
-    if (effective_timeout_ms >= 0) {
-        ts.tv_sec = effective_timeout_ms / 1000;
-        ts.tv_nsec = (effective_timeout_ms % 1000) * 1000000;
-        pts = &ts;
-        // Monotonic clock for the EINTR-retry deadline: this is a relative "wait at most N ms"
-        // bound, so it must not be skewed by realtime clock adjustments.
-        deadline_us = q_get_monotonic_us() + (int64_t)effective_timeout_ms * 1000;
-    }
-
+    // the events of the named pipes, which are watched with select(2)
+    std::vector<QoreEventInfo> fifo_events;
     int rc;
-    while (true) {
-        rc = kevent(event_fd, nullptr, 0, kevents.data(), kevents.size(), pts);
-        if (rc >= 0 || errno != EINTR) {
-            break;
+    if (fifo_count) {
+        rc = waitWithFifos(wait_us, kevents, fifo_events, xsink);
+        if (rc < 0) {
+            return -1;
         }
-        // Recompute remaining time after EINTR — without this, each retry
-        // restarts the full timeout and repeated signals can prevent the
-        // timeout from ever firing (root cause of stale-detect stalls)
-        if (pts) {
-            int64_t remaining_us = deadline_us - q_get_monotonic_us();
-            if (remaining_us <= 0) {
-                rc = 0;
+    } else {
+        struct timespec ts;
+        struct timespec* pts = nullptr;
+        int64_t deadline_us = 0;
+        if (wait_us >= 0) {
+            q_wait_us_to_timespec(wait_us, ts);
+            pts = &ts;
+            // Monotonic clock for the EINTR-retry deadline: this is a relative "wait at most N ms"
+            // bound, so it must not be skewed by realtime clock adjustments.
+            deadline_us = q_get_monotonic_us() + wait_us;
+        }
+
+        while (true) {
+            rc = kevent(event_fd, nullptr, 0, kevents.data(), kevents.size(), pts);
+            if (rc >= 0 || errno != EINTR) {
                 break;
             }
-            ts.tv_sec = remaining_us / 1000000;
-            ts.tv_nsec = (remaining_us % 1000000) * 1000;
+            // Recompute remaining time after EINTR — without this, each retry
+            // restarts the full timeout and repeated signals can prevent the
+            // timeout from ever firing (root cause of stale-detect stalls)
+            if (pts) {
+                int64_t remaining_us = deadline_us - q_get_monotonic_us();
+                if (remaining_us <= 0) {
+                    rc = 0;
+                    break;
+                }
+                q_wait_us_to_timespec(remaining_us, ts);
+            }
         }
-    }
 
-    if (rc < 0) {
-        xsink->raiseErrnoException("EVENT-LOOP-ERROR", errno, "kevent() failed");
-        return -1;
+        if (rc < 0) {
+            xsink->raiseErrnoException("EVENT-LOOP-ERROR", errno, "kevent() failed");
+            return -1;
+        }
     }
 
     // Convert kevent results to QoreEventInfo
     events.clear();
-    events.reserve(rc);
+    events.reserve(rc + fifo_events.size());
 
     // Track which fds we've seen to combine read+write events
     std::unordered_map<int, size_t> fd_to_idx;
@@ -497,7 +815,11 @@ int QoreEventLoop::poll(std::vector<QoreEventInfo>& events, int timeout_ms, Exce
             events.push_back({fd, ev, udata});
         }
     }
+    // named pipes are not registered with kqueue, so their events are separate
+    events.insert(events.end(), fifo_events.begin(), fifo_events.end());
 
+    // each registration of a descriptor gets the events it waits for
+    expandRegistrations(events);
     collectExpiredTimers(events);
     return static_cast<int>(events.size());
 
@@ -513,25 +835,37 @@ int QoreEventLoop::poll(std::vector<QoreEventInfo>& events, int timeout_ms, Exce
     std::vector<struct epoll_event> epevents(epoll_size);
 
     int rc;
-    int epoll_timeout_ms = effective_timeout_ms;
+    int64_t epoll_wait_us = wait_us;
     int64_t epoll_deadline_us = 0;
-    if (epoll_timeout_ms >= 0) {
+    if (epoll_wait_us >= 0) {
         // Monotonic clock for the EINTR-retry deadline (see kevent path above).
-        epoll_deadline_us = q_get_monotonic_us() + (int64_t)epoll_timeout_ms * 1000;
+        epoll_deadline_us = q_get_monotonic_us() + epoll_wait_us;
     }
     while (true) {
-        rc = epoll_wait(event_fd, epevents.data(), epevents.size(), epoll_timeout_ms);
+        rc = -2;
+#ifdef QORE_HAVE_EPOLL_NS_WAIT
+        // a limited wait with nanosecond resolution; epoll_wait() is the same for no limit and for no wait
+        if (epoll_wait_us > 0) {
+            struct timespec ts;
+            q_wait_us_to_timespec(epoll_wait_us, ts);
+            rc = q_epoll_pwait2(event_fd, epevents.data(), static_cast<int>(epevents.size()), &ts);
+        }
+#endif
+        if (rc == -2) {
+            rc = epoll_wait(event_fd, epevents.data(), epevents.size(),
+                epoll_wait_us < 0 ? -1 : q_wait_us_to_ms(epoll_wait_us));
+        }
         if (rc >= 0 || errno != EINTR) {
             break;
         }
         // Recompute remaining time after EINTR
-        if (epoll_timeout_ms >= 0) {
+        if (epoll_wait_us >= 0) {
             int64_t remaining_us = epoll_deadline_us - q_get_monotonic_us();
             if (remaining_us <= 0) {
                 rc = 0;
                 break;
             }
-            epoll_timeout_ms = (int)(remaining_us / 1000);
+            epoll_wait_us = remaining_us;
         }
     }
 
@@ -584,6 +918,8 @@ int QoreEventLoop::poll(std::vector<QoreEventInfo>& events, int timeout_ms, Exce
         events.push_back({fd, ev, udata});
     }
 
+    // each registration of a descriptor gets the events it waits for
+    expandRegistrations(events);
     collectExpiredTimers(events);
     return static_cast<int>(events.size());
 
@@ -607,25 +943,33 @@ int QoreEventLoop::poll(std::vector<QoreEventInfo>& events, int timeout_ms, Exce
     }
 
     int rc;
-    int poll_timeout_ms = effective_timeout_ms;
+    int64_t poll_wait_us = wait_us;
     int64_t poll_deadline_us = 0;
-    if (poll_timeout_ms >= 0) {
+    if (poll_wait_us >= 0) {
         // Monotonic clock for the EINTR-retry deadline (see kevent/epoll paths above).
-        poll_deadline_us = q_get_monotonic_us() + (int64_t)poll_timeout_ms * 1000;
+        poll_deadline_us = q_get_monotonic_us() + poll_wait_us;
     }
     while (true) {
-        rc = ::poll(pollfds.data(), pollfds.size(), poll_timeout_ms);
+#ifdef HAVE_PPOLL
+        struct timespec ts;
+        if (poll_wait_us >= 0) {
+            q_wait_us_to_timespec(poll_wait_us, ts);
+        }
+        rc = ::ppoll(pollfds.data(), pollfds.size(), poll_wait_us < 0 ? nullptr : &ts, nullptr);
+#else
+        rc = ::poll(pollfds.data(), pollfds.size(), poll_wait_us < 0 ? -1 : q_wait_us_to_ms(poll_wait_us));
+#endif
         if (rc >= 0 || errno != EINTR) {
             break;
         }
         // Recompute remaining time after EINTR
-        if (poll_timeout_ms >= 0) {
+        if (poll_wait_us >= 0) {
             int64_t remaining_us = poll_deadline_us - q_get_monotonic_us();
             if (remaining_us <= 0) {
                 rc = 0;
                 break;
             }
-            poll_timeout_ms = (int)(remaining_us / 1000);
+            poll_wait_us = remaining_us;
         }
     }
 
@@ -661,6 +1005,8 @@ int QoreEventLoop::poll(std::vector<QoreEventInfo>& events, int timeout_ms, Exce
         }
     }
 
+    // each registration of a descriptor gets the events it waits for
+    expandRegistrations(events);
     collectExpiredTimers(events);
     return static_cast<int>(events.size());
 #endif

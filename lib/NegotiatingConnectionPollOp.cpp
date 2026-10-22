@@ -632,6 +632,8 @@ HttpClientConnectionBase* NegotiatingHttpClientConnection::takeOver(
         return nullptr;
     }
 
+    // the concrete connection can be created on another thread than this one; it was opened for the same code
+    concrete->inheritOpener(*this);
     return concrete;
 }
 

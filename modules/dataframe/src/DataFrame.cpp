@@ -579,9 +579,14 @@ void QoreDataFrame::destructor(QoreObject& self, ExceptionSink* xsink) {
 }
 
 bool QoreDataFrame::scanValues(QorePrivateDataScanner& scanner) {
-    // the scan never blocks (see AbstractScannablePrivateData::scanValues())
+    // the scan never blocks (see AbstractScannablePrivateData::scanValues()): with the lock held by another thread
+    // the columns cannot be reported, and the collector scans the object again once it has been released
     std::unique_lock<std::mutex> slk(scan_mtx, std::try_to_lock);
-    if (!slk.owns_lock() || !scan_columns) {
+    if (!slk.owns_lock()) {
+        scanner.contended();
+        return false;
+    }
+    if (!scan_columns) {
         return false;
     }
     return scanColumnValues(columns, scanner);

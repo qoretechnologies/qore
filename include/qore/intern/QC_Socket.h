@@ -499,8 +499,11 @@ public:
     //! Posts a socket HTTP header read event through the underlying socket private implementation
     DLLLOCAL void doReadHttpHeaderEvent(int event, const QoreHashNode& hdr, int source) const;
 
-    //! Parses HTTP header lines into a hash using the underlying socket private implementation
-    DLLLOCAL void convertHeaderToHash(QoreHashNode& h, QoreString& hdr, QoreHashNode* info = nullptr) const;
+    //! Parses HTTP chunked body trailer lines into a hash using the underlying socket private implementation
+    /** @return 0 for OK, -1 if an exception was raised: the trailer text contains a NUL character
+    */
+    DLLLOCAL int convertHeaderToHash(QoreHashNode& h, QoreString& hdr, ExceptionSink* xsink,
+            QoreHashNode* info = nullptr) const;
 
     //! Clears the pending chunked body expectation flag on the underlying socket private implementation
     DLLLOCAL void clearHttpExpectChunkedBody() const;

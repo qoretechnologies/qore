@@ -39,6 +39,7 @@
 #include "qore/intern/QoreAOTExprSlotRegistry.h"
 #include "qore/intern/QoreIR.h"
 #include "qore/intern/xxhash.h"
+#include "qore/intern/QoreModuleSourceFingerprints.h"
 
 #include <algorithm>
 #include <cctype>
@@ -207,7 +208,7 @@ static std::string shell_quote(const std::string& arg) {
 
 //! Directory containing the loaded libqore.
 static std::string get_loaded_libqore_dir() {
-    if (const char* env = std::getenv("QORE_LIBDIR")) {
+    if (QoreEnvironmentValue env_holder("QORE_LIBDIR"); const char* env = env_holder.c_str()) {
         if (*env) {
             return env;
         }
@@ -235,8 +236,8 @@ static std::string get_loaded_libqore_dir() {
 static void collect_qcc_link_paths(std::vector<std::string>& include_dirs,
         std::vector<std::string>& lib_dirs) {
     std::vector<std::string> env_include_dirs;
-    add_env_paths(env_include_dirs, std::getenv("QORE_INCLUDE_DIRS"));
-    add_env_paths(env_include_dirs, std::getenv("QORE_INCLUDE_DIR"));
+    add_env_paths(env_include_dirs, QoreEnvironmentValue("QORE_INCLUDE_DIRS").c_str());
+    add_env_paths(env_include_dirs, QoreEnvironmentValue("QORE_INCLUDE_DIR").c_str());
     for (const auto& dir : env_include_dirs) {
         add_qore_include_candidate(include_dirs, dir);
     }
@@ -430,9 +431,13 @@ static bool write_depfile_atomic(const char* path, const std::string& content) {
     return true;
 }
 
+// Writes the depfile of a module compile; for a .qmod (fingerprints true), also the source fingerprint file next to
+// it (QoreModuleSourceFingerprints.h): the size, modification time and content hash of each file it lists, with which
+// the module loader decides whether a .qmod linked into a source tree is older than its sources by their content
 static bool write_depfile(const char* path, const std::string& output,
                           const std::string& source, const char* context,
-                          const std::vector<std::string>* extra_deps = nullptr) {
+                          const std::vector<std::string>* extra_deps = nullptr,
+                          bool fingerprints = false) {
     // Canonicalize so the relative vs absolute spelling of the same file
     // (e.g. primary passed by qcc as realpath + same file re-emerging
     // from an opendir(context) scan with a relative prefix) dedupes
@@ -537,7 +542,17 @@ static bool write_depfile(const char* path, const std::string& output,
         content += escape(dep);
     }
     content += '\n';
-    return write_depfile_atomic(path, content);
+    if (!write_depfile_atomic(path, content)) {
+        return false;
+    }
+    if (fingerprints) {
+        std::string error;
+        if (!qore_aot_write_module_source_fingerprints(path, deps, error)) {
+            fprintf(stderr, "error: --depfile: %s\n", error.c_str());
+            return false;
+        }
+    }
+    return true;
 }
 
 // Write a Make-style depfile from an explicit, already-canonicalized
@@ -698,8 +713,10 @@ static bool dump_sections = false;
 static bool dump_index_json = false;
 
 static bool qcc_output_verbose() {
-    const char* verbose_env = getenv("QORE_AOT_VERBOSE");
-    return verbose || (verbose_env && *verbose_env && strcmp(verbose_env, "0")) || getenv("QORE_AOT_DEBUG");
+    QoreEnvironmentValue verbose_env_holder("QORE_AOT_VERBOSE");
+    const char* verbose_env = verbose_env_holder.c_str();
+    return verbose || (verbose_env && *verbose_env && strcmp(verbose_env, "0"))
+        || SystemEnvironment::isSet("QORE_AOT_DEBUG");
 }
 
 static bool apply_parse_option_flags(QoreParseOptions& po, std::string& error) {
@@ -992,7 +1009,7 @@ static std::vector<std::string> qcc_module_depfile_inputs(
     }
 
     std::vector<std::string> search_paths;
-    append_module_search_paths(search_paths, getenv("QORE_MODULE_DIR"));
+    append_module_search_paths(search_paths, QoreEnvironmentValue("QORE_MODULE_DIR").c_str());
     search_paths.emplace_back(qore_user_module_ver_dir);
     search_paths.emplace_back(qore_module_ver_dir);
     search_paths.emplace_back(qore_user_module_dir);
@@ -1065,6 +1082,12 @@ static bool save_temps = false;
 // different convention override via `-e <fn>`.
 static const char* entry_fn = "main";
 
+//! returns true if the output of a compile is an AOT module (.qmod), whose depfile gets the source fingerprints
+static bool qcc_output_is_qmod(const std::string& output) {
+    static constexpr const char ext[] = ".qmod";
+    return output.size() > sizeof(ext) - 1 && !output.compare(output.size() - (sizeof(ext) - 1), sizeof(ext) - 1, ext);
+}
+
 static std::string qcc_depfile_target(const std::string& output) {
     return depfile_target_path ? std::string(depfile_target_path) : output;
 }
@@ -1131,7 +1154,11 @@ static void print_usage(const char* prog) {
            "                         cmake's `add_custom_command(... DEPFILE ...)` so\n"
            "                         incremental builds retrigger on sibling-file edits.\n"
            "                         With --link-qo and --script-aggregate, lists the\n"
-           "                         aggregate object's direct input files.\n");
+           "                         aggregate object's direct input files.  For a .qmod,\n"
+           "                         FILE.fingerprints records the size, modification\n"
+           "                         time and content hash of each file listed, so that\n"
+           "                         the module loader checks a .qmod linked into a source\n"
+           "                         tree against the content of its sources.\n");
     printf("      --depfile-target=FILE\n"
            "                         Override the Make depfile target written before the\n"
            "                         colon.  Requires --depfile=FILE and is intended\n"
@@ -7368,7 +7395,8 @@ static std::string resolve_command_path(const char* argv0) {
     if (strchr(argv0, '/')) {
         return canonical_existing_path(argv0);
     }
-    const char* path_env = getenv("PATH");
+    QoreEnvironmentValue path_env_holder("PATH");
+    const char* path_env = path_env_holder.c_str();
     if (!path_env) {
         return argv0;
     }
@@ -7538,7 +7566,8 @@ static bool capture_qcc_observed_source_snapshots(QCCBuildManifest& manifest,
 }
 
 static bool qcc_test_wait_after_input_snapshot(std::string& error) {
-    const char* marker = getenv("QORE_QCC_TEST_AFTER_INPUT_SNAPSHOT_MARKER");
+    QoreEnvironmentValue marker_holder("QORE_QCC_TEST_AFTER_INPUT_SNAPSHOT_MARKER");
+    const char* marker = marker_holder.c_str();
     if (!marker || !*marker || is_file(marker)) {
         return true;
     }
@@ -7554,7 +7583,8 @@ static bool qcc_test_wait_after_input_snapshot(std::string& error) {
         return false;
     }
     long delay_ms = 1000;
-    if (const char* delay = getenv("QORE_QCC_TEST_AFTER_INPUT_SNAPSHOT_DELAY_MS")) {
+    if (QoreEnvironmentValue delay_holder("QORE_QCC_TEST_AFTER_INPUT_SNAPSHOT_DELAY_MS");
+            const char* delay = delay_holder.c_str()) {
         char* end = nullptr;
         long parsed = strtol(delay, &end, 10);
         if (end && !*end && parsed >= 0 && parsed <= 10000) {
@@ -7575,11 +7605,13 @@ static bool qcc_test_wait_after_input_snapshot(std::string& error) {
 
 static bool qcc_test_wait_before_input_validation(
         const QCCBuildManifest& manifest, std::string& error) {
-    const char* marker = getenv("QORE_QCC_TEST_INPUT_VALIDATION_MARKER");
+    QoreEnvironmentValue marker_holder("QORE_QCC_TEST_INPUT_VALIDATION_MARKER");
+    const char* marker = marker_holder.c_str();
     if (!marker || !*marker || is_file(marker)) {
         return true;
     }
-    if (const char* source = getenv("QORE_QCC_TEST_INPUT_VALIDATION_SOURCE")) {
+    if (QoreEnvironmentValue source_holder("QORE_QCC_TEST_INPUT_VALIDATION_SOURCE");
+            const char* source = source_holder.c_str()) {
         std::string canonical_source = canonical_existing_path(source);
         bool found = false;
         if (!manifest.input_snapshots) {
@@ -7609,7 +7641,8 @@ static bool qcc_test_wait_before_input_validation(
     }
 
     long delay_ms = 1000;
-    if (const char* delay = getenv("QORE_QCC_TEST_INPUT_VALIDATION_DELAY_MS")) {
+    if (QoreEnvironmentValue delay_holder("QORE_QCC_TEST_INPUT_VALIDATION_DELAY_MS");
+            const char* delay = delay_holder.c_str()) {
         char* end = nullptr;
         long parsed = strtol(delay, &end, 10);
         if (end && !*end && parsed >= 0 && parsed <= 10000) {
@@ -7851,10 +7884,14 @@ static bool build_qcc_manifest_content(const QCCBuildManifest& manifest,
     }
 
     fprintf(f, "  \"environment\": {\n");
-    const char* qore_include_dir = getenv("QORE_INCLUDE_DIR");
-    const char* qore_module_dir = getenv("QORE_MODULE_DIR");
-    const char* qore_big_fn_threshold = getenv("QORE_AOT_BIG_FN_THRESHOLD");
-    const char* qore_metadata_compression = getenv("QORE_AOT_METADATA_COMPRESSION");
+    QoreEnvironmentValue qore_include_dir_holder("QORE_INCLUDE_DIR");
+    const char* qore_include_dir = qore_include_dir_holder.c_str();
+    QoreEnvironmentValue qore_module_dir_holder("QORE_MODULE_DIR");
+    const char* qore_module_dir = qore_module_dir_holder.c_str();
+    QoreEnvironmentValue qore_big_fn_threshold_holder("QORE_AOT_BIG_FN_THRESHOLD");
+    const char* qore_big_fn_threshold = qore_big_fn_threshold_holder.c_str();
+    QoreEnvironmentValue qore_metadata_compression_holder("QORE_AOT_METADATA_COMPRESSION");
+    const char* qore_metadata_compression = qore_metadata_compression_holder.c_str();
     write_json_file_string_field(f, "QORE_INCLUDE_DIR", qore_include_dir ? qore_include_dir : "", 4);
     write_json_file_string_field(f, "QORE_MODULE_DIR", qore_module_dir ? qore_module_dir : "", 4);
     write_json_file_string_field(f, "QORE_AOT_BIG_FN_THRESHOLD",
@@ -8120,7 +8157,8 @@ static std::string get_default_output(const char* input_path, bool is_module,
 
 //! Create a private temporary directory for qcc-generated objects.
 static bool make_qcc_temp_dir(std::string& temp_dir, std::string& error) {
-    const char* base = std::getenv("TMPDIR");
+    QoreEnvironmentValue base_holder("TMPDIR");
+    const char* base = base_holder.c_str();
     if (!base || !*base) {
         base = "/tmp";
     }
@@ -9444,7 +9482,7 @@ static int link_script_objects_to_executable(const std::string& output,
     }
 
     std::string cxx;
-    if (const char* env_cxx = std::getenv("CXX")) {
+    if (QoreEnvironmentValue env_cxx_holder("CXX"); const char* env_cxx = env_cxx_holder.c_str()) {
         cxx = env_cxx;
     } else {
         cxx = "g++";
@@ -9473,7 +9511,12 @@ static int link_script_objects_to_executable(const std::string& output,
         }
         printf("qcc link: %s\n", cmd.c_str());
     }
-    int link_rc = std::system(cmd.c_str());
+    int link_rc;
+    {
+        // the linker gets a copy of the environment, which must not change while it is copied
+        QoreEnvironmentReadLock env_lock;
+        link_rc = std::system(cmd.c_str());
+    }
     if (link_rc != 0) {
         fprintf(stderr,
             "error: %s link failed for output '%s' from %zu .qo objects using glue '%s' (rc=%d): %s\n",
@@ -9522,19 +9565,19 @@ int main(int argc, char** argv) {
     // Phase 1 compile-time opt: flags propagated to QoreAOT via env vars
     // (AOT layer already reads several QORE_AOT_* vars; this extends the set).
     if (strip_debug_info) {
-        setenv("QORE_AOT_NO_DEBUG_INFO", "1", 1);
+        SystemEnvironment::set("QORE_AOT_NO_DEBUG_INFO", "1", 1);
     }
     if (time_trace_path) {
-        setenv("QORE_AOT_TIME_TRACE", time_trace_path, 1);
+        SystemEnvironment::set("QORE_AOT_TIME_TRACE", time_trace_path, 1);
     }
     if (verbose) {
-        setenv("QORE_AOT_VERBOSE", "1", 1);
+        SystemEnvironment::set("QORE_AOT_VERBOSE", "1", 1);
     }
     if (warnings_are_errors) {
-        setenv("QORE_AOT_WARNINGS_ARE_ERRORS", "1", 1);
+        SystemEnvironment::set("QORE_AOT_WARNINGS_ARE_ERRORS", "1", 1);
     }
     if (metadata_compression) {
-        setenv("QORE_AOT_METADATA_COMPRESSION", metadata_compression, 1);
+        SystemEnvironment::set("QORE_AOT_METADATA_COMPRESSION", metadata_compression, 1);
     }
     // Propagate the CLI flag's value to QORE_AOT_BIG_FN_THRESHOLD so
     // the IR-to-LLVM lowerer picks it up.  Overwrite the env only when
@@ -9547,15 +9590,14 @@ int main(int argc, char** argv) {
     if (big_fn_threshold > 0) {
         char buf[32];
         snprintf(buf, sizeof(buf), "%d", big_fn_threshold);
-        setenv("QORE_AOT_BIG_FN_THRESHOLD", buf,
-               big_fn_threshold_cli_explicit ? 1 : 0);
+        SystemEnvironment::set("QORE_AOT_BIG_FN_THRESHOLD", buf, big_fn_threshold_cli_explicit);
     }
     // Propagate --jobs to QCC_JOBS so the backend-codegen path (emitObjectFile) picks it up.
     // An explicit flag overrides any pre-existing QCC_JOBS in the environment.
     if (aot_jobs > 0) {
         char jbuf[32];
         snprintf(jbuf, sizeof(jbuf), "%d", aot_jobs);
-        setenv("QCC_JOBS", jbuf, 1);
+        SystemEnvironment::set("QCC_JOBS", jbuf, 1);
     }
 
     if (show_help) {
@@ -10201,7 +10243,7 @@ int main(int argc, char** argv) {
         // this fallback.  Write empty-source + context depfile.
         if (depfile_path
                 && !write_depfile(depfile_path, qcc_depfile_target(output),
-                    std::string(), context_dir)) {
+                    std::string(), context_dir, nullptr, qcc_output_is_qmod(output))) {
             qore_cleanup();
             return 1;
         }
@@ -10938,7 +10980,8 @@ int main(int argc, char** argv) {
     }
 
     // Allow environment variable to override optimization level for debugging/testing
-    const char* opt_override = getenv("QORE_AOT_OPT_LEVEL");
+    QoreEnvironmentValue opt_override_holder("QORE_AOT_OPT_LEVEL");
+    const char* opt_override = opt_override_holder.c_str();
     if (opt_override) {
         opt_level = atoi(opt_override);
     }
@@ -11167,7 +11210,7 @@ int main(int argc, char** argv) {
             if (depfile_path
                     && !write_depfile(depfile_path, qcc_depfile_target(output),
                                       source_file, context_dir,
-                                      &module_deps)) {
+                                      &module_deps, qcc_output_is_qmod(output))) {
                 rc = 1;
             }
         }
@@ -11203,7 +11246,7 @@ int main(int argc, char** argv) {
             if (depfile_path
                     && !write_depfile(depfile_path, qcc_depfile_target(output),
                                       std::string(), source_file,
-                                      &module_deps)) {
+                                      &module_deps, qcc_output_is_qmod(output))) {
                 rc = 1;
             }
         }
@@ -11236,7 +11279,7 @@ int main(int argc, char** argv) {
                 qcc_module_depfile_inputs(dep_module_files);
             if (depfile_path && !write_depfile(depfile_path, qcc_depfile_target(output),
                                                source_file, nullptr,
-                                               &module_deps)) {
+                                               &module_deps, qcc_output_is_qmod(output))) {
                 rc = 1;
             }
         }

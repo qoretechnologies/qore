@@ -237,7 +237,7 @@ bool QoreIRVerifier::verify(const QoreIRFunction& func, std::string& error) {
         const QoreIRInstruction* last = block->instructions.back().get();
         if (!isTerminator(last->opcode)) {
             error = "basic block '" + block->name + "' missing terminator";
-            if (getenv("QORE_AOT_DEBUG")) {
+            if (q_env_is_set("QORE_AOT_DEBUG")) {
                 fprintf(stderr, "VERIFIER: block '%s' has %zu instructions, last opcode=%d\n",
                     block->name.c_str(), block->instructions.size(), static_cast<int>(last->opcode));
                 for (size_t i = 0; i < block->instructions.size(); ++i) {

@@ -1,0 +1,208 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    An HTTP/2 stream can outlive the handler it was dispatched to: a handler that streams the request body to a
+    Queue can return a response whose body is produced from that Queue, so the request body and the response body
+    are sent after the handler is done (full-duplex streaming, as in Bedrock's bidirectional event streams).  The
+    server releases its record of the stream when the handler is done (Socket::cleanupHttp2Stream()), and the stream
+    must still work until it is closed: the rest of the request body is delivered to the Queue, and the response is
+    sent.
+
+    The handler releases the stream itself before it returns, as the server does when it returns, so that the
+    release precedes the request body that the client sends after it has the response headers.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Mime
+%requires Logger
+%requires HttpServerUtil
+%requires HttpServer
+%requires HttpClientIo
+%requires ../../TestCertificates.qm
+
+%exec-class HttpServerHttp2StreamAfterHandlerTest
+
+#! the bound of a wait that only guards against a hang
+const HangGuard = 30s;
+
+#! A response body that echoes the chunks of a request body delivered to a Queue
+class QueueEchoBody inherits InputStream {
+    private {
+        Queue input;
+        binary pending = binary();
+        bool eof = False;
+    }
+
+    constructor(Queue input) {
+        self.input = input;
+    }
+
+    *binary read(int limit) {
+        fill();
+        if (!pending.size()) {
+            return NOTHING;
+        }
+        binary rv = pending.size() > limit ? pending[0..limit - 1] : pending;
+        pending = pending[rv.size()..];
+        return rv;
+    }
+
+    int peek() {
+        fill();
+        return pending.size() ? pending[0] : -1;
+    }
+
+    private fill() {
+        if (pending.size() || eof) {
+            return;
+        }
+        # a chunk of the body, NOTHING for the end of the body, or an error hash for a body that ended otherwise
+        auto chunk = input.get(HangGuard);
+        if (chunk instanceof binary) {
+            pending = chunk;
+            return;
+        }
+        eof = True;
+        if (chunk.typeCode() == NT_HASH) {
+            throw chunk.err, chunk.desc;
+        }
+    }
+}
+
+#! Echoes the request body in the response; the handler is done with the stream before the body arrives
+class EchoAfterHandlerDone inherits AbstractHttpRequestHandler {
+    bool wantsBodyStreaming(hash<auto> cx, hash<auto> hdr) {
+        return True;
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        Queue input(-1);
+        cx."header-info".register_body_queue(input);
+        Socket sock = cx."header-info".sock;
+        sock.cleanupHttp2Stream(cx."header-info".stream_id);
+        return makeResponse(200, new QueueEchoBody(input), {"Content-Type": MimeTypeOctetStream});
+    }
+}
+
+public class HttpServerHttp2StreamAfterHandlerTest inherits QUnit::Test {
+    private {
+        #! the number of chunks that the client sends after the handler is done
+        const Chunks = 4;
+
+        HttpServer server;
+        string url;
+    }
+
+    constructor() : Test("HttpServerHttp2StreamAfterHandlerTest", "1.0") {
+        addTestCase("HTTP/2: the request body still arrives after the handler is done", \echoTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        server = new HttpServer(<HttpServerOptionInfo>{
+            "logger": new Logger("h2-after-handler", LoggerLevel::getLevelInfo()),
+        });
+        server.setHandler("echo", "/echo", NOTHING, new EchoAfterHandlerDone());
+        url = sprintf("https://127.0.0.1:%d", server.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
+            "service": 0,
+            "cert": new SSLCertificate(TestCertificates::CertPem),
+            "key": new SSLPrivateKey(TestCertificates::KeyPem),
+            "enable_h3": False,
+        }).port);
+        server.waitForAsyncIo();
+    }
+
+    globalTearDown() {
+        if (server) {
+            server.stop();
+        }
+    }
+
+    private HttpClientConnectionManager getManager() {
+        return new HttpClientConnectionManager(<HttpClientConnectionManagerOptions>{
+            "protocol": "h2",
+            "accept_all_certs": True,
+            "connect_timeout": 10s,
+            "request_timeout": 20s,
+        });
+    }
+
+    #! Returns the next event of a stream: a chunk of the response body, or a hash for its end or an error
+    private auto readEvent(HttpClientStreamHandle stream) {
+        while (True) {
+            auto ev = stream.readData(HangGuard);
+            if (!exists ev) {
+                throw "TIMEOUT", sprintf("no stream event within %y", HangGuard);
+            }
+            # other events (such as the response headers) are skipped
+            if (ev.typeCode() == NT_HASH && !ev.end_stream && !ev.error) {
+                continue;
+            }
+            return ev;
+        }
+    }
+
+    #! Reads the rest of the response body and returns it, until the stream ends
+    private binary readRest(HttpClientStreamHandle stream) {
+        binary rv = binary();
+        while (True) {
+            auto ev = readEvent(stream);
+            if (ev.typeCode() == NT_HASH) {
+                assertNothing(ev.error, "the stream ends without an error");
+                assertTrue(ev.end_stream, "the stream ends");
+                return rv;
+            }
+            rv += binary(ev);
+        }
+    }
+
+    echoTest() {
+        HttpClientConnectionManager mgr = getManager();
+        on_exit mgr.closeAll();
+        HttpClientStreamHandle stream = mgr.acquireStream(url);
+        stream.startStreaming("POST", "/echo", {"content-type": MimeTypeOctetStream}, True);
+        # each chunk is sent once the previous one has come back, so every one after the first is sent after the
+        # response headers, which the handler submits once it is done with the stream
+        for (int i = 0; i < Chunks; ++i) {
+            binary chunk = binary(sprintf("chunk %d: %s", i, strmul("x", 100)));
+            stream.sendData(chunk);
+            binary echoed = binary();
+            while (echoed.size() < chunk.size()) {
+                auto ev = readEvent(stream);
+                if (ev.typeCode() == NT_HASH) {
+                    fail(sprintf("chunk %d: the stream ended before the chunk came back: %y", i, ev));
+                }
+                echoed += binary(ev);
+            }
+            assertEq(chunk, echoed, sprintf("chunk %d comes back", i));
+        }
+        stream.writesDone();
+        assertEq(binary(), readRest(stream), "the response ends with the request body");
+        assertEq(200, stream.getResponse().status_code);
+    }
+}

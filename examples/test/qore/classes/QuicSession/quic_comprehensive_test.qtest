@@ -1079,25 +1079,29 @@ class QuicComprehensiveTest inherits QUnit::Test {
         assertEq(200, resp_result.client_output.status_code, "GOAWAY: initial response status");
 
         # Now submit shutdown notice on the server side
-        # This sends GOAWAY with max stream ID (notice phase)
+        # This queues GOAWAY with max stream ID (notice phase); the session records the GOAWAYs when they are
+        # queued, before an operation on the socket writes them (that a client receives them and drains is tested by
+        # HttpClientIoGoaway.qtest)
         ctx.server_sock.submitQuicShutdownNotice(session_id);
+        hash<auto> server_state = ctx.server_sock.getQuicSessionGoawayState(session_id);
+        assertFalse(server_state.goaway_sent, "the notice is not the final GOAWAY");
 
-        # Wake the controller to flush the GOAWAY frame
-        ctx.ctrl.wakeSocket(ctx.server_sock);
-
-        # Submit final shutdown (sends GOAWAY with actual last stream ID)
+        # Submit final shutdown (queues GOAWAY with actual last stream ID)
         ctx.server_sock.submitQuicShutdown(session_id);
 
-        # Wake again to flush the final GOAWAY
-        ctx.ctrl.wakeSocket(ctx.server_sock);
-
         # Verify the server session reports goaway_sent: submitQuicShutdown() runs on the
-        # controller and returns after the session has recorded the GOAWAY, which the
-        # controller then flushes to the wire
-        hash<auto> server_state = ctx.server_sock.getQuicSessionGoawayState(session_id);
+        # controller and returns after the session has recorded the GOAWAY
+        server_state = ctx.server_sock.getQuicSessionGoawayState(session_id);
         assertTrue(server_state.goaway_sent, "server should report goaway_sent=True");
         assertEq(-1, server_state.goaway_max_stream_id,
             "server should not have received GOAWAY (max_stream_id=-1)");
+
+        # the identifier of a GOAWAY never increases (RFC 9114 section 5.2): after the final GOAWAY, another one and
+        # a notice are no-ops, as the graceful close of a server shuts every session down again
+        ctx.server_sock.submitQuicShutdownNotice(session_id);
+        ctx.server_sock.submitQuicShutdown(session_id);
+        assertEq(server_state, ctx.server_sock.getQuicSessionGoawayState(session_id),
+            "a repeated shutdown changes nothing");
 
         if (m_options.verbose > 1) {
             printf("testGoawayShutdown: server goaway_state=%y\n", server_state);

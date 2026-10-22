@@ -109,8 +109,11 @@ m.call(obj);
 
     @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the class and method has been destroyed
     @throw METHOD-ERROR the object was not instantiated from the class implementing this method
+    @throw INVALID-FUNCTION-ACCESS the calling code's or the class's Program's sandboxing restrictions do not allow the class (see @ref reflection_caller_privilege)
 */
 auto DestructorMethod::call(object obj) {
+    // the privileges of the calling code, captured before switching to the class's Program
+    QoreReflectionCaller caller;
     // get read access to program object
     QoreExternalProgramContextHelper tch(xsink, m->pgm);
     if (*xsink) {
@@ -119,6 +122,11 @@ auto DestructorMethod::call(object obj) {
 
     // we have to explictly test object compatibility here
     if (check_call(obj, *m->m, xsink)) {
+        return QoreValue();
+    }
+
+    // the class must be allowed by the caller and the class's Program
+    if (reflection_check_class_call(caller, m->m->getClass(), m->pgm, false, xsink)) {
         return QoreValue();
     }
 

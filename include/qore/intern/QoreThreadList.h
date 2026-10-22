@@ -34,6 +34,7 @@
 #define _QORE_QORETHREADLIST_H
 
 #include <qore/QoreRWLock.h>
+#include <qore/qore_thread.h>
 
 #include <atomic>
 #include <pthread.h>
@@ -55,6 +56,9 @@ static constexpr int QTF_NO_STACK_GUARD = (1 << 0);
     the counter, including native TLS destructors, after program data destruction.
 */
 static constexpr int QTF_EXTERNAL_LIFECYCLE = (1 << 1);
+// QTF_NO_SANDBOX_INHERIT (1 << 2) is public; see qore/qore_thread.h
+static_assert(!(QTF_NO_SANDBOX_INHERIT & (QTF_NO_STACK_GUARD | QTF_EXTERNAL_LIFECYCLE)),
+    "QTF_NO_SANDBOX_INHERIT must not share a bit with another thread creation flag");
 ///@}
 
 // FIXME: move to config.h or something like that
@@ -160,6 +164,9 @@ public:
     int wake_reg_depth = 0;
 
     DLLLOCAL void cleanup();
+
+    //! frees the entry of a thread of the parent process in a child created with fork(), where it does not exist
+    DLLLOCAL void abandonAfterFork();
 
     //! Closes the cancellation wakeup channel, if any; must be called with thread_list.lck held
     /** The thread must not be blocked in qore_cancellable_poll(); a thread clears waiting_fd before it returns
@@ -278,11 +285,12 @@ public:
         return 0;
     }
 
+    //! activates the entry of the calling thread and initializes its data
+    /** The thread's data for its Program is set up after the lock has been released: it runs the Program's thread
+        initialization code (user code), which must not run with the thread list locked
+    */
     DLLLOCAL void activate(int tid, pthread_t ptid = pthread_self(), QoreProgram* p = nullptr, bool foreign = false,
-            int flags = QTF_NONE) {
-        AutoLocker al(lck);
-        entry[tid].activate(tid, ptid, p, foreign, flags);
-    }
+            int flags = QTF_NONE);
 
     DLLLOCAL void setStatus(int tid, int status) {
         AutoLocker al(lck);
@@ -317,7 +325,20 @@ public:
         return num_threads;
     }
 
-    DLLLOCAL unsigned cancelAllActiveThreads();
+    //! acquires the lock before fork() (see QoreForkHandlers.h)
+    DLLLOCAL void forkPrepare() {
+        lck.lock();
+    }
+
+    //! releases the lock in the parent after fork()
+    DLLLOCAL void forkParent() {
+        lck.unlock();
+    }
+
+    //! leaves only the forking thread's entry in a child created with fork(), and initializes the lock again
+    /** @param tid the forking thread's TID, or a negative value if it has none
+    */
+    DLLLOCAL void forkChild(int tid);
 
     DLLLOCAL QoreHashNode* getAllCallStacks();
 
@@ -499,8 +520,6 @@ protected:
 
     // last TID issued to avoid reusing the same TID over and over again
     int last_tid = 0;
-
-    bool exiting = false;
 
     DLLLOCAL void releaseIntern(int tid) {
         // NOTE: cannot safely call printd here, because normally the thread_data has been deleted

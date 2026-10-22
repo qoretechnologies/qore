@@ -1,0 +1,570 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires SqlUtil
+%requires OracleSqlUtilBase
+
+%try-module oracle
+%define NoOracle
+%endtry
+
+%exec-class OracleReferentialActionsTest
+
+#! Oracle foreign constraint ON DELETE actions and sequence alignment with ALTER SEQUENCE
+/** Oracle supports ON DELETE CASCADE and ON DELETE SET NULL, and has no ON UPDATE action; an existing sequence is
+    aligned with ALTER SEQUENCE, keeping its value, and its starting value is never changed.
+
+    With a connection (-c or QORE_DB_CONNSTR_ORACLE), tables and sequences are also created, described and aligned
+    in the database; with a connection to another user (QORE_DB_CONNSTR_ORACLE_OTHER) that can create tables, the
+    foreign constraints of that user's tables are also described through the first connection.
+*/
+class OracleReferentialActionsTest inherits QUnit::Test {
+    public {
+        const MyOpts = Opts + {
+            "connstr": "c,conn=s",
+        };
+
+        #! the tables and sequences of the live test
+        const Parent = "b4sq_ra_parent";
+        const Child = "b4sq_ra_child";
+        const Seq = "b4sq_ra_seq";
+        const DescSeq = "b4sq_ra_desc_seq";
+    }
+
+    constructor() : Test("OracleReferentialActionsTest", "1.0", \ARGV, MyOpts) {
+        addTestCase("foreign constraint ON DELETE SQL", \foreignConstraintSql());
+        addTestCase("unsupported referential actions are refused", \refusedActions());
+        addTestCase("catalog delete rules", \catalogRules());
+        addTestCase("table alignment changes the ON DELETE action", \tableAlignment());
+        addTestCase("sequence create SQL", \sequenceCreateSql());
+        addTestCase("sequence ALTER SQL", \sequenceAlterSql());
+        addTestCase("live foreign constraint actions", \liveForeignConstraints());
+        addTestCase("live sequence alignment", \liveSequences());
+        addTestCase("live foreign constraints in another schema", \liveOtherSchema());
+        set_return_value(main());
+    }
+
+    private static OracleColumn column(string name) {
+        return new OracleColumn(name, "number", "integer", 14, True);
+    }
+
+    private static Columns columns(softlist<string> names) {
+        hash<auto> h;
+        foreach string name in (names) {
+            h{name} = OracleReferentialActionsTest::column(name);
+        }
+        return new Columns(h);
+    }
+
+    private static OracleForeignConstraint fk(*string on_delete, *string on_update, bool deferrable = False) {
+        return new OracleForeignConstraint("fk_child_parent", columns("parent_id"),
+            new ForeignConstraintTarget("parent", columns("id")), True, deferrable, False, on_delete, on_update);
+    }
+
+    foreignConstraintSql() {
+        string base = "alter table child add constraint fk_child_parent foreign key (parent_id) references parent (id)";
+        # no action: the SQL is as before
+        assertEq(base, fk().getCreateSql("child"));
+        assertEq(base, fk(FK_NO_ACTION).getCreateSql("child"));
+        assertEq(base, fk(NOTHING, "no action").getCreateSql("child"));
+        assertEq(base + " on delete cascade", fk(FK_CASCADE).getCreateSql("child"));
+        assertEq(base + " on delete cascade", fk("cascade").getCreateSql("child"));
+        assertEq(base + " on delete set null", fk(FK_SET_NULL).getCreateSql("child"));
+        assertEq(base + " on delete set null", fk("set_null").getCreateSql("child"));
+        # the action comes before the constraint state, as Oracle requires
+        assertEq(base + " on delete cascade deferrable initially immediate",
+            fk(FK_CASCADE, NOTHING, True).getCreateSql("child"));
+
+        assertEq(FK_CASCADE, fk("cascade").on_delete);
+        assertEq(NOTHING, fk("no action").on_delete);
+        assertEq(NOTHING, fk().on_update);
+
+        # the action is part of the constraint's identity
+        assertTrue(fk(FK_CASCADE).equal(fk("CASCADE")));
+        assertTrue(fk().equal(fk(FK_NO_ACTION)));
+        assertFalse(fk(FK_CASCADE).equal(fk()));
+        assertFalse(fk(FK_CASCADE).equal(fk(FK_SET_NULL)));
+    }
+
+    refusedActions() {
+        assertThrows("FOREIGN-CONSTRAINT-ERROR", "Oracle does not support ON UPDATE", \fk(), (NOTHING, FK_CASCADE));
+        assertThrows("FOREIGN-CONSTRAINT-ERROR", "Oracle does not support ON UPDATE", \fk(), (NOTHING, "set null"));
+        assertThrows("FOREIGN-CONSTRAINT-ERROR", "Oracle does not support ON UPDATE", \fk(), (NOTHING, "restrict"));
+        assertThrows("FOREIGN-CONSTRAINT-ERROR", "ON DELETE referential action \"RESTRICT\"", \fk(), FK_RESTRICT);
+        assertThrows("FOREIGN-CONSTRAINT-ERROR", "ON DELETE referential action \"SET DEFAULT\"", \fk(),
+            "set default");
+        assertThrows("FOREIGN-CONSTRAINT-ERROR", "invalid on_delete", \fk(), "explode");
+
+        # an action set on the constraint after it is created, as a table sets it from the foreign constraint
+        # options, is refused when the SQL is made
+        OracleForeignConstraint c = fk();
+        c.on_update = FK_CASCADE;
+        assertThrows("FOREIGN-CONSTRAINT-ERROR", "Oracle does not support ON UPDATE", \c.getCreateSql(), "child");
+        c = fk();
+        c.on_delete = FK_SET_DEFAULT;
+        assertThrows("FOREIGN-CONSTRAINT-ERROR", "SET DEFAULT", \c.getCreateSql(), "child");
+
+%ifndef NoOracle
+        # a table description with an ON UPDATE action is refused when the table is set up
+        Tables cache();
+        OracleTable parent = offlineTable("ra_p");
+        parent.setupTable(parentDescription(), {"table_cache": cache});
+        cache.add("ra_p", parent);
+        OracleTable child = offlineTable("ra_c");
+        assertThrows("FOREIGN-CONSTRAINT-ERROR", "Oracle does not support ON UPDATE", \child.setupTable(),
+            (childDescription({"on_update": "cascade"}), {"table_cache": cache}));
+        # and one with an ON DELETE action that Oracle does not have
+        child = offlineTable("ra_c");
+        assertThrows("FOREIGN-CONSTRAINT-ERROR", "RESTRICT", \child.setupTable(),
+            (childDescription({"on_delete": "restrict"}), {"table_cache": cache}));
+        # as is a foreign constraint added to a table with one
+        child = offlineTable("ra_c");
+        child.setupTable(childDescription(), {"table_cache": cache});
+        assertThrows("FOREIGN-CONSTRAINT-ERROR", "Oracle does not support ON UPDATE", \child.addForeignConstraint(),
+            ("fk_ra_c2", "pid", "ra_p", "id", {"table_cache": cache, "on_update": "set null"}));
+%endif
+    }
+
+    catalogRules() {
+        assertEq(FK_CASCADE, OracleForeignConstraint::actionFromCatalog("CASCADE"));
+        assertEq(FK_SET_NULL, OracleForeignConstraint::actionFromCatalog("SET NULL"));
+        assertEq(NOTHING, OracleForeignConstraint::actionFromCatalog("NO ACTION"));
+        assertEq(NOTHING, OracleForeignConstraint::actionFromCatalog());
+    }
+
+    #! returns a table for SQL generation without a connection
+    private static OracleTable offlineTable(string name) {
+%ifdef NoOracle
+        throw "SKIP", "no oracle module";
+%else
+        OfflineDatasource ds("oracle:omq/pass@db", "Oracle Database 19c Enterprise Edition Release 19.0.0.0.0",
+            "oracle");
+        return new OracleTable(ds, name);
+%endif
+    }
+
+    private static hash<auto> parentDescription() {
+        return {
+            "columns": {"id": {"qore_type": "integer", "notnull": True}},
+            "primary_key": {"name": "pk_ra_p", "columns": ("id",)},
+        };
+    }
+
+    private static hash<auto> childDescription(*hash<auto> fk_opts) {
+        return {
+            "columns": {
+                "id": {"qore_type": "integer", "notnull": True},
+                "pid": {"qore_type": "integer"},
+            },
+            "primary_key": {"name": "pk_ra_c", "columns": ("id",)},
+            "foreign_constraints": {
+                "fk_ra_c": {"columns": ("pid",), "table": "ra_p", "target_columns": ("id",)} + fk_opts,
+            },
+        };
+    }
+
+    #! returns the SQL that aligns the child table described with the first options to the second
+    private static list<auto> alignSql(*hash<auto> current_opts, *hash<auto> template_opts) {
+        # the table in the database and its template each reference their own parent table, as a foreign
+        # constraint is registered on the unique key that it references
+        OracleTable current = offlineChild(current_opts);
+        OracleTable template = offlineChild(template_opts);
+        return map regex_subst($1, "  +", " ", RE_Global), current.getAlignSql(template);
+    }
+
+    private static OracleTable offlineChild(*hash<auto> fk_opts) {
+        Tables cache();
+        OracleTable parent = offlineTable("ra_p");
+        parent.setupTable(parentDescription(), {"table_cache": cache});
+        cache.add("ra_p", parent);
+        OracleTable child = offlineTable("ra_c");
+        child.setupTable(childDescription(fk_opts), {"table_cache": cache});
+        return child;
+    }
+
+    tableAlignment() {
+%ifdef NoOracle
+        testSkip("no oracle module");
+%else
+        # the same action: no SQL
+        assertEq((), alignSql());
+        assertEq((), alignSql({"on_delete": "cascade"}, {"on_delete": FK_CASCADE}));
+        assertEq((), alignSql(NOTHING, {"on_delete": "no action"}));
+        # another action: the constraint is dropped and added again with it
+        list<auto> sql = alignSql(NOTHING, {"on_delete": "cascade"});
+        assertEq(2, sql.size());
+        assertEq("alter table omq.ra_c drop constraint fk_ra_c", sql[0]);
+        assertEq("alter table omq.ra_c add constraint fk_ra_c foreign key (pid) references ra_p (id) on delete cascade",
+            sql[1]);
+        sql = alignSql({"on_delete": "cascade"}, {"on_delete": "set null"});
+        assertEq("alter table omq.ra_c add constraint fk_ra_c foreign key (pid) references ra_p (id) on delete set null",
+            sql[1]);
+        sql = alignSql({"on_delete": "set null"});
+        assertEq("alter table omq.ra_c add constraint fk_ra_c foreign key (pid) references ra_p (id)", sql[1]);
+        assertThrows("FOREIGN-CONSTRAINT-ERROR", "Oracle does not support ON UPDATE", \alignSql(),
+            (NOTHING, {"on_update": "cascade"}));
+
+        # the description of a table keeps its action, so a template made from it needs no SQL
+        OracleTable child = offlineChild({"on_delete": "set null"});
+        hash<auto> desc = child.getDescriptionHash();
+        assertEq(FK_SET_NULL, desc.foreign_constraints.fk_ra_c.on_delete);
+        assertEq((), alignSql({"on_delete": "set null"}, desc.foreign_constraints.fk_ra_c
+            - ("columns", "table", "target_columns")));
+%endif
+    }
+
+    sequenceCreateSql() {
+        # without the new options: the SQL is as before
+        assertEq("create sequence s start with 1 increment by 1 nomaxvalue", new OracleSequence("s").getCreateSql());
+        assertEq("create sequence s start with 10 increment by 5 maxvalue 1000",
+            new OracleSequence("s", 10, 5, 1000).getCreateSql());
+        assertEq("create sequence s start with 10 increment by 5 maxvalue 1000 minvalue 5 cycle cache 50",
+            new OracleSequence("s", 10, 5, 1000, 5, True, 50).getCreateSql());
+        assertEq("create sequence s start with 1 increment by 1 nomaxvalue nocache",
+            new OracleSequence("s", 1, 1, NOTHING, NOTHING, False, 0).getCreateSql());
+        assertEq("create sequence \"MY SEQ\" start with 1 increment by 1 nomaxvalue cache 2",
+            new OracleSequence("my seq", 1, 1, NOTHING, NOTHING, False, 2).getCreateSql());
+        assertThrows("SEQUENCE-ERROR", "cache of 1", sub () { new OracleSequence("s", 1, 1, NOTHING, NOTHING, False,
+            1); });
+        assertThrows("SEQUENCE-ERROR", "cache of -5", sub () { new OracleSequence("s", 1, 1, NOTHING, NOTHING, False,
+            -5); });
+    }
+
+    sequenceAlterSql() {
+        # a sequence as Oracle describes one created with defaults
+        OracleSequence seq("s", 1, 1, NOTHING, NOTHING, False, 20);
+        # nothing differs, or only parameters that are not given
+        assertEq(NOTHING, seq.getAlterSql({}));
+        assertEq(NOTHING, seq.getAlterSql({"start": 1, "increment": 1}));
+        # defaults given explicitly are the description of the sequence
+        assertEq(NOTHING, seq.getAlterSql({"min": 1, "max": NOTHING, "cycle": False, "cache": 20}));
+        assertEq(NOTHING, seq.getAlterSql({"cache": NOTHING}));
+        # the starting value is never changed
+        assertEq(NOTHING, seq.getAlterSql({"start": 1000}));
+
+        assertEq(("alter sequence s increment by 5",), seq.getAlterSql({"increment": 5}));
+        assertEq(("alter sequence s maxvalue 1000",), seq.getAlterSql({"max": 1000}));
+        assertEq(("alter sequence s maxvalue 1000",), seq.getAlterSql({"end": 1000}));
+        assertEq(("alter sequence s minvalue 0",), seq.getAlterSql({"min": 0}));
+        assertEq(("alter sequence s cycle",), seq.getAlterSql({"cycle": True}));
+        assertEq(("alter sequence s nocache",), seq.getAlterSql({"cache": 0}));
+        assertEq(("alter sequence s cache 100",), seq.getAlterSql({"cache": 100}));
+        assertEq(("alter sequence s increment by 2 maxvalue 500 minvalue 0 cycle cache 10",),
+            seq.getAlterSql({"start": 7, "increment": 2, "max": 500, "min": 0, "cycle": True, "cache": 10}));
+        assertThrows("SEQUENCE-ERROR", "cache of 1", \seq.getAlterSql(), {"cache": 1});
+
+        # back to the defaults
+        OracleSequence custom("s", 1, 1, 1000, 5, True, 0);
+        assertEq(NOTHING, custom.getAlterSql({"max": 1000, "min": 5, "cycle": True, "cache": 0}));
+        assertEq(("alter sequence s nomaxvalue nominvalue nocycle cache 20",),
+            custom.getAlterSql({"max": NOTHING, "min": NOTHING, "cycle": False, "cache": NOTHING}));
+        # a minimum of 1 and a maximum beyond 9000000000000000000 are the defaults of an ascending sequence
+        assertEq(("alter sequence s nominvalue",), custom.getAlterSql({"min": 1}));
+        assertEq(("alter sequence s nomaxvalue",), custom.getAlterSql({"max": 9223372036854775807}));
+        assertEq(NOTHING, seq.getAlterSql({"max": 9223372036854775807}));
+        assertEq(("alter sequence s maxvalue 9000000000000000000",), seq.getAlterSql({"max": 9000000000000000000}));
+
+        # a descending sequence: a maximum of -1 is its default
+        OracleSequence desc("d", -1, -1, NOTHING, NOTHING, False, 20);
+        assertEq(NOTHING, desc.getAlterSql({"increment": -1, "max": -1}));
+        assertEq(NOTHING, desc.getAlterSql({"min": -9223372036854775807 - 1}));
+        assertEq(("alter sequence d maxvalue -10",), desc.getAlterSql({"max": -10}));
+        # 0 is a value, not the default
+        assertEq(("alter sequence d maxvalue 0",), desc.getAlterSql({"max": 0}));
+        OracleSequence zero("z", 0, 1, NOTHING, 0, False, 20);
+        assertEq(NOTHING, zero.getAlterSql({"min": 0}));
+        assertEq(("alter sequence z nominvalue",), zero.getAlterSql({"min": NOTHING}));
+        # a sequence object without a known cache has the default
+        OracleSequence made("m");
+        assertEq(NOTHING, made.getAlterSql({"cache": 20}));
+
+        # a sequence made from a description has all of its parameters, so it is created with them and the
+        # description needs no SQL
+        OracleSequence described("s", 1, 1);
+        hash<auto> sdesc = {"start": 1, "increment": 1, "min": 5, "cycle": True, "cache": 0};
+        described.setDescription(sdesc);
+        assertEq("create sequence s start with 1 increment by 1 nomaxvalue minvalue 5 cycle nocache",
+            described.getCreateSql());
+        assertEq(5n, described.min);
+        assertTrue(described.cycle);
+        assertEq(0, described.cache);
+        assertThrows("SEQUENCE-ERROR", "cache of 1", \described.setDescription(), {"cache": 1});
+        OracleSequence noted("s", 1, 1);
+        noted.setDescription({});
+        assertEq(NOTHING, noted.min);
+        assertFalse(noted.cycle);
+        assertEq(NOTHING, noted.cache);
+
+        # the name is quoted as in every statement
+        OracleSequence hostile("my seq; drop table t", 1, 1);
+        assertEq(("alter sequence \"MY SEQ; DROP TABLE T\" increment by 3",), hostile.getAlterSql({"increment": 3}));
+    }
+
+    #! returns the datasource of the live test, or skips the test
+    private Datasource getLiveDatasource() {
+%ifdef NoOracle
+        testSkip("no oracle module");
+%endif
+        *string connstr = m_options.connstr ?? ENV.QORE_DB_CONNSTR_ORACLE;
+        if (!connstr) {
+            testSkip("no Oracle connection; set QORE_DB_CONNSTR_ORACLE or use -c");
+        }
+        return new Datasource(connstr);
+    }
+
+    private static dropTables(Datasource ds) {
+        foreach string t in ((Child, Parent)) {
+            AbstractTable dt = AbstractTable::getTable(ds, t);
+            if (dt.checkExistence()) {
+                map ds.execRaw($1), dt.getDropSql({"cascade": True});
+            }
+        }
+        ds.commit();
+    }
+
+    #! returns the SQL that aligns the live child table to the template with the given foreign constraint options
+    private static list<auto> liveAlignSql(Datasource ds, *hash<auto> fk_opts) {
+        Tables cache();
+        AbstractTable parent = AbstractTable::getTable(ds, Parent);
+        cache.add(Parent, parent);
+        AbstractTable live = AbstractTable::getTable(ds, Child);
+        AbstractTable template = AbstractTable::getTable(ds, Child);
+        template.setupTable(liveChildDescription(fk_opts), {"table_cache": cache});
+        return live.getAlignSql(template);
+    }
+
+    private static hash<auto> liveChildDescription(*hash<auto> fk_opts) {
+        return {
+            "columns": {
+                "id": {"native_type": "number", "size": 14, "notnull": True},
+                "pid": {"native_type": "number", "size": 14},
+            },
+            "primary_key": {"name": "pk_b4sq_ra_child", "columns": ("id",)},
+            "foreign_constraints": {
+                "fk_b4sq_ra_child": {"columns": ("pid",), "table": Parent, "target_columns": ("id",)} + fk_opts,
+            },
+        };
+    }
+
+    liveForeignConstraints() {
+        Datasource ds = getLiveDatasource();
+        dropTables(ds);
+        on_exit {
+            ds.rollback();
+            dropTables(ds);
+        }
+
+        AbstractTable parent = AbstractTable::getTable(ds, Parent);
+        parent.setupTable({
+            "columns": {"id": {"native_type": "number", "size": 14, "notnull": True}},
+            "primary_key": {"name": "pk_b4sq_ra_parent", "columns": ("id",)},
+        });
+        parent.create();
+        Tables cache();
+        cache.add(Parent, parent);
+        AbstractTable child = AbstractTable::getTable(ds, Child);
+        child.setupTable(liveChildDescription({"on_delete": "cascade"}), {"table_cache": cache});
+        child.create();
+        ds.commit();
+
+        # the action is read from the database, and an unchanged table needs no SQL
+        AbstractForeignConstraint c = AbstractTable::getTable(ds, Child).getForeignConstraints().fk_b4sq_ra_child;
+        assertEq(FK_CASCADE, c.on_delete);
+        assertEq(NOTHING, c.on_update);
+        assertEq((), liveAlignSql(ds, {"on_delete": FK_CASCADE}));
+
+        # the action works: the child rows are deleted with the parent
+        parent.insert({"id": 1});
+        parent.insert({"id": 2});
+        child.insert({"id": 10, "pid": 1});
+        child.insert({"id": 20, "pid": 2});
+        assertEq(1, parent.del({"id": 1}));
+        assertEq((20,), child.select({"columns": "id"}).id);
+        ds.commit();
+
+        # another action: the constraint is added again with it
+        list<auto> sql = liveAlignSql(ds, {"on_delete": "set null"});
+        assertEq(2, sql.size());
+        assertRegex("on delete set null$", sql[1]);
+        map ds.execRaw($1), sql;
+        assertEq(FK_SET_NULL, AbstractTable::getTable(ds, Child).getForeignConstraints().fk_b4sq_ra_child.on_delete);
+        assertEq((), liveAlignSql(ds, {"on_delete": FK_SET_NULL}));
+        assertEq(1, parent.del({"id": 2}));
+        assertEq({"id": (20,), "pid": (NULL,)}, child.select({"columns": ("id", "pid")}));
+        ds.commit();
+
+        # no action: the constraint has the default, which is described as no action, without churn
+        sql = liveAlignSql(ds);
+        assertEq(2, sql.size());
+        assertNRegex("on delete", sql[1]);
+        map ds.execRaw($1), sql;
+        assertEq(NOTHING, AbstractTable::getTable(ds, Child).getForeignConstraints().fk_b4sq_ra_child.on_delete);
+        assertEq((), liveAlignSql(ds));
+        assertEq((), liveAlignSql(ds, {"on_delete": FK_NO_ACTION}));
+
+        # ON UPDATE is refused before any SQL is run
+        assertThrows("FOREIGN-CONSTRAINT-ERROR", "Oracle does not support ON UPDATE", \liveAlignSql(),
+            (ds, {"on_update": "cascade"}));
+    }
+
+    liveOtherSchema() {
+        Datasource ds = getLiveDatasource();
+        *string other_connstr = ENV.QORE_DB_CONNSTR_ORACLE_OTHER;
+        if (!other_connstr) {
+            testSkip("no connection to another Oracle user; set QORE_DB_CONNSTR_ORACLE_OTHER");
+        }
+        Datasource other(other_connstr);
+        string owner = other.getUserName().lwr();
+        OtherSchemaTest::drop(other);
+        on_exit {
+            ds.rollback();
+            other.rollback();
+            OtherSchemaTest::drop(other);
+        }
+        other.execRaw("create table " + OtherSchemaTest::Parent + " (id number(14) not null, constraint pk_b4sq_os_p "
+            "primary key (id))");
+        other.execRaw("create table " + OtherSchemaTest::Child + " (id number(14) not null, pid number(14), "
+            "constraint pk_b4sq_os_c primary key (id), constraint fk_b4sq_os_c foreign key (pid) references "
+            + OtherSchemaTest::Parent + " (id) on delete cascade)");
+        foreach string t in ((OtherSchemaTest::Parent, OtherSchemaTest::Child)) {
+            other.execRaw("grant select on " + t + " to " + ds.getUserName());
+        }
+        other.commit();
+
+        # the foreign constraint of the other user's table is described, with its target table in that schema
+        AbstractTable t = AbstractTable::getTable(ds, owner + "." + OtherSchemaTest::Child);
+        AbstractForeignConstraint fk = t.getForeignConstraints().fk_b4sq_os_c;
+        assertEq(owner + "." + OtherSchemaTest::Parent, fk.target.table);
+        assertEq(("id",), fk.target.columns.keys());
+        assertEq(("pid",), fk.keys());
+        assertEq(FK_CASCADE, fk.on_delete);
+        # its description gives it as it is, so a template made from it needs no SQL
+        hash<auto> desc = t.getDescriptionHash();
+        assertEq(owner + "." + OtherSchemaTest::Parent, desc.foreign_constraints.fk_b4sq_os_c.table);
+        assertEq(FK_CASCADE, desc.foreign_constraints.fk_b4sq_os_c.on_delete);
+        AbstractTable template = AbstractTable::getTable(ds, owner + "." + OtherSchemaTest::Child);
+        template.setupTable(desc);
+        assertEq((), AbstractTable::getTable(ds, owner + "." + OtherSchemaTest::Child).getAlignSql(template));
+    }
+
+    private static dropSequences(Datasource ds, OracleDatabase db) {
+        foreach string s in ((Seq, DescSeq)) {
+            *AbstractSequence seq = db.getSequence(s);
+            if (seq) {
+                ds.execRaw(seq.getDropSql());
+            }
+        }
+        ds.commit();
+    }
+
+    liveSequences() {
+        Datasource ds = getLiveDatasource();
+        OracleDatabase db(ds);
+        dropSequences(ds, db);
+        on_exit {
+            ds.rollback();
+            dropSequences(ds, db);
+        }
+
+        # created by the schema alignment
+        map ds.execRaw($1), db.getAlignSql({"sequences": {Seq: {"start": 100, "increment": 1}}});
+        assertEq(100, db.getNextSequenceValue(Seq));
+        assertEq(101, db.getNextSequenceValue(Seq));
+        # an unchanged sequence needs no SQL
+        assertEq((), db.getAlignSql({"sequences": {Seq: {"start": 100, "increment": 1}}}));
+        # a new starting value is not applied, as it would reset the value
+        assertEq((), db.getAlignSql({"sequences": {Seq: {"start": 5000, "increment": 1}}}));
+
+        # the parameters are altered, and the sequence keeps its value
+        hash<auto> desired = {"start": 100, "increment": 10, "max": 100000, "min": 50, "cycle": True, "cache": 5};
+        list<auto> sql = db.getAlignSql({"sequences": {Seq: desired}});
+        assertEq(("alter sequence " + Seq + " increment by 10 maxvalue 100000 minvalue 50 cycle cache 5",), sql);
+        map ds.execRaw($1), sql;
+        assertEq(111, db.getNextSequenceValue(Seq));
+        OracleSequence seq = db.getSequence(Seq);
+        assertEq(10n, seq.increment);
+        assertEq(100000n, seq.max);
+        assertEq(50n, seq.min);
+        assertTrue(seq.cycle);
+        assertEq(5, seq.cache);
+        assertEq((), db.getAlignSql({"sequences": {Seq: desired}}));
+
+        # back to the defaults, given as values, as a description has no keys without a value
+        sql = db.getAlignSql({"sequences": {Seq: {"increment": 1, "max": 9223372036854775807, "min": 1,
+            "cycle": False, "cache": 20}}});
+        assertEq(("alter sequence " + Seq + " increment by 1 nomaxvalue nominvalue nocycle cache 20",), sql);
+        map ds.execRaw($1), sql;
+        assertEq(112, db.getNextSequenceValue(Seq));
+        assertEq((), db.getAlignSql({"sequences": {Seq: {"increment": 1, "max": 9223372036854775807, "min": 1,
+            "cycle": False, "cache": 20}}}));
+        # a key without a value is not part of the description, so it changes nothing
+        assertEq((), db.getAlignSql({"sequences": {Seq: {"max": NOTHING, "cache": NOTHING}}}));
+        seq = db.getSequence(Seq);
+        assertEq(NOTHING, seq.max);
+        assertEq(NOTHING, seq.min);
+        assertEq(20, seq.cache);
+
+        # a descending sequence with the default maximum is described and needs no SQL
+        ds.execRaw("create sequence " + DescSeq + " increment by -1");
+        OracleSequence dseq = db.getSequence(DescSeq);
+        assertEq(-1n, dseq.increment);
+        assertEq(NOTHING, dseq.max);
+        assertEq(NOTHING, dseq.min);
+        assertEq(-1, db.getNextSequenceValue(DescSeq));
+        assertEq((), db.getAlignSql({"sequences": {DescSeq: {"increment": -1, "max": -1}}}));
+    }
+}
+
+#! the foreign constraints of tables in another user's schema
+class OtherSchemaTest {
+    public {
+        const Parent = "b4sq_os_parent";
+        const Child = "b4sq_os_child";
+    }
+
+    static drop(Datasource other) {
+        foreach string t in ((Child, Parent)) {
+            if (other.selectRow("select table_name from user_tables where table_name = %v", t.upr())) {
+                other.execRaw("drop table " + t + " cascade constraints");
+            }
+        }
+        other.commit();
+    }
+}
+
+#! a datasource that gives SQL generation the server version without a connection
+class OfflineDatasource inherits Datasource {
+    private {
+        string version;
+        string real_driver;
+    }
+
+    constructor(string connstr, string version, string real_driver) : Datasource(connstr) {
+        self.version = version;
+        self.real_driver = real_driver;
+    }
+
+    auto getServerVersion() {
+        return version;
+    }
+
+    string getDriverRealName() {
+        return real_driver;
+    }
+
+    auto select(string sql, ...) {
+        return {};
+    }
+
+    auto selectRow(string sql, ...) {
+    }
+
+    auto selectRows(string sql, ...) {
+        return ();
+    }
+}

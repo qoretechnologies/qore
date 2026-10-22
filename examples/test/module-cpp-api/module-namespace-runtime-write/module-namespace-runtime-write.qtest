@@ -1,0 +1,143 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+# the "cppapiuser" test module is built into the build tree by examples/test/module-cpp-api/CMakeLists.txt and is not
+# installed, so QORE_MODULE_DIR must include the build tree (run_tests.sh does this); the children inherit it
+%requires cppapiuser
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires Util
+
+%exec-class ModuleNamespaceRuntimeWriteTest
+
+#! Tests a binary module writing to a user module's shared Program while other threads import the module
+/** Every import of a user module copies the namespaces of the module's shared Program into the importing Program,
+    holding the read lock of that Program's root namespace.  The public QoreNamespace API, which binary modules call
+    on running Programs - module-jni adds its \c Jni namespace to a module's Program the first time Java code uses
+    the module's classes - took no lock, so an import could read the namespace map in the middle of an insert: a
+    qorus-core start crashed in qore_ns_private::copyMergeCommittedNamespace() on a map entry with no namespace yet.
+
+    Debug builds assert that every runtime insert into a namespace attached to a root namespace holds that root's
+    write lock, so the first case fails there without the lock; ThreadSanitizer builds report the race in the second;
+    every build checks that both children complete.
+*/
+class ModuleNamespaceRuntimeWriteTest inherits QUnit::Test {
+    public {
+        #! the number of threads importing the module
+        const Importers = 4;
+        #! the number of imports per thread
+        const Imports = 150;
+        #! the number of namespaces added while the threads import
+        const Adds = 1500;
+
+        #! the child: loads the module and writes to its Program through the public API, alone or while importing
+        const ChildSource = "%modern
+%requires cppapiuser
+load_module(ARGV[0]);
+string mode = ARGV[1];
+if (mode == \"single\") {
+    if (!cpp_api_add_module_namespace(\"NamespaceWriteTarget\", \"AddedAtRuntime\")) {
+        printf(\"ERROR: the module's Program could not be owned\\n\");
+        exit(1);
+    }
+    Program p(PO_NEW_STYLE);
+    p.loadModule(\"NamespaceWriteTarget\");
+    p.parse(\"int sub get() { return NamespaceWriteTarget::Inner::Item::value(); }\", \"single\");
+    printf(\"value=%d\\n\", p.callFunction(\"get\"));
+} else {
+    int importers = ARGV[2].toInt();
+    int imports = ARGV[3].toInt();
+    int adds = ARGV[4].toInt();
+    Counter start(1);
+    Counter running(importers + 1);
+    Queue errors();
+    code import_loop = sub () {
+        on_exit running.dec();
+        start.waitForZero();
+        try {
+            for (int i = 0; i < imports; ++i) {
+                Program p(PO_NEW_STYLE);
+                p.loadModule(\"NamespaceWriteTarget\");
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            errors.push(sprintf(\"%s: %s\", ex.err, ex.desc));
+        }
+    };
+    for (int i = 0; i < importers; ++i) {
+        background import_loop();
+    }
+    background sub () {
+        on_exit running.dec();
+        start.waitForZero();
+        try {
+            for (int i = 0; i < adds; ++i) {
+                cpp_api_add_module_namespace(\"NamespaceWriteTarget\", \"Added\" + i);
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            errors.push(sprintf(\"%s: %s\", ex.err, ex.desc));
+        }
+    }();
+    start.dec();
+    running.waitForZero();
+    if (errors.size()) {
+        while (errors.size()) {
+            printf(\"ERROR: %s\\n\", errors.get());
+        }
+        exit(1);
+    }
+}
+printf(\"done\\n\");
+";
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string module_path;
+    }
+
+    constructor() : QUnit::Test("binary module writes to a user module's Program while it is imported", "1.0",
+            \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        # absolute: the child runs in another directory
+        module_path = normalize_dir(get_script_dir() + "NamespaceWriteTarget.qm");
+        addTestCase("a namespace added through the public API to a module's Program", \singleTest());
+        addTestCase("namespaces added while other threads import the module", \concurrentTest());
+        set_return_value(main());
+    }
+
+    singleTest() {
+        string out = runChild("single");
+        assertTrue(out.find("value=42") >= 0, "an import after the write sees the module's namespaces: " + out);
+        assertTrue(out.find("done") >= 0, "the child completes: " + out);
+    }
+
+    concurrentTest() {
+        string out = runChild(sprintf("concurrent %d %d %d", Importers, Imports, Adds));
+        assertEq(-1, out.find("ERROR:"), "no import or write fails: " + out);
+        assertTrue(out.find("done") >= 0, "the child completes: " + out);
+        # a ThreadSanitizer build reports any data race in the child
+        assertEq(-1, out.find("WARNING: ThreadSanitizer"), "no data race: " + out);
+    }
+
+    #! runs the child with the given arguments after the module path; returns its output and asserts a normal exit
+    private string runChild(string args) {
+        TmpDir tmp("qore-module-namespace-runtime-write-");
+        string child = tmp.path + DirSep + "child.q";
+        File f();
+        f.open2(child, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(ChildSource);
+        f.close();
+
+        string out = backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s %s %s %s 2>&1; echo \"rc=$?\"",
+            libqore_dir, libqore_dir, qore_bin, child, module_path, args));
+        *list<*string> rc = (out =~ x/rc=([0-9]+)\s*$/);
+        assertEq("0", rc[0], "the child exits normally: " + out);
+        return out;
+    }
+}

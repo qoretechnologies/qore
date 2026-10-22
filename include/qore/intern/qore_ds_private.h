@@ -40,6 +40,7 @@
 #include "qore/intern/DatasourceStatementHelper.h"
 #include "qore/intern/SqlMutationContext.h"
 
+#include <atomic>
 #include <map>
 #include <set>
 #include <string>
@@ -55,10 +56,16 @@ struct qore_ds_private {
 
     Datasource* ds;
 
-    bool in_transaction = false;
+    // written only by the thread that holds the connection (the transaction lock of a Datasource, or the connection
+    // of a DatasourcePool), and read by other threads as a snapshot (Datasource::isInTransaction(), the destruction
+    // of a pool), so it is atomic; relaxed ordering is enough, as the holder always reads its own last write
+    std::atomic<bool> in_transaction{false};
     bool active_transaction = false;
     bool isopen = false;
-    bool autocommit = false;
+    // written with the Datasource's locks held (see ManagedDatasource::setAutoCommit()), but read by any thread: by
+    // Datasource::getAutoCommit() and before an action takes the transaction lock, so it is atomic; relaxed ordering
+    // is enough, as the value is an independent snapshot
+    std::atomic<bool> autocommit{false};
     bool connection_aborted = false;
     bool keep_lock = false;
     //! true while a driver commit call is in progress; used to derive commit ambiguity structurally
@@ -124,12 +131,32 @@ struct qore_ds_private {
     DatasourceStatementHelper* dsh;
     std::map<std::string, const TypedHashDecl*> typed_result_hashdecl_cache;
 
+    //! returns the autocommit flag; see autocommit
+    DLLLOCAL bool getAutoCommit() const {
+        return autocommit.load(std::memory_order_relaxed);
+    }
+
+    //! sets the autocommit flag; see autocommit
+    DLLLOCAL void setAutoCommit(bool b) {
+        autocommit.store(b, std::memory_order_relaxed);
+    }
+
+    //! returns true if a transaction is in progress on the connection; see in_transaction
+    DLLLOCAL bool inTransaction() const {
+        return in_transaction.load(std::memory_order_relaxed);
+    }
+
+    //! sets the transaction status; called only by the thread that holds the connection
+    DLLLOCAL void setInTransaction(bool b) {
+        in_transaction.store(b, std::memory_order_relaxed);
+    }
+
     DLLLOCAL qore_ds_private(Datasource* n_ds, DBIDriver* ndsl, DatasourceStatementHelper* dsh) : ds(n_ds),
             dsl(ndsl), opt(new QoreHashNode(autoTypeInfo)), dsh(dsh) {
     }
 
     DLLLOCAL qore_ds_private(const qore_ds_private& old, Datasource* n_ds, DatasourceStatementHelper* dsh) :
-            ds(n_ds), autocommit(old.autocommit), dsl(old.dsl),
+            ds(n_ds), autocommit(old.getAutoCommit()), dsl(old.dsl),
             p_username(old.p_username), p_password(old.p_password),
             p_dbname(old.p_dbname), p_db_encoding(old.p_db_encoding),
             p_hostname(old.p_hostname), p_port(old.p_port),
@@ -144,6 +171,8 @@ struct qore_ds_private {
     DLLLOCAL ~qore_ds_private() {
         assert(!private_data);
         assert(stmt_set.empty());
+        // the driver data of destroyed statements is closed with the connection
+        assert(orphan_stmts.empty());
         clearTypedResultHashDeclCache();
         ExceptionSink xsink;
         if (opt) {
@@ -169,7 +198,7 @@ struct qore_ds_private {
         p_dbname      = other->p_dbname;
         p_hostname    = other->p_hostname;
         p_db_encoding = other->p_db_encoding;
-        autocommit    = other->autocommit;
+        setAutoCommit(other->getAutoCommit());
         p_port        = other->p_port;
     }
 
@@ -280,8 +309,8 @@ struct qore_ds_private {
         }
         ev.tx_id = tx_id.c_str();
         ev.tx_seq = ++tx_seq;
-        ev.in_transaction = in_transaction;
-        ev.autocommit = autocommit;
+        ev.in_transaction = inTransaction();
+        ev.autocommit = getAutoCommit();
         int rc = ctx->dispatch(ev, *ds, xsink);
         if (rc && ev.isAdmission()) {
             dispatchMutationNotExecuted(ev, xsink);
@@ -415,6 +444,20 @@ struct qore_ds_private {
             stmt_set.erase(i);
     }
 
+    //! takes the driver data of a statement that is destroyed in a thread that does not hold this connection
+    /** The statement is removed from the connection, and its driver data, which belongs to the connection, is kept in
+        a placeholder statement; the thread that holds the connection closes it when its transaction ends (see
+        transactionDone()), when it releases the connection or the transaction lock (see closeOrphans()), or when the
+        connection is closed, so that the driver is only ever called for the connection by that thread.
+    */
+    DLLLOCAL void adoptStatementData(QoreSQLStatement* stmt);
+
+    //! closes the driver data of destroyed statements that the connection holds; called by the thread holding it
+    DLLLOCAL void closeOrphans(ExceptionSink* xsink) {
+        AutoLocker al(m);
+        orphansDone(true, xsink);
+    }
+
     DLLLOCAL void connectionAborted(ExceptionSink* xsink) {
         assert(isopen);
         // close all statements and clear private data, leave datasource allocated
@@ -424,8 +467,11 @@ struct qore_ds_private {
         if (getMutationCtx()) {
             mutation_conn_lost = true;
         }
-        // close the datasource
-        close();
+        // close the datasource; the connection is lost, and the driver reports that, so an error closing it is a
+        // warning event
+        ExceptionSink close_xsink;
+        close(&close_xsink);
+        qore_dbi_private::reportCloseWarnings(ds, close_xsink);
     }
 
     DLLLOCAL void connectionLost(ExceptionSink* xsink) {
@@ -438,7 +484,7 @@ struct qore_ds_private {
         assert(isopen);
         // close statements but do not clear datasource or statements in the datasource
         transactionDone(false, false, xsink);
-        if (getMutationCtx() && in_transaction) {
+        if (getMutationCtx() && inTransaction()) {
             mutation_conn_lost = true;
         }
     }
@@ -458,12 +504,13 @@ struct qore_ds_private {
         }
         if (clear)
             stmt_set.clear();
+        orphansDone(close, xsink);
     }
 
     DLLLOCAL int commitIntern(ExceptionSink* xsink) {
         //printd(5, "qore_ds_private::commitIntern() this: %p in_transaction: %d active_transaction: %d\n", this, in_transaction, active_transaction);
         assert(isopen);
-        in_transaction = false;
+        setInTransaction(false);
         active_transaction = false;
         if (!getMutationCtx()) {
             return qore_dbi_private::get(*dsl)->commit(ds, xsink);
@@ -500,7 +547,7 @@ struct qore_ds_private {
     DLLLOCAL int rollbackIntern(ExceptionSink* xsink) {
         //printd(5, "qore_ds_private::rollbackIntern() this: %p in_transaction: %d active_transaction: %d\n", this, in_transaction, active_transaction);
         assert(isopen);
-        in_transaction = false;
+        setInTransaction(false);
         active_transaction = false;
         if (!getMutationCtx()) {
             return qore_dbi_private::get(*dsl)->rollback(ds, xsink);
@@ -525,21 +572,34 @@ struct qore_ds_private {
         return rc;
     }
 
-    DLLLOCAL int close() {
+    //! closes the connection and the statements prepared on it, if it is open
+    /** the datasource is closed after the call in every case
+
+        @return 0 if the connection was closed without an error or was not open, -1 if an error closing it or one of
+        its statements was added to \a xsink
+    */
+    DLLLOCAL int close(ExceptionSink* xsink) {
+        assert(xsink);
         if (isopen) {
             //printd(5, "qore_ds_private::close() this: %p in_transaction: %d active_transaction: %d\n", this, in_transaction, active_transaction);
             if (bulk_load_active && !connection_aborted) {
                 // A native protocol session cannot survive a close/reopen cycle.  Give the driver a
                 // final abort callback so it can close its wire-level state and stream boundary.
-                ExceptionSink xsink;
+                ExceptionSink bulk_xsink;
                 bulk_load_active = false;
-                qore_dbi_private::get(*dsl)->bulkLoadEnd(ds, false, &xsink);
-                xsink.clear();
+                qore_dbi_private::get(*dsl)->bulkLoadEnd(ds, false, &bulk_xsink);
+                bulk_xsink.clear();
             }
             bulk_load_active = false;
-            qore_dbi_private::get(*dsl)->close(ds);
+            // what is raised here is checked in a sink of its own, as the caller's can already hold an exception
+            ExceptionSink close_xsink;
+            // the statements prepared on the connection are closed while it is still open, as their driver data
+            // belongs to it; they stay registered, with their datasource, so that an action in progress - one in
+            // which the driver aborted the connection, for example - still releases the connection when it ends
+            transactionDone(false, true, &close_xsink);
+            qore_dbi_private::get(*dsl)->close(ds, &close_xsink);
             isopen = false;
-            in_transaction = false;
+            setInTransaction(false);
             active_transaction = false;
             commit_in_progress = false;
             // a pending connection-loss event must keep the transaction identity it belongs to;
@@ -549,16 +609,20 @@ struct qore_ds_private {
                 tx_seq = 0;
             }
             clearTypedResultHashDeclCache();
-            return 0;
+            if (!close_xsink) {
+                return 0;
+            }
+            xsink->assimilate(close_xsink);
+            return -1;
         }
-        return -1;
+        return 0;
     }
 
     DLLLOCAL void setStatementKeepLock(QoreSQLStatement* stmt) {
         assert(!keep_lock);
         keep_lock = true;
-        if (!in_transaction)
-            in_transaction = true;
+        if (!inTransaction())
+            setInTransaction(true);
         if (!active_transaction)
             active_transaction = true;
 
@@ -579,6 +643,12 @@ struct qore_ds_private {
 private:
     // set of active SQLStatements on this datasource
     stmt_set_t stmt_set;
+    // placeholders holding the driver data of statements destroyed in another thread than the one holding this
+    // connection; protected by m, and closed by the thread holding the connection when its transaction ends
+    std::vector<SQLStatement*> orphan_stmts;
+
+    //! closes the placeholders (or frees their handles if \a close is false); called with m held
+    DLLLOCAL void orphansDone(bool close, ExceptionSink* xsink);
 };
 
 #endif

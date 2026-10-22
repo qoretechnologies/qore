@@ -189,6 +189,20 @@ public:
         }
     }
 
+    //! initializes the lock again, unlocked and without waiters, in a child process created with fork()
+    /** Only the thread that called fork() exists in the child: the holds and waits of the other threads are gone
+    */
+    DLLLOCAL void reinitAfterFork() {
+        write_tid.store(-1, std::memory_order_relaxed);
+        readers.store(0, std::memory_order_relaxed);
+        read_waiting = 0;
+        write_waiting.store(0, std::memory_order_relaxed);
+        write_claim.store(false, std::memory_order_relaxed);
+        write_cond.reinitAfterFork();
+        read_cond.reinitAfterFork();
+        l.reinitAfterFork();
+    }
+
     DLLLOCAL void unlock_signal() {
         if (write_waiting) {
             write_cond.signal();

@@ -714,6 +714,7 @@ class RestClientIoTest inherits QUnit::Test {
         # QUIC/HTTP3 listener on the same UDP port.  http_version "auto" then runs a
         # real H3+H2 happy-eyeballs race against this single URL.
         port = server.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
             "service": 0,
             "cert": new SSLCertificate(CertPem),
             "key": new SSLPrivateKey(KeyPem),
@@ -722,6 +723,7 @@ class RestClientIoTest inherits QUnit::Test {
         # host that does not serve HTTP/3 looks like -- the H3 leg of a happy-eyeballs race cannot
         # connect there and the race has to be won by H2
         noh3_port = server.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
             "service": 0,
             "cert": new SSLCertificate(CertPem),
             "key": new SSLPrivateKey(KeyPem),
@@ -729,6 +731,7 @@ class RestClientIoTest inherits QUnit::Test {
         }).port;
         # Plain HTTP listener for HTTP/1.1 tests
         h1_port = server.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
             "service": 0,
         }).port;
         # HTTPS listener that requires client certificates.  get_remote_certs +
@@ -738,6 +741,7 @@ class RestClientIoTest inherits QUnit::Test {
         # well-formed X.509 is accepted (no CA chain validation) — this test
         # only proves the server side sees and enforces the client cert.
         mtls_port = server.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
             "service": 0,
             "cert": new SSLCertificate(CertPem),
             "key": new SSLPrivateKey(KeyPem),
@@ -759,6 +763,7 @@ class RestClientIoTest inherits QUnit::Test {
         h1only_server.setHandler("/echo", "/echo", MimeTypeJson, new EchoHeadersHandler());
         h1only_server.setDefaultHandler("/api", new JsonEchoHandler());
         h1only_port = h1only_server.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
             "service": 0,
         }).port;
 

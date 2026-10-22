@@ -1,0 +1,192 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires FsUtil
+%requires QUnit
+
+%exec-class BackgroundReleaseExceptionTest
+
+#! An exception raised by a destructor when a background thread releases its call is reported
+/** A background thread releases the copy of its expression when the expression returns: for a call, the closure,
+    the variables that it captured and the evaluated arguments; for an operator, the values of its operands; for a
+    list or hash in the expression, its elements.  When that releases the last reference to an object, its destructor
+    runs there, and the call, operator, list and hash nodes released them with no exception sink: a debug build
+    aborted ("Assertion `xsink || !de' failed" in qore_class_private::execDestructor()).  The exception is now the
+    thread's, and reported as any exception of the thread that is not handled.
+
+    Each case runs in a child process, so that the report and the exit status can be checked.
+*/
+class BackgroundReleaseExceptionTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+    }
+
+    public {
+        #! the destructor's exception, and the parts of a child script shared by the cases
+        const Prologue = "%modern
+class Raiser {
+    destructor() {
+        throw \"BACKGROUND-RELEASE-ERROR\", \"raised by a destructor run by the release of a background call\";
+    }
+
+    ok() {
+    }
+}
+
+our Queue started();
+our Counter release(1);
+";
+
+        #! the end of each child script: the background thread holds the last reference when it returns
+        const Epilogue = "start();
+started.get();
+release.dec();
+";
+    }
+
+    constructor() : QUnit::Test("BackgroundReleaseExceptionTest", "1.0") {
+        qore_bin = ENV.QORE_EXECUTABLE ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        addTestCase("an object captured by the closure", \testCapturedObject());
+        addTestCase("an object passed as an argument of a call reference", \testArgumentObject());
+        addTestCase("an object held by an operator", \testOperatorObject());
+        addTestCase("an object in a list or hash in the arguments", \testListHashObject());
+        addTestCase("a copy that fails on a hash key", \testFailedHashKeyCopy());
+        set_return_value(main());
+    }
+
+    testOperatorObject() {
+        # the compiled tiers run an operator expression in the background operator through the AST interpreter only
+        # when AST fallback is enabled, so this case runs in AST mode
+        checkChild("sub wait_then() {
+    started.push(True);
+    release.waitForZero();
+}
+
+our bool done;
+
+sub start() {
+    Raiser r();
+    # the background copy of the expression holds the value of r as an operand
+    background (done = (wait_then() || r));
+}
+", "--exec-mode=ast");
+    }
+
+    testListHashObject() {
+        # the AST interpreter copies a list or hash in a background expression with the values of its local
+        # variables; the compiled tiers evaluate the arguments before the thread starts: every mode is checked
+        string common = "sub wait_then(auto v) {
+    started.push(True);
+    release.waitForZero();
+}
+";
+        hash<string, string> cases = {
+            "a list": "background wait_then((r, 1));",
+            "a hash": "background wait_then({\"a\": r, \"b\": 1});",
+            "a hash in a list in a hash": "background wait_then({\"a\": (1, {\"b\": r})});",
+        };
+        foreach hash<auto> i in (cases.pairIterator()) {
+            foreach string mode in ("ast", "ir", "jit", "tiered") {
+                checkChild(common + "sub start() {
+    Raiser r();
+    # the background copy of the call holds the value of r in " + i.key + "
+    " + i.value + "
+}
+", "--exec-mode=" + mode, i.key + " in " + mode + " mode");
+            }
+        }
+    }
+
+    testFailedHashKeyCopy() {
+        if (PlatformOS == "Windows") {
+            testSkip("the subprocess shell syntax in this test is POSIX-specific");
+        }
+        # the closure is created in the destructor, so it captures an object that is being destroyed: the copy of the
+        # hash for the new thread fails on its key, before it has copied any value; it was then deleted with more keys
+        # than values, which aborted a debug build ("Assertion `keys.size() == values.size()' failed").  The compiled
+        # tiers evaluate the call in the key before the thread starts, so this case runs in AST mode
+        string out = runChild("%modern
+string sub key(auto v) {
+    return \"k\";
+}
+
+sub show(auto v) {
+}
+
+class Starter {
+    destructor() {
+        code c = sub () {};
+        try {
+            background show({key(c): 1});
+            printf(\"no exception\\n\");
+        } catch (hash<ExceptionInfo> ex) {
+            printf(\"%s\\n\", ex.err);
+        }
+    }
+}
+
+{
+    Starter s();
+}
+", "--exec-mode=ast");
+        assertRegex("^BACKGROUND-CLOSURE-INVALID-CAPTURE\n", out, "the copy's exception is raised to the caller");
+        assertRegex("\nEXIT=0\n$", out, "the process exits normally");
+    }
+
+    testCapturedObject() {
+        checkChild("sub start() {
+    Raiser r();
+    background sub () {
+        started.push(True);
+        release.waitForZero();
+        r.ok();
+    }();
+}
+");
+    }
+
+    testArgumentObject() {
+        checkChild("sub start() {
+    code c = sub (Raiser r) {
+        started.push(True);
+        release.waitForZero();
+        r.ok();
+    };
+    # the background copy of the call holds the argument's value
+    Raiser r();
+    background c(r);
+}
+");
+    }
+
+    private checkChild(string start, string options = "", string label = "") {
+        if (PlatformOS == "Windows") {
+            testSkip("the subprocess shell syntax in this test is POSIX-specific");
+        }
+        string out = runChild(Prologue + start + Epilogue, options);
+        string sfx = label ? ": " + label : "";
+        assertRegex("BACKGROUND-RELEASE-ERROR", out, "the destructor's exception is reported" + sfx);
+        assertRegex("\nEXIT=0\n$", out, "the process exits normally" + sfx);
+    }
+
+    #! Runs the script in a child process; returns its output followed by "EXIT=<exit status>"
+    private string runChild(string script_text, string options) {
+        TmpDir tmp("qore-background-release-");
+        string script = tmp.path + "/child.q";
+        {
+            File f();
+            f.open2(script, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write(script_text);
+        }
+        return backquote(sprintf("%s %s %s 2>&1; echo EXIT=$?", shellQuote(qore_bin), options, shellQuote(script)));
+    }
+
+    private static string shellQuote(string str) {
+        return "'" + replace(str, "'", "'\\''") + "'";
+    }
+}

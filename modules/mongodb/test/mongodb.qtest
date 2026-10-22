@@ -32,6 +32,7 @@
 %requires QUnit
 %requires FsUtil
 %requires mongodb
+%requires ../../../examples/test/TestCertificates.qm
 
 %exec-class MongoDbTest
 
@@ -45,6 +46,10 @@ public class MongoDbTest inherits QUnit::Test {
         */
         string test_db = sprintf("qore_test_db_%d_%s", getpid(), get_random_string(8));
         string test_coll = "qore_test_collection";
+        #! True once the server has been checked
+        bool server_checked;
+        #! why the server cannot be used, if it cannot be reached
+        *string server_unavailable;
     }
 
     constructor() : Test("MongoDbTest", "1.0") {
@@ -86,13 +91,24 @@ public class MongoDbTest inherits QUnit::Test {
     }
 
     private bool ensureClient() {
-        if (!exists client) {
+        if (!server_checked) {
+            server_checked = True;
+            # the client connects to the server only when it is used, so the server is checked with a ping; a server
+            # that cannot be reached is not available, as for the other tests of database servers (CI's macOS job has
+            # the URL of the Linux jobs' MongoDB service, but no such service)
             try {
                 client = new MongoClient(mongodb_url);
+                client.ping();
             } catch (hash<ExceptionInfo> ex) {
-                testSkip("MongoDB not available: " + ex.desc);
-                return False;
+                if (ex.err != "MONGODB-CLIENT-ERROR") {
+                    rethrow;
+                }
+                server_unavailable = ex.desc;
+                remove client;
             }
+        }
+        if (server_unavailable) {
+            testSkip(sprintf("MongoDB not available at %y: %s", mongodb_url, server_unavailable));
         }
         return exists client;
     }
@@ -1280,10 +1296,12 @@ sub test_pre_interrupt() {
         mkdir(outside_dir);
         string allowed_ca = allowed_dir + "/ca.pem";
         string outside_ca = outside_dir + "/ca.pem";
+        # a valid certificate, so that libmongoc loads the CA files that the sandbox allows: the only errors are the
+        # sandbox's and the connection's
         foreach string path in ((allowed_ca, outside_ca)) {
             File f();
             f.open2(path, O_CREAT | O_TRUNC | O_WRONLY);
-            f.write("not a certificate\n");
+            f.write(TestCertificates::CertPem);
             f.close();
         }
 

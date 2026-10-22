@@ -1,0 +1,128 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class QppOutputPathsTest
+
+#! qpp writes its outputs where their paths name them, also when the paths are relative
+/** qpp changed into the Java output directory to write the Java file of a class, so the output files written after
+    it (metadata and stub) and the Java file of the next class, when given as relative paths, were written in the wrong
+    directory.
+*/
+class QppOutputPathsTest inherits QUnit::Test {
+    private {
+        string qpp_bin;
+
+        #! two classes in different namespaces, so two Java files are written in two package directories
+        const Source = "//! first test class
+/** a test class
+*/
+qclass FirstCls [arg=void* p; ns=Qore];
+
+//! returns one
+/** @return one
+*/
+int FirstCls::one() {
+    return 1;
+}
+
+//! second test class
+/** a test class
+*/
+qclass SecondCls [arg=void* p; ns=Qore::PathTest];
+
+//! returns two
+/** @return two
+*/
+int SecondCls::two() {
+    return 2;
+}
+";
+    }
+
+    constructor() : QUnit::Test("QppOutputPathsTest", "1.0", \ARGV) {
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string bin_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qpp_bin = ENV.QPP ?? ENV.QORE_QPP
+            ?? (is_file(bin_dir + "/qpp") ? bin_dir + "/qpp" : dirname(qore_bin) + "/qpp");
+
+        addTestCase("relative output paths", \testRelativePaths());
+        addTestCase("relative output paths of a failed run", \testRelativePathsFailedRun());
+
+        set_return_value(main());
+    }
+
+    #! runs qpp in the given directory with relative paths for every output
+    /** @return a hash with the exit status (\c status) and the combined output (\c out)
+    */
+    private hash<auto> runQpp(string dir, string source) {
+        if (!is_file(qpp_bin)) {
+            testSkip("qpp binary not found at %y; set QPP or QORE_LIBDIR", qpp_bin);
+        }
+
+        File f();
+        f.open2(dir + "/paths.qpp", O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(source);
+        f.close();
+
+        # qpp runs in another directory
+        string qpp = absolute_path(qpp_bin) ? qpp_bin : getcwd() + "/" + qpp_bin;
+        # the exit status is written to a file, so it is the status of qpp itself
+        string out = backquote(sprintf("cd %s && %s --javadoc=java --output=paths.cpp --dox-output=paths.dox.h "
+            "--metadata=paths.meta.json --stub-output=paths.stub.qc paths.qpp 2>&1; echo $? > status", dir, qpp));
+        return {
+            "out": out,
+            "status": trim(ReadOnlyFile::readTextFile(dir + "/status")).toInt(),
+        };
+    }
+
+    testRelativePaths() {
+        TmpDir tmp("qore-qpp-paths-");
+        hash<auto> r = runQpp(tmp.path, Source);
+        assertEq(0, r.status, r.out);
+
+        foreach string fn in ("paths.cpp", "paths.dox.h", "paths.meta.json", "paths.stub.qc") {
+            assertTrue(is_file(tmp.path + "/" + fn), fn + " is written in the working directory");
+        }
+        assertTrue(is_file(tmp.path + "/java/qore/Qore/FirstCls.java"), "the Java file of the first class");
+        assertTrue(is_file(tmp.path + "/java/qore/Qore/PathTest/SecondCls.java"),
+            "the Java file of the second class is in its package directory below the Java output directory");
+
+        # nothing is written in a directory that the outputs do not name
+        assertFalse(is_file(tmp.path + "/java/qore/Qore/paths.meta.json"), "no metadata in the Java directory");
+        assertFalse(is_file(tmp.path + "/java/qore/Qore/paths.stub.qc"), "no stub in the Java directory");
+        assertFalse(is_dir(tmp.path + "/java/qore/Qore/java"), "no Java directory in the Java directory");
+    }
+
+    testRelativePathsFailedRun() {
+        TmpDir tmp("qore-qpp-paths-");
+        # a function with a functional domain but no long comment is an error, which is found after the Java files
+        # have been written
+        hash<auto> r = runQpp(tmp.path, Source + "
+/** @defgroup test_functions Test Functions
+    Test functions
+*/
+///@{
+//! returns True
+bool t_env() [dom=EXTERNAL_INFO] {
+    return True;
+}
+///@}
+");
+        assertEq(1, r.status, r.out);
+        assertRegex("t_env\\(\\): cannot insert domain flags: missing long comment", r.out);
+
+        # the outputs of the failed run, which have relative paths, are all removed
+        foreach string fn in ("paths.cpp", "paths.dox.h", "paths.meta.json", "paths.stub.qc",
+                "java/qore/Qore/FirstCls.java", "java/qore/Qore/PathTest/SecondCls.java") {
+            assertFalse(is_file(tmp.path + "/" + fn), fn + " is removed");
+        }
+        assertTrue(is_file(tmp.path + "/paths.qpp"), "the input file is kept");
+    }
+}

@@ -619,6 +619,9 @@ public hashdecl DataProviderActionInfo inherits DataProviderActionBaseInfo {
     *AbstractDataProviderType output_type;
 
     #! In case the output type is expensive to acquire or requires I/O, this closure can be used to set it
+    /** The closure is called when a getter returning the action needs the output type, and the result is published
+        as \c output_type; see @ref dataprovider_deferred_output_types
+    */
     *code get_output_type;
 
     #! For the case when options should be generated dynamically
@@ -961,6 +964,41 @@ hashdecl DataProviderDiscoveryStateInfo {
 }
 
 #! DataProvider action and application catalog class
+/** @anchor dataprovider_deferred_output_types
+    @par Deferred Output Types
+
+    An action whose output type is expensive to build registers a \c get_output_type callback in place of an
+    \c output_type.  The getters that return actions call the callbacks of the actions they return, and return
+    each output type in \c output_type:
+    - getAppAction() and getAppActionEx() resolve the one action, and getActions(), getActionsEx(), getActionHash(),
+      getActionHashEx(), getActionsForScheme() and the \c searchAppAction*() methods resolve the actions of the
+      application they return; if a callback fails, they throw an \c ACTION-OUTPUT-TYPE-ERROR exception once every
+      action they return has been attempted, and each call attempts a failed callback again
+    - getAllActions(), searchActionRegex() and searchActionSubstr() resolve the output types that have not been
+      attempted yet and never throw for an output type: a callback that failed is not attempted again by them, and
+      its action is returned with \c get_output_type and no \c output_type
+    - getAllApps(), getApp(), getAppEx(), searchAppRegex(), searchAppSubstr() and getDataProviderForAction() return
+      no output types and do not resolve them (before %DataProvider 3.11 they resolved every deferred output type,
+      so a callback that loaded a module registering further applications could add applications to their
+      result; no callback in the modules distributed with %Qore does)
+    - getActionsNoInit() and getAllAppsNoInit() never call callbacks: an action not resolved yet carries
+      \c get_output_type and no \c output_type
+
+    A failed callback is retained like a failed deferred initialization: @ref getInitializationFailures() returns it
+    with kind \c "action" and the callback's exception, and a discovery generation reports it, until the output type
+    is resolved or the action is registered again.  Retrying a callback that fails the same way does not change the
+    catalog revision.
+
+    Callbacks run without the catalog lock held, so a callback can load provider modules.  Two threads asking for
+    the same action can both call its callback; the first result is published, and both threads return it.
+
+    @par Example
+    @code{.py}
+# throws ACTION-OUTPUT-TYPE-ERROR if the output type of the action cannot be built
+hash<DataProviderActionInfo> action = DataProviderActionCatalog::getAppActionEx("stripe", "create-customer");
+AbstractDataProviderType output_type = action.output_type;
+    @endcode
+*/
 public class DataProviderActionCatalog {
     public {
         #! Required application key set
@@ -1055,8 +1093,16 @@ public class DataProviderActionCatalog {
         #! Scheme map; keys are connection schemes
         static hash<string, list<hash<DataProviderActionInfo>>> smap;
 
-        #! Set of actions requiring output type resolution; app -> action -> True
+        #! Actions whose output type is resolved on demand: app -> action -> state
+        /** @ref True if the action's \c get_output_type callback has not been called yet, @ref False if it was called
+            and failed; an action leaves the map when its output type is resolved
+        */
         static hash<string, hash<string, bool>> resolve_output_types;
+
+        #! The callbacks that resolved output types: app -> action -> callback
+        /** A registration of an action carrying the callback that resolved its output type is the same action
+        */
+        static hash<string, hash<string, code>> resolved_output_type_callbacks;
 
         #! Pending application init handler map: app -> init handler
         static hash<string, hash<auto>> initmap;
@@ -2545,6 +2591,7 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
         map remove top_actionmap{name + "/" + $1.action}, dactions.values();
         remove initactionmap{name};
         remove resolve_output_types{name};
+        remove resolved_output_type_callbacks{name};
         remove appmodmap{name};
         remove actionmodmap{name};
         remove pending_generic_api_call_apps{name};
@@ -2738,8 +2785,16 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
         }
         appcache{action.app}{ActionCodeFlagMap{action.action_code}} = True;
         if (*hash<DataProviderActionInfo> act = app_actionmap{action.app}{action.action}) {
+            # the definition of an action whose deferred output type was resolved carries the callback that
+            # resolved it, and is the same action
+            hash<DataProviderActionInfo> registered = action;
+            if (has_get_output_type && !act.get_output_type
+                    && action.get_output_type == resolved_output_type_callbacks{action.app}{action.action}) {
+                remove registered.get_output_type;
+                registered.output_type = act.output_type;
+            }
             # ignore duplicates to cover injection scenarios
-            if (!DataProviderActionCatalog::compareActions(action, act)) {
+            if (!DataProviderActionCatalog::compareActions(registered, act)) {
                 if (module_path) {
                     bool new_owner = !actionmodmap{action.app}{action.action}{module_path};
                     actionmodmap{action.app}{action.action}{module_path} = True;
@@ -2753,7 +2808,7 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
             }
             list<string> diff = ();
             foreach hash<auto> elem in (act.pairIterator()) {
-                if (elem.value != action{elem.key}) {
+                if (elem.value != registered{elem.key}) {
                     diff += elem.key;
                 }
             }
@@ -2848,11 +2903,10 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
     #! Returns all applications in the cache
     /**
         @return all applications in the cache
+        @note application getters do not resolve the deferred output types of actions; see
+        @ref dataprovider_deferred_output_types
     */
     static *list<hash<DataProviderAppInfo>> getAllApps() {
-        if (resolve_output_types) {
-            DataProviderActionCatalog::resolveOutputTypes();
-        }
         foreach string app in (keys initmap) {
             if (*hash<auto> h = remove initmap{app}) {
                 DataProviderActionCatalog::doInit(h);
@@ -2869,6 +2923,8 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
         @return the application definition for the given application name or @ref nothing if not present
 
         @see getAppEx()
+        @note application getters do not resolve the deferred output types of actions; see
+        @ref dataprovider_deferred_output_types
     */
     static *hash<DataProviderAppInfo> getApp(string app) {
         # load app on demand
@@ -2880,9 +2936,6 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
         }
         # initialize any pending actions for the app to ensure supports_* flags are set
         map (map DataProviderActionCatalog::doInit($1), $1.iterator()), remove initactionmap{app};
-        if (resolve_output_types) {
-            DataProviderActionCatalog::resolveOutputTypes();
-        }
         return appcache{app};
     }
 
@@ -2895,6 +2948,8 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
         @throw APP-ERROR the given application is not registered
 
         @see getApp()
+        @note application getters do not resolve the deferred output types of actions; see
+        @ref dataprovider_deferred_output_types
     */
     static hash<DataProviderAppInfo> getAppEx(string app) {
         # load app on demand
@@ -2906,9 +2961,6 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
         }
         # initialize any pending actions for the app to ensure supports_* flags are set
         map (map DataProviderActionCatalog::doInit($1), $1.iterator()), remove initactionmap{app};
-        if (resolve_output_types) {
-            DataProviderActionCatalog::resolveOutputTypes();
-        }
         if (*hash<DataProviderAppInfo> rv = appcache{app}) {
             return rv;
         }
@@ -2920,6 +2972,8 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
         @param regex_options Regular expression options; a case-insensitive match is performed by default
 
         @return All applications that match the regular expression pattern in the \c name or \c desc fields
+        @note application getters do not resolve the deferred output types of actions; see
+        @ref dataprovider_deferred_output_types
     */
     static *list<hash<DataProviderAppInfo>> searchAppRegex(string regex_pattern, int regex_options = RE_Caseless) {
         # initialize any matching pending apps
@@ -2932,9 +2986,6 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
                 map (map DataProviderActionCatalog::doInit($1), $1.iterator()), remove initactionmap{appname};
             }
         }
-        if (resolve_output_types) {
-            DataProviderActionCatalog::resolveOutputTypes();
-        }
         return map $1, appcache.values(),
             regex($1.name, regex_pattern, regex_options) || regex($1.desc, regex_pattern, regex_options);
     }
@@ -2945,11 +2996,10 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
         @param ignore_case Ignore case when searching
 
         @return All applications that match the substring argument in the \c name or \c desc fields
+        @note application getters do not resolve the deferred output types of actions; see
+        @ref dataprovider_deferred_output_types
     */
     static *list<hash<DataProviderAppInfo>> searchAppSubstr(string substr, bool ignore_case = True) {
-        if (resolve_output_types) {
-            DataProviderActionCatalog::resolveOutputTypes();
-        }
         if (ignore_case) {
             substr = substr.upr();
 
@@ -2986,10 +3036,14 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
     /** @param scheme the connection scheme
 
         @return a list of actions associated with the given scheme
+        @throw ACTION-OUTPUT-TYPE-ERROR the output type of an action returned cannot be built; see
+        @ref dataprovider_deferred_output_types
     */
     static *list<hash<DataProviderActionInfo>> getActionsForScheme(string scheme) {
-        if (resolve_output_types) {
-            DataProviderActionCatalog::resolveOutputTypes();
+        # the actions returned are those of the applications with this scheme
+        if (*list<string> apps = (map $1.name, appcache.values(), $1.scheme == scheme
+                && exists resolve_output_types{$1.name})) {
+            DataProviderActionCatalog::resolveOutputTypes(apps, NOTHING, True);
         }
         return smap{scheme};
     }
@@ -3000,6 +3054,8 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
         @return a hash of actions keyed by action name for the given application
 
         @see getActionHashEx()
+        @throw ACTION-OUTPUT-TYPE-ERROR the output type of an action returned cannot be built; see
+        @ref dataprovider_deferred_output_types
     */
     static *hash<string, hash<DataProviderActionInfo>> getActionHash(string app) {
         # load app on demand
@@ -3011,8 +3067,8 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
         }
         # initialize any pending actions for the app
         map (map DataProviderActionCatalog::doInit($1), $1.iterator()), remove initactionmap{app};
-        if (resolve_output_types) {
-            DataProviderActionCatalog::resolveOutputTypes();
+        if (exists resolve_output_types{app}) {
+            DataProviderActionCatalog::resolveOutputTypes(app, NOTHING, True);
         }
         return app_actionmap{app};
     }
@@ -3025,6 +3081,8 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
         @throw APP-ERROR the given application is not registered
 
         @see getActionHash()
+        @throw ACTION-OUTPUT-TYPE-ERROR the output type of an action returned cannot be built; see
+        @ref dataprovider_deferred_output_types
     */
     static *hash<string, hash<DataProviderActionInfo>> getActionHashEx(string app) {
         # load app on demand
@@ -3036,8 +3094,8 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
         }
         # initialize any pending actions for the app
         map (map DataProviderActionCatalog::doInit($1), $1.iterator()), remove initactionmap{app};
-        if (resolve_output_types) {
-            DataProviderActionCatalog::resolveOutputTypes();
+        if (exists resolve_output_types{app}) {
+            DataProviderActionCatalog::resolveOutputTypes(app, NOTHING, True);
         }
         if (*hash<string, hash<DataProviderActionInfo>> rv = app_actionmap{app}) {
             return rv;
@@ -3067,8 +3125,20 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
                     app.name, ex.err, ex.desc);
                 continue;
             }
-            foreach hash<DataProviderActionInfo> action in (DataProviderActionCatalog::getActions(app.name,
-                False)) {
+            *list<hash<DataProviderActionInfo>> actions;
+            try {
+                actions = DataProviderActionCatalog::getActions(app.name, False);
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err != "ACTION-OUTPUT-TYPE-ERROR") {
+                    rethrow;
+                }
+                # the index cache holds no output types, so an action whose output type cannot be built is
+                # cached all the same; the failure is retained by the catalog
+                ProviderIndexUtil::log(LoggerLevel::LevelError, "Data provider app %y: %s: %s", app.name, ex.err,
+                    ex.desc);
+                actions = DataProviderActionCatalog::getActionsNoInit(app.name);
+            }
+            foreach hash<DataProviderActionInfo> action in (actions) {
                 try {
                     ProviderIndexUtil::addActionToCache(action);
                 } catch (hash<ExceptionInfo> ex) {
@@ -3088,6 +3158,8 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
         @return a list of actions for the given application
 
         @see getActionsEx()
+        @throw ACTION-OUTPUT-TYPE-ERROR the output type of an action returned cannot be built; see
+        @ref dataprovider_deferred_output_types
     */
     static *list<hash<DataProviderActionInfo>> getActions(string app, bool check_index = True) {
         # load app on demand
@@ -3101,8 +3173,8 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
         }
         # initialize any pending actions for the app
         map (map DataProviderActionCatalog::doInit($1), $1.iterator()), remove initactionmap{app};
-        if (resolve_output_types) {
-            DataProviderActionCatalog::resolveOutputTypes();
+        if (exists resolve_output_types{app}) {
+            DataProviderActionCatalog::resolveOutputTypes(app, NOTHING, True);
         }
         return app_actionmap{app}.values();
     }
@@ -3129,6 +3201,8 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
         @throw APP-ERROR the given application is not registered
 
         @see getActions()
+        @throw ACTION-OUTPUT-TYPE-ERROR the output type of an action returned cannot be built; see
+        @ref dataprovider_deferred_output_types
     */
     static list<hash<DataProviderActionInfo>> getActionsEx(string app) {
         # load app on demand
@@ -3140,8 +3214,8 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
         }
         # initialize any pending actions for the app
         map (map DataProviderActionCatalog::doInit($1), $1.iterator()), remove initactionmap{app};
-        if (resolve_output_types) {
-            DataProviderActionCatalog::resolveOutputTypes();
+        if (exists resolve_output_types{app}) {
+            DataProviderActionCatalog::resolveOutputTypes(app, NOTHING, True);
         }
         if (*list<hash<DataProviderActionInfo>> rv = app_actionmap{app}.values()) {
             return rv;
@@ -3151,6 +3225,8 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
 
     #! Returns all actions in the cache
     /** @return all actions in the cache
+        @note an output type whose callback failed is not attempted again, and its action is returned with
+        \c get_output_type and no \c output_type; see @ref dataprovider_deferred_output_types
     */
     static *list<hash<DataProviderActionInfo>> getAllActions() {
         # initialize all pending apps
@@ -3170,6 +3246,8 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
         @return the action definition for the given application name and action or @ref nothing if not present
 
         @see getAppActionEx()
+        @throw ACTION-OUTPUT-TYPE-ERROR the output type of the action cannot be built; see
+        @ref dataprovider_deferred_output_types
     */
     static *hash<DataProviderActionInfo> getAppAction(string app, string action) {
         # load app on demand
@@ -3186,8 +3264,8 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
                 remove initactionmap{app};
             }
         }
-        if (resolve_output_types) {
-            DataProviderActionCatalog::resolveOutputTypes();
+        if (exists resolve_output_types{app}{action}) {
+            DataProviderActionCatalog::resolveOutputTypes(app, action, True);
         }
         return app_actionmap{app}{action};
     }
@@ -3203,6 +3281,8 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
         @throw ACTION-ERROR the given action is not registered
 
         @see getAppAction()
+        @throw ACTION-OUTPUT-TYPE-ERROR the output type of the action cannot be built; see
+        @ref dataprovider_deferred_output_types
     */
     static hash<DataProviderActionInfo> getAppActionEx(string app, string action) {
         # load app on demand
@@ -3219,8 +3299,8 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
                 remove initactionmap{app};
             }
         }
-        if (resolve_output_types) {
-            DataProviderActionCatalog::resolveOutputTypes();
+        if (exists resolve_output_types{app}{action}) {
+            DataProviderActionCatalog::resolveOutputTypes(app, action, True);
         }
         *hash<string, hash<DataProviderActionInfo>> actionmap = app_actionmap{app};
         if (!actionmap) {
@@ -3358,9 +3438,6 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
     */
     static AbstractDataProvider getDataProviderForAction(hash<DataProviderActionInfo> action,
             *reference<hash<auto>> options) {
-        if (resolve_output_types) {
-            DataProviderActionCatalog::resolveOutputTypes();
-        }
         # load the module into this program's context so Class::forName() can resolve the class;
         # load_module() in ProviderIndexUtil loads into ProviderIndexUtil's program context,
         # but Class::forName() resolves in the calling program's context
@@ -3381,6 +3458,8 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
         @return All actions that match the regular expression pattern in the \c short_desc or \c desc fields
 
         @note If the application does not exist, no results are returned
+        @throw ACTION-OUTPUT-TYPE-ERROR the output type of an action returned cannot be built; see
+        @ref dataprovider_deferred_output_types
     */
     static *list<hash<DataProviderActionInfo>> searchAppActionRegex(string app, string regex_pattern,
             int regex_options = RE_Caseless) {
@@ -3393,8 +3472,8 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
         }
         # initialize any pending actions for the app
         map (map DataProviderActionCatalog::doInit($1), $1.iterator()), remove initactionmap{app};
-        if (resolve_output_types) {
-            DataProviderActionCatalog::resolveOutputTypes();
+        if (exists resolve_output_types{app}) {
+            DataProviderActionCatalog::resolveOutputTypes(app, NOTHING, True);
         }
         return map $1, app_actionmap{app}.values(),
             regex($1.short_desc, regex_pattern, regex_options) || regex($1.desc, regex_pattern, regex_options);
@@ -3408,6 +3487,8 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
         @return All actions that match the substring argument in the \c short_desc or \c desc fields
 
         @note If the application does not exist, no results are returned
+        @throw ACTION-OUTPUT-TYPE-ERROR the output type of an action returned cannot be built; see
+        @ref dataprovider_deferred_output_types
     */
     static *list<hash<DataProviderActionInfo>> searchAppActionSubstr(string app, string substr,
             bool ignore_case = True) {
@@ -3420,8 +3501,8 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
         }
         # initialize any pending actions for the app
         map (map DataProviderActionCatalog::doInit($1), $1.iterator()), remove initactionmap{app};
-        if (resolve_output_types) {
-            DataProviderActionCatalog::resolveOutputTypes();
+        if (exists resolve_output_types{app}) {
+            DataProviderActionCatalog::resolveOutputTypes(app, NOTHING, True);
         }
         if (ignore_case) {
             substr = substr.upr();
@@ -3441,6 +3522,8 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
         @throw APP-ERROR the given application is not registered
 
         @note If the application does not exist, an exception is thrown
+        @throw ACTION-OUTPUT-TYPE-ERROR the output type of an action returned cannot be built; see
+        @ref dataprovider_deferred_output_types
     */
     static *list<hash<DataProviderActionInfo>> searchAppActionRegexEx(string app, string regex_pattern,
             int regex_options = RE_Caseless) {
@@ -3453,8 +3536,8 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
         }
         # initialize any pending actions for the app
         map (map DataProviderActionCatalog::doInit($1), $1.iterator()), remove initactionmap{app};
-        if (resolve_output_types) {
-            DataProviderActionCatalog::resolveOutputTypes();
+        if (exists resolve_output_types{app}) {
+            DataProviderActionCatalog::resolveOutputTypes(app, NOTHING, True);
         }
         *hash<string, hash<DataProviderActionInfo>> appmap = app_actionmap{app};
         if (!appmap) {
@@ -3474,6 +3557,8 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
         @throw APP-ERROR the given application is not registered
 
         @note If the application does not exist, an exception is thrown
+        @throw ACTION-OUTPUT-TYPE-ERROR the output type of an action returned cannot be built; see
+        @ref dataprovider_deferred_output_types
     */
     static *list<hash<DataProviderActionInfo>> searchAppActionSubstrEx(string app, string substr,
             bool ignore_case = True) {
@@ -3486,8 +3571,8 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
         }
         # initialize any pending actions for the app
         map (map DataProviderActionCatalog::doInit($1), $1.iterator()), remove initactionmap{app};
-        if (resolve_output_types) {
-            DataProviderActionCatalog::resolveOutputTypes();
+        if (exists resolve_output_types{app}) {
+            DataProviderActionCatalog::resolveOutputTypes(app, NOTHING, True);
         }
         *hash<string, hash<DataProviderActionInfo>> appmap = app_actionmap{app};
         if (!appmap) {
@@ -3506,6 +3591,8 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
         @param regex_options Regular expression options; a case-insensitive match is performed by default
 
         @return All actions that match the regular expression pattern in the \c short_desc or \c desc fields
+        @note an output type whose callback failed is not attempted again, and its action is returned with
+        \c get_output_type and no \c output_type; see @ref dataprovider_deferred_output_types
     */
     static *list<hash<DataProviderActionInfo>> searchActionRegex(string regex_pattern,
             int regex_options = RE_Caseless) {
@@ -3521,6 +3608,8 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
         @param ignore_case Ignore case when searching
 
         @return All actions that match the substring argument in the \c short_desc or \c desc fields
+        @note an output type whose callback failed is not attempted again, and its action is returned with
+        \c get_output_type and no \c output_type; see @ref dataprovider_deferred_output_types
     */
     static *list<hash<DataProviderActionInfo>> searchActionSubstr(string substr, bool ignore_case = True) {
         if (resolve_output_types) {
@@ -3861,80 +3950,170 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
         return path == "/" ? path : "/" + path;
     }
 
-    #! Resolves output types in actions
-    private static resolveOutputTypes() {
-        list<hash<auto>> pending;
-        {
-            AutoLock al(lck);
-            foreach hash<auto> i in ((remove resolve_output_types).pairIterator()) {
-                foreach hash<auto> j in (i.value.pairIterator()) {
-                    string key = sprintf("%s/%s", i.key, j.key);
-                    *hash<DataProviderActionInfo> top_action =
-                        top_actionmap{key};
-                    *hash<DataProviderActionInfo> app_action =
-                        app_actionmap{i.key}{j.key};
-                    if (!top_action || !app_action
-                            || !top_action.get_output_type) {
+    #! Resolves the deferred output types of the actions in scope
+    /** @param scope_apps the applications whose actions are resolved; every application when omitted
+        @param scope_action the one action of the application in @p scope_apps that is resolved; every action of
+        the applications when omitted
+        @param scoped @ref True if the caller returns exactly the actions in scope: an output type whose callback
+        failed before is attempted again, and a failure throws an \c ACTION-OUTPUT-TYPE-ERROR exception once every
+        action in scope has been attempted; @ref False for a getter returning every action, which runs only
+        callbacks that have not run yet and records their failures without throwing
+
+        A failure is retained like a failed deferred action initialization: it is returned by
+        @ref getInitializationFailures() and reported by a discovery generation, until the output type is resolved
+        or the action is registered again.  A failure that repeats the retained one does not change the catalog
+        revision, so retrying it does not invalidate a discovery snapshot.
+
+        @throw ACTION-OUTPUT-TYPE-ERROR (only if @p scoped is @ref True) the output type of an action in scope cannot
+        be built; the exception argument is the list of the failures (hash<DataProviderInitializationFailureInfo>)
+    */
+    private static resolveOutputTypes(*softlist<string> scope_apps, *string scope_action, bool scoped = False) {
+        hash<string, bool> app_filter = scope_apps ? map {$1: True}, scope_apps.iterator() : {};
+        # identities attempted by this call, so a callback that registers further actions is attempted once
+        hash<string, bool> attempted = {};
+        list<hash<DataProviderInitializationFailureInfo>> failures = ();
+        while (True) {
+            list<hash<auto>> pending = ();
+            {
+                AutoLock al(lck);
+                foreach hash<auto> i in (resolve_output_types.pairIterator()) {
+                    if (scope_apps && !app_filter{i.key}) {
                         continue;
                     }
-                    pending += {
-                        "app": i.key,
-                        "action": j.key,
-                        "get_output_type": top_action.get_output_type,
-                    };
-                }
-            }
-        }
-
-        # Output-type callbacks can lazily load provider modules whose
-        # initializers register apps or actions.  Never hold the catalog mutex
-        # while invoking them.
-        list<hash<auto>> resolved;
-        foreach hash<auto> item in (pending) {
-            try {
-                item.output_type = item.get_output_type();
-                resolved += item;
-            } catch (hash<ExceptionInfo> ex) {
-                # ignore exceptions
-            }
-        }
-
-        {
-            AutoLock al(lck);
-            foreach hash<auto> item in (resolved) {
-                string key = sprintf("%s/%s", item.app, item.action);
-                *hash<DataProviderActionInfo> top_action = top_actionmap{key};
-                *hash<DataProviderActionInfo> app_action =
-                    app_actionmap{item.app}{item.action};
-                # Do not publish a result into an action that was removed and
-                # replaced while its callback ran.
-                if (!top_action || !app_action
-                        || top_action.get_output_type
-                            != item.get_output_type) {
-                    continue;
-                }
-                top_action.output_type = item.output_type;
-                app_action.output_type = item.output_type;
-                remove top_action.get_output_type;
-                remove app_action.get_output_type;
-                top_actionmap{key} = top_action;
-                app_actionmap{item.app}{item.action} = app_action;
-                ++catalog_revision;
-                if (*string scheme = appcache{item.app}.scheme) {
-                    *list<hash<DataProviderActionInfo>> actions = smap{scheme};
-                    if (actions) {
-                        for (int idx = 0; idx < actions.size(); ++idx) {
-                            if (actions[idx].app == item.app
-                                    && actions[idx].action == item.action) {
-                                actions[idx] = app_action;
-                                smap{scheme} = actions;
-                                break;
-                            }
+                    foreach hash<auto> j in (i.value.pairIterator()) {
+                        if (scope_action && j.key != scope_action) {
+                            continue;
                         }
+                        # a callback that failed is called again only for a caller that asked for its action
+                        if (!j.value && !scoped) {
+                            continue;
+                        }
+                        string key = i.key + "/" + j.key;
+                        if (attempted{key}) {
+                            continue;
+                        }
+                        attempted{key} = True;
+                        *code get_output_type = app_actionmap{i.key}{j.key}.get_output_type;
+                        if (!get_output_type || !top_actionmap{key}) {
+                            continue;
+                        }
+                        pending += {
+                            "app": i.key,
+                            "action": j.key,
+                            "get_output_type": get_output_type,
+                        };
+                    }
+                }
+            }
+            if (!pending) {
+                break;
+            }
+
+            # Output-type callbacks can lazily load provider modules whose initializers register apps or actions.
+            # Never hold the catalog mutex while invoking them.  Two threads asking for the same action both call
+            # its callback; the first result is published and the second finds the action resolved.
+            list<hash<auto>> results = ();
+            foreach hash<auto> item in (pending) {
+                try {
+                    item.output_type = item.get_output_type();
+                } catch (hash<ExceptionInfo> ex) {
+                    item.ex = ex;
+                }
+                results += item;
+            }
+
+            AutoLock al(lck);
+            foreach hash<auto> item in (results) {
+                if (item.ex) {
+                    if (*hash<DataProviderInitializationFailureInfo> failure
+                            = DataProviderActionCatalog::recordOutputTypeFailure(item.app, item.action,
+                                item.get_output_type, item.ex)) {
+                        failures += failure;
+                    }
+                } else {
+                    DataProviderActionCatalog::publishOutputType(item.app, item.action, item.get_output_type,
+                        item.output_type);
+                }
+            }
+        }
+
+        if (scoped && failures) {
+            hash<DataProviderInitializationFailureInfo> failure = failures[0];
+            throw "ACTION-OUTPUT-TYPE-ERROR", sprintf("the output type of action %y of application %y cannot be "
+                "built: %s: %s%s", failure.action, failure.app, failure.error, failure.description,
+                failures.size() > 1
+                    ? sprintf(" (the output types of %d other action(s) cannot be built either: %y)",
+                        failures.size() - 1, (map $1.app + "/" + $1.action, failures[1..]))
+                    : ""), failures;
+        }
+    }
+
+    #! Publishes a resolved output type; the catalog lock must be held
+    /** Nothing is published into an action that was resolved, removed or replaced while its callback ran.
+    */
+    private static publishOutputType(string app, string action, code get_output_type,
+            *AbstractDataProviderType output_type) {
+        string key = app + "/" + action;
+        *hash<DataProviderActionInfo> top_action = top_actionmap{key};
+        *hash<DataProviderActionInfo> app_action = app_actionmap{app}{action};
+        if (!top_action || !app_action || top_action.get_output_type != get_output_type) {
+            return;
+        }
+        top_action.output_type = output_type;
+        app_action.output_type = output_type;
+        remove top_action.get_output_type;
+        remove app_action.get_output_type;
+        top_actionmap{key} = top_action;
+        app_actionmap{app}{action} = app_action;
+        remove resolve_output_types{app}{action};
+        if (!resolve_output_types{app}) {
+            remove resolve_output_types{app};
+        }
+        resolved_output_type_callbacks{app}{action} = get_output_type;
+        ++catalog_revision;
+        if (*string scheme = appcache{app}.scheme) {
+            *list<hash<DataProviderActionInfo>> actions = smap{scheme};
+            if (actions) {
+                for (int idx = 0; idx < actions.size(); ++idx) {
+                    if (actions[idx].app == app && actions[idx].action == action) {
+                        actions[idx] = app_action;
+                        smap{scheme} = actions;
+                        break;
                     }
                 }
             }
         }
+        # a failure retained from an earlier attempt no longer applies
+        DataProviderActionCatalog::clearSuccessfulInitializationState(app, action);
+    }
+
+    #! Retains the failure of an output-type callback; the catalog lock must be held
+    /** @return the failure retained, or @ref nothing if the action was resolved, removed or replaced while its
+        callback ran, in which case the failure no longer describes the action
+    */
+    private static *hash<DataProviderInitializationFailureInfo> recordOutputTypeFailure(string app, string action,
+            code get_output_type, hash<ExceptionInfo> ex) {
+        *hash<DataProviderActionInfo> app_action = app_actionmap{app}{action};
+        if (!app_action || app_action.get_output_type != get_output_type) {
+            return;
+        }
+        *list<string> owners = actionmodmap{app}{action} ? sort(keys actionmodmap{app}{action}) : NOTHING;
+        hash<DataProviderInitializationFailureInfo> failure = <DataProviderInitializationFailureInfo>{
+            "kind": "action",
+            "app": app,
+            "action": action,
+            "error": ex.err,
+            "description": ex.desc,
+            "argument": ex.arg,
+            "module_context": owners ? owners[0] : NOTHING,
+        };
+        resolve_output_types{app}{action} = False;
+        # a retry that fails the same way changes nothing a discovery generation can observe
+        if (initialization_failure_map{app}{action} != failure) {
+            initialization_failure_map{app}{action} = failure;
+            ++catalog_revision;
+        }
+        return failure;
     }
 
     #! Deregisters an app and all its actions if an exception occurs during the other module's initialization
@@ -3964,6 +4143,7 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
         remove initialization_failure_map{name};
         remove expected_initialization_map{name};
         remove resolve_output_types{name};
+        remove resolved_output_type_callbacks{name};
         remove appmodmap{name};
         remove actionmodmap{name};
         remove pending_generic_api_call_apps{name};

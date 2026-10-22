@@ -447,7 +447,7 @@ public class Cin7CoreDataProviderTest inherits QUnit::Test {
             "logger": new Logger("server", LoggerLevel::getLevelError()),
         });
         on_exit server.stop();
-        int port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
         FakeCin7CoreHandler handler();
         server.setHandler("cin7core", "", NOTHING, handler);
         server.setDefaultHandler("cin7core", handler);

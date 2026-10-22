@@ -270,6 +270,25 @@ public:
     DLLEXPORT QoreValue evalFunction(const QoreExternalVariant* variant, const QoreListNode* args, QoreProgram* pgm,
             ExceptionSink* xsink) const;
 
+    //! evaluates the function on behalf of a caller captured at a reflection entry point
+    /** The functional domain of the variant called - the given one, or the one selected for the arguments - must be
+        allowed both by the caller and by \a pgm (see QoreReflectionCaller); the function body then runs in \a pgm
+        with its own parse options, as in a call from code in \a pgm.
+
+        @param variant the variant to call, or nullptr to select it for the arguments
+        @param args the arguments
+        @param pgm the Program where the function is defined
+        @param caller the code calling the function
+        @param xsink raises \c INVALID-FUNCTION-ACCESS if the caller or \a pgm does not allow the variant's
+        functional domain
+
+        @note Do not use this function with class methods
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT QoreValue evalFunction(const QoreExternalVariant* variant, const QoreListNode* args, QoreProgram* pgm,
+            const class QoreReflectionCaller& caller, ExceptionSink* xsink) const;
+
     //! returns the first declared variant in the variant list
     DLLEXPORT const QoreExternalVariant* getFirstVariant() const;
 
@@ -538,5 +557,125 @@ DLLEXPORT bool qore_type_is_union(const QoreTypeInfo* ti);
     @since %Qore 2.1
 */
 DLLEXPORT type_vec_t* qore_type_get_union_member_types(const QoreTypeInfo* ti);
+
+//! Returns true if code running with the given parse options may use code in the given functional domain
+/** This is the rule the parser applies to a builtin function, method or class named in source code: the parse
+    options must not restrict a domain they can restrict (for example \c FILESYSTEM is restricted by
+    \c PO_NO_FILESYSTEM), and they must allow every domain that has to be allowed explicitly (for example
+    \c DEBUGGER, allowed by \c PO_ALLOW_DEBUGGER).
+
+    @param po the parse options of the code
+    @param domain the functional domain bits (\c QDOM_*)
+
+    @since %Qore 3.0
+*/
+DLLEXPORT bool qore_parse_options_allow_domain(const QoreParseOptions& po, int64 domain);
+
+//! Returns the namespace in a Program's namespace tree that corresponds to a namespace, or nullptr if there is none
+/** A class, typed hash or enum declared in one Program and inherited by or imported into another keeps referring
+    to the namespace where it was declared, which belongs to the declaring Program (or to the system namespace).
+    Navigation from such a symbol reached in \a pgm must stay in \a pgm's namespace tree: this function returns
+    \a ns itself if it belongs to \a pgm's tree, otherwise the namespace with the same path in \a pgm's tree, or
+    nullptr if \a pgm has no namespace with that path.
+
+    @since %Qore 3.0
+*/
+DLLEXPORT const QoreNamespace* qore_program_find_namespace(const QoreProgram& pgm, const QoreNamespace& ns);
+
+//! The privileges of code that enters a reflection API, captured before the API switches to the target's Program
+/** Reflection APIs call, read, write and navigate code and data that may belong to another Program than the
+    calling code's.  Every such entry point captures the caller first and then checks:
+    - a call: the functional domain of the code called (builtin function or method variant, or the class of a
+      constructor, copy method, destructor or method) must be allowed by the caller and by the target Program
+      (allowsDomain()); a variant selected at run time is checked with QoreReflectionCallCheckHelper or the
+      QoreExternalFunction::evalFunction() variant that takes the caller
+    - reading or writing a class's members or constants: the class's functional domain is checked in the same way
+    - navigation and value access in another Program (checkProgramAccess()): allowed from that Program, from a
+      Program that created it (directly or through Programs it created), or when the caller is at least as
+      privileged as that Program
+
+    See design/reflection-caller-privilege.md.
+
+    @since %Qore 3.0
+*/
+class DLLEXPORT QoreReflectionCaller {
+public:
+    //! Captures the Program, runtime parse options and governing sandbox manager of the current thread
+    DLLEXPORT QoreReflectionCaller();
+
+    //! Releases the captured sandbox manager reference
+    DLLEXPORT ~QoreReflectionCaller();
+
+    //! Returns the Program that the calling code runs in, or nullptr if the thread has no Program
+    DLLEXPORT QoreProgram* getProgram() const;
+
+    //! Returns the runtime parse options of the calling code
+    DLLEXPORT QoreParseOptions getParseOptions() const;
+
+    //! Returns true if both the caller and the target Program allow a functional domain
+    /** @param domain the functional domain bits (\c QDOM_*)
+        @param target the Program the code belongs to, or nullptr for code in no Program
+        @param caller_refused if non-null, set to true if the caller's restrictions refuse the domain, false if only
+        the target Program's restrictions do (only meaningful when the function returns false)
+    */
+    DLLEXPORT bool allowsDomain(int64 domain, const QoreProgram* target, bool* caller_refused = nullptr) const;
+
+    //! Returns the runtime parse-option override that forces the caller's restrictions through a call
+    /** The mask covers every functional domain the caller restricts and every explicitly-allowed domain the caller
+        lacks; the value restricts the former and leaves the latter unallowed.  Applied as a runtime override
+        (QoreReflectionCallCheckHelper) so it survives the Program-context switch a method call makes, the caller's
+        restrictions are enforced on the call and its body on top of the target Program's own options.
+
+        @param mask set to the override mask
+        @param value set to the override value
+    */
+    DLLEXPORT void getCallRestrictionOverride(QoreParseOptions& mask, QoreParseOptions& value) const;
+
+    //! Checks that the caller may navigate and read or write values in the target Program
+    /** Allowed when the caller runs in the target Program, when the caller's Program created the target (directly
+        or through Programs it created), or when the caller is at least as privileged as the target: its runtime
+        parse options restrict no functional domain that the target allows, allow every domain that the target
+        allows explicitly, and no sandbox manager governs the caller other than the target's own.
+
+        @param target the Program to navigate; nullptr is always allowed
+        @param what a description of the access for the error message, e.g. "navigate the namespaces of"
+        @param xsink raises \c REFLECTION-ACCESS-ERROR if the access is not allowed
+
+        @return 0 if allowed, -1 if an exception was raised
+    */
+    DLLEXPORT int checkProgramAccess(const QoreProgram* target, const char* what, ExceptionSink* xsink) const;
+
+private:
+    QoreProgram* pgm;
+    unsigned pgm_id;
+    QoreParseOptions po;
+    //! the sandbox manager that governs the caller (referenced), or nullptr
+    class QoreSandboxManager* sm;
+
+    QoreReflectionCaller(const QoreReflectionCaller&) = delete;
+    QoreReflectionCaller& operator=(const QoreReflectionCaller&) = delete;
+};
+
+//! Checks a variant selected at run time against the caller and the target Program while the object exists
+/** While the object exists, the runtime parse options of the current thread are the caller's
+    restriction override (QoreReflectionCaller::getCallRestrictionOverride()), so the functional domain of a builtin method variant selected for
+    the arguments of a call made through reflection is checked against the caller and the target Program.
+
+    @since %Qore 3.0
+*/
+class DLLEXPORT QoreReflectionCallCheckHelper {
+public:
+    //! Sets the runtime parse options for checking a call into \a target on behalf of \a caller
+    DLLEXPORT QoreReflectionCallCheckHelper(const QoreReflectionCaller& caller, const QoreProgram* target);
+
+    //! Restores the runtime parse options
+    DLLEXPORT ~QoreReflectionCallCheckHelper();
+
+private:
+    void* priv = nullptr;
+
+    QoreReflectionCallCheckHelper(const QoreReflectionCallCheckHelper&) = delete;
+    QoreReflectionCallCheckHelper& operator=(const QoreReflectionCallCheckHelper&) = delete;
+};
 
 #endif

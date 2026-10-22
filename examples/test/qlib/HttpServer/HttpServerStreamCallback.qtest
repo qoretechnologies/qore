@@ -675,6 +675,7 @@ class HttpServerStreamCallbackTest inherits QUnit::Test {
 
         # HTTPS listener for HTTP/2 (ALPN negotiation requires TLS)
         mSslPort = mServer.addListener(<HttpListenerOptionInfo>{
+            "node": "localhost",
             "service": 0,
             "cert": new SSLCertificate(CertPem),
             "key": new SSLPrivateKey(KeyPem),
@@ -683,6 +684,7 @@ class HttpServerStreamCallbackTest inherits QUnit::Test {
 
         # Plain HTTP listener for HTTP/1.x tests
         mPlainPort = mServer.addListener(<HttpListenerOptionInfo>{
+            "node": "localhost",
             "service": 0,
         }).port;
         mPlainUrl = "http://localhost:" + mPlainPort;

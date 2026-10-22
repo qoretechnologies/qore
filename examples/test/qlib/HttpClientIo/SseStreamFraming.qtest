@@ -1,0 +1,168 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+#
+# A server-sent event stream is framed as the WHATWG HTML event stream format requires, by every reader: one leading
+# byte order mark (U+FEFF) is ignored, and a blank line ends an event whatever the line endings are: a line can end
+# with CRLF, LF or CR, so a blank line can follow a line with another ending (for example LF, then CRLF).  Before,
+# the leading byte order mark was read as part of the first field name, so the first field was ignored, and the
+# readers that searched for "\r\n\r\n", "\n\n" or "\r\r" did not end an event at a blank line after a line with
+# another ending.  The readers are Socket::readServerSentEvent(), HTTPClient::readServerSentEvent(), the SSE queue of
+# an HTTP/1.1 client stream (HttpClientStreamHandle::startSseStreaming()) and HttpClientStreamingIo::SseStreamReader.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Mime
+%requires Logger
+%requires QUnit
+%requires AsyncSocketIo
+%requires HttpClientIo
+%requires HttpClientStreamingIo
+
+%exec-class SseStreamFramingTest
+
+class SseStreamFramingTest inherits QUnit::Test {
+    public {
+        #! the data of the events in Stream that have data
+        const Data = ("a", "b", "c", "d", "e", "g");
+    }
+
+    private {
+        #! the stream: a byte order mark, then events that end with each blank line after each line ending; the byte
+        #! order mark before "f" is not at the start of the stream, so it is part of the field name, which is ignored
+        binary stream = <efbbbf> + binary("data: a\n\r\ndata: b\r\n\rdata: c\r\r\ndata: d\n\rdata: e\r\n\n")
+            + <efbbbf> + binary("data: f\n\ndata: g\n\n");
+        Socket server();
+        int port;
+    }
+
+    constructor() : Test("SseStreamFraming", "1.0") {
+        server.bind("127.0.0.1:0");
+        server.listen();
+        port = server.getSocketInfo().port;
+
+        addTestCase("Socket::readServerSentEvent()", \socketReader());
+        addTestCase("HTTPClient::readServerSentEvent()", \httpClientReader());
+        addTestCase("HTTP/1.1 client stream SSE queue", \sseQueueReader());
+        addTestCase("SseStreamReader", \sseStreamReader());
+        set_return_value(main());
+    }
+
+    #! serves one connection: reads an HTTP request if http is True and sends the stream in pieces
+    /** The stream is sent in pieces that split CRLF pairs and the byte order mark, so that the readers keep their
+        state across the data received
+    */
+    private Counter serve(bool http) {
+        Counter done(1);
+        background sub () {
+            on_exit done.dec();
+            Socket s = server.accept(30s);
+            on_exit s.close();
+            list<binary> pieces = (stream.substr(0, 2), stream.substr(2, 10), stream.substr(12, 3),
+                stream.substr(15));
+            if (!http) {
+                map s.send($1), pieces;
+                s.shutdown();
+                return;
+            }
+            s.readHTTPHeader(30s);
+            s.send("HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nTransfer-Encoding: chunked\r\n\r\n");
+            foreach binary piece in (pieces) {
+                s.send(sprintf("%x\r\n", piece.size()));
+                s.send(piece);
+                s.send("\r\n");
+            }
+            s.send("0\r\n\r\n");
+            # waits for the client to close the connection
+            try {
+                s.recv(1, 30s);
+            } catch (hash<ExceptionInfo> ex) {
+            }
+        }();
+        return done;
+    }
+
+    #! returns the data of the events that have data
+    static list<string> getData(list<hash<auto>> events) {
+        return map $1.data, events, exists $1.data;
+    }
+
+    socketReader() {
+        Counter served = serve(False);
+        on_exit served.waitForZero(30s);
+        Socket s();
+        s.connect("127.0.0.1:" + port, 30s);
+        on_exit s.close();
+        list<hash<auto>> events = ();
+        try {
+            while (True) {
+                push events, s.readServerSentEvent(NOTHING, 30s);
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err != "SOCKET-CLOSED") {
+                rethrow;
+            }
+        }
+        assertEq(Data, SseStreamFramingTest::getData(events));
+    }
+
+    httpClientReader() {
+        Counter served = serve(True);
+        on_exit served.waitForZero(30s);
+        HTTPClient hc({"url": "http://127.0.0.1:" + port, "timeout": 30s});
+        on_exit hc.disconnect();
+        hash<auto> info;
+        hash<auto> resp = hc.sendAndStream("GET", "/", NOTHING, {"Accept": MimeTypeSse}, \info);
+        assertEq(200, resp.status_code);
+        list<hash<auto>> events = ();
+        while (*hash<SseMessageInfo> evt = hc.readServerSentEvent()) {
+            push events, evt;
+        }
+        assertEq(Data, SseStreamFramingTest::getData(events));
+    }
+
+    sseQueueReader() {
+        Counter served = serve(True);
+        on_exit served.waitForZero(30s);
+        HttpClientIo::HttpClientConnectionManager mgr();
+        HttpClientIo::HttpClientStreamHandle stream = mgr.acquireStream("http://127.0.0.1:" + port);
+        on_exit {
+            try {
+                stream.cancel();
+            } catch (hash<ExceptionInfo> ex) {
+            }
+        }
+        Queue queue = stream.startSseStreaming("GET", "/", {"Accept": MimeTypeSse}, NOTHING);
+        list<hash<auto>> events = ();
+        while (exists (auto evt = queue.get(30s))) {
+            # an error is a plain hash with "err" and "desc" keys
+            if (evt.hasKey("err")) {
+                throw evt.err, evt.desc;
+            }
+            push events, evt;
+        }
+        assertEq(Data, SseStreamFramingTest::getData(events));
+    }
+
+    sseStreamReader() {
+        Counter served = serve(True);
+        on_exit served.waitForZero(30s);
+        HttpClientIo::HttpClientConnectionManager mgr();
+        HttpClientIo::HttpClientStreamHandle stream = mgr.acquireAndStartStreaming("http://127.0.0.1:" + port, "GET",
+            "/", {"Accept": MimeTypeSse});
+        on_exit {
+            try {
+                stream.cancel();
+            } catch (hash<ExceptionInfo> ex) {
+            }
+        }
+        HttpClientStreamingIo::SseStreamReader reader(stream);
+        list<hash<auto>> events = ();
+        while (*hash<SseMessageInfo> evt = reader.readEvent(30s)) {
+            push events, evt;
+        }
+        assertTrue(reader.isDone());
+        assertEq(Data, SseStreamFramingTest::getData(events));
+    }
+}

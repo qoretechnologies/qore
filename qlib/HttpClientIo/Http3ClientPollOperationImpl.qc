@@ -577,14 +577,24 @@ public class Http3ClientPollOperation inherits Http3ClientPollOperationBase, Htt
         log(LoggerLevel::DEBUG, "cancelled request: stream_id=%d", stream_id);
     }
 
-    #! Initiates QUIC connection migration to a new network path
-    migrate() {
+    #! Requests a QUIC connection migration to a new network path
+    /** The I/O thread runs the migration in its next read cycle; wake the socket on the controller and wait for the
+        result with @ref Qore::Http3ClientPollOperationBase::waitForMigration() "waitForMigration()"; see
+        @ref Http3ClientConnection::migrate()
+
+        @return the ID of the request
+
+        @throw HTTP3-STATE-ERROR the connection is not ready
+        @throw HTTP3-CONNECTION-CLOSED the connection is closed
+
+    */
+    int migrate() {
         if (!self.isReady()) {
             throw "HTTP3-STATE-ERROR", sprintf("cannot migrate in state: %y", self.getState());
         }
 
         log(LoggerLevel::DEBUG, "requesting QUIC connection migration");
-        self.setMigrationPending();
+        return self.requestMigration();
     }
 
     #! Internal: creates and configures the UDP socket of a QUIC connection

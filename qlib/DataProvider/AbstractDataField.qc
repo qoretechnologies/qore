@@ -393,22 +393,34 @@ public class AbstractDataField inherits Qore::Serializable {
     }
 
     #! Sets allowed values for enum types
+    /** @param allowed_values raw values or AllowedValueInfo records
+        @param allowed_values_creatable whether values outside the allowed values are accepted
+        @return this field
+        @throw RUNTIME-TYPE-ERROR an allowed value cannot be converted to the field's type, or a string allowed value
+        contains a NUL character, which cannot be a key of the set of allowed values
+        @note A refused list leaves the previous allowed values unchanged.
+    */
     AbstractDataField setAllowedValues(list<auto> allowed_values, *bool allowed_values_creatable) {
         AbstractDataProviderType type = getType();
+        list<hash<AllowedValueInfo>> resolved;
         if (allowed_values[0] instanceof hash<AllowedValueInfo>) {
-            self.allowed_values = allowed_values;
+            resolved = allowed_values;
         } else if (allowed_values[0].typeCode() == NT_HASH && allowed_values[0].hasKey("value")
             && type.getBaseTypeCode() != NT_HASH) {
-            self.allowed_values = map cast<hash<AllowedValueInfo>>($1), allowed_values;
+            resolved = map cast<hash<AllowedValueInfo>>($1), allowed_values;
         } else {
-            self.allowed_values = map <AllowedValueInfo>{
+            resolved = map <AllowedValueInfo>{
                 "display_name": $1.toString(),
                 "value": $1,
             }, allowed_values;
         }
         on_error rethrow $1.err, sprintf("%s (allowed_values: %y)", $1.desc, allowed_values);
         # check that the value can be assigned to the type
-        map self.allowed_values[$#].value = type.acceptsValue($1.value), self.allowed_values.iterator();
+        map resolved[$#].value = type.acceptsValue($1.value), resolved.iterator();
+        if (!allowed_values_creatable) {
+            DataProviderAllowedValueKeys::check(resolved);
+        }
+        self.allowed_values = resolved;
         if (allowed_values_creatable) {
             self.allowed_values_creatable = True;
         } else {
@@ -422,7 +434,8 @@ public class AbstractDataField inherits Qore::Serializable {
     /** @param element_allowed_values raw values or AllowedValueInfo records; an empty list clears choices
         @param element_allowed_values_creatable whether values outside the choices are accepted
         @return this field
-        @throw RUNTIME-TYPE-ERROR a choice cannot be converted to the list element type
+        @throw RUNTIME-TYPE-ERROR a choice cannot be converted to the list element type, or a string choice contains a
+        NUL character, which cannot be a key of the set of choices
         @note Failed conversion leaves the previous choices and membership rules unchanged.
         @par Example
         A currency list with choices \c ("EUR", "USD") accepts \c ("EUR", "EUR") and rejects \c ("GBP",).
@@ -458,6 +471,7 @@ public class AbstractDataField inherits Qore::Serializable {
                 }
             }
             if (hashable) {
+                DataProviderAllowedValueKeys::check(resolved);
                 membership = map {$1.value: True}, resolved;
             }
         }
@@ -532,14 +546,14 @@ public class AbstractDataField inherits Qore::Serializable {
             # first do any value / type filtering / conversions
             value = getType().acceptsValue(value);
             if (allowed_values && !allowed_values_creatable) {
-                if (!allowed_values_map{value}) {
+                if (!DataProviderAllowedValueKeys::contains(allowed_values_map, value)) {
                     throw "FIELD-VALUE-ERROR", sprintf("field %y does not accept value %y; allowed values: %y",
                         getName(), value, (map $1.value, allowed_values));
                 }
             }
             if (element_allowed_values_map) {
                 foreach auto v in (value) {
-                    if (!element_allowed_values_map{v}) {
+                    if (!DataProviderAllowedValueKeys::contains(element_allowed_values_map, v)) {
                         throw "FIELD-VALUE-ERROR", sprintf("field %y does not accept value %y; allowed "
                             "values for elements: %y", getName(), v, (map $1.value, element_allowed_values));
                     }
@@ -1329,5 +1343,29 @@ public class AbstractDataField inherits Qore::Serializable {
 
     #! returns the type of the field
     abstract AbstractDataProviderType getType();
+}
+}
+
+# Private namespace
+namespace Priv {
+# allowed values are kept as a set of hash keys, which cannot contain a NUL character
+class DataProviderAllowedValueKeys {
+    # refuses a choice that is a string with a NUL character, which cannot be a key of the set
+    static check(list<hash<AllowedValueInfo>> choices) {
+        foreach hash<AllowedValueInfo> choice in (choices) {
+            if (choice.value.typeCode() == NT_STRING && choice.value.contains(chr(0))) {
+                throw "RUNTIME-TYPE-ERROR", sprintf("allowed value \"%s\" contains a NUL character",
+                    replace(choice.value, chr(0), "\\x00"));
+            }
+        }
+    }
+
+    # returns True if the value is in the set; a string with a NUL character is in none
+    static bool contains(*hash<string, bool> set, auto value) {
+        if (value.typeCode() == NT_STRING && value.contains(chr(0))) {
+            return False;
+        }
+        return set{value} ?? False;
+    }
 }
 }

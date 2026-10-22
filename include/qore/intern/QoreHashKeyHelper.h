@@ -194,6 +194,9 @@ public:
     */
     DLLLOCAL static QoreStringNode* getNulKeyDesc(const char* key, size_t len);
 
+    //! appends the key, escaped and with at most its first 64 characters, to the string
+    DLLLOCAL static void concatEscapedKey(QoreString& str, const char* key, size_t len);
+
 private:
     //! the key in the default encoding
     const char* key = "";

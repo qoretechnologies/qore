@@ -421,7 +421,7 @@ public class ShippoDataProviderTest inherits QUnit::Test {
             "logger": new Logger("server", LoggerLevel::getLevelError()),
         });
         on_exit server.stop();
-        int port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
         FakeShippoHandler handler();
         server.setHandler("shippo", "", NOTHING, handler);
         server.setDefaultHandler("shippo", handler);

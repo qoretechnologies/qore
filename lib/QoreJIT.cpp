@@ -663,7 +663,7 @@ bool qore_ir_fast_entry_param_is_private(
     if (ir_func.ir_only_locals.count(key)) {
         return true;
     }
-    if (std::getenv("QORE_DISABLE_UNUSED_FAST_ENTRY_PARAMS")) {
+    if (q_env_is_set("QORE_DISABLE_UNUSED_FAST_ENTRY_PARAMS")) {
         return false;
     }
 
@@ -747,7 +747,7 @@ std::vector<uint8_t> qore_ir_get_fast_entry_param_rejects_nothing(
 BatchCalleeReturnKind qore_ir_get_fast_entry_return_kind(
         const AbstractQoreFunctionVariant* variant, bool never_returns_nothing,
         const QoreIRFunction* ir_func) {
-    if (!variant || !never_returns_nothing || std::getenv("QORE_DISABLE_NATIVE_FAST_RETURNS")) {
+    if (!variant || !never_returns_nothing || q_env_is_set("QORE_DISABLE_NATIVE_FAST_RETURNS")) {
         return BatchCalleeReturnKind::Boxed;
     }
     const AbstractFunctionSignature* sig
@@ -783,11 +783,13 @@ static llvm::Type* qore_jit_fast_entry_param_type(BatchCalleeParamKind kind,
 
 // Tiered compilation threshold defaults (overridable via QORE_IR_THRESHOLD / QORE_JIT_THRESHOLD env vars)
 uint64_t QoreJIT::ir_threshold = []() -> uint64_t {
-    const char* env = getenv("QORE_IR_THRESHOLD");
+    QoreEnvironmentValue env_holder("QORE_IR_THRESHOLD");
+    const char* env = env_holder.c_str();
     return env ? strtoull(env, nullptr, 10) : 100;
 }();
 uint64_t QoreJIT::jit_threshold = []() -> uint64_t {
-    const char* env = getenv("QORE_JIT_THRESHOLD");
+    QoreEnvironmentValue env_holder("QORE_JIT_THRESHOLD");
+    const char* env = env_holder.c_str();
     return env ? strtoull(env, nullptr, 10) : 1000;
 }();
 
@@ -800,7 +802,8 @@ int QoreJIT::getJITOptLevel() {
     int current = jit_opt_level.load(std::memory_order_acquire);
     if (current < 0) {
         constexpr int default_level = 3;
-        const char* env = getenv("QORE_JIT_OPT_LEVEL");
+        QoreEnvironmentValue env_holder("QORE_JIT_OPT_LEVEL");
+        const char* env = env_holder.c_str();
         // atoi() cannot tell "0" from an unparsable value, and 0 is in range, so a malformed or
         // empty value selected -O0 silently instead of falling back to the default
         int level = default_level;
@@ -884,7 +887,7 @@ static void optimizeModule(llvm::Module& module, int opt_level) {
     auto MPM = PB.buildPerModuleDefaultPipeline(llvm_opt);
     MPM.run(module, MAM);
     size_t pruned_calls = QoreIRToLLVM::pruneNoopDecrefs(module);
-    if (pruned_calls && getenv("QORE_IR_OPT_STATS")) {
+    if (pruned_calls && q_env_is_set("QORE_IR_OPT_STATS")) {
         fprintf(stderr, "IR-OPT-LLVM: pruned-noop-decrefs=%zu\n",
             pruned_calls);
     }
@@ -918,16 +921,29 @@ static void qore_jit_shutdown_at_exit() {
 // released late by shutdown() after normal qore_cleanup() has destroyed module Programs.  On a
 // direct exit(), only the compiler is stopped and the operating system reclaims the execution
 // engine after all process callbacks have finished.
+//
+// The object is created when the library is initialized (see init()), but the stop at process exit is still
+// registered on the first use of the JIT, so that it keeps its place in the teardown order.
+static QoreJIT* qore_jit_singleton = nullptr;
+//! true once the stop at process exit is registered
+static std::atomic<bool> qore_jit_atexit_registered{false};
+
+void QoreJIT::init() {
+    if (!qore_jit_singleton) {
+        qore_jit_singleton = new QoreJIT;
+    }
+}
+
 QoreJIT& QoreJIT::instance() {
-    static QoreJIT* jit = [] {
-        QoreJIT* rv = new QoreJIT;
+    assert(qore_jit_singleton);
+    if (!qore_jit_atexit_registered.load(std::memory_order_acquire)
+            && !qore_jit_atexit_registered.exchange(true, std::memory_order_acq_rel)) {
         if (atexit(qore_jit_shutdown_at_exit)) {
             printd(0, "QoreJIT::instance(): failed to register the atexit JIT shutdown handler; "
                 "the background compile thread will not be stopped before process exit\n");
         }
-        return rv;
-    }();
-    return *jit;
+    }
+    return *qore_jit_singleton;
 }
 
 bool QoreJIT::isEnabled() const {
@@ -1050,17 +1066,23 @@ bool QoreJIT::registerRuntimeSymbols(std::string& error) {
     return true;
 }
 
-bool QoreJIT::compileFunction(const QoreIRFunction& func, std::string& error,
-        void* deopt_counter) {
-    // Thread-safe initialization using std::call_once
-    std::call_once(init_flag, [this]() {
+bool QoreJIT::initializeLocked(std::string& error) {
+    // initialized under compile_mutex rather than with std::call_once(): a child process created with fork() while
+    // another thread was initializing the JIT would wait forever for the once flag (musl, macOS), while
+    // compile_mutex has a fork handler (see forkChild())
+    if (!init_done) {
         init_success = initialize(init_error);
-    });
+        init_done = true;
+    }
     if (!init_success) {
         error = init_error;
         return false;
     }
+    return true;
+}
 
+bool QoreJIT::compileFunction(const QoreIRFunction& func, std::string& error,
+        void* deopt_counter) {
     // Check if already compiled (fast path without compile lock)
     {
         std::lock_guard<std::mutex> lock(cache_mutex);
@@ -1075,11 +1097,14 @@ bool QoreJIT::compileFunction(const QoreIRFunction& func, std::string& error,
     // Serialize the entire compilation pipeline: LLVM's code generation (MCStreamer,
     // DWARF emission, debugger support) is not thread-safe for concurrent compilations.
     std::lock_guard<std::mutex> compile_lock(compile_mutex);
+    if (!initializeLocked(error)) {
+        return false;
+    }
 
     bool rc = compileFunctionInternal(func, error, deopt_counter);
     // synchronous compilations (top-level code with JIT execution) are traced like background ones, so that the
     // trace shows all native code
-    if (getenv("QORE_JIT_TIMING")) {
+    if (q_env_is_set("QORE_JIT_TIMING")) {
         if (rc) {
             fprintf(stderr, "[JIT] compiled '%s' synchronously\n", func_name.c_str());
         } else {
@@ -1091,12 +1116,7 @@ bool QoreJIT::compileFunction(const QoreIRFunction& func, std::string& error,
 
 bool QoreJIT::compileFunctionLocked(const QoreIRFunction& func, std::string& error,
         void* deopt_counter, const std::string* symbol_name) {
-    // Thread-safe initialization using std::call_once
-    std::call_once(init_flag, [this]() {
-        init_success = initialize(init_error);
-    });
-    if (!init_success) {
-        error = init_error;
+    if (!initializeLocked(error)) {
         return false;
     }
 
@@ -1127,7 +1147,7 @@ static bool jit_check_size_budget(const std::string& func_name, size_t instructi
     error = "function '" + func_name + "' is too large for native compilation ("
         + std::to_string(instruction_count) + " IR instructions; limit " + std::to_string(budget)
         + "); it remains on the IR tier";
-    if (getenv("QORE_JIT_TIMING")) {
+    if (q_env_is_set("QORE_JIT_TIMING")) {
         fprintf(stderr, "[JIT] skipped native compilation of '%s' (compilation budget exceeded; "
             "%zu IR instructions; limit %zu)\n", func_name.c_str(), instruction_count, budget);
     }
@@ -1158,7 +1178,7 @@ int QoreJIT::adoptDefinedFunction(const std::string& name, std::string& error) {
         std::lock_guard<std::mutex> lock(cache_mutex);
         compiled_functions[name] = fn_ptr;
     }
-    if (getenv("QORE_JIT_TIMING")) {
+    if (q_env_is_set("QORE_JIT_TIMING")) {
         fprintf(stderr, "[BG-JIT] reused '%s' compiled in an earlier batch\n", name.c_str());
     }
     return 1;
@@ -1214,7 +1234,7 @@ bool QoreJIT::compileFunctionInternal(const QoreIRFunction& func, std::string& e
     optimizeModule(*module, getEffectiveJITOptLevel(func.pgm));
 
     // Dump LLVM IR if requested (after optimization)
-    if (getenv("QORE_DUMP_LLVM_IR")) {
+    if (q_env_is_set("QORE_DUMP_LLVM_IR")) {
         llvm::raw_fd_ostream llvm_dump(2, false);
         llvm_dump << "=== LLVM IR for " << func_name << " ===\n";
         module->print(llvm_dump, nullptr);
@@ -1250,15 +1270,6 @@ bool QoreJIT::compileFunctionInternal(const QoreIRFunction& func, std::string& e
 bool QoreJIT::compileFunctionBatch(const QoreIRFunction& root_func, std::string& error,
         void* root_deopt_counter,
         const std::vector<BatchCallee>& callees) {
-    // Thread-safe initialization using std::call_once
-    std::call_once(init_flag, [this]() {
-        init_success = initialize(init_error);
-    });
-    if (!init_success) {
-        error = init_error;
-        return false;
-    }
-
     // Check if already compiled (fast path without compile lock)
     {
         std::lock_guard<std::mutex> lock(cache_mutex);
@@ -1269,6 +1280,9 @@ bool QoreJIT::compileFunctionBatch(const QoreIRFunction& root_func, std::string&
 
     // Serialize the entire compilation pipeline
     std::lock_guard<std::mutex> compile_lock(compile_mutex);
+    if (!initializeLocked(error)) {
+        return false;
+    }
 
     return compileFunctionBatchInternal(root_func, error, root_deopt_counter, callees);
 }
@@ -1276,12 +1290,7 @@ bool QoreJIT::compileFunctionBatch(const QoreIRFunction& root_func, std::string&
 bool QoreJIT::compileFunctionBatchLocked(const QoreIRFunction& root_func, std::string& error,
         void* root_deopt_counter,
         const std::vector<BatchCallee>& callees) {
-    // Thread-safe initialization using std::call_once
-    std::call_once(init_flag, [this]() {
-        init_success = initialize(init_error);
-    });
-    if (!init_success) {
-        error = init_error;
+    if (!initializeLocked(error)) {
         return false;
     }
 
@@ -1416,7 +1425,7 @@ bool QoreJIT::compileFunctionBatchInternal(const QoreIRFunction& root_func, std:
         }
         batch_callee_map[callee.variant] = std::move(info);
     }
-    if (!std::getenv("QORE_DISABLE_JIT_INTERPROCEDURAL_SUMMARIES")) {
+    if (!q_env_is_set("QORE_DISABLE_JIT_INTERPROCEDURAL_SUMMARIES")) {
         if (!qore_ir_resolve_batch_function_summaries(
                 effect_functions, batch_callee_map)) {
             error = "cancelled during JIT batch function summary analysis";
@@ -1424,12 +1433,12 @@ bool QoreJIT::compileFunctionBatchInternal(const QoreIRFunction& root_func, std:
         }
     }
     if (rewrite_root
-            && !std::getenv("QORE_DISABLE_JIT_AGGREGATE_RETURN_PROJECTION")) {
+            && !q_env_is_set("QORE_DISABLE_JIT_AGGREGATE_RETURN_PROJECTION")) {
         size_t projections = qore_ir_fuse_batch_aggregate_return_projections(
             *rewrite_root, batch_callee_map);
         size_t late_specializations = 0;
         if (projections
-                && !std::getenv("QORE_DISABLE_JIT_LATE_SPECIALIZATION")) {
+                && !q_env_is_set("QORE_DISABLE_JIT_LATE_SPECIALIZATION")) {
             constexpr size_t max_rounds = 4;
             for (size_t round = 0; round < max_rounds; ++round) {
                 size_t changes = 0;
@@ -1447,7 +1456,7 @@ bool QoreJIT::compileFunctionBatchInternal(const QoreIRFunction& root_func, std:
                 }
             }
         }
-        if (std::getenv("QORE_JIT_TIMING")) {
+        if (q_env_is_set("QORE_JIT_TIMING")) {
             fprintf(stderr,
                 "[BG-JIT] fused %zu aggregate-return projection group(s)"
                 " and applied %zu late specialization(s) in '%s'\n",
@@ -1687,7 +1696,7 @@ bool QoreJIT::compileFunctionBatchInternal(const QoreIRFunction& root_func, std:
     optimizeModule(*module, getEffectiveJITOptLevel(root_func.pgm));
 
     // Dump LLVM IR if requested (after optimization)
-    if (getenv("QORE_DUMP_LLVM_IR")) {
+    if (q_env_is_set("QORE_DUMP_LLVM_IR")) {
         llvm::raw_fd_ostream llvm_dump(2, false);
         llvm_dump << "=== LLVM IR (batch) for " << root_func_name << " ===\n";
         module->print(llvm_dump, nullptr);
@@ -1808,9 +1817,10 @@ uint64_t QoreJIT::getJITThreshold() {
 // a constrained container.  Such functions therefore stay on the IR tier.
 uint64_t QoreJIT::getMaxJITIRInstructions() {
     // function-local so the value cannot be read before its initializer runs, and is computed once
-    static const uint64_t budget = []() -> uint64_t {
+    static constinit QoreLazyValue<uint64_t> budget_setting([]() -> uint64_t {
         constexpr uint64_t default_max = 10000;
-        const char* env = getenv("QORE_JIT_MAX_IR_INSTRUCTIONS");
+        QoreEnvironmentValue env_holder("QORE_JIT_MAX_IR_INSTRUCTIONS");
+        const char* env = env_holder.c_str();
         if (!env || !*env) {
             return default_max;
         }
@@ -1835,7 +1845,8 @@ uint64_t QoreJIT::getMaxJITIRInstructions() {
         }
         // 0 means "no limit"
         return static_cast<uint64_t>(value);
-    }();
+    });
+    const uint64_t budget = budget_setting.get();
     return budget;
 }
 
@@ -1953,27 +1964,27 @@ void QoreJIT::bgCompileThreadLoop() {
             bg_in_progress = &work;
         }
 
+        // Acquire compile lock (blocking is OK here — this is a dedicated background thread)
+        std::lock_guard<std::mutex> lock(compile_mutex);
+
         // Tiered execution can reach a hot function before any synchronous JIT
         // compilation has initialized LLVM.  Initialize it here so that the
         // first background promotion can make progress; otherwise enqueueing
         // rejects the work and resets the variant's compile state, causing every
         // subsequent call above the threshold to repeat batch discovery and IR
         // lowering indefinitely.
-        std::call_once(init_flag, [this]() {
-            init_success = initialize(init_error);
-        });
-        if (!init_success) {
-            if (work.uvb) {
-                UserVariantBase* mutable_uvb = const_cast<UserVariantBase*>(work.uvb);
-                mutable_uvb->jit_compile_failed.store(true, std::memory_order_release);
-                mutable_uvb->jit_compile_state.store(2, std::memory_order_release);
+        {
+            std::string init_err;
+            if (!initializeLocked(init_err)) {
+                if (work.uvb) {
+                    UserVariantBase* mutable_uvb = const_cast<UserVariantBase*>(work.uvb);
+                    mutable_uvb->jit_compile_failed.store(true, std::memory_order_release);
+                    mutable_uvb->jit_compile_state.store(2, std::memory_order_release);
+                }
+                finishBgCompileWork(work);
+                continue;
             }
-            finishBgCompileWork(work);
-            continue;
         }
-
-        // Acquire compile lock (blocking is OK here — this is a dedicated background thread)
-        std::lock_guard<std::mutex> lock(compile_mutex);
 
         // Pre-copy function names before any LLVM operations.
         // LLVM 21's addIRModule()/lookup() corrupts adjacent heap memory
@@ -1991,7 +2002,7 @@ void QoreJIT::bgCompileThreadLoop() {
         std::string error;
         bool success;
 
-        if (getenv("QORE_JIT_TIMING")) {
+        if (q_env_is_set("QORE_JIT_TIMING")) {
             fprintf(stderr, "[BG-JIT] compiling '%s' on background thread\n", saved_func_name.c_str());
         }
 
@@ -2005,7 +2016,7 @@ void QoreJIT::bgCompileThreadLoop() {
         }
 
         if (!success) {
-            if (getenv("QORE_JIT_TIMING")) {
+            if (q_env_is_set("QORE_JIT_TIMING")) {
                 fprintf(stderr, "[BG-JIT] failed to compile '%s': %s\n", saved_func_name.c_str(), error.c_str());
             }
             if (work.uvb) {
@@ -2020,7 +2031,7 @@ void QoreJIT::bgCompileThreadLoop() {
         // Defensive check: only process if uvb is still valid (if jit_compile_state != 1, compilation was cancelled/failed)
         const UserVariantBase* root_uvb = work.uvb;
         if (!root_uvb) {
-            if (getenv("QORE_JIT_TIMING")) {
+            if (q_env_is_set("QORE_JIT_TIMING")) {
                 fprintf(stderr, "[BG-JIT] work item uvb is null, skipping\n");
             }
             finishBgCompileWork(work);
@@ -2031,7 +2042,7 @@ void QoreJIT::bgCompileThreadLoop() {
         int state = const_cast<UserVariantBase*>(root_uvb)->jit_compile_state.load(std::memory_order_acquire);
         if (state != 1) {
             // Compilation was cancelled, failed, or already completed
-            if (getenv("QORE_JIT_TIMING")) {
+            if (q_env_is_set("QORE_JIT_TIMING")) {
                 fprintf(stderr, "[BG-JIT] compilation state is %d (not pending), skipping '%s'\n", state, saved_func_name.c_str());
             }
             finishBgCompileWork(work);
@@ -2041,7 +2052,7 @@ void QoreJIT::bgCompileThreadLoop() {
         // Lookup the compiled function
         JitFunctionPtr fn = lookupFunction(saved_func_name);
         if (!fn) {
-            if (getenv("QORE_JIT_TIMING")) {
+            if (q_env_is_set("QORE_JIT_TIMING")) {
                 fprintf(stderr, "[BG-JIT] lookup failed for '%s'\n", saved_func_name.c_str());
             }
             // Mark as failed
@@ -2070,7 +2081,7 @@ void QoreJIT::bgCompileThreadLoop() {
         mutable_uvb->jit_compile_state.store(2, std::memory_order_relaxed);
         mutable_uvb->current_tier.store(UserVariantBase::TIER_JIT, std::memory_order_release);
 
-        if (getenv("QORE_JIT_TIMING")) {
+        if (q_env_is_set("QORE_JIT_TIMING")) {
             fprintf(stderr, "[BG-JIT] compiled '%s' and promoted to JIT tier\n", saved_func_name.c_str());
         }
 
@@ -2087,7 +2098,7 @@ void QoreJIT::bgCompileThreadLoop() {
                     if (callee_uvb) {
                         UserVariantBase* mutable_callee = const_cast<UserVariantBase*>(callee_uvb);
                         mutable_callee->registerPrecompiledFunction(callee_fn);
-                        if (getenv("QORE_JIT_TIMING")) {
+                        if (q_env_is_set("QORE_JIT_TIMING")) {
                             fprintf(stderr, "[BG-JIT] batch-promoted callee '%s' to JIT tier\n",
                                     saved_callee_names[i].c_str());
                         }
@@ -2171,7 +2182,7 @@ void QoreJIT::enqueueBgCompile(const AbstractQoreFunctionVariant* variant, const
     }
     bg_queue_cv.notify_one();
 
-    if (getenv("QORE_JIT_TIMING")) {
+    if (q_env_is_set("QORE_JIT_TIMING")) {
         fprintf(stderr, "[BG-JIT] enqueued compilation of '%s'\n", ir_func->name.c_str());
     }
 
@@ -2184,10 +2195,12 @@ void QoreJIT::enqueueBgCompile(const AbstractQoreFunctionVariant* variant, const
 }
 
 bool QoreJIT::syncBgCompile() {
-    static const bool sync = []() -> bool {
-        const char* env = getenv("QORE_JIT_SYNC_COMPILE");
+    static constinit QoreLazyValue<bool> sync_setting([]() -> bool {
+        QoreEnvironmentValue env_holder("QORE_JIT_SYNC_COMPILE");
+        const char* env = env_holder.c_str();
         return env && *env && strcmp(env, "0") != 0;
-    }();
+    });
+    const bool sync = sync_setting.get();
     return sync;
 }
 
@@ -2307,7 +2320,7 @@ void QoreJIT::stopBackgroundCompiler() {
         finishBgCompileWork(work);
         ++cancelled_count;
     }
-    if (cancelled_count && getenv("QORE_JIT_TIMING")) {
+    if (cancelled_count && q_env_is_set("QORE_JIT_TIMING")) {
         fprintf(stderr, "[BG-JIT] cancelled %zu pending compilation%s at shutdown\n",
             cancelled_count, cancelled_count == 1 ? "" : "s");
     }
@@ -2320,7 +2333,13 @@ void QoreJIT::shutdown() {
     // Acquiring compile_mutex also documents and enforces serialization with compilation even if
     // shutdown() is called independently of the normal two-phase qore_cleanup() path.
     std::lock_guard<std::mutex> compile_lock(compile_mutex);
-    jit.reset();
+    if (unusable_after_fork) {
+        // in a child process created with fork() while another thread of the parent was compiling, the LLVM
+        // objects can be inconsistent, so they are not destroyed; the process is exiting
+        (void)jit.release();
+    } else {
+        jit.reset();
+    }
     symbols_registered = false;
     {
         std::lock_guard<std::mutex> lock(cache_mutex);
@@ -2329,6 +2348,32 @@ void QoreJIT::shutdown() {
         defined_fast_entry_abi.clear();
     }
     init_success = false;
+}
+
+void QoreJIT::forkChild(bool compile_lock_acquired) noexcept {
+    // runs in the child process in its only thread, with no lock held; cache_mutex, bg_queue_mutex and its
+    // conditions are already initialized again
+    if (!compile_lock_acquired) {
+        // another thread of the parent was compiling or initializing LLVM: the LLVM objects that it was changing can
+        // be inconsistent, so nothing is compiled in the child, and the code runs in the IR tier; compiled code and
+        // the caches stay valid, since they are only changed under cache_mutex
+        unusable_after_fork = true;
+        init_done = true;
+        init_success = false;
+        try {
+            init_error = "the JIT is not available in a child process created with fork() while another thread was "
+                "compiling";
+        } catch (...) {
+            // the error message stays empty; the JIT is still disabled
+        }
+    }
+    // the background compile thread does not exist in the child; it is started again with the next background
+    // compilation.  The work it had taken from the queue is lost with it: the function stays in the tier it is in.
+    bg_thread_running.store(false, std::memory_order_relaxed);
+    bg_compile_thread.abandonAfterFork();
+    bg_in_progress = nullptr;
+    // only the queued work is pending in the child
+    bg_active_work.store(static_cast<int>(bg_compile_queue.size()), std::memory_order_relaxed);
 }
 
 bool QoreJIT::tryAcquireCompileLock() {

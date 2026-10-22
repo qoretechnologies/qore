@@ -261,6 +261,17 @@ public:
 #endif
 
 class QoreTimeZoneManager {
+public:
+    //! returns the lock of the zone map, for the fork handlers (internal)
+    DLLLOCAL QoreRWLock& getZoneLockForFork() const {
+        return rwl;
+    }
+
+    //! returns the lock of the UTC offset zones, for the fork handlers (internal)
+    DLLLOCAL QoreRWLock& getOffsetLockForFork() const {
+        return rwl_offset;
+    }
+
 protected:
     // read-write lock to manage real (non-offset) zone info objects
     mutable QoreRWLock rwl;

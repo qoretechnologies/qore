@@ -158,7 +158,12 @@ public:
     //! Sets the starting time for relative time
     DLLLOCAL static void setStartTime(const DateTimeNode* time);
 
-    DLLLOCAL static void init();
+    //! initializes the static data and registers the fork handlers of the static locks; called by the module
+    //! initialization
+    DLLLOCAL static void init(ExceptionSink* xsink);
+
+    //! removes the fork handlers of the static locks; called when the module is deleted
+    DLLLOCAL static void del();
 
 protected:
     //! Fully Qualified Class Name of the calling category class.
@@ -218,6 +223,11 @@ protected:
 
     //! Global atomicity lock
     static QoreThreadLock m;
+
+    //! the fork handlers of the unique id generator and the atomicity lock, which are leaf locks (see
+    //! QoreForkHandler.h)
+    static QoreForkHandlerRegistration* sequence_fork_reg;
+    static QoreForkHandlerRegistration* m_fork_reg;
 
     //! Render the log message
     DLLLOCAL void renderMessageLocked(ExceptionSink* xsink) const;

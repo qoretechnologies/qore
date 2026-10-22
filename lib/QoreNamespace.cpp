@@ -370,10 +370,12 @@ const char* QoreNamespace::getName() const {
 }
 
 void QoreNamespace::setClassHandler(q_ns_class_handler_t class_handler) {
-   priv->setClassHandler(class_handler);
+    qore_root_ns_private::OptionalRuntimeNamespaceWriteGuard runtime_ns_guard(priv->getRoot());
+    priv->setClassHandler(class_handler);
 }
 
 void QoreNamespace::addSystemHashDecl(TypedHashDecl* hd) {
+    qore_root_ns_private::OptionalRuntimeNamespaceWriteGuard runtime_ns_guard(priv->getRoot());
     // set sys and pub flags
     typed_hash_decl_private::get(*hd)->setSystemPublic();
     typed_hash_decl_private::get(*hd)->setNamespace(priv);
@@ -397,6 +399,7 @@ void QoreNamespace::addSystemHashDecl(TypedHashDecl* hd) {
 }
 
 void QoreNamespace::addSystemEnum(QoreEnumDecl* enumdecl) {
+    qore_root_ns_private::OptionalRuntimeNamespaceWriteGuard runtime_ns_guard(priv->getRoot());
     qore_enum_decl_private* enum_priv = qore_enum_decl_private::get(*enumdecl);
 
     // set sys and pub flags
@@ -447,6 +450,7 @@ void QoreNamespace::addSystemEnum(QoreEnumDecl* enumdecl) {
 // which QoreBuiltinModule::addToProgramImpl() runs under the target root's runtime namespace write lock
 void QoreNamespace::addSystemClass(QoreClass* oc) {
     QORE_TRACE("QoreNamespace::addSystemClass()");
+    qore_root_ns_private::OptionalRuntimeNamespaceWriteGuard runtime_ns_guard(priv->getRoot());
 
     oc->setSystem();
     if (qore_class_private::get(*oc)->setNamespaceConditional(priv)) {
@@ -480,10 +484,14 @@ void QoreNamespace::addSystemClass(QoreClass* oc) {
 }
 
 void QoreNamespace::addNamespace(QoreNamespace* ns) {
+    // the public API is called by binary modules on namespaces of running Programs: a write to one attached to a
+    // root namespace excludes the threads reading it, such as one importing a module from that Program
+    qore_root_ns_private::OptionalRuntimeNamespaceWriteGuard runtime_ns_guard(priv->getRoot());
     priv->addNamespace(ns->priv);
 }
 
 void QoreNamespace::addInitialNamespace(QoreNamespace* ns) {
+    qore_root_ns_private::OptionalRuntimeNamespaceWriteGuard runtime_ns_guard(priv->getRoot());
     priv->addNamespace(ns->priv);
 }
 
@@ -844,7 +852,24 @@ void QoreNamespaceList::parseAssimilate(QoreNamespaceList& n, qore_ns_private* p
     n.nsmap.clear();
 }
 
+#ifdef DEBUG
+//! Asserts that a runtime write to a namespace attached to a root namespace holds the root's write lock
+/** Other threads read such a namespace under the root's read lock: runtime lookups, and imports that copy a module
+    Program's namespace into another Program.  An unlocked insert can be seen half done, with no namespace yet in
+    the new map entry.
+*/
+static void assert_runtime_namespace_write(qore_ns_private* ns) {
+    if (ns) {
+        const qore_root_ns_private* rns = ns->getRoot();
+        assert(!rns || rns->runtimeNamespaceWriteLockHeld());
+    }
+}
+#endif
+
 void QoreNamespaceList::runtimeAssimilate(QoreNamespaceList& n, qore_ns_private* parent) {
+#ifdef DEBUG
+    assert_runtime_namespace_write(parent);
+#endif
     for (auto& i : n.nsmap) {
         nsmap_t::iterator ni = nsmap.find(i.first);
         if (ni != nsmap.end()) {
@@ -891,6 +916,9 @@ qore_ns_private* QoreNamespaceList::parseAdd(QoreNamespace* ns, qore_ns_private*
 }
 
 qore_ns_private* QoreNamespaceList::runtimeAdd(QoreNamespace* ns, qore_ns_private* parent) {
+#ifdef DEBUG
+    assert_runtime_namespace_write(parent);
+#endif
     // if namespace is already registered, then assimilate
     QoreNamespace* ons;
     if ((ons = find(ns->priv->name.c_str()))) {
@@ -1065,6 +1093,7 @@ void QoreNamespace::addConstant(const char* cname, QoreValue val) {
 void QoreNamespace::addConstant(const char* cname, QoreValue val, const QoreTypeInfo* typeInfo) {
     // see if namespace is attached to the root
     qore_root_ns_private* rns = priv->getRoot();
+    qore_root_ns_private::OptionalRuntimeNamespaceWriteGuard runtime_ns_guard(rns);
     if (!rns) {
         priv->constant.add(cname, val, typeInfo);
         return;
@@ -1085,12 +1114,14 @@ void qore_ns_add_runtime_constant(QoreNamespace& ns, const char* ns_path, const 
 }
 
 QoreNamespace* QoreNamespace::findCreateNamespacePath(const char* nspath) {
+    qore_root_ns_private::OptionalRuntimeNamespaceWriteGuard runtime_ns_guard(priv->getRoot());
     NamedScope nscope(nspath);
     bool is_new = false;
     return priv->findCreateNamespacePath(nscope, false, false, is_new, 1);
 }
 
 QoreNamespace* QoreNamespace::findCreateNamespacePathAll(const char* nspath) {
+    qore_root_ns_private::OptionalRuntimeNamespaceWriteGuard runtime_ns_guard(priv->getRoot());
     NamedScope nscope(nspath);
     bool is_new = false;
     return priv->findCreateNamespacePath(nscope, false, false, is_new, 0);
@@ -1286,6 +1317,7 @@ QoreHashNode* QoreNamespace::getInfo() const {
 }
 
 void QoreNamespace::addBuiltinVariant(const char* name, q_func_t f, int64 code_flags, int64 functional_domain, const QoreTypeInfo* returnTypeInfo, unsigned num_params, ...) {
+    qore_root_ns_private::OptionalRuntimeNamespaceWriteGuard runtime_ns_guard(priv->getRoot());
     va_list args;
     va_start(args, num_params);
     priv->addBuiltinVariant<q_func_t, BuiltinFunctionValueVariant>(name, f, code_flags, functional_domain, returnTypeInfo, num_params, args);
@@ -1294,6 +1326,7 @@ void QoreNamespace::addBuiltinVariant(const char* name, q_func_t f, int64 code_f
 
 void QoreNamespace::addBuiltinVariant(void* ptr, const char* name, q_external_func_t f, int64 code_flags,
     int64 functional_domain, const QoreTypeInfo* returnTypeInfo, unsigned num_params, ...) {
+    qore_root_ns_private::OptionalRuntimeNamespaceWriteGuard runtime_ns_guard(priv->getRoot());
     va_list args;
     va_start(args, num_params);
     priv->addBuiltinVariant<q_external_func_t, BuiltinFunctionExternalVariant>(ptr, name, f, code_flags,
@@ -1392,6 +1425,9 @@ extern void preinitBreakpointClass();
 
 // sets up the root namespace
 StaticSystemNamespace::StaticSystemNamespace() : RootQoreNamespace(new qore_root_ns_private(this)) {
+    // every write to a root namespace holds its runtime namespace write lock; no other thread exists yet, so it is
+    // never contended here
+    RuntimeNamespaceWriteLocker init_lock(*this);
     rpriv->qoreNS = new QoreNamespace("Qore");
     QoreNamespace& qns = *rpriv->qoreNS;
 

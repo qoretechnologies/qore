@@ -65,7 +65,9 @@ public namespace SqlUtil {
     - \c "triggers": hash of trigger name to trigger source SQL (driver-specific)
     - \c "driver": hash with driver-specific extra definitions (e.g., PostgreSQL trigger functions)
 
-    @throw AUTO-TRIGGER-ERROR unsupported driver or invalid configuration
+    @throw AUTO-TRIGGER-ERROR unsupported driver or invalid configuration, or a table, column or sequence name that
+    is not a plain identifier of ASCII letters, digits, underscores and dollar signs (since SqlUtil 3.11.0: the names
+    are written in the SQL of the generated triggers, and the names of the triggers are made from the table name)
 
     @since SqlUtil 1.10
 */
@@ -83,6 +85,8 @@ public hash<auto> sub generate_auto_triggers(string driver_name, string table_na
     if (!has_created && !has_modified && !seq_cols) {
         return {};
     }
+
+    check_auto_trigger_names(table_name, seq_cols, pk_columns);
 
     switch (driver_name) {
         case "pgsql":
@@ -113,6 +117,9 @@ public hash<auto> sub generate_auto_triggers(string driver_name, string table_na
 
     @return a hash with \c "triggers" and \c "driver" keys containing per-driver trigger definitions
 
+    @throw AUTO-TRIGGER-ERROR a table, column or sequence name that is not a plain identifier of ASCII letters,
+    digits, underscores and dollar signs (since SqlUtil 3.11.0)
+
     @since SqlUtil 1.10
 */
 public hash<auto> sub generate_auto_triggers_all_drivers(string table_name,
@@ -124,6 +131,8 @@ public hash<auto> sub generate_auto_triggers_all_drivers(string table_name,
     if (!has_created && !has_modified && !seq_cols) {
         return {};
     }
+
+    check_auto_trigger_names(table_name, seq_cols);
 
     hash<auto> pgsql = generate_pgsql_auto_triggers(table_name, has_created, has_modified, seq_cols,
         insert_only);
@@ -177,6 +186,30 @@ public string sub get_physical_placement_trigger_guard(string driver_name, strin
         + sprintf("        and (pg_catalog.current_setting('qore.physical_placement', true)::jsonb ->> 'table') = E'%s' then\n", literal)
         + sprintf("      return %s;\n", delete_row ? "old" : "new")
         + "    end if;\n  end if;\n";
+}
+
+# checks that the names in an auto-trigger configuration are plain identifiers
+/* the names are written in the SQL of the triggers, and the names of the triggers and trigger functions are made from
+   the table name, for every database, so they must be identifiers that need no quotes on any of them: ASCII letters,
+   digits, underscores and dollar signs, not starting with a digit or a dollar sign; a sequence can also be given
+   with a schema of the same form
+*/
+sub check_auto_trigger_names(string table_name, *hash<string, string> seq_cols, *list<string> pk_columns) {
+    code check = sub (string name, string what, bool schema = False) {
+        if (schema ? name !~ /\A[A-Za-z_][A-Za-z0-9_$]*(?:\.[A-Za-z_][A-Za-z0-9_$]*)?\z/
+                : name !~ /\A[A-Za-z_][A-Za-z0-9_$]*\z/) {
+            throw "AUTO-TRIGGER-ERROR", sprintf("auto-trigger %s \"%s\" is not a name of ASCII letters, digits, "
+                "underscores and dollar signs that does not start with a digit or a dollar sign%s; it is written in "
+                "the SQL of the generated triggers, which need it to be such a name on every database", what,
+                replace(name, chr(0), "\\0"), schema ? ", optionally after a schema of the same form" : "");
+        }
+    };
+    check(table_name, "table name");
+    foreach hash<auto> sc in (seq_cols.pairIterator()) {
+        check(sc.key, "sequence column name");
+        check(sc.value, "sequence name", True);
+    }
+    map check($1, "primary key column name"), pk_columns;
 }
 
 # --- PostgreSQL ---

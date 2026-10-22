@@ -244,7 +244,7 @@ class DataStreamClientTest inherits QUnit::Test {
         m_http.setHandler("/yaml", "/yaml", MimeTypeYaml, new YamlHandler(MimeTypeYaml));
         m_http.setHandler("/ds-echo", "/ds-echo", MimeTypeYaml, new DataStreamEchoHandler());
         m_http.setHandler("/ds-error", "/ds-error", MimeTypeYaml, new DataStreamErrorHandler());
-        port = m_http.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        port = m_http.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
 
         # Return for compatibility with test harness that checks return value.
         set_return_value(main());

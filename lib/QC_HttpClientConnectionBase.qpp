@@ -31,6 +31,7 @@
 
 #include "qore/Qore.h"
 #include <qore/HttpClientConnection.h>
+#include "qore/intern/qore_socket_private.h"
 
 // vparent: referenced by qpp-generated addBuiltinVirtualBaseClass() call — must
 // be declared here so non-SCU builds can resolve the symbol across TUs.
@@ -156,4 +157,53 @@ bool HttpClientConnectionBase::isDraining() [flags=RET_VALUE_ONLY] {
 */
 int HttpClientConnectionBase::getConnectionState() [flags=RET_VALUE_ONLY] {
     return priv->getState();
+}
+
+//! Returns True if the network sandbox of the calling code allows it to use the connection
+/** A connection is checked against the network sandbox of the code that opens it; a connection pool hands it to
+    later callers, whose code can run under another sandbox, so the pool calls this before it hands the connection to
+    a caller.  The connection's destinations are checked as a new connection to them would be, with the sandbox as it
+    is configured now.
+
+    @return True if the calling code may use the connection: it has no network sandbox, its sandbox allows every
+    destination of the connection, or the connection is still being made for code under the same sandbox; False if
+    its sandbox denies a destination of the connection, or cannot decide on it: the connection is still being made
+    for code under another sandbox, or it leads to a destination that was not resolved, such as the destination of a
+    proxy connection made without a sandbox
+
+    @see checkSandboxUse()
+
+    @since %Qore 3.0
+*/
+bool HttpClientConnectionBase::sandboxAllowsUse() [flags=RET_VALUE_ONLY] {
+    SimpleRefHolder<QoreSandboxManager> sm(qore_socket_ref_policy_sandbox_manager());
+    if (!sm) {
+        return true;
+    }
+    ExceptionSink xs;
+    bool rv = !priv->checkSandboxUse(*sm, &xs);
+    xs.clear();
+    return rv;
+}
+
+//! Throws an exception if the network sandbox of the calling code does not allow it to use the connection
+/** For a connection that the caller must use, such as the connection of a persistent session; see
+    sandboxAllowsUse()
+
+    @throw NETWORK-ACCESS-DENIED the network sandbox of the calling code denies a destination of the connection, or
+    cannot decide on it
+
+    @since %Qore 3.0
+*/
+nothing HttpClientConnectionBase::checkSandboxUse() {
+    SimpleRefHolder<QoreSandboxManager> sm(qore_socket_ref_policy_sandbox_manager());
+    if (!sm) {
+        return QoreValue();
+    }
+    if (priv->checkSandboxUse(*sm, xsink) > 0) {
+        xsink->raiseException("NETWORK-ACCESS-DENIED", "the network sandbox of the calling code cannot decide on "
+            "this connection: it was opened for code under another sandbox and is still being made, or it leads to "
+            "a destination that was not resolved");
+    }
+    return QoreValue();
 }

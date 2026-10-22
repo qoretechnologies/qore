@@ -310,7 +310,7 @@ class SseObservableTest inherits Test {
         };
         server = new HttpServer(http_opts);
         server.setDefaultHandler("sse", handler);
-        port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        port = server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
     }
 
     globalTearDown() {
@@ -516,7 +516,7 @@ class SseObservableTest inherits Test {
         });
         on_exit hb_server.stop();
         hb_server.setDefaultHandler("sse", hb_handler);
-        int hb_port = hb_server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        int hb_port = hb_server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
 
         string url = sprintf("http://localhost:%d/sse", hb_port);
         HttpClientIo::HttpClientConnectionManager mgr();
@@ -548,7 +548,7 @@ class SseObservableTest inherits Test {
         });
         on_exit hb_server.stop();
         hb_server.setDefaultHandler("sse", hb_handler);
-        int hb_port = hb_server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        int hb_port = hb_server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
 
         string url = sprintf("http://localhost:%d/sse", hb_port);
         HttpClientIo::HttpClientConnectionManager mgr();
@@ -658,7 +658,7 @@ class SseObservableTest inherits Test {
         });
         on_exit hb_server.stop();
         hb_server.setDefaultHandler("sse", hb_handler);
-        int hb_port = hb_server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        int hb_port = hb_server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
 
         string url = sprintf("http://localhost:%d/sse", hb_port);
         HttpClientIo::HttpClientConnectionManager mgr();
@@ -697,7 +697,7 @@ class SseObservableTest inherits Test {
         });
         on_exit async_server.stop();
         async_server.setDefaultHandler("sse", async_handler);
-        int async_port = async_server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        int async_port = async_server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
 
         string url = sprintf("http://localhost:%d/sse", async_port);
         HttpClientIo::HttpClientConnectionManager mgr();
@@ -735,7 +735,7 @@ class SseObservableTest inherits Test {
         });
         on_exit invalid_server.stop();
         invalid_server.setDefaultHandler("sse", invalid_handler);
-        int invalid_port = invalid_server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        int invalid_port = invalid_server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
 
         string url = sprintf("http://localhost:%d/sse", invalid_port);
         HttpClientIo::HttpClientConnectionManager mgr();
@@ -776,7 +776,7 @@ class SseObservableTest inherits Test {
         });
         on_exit endless_server.stop();
         endless_server.setDefaultHandler("huge", new HugeEventSseHandler());
-        int endless_port = endless_server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        int endless_port = endless_server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
 
         string url = sprintf("http://localhost:%d/sse", endless_port);
         HttpClientIo::HttpClientConnectionManager mgr();

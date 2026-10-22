@@ -5,6 +5,9 @@ set -x
 
 # authenticate the clones CMake makes from github.com (see github-auth.sh)
 . "$(dirname "$0")/github-auth.sh"
+# no process the job starts may outlive it (see ci-job-processes.sh)
+. "$(dirname "$0")/ci-job-processes.sh"
+qore_ci_mark_job_processes
 
 ENV_FILE=/tmp/env.sh
 
@@ -229,20 +232,14 @@ if ! command -v gdb > /dev/null 2>&1; then
     fi
 fi
 
-# Enable core dumps before dropping to qore user (needs root for /proc/sys writes)
-# suid_dumpable=2 writes cores to the core_pattern location securely (needed for gosu)
-if [ -f /proc/sys/fs/suid_dumpable ]; then
-    echo 2 > /proc/sys/fs/suid_dumpable 2>/dev/null || true
-fi
-# Set core_pattern to write cores to crash-dumps/ (must be done as root)
+# Enable core dumps before dropping to qore user (needs root for /proc/sys writes): the pattern is the one every CI
+# job on the node sets, as the node has only one (see ci-core-capture.sh); cores are kept in crash-dumps/ (the job
+# artifact)
+. "${QORE_SRC_DIR}/test/docker_test/ci-core-capture.sh"
+qore_ci_setup_core_capture
 CORE_DIR="${QORE_SRC_DIR}/crash-dumps"
 mkdir -p "$CORE_DIR"
 chown qore:qore "$CORE_DIR"
-if [ -w /proc/sys/kernel/core_pattern ]; then
-    echo "$CORE_DIR/core.%e.%p" > /proc/sys/kernel/core_pattern
-elif command -v sysctl > /dev/null 2>&1; then
-    sysctl -w "kernel.core_pattern=$CORE_DIR/core.%e.%p" 2>/dev/null || true
-fi
 
 # own everything by the qore user
 chown -R qore:qore ${QORE_SRC_DIR}
@@ -264,6 +261,21 @@ done
 export QORE_MODULE_DIR=${QORE_SRC_DIR}/qlib:${CI_NATIVE_MODULE_DIR}
 export QORE_MODULE_DIR_ONLY=1
 cd ${QORE_SRC_DIR}
+
+# The tests of the binary modules built with Qore are in their source directories (modules/*/test), which
+# run_tests.sh runs only when named; those of a module this build did not make (mongodb is built only when libmongoc
+# is found) are not run.  A job that runs a subset of the tests (QORE_TEST_DIRS) runs none of them.
+QORE_TEST_EXTRA_DIRS=""
+if [ -z "${QORE_TEST_DIRS}" ]; then
+    for dir in modules/*/test; do
+        mod=$(basename "$(dirname "${dir}")")
+        if ls "${QORE_SRC_DIR}/build/modules/${mod}"/*.qmod > /dev/null 2>&1; then
+            QORE_TEST_EXTRA_DIRS="${QORE_TEST_EXTRA_DIRS} ${dir}"
+        else
+            echo "-- no ${mod} module was built; its tests in ${dir} are not run --"
+        fi
+    done
+fi
 
 export QORE_DEBUG_BINARY="${QORE_SRC_DIR}/build/qore"
 export QORE_LIBDIR="${QORE_SRC_DIR}/build"
@@ -294,6 +306,7 @@ if [ "$NEED_RELEASE_BUILD" = "1" ]; then
 else
     echo && echo "-- running tests with pre-built Debug Qore; performance tests excluded --"
 fi
+TEST_RC=0
 gosu qore:qore env \
     QORE_DEBUG_BINARY="${QORE_DEBUG_BINARY}" \
     QORE_RELEASE_BINARY="${QORE_RELEASE_BINARY}" \
@@ -303,10 +316,23 @@ gosu qore:qore env \
     QORE_MODULE_DIR_ONLY="${QORE_MODULE_DIR_ONLY}" \
     QORE_EXCLUDE_PERF_TESTS="${QORE_EXCLUDE_PERF_TESTS}" \
     QORE_PERF_TESTS_ONLY="${QORE_PERF_TESTS_ONLY}" \
+    QORE_TEST_EXTRA_DIRS="${QORE_TEST_EXTRA_DIRS}" \
     LIBQORE_BINARY="${LIBQORE_BINARY}" \
     LD_LIBRARY_PATH="${TEST_LD_LIBRARY_PATH}:${LD_LIBRARY_PATH}" \
-    ./run_tests.sh
+    ./run_tests.sh || TEST_RC=$?
+
+# the cores of the processes the tests started are kept with those of the tests
+qore_ci_collect_cores "$CORE_DIR"
+if [ "${TEST_RC}" != "0" ]; then
+    qore_ci_end_job_processes || true
+    exit ${TEST_RC}
+fi
 
 if [ "${drop_pgsql_schema}" = "1" ]; then
     cleanup_postgres_on_host
+fi
+
+# the runner ends the job only when no process the job started still holds its output
+if ! qore_ci_end_job_processes; then
+    exit 1
 fi

@@ -276,7 +276,13 @@ write lock); the other finds the set invalidated and rescans, and the object can
 
 - An **object** is deleted by the dereference that marks it as being destroyed under its lock (`in_destructor` in
   `qore_object_private::customDeref()`); a second one hands the deletion off
-  (`robject_dereference_helper::finalDeref()`).
+  (`robject_dereference_helper::finalDeref()`).  The dereference that marks the object completes
+  (`RObject::derefDone()`) right after the marking, and deletes the object after that.  A handed-off dereference
+  waits in `derefDone()` for the dereferences of other threads only when it released the last reference, since it
+  then releases the object's base weak reference afterwards; one that decided while references remained releases
+  nothing and does not wait.  It used to wait in either case, and when it started waiting before the deleter
+  completed, the deleter completed with a waiter left, which `derefDone()` asserts never happens
+  (`ref_inprogress || !del`).
 - A **closure-bound variable** had no such mark: two dereferences that both decided deleted its value at the same
   time, one waiting in `RObject::derefDone()` for the other's dereference to finish, which then deleted it too
   (an assertion in `derefDone()` in debug builds, a double release of the value in release builds).
@@ -290,6 +296,11 @@ holder's reference with no lock while a dereference scans (a debug hook in `cust
 `RObject::dbg_before_deref_scan`); `examples/test/qore/misc/dgc-closure-var-collect-race.qtest` holds one
 dereference of a closure-bound variable before it decides (`dbg_hold_closure_var_deref()`), lets another one collect
 the variable, and counts the dereferences that collect it (`dbg_count_closure_var_collections()`);
+`examples/test/qore/misc/dgc-collect-handoff-race.qtest` makes two dereferences decide to collect an object: it holds
+the first before it decides (`dbg_hold_deref_decide()`), lets the second decide with the current count and holds it
+before its lock (`dbg_hold_deref_collect()`), lets the first decide with its superseded count and holds it after it
+has marked the object (`dbg_hold_deref_marked()`), and checks that the second hands the deletion off without waiting
+(`dbg_deref_wait_notify()`);
 `examples/test/qore/classes/AsyncIoController/asyncio_queue_gc.qtest` is the controller's case.
 
 ## When a scan is triggered — and when it may be skipped
@@ -588,7 +599,8 @@ is a try-lock:
 
 - `tryRSectionLockNotifyWaitRead()` (`lib/RSection.cpp`) registers an `RNotifier` against the conflicting owner
   and returns `-1` rather than waiting.
-- Pattern B private-data scanners (below) use `trylock()` and skip a contended container.
+- Pattern B private-data scanners (below) use `trylock()` and skip a contended container, making the scan due
+  again; see "A container that a scan finds locked".
 
 On a conflict the scan **rolls back** — releasing every r-section it holds — waits on the notifier until the
 conflicting owner releases, and starts over. Because a waiting scan holds nothing, scans can never wait on each
@@ -613,6 +625,51 @@ same object — every accepted connection releasing a local that holds a shared 
 restarts stop converging: every thread sits in `RNotifier::wait()`, no scan finishes, and the work those
 threads were doing never resumes. Native stacks then show many threads parked in `RSetHelper::RSetHelper()`
 with nothing running, which reads like a deadlock but is the restart loop failing to converge.
+
+### A container that a scan finds locked
+
+A Pattern B container reports its values to a scan under its own lock, and the scan only tries that lock: blocking
+could deadlock, as the lock can be held by a thread that waits for something the scan holds (a `Queue` releases
+the values it clears under its lock, which can run any destructor). A scan that finds the lock held cannot read the
+values, so it does not see the edges they make, and the dereference that made the scan has already taken the scan
+due at the object (`deferred_scan`). Skipping the values used to be all there was to it, on the assumption that a
+later scan would read them; but nothing made one due, and a cycle that only the container's values closed was never
+found. The async I/O controller pushes a poll operation's result to the operation's own result Queue on its I/O
+thread while a callback worker releases the controller's reference to the Queue's object: the worker's
+dereference consumed the scan due that the push had made, found the Queue's lock held by the push, committed no
+set, and the operation and its Queue were never collected (`asyncio_queue_gc.qtest`, 10 of 1024 runs under load
+on Alpine).
+
+A scanner that finds its container's lock held therefore calls `RSetHelper::containerContended()` (a module's
+`scanValues()` calls `QorePrivateDataScanner::contended()`), which does three things:
+
+- `RObject::privateScanContended()` makes the scan due again at the object (`deferred_scan`), so that its next
+  dereference that finds no real reference scans, and reads the container once its lock has been released;
+- the same call marks an edge added (`edgesAdded()`), so that a recursive set the scan records for the object,
+  which does not count the container's edges, is not trusted for a verdict of "cannot delete" until a scan has read
+  them;
+- the scan's commit advances no scan generation (`RSetHelper::contended`): a scan of the object waiting for this
+  one would otherwise take its result as current (`RScanHelper::needScan()`) and skip the scan that reads the
+  container, after consuming the scan due itself.
+
+The thread that held the lock can release it and dereference the object between the scan's try and its mark: that
+dereference would find no scan due, and the mark would come too late for anything to act on it. The dispatcher in
+`qore_object_private::scanMembers()` therefore counts the try before any container's lock is tried
+(`RObject::private_scan_tries`, `PrivateScanTryHelper`, with a sequentially consistent fence), and a dereference
+treats a non-zero count as a scan due (`RObject::tryFastDeref()`, `RObject::deref()`). A dereference made after the
+lock has been released finds the count or the mark. The count is a 16-bit atomic in the padding after
+`scan_wrote`, so no member of `RObject` or `ClosureVarValue` moves; a thread counts one try at a time, and
+`MAX_QORE_THREADS` is below its range (asserted in `lib/RSet.cpp`).
+
+The scan made due is made by a later dereference of the object, so a thread that operates on a container whose
+values can close a cycle holds a reference to the container's object for the duration, as every Qore method call
+does and as the C++ API's callers that pass the object do; its release is that dereference.
+
+`ut_contended_queue_scan()` in the C++ unit tests (`asyncio_unit_tests.qtest`) holds a push with the queue's lock
+(`qore_dbg_queue_push_locked_hook`) while another thread's dereference scans; `ut_contended_queue_scan_window()`
+also holds the scan between finding the lock held and making the scan due (`RObject::dbg_scan_contended`) while
+the pushing thread releases the last reference from outside the cycle, and checks that its dereference has a
+decision to make (`RObject::dbg_deref_decides`).
 
 ### Every abandoned pass registers the notification its retry waits on
 
@@ -758,6 +815,71 @@ cycle take none, that an object inside one still does, and that cycles built aro
 captured variable are still collected.
 
 
+### A lock-free release and a scan that commits a set: hazard slots
+
+`RObject::tryFastDeref()` decides before it releases: it reads `rset` (null), then releases the reference with one
+atomic decrement. A scan made by another thread can commit a recursive set for the object between the two, and the
+dereference that made the scan can read the object's count in `RSet::canDelete()` before the decrement lands:
+
+1. thread A releases a reference to member X of what is about to be a cycle, reads `rset` as null and is
+   descheduled before its decrement;
+2. thread B releases its reference to another member Q; the scan due at Q finds the cycle and commits a set for Q
+   and X; `canDelete()` reads X's count, which still includes A's reference, finds X held from outside the set and
+   keeps it;
+3. A's decrement lands: X now has only the reference from inside the set, but A decided nothing, and no other
+   dereference follows, so the cycle was never collected.
+
+"A count superseded by a release that decided nothing" covers the dereferencing object's own count, not the counts
+of the other members of the set it decides for. Closing this window has to cost the lock-free release more than its
+decrement, as nothing that a scan does can tell a release that is still to land from a reference that is held. Each
+thread therefore has a **hazard slot** in which its lock-free releases are published, and a scan that commits a set
+waits for the releases that its slots show in progress:
+
+- **Publication.** The release writes the object's address to the thread's slot (after advancing the slot's
+  generation, see below), issues a sequentially consistent fence, and only then reads `rset`; after its decrement it
+  clears the slot. The commit publishes the sets and the scan issues a fence of its own before it reads the slots
+  (`RSetHelper::waitHazards()`), so for each release either the release reads the new set and takes the locking path,
+  or the scan reads the release in its slot. A release that read a set takes the locking path as before.
+- **The scan's wait.** A commit records each object that it put in a set when the object had none (`newly_set`);
+  only those can have a lock-free release in progress that read no set. After its commit, and before any verdict is
+  made with their counts, the scan reads every registered slot, and for one that shows one of those objects it waits
+  on a condition variable until the slot is cleared, or until its generation moves. It marks the slot with
+  `HAZARD_WAITER` (a compare-and-swap, under the lock of the waits) before it waits, and the releasing thread's clear
+  reports the mark and notifies the waits under the same lock, so the notification comes after the scan waits.
+- **The clear is an exchange.** A release that read its slot, found no mark and then stored 0 would overwrite a mark
+  made in between, and the scan that made it would wait for ever: the clear has to report the mark it replaces in
+  the same atomic operation. A lock-free release therefore costs a fence and an exchange on its own slot more than
+  its decrement; neither touches the object's cache line, so releases of a shared object do not contend more than
+  before. Measured on x86_64 (release build, a reference taken and released in a loop): 9.9 ns before, 18.4 ns with
+  the slot on one thread; 27.4 ns and 29.1 ns with 8 threads releasing references to one object. A weak reference
+  held across the release, the other sound way to close the window, costs as much on one thread and 75 ns with 8
+  threads, as its two atomic operations are on the shared object's line.
+- **The generation.** The release advances its slot's generation before it publishes; the scan reads the object and
+  then the generation, and waits only for the publication it saw. A thread that keeps releasing references to the
+  object with no lock (each of which now reads the set and takes the locking path) cannot keep the scan waiting.
+- **Liveness.** The releasing thread holds no lock between its publication and its clear, and runs nothing there
+  that can block it or end it: the loads, the decrement and the exchange, with no cancellation point (Qore's thread
+  cancellation and `thread_exit` act at statement boundaries; the `pthread_cancel()` made at process exit is deferred).
+  A thread cannot end with its slot set, and a descheduled thread only delays the scan until it runs again. The scan
+  holds the scan lock of the object that it started at while it waits, and the r-sections of the graph have been
+  released by the commit.
+- **Registration.** The slots are a static array with one slot per TID, as many as the thread list has entries
+  (`MAX_QORE_THREADS`), each alone in its cache line (64 bytes; 128 on aarch64), so a page is only touched once a TID
+  in it has been used. `ThreadEntry::activate()` registers the thread's slot when it creates the thread's Qore data, on
+  the thread itself (background threads, the main thread, foreign threads and the signal thread), and
+  `QoreThreadList::deleteData()` and its variants unregister it before deleting the data. A scan reads the slots up to
+  the highest TID that has registered one: about 0.4 ns per slot per commit that put objects in a set.
+- **Threads with no slot.** A native thread that is not registered with Qore, and a thread whose Qore data is being
+  deleted, have no slot; their releases take the locking path, which decides under `rlck` after the decrement and needs
+  no slot. `ut_unregistered_thread_release()` checks that a native thread's releases take the locking path, that a
+  registered thread's take the lock-free path, and that both, made at the same time on one object, release every
+  reference once.
+
+`ut_fast_release_during_member_scan()` in the C++ unit tests (`asyncio_unit_tests.qtest`) holds the lock-free
+release of X between its decision and its decrement (`RObject::dbg_before_fast_release`) while this thread's
+dereference of Q commits the set; the scan's wait (`RObject::dbg_hazard_wait`) lets the held release continue, and
+the two-Queue cycle is collected. Both hooks are only in debug builds.
+
 ### A dereference keeps its object allocated until it returns
 
 `RObject::derefDone()` makes a deleting dereference wait for the dereferences of other threads, but not for the
@@ -857,11 +979,14 @@ When the owning `StreamReader` object is destroyed (cycle or otherwise), its `cd
 
 Implement `scanMembers` on the private class; the object scanner dispatches to it.
 
-See `lib/QoreQueue.cpp:509`:
+See `qore_queue_private::scanMembers()` in `lib/QoreQueue.cpp`:
 
 ```cpp
 bool qore_queue_private::scanMembers(RObject& obj, RSetHelper& rsh) {
-    if (l.trylock()) return false;   // non-blocking: skip if contended
+    if (l.trylock()) {               // non-blocking: skip if contended, and make the scan due again
+        rsh.containerContended(obj);
+        return false;
+    }
     AutoLocker al(l, true);
 
     QoreQueueNode* w = head;
@@ -935,8 +1060,9 @@ A module's private data reports its values through the public API in `include/qo
   it can be released or handed out with the container's reference, both under the container's lock.
 - `_QORE_HAS_SCANNABLE_PRIVATE_DATA` is defined when the API is available.
 
-The rules for `scanValues()` are the scanner rules: it tries the container's lock and returns false if the lock is
-held, it raises no exception and calls no Qore or foreign-language code, and it releases no reference. A container
+The rules for `scanValues()` are the scanner rules: it tries the container's lock, and if the lock is held it calls
+`QorePrivateDataScanner::contended()` and returns false (see "A container that a scan finds locked"), it raises no
+exception and calls no Qore or foreign-language code, and it releases no reference. A container
 lock that is held while the module releases values or runs Qore code can be tried by a scan on the same thread, so
 the lock that `scanValues()` tries should only be held while the container itself is changed, with the values it
 gives up released after the lock.

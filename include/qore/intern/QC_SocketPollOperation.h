@@ -450,6 +450,24 @@ public:
         }
     }
 
+    //! Releases the operation's claim on the listening socket when the controller completes the operation
+    /** Called on the I/O thread before the result is delivered: the code that gets the result can use the socket at
+        once, although the operation object is released only later (its last references can be released on a callback
+        worker).  The claim is otherwise released when the accept ends or the operation is aborted, but the controller
+        ends a wait whose descriptor was closed or replaced without either.  abort() never closes the socket, so the
+        claim can be released here whatever the order.
+    */
+    DLLLOCAL virtual bool handleCompletion(bool canceled, const QoreHashNode* ex_hash, ExceptionSink* xsink) override {
+        if (sock) {
+            AutoLocker al(sock->priv->m);
+            if (set_non_block_accept) {
+                sock->priv->clearNonBlockAccept();
+                set_non_block_accept = false;
+            }
+        }
+        return false;
+    }
+
 protected:
     QoreSocketObject* sock = nullptr;
     int state = SPS_NONE;
@@ -529,11 +547,40 @@ public:
         return aborted_before_accept || state == SPS_ACCEPTING;
     }
 
+    //! Makes the accepted socket available to C++ callers with takeAcceptedSocket() instead of getOutput()
+    /** The TLS handshake of the accepted connection is then polled with a pollable wrapper of the accepted socket
+        instead of a Socket object: releasing a Socket object invalidates its socket, which the caller gets.  Call
+        before the operation is submitted.
+    */
+    DLLLOCAL void setNativeOutput() {
+        native_output = true;
+    }
+
+    //! Returns the accepted socket, which the caller then owns (one reference), or nullptr if none was accepted
+    DLLLOCAL QoreSocketObject* takeAcceptedSocket(ExceptionSink* xsink) {
+        QoreObject* wrapper;
+        QoreSocketObject* rv;
+        {
+            AutoLocker al(sock->priv->m);
+            rv = accepted_socket.release();
+            wrapper = accepted_socket_obj.release();
+        }
+        // the pollable wrapper of the TLS handshake holds a reference of its own; releasing it does not invalidate
+        // the socket
+        if (wrapper) {
+            assert(native_output);
+            wrapper->deref(xsink);
+        }
+        return rv;
+    }
+
 protected:
     mutable SimpleRefHolder<QoreSocketObject> accepted_socket;
     //! Cached QoreObject wrapper for the accepted socket during SSL handshake
     mutable ReferenceHolder<QoreObject> accepted_socket_obj;
     SocketSource* source = nullptr;
+    //! True if the accepted socket is taken with takeAcceptedSocket(); see setNativeOutput()
+    bool native_output = false;
 
     //! Called in the constructor
     DLLLOCAL virtual int preVerify(ExceptionSink* xsink) {
@@ -559,7 +606,8 @@ protected:
             // Cache the QoreObject wrapper to avoid creating a new one each time
             if (!accepted_socket_obj) {
                 accepted_socket->ref();
-                accepted_socket_obj = new QoreObject(QC_SOCKET, getProgram(), *accepted_socket);
+                accepted_socket_obj = new QoreObject(native_output ? QC_ABSTRACTPOLLABLEIOOBJECTBASE : QC_SOCKET,
+                    getProgram(), *accepted_socket);
             }
             accepted_socket_obj->ref();
             info->setKeyValue("socket", *accepted_socket_obj, xsink);
@@ -1522,6 +1570,15 @@ public:
         return h2_session && h2_session->isGoawayReceived();
     }
 
+    //! Releases the records of a stream that the application is done with; see Http2Session::releaseStream()
+    /** I/O thread only
+    */
+    DLLLOCAL void releaseStream(int32_t stream_id) {
+        if (h2_session) {
+            h2_session->releaseStream(stream_id);
+        }
+    }
+
     //! Collects the response header of each stream whose header arrived and has not been reported
     /** @see Http2Session::takeResponseHeaderEvents()
 
@@ -1866,9 +1923,12 @@ public:
         and swaps the fd on the underlying socket object.
 
         @param xsink exception sink
-        @return 0 on success, -1 on error
+        @param conn_id_blocked if not null, set to true instead of raising an exception when the peer has provided
+        no spare connection ID for a new path (see QuicSession::initiateMigration()); nothing is changed then
+        @return 0 on success, 1 if the migration was not made for lack of a spare connection ID (only with
+        \a conn_id_blocked), -1 on error
     */
-    DLLLOCAL int migrateConnection(ExceptionSink* xsink);
+    DLLLOCAL int migrateConnection(ExceptionSink* xsink, bool* conn_id_blocked = nullptr);
 
 private:
     DLLLOCAL QoreHashNode* continueResolve(ExceptionSink* xsink);

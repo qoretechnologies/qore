@@ -39,7 +39,10 @@
 #include <qore/AbstractPollableIoObjectBase.h>
 #include <qore/QoreThreadLock.h>
 
+#include <memory>
+
 class QoreSSLCertificate;
+class QoreConnectionDestinations;
 class QoreSSLPrivateKey;
 class Queue;
 class my_socket_priv;
@@ -83,6 +86,7 @@ class QoreSocketObject : public AbstractPollableIoObjectBase {
     friend class SocketHttp2FlushPollOperation;
     friend class SocketHttp2ClientMultiplexPollOperation;
     friend class AsyncIoControllerPriv;
+    friend class AsyncIoDescriptorHoldTest;
     friend class SocketSendAndReadHeaderPollOperation;
     friend class SocketSendStreamAndReadHeaderPollOperation;
     friend class SocketRecvFromPollOperation;
@@ -112,6 +116,17 @@ public:
         @since %Qore 3.0
     */
     DLLLOCAL void dbgCloseAtNextSslIo();
+
+    //! Debug-only: returns the number of records that a session of the socket keeps for its streams, by kind
+    /** Called via the @c dbg_socket_stream_records() debug builtin in @ref lib/ql_debug.cpp, so tests can show that
+        a long-lived session does not keep records for the streams it has finished.
+
+        @param session_id the ID of a QUIC session of the socket; 0 for the HTTP/2 session of the socket
+        @param xsink raises \c DBG-ARGUMENT-ERROR if the socket has no such session
+
+        @since %Qore 3.0
+    */
+    DLLLOCAL QoreHashNode* dbgGetStreamRecordCounts(int64_t session_id, ExceptionSink* xsink);
 #endif
 
     DLLEXPORT QoreSocketObject();
@@ -254,9 +269,53 @@ public:
 
     // get port number for INET sockets
     DLLEXPORT int getPort();
+
+    //! Accepts a connection on a listening socket, waiting for one without a timeout
+    /** @param source if not null, set to the address of the connection's peer
+        @param xsink if an error occurs, the Qore-language exception information will be added here
+
+        @return a new socket object for the accepted connection, of which the caller owns the only reference (it is
+        normally given to a new Socket object: <tt>new QoreObject(QC_SOCKET, getProgram(), sock)</tt>), or nullptr
+        if an exception was raised
+
+        @par Example:
+        @code{.cpp}
+QoreSocketObject* accepted = listener->accept(nullptr, xsink);
+if (accepted) {
+    ReferenceHolder<QoreObject> obj(new QoreObject(QC_SOCKET, getProgram(), accepted), xsink);
+    accepted->send("hello", 5, 5000, xsink);
+}
+        @endcode
+    */
     DLLEXPORT QoreSocketObject* accept(SocketSource* source, ExceptionSink* xsink);
+
+    //! Accepts a connection on a listening socket and negotiates TLS with the socket's certificate and key
+    /** @param xsink if an error occurs, the Qore-language exception information will be added here
+        @param source if not null, set to the address of the connection's peer
+
+        @return a new socket object for the accepted connection, of which the caller owns the only reference, or
+        nullptr if an exception was raised; see accept(SocketSource*, ExceptionSink*)
+    */
     DLLEXPORT QoreSocketObject* acceptSSL(ExceptionSink* xsink, SocketSource* source);
+
+    //! Accepts a connection on a listening socket, waiting at most the given time for one
+    /** @param timeout_ms the maximum time to wait for a connection in milliseconds; -1 for no timeout
+        @param xsink if an error occurs, the Qore-language exception information will be added here
+
+        @return a new socket object for the accepted connection, of which the caller owns the only reference, or
+        nullptr if no connection arrived within the timeout (without an exception) or if an exception was raised; see
+        accept(SocketSource*, ExceptionSink*)
+    */
     DLLEXPORT QoreSocketObject* accept(int timeout_ms, ExceptionSink* xsink);
+
+    //! Accepts a connection and negotiates TLS with the socket's certificate and key, waiting at most the given time
+    /** @param xsink if an error occurs, the Qore-language exception information will be added here
+        @param timeout_ms the maximum time to wait for a connection in milliseconds; -1 for no timeout
+
+        @return a new socket object for the accepted connection, of which the caller owns the only reference, or
+        nullptr if no connection arrived within the timeout (without an exception) or if an exception was raised; see
+        accept(SocketSource*, ExceptionSink*)
+    */
     DLLEXPORT QoreSocketObject* acceptSSL(ExceptionSink* xsink, int timeout_ms);
 
     DLLEXPORT int listen(int backlog);
@@ -382,6 +441,16 @@ public:
         @since %Qore 1.12
     */
     DLLEXPORT int getPollableDescriptor() const override;
+
+    //! Keeps the socket's descriptor open while the async I/O controller has it registered in an event loop
+    /** A close() in another thread meanwhile closes the socket for its users at once and shuts the descriptor down,
+        and the descriptor is closed when the hold is released.
+
+        @see AbstractPollableIoObjectBase::holdPollableDescriptor()
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT int holdPollableDescriptor(int fd, std::shared_ptr<void>& hold) const override;
 
 #ifdef DARWIN
     //! Sets the write end of a notification pipe for kqueue poll on macOS
@@ -717,6 +786,13 @@ public:
     */
     DLLLOCAL void setSslTargetHostForAsyncPoll(const char* host);
 
+    //! Returns where the socket's current connection leads, or a null pointer if no asynchronous connect recorded it
+    /** Can be called from any thread; see QoreConnectionDestinations
+
+        @since %Qore 3.0
+    */
+    DLLLOCAL std::shared_ptr<const QoreConnectionDestinations> getConnectedDestinations() const;
+
     //! Returns the trailers received for an HTTP/2 stream, or nullptr if none were received
     /** Can be called from any thread
 
@@ -730,6 +806,30 @@ public:
         HTTP/2 session.
     */
     DLLLOCAL std::vector<int32_t> takeHttp2PeerResetReportsForAsyncPoll();
+
+    //! Releases the records that the HTTP/2 session of the socket keeps for a stream that the caller is done with
+    /** See Http2Session::releaseStream(); a no-op if the socket has no HTTP/2 session.  Not for an I/O thread that
+        holds the lock of the socket.
+    */
+    DLLLOCAL void releaseHttp2Stream(int32_t stream_id);
+
+    //! Marks an HTTP/2 server stream whose request body is delivered to a Queue that the handler registers
+    /** See Http2Session::setStreamBodyConsumer(); a no-op if the socket has no HTTP/2 session.  Not for an I/O thread
+        that holds the lock of the socket.
+    */
+    DLLLOCAL void setHttp2StreamBodyConsumer(int32_t stream_id);
+
+    //! Releases the body consumer of an HTTP/2 server stream once its Queue has received the end of the body
+    /** See Http2Session::releaseStreamBodyConsumer(); a no-op if the socket has no HTTP/2 session.  Not for an I/O
+        thread that holds the lock of the socket.
+    */
+    DLLLOCAL void releaseHttp2StreamBodyConsumer(int32_t stream_id);
+
+    //! Releases the records that a QUIC session of the socket keeps for a stream that the caller is done with
+    /** See QuicSession::releaseStream(); a no-op if the socket has no such session.  Not for an I/O thread that
+        holds the lock of the socket.
+    */
+    DLLLOCAL void releaseQuicStream(int64_t session_id, int64_t stream_id);
 
     //! Watches the response on an HTTP/2 server stream so that the result of its transmission is reported
     /** Must be called before the response is submitted; see Http2Session::watchResponseSend().  The result is

@@ -210,6 +210,22 @@ log("started listener on %s", lh.desc);
     @section http_relnotes HttpServer Module Release Notes
 
     @subsection http1_7 HttpServer 1.7
+    - a request whose path contains an escaped NUL character (\c %00), which names no resource, is answered with
+      status 400 (Bad Request) before a handler is selected, over HTTP/1.1, HTTP/2 and HTTP/3; before, the handler
+      was selected by the path cut at the NUL character, so that \c "/a%00b" was handled by the handler of \c "/a",
+      or the decoded path reached the default handler
+    - an HTTP/1.x request with a NUL character in a header line is answered with status 400 (Bad Request), and the
+      connection is closed, as a request with one in its request line already was; before, the request was handled
+      without the header lines from the NUL character on
+    - an HTTP/1.x request with a field line that RFC 9112 does not allow, such as a bare CR, whitespace before the
+      colon (<tt>"Host : x"</tt>), an obsolete line folding or a line without a colon, is answered with status 400
+      (Bad Request), and the connection is closed, as RFC 9112 requires; before, the request was handled, and an
+      obsolete line folding or a line without a colon ended the header, so that the header lines after it, such as
+      \c Content-Length, were lost
+    - @ref HttpServer::HttpServer::stop() "HttpServer::stop()" and stopping a listener close the dedicated
+      connections, such as WebSocket connections, with their protocol's closing handshake, all at the same time: the
+      stop waits at most the handlers' close timeout in total for the clients to answer the server's close frame
+      (code 1001, going away); before, a WebSocket connection was closed as soon as the server's close frame was sent
     - response bodies are compressed on the fly with levels suited to compressing them for each request, set with the
       new \c compression_levels server option and @ref HttpServer::HttpServer::setCompressionLevels()
       "setCompressionLevels()" (defaults: Brotli quality 5, Zstandard level 3, gzip and deflate level 6, bzip2 level
@@ -1564,6 +1580,13 @@ server.setCompressionLevels({"br": 4, "zstd": 3});
 
         @note The listener listens on all interfaces with one dual-stack socket that serves both IPv4 and IPv6
         clients; see @ref Qore::Socket::bindINET() "Socket::bindINET()"
+
+        @note On macOS, a listener on all interfaces is refused a port that another program already uses for IPv4 on
+        \c 0.0.0.0 or \c 127.0.0.1 (\c SOCKET-BIND-ERROR), as Linux refuses it, and a port assigned by the system
+        (port \c 0) is one that no IPv4 socket uses.  A program of the same user that later binds a specific address
+        of the port with \c SO_REUSEADDR still receives the IPv4 clients of that address on macOS; a server whose
+        clients connect to one address, such as \c 127.0.0.1, listens on that address with a \c node to avoid it.
+        See @ref Qore::Socket::bindINET() "Socket::bindINET()"
      */
     hash<auto> addListener(int port) {
         hash<auto> rv = addListenerAsync(port).get();
@@ -1621,6 +1644,13 @@ server.setCompressionLevels({"br": 4, "zstd": 3});
         @note A listener with a \c service and no \c node or \c family listens on all interfaces with one
         dual-stack socket that serves both IPv4 and IPv6 clients; see @ref Qore::Socket::bindINET()
         "Socket::bindINET()"
+
+        @note On macOS, a listener on all interfaces is refused a port that another program already uses for IPv4 on
+        \c 0.0.0.0 or \c 127.0.0.1 (\c SOCKET-BIND-ERROR), as Linux refuses it, and a port assigned by the system
+        (port \c 0) is one that no IPv4 socket uses.  A program of the same user that later binds a specific address
+        of the port with \c SO_REUSEADDR still receives the IPv4 clients of that address on macOS; a server whose
+        clients connect to one address, such as \c 127.0.0.1, listens on that address with a \c node to avoid it.
+        See @ref Qore::Socket::bindINET() "Socket::bindINET()"
      */
     hash<auto> addListener(hash<HttpListenerOptionInfo> opts) {
         hash<auto> rv = addListenerAsync(opts).get();
@@ -1699,8 +1729,9 @@ server.setCompressionLevels({"br": 4, "zstd": 3});
         # IPv4 0.0.0.0 silently share a UDP port, after which the kernel delivers
         # IPv4 datagrams only to the IPv4 socket — the H3 listener bound on [::]
         # would then never receive any traffic from IPv4 clients.  With reuseaddr
-        # disabled the bind fails on conflict and the random-port retry path in
-        # addINETListenersInternResolved() picks a fresh port that actually works.
+        # disabled the bind fails on conflict (on macOS, Socket::bindINET() checks
+        # the port for IPv4 on 0.0.0.0 and 127.0.0.1 itself), and the random-port
+        # retry in addListenerIntern() picks a fresh port that actually works.
         udp_sock.bindINET(bind_addr, bind_port, False, family, SOCK_DGRAM);
 
         # Get the actual port that was bound
@@ -2071,6 +2102,10 @@ server.setCompressionLevels({"br": 4, "zstd": 3});
 
     #! Stops the HTTP server and releases all resources
     /** Performs a synchronous, ordered shutdown:
+        -# Closes the dedicated connections with their protocol's closing handshake, all at the same time: WebSocket
+           connections are sent a close frame (code 1001, going away), and the server waits for the clients' close
+           frames at most the close timeout of their handlers in total (see
+           @ref WebSocketHandler::WebSocketHandler::setCloseTimeout() "WebSocketHandler::setCloseTimeout()")
         -# Signals streaming handlers (SSE, WebSocket) to stop
         -# Stops the async I/O controller (cancels all accept, connection, and streaming
            operations and waits for in-flight handler tasks to complete)
@@ -2098,6 +2133,11 @@ server.setCompressionLevels({"br": 4, "zstd": 3});
             }
             callback_appender = NOTHING;
         }
+        # Close the dedicated connections (for example WebSocket connections) with their protocol's closing handshake
+        # first, while the I/O that the handshakes need still runs; all of them close at the same time, so this
+        # waits at most one handshake timeout in total
+        closeDedicatedConnections();
+
         # Cancel operations owned by this server on the global controller FIRST
         # (e.g. HTTP/2 and HTTP/3 poll operations from execAsyncPollOperation).
         # This must happen before asyncIo.stop() because that method calls
@@ -2152,6 +2192,27 @@ server.setCompressionLevels({"br": 4, "zstd": 3});
             stopped = True;
             stopping = False;
         }
+    }
+
+    #! Closes the dedicated connections of all listeners with their protocol's closing handshake, all at the same time
+    /** Each dedicated socket handler starts the closing handshake on its connections
+        (@ref HttpServer::AbstractHttpSocketHandlerInterface::startClosingConnections()
+        "AbstractHttpSocketHandlerInterface::startClosingConnections()"), and then the server waits until the latest
+        of the deadlines that the handlers return; the connections still open then are stopped at once with the
+        listeners.
+    */
+    private closeDedicatedConnections() {
+        hash<string, AbstractHttpSocketHandlerInterface> handlers = {};
+        {
+            lm.enter();
+            on_exit lm.exit();
+            foreach HttpListener l in (listeners.iterator()) {
+                handlers += l.getDedicatedSocketHandlers();
+            }
+        }
+        HttpListener::closeHandlerConnections(handlers, NOTHING, sub (string fmt, ...) {
+            logError("%s", vsprintf(fmt, argv));
+        });
     }
 
     #! stops a single listener based on its name or bind address; does not return until all connections on the listener have closed
@@ -3623,6 +3684,22 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
             listener.logError("%s", str);
             cx.close = True;
             sendHttpError(listener, cx, s, 501, err, NOTHING, NOTHING, cx."response-encoding", head);
+            return;
+        }
+
+        # the decoded resource path selects the handler by key; an escaped NUL character (%00) decodes to a path that
+        # names no resource and cannot be a key, so the request is malformed; it is answered before any handler is
+        # selected, and an HTTP/1.x connection is closed, as the request body has not been read
+        if (exists hdr.path && hdr.path.contains(chr(0))) {
+            string err = "the request path contains an escaped NUL character";
+            listener.logError("%s: received from %s via %s", err, info.address_desc,
+                listener.getListenerSocketInfo().address_desc);
+            if (async_response_out) {
+                async_response_out = buildAsyncErrorResponse(400, err, cx, listener, s, !is_multiplexed);
+            } else {
+                cx.close = True;
+                sendHttpError(listener, cx, s, 400, err, NOTHING, NOTHING, cx."response-encoding", head);
+            }
             return;
         }
 
@@ -5837,6 +5914,11 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
 
         # stop all dedicated socket connections
         {
+            # their protocol's closing handshake runs first, on all connections at the same time
+            closeHandlerConnections(getDedicatedSocketHandlers(), id, silent ? NOTHING : sub (string fmt, ...) {
+                logError("%s", vsprintf(fmt, argv));
+            });
+
             *hash<string, AbstractHttpSocketHandlerInterface> shh_copy;
             {
                 m.lock();
@@ -6042,6 +6124,54 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                 serv.logErrorArgs(args);
             } catch () {
                 # ignore if server was deleted
+            }
+        }
+    }
+
+    #! Returns the dedicated socket handlers of the listener's connections, keyed by their unique hashes
+    hash<string, AbstractHttpSocketHandlerInterface> getDedicatedSocketHandlers() {
+        hash<string, AbstractHttpSocketHandlerInterface> rv = {};
+        m.lock();
+        on_exit m.unlock();
+        foreach AbstractHttpSocketHandlerInterface h in (shh.iterator()) {
+            rv{h.uniqueHash()} = h;
+        }
+        return rv;
+    }
+
+    #! Closes the connections of dedicated socket handlers with their protocol's closing handshake
+    /** All the handlers start the handshake on their connections, then the latest of their deadlines is waited for,
+        so the wait is at most one handshake timeout in total.
+
+        @param handlers the handlers, keyed by their unique hashes
+        @param lid the listener ID, or @ref nothing for all listeners
+        @param log_error the error logging function, if any
+    */
+    static closeHandlerConnections(hash<string, AbstractHttpSocketHandlerInterface> handlers, *softstring lid,
+            *code log_error) {
+        *date deadline;
+        foreach AbstractHttpSocketHandlerInterface h in (handlers.iterator()) {
+            try {
+                *date d = h.startClosingConnections(lid);
+                if (d && (!deadline || d > deadline)) {
+                    deadline = d;
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                if (log_error) {
+                    log_error("error closing dedicated connections: %s: %s", ex.err, ex.desc);
+                }
+            }
+        }
+        if (!deadline) {
+            return;
+        }
+        foreach AbstractHttpSocketHandlerInterface h in (handlers.iterator()) {
+            try {
+                h.waitForConnectionsClosed(deadline, lid);
+            } catch (hash<ExceptionInfo> ex) {
+                if (log_error) {
+                    log_error("error waiting for dedicated connections to close: %s: %s", ex.err, ex.desc);
+                }
             }
         }
     }

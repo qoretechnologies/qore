@@ -1,0 +1,131 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Logger
+%requires HttpServerUtil
+%requires HttpServer
+%requires WebSocketUtil
+%requires WebSocketHandler
+%requires WebSocketClient
+%requires AsyncSocketIo
+%requires ../../TestCertificates.qm
+
+%exec-class WebSocketH2PendingRegistrationTest
+
+#! echoes each message back
+class EchoConnection inherits WebSocketConnection {
+    constructor(WebSocketHandler handler) : WebSocketConnection(handler) {
+    }
+
+    gotMessage(string msg) {
+        send("RESPONSE:" + msg);
+    }
+}
+
+class EchoHandler inherits WebSocketHandler {
+    WebSocketConnection getConnectionImpl(hash<auto> cx, hash<auto> hdr, string cid) {
+        return new EchoConnection(self);
+    }
+}
+
+#! Tests that a WebSocket client over HTTP/2 gets data that arrives before the I/O thread applies its stream's queue
+/** A WebSocket client over HTTP/2 registers its stream's queue on its own thread, and the connection's I/O thread
+    applies the registration when it next drains the stream queues of a read cycle, after the data of the cycle has
+    been dispatched.  The data of a WebSocket stream is decoded into the queue by the stream's frame state when it is
+    dispatched, and the client is told of it only if the stream is registered then: a registration made since the last
+    drain was not taken for one, so the client was not told of data that arrived before the next drain.  The answer to
+    the client's first message, which can arrive in the first read cycle after the registration, then waited for the
+    next data the stream got (the answer to the heartbeat PING 20 seconds later): WebSocketH2Scan.qtest failed with
+    ETIMEDOUT in 0.2% of its runs on macOS (CI pipeline 61208, job 213609).
+
+    A debug hook holds the registrations pending, so the client's data always arrives before its registration is
+    applied.
+*/
+class WebSocketH2PendingRegistrationTest inherits QUnit::Test {
+    public {
+        const CertPem = TestCertificates::CertPem;
+        const KeyPem = TestCertificates::KeyPem;
+    }
+
+    private {
+        HttpServer server;
+        *hash<auto> h2info;
+        Logger logger("test", LoggerLevel::getLevelInfo());
+    }
+
+    constructor() : QUnit::Test("WebSocket HTTP/2 pending stream registration", "1.0") {
+        server = new HttpServer(<HttpServerOptionInfo>{"logger": logger});
+        EchoHandler handler();
+        server.setHandler("ws-handler", "", NOTHING, handler);
+        server.setDefaultHandler("ws-handler", handler);
+        try {
+            h2info = server.addListener(<HttpListenerOptionInfo>{
+                "node": "localhost",
+                "service": 0,
+                "cert": new SSLCertificate(CertPem),
+                "key": new SSLPrivateKey(KeyPem),
+                "http_version": "auto",
+                "enable_h3": False,
+            });
+        } catch (hash<ExceptionInfo> ex) {
+            # SSL might not be available
+        }
+
+        addTestCase("data that arrives while the stream's registration is pending reaches the client",
+            \pendingRegistrationTest());
+        set_return_value(main());
+
+        server.stop();
+        AsyncSocketIo::AsyncSocketIoController ctrl = AsyncSocketIo::getGlobalAsyncIoController();
+        ctrl.stopClear();
+    }
+
+    pendingRegistrationTest() {
+        if (!h2info) {
+            testSkip("HTTPS/HTTP/2 listener not available");
+        }
+        # the debug hook is registered only in debug builds
+        try {
+            call_function("dbg_h2_client_hold_stream_registrations", True);
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "NO-FUNCTION" || ex.err == "UNDEFINED-FUNCTION-CALL") {
+                testSkip("debug build required for dbg_h2_client_hold_stream_registrations()");
+            }
+            rethrow;
+        }
+        on_exit call_function("dbg_h2_client_hold_stream_registrations", False);
+
+        Counter received(1);
+        *string response;
+        code cb = sub (*data msg) {
+            if (exists msg && !exists response) {
+                response = msg;
+                received.dec();
+            }
+        };
+        # no heartbeat: nothing but the answer reaches the stream
+        WebSocketClient wsc(cb, {
+            "url": "wss://localhost:" + h2info.port,
+            "logger": logger,
+            "http_version": "2.0",
+            "ssl_verify_cert": False,
+            "heartbeat": 0,
+        });
+        wsc.connect();
+        on_exit wsc.disconnect();
+        assertTrue(wsc.isHttp2(), "the client connects over HTTP/2");
+
+        wsc.send("REQUEST");
+        assertEq(0, received.waitForZero(10s), "the client gets the answer");
+        assertEq("RESPONSE:REQUEST", response);
+
+        # the registration is applied again before the client closes the stream, which it reports
+        call_function("dbg_h2_client_hold_stream_registrations", False);
+    }
+}

@@ -55,6 +55,12 @@ static void FILEINPUTSTREAM_system_constructor(QoreObject* self, int fd, va_list
     method in the thread that currently owns the stream, and the
     @ref Qore::StreamBase::reassignThread() "StreamBase::reassignThread()" method in the new thread.
 
+    @note A read that must not wait (including those made for the stream by the async I/O controller) leaves the
+    file status flags of the stream's descriptor unchanged, so that other holders of the descriptor's open file
+    description (for example an inherited standard input) are not affected: a pipe, a FIFO or a terminal is
+    checked for readiness first.  The stream must therefore not share a pipe with other concurrent readers: data
+    that another reader takes between the check and the read makes the read wait for the pipe.
+
     @see @ref Qore::StreamReader "StreamReader" for a class that can be used to read various kinds of data from an @ref Qore::InputStream "InputStream"
 
     @since %Qore 0.8.13
@@ -163,7 +169,9 @@ int FileInputStream::getPollableDescriptor() [flags=CONSTANT] {
 }
 
 //! Reads up to \a limit bytes with a timeout; returns \ref NOTHING if no data available
-/**
+/** A wait with a positive timeout ends at once when the thread is cancelled (see
+    @ref Qore::cancel_thread() "cancel_thread()") or its Program is interrupted.
+
     @param limit the maximum number of bytes to read
     @param timeout_ms timeout in milliseconds (-1 for blocking, 0 for non-blocking)
 
@@ -172,6 +180,8 @@ int FileInputStream::getPollableDescriptor() [flags=CONSTANT] {
     @throw INPUT-STREAM-ERROR \a limit is not positive
     @throw FILE-READ-ERROR if an I/O error occurs
     @throw STREAM-THREAD-ERROR this exception is thrown if this method is called from any thread other than the thread that created the object
+    @throw THREAD-CANCELLED the thread was cancelled during the wait
+    @throw PROGRAM-INTERRUPTED the thread's Program was interrupted during the wait
 
     @since %Qore 2.2
 */

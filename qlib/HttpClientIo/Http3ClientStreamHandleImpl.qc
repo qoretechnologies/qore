@@ -94,6 +94,9 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
         #! True when the request write side remains open after startStreaming()
         bool request_body_streaming = False;
 
+        #! The reset of the stream by the server, as a send reported it; reported again by every later send
+        *hash<ExceptionInfo> send_reset;
+
         #! Per-stream \c Queue for async QUIC datagram delivery (RFC 9221/9297)
         /** Lazily created on the first @ref readDatagram() call and registered with
             the QUIC session via @ref Qore::Socket::registerQuicDatagramQueue().  The
@@ -105,6 +108,8 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
     }
 
     #! Destructor — unregisters the datagram queue if one was registered
+    /** The session of the connection also releases the records it keeps for the stream
+    */
     destructor() {
         if (exists datagram_queue && exists stream_id) {
             *int sid = h3conn.getSessionId();
@@ -114,6 +119,13 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
                 } catch () {
                     # Best-effort cleanup during teardown; session may already be gone
                 }
+            }
+        }
+        if (exists stream_id) {
+            try {
+                h3conn.releaseStream(stream_id);
+            } catch () {
+                # Best-effort cleanup during teardown; the connection may already be closed
             }
         }
     }
@@ -385,19 +397,24 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
     }
 
     #! Sends data on a streaming connection
-    /** @param data the data to send
-        @param end_stream if True, signals end of stream; if the stream is
-        already in a terminal state when \a end_stream is \c True, the call
-        is a no-op (half-close is idempotent)
+    /** The request can be sent whatever has been read of the response: a server can send its complete response
+        before the request is complete and keep reading the request (RFC 9114 section 4.1), and a send reports a stop,
+        a close or a reset of the stream by the server in the same way before and after the response is read.
 
-        @throw HTTPCLIENT-STATE-ERROR if not in streaming mode, stream is
-        closed, or stream is not yet established
+        @param data the data to send
+        @param end_stream if True, signals end of stream; an empty half-close (no data and \a end_stream \c True) of
+        a stream that the server stopped reading or closed without an error, or that was cancelled, is a no-op
+        (half-close is idempotent)
+
+        @throw HTTPCLIENT-STATE-ERROR if not in streaming mode, the stream was not started or was cancelled, it is not
+        yet established, or its request body is not streamed
         @throw HTTPCLIENT-STREAM-CLOSED if the connection is closed, or if the
         server has stopped reading the stream or closed it without an error, for
         example with \c STOP_SENDING(H3_NO_ERROR) after sending its complete
         response before the request was complete (RFC 9114 section 4.1.2); the
         response can still be read with @ref readData()
-        @throw QUIC-STREAM-RESET if the server reset the stream with an error
+        @throw QUIC-STREAM-RESET if the server reset the stream or stopped reading it with an error; every later send
+        raises it again
     */
     sendData(data data, bool end_stream = False) {
         int sid;
@@ -406,9 +423,12 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
             if (!streaming) {
                 throw "HTTPCLIENT-STATE-ERROR", "not in streaming mode";
             }
-            if (state != HttpClientStreamState::Open
-                    && state != HttpClientStreamState::HeadersReceived
-                    && state != HttpClientStreamState::ReceivingBody) {
+            # a reset is reported again by every later send
+            if (send_reset) {
+                throw send_reset.err, send_reset.desc, send_reset.arg;
+            }
+            # a stream that was not started or that the caller cancelled takes no data
+            if (state == HttpClientStreamState::Pending || state == HttpClientStreamState::Cancelled) {
                 if (end_stream && data.empty()) {
                     # Half-close on an already-closed stream is a no-op;
                     # the send side is already effectively closed
@@ -417,6 +437,10 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
                 throw "HTTPCLIENT-STATE-ERROR",
                     sprintf("cannot send data in state: %y", state);
             }
+            # what has been read of the response does not decide whether the request can still be sent: a server can
+            # send its complete response before the request is complete and keep reading the request, and the
+            # session reports a close or a reset of the stream to the sender before and after the response is read,
+            # so a send has the same result whether or when another thread read the response
             if (!exists stream_id) {
                 throw "HTTPCLIENT-STATE-ERROR", "stream not yet established";
             }
@@ -434,8 +458,10 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
         # checks.  The underlying H3 connection may have been closed while the
         # stream handle's state is still Open.  Catching this here produces a
         # clean HTTPCLIENT-STREAM-CLOSED instead of an opaque protocol-level
-        # error from sendStreamData().
-        if (!h3conn.isReady()) {
+        # error from sendStreamData().  A draining connection (the server sent
+        # GOAWAY) still completes the streams in progress (RFC 9114 section
+        # 5.2), so their requests can still be sent.
+        if (h3conn.isClosed()) {
             if (end_stream && data.empty()) {
                 return;
             }
@@ -465,6 +491,10 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
             if (ex.err == "QUIC-STREAM-CLOSED") {
                 throw "HTTPCLIENT-STREAM-CLOSED", sprintf("cannot send data: stream %d was closed by the server",
                     sid);
+            }
+            if (ex.err == "QUIC-STREAM-RESET") {
+                AutoLock al(lock);
+                send_reset = ex;
             }
             rethrow;
         }

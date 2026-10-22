@@ -913,7 +913,7 @@ public class SquarespaceDataProviderTest inherits QUnit::Test {
             "logger": new Logger("server", LoggerLevel::getLevelError()),
         });
         on_exit server.stop();
-        int port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
         FakeSquarespaceHandler handler();
         server.setHandler("squarespace", "", NOTHING, handler);
         server.setDefaultHandler("squarespace", handler);

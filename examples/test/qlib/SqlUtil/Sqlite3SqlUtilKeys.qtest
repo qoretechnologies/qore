@@ -173,8 +173,8 @@ class Sqlite3KeysTest inherits QUnit::Test {
         composite.setupTable({"columns": {"a": {"native_type": "integer", "notnull": True},
             "group": {"native_type": "text", "notnull": True}, "v": {"native_type": "text"}},
             "primary_key": {"name": "pk_created_composite", "columns": ("group", "a")}});
-        assertEq("create table created_composite (\n  a integer not null,\n  'group' text not null,\n  v text,\n"
-            "  primary key ('group', a)\n)", composite.getCreateTableSql());
+        assertEq("create table created_composite (\n  a integer not null,\n  \"group\" text not null,\n  v text,\n"
+            "  primary key (\"group\", a)\n)", composite.getCreateTableSql());
 
         # a table without a key
         Sqlite3Table none(ds, "created_none");
@@ -289,7 +289,7 @@ class Sqlite3KeysTest inherits QUnit::Test {
         assertEq("create table fk_line (\n  id integer not null,\n  order_id integer,\n  item_group text,\n"
             "  item_id integer,\n  primary key (id),\n"
             "  constraint fk_line_order foreign key (order_id) references fk_order (id),\n"
-            "  constraint fk_line_item foreign key (item_group, item_id) references fk_item ('group', id)\n)",
+            "  constraint fk_line_item foreign key (item_group, item_id) references fk_item (\"group\", id)\n)",
             line.getCreateTableSql());
         assertEq((line.getCreateTableSql(),), line.getCreateSql(), "there is no separate foreign constraint SQL");
         hash<auto> omit_opt = {};
@@ -511,8 +511,8 @@ class Sqlite3KeysTest inherits QUnit::Test {
         };
         Sqlite3Table created(ds, "created_unique");
         created.setupTable(desc);
-        assertEq(("create table created_unique (\n  id integer not null,\n  'group' text not null,\n  code text,\n"
-            "  v text,\n  primary key (id),\n  constraint uk_created_unique_code unique (code, 'group')\n)",
+        assertEq(("create table created_unique (\n  id integer not null,\n  \"group\" text not null,\n  code text,\n"
+            "  v text,\n  primary key (id),\n  constraint uk_created_unique_code unique (code, \"group\")\n)",
             "create unique index ui_created_unique_v on created_unique (v)"), created.getCreateSql(),
             "there is no separate unique constraint SQL");
         created.create();
@@ -541,9 +541,9 @@ class Sqlite3KeysTest inherits QUnit::Test {
         # the description creates the constraints with another table
         Sqlite3Table copy(ds, "created_unique_copy");
         copy.setupTable(live_desc - "indexes");
-        assertEq("create table created_unique_copy (\n  id integer not null,\n  'group' text not null,\n"
+        assertEq("create table created_unique_copy (\n  id integer not null,\n  \"group\" text not null,\n"
             "  code text,\n  v text,\n  primary key (id),\n"
-            "  constraint sqlite_autoindex_created_unique_1 unique (code, 'group'),\n"
+            "  constraint sqlite_autoindex_created_unique_1 unique (code, \"group\"),\n"
             "  constraint ui_created_unique_v unique (v)\n)", copy.getCreateTableSql());
         copy.create();
         assertEq({"sqlite_autoindex_created_unique_copy_1": {"columns": ("code", "group")},

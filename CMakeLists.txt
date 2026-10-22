@@ -1553,10 +1553,10 @@ qore_search_libs(LIBQORE_LIBS clock_gettime rt)
 
 set(CMAKE_REQUIRED_LIBRARIES ${CMAKE_CXX_IMPLICIT_LINK_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT} ${LIBQORE_LIBS})
 qore_check_funcs(
-    access alarm atoll bzero chown clock_gettime doprnt exp2 floor fork fsync getaddrinfo getegid geteuid
+    access alarm atoll bzero chown clock_gettime doprnt epoll_pwait2 exp2 floor fork fsync getaddrinfo getegid geteuid
     getgid getgrgid_r getgrnam_r getgroups gethostbyaddr gethostbyname gethostname getifaddrs getnameinfo getppid
     getpwnam_r getpwuid_r getrlimit getsockopt gettimeofday getuid glob gmtime_r inet_ntop inet_pton isblank kill lchown
-    localtime_r link_ntoa lstat memmem memmove memset mkfifo mkfifo nanosleep poll posix_spawn
+    localtime_r link_ntoa lstat memmem memmove memset mkfifo mkfifo nanosleep poll ppoll posix_spawn
     pthread_attr_getstack pthread_attr_getstacksize
     pthread_get_name_np pthread_get_stacksize_np pthread_getname_np putenv random
     readlink realloc realpath regcomp round select setegid setegid setenv
@@ -1759,6 +1759,7 @@ set(LIBQORE_CPP_SRC
     lib/QoreSocket.cpp
     lib/QoreHttpBodyCharset.cpp
     lib/SocketSyncPoll.cpp
+    lib/QorePollCompat.cpp
     lib/QoreEventLoop.cpp
     lib/QoreEventNotifier.cpp
     lib/QoreIoUring.cpp
@@ -1833,6 +1834,7 @@ set(LIBQORE_CPP_SRC
     lib/ParseOptionMap.cpp
     lib/QoreParseOptions.cpp
     lib/SystemEnvironment.cpp
+    lib/QoreForkHandlers.cpp
     lib/QoreCounter.cpp
     lib/QoreFuture.cpp
     lib/ReferenceArgumentHelper.cpp
@@ -2114,6 +2116,7 @@ if (SINGLE_COMPILATION_UNIT)
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreSocket.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreHttpBodyCharset.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/SocketSyncPoll.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QorePollCompat.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreEventLoop.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreEventNotifier.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreIoUring.cpp\"
@@ -2182,6 +2185,7 @@ if (SINGLE_COMPILATION_UNIT)
 #include \"${CMAKE_SOURCE_DIR}/lib/ParseOptionMap.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreParseOptions.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/SystemEnvironment.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreForkHandlers.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreCounter.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreFuture.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/ReferenceArgumentHelper.cpp\"

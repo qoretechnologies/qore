@@ -106,7 +106,7 @@ QoreHashNode* HttpWebSocketPollOperationPriv::continuePoll(ExceptionSink* xsink)
 
     // Check if socket is still open — skip in CLOSING state because the
     // peer's TCP FIN may have arrived before the close echo is sent
-    if (!sock->isOpen() && ws_state != WsState::CLOSING) {
+    if (!sock->isOpen() && (ws_state != WsState::CLOSING || waitsForPeerClose())) {
         setClosed(1006, "Connection lost");
         return nullptr;
     }
@@ -155,6 +155,11 @@ QoreHashNode* HttpWebSocketPollOperationPriv::continuePoll(ExceptionSink* xsink)
             releaseRecvOp(xsink);
             // Recv errors on EAGAIN/TIMEOUT are not fatal — clear and continue
             xsink->clear();
+            if (waitsForPeerClose()) {
+                // the client's close frame can no longer arrive
+                setClosed(1006, "Connection lost");
+                return nullptr;
+            }
         } else if (!recv_info) {
             // Recv complete — process the data
             if (recv_op->goalReached()) {
@@ -229,18 +234,18 @@ QoreHashNode* HttpWebSocketPollOperationPriv::continuePoll(ExceptionSink* xsink)
     // Skip in CLOSING state (FIN would cause SSL errors on the closing
     // socket). No isDataAvailable() — the controller's hasPendingData()
     // check in Phase 1 detects SSL-buffered data that epoll can't see.
-    if (!recv_op && !goalReached() && ws_state != WsState::CLOSING) {
+    // A close the server started reads on until the client's close frame arrives.
+    if (!recv_op && !goalReached() && (ws_state != WsState::CLOSING || waitsForPeerClose())) {
         if (startRecvOp(xsink)) {
             return nullptr;
         }
         poll_events |= SOCK_POLLIN;
     }
 
-    // In CLOSING state: transition to CLOSED when the close handshake
-    // is complete (close_initiated) or the connection is lost
-    if (ws_state == WsState::CLOSING && !send_op && send_queue->empty()
-            && (close_initiated || !sock->isOpen())) {
-        setClosed(close_code, close_reason.c_str());
+    // In CLOSING state: transition to CLOSED when the close handshake is complete (both close frames have been
+    // sent and received, and ours has been written) or the connection is lost; the operation then ends, and the
+    // server closes the TCP connection first (RFC 6455 section 7.1.1)
+    if (checkClosing(xsink)) {
         return nullptr;
     }
 
@@ -256,7 +261,7 @@ QoreHashNode* HttpWebSocketPollOperationPriv::continuePoll(ExceptionSink* xsink)
     // last_ping_sent_ms guards against spamming PINGs when the peer is
     // silent; last_recv_activity_ms reflects real incoming traffic only
     // so any future idle-timeout check can rely on it.
-    if (heartbeat_interval_ms > 0 && !goalReached() && last_recv_activity_ms > 0) {
+    if (heartbeat_interval_ms > 0 && ws_state == WsState::CONNECTED && last_recv_activity_ms > 0) {
         int64 now_ms = q_clock_getmillis();
         int64 since_recv = now_ms - last_recv_activity_ms;
         int64 since_ping = last_ping_sent_ms ? now_ms - last_ping_sent_ms : heartbeat_interval_ms;
@@ -310,16 +315,14 @@ QoreHashNode* HttpWebSocketPollOperationPriv::continuePoll(ExceptionSink* xsink)
     // The first CLOSING check (above Phase 4) may have failed because the
     // close echo was still in the send_queue; now that Phase 4 has sent it,
     // the transition can complete.
-    if (ws_state == WsState::CLOSING && !send_op && send_queue->empty()
-            && (close_initiated || !sock->isOpen())) {
-        setClosed(close_code, close_reason.c_str());
+    if (checkClosing(xsink)) {
         return nullptr;
     }
 
     // Poll for incoming data. Skip in CLOSING state to prevent busy-loop
-    // from the TCP FIN. The wakeSocket mechanism handles the closing
-    // handshake, and the CLOSED transition cleans up the cache entry.
-    if (ws_state != WsState::CLOSING) {
+    // from the TCP FIN, except while a close the server started waits for the client's close frame. The
+    // wakeSocket mechanism handles the closing handshake, and the CLOSED transition cleans up the cache entry.
+    if (ws_state != WsState::CLOSING || waitsForPeerClose()) {
         poll_events |= SOCK_POLLIN;
     }
 
@@ -333,7 +336,7 @@ QoreHashNode* HttpWebSocketPollOperationPriv::continuePoll(ExceptionSink* xsink)
                 poll_timeout = 1;
             }
         }
-        if (heartbeat_interval_ms > 0 && last_recv_activity_ms > 0) {
+        if (heartbeat_interval_ms > 0 && ws_state == WsState::CONNECTED && last_recv_activity_ms > 0) {
             // Measure from the most recent "ping-pacing anchor" — whichever
             // is later of last recv activity or last ping we sent.  Without
             // this, spinning off a PING would keep hb_remaining pinned at 0.
@@ -350,13 +353,23 @@ QoreHashNode* HttpWebSocketPollOperationPriv::continuePoll(ExceptionSink* xsink)
             }
         }
         // schedule a poll for the idle-timeout deadline so the idle check fires even when heartbeat is disabled
-        if (idle_timeout_ms > 0 && last_recv_activity_ms > 0) {
+        if (idle_timeout_ms > 0 && ws_state == WsState::CONNECTED && last_recv_activity_ms > 0) {
             int64 idle_remaining = idle_timeout_ms - (q_clock_getmillis() - last_recv_activity_ms);
             if (idle_remaining <= 0) {
                 idle_remaining = 1;
             }
             if (poll_timeout == 0 || idle_remaining < poll_timeout) {
                 poll_timeout = idle_remaining;
+            }
+        }
+        // wake at the close deadline of a close the server started
+        if (waitsForPeerClose() && close_deadline_ms) {
+            int64 close_remaining = close_deadline_ms - q_clock_getmicros_monotonic() / 1000;
+            if (close_remaining <= 0) {
+                close_remaining = 1;
+            }
+            if (poll_timeout == 0 || close_remaining < poll_timeout) {
+                poll_timeout = close_remaining;
             }
         }
         if (poll_timeout > 0) {
@@ -374,7 +387,7 @@ void HttpWebSocketPollOperationPriv::abort(ExceptionSink* xsink) {
     // double-deref the inner op (refcount 0 -> -1 trips
     // QoreReferenceCounter::ROdereference()).
     AutoLocker al(m);
-    ws_state = WsState::CLOSED;
+    setWsStateValue(WsState::CLOSED);
     releaseSendOp(xsink);
     releaseRecvOp(xsink);
 }
@@ -402,7 +415,7 @@ void HttpWebSocketPollOperationPriv::processDecodedFrames(ExceptionSink* xsink) 
         WsFrame frame = decoder.nextFrame(xsink);
         if (*xsink) {
             // Protocol error — transition to error state
-            ws_state = WsState::ERROR;
+            setWsStateValue(WsState::ERROR);
             if (frame.payload) {
                 frame.payload->deref(xsink);
             }
@@ -461,7 +474,8 @@ void HttpWebSocketPollOperationPriv::handleFrame(const WsFrame& frame, Exception
 
             case WSOP_CLOSE: {
                 // Parse close code and reason from payload
-                uint16_t code = WSCC_NormalClosure;
+                // a close frame without a status code has the close code 1005 (RFC 6455 section 7.1.5)
+                uint16_t code = WSCC_NoStatusRcvd;
                 std::string reason;
                 if (frame.payload && frame.payload->size() >= 2) {
                     const uint8_t* data = static_cast<const uint8_t*>(frame.payload->getPtr());
@@ -472,6 +486,13 @@ void HttpWebSocketPollOperationPriv::handleFrame(const WsFrame& frame, Exception
                     }
                 }
 
+                // a second close frame is ignored
+                if (close_received) {
+                    break;
+                }
+                close_received = true;
+                // the close code and reason are those of the client's close frame (RFC 6455 sections 7.1.5 and
+                // 7.1.6), also after a close the server started
                 close_code = code;
                 close_reason = reason;
 
@@ -484,9 +505,9 @@ void HttpWebSocketPollOperationPriv::handleFrame(const WsFrame& frame, Exception
                 // For peer-initiated close: the close echo is sent by the
                 // Qore onPollComplete handler AFTER processing all data frames.
                 // This ensures echo responses are sent before the close frame.
-                // For server-initiated close (close_initiated=true): the close
-                // frame was already sent, so no echo is needed.
-                ws_state = WsState::CLOSING;
+                // For server-initiated close (close_sent=true): the close
+                // frame was already sent, so no echo is needed, and the handshake is complete.
+                setWsStateValue(WsState::CLOSING);
                 break;
             }
 
@@ -496,10 +517,16 @@ void HttpWebSocketPollOperationPriv::handleFrame(const WsFrame& frame, Exception
         return;
     }
 
+    // Data frames received after the server's close frame was sent are discarded: the server started closing, so
+    // the connection's handler gets no more messages
+    if (close_sent) {
+        return;
+    }
+
     // Data frames: use reassembler for fragmentation support
     bool complete = reassembler.processFrame(frame, xsink);
     if (*xsink) {
-        ws_state = WsState::ERROR;
+        setWsStateValue(WsState::ERROR);
         return;
     }
 
@@ -617,10 +644,17 @@ void HttpWebSocketPollOperationPriv::queueSendPing(const BinaryNode* data, Excep
 
 void HttpWebSocketPollOperationPriv::queueSendClose(uint16_t code, const char* reason,
         ExceptionSink* xsink) {
-    close_initiated = true;
-    close_code = code;
-    if (reason) {
-        close_reason = reason;
+    // an endpoint sends one close frame; a closed connection sends none
+    if (close_sent || ws_state == WsState::CLOSED || ws_state == WsState::ERROR) {
+        return;
+    }
+    close_sent = true;
+    // no data frame may follow the close frame (RFC 6455 section 5.5.1)
+    closing.store(true, std::memory_order_release);
+    if (!close_received) {
+        // a close the server starts; the echo of the client's close frame keeps the client's code and reason
+        close_code = code;
+        close_reason = reason ? reason : "";
     }
 
     SimpleRefHolder<BinaryNode> frame(
@@ -628,7 +662,7 @@ void HttpWebSocketPollOperationPriv::queueSendClose(uint16_t code, const char* r
     );
     send_queue->push(xsink, frame.release());
     if (!*xsink) {
-        ws_state = WsState::CLOSING;
+        setWsStateValue(WsState::CLOSING);
     }
 }
 
@@ -693,6 +727,16 @@ void HttpWebSocketPollOperationPriv::drainSendQueue(ExceptionSink* xsink) {
         if (val.getType() == NT_BINARY) {
             const BinaryNode* bin = val.get<const BinaryNode>();
             if (bin && bin->size() > 0) {
+                // each entry is one encoded frame; the opcode is in the low bits of its first byte.  No data frame
+                // follows a close frame (RFC 6455 section 5.5.1): a data frame queued by another thread after the
+                // close frame was queued is dropped
+                uint8_t opcode = static_cast<const uint8_t*>(bin->getPtr())[0] & 0x0f;
+                if (opcode == WSOP_CLOSE) {
+                    close_frame_queued = true;
+                } else if (close_frame_queued && opcode < WSOP_CLOSE) {
+                    val.discard(xsink);
+                    continue;
+                }
                 if (!pending_send) {
                     pending_send = new BinaryNode();
                 }
@@ -701,6 +745,41 @@ void HttpWebSocketPollOperationPriv::drainSendQueue(ExceptionSink* xsink) {
         }
         val.discard(xsink);
     }
+}
+
+int HttpWebSocketPollOperationPriv::checkDataSend(ExceptionSink* xsink) const {
+    if (closing.load(std::memory_order_acquire)) {
+        xsink->raiseException("WEBSOCKET-CLOSING-ERROR", "cannot send a data frame on a WebSocket connection whose "
+            "close handshake has started; no data frame may follow a close frame (RFC 6455 section 5.5.1)");
+        return -1;
+    }
+    return 0;
+}
+
+int HttpWebSocketPollOperationPriv::checkClosing(ExceptionSink* xsink) {
+    if (ws_state != WsState::CLOSING || send_op || !send_queue->empty()) {
+        return 0;
+    }
+    // the connection is lost, or both close frames have been exchanged and ours has been written
+    if (!sock->isOpen() || (close_sent && close_received)) {
+        setClosed(close_code, close_reason.c_str());
+        return -1;
+    }
+    if (waitsForPeerClose()) {
+        // the server's close frame has been written: the wait for the client's close frame starts; without a close
+        // timeout, the server does not wait
+        int64 now_ms = q_clock_getmicros_monotonic() / 1000;
+        if (!close_deadline_ms) {
+            close_deadline_ms = now_ms + close_timeout_ms;
+        }
+        if (now_ms >= close_deadline_ms) {
+            // no close frame was received, so the close code is 1006, which is never sent in a close frame
+            // (RFC 6455 section 7.4.1)
+            setClosed(1006, "close handshake timed out");
+            return -1;
+        }
+    }
+    return 0;
 }
 
 int HttpWebSocketPollOperationPriv::startRecvOp(ExceptionSink* xsink) {
@@ -764,7 +843,7 @@ void HttpWebSocketPollOperationPriv::releaseRecvOp(ExceptionSink* xsink) {
 }
 
 void HttpWebSocketPollOperationPriv::setError(ExceptionSink* xsink) {
-    ws_state = WsState::ERROR;
+    setWsStateValue(WsState::ERROR);
     if (!error_info) {
         error_info = new QoreHashNode(autoTypeInfo);
         ExceptionSink save_xsink;
@@ -784,7 +863,7 @@ void HttpWebSocketPollOperationPriv::setError(ExceptionSink* xsink) {
 }
 
 void HttpWebSocketPollOperationPriv::setClosed(uint16_t code, const char* reason) {
-    ws_state = WsState::CLOSED;
+    setWsStateValue(WsState::CLOSED);
     close_code = code;
     if (reason) {
         close_reason = reason;
@@ -977,8 +1056,13 @@ hash<auto> HttpWebSocketPollOperationBase::getOutput() [flags=RET_VALUE_ONLY] {
     Thread-safe: can be called from any thread.
 
     @param text the UTF-8 text to send
+    @throw WEBSOCKET-CLOSING-ERROR the close handshake has started (the server's close frame was queued, or the
+    connection has closed): no data frame may follow a close frame (RFC 6455 section 5.5.1)
 */
 nothing HttpWebSocketPollOperationBase::sendText(string text) [flags=NAMED_ARGS] {
+    if (priv->checkDataSend(xsink)) {
+        return QoreValue();
+    }
     priv->queueSendText(text, xsink);
 }
 
@@ -987,8 +1071,13 @@ nothing HttpWebSocketPollOperationBase::sendText(string text) [flags=NAMED_ARGS]
     Thread-safe: can be called from any thread.
 
     @param data the binary data to send
+    @throw WEBSOCKET-CLOSING-ERROR the close handshake has started (the server's close frame was queued, or the
+    connection has closed): no data frame may follow a close frame (RFC 6455 section 5.5.1)
 */
 nothing HttpWebSocketPollOperationBase::sendBinary(binary data) [flags=NAMED_ARGS] {
+    if (priv->checkDataSend(xsink)) {
+        return QoreValue();
+    }
     priv->queueSendBinary(data, xsink);
 }
 
@@ -1007,7 +1096,17 @@ nothing HttpWebSocketPollOperationBase::sendPing(*binary payload) [flags=NAMED_A
     Transitions the state to CLOSING.
     Thread-safe: can be called from any thread.
 
-    @param code the close code (default 1000 = normal closure)
+    A close started by the server completes when the client's CLOSE frame arrives (RFC 6455 section 5.5.1): once
+    its own CLOSE frame has been written, the operation reads on until then, discarding the data frames it receives,
+    and then ends; the server then closes the TCP connection (RFC 6455 section 7.1.1).  The operation also ends when
+    the connection is lost, or when the client's CLOSE frame does not arrive within the close timeout (see
+    @ref setCloseTimeout()), with the close code 1006 and the reason \c "close handshake timed out".  After a close
+    handshake, @ref getCloseCode() and @ref getCloseReason() return the code and reason of the client's CLOSE frame
+    (RFC 6455 sections 7.1.5 and 7.1.6).  A call made after the server's CLOSE frame was queued has no effect: an
+    endpoint sends one CLOSE frame.  A call made after the client's CLOSE frame arrived sends the answer to it.
+
+    @param code the close code (default 1000 = normal closure); 1005 and 1006 are never sent in a CLOSE frame (RFC
+    6455 section 7.4.1): with one of them, the frame has no status code and no reason
     @param reason the close reason string (default empty)
 */
 nothing HttpWebSocketPollOperationBase::sendClose(int code = 1000, string reason = "") [flags=NAMED_ARGS] {
@@ -1083,14 +1182,22 @@ bool HttpWebSocketPollOperationBase::hasError() [flags=RET_VALUE_ONLY] {
 }
 
 //! Returns the WebSocket close code
-/** @return the close code (default 1000)
+/** Once a CLOSE frame has been received, this is the code of the client's CLOSE frame (RFC 6455 section 7.1.5),
+    also when the server started the close, or 1005 if the frame has no status code; it is 1006 when the connection
+    ended without a CLOSE frame from the client.  Before that, it is the code of a close started by the server, if any.
+
+    @return the close code (default 1000)
 */
 int HttpWebSocketPollOperationBase::getCloseCode() [flags=RET_VALUE_ONLY] {
     return priv->getCloseCode();
 }
 
 //! Returns the WebSocket close reason
-/** @return the close reason string
+/** Once a CLOSE frame has been received, this is the reason of the client's CLOSE frame (RFC 6455 section 7.1.6),
+    also when the server started the close; it describes the end when the connection ended without a CLOSE frame
+    from the client (see @ref sendClose()).  Before that, it is the reason of a close started by the server, if any.
+
+    @return the close reason string
 */
 string HttpWebSocketPollOperationBase::getCloseReason() [flags=RET_VALUE_ONLY] {
     return new QoreStringNode(priv->getCloseReason());
@@ -1107,8 +1214,17 @@ Socket HttpWebSocketPollOperationBase::getSocket() {
 /** Thread-safe: can be called from any thread.
 
     @param frame_data the pre-encoded frame bytes (as produced by ws_encode_message())
+
+    @throw WEBSOCKET-CLOSING-ERROR \a frame_data is a data frame, and the close handshake has started (the server's
+    close frame was queued, or the connection has closed): no data frame may follow a close frame (RFC 6455 section
+    5.5.1)
 */
 nothing HttpWebSocketPollOperationBase::sendRawFrame(binary frame_data) [flags=NAMED_ARGS] {
+    // a data frame (opcode below that of a close frame) is refused once the close handshake has started
+    if (frame_data->size() && (static_cast<const uint8_t*>(frame_data->getPtr())[0] & 0x0f) < WSOP_CLOSE
+            && priv->checkDataSend(xsink)) {
+        return QoreValue();
+    }
     priv->queueSendRawFrame(frame_data, xsink);
 }
 
@@ -1157,6 +1273,29 @@ int HttpWebSocketPollOperationBase::getSendQueueSize() [flags=RET_VALUE_ONLY] {
 */
 nothing HttpWebSocketPollOperationBase::setIdleTimeout(int idle_timeout_ms) [flags=NAMED_ARGS] {
     priv->setIdleTimeout(static_cast<int64>(idle_timeout_ms));
+}
+
+//! Sets how long a close started by the server waits for the client's CLOSE frame
+/** The wait starts when the server's CLOSE frame has been written.  When the client's CLOSE frame does not arrive
+    in time, the operation ends with the state \c "closed", the close code 1006 and the reason
+    \c "close handshake timed out", and the server closes the TCP connection.
+
+    @param close_timeout_ms the time to wait in milliseconds; 0 or a negative value means that the server does not
+    wait: the operation ends when the server's CLOSE frame has been written; the default is 5 seconds
+
+    @since %Qore 3.0
+*/
+nothing HttpWebSocketPollOperationBase::setCloseTimeout(timeout close_timeout_ms) [flags=NAMED_ARGS] {
+    priv->setCloseTimeout(close_timeout_ms);
+}
+
+//! Returns how long a close started by the server waits for the client's CLOSE frame
+/** @return the close timeout in milliseconds (0 = the server does not wait for the client's CLOSE frame)
+
+    @since %Qore 3.0
+*/
+int HttpWebSocketPollOperationBase::getCloseTimeout() [flags=RET_VALUE_ONLY] {
+    return priv->getCloseTimeout();
 }
 
 //! Returns the idle timeout in milliseconds (0 = disabled)

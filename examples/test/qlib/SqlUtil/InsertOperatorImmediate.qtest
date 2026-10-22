@@ -1,0 +1,227 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires SqlUtil
+%requires PgsqlSqlUtilBase
+%requires OracleSqlUtilBase
+%requires MysqlSqlUtil
+%requires MssqlSqlUtilBase
+%requires FreetdsSqlUtil
+%requires XdbcFirebirdSqlUtilBase
+%requires Sqlite3SqlUtil
+
+%try-module pgsql
+%define NO_PGSQL
+%endtry
+
+%try-module oracle
+%define NO_ORACLE
+%endtry
+
+%try-module mysql
+%define NO_MYSQL
+%endtry
+
+%try-module freetds
+%define NO_FREETDS
+%endtry
+
+%try-module odbc
+%define NO_ODBC
+%endtry
+
+%try-module sqlite3
+%define NO_SQLITE3
+%endtry
+
+%exec-class InsertOperatorImmediateTest
+
+#! Insert operators whose value is SQL in the statement, such as the next value of a sequence
+/** An "immediate" insert operator puts the SQL that its code builds from its argument into the statement; the
+    argument is checked to be a name of letters, digits, underscores and dots before the code builds the SQL, so that
+    a sequence name can never change the statement.  Each driver's SQL is checked with tables described in memory and
+    a datasource that records the SQL it is given without connecting
+*/
+class InsertOperatorImmediateTest inherits QUnit::Test {
+    private {
+        #! a sequence name that would end the operator's SQL and add a statement if it were used as given
+        const HostileSequence = "s; drop table iop_sentinel";
+    }
+
+    constructor() : Test("InsertOperatorImmediateTest", "1.0", \ARGV) {
+        addTestCase("PostgreSQL binds the sequence name", \pgsqlSql());
+        addTestCase("Oracle names the sequence in the SQL", \oracleSql());
+        addTestCase("SQL Server names the sequence in the SQL", \mssqlSql());
+        addTestCase("drivers without sequence insert operators refuse them", \unsupportedSql());
+        set_return_value(main());
+    }
+
+    #! Returns a table described in memory with an id and a value column
+    private static AbstractTable table(AbstractTable t) {
+        t.setupTable({"columns": {
+            "id": {"native_type": "integer", "notnull": True},
+            "v": {"native_type": "integer"},
+        }});
+        return t;
+    }
+
+    pgsqlSql() {
+%ifdef NO_PGSQL
+        testSkip("pgsql module unavailable");
+%endif
+        RecordingDatasource ds("pgsql:user/pass@db", "PostgreSQL 16.4", "pgsql");
+        AbstractTable t = InsertOperatorImmediateTest::table(new PgsqlTable(ds, "iop_t"));
+        t.insert({"id": 1, "v": iop_seq("iop_seq")});
+        t.insert({"id": 2, "v": iop_seq_currval("s.iop_seq")});
+        # the SQL is unchanged; the name, which nextval() reads as SQL names a relation, is a bind value
+        assertEq((
+            {"sql": "insert into public.iop_t (id,v) values (%v,nextval(%v))", "args": (1, "iop_seq")},
+            {"sql": "insert into public.iop_t (id,v) values (%v,currval(%v))", "args": (2, "s.iop_seq")},
+        ), ds.recorded);
+
+        # a name that needs quotes is bound quoted, so that nextval() reads it as one name; it is never SQL
+        ds.recorded = ();
+        t.insert({"id": 3, "v": iop_seq(HostileSequence)});
+        assertEq(({"sql": "insert into public.iop_t (id,v) values (%v,nextval(%v))",
+            "args": (3, "\"s; drop table iop_sentinel\"")},), ds.recorded);
+    }
+
+    oracleSql() {
+%ifdef NO_ORACLE
+        testSkip("oracle module unavailable");
+%endif
+        RecordingDatasource ds("oracle:iopuser/pass@db", "Oracle Database 19c Enterprise Edition Release 19.0.0.0.0",
+            "oracle");
+        AbstractTable t = InsertOperatorImmediateTest::table(new OracleTable(ds, "iop_t"));
+        t.insert({"id": 1, "v": iop_seq("iop_seq")});
+        t.insert({"id": 2, "v": iop_seq_currval("s.iop_seq")});
+        # the SQL is unchanged
+        list<hash<auto>> recorded = select ds.recorded, $1.sql =~ /^insert/;
+        assertEq((
+            {"sql": "insert into iopuser.iop_t (id,v) values (%v,iop_seq.nextval)", "args": (1,)},
+            {"sql": "insert into iopuser.iop_t (id,v) values (%v,s.iop_seq.currval)", "args": (2,)},
+        ), recorded);
+        assertThrows("INSERT-OPERATOR-ERROR", "illegal characters", \t.insert(),
+            ({"id": 3, "v": iop_seq(HostileSequence)},));
+        assertThrows("INSERT-OPERATOR-ERROR", "illegal characters", \t.insert(),
+            ({"id": 3, "v": iop_seq_currval(HostileSequence)},));
+    }
+
+    mssqlSql() {
+%ifdef NO_FREETDS
+        testSkip("freetds module unavailable");
+%endif
+        RecordingDatasource ds("freetds:user/pass@db", "Microsoft SQL Server 2022 (RTM) - 16.0.1000.6", "mssql");
+        AbstractTable t = InsertOperatorImmediateTest::table(new MssqlTable(ds, "iop_t"));
+        t.insert({"id": 1, "v": iop_seq("iop_seq")});
+        t.insert({"id": 2, "v": iop_seq("s.iop_seq")});
+        # the sequence is named in the SQL: it was a bind value in "next value for %v", which SQL Server refuses
+        list<hash<auto>> recorded = select ds.recorded, $1.sql =~ /^insert/;
+        assertEq((
+            {"sql": "insert into dbo.iop_t (id,v) values (%v,next value for iop_seq)", "args": (1,)},
+            {"sql": "insert into dbo.iop_t (id,v) values (%v,next value for s.iop_seq)", "args": (2,)},
+        ), recorded);
+        assertThrows("INSERT-OPERATOR-ERROR", "illegal characters", \t.insert(),
+            ({"id": 3, "v": iop_seq(HostileSequence)},));
+    }
+
+    unsupportedSql() {
+        int drivers = 0;
+%ifndef NO_MYSQL
+        {
+            RecordingDatasource ds("mysql:user/pass@db%localhost:1", "11.4.2-MariaDB", "mysql");
+            AbstractTable t = InsertOperatorImmediateTest::table(new MysqlTable(ds, "iop_t"));
+            assertThrows("INSERT-OPERATOR-ERROR", "unknown insert operator", \t.insert(),
+                ({"id": 1, "v": iop_seq(HostileSequence)},), "MySQL");
+            ++drivers;
+        }
+%endif
+%ifndef NO_ODBC
+        {
+            RecordingDatasource ds("odbc:user/pass@db", "WI-V3.0.10 Firebird 3.0", "firebird");
+            AbstractTable t = InsertOperatorImmediateTest::table(new XdbcFirebirdTable(ds, "iop_t"));
+            assertThrows("INSERT-OPERATOR-ERROR", "unknown insert operator", \t.insert(),
+                ({"id": 1, "v": iop_seq(HostileSequence)},), "Firebird");
+            ++drivers;
+        }
+%endif
+%ifndef NO_SQLITE3
+        {
+            Datasource ds("sqlite3:@:memory:");
+            AbstractTable t = InsertOperatorImmediateTest::table(new Sqlite3Table(ds, "iop_t"));
+            assertThrows("INSERT-OPERATOR-ERROR", "unknown insert operator", \t.insert(),
+                ({"id": 1, "v": iop_seq(HostileSequence)},), "SQLite");
+            ++drivers;
+        }
+%endif
+        if (!drivers) {
+            testSkip("no driver modules available");
+        }
+    }
+}
+
+#! A datasource that records the SQL and arguments it is given and does not connect
+class RecordingDatasource inherits Datasource {
+    public {
+        #! each statement with its arguments
+        list<hash<auto>> recorded = ();
+    }
+
+    private {
+        string version;
+        string real_driver;
+    }
+
+    constructor(string connstr, string version, string real_driver) : Datasource(connstr) {
+        self.version = version;
+        self.real_driver = real_driver;
+    }
+
+    auto getServerVersion() {
+        return version;
+    }
+
+    string getDriverRealName() {
+        return real_driver;
+    }
+
+    auto select(string sql, ...) {
+        return {};
+    }
+
+    auto selectRow(string sql, ...) {
+        # the default schema of SQL Server and of PostgreSQL
+        if (sql =~ /schema_name\(\)/) {
+            return {"schema": "dbo"};
+        }
+        if (sql =~ /current_schema\(\)/) {
+            return {"schema": "public"};
+        }
+    }
+
+    auto selectRows(string sql, ...) {
+        return ();
+    }
+
+    auto vexec(string sql, *softlist<auto> args) {
+        recorded += {"sql": sql, "args": args ?? ()};
+        return 1;
+    }
+
+    auto exec(string sql, ...) {
+        recorded += {"sql": sql, "args": argv ?? ()};
+        return 1;
+    }
+
+    commit() {
+    }
+
+    rollback() {
+    }
+}

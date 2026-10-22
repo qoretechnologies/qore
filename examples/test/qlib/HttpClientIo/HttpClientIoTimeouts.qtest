@@ -153,6 +153,7 @@ public class HttpClientIoTimeoutsTest inherits QUnit::Test {
             "service": 0,
         }).port);
         urls.h2 = sprintf("https://localhost:%d", server.addListener(<HttpListenerOptionInfo>{
+            "node": "localhost",
             "service": 0,
             "cert": new SSLCertificate(CertPem),
             "key": new SSLPrivateKey(KeyPem),

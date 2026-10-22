@@ -1,0 +1,269 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  MemcachedClientWire.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# Tests the binary protocol on the wire against a scripted server: the key length is a length in bytes, a statistic
+# name with a NUL character is a protocol error, and so is a response whose lengths do not fit in its body.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires DataProvider
+%requires MemcachedDataProvider
+
+%exec-class MemcachedClientWireTest
+
+#! a request received by the scripted server
+hashdecl MemcachedWireRequest {
+    int opcode;
+    int key_len;
+    int extras_len;
+    int total_body;
+    binary extras;
+    binary key;
+    binary value;
+}
+
+#! a memcached server that answers each request with scripted responses and records the requests
+class ScriptedMemcachedServer {
+    private {
+        Socket listener();
+        int port;
+        int tid;
+        #! the requests received, then NOTHING when the connection is closed
+        Queue requests();
+        #! one list of responses for each request expected
+        list<list<binary>> script;
+    }
+
+    constructor(list<list<binary>> script) {
+        self.script = script;
+        listener.bind("127.0.0.1:0");
+        listener.listen();
+        port = listener.getSocketInfo().port;
+        tid = background serve();
+    }
+
+    int getPort() {
+        return port;
+    }
+
+    #! returns the next request received, or NOTHING if the client closed the connection
+    *hash<MemcachedWireRequest> getRequest() {
+        return requests.get(30s);
+    }
+
+    #! waits for the server thread to end
+    join() {
+        # the server thread pushes NOTHING last
+        while (exists requests.get(30s)) {
+        }
+    }
+
+    private serve() {
+        on_exit {
+            requests.push();
+        }
+        *Socket s = listener.accept(30s);
+        if (!s) {
+            return;
+        }
+        try {
+            serveConnection(s);
+        } catch (hash<ExceptionInfo> ex) {
+            # the client closed the connection before the end of the script
+            if (ex.err != "SOCKET-CLOSED") {
+                rethrow;
+            }
+        }
+    }
+
+    private serveConnection(Socket s) {
+        foreach list<binary> responses in (script) {
+            binary header = s.recvBinary(24, 30s);
+            int key_len = (header[2] << 8) | header[3];
+            int extras_len = header[4];
+            int total_body = (header[8] << 24) | (header[9] << 16) | (header[10] << 8) | header[11];
+            binary body = total_body ? s.recvBinary(total_body, 30s) : binary();
+            int value_len = total_body - extras_len - key_len;
+            requests.push(<MemcachedWireRequest>{
+                "opcode": header[1],
+                "key_len": key_len,
+                "extras_len": extras_len,
+                "total_body": total_body,
+                "extras": body.substr(0, extras_len),
+                "key": body.substr(extras_len, key_len),
+                "value": value_len > 0 ? body.substr(extras_len + key_len) : binary(),
+            });
+            foreach binary resp in (responses) {
+                s.send(resp);
+            }
+        }
+        # waits for the client to close the connection
+        try {
+            s.recvBinary(1, 30s);
+        } catch (hash<ExceptionInfo> ex) {
+        }
+    }
+}
+
+public class MemcachedClientWireTest inherits QUnit::Test {
+    constructor() : Test("MemcachedClientWire", "1.0", \ARGV) {
+        addTestCase("key length in bytes", \keyLengthInBytes());
+        addTestCase("key limit in bytes", \keyLimitInBytes());
+        addTestCase("statistic name with a NUL character", \statNameNul());
+        addTestCase("statistics group name with a NUL character", \statTypeNul());
+        addTestCase("response lengths outside the body", \badResponseLengths());
+        set_return_value(main());
+    }
+
+    #! returns a binary protocol response
+    static binary response(int opcode, int status = 0, *binary key, *binary extras, *binary value) {
+        int key_len = key ? key.size() : 0;
+        int extras_len = extras ? extras.size() : 0;
+        int body_len = key_len + extras_len + (value ? value.size() : 0);
+        return MemcachedClientWireTest::responseWithLengths(opcode, status, key_len, extras_len, body_len)
+            + (extras ?? binary()) + (key ?? binary()) + (value ?? binary());
+    }
+
+    #! returns a response header with the given lengths
+    static binary responseWithLengths(int opcode, int status, int key_len, int extras_len, int body_len) {
+        return binary(chr(0x81) + chr(opcode) + chr(key_len >> 8) + chr(key_len & 0xff) + chr(extras_len)
+            + chr(0) + chr(status >> 8) + chr(status & 0xff)
+            + chr((body_len >> 24) & 0xff) + chr((body_len >> 16) & 0xff) + chr((body_len >> 8) & 0xff)
+            + chr(body_len & 0xff)
+            + chr(0) + chr(0) + chr(0) + chr(0)
+            + chr(0) + chr(0) + chr(0) + chr(0) + chr(0) + chr(0) + chr(0) + chr(1));
+    }
+
+    static MemcachedClient getClient(ScriptedMemcachedServer server) {
+        MemcachedClient client({"host": "127.0.0.1", "port": server.getPort(), "io_timeout": 30s});
+        client.connect();
+        return client;
+    }
+
+    keyLengthInBytes() {
+        # a SET response, then a GET response
+        ScriptedMemcachedServer server((
+            (MemcachedClientWireTest::response(MemcachedClient::OP_SET),),
+            (MemcachedClientWireTest::response(MemcachedClient::OP_GET, 0, NOTHING, <00000000>, binary("v")),),
+        ));
+        MemcachedClient client = MemcachedClientWireTest::getClient(server);
+        on_exit {
+            client.disconnect();
+            server.join();
+        }
+
+        # four characters in eight bytes
+        string key = "ключ";
+        assertEq(4, key.length());
+        assertEq(8, key.size());
+
+        hash<auto> h = client.set(key, "value");
+        assertTrue(h.stored, "set");
+        hash<MemcachedWireRequest> req = server.getRequest();
+        assertEq(MemcachedClient::OP_SET, req.opcode);
+        # with the length in characters, the server read "клю" as the key and the rest as the value
+        assertEq(8, req.key_len, "key length in bytes");
+        assertEq(8 + 8 + 5, req.total_body, "body length");
+        assertEq(binary(key), req.key, "key");
+        assertEq(binary("value"), req.value, "value");
+
+        h = client.get(key);
+        assertTrue(h.found, "get");
+        req = server.getRequest();
+        assertEq(MemcachedClient::OP_GET, req.opcode);
+        assertEq(8, req.key_len, "get key length in bytes");
+        assertEq(binary(key), req.key, "get key");
+    }
+
+    keyLimitInBytes() {
+        MemcachedClient client({"host": "127.0.0.1", "port": 1});
+        # 125 two-byte characters: 250 bytes are allowed
+        string key = strmul("é", 125);
+        assertEq(250, key.size());
+        # 126 two-byte characters are 252 bytes, longer than the limit of 250 bytes
+        string long_key = strmul("é", 126);
+        assertEq(126, long_key.length());
+        assertThrows("MEMCACHED-KEY-ERROR", "Key length 252 exceeds maximum of 250 bytes", \client.set(),
+            (long_key, "v"));
+        # the key is accepted by the check; the client is not connected
+        assertThrows("MEMCACHED-CONNECTION-ERROR", \client.set(), (key, "v"));
+    }
+
+    statNameNul() {
+        int op = MemcachedClient::OP_STAT;
+        ScriptedMemcachedServer server((
+            (
+                MemcachedClientWireTest::response(op, 0, binary("pid"), NOTHING, binary("1")),
+                MemcachedClientWireTest::response(op, 0, binary("a\x00b"), NOTHING, binary("2")),
+                MemcachedClientWireTest::response(op, 0, binary("uptime"), NOTHING, binary("3")),
+                MemcachedClientWireTest::response(op),
+            ),
+            (MemcachedClientWireTest::response(MemcachedClient::OP_VERSION, 0, NOTHING, NOTHING, binary("1.6.0")),),
+        ));
+        MemcachedClient client = MemcachedClientWireTest::getClient(server);
+        on_exit {
+            client.disconnect();
+            server.join();
+        }
+
+        assertThrows("MEMCACHED-PROTOCOL-ERROR",
+            "the server sent the statistic name \"a\\\\x00b\", which contains a NUL character", \client.stats());
+        assertEq(op, server.getRequest().opcode);
+        # the statistics after the bad name were read, so the next response is the response to the next request
+        assertEq({"version": "1.6.0", "status": "OK"}, client.version());
+        assertEq(MemcachedClient::OP_VERSION, server.getRequest().opcode);
+    }
+
+    statTypeNul() {
+        MemcachedClient client({"host": "127.0.0.1", "port": 1});
+        assertThrows("MEMCACHED-KEY-ERROR", "statistics group name \"items\\\\x00x\" contains a NUL character",
+            \client.stats(), "items\x00x");
+        assertThrows("MEMCACHED-KEY-ERROR", "statistics group name length 251 exceeds maximum of 250 bytes",
+            \client.stats(), strmul("a", 251));
+        # the group name is accepted by the check; the client is not connected
+        assertThrows("MEMCACHED-CONNECTION-ERROR", \client.stats(), "items");
+    }
+
+    badResponseLengths() {
+        int op = MemcachedClient::OP_GET;
+        ScriptedMemcachedServer server((
+            # a key length of 10 bytes and 4 bytes of extras in a body of 6 bytes
+            (MemcachedClientWireTest::responseWithLengths(op, 0, 10, 4, 6) + <000000006162>,),
+            (MemcachedClientWireTest::response(MemcachedClient::OP_VERSION, 0, NOTHING, NOTHING, binary("1.6.0")),),
+        ));
+        MemcachedClient client = MemcachedClientWireTest::getClient(server);
+        on_exit {
+            client.disconnect();
+            server.join();
+        }
+
+        assertThrows("MEMCACHED-PROTOCOL-ERROR", "the response has an extras length of 4 bytes and a key length of "
+            "10 bytes, which do not fit in its body of 6 bytes", \client.get(), "k");
+        assertEq(op, server.getRequest().opcode);
+        # the body was read, so the next response is the response to the next request
+        assertEq("1.6.0", client.version().version);
+    }
+}

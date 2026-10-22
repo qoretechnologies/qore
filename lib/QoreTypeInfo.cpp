@@ -51,6 +51,7 @@
 #include "qore/intern/qore_aot_deps.h"
 #include "qore/intern/AbstractIteratorHelper.h"
 #include "qore/QoreIteratorBase.h"
+#include "qore/intern/QoreForkHandlers.h"
 
 #include <algorithm>
 #include <memory>
@@ -298,6 +299,8 @@ typedef std::map<const QoreTypeInfo*, const QoreTypeInfo*> typeinfo_map_t;
 static typeinfo_map_t typeinfo_map, typeinfo_or_nothing_map;
 
 static QoreThreadLock ctl; // complex type lock
+// the type caches can be used in a child process created with fork() (see QoreForkHandlers.h)
+static QoreForkThreadLock ctl_fork_handler(ctl, QFLR_LEAF, "complex_types");
 
 namespace {
 class QoreAOTDeferredTypeInfo : public QoreTypeInfo {
@@ -374,6 +377,8 @@ protected:
 
 static std::mutex aot_deferred_type_info_mutex;
 static std::unordered_map<std::string, std::unique_ptr<QoreAOTDeferredTypeInfo>> aot_deferred_type_info_map;
+static QoreForkStdMutex aot_deferred_type_info_fork_handler(aot_deferred_type_info_mutex, QFLR_LEAF,
+    "aot_deferred_types");
 
 static std::string aotDeferredTypeQorePath(const char* qore_path) {
     if (!qore_path) {
@@ -594,6 +599,7 @@ static void noteDerivedTypeKeys(const void* first, const type_vec_t& types) {
 
 // rwlock for global type map
 static QoreRWLock extern_type_info_map_lock;
+static QoreForkRWLock extern_type_info_map_fork_handler(extern_type_info_map_lock, QFLR_LEAF, "external_types");
 
 static void do_maps(qore_type_t t, const char* name, const QoreTypeInfo* typeInfo,
         const QoreTypeInfo* orNothingTypeInfo) {

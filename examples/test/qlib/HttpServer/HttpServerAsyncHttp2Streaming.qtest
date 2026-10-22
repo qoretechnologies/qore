@@ -520,6 +520,7 @@ class HttpServerAsyncHttp2StreamingTest inherits QUnit::Test {
             mBufferedStaggeredHandler, NOTHING, False);
 
         mSslPort = mServer.addListener(<HttpListenerOptionInfo>{
+            "node": "localhost",
             "service": 0,
             "cert": new SSLCertificate(CertPem),
             "key": new SSLPrivateKey(KeyPem),

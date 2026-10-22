@@ -38,6 +38,7 @@
 #include "qore/intern/QoreParseClass.h"
 #include "qore/intern/RuntimeConfig.h"
 #include "qore/intern/QoreLibIntern.h"
+#include "qore/intern/QoreForkHandlers.h"
 
 #include <algorithm>
 #include <atomic>
@@ -51,6 +52,8 @@
 
 // global class ID sequence
 DLLLOCAL Sequence classIDSeq(1);
+// class IDs can be allocated in a child process created with fork() (see QoreForkHandlers.h)
+static QoreForkThreadLock class_id_fork_handler(classIDSeq, QFLR_LEAF, "class_ids");
 
 static std::atomic<uint64_t> qore_method_dispatch_epoch{1};
 
@@ -3390,10 +3393,7 @@ int QoreClass::runtimeCheckDomain(const QoreProgram& pgm, ExceptionSink* xsink) 
     assert(xsink);
     // as at parse time (qore_program_private::parseAddDomain()): a restricting domain must not be set in the
     // Program, and a domain the Program has to allow explicitly (e.g. DEBUGGER) must be set
-    QoreParseOptions dom(priv->domain);
-    QoreParseOptions po = pgm.getParseOptions();
-    QoreParseOptions allow = dom & QoreParseOptions::POSITIVE_OPTIONS;
-    if ((dom & ~QoreParseOptions::POSITIVE_OPTIONS & po) || ((allow & po) != allow)) {
+    if (!qore_parse_options_allow_domain(pgm.getParseOptions(), priv->domain)) {
         xsink->raiseException("CREATE-OBJECT-ERROR", "current Program sandboxing restrictions do not allow "
             "access to the '%s' class", getName());
         return -1;

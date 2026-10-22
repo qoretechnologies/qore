@@ -1,0 +1,485 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires DataProvider
+%requires SqlUtil
+%requires XdbcFirebirdSqlUtilBase
+%requires JdbcFirebirdSqlUtil
+
+%try-module jni
+%define NoJni
+%endtry
+
+%exec-class FirebirdBoundValuesTest
+
+#! a datasource that records the SQL that it is given, so SQL is generated without a Firebird server
+class FirebirdBindRecordingDatasource inherits Qore::SQL::AbstractDatasource {
+    public {
+        #! each statement given, with the method and the arguments
+        list<hash<auto>> log = ();
+
+        #! the row returned by selectRow() and vselectRow(): the catalog row of the character set of the database
+        *hash<auto> row;
+    }
+
+    constructor(*hash<auto> row) {
+        self.row = row;
+    }
+
+    private record(string m, string sql, *softlist<auto> args) {
+        log += {"method": m, "sql": sql, "args": args};
+    }
+
+    *string getPassword() {}
+    *string getOSEncoding() {}
+    *string getDBName() { return "fbtest"; }
+    *string getUserName() { return "fbuser"; }
+    *string getHostName() {}
+    *int getPort() {}
+    *string getDBEncoding() {}
+    string getDriverName() { return "jni"; }
+    auto getServerVersion() {}
+    auto getClientVersion() {}
+    string getConfigString() { return ""; }
+    hash<auto> getConfigHash() { return {}; }
+    bool inTransaction() { return False; }
+    bool currentThreadInTransaction() { return False; }
+    nothing beginTransaction() {}
+    nothing commit() {}
+    nothing rollback() {}
+
+    auto exec(string sql, ...) { record("exec", sql, argv); return 0; }
+    auto vexec(string sql, *softlist<auto> vargs) { record("vexec", sql, vargs); return 0; }
+    auto execRaw(string sql) { record("execRaw", sql); return 0; }
+    auto select(string sql, ...) { record("select", sql, argv); }
+    auto vselect(string sql, *softlist<auto> vargs) { record("vselect", sql, vargs); }
+    auto selectRow(string sql, ...) { record("selectRow", sql, argv); return row; }
+    auto vselectRow(string sql, *softlist<auto> vargs) { record("vselectRow", sql, vargs); return row; }
+    auto selectRows(string sql, ...) { record("selectRows", sql, argv); }
+    auto vselectRows(string sql, *softlist<auto> vargs) { record("vselectRows", sql, vargs); }
+    auto selectTyped(string sql, ...) {}
+    auto vselectTyped(string sql, *softlist<auto> vargs) {}
+    auto selectRowsTyped(string sql, ...) {}
+    auto vselectRowsTyped(string sql, *softlist<auto> vargs) {}
+}
+
+#! Tests bound values in Firebird SQL: Firebird refuses a bound value that it cannot type ("Data type unknown")
+/** A value is bound in a cast to its type where Firebird cannot type it from the expression that it is part of, and
+    is bound as before where it can; a cast to a character type without a size has the largest size of the default
+    character set of the database.  The live cases run with a disposable Firebird database through the JDBC driver,
+    given with \c -c or \c QORE_DB_CONNSTR_JDBC_FIREBIRD, in a database with a character set of more than one byte per
+    character, such as \c UTF8, for the size of a cast to fail without the fix
+*/
+class FirebirdBoundValuesTest inherits QUnit::Test {
+    public {
+        const MyOpts = Opts + {
+            "connstr": "c,conn=s",
+        };
+
+        #! the table of the live cases
+        const TableName = "fbbind_t";
+
+        #! the columns of the table
+        const Columns = {
+            "id": {"qore_type": "integer", "notnull": True},
+            "s": {"qore_type": "string", "size": 20},
+            "b": {"qore_type": "bool"},
+            "n": {"qore_type": "number", "size": 10, "scale": 2},
+            "d": {"qore_type": "date"},
+        };
+
+        #! the row of the table
+        const Row = {"id": 1, "s": "abcdef", "b": True, "n": 2.25n, "d": 2026-10-21T12:30:00};
+    }
+
+    private {
+        *Datasource ds;
+        *AbstractTable table;
+    }
+
+    constructor() : Test("FirebirdBoundValues", "1.0", \ARGV, MyOpts) {
+        addTestCase("a value is bound in a cast to its type", \bindTypes());
+        addTestCase("a value compared with a column is bound as before", \inferredValues());
+        addTestCase("values that Firebird cannot type are bound in a cast", \castValues());
+        addTestCase("the size of a cast to a character type is that of the character set", \castSize());
+        addTestCase("ltrim() and rtrim() are Firebird SQL", \trimSql());
+        addTestCase("a timestamp literal is Firebird SQL", \timestampLiteral());
+        addTestCase("live: values in the select list", \liveSelectList());
+        addTestCase("live: values in the where clause", \liveWhere());
+        addTestCase("live: the size of a cast to a string in the database's character set", \liveCastSize());
+        addTestCase("live: a timestamp literal", \liveTimestampLiteral());
+        set_return_value(main());
+    }
+
+    globalTearDown() {
+        if (table) {
+            table.dropCommit();
+        }
+    }
+
+    #! returns an offline table of the columns, with the number of bytes per character of the database and the
+    #! version of the server
+    private static XdbcFirebirdTable getOfflineTable(int bpc = 4, string version = "5.0.4") {
+        XdbcFirebirdTable t(new FirebirdBindRecordingDatasource({"bpc": bpc, "version": version}), TableName);
+        t.setupTable({"columns": Columns});
+        return t;
+    }
+
+    #! returns the SQL of a select with the given options, and the arguments in the reference
+    private static string selectSql(AbstractTable t, hash<auto> sh, *reference<list<auto>> args) {
+        list<auto> a;
+        string sql = t.getSelectSql(sh, \a);
+        args = a;
+        return sql;
+    }
+
+    #! returns an expression
+    private static hash<DataProviderExpression> exp(string op, auto args) {
+        return <DataProviderExpression>{"exp": op, "args": args};
+    }
+
+    #! returns a column reference
+    private static hash<DataProviderFieldReference> fld(string name) {
+        return <DataProviderFieldReference>{"field": name};
+    }
+
+    bindTypes() {
+        XdbcFirebirdTable t = getOfflineTable();
+        assertEq("bigint", t.getBindType(1));
+        assertEq("double precision", t.getBindType(1.5));
+        # a number is a decimal of arbitrary precision from Firebird 4 on
+        assertEq(5, t.getServerMajorVersion());
+        assertEq("decfloat(34)", t.getBindType(1.25n));
+        assertEq("decfloat(34)", t.getBindType(3n));
+        # Firebird 3 has no DECFLOAT: a NUMERIC of the digits, or a DOUBLE PRECISION for more than 18
+        XdbcFirebirdTable fb3 = getOfflineTable(4, "3.0.12");
+        assertEq(3, fb3.getServerMajorVersion());
+        assertEq("numeric(3,2)", fb3.getBindType(1.25n));
+        assertEq("numeric(3,3)", fb3.getBindType(-0.125n));
+        assertEq("numeric(1,0)", fb3.getBindType(0n));
+        assertEq("numeric(18,0)", fb3.getBindType(123456789012345678n));
+        assertEq("double precision", fb3.getBindType(1234567890123456789n));
+        assertEq("double precision", fb3.getBindType(0.000000000000000000000000000001n));
+        assertEq("double precision", fb3.getBindType(@nan@n));
+        assertEq("boolean", t.getBindType(False));
+        assertEq("timestamp", t.getBindType(2026-10-21T12:00:00));
+        # a string is counted in characters in a character set of more than one byte per character
+        assertEq("varchar(2)", t.getBindType("éa"));
+        assertEq("varchar(1)", t.getBindType(""));
+        assertEq("varchar(8191)", t.getBindType(strmul("x", 8191)));
+        assertEq("blob sub_type text", t.getBindType(strmul("x", 8192)));
+        assertEq("varchar(3) character set octets", t.getBindType(<010203>));
+        assertEq("blob", t.getBindType(binary(strmul("x", 32766))));
+        # values without a Firebird type
+        assertEq(NOTHING, t.getBindType(NULL));
+        assertEq(NOTHING, t.getBindType());
+        assertEq(NOTHING, t.getBindType(1D));
+        assertEq(NOTHING, t.getBindType((1, 2)));
+
+        # in a character set of one byte per character, such as NONE, a string is counted in bytes
+        XdbcFirebirdTable none = getOfflineTable(1);
+        assertEq("varchar(3)", none.getBindType("éa"));
+        assertEq("varchar(32765)", none.getBindType(strmul("x", 32765)));
+        assertEq("blob sub_type text", none.getBindType(strmul("x", 32766)));
+    }
+
+    inferredValues() {
+        XdbcFirebirdTable t = getOfflineTable();
+        list<auto> args;
+
+        # a where hash, as before
+        assertEq("select * from fbbind_t where id = %v and s like %v", selectSql(t, {"where": {"id": 1,
+            "s": op_like("a%")}}, \args));
+        assertEq((1, "a%"), args);
+
+        # comparisons with a column
+        foreach hash<auto> i in ({
+                OP_EQ: "id = %v", OP_NE: "id != %v", OP_LT: "id < %v", OP_LE: "id <= %v", OP_GT: "id > %v",
+                OP_GE: "id >= %v",
+            }.pairIterator()) {
+            assertEq("select * from fbbind_t where " + i.value, selectSql(t, {"where": exp(i.key, (fld("id"), 1))},
+                \args), i.key);
+            assertEq((1,), args, i.key);
+            # with the value first
+            assertRegex("where %v [!=<>]+ id$", selectSql(t, {"where": exp(i.key, (1, fld("id")))}, \args), i.key);
+        }
+        assertEq("select * from fbbind_t where id between %v and %v",
+            selectSql(t, {"where": exp(OP_BETWEEN, (fld("id"), 1, 2))}, \args));
+        assertEq("select * from fbbind_t where (id in (%v,%v))",
+            selectSql(t, {"where": exp(OP_IN, (fld("id"), (1, 2)))}, \args));
+        assertEq((1, 2), args);
+        assertEq("select * from fbbind_t where id not in (%v,%v)",
+            selectSql(t, {"where": exp(DP_OP_NOT_IN, (fld("id"), (1, 2)))}, \args));
+        assertEq("select * from fbbind_t where s like %v", selectSql(t, {"where": exp(DP_OP_LIKE, (fld("s"), "a%"))},
+            \args));
+        assertEq("select * from fbbind_t where s like '%' || %v || '%'",
+            selectSql(t, {"where": exp(DP_OP_CONTAINS, (fld("s"), "b"))}, \args));
+        assertEq("select * from fbbind_t where s like %v || '%'",
+            selectSql(t, {"where": exp(DP_OP_STARTS_WITH, (fld("s"), "a"))}, \args));
+        assertEq("select * from fbbind_t where s like '%' || %v",
+            selectSql(t, {"where": exp(DP_OP_ENDS_WITH, (fld("s"), "f"))}, \args));
+        # a value compared with an expression has its type too
+        assertEq("select * from fbbind_t where upper(s) = %v",
+            selectSql(t, {"where": exp(OP_EQ, (exp(COP_UPPER, (fld("s"),)), "ABC"))}, \args));
+
+        # null tests, logical operators, casts and the values replaced in a column
+        assertEq("select * from fbbind_t where %v is null", selectSql(t, {"where": exp(DP_OP_IS_NULL, (1,))},
+            \args));
+        assertEq("select * from fbbind_t where %v is not null", selectSql(t, {"where": exp(DP_OP_IS_NOT_NULL, (1,))},
+            \args));
+        assertEq("select * from fbbind_t where (%v and b)", selectSql(t, {"where": exp(DP_OP_AND, (True, fld("b")))},
+            \args));
+        assertEq("select * from fbbind_t where not (%v)", selectSql(t, {"where": exp(OP_NOT, (True,))}, \args));
+        assertEq("select cast(%v as integer) from fbbind_t", selectSql(t, {"columns": (exp(DP_OP_TO_INT, (1,)),)},
+            \args));
+        assertEq("select cast (%v as bigint) from fbbind_t", selectSql(t, {"columns": (exp(COP_CAST, (1,
+            "integer")),)}, \args));
+        assertEq("select replace(s, %v, %v) from fbbind_t", selectSql(t, {"columns": (exp(DP_OP_REPLACE, (fld("s"),
+            "a", "b")),)}, \args));
+
+        # a branch, a coalesce() and a nullif() value with a column
+        assertEq("select case when b then s else %v end from fbbind_t",
+            selectSql(t, {"columns": (exp(DP_OP_TERNARY, (fld("b"), fld("s"), "no")),)}, \args));
+        assertEq("select coalesce(s, %v) from fbbind_t",
+            selectSql(t, {"columns": (exp(DP_FUNC_COALESCE, (fld("s"), "none")),)}, \args));
+        assertEq("select nullif(s, %v) from fbbind_t",
+            selectSql(t, {"columns": (exp(DP_FUNC_NULLIF, (fld("s"), "x")),)}, \args));
+
+        # insert and update values, as before
+        FirebirdBindRecordingDatasource ds = cast<FirebirdBindRecordingDatasource>(t.getDatasource());
+        ds.log = ();
+        t.insert({"id": 2, "s": "x"});
+        t.update({"s": "y"}, {"id": 2});
+        assertEq(("insert into fbbind_t (id,s) values (%v,%v)", "update fbbind_t set s = %v where id = %v"),
+            map $1.sql, ds.log);
+    }
+
+    castValues() {
+        XdbcFirebirdTable t = getOfflineTable();
+        list<auto> args;
+
+        # arithmetic, concatenation and string functions in the select list
+        assertEq("select cast(%v as bigint) - cast(%v as bigint) as \"minus\", id + cast(%v as bigint) as \"plus\", "
+            "cast(%v as varchar(1)) || s as \"prepend\", upper(cast(%v as varchar(3))) as \"upper\", "
+            "char_length(cast(%v as varchar(2))) as \"len\", substring(s from cast(%v as bigint) for cast(%v as "
+            "bigint)) as \"sub\" from fbbind_t",
+            selectSql(t, {"columns": (
+                exp(COP_AS, (exp(COP_MINUS, (2, 1)), "minus")),
+                exp(COP_AS, (exp(COP_PLUS, (fld("id"), 1)), "plus")),
+                exp(COP_AS, (exp(COP_PREPEND, (fld("s"), "x")), "prepend")),
+                exp(COP_AS, (exp(COP_UPPER, ("abc",)), "upper")),
+                exp(COP_AS, (exp(COP_LENGTH, ("ab",)), "len")),
+                exp(COP_AS, (exp(OP_SUBSTR, (fld("s"), 2, 3)), "sub")),
+            )}, \args));
+        assertEq((2, 1, 1, "x", "abc", "ab", 2, 3), args);
+
+        # a value as a column, branches, coalesce() of values, a comparison of values, a date to extract from
+        assertEq("select cast(%v as decfloat(34)) as \"v\" from fbbind_t", selectSql(t, {"columns":
+            (exp(COP_AS, (exp(DP_EXPR_VALUE, (1.25n,)), "v")),)}, \args));
+        assertEq("select case when b then cast(%v as varchar(3)) else cast(%v as varchar(2)) end from fbbind_t",
+            selectSql(t, {"columns": (exp(DP_OP_TERNARY, (fld("b"), "yes", "no")),)}, \args));
+        assertEq("select case when %v then cast(%v as varchar(3)) else cast(%v as varchar(2)) end from fbbind_t",
+            selectSql(t, {"columns": (exp(DP_OP_TERNARY, (True, "yes", "no")),)}, \args));
+        assertEq("select coalesce(cast(%v as varchar(1)), cast(%v as varchar(1))) from fbbind_t",
+            selectSql(t, {"columns": (exp(DP_FUNC_COALESCE, ("a", "b")),)}, \args));
+        assertEq("select * from fbbind_t where cast(%v as bigint) = cast(%v as bigint)",
+            selectSql(t, {"where": exp(OP_EQ, (1, 1))}, \args));
+        assertEq("select extract(year from cast(%v as timestamp)) from fbbind_t",
+            selectSql(t, {"columns": (exp(DP_FUNC_GET_YEAR, (2026-10-21T12:00:00,)),)}, \args));
+        # a value without a type is bound as before
+        assertEq("select * from fbbind_t where s is null", selectSql(t, {"where": exp(OP_EQ, (fld("s"), NULL))},
+            \args));
+
+        # the start and the count of the substring where operator
+        assertEq("select * from fbbind_t where substring(s from cast(%v as integer) for cast(%v as integer)) = %v",
+            selectSql(t, {"where": {"s": op_substr(2, 3, "bcd")}}, \args));
+        assertEq((2, 3, "bcd"), args);
+        assertEq("select * from fbbind_t where substring(s from cast(%v as integer)) = %v",
+            selectSql(t, {"where": {"s": op_substr(2, "bcdef")}}, \args));
+    }
+
+    castSize() {
+        # a cast to a string without a size has the largest size of the character set: 8191 in UTF8, 10921 in
+        # UNICODE_FSS, the size in bytes in NONE and in a character set of one byte per character
+        foreach hash<auto> i in ({"bpc": 4, "size": 8191}, {"bpc": 3, "size": 10921}, {"bpc": 1, "size": 32765}) {
+            XdbcFirebirdTable t = getOfflineTable(i.bpc);
+            list<auto> args;
+            string desc = sprintf("%d bytes per character", i.bpc);
+            assertEq(sprintf("select cast (id as varchar(%d)) as \"c\" from fbbind_t", i.size),
+                selectSql(t, {"columns": (cop_as(cop_cast("id", "string"), "c"),)}, \args), desc);
+            assertEq(sprintf("select cast (id as varchar(%d)) from fbbind_t", i.size),
+                selectSql(t, {"columns": (exp(COP_CAST, (fld("id"), "string")),)}, \args), desc);
+            assertEq(sprintf("select cast(id as varchar(%d)) from fbbind_t", i.size),
+                selectSql(t, {"columns": (exp(DP_OP_TO_STRING, (fld("id"),)),)}, \args), desc);
+            # a char has a limit of 32767 bytes
+            assertEq(sprintf("select cast (id as char(%d)) from fbbind_t", 32767 / i.bpc),
+                selectSql(t, {"columns": (exp(COP_CAST, (fld("id"), "char")),)}, \args), desc);
+            # a given size, and a binary type, are as before
+            assertEq("select cast (id as varchar(10)) from fbbind_t",
+                selectSql(t, {"columns": (exp(COP_CAST, (fld("id"), "string", 10)),)}, \args), desc);
+            assertEq("select cast (id as varbinary(32765)) from fbbind_t",
+                selectSql(t, {"columns": (exp(COP_CAST, (fld("id"), "varbinary")),)}, \args), desc);
+        }
+
+        # the character set is read once for the table
+        XdbcFirebirdTable t = getOfflineTable();
+        FirebirdBindRecordingDatasource ds = cast<FirebirdBindRecordingDatasource>(t.getDatasource());
+        list<auto> args;
+        map selectSql(t, {"columns": (exp(COP_CAST, (fld("id"), "string")),)}, \args), xrange(3);
+        assertEq(1, (select ds.log, $1.sql =~ /rdb\$character_sets/).size());
+        # a cast to a type that has no character size reads no character set
+        XdbcFirebirdTable t2 = getOfflineTable();
+        FirebirdBindRecordingDatasource ds2 = cast<FirebirdBindRecordingDatasource>(t2.getDatasource());
+        selectSql(t2, {"columns": (exp(COP_CAST, (fld("id"), "integer")),)}, \args);
+        assertEq((), ds2.log);
+    }
+
+    trimSql() {
+        XdbcFirebirdTable t = getOfflineTable();
+        list<auto> args;
+        assertEq("select trim(leading from s), trim(trailing from s), trim(s) from fbbind_t",
+            selectSql(t, {"columns": (exp(DP_FUNC_LTRIM, (fld("s"),)), exp(DP_FUNC_RTRIM, (fld("s"),)),
+                exp(DP_FUNC_TRIM, (fld("s"),)))}, \args));
+    }
+
+    timestampLiteral() {
+        TimeZone tz = TimeZone::get();
+        date d = tz.date(2026-10-21T12:30:45.123456);
+        # a space between the date and the time, and four fractional digits
+        assertEq("timestamp '2026-10-21 12:30:45.1234'", XdbcFirebirdTable::getSqlValue(d));
+    }
+
+    #! returns the live table, creating it on the first call
+    private AbstractTable getLiveTable() {
+%ifdef NoJni
+        testSkip("no jni module");
+%endif
+        if (table) {
+            return table;
+        }
+        string connstr = m_options.connstr ?? ENV.QORE_DB_CONNSTR_JDBC_FIREBIRD ?? "";
+        if (!connstr.val()) {
+            testSkip("no Firebird connection; set QORE_DB_CONNSTR_JDBC_FIREBIRD or use -c");
+        }
+        Datasource nds(connstr);
+        if (nds.getDriverRealName() !~ /^firebird/i) {
+            testSkip("not a Firebird connection");
+        }
+        ds = nds;
+        Database db(ds);
+        {
+            *AbstractTable old = db.getTable(TableName);
+            if (old) {
+                old.dropCommit();
+            }
+        }
+        AbstractTable t = db.makeTable(TableName, {"columns": Columns, "primary_key": {"name": "pk_fbbind_t",
+            "columns": ("id",)}});
+        t.create();
+        ds.commit();
+        t.insert(Row);
+        ds.commit();
+        return table = db.getTable(TableName);
+    }
+
+    liveSelectList() {
+        AbstractTable t = getLiveTable();
+        hash<auto> row = t.selectRow({"columns": (
+            exp(COP_AS, (exp(COP_MINUS, (2, 1)), "minus")),
+            exp(COP_AS, (exp(COP_MULTIPLY, (fld("n"), 2)), "mult")),
+            exp(COP_AS, (exp(COP_DIVIDE, (3.0n, 2.0n)), "div")),
+            exp(COP_AS, (exp(COP_PREPEND, (fld("s"), "x-")), "prepend")),
+            exp(COP_AS, (exp(COP_APPEND, ("a", "b")), "append")),
+            exp(COP_AS, (exp(COP_UPPER, ("abc",)), "upper")),
+            exp(COP_AS, (exp(DP_OP_TO_LOWER, ("ABC",)), "lower")),
+            exp(COP_AS, (exp(COP_LENGTH, ("abcd",)), "len")),
+            exp(COP_AS, (exp(OP_SUBSTR, (fld("s"), 2, 3)), "sub")),
+            exp(COP_AS, (exp(OP_SUBSTR, ("hello", 2)), "sub2")),
+            exp(COP_AS, (exp(DP_EXPR_VALUE, ("value",)), "value")),
+            exp(COP_AS, (exp(DP_OP_TERNARY, (fld("b"), "yes", "no")), "ternary")),
+            exp(COP_AS, (exp(DP_OP_TERNARY, (False, 1, 2)), "ternary2")),
+            exp(COP_AS, (exp(DP_FUNC_COALESCE, (NULL, "c")), "coalesce")),
+            exp(COP_AS, (exp(DP_FUNC_NULLIF, (1, 2)), "nullif")),
+            exp(COP_AS, (exp(DP_FUNC_TRIM, (" t ",)), "trim")),
+            exp(COP_AS, (exp(DP_FUNC_LTRIM, (" t ",)), "ltrim")),
+            exp(COP_AS, (exp(DP_FUNC_RTRIM, (" t ",)), "rtrim")),
+            exp(COP_AS, (exp(DP_FUNC_GET_YEAR, (2026-10-21T12:00:00,)), "year")),
+            exp(COP_AS, (exp(DP_OP_MOD, (7, 3)), "mod")),
+            exp(COP_AS, (exp(DP_OP_REPLACE, ("aXa", "X", "b")), "replace")),
+        ), "where": {"id": 1}});
+        assertEq({
+            "minus": 1,
+            "mult": 4.5n,
+            "div": 1.5n,
+            "prepend": "x-abcdef",
+            "append": "ab",
+            "upper": "ABC",
+            "lower": "abc",
+            "len": 4,
+            "sub": "bcd",
+            "sub2": "ello",
+            "value": "value",
+            "ternary": "yes",
+            "ternary2": 2,
+            "coalesce": "c",
+            "nullif": 1,
+            "trim": "t",
+            "ltrim": "t ",
+            "rtrim": " t",
+            "year": 2026,
+            "mod": 1,
+            "replace": "aba",
+        }, row);
+        # an aggregate of a value
+        assertEq({"max": 5}, t.selectRow({"columns": (exp(COP_AS, (exp(COP_MAX, (5,)), "max")),)}));
+    }
+
+    liveWhere() {
+        AbstractTable t = getLiveTable();
+        # a value compared with a column, a column compared with an expression of values, and values compared
+        assertEq((1,), t.select({"columns": ("id",), "where": exp(OP_EQ, (fld("id"), 1))}).id);
+        assertEq((1,), t.select({"columns": ("id",), "where": exp(OP_EQ, (fld("id"), exp(COP_MINUS, (2, 1))))}).id);
+        assertEq((1,), t.select({"columns": ("id",), "where": exp(OP_EQ, (2, 2))}).id);
+        assertEq((), t.select({"columns": ("id",), "where": exp(OP_LT, (2, 1))}).id ?? ());
+        assertEq((1,), t.select({"columns": ("id",), "where": exp(OP_BETWEEN, (2, 1, 3))}).id);
+        assertEq((1,), t.select({"columns": ("id",), "where": exp(OP_IN, (2, (1, 2)))}).id);
+        assertEq((1,), t.select({"columns": ("id",), "where": exp(DP_OP_LIKE, ("abc", "a%"))}).id);
+        assertEq((1,), t.select({"columns": ("id",), "where": exp(OP_EQ, (exp(COP_LENGTH, ("ab",)), 2))}).id);
+        assertEq((1,), t.select({"columns": ("id",), "where": exp(OP_EQ, (fld("s"),
+            exp(DP_FUNC_COALESCE, (NULL, "abcdef"))))}).id);
+        # the substring where operator with a bound start and count
+        assertEq((1,), t.select({"columns": ("id",), "where": {"s": op_substr(2, 3, "bcd")}}).id);
+        assertEq((1,), t.select({"columns": ("id",), "where": {"s": op_substr(2, "bcdef")}}).id);
+    }
+
+    liveCastSize() {
+        AbstractTable t = getLiveTable();
+        # the number of bytes per character of the default character set of the database
+        int bpc = ds.selectRow("select cs.rdb$bytes_per_character as bpc from rdb$database d "
+            "left join rdb$character_sets cs on cs.rdb$character_set_name = d.rdb$character_set_name").bpc ?? 1;
+        if (bpc == 1) {
+            testSkip("the database has a character set of one byte per character");
+        }
+        # a cast to a string without a size, which had the size in bytes, which Firebird refused
+        assertEq({"c": "1"}, t.selectRow({"columns": (cop_as(cop_cast("id", "string"), "c"),),
+            "where": {"id": 1}}));
+        assertEq({"c": "1"}, t.selectRow({"columns": (exp(COP_AS, (exp(COP_CAST, (fld("id"), "string")), "c")),),
+            "where": {"id": 1}}));
+        assertEq({"c": "1"}, t.selectRow({"columns": (exp(COP_AS, (exp(DP_OP_TO_STRING, (fld("id"),)), "c")),),
+            "where": {"id": 1}}));
+        assertEq(bpc, cast<XdbcFirebirdTable>(t).getDatabaseBytesPerCharacter());
+    }
+
+    liveTimestampLiteral() {
+        AbstractTable t = getLiveTable();
+        date d = 2026-10-21T12:30:45.123456;
+        # a Firebird timestamp has four fractional digits of seconds
+        assertEq(2026-10-21T12:30:45.1234, t.selectRow({"columns": (cop_as(cop_value(d), "d"),),
+            "where": {"id": 1}}).d);
+    }
+}

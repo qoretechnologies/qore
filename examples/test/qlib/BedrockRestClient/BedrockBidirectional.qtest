@@ -108,7 +108,7 @@ class BedrockBidirectionalTest inherits QUnit::Test {
         BidirectionalHandler handler();
         server.setDefaultHandler("duplex", handler);
         server.waitForAsyncIo();
-        hash<auto> listener = server.addListener(<HttpListenerOptionInfo>{"service": 0,
+        hash<auto> listener = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0,
             "cert": new SSLCertificate(File::readTextFile(get_script_dir() + "/../ConnectionProvider/mycert.pem")),
             "key": new SSLPrivateKey(File::readTextFile(get_script_dir() + "/../ConnectionProvider/mykey.pem"),
                 "password"),

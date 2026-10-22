@@ -1,6 +1,8 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
 %modern
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
@@ -121,7 +123,7 @@ public class JsonRpcClientIoTest inherits QUnit::Test {
         server = new HttpServer(http_opts);
         server.setHandler("jsonrpc-handler", "", MimeTypeJson, handler);
         server.setDefaultHandler("jsonrpc-handler", handler);
-        port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        port = server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
 
         client = new JsonRpcClientIo::JsonRpcClientIo("http://localhost:" + port + "/JSON");
     }

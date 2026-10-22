@@ -71,8 +71,7 @@ public hashdecl UnstructuredPlatformSchemaProvenanceInfo {
 
 #! Loads and holds the vendored Unstructured Platform API schema
 /** The schema is pruned to the exported operations and the transitive closure of everything they
-    reference, and is parsed once on first use rather than when the module loads, so that a program that
-    only partitions documents never pays for it.
+    reference.  It is parsed once, when the module loads and registers its actions, which are built from it.
 
     @since %UnstructuredDataProvider 1.0
 */

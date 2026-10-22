@@ -123,6 +123,15 @@ public class RestSchemaActionOperation {
         #! The action output type: the success response body, unwrapped
         *AbstractDataProviderType response_type;
 
+        #! The schema of the success response body the output type is built from, while it is not built yet
+        *RestSchemaValidator::AbstractSchemaObject response_schema;
+
+        #! @ref True while the output type is still to be built from @ref response_schema
+        bool response_pending = False;
+
+        #! @ref True if the constructor left the output type to be built on first use
+        bool response_deferred = False;
+
         #! The reverse map from action option name to transport location
         hash<string, hash<RestSchemaFlatFieldInfo>> flat_map = {};
 
@@ -154,12 +163,18 @@ public class RestSchemaActionOperation {
         @param host_source the host source named by
         @ref RestSchemaActions::RestSchemaActionInfo::host_from "host_from", resolved by the action set;
         required whenever the manifest entry names one, because the action gains an option from it
+        @param lazy_response if @ref True, the output type is built on the first call of getResponseType()
+        rather than here; the response it is built from is still selected here, so an ambiguous output contract
+        is still reported here, while an unwrap path or a response overlay that does not apply is reported by
+        the first call of getResponseType()
 
         @throw REST-SCHEMA-ACTION-ERROR the operation cannot be resolved, the overlay does not apply, or the
         output contract is ambiguous
+
+        @since RestSchemaActions 1.0 the \a lazy_response parameter
     */
     constructor(AbstractRestSchemaValidator schema, hash<RestSchemaActionInfo> info,
-            *hash<RestSchemaHostSourceInfo> host_source) {
+            *hash<RestSchemaHostSourceInfo> host_source, *bool lazy_response) {
         self.schema = schema;
         self.info = info;
         self.host_source = host_source;
@@ -173,7 +188,14 @@ public class RestSchemaActionOperation {
         }
         resolveOperation();
         buildRequestType();
-        buildResponseType();
+        selectResponse();
+        if (response_pending) {
+            if (lazy_response) {
+                response_deferred = True;
+            } else {
+                buildResponseType();
+            }
+        }
     }
 
     #! Returns the stable action ID
@@ -230,8 +252,42 @@ public class RestSchemaActionOperation {
     }
 
     #! Returns the action output type, or @ref nothing if the operation returns no body
+    /** An output type that was not built at construction is built by the first call, once; a build that fails
+        throws and leaves nothing behind, and the next call builds it again.  Concurrent first calls wait for one
+        build and return its type.
+
+        @throw REST-SCHEMA-ACTION-ERROR an unwrap path or a response overlay of the manifest does not apply to the
+        response; only possible if the output type was not built at construction
+    */
     *AbstractDataProviderType getResponseType() {
+        if (response_pending) {
+            schema.runTypeBuild(sub () {
+                # another thread may have built it while this one waited for the build lock
+                if (response_pending) {
+                    on_error rethrow $1.err, sprintf("%s (while building the output type of action %y from "
+                        "\"%s %s\")", $1.desc, info.action, info.method.upr(), info.path);
+                    buildResponseType();
+                }
+            });
+        }
         return response_type;
+    }
+
+    #! Returns @ref True if the constructor left the output type to be built by getResponseType()
+    /** The result does not change once the type is built, so an action definition generated from the operation
+        is the same before and after.
+
+        @since RestSchemaActions 1.0
+    */
+    bool isResponseTypeDeferred() {
+        return response_deferred;
+    }
+
+    #! Returns @ref True if the output type is still to be built by getResponseType()
+    /** @since RestSchemaActions 1.0
+    */
+    bool isResponseTypePending() {
+        return response_pending;
     }
 
     #! Returns the HTTP status code of the response published as the output type, if any
@@ -687,6 +743,8 @@ public class RestSchemaActionOperation {
         @return the value to publish as the action's output
     */
     auto processResponse(auto body) {
+        # the response conversions are derived with the output type
+        getResponseType();
         foreach string name in (info.response_unwrap) {
             if (!exists body) {
                 break;
@@ -1259,8 +1317,14 @@ public class RestSchemaActionOperation {
         }
     }
 
-    #! Builds the action output type from the selected success response
-    private buildResponseType() {
+    #! Selects the success response the action output type is derived from
+    /** Sets the output type when it needs no schema; otherwise records the schema and leaves the type to
+        buildResponseType().
+
+        @throw REST-SCHEMA-ACTION-ERROR the manifest selects a response code or media type the operation does not
+        declare, or the operation declares several success responses with a body and the manifest selects none
+    */
+    private selectResponse() {
         RestSchemaValidator::AbstractResponsesObject responses = op.getResponses();
         *hash<string, RestSchemaValidator::AbstractResponseObject> resp_hash = responses.getResponses();
 
@@ -1301,7 +1365,7 @@ public class RestSchemaActionOperation {
             return;
         }
 
-        RestSchemaValidator::AbstractSchemaObject response_schema = resp.getSchema();
+        RestSchemaValidator::AbstractSchemaObject selected_schema = resp.getSchema();
         if (info.response_content_type.val()) {
             if (!(resp instanceof OpenApi3::ResponseObject)
                     || !cast<OpenApi3::ResponseObject>(resp).contentTypes{info.response_content_type}) {
@@ -1314,8 +1378,19 @@ public class RestSchemaActionOperation {
                 throw "REST-SCHEMA-ACTION-ERROR", sprintf("response media type %y declares no schema",
                     info.response_content_type);
             }
-            response_schema = selected;
+            selected_schema = selected;
         }
+        response_schema = selected_schema;
+        response_pending = True;
+    }
+
+    #! Builds the action output type from the success response selected by selectResponse()
+    /** Nothing is set unless the build succeeds, so a build that fails can be repeated.
+
+        @throw REST-SCHEMA-ACTION-ERROR an unwrap path or a response overlay of the manifest does not apply to the
+        response
+    */
+    private buildResponseType() {
         AbstractDataField body_field = schema.getFieldFromSchema("body", "REST response body argument",
             response_schema);
         AbstractDataProviderType type = body_field.getType();
@@ -1336,12 +1411,16 @@ public class RestSchemaActionOperation {
             type = tfields{name}.getType();
         }
 
+        *hash<auto> conv;
         if (info.response_fields) {
             *hash<auto> node;
             type = applyTypeOverlay(type, info.response_fields, "response body", \node);
-            response_conv = node;
+            conv = node;
         }
         response_type = info.response_envelope ? makeResponseEnvelopeType(type) : type;
+        response_conv = conv;
+        remove response_schema;
+        response_pending = False;
     }
 
     #! Builds a typed HTTP envelope without inventing a body for a bodyless response

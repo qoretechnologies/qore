@@ -81,8 +81,7 @@ public hashdecl GitHubSchemaProvenanceInfo {
     Adopting a newer description without moving the pin would generate actions against a version the
     requests never ask for.
 
-    The schema is parsed once, on first use, rather than when the module loads, so that a program that only
-    needs the connection does not pay for it.
+    The schema is parsed once, when the module loads and registers its actions, which are built from it.
 */
 public class GitHubSchema {
     public {

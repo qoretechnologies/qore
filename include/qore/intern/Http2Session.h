@@ -126,6 +126,30 @@ struct Http2StreamInfo {
     bool headers_complete = false;
     bool body_complete = false;
     bool reset = false;
+    //! True once the application has released the stream (Http2Session::releaseStream()) while it was open
+    /** A reset by the peer after that is not recorded in Http2Session::peer_reset_streams, as nothing will send on
+        the stream
+    */
+    bool released = false;
+    //! True once the handler that the stream was dispatched to is done with it (Http2Session::cleanupStream())
+    /** The stream can outlive its handler: a response body sent from an InputStream or by a dedicated sender (such as
+        a Server-Sent Events connection) is sent after the handler returns, a request body can be delivered to a
+        Queue that the handler registered (@ref body_consumer), and a reset by the peer is reported to the server's
+        poll operation only for a stream that has a record when it closes.  The record is erased once the stream is
+        closed and no consumer still has to receive the end of its request body.
+    */
+    bool handler_done = false;
+    //! True while a Queue registered for the request body has not yet received the end of the body
+    /** Set by Http2Session::setStreamBodyConsumer() when the handler registers the Queue, and cleared by
+        Http2Session::releaseStreamBodyConsumer() when the server's poll operation has delivered the end of the body;
+        the rest of the request body of a stream whose handler is done is discarded unless it is set.
+    */
+    bool body_consumer = false;
+    //! True once the application has reset the stream (Http2Session::submitRstStream())
+    /** cleanupStream() removes such a stream at once, as nothing is sent or received on it any more, so that its
+        close is not taken for a reset by the peer
+    */
+    bool rst_submitted = false;
     bool marked_complete = false;  //!< True if already added to completed_streams (prevents duplicates)
     bool dispatched = false;       //!< True after headers-only dispatch (stream stays in map for DATA accumulation)
     bool headers_end_stream = false; //!< True if END_STREAM was on the initial HEADERS frame (no body expected)
@@ -578,6 +602,14 @@ public:
     */
     DLLLOCAL void stopRequestAfterResponse(int32_t stream_id);
 
+#ifdef DEBUG
+    //! Debug-only: the number of records that the session keeps for its streams, by kind
+    /** Tests use it to show that the records of a long-lived session do not grow with the number of streams it has
+        finished; see QoreSocketObject::dbgGetStreamRecordCounts()
+    */
+    DLLLOCAL QoreHashNode* dbgGetStreamRecordCounts() const;
+#endif
+
     //! Drains the stream IDs reset by the peer since the last call (one-shot)
     /** Lets the H2 server poll operation surface peer RST_STREAMs to the
         controller so a persistent dedicated handler thread bound to the
@@ -612,11 +644,46 @@ public:
         return rv;
     }
 
+    //! Releases the records that the session keeps for a stream once the application is done with it
+    /** The record of a reset by the peer outlives the stream so that a send reports it (sendStreamData()); once the
+        application cannot send on the stream any more, the record is not needed, and a long-lived session must not
+        keep one for every stream the peer reset.  A no-op for a stream without records.
+
+        @param stream_id the HTTP/2 stream ID
+    */
+    DLLLOCAL void releaseStream(int32_t stream_id);
+
     //! Remove stream from map (cleanup after handler finishes)
-    /** @param stream_id the stream to remove
+    /** Also releases the records of the stream; see releaseStream()
+
+        A stream that is still in use when its handler is done is not removed now: one that is not closed yet (its
+        response or the rest of its request body may still be on the way, and a reset by the peer must still be
+        reported), and one whose request body a registered Queue has not received the end of yet
+        (setStreamBodyConsumer()).  It is marked (Http2StreamInfo::handler_done) and removed when it closes or when its
+        body consumer is released, whichever is last; meanwhile the rest of a request body that no Queue receives is
+        discarded.  A stream that the application has reset (submitRstStream()) is removed at once.  An active CONNECT
+        tunnel is kept until the session ends.
+
+        @param stream_id the stream to remove
         @since %Qore 3.0
     */
     DLLLOCAL void cleanupStream(int32_t stream_id);
+
+    //! Marks a server stream whose request body is delivered to a Queue that the handler registered
+    /** Called when the handler registers the Queue, before it is done with the stream, so that cleanupStream() keeps
+        the stream until the Queue has received the end of the body; see releaseStreamBodyConsumer().  A no-op for a
+        stream without a record.
+
+        @param stream_id the HTTP/2 stream ID
+    */
+    DLLLOCAL void setStreamBodyConsumer(int32_t stream_id);
+
+    //! Releases the body consumer of a server stream once its Queue has received the end of the request body
+    /** Removes the stream if its handler is done and the stream is closed; see cleanupStream()
+
+        @param stream_id the HTTP/2 stream ID
+    */
+    DLLLOCAL void releaseStreamBodyConsumer(int32_t stream_id);
 
     //! Marks a stream as streaming for subsequent data delivery
     /** Used by client multiplex to mark a CONNECT stream as streaming after
@@ -730,21 +797,21 @@ public:
     //! Clears the stream completion callback
     DLLLOCAL void clearStreamCompleteCallback() {
         printd(5, "clearStreamCompleteCallback() session=%p about to lock\n", this);
-        if (getenv("QORE_HTTP2_DEBUG")) {
+        if (q_env_is_set("QORE_HTTP2_DEBUG")) {
             fprintf(stderr, "HTTP2 DEBUG: clearStreamCompleteCallback() session=%p isServer=%d tid=%d about to lock\n",
                 this, is_server ? 1 : 0, q_gettid());
             fflush(stderr);
         }
         std::lock_guard<std::recursive_mutex> lg(m);
         printd(5, "clearStreamCompleteCallback() locked, clearing callback\n");
-        if (getenv("QORE_HTTP2_DEBUG")) {
+        if (q_env_is_set("QORE_HTTP2_DEBUG")) {
             fprintf(stderr, "HTTP2 DEBUG: clearStreamCompleteCallback() session=%p tid=%d locked, clearing callback\n",
                 this, q_gettid());
             fflush(stderr);
         }
         stream_complete_callback = nullptr;
         printd(5, "clearStreamCompleteCallback() done\n");
-        if (getenv("QORE_HTTP2_DEBUG")) {
+        if (q_env_is_set("QORE_HTTP2_DEBUG")) {
             fprintf(stderr, "HTTP2 DEBUG: clearStreamCompleteCallback() session=%p tid=%d done\n", this, q_gettid());
             fflush(stderr);
         }
@@ -981,7 +1048,10 @@ private:
         \c HTTP2-STREAM-RESET exception after the stream has been erased from
         \c streams by the normal close path.  Without this, a caller racing
         the close callback sees the generic \c HTTP2-ERROR "stream not found".
-        Mirrors @ref QuicSession::peer_reset_streams_.
+        An entry is removed by the first send that reports it, or when the
+        application is done with its stream (releaseStream(), cleanupStream()),
+        so a long-lived session does not keep one for every stream the peer
+        reset.  Mirrors @ref QuicSession::peer_reset_streams_.
     */
     std::unordered_map<int32_t, uint32_t> peer_reset_streams;
 
@@ -1001,7 +1071,8 @@ private:
 
     //! Stream IDs reset by the peer, awaiting one-shot reporting to the H2 poll
     //! operation for persistent-session teardown.  Pushed in onStreamCloseCallback()
-    //! (error_code!=0); drained by takePendingPeerResetReports().  Accessed under m.
+    //! (error_code!=0) on server sessions only, as nothing drains the reports of a
+    //! client session; drained by takePendingPeerResetReports().  Accessed under m.
     //! Mirrors @ref QuicSession::pending_peer_reset_reports_.
     std::vector<int32_t> pending_peer_reset_reports;
 

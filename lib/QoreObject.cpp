@@ -64,7 +64,8 @@
 static std::atomic<uint64_t> object_id_seq{0};
 
 static const std::string qore_trace_object_refs_filter = [] {
-    const char* env = getenv("QORE_TRACE_OBJECT_REFS");
+    QoreEnvironmentValue env_holder("QORE_TRACE_OBJECT_REFS");
+    const char* env = env_holder.c_str();
     return env ? std::string(env) : std::string();
 }();
 
@@ -102,18 +103,21 @@ static bool qore_trace_object_refs_for_class(const char* cls) {
 }
 
 static bool qore_trace_object_ref_should_backtrace(int before, int after) {
-    static const bool always_backtrace = getenv("QORE_TRACE_OBJECT_REF_BACKTRACE") != nullptr;
+    static constinit QoreEnvFlag always_backtrace_env("QORE_TRACE_OBJECT_REF_BACKTRACE");
+    const bool always_backtrace = always_backtrace_env.get();
     if (always_backtrace) {
         return true;
     }
 
-    static const int threshold = [] {
-        const char* low_refs = getenv("QORE_TRACE_OBJECT_REF_BACKTRACE_LOW_REFS");
+    static constinit QoreLazyValue<int> threshold_setting([]() -> int {
+        QoreEnvironmentValue low_refs_holder("QORE_TRACE_OBJECT_REF_BACKTRACE_LOW_REFS");
+        const char* low_refs = low_refs_holder.c_str();
         if (!low_refs || !*low_refs) {
             return 0;
         }
         return atoi(low_refs);
-    }();
+    });
+    const int threshold = threshold_setting.get();
     if (threshold <= 0) {
         return false;
     }
@@ -543,6 +547,10 @@ bool qore_object_private::scanMembers(RSetHelper& rsh) {
         ON_BLOCK_EXIT_OBJ(xsink, &ExceptionSink::clear);
         // the containers of private data can change after their locks are released, so the scan keeps their values
         RSetHeldEdgeHelper held(rsh);
+        // the containers' locks are only tried: one found held makes a scan due at this object again
+        // (RSetHelper::containerContended()), and a dereference made meanwhile finds the try counted; see
+        // RObject::private_scan_tries
+        PrivateScanTryHelper try_helper(*this);
         printd(5, "qore_object_private::checkIntern() scanning internals of object of class '%s'\n",
             theclass->getName());
         {
@@ -1148,7 +1156,8 @@ int qore_object_private::getLValueOrUpdateIntMember(const char* key,
             // Snapshot the diagnostic switch on first eligible use. Initialization
             // only reads the environment; it cannot enter Qore code or take another
             // object lock. Non-integer and wide-result misses avoid this guard.
-            static const bool disable_int_update = std::getenv("QORE_DISABLE_SELF_MEMBER_INT_UPDATE") != nullptr;
+            static constinit QoreEnvFlag disable_int_update_env("QORE_DISABLE_SELF_MEMBER_INT_UPDATE");
+            const bool disable_int_update = disable_int_update_env.get();
             if (!disable_int_update) {
                 // Both values are immediate: no ownership, recursive graph or container-count
                 // change, no allocation and no user callback. All guards precede the update.
@@ -1539,6 +1548,8 @@ void qore_object_private::unsetRealReference() {
 }
 
 #ifdef DEBUG
+std::atomic<qore_dbg_deref_decide_hook_t> qore_dbg_deref_decide_hook{nullptr};
+std::atomic<qore_dbg_deref_marked_hook_t> qore_dbg_deref_marked_hook{nullptr};
 std::atomic<qore_dbg_deref_collect_hook_t> qore_dbg_deref_collect_hook{nullptr};
 #endif
 
@@ -1616,6 +1627,20 @@ void qore_object_private::customDeref(ExceptionSink* xsink, bool real) {
                     "nothing to do\n", this, status == OS_OK ? getClassName() : "<deleted>");
                 return;
             }
+#ifdef DEBUG
+            // this dereference has a decision to make; tests note it here, before the rsection can block it
+            if (dbg_deref_decides_t hook = dbg_deref_decides.load(std::memory_order_acquire)) {
+                hook(this);
+            }
+#endif
+
+#ifdef DEBUG
+            // this dereference has taken its count and has a decision to make; tests hold it here, so that a release
+            // made by another thread supersedes its count and that thread decides first
+            if (qore_dbg_deref_decide_hook_t hook = qore_dbg_deref_decide_hook.load()) {
+                hook(status == OS_OK ? getClassName() : "<deleted>");
+            }
+#endif
 
             while (true) {
                 bool recalc = false;
@@ -1746,7 +1771,17 @@ void qore_object_private::customDeref(ExceptionSink* xsink, bool real) {
         // mark status as in destructor
         status = q_gettid();
 
+        // released here and not at the end of the block, so that the hook below runs between the marking and the
+        // end of this dereference (RObject::derefDone() in the helper's destructor)
+        sl.unlock();
         //printd(5, "Object lock %p unlocked (safe)\n", &rml);
+#ifdef DEBUG
+        // this dereference has marked the object as being destroyed and completes before deleting it; tests hold it
+        // here, so that another dereference finds the object being destroyed while this one is still in progress
+        if (qore_dbg_deref_marked_hook_t hook = qore_dbg_deref_marked_hook.load()) {
+            hook(getClassName());
+        }
+#endif
     }
 
     deleteOrDefer(xsink, cycle_cleanup);
@@ -2460,6 +2495,10 @@ bool QorePrivateDataScanner::scan(const QoreValue& value) {
     // own reference to the node
     QoreValue v(value);
     return obj.scanCheck(rsh, v.getInternalNode());
+}
+
+void QorePrivateDataScanner::contended() {
+    rsh.containerContended(obj);
 }
 
 bool AbstractScannablePrivateData::needsScan(const QoreValue& value) {

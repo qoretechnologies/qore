@@ -85,6 +85,11 @@ public:
     //! tries to grab the read lock; does not block if unsuccessful; returns 0 if successful
     DLLEXPORT int tryrdlock();
 
+    //! initializes the lock again, unlocked and without waiters, in a child process created with fork() (internal)
+    /** see QoreForkRWLock
+    */
+    DLLLOCAL void reinitAfterFork();
+
 protected:
     //! the private implementation of the lock
     qore_var_rwlock_priv* priv;

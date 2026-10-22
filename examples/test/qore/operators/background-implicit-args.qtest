@@ -1,0 +1,249 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires FsUtil
+%requires QUnit
+
+%exec-class BackgroundImplicitArgsTest
+
+#! a class whose methods the background expressions call
+class BackgroundImplicitArgsTarget {
+    public {
+        #! the values that the background threads pass, in the order they arrive
+        static Queue values();
+    }
+
+    push(auto v) {
+        BackgroundImplicitArgsTarget::values.push(v);
+    }
+
+    static spush(auto v) {
+        BackgroundImplicitArgsTarget::values.push(v);
+    }
+
+    #! Starts threads with the implicit arguments of a function: its arguments after the declared parameters
+    static startVariadic(int x, ...) {
+        background bg_push($$);
+        background bg_push($1);
+        background bg_push($2);
+    }
+}
+
+#! the function that the background expressions call
+sub bg_push(auto v) {
+    BackgroundImplicitArgsTarget::values.push(v);
+}
+
+#! The implicit arguments of a background expression are those of the code that starts the thread
+/** The background operator copies its expression with the values of the local variables of the code that starts the
+    thread.  In AST mode the implicit arguments ($1, $$ and $#) were copied unevaluated, so the new thread evaluated
+    them without the iteration that set them, and got no value: "map background f($1), list" passed NOTHING for each
+    element.  An operator in the expression that iterates (map, select, foldl, ...) still evaluates its own implicit
+    arguments for each element in the new thread.
+*/
+class BackgroundImplicitArgsTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+    }
+
+    public {
+        #! a hang guard for the values of the background threads; never a timing assertion
+        const HangGuard = 30s;
+
+        const List = (1, 2, 3);
+    }
+
+    constructor() : QUnit::Test("BackgroundImplicitArgsTest", "1.0") {
+        qore_bin = ENV.QORE_EXECUTABLE ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        addTestCase("implicit arguments of the code that starts the thread", \testFreeImplicitArgs());
+        addTestCase("implicit arguments of an operator in the background expression", \testBoundImplicitArgs());
+        addTestCase("both in one background expression", \testMixedImplicitArgs());
+        addTestCase("a copy of an operator with implicit arguments that fails", \testFailedIteratingCopy());
+        set_return_value(main());
+    }
+
+    #! Returns the next \a n values pushed by the background threads, sorted by their string representation
+    private static list<auto> collect(int n) {
+        list<hash<auto>> rv = ();
+        for (int i = 0; i < n; ++i) {
+            auto v = BackgroundImplicitArgsTarget::values.get(HangGuard);
+            rv += {"k": sprintf("%y", v), "v": v};
+        }
+        return map $1.v, sort(rv, int sub (hash<auto> a, hash<auto> b) { return a.k <=> b.k; });
+    }
+
+    testFreeImplicitArgs() {
+        list<auto> l = List;
+        auto r;
+
+        r = map background bg_push($1), l;
+        assertEq((1, 2, 3), BackgroundImplicitArgsTest::collect(3), "map: $1");
+
+        r = map background bg_push($#), l;
+        assertEq((0, 1, 2), BackgroundImplicitArgsTest::collect(3), "map: $#");
+
+        r = map background bg_push($$), l;
+        assertEq(((1,), (2,), (3,)), BackgroundImplicitArgsTest::collect(3), "map: $$");
+
+        r = map background bg_push($1 + 10), l;
+        assertEq((11, 12, 13), BackgroundImplicitArgsTest::collect(3), "map: $1 in an operator");
+
+        r = map background bg_push(($1, $#)), l;
+        assertEq(((1, 0), (2, 1), (3, 2)), BackgroundImplicitArgsTest::collect(3), "map: $1 and $# in a list");
+
+        r = map background bg_push({"v": $1}), l;
+        assertEq(({"v": 1}, {"v": 2}, {"v": 3}), BackgroundImplicitArgsTest::collect(3), "map: $1 in a hash");
+
+        r = map background bg_push($1), l, $1 > 1;
+        assertEq((2, 3), BackgroundImplicitArgsTest::collect(2), "map with select: $1");
+
+        r = map {$1: background bg_push($1)}, l;
+        assertEq((1, 2, 3), BackgroundImplicitArgsTest::collect(3), "hash map: $1");
+
+        r = select l, (background bg_push($1)) > 0;
+        assertEq((1, 2, 3), BackgroundImplicitArgsTest::collect(3), "select: $1");
+
+        r = foldl (background bg_push($2)), l;
+        assertEq((2, 3), BackgroundImplicitArgsTest::collect(2), "foldl: $2");
+
+        code c = sub (auto v) { bg_push(v); };
+        r = map background c($1), l;
+        assertEq((1, 2, 3), BackgroundImplicitArgsTest::collect(3), "a call reference: $1");
+
+        BackgroundImplicitArgsTarget t();
+        r = map background t.push($1), l;
+        assertEq((1, 2, 3), BackgroundImplicitArgsTest::collect(3), "a method call: $1");
+
+        r = map background BackgroundImplicitArgsTarget::spush($1), l;
+        assertEq((1, 2, 3), BackgroundImplicitArgsTest::collect(3), "a static method call: $1");
+
+        BackgroundImplicitArgsTarget::startVariadic(5, 6, 7);
+        assertEq((6, 7, (6, 7)), BackgroundImplicitArgsTest::collect(3), "a function's implicit arguments");
+
+        foreach auto v in (l) {
+            background bg_push(($#, v));
+        }
+        assertEq(((0, 1), (1, 2), (2, 3)), BackgroundImplicitArgsTest::collect(3), "foreach: $#");
+    }
+
+    testBoundImplicitArgs() {
+        list<auto> l = List;
+
+        background bg_push((map $1 * 2, l));
+        assertEq((2, 4, 6), BackgroundImplicitArgsTarget::values.get(HangGuard), "map");
+
+        background bg_push((map $1 * 2, l, $1 > 1));
+        assertEq((4, 6), BackgroundImplicitArgsTarget::values.get(HangGuard), "map with select");
+
+        background bg_push((map {$1: $#}, l));
+        assertEq({"1": 0, "2": 1, "3": 2}, BackgroundImplicitArgsTarget::values.get(HangGuard), "hash map");
+
+        background bg_push((map {$1: $# * 10}, l, $1 > 1));
+        assertEq({"2": 10, "3": 20}, BackgroundImplicitArgsTarget::values.get(HangGuard), "hash map with select");
+
+        background bg_push((select l, $1 > 1));
+        assertEq((2, 3), BackgroundImplicitArgsTarget::values.get(HangGuard), "select");
+
+        background bg_push((foldl $1 + $2, l));
+        assertEq(6, BackgroundImplicitArgsTarget::values.get(HangGuard), "foldl");
+
+        background bg_push((foldr $1 * 10 + $2, l));
+        assertEq((foldr $1 * 10 + $2, l), BackgroundImplicitArgsTarget::values.get(HangGuard), "foldr");
+
+        background bg_push((any $1 > 2, l));
+        assertEq(True, BackgroundImplicitArgsTarget::values.get(HangGuard), "any");
+
+        background bg_push((first $1 > 1, l));
+        assertEq(2, BackgroundImplicitArgsTarget::values.get(HangGuard), "first");
+    }
+
+    testMixedImplicitArgs() {
+        list<auto> l = List;
+        # the inner map's list uses the implicit argument of the outer map, which starts the threads; its expression
+        # uses its own
+        auto r = map background bg_push(map $1 * 10 + 1, ($1, 2)), l;
+        assertEq(((11, 21), (21, 21), (31, 21)), BackgroundImplicitArgsTest::collect(3), "map in map");
+
+        # the select expression uses its own; the list is that of the outer map
+        r = map background bg_push(select ($1, $1 + 1, $1 + 2), $1 % 2), l;
+        assertEq(((1, 3), (3, 5), (3,)), BackgroundImplicitArgsTest::collect(3), "select in map");
+    }
+
+    testFailedIteratingCopy() {
+        if (PlatformOS == "Windows") {
+            testSkip("the subprocess shell syntax in this test is POSIX-specific");
+        }
+        # a closure created in a destructor captures an object that is being destroyed, so copying it for a new
+        # thread fails: the copy of an operator that evaluates it for each element failed with it and the operator
+        # then used the copy that it did not make, which crashed.  The compiled tiers run an operator expression in
+        # the background operator through the AST interpreter only when AST fallback is enabled, so this case runs
+        # in a child process in AST mode
+        TmpDir tmp("qore-background-implicit-args-");
+        string script = tmp.path + "/child.q";
+        {
+            File f();
+            f.open2(script, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write("%modern
+bool sub check(auto v) {
+    return True;
+}
+
+sub report(string op, *hash<ExceptionInfo> ex) {
+    printf(\"%s: %s\\n\", op, ex ? ex.err : \"no exception\");
+}
+
+our auto done;
+
+class Starter {
+    destructor() {
+        code c = sub () {};
+        list<auto> l = (1, 2);
+        try {
+            background (done = (map check(c), l));
+            report(\"map\");
+        } catch (hash<ExceptionInfo> ex) {
+            report(\"map\", ex);
+        }
+        try {
+            background (done = (select l, check(c)));
+            report(\"select\");
+        } catch (hash<ExceptionInfo> ex) {
+            report(\"select\", ex);
+        }
+        try {
+            background (done = (foldl check(c), l));
+            report(\"foldl\");
+        } catch (hash<ExceptionInfo> ex) {
+            report(\"foldl\", ex);
+        }
+        try {
+            background (done = (foldr check(c), l));
+            report(\"foldr\");
+        } catch (hash<ExceptionInfo> ex) {
+            report(\"foldr\", ex);
+        }
+    }
+}
+
+{
+    Starter s();
+}
+");
+        }
+        string out = backquote(sprintf("%s --exec-mode=ast %s 2>&1; echo EXIT=$?", shellQuote(qore_bin),
+            shellQuote(script)));
+        foreach string op in ("map", "select", "foldl", "foldr") {
+            assertRegex("(^|\n)" + op + ": BACKGROUND-CLOSURE-INVALID-CAPTURE\n", out, op);
+        }
+        assertRegex("\nEXIT=0\n$", out, "the process exits normally");
+    }
+
+    private static string shellQuote(string str) {
+        return "'" + replace(str, "'", "'\\''") + "'";
+    }
+}

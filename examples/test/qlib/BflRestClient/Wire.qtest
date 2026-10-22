@@ -97,7 +97,8 @@ class BflWireTest inherits QUnit::Test {
         addTestCase("setup request and concurrent waits have independent deadlines", \deadlineTest());
         server = new HttpServer(<HttpServerOptionInfo>{"logger": new Logger::Logger("5423-wire", Logger::LoggerLevel::ERROR)});
         server.setDefaultHandler("fixture", handler);
-        endpoint = sprintf("http://127.0.0.1:%d", server.addListener(<HttpListenerOptionInfo>{"service": 0}).port);
+        endpoint = sprintf("http://127.0.0.1:%d",
+            server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port);
         handler.origin = endpoint;
         client = new BflRestClientIo({"url": endpoint, "apikey": "wire-fixture-key", "timeout": 5s, "connect_timeout": 1s});
         set_return_value(main());

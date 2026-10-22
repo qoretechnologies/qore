@@ -70,7 +70,10 @@ QoreNamespace LoggerNS("Qore::Logger");
 #endif
 
 static void logger_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
-    QoreLoggerEvent::init();
+    QoreLoggerEvent::init(&xsink);
+    if (xsink) {
+        return;
+    }
 
     // set up Logger namespace
     QoreClass* cls = initLoggerPatternClass(LoggerNS);
@@ -176,4 +179,5 @@ static void logger_module_ns_init(QoreNamespace* rns, QoreNamespace* qns, Except
 static void logger_module_delete() {
     LoggerNS.clear(nullptr);
     QoreLoggerLevel::del();
+    QoreLoggerEvent::del();
 }

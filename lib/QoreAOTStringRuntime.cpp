@@ -149,8 +149,11 @@ private:
 extern "C" DLLEXPORT uint64_t qore_rt_string_trim_aot_v1(QoreAOTContext* ctx,
         int32_t slot, uint64_t value, uint64_t** arg_cleanups, ExceptionSink* xsink) {
     assert(ctx && ctx->call_targets && slot >= 0 && slot < ctx->num_exprs && xsink);
-    static const bool enabled = !std::getenv("QORE_DISABLE_AOT_STRING_TRIM")
-        && !std::getenv("QORE_AOT_DISABLE_PRELINKED_CALLS");
+    static constinit QoreLazyValue<bool> enabled_setting([]() -> bool {
+        return !q_env_is_set("QORE_DISABLE_AOT_STRING_TRIM")
+            && !q_env_is_set("QORE_AOT_DISABLE_PRELINKED_CALLS");
+    });
+    const bool enabled = enabled_setting.get();
     const QoreAOTCallTarget& target = ctx->call_targets[slot];
     RuntimeConfig& rc = rc_get_current_ref();
     QoreValue arg = fromBits(value);
@@ -181,7 +184,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_pseudo_string_split_aot_v1(QoreAOTContext*
         int32_t slot, uint64_t base_bits, uint64_t separator_bits, uint64_t** arg_cleanups,
         ExceptionSink* xsink) {
     assert(ctx && slot >= 0 && slot < ctx->num_exprs && xsink);
-    static const bool enabled = !std::getenv("QORE_DISABLE_AOT_STRING_SPLIT");
+    static constinit QoreEnvFlag enabled_env("QORE_DISABLE_AOT_STRING_SPLIT");
+    const bool enabled = !enabled_env.get();
     QoreValue base = fromBits(base_bits);
     QoreValue separator = fromBits(separator_bits);
     if (!enabled || base.isEnum() || separator.isEnum()

@@ -80,6 +80,7 @@ public class HttpServerListenerSandboxTest inherits QUnit::Test {
         assertEq(1, server.getListeners().size(), "the loopback listener is created");
 
         # without a sandbox, the same address can be bound
+        # all-interfaces: an unsandboxed listener may bind the wildcard address
         server.addListeners("0.0.0.0:0", <HttpListenerOptionInfo>{});
         assertEq(2, server.getListeners().size(), "an unsandboxed listener on the wildcard address is created");
     }

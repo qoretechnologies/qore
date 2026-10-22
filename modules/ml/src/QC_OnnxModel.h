@@ -30,6 +30,7 @@
 
 #include <qore/Qore.h>
 #include <qore/QoreFuture.h>
+#include <qore/QoreSandboxManager.h>
 
 #include "QC_Tensor.h"
 #include "OnnxContentIdentity.h"
@@ -768,6 +769,11 @@ private:
         QoreValue output_names;
         std::string output_signature;
         QorePromise* promise;
+        //! the sandbox of the submitting code, which governs the batch that runs the request
+        /** the leader thread runs the requests of every submitter, so it does not inherit a sandbox itself; requests
+            are only batched with requests captured under the same sandbox
+        */
+        QoreSandboxCapture sandbox;
     };
 
     struct SingleAsyncParams {
@@ -809,6 +815,10 @@ private:
     DLLLOCAL QoreObject* submitDynamicRunAsync(const QoreHashNode* inputs,
         const QoreListNode* output_names, QoreProgram* pgm, ExceptionSink* xsink);
     DLLLOCAL void processDynamicRunQueue(ExceptionSink* xsink);
+    //! Returns true if the exception reports that the leader thread was cancelled
+    DLLLOCAL static bool isThreadCancel(ExceptionSink& err);
+    //! Returns true if the exception reports an interrupt of the sandbox that the current batch runs under
+    DLLLOCAL static bool isInterruptOnly(ExceptionSink& err);
     //! Clears async_leader_tid if it is the TID of the calling leader thread; must be called with async_mutex held
     DLLLOCAL void clearAsyncLeaderUnlocked();
     DLLLOCAL void resolveAsyncRequest(QorePromise* promise, QoreValue value);
@@ -975,6 +985,22 @@ public:
 };
 
 #endif // HAVE_ONNXRUNTIME
+
+#ifdef HAVE_ONNXRUNTIME
+//! registers the fork handlers of the ONNX support's process-wide locks; returns -1 if an exception was raised
+DLLLOCAL int qore_ml_onnx_register_fork_handlers(ExceptionSink* xsink);
+
+//! removes the fork handlers of the ONNX support's process-wide locks
+DLLLOCAL void qore_ml_onnx_unregister_fork_handlers();
+#else
+//! without ONNX Runtime support, there are no process-wide locks
+static inline int qore_ml_onnx_register_fork_handlers(ExceptionSink*) {
+    return 0;
+}
+
+static inline void qore_ml_onnx_unregister_fork_handlers() {
+}
+#endif
 
 DLLLOCAL QoreObject* qore_ml_onnx_run_options_to_object(QoreOnnxRunOptions* options,
     QoreProgram* pgm, ExceptionSink* xsink);

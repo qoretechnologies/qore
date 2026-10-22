@@ -1,0 +1,668 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Util
+%requires FsUtil
+%requires Mime
+%requires Logger
+%requires HttpServerUtil
+%requires HttpServer
+%requires HttpClientIo
+%requires RestClientIo
+%requires RestClient
+%requires ../../TestCertificates.qm
+
+%exec-class PooledConnectionSandboxTest
+
+#! Records the connections that the requests for each path arrived on, by the client's port
+class TestHandler inherits AbstractHttpRequestHandler {
+    private {
+        Mutex m();
+        #! path -> the IDs of the connections that its requests arrived on, in order
+        hash<auto> ids = {};
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        {
+            AutoLock al(m);
+            # the client's port identifies the connection: the TCP connection, or the QUIC connection's UDP path
+            ids{cx.url.path} += (cx."peer-info".port,);
+        }
+        return makeResponse(200, "reached", {"Content-Type": MimeTypeText});
+    }
+
+    #! Returns the IDs of the connections that the requests for the path arrived on
+    list<auto> getIds(string path) {
+        AutoLock al(m);
+        return ids{path} ?? ();
+    }
+}
+
+#! Records the connections that a connection manager makes to each origin
+/** Every new connection is submitted to the I/O controller; a connection that wins a race between HTTP/3 and HTTP/2
+    is submitted again, so each connection is recorded once
+*/
+class RecordingManager inherits HttpClientIo::HttpClientConnectionManager {
+    private {
+        Mutex m();
+        #! origin -> connection ID -> True
+        hash<auto> conns = {};
+    }
+
+    constructor(hash<HttpClientIo::HttpClientConnectionManagerOptions> opts)
+            : HttpClientIo::HttpClientConnectionManager(opts) {
+    }
+
+    #! Returns the number of connections made to the origin
+    int getCount(string key) {
+        AutoLock al(m);
+        return conns{key}.size();
+    }
+
+    private submitConnectionToController(string key, HttpClientIo::HttpClientConnection conn, bool initial = True) {
+        {
+            AutoLock al(m);
+            conns{key}{conn.getConnectionId().toString()} = True;
+        }
+        HttpClientIo::HttpClientConnectionManager::submitConnectionToController(key, conn, initial);
+    }
+}
+
+#! An HTTP/1.1 server that answers every request with a fixed body and keeps its connections open
+/** Used as a plain HTTP proxy, which answers the requests itself, and as a server on a UNIX socket; it counts the
+    connections that it accepts
+*/
+class KeepAliveServer {
+    private {
+        Socket listener();
+        int port;
+        #! the body of every response; followed by the request target if echo is set
+        string body;
+        bool echo;
+        Counter running(1);
+        Mutex m();
+        #! the request targets received, in order
+        list<string> targets = ();
+        #! the connections accepted
+        list<Socket> peers = ();
+    }
+
+    #! Listens on 127.0.0.1 or on the UNIX socket given
+    constructor(string body, bool echo, *string unix_path) {
+        self.body = body;
+        self.echo = echo;
+        if (unix_path) {
+            listener.bindUNIX(unix_path);
+        } else {
+            listener.bindINET("127.0.0.1", 0, True);
+            port = listener.getSocketInfo().port;
+        }
+        listener.listen();
+        background serve();
+    }
+
+    int getPort() {
+        return port;
+    }
+
+    #! Returns the number of connections accepted
+    int getConnectionCount() {
+        AutoLock al(m);
+        return peers.size();
+    }
+
+    #! Returns the request targets received, in order
+    list<string> getTargets() {
+        AutoLock al(m);
+        return targets;
+    }
+
+    stop() {
+        listener.shutdown();
+        listener.close();
+        {
+            AutoLock al(m);
+            map $1.shutdown(), peers;
+        }
+        running.waitForZero();
+    }
+
+    private serve() {
+        on_exit running.dec();
+        while (True) {
+            Socket peer;
+            try {
+                peer = listener.accept();
+            } catch (hash<ExceptionInfo> ex) {
+                return;
+            }
+            {
+                AutoLock al(m);
+                peers += peer;
+            }
+            running.inc();
+            background handle(peer);
+        }
+    }
+
+    private handle(Socket peer) {
+        on_exit running.dec();
+        while (True) {
+            hash<auto> hdr;
+            try {
+                hdr = peer.readHTTPHeader();
+            } catch (hash<ExceptionInfo> ex) {
+                # the client or stop() closed the connection
+                return;
+            }
+            if (hdr.method.typeCode() != NT_STRING) {
+                return;
+            }
+            {
+                AutoLock al(m);
+                targets += hdr.path;
+            }
+            string rbody = echo ? body + hdr.path : body;
+            try {
+                peer.send(sprintf("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: %d\r\n\r\n%s",
+                    rbody.size(), rbody));
+            } catch (hash<ExceptionInfo> ex) {
+                return;
+            }
+        }
+    }
+}
+
+#! A pool of connections: a label and a closure that makes a request through the pool for a path
+hashdecl PoolCase {
+    #! the pool, its protocol and the API used
+    string label;
+    #! makes a GET request through the pool for the path given (without a leading slash) and returns the body
+    code<string(string)> request;
+    #! returns the number of connections that the pool made to the server, if known
+    *code<int()> connections;
+}
+
+#! A connection that a pool holds open is handed to code only if that code's network sandbox allows where it leads
+/** A connection is checked against the network sandbox of the code that opens it; a pool reuses it for later
+    requests, which can come from code under another sandbox, so the pool checks the connection against the sandbox
+    of each caller.  The requests of sandboxed code are made by closures of this unsandboxed Program, as module code
+    makes them.
+*/
+public class PooledConnectionSandboxTest inherits QUnit::Test {
+    public {
+        #! the protocols of the HttpClientIo pool tested
+        const Protocols = ("h1", "h2", "h3", "auto");
+        #! the APIs of the HttpClientIo pool tested
+        const Apis = ("HTTP", "HTTP async", "REST", "REST async");
+        #! the HTTP versions of HTTPClient tested: "auto" negotiates HTTP/2 with ALPN
+        const HttpVersions = ("1.1", "2.0", "3.0", "auto");
+        #! the pools tested: HttpClientIo's connection manager, and the connections of an HTTPClient object
+        const Families = ("HttpClientIo", "HTTPClient");
+    }
+
+    private {
+        HttpServer server;
+        TestHandler handler();
+        #! TLS listeners that also receive HTTP/3 on their ports
+        int port_a;
+        int port_b;
+        string url_a;
+        #! the URL of the server on a UNIX socket
+        string url_unix;
+        TmpDir tmp;
+        KeepAliveServer proxy;
+        #! a server on a UNIX socket
+        KeepAliveServer unix_server;
+        #! the number of paths used, to give every case its own path
+        int seq = 0;
+        #! clients to close when the test ends
+        list<auto> clients = ();
+    }
+
+    constructor() : Test("PooledConnectionSandboxTest", "1.0") {
+        # the pool of HttpClientIo, and the pool of each HTTPClient object (also of RestClient)
+        foreach string family in (Families) {
+            addTestCase(family + ": a pooled connection is handed only to a sandbox that allows its destination",
+                familyCase(\reuseTest(), family));
+            addTestCase(family + ": a sandbox tightened after the connection was made applies to the next request",
+                familyCase(\tightenedTest(), family));
+            addTestCase(family + ": a connection made under a sandbox is reused by other code that may use it",
+                familyCase(\sandboxOpenerTest(), family));
+            addTestCase(family + ": a proxy connection is reused only for a sandbox that allows its destination",
+                familyCase(\proxyReuseTest(), family));
+            addTestCase(family + ": a new proxy connection is checked against the proxy's destination",
+                familyCase(\proxyConnectTest(), family));
+            addTestCase(family + ": a UNIX socket connection is checked against the sandbox",
+                familyCase(\unixSocketTest(), family));
+        }
+        addTestCase("HttpClientIo: a sandbox that denies the destination gets no connection at the connection limit",
+            \capacityTest());
+        addTestCase("HttpClientIo: the connection of a persistent session is checked against the sandbox",
+            \sessionTest());
+        addTestCase("HttpClientIo: a request does not borrow a connection leased to a persistent session",
+            \leaseTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        tmp = new TmpDir("pooled-connection-sandbox-");
+        server = new HttpServer(<HttpServerOptionInfo>{"logger": new Logger("pooled-connection-sandbox",
+            LoggerLevel::getLevelInfo())});
+        server.setDefaultHandler("test", handler);
+        server.waitForAsyncIo();
+        port_a = addTlsListener();
+        port_b = addTlsListener();
+        server.waitForAsyncIo();
+        url_a = sprintf("https://127.0.0.1:%d", port_a);
+        string sock_path = tmp.path + "/server.sock";
+        unix_server = new KeepAliveServer("reached", False, sock_path);
+        url_unix = "http://socket=" + encode_url(sock_path, True);
+        proxy = new KeepAliveServer("proxied ", True);
+    }
+
+    globalTearDown() {
+        foreach auto client in (clients) {
+            try {
+                if (client instanceof HttpClientIo::HttpClientConnectionManager) {
+                    client.closeAll();
+                } else {
+                    client.disconnect();
+                }
+            } catch (hash<ExceptionInfo> ex) {
+            }
+        }
+        if (proxy) {
+            proxy.stop();
+        }
+        if (unix_server) {
+            unix_server.stop();
+        }
+        if (server) {
+            server.stop();
+        }
+    }
+
+    #! A sandbox that denies the server does not get the connection that unsandboxed code opened, one that allows
+    #! the server reuses it
+    reuseTest(string family) {
+        Program deny = sandboxedProgram(sandboxAllowingPort(port_b));
+        Program allow = sandboxedProgram(sandboxAllowingPort(port_a));
+        foreach hash<PoolCase> c in (poolCases(family, url_a)) {
+            string path = nextPath();
+            # code without a sandbox opens the connection
+            assertEq("reached", call_function(c.request, path), c.label);
+            assertEq(1, handler.getIds(path).size(), c.label);
+            # a sandbox that denies the server does not get it, and cannot open another connection: the pool starts
+            # one, and the sandbox denies it
+            assertDenied(deny, c.request, path, sprintf("port %d", port_a), c.label);
+            assertEq(1, handler.getIds(path).size(), c.label + ": the server was not reached");
+            int made = getConnections(c);
+            # a sandbox that allows the server reuses it
+            assertEq("reached", allow.callFunction("run", c.request, path), c.label);
+            assertReused(path, 2, c, made);
+        }
+    }
+
+    #! The connection is checked against the sandbox as it is configured when the connection is reused
+    tightenedTest(string family) {
+        foreach hash<PoolCase> c in (poolCases(family, url_a)) {
+            SandboxManager sm();
+            sm.setNetworkDefaultPolicy(True);
+            Program p = sandboxedProgram(sm);
+            string path = nextPath();
+            # the sandboxed code opens the connection and reuses it
+            assertEq("reached", p.callFunction("run", c.request, path), c.label);
+            int made = getConnections(c);
+            assertEq("reached", p.callFunction("run", c.request, path), c.label);
+            assertReused(path, 2, c, made);
+            # the sandbox no longer allows the server
+            sm.addNetworkDeniedIPRange("127.0.0.0/8");
+            assertDenied(p, c.request, path, "127\\.0\\.0\\.1", c.label);
+            assertEq(2, handler.getIds(path).size(), c.label + ": the server was not reached");
+        }
+    }
+
+    #! A connection opened under a sandbox is reused by code without a sandbox and by code under another sandbox
+    #! that allows it
+    sandboxOpenerTest(string family) {
+        Program opener = sandboxedProgram(sandboxAllowingPort(port_a));
+        Program other = sandboxedProgram(sandboxAllowingPort(port_a));
+        Program deny = sandboxedProgram(sandboxAllowingPort(port_b));
+        foreach hash<PoolCase> c in (poolCases(family, url_a)) {
+            string path = nextPath();
+            assertEq("reached", opener.callFunction("run", c.request, path), c.label);
+            int made = getConnections(c);
+            assertEq("reached", call_function(c.request, path), c.label);
+            assertEq("reached", other.callFunction("run", c.request, path), c.label);
+            assertReused(path, 3, c, made);
+            assertDenied(deny, c.request, path, sprintf("port %d", port_a), c.label);
+            assertEq(3, handler.getIds(path).size(), c.label + ": the server was not reached");
+        }
+    }
+
+    #! With one connection per host allowed, a sandbox that denies the destination gets its denial, not the
+    #! connection; one that allows it still reuses the connection
+    capacityTest() {
+        Program deny = sandboxedProgram(sandboxAllowingPort(port_b));
+        Program allow = sandboxedProgram(sandboxAllowingPort(port_a));
+        foreach string protocol in (("h1", "h2")) {
+            string label = "HttpClientIo " + protocol + " limit 1";
+            RecordingManager mgr = getManager(protocol, {"max_connections_per_host": 1});
+            string key = sprintf("127.0.0.1:%d", port_a);
+            code<string(string)> request = string sub (string path) {
+                return mgr.request(url_a, "GET", "/" + path).body;
+            };
+            hash<PoolCase> c = <PoolCase>{
+                "label": label,
+                "request": request,
+                "connections": int sub () { return mgr.getCount(key); },
+            };
+            string path = nextPath();
+            assertEq("reached", request(path), label);
+            assertEq(1, mgr.getCount(key), label);
+            assertDenied(deny, request, path, sprintf("port %d", port_a), label);
+            assertEq(1, handler.getIds(path).size(), label + ": the server was not reached");
+            assertEq("reached", allow.callFunction("run", request, path), label);
+            assertReused(path, 2, c, 1);
+        }
+    }
+
+    #! A proxy connects to the destination for the client: a sandbox must allow the proxy and the destination
+    /** Without a sandbox, the destination is not resolved by the client, so no sandbox can decide on a connection
+        that code without a sandbox made: a sandbox that allows the proxy and the destination makes its own
+        connection, which code under another sandbox that allows both can reuse.
+    */
+    proxyReuseTest(string family) {
+        Program proxy_only = sandboxedProgram(sandboxAllowingPort(proxy.getPort()));
+        Program both = sandboxedProgram(sandboxAllowingPort(proxy.getPort(), port_b));
+        Program both_other = sandboxedProgram(sandboxAllowingPort(proxy.getPort(), port_b));
+
+        string path = nextPath();
+        string expected = sprintf("proxied %s/%s", getProxyTarget(), path);
+        code<string(string)> request = proxyClient(family);
+        int conns = proxy.getConnectionCount();
+        # code without a sandbox opens a connection to the proxy
+        assertEq(expected, request(path));
+        assertEq(++conns, proxy.getConnectionCount());
+        int requests = proxy.getTargets().size();
+        # a sandbox that allows the proxy but not the destination does not get the connection, and cannot open
+        # another one
+        assertDenied(proxy_only, request, path, sprintf("port %d", port_b), family);
+        assertEq(requests, proxy.getTargets().size(), "the proxy was not reached");
+        assertEq(conns, proxy.getConnectionCount(), "no connection was made");
+        # a sandbox that allows both makes its own connection: no sandbox can decide on the one made without one
+        assertEq(expected, both.callFunction("run", request, path));
+        assertEq(++conns, proxy.getConnectionCount(), "a connection was made for the sandbox");
+        # code under another sandbox that allows both reuses the connection made under a sandbox
+        assertEq(expected, both_other.callFunction("run", request, path));
+        assertEq(conns, proxy.getConnectionCount(), "the connection was reused");
+        # code without a sandbox can use any of them
+        assertEq(expected, request(path));
+        assertEq(conns, proxy.getConnectionCount(), "a connection was reused");
+    }
+
+    #! A new connection to a proxy is checked against the proxy's destination as well as the proxy
+    proxyConnectTest(string family) {
+        Program proxy_only = sandboxedProgram(sandboxAllowingPort(proxy.getPort()));
+        Program both = sandboxedProgram(sandboxAllowingPort(proxy.getPort(), port_b));
+        string path = nextPath();
+        code<string(string)> request = proxyClient(family);
+        int conns = proxy.getConnectionCount();
+        int requests = proxy.getTargets().size();
+        assertDenied(proxy_only, request, path, sprintf("port %d", port_b), family);
+        assertEq(requests, proxy.getTargets().size(), "the proxy was not reached");
+        assertEq(conns, proxy.getConnectionCount(), "no connection was made");
+        assertEq(sprintf("proxied %s/%s", getProxyTarget(), path), both.callFunction("run", request, path));
+        assertEq(conns + 1, proxy.getConnectionCount());
+    }
+
+    #! Returns the destination of the proxy requests; the proxy answers itself, so nothing listens on it
+    private string getProxyTarget() {
+        return sprintf("http://127.0.0.1:%d", port_b);
+    }
+
+    #! Returns a closure that makes a request through a new pool of the family that uses the proxy
+    private code<string(string)> proxyClient(string family) {
+        string proxy_url = sprintf("http://127.0.0.1:%d", proxy.getPort());
+        string target = getProxyTarget();
+        if (family == "HttpClientIo") {
+            RecordingManager mgr = getManager("h1", {"proxy_url": proxy_url});
+            return string sub (string path) { return mgr.request(target, "GET", "/" + path).body; };
+        }
+        HTTPClient hc({"url": target, "proxy": proxy_url, "http_version": "1.1"});
+        clients += hc;
+        return string sub (string path) { return hc.send(NOTHING, "GET", "/" + path).body; };
+    }
+
+    #! A persistent session pins its connection for the manager's requests to the server; a sandbox that denies
+    #! the server cannot use it
+    sessionTest() {
+        Program deny = sandboxedProgram(sandboxAllowingPort(port_b));
+        Program allow = sandboxedProgram(sandboxAllowingPort(port_a));
+        RecordingManager mgr = getManager("h1");
+        RestClientIo rest({"url": url_a, "data": "text"}, mgr);
+        RestPersistentSession session = rest.startPersistentSession();
+        on_exit session.close();
+        code<string(string)> request = string sub (string path) {
+            return mgr.request(url_a, "GET", "/" + path).body;
+        };
+        string path = nextPath();
+        assertEq("reached", session.pinned(auto sub () { return request(path); }));
+        assertDenied(deny, request, path, sprintf("port %d", port_a), "persistent session");
+        assertEq(1, handler.getIds(path).size(), "persistent session: the server was not reached");
+        assertEq("reached", allow.callFunction("run", request, path));
+        list<auto> ids = handler.getIds(path);
+        assertEq(2, ids.size());
+        assertEq(ids[0], ids[1], "the request rode the session's connection");
+    }
+
+    #! A connection leased for a persistent session is not used by other requests
+    leaseTest() {
+        foreach string protocol in (("h1", "h2")) {
+            RecordingManager mgr = getManager(protocol);
+            string key = sprintf("127.0.0.1:%d", port_a);
+            HttpClientIo::HttpClientConnection conn = mgr.leaseConnection(url_a);
+            on_exit mgr.releaseConnection(conn);
+            assertEq(1, mgr.getCount(key), protocol);
+            string path = nextPath();
+            assertEq("reached", mgr.request(url_a, "GET", "/" + path).body, protocol);
+            assertEq(2, mgr.getCount(key), protocol + ": the request made its own connection");
+        }
+    }
+
+    #! A connection to a UNIX socket is decided on by the network and the filesystem policy of the sandbox
+    unixSocketTest(string family) {
+        SandboxManager deny_sm();
+        deny_sm.setNetworkDefaultPolicy(False);
+        deny_sm.setFilesystemDefaultPolicy(True);
+        Program deny = sandboxedProgram(deny_sm);
+        SandboxManager allow_sm();
+        allow_sm.setNetworkDefaultPolicy(True);
+        allow_sm.setFilesystemDefaultPolicy(True);
+        Program allow = sandboxedProgram(allow_sm);
+
+        code<string(string)> request;
+        if (family == "HttpClientIo") {
+            RecordingManager mgr = getManager("h1");
+            request = string sub (string path) { return mgr.request(url_unix, "GET", "/" + path).body; };
+        } else {
+            HTTPClient hc({"url": url_unix, "http_version": "1.1"});
+            clients += hc;
+            request = string sub (string path) { return hc.send(NOTHING, "GET", "/" + path).body; };
+        }
+        string path = nextPath();
+        int conns = unix_server.getConnectionCount();
+        assertEq("reached", request(path));
+        assertEq(++conns, unix_server.getConnectionCount());
+        int requests = unix_server.getTargets().size();
+        assertDenied(deny, request, path, "denied", family);
+        assertEq(requests, unix_server.getTargets().size(), "the server was not reached");
+        assertEq(conns, unix_server.getConnectionCount(), "no connection was made");
+        assertEq("reached", allow.callFunction("run", request, path));
+        assertEq(conns, unix_server.getConnectionCount(), "the connection was reused");
+    }
+
+    #! Returns the pools of the family tested for the origin given
+    private list<hash<PoolCase>> poolCases(string family, string url) {
+        list<hash<PoolCase>> rv = ();
+        if (family == "HTTPClient") {
+            return httpClientCases(url);
+        }
+        string key = url.substr(8);
+        foreach string protocol in (Protocols) {
+            foreach string api in (Apis) {
+                RecordingManager mgr = getManager(protocol);
+                code<string(string)> request;
+                switch (api) {
+                    case "HTTP":
+                        request = string sub (string path) { return mgr.request(url, "GET", "/" + path).body; };
+                        break;
+                    case "HTTP async":
+                        request = string sub (string path) {
+                            return mgr.requestAsync(url, "GET", "/" + path).get(60s).body;
+                        };
+                        break;
+                    case "REST":
+                        request = string sub (string path) {
+                            RestClientIo rest({"url": url, "data": "text"}, mgr);
+                            on_exit rest.close();
+                            return rest.restGet("/" + path).body;
+                        };
+                        break;
+                    case "REST async":
+                        request = string sub (string path) {
+                            RestClientIo rest({"url": url, "data": "text"}, mgr);
+                            on_exit rest.close();
+                            return rest.restGetAsync("/" + path).get(60s).body;
+                        };
+                        break;
+                }
+                rv += <PoolCase>{
+                    "label": sprintf("HttpClientIo %s %s", protocol, api),
+                    "request": request,
+                    "connections": int sub () { return mgr.getCount(key); },
+                };
+            }
+        }
+        return rv;
+    }
+
+    #! Returns the HTTPClient and RestClient pools tested for the origin given
+    private list<hash<PoolCase>> httpClientCases(string url) {
+        list<hash<PoolCase>> rv = ();
+        foreach string version in (HttpVersions) {
+            hash<auto> opts = {
+                "url": url,
+                "http_version": version,
+                "ssl_verify_cert": False,
+                "accept_all_certs": True,
+            };
+            if (version == "auto") {
+                # an HTTP/3 upgrade advertised by the server would make another connection
+                opts.http3_mode = "disabled";
+            }
+            HTTPClient hc(opts);
+            clients += hc;
+            rv += <PoolCase>{
+                "label": sprintf("HTTPClient %s", version),
+                "request": string sub (string path) { return hc.send(NOTHING, "GET", "/" + path).body; },
+            };
+            RestClient rc(opts + {"data": "text"});
+            clients += rc;
+            rv += <PoolCase>{
+                "label": sprintf("RestClient %s", version),
+                "request": string sub (string path) { return rc.get(path).body; },
+            };
+        }
+        return rv;
+    }
+
+    #! Returns the number of connections that the pool made, or 0 if not known
+    private int getConnections(hash<PoolCase> c) {
+        return c.connections ? call_function(c.connections) : 0;
+    }
+
+    #! Asserts that the requests for the path arrived on one connection, and that the pool made no other connection
+    /** @param path the path of the requests
+        @param count the number of requests made
+        @param c the pool
+        @param made the number of connections that the pool made for the first request
+    */
+    private assertReused(string path, int count, hash<PoolCase> c, int made) {
+        list<auto> ids = handler.getIds(path);
+        assertEq(count, ids.size(), c.label + ": requests received");
+        assertEq(1, (map {$1.toString(): True}, ids).size(), c.label + ": the requests arrived on one connection: "
+            + (map $1.toString(), ids).join(", "));
+        assertEq(made, getConnections(c), c.label + ": the pool made no other connection");
+    }
+
+    #! Asserts that the request made by the sandboxed Program fails because the sandbox denies the destination
+    private assertDenied(Program p, code<string(string)> request, string path, string desc_regex, string msg) {
+        try {
+            auto rv = p.callFunction("run", request, path);
+            fail(sprintf("%s: no exception raised; the request returned: %y", msg, rv));
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("NETWORK-ACCESS-DENIED", ex.err, sprintf("%s: %s: %s", msg, ex.err, ex.desc));
+            assertRegex(desc_regex, ex.desc, msg);
+        }
+    }
+
+    #! Returns a sandbox that allows connections to the given ports only
+    private SandboxManager sandboxAllowingPort(int port, *int port2) {
+        SandboxManager sm();
+        sm.setNetworkDefaultPolicy(True);
+        sm.addNetworkAllowedPort(port);
+        if (port2) {
+            sm.addNetworkAllowedPort(port2);
+        }
+        return sm;
+    }
+
+    #! Returns a Program with the given sandbox that runs a request closure with run()
+    private Program sandboxedProgram(SandboxManager sm) {
+        Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+        p.setSandboxManager(sm);
+        p.parse("%modern\nauto sub run(code request, string path) { return request(path); }",
+            "pooled-connection-sandbox");
+        return p;
+    }
+
+    #! Returns a connection manager that is closed when the test ends
+    private RecordingManager getManager(string protocol, *hash<auto> opts) {
+        RecordingManager mgr(cast<hash<HttpClientIo::HttpClientConnectionManagerOptions>>({
+            "protocol": protocol,
+            "enable_http3": True,
+            "accept_all_certs": True,
+            "connect_timeout": 30s,
+            "request_timeout": 60s,
+        } + opts));
+        clients += mgr;
+        return mgr;
+    }
+
+    #! Adds a TLS listener on 127.0.0.1, which also receives HTTP/3, and returns its port
+    private int addTlsListener() {
+        return server.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
+            "service": 0,
+            "cert": new SSLCertificate(TestCertificates::CertPem),
+            "key": new SSLPrivateKey(TestCertificates::KeyPem),
+        }).port;
+    }
+
+    #! Returns a test case closure that runs the test for the pool family given
+    private code<nothing()> familyCase(code<nothing(string)> test, string family) {
+        return sub () { call_function(test, family); };
+    }
+
+    #! Returns a path that no other case uses
+    private string nextPath() {
+        return sprintf("case-%d", ++seq);
+    }
+}

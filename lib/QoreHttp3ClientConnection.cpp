@@ -658,6 +658,10 @@ void Http3ClientConnection::onInnerHandshakeReady(Http3ClientPollOperationPriv* 
     // QoreHttp3ClientConnection.h) to catch future double-ownership bugs.
     Attempt* w = attempts_[my_idx].get();
     sock_priv = w->sock_priv;        w->sock_priv = nullptr;
+    // where the connection leads: the winning attempt's socket, which a pool checks before it hands the connection
+    // to other code
+    std::shared_ptr<const QoreConnectionDestinations> winner_destinations
+        = sock_priv ? sock_priv->getConnectedDestinations() : nullptr;
     sock_obj = w->sock_obj;          w->sock_obj = nullptr;
     poll_op_priv = w->poll_op_priv;  w->poll_op_priv = nullptr;
     poll_op_obj = w->poll_op_obj;    w->poll_op_obj = nullptr;
@@ -685,6 +689,8 @@ void Http3ClientConnection::onInnerHandshakeReady(Http3ClientPollOperationPriv* 
         }
     }
     xsink.clear();
+
+    setDestinations(std::move(winner_destinations));
 
     // Finally, signal the base-class condition variable so the caller's
     // waitForReadyOrError returns success.

@@ -1,0 +1,92 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/SqlUtil
+%requires ../../../../qlib/Sqlite3SqlUtil.qm
+%requires ../../../../qlib/QUnit.qm
+
+%try-module sqlite3
+%define NoSqlite3
+%endtry
+
+%exec-class SqlUtilImmediateInsertOperatorTest
+
+#! a table whose insert operator map has an immediate operator that builds SQL with spaces and parentheses from
+#! its argument, as an immediate sequence operator does on SQL Server (<tt>next value for [seq]</tt>)
+class ImmediateTable inherits Sqlite3Table {
+    constructor(AbstractDatasource ds, string name) : Sqlite3Table(ds, name) {
+    }
+
+    private hash<auto> getInsertOperatorMap() {
+        return Sqlite3Table::getInsertOperatorMap() + {
+            "plus_one": {
+                "arg": Type::String,
+                "immediate": True,
+                # the argument is a validated identifier: a column of the table
+                "code": string sub (string key, string arg) {
+                    return sprintf("(select coalesce(max(%s), 0) + 1 from t)", arg);
+                },
+            },
+        };
+    }
+}
+
+#! Tests that an immediate insert operator's argument, not the SQL its code builds, is checked
+class SqlUtilImmediateInsertOperatorTest inherits QUnit::Test {
+    private {
+        *Datasource ds;
+    }
+
+    constructor() : Test("SqlUtilImmediateInsertOperator", "1.0", \ARGV) {
+        addTestCase("the SQL of an immediate operator can have any characters", \immediateSql());
+        addTestCase("the argument of an immediate operator must be an identifier", \immediateArgument());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+%ifndef NoSqlite3
+        ds = new Datasource("sqlite3:x@:memory:");
+        ds.exec("create table t (id integer)");
+        ds.exec("insert into t (id) values (41)");
+        ds.commit();
+%endif
+    }
+
+    globalTearDown() {
+        if (ds) {
+            ds.rollback();
+        }
+    }
+
+    private Datasource getDatasource() {
+%ifdef NoSqlite3
+        testSkip("no sqlite3 module");
+%endif
+        return ds;
+    }
+
+    immediateSql() {
+        Datasource ds = getDatasource();
+        on_exit ds.rollback();
+        ImmediateTable t(ds, "t");
+        # the operator's SQL has spaces and parentheses; it is built from a validated identifier, so it is used
+        t.insert({"id": make_iop("plus_one", "id")});
+        assertEq(42, ds.selectRow("select max(id) as m from t").m);
+    }
+
+    immediateArgument() {
+        Datasource ds = getDatasource();
+        on_exit ds.rollback();
+        ImmediateTable t(ds, "t");
+        # an argument that is not an identifier never reaches the operator's code
+        assertThrows("INSERT-OPERATOR-ERROR", "illegal characters", \t.insert(),
+            ({"id": make_iop("plus_one", "id) from t; drop table t; --")},));
+        assertEq(1, ds.selectRow("select count(*) as c from sqlite_schema where name = 't'").c);
+    }
+}

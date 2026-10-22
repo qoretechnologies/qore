@@ -1,0 +1,86 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/SqlUtil
+%requires ../../../../qlib/Sqlite3SqlUtil.qm
+%requires ../../../../qlib/QUnit.qm
+
+%try-module sqlite3
+%define NoSqlite3
+%endtry
+
+%exec-class SqlUtilAliasSqlNameTest
+
+#! a table that records the aliases given to getAliasSqlName() and quotes them in their exact case
+class AliasTable inherits Sqlite3Table {
+    public {
+        list<string> aliases = ();
+    }
+
+    constructor(AbstractDatasource ds, string name) : Sqlite3Table(ds, name) {
+    }
+
+    string getAliasSqlName(string alias) {
+        aliases += alias;
+        return "\"" + replace(alias, "\"", "\"\"") + "\"";
+    }
+}
+
+#! Tests that a column alias is given to SQL through AbstractTable::getAliasSqlName()
+class SqlUtilAliasSqlNameTest inherits QUnit::Test {
+    private {
+        *Datasource ds;
+    }
+
+    constructor() : Test("SqlUtilAliasSqlName", "1.0", \ARGV) {
+        addTestCase("cop_as() aliases are given by getAliasSqlName()", \copAs());
+        addTestCase("the default keeps the result key of a working alias", \defaultAlias());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+%ifndef NoSqlite3
+        ds = new Datasource("sqlite3:x@:memory:");
+        ds.exec("create table t (id integer, val text)");
+        ds.exec("insert into t (id, val) values (1, 'a')");
+        ds.commit();
+%endif
+    }
+
+    globalTearDown() {
+        if (ds) {
+            ds.rollback();
+        }
+    }
+
+    private Datasource getDatasource() {
+%ifdef NoSqlite3
+        testSkip("no sqlite3 module");
+%endif
+        return ds;
+    }
+
+    copAs() {
+        Datasource ds = getDatasource();
+        AliasTable t(ds, "t");
+        # the alias of the legacy column operator is given by the hook, so a driver can keep its case
+        *hash<auto> row = t.selectRow({"columns": (cop_as("val", "My Value"),), "where": {"id": 1}});
+        assertEq(("My Value",), t.aliases);
+        assertEq({"My Value": "a"}, row);
+    }
+
+    defaultAlias() {
+        Datasource ds = getDatasource();
+        Sqlite3Table t(ds, "t");
+        # the default gives an ordinary alias as before, so its result key is unchanged
+        *hash<auto> row = t.selectRow({"columns": (cop_as("val", "v1"),), "where": {"id": 1}});
+        assertEq({"v1": "a"}, row);
+        assertEq("v1", t.getAliasSqlName("v1"));
+    }
+}

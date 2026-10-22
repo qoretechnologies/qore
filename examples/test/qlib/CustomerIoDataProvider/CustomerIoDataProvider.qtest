@@ -513,7 +513,7 @@ public class CustomerIoDataProviderTest inherits QUnit::Test {
             "logger": new Logger("server", LoggerLevel::getLevelError()),
         });
         on_exit server.stop();
-        int port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
         FakeCustomerIoHandler handler();
         server.setHandler("customerio", "", NOTHING, handler);
         server.setDefaultHandler("customerio", handler);
@@ -535,7 +535,7 @@ public class CustomerIoDataProviderTest inherits QUnit::Test {
             "logger": new Logger("server", LoggerLevel::getLevelError()),
         });
         on_exit server.stop();
-        int port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
         FakeCustomerIoHandler handler();
         server.setHandler("customerio", "", NOTHING, handler);
         server.setDefaultHandler("customerio", handler);
@@ -658,7 +658,7 @@ public class CustomerIoDataProviderTest inherits QUnit::Test {
             "logger": new Logger("server", LoggerLevel::getLevelError()),
         });
         on_exit server.stop();
-        int port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
         FakeCustomerIoHandler handler();
         server.setHandler("customerio", "", NOTHING, handler);
         server.setDefaultHandler("customerio", handler);

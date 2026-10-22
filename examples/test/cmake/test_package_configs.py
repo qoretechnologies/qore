@@ -90,6 +90,40 @@ file(WRITE "${CMAKE_BINARY_DIR}/result.txt"
                           str(self.prefix / "bin/qore"), str(self.prefix / "bin/qcc"),
                           str(self.prefix / "lib/libqore.so")], report)
 
+    def doc_inputs(self, config, name, *args):
+        """Returns the documentation template and the language reference index a module consumer sees."""
+        source = self.root / (name + "-doc-consumer")
+        source.mkdir()
+        (source / "CMakeLists.txt").write_text('''cmake_minimum_required(VERSION 3.20)
+project(QoreDocConsumer NONE)
+find_package(Qore CONFIG REQUIRED)
+file(WRITE "${CMAKE_BINARY_DIR}/result.txt"
+    "${QORE_USERMODULE_DOXYGEN_TEMPLATE}\\n${QORE_DOXYGEN_TAGFILE}\\n")
+''')
+        build = source / "build"
+        self.cmake("-S", source, "-B", build, f"-DQore_DIR={config}", *args)
+        return (build / "result.txt").read_text().splitlines()
+
+    def test_build_tree_documents_modules_with_its_own_sources(self):
+        # without an installed Qore, a template in the install prefix does not exist, so a module built against a
+        # build tree had no documentation target
+        source, build = self.generate("documentation")
+        self.assertFalse((self.prefix / "share/qore/Doxyfile.in").exists())
+        self.assertEqual([str(source / "doxygen/Doxyfile.in"), str(build / "qore.tag")],
+                         self.doc_inputs(build / "cmake", "build-tree"))
+        # an index given by the consumer is kept
+        tag = self.root / "other index/qore.tag"
+        self.assertEqual([str(source / "doxygen/Doxyfile.in"), str(tag)],
+                         self.doc_inputs(build / "cmake", "build-tree-tag", f"-DQORE_DOXYGEN_TAGFILE={tag}"))
+
+    def test_installed_config_documents_modules_with_installed_sdk(self):
+        source, build = self.generate("installed-documentation")
+        installed = self.prefix / "lib/cmake/Qore"
+        shutil.copyfile(build / "cmake/install/QoreConfig.cmake", installed / "QoreConfig.cmake")
+        shutil.rmtree(source.parent)
+        self.assertEqual([str(self.prefix / "share/qore/Doxyfile.in"), str(self.prefix / "share/qore/qore.tag")],
+                         self.doc_inputs(installed, "installed"))
+
     def test_build_tree_and_symlink_keep_build_outputs(self):
         source, build = self.generate("development")
         alias = self.root / "build-alias"

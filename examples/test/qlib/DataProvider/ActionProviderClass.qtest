@@ -23,6 +23,11 @@ hashdecl UnresolvableActionInfo {
 # such actions in a Qore environment (Qorus's built-in applications are not loaded here); any other application
 # whose actions have neither cannot be used: Qorus refuses its tool calls and Qog actions.
 public class ActionProviderClassTest inherits QUnit::Test {
+    public {
+        #! the module that registers the applications of TypeScript actions, which name no class
+        const TypeScriptActionInterface = "TypeScriptActionInterface";
+    }
+
     constructor() : QUnit::Test("ActionProviderClass", "1.0") {
         addTestCase("every action names a scheme or a class", \schemeOrClassTest());
         set_return_value(main());
@@ -55,9 +60,6 @@ public class ActionProviderClassTest inherits QUnit::Test {
             printf("modules not loaded: %y\n", load_errors);
         }
 
-        # the TypeScript action interface, by the module path it registers its applications from
-        *string ts_module_path = get_module_hash().TypeScriptActionInterface.filename;
-
         list<hash<UnresolvableActionInfo>> unresolvable = ();
         int checked = 0;
         foreach hash<DataProviderAppInfo> app in (DataProviderActionCatalog::getAllApps()) {
@@ -65,7 +67,10 @@ public class ActionProviderClassTest inherits QUnit::Test {
                 continue;
             }
             list<string> owners = DataProviderActionCatalog::getModulePathsForApp(app.name) ?? ();
-            if (ts_module_path && inlist(ts_module_path, owners)) {
+            # the applications that the TypeScript action interface registers, by the name of their owner module: the
+            # catalog records a separated module by its directory and the module hash a module by its main file, so
+            # their paths differ for the same module
+            if (inlist(TypeScriptActionInterface, map ActionProviderClassTest::moduleName($1), owners)) {
                 continue;
             }
             foreach hash<DataProviderActionInfo> action in (DataProviderActionCatalog::getActions(app.name)) {
@@ -80,6 +85,14 @@ public class ActionProviderClassTest inherits QUnit::Test {
         }
         assertTrue(checked > 0, "actions of applications without a connection scheme are checked");
         assertEq((), unresolvable, "every action of an application without a connection scheme names its class");
+    }
+
+    #! Returns the name of the module at a module path: a module file or the directory of a separated module
+    private static string moduleName(string path) {
+        path =~ s/\/+$//;
+        string name = basename(path);
+        name =~ s/\.qmod?$//;
+        return name;
     }
 
     #! Returns the modules in the directory whose sources register an application

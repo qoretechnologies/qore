@@ -1,0 +1,162 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/SqlUtil
+%requires ../../../../qlib/Sqlite3SqlUtil.qm
+%requires ../../../../qlib/QUnit.qm
+
+%try-module sqlite3
+%define NoSqlite3
+%endtry
+
+%exec-class Sqlite3IdentifierQuotingTest
+
+#! Tests that SQLite identifiers from untrusted data are quoted and escaped, never pasted into SQL
+class Sqlite3IdentifierQuotingTest inherits QUnit::Test {
+    public {
+        const Hostile = (
+            "a\"b",
+            "x\"; drop table victim; --",
+            "a); drop table victim; select (",
+            "order",         # a reserved word
+            "Mixed Case",
+            "é cole",
+            "a'b",
+            "%v",
+            "a--b",
+            "a`b",
+        );
+    }
+
+    private {
+        *Datasource ds;
+    }
+
+    constructor() : Test("Sqlite3IdentifierQuoting", "1.0", \ARGV) {
+        addTestCase("the identifier rule", \identifierRule());
+        addTestCase("generated SQL quotes hostile names", \generatedSql());
+        addTestCase("ordinary names are unchanged", \ordinaryNames());
+        addTestCase("hostile names round trip in the database", \roundTrip());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+%ifndef NoSqlite3
+        ds = new Datasource("sqlite3:x@:memory:");
+%endif
+    }
+
+    globalTearDown() {
+        if (ds) {
+            ds.rollback();
+        }
+    }
+
+    private Datasource getDatasource() {
+%ifdef NoSqlite3
+        testSkip("no sqlite3 module");
+%endif
+        return ds;
+    }
+
+    private AbstractTable getTable(string name, hash<auto> cols) {
+        Sqlite3Table t(getDatasource(), name);
+        t.setupTable({"columns": cols});
+        return t;
+    }
+
+    identifierRule() {
+        AbstractTable t = getTable("probe", {"id": {"qore_type": "integer", "notnull": True}});
+        # an ordinary name is unchanged, so existing schemas do not churn
+        assertEq("abc", t.getColumnSqlName("abc"));
+        assertEq("a_b1", t.getColumnSqlName("a_b1"));
+        # a reserved word is quoted (in double quotes now, which the sqlite3 driver reads no placeholder in)
+        assertEq("\"order\"", t.getColumnSqlName("order"));
+        # a name that is not an ordinary name is quoted, each double quote doubled
+        assertEq("\"a\"\"b\"", t.getColumnSqlName("a\"b"));
+        assertEq("\"x\"\"; drop table victim; --\"", t.getColumnSqlName("x\"; drop table victim; --"));
+        assertEq("\"Mixed Case\"", t.getColumnSqlName("Mixed Case"));
+        assertEq("\"a%vb\"", t.getColumnSqlName("a%vb"));
+        # a non-ASCII name that SQLite reads as one identifier is unchanged
+        assertEq("město", t.getColumnSqlName("město"));
+
+        assertThrows("IDENTIFIER-ERROR", "empty name", \t.getColumnSqlName(), (""));
+        assertThrows("IDENTIFIER-ERROR", "NUL character", \t.getColumnSqlName(), ("a" + chr(0) + "b"));
+    }
+
+    generatedSql() {
+        foreach string name in (Hostile) {
+            AbstractTable t = getTable("probe", {name: {"qore_type": "string", "size": 80},
+                "id": {"qore_type": "integer", "notnull": True}});
+            string quoted = t.getColumnSqlName(name);
+            assertTrue(quoted == name || quoted =~ /^".*"$/, sprintf("column %y quoted as %y", name, quoted));
+
+            list<auto> args;
+            string sql = t.getSelectSql({"columns": (name,)}, \args);
+            assertTrue(sql.find(quoted) >= 0, sprintf("select SQL %y has the quoted column %y", sql, quoted));
+
+            # the create-table SQL for a table whose own name and a column are hostile quotes both
+            AbstractTable t2 = getTable(name, {name: {"qore_type": "string", "size": 80}});
+            string create_sql = t2.getCreateTableSql();
+            assertTrue(create_sql.find("create table " + t2.getSqlName()) == 0,
+                sprintf("create SQL %y names the table quoted", create_sql));
+        }
+    }
+
+    ordinaryNames() {
+        # the SQL generated for ordinary names must be exactly what it was before this change
+        AbstractTable t = getTable("probe", {"id": {"qore_type": "integer", "notnull": True},
+            "val": {"qore_type": "string", "size": 80}});
+        list<auto> args;
+        assertEq("select id, val from probe", t.getSelectSql({"columns": ("id", "val")}, \args));
+        hash<SqlCommandInfo> upd = t.getUpdateSql({"val": "x"}, {"id": 1});
+        assertEq("update probe set val = %v where id = %v", upd.sql);
+    }
+
+    roundTrip() {
+        Datasource ds = getDatasource();
+        on_exit ds.rollback();
+
+        # a victim table an injection would drop
+        ds.exec("create table victim (id integer)");
+
+        string tname = "inj\"; drop table victim; --";
+        string cname = "c\"; drop table victim; --";
+        Sqlite3Table t(ds, tname);
+        t.setupTable({
+            "columns": {
+                "id": {"qore_type": "integer", "notnull": True},
+                cname: {"qore_type": "string", "size": 80},
+            },
+            "primary_key": {"name": "pk_inj", "columns": ("id",)},
+            "indexes": {"ix\"inj": {"columns": (cname,)}},
+        });
+        t.create();
+        ds.commit();
+
+        # the hostile names did not run as SQL: victim is still here
+        assertEq(1, ds.selectRow("select count(*) as c from sqlite_schema where type = 'table' "
+            "and name = 'victim'").c);
+
+        # a full DML round trip through the hostile column and table names
+        t.insert({"id": 1, cname: "hello"});
+        ds.commit();
+        assertEq("hello", t.selectRow({"where": {"id": 1}}){cname});
+        assertEq(1, t.update({cname: "world"}, {"id": 1}));
+        ds.commit();
+        assertEq("world", t.selectRow({"where": {"id": 1}}){cname});
+        assertEq(1, t.del({"id": 1}));
+        ds.commit();
+        assertEq(0, t.rowCount());
+
+        # a re-alignment of the described table against itself proposes no SQL
+        Sqlite3Table described(ds, tname);
+        assertEq((), t.getAlignSql(described));
+    }
+}

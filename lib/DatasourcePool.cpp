@@ -125,6 +125,12 @@ DatasourcePool::DatasourcePool(ExceptionSink* xsink, DBIDriver* ndsl, const char
 }
 
 DatasourcePool::DatasourcePool(const DatasourcePool& old, ExceptionSink* xsink) :
+    DatasourcePool(old, CopyLock(old), xsink) {
+}
+
+// the configuration, the timeouts and the warning callback of the pool that is copied are changed with its lock held,
+// so they are copied with it held as well
+DatasourcePool::DatasourcePool(const DatasourcePool& old, CopyLock&& lock, ExceptionSink* xsink) :
     pool(new Datasource*[old.max]),
     tid_list(new int[old.max]),
     min(old.min),
@@ -140,6 +146,8 @@ DatasourcePool::DatasourcePool(const DatasourcePool& old, ExceptionSink* xsink) 
     callback_arg(old.callback_arg.refSelf()),
     config(old.config),
     valid(false) {
+    // the connections of the copy are opened without the lock of the pool that was copied
+    lock.unlock();
     init(xsink);
 }
 
@@ -343,6 +351,20 @@ Datasource* DatasourcePool::getDS(bool &new_ds, ExceptionSink* xsink) {
    assert(!*xsink);
 
    return ds;
+}
+
+Datasource* DatasourcePool::findAllocatedDS() {
+    SafeLocker sl((QoreThreadLock*)this);
+    thread_use_t::iterator i = tmap.find(q_gettid());
+    return i == tmap.end() ? nullptr : pool[i->second];
+}
+
+void DatasourcePool::closeConnections(ExceptionSink* xsink) {
+    // no other reference to the pool exists, so no thread can hold or allocate a connection
+    for (unsigned i = 0; i < cmax; ++i) {
+        // an error closing a connection is raised, and the others are still closed
+        pool[i]->close(xsink);
+    }
 }
 
 Datasource* DatasourcePool::getAllocatedDS() {

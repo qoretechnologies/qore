@@ -780,12 +780,17 @@ extern "C" void qore_aot_module_ns_init(QoreNamespace* root_ns, QoreNamespace* q
 extern "C" void qore_aot_module_ns_init_v2(QoreNamespace* root_ns, QoreNamespace* qore_ns,
     ExceptionSink* xsink);
 
-//! Returns the recursive lock serializing AOT module application and initializer execution.
-/** Slow runtime module loads take this lock before taking a target Program's parse lock.
-    This establishes one lock order for concurrent child-Program module loading and prevents
-    AOT initializer callbacks from deadlocking while resolving committed APIs in another Program.
+#ifdef DEBUG
+//! fork unit test: the AOT module initializations claimed by other threads are released in a child process
+/** @return the exit status of the child process: 0 if the checks passed
 */
-DLLLOCAL QoreRecursiveThreadLock& qore_aot_get_init_execution_lock();
+DLLLOCAL int qore_aot_ut_fork_module_state(QoreProgram* pgm);
+
+//! fork unit test: the lazy constant initialization lock in a child process
+/** @return 0 if the checks passed
+*/
+DLLLOCAL int qore_aot_ut_fork_lazy_constant_lock();
+#endif
 
 //! C ABI entry point called by AOT-compiled modules from their generated qore_module_delete()
 extern "C" void qore_aot_module_delete();
@@ -831,7 +836,7 @@ extern "C" DLLEXPORT const char* qore_aot_runtime_identity;
 /** This is \c qore_aot_runtime_identity unless the \c QORE_AOT_TEST_RUNTIME_IDENTITY environment variable is set,
     which only tests use to compile a module for a different runtime.
 */
-DLLLOCAL const char* qore_aot_get_compile_runtime_identity();
+DLLLOCAL std::string qore_aot_get_compile_runtime_identity();
 
 //! C ABI helper recording the AOT runtime identity that an AOT module was compiled for
 /** Called by the generated module descriptor function after qore_aot_fill_module_desc() in every AOT module with

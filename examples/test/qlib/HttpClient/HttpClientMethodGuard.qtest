@@ -154,7 +154,7 @@ class HttpClientMethodGuardTest inherits QUnit::Test {
         on_exit delete server;
         server.setHandler("ok", "/ok", NOTHING, new OkHandler());
 
-        hash<auto> info = server.addListener(<HttpListenerOptionInfo>{"service": "0"});
+        hash<auto> info = server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": "0"});
         server.waitForAsyncIo();
 
         hammerAndDelete("http://localhost:" + info.port);
@@ -169,6 +169,7 @@ class HttpClientMethodGuardTest inherits QUnit::Test {
         server.setHandler("ok", "/ok", NOTHING, new OkHandler());
 
         hash<auto> info = server.addListener(<HttpListenerOptionInfo>{
+            "node": "localhost",
             "service": "0",
             "cert": new SSLCertificate(CertPem),
             "key": new SSLPrivateKey(KeyPem),
@@ -187,6 +188,7 @@ class HttpClientMethodGuardTest inherits QUnit::Test {
         server.setHandler("ok", "/ok", NOTHING, new OkHandler());
 
         hash<auto> info = server.addListener(<HttpListenerOptionInfo>{
+            "node": "localhost",
             "service": "0",
             "cert": new SSLCertificate(CertPem),
             "key": new SSLPrivateKey(KeyPem),

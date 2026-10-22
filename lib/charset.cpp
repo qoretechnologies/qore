@@ -32,6 +32,7 @@
 
 #include <qore/intern/qore_encoding_private.h>
 #include <qore/intern/qore_string_private.h>
+#include "qore/intern/QoreForkHandlers.h"
 
 #include <cstdint>
 #include <cstdio>
@@ -89,6 +90,9 @@ encoding_map_t QoreEncodingManager::emap;
 const_encoding_map_t QoreEncodingManager::amap;
 QoreThreadLock QoreEncodingManager::mutex;
 QoreEncodingManager QEM;
+
+// the encoding maps can be used in a child process created with fork() (see QoreForkHandlers.h)
+static QoreForkThreadLock qem_fork_handler(QoreEncodingManager::getLockForFork(), QFLR_LEAF, "encodings");
 
 QoreEncoding::QoreEncoding(const char* code, const char* desc, unsigned char minwidth, unsigned char maxwidth,
         mbcs_length_t l, mbcs_end_t e, mbcs_pos_t p, mbcs_charlen_t c, mbcs_get_unicode_t gu, bool ascii_compat)
@@ -646,7 +650,8 @@ void QoreEncodingManager::init(const char* def) {
         return;
     }
     // first see if QORE_CHARSET exists
-    const char* estr = getenv("QORE_CHARSET");
+    QoreEnvironmentValue estr_holder("QORE_CHARSET");
+    const char* estr = estr_holder.c_str();
     if (estr) {
         if (validateEncoding(estr)) {
             QCS_DEFAULT = get_default(estr, "QORE_CHARSET");
@@ -661,7 +666,8 @@ void QoreEncodingManager::init(const char* def) {
     }
     // try to get character set name from LANG variable; otherwise set QCS_DEFAULT to UTF-8
     QCS_DEFAULT = QCS_UTF8;
-    estr = getenv("LANG");
+    QoreEnvironmentValue lang_holder("LANG");
+    estr = lang_holder.c_str();
     const char* p;
     if (!estr || !(p = strrchr(estr, '.'))) {
         return;

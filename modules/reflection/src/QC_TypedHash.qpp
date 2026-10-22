@@ -507,9 +507,22 @@ Namespace ns = th.getNamespace();
     @endcode
 
     @return the namespace for the typed hash
+    @throw REFLECTION-ACCESS-ERROR the reflection object belongs to another Program that the calling code may not navigate the namespaces of (see @ref reflection_caller_privilege)
+    @throw UNKNOWN-NAMESPACE the namespace is not visible in the Program of the reflection object (see @ref reflection_caller_privilege)
  */
 Namespace TypedHash::getNamespace() [flags=CONSTANT] {
-    return new QoreObject(QC_NAMESPACE, thd->pgm, new QoreReflectionNamespace(thd->pgm, thd->ns));
+    // the calling code's privileges apply (see @ref reflection_caller_privilege)
+    QoreReflectionCaller caller;
+    if (reflection_check_program_access(caller, thd->pgm, "navigate the namespaces of", xsink)) {
+        return QoreValue();
+    }
+    // the declaring namespace of an inherited symbol belongs to the declaring Program; navigation stays in the
+    // Program of the reflection object
+    const QoreNamespace* ns = reflection_program_namespace(thd->pgm, thd->ns, xsink);
+    if (!ns) {
+        return QoreValue();
+    }
+    return new QoreObject(QC_NAMESPACE, thd->pgm, new QoreReflectionNamespace(thd->pgm, ns));
 }
 
 //! returns the requested member or throws an exception if the member is not defined in the @ref hashdecl "typed hash (hashdecl)"
@@ -826,8 +839,14 @@ TypedHash th = TypedHash::forName(pgm, "::ENV");
 
     @throw UNKNOWN-TYPED-HASH cannot find a @ref hashdecl "typed hash (hashdecl)" with the given name or path, or the typed hash name contains a NUL character (since %Qore 3.0)
     @throw ENCODING-CONVERSION-ERROR this exception could be thrown if the string argument is not in the @ref default_encoding "default character encoding" and an error occurs during encoding conversion
+    @throw REFLECTION-ACCESS-ERROR the calling code may not look up symbols in the given Program (see @ref reflection_caller_privilege)
  */
 static TypedHash TypedHash::forName(Program[QoreProgram] pgm, string path) [flags=RET_VALUE_ONLY] {
+    // the calling code's privileges apply (see @ref reflection_caller_privilege)
+    QoreReflectionCaller caller;
+    if (reflection_check_program_access(caller, *pgm, "look up symbols in", xsink)) {
+        return QoreValue();
+    }
     // the name is looked up as a C string, which would be cut at a NUL character and name another typed
     if (q_check_no_nul(path->c_str(), path->size(), "typed hash name", "typed hash names", "UNKNOWN-TYPED-HASH", xsink)) {
         return QoreValue();
@@ -875,7 +894,13 @@ list<TypedHash> l = TypedHash::findAllRegex(pgm, "^S");
     @param re_opts see @ref regex_constants for possible values
 
     @return a list of typed hashes (hashdecls) matching the regular expression pattern argument or an empty list if no typed hashes match
+    @throw REFLECTION-ACCESS-ERROR the calling code may not look up symbols in the given Program (see @ref reflection_caller_privilege)
 */
 static list<TypedHash> TypedHash::findAllRegex(Program[QoreProgram] pgm, string pattern, *int re_opts) [flags=RET_VALUE_ONLY] {
+    // the calling code's privileges apply (see @ref reflection_caller_privilege)
+    QoreReflectionCaller caller;
+    if (reflection_check_program_access(caller, *pgm, "look up symbols in", xsink)) {
+        return QoreValue();
+    }
     return find_all_typedhashes(*pattern, re_opts, *pgm, xsink);
 }

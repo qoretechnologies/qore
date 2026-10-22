@@ -1,0 +1,274 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class StmtHandoffTest
+
+#! A statement destroyed in one thread while another thread holds its connection is closed by that thread
+/** A statement's driver data belongs to the connection that the statement uses.  When the last reference to a
+    statement was released in another thread than the one holding that connection - a DatasourcePool connection, or
+    the transaction lock of a Datasource - the driver data was closed in the thread releasing it, on a connection that
+    the other thread was using at the same time.  The driver data is now handed to the connection, and the thread
+    that holds the connection closes it when its transaction ends or it gives the connection up: at commit, at
+    rollback, when the connection or the transaction lock is released, or when the connection is closed.
+
+    The "dbitest" mock driver's "stmt-close-stats" option reports how many statements were closed in the process, and
+    how many of them in another thread than the one that prepared them (which holds the connection); its connections
+    count their calls in a field that only the thread holding the connection may change, so that a call from another
+    thread is a data race for ThreadSanitizer.
+*/
+public class StmtHandoffTest inherits QUnit::Test {
+    public {
+        const ConnStr = "dbitest:u/p@db";
+
+        #! the event type of DBI warning events (QDBI_EVENT_WARNING in the C++ API)
+        const DbiEventWarning = 1;
+
+        #! the number of statements that the thread holding the connection executes while the statement is destroyed
+        const Rounds = 50;
+    }
+
+    private {
+        #! a datasource that reads the driver's statement statistics
+        Datasource monitor(ConnStr);
+    }
+
+    constructor() : Test("StmtHandoffTest", "1.0", \ARGV) {
+        addTestCase("closed by the connection's thread at commit", \commitTest());
+        addTestCase("an error closing it is raised by the commit", \commitErrorTest());
+        addTestCase("closed by the connection's thread at rollback", \rollbackTest());
+        addTestCase("closed by the connection's thread when it ends", \threadEndTest());
+        addTestCase("closed by the connection's thread when the connection is closed", \connectionClosedTest());
+        addTestCase("a Datasource statement closed by the thread holding the transaction lock", \datasourceTest());
+        addTestCase("a Datasource statement closed when the thread holding the lock releases it",
+            \datasourceReleaseTest());
+        addTestCase("a Datasource statement closed when the thread holding the lock closes the datasource",
+            \datasourceCloseTest());
+        addTestCase("an error closing it when the lock is released is a warning event", \datasourceReleaseErrorTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        monitor.open();
+    }
+
+    hash<auto> stats() {
+        return monitor.getOption("stmt-close-stats");
+    }
+
+    #! the closes since \a base
+    hash<auto> delta(hash<auto> base) {
+        hash<auto> now = stats();
+        return {
+            "closes": now.closes - base.closes,
+            "foreign_closes": now.foreign_closes - base.foreign_closes,
+        };
+    }
+
+    #! runs a case: the other thread executes a pool statement, this thread destroys it, and the other thread ends
+    #! its transaction with \a end_tx, which must close the statement's driver data in that thread
+    private runPoolCase(string connstr, code end_tx, *string end_err) {
+        DatasourcePool pool(connstr);
+        SQLStatement stmt(pool);
+        hash<auto> base = stats();
+        Queue ready();
+        Queue destroyed();
+        Queue result();
+        background sub () {
+            try {
+                stmt.prepare("insert into t values (%v)");
+                stmt.exec(1);
+                ready.push(True);
+                # this thread keeps using the connection while the other thread destroys the statement
+                for (int i = 0; i < Rounds; ++i) {
+                    pool.exec("insert into t values (%v)", i);
+                }
+                destroyed.get();
+                hash<auto> before = delta(base);
+                *string err;
+                try {
+                    end_tx(pool);
+                } catch (hash<ExceptionInfo> ex) {
+                    err = ex.err;
+                }
+                result.push({"before": before, "after": delta(base), "err": err});
+            } catch (hash<ExceptionInfo> ex) {
+                ready.push(False);
+                result.push({"err": sprintf("%s: %s", ex.err, ex.desc)});
+            }
+        }();
+        assertTrue(ready.get());
+        # this thread holds no connection of the pool: the statement cannot be closed here
+        assertThrows("SQLSTATEMENT-ERROR", sub () { delete stmt; });
+        destroyed.push(True);
+        hash<auto> h = result.get();
+        assertEq(end_err, h.err, "the end of the transaction");
+        assertEq({"closes": 0, "foreign_closes": 0}, h.before, "not closed in this thread");
+        assertEq({"closes": 1, "foreign_closes": 0}, h.after, "closed by the thread that holds the connection");
+    }
+
+    commitTest() {
+        runPoolCase(ConnStr + "{min=1,max=1}", sub (DatasourcePool pool) { pool.commit(); });
+    }
+
+    #! the statement's driver data reports an error when it is closed: the commit raises it after committing
+    commitErrorTest() {
+        runPoolCase(ConnStr + "{min=1,max=1,fault=stmt-close}", sub (DatasourcePool pool) { pool.commit(); },
+            "DBI-TEST-STMT-CLOSE-ERROR");
+    }
+
+    rollbackTest() {
+        runPoolCase(ConnStr + "{min=1,max=1}", sub (DatasourcePool pool) { pool.rollback(); });
+    }
+
+    #! the commit fails with a lost connection, so the connection is closed with the statement's driver data pending
+    connectionClosedTest() {
+        runPoolCase(ConnStr + "{min=1,max=1,fault=abort-on-commit}", sub (DatasourcePool pool) { pool.commit(); },
+            "DBI-TEST-CONNECTION-ERROR");
+    }
+
+    #! the other thread ends holding the connection, which is released by the thread's cleanup
+    threadEndTest() {
+        DatasourcePool pool(ConnStr + "{min=1,max=1}");
+        SQLStatement stmt(pool);
+        hash<auto> base = stats();
+        Queue ready();
+        Queue destroyed();
+        Queue before_end();
+        background sub () {
+            stmt.prepare("insert into t values (%v)");
+            stmt.exec(1);
+            ready.push(True);
+            for (int i = 0; i < Rounds; ++i) {
+                pool.exec("insert into t values (%v)", i);
+            }
+            destroyed.get();
+            before_end.push(delta(base));
+            # the thread ends holding the connection: its cleanup rolls the transaction back and releases it
+        }();
+        assertTrue(ready.get());
+        assertThrows("SQLSTATEMENT-ERROR", sub () { delete stmt; });
+        destroyed.push(True);
+        assertEq({"closes": 0, "foreign_closes": 0}, before_end.get(), "not closed in this thread");
+        # the pool has one connection, so this waits until the other thread's cleanup has released it
+        pool.exec("insert into t values (1)");
+        pool.rollback();
+        assertEq({"closes": 1, "foreign_closes": 0}, delta(base), "closed by the thread that held the connection");
+    }
+
+    #! runs a Datasource case: the other thread holds the transaction lock with a statement that this thread
+    #! destroys, and then calls \a end, which must close the statement's driver data in that thread
+    private runDatasourceCase(bool autocommit, code end) {
+        Datasource ds(ConnStr);
+        ds.setAutoCommit(autocommit);
+        # this thread gives up waiting for the transaction lock, which the other thread holds
+        ds.setTransactionLockTimeout(50);
+        ds.open();
+        SQLStatement stmt(ds);
+        hash<auto> base = stats();
+        Queue ready();
+        Queue destroyed();
+        Queue result();
+        background sub () {
+            try {
+                # the statement takes the transaction lock and keeps it; binding it prepares it without starting a
+                # transaction
+                stmt.prepare("insert into t values (%v)");
+                stmt.bind(1);
+                ready.push(True);
+                # this thread keeps using the connection while the other thread destroys the statement
+                for (int i = 0; i < Rounds; ++i) {
+                    ds.exec("insert into t values (%v)", i);
+                }
+                destroyed.get();
+                hash<auto> before = delta(base);
+                end(ds);
+                result.push({"before": before, "after": delta(base)});
+            } catch (hash<ExceptionInfo> ex) {
+                ready.push(False);
+                result.push({"err": sprintf("%s: %s", ex.err, ex.desc)});
+            }
+        }();
+        assertTrue(ready.get());
+        assertThrows("TRANSACTION-LOCK-TIMEOUT", sub () { delete stmt; });
+        destroyed.push(True);
+        hash<auto> h = result.get();
+        assertNothing(h.err);
+        assertEq({"closes": 0, "foreign_closes": 0}, h.before, "not closed in this thread");
+        assertEq({"closes": 1, "foreign_closes": 0}, h.after, "closed by the thread that holds the transaction lock");
+    }
+
+    #! the statement of a Datasource uses the connection of the thread that holds the transaction lock
+    datasourceTest() {
+        runDatasourceCase(False, sub (Datasource ds) { ds.commit(); });
+    }
+
+    #! in autocommit mode the other thread releases the lock with the statement's driver data pending
+    datasourceReleaseTest() {
+        runDatasourceReleaseCase();
+    }
+
+    #! an error closing the statement's driver data when the lock is released has no caller to be raised to
+    datasourceReleaseErrorTest() {
+        Queue events();
+        runDatasourceReleaseCase(events);
+        assertEq(1, events.size());
+        hash<auto> event = events.get();
+        assertEq(DbiEventWarning, event.eventtype);
+        assertEq("DBI-TEST-STMT-CLOSE-ERROR", event.warning);
+        assertEq("injected failure closing a statement", event.desc);
+        assertEq("handoff", event.arg);
+    }
+
+    #! the other thread holds the transaction lock of a Datasource in autocommit mode, so no transaction is in
+    #! progress, and ends holding it; its cleanup releases the lock; with \a events, closing the statement fails,
+    #! and the datasource's events go to \a events
+    private runDatasourceReleaseCase(*Queue events) {
+        Datasource ds(ConnStr);
+        ds.setAutoCommit(True);
+        # this thread gives up waiting for the transaction lock, which the other thread holds
+        ds.setTransactionLockTimeout(50);
+        if (events) {
+            ds.setEventQueue(events, "handoff");
+        }
+        ds.open();
+        if (events) {
+            ds.setOption("fault", "stmt-close");
+        }
+        SQLStatement stmt(ds);
+        hash<auto> base = stats();
+        Queue ready();
+        Queue destroyed();
+        Queue before_end();
+        background sub () {
+            stmt.prepare("insert into t values (%v)");
+            stmt.bind(1);
+            ready.push(True);
+            for (int i = 0; i < Rounds; ++i) {
+                ds.exec("insert into t values (%v)", i);
+            }
+            destroyed.get();
+            before_end.push(delta(base));
+            # the thread ends holding the transaction lock with no transaction: its cleanup releases the lock
+        }();
+        assertTrue(ready.get());
+        assertThrows("TRANSACTION-LOCK-TIMEOUT", sub () { delete stmt; });
+        destroyed.push(True);
+        assertEq({"closes": 0, "foreign_closes": 0}, before_end.get(), "not closed in this thread");
+        # this waits until the other thread's cleanup has released the transaction lock
+        ds.setTransactionLockTimeout(60000);
+        ds.exec("insert into t values (1)");
+        assertEq({"closes": 1, "foreign_closes": 0}, delta(base), "closed by the thread that held the lock");
+    }
+
+    #! the other thread closes the datasource with the statement's driver data pending
+    datasourceCloseTest() {
+        runDatasourceCase(True, sub (Datasource ds) { ds.close(); });
+    }
+}

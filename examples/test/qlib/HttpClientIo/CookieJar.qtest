@@ -99,7 +99,7 @@ public class CookieJarTest inherits QUnit::Test {
         CookieHandler handler();
         mServer.setHandler("cookie-handler", "", NOTHING, handler);
         mServer.setDefaultHandler("cookie-handler", handler);
-        hash<auto> linfo = mServer.addListener(<HttpListenerOptionInfo>{"service": 0});
+        hash<auto> linfo = mServer.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0});
         port = linfo.port;
 
         set_return_value(main());

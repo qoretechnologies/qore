@@ -1,0 +1,51 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file NamespaceWriteTarget.qm a user module whose shared Program a binary module writes to while it is imported
+
+/*  NamespaceWriteTarget.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+module NamespaceWriteTarget {
+    version = "1.0";
+    desc = "test module: every import copies its namespaces from the module's shared Program, which a binary module "
+        "writes to at the same time";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+#! the module's public namespace, copied into each importing Program
+public namespace NamespaceWriteTarget {
+    #! a nested namespace, so that an import walks the sub-namespace map
+    public namespace Inner {
+        #! a class an importing Program calls
+        public class Item {
+            #! returns a fixed value
+            static int value() {
+                return 42;
+            }
+        }
+    }
+
+    #! a constant an importing Program reads
+    public const Version = "1.0";
+}

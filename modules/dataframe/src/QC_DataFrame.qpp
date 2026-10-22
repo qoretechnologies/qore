@@ -1464,7 +1464,8 @@ static DataFrame DataFrame::fromQuery(object ds, string sql, *list<auto> bind_ar
         df.numRows(), columns.numColumns());
     @endcode
 
-    @throw DATAFRAME-IO-ERROR if the data cannot be parsed as Arrow IPC data
+    @throw DATAFRAME-IO-ERROR if the data cannot be parsed as Arrow IPC data, or a struct field name or map key in
+    it has a NUL character, which a hash key cannot hold
 */
 static DataFrame DataFrame::fromArrowIpc(binary data) [flags=RET_VALUE_ONLY] {
     QoreDataFrame* result = QoreDataFrame::fromArrowIpc(data, xsink);
@@ -1547,7 +1548,8 @@ binary DataFrame::toArrowIpc() [flags=RET_VALUE_ONLY] {
     printf("Loaded %d rows, %d cols\n", df.numRows(), df.numCols());
     @endcode
 
-    @throw DATAFRAME-IO-ERROR if the path has a NUL character or the file cannot be opened or parsed
+    @throw DATAFRAME-IO-ERROR if the path has a NUL character or the file cannot be opened or parsed, or a struct
+    field name or map key in it has a NUL character, which a hash key cannot hold
     @throw FILESYSTEM-ACCESS-DENIED if the sandbox of the calling program does not allow the file to be read
     @throw SANDBOX-PATH-ERROR if the sandbox of the calling program cannot resolve the path
 */

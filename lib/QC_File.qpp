@@ -1137,7 +1137,9 @@ nothing File::redirect(Qore::File[File] target_file) [flags=NAMED_ARGS] {
 //! Returns a hash with read and write files on an internal FIFO pipe
 /** @return a hash with read and write files on an internal FIFO pipe
 
-    @note the files returned in the return value are considered "special" files that cannot be reopened
+    @note the files returned in the return value are considered "special" files that cannot be reopened; each owns
+    its descriptor, which @ref Qore::ReadOnlyFile::close() "close()" closes (returning 0), as does the destruction of
+    the object, so that the reading end gets the end of the input once the writing end is closed or destroyed
 
     @since %Qore 1.12
 */
@@ -1151,12 +1153,13 @@ static hash<PipeInfo> File::getPipe() {
 
     ReferenceHolder<QoreHashNode> rv(new QoreHashNode(hashdeclPipeInfo, xsink), xsink);
 
+    // the ends own their descriptors: close() and the destruction of the objects close them
     ReferenceHolder<File> read(new File(QCS_DEFAULT), xsink);
-    read->makeSpecial(pipefd[0]);
+    read->makeOwnedSpecial(pipefd[0]);
     ReferenceHolder<QoreObject> readobj(new QoreObject(QC_READONLYFILE, getProgram(), read.release()), xsink);
 
     ReferenceHolder<File> write(new File(QCS_DEFAULT), xsink);
-    write->makeSpecial(pipefd[1]);
+    write->makeOwnedSpecial(pipefd[1]);
     ReferenceHolder<QoreObject> writeobj(new QoreObject(QC_FILE, getProgram(), write.release()), xsink);
 
     rv->setKeyValue("read", readobj.release(), xsink);

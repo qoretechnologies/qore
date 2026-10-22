@@ -85,7 +85,7 @@ public class FireworksRestClientTest inherits QUnit::Test {
         http = new HttpServer(<HttpServerOptionInfo>{
             "logger": new Logger("fireworks-test", LoggerLevel::getLevelWarn()),
         });
-        port = http.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        port = http.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
         handler = new FireworksWireHandler();
         http.setDefaultHandler("fireworks", handler);
     }

@@ -73,6 +73,7 @@ class WebSocketH2ScanTest inherits QUnit::Test {
         server.setDefaultHandler("ws-handler", handler);
         try {
             h2info = server.addListener(<HttpListenerOptionInfo>{
+                "node": "localhost",
                 "service": 0,
                 "cert": new SSLCertificate(CertPem),
                 "key": new SSLPrivateKey(KeyPem),

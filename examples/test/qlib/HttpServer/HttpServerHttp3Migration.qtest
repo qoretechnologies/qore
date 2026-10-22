@@ -25,16 +25,22 @@
     QUIC connection migration tests - exercises client-side active migration
     (RFC 9000 §9) end-to-end over QUIC/HTTP/3.
 
+    Http3ClientConnection::migrate() returns once the I/O thread of the connection has made the migration, so every
+    test checks that the connection has a new local port when it returns.
+
     Tests cover:
     - Client active migration (migrate then request)
     - Migration during streaming response (1MB body mid-stream)
     - Migration during large upload (1MB POST body mid-upload)
-    - Multiple successive migrations (3x with path validation retries)
+    - Multiple successive migrations (3x)
     - Many migrations / CID replenishment (10 migrations with requests)
     - Migration before handshake (negative test)
     - Idle connection migration
     - Concurrent streams (10) + migration
     - Http3ClientConnectionManager.migrateAll()
+    - A migration that the QUIC layer refuses raises its error, and migrateAll() drains the connection
+    - A migration that the I/O thread does not start in time is withdrawn (HTTP3-MIGRATION-TIMEOUT)
+    - A migration requested before the connection closes raises HTTP3-CONNECTION-CLOSED
 */
 
 %modern
@@ -105,7 +111,12 @@ class HttpServerHttp3MigrationTest inherits Test {
 
         # Group 3: Negative Tests
         addTestCase("migration before handshake", \testMigrationBeforeHandshake());
-        addTestCase("many migrations / CID replenishment", \testCidExhaustion());
+        addTestCase("many migrations / CID replenishment", \testCidReplenishment());
+        addTestCase("back-to-back migrations wait for a spare connection ID", \testBackToBackMigrations());
+        addTestCase("a migration with no spare connection ID times out", \testRefusedMigration());
+        addTestCase("migrateAll drains a connection that cannot be migrated", \testMigrateAllRefused());
+        addTestCase("migration not started in time is withdrawn", \testMigrationTimeout());
+        addTestCase("migration requested before the connection closes", \testMigrationConnectionClosed());
 
         set_return_value(main());
     }
@@ -180,6 +191,18 @@ class HttpServerHttp3MigrationTest inherits Test {
         return conn;
     }
 
+    #! Helper: returns the local port of the UDP socket of a connection
+    private static int getLocalPort(Http3ClientConnection conn) {
+        return conn.getSocket().getSocketInfo().port;
+    }
+
+    #! Helper: migrates a connection and checks that it has a new local port when migrate() returns
+    private migrateAndCheck(Http3ClientConnection conn, string what) {
+        int old_port = getLocalPort(conn);
+        assertTrue(conn.migrate(), what + ": migrate() returns True");
+        assertNeq(old_port, getLocalPort(conn), what + ": the connection has a new local port");
+    }
+
     #! Helper: do a sync request via Http3ClientConnection and return the response
     private hash<auto> doSyncRequest(Http3ClientConnection conn, string method, string path,
             *hash<auto> headers, *data body) {
@@ -198,7 +221,7 @@ class HttpServerHttp3MigrationTest inherits Test {
         assertEq(200, resp1.status_code, "pre-migration request succeeds");
 
         # Migrate
-        assertTrue(conn.migrate(), "migration returns True");
+        migrateAndCheck(conn, "migration");
 
         # Request after migration
         hash<auto> resp2 = doSyncRequest(conn, "GET", "/echo");
@@ -223,7 +246,7 @@ class HttpServerHttp3MigrationTest inherits Test {
         Future f = req.future;
 
         # Migrate mid-stream — the request is in-flight via the controller
-        assertTrue(conn.migrate(), "migration during streaming succeeds");
+        migrateAndCheck(conn, "migration during streaming");
 
         # Wait for the Future to resolve; use 60s timeout because RFC 9000 §9.4
         # resets the congestion window after migration, and QUIC retransmission
@@ -239,10 +262,9 @@ class HttpServerHttp3MigrationTest inherits Test {
     }
 
     #! Test: migrate 3 times with I/O between each → verify final state consistent
-    /** Performs successive migrations with a request between each to verify
-        path validation completes and the new path is usable. With async I/O
-        the controller drives path validation in the background; a successful
-        request proves the new path is validated and functional.
+    /** Performs successive migrations with a request between each to verify the new path is usable.  A migration
+        does not wait for the validation of the previous path: ngtcp2 abandons a validation that is still running
+        when the next migration is made.
     */
     testMultipleMigrations() {
         Http3ClientConnection conn = createReadyConnection();
@@ -252,27 +274,8 @@ class HttpServerHttp3MigrationTest inherits Test {
         hash<auto> resp0 = doSyncRequest(conn, "GET", "/echo");
         assertEq(200, resp0.status_code, "initial request succeeds");
 
-        # Migrate 3 times; ngtcp2 won't allow a new migration while path validation
-        # from the previous one is still in progress, so retry with brief waits.
-        int migrations = 3;
-        for (int i = 0; i < migrations; ++i) {
-            # Retry migration until path validation from previous migration completes
-            date deadline = now_us() + 15s;
-            bool migrated = False;
-            while (!migrated && now_us() < deadline) {
-                try {
-                    assertTrue(conn.migrate(), sprintf("migration %d succeeds", i + 1));
-                    migrated = True;
-                } catch (hash<ExceptionInfo> ex) {
-                    if (ex.err == "QUIC-MIGRATION-ERROR" && ex.desc =~ /not in a migratable state/) {
-                        # Controller drives I/O; wait briefly for path validation to complete
-                        usleep(100ms);
-                    } else {
-                        rethrow;
-                    }
-                }
-            }
-            assertTrue(migrated, sprintf("migration %d completed within deadline", i + 1));
+        for (int i = 0; i < 3; ++i) {
+            migrateAndCheck(conn, sprintf("migration %d", i + 1));
             # Do a request to verify the connection works after this migration
             hash<auto> mid_resp = doSyncRequest(conn, "GET", "/echo");
             assertEq(200, mid_resp.status_code, sprintf("request after migration %d succeeds", i + 1));
@@ -297,14 +300,8 @@ class HttpServerHttp3MigrationTest inherits Test {
         hash<auto> resp1 = doSyncRequest(conn, "GET", "/echo");
         assertEq(200, resp1.status_code, "initial request succeeds");
 
-        # Let it sit idle briefly (controller continues driving I/O in background)
-        usleep(200ms);
-
-        # Migrate the idle connection
-        assertTrue(conn.migrate(), "idle migration succeeds");
-
-        # Wait briefly for path validation (controller drives I/O)
-        usleep(200ms);
+        # Migrate the idle connection; the next request is sent on the new path at once
+        migrateAndCheck(conn, "idle migration");
 
         # Verify it still works
         hash<auto> resp2 = doSyncRequest(conn, "POST", "/echo", NOTHING, "after-idle-migration");
@@ -333,7 +330,7 @@ class HttpServerHttp3MigrationTest inherits Test {
         }
 
         # Migrate while requests are in-flight (controller drives I/O)
-        assertTrue(conn.migrate(), "migration with concurrent streams succeeds");
+        migrateAndCheck(conn, "migration with concurrent streams");
 
         # Wait for all Futures to resolve
         hash<string, hash<auto>> results;
@@ -406,14 +403,13 @@ class HttpServerHttp3MigrationTest inherits Test {
     }
 
     #! Test: many successive migrations → verify CID replenishment and connection stability
-    /** On loopback, path validation completes fast enough that the server
-        replenishes connection IDs before exhaustion. This test verifies that
-        the CID replenishment mechanism works correctly by performing 10
-        migrations with a request between each to prove the connection remains
-        functional.  If CID exhaustion is detected, the test verifies the
-        connection still works for existing streams.
+    /** Each migration uses a spare connection ID of the server and retires the ID of the path it leaves; the server
+        replaces a retired ID one PTO after it learned of the retirement, and it keeps at most 8 IDs including the
+        retired ones, so it provides fewer spare connection IDs than 10 within a PTO (see
+        @ref testRefusedMigration()).  A migration that finds no spare ID waits for the replacement, so 10 migrations
+        succeed with a request between them.
     */
-    testCidExhaustion() {
+    testCidReplenishment() {
         Http3ClientConnection conn = createReadyConnection();
         on_exit { try { conn.close(); } catch () {} }
 
@@ -421,44 +417,208 @@ class HttpServerHttp3MigrationTest inherits Test {
         hash<auto> resp0 = doSyncRequest(conn, "GET", "/echo");
         assertEq(200, resp0.status_code, "initial request succeeds");
 
-        int successful = 0;
-        bool exhausted = False;
         for (int i = 0; i < 10; ++i) {
-            # Wait for path validation from previous migration to complete
-            date deadline = now_us() + 10s;
-            bool migrated = False;
-            while (!migrated && !exhausted && now_us() < deadline) {
-                try {
-                    conn.migrate();
-                    migrated = True;
-                    ++successful;
-                } catch (hash<ExceptionInfo> ex) {
-                    if (ex.err == "QUIC-MIGRATION-ERROR"
-                            && ex.desc =~ /active_connection_id_limit exhausted/) {
-                        exhausted = True;
-                    } else if (ex.err == "QUIC-MIGRATION-ERROR"
-                            && ex.desc =~ /not in a migratable state/) {
-                        # Controller drives I/O; wait briefly for path validation
-                        usleep(100ms);
-                    } else {
-                        rethrow;
-                    }
-                }
-            }
-            if (exhausted) {
-                break;
-            }
+            migrateAndCheck(conn, sprintf("migration %d", i + 1));
             # Verify connection works after each migration
             hash<auto> mid_resp = doSyncRequest(conn, "GET", "/echo");
             assertEq(200, mid_resp.status_code,
                 sprintf("request after migration %d succeeds", i + 1));
         }
-        assertTrue(successful > 0, sprintf("at least one migration succeeded (got %d)", successful));
+    }
 
-        # Whether CIDs were exhausted or all migrations succeeded,
-        # the connection should still be usable
+    #! Test: migrations made one right after the other wait for the server's new connection IDs
+    /** No request is made between the migrations, and they come faster than the server replaces the connection IDs
+        they retire (one PTO after the retirement): the migrations after the 7th wait for a new ID, and all 10 move the
+        connection to a new path
+    */
+    testBackToBackMigrations() {
+        Http3ClientConnection conn = createReadyConnection();
+        on_exit { try { conn.close(); } catch () {} }
+
+        hash<auto> resp0 = doSyncRequest(conn, "GET", "/echo");
+        assertEq(200, resp0.status_code, "initial request succeeds");
+
+        for (int i = 0; i < 10; ++i) {
+            migrateAndCheck(conn, sprintf("migration %d", i + 1));
+        }
         hash<auto> resp = doSyncRequest(conn, "GET", "/echo");
-        assertEq(200, resp.status_code, "connection works after many migrations");
+        assertEq(200, resp.status_code, "the connection works on its last path");
+    }
+
+    #! Helper: starts a raw QUIC server; returns the context of the test
+    /** The server reads the connection only while an operation of the test runs on its socket, so once it has
+        answered a request it processes no packet of the client: it never replaces the spare connection IDs that
+        the client's migrations use.
+    */
+    private hash<auto> startRawQuicServer() {
+        Socket sock();
+        sock.bindINET("127.0.0.1", "0", False, AF_INET, SOCK_DGRAM);
+        sock.setCertificate(new SSLCertificate(CertPem));
+        sock.setPrivateKey(new SSLPrivateKey(KeyPem));
+        AsyncSocketIo::AsyncSocketIoController ctrl = AsyncSocketIo::getGlobalAsyncIoController();
+        AbstractPollOperation accept_op = sock.startPollQuicAccept();
+        string owner = sock.uniqueHash();
+        return {
+            "sock": sock,
+            "ctrl": ctrl,
+            "owner": owner,
+            "accept_op": accept_op,
+            "accept_q": ctrl.submit(<SocketPollOperationInfo>{
+                "sock": sock,
+                "spop": accept_op,
+                "owner": owner,
+                "to": 30s,
+            }),
+            "url": sprintf("https://127.0.0.1:%d", sock.getSocketInfo().port),
+            "url_info": {
+                "host": "127.0.0.1",
+                "port": sock.getSocketInfo().port,
+                "protocol": "https",
+            },
+        };
+    }
+
+    #! Helper: answers the next request on the raw QUIC server; the server reads nothing afterwards
+    private answerRawQuicRequest(hash<auto> ctx) {
+        hash<SocketPollResultInfo> result = ctx.accept_q.get(20000);
+        if (result.ex) {
+            throw result.ex.err, result.ex.desc, result.ex.arg;
+        }
+        hash<auto> req = ctx.accept_op.getOutput();
+        AbstractPollOperation send_op = ctx.sock.startPollQuicSendResponse(req.session_id, req.stream_id, 200,
+            {"content-type": "text/plain"}, "ok");
+        result = ctx.ctrl.submit(<SocketPollOperationInfo>{
+            "sock": ctx.sock,
+            "spop": send_op,
+            "owner": ctx.owner,
+            "key": sprintf("send-%d-%d", req.session_id, req.stream_id),
+            "to": 30s,
+        }, True).get(20000);
+        if (result.ex) {
+            throw result.ex.err, result.ex.desc, result.ex.arg;
+        }
+    }
+
+    #! Test: a migration for which the server provides no spare connection ID times out
+    /** The raw server stops reading after its answer, so it provides no new connection IDs: the migrations use up
+        the spare connection IDs it gave the client, and the next one waits for one until its timeout expires, and
+        leaves the connection on its path.  The bound of the other migrations only guards against a hang.
+    */
+    testRefusedMigration() {
+        hash<auto> ctx = startRawQuicServer();
+        on_exit try { ctx.ctrl.cancelByOwner(ctx.owner); } catch () {}
+        Http3ClientConnection conn(ctx.url_info, 15s, mLogger, HttpClientIo::DefaultMaxStreamsPerConnection,
+            NOTHING, True);
+        on_exit { try { conn.close(); } catch () {} }
+        registerConnection(conn);
+        assertTrue(conn.waitForReady(15s), "connection should become ready");
+
+        Future f = conn.submitRequest("GET", "/first").future;
+        answerRawQuicRequest(ctx);
+        assertEq(200, f.get(15s).status_code, "the request is answered");
+
+        # the client can use at most all but one of its active connection IDs (8, QUIC_ACTIVE_CONNECTION_ID_LIMIT)
+        *hash<ExceptionInfo> refused;
+        int migrated = 0;
+        for (int i = 0; i < 8; ++i) {
+            int old_port = getLocalPort(conn);
+            try {
+                conn.migrate(2s);
+            } catch (hash<ExceptionInfo> ex) {
+                refused = ex;
+                assertEq(old_port, getLocalPort(conn), "a migration that times out leaves the connection on its path");
+                break;
+            }
+            assertNeq(old_port, getLocalPort(conn), sprintf("migration %d: a new local port", i + 1));
+            ++migrated;
+        }
+        assertGt(0, migrated, "the spare connection IDs are used");
+        assertEq("HTTP3-MIGRATION-TIMEOUT", refused.err, sprintf("the migration times out: %y", refused));
+        assertRegex("no spare connection ID became available", refused.desc);
+    }
+
+    #! Test: migrateAll() drains a connection that cannot be migrated
+    testMigrateAllRefused() {
+        hash<auto> ctx = startRawQuicServer();
+        on_exit try { ctx.ctrl.cancelByOwner(ctx.owner); } catch () {}
+        HttpClientIo::HttpClientConnectionManager mgr(<HttpClientIo::HttpClientConnectionManagerOptions>{
+            "protocol": "h3",
+            "logger": mLogger,
+            "accept_all_certs": True,
+            "request_timeout": 15s,
+            "connect_timeout": 15s,
+        });
+        on_exit { try { mgr.closeAll(); } catch () {} }
+
+        HttpCancellableFuture f = mgr.requestAsync(ctx.url, "GET", "/first");
+        answerRawQuicRequest(ctx);
+        assertEq(200, f.get(15s).status_code, "the request is answered");
+
+        # each call migrates the connection until the server's spare connection IDs are used up; the bound of each
+        # migration only guards against a hang, except for the last one, which times out
+        int calls = 0;
+        while (mgr.migrateAll(2s)) {
+            ++calls;
+            assertGt(calls, 8, "the spare connection IDs are used up");
+        }
+        hash<auto> host = mgr.getStats().per_host.firstValue();
+        assertEq(1, host.draining, "the connection that cannot be migrated drains");
+        assertEq(0, host.usable_connections, "the connection takes no new request");
+    }
+
+    #! Helper: creates a connection to the HTTP server that the test drives itself, until it is ready
+    /** No I/O thread drives the connection: a step runs only when the test calls continuePoll()
+    */
+    private Http3ClientConnection createManuallyDrivenConnection() {
+        Http3ClientConnection conn(<auto>{
+            "host": "127.0.0.1",
+            "port": mH3Port,
+            "protocol": "https",
+        }, 15s, mLogger, HttpClientIo::DefaultMaxStreamsPerConnection, NOTHING, True);
+        HttpClientIo::HttpClientPollOperation op = conn.getPollOperation();
+        while (!conn.isReady()) {
+            *hash<SocketPollInfo> info = op.continuePoll();
+            if (!info) {
+                throw "CONNECT-ERROR", sprintf("the connection did not become ready: %y", op.getError());
+            }
+            # with a poll_timeout_ms hint, Socket::poll() returns when the hint expires, and the operation is
+            # continued
+            if (!Socket::poll((info,), 15s) && !exists info.poll_timeout_ms) {
+                throw "POLL-TIMEOUT", sprintf("no socket event (events: %d) within 15s", info.events);
+            }
+        }
+        return conn;
+    }
+
+    #! Test: a migration that the I/O thread does not start within the timeout is withdrawn
+    testMigrationTimeout() {
+        Http3ClientConnection conn = createManuallyDrivenConnection();
+        on_exit { try { conn.close(); } catch () {} }
+
+        # nothing drives the connection, so nothing can start the migration
+        int old_port = getLocalPort(conn);
+        assertThrows("HTTP3-MIGRATION-TIMEOUT", \conn.migrate(), 100ms);
+        assertEq(old_port, getLocalPort(conn), "the connection was not migrated");
+
+        # a step of the connection does not make the withdrawn migration
+        HttpClientIo::HttpClientPollOperation op = conn.getPollOperation();
+        op.continuePoll();
+        assertEq(old_port, getLocalPort(conn), "the withdrawn migration is not made");
+        assertTrue(conn.isReady());
+    }
+
+    #! Test: a migration requested before the connection closes raises HTTP3-CONNECTION-CLOSED
+    testMigrationConnectionClosed() {
+        Http3ClientConnection conn = createManuallyDrivenConnection();
+        on_exit { try { conn.close(); } catch () {} }
+        Http3ClientPollOperation op = cast<Http3ClientPollOperation>(conn.getPollOperation());
+
+        int id = op.migrate();
+        # the controller aborts the operation of a connection that closes
+        op.abort();
+        assertThrows("HTTP3-CONNECTION-CLOSED", \op.waitForMigration(), (id, 15s));
+        # a closed connection takes no migration request
+        assertThrows("HTTP3-CONNECTION-CLOSED", \op.requestMigration());
     }
 
     #! Test: client sends large POST body → migrate mid-upload → verify upload completes

@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -62,8 +62,10 @@ public:
     }
 
     DLLLOCAL ~QoreParseListNode() {
-        for (auto& i : values)
+        // only a node deleted without being released holds values here; see derefImpl()
+        for (auto& i : values) {
             i.discard(nullptr);
+        }
     }
 
     DLLLOCAL void add(QoreValue v, const QoreProgramLocation* loc) {
@@ -293,6 +295,19 @@ protected:
 
     DLLLOCAL virtual const QoreTypeInfo* getTypeInfo() const {
         return typeInfo;
+    }
+
+    //! Releases the values with the caller's exception sink
+    /** The copy that the background operator makes holds runtime values (the values of the local variables of the
+        code that starts the thread), whose release can run destructors; their exceptions go to the thread releasing
+        the node, as the destructor has no exception sink.
+    */
+    DLLLOCAL virtual bool derefImpl(ExceptionSink* xsink) {
+        for (auto& i : values) {
+            i.discard(xsink);
+        }
+        values.clear();
+        return ParseNode::derefImpl(xsink);
     }
 
     DLLLOCAL virtual int parseInitImpl(QoreValue& val, QoreParseContext& parse_context);

@@ -172,10 +172,15 @@ public class QdrantVectorStore inherits QoreRagUtils::AbstractVectorStore {
         @param query_vector the query embedding
         @param k how many results to return
         @param filter optional Qdrant filter (must / should / must_not
-        clauses); see the class doxygen for the dialect
+        clauses); see the class doxygen for the dialect; each key of the portable
+        \c payload_eq form is one key of the payload, as for the other vector
+        stores, so a key with a dot is quoted and names no nested key
 
         @return list of @ref QoreRagUtils::VectorSearchResult "VectorSearchResult"
         hashes ordered by descending similarity
+
+        @throw QDRANT-VECTOR-STORE-ERROR a \c payload_eq key has a double quote or
+        a backslash, which a Qdrant filter cannot name
     */
     list<hash<QoreRagUtils::VectorSearchResult>> search(list<float> query_vector,
             int k, *hash<auto> filter) {
@@ -311,15 +316,24 @@ public class QdrantVectorStore inherits QoreRagUtils::AbstractVectorStore {
             return filter.native_filter ?? (exists filter{"payload_eq"} ? filter - ("payload_eq",) : filter);
         }
 
-        hash<auto> qfilter = filter.native_filter ?? (filter - ("payload_eq",));
+        # a new hash, so that the clauses can be added whatever the value type of the caller's hash is
+        hash<auto> qfilter = {};
+        qfilter += filter.native_filter ?? (filter - ("payload_eq",));
         list<auto> must = ();
         if (qfilter.must) {
             must = qfilter.must instanceof list ? qfilter.must : (qfilter.must,);
         }
 
         foreach string key in (keys payload_eq) {
+            # a portable filter key is one key of the payload, as for the other vector stores; a key with a dot is
+            # quoted, so that it does not name a key in a nested object
+            *string payload_key = QdrantPayloadKey::getKey(key);
+            if (!exists payload_key) {
+                throw "QDRANT-VECTOR-STORE-ERROR", sprintf("the payload_eq filter key \"%s\" has a double quote or a "
+                    "backslash, which a Qdrant filter cannot name", key);
+            }
             push must, {
-                "key": key,
+                "key": payload_key,
                 "match": {"value": payload_eq{key}},
             };
         }

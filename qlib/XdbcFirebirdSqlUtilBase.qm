@@ -87,9 +87,172 @@ module XdbcFirebirdSqlUtilBase {
     without a size therefore use the widest int64-backed precision (\c 18) instead, and a scale must be given
     explicitly to store decimal values
 
+    @subsection xdbcfirebird_identifiers Identifiers
+
+    Names of tables, columns, indexes, constraints, sequences, views, triggers, savepoints and aliases are given to
+    Firebird as identifiers that can never change the SQL that they are part of (see @ref sql_identifiers):
+    - a name that Firebird reads as one unquoted identifier (an ASCII letter, then ASCII letters, digits, underscores
+      or dollar signs) is given as it is, and Firebird stores it in upper case, as before
+    - a reserved word is given in double quotes in the case given, as before
+    - any other name, such as one with spaces, non-ASCII letters, quotes or other punctuation, is given in upper case
+      in double quotes, with each double quote doubled, so that it names the object that an unquoted name of the same
+      letters would: SqlUtil looks up names in upper case on Firebird and gives the names that it reads from the
+      database in lower case, so a table created with a column \c "order date" has the column \c "ORDER DATE",
+      described as \c "order date"
+    - an alias (@ref SqlUtil::cop_as() "cop_as()") is given in double quotes in the case given, so the key of the
+      result is the alias, as before
+    - an empty name or a name with a NUL character cannot be an identifier and is refused with \c IDENTIFIER-ERROR
+
+    @par Example:
+    @code{.py}
+# create table orders (id bigint not null, "ORDER DATE" timestamp)
+string sql = table.getCreateTableSql();
+    @endcode
+
+    @subsection xdbcfirebird_fk_actions Foreign Constraint Referential Actions
+
+    Firebird supports the \c on_delete and \c on_update
+    @ref SqlUtil::AbstractTable::ForeignConstraintOptions "foreign constraint options" (see
+    @ref fk_actions) as follows:
+
+    <b>Firebird Referential Actions</b>
+    |!Action|!Firebird SQL|!Described as
+    |NOTHING or @ref SqlUtil::FK_NO_ACTION|no clause; the database default, which refuses the delete or update of a \
+      referenced row|NOTHING
+    |@ref SqlUtil::FK_CASCADE|<tt>on delete cascade</tt>, <tt>on update cascade</tt>|@ref SqlUtil::FK_CASCADE
+    |@ref SqlUtil::FK_SET_NULL|<tt>on delete set null</tt>, <tt>on update set null</tt>|@ref SqlUtil::FK_SET_NULL
+    |@ref SqlUtil::FK_SET_DEFAULT|<tt>on delete set default</tt>, <tt>on update set default</tt>|\
+      @ref SqlUtil::FK_SET_DEFAULT
+    |@ref SqlUtil::FK_RESTRICT|refused with \c FOREIGN-CONSTRAINT-ERROR: Firebird has no \c RESTRICT clause, and \
+      its default already refuses the delete or update of a referenced row|-
+
+    Firebird records \c RESTRICT in its catalog for an action that is not given and \c NO \c ACTION for an action
+    given as \c NO \c ACTION; both are described as NOTHING, the database default, so that a foreign constraint
+    created without an action is equal to a template foreign constraint without an action, and schema alignment
+    proposes no SQL for it.
+
+    @par Example:
+    @code{.py}
+# alter table order_lines add constraint fk_order_lines_order foreign key (order_id) references orders (id)
+#   on delete cascade
+string sql;
+table.addForeignConstraint("fk_order_lines_order", "order_id", "orders", "id", {"on_delete": FK_CASCADE}, \sql);
+    @endcode
+
+    @subsection xdbcfirebird_sequences Sequences
+
+    A Firebird sequence has a starting value and an increment, which Firebird keeps from Firebird 3 on, and no
+    minimum, maximum, cycle option or cache:
+    - a sequence is created with <tt>start with</tt> and <tt>increment by</tt> when they are not the defaults (1)
+    - schema alignment changes the increment of an existing sequence with <tt>alter sequence ... increment by</tt>,
+      which keeps its current value; the starting value of an existing sequence is never changed, as that would
+      restart it
+    - a sequence description with a minimum, a maximum (\c max or \c end), the cycle option or a cache is refused
+      with \c SEQUENCE-ERROR when the sequence is created or aligned; a cache of \c 0 and the cycle option
+      @ref False "False" are as Firebird sequences are, and are accepted
+
+    @note the first value of a sequence created with a starting value is the starting value from Firebird 4 on, and
+    the starting value plus the increment on Firebird 3
+
+    @section xdbcfirebird_bound_values Bound Values in Expressions
+
+    Firebird gives a value bound to a placeholder the type of the expression that it is part of only in some places:
+    in a comparison with a column or an expression, in a cast, in a null test and in a few functions.  Anywhere else,
+    such as in the select list, in arithmetic, in concatenation, in a string function, in the start or the count of
+    \c substring(), in a \c CASE expression or in a comparison of two values, Firebird refuses a value without a type
+    with <tt>Data type unknown</tt>.  A value of a data provider expression in such a place is therefore bound in a
+    cast to its type (see @ref XdbcFirebirdSqlUtilBase::XdbcFirebirdTable::getBindType() "XdbcFirebirdTable::getBindType()"):
+
+    <b>Firebird Types of Bound Values</b>
+    |!%Qore Type|!Firebird Type
+    |\c int|\c bigint
+    |\c float|<tt>double precision</tt>
+    |\c number|<tt>decfloat(34)</tt> from Firebird 4 on; a \c numeric of the digits of the value on Firebird 3 \
+      (<tt>double precision</tt> for more than 18 digits)
+    |\c bool|\c boolean
+    |\c date|\c timestamp; a relative date is bound without a cast
+    |\c string|a \c varchar of the size of the string, in characters, or in bytes in a character set of one byte \
+      per character, such as \c NONE; <tt>blob sub_type text</tt> for a string longer than a \c varchar can be in \
+      the default character set of the database
+    |\c binary|<tt>varchar(</tt><em>size</em><tt>) character set octets</tt>; a \c blob for more than 32765 bytes
+
+    A value compared with a column or an expression, a value in a cast or a null test, and the values in an \c in
+    list of a column are bound without a cast, as before, as are the values of a where hash, of an insert and of an
+    update; a \c NULL is always bound without a cast.
+
+    @par Example:
+    @code{.py}
+# select cast(%v as bigint) - cast(%v as bigint) as "diff" from orders where id = %v
+*hash<auto> row = table.selectRow({
+    "columns": (<DataProviderExpression>{"exp": COP_AS, "args": (
+        <DataProviderExpression>{"exp": COP_MINUS, "args": (10, 4)}, "diff")},),
+    "where": {"id": 1},
+});
+    @endcode
+
+    A cast to a character type without a size (as with @ref SqlUtil::cop_cast() "cop_cast()" or the \c cast and
+    \c toString expressions) has the largest size that the type can have in the default character set of the
+    database: 8191 characters in \c UTF8, 32765 in \c NONE and in any character set of one byte per character.
+
+    @section xdbcfirebird_date_arithmetic Date Arithmetic
+
+    Firebird has no duration type.  A date plus or minus durations (the \c years, \c months, \c weeks, \c days,
+    \c hours, \c minutes, \c seconds, \c milliseconds and \c microseconds functions, relative date values, and
+    sums and differences of them) is given as nested <tt>dateadd()</tt>, which adds the durations in their order;
+    a microsecond is a fraction of a millisecond, to the precision of a Firebird timestamp (100 microseconds).
+
+    A duration anywhere else, such as alone in the select list or compared with a date, is refused with
+    \c SQLUTIL-EXPRESSION-NOT-PUSHDOWNABLE, as is a duration minus a date.  The duration functions have no SQL of
+    their own in the expression map, so
+    @ref DataProvider::AbstractDataProvider::splitPushdownableExpression() "AbstractDataProvider::splitPushdownableExpression()"
+    gives an expression with a duration to be evaluated client-side, as any expression that cannot be pushed down.
+
+    @par Example:
+    @code{.py}
+# select id from orders where created > dateadd(-(cast(%v as bigint)) day to current_timestamp)
+*list<hash<auto>> rows = table.selectRows({
+    "columns": ("id",),
+    "where": <DataProviderExpression>{"exp": DP_SEARCH_OP_GT, "args": (
+        <DataProviderFieldReference>{"field": "created"},
+        <DataProviderExpression>{"exp": DP_OP_MINUS, "args": (
+            <DataProviderExpression>{"exp": DP_FUNC_NOW},
+            <DataProviderExpression>{"exp": DP_FUNC_DAYS, "args": (7,)},
+        )},
+    )},
+});
+    @endcode
+
+    @section xdbcfirebird_averages Averages
+
+    Firebird gives the average of an integer or an exact numeric in its own type, so that the average of 1 and 2
+    is 1.  The average of a column of an integer or an exact numeric type, and of an expression that returns an
+    integer or a number, is therefore exact, as on other databases: it is computed in \c DECFLOAT(34) and is a
+    number from Firebird 4 on, and in <tt>DOUBLE PRECISION</tt> on Firebird 3, which has no \c DECFLOAT, so that it is a
+    float.  The average of a float is as Firebird gives it, a float, as is the average of an expression of no known
+    type, such as an alias or, with @ref SqlUtil::cop_avg() "cop_avg()", another column operator.
+
     @section xdbcfirebird_relnotes Release Notes
 
     @subsection xdbcfirebirdsqlutilbasev_0_2 XdbcFirebirdSqlUtilBase Module v0.2
+    - added support for the \c on_delete and \c on_update referential actions of foreign constraints; \c RESTRICT,
+      which Firebird has no clause for, is refused with \c FOREIGN-CONSTRAINT-ERROR (see
+      @ref xdbcfirebird_fk_actions)
+    - fixed describing the foreign constraints of a table: none were described, so schema alignment added the
+      foreign constraints of a template to a table that had them already; they are now described from the database,
+      with their referential actions
+    - fixed creating a sequence with the starting value and the increment of its description, which were not given,
+      so every sequence was created with the defaults; schema alignment now changes the increment of an existing
+      sequence, keeping its current value, and a description with a minimum, a maximum, the cycle option or a cache,
+      which Firebird sequences do not have, is refused with \c SEQUENCE-ERROR (see @ref xdbcfirebird_sequences)
+    - fixed listing the sequences of the database, which gave none
+    - fixed SQL injection through names: the names of tables, columns, indexes, constraints, sequences, views,
+      triggers and savepoints, and aliases, were given in SQL as they are, so a name with a double quote, a semicolon
+      or other punctuation, as a name from a file or a data provider can have, could change the SQL statement; a name
+      that is not an ordinary identifier is now quoted and escaped, an ordinary name or a reserved word is given as
+      before, and a name that cannot be an identifier is refused with \c IDENTIFIER-ERROR (see
+      @ref xdbcfirebird_identifiers)
+    - fixed a unique constraint naming its columns as they are, so that a column whose name is a reserved word was
+      not quoted
     - fixed renaming an index, as table alignment does for an index with the definition of the template's index
       under another name: the SQL that dropped the index and created it under the new name was two statements in one
       string; Firebird cannot rename an index, so such an index is now taken for the template's index and kept under
@@ -105,10 +268,254 @@ module XdbcFirebirdSqlUtilBase {
       @ref SqlUtil::AbstractConstraint::supportsRename() "AbstractConstraint::supportsRename()")
     - renaming a trigger raised \c UNSUPPORTED: Firebird cannot rename a trigger, so it is dropped and created under
       the new name
+    - fixed a \c cast data provider expression with a size, or with a precision and a scale: the size was ignored
+      and the precision was given as the scale, so that the cast failed or changed the value
+    - fixed describing the indexes of a table: an index created with \c CREATE \c INDEX was never described, only
+      the indexes of unique and foreign constraints were, so schema alignment created an index again that the table
+      had already
+    - fixed describing the unique constraints of a table: none were described, so every schema alignment dropped the
+      index of each unique constraint and added the constraint again
+    - fixed describing the size of a \c CHAR or \c VARCHAR column in a database with a character set of more than
+      one byte per character, such as \c UTF8: its size in bytes was described, so every schema alignment changed
+      the type of the column again
+    - fixed finding a table or a sequence named with a reserved word, such as \c order: it was looked up in upper
+      case, but Firebird keeps such a name in the case that it is given in, so the table or sequence was never found
+    - fixed reading a view, which was never found; the names of views are now listed in lower case, as the names of
+      tables and sequences are; before, they were listed in upper case
+    - fixed values of data provider expressions that Firebird refused with <tt>Data type unknown</tt>, such as values
+      in the select list, in arithmetic, in concatenation, in string functions, in the start and the count of a
+      substring and in a comparison of two values: such a value is now bound in a cast to its type, and a value
+      compared with a column is bound as before (see @ref xdbcfirebird_bound_values); the start and the count of
+      the \c op_substr() where operator are bound as integers
+    - fixed a cast to a character type without a size in a database with a character set of more than one byte per
+      character, such as \c UTF8, which Firebird refused: it is now cast to the largest size of the character set
+      (8191 characters in \c UTF8)
+    - fixed a date given as a literal value, such as with \c cop_value(), which Firebird refused
+    - behaviour change: the average of an integer or exact numeric column, or of an expression that returns an
+      integer or a number, is exact, as on other databases: the average of 1 and 2 is 1.5, and the average of
+      1.25 and 2.50 is 1.875; before, Firebird gave the average in the type of the column, so 1 and 1.87.  It is a
+      number from Firebird 4 on, and a float on Firebird 3 (see @ref xdbcfirebird_averages)
+    - fixed date arithmetic with relative date values, which always failed: a date plus or minus durations (relative
+      date values and the \c years to \c microseconds functions) is given as \c dateadd(), and a duration anywhere
+      else is refused with \c SQLUTIL-EXPRESSION-NOT-PUSHDOWNABLE (see @ref xdbcfirebird_date_arithmetic)
+    - added support for @ref SqlUtil::cop_trunc_date() "cop_trunc_date()" and the \c truncate_date expression,
+      which were refused as unknown
 
     @subsection xdbcfirebirdsqlutilbasev_0_1 XdbcFirebirdSqlUtilBase Module v0.1
     - initial release
 */
+
+# returns a name as an SQL identifier for Firebird: as given if Firebird reads it as one unquoted identifier (an ASCII
+# letter, then ASCII letters, digits, underscores or dollar signs), so that Firebird folds it to upper case as for any
+# unquoted name, as before; a reserved word in double quotes in the case given, as before; any other name in upper
+# case in double quotes, with each double quote doubled, so that it names the object that an unquoted name of the same
+# letters would, and can never change the SQL that it is part of; the jni and odbc drivers read no placeholder,
+# comment or escape in double-quoted text; firebird_get_catalog_name() gives the name that Firebird keeps for it
+string sub firebird_get_sql_identifier(string name) {
+    if (name =~ /\A[A-Za-z][A-Za-z0-9_$]*\z/) {
+        return XdbcFirebirdDatabase::XdbcFirebirdReservedWords{name.lwr()} ? ("\"" + name + "\"") : name;
+    }
+    return AbstractSqlUtilBase::getDelimitedIdentifier(name.upr(), "\"", "\"", "Firebird");
+}
+
+# returns the name that Firebird keeps in its catalog for an object named in SQL with firebird_get_sql_identifier():
+# a reserved word in the case given, as it is given in double quotes in that case, and any other name in upper case,
+# as Firebird folds an unquoted name to upper case and any other name is given in upper case in double quotes
+string sub firebird_get_catalog_name(string name) {
+    if (name =~ /\A[A-Za-z][A-Za-z0-9_$]*\z/ && XdbcFirebirdDatabase::XdbcFirebirdReservedWords{name.lwr()}) {
+        return name;
+    }
+    return name.upr();
+}
+
+# a value of an expression that Firebird gives the type of the expression that it is part of, so that it is bound
+# without a cast (see XdbcFirebirdTable::getExpressionArg())
+hashdecl FirebirdInferredValue {
+    # the value to bind
+    auto value;
+}
+
+# returns True if an argument of an expression has a type in SQL of its own: a column or an expression
+bool sub firebird_is_typed_arg(auto arg) {
+    return arg instanceof hash<DataProviderFieldReference> || arg instanceof hash<DataProviderExpression>;
+}
+
+# returns True if an argument of an expression is a value bound to a placeholder that can be given a type: not a
+# column, an expression, a list, NULL or no value
+bool sub firebird_is_bound_value(auto arg) {
+    return exists arg && arg !== NULL && !firebird_is_typed_arg(arg) && !(arg instanceof hash<FirebirdInferredValue>)
+        && arg.typeCode() != NT_LIST;
+}
+
+# returns the arguments of an expression with each bound value of the first "count" arguments marked as a value that
+# Firebird types from the expression, so that it is bound without a cast: if one of these arguments is a column or an
+# expression, from which Firebird types the others in a comparison, or in any case if "always" is True, as for the
+# argument of a cast or of a null test
+list<auto> sub firebird_infer_values(list<auto> args, int count, bool always = False) {
+    # the arguments in a list that can hold a marked value, as a list of arguments can have a narrower type
+    {
+        list<auto> l = ();
+        l += args;
+        args = l;
+    }
+    count = min(count, args.size());
+    if (!always) {
+        bool typed;
+        for (int i = 0; i < count; ++i) {
+            if (firebird_is_typed_arg(args[i])) {
+                typed = True;
+                break;
+            }
+        }
+        if (!typed) {
+            return args;
+        }
+    }
+    for (int i = 0; i < count; ++i) {
+        if (firebird_is_bound_value(args[i])) {
+            args[i] = <FirebirdInferredValue>{"value": args[i]};
+        }
+    }
+    return args;
+}
+
+# a term of a duration: an amount of a unit of dateadd(), to add or to subtract
+hashdecl FirebirdDurationTerm {
+    # the amount: an argument of an expression, given in SQL as getExpressionArg() gives it
+    auto amount;
+
+    # the amount as an SQL literal, for a component of a relative date value, instead of "amount"
+    *string amount_sql;
+
+    # the unit of dateadd(), or "microsecond", which is given as a fraction of a millisecond
+    string unit;
+
+    # True if the amount is subtracted
+    bool negate = False;
+}
+
+# the units of the duration functions in dateadd()
+const FirebirdDurationUnits = {
+    DP_FUNC_YEARS: "year",
+    DP_FUNC_MONTHS: "month",
+    DP_FUNC_WEEKS: "week",
+    DP_FUNC_DAYS: "day",
+    DP_FUNC_HOURS: "hour",
+    DP_FUNC_MINUTES: "minute",
+    DP_FUNC_SECONDS: "second",
+    DP_FUNC_MILLISECONDS: "millisecond",
+    DP_FUNC_MICROSECONDS: "microsecond",
+};
+
+# returns True if a value is a duration: a relative date
+bool sub firebird_is_duration_value(auto v) {
+    return v.typeCode() == NT_DATE && !v.absolute();
+}
+
+# returns the terms of an argument of an expression that is a duration: a duration function, a relative date value,
+# or a sum or a difference of durations; no value if the argument is not a duration
+*list<hash<FirebirdDurationTerm>> sub firebird_get_duration_terms(auto arg) {
+    if (firebird_is_duration_value(arg)) {
+        # the components of a relative date; a duration of zero has no terms
+        list<hash<FirebirdDurationTerm>> terms = ();
+        foreach hash<auto> i in ({
+                "year": arg.years(), "month": arg.months(), "day": arg.days(), "hour": arg.hours(),
+                "minute": arg.minutes(), "second": arg.seconds(),
+            }.pairIterator()) {
+            if (i.value) {
+                terms += <FirebirdDurationTerm>{"amount_sql": string(i.value), "unit": i.key};
+            }
+        }
+        if (int us = arg.microseconds()) {
+            # a millisecond with a fraction of tenths, the precision of a Firebird timestamp
+            int tenths = us / 100;
+            terms += <FirebirdDurationTerm>{
+                "amount_sql": sprintf("%s%d.%d", tenths < 0 ? "-" : "", abs(tenths) / 10, abs(tenths) % 10),
+                "unit": "millisecond",
+            };
+        }
+        return terms;
+    }
+    if (!(arg instanceof hash<DataProviderExpression>)) {
+        return;
+    }
+    string exp = arg.exp;
+    if (!FirebirdDurationUnits{exp} && OperatorAliasMap{exp}) {
+        exp = OperatorAliasMap{exp};
+    }
+    if (*string unit = FirebirdDurationUnits{exp}) {
+        return (<FirebirdDurationTerm>{"amount": arg.args[0], "unit": unit},);
+    }
+    switch (exp) {
+        case DP_OP_PLUS:
+        case COP_PLUS: {
+            list<hash<FirebirdDurationTerm>> terms = ();
+            foreach auto a in (arg.args) {
+                *list<hash<FirebirdDurationTerm>> t = firebird_get_duration_terms(a);
+                if (!exists t) {
+                    return;
+                }
+                terms += t;
+            }
+            return terms;
+        }
+        case DP_OP_MINUS:
+        case COP_MINUS: {
+            *list<hash<FirebirdDurationTerm>> t0 = firebird_get_duration_terms(arg.args[0]);
+            *list<hash<FirebirdDurationTerm>> t1 = firebird_get_duration_terms(arg.args[1]);
+            if (!exists t0 || !exists t1) {
+                return;
+            }
+            return t0 + (map $1 + {"negate": !$1.negate}, t1);
+        }
+    }
+}
+
+# throws SQLUTIL-EXPRESSION-NOT-PUSHDOWNABLE for a duration that is not added to or subtracted from a date
+sub firebird_refuse_duration(string what) {
+    throw "SQLUTIL-EXPRESSION-NOT-PUSHDOWNABLE", sprintf("%s: Firebird has no duration type, so a duration can only "
+        "be added to or subtracted from a date", what);
+}
+
+# the date truncation masks of cop_trunc_date(): the length of the text of a timestamp that is kept, and the rest of
+# the truncated timestamp
+const FirebirdTruncDate = {
+    DT_YEAR: (4, "-01-01 00:00:00"),
+    DT_MONTH: (7, "-01 00:00:00"),
+    DT_DAY: (10, " 00:00:00"),
+    DT_HOUR: (13, ":00:00"),
+    DT_MINUTE: (16, ":00"),
+    DT_SECOND: (19, ""),
+};
+
+# returns the SQL that truncates a date to a mask of cop_trunc_date(), or no value for an unknown mask: Firebird has no
+# date_trunc(), so the text of the date as a timestamp ("YYYY-MM-DD HH:MM:SS.ffff") is cut and given back as a
+# timestamp, which names the date once in the SQL, as it can have bound values
+*string sub firebird_get_trunc_date_sql(string exp, string mask) {
+    *list<auto> m = FirebirdTruncDate{mask};
+    if (!m) {
+        return;
+    }
+    return sprintf("cast(substring(cast(cast(%s as timestamp) as varchar(24)) from 1 for %d)%s as timestamp)", exp,
+        m[0], m[1] ? sprintf(" || '%s'", m[1]) : "");
+}
+
+# returns the Firebird 3 type of an arbitrary-precision number, as Firebird 3 has no DECFLOAT: a NUMERIC with the
+# precision and the scale of its digits, or DOUBLE PRECISION for a number of more than 18 digits, an infinity or NaN
+string sub firebird_get_number_type(number n) {
+    *list<auto> digits = (n.toString() =~ x/^-?([0-9]*)(?:\.([0-9]*))?$/);
+    if (!digits) {
+        return "double precision";
+    }
+    string ip = digits[0] ?? "";
+    ip =~ s/^0+//;
+    int scale = (digits[1] ?? "").size();
+    int precision = ip.size() + scale;
+    if (precision > 18) {
+        return "double precision";
+    }
+    return sprintf("numeric(%d,%d)", precision ?: 1, scale);
+}
 
 #! the XdbcFirebirdSqlUtilBase namespace contains all the objects in the XdbcFirebirdSqlUtilBase module
 public namespace XdbcFirebirdSqlUtilBase {
@@ -130,17 +537,17 @@ public namespace XdbcFirebirdSqlUtilBase {
 
         #! Creates the savepoint
         private createSavepointImpl() {
-            ds.exec("savepoint " + savepoint);
+            ds.exec("savepoint " + firebird_get_sql_identifier(savepoint));
         }
 
         #! Rolls back to the savepoint
         private rollbackImpl() {
-            ds.exec("rollback to " + savepoint);
+            ds.exec("rollback to " + firebird_get_sql_identifier(savepoint));
         }
 
         #! Deletes the savepoint
         private deleteSavepointImpl() {
-            ds.exec("release savepoint " + savepoint);
+            ds.exec("release savepoint " + firebird_get_sql_identifier(savepoint));
         }
     }
 
@@ -152,8 +559,9 @@ public namespace XdbcFirebirdSqlUtilBase {
 
         #! returns a string that can be used to create the index in the database
         string getCreateSql(string table_name, *hash<auto> opt) {
-            return sprintf("create %sindex %s on %s (%s)", unique ? "unique " : "", name, table_name,
-                (foldl $1 + ", " + $2, columns.getSqlColumnNameIterator()));
+            # an index "column" that is not a column of the table is an SQL expression (see AbstractTable::addIndex())
+            return sprintf("create %sindex %s on %s (%s)", unique ? "unique " : "", firebird_get_sql_identifier(name),
+                table_name, (foldl $1 + ", " + $2, columns.getSqlColumnNameIterator()));
         }
 
         #! returns @ref True "True" if the argument is equal to the current index, @ref False "False" if not
@@ -182,13 +590,66 @@ public namespace XdbcFirebirdSqlUtilBase {
 
         #! returns a string that can be used to drop the index from the table, by its name in the database
         string getDropSql(string table_name) {
-            return sprintf("drop index %s", getDbName());
+            return sprintf("drop index %s", firebird_get_sql_identifier(getDbName()));
         }
     }
 
     #! represents a Firebird-specific foreign constraint
     public class XdbcFirebirdForeignConstraint inherits SqlUtil::AbstractForeignConstraint {
-        constructor(string n, Columns c, ForeignConstraintTarget t) : AbstractForeignConstraint(n, c, t) {
+        #! creates the constraint from the arguments
+        /** @param n the name of the constraint
+            @param c the columns of the constraint
+            @param t the target table and columns
+            @param on_delete the \c ON \c DELETE referential action (see @ref xdbcfirebird_fk_actions), or NOTHING for
+                the database default
+            @param on_update the \c ON \c UPDATE referential action (see @ref xdbcfirebird_fk_actions), or NOTHING for
+                the database default
+
+            @throw FOREIGN-CONSTRAINT-ERROR an invalid referential action, or @ref SqlUtil::FK_RESTRICT, which
+            Firebird does not support
+
+            @note \a on_delete and \a on_update are available since XdbcFirebirdSqlUtilBase 0.2
+        */
+        constructor(string n, Columns c, ForeignConstraintTarget t, *string on_delete, *string on_update)
+                : AbstractForeignConstraint(n, c, t, False, False, on_delete, on_update) {
+            checkActions();
+        }
+
+        #! maps an \c rdb$delete_rule or \c rdb$update_rule value of \c rdb$ref_constraints to a referential action
+        /** Firebird records \c RESTRICT for a foreign constraint created without an action and \c NO \c ACTION for
+            one created with \c NO \c ACTION; both are the database default, which checks the constraint immediately,
+            and are described as NOTHING, so that a foreign constraint of a template without an action is equal to
+            the foreign constraint in the database (see @ref xdbcfirebird_fk_actions)
+
+            @param rule the value of \c rdb$delete_rule or \c rdb$update_rule
+
+            @return the referential action (see @ref fk_actions), or NOTHING for the database
+            default
+
+            @throw FOREIGN-CONSTRAINT-ERROR the value is not a referential action
+
+            @since XdbcFirebirdSqlUtilBase 0.2
+        */
+        static *string actionFromCatalog(*string rule) {
+            if (!rule.val()) {
+                return;
+            }
+            string action = trim(rule);
+            if (action.upr() == FK_RESTRICT) {
+                return;
+            }
+            return normalize_fk_action(action, "rdb$ref_constraints rule");
+        }
+
+        # Firebird has no RESTRICT clause: its default already refuses the delete or update of a referenced row
+        private checkActions() {
+            foreach hash<auto> i in ({"on_delete": on_delete, "on_update": on_update}.pairIterator()) {
+                if (i.value == FK_RESTRICT) {
+                    throw "FOREIGN-CONSTRAINT-ERROR", sprintf("foreign constraint %y: Firebird does not support the %s "
+                        "referential action %y; leave the action out for the database default, which refuses the "
+                        "%s of a referenced row", name, i.key, FK_RESTRICT, i.key == "on_delete" ? "delete" : "update");
+                }
+            }
         }
 
         string getCreateSql(string table_name, *hash<auto> opt) {
@@ -217,15 +678,23 @@ public namespace XdbcFirebirdSqlUtilBase {
             return sprintf("alter table %s ", table_name) + getAddSql(name, table_name, opt);
         }
 
+        #! returns the \c ADD \c CONSTRAINT clause that adds the constraint, with its referential actions
+        /** @throw FOREIGN-CONSTRAINT-ERROR a referential action is @ref SqlUtil::FK_RESTRICT, which Firebird does not
+            support
+
+            @note the referential actions are added since XdbcFirebirdSqlUtilBase 0.2
+        */
         string getAddSql(string name, string table_name, *hash<auto> opt) {
-            return sprintf("add constraint %s foreign key (%s) references %s (%s)", name,
-                (foldl $1 + ", " + $2, getSqlColumnNameIterator()), target.table,
-                (foldl $1 + ", " + $2, target.columns.getSqlColumnNameIterator()));
+            # the actions are public members, so they are checked again here
+            checkActions();
+            return sprintf("add constraint %s foreign key (%s) references %s (%s)%s", firebird_get_sql_identifier(name),
+                (foldl $1 + ", " + $2, getSqlColumnNameIterator()), firebird_get_sql_identifier(target.table),
+                (foldl $1 + ", " + $2, target.columns.getSqlColumnNameIterator()), getActionsSql());
         }
 
         #! returns a string that can be used to drop the foreign constraint from the database
         string getDropSql(string table_name) {
-            return sprintf("alter table %s drop constraint %s", table_name, name);
+            return sprintf("alter table %s drop constraint %s", table_name, firebird_get_sql_identifier(name));
         }
     }
 
@@ -306,11 +775,14 @@ string str = col.getRenameSql(t, "new_name");
             return sprintf("alter table %s drop %s", table_name, ddl_name);
         }
 
-        #! returns the column name with quoting in case the column name is a reserved word
+        #! returns the column name for DDL, as XdbcFirebirdTable::getSqlIdentifier() returns it
         /** the name returned here will be used when executing DDL
+
+            @since XdbcFirebirdSqlUtilBase 0.2 a name that is not an ordinary name is quoted in upper case and escaped;
+            before, only a reserved word was quoted
         */
         string getDdlName(string name) {
-            return XdbcFirebirdDatabase::XdbcFirebirdReservedWords{name.lwr()} ? ("\"" + name + "\"") : name;
+            return firebird_get_sql_identifier(name);
         }
 
         #! returns @ref True "True" if the argument is equal to the current object, @ref False "False" if not
@@ -372,13 +844,15 @@ auto v = c.name;
 
         #! returns a string that can be used to create the constraint in the database
         string getCreateSql(string name, string table_name, *hash opt) {
-            return sprintf("alter table %s add constraint %s unique (%s)", table_name, name,
-                (foldl $1 + ", " + $2, h.keys()));
+            # the columns are given by their SQL names; the names of the columns were given as they are, so a reserved
+            # word in a unique constraint was not quoted
+            return sprintf("alter table %s add constraint %s unique (%s)", table_name,
+                firebird_get_sql_identifier(name), (foldl $1 + ", " + $2, getSqlColumnNameIterator()));
         }
 
         #! returns a string that can be used to drop the constraint from the database
         string getDropSql(string table_name) {
-            return sprintf("alter table %s drop constraint %s", table_name, name);
+            return sprintf("alter table %s drop constraint %s", table_name, firebird_get_sql_identifier(name));
         }
 
         #! returns the SQL that disables and re-enables the foreign constraints that reference the constraint
@@ -457,12 +931,12 @@ auto v = c.name;
 
         #! returns a string that can be used to create the trigger in the database
         softlist getCreateSql(string table_name, *hash<auto> opt) {
-            return sprintf("create trigger %s %s", name, src);
+            return sprintf("create trigger %s %s", firebird_get_sql_identifier(name), src);
         }
 
         #! returns a string that can be used to drop the trigger from the database
         softlist getDropSql(string table_name) {
-            return sprintf("drop trigger %s", name);
+            return sprintf("drop trigger %s", firebird_get_sql_identifier(name));
         }
 
         #! returns @ref True "True" if the argument is equal to the current object, @ref False "False" if not
@@ -480,20 +954,137 @@ auto v = c.name;
             @return the SQL statements that drop the trigger and create it under the new name
         */
         softlist getRenameSql(string table_name, string new_name) {
-            return (getDropSql(table_name)[0], sprintf("create trigger %s %s", new_name, src));
+            return (getDropSql(table_name)[0], sprintf("create trigger %s %s", firebird_get_sql_identifier(new_name),
+                src));
         }
     }
 
     #! class for XDBC Firebird sequences
+    /** A Firebird sequence has a starting value and an increment, and no minimum, maximum, cycle option or cache
+        (see @ref xdbcfirebird_sequences)
+    */
     public class XdbcFirebirdSequence inherits SqlUtil::AbstractSequence {
+        private {
+            # the parameters of the description that Firebird sequences do not have, refused by getCreateSql()
+            list<string> unsupported = ();
+        }
+
         #! creates the object from the arguments
+        /** @param n_name the name of the sequence
+            @param n_start the starting value
+            @param n_increment the increment
+            @param n_end the maximum value; Firebird sequences have none, so getCreateSql() refuses a sequence with
+            a maximum
+        */
         constructor(string n_name, number n_start = 1, number n_increment = 1, *softnumber n_end)
                 : AbstractSequence(n_name, n_start, n_increment, n_end) {
         }
 
+        #! records the parameters of the description that Firebird sequences do not have
+        /** getCreateSql() refuses a sequence whose description has a minimum, a maximum, the cycle option or a
+            cache; this method does not, so that the SQL that drops such a sequence can be given
+
+            @param desc the sequence description (see
+                @ref SqlUtil::AbstractDatabase::SequenceDescriptionOptions "SequenceDescriptionOptions")
+
+            @since XdbcFirebirdSqlUtilBase 0.2
+        */
+        setDescription(hash<auto> desc) {
+            unsupported = XdbcFirebirdSequence::getUnsupportedParameters(desc);
+        }
+
         #! returns a string that can be used to create the sequence in the database
+        /** The starting value and the increment are given when they are not the defaults (1), so the SQL that
+            creates a sequence with the defaults is as before
+
+            @par Example:
+            @code{.py}
+# "create sequence seq_orders start with 1000 increment by 10"
+string sql = new XdbcFirebirdSequence("seq_orders", 1000, 10).getCreateSql();
+            @endcode
+
+            @throw SEQUENCE-ERROR the sequence has a minimum, a maximum, the cycle option or a cache, which Firebird
+            sequences do not have
+
+            @since XdbcFirebirdSqlUtilBase 0.2 the starting value and the increment are given; before, a sequence was
+            always created with the defaults
+        */
         string getCreateSql(*hash opt) {
-            return sprintf("create sequence %s", name);
+            list<string> params = unsupported;
+            if (exists max && !inlist("max", params) && !inlist("end", params)) {
+                params += "max";
+            }
+            XdbcFirebirdSequence::checkParameters(name, params);
+            string sql = sprintf("create sequence %s", firebird_get_sql_identifier(name));
+            if (start != 1) {
+                sql += sprintf(" start with %d", start);
+            }
+            if (increment != 1) {
+                sql += sprintf(" increment by %d", increment);
+            }
+            return sql;
+        }
+
+        #! returns the SQL that changes the increment of the sequence in the database, keeping its current value
+        /** Firebird keeps the increment of a sequence, which <tt>NEXT VALUE FOR</tt> uses, and changes it with
+            <tt>ALTER SEQUENCE ... INCREMENT BY</tt>; the starting value is never changed, as that would restart the
+            sequence
+
+            @param desired the sequence description (see
+                @ref SqlUtil::AbstractDatabase::SequenceDescriptionOptions "SequenceDescriptionOptions")
+            @param opt this argument is ignored
+
+            @return the SQL that changes the increment, or NOTHING if the increment is not given or is not changed
+
+            @throw SEQUENCE-ERROR the description has a minimum, a maximum, the cycle option or a cache, which
+            Firebird sequences do not have
+
+            @since XdbcFirebirdSqlUtilBase 0.2
+        */
+        *softlist<string> getAlterSql(hash<auto> desired, *hash<auto> opt) {
+            XdbcFirebirdSequence::checkParameters(name, XdbcFirebirdSequence::getUnsupportedParameters(desired));
+            if (exists desired.increment && desired.increment != increment) {
+                if (!desired.increment) {
+                    throw "SEQUENCE-ERROR", sprintf("sequence %y: increment cannot be zero", name);
+                }
+                return sprintf("alter sequence %s increment by %d", firebird_get_sql_identifier(name),
+                    desired.increment);
+            }
+        }
+
+        # returns the parameters of a description that Firebird sequences do not have; a cache of 0 is no cache, as
+        # Firebird sequences have, and the cycle option False is no cycle
+        private static list<string> getUnsupportedParameters(hash<auto> desc) {
+            list<string> rv = ();
+            foreach string key in (("min", "max", "end")) {
+                if (exists desc{key}) {
+                    rv += key;
+                }
+            }
+            if (desc.cycle) {
+                rv += "cycle";
+            }
+            if (desc.cache) {
+                rv += "cache";
+            }
+            return rv;
+        }
+
+        private static checkParameters(string name, list<string> params) {
+            if (params) {
+                throw "SEQUENCE-ERROR", sprintf("sequence %y: Firebird sequences have only a starting value and an "
+                    "increment, so the sequence cannot have %s %y", name, params.size() == 1 ? "the parameter"
+                    : "the parameters", params);
+            }
+        }
+
+        #! returns a string that can be used to drop the sequence from the database
+        /** @param opt this argument is ignored
+
+            @since XdbcFirebirdSqlUtilBase 0.2 the name of the sequence is quoted if it is not an ordinary name
+        */
+        string getDropSql(*hash<auto> opt) {
+            return sprintf("drop sequence %s", firebird_get_sql_identifier(name));
         }
 
         #! returns a string that can be used to rename the sequence in the database
@@ -515,7 +1106,16 @@ auto v = c.name;
         #! returns a string that can be used to create the view in the database
         string getCreateSql(*hash<auto> opt) {
             # TODO/FIXME: check options
-            return sprintf("create view %s as %s", name, src);
+            return sprintf("create view %s as %s", firebird_get_sql_identifier(name), src);
+        }
+
+        #! returns a string that can be used to drop the view from the database
+        /** @param opt this argument is ignored
+
+            @since XdbcFirebirdSqlUtilBase 0.2 the name of the view is quoted if it is not an ordinary name
+        */
+        string getDropSql(*hash<auto> opt) {
+            return sprintf("drop view %s", firebird_get_sql_identifier(name));
         }
 
         #! returns a string that can be used to rename the view in the database
@@ -755,6 +1355,32 @@ auto v = c.name;
         constructor(AbstractDatasource ds, *hash<auto> opts) : AbstractDatabase(ds, opts) {
         }
 
+        #! returns a name as an SQL identifier for Firebird
+        /** A name that Firebird reads as one unquoted identifier (an ASCII letter, then ASCII letters, digits,
+            underscores or dollar signs) is returned as given, and Firebird folds it to upper case as for any unquoted
+            name; a reserved word is returned in double quotes in the case given, as before; any other name is returned
+            in upper case in double quotes, with each double quote doubled, so that it names the object that an unquoted
+            name of the same letters would: SqlUtil looks up names in upper case on Firebird and gives the names that it
+            reads from the database in lower case
+
+            @par Example:
+            @code{.py}
+# "\"ORDER DATE\""
+string sql = db.getSqlIdentifier("Order Date");
+            @endcode
+
+            @param name the name of a database object
+
+            @return the name as an SQL identifier for Firebird
+
+            @throw IDENTIFIER-ERROR the name is empty or has a NUL character
+
+            @since XdbcFirebirdSqlUtilBase 0.2
+        */
+        string getSqlIdentifier(string name) {
+            return firebird_get_sql_identifier(name);
+        }
+
         #! Returns @ref True if the driver requires a scale to support decimal values in numeric or decimal columns
         /** @return @ref True if the driver requires a scale to support decimal values in numeric or decimal columns
 
@@ -789,18 +1415,27 @@ auto v = c.name;
         }
 
         private *AbstractSequence getSequenceImpl(string name) {
-            *hash<auto> row = ds.selectRow("select rdb$generator_name as \"sequence\" from rdb$generators where "
-                "rdb$system_flag = 0 and rdb$generator_name = %v", name.upr());
-            return row.sequence ? new XdbcFirebirdSequence(row.sequence.lwr()) : NOTHING;
+            # the starting value and the increment are kept from Firebird 3 on
+            *hash<auto> row = ds.selectRow("select rdb$generator_name as \"sequence\", "
+                "rdb$initial_value as \"start\", rdb$generator_increment as \"increment\" from rdb$generators where "
+                "rdb$system_flag = 0 and rdb$generator_name = %v", firebird_get_catalog_name(name));
+            return row.sequence
+                ? new XdbcFirebirdSequence(row.sequence.lwr(), row.start ?? 1, row.increment ?? 1)
+                : NOTHING;
         }
 
+        #! returns the view of the given name with its source, or no value if there is no such view
+        /** @since XdbcFirebirdSqlUtilBase 0.2 views are read from the catalog; before, no view was ever found
+        */
         private *AbstractView getViewImpl(string name) {
-            *hash<auto> row;
+            *hash<auto> row = ds.selectRow("select rdb$view_source as \"src\" from rdb$relations "
+                "where rdb$view_blr is not null and coalesce(rdb$system_flag, 0) = 0 and rdb$relation_name = %v",
+                firebird_get_catalog_name(name));
             if (!row) {
                 return;
             }
 
-            return new XdbcFirebirdView(name, row.sql);
+            return new XdbcFirebirdView(name, row.src);
         }
 
         private AbstractFunction makeFunctionImpl(string name, string src, *hash<auto> opts) {
@@ -849,13 +1484,22 @@ auto v = c.name;
             return ();
         }
 
+        #! returns the names of the sequences in the database, in lower case
+        /** @since XdbcFirebirdSqlUtilBase 0.2 the sequences are listed; before, none were
+        */
         private list<string> listSequencesImpl() {
-            return ();
+            # a generator of an identity column has another system flag
+            return ds.select("select lower(trim(rdb$generator_name)) as \"name\" from rdb$generators "
+                "where rdb$system_flag = 0").name ?? ();
         }
 
+        #! returns the names of the views in the database, in lower case
+        /** @since XdbcFirebirdSqlUtilBase 0.2 the names are given in lower case, as the names of tables and
+            sequences are; before, they were given in upper case
+        */
         private list<string> listViewsImpl() {
-            return ds.select("select rdb$relation_name as \"name\" from rdb$relations where rdb$view_blr is not null "
-                "and (rdb$system_flag is null or rdb$system_flag = 0)").name;
+            return ds.select("select lower(trim(rdb$relation_name)) as \"name\" from rdb$relations "
+                "where rdb$view_blr is not null and coalesce(rdb$system_flag, 0) = 0").name ?? ();
         }
 
         private string getCreateSqlImpl(list<auto> l) {
@@ -868,12 +1512,15 @@ auto v = c.name;
 
         #! returns the next value in the given sequence
         private softint getNextSequenceValueImpl(string name) {
-            return ds.selectRow("select next value for %s as \"nextval\" from rdb$database", name).nextval;
+            # "%s" in SQL with arguments is substituted as given, so the name is given as an identifier here
+            return ds.selectRow("select next value for " + firebird_get_sql_identifier(name)
+                + " as \"nextval\" from rdb$database").nextval;
         }
 
         #! returns the last value issued for the given sequence in the current session
         private softint getCurrentSequenceValueImpl(string name) {
-            return ds.selectRow("select gen_id(%s, 0) as \"currentval\" from rdb$database", name).currentval;
+            return ds.selectRow("select gen_id(" + firebird_get_sql_identifier(name)
+                + ", 0) as \"currentval\" from rdb$database").currentval;
         }
 
         #! returns @ref True "True" since we have a workaround implementation for sequences in XdbcFirebird
@@ -1033,36 +1680,26 @@ auto v = c.name;
                     "arg": Type::String,
                     "withalias": True,
                     "code": string sub (string cve, string arg, reference<hash<auto>> aliases) {
-                        # issue #2163: make sure the unquoted alias is inserted in the map
-                        if (arg =~ /^(".*"|`.*`)$/) {
+                        # issue #2163: make sure the unquoted alias is inserted in the map; the alias is given as a
+                        # double-quoted identifier, with each double quote doubled (see
+                        # XdbcFirebirdTable::getAliasSqlName()), or as an ordinary name
+                        if (arg =~ /^".*"$/s) {
+                            arg = replace(arg.substr(1, -1), "\"\"", "\"");
+                        } else if (arg =~ /^`.*`$/s) {
                             arg = arg.substr(1, -1);
                         }
                         aliases{arg} = cve;
-                        return sprintf("%s as \"%s\"", cve, arg);
+                        # an alias is always given in double quotes, so the result key has its case
+                        return sprintf("%s as %s", cve, AbstractSqlUtilBase::getDelimitedIdentifier(arg, "\"", "\"",
+                            "Firebird"));
                     },
                 },
+                # without a database, a character type without a size has its largest size in bytes; the column
+                # operator map of a table gives it the largest size of the character set of its database (see
+                # XdbcFirebirdTable::getColumnOperatorMapImpl())
                 COP_CAST: (
                     "code": string sub (string cve, list<auto> args) {
-                        string name = QoreTypeMap{args[0]} ?? args[0];
-                        *hash<auto> desc = XdbcFirebirdTypeMap{name};
-                        string sql = sprintf ("cast (%s as %s", cve, name);
-                        switch (name) {
-                            default:
-                                if (desc.size == SZ_MAND) {
-                                    if (!exists args[1] && !exists desc.size_range) {
-                                        throw "OPERATOR-ERROR", sprintf ("op_cast operator missing size for type %s",
-                                            name);
-                                    }
-                                    sql += sprintf("(%d)", args[1] ?? desc.size_range[1]);
-                                } else if (desc.size == SZ_NUM && exists args[1]) {
-                                    sql += args[1] == "*" ? "(*" : sprintf("(%d", args[1]);
-                                    sql += exists args[2] ? sprintf(",%d)", args[2]) : ")";
-                                } else if (desc.size == SZ_OPT && exists args[1]) {
-                                    sql += sprintf("(%d)", args[1]);
-                                }
-                        }
-                        sql += ")";
-                        return sql;
+                        return XdbcFirebirdTable::getCastSql(cve, args[0], args[1], args[2], int sub () { return 1; });
                     },
                 ),
                 COP_LENGTH: {
@@ -1070,6 +1707,16 @@ auto v = c.name;
                         return sprintf("char_length(%s)", cve);
                     },
                 },
+                COP_TRUNC_DATE: (
+                    "code": string sub (string cve, auto arg) {
+                        *string sql = firebird_get_trunc_date_sql(cve, arg);
+                        if (!sql) {
+                            throw "COP-TRUNC-DATE-ERROR", sprintf("Not allowed format argument: %n: allowed: %n", arg,
+                                keys FirebirdTruncDate);
+                        }
+                        return sql;
+                    },
+                ),
                 COP_PREPEND: (
                     "arg": Type::String,
                     "sqlvalue": True,
@@ -1088,6 +1735,19 @@ auto v = c.name;
 
             #! Firebird operator map
             const FirebirdOpMap = DefaultOpMap + {
+                # Firebird cannot type a bound start or count of substring(), so they are bound as integers
+                OP_SUBSTR: DefaultOpMap{OP_SUBSTR} + {
+                    "code": string sub (reference<hash<QueryInfo>> info, string cn, auto arg) {
+                        info.args += arg[0]; # start
+                        if (!exists arg[1]) {
+                            info.args += arg[2]; # text
+                            return sprintf("substring(%s from cast(%%v as integer)) = %%v", cn);
+                        }
+                        info.args += arg[1]; # count
+                        info.args += arg[2]; # text
+                        return sprintf("substring(%s from cast(%%v as integer) for cast(%%v as integer)) = %%v", cn);
+                    },
+                },
                 OP_IN: AbstractDataProvider::GenericExpressions{DP_SEARCH_OP_IN} + (
                     "code": string sub (reference<hash<QueryInfo>> info, string cn, auto arg) {
                         # firebird accepts max 1500 args in "IN" lists
@@ -1161,7 +1821,9 @@ auto v = c.name;
                             AbstractDataProviderTypeMap."any");
                         string arg = args[1];
                         info.pseudo_column_map{arg} = exp;
-                        return sprintf("%s as \"%s\"", exp, arg);
+                        # an alias is always given in double quotes, so the result key has its case, and is escaped,
+                        # so it cannot change the SQL
+                        return sprintf("%s as %s", exp, info.table.getAliasSqlName(arg));
                     },
                 },
                 COP_CAST: {
@@ -1182,24 +1844,12 @@ auto v = c.name;
                         "return_type": AbstractDataProviderTypeMap."any",
                     },
                     "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        # the arguments are the expression, the type, and an optional size and scale; the cast gives
+                        # a value its type
+                        args = firebird_infer_values(args, 1, True);
                         string exp0 = info.table.getExpressionArg(\info, role, args[0],
                             AbstractDataProviderTypeMap."any");
-                        string name = QoreTypeMap{args[1]} ?? args[1];
-                        *hash<auto> desc = XdbcFirebirdTypeMap{name};
-                        string sql = sprintf ("cast (%s as %s", exp0, name);
-                        if (desc.size == SZ_MAND) {
-                            if (!exists args[1] && !exists desc.size_range)
-                                throw "OPERATOR-ERROR", sprintf ("cast operator missing size for type %s",
-                                    name);
-                            sql += sprintf("(%d)", args[1] ?? desc.size_range[1]);
-                        } else if (desc.size == SZ_NUM && exists args[1]) {
-                            sql += sprintf("(%d", args[1]);
-                            sql += exists args[2] ? sprintf(",%d)", args[2]) : ")";
-                        } else if (desc.size == SZ_OPT && exists args[1]) {
-                            sql += sprintf("(%d)", args[1]);
-                        }
-                        sql += ")";
-                        return sql;
+                        return cast<XdbcFirebirdTable>(info.table).getCastSql(exp0, args[1], args[2], args[3]);
                     },
                 },
                 COP_LENGTH: {
@@ -1239,10 +1889,16 @@ auto v = c.name;
                     "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
                         # firebird accepts max 1500 args in "IN" lists
                         list<string> argl;
+                        # the values in the list of a column or an expression have its type
+                        bool typed = firebird_is_typed_arg(args[0]);
                         string exp0 = info.table.getExpressionArg(\info, role, args[0],
                             AbstractDataProviderTypeMap."any");
                         if (args[1].typeCode() != NT_LIST) {
                             args[1] = (args[1],);
+                        }
+                        if (typed) {
+                            args[1] = map firebird_is_bound_value($1) ? <FirebirdInferredValue>{"value": $1} : $1,
+                                args[1];
                         }
                         while (args[1]) {
                             list<auto> arg_slice = extract args[1], 0, 1500;
@@ -1266,54 +1922,18 @@ auto v = c.name;
                     },
                 },
                 # --- Duration functions for Firebird ---
-                DP_FUNC_YEARS: DefaultExpressionMap{DP_FUNC_YEARS} + {
-                    "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
-                        return sprintf("dateadd(%s year to cast(0 as timestamp))",
-                            info.table.getExpressionArg(\info, role, args[0], AbstractDataProviderTypeMap."int"));
-                    },
-                },
-                DP_FUNC_MONTHS: DefaultExpressionMap{DP_FUNC_MONTHS} + {
-                    "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
-                        return sprintf("dateadd(%s month to cast(0 as timestamp))",
-                            info.table.getExpressionArg(\info, role, args[0], AbstractDataProviderTypeMap."int"));
-                    },
-                },
-                DP_FUNC_WEEKS: DefaultExpressionMap{DP_FUNC_WEEKS} + {
-                    "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
-                        return sprintf("dateadd(%s week to cast(0 as timestamp))",
-                            info.table.getExpressionArg(\info, role, args[0], AbstractDataProviderTypeMap."int"));
-                    },
-                },
-                DP_FUNC_DAYS: DefaultExpressionMap{DP_FUNC_DAYS} + {
-                    "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
-                        return sprintf("dateadd(%s day to cast(0 as timestamp))",
-                            info.table.getExpressionArg(\info, role, args[0], AbstractDataProviderTypeMap."int"));
-                    },
-                },
-                DP_FUNC_HOURS: DefaultExpressionMap{DP_FUNC_HOURS} + {
-                    "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
-                        return sprintf("dateadd(%s hour to cast(0 as timestamp))",
-                            info.table.getExpressionArg(\info, role, args[0], AbstractDataProviderTypeMap."int"));
-                    },
-                },
-                DP_FUNC_MINUTES: DefaultExpressionMap{DP_FUNC_MINUTES} + {
-                    "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
-                        return sprintf("dateadd(%s minute to cast(0 as timestamp))",
-                            info.table.getExpressionArg(\info, role, args[0], AbstractDataProviderTypeMap."int"));
-                    },
-                },
-                DP_FUNC_SECONDS: DefaultExpressionMap{DP_FUNC_SECONDS} + {
-                    "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
-                        return sprintf("dateadd(%s second to cast(0 as timestamp))",
-                            info.table.getExpressionArg(\info, role, args[0], AbstractDataProviderTypeMap."int"));
-                    },
-                },
-                DP_FUNC_MILLISECONDS: DefaultExpressionMap{DP_FUNC_MILLISECONDS} + {
-                    "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
-                        return sprintf("dateadd(%s millisecond to cast(0 as timestamp))",
-                            info.table.getExpressionArg(\info, role, args[0], AbstractDataProviderTypeMap."int"));
-                    },
-                },
+                # Firebird has no duration type: a duration has no SQL of its own, and is given in SQL only where
+                # it is added to or subtracted from a date, as dateadd() (see XdbcFirebirdTable::getDateArithmeticSql());
+                # anywhere else, it is refused with SQLUTIL-EXPRESSION-NOT-PUSHDOWNABLE
+                DP_FUNC_YEARS: DefaultExpressionMap{DP_FUNC_YEARS} - "code",
+                DP_FUNC_MONTHS: DefaultExpressionMap{DP_FUNC_MONTHS} - "code",
+                DP_FUNC_WEEKS: DefaultExpressionMap{DP_FUNC_WEEKS} - "code",
+                DP_FUNC_DAYS: DefaultExpressionMap{DP_FUNC_DAYS} - "code",
+                DP_FUNC_HOURS: DefaultExpressionMap{DP_FUNC_HOURS} - "code",
+                DP_FUNC_MINUTES: DefaultExpressionMap{DP_FUNC_MINUTES} - "code",
+                DP_FUNC_SECONDS: DefaultExpressionMap{DP_FUNC_SECONDS} - "code",
+                DP_FUNC_MILLISECONDS: DefaultExpressionMap{DP_FUNC_MILLISECONDS} - "code",
+                DP_FUNC_MICROSECONDS: DefaultExpressionMap{DP_FUNC_MICROSECONDS} - "code",
                 # --- Date extraction functions for Firebird ---
                 DP_FUNC_GET_YEAR: DefaultExpressionMap{DP_FUNC_GET_YEAR} + {
                     "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
@@ -1354,6 +1974,8 @@ auto v = c.name;
                 # --- String pattern matching operators for Firebird ---
                 DP_OP_LIKE: DefaultExpressionMap{DP_OP_LIKE} + {
                     "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        # a value compared with a column or an expression has its type
+                        args = firebird_infer_values(args, 2);
                         string exp0 = info.table.getExpressionArg(\info, role, args[0],
                             AbstractDataProviderTypeMap."string");
                         string exp1 = info.table.getExpressionArg(\info, role, args[1],
@@ -1366,6 +1988,8 @@ auto v = c.name;
                 },
                 DP_OP_CONTAINS: DefaultExpressionMap{DP_OP_CONTAINS} + {
                     "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        # a value compared with a column or an expression has its type
+                        args = firebird_infer_values(args, 2);
                         string exp0 = info.table.getExpressionArg(\info, role, args[0],
                             AbstractDataProviderTypeMap."string");
                         string exp1 = info.table.getExpressionArg(\info, role, args[1],
@@ -1378,6 +2002,8 @@ auto v = c.name;
                 },
                 DP_OP_STARTS_WITH: DefaultExpressionMap{DP_OP_STARTS_WITH} + {
                     "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        # a value compared with a column or an expression has its type
+                        args = firebird_infer_values(args, 2);
                         string exp0 = info.table.getExpressionArg(\info, role, args[0],
                             AbstractDataProviderTypeMap."any");
                         string exp1 = info.table.getExpressionArg(\info, role, args[1],
@@ -1390,6 +2016,8 @@ auto v = c.name;
                 },
                 DP_OP_ENDS_WITH: DefaultExpressionMap{DP_OP_ENDS_WITH} + {
                     "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        # a value compared with a column or an expression has its type
+                        args = firebird_infer_values(args, 2);
                         string exp0 = info.table.getExpressionArg(\info, role, args[0],
                             AbstractDataProviderTypeMap."any");
                         string exp1 = info.table.getExpressionArg(\info, role, args[1],
@@ -1402,6 +2030,10 @@ auto v = c.name;
                 },
                 DP_OP_REPLACE: DefaultExpressionMap{DP_OP_REPLACE} + {
                     "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        # the values replaced in a column or an expression have its type
+                        if (firebird_is_typed_arg(args[0])) {
+                            args = (args[0],) + firebird_infer_values(args[1..], 2, True);
+                        }
                         string exp0 = info.table.getExpressionArg(\info, role, args[0],
                             AbstractDataProviderTypeMap."string");
                         string exp1 = info.table.getExpressionArg(\info, role, args[1],
@@ -1414,13 +2046,18 @@ auto v = c.name;
                 # --- Type conversion operators for Firebird ---
                 DP_OP_TO_STRING: DefaultExpressionMap{DP_OP_TO_STRING} + {
                     "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        # the cast gives a value its type
+                        args = firebird_infer_values(args, 1, True);
                         string exp0 = info.table.getExpressionArg(\info, role, args[0],
                             AbstractDataProviderTypeMap."any");
-                        return sprintf("cast(%s as varchar(8191))", exp0);
+                        return sprintf("cast(%s as varchar(%d))", exp0,
+                            cast<XdbcFirebirdTable>(info.table).getMaxVarcharLength());
                     },
                 },
                 DP_OP_TO_INT: DefaultExpressionMap{DP_OP_TO_INT} + {
                     "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        # the cast gives a value its type
+                        args = firebird_infer_values(args, 1, True);
                         string exp0 = info.table.getExpressionArg(\info, role, args[0],
                             AbstractDataProviderTypeMap."any");
                         return sprintf("cast(%s as integer)", exp0);
@@ -1428,6 +2065,8 @@ auto v = c.name;
                 },
                 DP_OP_TO_FLOAT: DefaultExpressionMap{DP_OP_TO_FLOAT} + {
                     "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        # the cast gives a value its type
+                        args = firebird_infer_values(args, 1, True);
                         string exp0 = info.table.getExpressionArg(\info, role, args[0],
                             AbstractDataProviderTypeMap."any");
                         return sprintf("cast(%s as double precision)", exp0);
@@ -1435,6 +2074,8 @@ auto v = c.name;
                 },
                 DP_OP_TO_NUMBER: DefaultExpressionMap{DP_OP_TO_NUMBER} + {
                     "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        # the cast gives a value its type
+                        args = firebird_infer_values(args, 1, True);
                         string exp0 = info.table.getExpressionArg(\info, role, args[0],
                             AbstractDataProviderTypeMap."any");
                         return sprintf("cast(%s as numeric(18,4))", exp0);
@@ -1442,6 +2083,8 @@ auto v = c.name;
                 },
                 DP_OP_TO_DATE: DefaultExpressionMap{DP_OP_TO_DATE} + {
                     "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        # the cast gives a value its type
+                        args = firebird_infer_values(args, 1, True);
                         string exp0 = info.table.getExpressionArg(\info, role, args[0],
                             AbstractDataProviderTypeMap."any");
                         return sprintf("cast(%s as timestamp)", exp0);
@@ -1449,6 +2092,8 @@ auto v = c.name;
                 },
                 DP_OP_TO_BOOL: DefaultExpressionMap{DP_OP_TO_BOOL} + {
                     "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        # the cast gives a value its type
+                        args = firebird_infer_values(args, 1, True);
                         string exp0 = info.table.getExpressionArg(\info, role, args[0],
                             AbstractDataProviderTypeMap."any");
                         return sprintf("cast(%s as boolean)", exp0);
@@ -1470,6 +2115,10 @@ auto v = c.name;
                 # --- Control flow operators for Firebird ---
                 DP_OP_TERNARY: DefaultExpressionMap{DP_OP_TERNARY} + {
                     "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        # Firebird types a condition as a boolean, and a value of a branch from the other branch if it
+                        # is a column or an expression
+                        args = firebird_infer_values(args, 1, True);
+                        args = (args[0],) + firebird_infer_values(args[1..], 2);
                         string cond = info.table.getExpressionArg(\info, role, args[0],
                             AbstractDataProviderTypeMap."bool");
                         string true_val = info.table.getExpressionArg(\info, role, args[1],
@@ -1481,24 +2130,616 @@ auto v = c.name;
                 },
                 DP_OP_HAS_VALUE: DefaultExpressionMap{DP_OP_HAS_VALUE} + {
                     "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        # the null test gives a value its type
+                        args = firebird_infer_values(args, 1, True);
                         return sprintf("%s is not null", info.table.getExpressionArg(\info, role, args[0],
                             AbstractDataProviderTypeMap."any"));
+                    },
+                },
+                # --- Comparisons and logical operators for Firebird ---
+                # a value compared with a column or an expression has its type, so it is bound without a cast, as
+                # before; a value compared with a value is bound in a cast (see XdbcFirebirdTable::getExpressionArg())
+                OP_LT: DefaultExpressionMap{OP_LT} + {
+                    "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        return DefaultExpressionMap{OP_LT}.code(\info, role, firebird_infer_values(args, 2));
+                    },
+                },
+                OP_LE: DefaultExpressionMap{OP_LE} + {
+                    "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        return DefaultExpressionMap{OP_LE}.code(\info, role, firebird_infer_values(args, 2));
+                    },
+                },
+                OP_GT: DefaultExpressionMap{OP_GT} + {
+                    "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        return DefaultExpressionMap{OP_GT}.code(\info, role, firebird_infer_values(args, 2));
+                    },
+                },
+                OP_GE: DefaultExpressionMap{OP_GE} + {
+                    "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        return DefaultExpressionMap{OP_GE}.code(\info, role, firebird_infer_values(args, 2));
+                    },
+                },
+                OP_NE: DefaultExpressionMap{OP_NE} + {
+                    "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        return DefaultExpressionMap{OP_NE}.code(\info, role, firebird_infer_values(args, 2));
+                    },
+                },
+                OP_EQ: DefaultExpressionMap{OP_EQ} + {
+                    "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        return DefaultExpressionMap{OP_EQ}.code(\info, role, firebird_infer_values(args, 2));
+                    },
+                },
+                OP_BETWEEN: DefaultExpressionMap{OP_BETWEEN} + {
+                    "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        return DefaultExpressionMap{OP_BETWEEN}.code(\info, role, firebird_infer_values(args, 3));
+                    },
+                },
+                DP_FUNC_NULLIF: DefaultExpressionMap{DP_FUNC_NULLIF} + {
+                    "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        return DefaultExpressionMap{DP_FUNC_NULLIF}.code(\info, role, firebird_infer_values(args, 2));
+                    },
+                },
+                DP_OP_MOD: DefaultExpressionMap{DP_OP_MOD} + {
+                    "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        return DefaultExpressionMap{DP_OP_MOD}.code(\info, role, firebird_infer_values(args, 2));
+                    },
+                },
+                # a value of coalesce() has the type of a column or an expression of its arguments
+                DP_FUNC_COALESCE: DefaultExpressionMap{DP_FUNC_COALESCE} + {
+                    "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        return DefaultExpressionMap{DP_FUNC_COALESCE}.code(\info, role,
+                            firebird_infer_values(args, args.size()));
+                    },
+                },
+                # a condition is typed as a boolean
+                DP_OP_AND: DefaultExpressionMap{DP_OP_AND} + {
+                    "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        return DefaultExpressionMap{DP_OP_AND}.code(\info, role, firebird_infer_values(args, args.size(),
+                            True));
+                    },
+                },
+                # a condition is typed as a boolean
+                DP_OP_OR: DefaultExpressionMap{DP_OP_OR} + {
+                    "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        return DefaultExpressionMap{DP_OP_OR}.code(\info, role, firebird_infer_values(args, args.size(),
+                            True));
+                    },
+                },
+                OP_NOT: DefaultExpressionMap{OP_NOT} + {
+                    "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        return DefaultExpressionMap{OP_NOT}.code(\info, role, firebird_infer_values(args, 1, True));
+                    },
+                },
+                DP_OP_IS_NULL: DefaultExpressionMap{DP_OP_IS_NULL} + {
+                    "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        return DefaultExpressionMap{DP_OP_IS_NULL}.code(\info, role, firebird_infer_values(args, 1, True));
+                    },
+                },
+                DP_OP_IS_NOT_NULL: DefaultExpressionMap{DP_OP_IS_NOT_NULL} + {
+                    "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        return DefaultExpressionMap{DP_OP_IS_NOT_NULL}.code(\info, role, firebird_infer_values(args, 1, True));
+                    },
+                },
+                # --- Date arithmetic for Firebird ---
+                # a date plus or minus a duration is dateadd()
+                DP_OP_PLUS: DefaultExpressionMap{DP_OP_PLUS} + {
+                    "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        return cast<XdbcFirebirdTable>(info.table).getDateArithmeticSql(\info, role, args, False,
+                            DefaultExpressionMap{DP_OP_PLUS}.code);
+                    },
+                },
+                COP_PLUS: DefaultExpressionMap{COP_PLUS} + {
+                    "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        return cast<XdbcFirebirdTable>(info.table).getDateArithmeticSql(\info, role, args, False,
+                            DefaultExpressionMap{COP_PLUS}.code);
+                    },
+                },
+                DP_OP_MINUS: DefaultExpressionMap{DP_OP_MINUS} + {
+                    "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        return cast<XdbcFirebirdTable>(info.table).getDateArithmeticSql(\info, role, args, True,
+                            DefaultExpressionMap{DP_OP_MINUS}.code);
+                    },
+                },
+                COP_MINUS: DefaultExpressionMap{COP_MINUS} + {
+                    "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        return cast<XdbcFirebirdTable>(info.table).getDateArithmeticSql(\info, role, args, True,
+                            DefaultExpressionMap{COP_MINUS}.code);
+                    },
+                },
+                # --- Date truncation for Firebird ---
+                COP_TRUNC_DATE: {
+                    "exp": <DataProviderExpressionInfo>{
+                        "type": DET_Operator,
+                        "name": COP_TRUNC_DATE,
+                        "display_name": COP_TRUNC_DATE,
+                        "desc": "truncates the given date to the given resolution; args: date, string code: Y: year, "
+                            "M: month, D: day, H: hour, m: minute, S: second",
+                        "symbol": COP_TRUNC_DATE,
+                        "groups": "Date/Time",
+                        "args": (
+                            DataProviderSignatureDateType,
+                            DataProviderSignatureStringValueType,
+                        ),
+                        "return_type": AbstractDataProviderTypeMap."date",
+                    },
+                    "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        # the cast gives a value its type
+                        args = firebird_infer_values(args, 1, True);
+                        string exp0 = info.table.getExpressionArg(\info, role, args[0],
+                            AbstractDataProviderTypeMap."date");
+                        *string sql = firebird_get_trunc_date_sql(exp0, args[1]);
+                        if (!sql) {
+                            throw "TRUNC-DATE-ERROR", sprintf("unknown date truncation format argument %y; "
+                                "supported date format arguments: %y", args[1], keys FirebirdTruncDate);
+                        }
+                        return sql;
+                    },
+                },
+                # --- Aggregates for Firebird ---
+                # the average of an integer or an exact numeric is exact, as on other databases (see
+                # XdbcFirebirdTable::getAvgSql())
+                COP_AVG: DefaultExpressionMap{COP_AVG} + {
+                    "code": string sub (reference<hash<QueryInfo>> info, int role, *list<auto> args) {
+                        XdbcFirebirdTable t = cast<XdbcFirebirdTable>(info.table);
+                        *bool exact = t.isExactNumericArg(info, args[0]);
+                        return t.getAvgSql(t.getExpressionArg(\info, role, args[0], AbstractDataProviderTypeMap."any"),
+                            exact);
+                    },
+                },
+                # Firebird has no ltrim() or rtrim()
+                DP_FUNC_LTRIM: DefaultExpressionMap{DP_FUNC_LTRIM} + {
+                    "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        return sprintf("trim(leading from %s)", info.table.getExpressionArg(\info, role, args[0],
+                            AbstractDataProviderTypeMap."string"));
+                    },
+                },
+                DP_FUNC_RTRIM: DefaultExpressionMap{DP_FUNC_RTRIM} + {
+                    "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        return sprintf("trim(trailing from %s)", info.table.getExpressionArg(\info, role, args[0],
+                            AbstractDataProviderTypeMap."string"));
                     },
                 },
             };
         }
 
+        public {
+            #! the largest size in bytes of a \c VARCHAR in Firebird
+            /** @since XdbcFirebirdSqlUtilBase 0.2
+            */
+            const MaxVarcharBytes = 32765;
+        }
+
+        private {
+            #! the number of bytes per character of the default character set of the database, once read
+            transient *int bytes_per_character;
+
+            #! the major version of the Firebird server, once read
+            transient *int server_major_version;
+
+            #! the lock of \a bytes_per_character and \a server_major_version
+            transient Mutex db_info_lock();
+        }
+
         constructor(AbstractDatasource ds, string name, *hash<auto> opts) : AbstractTable(ds, name, opts) {
         }
 
-        #! returns the name of the table to be used in SQL (with a possible qualifiers for schema, etc)
+        #! returns the number of bytes per character of the default character set of the database
+        /** The character set is read from the database once for the object; the character set \c NONE gives 1
+
+            @return the number of bytes per character of the default character set of the database: 4 for \c UTF8, 1
+            for \c NONE and the character sets of one byte per character
+
+            @since XdbcFirebirdSqlUtilBase 0.2
+        */
+        int getDatabaseBytesPerCharacter() {
+            getDatabaseInfo();
+            return bytes_per_character;
+        }
+
+        #! returns the major version of the Firebird server
+        /** The version is read from the database once for the object
+
+            @return the major version of the Firebird server, such as 5 for Firebird 5.0, or 0 if it cannot be read
+
+            @since XdbcFirebirdSqlUtilBase 0.2
+        */
+        int getServerMajorVersion() {
+            getDatabaseInfo();
+            return server_major_version;
+        }
+
+        #! reads the character set of the database and the version of the server once
+        private getDatabaseInfo() {
+            db_info_lock.lock();
+            on_exit db_info_lock.unlock();
+
+            if (exists bytes_per_character) {
+                return;
+            }
+            # the default character set of a database without one is NONE, of one byte per character
+            *hash<auto> row = ds.selectRow("select cs.rdb$bytes_per_character as \"bpc\", "
+                "rdb$get_context('SYSTEM', 'ENGINE_VERSION') as \"version\" from rdb$database d "
+                "left join rdb$character_sets cs on cs.rdb$character_set_name = d.rdb$character_set_name");
+            *string major = (row.version =~ x/^([0-9]+)/)[0];
+            server_major_version = major ? major.toInt() : 0;
+            bytes_per_character = row.bpc ? int(row.bpc) : 1;
+        }
+
+        #! returns the largest size in characters of a \c VARCHAR in the default character set of the database
+        /** @return the largest size in characters of a \c VARCHAR in the default character set of the database:
+            8191 for \c UTF8 and 32765 for \c NONE and the character sets of one byte per character
+
+            @since XdbcFirebirdSqlUtilBase 0.2
+        */
+        int getMaxVarcharLength() {
+            return MaxVarcharBytes / getDatabaseBytesPerCharacter();
+        }
+
+        #! returns the Firebird type that a value is bound as in a cast, or no value if the value has none
+        /** @param v the value
+
+            @return the Firebird type of the value: \c BIGINT for an integer, <tt>DOUBLE PRECISION</tt> for a float,
+            \c DECFLOAT(34) for a number from Firebird 4 on, and on Firebird 3, which has no \c DECFLOAT, a \c NUMERIC
+            with the precision and the scale of its digits (<tt>DOUBLE PRECISION</tt> for more than 18 digits),
+            \c BOOLEAN for a boolean, \c TIMESTAMP for an absolute date, a \c VARCHAR of the size of a string
+            (a text \c BLOB for a string longer than a \c VARCHAR can be in the default character set of the
+            database) and a \c VARCHAR in the \c OCTETS character set of the size of a binary value (a \c BLOB for
+            more than 32765 bytes); no value for any other value, such as \c NULL or a relative date
+
+            @since XdbcFirebirdSqlUtilBase 0.2
+        */
+        *string getBindType(auto v) {
+            switch (v.typeCode()) {
+                case NT_INT:
+                    return "bigint";
+                case NT_FLOAT:
+                    return "double precision";
+                case NT_NUMBER:
+                    # an arbitrary-precision decimal; a NUMERIC of the digits of a value without fractional digits
+                    # would divide as an integer
+                    return getServerMajorVersion() >= 4 ? "decfloat(34)" : firebird_get_number_type(v);
+                case NT_BOOLEAN:
+                    return "boolean";
+                case NT_DATE:
+                    return v.absolute() ? "timestamp" : NOTHING;
+                case NT_STRING: {
+                    int bpc = getDatabaseBytesPerCharacter();
+                    # a character set of one byte per character, or NONE, counts the bytes of a string
+                    int len = bpc == 1 ? v.size() : v.length();
+                    if (len > MaxVarcharBytes / bpc) {
+                        return "blob sub_type text";
+                    }
+                    return sprintf("varchar(%d)", len ?: 1);
+                }
+                case NT_BINARY: {
+                    int len = v.size();
+                    if (len > MaxVarcharBytes) {
+                        return "blob";
+                    }
+                    return sprintf("varchar(%d) character set octets", len ?: 1);
+                }
+            }
+        }
+
+        #! returns the SQL of an argument of an expression; a bound value is bound in a cast to its type where Firebird cannot type it
+        /** Firebird gives a bound value the type of the expression that it is part of only in a comparison with a
+            column or an expression, in a cast, in a null test and in a few functions; anywhere else, such as in the
+            select list, in arithmetic, in a string function, in a \c CASE expression or in a comparison of two
+            values, it refuses a value without a type with <tt>Data type unknown</tt>, so such a value is bound in a
+            cast to its type as getBindType() gives it (see @ref xdbcfirebird_bound_values); a value with no type,
+            such as \c NULL, is bound as it is; a relative date value, which Firebird has no type for, is refused
+
+            @param info the query information, to which a bound value is added
+            @param role the role of the expression
+            @param arg the argument: a column, an expression or a value
+            @param expected_type the type of the argument that the expression expects
+
+            @return the SQL of the argument
+
+            @throw SQLUTIL-EXPRESSION-NOT-PUSHDOWNABLE the argument is a relative date value, which can only be added to
+            or subtracted from a date (see getDateArithmeticSql())
+
+            @since XdbcFirebirdSqlUtilBase 0.2
+        */
+        string getExpressionArg(reference<hash<QueryInfo>> info, int role, auto arg,
+                AbstractDataProviderType expected_type) {
+            # a duration value is given only in date arithmetic (see getDateArithmeticSql())
+            {
+                auto v = (arg instanceof hash<FirebirdInferredValue>) ? arg.value : arg;
+                if (firebird_is_duration_value(v)) {
+                    firebird_refuse_duration(sprintf("relative date value %y", v));
+                }
+            }
+            if (arg instanceof hash<FirebirdInferredValue>) {
+                info.args += arg.value;
+                return "%v";
+            }
+            if (firebird_is_bound_value(arg)) {
+                *string type = getBindType(arg);
+                if (type) {
+                    info.args += arg;
+                    return sprintf("cast(%%v as %s)", type);
+                }
+            }
+            return AbstractTable::getExpressionArg(\info, role, arg, expected_type);
+        }
+
+        #! returns the SQL of a sum or a difference of the arguments of an expression, with each duration as \c dateadd()
+        /** Firebird has no duration type: a date plus or minus durations (@ref DataProvider::DP_FUNC_YEARS "years"
+            to @ref DataProvider::DP_FUNC_MICROSECONDS "microseconds", relative date values, and sums and differences
+            of them) is given as nested <tt>dateadd(</tt><em>amount</em> <em>unit</em> <tt>to</tt> <em>date</em><tt>)</tt>,
+            in the order of the durations, with the amounts negated for a difference; a microsecond is a fraction of
+            a millisecond, to the precision of a Firebird timestamp (100 microseconds)
+
+            @param info the query information, to which the bound values are added
+            @param role the role of the expression
+            @param args the arguments of the sum, or the two arguments of the difference
+            @param minus @ref True "True" for a difference, @ref False "False" for a sum
+            @param default_code the SQL of the expression when no argument is a duration
+
+            @return the SQL of the expression
+
+            @throw SQLUTIL-EXPRESSION-NOT-PUSHDOWNABLE the expression is a duration without a date, or a duration
+            minus a date
+
+            @since XdbcFirebirdSqlUtilBase 0.2
+        */
+        string getDateArithmeticSql(reference<hash<QueryInfo>> info, int role, list<auto> args, bool minus,
+                code<string(reference<hash<QueryInfo>>, int, list<auto>)> default_code) {
+            # the durations, and the other arguments
+            list<hash<FirebirdDurationTerm>> terms = ();
+            list<auto> others = ();
+            bool duration;
+            foreach auto arg in (args) {
+                *list<hash<FirebirdDurationTerm>> t = firebird_get_duration_terms(arg);
+                if (!exists t) {
+                    others += arg;
+                    continue;
+                }
+                # a duration that is subtracted from a date
+                if (minus) {
+                    if (!$#) {
+                        # a duration minus a date, or minus a duration
+                        firebird_refuse_duration("a duration minus another value");
+                    }
+                    t = map $1 + {"negate": !$1.negate}, t;
+                }
+                terms += t;
+                duration = True;
+            }
+            if (!duration) {
+                return default_code(\info, role, args);
+            }
+            if (!others) {
+                firebird_refuse_duration("a sum of durations");
+            }
+
+            # the first term is added first, so its dateadd() is the innermost: the SQL of the amounts is made from
+            # the last term to the first, and then the SQL of the date, in the order of their bound values
+            int count = terms.size();
+            list<string> amounts = ();
+            for (int i = count - 1; i >= 0; --i) {
+                amounts += getDurationAmountSql(\info, role, terms[i]);
+            }
+            string sql = others.size() == 1
+                ? getExpressionArg(\info, role, others[0], AbstractDataProviderTypeMap."date")
+                : default_code(\info, role, others);
+            for (int i = 0; i < count; ++i) {
+                sql = sprintf("dateadd(%s %s to %s)", amounts[count - 1 - i],
+                    terms[i].unit == "microsecond" ? "millisecond" : terms[i].unit, sql);
+            }
+            return sql;
+        }
+
+        #! returns the SQL of the amount of a term of a duration for dateadd()
+        private string getDurationAmountSql(reference<hash<QueryInfo>> info, int role, hash<FirebirdDurationTerm> term) {
+            auto amount = term.amount;
+            # the cast of microseconds to a fraction of milliseconds gives a value its type
+            if (term.unit == "microsecond" && firebird_is_bound_value(amount)) {
+                amount = <FirebirdInferredValue>{"value": amount};
+            }
+            string sql = term.amount_sql ?? getExpressionArg(\info, role, amount, AbstractDataProviderTypeMap."int");
+            if (term.unit == "microsecond") {
+                # a fraction of a millisecond in tenths, the precision of a Firebird timestamp
+                sql = sprintf("cast(%s as numeric(18,1)) / 1000", sql);
+            }
+            return term.negate ? sprintf("-(%s)", sql) : sql;
+        }
+
+        #! returns the SQL of an average
+        /** Firebird gives the average of an integer or an exact numeric in its type, so that the average of 1 and 2
+            is 1; such an average is given exact, as on other databases: in a \c DECFLOAT(34) from Firebird 4 on, which
+            is a number, and in <tt>DOUBLE PRECISION</tt> on Firebird 3, which has no \c DECFLOAT, so that it is a
+            float.  The average of any other type, such as a float, is as Firebird gives it.
+
+            @param exp the SQL of the expression averaged
+            @param exact @ref True "True" if the expression is an integer or an exact numeric, @ref False "False" or
+            no value if it is not or if its type is not known
+
+            @return the SQL of the average
+
+            @since XdbcFirebirdSqlUtilBase 0.2
+        */
+        string getAvgSql(string exp, *bool exact) {
+            if (!exact) {
+                return sprintf("avg(%s)", exp);
+            }
+            return sprintf("avg(cast(%s as %s))", exp, getServerMajorVersion() >= 4 ? "decfloat(34)" : "double precision");
+        }
+
+        #! returns if an argument of an expression is an integer or an exact numeric
+        /** @param info the query information
+            @param arg the argument: a column of the table or of a joined table, an expression or a value
+
+            @return @ref True "True" for a column of an integer or exact numeric type, an expression that returns an
+            integer or a number, or an integer or a number value; @ref False "False" for any other column, expression
+            or value of a known type; no value if the type is not known, as for an alias
+
+            @since XdbcFirebirdSqlUtilBase 0.2
+        */
+        *bool isExactNumericArg(hash<QueryInfo> info, auto arg) {
+            if (arg instanceof hash<DataProviderFieldReference>) {
+                string name = arg.field;
+                name =~ s/^[0-9]+://;
+                *AbstractColumn c;
+                *string alias = (name =~ x/^(\w+)\./)[0];
+                if (alias) {
+                    *AbstractTable t = info.join_map{alias};
+                    if (!t) {
+                        return;
+                    }
+                    Columns cols = t.describe();
+                    string col = name.substr(alias.size() + 1);
+                    if (cols.hasKey(col)) {
+                        c = cols{col};
+                    }
+                } else if (columns.hasKey(name)) {
+                    c = columns{name};
+                }
+                return c ? XdbcFirebirdTable::isExactNumericColumn(c) : NOTHING;
+            }
+            if (arg instanceof hash<DataProviderExpression>) {
+                *hash<auto> exp = info.expression_map{arg.exp} ?? info.expression_map{OperatorAliasMap{arg.exp}};
+                switch (exp.exp.return_type ? exp.exp.return_type.getBaseTypeCode() : NT_ALL) {
+                    case NT_INT:
+                    case NT_NUMBER:
+                        return True;
+                    case NT_ALL:
+                        return;
+                }
+                return False;
+            }
+            switch (arg.typeCode()) {
+                case NT_INT:
+                case NT_NUMBER:
+                    return True;
+                case NT_NOTHING:
+                case NT_NULL:
+                    return;
+            }
+            return False;
+        }
+
+        #! returns if a column has an integer or an exact numeric type
+        /** @param c the column
+
+            @return @ref True "True" if the column is a \c SMALLINT, an \c INTEGER, a \c BIGINT, an \c INT128, a
+            \c NUMERIC or a \c DECIMAL
+
+            @since XdbcFirebirdSqlUtilBase 0.2
+        */
+        static bool isExactNumericColumn(AbstractColumn c) {
+            return inlist(c.native_type.lwr(), ("smallint", "integer", "int", "bigint", "int128", "numeric",
+                "decimal"));
+        }
+
+        #! returns the SQL that casts an expression to a type
+        /** @param exp the SQL of the expression
+            @param type a Qore type name, such as \c "string", or a Firebird type
+            @param size the size of the type, or the precision of a \c NUMERIC or a \c DECIMAL; a character type
+            without a size has the largest size that it can have in the default character set of the database (see
+            getMaxVarcharLength()), and a binary type the largest size in bytes
+            @param scale the scale of a \c NUMERIC or a \c DECIMAL
+
+            @return the SQL that casts the expression to the type
+
+            @throw OPERATOR-ERROR the type needs a size, and none is given
+
+            @since XdbcFirebirdSqlUtilBase 0.2 a character type without a size has the largest size of the default
+            character set of the database; before, it had the size in bytes, which Firebird refused in a character set
+            of more than one byte per character, such as \c UTF8
+        */
+        string getCastSql(string exp, string type, auto size, auto scale) {
+            return XdbcFirebirdTable::getCastSql(exp, type, size, scale, \getDatabaseBytesPerCharacter());
+        }
+
+        #! returns the SQL that casts an expression to a type, with the number of bytes per character of the database
+        /** @param exp the SQL of the expression
+            @param type a Qore type name, such as \c "string", or a Firebird type
+            @param size the size of the type, or the precision of a \c NUMERIC or a \c DECIMAL; a character type
+            without a size has the largest size that it can have in the character set, and a binary type the largest
+            size in bytes
+            @param scale the scale of a \c NUMERIC or a \c DECIMAL
+            @param bytes_per_character returns the number of bytes per character of the character set; called only
+            for a character type without a size
+
+            @return the SQL that casts the expression to the type
+
+            @throw OPERATOR-ERROR the type needs a size, and none is given
+
+            @since XdbcFirebirdSqlUtilBase 0.2
+        */
+        static string getCastSql(string exp, string type, auto size, auto scale, code<int()> bytes_per_character) {
+            string name = QoreTypeMap{type} ?? type;
+            *hash<auto> desc = XdbcFirebirdTypeMap{name};
+            string sql = sprintf("cast (%s as %s", exp, name);
+            if (desc.size == SZ_MAND) {
+                if (!exists size) {
+                    if (!exists desc.size_range) {
+                        throw "OPERATOR-ERROR", sprintf("cast operator missing size for type %s", name);
+                    }
+                    # the size range of a character type is in bytes
+                    size = desc.is_char
+                        ? desc.size_range[1] / bytes_per_character()
+                        : desc.size_range[1];
+                }
+                sql += sprintf("(%d)", size);
+            } else if (desc.size == SZ_NUM && exists size) {
+                sql += size == "*" ? "(*" : sprintf("(%d", size);
+                sql += exists scale ? sprintf(",%d)", scale) : ")";
+            } else if (desc.size == SZ_OPT && exists size) {
+                sql += sprintf("(%d)", size);
+            }
+            return sql + ")";
+        }
+
+        #! returns the name of the table to be used in SQL, as getSqlIdentifier() returns it
+        /** @since XdbcFirebirdSqlUtilBase 0.2 a name that is not an ordinary name is quoted in upper case and escaped
+        */
         string getSqlName() {
-            return name;
+            return firebird_get_sql_identifier(name);
+        }
+
+        #! returns a name as an SQL identifier for Firebird
+        /** @copydetails XdbcFirebirdDatabase::getSqlIdentifier()
+        */
+        string getSqlIdentifier(string name) {
+            return firebird_get_sql_identifier(name);
+        }
+
+        #! returns an alias for SQL: in double quotes, in the case given, with each double quote doubled
+        /** An alias names a key of the result, so it is given in double quotes as before, also when it is an ordinary
+            name, and is not given in upper case as other names that need quotes are
+
+            @since XdbcFirebirdSqlUtilBase 0.2
+        */
+        string getAliasSqlName(string alias) {
+            return AbstractSqlUtilBase::getDelimitedIdentifier(alias, "\"", "\"", "Firebird");
         }
 
         #! returns the column operator map for this object
+        /** @since XdbcFirebirdSqlUtilBase 0.2 \c cop_cast() gives a character type without a size the largest size
+            of the default character set of the database (see getCastSql()), and \c cop_avg() of an integer or exact
+            numeric column of the table or of a joined table is exact (see getAvgSql())
+        */
         private hash getColumnOperatorMapImpl() {
-            return XdbcFirebirdCopMap;
+            return XdbcFirebirdCopMap + {
+                COP_CAST: XdbcFirebirdCopMap{COP_CAST} + {
+                    "code": string sub (string cve, list<auto> args) {
+                        return getCastSql(cve, args[0], args[1], args[2]);
+                    },
+                },
+                # the average of an integer or an exact numeric column of the table or of a joined table is exact
+                # (see getAvgSql()); the type of the column is given by the column designator of the operator
+                COP_AVG: DefaultCopMap{COP_AVG} + {
+                    "withcolumn": True,
+                    "code": string sub (string cve, auto arg, hash<QueryInfo> info, auto column) {
+                        return getAvgSql(cve, column.typeCode() == NT_STRING
+                            ? isExactNumericArg(info, <DataProviderFieldReference>{"field": column})
+                            : NOTHING);
+                    },
+                },
+            };
         }
 
         #! returns the "where" operator map for Firebird
@@ -1514,7 +2755,7 @@ auto v = c.name;
         private bool checkExistenceImpl() {
             *hash<auto> row = ds.selectRow("select a.rdb$relation_name as \"name\" from rdb$relations a "
                 "where coalesce(rdb$system_flag, 0) = 0 and rdb$relation_type = 0 and a.rdb$relation_name = %v",
-                name.upr());
+                firebird_get_catalog_name(name));
             if (row) {
                 return inDb = True;
             }
@@ -1526,6 +2767,7 @@ auto v = c.name;
             *hash<auto> qh = ds.select("select "
                 "   lower(rf.rdb$field_name) as \"name\", "
                 "   f.rdb$field_length as \"length\", "
+                "   f.rdb$character_length as \"char_length\", "
                 "   f.rdb$field_precision as \"precision\", "
                 "   f.rdb$field_scale as \"scale\", "
                 "   f.rdb$field_type as \"type\", "
@@ -1540,7 +2782,7 @@ auto v = c.name;
                 "   (r.rdb$system_flag is null or r.rdb$system_flag = 0) and r.rdb$view_blr is null "
                 "   and f.rdb$field_name = rf.rdb$field_source "
                 "order by "
-                "   rf.rdb$field_position", name.upr());
+                "   rf.rdb$field_position", firebird_get_catalog_name(name));
             if (!qh.name) {
                 throw "TABLE-ERROR", sprintf("cannot retrieve table information for table %y in %y", name, dsdesc);
             }
@@ -1613,6 +2855,12 @@ auto v = c.name;
                 if (typename == "numeric" || typename == "decimal") {
                     row.length = row.precision;
                 }
+                # "rdb$field_length" gives the size in bytes of a character column, which is more than the size in
+                # characters that it was declared with in a character set of more than one byte per character (four
+                # in UTF8); the declared size is "rdb$character_length"
+                else if ((typename == "char" || typename == "varchar") && row.char_length) {
+                    row.length = row.char_length;
+                }
                 if (row.scale < 0) {
                     row.scale = -row.scale;
                 }
@@ -1668,7 +2916,7 @@ from
     left join rdb$index_segments sg on ix.rdb$index_name = sg.rdb$index_name
     left join rdb$relation_constraints rc on rc.rdb$index_name = ix.rdb$index_name
 where
-    rc.rdb$constraint_type = 'PRIMARY KEY' and rc.rdb$relation_name = %v", name.upr());
+    rc.rdb$constraint_type = 'PRIMARY KEY' and rc.rdb$relation_name = %v", firebird_get_catalog_name(name));
 
             hash<auto> rv;
             foreach string col in (qh.column_name) {
@@ -1682,61 +2930,131 @@ where
                 : new XdbcFirebirdPrimaryKey();
         }
 
+        #! describes the indexes of the table from the catalog
+        /** Every index of the table is described but the index of its primary key: an index created with
+            \c CREATE \c INDEX, and the index that Firebird creates for each unique and foreign constraint, under the
+            name of the constraint, as before.  An index of an expression (\c COMPUTED \c BY) is not described, as
+            it has no columns.
+
+            @since XdbcFirebirdSqlUtilBase 0.2 an index created with \c CREATE \c INDEX is described; before, only the
+            indexes of unique and foreign constraints were
+        */
         private Indexes getIndexesImpl() {
-            hash<auto> rv;
-
-            # get index descriptions
+            # one row per column of each index, in the order of its columns; names are given in lower case, as for
+            # columns
             *hash<auto> qh = ds.select("select "
-                "   lower(ix.rdb$index_name) as \"name\", rdb$unique_flag as \"unique\" "
+                "   lower(trim(ix.rdb$index_name)) as \"name\", "
+                "   ix.rdb$unique_flag as \"unique\", "
+                "   lower(trim(sg.rdb$field_name)) as \"column_name\" "
                 "from "
-                "   rdb$indices ix, rdb$relation_constraints rc "
+                "   rdb$indices ix "
+                "   join rdb$index_segments sg on sg.rdb$index_name = ix.rdb$index_name "
+                "   left join rdb$relation_constraints rc on rc.rdb$index_name = ix.rdb$index_name "
                 "where "
-                "   rdb$system_flag = 0 and rc.rdb$index_name = ix.rdb$index_name "
-                "   and rc.rdb$constraint_type != 'PRIMARY KEY' and ix.rdb$relation_name = %v", name.upr());
-            hash<auto> ih;
+                "   coalesce(ix.rdb$system_flag, 0) = 0 and ix.rdb$relation_name = %v "
+                "   and (rc.rdb$constraint_type is null or rc.rdb$constraint_type != 'PRIMARY KEY') "
+                "order by "
+                "   ix.rdb$index_name, sg.rdb$field_position", firebird_get_catalog_name(name));
+
+            # the indexes in the order of the query, each with its columns in their order
+            hash<string, hash<auto>> ih;
             foreach hash<auto> row in (qh.contextIterator()) {
-                ih{row.name}.unique = row.unique;
-                *hash<auto> ch = ds.select("select lower(rdb$field_name) as \"cname\" from rdb$index_segments "
-                    "where rdb$index_name = %v order by rdb$field_position", row.name.upr());
-
-                foreach string col in (ch.cname) {
-                    on_error rethrow $1, sprintf("%s (index %y column %y)", $1.desc, row.name, col);
-                    ih{row.name}.columns{col} = columns{col};
+                on_error rethrow $1.err, sprintf("%s (index %y column %y)", $1.desc, row.name, row.column_name);
+                reference<hash<auto>> ix = \ih{row.name};
+                if (!ix) {
+                    ix = {"unique": boolean(row.unique), "columns": {}};
                 }
-
-                if (!ih{row.name}.columns) {
-                    throw "INDEX-ERROR", sprintf("index %y on table %y has no columns", row.name, getSqlName());
-                }
+                ix.columns{row.column_name} = columns{row.column_name};
             }
+
+            hash<string, AbstractIndex> rv;
             foreach hash<auto> i in (ih.pairIterator()) {
-                rv{i.key} = new XdbcFirebirdIndex(i.key, boolean(i.value.unique), i.value.columns);
+                rv{i.key} = new XdbcFirebirdIndex(i.key, i.value.unique, i.value.columns);
             }
-
             return new Indexes(rv);
         }
 
+        #! describes the foreign constraints of the table, with their referential actions, from the catalog
+        /** @since XdbcFirebirdSqlUtilBase 0.2 the foreign constraints are described; before, none were
+        */
         private ForeignConstraints getForeignConstraintsImpl(*hash<auto> opts) {
-            return new ForeignConstraints();
-        }
+            # one row per column of each constraint: its target column is the column of the referenced primary key
+            # or unique constraint at the same position; names are given in lower case, as for columns and indexes
+            *hash<auto> qh = ds.select("select "
+                "   lower(trim(rc.rdb$constraint_name)) as \"constraint_name\", "
+                "   lower(trim(sg.rdb$field_name)) as \"column_name\", "
+                "   lower(trim(tc.rdb$relation_name)) as \"target_table\", "
+                "   lower(trim(tsg.rdb$field_name)) as \"target_column\", "
+                "   trim(ref.rdb$delete_rule) as \"delete_rule\", "
+                "   trim(ref.rdb$update_rule) as \"update_rule\" "
+                "from "
+                "   rdb$relation_constraints rc "
+                "   join rdb$ref_constraints ref on ref.rdb$constraint_name = rc.rdb$constraint_name "
+                "   join rdb$relation_constraints tc on tc.rdb$constraint_name = ref.rdb$const_name_uq "
+                "   join rdb$index_segments sg on sg.rdb$index_name = rc.rdb$index_name "
+                "   join rdb$index_segments tsg on tsg.rdb$index_name = tc.rdb$index_name "
+                "       and tsg.rdb$field_position = sg.rdb$field_position "
+                "where "
+                "   rc.rdb$constraint_type = 'FOREIGN KEY' and rc.rdb$relation_name = %v "
+                "order by "
+                "   rc.rdb$constraint_name, sg.rdb$field_position", firebird_get_catalog_name(name));
 
-        private Constraints getConstraintsImpl() {
-            hash<auto> rv;
-
-            Constraints c = new Constraints(rv);
-            /*
-            # get unique constraints
-            *hash qh = ds.select("");
-            delete rv;
+            # the constraints in the order of the query, each with its columns in their order
+            hash<string, hash<auto>> fks;
             foreach hash<auto> row in (qh.contextIterator()) {
-                reference<XdbcFirebirdUniqueConstraint> ch = \rv.(row.constraint_name);
-                if (!ch)
-                    ch = new XdbcFirebirdUniqueConstraint(row.constraint_name, {});
-                ch.add(row.column_name, columns{row.column_name});
+                reference<hash<auto>> fk = \fks{row.constraint_name};
+                if (!fk) {
+                    fk = {
+                        "table": row.target_table,
+                        "columns": (),
+                        "target_columns": (),
+                        # the rules are given once per constraint, the same on every row
+                        "on_delete": XdbcFirebirdForeignConstraint::actionFromCatalog(row.delete_rule),
+                        "on_update": XdbcFirebirdForeignConstraint::actionFromCatalog(row.update_rule),
+                    };
+                }
+                fk.columns += row.column_name;
+                fk.target_columns += row.target_column;
             }
 
-            # add unique constraints to constraint hash
-            map c.add($1.key, $1.value), rv.pairIterator();
-            */
+            hash<string, AbstractForeignConstraint> rv;
+            foreach hash<auto> i in (fks.pairIterator()) {
+                Columns targ_columns = getReferencedTableColumnsUnlocked(i.value.table, opts.table_cache);
+                rv{i.key} = new XdbcFirebirdForeignConstraint(i.key, columns.subset(i.value.columns),
+                    new ForeignConstraintTarget(i.value.table, targ_columns.subset(i.value.target_columns)),
+                    i.value.on_delete, i.value.on_update);
+            }
+            return new ForeignConstraints(rv);
+        }
+
+        #! describes the unique constraints of the table from the catalog
+        /** @since XdbcFirebirdSqlUtilBase 0.2 unique constraints are described; before, none were, so that every table
+            alignment dropped the index of each unique constraint and added the constraint again
+        */
+        private Constraints getConstraintsImpl() {
+            # one row per column of each unique constraint, in the order of its columns; names are given in lower
+            # case, as for columns and indexes
+            *hash<auto> qh = ds.select("select "
+                "   lower(trim(rc.rdb$constraint_name)) as \"constraint_name\", "
+                "   lower(trim(sg.rdb$field_name)) as \"column_name\" "
+                "from "
+                "   rdb$relation_constraints rc "
+                "   join rdb$index_segments sg on sg.rdb$index_name = rc.rdb$index_name "
+                "where "
+                "   rc.rdb$constraint_type = 'UNIQUE' and rc.rdb$relation_name = %v "
+                "order by "
+                "   rc.rdb$constraint_name, sg.rdb$field_position", firebird_get_catalog_name(name));
+
+            # the constraints in the order of the query, each with its columns in their order
+            hash<string, hash<string, AbstractColumn>> uh;
+            foreach hash<auto> row in (qh.contextIterator()) {
+                on_error rethrow $1.err, sprintf("%s (unique constraint %y column %y)", $1.desc, row.constraint_name,
+                    row.column_name);
+                uh{row.constraint_name}{row.column_name} = columns{row.column_name};
+            }
+
+            Constraints c();
+            map c.add($1.key, new XdbcFirebirdUniqueConstraint($1.key, $1.value)), uh.pairIterator();
             return c;
         }
 
@@ -1756,7 +3074,7 @@ where
         }
 
         string getCreateTableSqlImpl(*hash<auto> opt) {
-            string sql = sprintf("create table %s (\n", name);
+            string sql = sprintf("create table %s (\n", getSqlName());
             sql += foldl $1 + ",\n" + $2, (map "  " + $1.getCreateSql(self), columns.iterator());
             sql += "\n)";
             return sql;
@@ -1807,7 +3125,7 @@ where
         private AbstractForeignConstraint addForeignConstraintImpl(string cname, hash<auto> ch, string table,
                 hash<auto> tch, *hash<auto> opt) {
             ForeignConstraintTarget fct(table, new Columns(tch));
-            return new XdbcFirebirdForeignConstraint(cname, new Columns(ch), fct);
+            return new XdbcFirebirdForeignConstraint(cname, new Columns(ch), fct, opt.on_delete, opt.on_update);
         }
 
         private AbstractCheckConstraint addCheckConstraintImpl(string cname, string src, *hash<auto> opt) {
@@ -1882,23 +3200,24 @@ where
                     # XdbcFirebird does not allow us to specify the UTC offset in the timestamp literal :(
                     TimeZone tz = TimeZone::get();
                     v = tz.date(v);
-                    return "timestamp " + v.format("'YYYY-MM-DDTHH:mm:SS.us'");
+                    # Firebird reads a "T" between the date and the time as a time zone, and a timestamp has four
+                    # fractional digits of seconds: the last two of the microseconds are left out
+                    return "timestamp '" + v.format("YYYY-MM-DD HH:mm:SS.us")[0..23] + "'";
                 }
             }
         }
 
-        #! Returns the column name for use in SQL strings
-        /** Subclasses can return a special string in case the column name is a reserved word
-
-            Firebird requires column names to be enclosed in double quotes
+        #! Returns the column name for use in SQL strings, as getSqlIdentifier() returns it
+        /** @since XdbcFirebirdSqlUtilBase 0.2 a name that is not an ordinary name is quoted in upper case and escaped;
+            before, only a reserved word was quoted
         */
         string getColumnSqlName(string col) {
-            return XdbcFirebirdDatabase::XdbcFirebirdReservedWords{col.lwr()} ? ("\"" + col + "\"") : col;
+            return firebird_get_sql_identifier(col);
         }
 
-        #! returns a list of column names for use in SQL strings; subclasses can process the argument list in case a column name is a reserved word
+        #! returns a list of column names for use in SQL strings, as getSqlIdentifier() returns them
         list<string> getColumnSqlNames(softlist<auto> cols) {
-            return map getColumnSqlName($1), cols;
+            return map firebird_get_sql_identifier($1), cols;
         }
 
         #! returns a string for use in SQL queries representing the DB-specific value of the argument

@@ -610,6 +610,17 @@ public class HttpClientConnection inherits HttpClientConnectionBase {
         return ready;
     }
 
+    #! Returns @ref True if the streams in progress on the connection can still send data
+    /** That is, if the connection is ready or draining: a server's GOAWAY ends new requests only, and the streams in
+        progress are completed (RFC 9113 section 6.8, RFC 9114 section 5.2), so their request bodies can still be sent
+
+        @since HttpClientIo 1.0
+    */
+    bool canSendOnStreams() {
+        int cs = self.getConnectionState();
+        return cs == HttpClientConnectionState::Ready || cs == HttpClientConnectionState::Draining;
+    }
+
     #! Sets the connection to draining state (GOAWAY received)
     setDraining() {
         log(LoggerLevel::DEBUG, "connection draining");
@@ -641,7 +652,15 @@ public class HttpClientConnection inherits HttpClientConnectionBase {
         return pool_key;
     }
 
-    #! Initiates connection migration (HTTP/3 only; default no-op for HTTP/2)
+    #! Migrates the connection to a new network path; only HTTP/3 connections can be migrated
+    /** This implementation makes no migration and returns @ref False; see @ref Http3ClientConnection::migrate()
+
+        @param migration_timeout the maximum time to wait for the migration to start; see
+        @ref Http3ClientConnection::migrate()
+
+        @return @ref True if the connection was migrated, @ref False if the protocol of the connection does not
+        support migration
+    */
     bool migrate(*timeout migration_timeout) {
         return False;
     }

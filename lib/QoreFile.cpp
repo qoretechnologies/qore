@@ -589,6 +589,11 @@ void QoreFile::makeSpecial(int sfd) {
     priv->fd = sfd;
 }
 
+void QoreFile::makeOwnedSpecial(int fd) {
+    makeSpecial(fd);
+    priv->owned_special = true;
+}
+
 int qore_qf_private::checkOpenAccess(const char* fn, int flags, ExceptionSink* xsink) {
     QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
     if (!smh) {

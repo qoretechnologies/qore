@@ -43,10 +43,12 @@
 
 #include "qore/intern/ThreadPool.h"
 #include "qore/intern/MpscQueue.h"
+#include "qore/intern/QoreForkHandlers.h"
 
 #include <algorithm>
 #include <atomic>
 #include <deque>
+#include <map>
 #include <memory>
 #include <queue>
 #include <set>
@@ -79,6 +81,7 @@ class AsyncIoRoutedPollable : public AbstractPollableIoObjectBase {
 public:
     //! Returns the route key that selects the I/O thread of every operation on this object
     DLLLOCAL virtual const std::string& getAsyncIoRouteKey() const = 0;
+
 };
 
 //! Lends the previous poll info hash of an operation to the C++ continuePoll() call the I/O thread makes for it
@@ -216,6 +219,12 @@ class QoreSandboxContext;
 */
 typedef std::shared_ptr<const QoreSandboxContext> AsyncIoSandboxContext;
 
+//! Captures the sandbox of the current thread for work continued on a callback worker; empty if no sandbox governs it
+/** A nested capture keeps a context that is applied, so work submitted by a step of another operation inherits that
+    operation's sandbox.
+*/
+DLLLOCAL AsyncIoSandboxContext capture_async_io_sandbox_context();
+
 class QoreCallDispatcher {
 public:
     //! Dispatch type for async work items
@@ -288,9 +297,10 @@ public:
     /** @param callback the callback code (referenced — ownership transferred)
         @param args the argument list (referenced — ownership transferred, or nullptr)
         @param owner optional owner identifier for per-owner flush tracking (empty = untracked)
+        @param sandbox_ctx the sandbox of the code that added the timer, which governs the callback
     */
     DLLLOCAL void dispatchAsync(ResolvedCallReferenceNode* callback, QoreListNode* args,
-        const std::string& owner = std::string());
+        const std::string& owner = std::string(), AsyncIoSandboxContext sandbox_ctx = AsyncIoSandboxContext());
 
     //! Dispatch continuePoll() asynchronously with result delivery back to I/O thread
     /** @param spop_obj the AbstractPollOperation object (referenced — ownership transferred)
@@ -537,9 +547,14 @@ DLLEXPORT extern const TypedHashDecl* hashdeclSocketPollResultInfo;
 */
 class AsyncIoControllerPriv : public AbstractPrivateData {
 #ifdef DEBUG
+    friend class AsyncIoAbandonedCommandLockTest;
+    friend class AsyncIoErrorCheckLockTest;
     friend class AsyncIoCloseTest;
+    friend class AsyncIoDescriptorHoldTest;
     friend class AsyncIoOpCacheTest;
     friend class AsyncIoAbandonedSubmitTest;
+    friend class AsyncIoRegistrationCloseTest;
+    friend class AsyncIoStaleReadinessTest;
     friend class AsyncIoStoppingThreadTest;
     friend class AsyncIoFrameSendTest;
 #endif
@@ -646,6 +661,19 @@ public:
 
     //! Destructor
     DLLLOCAL virtual ~AsyncIoControllerPriv();
+
+    //! returns true if the controller is used in a child process created with fork() after it was created
+    /** Its I/O threads, workers and waiters do not exist in the child, and its locks can be held by them, so the
+        controller cannot be used, stopped or destroyed there: its operations raise an exception, its waits and its
+        stop return at once, and it is not freed (see QoreForkHandlers.h).  The default controller is replaced in
+        the child (see qore_get_async_io_controller_obj()).
+    */
+    DLLLOCAL bool forked() const {
+        return fork_generation != qore_fork_get_generation();
+    }
+
+    //! raises ASYNC-IO-ERROR and returns -1 if the controller is used in a child process (see forked())
+    DLLLOCAL int checkForked(const char* method, ExceptionSink* xsink) const;
 
     //! Submit an async operation
     /** @param self the QoreObject wrapping this controller
@@ -876,6 +904,8 @@ public:
     DLLLOCAL void dispatchNativeTask(AsyncIoNativeTask* task);
 
 private:
+    //! the fork generation of the process that created the controller (see forked())
+    const unsigned fork_generation = qore_fork_get_generation();
     //! I/O thread commands
     enum class IoCommand {
         SubmitOp,            //!< Submit a new operation (carries PollInfo data)
@@ -1224,6 +1254,7 @@ private:
     struct TimerInfo {
         QoreValue udata;                //!< Referenced Qore user data
         std::string owner;              //!< Owner identifier for per-owner callback flush (empty if untracked)
+        AsyncIoSandboxContext sandbox_ctx; //!< The sandbox of the code that added the timer, for its callback
     };
 
     //! Per-I/O-thread context — each thread owns its own event loop, cache, and socket state
@@ -1343,6 +1374,9 @@ private:
         bool dbg_held = false;
         //! Test hook: signaled when \c dbg_held is set, and to release the thread
         QoreCondition dbg_cond;
+        //! Test hook: called by the thread with the controller's lock held just before it checks its command queue
+        //! for the last time before it polls its event loop; it may push a command to the queue
+        std::function<void(IoThreadContext&)> dbg_before_poll;
 #endif
 
         QoreEventLoop* loop = nullptr;
@@ -1399,9 +1433,33 @@ private:
         std::unordered_map<uint64_t, int> key_events;
         //! The IDs of the operations registered for each socket
         std::unordered_map<std::string, std::unordered_set<uint64_t>> sock_hash_to_ops;
-        std::unordered_map<int, std::string> fd_to_sock_hash;
+        //! The key of the event loop registration of each socket's descriptor, by socket hash; see regKey()
+        /** One descriptor can be registered for several objects (a socket and a controller wrapper of it, a number
+            polled for a %Qore pollable, an extra fd): each registration has its own key, so the event loop reports
+            each one's events and removing one keeps the others (see QoreEventLoop::addRegistration())
+        */
+        std::unordered_map<std::string, uint64_t> reg_keys;
+        //! The socket hash of each registration key in @ref reg_keys
+        std::unordered_map<uint64_t, std::string> key_hashes;
+        //! The next key for a socket registration; never reused, as the event loop outlives the thread's runs
+        uint64_t next_reg_key = 1;
+        //! The holds that keep the registered descriptors open, by the hash of the object registered with each
+        /** A descriptor registered in the event loop cannot be closed by another thread, so its number cannot be
+            given to another connection while the loop has it registered; see qore_socket_private::DescriptorHold.
+            Each registration (@ref registered_fds) has its own hold: one descriptor can be registered for more than
+            one object (a socket and a controller wrapper of it; a number that Socket::poll() polls for a %Qore
+            pollable or an extra fd), and a registration without a hold must not release the hold of another one
+        */
+        std::unordered_map<std::string, std::shared_ptr<void>> fd_holds;
         //! The extra fds of each operation, by operation ID
         std::unordered_map<uint64_t, std::unordered_set<int>> key_extra_fds;
+        //! The holds of the owned extra fds of operations, by operation ID and descriptor
+        /** An extra fd is registered by number; when its owner made it an owned descriptor (see
+            qore_owned_descriptor_create(): the connection attempts of happy eyeballs, the sockets of a c-ares
+            channel), the registration holds it open, so the owner's close cannot release its number before the
+            registration is removed
+        */
+        std::map<std::pair<uint64_t, int>, std::shared_ptr<void>> extra_fd_holds;
         //! Extra fd readiness is operation-scoped (by operation ID); primary socket event masks can be zero.
         std::unordered_map<int, std::unordered_map<uint64_t, int>> extra_fd_to_key_events;
 
@@ -1606,6 +1664,15 @@ private:
     */
     DLLLOCAL int64 armTimeoutHeap(IoThreadContext& t, PollInfo& pinfo);
 
+    //! Returns the absolute deadline of an operation's protocol-level poll timeout hint (\c poll_timeout_ms)
+    /** The hint is the time in which the operation must be continued even if no I/O event arrives for it; a hint of
+        0 or less is due now, as for an operation whose own deadline expired while its continuePoll() ran.
+
+        @param poll_timeout_ms the hint in milliseconds
+        @return the deadline in microseconds since the epoch, as for PollInfo::poll_timeout_deadline_us
+    */
+    DLLLOCAL static int64 getPollTimeoutDeadline(int64 poll_timeout_ms);
+
     //! cancelByKey() on one of this controller's I/O threads; never waits for another I/O thread
     /** @param uh the operation key
         @param own_idx the index of the calling I/O thread
@@ -1638,7 +1705,24 @@ private:
     }
 
     // --- Mutex-protected state (rare paths: startup, shutdown, cancel wait) ---
+#ifdef DEBUG
+    //! The controller's lock in debug builds: an error-checking mutex
+    /** A thread that takes the lock it already holds (a self-deadlock: the lock is not recursive) or that releases a
+        lock it does not hold then fails the assertion in QoreThreadLock::lock() or unlock() at once, instead of
+        waiting for itself forever.  Release builds use a plain QoreThreadLock.
+    */
+    class ErrorCheckLock : public QoreThreadLock {
+    public:
+        DLLLOCAL ErrorCheckLock() : QoreThreadLock(getAttr()) {
+        }
+
+        //! Returns the attributes the lock is created with: those of an error-checking mutex
+        DLLLOCAL static const pthread_mutexattr_t* getAttr();
+    };
+    mutable ErrorCheckLock m;
+#else
     mutable QoreThreadLock m;
+#endif
     bool autostop_flag;
     //! True if the I/O threads are external-lifecycle threads; see setExternalLifecycleThreads()
     bool external_lifecycle_threads = false;
@@ -1671,6 +1755,22 @@ private:
     */
     DLLLOCAL void releaseOffIoThread(AsyncIoDeferredRelease& refs, ExceptionSink* xsink);
 
+#ifdef DEBUG
+public:
+    //! Debug-only: holds the references that the I/O threads of every controller release off the I/O thread
+    /** Called by the dbg_async_io_hold_releases() test hook.  While held, the references handed to
+        releaseOffIoThread() on an I/O thread are kept instead of being released by a callback worker, so that a test
+        can make an object outlive the delivery of an operation's result deterministically; with @a hold = false,
+        the references held are released on the calling thread, which must not be an I/O thread.
+
+        @param hold true to hold the references from now on, false to stop holding them and release those held
+        @param xsink exception sink for the releases
+    */
+    DLLLOCAL static void dbgHoldOffIoThreadReleases(bool hold, ExceptionSink* xsink);
+
+private:
+#endif
+
     //! Start the I/O thread (caller must hold lock)
     DLLLOCAL void startIntern(ExceptionSink* xsink);
 
@@ -1694,11 +1794,14 @@ private:
         any condition-variable waiters (CancelOwner/CancelByProgram/GetInfo/
         Cancel) so callers don't hang.
 
-        @note Caller must hold @ref m — the helper touches
-        @ref cancel_cond_map (shared state) in the @ref IoCommand::Cancel
-        case.
+        @note The caller must not hold @ref m: the cleanup delivers a canceled result, logs, releases references
+        (which can run destructors) and can create the callback dispatcher, which take @ref m; it takes @ref m itself
+        to signal the waiters (@ref cancel_cond_map, completions)
     */
     DLLLOCAL void cleanupAbandonedCommand(Command& cmd, ExceptionSink* xsink);
+
+    //! Completes the completion of an abandoned command, if any; the caller holds @ref m
+    DLLLOCAL void completeAbandonedLocked(Command& cmd);
 
     //! Cancel an operation internally (delivers result, called from I/O thread)
     DLLLOCAL void doCancelIntern(PollInfo& pinfo, ExceptionSink* xsink);
@@ -1815,35 +1918,53 @@ private:
     */
     DLLLOCAL void unregisterExtraFds(IoThreadContext& t, uint64_t op_id, ExceptionSink* xsink);
 
-    //! Compute the event union for an extra fd, preserving primary socket events if the fd is also a socket fd
-    DLLLOCAL int computeExtraFdEventUnion(const IoThreadContext& t, int fd) const;
+    //! The bit that marks the event loop registration key of an operation's extra fd; see extraRegKey()
+    static constexpr uint64_t ExtraRegKeyBit = 1ULL << 63;
 
-    //! Remove one operation from an extra fd and return the remaining event union
-    DLLLOCAL int removeExtraFdKey(IoThreadContext& t, int fd, uint64_t op_id) const;
+    //! Returns the event loop registration key of the extra fds of the operation with the given ID
+    /** An operation lists a descriptor once, so the key is unique among the registrations of the descriptor; socket
+        registration keys (see regKey()) never have @ref ExtraRegKeyBit set
+    */
+    DLLLOCAL static uint64_t extraRegKey(uint64_t op_id) {
+        return op_id | ExtraRegKeyBit;
+    }
 
-    //! Remove one operation from an extra fd registration and either modify or release the fd
-    DLLLOCAL void removeExtraFdKeyRegistration(IoThreadContext& t, int fd, uint64_t op_id,
-        const std::string& expected_hash, ExceptionSink* xsink);
+    //! Returns the event loop registration key of the socket with the given hash, making one if it has none
+    DLLLOCAL uint64_t regKey(IoThreadContext& t, const std::string& sock_hash);
 
-    //! Release an old fd from event loop tracking, if still owned by expected_hash
-    /** Safely removes \c old_fd from the kqueue/epoll registration and erases
-        \c fd_to_sock_hash[old_fd], but only if the current owner of that fd is
-        still \c expected_hash.
+    //! Removes the registration of an operation's extra fd from the event loop
+    DLLLOCAL void removeExtraFdRegistration(IoThreadContext& t, int fd, uint64_t op_id, ExceptionSink* xsink);
 
-        This guards against the fd-recycling race: when a socket is closed and
-        its fd is later reused by a new socket, a late cleanup of the original
-        socket must not clobber the new owner's tracking or deregister its
-        kqueue filter.  If \c fd_to_sock_hash[old_fd] has moved to a different
-        hash, leave everything untouched.
+    //! Removes the event loop registration of the socket with the given hash for the given descriptor, if any
+    /** Only the socket's own registration is removed: another object's registration of the same descriptor, or of a
+        descriptor that got the number after the socket's was closed, is left as it is (see
+        QoreEventLoop::removeRegistration()).
 
         @param t the I/O thread context
-        @param old_fd the fd to release
-        @param expected_hash the sock_hash that should currently own \c old_fd
+        @param old_fd the descriptor registered for the socket
+        @param expected_hash the socket hash
         @param xsink exception sink
         @since %Qore 3.0
     */
     DLLLOCAL void releaseFdIfOwner(IoThreadContext& t, int old_fd,
         const std::string& expected_hash, ExceptionSink* xsink);
+
+    //! Adds the descriptor of an I/O object to the event loop of an I/O thread and records it for the socket hash
+    /** The descriptor is held open while it is registered (see AbstractPollableIoObjectBase::holdPollableDescriptor()),
+        so a close made by another thread cannot release its number to another object before the I/O thread has
+        removed it from its event loop.
+
+        @return 0 if the descriptor was added, -1 if not because the socket no longer has it (it was closed or
+        replaced; its number may already belong to another connection)
+    */
+    DLLLOCAL int addSocketFd(IoThreadContext& t, AbstractPollableIoObjectBase* s, QoreObject* socket,
+        const std::string& sock_hash, int fd, int events, ExceptionSink* xsink);
+
+    //! Forgets the registration of the descriptor of the object with the given hash and releases its hold
+    /** Called once the descriptor has been removed from the event loop (see releaseFdIfOwner()), or when it is not
+        the object's any more; a close made by another thread meanwhile closes the descriptor now
+    */
+    DLLLOCAL void eraseRegisteredFd(IoThreadContext& t, const std::string& sock_hash);
 
     //! Compute the event union for a socket
     DLLLOCAL int computeEventUnion(const IoThreadContext& t, const std::string& sock_hash) const;

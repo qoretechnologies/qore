@@ -49,6 +49,7 @@
 #cmakedefine HAVE_CLOCK_GETTIME
 #cmakedefine HAVE_DECL_STRERROR_R
 #cmakedefine HAVE_DOPRNT
+#cmakedefine HAVE_EPOLL_PWAIT2
 #cmakedefine HAVE_EXP2
 #cmakedefine HAVE_FLOOR
 #cmakedefine HAVE_FORK
@@ -88,6 +89,7 @@
 #cmakedefine HAVE_MKFIFO
 #cmakedefine HAVE_NANOSLEEP
 #cmakedefine HAVE_POLL
+#cmakedefine HAVE_PPOLL
 #cmakedefine HAVE_POSIX_SPAWN
 #cmakedefine HAVE_PTHREAD_ATTR_GETSTACK
 #cmakedefine HAVE_PTHREAD_ATTR_GETSTACKSIZE

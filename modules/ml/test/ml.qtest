@@ -208,6 +208,10 @@ public class MlTest inherits QUnit::Test {
         addTestCase("OnnxSessionPool async dynamic error statistics", \onnxSessionPoolAsyncDynamicErrorStatsTest());
         addTestCase("OnnxSessionPool async leader TID", \onnxSessionPoolAsyncLeaderTidTest());
         addTestCase("OnnxSessionPool async leader cancellation", \onnxSessionPoolAsyncLeaderCancelTest());
+        addTestCase("OnnxSessionPool async request is governed by the submitter's sandbox",
+            \onnxSessionPoolAsyncSandboxInterruptTest());
+        addTestCase("OnnxSessionPool async batches are isolated per submitter sandbox",
+            \onnxSessionPoolAsyncSandboxIsolationTest());
         addTestCase("OnnxModel single value inference", \onnxSingleValueTest());
         addTestCase("OnnxModel error cases", \onnxErrorTest());
         addTestCase("OnnxModel bytes constructor", \onnxBytesConstructorTest());
@@ -5425,6 +5429,87 @@ bool sub identity_complete(string path, *hash<auto> config) {
         Future<hash<auto>> f5 = pool.runAsync({"X": ((5.0,),)});
         assertFloat(9.0, f4.get(60s).Y[0], 1e-5);
         assertFloat(11.0, f5.get(60s).Y[0], 1e-5);
+    }
+
+    #! the code a submitter with its own sandbox runs: it submits one async request to a shared pool
+    const SubmitterSource = "%new-style
+%require-types
+%strict-args
+Future sub submit(object pool, hash<auto> inputs, *softlist<auto> outputs) {
+    return pool.runAsync(inputs, outputs);
+}
+";
+
+    #! returns a Program with a SandboxManager whose filesystem policy allows everything (so only the interrupt acts)
+    private Program submitterProgram(SandboxManager sm) {
+        Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS);
+        sm.setFilesystemDefaultPolicy(True);
+        p.setSandboxManager(sm);
+        p.parse(SubmitterSource, "submitter");
+        return p;
+    }
+
+    onnxSessionPoolAsyncSandboxInterruptTest() {
+        if (skipOnnx()) {
+            return;
+        }
+        # the pool's dynamic-batch leader runs a request under the sandbox of the code that submitted it: an
+        # interrupt of that sandbox ends the request with PROGRAM-INTERRUPTED.  Before this, the leader ran with no
+        # sandbox, so the interrupt never reached it and the request ran to completion.
+        ML::OnnxSessionPool pool(getTestModelPath(), <ML::OnnxSessionConfig>{"providers": ()},
+            {"max_sessions": 1, "dynamic_batch_size": 2, "dynamic_batch_wait_ms": 3600000});
+
+        SandboxManager sm();
+        Program p = submitterProgram(sm);
+
+        # the first request starts the leader, which waits for a second request like it
+        Future f1 = p.callFunction("submit", pool, {"X": ((1.0,),)});
+        assertTrue(pool.getPoolStats().async_leader_tid > 0, "leader started");
+        # interrupt the submitter's sandbox while the leader waits
+        sm.requestInterrupt();
+        # a second request like the first completes the batch; the leader applies the batch's sandbox and sees the
+        # interrupt
+        Future f2 = p.callFunction("submit", pool, {"X": ((2.0,),)});
+        assertThrows("PROGRAM-INTERRUPTED", sub () { f1.get(60s); }, NOTHING, "request 1");
+        assertThrows("PROGRAM-INTERRUPTED", sub () { f2.get(60s); }, NOTHING, "request 2");
+        sm.clearInterrupt();
+
+        # a later request from a fresh sandbox is served normally
+        Program p2 = submitterProgram(new SandboxManager());
+        Future f3 = p2.callFunction("submit", pool, {"X": ((4.0,),)});
+        Future f4 = p2.callFunction("submit", pool, {"X": ((5.0,),)});
+        assertFloat(9.0, f3.get(60s).Y[0], 1e-5);
+        assertFloat(11.0, f4.get(60s).Y[0], 1e-5);
+    }
+
+    onnxSessionPoolAsyncSandboxIsolationTest() {
+        if (skipOnnx()) {
+            return;
+        }
+        # the leader batches only requests submitted under the same sandbox and runs each batch under that sandbox:
+        # interrupting one submitter's sandbox ends only its batch; another submitter's requests go on
+        ML::OnnxSessionPool pool(getTestModelPath(), <ML::OnnxSessionConfig>{"providers": ()},
+            {"max_sessions": 1, "dynamic_batch_size": 2, "dynamic_batch_wait_ms": 3600000});
+
+        SandboxManager sm_a();
+        Program a = submitterProgram(sm_a);
+        Program b = submitterProgram(new SandboxManager());
+
+        # submitter A starts the leader and A's interrupt is requested; A's batch needs a second A request
+        Future a1 = a.callFunction("submit", pool, {"X": ((1.0,),)});
+        assertTrue(pool.getPoolStats().async_leader_tid > 0, "leader started");
+        # B's request is under a different sandbox, so it is never batched with A's and waits its turn
+        Future b1 = b.callFunction("submit", pool, {"X": ((2.0,),)});
+        sm_a.requestInterrupt();
+        # complete A's batch: it is rejected with A's interrupt
+        Future a2 = a.callFunction("submit", pool, {"X": ((3.0,),)});
+        assertThrows("PROGRAM-INTERRUPTED", sub () { a1.get(60s); }, NOTHING, "A request 1");
+        assertThrows("PROGRAM-INTERRUPTED", sub () { a2.get(60s); }, NOTHING, "A request 2");
+        # complete B's batch: B is not interrupted, so it runs
+        Future b2 = b.callFunction("submit", pool, {"X": ((4.0,),)});
+        assertFloat(5.0, b1.get(60s).Y[0], 1e-5);
+        assertFloat(9.0, b2.get(60s).Y[0], 1e-5);
+        sm_a.clearInterrupt();
     }
 
     onnxSessionPoolAsyncDynamicErrorStatsTest() {

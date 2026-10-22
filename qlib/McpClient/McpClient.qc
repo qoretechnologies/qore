@@ -2630,6 +2630,12 @@ public class McpClient {
     #! Internal: Parses SSE events from a complete response body
     private hash<auto> parseSseResponseBody(auto body, int request_id) {
         string body_str = body.typeCode() == NT_BINARY ? body.toString() : string(body);
+        # as the event stream format requires, one leading byte order mark is ignored, and a line ends with CRLF, LF or
+        # CR, so the line endings are made LF before the stream is split into events at blank lines
+        if (body_str.substr(0, 1) == "\ufeff") {
+            body_str = body_str.substr(1);
+        }
+        body_str = Qore::replace(Qore::replace(body_str, "\r\n", "\n"), "\r", "\n");
         # Split by double-newline (SSE event boundaries)
         list<string> event_blocks = body_str.split("\n\n");
         for (int i = 0; i < event_blocks.size(); ++i) {

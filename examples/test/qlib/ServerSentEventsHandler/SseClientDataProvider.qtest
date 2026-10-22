@@ -217,7 +217,7 @@ public class Main inherits QUnit::Test {
         on_exit http.stop();
         http.setHandler("sse", "", NOTHING, handler);
         http.setDefaultHandler("sse", handler);
-        port = http.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        port = http.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
 
         set_return_value(main());
     }
@@ -349,7 +349,7 @@ public class Main inherits QUnit::Test {
 
         # a closed port
         HttpServer tmp(<HttpServerOptionInfo>{});
-        int closed_port = tmp.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        int closed_port = tmp.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
         tmp.stop();
         prov = new ServerSentEventClientDataProvider({"url": "sse://localhost:" + closed_port});
         assertThrows("HTTPCLIENT-CONNECT-ERROR", \prov.observersReady());
@@ -410,7 +410,7 @@ public class Main inherits QUnit::Test {
         on_exit server.stop();
         server.setHandler("sse-handler", "", NOTHING, sse);
         server.setDefaultHandler("sse-handler", sse);
-        int sse_port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        int sse_port = server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
 
         ServerSentEventClientDataProvider prov({
             "url": "sse://localhost:" + sse_port,
@@ -643,7 +643,7 @@ public class Main inherits QUnit::Test {
         on_exit server.stop();
         server.setHandler("sse-immediate", "", NOTHING, sse);
         server.setDefaultHandler("sse-immediate", sse);
-        int sse_port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        int sse_port = server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
 
         for (int i = 0; i < 20; ++i) {
             OrderObserver observer();

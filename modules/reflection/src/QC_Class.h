@@ -3,7 +3,7 @@
 /*
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -34,7 +34,12 @@
 
 #include "QC_AbstractClass.h"
 
-DLLLOCAL int check_constructor(const QoreClass* cls, ExceptionSink* xsink);
+//! Checks a class whose object is created through reflection against the caller and the reflection object's Program
+/** Raises CREATE-OBJECT-ERROR unless the caller and \a target both allow the class's functional domain, by the same
+    rule as a class named in source code (see QoreReflectionCaller)
+*/
+DLLLOCAL int check_constructor(const QoreReflectionCaller& caller, const QoreClass* cls, const QoreProgram* target,
+        ExceptionSink* xsink);
 
 DLLEXPORT extern qore_classid_t CID_CLASS;
 DLLLOCAL extern QoreClass* QC_CLASS;

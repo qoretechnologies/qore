@@ -392,9 +392,13 @@ QoreHashNode* ProtobufHelper::mapFieldToHash(const Message& msg, const FieldDesc
             return nullptr;
         }
 
-        // a string key with a NUL character raises HASH-KEY-ERROR; it cannot be a hash key, and cut at the NUL
-        // character, it would merge entries
-        if (hash->setKeyValue(key_str, val.release(), xsink)) {
+        // a string key with a NUL character cannot be a hash key, and cut at the NUL character, it would merge
+        // entries, so the message cannot be decoded to a hash
+        if (QoreHashNode::checkKey(key_str.data(), key_str.size(), "PROTOBUF-DECODE-ERROR", "protobuf map key",
+                xsink)) {
+            return nullptr;
+        }
+        if (hash->setKeyValue(key_str.c_str(), val.release(), xsink)) {
             return nullptr;
         }
     }

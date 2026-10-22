@@ -1,0 +1,230 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+# the "cppapiuser" test module is built into the build tree by examples/test/module-cpp-api/CMakeLists.txt and is not
+# installed, so QORE_MODULE_DIR must include the build tree (run_tests.sh does this); it provides waitpid()
+%requires cppapiuser
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ../../ExecModeHarness.qm
+
+%exec-class ForkThreadChurnTest
+
+#! Tests that a child process created with fork() while other threads start and exit can run Qore code
+/** A child process created with fork() runs only the thread that called fork(); a lock that another thread held at
+    that moment stayed locked in the child forever.  Threads take the lock of the thread list when they start and
+    exit, and QoreSignalManager::postFork() needs it to start the signal thread in the child, so a child created while
+    another thread started or exited waited forever in fork() itself.  The library's fork handlers now acquire its
+    process-wide locks before the process is copied and re-initialize them in the child.
+
+    Churn threads start threads one after another, each of which exits at once, while the main thread creates the
+    children; each child runs Qore code that takes process-wide locks (the environment, character encodings, time
+    zones, starting and waiting for a thread) and exits with the number of failed checks.  The iteration counts are
+    fixed (the churn threads stop when the children have been created, or after a fixed number of threads); a
+    child that waits forever makes the test wait forever, which is how the failure shows (the test runner's time
+    limit is only a guard).
+
+    The other cases cover the services whose threads do not exist in a child: the JIT background compiler, which a
+    child's exit stopped by waiting for its thread, and the I/O threads of the default async I/O controller, which a
+    child's first socket operation waited for.
+*/
+class ForkThreadChurnTest inherits QUnit::Test {
+    #! the number of threads that start threads while the children are created
+    const Churners = 4;
+    #! the maximum number of threads that each churn thread starts
+    const MaxGenerations = 100000;
+    #! the number of child processes
+    const Forks = 100;
+
+    constructor() : QUnit::Test("ForkThreadChurnTest", "1.0", \ARGV) {
+        addTestCase("fork() while threads start and exit", \testForkChurn());
+        addTestCase("fork() without other threads", \testForkQuiet());
+        addTestCase("a fork() outside Qore's fork() leaves signal handling usable", \testForeignFork());
+        addTestCase("a child exits after the JIT background compiler ran in the parent", \testForkAfterBgJit());
+        addTestCase("a child uses socket I/O after the parent did", \testForkSocketIo());
+        set_return_value(main());
+    }
+
+    testForkChurn() {
+        if (!Option::HAVE_FORK) {
+            testSkip("fork() is not available");
+        }
+        Counter start(1);
+        Counter forking(1);
+        Queue results();
+        for (int t = 0; t < Churners; ++t) {
+            background runChurn(start, forking, results);
+        }
+        start.dec();
+        list<int> rcs = ();
+        {
+            # the churn threads stop once all children have been created, also if an assertion fails
+            on_exit forking.dec();
+            for (int i = 0; i < Forks; ++i) {
+                rcs += forkChild(i);
+            }
+        }
+        int generations = 0;
+        for (int t = 0; t < Churners; ++t) {
+            generations += results.get();
+        }
+        assertGt(0, generations, "threads were started while the children were created");
+        assertEq((map 0, xrange(Forks)), rcs, "every child ran its code and exited normally");
+    }
+
+    testForkQuiet() {
+        if (!Option::HAVE_FORK) {
+            testSkip("fork() is not available");
+        }
+        # the positive control: no other thread starts or exits
+        assertEq(0, forkChild(-1));
+    }
+
+    testForeignFork() {
+        if (!Option::HAVE_FORK || !Option::HAVE_SIGNAL_HANDLING) {
+            testSkip("fork() or signal handling is not available");
+        }
+        # the signal thread does not exist in the child of a fork() that Qore's fork() did not make: changing a signal
+        # handler there waited forever for it
+        int rc = cpp_api_fork_and_call(int sub () {
+            set_signal_handler(SIGUSR2, sub (int sig) {});
+            remove_signal_handler(SIGUSR2);
+            return 0;
+        });
+        assertEq(0, rc, "the child changed a signal handler");
+        # and the parent's signal handling is unchanged
+        Queue q();
+        set_signal_handler(SIGUSR2, sub (int sig) { q.push(sig); });
+        on_exit remove_signal_handler(SIGUSR2);
+        kill(getpid(), SIGUSR2);
+        assertEq(SIGUSR2, q.get(), "the parent's signal handler ran");
+    }
+
+    testForkAfterBgJit() {
+        if (!Option::HAVE_FORK) {
+            testSkip("fork() is not available");
+        }
+        # the thread of the JIT background compiler does not exist in the child: stopping the compiler at the child's
+        # exit waited forever for it
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string scenario = get_script_dir() + DirSep + "ForkAfterBgJitScenario.qr";
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s --exec-mode=tiered %s",
+            qore_bin, scenario));
+        on_error printf("scenario output:\n%s\n", r.out);
+        # the symbol of a compiled function is its name followed by a suffix that makes it unique
+        assertTrue((select r.trace, $1 =~ /^\[BG-JIT\] compiled 'hot[@']/).size() > 0,
+            "the background compiler compiled a function before fork()");
+        assertEq(0, r.rc, "the scenario exited normally");
+        assertEq("child-status=0", trim(r.stdout), "the child exited normally");
+    }
+
+    testForkSocketIo() {
+        if (!Option::HAVE_FORK) {
+            testSkip("fork() is not available");
+        }
+        # socket I/O runs on the threads of the default async I/O controller, which do not exist in the child: the
+        # child's first socket operation waited forever for them
+        Socket server();
+        server.bindINET("127.0.0.1", 0, False, AF_INET);
+        server.listen();
+        int port = server.getSocketInfo().port;
+        assertEq("parent", exchange(server, port, "parent"), "the parent used sockets");
+        int pid = fork();
+        if (!pid) {
+            int failed = 0;
+            try {
+                if (exchange(server, port, "child") != "child") {
+                    ++failed;
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                stderr.printf("child: %s: %s\n", ex.err, ex.desc);
+                ++failed;
+            }
+            exit(failed);
+        }
+        assertGt(0, pid, "fork() succeeded");
+        assertEq(0, cpp_api_wait_child(pid), "the child used sockets");
+        assertEq("parent again", exchange(server, port, "parent again"), "the parent still uses sockets");
+    }
+
+    #! sends a message to the server, which returns it from a thread, and returns the answer
+    private string exchange(Socket server, int port, string msg) {
+        Queue q();
+        background sub () {
+            try {
+                Socket conn = server.accept();
+                conn.send(conn.recv(msg.size()));
+                conn.close();
+                q.push("ok");
+            } catch (hash<ExceptionInfo> ex) {
+                q.push(sprintf("%s: %s", ex.err, ex.desc));
+            }
+        }();
+        Socket client();
+        client.connect("127.0.0.1:" + port);
+        client.send(msg);
+        string rv = client.recv(msg.size());
+        client.close();
+        assertEq("ok", q.get(), "the server answered");
+        return rv;
+    }
+
+    #! creates a child process that runs childMain() and returns its exit status
+    private int forkChild(int i) {
+        int pid = fork();
+        if (!pid) {
+            childMain(i);
+        }
+        assertGt(0, pid, "fork() succeeded");
+        return cpp_api_wait_child(pid);
+    }
+
+    #! the child: runs Qore code that takes process-wide locks, then exits with the number of failed checks
+    private childMain(int i) {
+        int failed = 0;
+        try {
+            # the environment
+            string name = sprintf("QORE_FORK_CHURN_%d_%d", getpid(), i);
+            if (setenv(name, "child") || getenv(name) != "child") {
+                ++failed;
+            }
+            # character encodings
+            if (convert_encoding("äöü", "ISO-8859-1").encoding() != "ISO-8859-1") {
+                ++failed;
+            }
+            # time zones
+            TimeZone tz("Europe/Prague");
+            if (tz.region() != "Europe/Prague") {
+                ++failed;
+            }
+            # a thread started in the child
+            Counter c(1);
+            background c.dec();
+            c.waitForZero();
+        } catch (hash<ExceptionInfo> ex) {
+            ++failed;
+        }
+        exit(failed);
+    }
+
+    #! starts threads one after another, each of which exits at once, until the children have been created
+    private runChurn(Counter start, Counter forking, Queue results) {
+        int generations = 0;
+        try {
+            start.waitForZero();
+            while (forking.getCount() && generations < MaxGenerations) {
+                Counter done(1);
+                background done.dec();
+                done.waitForZero();
+                ++generations;
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            stderr.printf("churn thread: %s: %s\n", ex.err, ex.desc);
+        }
+        results.push(generations);
+    }
+}

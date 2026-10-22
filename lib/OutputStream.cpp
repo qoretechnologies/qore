@@ -32,6 +32,8 @@
 #include <qore/Qore.h>
 #include <qore/OutputStream.h>
 
+#include <climits>
+
 #ifdef HAVE_POLL
 #include <poll.h>
 #else
@@ -65,7 +67,13 @@ int64 OutputStream::writeWithTimeout(const void* ptr, int64 count, int64 timeout
     pfd.events = POLLOUT;
     pfd.revents = 0;
 
-    int rv = poll(&pfd, 1, static_cast<int>(timeout_ms));
+    // the wait ends at once when the thread is cancelled or its Program is interrupted; qore_cancellable_poll() also
+    // resumes it after EINTR and waits on a named pipe with select(2) on Darwin (see QorePollCompat.h)
+    int rv = qore_cancellable_poll(&pfd, 1, timeout_ms > INT_MAX ? INT_MAX : static_cast<int>(timeout_ms), xsink,
+        "stream write");
+    if (rv == QORE_POLL_CANCELLED) {
+        return -1;
+    }
     if (rv < 0) {
         xsink->raiseException("OUTPUT-STREAM-ERROR", "poll() failed: %s", strerror(errno));
         return -1;

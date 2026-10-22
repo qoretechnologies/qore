@@ -1,6 +1,8 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
 # MCP Test Server for integration testing with official MCP clients
 
 %modern
@@ -174,7 +176,7 @@ sub main() {
     server.setDefaultHandler("mcp", handler);
 
     # Add listener
-    hash<auto> listener_info = server.addListener(<HttpListenerOptionInfo>{"service": port});
+    hash<auto> listener_info = server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": port});
     int actual_port = listener_info.port;
 
     # Write port to a file if specified (primary method for test harness)

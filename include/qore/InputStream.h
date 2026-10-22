@@ -161,7 +161,9 @@ public:
     /**
       * @brief Read with timeout in milliseconds. -1 = blocking, 0 = non-blocking poll.
       *
-      * Default implementation uses getPollableDescriptor() + poll() + readNonBlock().
+      * Default implementation uses getPollableDescriptor() + qore_cancellable_poll() + readNonBlock(): the wait
+      * for a positive timeout ends at once with \c THREAD-CANCELLED or \c PROGRAM-INTERRUPTED when the thread is
+      * cancelled or its Program is interrupted (see qore_cancellable_poll()).
       * For non-pollable streams that don't support non-blocking I/O, a positive timeout
       * falls back to readNonBlock() (safe for memory-backed streams that never block).
       * Throws INPUT-STREAM-ERROR only for streams that claim non-blocking support

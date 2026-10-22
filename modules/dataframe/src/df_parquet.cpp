@@ -1621,9 +1621,14 @@ static QoreValue arrowScalarToQore(const std::shared_ptr<arrow::Array>& array,
                 if (*xsink) {
                     return QoreValue();
                 }
-                // the field name is converted to a QoreString key, which raises HASH-KEY-ERROR for a name with a NUL
-                // character
-                if (hash->setKeyValue(struct_type->field(i)->name(), child_val, xsink)) {
+                // a field name with a NUL character cannot be a hash key; the value cannot be read to a hash
+                const std::string& field_name = struct_type->field(i)->name();
+                if (QoreHashNode::checkKey(field_name.data(), field_name.size(), "DATAFRAME-IO-ERROR",
+                        "struct field name", xsink)) {
+                    child_val.discard(xsink);
+                    return QoreValue();
+                }
+                if (hash->setKeyValue(field_name.c_str(), child_val, xsink)) {
                     return QoreValue();
                 }
             }
@@ -1699,8 +1704,9 @@ static QoreValue arrowScalarToQore(const std::shared_ptr<arrow::Array>& array,
                     return QoreValue();
                 }
                 QoreStringValueHelper key_str(*key_val);
-                // a map key with a NUL character cannot be a hash key
-                if (QoreHashNode::checkKey(key_str->c_str(), key_str->size(), xsink)) {
+                // a map key with a NUL character cannot be a hash key; the value cannot be read to a hash
+                if (QoreHashNode::checkKey(key_str->c_str(), key_str->size(), "DATAFRAME-IO-ERROR", "map key",
+                        xsink)) {
                     return QoreValue();
                 }
                 QoreValue item_val = arrowScalarToQore(items, start + i, xsink);

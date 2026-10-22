@@ -89,7 +89,7 @@ public class QoreReplWebSocketTest inherits QUnit::Test {
         };
         server = new HttpServer(http_opts);
         server.setHandler("repl", "/ws/repl", NOTHING, wsHandler);
-        port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        port = server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
         on_exit {
             server.stop();
             delete server;
@@ -359,7 +359,7 @@ public class QoreReplWebSocketTest inherits QUnit::Test {
             },
         });
 
-        hash<HttpListenerOptionInfo> linfo = <HttpListenerOptionInfo>{"service": 0};
+        hash<HttpListenerOptionInfo> linfo = <HttpListenerOptionInfo>{"node": "localhost", "service": 0};
         int authPort = server.addListener(linfo).port;
         server.setHandler("auth-repl", "/ws/auth-repl", NOTHING, authHandler);
 
@@ -403,7 +403,7 @@ public class QoreReplWebSocketTest inherits QUnit::Test {
             "max_connections": 1,
         });
 
-        hash<HttpListenerOptionInfo> linfo = <HttpListenerOptionInfo>{"service": 0};
+        hash<HttpListenerOptionInfo> linfo = <HttpListenerOptionInfo>{"node": "localhost", "service": 0};
         int limitPort = server.addListener(linfo).port;
         server.setHandler("limit-repl", "/ws/limit-repl", NOTHING, limitHandler);
 

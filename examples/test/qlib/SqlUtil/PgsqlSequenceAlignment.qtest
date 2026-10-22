@@ -1,0 +1,124 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires ../../../../qlib/Util.qmod
+%requires ../../../../qlib/DataProvider/DataProvider.qmod
+%requires ../../../../qlib/SqlUtil/SqlUtil.qmod
+%requires ../../../../qlib/PgsqlSqlUtilBase.qmod
+%requires ../../../../qlib/PgsqlSqlUtil.qmod
+%requires ../../../../qlib/Schema/Schema.qmod
+%requires QUnit
+
+%prepend-module-path "${SCRIPT_DIR}"
+%requires ./PgsqlTestIsolation.qm
+
+%try-module pgsql
+%define NoPgsql
+%endtry
+
+%exec-class PgsqlSequenceAlignmentTest
+
+#! Tests ALTER-based sequence alignment and sequence bounds on PostgreSQL
+public class PgsqlSequenceAlignmentTest inherits QUnit::Test {
+    constructor() : QUnit::Test("PgsqlSequenceAlignment", "1.0", \ARGV) {
+        addTestCase("a sequence parameter change is an ALTER that keeps the value", \sequenceAlter());
+        addTestCase("sequence bounds are checked in both directions", \sequenceBounds());
+        set_return_value(main());
+    }
+
+    globalTearDown() {
+        if (m_live) {
+            PgsqlRunSchema::teardown();
+        }
+    }
+
+    private {
+        bool m_live = False;
+    }
+
+
+    private Datasource connectOrSkip() {
+%ifdef NoPgsql
+        testSkip("pgsql module unavailable");
+%endif
+        if (!ENV.QORE_DB_CONNSTR_PGSQL) {
+            testSkip("live disposable database required");
+        }
+        if (!m_live) {
+            PgsqlRunSchema::setup(ENV.QORE_DB_CONNSTR_PGSQL, "PgsqlSequenceAlignment");
+            m_live = True;
+        }
+        return new Datasource(ENV.QORE_DB_CONNSTR_PGSQL);
+    }
+
+
+    sequenceAlter() {
+        Datasource ds = connectOrSkip();
+        on_exit ds.rollback();
+        on_exit {
+            ds.execRaw("drop sequence if exists b4ra_seq");
+            ds.commit();
+        }
+        ds.execRaw("create sequence b4ra_seq start with 1 increment by 1");
+        # advance the sequence so its current value is observable
+        map ds.selectRow("select nextval('b4ra_seq')"), xrange(3);
+        int before = ds.selectRow("select last_value as v from b4ra_seq").v;
+        assertEq(3, before);
+
+        Database db(ds);
+        hash<auto> schema = {"sequences": {"b4ra_seq": {"start": 1, "increment": 5, "max": 1000, "cycle": True}}};
+        list<auto> sql = db.getAlignSql(schema);
+        # a parameter change is an ALTER, not a drop and recreate
+        assertEq(1, sql.size(), sprintf("sql: %y", sql));
+        assertTrue(sql[0] =~ /^alter sequence/, sql[0]);
+        assertEq(-1, sql[0].find("restart"));
+        map ds.execRaw($1), sql;
+        ds.commit();
+
+        # the current value is preserved and the new increment applies, so the next value is before + 5
+        assertEq(before + 5, ds.selectRow("select nextval('b4ra_seq') as v").v);
+        # a second alignment against the same description proposes no SQL
+        assertEq((), db.getAlignSql(schema));
+
+        # a maximum or minimum of 0 is a value, not "no value": a descending sequence can have maxvalue 0
+        assertTrue(PgsqlSequence::valueDiffers(0, NOTHING));
+        assertTrue(PgsqlSequence::valueDiffers(NOTHING, 0));
+        assertFalse(PgsqlSequence::valueDiffers(0, 0));
+        assertFalse(PgsqlSequence::valueDiffers(NOTHING, NOTHING));
+        assertTrue(PgsqlSequence::valueDiffers(0, 5));
+
+        # a descending sequence aligned to an explicit maxvalue 0 gets "maxvalue 0", not "no maxvalue"
+        ds.execRaw("drop sequence if exists b4ra_seq_desc");
+        on_exit {
+            ds.execRaw("drop sequence if exists b4ra_seq_desc");
+            ds.commit();
+        }
+        ds.execRaw("create sequence b4ra_seq_desc increment by -1");
+        list<auto> dsql = db.getAlignSql({"sequences": {"b4ra_seq_desc": {"increment": -1, "max": 0}}});
+        assertEq(("alter sequence b4ra_seq_desc maxvalue 0",), dsql);
+        map ds.execRaw($1), dsql;
+        ds.commit();
+        assertEq((), db.getAlignSql({"sequences": {"b4ra_seq_desc": {"increment": -1, "max": 0}}}));
+    }
+
+    sequenceBounds() {
+        # a descending sequence that starts below its maximum is valid (it was refused before SqlUtil 3.11.0)
+        PgsqlSequence d1("d1", 10, -2, 100);
+        assertEq(100n, d1.max);
+        # a descending sequence starting at its maximum of 0 is valid
+        PgsqlSequence d2("d2", -1, -1, 0);
+        assertEq(0n, d2.max);
+        # a sequence that starts above its maximum is refused in both directions, as every database refuses it
+        assertThrows("SEQUENCE-ERROR", "descending sequence.*max value 5 is less than the starting value: 10",
+            sub () { PgsqlSequence s("d3", 10, -1, 5); });
+        assertThrows("SEQUENCE-ERROR", "ascending sequence.*max value 0 is less than the starting value: 1",
+            sub () { PgsqlSequence s("a1", 1, 1, 0); });
+        assertThrows("SEQUENCE-ERROR", "increment cannot be zero", sub () { PgsqlSequence s("z", 1, 0); });
+    }
+
+
+}

@@ -158,6 +158,7 @@ public class HttpClientStreamCancelWakeTest inherits QUnit::Test {
         server.setDefaultHandler("hang", handler);
         server.waitForAsyncIo();
         hash<auto> info = server.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
             "service": 0,
             "cert": new SSLCertificate(CertPem),
             "key": new SSLPrivateKey(KeyPem),
@@ -240,6 +241,7 @@ public class HttpClientStreamCancelWakeTest inherits QUnit::Test {
         server.setDefaultHandler("ok", new CompleteResponseHandler());
         server.waitForAsyncIo();
         hash<auto> info = server.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
             "service": 0,
             "cert": new SSLCertificate(CertPem),
             "key": new SSLPrivateKey(KeyPem),

@@ -223,6 +223,18 @@ public:
         return ready ? ready_state : waiting_state;
     }
 
+    //! Releases the operation's claim on the socket when the controller completes the operation, however it ends
+    /** Called on the I/O thread before the result is delivered: the code that gets the result can use the socket at
+        once, although the operation object is released only later (its last references can be released on a callback
+        worker).  The claim is otherwise released when the wait ends or the operation is aborted, but the controller
+        ends a wait whose descriptor was closed or replaced without either.  abort() releases nothing else, so the
+        claim can be released here whatever the order.
+    */
+    DLLLOCAL virtual bool handleCompletion(bool canceled, const QoreHashNode* ex_hash, ExceptionSink* xsink) override {
+        clearNonBlock();
+        return false;
+    }
+
 private:
     DLLLOCAL void clearNonBlock() {
         if (set_non_block) {
@@ -346,8 +358,16 @@ public:
             }
         }
 
-        result = sock->checkIdleDataForAsyncPoll(xsink);
+        my_socket_priv* priv = my_socket_priv::getPriv(*sock);
+        AutoLocker al(priv->m);
+        result = sock->checkIdleDataForAsyncPollLocked(xsink);
         done = true;
+        // the check is done: its claim on the socket is released before the controller delivers its result, so the
+        // caller can use the socket as soon as it has the result, while the operation object is released later
+        if (set_non_block) {
+            priv->clearNonBlock(NB_RECV);
+            set_non_block = false;
+        }
         return nullptr;
     }
 
@@ -3266,6 +3286,8 @@ static QoreSocketObject* qore_socket_object_exec_accept(QoreSocketObject* s, int
     if (*xsink) {
         return nullptr;
     }
+    // the caller gets the accepted socket itself, not a Socket object, whose release would invalidate it
+    accept_poller->setNativeOutput();
 
     my_socket_priv* priv = my_socket_priv::getPriv(*s);
     QoreSocketObjectAsyncIoGuard async_guard(*priv, xsink, NB_ALL);
@@ -3297,29 +3319,17 @@ static QoreSocketObject* qore_socket_object_exec_accept(QoreSocketObject* s, int
         return nullptr;
     }
 
-    ValueHolder output(accept_poller->getOutput(), xsink);
+    QoreSocketObject* accepted = accept_poller->takeAcceptedSocket(xsink);
     if (*xsink) {
-        return nullptr;
-    }
-    if (output->isNothing()) {
-        // no connection and no timeout: the operation was canceled
-        qore_socket_raise_accept_without_connection(*result, ssl ? "acceptSSL" : "accept", xsink);
-        return nullptr;
-    }
-    if (output->getType() != NT_OBJECT) {
-        xsink->raiseException("SOCKET-ACCEPT-ERROR",
-            "expected Socket object from async accept operation, got '%s'",
-            output->getFullTypeName());
-        return nullptr;
-    }
-
-    QoreObject* ns = output->get<QoreObject>();
-    QoreSocketObject* accepted = static_cast<QoreSocketObject*>(ns->getReferencedPrivateData(CID_SOCKET, xsink));
-    if (*xsink) {
+        if (accepted) {
+            accepted->deref(xsink);
+        }
         return nullptr;
     }
     if (!accepted) {
-        xsink->raiseException("SOCKET-ACCEPT-ERROR", "accepted object does not contain Socket private data");
+        // no connection and no timeout: the operation was canceled
+        qore_socket_raise_accept_without_connection(*result, ssl ? "acceptSSL" : "accept", xsink);
+        return nullptr;
     }
     return accepted;
 }
@@ -3923,7 +3933,9 @@ static int qore_socket_object_exec_read_http_chunked_trailers(QoreSocketObject* 
     }
     if (!trailers.empty()) {
         my_socket_priv* priv = my_socket_priv::getPriv(*s);
-        priv->convertHeaderToHash(output, trailers, info);
+        if (priv->convertHeaderToHash(output, trailers, xsink, info)) {
+            return -1;
+        }
         priv->doReadHttpHeaderEvent(QORE_EVENT_HTTP_FOOTERS_RECEIVED, output, QORE_SOURCE_SOCKET);
     }
     return 0;
@@ -6021,6 +6033,12 @@ void QoreSocketObject::setSslTargetHostForAsyncPoll(const char* host) {
     priv->socket->priv->client_target = host;
 }
 
+std::shared_ptr<const QoreConnectionDestinations> QoreSocketObject::getConnectedDestinations() const {
+    // the socket is created with the object and destroyed with it; the record has its own leaf lock, so the I/O
+    // thread can read it while it holds other locks
+    return priv->socket->priv->getConnectedDestinations();
+}
+
 QoreHashNode* QoreSocketObject::getHttp2StreamTrailers(int32_t stream_id) const {
     Http2SessionPtr h2 = qore_socket_object_get_h2_session(this);
     return h2 ? h2->getStreamTrailers(stream_id) : nullptr;
@@ -6037,6 +6055,34 @@ std::vector<int32_t> QoreSocketObject::takeHttp2PeerResetReportsForAsyncPoll() {
         return {};
     }
     return h2->takePendingPeerResetReports();
+}
+
+void QoreSocketObject::releaseHttp2Stream(int32_t stream_id) {
+    Http2SessionPtr h2 = qore_socket_object_get_h2_session(this);
+    if (h2) {
+        h2->releaseStream(stream_id);
+    }
+}
+
+void QoreSocketObject::setHttp2StreamBodyConsumer(int32_t stream_id) {
+    Http2SessionPtr h2 = qore_socket_object_get_h2_session(this);
+    if (h2) {
+        h2->setStreamBodyConsumer(stream_id);
+    }
+}
+
+void QoreSocketObject::releaseHttp2StreamBodyConsumer(int32_t stream_id) {
+    Http2SessionPtr h2 = qore_socket_object_get_h2_session(this);
+    if (h2) {
+        h2->releaseStreamBodyConsumer(stream_id);
+    }
+}
+
+void QoreSocketObject::releaseQuicStream(int64_t session_id, int64_t stream_id) {
+    std::shared_ptr<QuicSession> session = qore_socket_object_get_quic_session(this, session_id);
+    if (session) {
+        session->releaseStream(stream_id);
+    }
 }
 
 int QoreSocketObject::waitForHttp2StreamDrain(int32_t stream_id, int timeout_ms) {
@@ -6088,6 +6134,19 @@ int QoreSocketObject::getPollableDescriptor() const {
     return priv->socket->getSocket();
 }
 
+int QoreSocketObject::holdPollableDescriptor(int fd, std::shared_ptr<void>& hold) const {
+    // an HTTP client can exchange its socket for another one (see QoreHttpClientObject): the hold references the
+    // socket read here until it is released; the object's lock is not taken, as the I/O thread calls this, and a
+    // blocking I/O call can hold the lock
+    std::shared_ptr<qore_socket_private::DescriptorHold> h
+        = qore_socket_private::DescriptorHold::take(*qore_socket_private::get(*priv->socket), fd);
+    if (!h) {
+        return -1;
+    }
+    hold = std::move(h);
+    return 0;
+}
+
 #ifdef DARWIN
 void QoreSocketObject::setPollNotifyFd(int fd) {
     qore_socket_private::get(*priv->socket)->poll_notify_fd.store(fd, std::memory_order_release);
@@ -6121,6 +6180,24 @@ void QoreSocketObject::dbgCloseAtNextSslIo() {
             fprintf(stderr, "dbgCloseAtNextSslIo(): cannot start the closing thread: %s\n", e.what());
         }
     });
+}
+
+QoreHashNode* QoreSocketObject::dbgGetStreamRecordCounts(int64_t session_id, ExceptionSink* xsink) {
+    if (session_id) {
+        std::shared_ptr<QuicSession> session = qore_socket_object_get_quic_session(this, session_id);
+        if (!session) {
+            xsink->raiseException("DBG-ARGUMENT-ERROR", "the socket has no QUIC session " QLLD,
+                static_cast<int64>(session_id));
+            return nullptr;
+        }
+        return session->dbgGetStreamRecordCounts();
+    }
+    Http2SessionPtr h2 = qore_socket_object_get_h2_session(this);
+    if (!h2) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "the socket has no HTTP/2 session");
+        return nullptr;
+    }
+    return h2->dbgGetStreamRecordCounts();
 }
 #endif
 

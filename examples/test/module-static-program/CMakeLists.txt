@@ -18,6 +18,9 @@ target_compile_definitions(staticpgm PRIVATE
     BUILDING_DLL=1
     HAVE_UNIX_CONFIG_H
     PACKAGE_VERSION="${VERSION}")
+# DLLLOCAL hides symbols as in every other module (see QORE_BINARY_MODULE_INTERN2 in QoreMacros.cmake): libqore's
+# usage requirements give this target _QORE_LIB_INTERN, so <qore/Qore.h> includes the library's configuration
+# header, which defines HAVE_GCC_VISIBILITY where the compiler supports it; defining it here as well redefines it
 set_target_properties(staticpgm PROPERTIES
     PREFIX ""
     SUFFIX "-api-${MODULE_API_MAJOR}.${MODULE_API_MINOR}.qmod"

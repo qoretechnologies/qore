@@ -61,6 +61,15 @@ barrier waits for or discards it; it is released on the calling thread only when
 the I/O threads have exited) or the objects' program is shutting down.  Builtin objects whose destruction is pure
 C++ (e.g. `Promise`, `EventNotifier`) may still be released on the I/O thread.
 
+The controller's lock `m` is not recursive, and the cleanup of a command that will not be processed
+(`cleanupAbandonedCommand()`: the commands after a Quit in an I/O thread's batch, those drained when a thread stops
+for good, a submission refused while the controller shuts down) delivers a canceled result, logs, releases
+references and can create the callback dispatcher, which take `m`.  It is therefore called without `m` and takes it
+itself to signal waiters; an exiting I/O thread collects the commands and the references of its timers under `m`
+and cleans them up after releasing it.  `AsyncIoAbandonedCommandLockTest` holds an I/O thread in the
+`dbg_before_poll` hook so that a submission follows a Quit in one batch, on a controller that has no callback
+dispatcher yet.
+
 ## Thread Model
 
 An operation's `abort()` callback performs transport cleanup for both timeout and explicit cancellation.
@@ -85,6 +94,13 @@ to their public `HTTPCLIENT-TIMEOUT` error. Explicit Future cancellation still p
   - At the end of Phase 1 (cache snapshot), `processed_seq` is set to `submit_seq` and
     `processed_cond` is broadcast.  This allows `waitForProcessing()` to block until the I/O
     thread has captured all previously submitted operations in its poll set.
+  - The events of a poll are reported once: the Phase 1 that follows the poll queues their operations and clears
+    them.  When a command arrives before the next poll, the loop goes round without polling; the events it already
+    reported must not be reported again, as an operation continued for an event may have consumed it (read the data,
+    or acknowledged an `EventNotifier`), and `continuePoll()` is only called again for an event received after the
+    operation returned its poll info.  `AsyncIoStaleReadinessTest` in the C++ unit tests pushes a command just
+    before the poll with a debug hook (`IoThreadContext::dbg_before_poll`) and checks that the operation is not
+    continued again.
 
   - The I/O threads of the global controller are external-lifecycle threads (`QTF_EXTERNAL_LIFECYCLE`, set by
     `setExternalLifecycleThreads()` when the global controller is created): the cleanup at process exit waits for
@@ -386,7 +402,25 @@ operation's current deadlines whether it timed out, its protocol timer fired, or
   When the heap holds more than `2 * cache.size() + TIMEOUT_HEAP_COMPACT_SLACK` entries, it is rebuilt from the cache
   with the entry of each operation that has a deadline armed.  An operation queued for continuePoll() at that point
   has none and is re-armed with its result, so no deadline is lost.
+- **A hint of 0 is due now**: a `poll_timeout_ms` of 0 or less arms the protocol-level deadline at the current time
+  (`getPollTimeoutDeadline()`), so Step C of the next iteration continues the operation even if no I/O event arrives
+  for it.  An operation returns 0 when its own deadline expires while its continuePoll() runs - a QUIC handshake
+  deadline (`clampPollTimeoutToDeadline()`), the HTTP/1 and HTTP/2 connect deadlines - or to be continued at once
+  (the QUIC packet budget).  A hint of 0 used to make the I/O thread poll its event loop once without blocking and
+  drop the deadline, so such an operation was continued only by an I/O event: a QUIC handshake with a silent peer
+  was never timed out, and the happy-eyeballs race of HttpClientIo.qtest's "async HE waits for HTTP/3 after a refused
+  TCP connection" never ended (`AsyncIoZeroPollHintTest` in the C++ unit tests and
+  `examples/test/qlib/AsyncSocketIo/AsyncIoTimeoutHeap.qtest` check both result paths).
 - `getInfo()` reports each thread's heap size (`threads[].timeouts`).
+- **Waits are never shorter than the time to the next timer**: `QoreEventLoop::poll()` keeps the wait in
+  microseconds and waits with the resolution the system provides - `kevent()`'s timespec on macOS, `epoll_pwait2()`
+  on Linux 5.11 and later (the raw system call where the C library has no wrapper, as with musl), `ppoll()` for the
+  `poll()` fallback, `nanosleep()` for a loop with timers only - and rounds up to whole milliseconds only where
+  nothing finer exists (`epoll_wait()` before Linux 5.11).  It used to round the time to the earliest timer down to
+  whole milliseconds, so a timer due in less than a millisecond made the wait 0 and the I/O thread polled without
+  blocking until it was due (thousands of polls for one timer), and a wait of 1.5 ms ended 0.5 ms early and did the
+  same; `ut_event_loop_sub_ms_timer_wakeups` in the C++ unit tests counts the polls that return no event before a
+  timer's.
 
 ### Operation IDs
 
@@ -504,6 +538,88 @@ use-after-free in release builds).  The debug-only `dbg_close_socket_at_next_ssl
 another thread at the start of its next SSL I/O call; see
 `examples/test/qore/classes/Socket/ssl-close-during-io.qtest` and the `ut_socket_close_during_io_keeps_descriptor`
 unit test in `lib/ql_debug.cpp`.
+
+### A socket closed while the I/O thread registers its descriptor
+
+The I/O thread registers a socket's descriptor with its event queue (kqueue on macOS, epoll on Linux) when an
+operation on the socket starts waiting for I/O, and changes the registration when the events it waits for change.
+The `abort()` of a poll operation closes the socket on the thread that calls it, for example in the destructor of an
+`HttpRequestPollOperation`, so a close can run at the same time as the registration.
+
+On macOS that race can hang the process for good.  `kevent()` takes a reference to the descriptor before it attaches
+the registration (a knote) and gives it to the knote; `close()` first removes the descriptor's knotes and then waits
+for the other references to be released (`fileproc_drain()`, wait channel `fpdrain`, uninterruptible, no timeout).
+A knote attached between those two steps keeps its reference until it is deleted or its kqueue is closed: the
+close waits forever, the process ignores `SIGKILL`, and it stays a zombie in `close()` until the machine restarts.
+In the hang that was seen, the I/O thread that would have deleted the registration also waited for the socket's lock,
+which the closing `abort()` held.  This is how `HttpAsyncRequestTest.qtest` hung (kernel stack `close` -> `fileproc_drain` -> `msleep`
+-> `lck_mtx_sleep`; XNU `bsd/kern/kern_event.c` `kevent_register()` / `kq_add_knote()`, `bsd/kern/kern_descrip.c`
+`fp_close_and_unlock()` / `fileproc_drain()`).  Linux's `close()` does not wait for epoll, so it does not hang, but a
+descriptor number registered after its close can belong to another connection there as well.
+
+A descriptor can be registered for more than one object in one event loop: a socket and a controller wrapper of it
+have I/O identities of their own, `Socket::poll()` polls a pollable implemented in %Qore or an extra fd by number, and
+an operation's extra fd can be another object's descriptor.  The event loop therefore keeps each registration of a
+descriptor separately (`QoreEventLoop::addRegistration()`, by key): the descriptor is polled for the union of their
+events, `poll()` reports each registration's events with its key and user data, and removing a registration polls
+the descriptor for the events of the others, removing it from the system only with the last one.  The controller
+gives each socket hash its own key (`IoThreadContext::reg_keys`) and each operation's extra fd the key
+`op_id | ExtraRegKeyBit`, and delivers an event to the socket or the operation its key names.  Before, the loop kept
+one registration per descriptor: the second replaced the first, so one object got no events, and removing either
+removed the descriptor for both (`runSharedRegistration()` in `AsyncIoDescriptorHoldTest`).  An exiting I/O thread
+removes its registrations, as the loop outlives the thread's run.
+
+The I/O thread therefore holds a descriptor open for as long as it has it registered: `addSocketFd()` takes a hold
+with `AbstractPollableIoObjectBase::holdPollableDescriptor()` before it adds the descriptor to the event queue and keeps
+it in `IoThreadContext::fd_holds`, and `eraseRegisteredFd()` releases it after `releaseFdIfOwner()` has removed the
+descriptor from the queue.  The holds are kept by registration (the hash of the registered object), not by
+descriptor: one descriptor can be registered for more than one object, such as a socket and a controller wrapper of
+it, or a number that `Socket::poll()` polls for a pollable implemented in %Qore or for an extra fd, and such a
+registration, which has no hold, must not release the hold of the owner's registration (`runSharedDescriptor()` in
+`AsyncIoDescriptorHoldTest`).  An exiting I/O thread releases the holds of all its registrations.  Every registration, change of the registered events and removal (`EV_ADD`, `EPOLL_CTL_MOD`,
+`EPOLL_CTL_DEL`, ...) thus acts on the object's own descriptor, and the number cannot be given to another object
+before the descriptor has been removed: a close made by any thread meanwhile closes the object for its users and
+shuts the descriptor down, which wakes the operations waiting on it, and the descriptor is closed when the hold is
+released.  An operation that runs after the close finds the object without a descriptor, so the registration is
+removed (with the kernel call, on the still open descriptor) and the hold released; the descriptor never stays
+registered without a hold, so no level-triggered event of a shut-down descriptor can wake the I/O thread over and
+over.  When the object was closed after its descriptor was read, `holdPollableDescriptor()` fails, the descriptor is
+not registered and the object's operations run again and see the close.
+
+Socket objects, the controller's socket wrappers and `QoreSocket::holdDescriptor()` implement the hold with
+`qore_socket_private::DescriptorHold`, a reference to the socket's `SharedDescriptor` like the one an I/O call takes
+(`IoUseHelper`): `close_and_reset_locked()` then sets `close_on_release`, and the last reference closes the
+descriptor.  A descriptor that `replaceDescriptor()` replaces (a QUIC connection migration) is closed by its last
+hold too.  Event notifiers keep the descriptor they are polled with in a reference that `closeFd()` releases (the
+Qore object can be destroyed while an operation waits on it).  File objects use the default implementation, which
+takes no hold: `File::close()` fails while a non-blocking operation runs.  The extra descriptors of an operation
+(`extra_fds`) are registered by number, and held when their owner made them owned descriptors (see below).  A
+pollable object implemented in Qore or in a module that implements only
+`AbstractPollableIoObject::getPollableDescriptor()` is polled by number as well; a module whose pollable descriptor
+can be closed while an operation uses it implements the C++ base class and `holdPollableDescriptor()`, for example
+with `QoreSocket::holdDescriptor()`.
+
+The extra fds that their owner closes while an operation can still have them registered are owned descriptors
+(`qore_owned_descriptor_create()`, a `QoreSharedDescriptor` in a registry by number): the connection attempts of
+happy eyeballs (`SocketConnectInetHappyEyeballsPollState`) and the sockets of the c-ares channels of the resolvers,
+which make them with their own socket functions (`QoreCaresSockets`, `ares_set_socket_functions_ex()`).
+`updateExtraFds()` takes a hold of an owned descriptor (`qore_owned_descriptor_hold()`) before it registers it, kept
+in `IoThreadContext::extra_fd_holds` until the registration is removed; the owner gives the descriptor up with
+`qore_owned_descriptor_release()`, which closes it now, or with the last hold.  A connection attempt that becomes the
+socket's descriptor is handed over to the socket (`qore_owned_descriptor_adopt()`, `setDescriptor()`,
+`replaceDescriptor()`), whose `shared_fd` it becomes, so the holds count as uses of it and a close of the socket defers
+its close (`runOwnedExtraFd()` in `AsyncIoDescriptorHoldTest`, `QoreCaresSocketsTest`).  An extra fd that the event
+loop refuses (a descriptor that epoll cannot wait for, or a number that a close and a reuse gave to such a file) is
+not waited for: `updateExtraFds()` removes any registration of the operation's for it and releases its hold
+(`runRefusedExtraFd()`).
+
+`AsyncIoRegistrationCloseTest` in the C++ unit tests closes the socket from another thread at the point where the
+event loop is about to register its descriptor (the debug hook `QoreEventLoop::dbgSetBeforeRegister()`), for the
+first registration and for a change of the registered events, and checks that the descriptor is still the
+socket's when it is registered, stays open while it is registered, and is closed once it has been removed.
+`AsyncIoDescriptorHoldTest` closes a socket whose descriptor a running I/O thread has registered from another thread,
+without the controller (as an HTTP/2 client abort does), and checks that the descriptor stays open and its number is
+not given to another socket until the I/O thread has removed it.
 
 ### Periodic work owned by a Qore object
 
@@ -907,6 +1023,79 @@ The HTTP/3 counterparts of the HTTP/2 rules above, in `lib/QuicSession.cpp`:
   did after clearing them), the rest is not read (STOP_SENDING `H3_NO_ERROR`), and `readQuicStreamDataBlock()`
   raises `HTTP-BODY-TOO-LARGE` after the buffered bytes.
 
+## HTTP/2 and HTTP/3 Clients: Sending After a Reset or a Response
+
+What has been read of a response does not decide whether the request of a client stream can still be sent: a server
+can send its complete response before the request is complete and keep reading the request (RFC 9113 section 8.1,
+RFC 9114 section 4.1).  `Http2ClientStreamHandle::sendData()` and `Http3ClientStreamHandle::sendData()` refuse a send
+on their own only for a stream that was not started or that the caller cancelled; otherwise the session decides, so
+a send has the same result before and after another thread read the response:
+
+- the data is sent if the stream is open for sending;
+- `HTTPCLIENT-STREAM-CLOSED` (from `HTTP2-STREAM-CLOSED` / `QUIC-STREAM-CLOSED`) if the server closed it without an
+  error, where an empty half-close is a no-op;
+- the typed reset (`HTTP2-STREAM-RESET`, `HTTP2-STREAM-REFUSED`, `QUIC-STREAM-RESET`) if the server reset it; the
+  handle remembers the reset it reported and raises it for every later send, as `Http2Session::sendStreamData()`
+  reports a reset of an erased stream once.
+
+The QUIC session records a server's STOP_SENDING when the frame arrives (ngtcp2's `recv_stop_sending`, ngtcp2 1.24
+and later; `QuicSession::recordPeerStopSending()`): with an error code as a reset, with `H3_NO_ERROR` as a stream
+closed for sending.  ngtcp2 answers the frame by resetting the send side itself, and closes the stream (the
+`stream_close` callback, which recorded the stop before) only once the peer has acknowledged that RESET_STREAM: a
+response sent after the STOP_SENDING could be read whole before the reset was known, and a send in that window was
+queued and silently dropped.  A server learns of a client's STOP_SENDING at the same point.
+
+## HTTP/2 and HTTP/3: Stream Records of Long-Lived Sessions
+
+A session serves any number of streams, so it keeps nothing per finished stream:
+
+- QUIC tells a closed request stream from an unknown one by the stream-ID watermark: stream IDs of a type are opened
+  in increasing order (RFC 9000 section 2.1), so a client-initiated bidirectional stream at or below the highest one
+  opened that is not in `QuicSession::open_bidi_streams_` (filled when ngtcp2 opens a stream: locally after
+  `ngtcp2_conn_open_bidi_stream()`, remotely in `stream_open`; emptied in `stream_close`) is closed
+  (`isClosedStreamLocked()`).  The set of closed streams that this replaced grew by one entry per request, on clients
+  and servers.  HTTP/2 already used nghttp2's stream-ID watermarks (`Http2Session::isClosedStreamIdUnlocked()`).
+- The record of a reset by the peer outlives the stream, so that a send reports it; it is released when the
+  application is done with the stream: on a client when a stream without a streaming consumer completes, and when the
+  stream handle of a streaming request is destroyed (`releaseStream()` on the HTTP/2 and HTTP/3 poll operations); on a
+  server in `cleanupStream()` (the handler is done); an HTTP/2 record also by the first send that reports it.
+- The one-shot reports of peer resets (`pending_peer_reset_reports`) are kept on server sessions only, whose poll
+  operations drain them.
+- An HTTP/2 server stream can outlive its handler: a response body sent from an InputStream or by a dedicated sender
+  (a Server-Sent Events connection) is sent after the handler returns, and the request body can be delivered to a
+  Queue that the handler registered (full-duplex streaming, as in Bedrock's bidirectional event streams).  So
+  `Http2Session::cleanupStream()` (the handler is done) removes a stream only once it is closed and no registered
+  Queue still has to receive the end of its request body; until then it marks it (`Http2StreamInfo::handler_done`),
+  and the stream is removed when it closes (`onStreamCloseCallback()`, which also queues the report of a reset for
+  the poll operation) or when the poll operation has delivered the end of the body to the Queue
+  (`releaseStreamBodyConsumer()`; the Queue's registration marks the stream with `setStreamBodyConsumer()` before
+  the handler is done), whichever is last.  The rest of a request body that no Queue receives is discarded once the
+  handler is done.  Removing the stream when the handler returned discarded the rest of a streamed request body, ended
+  the response of a full-duplex stream, and lost the report of a reset that arrived afterwards, so a Server-Sent
+  Events connection stayed registered (`HttpServerHttp2StreamAfterHandler.qtest`, `SseAllProtocols.qtest`).
+- `dbg_socket_stream_records()` (library-debug builds) returns the size of each kind of record of a session;
+  `HttpClientIoStreamRecords.qtest` checks that none grows with the number of requests made on one connection,
+  including full-duplex streams that outlive their handlers.
+
+## HTTP/2 Client: Stream Queue Registrations and Listener Signals
+
+A WebSocket client over HTTP/2 (RFC 8441) registers its stream's queue on its own thread
+(`Http2ClientPollOperationPriv::registerStreamQueue()`): the registration is pending
+(`pending_stream_registrations`, under `sq_lock`) until the connection's I/O thread applies it in
+`drainStreamQueues()`, which runs at the end of a read cycle, after the responses of the cycle have been dispatched
+(so the end of a stream reported in its queue follows the stream's last data).  The stream's data is decoded into the
+queue by its frame state when the I/O thread dispatches it, and `drainStreamQueues()` does not read the data of such
+a registration (`StreamQueueInfo::frame_state`), so it never signals it: the stream's listener (`notifyIo()`, through
+`onStreamData()`) is told of decoded data only by the dispatch, if the stream is registered then.  A pending
+registration counts as one: it was made before the data was dispatched.  Otherwise data that arrives before the next
+drain after the registration (the answer to the client's first message can arrive in the first read cycle after it)
+reaches the queue unsignaled and waits for the stream's next data, such as the answer to the heartbeat PING 20 seconds
+later (WebSocketH2Scan.qtest, CI pipeline 61208, 0.2% of its runs on macOS).
+
+Debug builds expose `dbg_h2_client_hold_stream_registrations(bool)` (in `lib/ql_debug.cpp`), which keeps every HTTP/2
+client stream queue registration pending while it is set;
+`examples/test/qlib/WebSocketClient/WebSocketH2PendingRegistration.qtest` uses it.
+
 ## HTTP/2 and HTTP/3 Server: Incomplete Request Bodies
 
 A request body ends cleanly only when the client ends the stream: `END_STREAM` (HTTP/2) or `FIN` (HTTP/3).  A stream
@@ -1307,6 +1496,35 @@ that arms a one-shot flag on the Socket.  The next controller wait on that Socke
 the sync I/O operation aborts with `SOCKET-CLOSED`.  See
 `examples/test/qore/classes/Socket/Socket.qtest` `fdGenerationTest` for the regression
 test.  The hook is DEBUG-only; the builtin is not registered in release builds.
+
+The controller ends such an operation without calling `abort()`, which can close the descriptor
+that the socket has now.  An operation's claim on its socket (the direction flags set with
+`setNonBlockFromAsyncController()`, or the accept count) must still end before the result is
+delivered: the result wakes the caller, which can use the socket again at once, while the
+controller's last references to the operation are released later on a callback worker
+(`releaseOffIoThread()`), so a claim released only with the operation object makes a call that
+follows at once fail with `SOCKET-NON-BLOCK-ERROR`, depending on that worker's timing (CI pipeline
+61208).  So, before the result is built:
+
+- a `SocketPollSocketOperationBase` operation is released with `releaseSocketClaim()`, called by
+  Phase 3 for an operation ended by the descriptor check.  It cannot release its claim in
+  `handleCompletion()`, which is called for every completion: its `abort()` decides whether the
+  socket is closed, and an `abort()` dispatched to a callback worker (a %Qore subclass that
+  overrides it) runs after `handleCompletion()`
+- the operations whose `abort()` only releases their claim (the readiness wait of
+  `Socket::isWriteFinished()` and its C++ counterpart in `QoreSocketObject.cpp`, and the accept
+  operations) release it in `handleCompletion()`
+- an operation that ends in its first `continuePoll()` releases its claim there, as the idle-data
+  check of `QoreSocketObject::checkIdleData()` does
+
+Debug builds expose `dbg_async_io_hold_releases(bool)` (in `lib/ql_debug.cpp`), which keeps the
+references that the I/O threads release off the I/O thread until it is called with `False`, so a
+test can make an operation outlive the delivery of its result for certain;
+`dbg_socket_check_idle_data(Socket)` calls `QoreSocketObject::checkIdleData()`, which no %Qore
+method calls.  The Socket.qtest cases "a receive follows at once a receive that the controller
+ended", "a send follows at once a write wait that the controller ended", "a listening socket is
+usable at once after an accept that the controller ended" and "a receive follows at once an idle
+data check" use them.
 
 ### QUIC Keepalive Policy
 

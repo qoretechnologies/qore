@@ -31,6 +31,7 @@
 #include <qore/Qore.h>
 #include "qore/intern/QoreSignal.h"
 #include "qore/intern/qore_program_private.h"
+#include "qore/intern/QoreForkHandlers.h"
 
 #include <cerrno>
 #include <cstdio>
@@ -51,12 +52,12 @@ void QoreSignalHandler::init() {
     status = SH_OK;
 }
 
-// must be called in the signal lock
-void QoreSignalHandler::runHandler(int sig, ExceptionSink *xsink) {
+// called outside the signal lock
+void QoreSignalHandler::runHandler(const ResolvedCallReferenceNode& callback, int sig, ExceptionSink* xsink) {
     // create signal number argument
     ReferenceHolder<QoreListNode> args(new QoreListNode(bigIntTypeInfo), xsink);
     args->push(sig, nullptr);
-    funcref->execValue(*args, xsink).discard(xsink);
+    callback.execValue(*args, xsink).discard(xsink);
 }
 
 QoreSignalManager::QoreSignalManager() : is_enabled(false), tid(-1), block(false), waiting(0), num_handlers(0),
@@ -175,9 +176,11 @@ void QoreSignalManager::del() {
             if (!handlers[i].isSet())
                 continue;
 
-            if (handlers[i].status == QoreSignalHandler::SH_InProgress)
+            // a handler whose callback is running, including one already removed while it runs, is released by
+            // the signal thread when the callback returns
+            if (handlers[i].status != QoreSignalHandler::SH_OK) {
                 handlers[i].status = QoreSignalHandler::SH_Delete;
-            else {
+            } else {
                 // must be called in the signal lock
                 CodePgm old = handlers[i].take();
                 qore_program_private::delSignal(*old.pgm, i);
@@ -288,18 +291,32 @@ void QoreSignalManager::wait_signal_thread_stopped() {
     }
 }
 
+#ifdef DEBUG
+std::atomic<void (*)()> qore_qsm_block_wait_hook{nullptr};
+#endif
+
+void QoreSignalManager::waitForBlockUnlocked() {
+    while (block) {
+        ++waiting;
+#ifdef DEBUG
+        if (void (*hook)() = qore_qsm_block_wait_hook.load()) {
+            hook();
+        }
+#endif
+        cond.wait(&mutex);
+        --waiting;
+    }
+}
+
 void QoreSignalManager::preFork() {
     SafeLocker sl(&mutex);
     if (!running())
         return;
 
     // if another block is already in progress then wait for it to complete
-    while (block) {
-        ++waiting;
-        cond.wait(&mutex);
-        --waiting;
-    }
+    waitForBlockUnlocked();
     block = true;
+    block_tid = ::q_gettid();
     stop_signal_thread_unlocked();
 
     // wait for thread to exit (may be already gone)
@@ -314,8 +331,14 @@ void QoreSignalManager::postFork(bool new_process, ExceptionSink *xsink) {
         return;
     }
 
+    AutoLocker al(mutex);
+    // the block is lifted under the lock, and the threads that wait for it are woken; in the child they do not exist
+    // (see forkChild())
     block = false;
-    assert(!waiting);
+    block_tid = -1;
+    if (waiting) {
+        cond.broadcast();
+    }
 
     // set new default signal mask for new process
 #if !defined(__linux__) && !defined(__APPLE__)
@@ -333,8 +356,73 @@ void QoreSignalManager::postFork(bool new_process, ExceptionSink *xsink) {
     printd(5, "QoreSignalManager::postFork() pid: %d, new_process: %d, starting signal thread\n", getpid(),
         new_process);
 
-    AutoLocker al(mutex);
     start_signal_thread(xsink);
+}
+
+void QoreSignalManager::forkPrepare() {
+    mutex.lock();
+    tcount.lockForFork();
+}
+
+void QoreSignalManager::forkParent() {
+    tcount.unlockForFork();
+    mutex.unlock();
+}
+
+void QoreSignalManager::forkChild(int fork_tid) {
+    // the threads that waited for the lock or the block do not exist in the child
+    waiting = 0;
+    if (block && block_tid != fork_tid) {
+        // another thread's fork() set the block; its postFork() does not run in the child
+        block = false;
+        block_tid = -1;
+    }
+    int signal_threads = 0;
+    if (thread_running && fork_tid == tid) {
+        // fork() was called by the signal thread itself, which goes on in the child
+        signal_threads = 1;
+    } else if (thread_running || tid != -1) {
+        // the signal thread does not exist in the child (fork() was not called by Qore's fork(), which stops it); it
+        // is started again with the next signal handler (see setHandler())
+        thread_running = false;
+        tid = -1;
+        thread_joinable = false;
+        cmd = C_None;
+        handler_running = false;
+        for (int i = 0; i < QORE_SIGNAL_MAX; ++i) {
+            if (handlers[i].status == QoreSignalHandler::SH_InProgress) {
+                // the handler was running in the signal thread
+                handlers[i].status = QoreSignalHandler::SH_OK;
+            }
+        }
+    }
+    tcount.reinitAfterFork(signal_threads);
+    cond.reinitAfterFork();
+    // held by this thread since forkPrepare()
+    mutex.reinitAfterFork();
+}
+
+namespace {
+//! the fork handler of the signal manager (see QoreForkHandlers.h)
+class QoreSignalManagerForkHandler : public QoreForkHandler {
+public:
+    QoreSignalManagerForkHandler() : QoreForkHandler(QFLR_SIGNAL_MANAGER, "signal_manager") {
+    }
+
+    void prepare() noexcept override {
+        QSM.forkPrepare();
+    }
+
+    void parent() noexcept override {
+        QSM.forkParent();
+    }
+
+    void child() noexcept override {
+        QSM.forkChild(qore_fork_get_tid());
+    }
+};
+
+QoreSignalManagerForkHandler qsm_fork_handler;
 }
 
 void QoreSignalManager::signal_handler_thread() {
@@ -445,26 +533,37 @@ void QoreSignalManager::signal_handler_thread() {
             handlers[sig].status = QoreSignalHandler::SH_InProgress;
             handler_running = true;
 
-            // unlock to run handler code
-            sl.unlock();
-
-            // the handler's thread-local data in the Program's family is created when the handler first saves data
-            QoreProgram* pgm = handlers[sig].getProgram();
-
             {
-                ProgramThreadCountContextHelper tch(&xsink, pgm, true);
-                if (!xsink) {
-                    handlers[sig].runHandler(sig, &xsink);
+                // The callback and its Program are referenced while the lock is held and stay referenced while the
+                // callback runs: the callback itself or another thread can replace the handler in the meantime,
+                // which releases the references the handler holds
+                ReferenceHolder<QoreProgram> pgm(handlers[sig].refProgram(), &xsink);
+                ReferenceHolder<ResolvedCallReferenceNode> callback(handlers[sig].refCallback(), &xsink);
+
+                // unlock to run handler code
+                sl.unlock();
+
+                {
+                    // the handler's thread-local data in the Program's family is created when the handler first
+                    // saves data
+                    ProgramThreadCountContextHelper tch(&xsink, *pgm, true);
+                    if (!xsink) {
+                        QoreSignalHandler::runHandler(**callback, sig, &xsink);
+                    }
+                    // a callback whose handler was replaced while it ran is destroyed here, in its Program's context
+                    callback = nullptr;
                 }
-            }
 
-            // delete thread-local storage, if any
-            if (pgm) {
+                // delete thread-local storage
                 end_signal_thread(&xsink);
-            }
 
-            // cleanup thread resources
-            purge_thread_resources(&xsink);
+                // cleanup thread resources
+                purge_thread_resources(&xsink);
+
+                // released before the lock is reacquired: when the handler was replaced by one of another Program,
+                // this can be the last reference, and the Program's destruction removes its signal handlers
+                pgm = nullptr;
+            }
 
             // consume exceptions and reset exception sink
             xsink.handleExceptions();
@@ -488,6 +587,9 @@ void QoreSignalManager::signal_handler_thread() {
             assert(num_handlers >= 0);
             sl.unlock();
             old.del(&xsink);
+            // an exception raised by a destructor while the handler is released is reported here; left in the
+            // exception sink, it would prevent the next callback from running
+            xsink.handleExceptions();
             sl.lock();
             handler_running = false;
         }
@@ -555,11 +657,7 @@ int QoreSignalManager::setHandler(int sig, const ResolvedCallReferenceNode *fr, 
             return 0;
 
         // wait for any blocks to be lifted
-        while (block) {
-            ++waiting;
-            cond.wait(&mutex);
-            --waiting;
-        }
+        waitForBlockUnlocked();
 
         sig_map_t::iterator i = fmap.find(sig);
         if (i != fmap.end()) {
@@ -627,14 +725,15 @@ int QoreSignalManager::removeHandler(int sig, ExceptionSink *xsink) {
             return 0;
 
         // wait for any blocks to be lifted
-        while (block) {
-            ++waiting;
-            cond.wait(&mutex);
-            --waiting;
-        }
+        waitForBlockUnlocked();
 
         if (!handlers[sig].isSet())
             return 0;
+
+        // a handler removed while its callback runs is released by the signal thread when the callback returns
+        if (handlers[sig].status == QoreSignalHandler::SH_Delete) {
+            return 0;
+        }
 
         // remove from the signal mask for sigwait
         sigdelset(&mask, sig);
@@ -667,11 +766,7 @@ QoreStringNode* QoreSignalManager::reassignSignal(int sig, const char* name, boo
     }
 
     // wait for any blocks to be lifted
-    while (block) {
-        ++waiting;
-        cond.wait(&mutex);
-        --waiting;
-    }
+    waitForBlockUnlocked();
 
     if (handlers[sig].isSet()) {
         QoreStringNode* err = new QoreStringNodeMaker("the Qore library cannot reassign signal %d because a handler "
@@ -713,11 +808,7 @@ QoreStringNode* QoreSignalManager::reassignSignals(const sig_vec_t& sig_vec, con
     }
 
     // wait for any blocks to be lifted
-    while (block) {
-        ++waiting;
-        cond.wait(&mutex);
-        --waiting;
-    }
+    waitForBlockUnlocked();
 
     for (auto& sig : sig_vec) {
         assert(sig > 0);

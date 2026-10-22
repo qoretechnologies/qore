@@ -34,10 +34,14 @@
 
 #include <qore/Qore.h>
 
+#include <functional>
 #include <memory>
 #include <vector>
+#include <functional>
+#include <map>
 #include <set>
 #include <unordered_map>
+#include <vector>
 
 #ifdef DARWIN
 #include <sys/event.h>
@@ -73,12 +77,14 @@ static constexpr int QORE_IOURING_FD = -3;
 struct QoreEventInfo {
     int fd;             //!< File descriptor (QORE_TIMER_FD for timer events)
     int events;         //!< Events that occurred (QORE_EV_READ, QORE_EV_WRITE, QORE_EV_ERROR, QORE_EV_TIMER)
-    void* udata;        //!< User data associated with this fd
+    void* udata;        //!< User data of the registration the events are for
     int64_t timer_id;   //!< Timer ID (only valid when events & QORE_EV_TIMER)
+    //! The key of the registration the events are for (see QoreEventLoop::addRegistration()); 0 for add()
+    uint64_t key;
 
-    QoreEventInfo() : fd(0), events(0), udata(nullptr), timer_id(0) {}
-    QoreEventInfo(int fd, int events, void* udata, int64_t timer_id = 0)
-        : fd(fd), events(events), udata(udata), timer_id(timer_id) {}
+    QoreEventInfo() : fd(0), events(0), udata(nullptr), timer_id(0), key(0) {}
+    QoreEventInfo(int fd, int events, void* udata, int64_t timer_id = 0, uint64_t key = 0)
+        : fd(fd), events(events), udata(udata), timer_id(timer_id), key(key) {}
 };
 
 //! Persistent event loop abstraction
@@ -92,6 +98,13 @@ struct QoreEventInfo {
     Events are registered once and persist until explicitly removed, which
     allows proper detection of pending I/O operations (like pending connections
     on listener sockets) that may have occurred before registration.
+
+    A descriptor can have several registrations, each with its own key, events
+    and user data (see addRegistration()): the descriptor is polled for the
+    union of their events, poll() reports each registration's events with its
+    key and user data, and removing a registration polls the descriptor for the
+    events of the others, removing it from the system only with the last one.
+    add(), modify() and remove() manage the registration with key 0.
 
     Usage:
     @code
@@ -154,6 +167,43 @@ public:
         @return 0 on success, -1 on error (exception raised)
     */
     DLLLOCAL int remove(int fd, ExceptionSink* xsink);
+
+    //! Adds a registration of a descriptor, or changes the events and user data of an existing one
+    /** The descriptor is polled for the union of the events of its registrations; poll() reports the events of each
+        registration that it waits for, and errors to every registration, with the registration's key and user data.
+
+        @param fd the file descriptor
+        @param key the key of the registration, unique among the registrations of the descriptor
+        @param events events to monitor (QORE_EV_READ and/or QORE_EV_WRITE)
+        @param udata user data reported with the registration's events
+        @param xsink exception sink for error reporting
+
+        @return 0 on success, -1 on error (exception raised; the registration is not made)
+
+        @par Example:
+        @code{.cpp}
+// a socket and an operation that also waits for the socket's descriptor
+loop.addRegistration(fd, socket_key, QORE_EV_READ, socket_obj, xsink);
+loop.addRegistration(fd, op_key, QORE_EV_WRITE, op_obj, xsink);
+// the descriptor is polled for reading and writing; removing one registration keeps the other
+loop.removeRegistration(fd, op_key, xsink);
+        @endcode
+    */
+    DLLLOCAL int addRegistration(int fd, uint64_t key, int events, void* udata, ExceptionSink* xsink);
+
+    //! Removes a registration of a descriptor
+    /** The descriptor is then polled for the events of its other registrations, and removed from the system with the
+        last one.  Removing a registration that does not exist does nothing.
+
+        @return 0 on success, -1 on error (exception raised)
+    */
+    DLLLOCAL int removeRegistration(int fd, uint64_t key, ExceptionSink* xsink);
+
+    //! Returns true if the descriptor has a registration with the given key
+    DLLLOCAL bool hasRegistration(int fd, uint64_t key) const;
+
+    //! Calls @p f with the key and the events of each registration of the descriptor
+    DLLLOCAL void forEachRegistration(int fd, const std::function<void(uint64_t key, int events)>& f) const;
 
     //! Polls for events
     /** @param events vector to receive event information (will be resized as needed)
@@ -236,12 +286,67 @@ public:
     DLLLOCAL int removeUserEvent(uintptr_t ident, ExceptionSink* xsink);
 #endif
 
+#ifdef DEBUG
+    //! Debug-only: sets a hook that add() and modify() call with the descriptor before they register it
+    /** Lets a test close the descriptor's socket from another thread at the point where the descriptor is about to
+        be registered with the system's event queue; see AsyncIoRegistrationCloseTest in the C++ unit tests.
+
+        @param hook the hook, or an empty function to remove it; the loop must only be used by the calling thread
+    */
+    DLLLOCAL void dbgSetBeforeRegister(std::function<void(int)> hook) {
+        dbg_before_register = std::move(hook);
+    }
+
+    //! Debug-only: sets a hook that remove() calls with a registered descriptor before it removes it
+    /** Lets a test check that a descriptor is still open when the loop removes it; see AsyncIoDescriptorHoldTest in
+        the C++ unit tests.
+
+        @param hook the hook, or an empty function to remove it; set before the loop's thread starts, or by it
+    */
+    DLLLOCAL void dbgSetBeforeRemove(std::function<void(int)> hook) {
+        dbg_before_remove = std::move(hook);
+    }
+#endif
+
 private:
-    //! Internal fd info
-    struct FdInfo {
+#ifdef DEBUG
+    //! Debug-only: called with the descriptor before add() or modify() registers it; see dbgSetBeforeRegister()
+    std::function<void(int)> dbg_before_register;
+    //! Debug-only: called with a registered descriptor before remove() removes it; see dbgSetBeforeRemove()
+    std::function<void(int)> dbg_before_remove;
+#endif
+
+    //! A registration of a descriptor; see addRegistration()
+    struct Registration {
         int events;     //!< Registered events
         void* udata;    //!< User data
     };
+
+    //! Internal fd info
+    struct FdInfo {
+        int events = 0;         //!< The events registered with the system: the union of the registrations' events
+        void* udata = nullptr;  //!< User data given to the system (that of the first registration)
+        //! The registrations of the descriptor, by key
+        std::map<uint64_t, Registration> regs;
+        //! A named pipe on Darwin, which is watched with select(2) instead of kqueue (see fifo_count); always false
+        //! on other platforms
+        bool fifo = false;
+    };
+
+    //! Registers the descriptor with the system; @p events are the union of its registrations' events
+    DLLLOCAL int kernelAdd(int fd, int events, void* udata, ExceptionSink* xsink);
+
+    //! Changes the events of a descriptor registered with the system (adds it if the system has dropped it)
+    DLLLOCAL int kernelModify(int fd, int events, void* udata, ExceptionSink* xsink);
+
+    //! Removes a descriptor from the system
+    DLLLOCAL int kernelRemove(int fd, ExceptionSink* xsink);
+
+    //! Replaces the events of each descriptor in @p events with the events of each of its registrations
+    DLLLOCAL void expandRegistrations(std::vector<QoreEventInfo>& events);
+
+    //! Scratch buffer for expandRegistrations()
+    std::vector<QoreEventInfo> expand_buf;
 
     //! Timer entry for the sorted timer set
     struct TimerEntry {
@@ -273,6 +378,21 @@ private:
     int event_fd = -1;  //!< kqueue file descriptor
     //! Map of user event ident -> udata (for EVFILT_USER)
     std::unordered_map<uintptr_t, void*> user_event_map;
+    //! the number of named pipes in fd_map
+    /** kqueue never reports the end of a named pipe whose writers have closed, nor the write end of one whose
+        readers have closed (see QorePollCompat.h), so named pipes are not registered with kqueue; while there are
+        any, poll() waits with select(2) for them and for the kqueue descriptor, which is readable when kqueue has
+        events
+    */
+    size_t fifo_count = 0;
+
+    //! Waits up to @p wait_us microseconds (-1 for no limit) for the kqueue and the named pipes
+    /** @return the number of kqueue events in @p kevents, or -1 on error (exception raised); the events of the named
+        pipes are appended to @p fifo_events, and a named pipe found closed is dropped, as kqueue drops a closed
+        descriptor
+    */
+    DLLLOCAL int waitWithFifos(int64_t wait_us, std::vector<struct kevent>& kevents,
+            std::vector<QoreEventInfo>& fifo_events, ExceptionSink* xsink);
 #elif defined(__linux__)
     int event_fd = -1;  //!< epoll file descriptor
 #if defined(HAVE_IO_URING)

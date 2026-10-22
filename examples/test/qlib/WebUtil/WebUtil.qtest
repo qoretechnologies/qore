@@ -1,6 +1,8 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
 %modern
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
@@ -81,7 +83,7 @@ public class WebUtilTest inherits QUnit::Test {
         HttpServer server(http_opts);
         server.setHandler("fh", "/", MimeTypeHtml, fh);
         server.setDefaultHandler("fh", fh);
-        int port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
 
         on_exit delete server;
 
@@ -137,7 +139,7 @@ public class WebUtilTest inherits QUnit::Test {
         TestFileHandler fh(tmpdir, "/", {"IndexFile": "index.html"});
         server.setHandler("fh", "/", MimeTypeHtml, fh);
         server.setDefaultHandler("fh", fh);
-        int port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
         on_exit delete server;
 
         HTTPClient client({"url": "http://localhost:" + port});

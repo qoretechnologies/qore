@@ -1,0 +1,101 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class DatasourceOptionRefusedTest
+
+#! An option value that is refused never becomes current
+/** Datasource::setOption() kept a copy of the value, which is set on every new connection, before the value was
+    validated and before the driver accepted it on an open connection: a value that the driver refused, or an option
+    that the driver does not have, raised an exception but was set again when the datasource was next opened (and an
+    option that the driver refused made every later open fail).  The value is now kept only once it is accepted.
+
+    The "dbitest" mock driver's "reject" option fails when it is set to True on an open connection, and its "rows"
+    option gives the number of rows that exec() reports.
+*/
+class DatasourceOptionRefusedTest inherits QUnit::Test {
+    public {
+        const ConnStr = "dbitest:u/p@db";
+    }
+
+    constructor() : QUnit::Test("DatasourceOptionRefusedTest", "1.0", \ARGV) {
+        addTestCase("a value refused on an open connection", \testRefusedOpen());
+        addTestCase("a value refused on an open connection that replaces an accepted one", \testRefusedReplacing());
+        addTestCase("an option that the driver does not have", \testUnknownOption());
+        addTestCase("accepted values are kept", \testAccepted());
+        set_return_value(main());
+    }
+
+    #! returns the options that are set on every new connection of the datasource
+    private static *hash<auto> storedOptions(Datasource ds) {
+        return ds.getConfigHash().options;
+    }
+
+    testRefusedOpen() {
+        Datasource ds(ConnStr);
+        ds.open();
+        assertThrows("DBI-TEST-OPTION-ERROR", \ds.setOption(), ("reject", True));
+        ds.close();
+        assertFalse(exists DatasourceOptionRefusedTest::storedOptions(ds).reject, "the refused value is not kept");
+        # the next connection is opened without it
+        ds.open();
+        assertEq(1, ds.exec("insert into t values (1)"));
+        ds.rollback();
+        ds.close();
+    }
+
+    testRefusedReplacing() {
+        Datasource ds(ConnStr);
+        ds.open();
+        ds.setOption("reject", False);
+        assertThrows("DBI-TEST-OPTION-ERROR", \ds.setOption(), ("reject", True));
+        ds.close();
+        # the accepted value is still the current one: False, which the configuration leaves out, and not True
+        assertFalse(DatasourceOptionRefusedTest::storedOptions(ds).reject ?? False,
+            "the accepted value is still the current one");
+        # and the next connection is opened with it
+        ds.open();
+        assertEq(1, ds.exec("insert into t values (1)"));
+        ds.rollback();
+        ds.close();
+    }
+
+    testUnknownOption() {
+        Datasource ds(ConnStr);
+        # with the datasource closed
+        assertThrows("DBI-OPTION-ERROR", \ds.setOption(), ("no-such-option", 1));
+        assertFalse(exists DatasourceOptionRefusedTest::storedOptions(ds)."no-such-option",
+            "closed: the option is not kept");
+        # and open
+        ds.open();
+        assertThrows("DBI-OPTION-ERROR", \ds.setOption(), ("no-such-option", 1));
+        ds.close();
+        assertFalse(exists DatasourceOptionRefusedTest::storedOptions(ds)."no-such-option",
+            "open: the option is not kept");
+    }
+
+    testAccepted() {
+        Datasource ds(ConnStr);
+        # set while closed, and set on the connection when it is opened
+        ds.setOption("rows", 7);
+        ds.open();
+        assertEq(7, ds.exec("insert into t values (1)"));
+        ds.rollback();
+        # set while open, and set again on the next connection
+        ds.setOption("rows", 5);
+        assertEq(5, ds.exec("insert into t values (1)"));
+        ds.rollback();
+        ds.close();
+        assertEq(5, DatasourceOptionRefusedTest::storedOptions(ds).rows);
+        ds.open();
+        assertEq(5, ds.exec("insert into t values (1)"));
+        ds.rollback();
+        ds.close();
+    }
+}

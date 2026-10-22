@@ -137,10 +137,13 @@ auto v = m.call(obj, arg1, arg2);
 
     @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the class and method has been destroyed
     @throw METHOD-ERROR the object was not instantiated from the class implementing this method
+    @throw INVALID-FUNCTION-ACCESS the calling code's or the method's Program's sandboxing restrictions do not allow the method's class or the variant called (see @ref reflection_caller_privilege)
 
     @see callArgs()
 */
 auto NormalMethod::call(object obj, ...) {
+    // the privileges of the calling code, captured before switching to the method's Program
+    QoreReflectionCaller caller;
     // get read access to program object
     QoreExternalProgramContextHelper tch(xsink, m->pgm);
     if (*xsink) {
@@ -161,6 +164,12 @@ auto NormalMethod::call(object obj, ...) {
         call_args = args->copyListFrom(1);
     }
 
+    // the method's class and the variant selected for the arguments must be allowed by the caller and the
+    // method's Program
+    if (reflection_check_class_call(caller, m->m->getClass(), m->pgm, false, xsink)) {
+        return QoreValue();
+    }
+    QoreReflectionCallCheckHelper call_check(caller, m->pgm);
     // the method ptr must be valid
     return obj->evalMethod(*m->m, m->m->getClass(), *call_args, xsink);
 }
@@ -178,10 +187,13 @@ auto v = m.callArgs(obj, (arg1, arg2));
 
     @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the class and method has been destroyed
     @throw METHOD-ERROR the object was not instantiated from the class implementing this method
+    @throw INVALID-FUNCTION-ACCESS the calling code's or the method's Program's sandboxing restrictions do not allow the method's class or the variant called (see @ref reflection_caller_privilege)
 
     @see call()
 */
 auto NormalMethod::callArgs(object obj, *softlist<auto> argv) {
+    // the privileges of the calling code, captured before switching to the method's Program
+    QoreReflectionCaller caller;
     // get read access to program object
     QoreExternalProgramContextHelper tch(xsink, m->pgm);
     if (*xsink) {
@@ -194,6 +206,12 @@ auto NormalMethod::callArgs(object obj, *softlist<auto> argv) {
         return QoreValue();
     }
 
+    // the method's class and the variant selected for the arguments must be allowed by the caller and the
+    // method's Program
+    if (reflection_check_class_call(caller, m->m->getClass(), m->pgm, false, xsink)) {
+        return QoreValue();
+    }
+    QoreReflectionCallCheckHelper call_check(caller, m->pgm);
     // the method ptr must be valid
     return obj->evalMethod(*m->m, m->m->getClass(), argv, xsink);
 }

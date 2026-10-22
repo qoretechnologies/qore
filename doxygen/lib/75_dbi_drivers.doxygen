@@ -8,7 +8,7 @@
 
     To write a DBI driver, you have to provide implementations for the following functions supporting the Datasource class (listed by their function signatures):
     - \ref dbi_open "open": opens the connection to the database
-    - \ref dbi_close "close": closes the connection to the database
+    - \ref dbi_close "close": closes the connection to the database; a second, optional close method can report an error closing it
     - \ref dbi_select "select": executes a select statement and returns the result as a QoreHashNode (columns) of QoreListNode objects (rows)
     - \ref dbi_select_rows "select_rows": executes a select statement and returns the result as a QoreListNode (rows) or QoreHashNode objects (columns and values)
     - \ref dbi_exec "exec": executes arbitrary SQL on the connection and returns the result
@@ -136,22 +136,65 @@ if (mysql_query(db, "set transaction isolation level read committed")) {
 
     @subsection dbi_close DBI Close Method
 
-    Function signature: \ref q_dbi_close_t
+    Function signatures: \ref q_dbi_close_t (\c QDBI_METHOD_CLOSE), \ref q_dbi_close_sink_t
+    (\c QDBI_METHOD_CLOSE_SINK, since %Qore 3.0)
 
-    This method should unconditionally close the connection to the database.  There is currently no facility for registering errors when closing a connection; the return value for this function is currently ignored.
+    This method should unconditionally close the connection to the database.  It must clear the private data
+    structure by calling Datasource::setPrivateData() with the argument nullptr, and the private data structure
+    should also be deleted here.  The Datasource is closed after the call in every case.
 
-    This function must clear the private data structure by calling Datasource::setPrivateData() with the argument 0.  The private data structure should also be deleted here.
+    The \c QDBI_METHOD_CLOSE method has no exception sink, and its return value is ignored, so it cannot report an
+    error.  A driver that can fail to close a connection cleanly also registers a \c QDBI_METHOD_CLOSE_SINK method;
+    when it is registered, the %Qore library calls it instead of the \c QDBI_METHOD_CLOSE method to close every
+    connection.  It returns -1 with an exception added to its exception sink if the connection could not be closed
+    cleanly, and it must still release the connection and clear the private data.  The \c QDBI_METHOD_CLOSE method
+    stays registered as well for earlier versions of %Qore, which call only that method.  A driver that must also build
+    with the headers of earlier %Qore versions tests for the method with <tt>\#ifdef QDBI_METHOD_CLOSE_SINK</tt>.
 
-    Here is the implementation of this function in the sybase driver:
+    Where the error is reported depends on why the connection is closed:
+    - when the close is requested, it is raised to the caller: by Datasource::close(ExceptionSink*) and
+      Datasource::reset(), and by the %Qore-level close, reset or destruction of a
+      @ref Qore::SQL::Datasource "Datasource" or @ref Qore::SQL::DatasourcePool "DatasourcePool" object
+    - when the close cleans up after an error that is already being reported - after the connection was lost and the
+      driver called Datasource::connectionAborted(), or after a connection option failed as the connection was
+      opened - and when no caller can receive it - Datasource::close() and the Datasource destructor - it is
+      reported as a DBI warning event (\ref QDBI_EVENT_WARNING, with the error code in the \c warning key and its
+      description in the \c desc key) on the datasource's event queue (Datasource::setEventQueue()); it is discarded
+      if no event queue is set
+
+    The statements prepared on the connection are closed (with the \c QDBI_METHOD_STMT_CLOSE method) before the
+    connection is closed; their errors are reported in the same way.
+
+    A driver must not raise an exception with the \c QDBI_METHOD_CLOSE_SINK method when it closes a connection
+    itself, for example to reconnect after the connection was lost: there is no caller to report it to.
+
+    Here is the implementation of these functions in a driver; \c connection::disconnect() raises an exception if
+    the server cannot be disconnected cleanly:
 
     @code{.cpp}
-static int sybase_close(Datasource* ds) {
-    connection* sc = (connection*)ds->getPrivateData();
+// earlier Qore versions: an error cannot be reported
+static int mydb_close(Datasource* ds) {
+    std::unique_ptr<connection> conn(static_cast<connection*>(ds->getPrivateData()));
     ds->setPrivateData(nullptr);
-    delete sc;
-
+    conn->disconnect(nullptr);
     return 0;
 }
+
+#ifdef QDBI_METHOD_CLOSE_SINK
+// Qore 3.0 and later: an error closing the connection is reported
+static int mydb_close_sink(Datasource* ds, ExceptionSink* xsink) {
+    // the connection is released in every case
+    std::unique_ptr<connection> conn(static_cast<connection*>(ds->getPrivateData()));
+    ds->setPrivateData(nullptr);
+    return conn->disconnect(xsink);
+}
+#endif
+
+// in the module's initialization function
+    methods.add(QDBI_METHOD_CLOSE, mydb_close);
+#ifdef QDBI_METHOD_CLOSE_SINK
+    methods.add(QDBI_METHOD_CLOSE_SINK, mydb_close_sink);
+#endif
     @endcode
 
     @subsection dbi_select DBI Select Method

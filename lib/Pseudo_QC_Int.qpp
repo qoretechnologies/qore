@@ -32,7 +32,9 @@
 #include <qore/Qore.h>
 #include "qore/intern/qore_number_private.h"
 
-string to_base_intern(int64 i, int base);
+#include <string>
+
+std::string to_base_intern(int64 i, int base);
 
 //! Methods in this pseudo-class can be executed on @ref integer "integer values"
 /**
@@ -378,15 +380,15 @@ string <int>::toBase(int base = 10) [const;flags=RET_VALUE_ONLY,NAMED_ARGS] {
     if (base < 2 || base > 36)
         return xsink->raiseException("INVALID-BASE", "base " QLLD " is invalid; base must be 2 - 36 inclusive", base);
 
-    string s = to_base_intern(i, base);
+    std::string s = to_base_intern(i, base);
     return new QoreStringNode(s);
 }
 
-string to_base_intern(int64 i, int base) {
+std::string to_base_intern(int64 i, int base) {
     if (i < 0)
         return '-' + to_base_intern(-i, base);
 
-    string s;
+    std::string s;
     while (true) {
         int rem = i % base;
         s = char((rem < 10 ? 48 : 55) + rem) + s;

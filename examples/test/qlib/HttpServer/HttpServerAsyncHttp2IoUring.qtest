@@ -177,6 +177,7 @@ class HttpServerAsyncHttp2IoUringTest inherits QUnit::Test {
         mServer.setHandler("ping", "/ping", NOTHING, new PingHandler());
 
         mSslPort = mServer.addListener(<HttpListenerOptionInfo>{
+            "node": "localhost",
             "service": 0,
             "cert": new SSLCertificate(CertPem),
             "key": new SSLPrivateKey(KeyPem),

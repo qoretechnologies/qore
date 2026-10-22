@@ -248,8 +248,9 @@ class HttpBodyCharsetTest inherits QUnit::Test {
         TestHandler handler();
         server.setHandler("test", "", NOTHING, handler);
         server.setDefaultHandler("test", handler);
-        port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
         tls_port = server.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
             "service": 0,
             "cert": new SSLCertificate(CertPem),
             "key": new SSLPrivateKey(KeyPem),

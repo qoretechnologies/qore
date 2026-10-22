@@ -1,0 +1,335 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires DataProvider
+%requires SqlUtil
+%requires XdbcFirebirdSqlUtilBase
+%requires JdbcFirebirdSqlUtil
+
+%try-module jni
+%define NoJni
+%endtry
+
+%exec-class FirebirdDateArithmeticTest
+
+#! a datasource that gives SQL generation the catalog row of the database without a Firebird server
+class FirebirdDateOfflineDatasource inherits Qore::SQL::AbstractDatasource {
+    *string getPassword() {}
+    *string getOSEncoding() {}
+    *string getDBName() { return "fbtest"; }
+    *string getUserName() { return "fbuser"; }
+    *string getHostName() {}
+    *int getPort() {}
+    *string getDBEncoding() {}
+    string getDriverName() { return "jni"; }
+    auto getServerVersion() {}
+    auto getClientVersion() {}
+    string getConfigString() { return ""; }
+    hash<auto> getConfigHash() { return {}; }
+    bool inTransaction() { return False; }
+    bool currentThreadInTransaction() { return False; }
+    nothing beginTransaction() {}
+    nothing commit() {}
+    nothing rollback() {}
+
+    auto exec(string sql, ...) { return 0; }
+    auto vexec(string sql, *softlist<auto> vargs) { return 0; }
+    auto execRaw(string sql) { return 0; }
+    auto select(string sql, ...) {}
+    auto vselect(string sql, *softlist<auto> vargs) {}
+    auto selectRow(string sql, ...) { return {"bpc": 4, "version": "5.0.4"}; }
+    auto vselectRow(string sql, *softlist<auto> vargs) { return {"bpc": 4, "version": "5.0.4"}; }
+    auto selectRows(string sql, ...) {}
+    auto vselectRows(string sql, *softlist<auto> vargs) {}
+    auto selectTyped(string sql, ...) {}
+    auto vselectTyped(string sql, *softlist<auto> vargs) {}
+    auto selectRowsTyped(string sql, ...) {}
+    auto vselectRowsTyped(string sql, *softlist<auto> vargs) {}
+}
+
+#! Tests date arithmetic with durations on Firebird, which has no duration type
+/** A date plus or minus durations (years to microseconds, relative date values, and sums and differences of them) is
+    given as nested \c dateadd(), in the order of the durations; a duration anywhere else is refused with
+    \c SQLUTIL-EXPRESSION-NOT-PUSHDOWNABLE.  The live cases run with a disposable Firebird database through the JDBC
+    driver, given with \c -c or \c QORE_DB_CONNSTR_JDBC_FIREBIRD
+*/
+class FirebirdDateArithmeticTest inherits QUnit::Test {
+    public {
+        const MyOpts = Opts + {
+            "connstr": "c,conn=s",
+        };
+
+        #! the table of the live cases
+        const TableName = "fbdate_t";
+
+        #! the columns of the table
+        const Columns = {
+            "id": {"qore_type": "integer", "notnull": True},
+            "d": {"qore_type": "date"},
+        };
+
+        #! the rows of the table
+        const Rows = (
+            {"id": 1, "d": 2026-01-30T12:00:00},
+            {"id": 2, "d": 2026-10-21T12:00:00},
+        );
+    }
+
+    private {
+        *Datasource ds;
+        *AbstractTable table;
+    }
+
+    constructor() : Test("FirebirdDateArithmetic", "1.0", \ARGV, MyOpts) {
+        addTestCase("a date plus or minus durations is dateadd()", \dateaddSql());
+        addTestCase("other arithmetic is as before", \otherArithmetic());
+        addTestCase("a duration that is not added to a date is refused", \refusedDurations());
+        addTestCase("dates are truncated with cop_trunc_date() and truncate_date", \truncDateSql());
+        addTestCase("live: date arithmetic", \liveDateArithmetic());
+        addTestCase("live: a duration in a where clause", \liveWhere());
+        addTestCase("live: date truncation", \liveTruncDate());
+        set_return_value(main());
+    }
+
+    globalTearDown() {
+        if (table) {
+            table.dropCommit();
+        }
+    }
+
+    private static hash<DataProviderExpression> exp(string op, list<auto> args) {
+        return <DataProviderExpression>{"exp": op, "args": args};
+    }
+
+    private static hash<DataProviderFieldReference> fld(string name) {
+        return <DataProviderFieldReference>{"field": name};
+    }
+
+    #! returns an offline table of the columns
+    private static XdbcFirebirdTable getOfflineTable() {
+        XdbcFirebirdTable t(new FirebirdDateOfflineDatasource(), TableName);
+        t.setupTable({"columns": Columns});
+        return t;
+    }
+
+    #! returns the SQL of a select of one column expression, and the arguments in the reference
+    private static string columnSql(AbstractTable t, hash<DataProviderExpression> col, *reference<list<auto>> args) {
+        list<auto> a;
+        string sql = t.getSelectSql({"columns": (col,)}, \a);
+        args = a;
+        # the expression and nothing else
+        return (sql =~ x/^select (.*) from fbdate_t$/)[0] ?? sql;
+    }
+
+    dateaddSql() {
+        XdbcFirebirdTable t = getOfflineTable();
+        list<auto> args;
+
+        # the durations are added in their order: the first is the innermost
+        assertEq("dateadd(cast(%v as bigint) day to dateadd(cast(%v as bigint) month to d))",
+            columnSql(t, exp(DP_OP_PLUS, (fld("d"), exp(DP_FUNC_MONTHS, (1,)), exp(DP_FUNC_DAYS, (2,)))), \args));
+        # the bound values in the order of the SQL
+        assertEq((2, 1), args);
+        # a duration before the date
+        assertEq("dateadd(cast(%v as bigint) week to d)", columnSql(t, exp(COP_PLUS, (exp(DP_FUNC_WEEKS, (1,)),
+            fld("d"))), \args));
+        # a difference negates the amounts of a sum of durations
+        assertEq("dateadd(-(cast(%v as bigint)) hour to dateadd(-(cast(%v as bigint)) year to d))",
+            columnSql(t, exp(DP_OP_MINUS, (fld("d"), exp(DP_OP_PLUS, (exp(DP_FUNC_YEARS, (1,)),
+                exp(DP_FUNC_HOURS, (2,)))))), \args));
+        assertEq((2, 1), args);
+        # a difference of durations: d - (10 seconds - -1 minutes) is d - 10 seconds + -1 minutes
+        assertEq("dateadd(cast(%v as bigint) minute to dateadd(-(cast(%v as bigint)) second to d))",
+            columnSql(t, exp(COP_MINUS, (fld("d"), exp(DP_OP_MINUS, (exp(DP_FUNC_SECONDS, (10,)),
+                exp(DP_FUNC_MINUTES, (-1,)))))), \args));
+        assertEq((-1, 10), args);
+        # milliseconds, and microseconds as a fraction of a millisecond
+        assertEq("dateadd(cast(%v as numeric(18,1)) / 1000 millisecond to dateadd(cast(%v as bigint) millisecond "
+            "to d))", columnSql(t, exp(DP_OP_PLUS, (fld("d"), exp(DP_FUNC_MILLISECONDS, (5,)),
+                exp(DP_FUNC_MICROSECONDS, (1500,)))), \args));
+        assertEq((1500, 5), args);
+        # a relative date value, by its components
+        assertEq("dateadd(1.5 millisecond to dateadd(3 hour to dateadd(2 day to dateadd(1 year to d))))",
+            columnSql(t, exp(DP_OP_PLUS, (fld("d"), 1Y + 2D + 3h + 1500us)), \args));
+        assertEq((), args);
+        assertEq("dateadd(-(-1) day to d)", columnSql(t, exp(DP_OP_MINUS, (fld("d"), -1D)), \args));
+        # a duration of zero
+        assertEq("d", columnSql(t, exp(DP_OP_PLUS, (fld("d"), 0s)), \args));
+        # the current time and a date value
+        assertEq("dateadd(-(cast(%v as bigint)) second to current_timestamp)",
+            columnSql(t, exp(DP_OP_MINUS, (exp(DP_FUNC_NOW, ()), exp(DP_FUNC_SECONDS, (30,)))), \args));
+        assertEq("dateadd(cast(%v as bigint) day to cast(%v as timestamp))",
+            columnSql(t, exp(DP_OP_PLUS, (2026-10-21T12:00:00, exp(DP_FUNC_DAYS, (1,)))), \args));
+        assertEq((1, 2026-10-21T12:00:00), args);
+
+        # in a comparison of a where clause
+        assertEq("select id from fbdate_t where d > dateadd(-(cast(%v as bigint)) day to current_timestamp)",
+            t.getSelectSql({"columns": ("id",), "where": exp(OP_GT, (fld("d"), exp(DP_OP_MINUS,
+                (exp(DP_FUNC_NOW, ()), exp(DP_FUNC_DAYS, (1,))))))}, \args));
+    }
+
+    otherArithmetic() {
+        XdbcFirebirdTable t = getOfflineTable();
+        list<auto> args;
+        assertEq("(id + cast(%v as bigint))", columnSql(t, exp(DP_OP_PLUS, (fld("id"), 1)), \args));
+        assertEq("id - cast(%v as bigint)", columnSql(t, exp(COP_MINUS, (fld("id"), 1)), \args));
+        # the difference of two dates, in days
+        assertEq("d - d", columnSql(t, exp(DP_OP_MINUS, (fld("d"), fld("d"))), \args));
+    }
+
+    refusedDurations() {
+        XdbcFirebirdTable t = getOfflineTable();
+        list<auto> args;
+        # standalone
+        assertThrows("SQLUTIL-EXPRESSION-NOT-PUSHDOWNABLE", "days", sub () {
+            columnSql(t, exp(DP_FUNC_DAYS, (1,)), \args);
+        });
+        assertThrows("SQLUTIL-EXPRESSION-NOT-PUSHDOWNABLE", "microseconds", sub () {
+            columnSql(t, exp(DP_FUNC_MICROSECONDS, (1,)), \args);
+        });
+        # a sum and a difference of durations without a date
+        assertThrows("SQLUTIL-EXPRESSION-NOT-PUSHDOWNABLE", "a sum of durations", sub () {
+            columnSql(t, exp(DP_OP_PLUS, (exp(DP_FUNC_DAYS, (1,)), exp(DP_FUNC_HOURS, (1,)))), \args);
+        });
+        assertThrows("SQLUTIL-EXPRESSION-NOT-PUSHDOWNABLE", "a duration minus", sub () {
+            columnSql(t, exp(DP_OP_MINUS, (exp(DP_FUNC_DAYS, (1,)), exp(DP_FUNC_HOURS, (1,)))), \args);
+        });
+        # a duration minus a date
+        assertThrows("SQLUTIL-EXPRESSION-NOT-PUSHDOWNABLE", "a duration minus", sub () {
+            columnSql(t, exp(DP_OP_MINUS, (exp(DP_FUNC_DAYS, (1,)), fld("d"))), \args);
+        });
+        # compared directly with a date, and as a value
+        assertThrows("SQLUTIL-EXPRESSION-NOT-PUSHDOWNABLE", "days", sub () {
+            t.getSelectSql({"where": exp(OP_GT, (fld("d"), exp(DP_FUNC_DAYS, (1,))))}, \args);
+        });
+        assertThrows("SQLUTIL-EXPRESSION-NOT-PUSHDOWNABLE", "relative date value", sub () {
+            t.getSelectSql({"where": exp(OP_GT, (fld("d"), 1D))}, \args);
+        });
+        assertThrows("SQLUTIL-EXPRESSION-NOT-PUSHDOWNABLE", "relative date value", sub () {
+            columnSql(t, exp(DP_EXPR_VALUE, (1D,)), \args);
+        });
+
+        # a caller that splits a where clause evaluates an expression with a duration client-side, as with any
+        # expression that has no SQL of its own on Firebird
+        hash<DataProviderExpression> cond = exp(OP_GT, (fld("d"), exp(DP_OP_MINUS, (exp(DP_FUNC_NOW, ()),
+            exp(DP_FUNC_DAYS, (1,))))));
+        hash<auto> split = AbstractDataProvider::splitPushdownableExpression(cond, t.getExpressionMap());
+        assertEq(NOTHING, split.pushdown);
+        assertEq(cond, split.client);
+    }
+
+    truncDateSql() {
+        XdbcFirebirdTable t = getOfflineTable();
+        list<auto> args;
+        # Firebird has no date_trunc(): the text of the timestamp is cut, and the date is named once
+        assertEq("select cast(substring(cast(cast(d as timestamp) as varchar(24)) from 1 for 7) || '-01 00:00:00' as "
+            "timestamp) from fbdate_t", t.getSelectSql({"columns": (cop_trunc_date("d", DT_MONTH),)}, \args));
+        assertEq("cast(substring(cast(cast(d as timestamp) as varchar(24)) from 1 for 19) as timestamp)",
+            columnSql(t, exp(COP_TRUNC_DATE, (fld("d"), DT_SECOND)), \args));
+        # a value, given its type by the cast
+        assertEq("cast(substring(cast(cast(%v as timestamp) as varchar(24)) from 1 for 4) || '-01-01 00:00:00' as "
+            "timestamp)", columnSql(t, exp(COP_TRUNC_DATE, (2016-02-11T09:26:14, DT_YEAR)), \args));
+        assertEq((2016-02-11T09:26:14,), args);
+        assertThrows("TRUNC-DATE-ERROR", sub () {
+            columnSql(t, exp(COP_TRUNC_DATE, (fld("d"), "X")), \args);
+        });
+    }
+
+    #! returns the live table, creating it on the first call
+    private AbstractTable getLiveTable() {
+%ifdef NoJni
+        testSkip("no jni module");
+%endif
+        if (table) {
+            return table;
+        }
+        string connstr = m_options.connstr ?? ENV.QORE_DB_CONNSTR_JDBC_FIREBIRD ?? "";
+        if (!connstr.val()) {
+            testSkip("no Firebird connection; set QORE_DB_CONNSTR_JDBC_FIREBIRD or use -c");
+        }
+        Datasource nds(connstr);
+        if (nds.getDriverRealName() !~ /^firebird/i) {
+            testSkip("not a Firebird connection");
+        }
+        ds = nds;
+        Database db(ds);
+        {
+            *AbstractTable old = db.getTable(TableName);
+            if (old) {
+                old.dropCommit();
+            }
+        }
+        AbstractTable t = db.makeTable(TableName, {"columns": Columns, "primary_key": {"name": "pk_fbdate_t",
+            "columns": ("id",)}});
+        t.create();
+        ds.commit();
+        map t.insert($1), Rows;
+        ds.commit();
+        return table = db.getTable(TableName);
+    }
+
+    liveDateArithmetic() {
+        AbstractTable t = getLiveTable();
+        hash<auto> row = t.selectRow({"columns": (
+            exp(COP_AS, (exp(DP_OP_PLUS, (fld("d"), exp(DP_FUNC_MONTHS, (1,)), exp(DP_FUNC_DAYS, (1,)))), "md")),
+            exp(COP_AS, (exp(DP_OP_PLUS, (fld("d"), exp(DP_FUNC_DAYS, (1,)), exp(DP_FUNC_MONTHS, (1,)))), "dm")),
+            exp(COP_AS, (exp(DP_OP_MINUS, (fld("d"), exp(DP_OP_PLUS, (exp(DP_FUNC_YEARS, (1,)),
+                exp(DP_FUNC_HOURS, (2,)))))), "minus")),
+            exp(COP_AS, (exp(COP_PLUS, (exp(DP_FUNC_WEEKS, (1,)), fld("d"))), "week")),
+            exp(COP_AS, (exp(DP_OP_PLUS, (fld("d"), exp(DP_FUNC_MINUTES, (5,)), exp(DP_FUNC_SECONDS, (6,)),
+                exp(DP_FUNC_MILLISECONDS, (7,)), exp(DP_FUNC_MICROSECONDS, (800,)))), "small")),
+            exp(COP_AS, (exp(DP_OP_PLUS, (fld("d"), 1Y + 2D + 3h + 1500us)), "rel")),
+            exp(COP_AS, (exp(DP_OP_PLUS, (2026-10-21T12:00:00, exp(DP_FUNC_DAYS, (1,)))), "value")),
+        ), "where": {"id": 1}});
+        assertEq({
+            # the durations are added in their order: January 30 plus a month is February 28, plus a day March 1;
+            # plus a day, January 31, plus a month February 28
+            "md": 2026-03-01T12:00:00,
+            "dm": 2026-02-28T12:00:00,
+            "minus": 2025-01-30T10:00:00,
+            "week": 2026-02-06T12:00:00,
+            "small": 2026-01-30T12:05:06.0078,
+            "rel": 2027-02-01T15:00:00.0015,
+            "value": 2026-10-22T12:00:00,
+        }, row);
+    }
+
+    liveTruncDate() {
+        AbstractTable t = getLiveTable();
+        date d = 2016-02-11T09:26:14.5021;
+        # the result keys of the masks, which differ in case only
+        hash<string, string> mask_keys = {
+            DT_YEAR: "year", DT_MONTH: "month", DT_DAY: "day", DT_HOUR: "hour", DT_MINUTE: "minute",
+            DT_SECOND: "second",
+        };
+        hash<auto> row = t.selectRow({"columns": (
+            map exp(COP_AS, (exp(COP_TRUNC_DATE, (d, $1.key)), $1.value)), mask_keys.pairIterator()
+        ), "where": {"id": 1}});
+        assertEq({
+            "year": 2016-01-01T00:00:00,
+            "month": 2016-02-01T00:00:00,
+            "day": 2016-02-11T00:00:00,
+            "hour": 2016-02-11T09:00:00,
+            "minute": 2016-02-11T09:26:00,
+            "second": 2016-02-11T09:26:14,
+        }, row);
+        assertEq({"y": 2026-01-01T00:00:00}, t.selectRow({"columns": (cop_as(cop_trunc_date("d", DT_YEAR), "y"),),
+            "where": {"id": 1}}));
+    }
+
+    liveWhere() {
+        AbstractTable t = getLiveTable();
+        # the rows of a date after a date minus a duration
+        assertEq((2,), t.select({"columns": ("id",), "where": exp(OP_GT, (fld("d"), exp(DP_OP_MINUS,
+            (2026-10-22T00:00:00, exp(DP_FUNC_DAYS, (2,))))))}).id);
+        assertEq((1, 2), t.select({"columns": ("id",), "where": exp(OP_LT, (fld("d"), exp(DP_OP_PLUS,
+            (2026-01-30T12:00:01, exp(DP_FUNC_YEARS, (1,)))))), "orderby": "id"}).id);
+        assertEq((1,), t.select({"columns": ("id",), "where": exp(OP_LT, (fld("d"), exp(DP_OP_PLUS,
+            (2026-01-30T12:00:00, exp(DP_FUNC_MICROSECONDS, (200,))))))}).id);
+    }
+}

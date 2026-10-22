@@ -543,8 +543,16 @@ public:
     //! Sets maximum number of threads
     /** @param count Maximum number of threads (0 = unlimited)
 
-        @note This limits threads created by the background statement.
-        Exceeding the limit raises a SANDBOX-THREAD-LIMIT exception.
+        The limit is the number of threads that code governed by this sandbox may have running at the same time:
+        threads started with the \c background operator, \c call_async(), the workers of \c parallel_map() and
+        \c parallel_foreach(), and threads that modules start with q_start_thread() on the sandboxed code's
+        behalf; these are exactly the threads that inherit this sandbox (see @ref QTF_NO_SANDBOX_INHERIT).  The
+        thread that enters the sandboxed Program from outside is not counted, nor are shared threads that run work
+        for many callers (for example the workers of a @ref Qore::Thread::ThreadPool "ThreadPool" and the I/O and
+        callback threads of an async I/O controller).
+
+        Starting a thread at the limit raises \c THREAD-CREATION-FAILURE in the starting code; a counted thread
+        stops counting when it ends.  Lowering the limit does not affect threads that are already running.
     */
     DLLEXPORT void setMaxThreads(int count);
 
@@ -730,7 +738,7 @@ private:
     int64 wall_time_limit;
 
     //! Maximum threads (0 = unlimited)
-    int max_threads;
+    std::atomic<int> max_threads;
 
     //! Maximum recursion depth (0 = unlimited)
     int max_recursion;
@@ -744,8 +752,22 @@ private:
     //! Registered cancel callbacks
     std::vector<std::pair<void*, cancel_callback_t>> cancel_callbacks;
 
+    //! The number of running threads that this sandbox governs and counts against @ref max_threads
+    std::atomic<int> active_threads;
+
     //! Disallow copying via assignment
     QoreSandboxManager& operator=(const QoreSandboxManager&) = delete;
+
+    // reserves and releases thread slots for the threads that inherit this sandbox
+    friend class QoreInheritedSandbox;
+
+    //! Counts a new thread governed by this sandbox; raises THREAD-CREATION-FAILURE at the thread limit
+    /** @return 0 if the thread is counted, -1 if the limit has been reached (an exception is raised)
+    */
+    DLLLOCAL int acquireThreadSlot(ExceptionSink* xsink);
+
+    //! Stops counting a thread counted with acquireThreadSlot()
+    DLLLOCAL void releaseThreadSlot();
 };
 
 //! RAII helper that acquires a ref'd sandbox manager for the current running program
@@ -874,6 +896,84 @@ private:
     // non-copyable
     QoreSandboxPolicyBarrierHelper(const QoreSandboxPolicyBarrierHelper&) = delete;
     QoreSandboxPolicyBarrierHelper& operator=(const QoreSandboxPolicyBarrierHelper&) = delete;
+};
+
+class QoreSandboxContext;
+
+//! The sandbox that governs the current thread, captured so that it can govern work run on another thread
+/** A thread started with q_start_thread() or the \c background operator inherits the sandbox of the code that
+    starts it.  A thread that runs work for many callers - a module's worker pool, or a thread that a native library
+    owns and that runs callbacks registered by Qore code - must instead govern each piece of work by the sandbox of
+    the code that submitted or registered it: capture a QoreSandboxCapture when the work is submitted (in the
+    submitting thread) and apply it with QoreSandboxCaptureHelper around the work on the worker thread.
+
+    Without this, the work of a sandboxed caller runs with no sandbox at all, or under the sandbox of whichever
+    caller happened to start the worker.
+
+    The object is immutable after construction and may be shared between threads.
+
+    @par Example:
+    @code{.cpp}
+    // when the work is submitted, in the submitting thread
+    task->sandbox.reset(new QoreSandboxCapture);
+    // on the worker thread
+    QoreSandboxCaptureHelper sch(*task->sandbox);
+    task->callback->execValue(args, xsink);
+    @endcode
+
+    @see @ref QTF_NO_SANDBOX_INHERIT
+
+    @since %Qore 3.0
+*/
+class DLLEXPORT QoreSandboxCapture {
+public:
+    //! Captures the sandbox that governs the current thread
+    DLLEXPORT QoreSandboxCapture();
+
+    //! Releases the captured sandbox
+    DLLEXPORT ~QoreSandboxCapture();
+
+    //! Returns true if a sandbox governed the thread that captured the object
+    DLLEXPORT bool isSandboxed() const;
+
+    //! Returns true if both objects captured the same sandbox (or both captured none)
+    /** Work captured under the same sandbox can be combined, for example into one batch, and run under either
+        capture.
+    */
+    DLLEXPORT bool sameSandbox(const QoreSandboxCapture& other) const;
+
+private:
+    QoreSandboxContext* ctx;
+
+    friend class QoreSandboxCaptureHelper;
+
+    // non-copyable
+    QoreSandboxCapture(const QoreSandboxCapture&) = delete;
+    QoreSandboxCapture& operator=(const QoreSandboxCapture&) = delete;
+};
+
+//! Governs the current thread by a captured sandbox while the object exists
+/** The captured sandbox governs the work as its outermost caller, exactly as if the work ran on a thread that the
+    capturing code had started: a Program that the work enters and that has a sandbox manager of its own is still
+    governed by that manager.
+
+    @since %Qore 3.0
+*/
+class DLLEXPORT QoreSandboxCaptureHelper {
+public:
+    //! Applies the captured sandbox; the capture must remain valid while the helper exists
+    DLLEXPORT QoreSandboxCaptureHelper(const QoreSandboxCapture& capture);
+
+    //! Restores the sandbox that governed the thread before
+    DLLEXPORT ~QoreSandboxCaptureHelper();
+
+private:
+    const QoreSandboxContext* old_ctx = nullptr;
+    bool active = false;
+
+    // non-copyable
+    QoreSandboxCaptureHelper(const QoreSandboxCaptureHelper&) = delete;
+    QoreSandboxCaptureHelper& operator=(const QoreSandboxCaptureHelper&) = delete;
 };
 
 //! Polling interval for blocking I/O operations in milliseconds

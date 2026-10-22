@@ -345,5 +345,61 @@ qore_external_user_module("{'qlib/Fixture' if separated else 'qlib/Fixture.qm'}"
                     self.assertNotIn(str(build / ".tag"), config.read_text())
 
 
+class BuildTreeDocToolsTest(unittest.TestCase):
+    """A module built against a Qore build tree runs that tree's documentation tools, which are scripts in its source
+    tree, with the tree's qore and modules; a qore on PATH is another Qore or none at all."""
+
+    QORE = "/qore build/qore"
+    QDX = "/qore source/doxygen/qdx"
+    QJAR = "/qore source/doxygen/qjar"
+    BUILD_TREE_PATH = "/qore build/qlib-qmod:/qore source/qlib:/qore build/modules/astparser"
+
+    def macro_settings(self, root, in_build_tree, module_dir=None):
+        """Returns QORE_QDX_COMMAND, QORE_QJAR_COMMAND and QORE_DOCS_ENV as QoreMacros.cmake sets them."""
+        source = root / ("build-tree" if in_build_tree else "installed") / "consumer"
+        source.mkdir(parents=True)
+        (source / "CMakeLists.txt").write_text(f'''cmake_minimum_required(VERSION 3.14...3.31)
+project(DocTools NONE)
+set(QORE_IN_BUILD_TREE {"TRUE" if in_build_tree else "FALSE"})
+set(QORE_EXECUTABLE "{self.QORE}")
+set(QORE_QDX_EXECUTABLE "{self.QDX}")
+set(QORE_QJAR_EXECUTABLE "{self.QJAR}")
+set(QORE_BUILDTREE_USER_MODULE_PATH "{self.BUILD_TREE_PATH if in_build_tree else ""}")
+include("{ROOT}/cmake/QoreMacros.cmake")
+file(WRITE "${{CMAKE_BINARY_DIR}}/result.txt" "${{QORE_QDX_COMMAND}}\\n${{QORE_QJAR_COMMAND}}\\n${{QORE_DOCS_ENV}}\\n")
+''')
+        env = {name: value for name, value in os.environ.items() if name not in ("QORE_MODULE_DIR", "QORE_DOC_DEFINES")}
+        if module_dir is not None:
+            env["QORE_MODULE_DIR"] = module_dir
+        build = source.parent / "build"
+        result = subprocess.run([CMAKE, "-S", str(source), "-B", str(build)], capture_output=True, text=True,
+                                timeout=60, env=env)
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+        return (build / "result.txt").read_text().splitlines()
+
+    def test_build_tree_tools_run_with_its_qore_and_modules(self):
+        with tempfile.TemporaryDirectory(prefix="qore doc tools ") as directory:
+            qdx, qjar, docs_env = self.macro_settings(Path(directory), True)
+            self.assertEqual(f"{self.QORE};{self.QDX}", qdx)
+            self.assertEqual(f"{self.QORE};{self.QJAR}", qjar)
+            self.assertEqual(f"QORE_MODULE_DIR={self.BUILD_TREE_PATH}", docs_env.split(";")[0])
+
+    def test_build_tree_modules_come_before_the_environment(self):
+        with tempfile.TemporaryDirectory(prefix="qore doc tools ") as directory:
+            _, _, docs_env = self.macro_settings(Path(directory), True, "/other modules")
+            self.assertEqual(f"QORE_MODULE_DIR={self.BUILD_TREE_PATH}:/other modules", docs_env.split(";")[0])
+
+    def test_installed_tools_are_unchanged(self):
+        with tempfile.TemporaryDirectory(prefix="qore doc tools ") as directory:
+            root = Path(directory)
+            qdx, qjar, docs_env = self.macro_settings(root, False)
+            self.assertEqual(self.QDX, qdx)
+            self.assertEqual(self.QJAR, qjar)
+            self.assertTrue(docs_env.startswith("QORE_DOC_DEFINES="), docs_env)
+            shutil.rmtree(root / "installed")
+            _, _, docs_env = self.macro_settings(root, False, "/other modules")
+            self.assertEqual("QORE_MODULE_DIR=/other modules", docs_env.split(";")[0])
+
+
 if __name__ == "__main__":
     unittest.main()

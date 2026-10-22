@@ -310,20 +310,25 @@ public class HttpSseStreamPollOperation inherits HttpConnectionPollOperationBase
         @param retry retry interval in ms (optional)
     */
     queueEvent(*string event_type, string data, *string id, *int retry) {
-        event_channel.send({
+        queueRawEvent({
             "type": event_type,
             "data": data,
             "id": id,
             "retry": retry,
         });
-        notifier.notify();
     }
 
     #! Queues a raw SSE message
-    /** @param event hash with optional keys: type, data, id, retry
+    /** The event is formatted when it is queued, so that an event that cannot be written raises an exception in the
+        caller instead of failing in the I/O thread.
+
+        @param event hash with optional keys: type, data, id, retry
+
+        @throw SSE-EVENT-ERROR the event type or ID contains a NUL, CR or LF character, or the retry value is not a
+        non-negative integer; see @ref HttpServerAsyncIo::SseEventFormat "SseEventFormat"
     */
     queueRawEvent(hash<auto> event) {
-        event_channel.send(event);
+        event_channel.send(formatSseEvent(event));
         notifier.notify();
     }
 
@@ -367,26 +372,7 @@ public class HttpSseStreamPollOperation inherits HttpConnectionPollOperationBase
 
     #! Formats an SSE event according to the spec
     private string formatSseEvent(hash<auto> event) {
-        string msg = "";
-
-        if (event.id) {
-            msg += "id: " + event.id + "\n";
-        }
-        if (event.type) {
-            msg += "event: " + event.type + "\n";
-        }
-        if (event.retry) {
-            msg += "retry: " + event.retry + "\n";
-        }
-        if (event.data) {
-            # Split data by newlines and prefix each line with "data: "
-            list<string> lines = event.data.split("\n");
-            foreach string line in (lines) {
-                msg += "data: " + line + "\n";
-            }
-        }
-        msg += "\n";  # Empty line terminates the event
-        return msg;
+        return SseEventFormat::formatEvent(event);
     }
 
     #! Returns the socket

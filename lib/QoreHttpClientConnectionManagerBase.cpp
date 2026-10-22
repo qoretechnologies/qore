@@ -42,6 +42,7 @@
 #include "qore/intern/QC_Future.h"
 #include "qore/intern/QoreAsyncIoLogger.h"
 #include "qore/intern/SocketSyncPoll.h"
+#include "qore/intern/qore_socket_private.h"
 
 #include <chrono>
 #include <cstdio>
@@ -160,12 +161,60 @@ std::string HttpClientConnectionManagerBase::poolKey(const char* host, int port,
 // acquireConnection
 // ============================================================
 
+struct HttpClientConnectionManagerBase::SandboxScan {
+    //! the network sandbox of the calling code, or nullptr if it has none
+    QoreSandboxManager* policy;
+    //! the first denial of a live connection by the sandbox, if any
+    ExceptionSink refused;
+    //! true if a live connection was skipped because the sandbox denies it or cannot decide on it
+    bool skipped = false;
+    //! true if the sandbox allows a live connection, also one without a free stream
+    bool allowed = false;
+
+    DLLLOCAL explicit SandboxScan(QoreSandboxManager* policy) : policy(policy) {
+    }
+
+    //! the denial is reported only if no connection can be opened instead; a new connection is checked by its connect
+    DLLLOCAL ~SandboxScan() {
+        refused.clear();
+    }
+
+    //! Clears the decisions for another scan
+    DLLLOCAL void reset() {
+        refused.clear();
+        skipped = false;
+        allowed = false;
+    }
+
+    //! Returns true if the calling code may use the connection
+    DLLLOCAL bool allows(HttpClientConnectionBase* conn) {
+        if (!policy) {
+            return true;
+        }
+        ExceptionSink xs;
+        if (!conn->checkSandboxUse(policy, &xs)) {
+            allowed = true;
+            return true;
+        }
+        skipped = true;
+        if (xs && !refused) {
+            refused.assimilate(xs);
+        } else {
+            xs.clear();
+        }
+        return false;
+    }
+};
+
 HttpClientConnectionBase* HttpClientConnectionManagerBase::findReusableLocked(
-        const std::string& key, bool streaming_send) {
+        const std::string& key, bool streaming_send, SandboxScan& scan) {
     auto it = pool_.find(key);
     if (it == pool_.end()) {
         return nullptr;
     }
+
+    // A connection is checked against the network sandbox of the code that opened it; it is handed to other code
+    // only if that code's sandbox allows its destinations, as a new connection to them would be checked
 
     // For NEGOTIATE managers the pool may hold a mix of H1 and H2
     // connections under the same (host, port) key.  H2 is nearly always
@@ -188,6 +237,9 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::findReusableLocked(
             if (conn->getProtocol() != HttpClientProtocol::H2) {
                 continue;
             }
+            if (!scan.allows(conn)) {
+                continue;
+            }
             if (conn->tryReserveStream(streaming_send)) {
                 return conn;
             }
@@ -207,6 +259,9 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::findReusableLocked(
                 // a request in this state.
                 continue;
             }
+            if (!scan.allows(conn)) {
+                continue;
+            }
             if (conn->tryReserveStream(streaming_send)) {
                 return conn;
             }
@@ -217,6 +272,9 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::findReusableLocked(
     // Fixed-protocol manager: single pass, insertion order.
     for (HttpClientConnectionBase* conn : it->second) {
         if (conn->isClosed() || conn->isDraining()) {
+            continue;
+        }
+        if (!scan.allows(conn)) {
             continue;
         }
         if (conn->tryReserveStream(streaming_send)) {
@@ -335,7 +393,13 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::acquireConnectionImpl
 
     std::string key = poolKey(host, port, ssl_required);
 
+    // the network sandbox of the calling code, which every pooled connection handed to it must be allowed by
+    SimpleRefHolder<QoreSandboxManager> policy(qore_socket_ref_policy_sandbox_manager());
+
     while (true) {
+        // the sandbox's decisions on the pooled connections
+        SandboxScan scan(*policy);
+
         // 1. Read-lock pool scan for a reusable connection.
         {
             std::shared_lock<std::shared_mutex> rl(pool_lock_);
@@ -344,7 +408,7 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::acquireConnectionImpl
                     "connection manager is shutting down");
                 return nullptr;
             }
-            HttpClientConnectionBase* live = findReusableLocked(key, streaming_send);
+            HttpClientConnectionBase* live = findReusableLocked(key, streaming_send, scan);
             if (live) {
                 return live;
             }
@@ -425,16 +489,29 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::acquireConnectionImpl
             // Pass the out-vector so max-age-expired conns are collected
             // for close-after-lock-drop instead of being kept in the pool.
             evictDeadLocked(key, &max_age_evicted, &closed_evicted);
-            live_to_return = findReusableLocked(key, streaming_send);
+            scan.reset();
+            live_to_return = findReusableLocked(key, streaming_send, scan);
 
             // Capacity check
             if (!live_to_return && opts_.max_connections_per_host) {
                 auto it = pool_.find(key);
                 int count = (it == pool_.end()) ? 0 : (int)it->second.size();
                 if (count >= opts_.max_connections_per_host) {
-                    xsink->raiseException("HTTPCLIENT-CAPACITY-ERROR",
-                        "all %d connections to %s have reached the "
-                        "concurrent stream limit", count, key.c_str());
+                    // when the sandbox of the calling code allows none of the connections, its denial is the reason
+                    // that the caller gets none; otherwise the connections it may use are busy
+                    if (!scan.allowed && scan.refused) {
+                        xsink->assimilate(scan.refused);
+                    } else if (!scan.allowed && scan.skipped) {
+                        xsink->raiseException("NETWORK-ACCESS-DENIED", "the network sandbox of the calling code "
+                            "cannot use the %d connections to %s, which were opened for code under another sandbox "
+                            "and are still being made or lead to destinations it cannot decide on, and no further "
+                            "connection can be opened (the limit is %d)", count, key.c_str(),
+                            opts_.max_connections_per_host);
+                    } else {
+                        xsink->raiseException("HTTPCLIENT-CAPACITY-ERROR",
+                            "all %d connections to %s have reached the "
+                            "concurrent stream limit", count, key.c_str());
+                    }
                     return nullptr;  // drain_guard fires
                 }
             }
@@ -726,6 +803,9 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::createConnection(
                     conn = new Http2ClientConnection(adopted_obj,
                         adopted_priv, host, port,
                         opts_.max_streams_per_connection, xsink, this, connect_timeout_us, connect_deadline_us);
+                    if (conn) {
+                        conn->inheritOpener(**h1);
+                    }
                     // Fall through: any xsink raised here is handled by
                     // the post-switch error block, and the holder will
                     // deref `conn` safely on early return.

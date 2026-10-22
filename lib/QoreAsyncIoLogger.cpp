@@ -32,6 +32,7 @@
 #include <qore/Qore.h>
 #include "qore/intern/QoreLoggerBridge.h"
 #include "qore/intern/QoreAsyncIoLogger.h"
+#include "qore/intern/QoreForkHandlers.h"
 #include <unistd.h>
 #ifdef __linux__
 #include <sys/syscall.h>
@@ -41,6 +42,8 @@
 
 static QoreThreadLock async_io_logger_lock;
 static QoreLoggerBridge* async_io_logger = nullptr;
+// the logger can be set in a child process created with fork() (see QoreForkHandlers.h)
+static QoreForkThreadLock async_io_logger_fork_handler(async_io_logger_lock, QFLR_LEAF, "async_io_logger");
 
 void qore_set_async_io_logger(QoreObject* logger_obj, ExceptionSink* xsink) {
     // Type safety is enforced at the Qore level via *LoggerInterfaceBase parameter type
@@ -133,14 +136,15 @@ void qore_async_io_logger_cleanup() {
 // --- Low-level C trace for async I/O debugging ---
 #if defined(DEBUG) || defined(DEBUG_ASYNC_IO)
 
+// read once, on the first call, without a static initialization guard (see QoreLazyValue); the I/O threads of
+// several controllers call this concurrently
+static constinit QoreLazyValue<bool> async_io_trace([]() -> bool {
+    QoreEnvironmentValue val("QORE_ASYNC_IO_TRACE");
+    return val && val.c_str()[0] == '1';
+});
+
 bool qore_async_io_trace_enabled() {
-    // initialized once, on the first call; the initialization of a local static is thread-safe, while the I/O threads
-    // of several controllers call this concurrently
-    static const bool enabled = [] () {
-        const char* val = getenv("QORE_ASYNC_IO_TRACE");
-        return val && val[0] == '1';
-    }();
-    return enabled;
+    return async_io_trace.get();
 }
 
 // the operating system's ID of the calling thread

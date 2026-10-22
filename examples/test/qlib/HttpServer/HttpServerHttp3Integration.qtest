@@ -1026,6 +1026,7 @@ l50Xb2GWQesIt9k5jF5IOw==
 
         # Add a TLS listener — should auto-create a QUIC listener
         hash<auto> info = server.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
             "service": "0",
             "cert": new SSLCertificate(CertPem),
             "key": new SSLPrivateKey(KeyPem),
@@ -1086,6 +1087,7 @@ l50Xb2GWQesIt9k5jF5IOw==
 
         # Add TLS listener to trigger auto-QUIC
         hash<auto> info = server.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
             "service": "0",
             "cert": new SSLCertificate(CertPem),
             "key": new SSLPrivateKey(KeyPem),
@@ -1143,6 +1145,7 @@ l50Xb2GWQesIt9k5jF5IOw==
         server.waitForAsyncIo();
 
         hash<auto> info = server.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
             "service": "0",
             "cert": new SSLCertificate(CertPem),
             "key": new SSLPrivateKey(KeyPem),
@@ -1195,6 +1198,7 @@ l50Xb2GWQesIt9k5jF5IOw==
         server.waitForAsyncIo();
 
         hash<auto> info = server.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
             "service": "0",
             "cert": new SSLCertificate(CertPem),
             "key": new SSLPrivateKey(KeyPem),
@@ -1242,6 +1246,7 @@ l50Xb2GWQesIt9k5jF5IOw==
         server.waitForAsyncIo();
 
         hash<auto> info = server.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
             "service": "0",
             "cert": new SSLCertificate(CertPem),
             "key": new SSLPrivateKey(KeyPem),
@@ -1326,6 +1331,7 @@ l50Xb2GWQesIt9k5jF5IOw==
 
         # Add a TLS listener — should NOT auto-create QUIC listener
         hash<auto> info = server.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
             "service": "0",
             "cert": new SSLCertificate(CertPem),
             "key": new SSLPrivateKey(KeyPem),
@@ -1361,6 +1367,7 @@ l50Xb2GWQesIt9k5jF5IOw==
         server.setHandler("test", "/test", NOTHING, new SimpleHandler());
         server.waitForAsyncIo();
         hash<auto> info = server.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
             "service": "0",
             "cert": new SSLCertificate(CertPem),
             "key": new SSLPrivateKey(KeyPem),
@@ -1524,6 +1531,7 @@ l50Xb2GWQesIt9k5jF5IOw==
             new FakeAltSvcHandler(443, "otherhost.invalid"));
         server.waitForAsyncIo();
         hash<auto> info = server.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
             "service": "0",
             "cert": new SSLCertificate(CertPem),
             "key": new SSLPrivateKey(KeyPem),
@@ -1574,6 +1582,7 @@ l50Xb2GWQesIt9k5jF5IOw==
         server.setHandler("fake-altsvc", "/test", NOTHING, new FakeAltSvcHandler(1));
         server.waitForAsyncIo();
         hash<auto> info = server.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
             "service": "0",
             "cert": new SSLCertificate(CertPem),
             "key": new SSLPrivateKey(KeyPem),
@@ -1640,6 +1649,7 @@ l50Xb2GWQesIt9k5jF5IOw==
         # Bind with no node so the TCP listener hits the same code path
         # the user hit: 0.0.0.0 wildcard (Linux getaddrinfo(AI_PASSIVE)
         # default).
+        # all-interfaces: the TCP listener on all interfaces is the subject of the test
         hash<auto> info = server.addListener(<HttpListenerOptionInfo>{
             "service": "0",
             "cert": new SSLCertificate(CertPem),

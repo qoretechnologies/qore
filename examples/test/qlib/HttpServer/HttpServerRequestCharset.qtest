@@ -107,11 +107,14 @@ class HttpServerRequestCharsetTest inherits QUnit::Test {
         server.setHandler("echo", "", NOTHING, handler);
         server.setDefaultHandler("echo", handler);
         urls."sync h1" = "http://localhost:" + server.addListener(<HttpListenerOptionInfo>{
+            "node": "localhost",
             "service": 0,
             "sync": True,
         }).port;
-        urls."async h1" = "http://localhost:" + server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        urls."async h1" = "http://localhost:"
+            + server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
         urls.h2 = "https://localhost:" + server.addListener(<HttpListenerOptionInfo>{
+            "node": "localhost",
             "service": 0,
             "cert": new SSLCertificate(CertPem),
             "key": new SSLPrivateKey(KeyPem),

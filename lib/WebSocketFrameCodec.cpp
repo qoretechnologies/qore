@@ -269,6 +269,11 @@ BinaryNode* WebSocketFrameEncoder::encode(WsOpcode opcode, const void* payload,
 }
 
 BinaryNode* WebSocketFrameEncoder::encodeClose(uint16_t code, const char* reason, bool mask) {
+    // 1005 and 1006 are never set as a status code in a close frame (RFC 6455 section 7.4.1): the close frame that
+    // answers one without a status code has none either
+    if (code == WSCC_NoStatusRcvd || code == WSCC_AbnormalClosure) {
+        return encode(WSOP_CLOSE, nullptr, 0, true, mask);
+    }
     // Close payload: 2-byte code (network byte order) + optional UTF-8 reason
     size_t reason_len = reason ? strlen(reason) : 0;
     std::vector<uint8_t> payload(2 + reason_len);

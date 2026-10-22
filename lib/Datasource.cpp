@@ -47,6 +47,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <initializer_list>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -455,11 +456,11 @@ struct DbiTypedColumnInfo {
 void qore_ds_private::statementExecuted(int rc) {
     // we always assume we are in a transaction after executing a transaction-relevant statement
     // unless the connection was aborted
-    if (!in_transaction) {
+    if (!inTransaction()) {
         if (!connection_aborted) {
             assert(!active_transaction);
             assert(isopen);
-            in_transaction = true;
+            setInTransaction(true);
             active_transaction = true;
             return;
         }
@@ -709,7 +710,7 @@ void Datasource::setPendingConnectionValues(const Datasource* other) {
 
 void Datasource::setTransactionStatus(bool t) {
     //printd(5, "Datasource::setTS(%d) this=%p\n", t, this);
-    priv->in_transaction = t;
+    priv->setInTransaction(t);
 }
 
 QoreListNode* Datasource::getCapabilityList() const {
@@ -720,8 +721,43 @@ int Datasource::getCapabilities() const {
     return qore_dbi_private::get(*priv->dsl)->getCaps();
 }
 
+void qore_ds_private::adoptStatementData(QoreSQLStatement* stmt) {
+    AutoLocker al(m);
+    stmt_set.erase(stmt);
+    if (!stmt->getPrivateData()) {
+        // the connection's thread already closed it
+        return;
+    }
+    // the placeholder is registered before the data is moved into it, so that the data is never left without an
+    // owner
+    std::unique_ptr<SQLStatement> placeholder(new SQLStatement(ds, nullptr));
+    orphan_stmts.push_back(placeholder.get());
+    placeholder.release()->setPrivateData(stmt->takePrivateData());
+}
+
+void qore_ds_private::orphansDone(bool close, ExceptionSink* xsink) {
+    if (orphan_stmts.empty()) {
+        return;
+    }
+    for (SQLStatement* stmt : orphan_stmts) {
+        if (close) {
+            qore_dbi_private::get(*dsl)->stmt_close(stmt, xsink);
+        } else {
+            // the handles are freed before the connection is reset; the data is closed later
+            qore_dbi_private::get(*dsl)->stmt_free(stmt, xsink);
+        }
+    }
+    if (close) {
+        for (SQLStatement* stmt : orphan_stmts) {
+            delete stmt;
+        }
+        orphan_stmts.clear();
+    }
+}
+
 bool Datasource::isInTransaction() const {
-    return priv->in_transaction;
+    // can be called by any thread: a snapshot of the state that the thread holding the connection sets
+    return priv->inTransaction();
 }
 
 bool Datasource::activeTransaction() const {
@@ -729,7 +765,7 @@ bool Datasource::activeTransaction() const {
 }
 
 bool Datasource::getAutoCommit() const {
-    return priv->autocommit;
+    return priv->getAutoCommit();
 }
 
 bool Datasource::isOpen() const {
@@ -745,7 +781,7 @@ void Datasource::setConnectionValues() {
 }
 
 void Datasource::setAutoCommit(bool ac) {
-    priv->autocommit = ac;
+    priv->setAutoCommit(ac);
 }
 
 QoreHashNode* qore_dbi_make_typed_select_result(Datasource* ds, const QoreHashNode* columns,
@@ -990,7 +1026,7 @@ static void ds_mutation_read_post(qore_ds_private* priv, ExceptionSink* xsink) {
     // in autocommit mode the read is its own implicit transaction, which Datasource::autoCommit()
     // is about to close; no commit outcome is reported for a read, but the transaction identity
     // must not leak into the next operation
-    if (priv->autocommit) {
+    if (priv->getAutoCommit()) {
         priv->tx_id.clear();
         priv->tx_seq = 0;
     }
@@ -1007,7 +1043,7 @@ QoreValue Datasource::select(const QoreString* query_str, const QoreListNode* ar
 
     // set active_transaction flag if in a transaction and the active_transaction flag
     // has not yet been set and no exception was raised
-    if (priv->in_transaction && !priv->active_transaction && !*xsink)
+    if (priv->inTransaction() && !priv->active_transaction && !*xsink)
         priv->active_transaction = true;
 
     return rv;
@@ -1024,7 +1060,7 @@ QoreValue Datasource::selectTyped(const QoreString* query_str, const QoreListNod
 
     // set active_transaction flag if in a transaction and the active_transaction flag
     // has not yet been set and no exception was raised
-    if (priv->in_transaction && !priv->active_transaction && !*xsink)
+    if (priv->inTransaction() && !priv->active_transaction && !*xsink)
         priv->active_transaction = true;
 
     return rv;
@@ -1042,7 +1078,7 @@ QoreColumnarResult* Datasource::selectColumnar(const QoreString* query_str, cons
 
     // set active_transaction flag if in a transaction and the active_transaction flag
     // has not yet been set and no exception was raised
-    if (priv->in_transaction && !priv->active_transaction && !*xsink)
+    if (priv->inTransaction() && !priv->active_transaction && !*xsink)
         priv->active_transaction = true;
 
     return rv;
@@ -1059,7 +1095,7 @@ QoreValue Datasource::selectRows(const QoreString* query_str, const QoreListNode
 
     // set active_transaction flag if in a transaction and the active_transaction flag
     // has not yet been set and no exception was raised
-    if (priv->in_transaction && !priv->active_transaction && !*xsink)
+    if (priv->inTransaction() && !priv->active_transaction && !*xsink)
         priv->active_transaction = true;
 
     return rv;
@@ -1076,7 +1112,7 @@ QoreValue Datasource::selectRowsTyped(const QoreString* query_str, const QoreLis
 
     // set active_transaction flag if in a transaction and the active_transaction flag
     // has not yet been set and no exception was raised
-    if (priv->in_transaction && !priv->active_transaction && !*xsink)
+    if (priv->inTransaction() && !priv->active_transaction && !*xsink)
         priv->active_transaction = true;
 
     return rv;
@@ -1093,7 +1129,7 @@ QoreHashNode* Datasource::selectRow(const QoreString* query_str, const QoreListN
 
     // set active_transaction flag if in a transaction and the active_transaction flag
     // has not yet been set and no exception was raised
-    if (priv->in_transaction && !priv->active_transaction && !*xsink)
+    if (priv->inTransaction() && !priv->active_transaction && !*xsink)
         priv->active_transaction = true;
 
     return rv;
@@ -1112,7 +1148,7 @@ QoreValue Datasource::exec_internal(bool doBind, const QoreString* query_str, co
         }
     }
 
-    const bool tx_begin = !priv->autocommit && !priv->in_transaction;
+    const bool tx_begin = !priv->getAutoCommit() && !priv->inTransaction();
     if (tx_begin && beginImplicitTransaction(xsink))
         return QoreValue();
 
@@ -1125,7 +1161,7 @@ QoreValue Datasource::exec_internal(bool doBind, const QoreString* query_str, co
     QoreValue rv = doBind ? qore_dbi_private::get(*priv->dsl)->execSQL(this, query_str, args, xsink)
         : qore_dbi_private::get(*priv->dsl)->execRawSQL(this, query_str, xsink);;
     //printd(5, "Datasource::exec_internal() this=%p, autocommit=%d, in_transaction=%d, xsink=%d\n", this,
-    //    priv->autocommit, priv->in_transaction, xsink->isException());
+    //    priv->getAutoCommit(), priv->inTransaction(), xsink->isException());
 
 #ifdef DEBUG
     // the statement has been executed and no commit has been attempted: this is the replay-safe
@@ -1162,7 +1198,7 @@ QoreValue Datasource::exec_internal(bool doBind, const QoreString* query_str, co
         priv->dispatchMutationEvent(ev, xsink);
     }
 
-    if (priv->autocommit) {
+    if (priv->getAutoCommit()) {
         if (priv->getMutationCtx()) {
             priv->commit_in_progress = true;
         }
@@ -1194,7 +1230,7 @@ QoreValue Datasource::exec_internal(bool doBind, const QoreString* query_str, co
 }
 
 int Datasource::autoCommit(ExceptionSink* xsink) {
-    if (priv->autocommit && !priv->connection_aborted)
+    if (priv->getAutoCommit() && !priv->connection_aborted)
         return qore_dbi_private::get(*priv->dsl)->autoCommit(this, xsink);
     return 0;
 }
@@ -1233,7 +1269,7 @@ int Datasource::bulkLoadBegin(const QoreString* table, const QoreListNode* colum
 
     // Match ordinary mutating operations: explicitly start a transaction when the driver requires
     // it, then keep the datasource allocated until the caller commits or rolls back.
-    const bool tx_begin = !priv->autocommit && !priv->in_transaction;
+    const bool tx_begin = !priv->getAutoCommit() && !priv->inTransaction();
     if (tx_begin && beginImplicitTransaction(xsink)) {
         return -1;
     }
@@ -1295,7 +1331,7 @@ int Datasource::bulkLoadEnd(bool success, ExceptionSink* xsink) {
             getDriverName());
         rc = -1;
     }
-    if (success && !rc && !*xsink && priv->autocommit) {
+    if (success && !rc && !*xsink && priv->getAutoCommit()) {
         autoCommit(xsink);
     }
     return *xsink ? -1 : rc;
@@ -1312,7 +1348,7 @@ QoreHashNode* Datasource::describe(const QoreString* query_str, const QoreListNo
 
     // set active_transaction flag if in a transaction and the active_transaction flag
     // has not yet been set and no exception was raised
-    if (priv->in_transaction && !priv->active_transaction && !*xsink)
+    if (priv->inTransaction() && !priv->active_transaction && !*xsink)
         priv->active_transaction = true;
 
     return rv;
@@ -1320,7 +1356,7 @@ QoreHashNode* Datasource::describe(const QoreString* query_str, const QoreListNo
 
 int Datasource::beginImplicitTransaction(ExceptionSink* xsink) {
     //printd(5, "Datasource::beginImplicitTransaction() autocommit=%s\n", autocommit ? "true" : "false");
-    if (priv->autocommit) {
+    if (priv->getAutoCommit()) {
         xsink->raiseException("AUTOCOMMIT-ERROR", "%s:%s@%s: transaction management is not available because "
             "autocommit is enabled for this Datasource", getDriverName(), priv->username.c_str(), priv->dbname.c_str());
         return -1;
@@ -1330,8 +1366,8 @@ int Datasource::beginImplicitTransaction(ExceptionSink* xsink) {
 
 int Datasource::beginTransaction(ExceptionSink* xsink) {
     int rc = beginImplicitTransaction(xsink);
-    if (!rc && !priv->in_transaction) {
-        priv->in_transaction = true;
+    if (!rc && !priv->inTransaction()) {
+        priv->setInTransaction(true);
         assert(!priv->active_transaction);
         if (priv->getMutationCtx()) {
             priv->dispatchMutationTxBegin(xsink);
@@ -1341,14 +1377,14 @@ int Datasource::beginTransaction(ExceptionSink* xsink) {
 }
 
 int Datasource::commit(ExceptionSink* xsink) {
-    if (!priv->in_transaction && beginImplicitTransaction(xsink))
+    if (!priv->inTransaction() && beginImplicitTransaction(xsink))
         return -1;
 
     return priv->commit(xsink);
 }
 
 int Datasource::rollback(ExceptionSink* xsink) {
-    if (!priv->in_transaction && beginImplicitTransaction(xsink))
+    if (!priv->inTransaction() && beginImplicitTransaction(xsink))
         return -1;
 
     return priv->rollback(xsink);
@@ -1377,7 +1413,18 @@ int Datasource::open(ExceptionSink* xsink) {
 }
 
 int Datasource::close() {
-    return priv->close();
+    if (!priv->isopen) {
+        return -1;
+    }
+    // no caller can receive an error closing the connection here
+    ExceptionSink xsink;
+    priv->close(&xsink);
+    qore_dbi_private::reportCloseWarnings(this, xsink);
+    return 0;
+}
+
+int Datasource::close(ExceptionSink* xsink) {
+    return priv->close(xsink);
 }
 
 void Datasource::connectionAborted() {
@@ -1405,9 +1452,10 @@ bool Datasource::wasConnectionAborted() const {
 // forces a close and open to reset a database connection
 void Datasource::reset(ExceptionSink* xsink) {
     if (priv->isopen) {
-        // close the Datasource
-        qore_dbi_private::get(*priv->dsl)->close(this);
-        priv->isopen = false;
+        // close the Datasource and the statements prepared on it; it is not reopened if the close raised an error
+        if (priv->close(xsink)) {
+            return;
+        }
 
         // open the connection
         open(xsink);
@@ -1415,7 +1463,7 @@ void Datasource::reset(ExceptionSink* xsink) {
         //printd(5, "Datasource::reset() this: %p priv: %p in_transaction: %d active_transaction: %d\n", this, priv, priv->in_transaction, priv->active_transaction);
 
         // close any open transaction(s)
-        priv->in_transaction = false;
+        priv->setInTransaction(false);
         priv->active_transaction = false;
         priv->commit_in_progress = false;
         priv->tx_id.clear();
@@ -1568,16 +1616,23 @@ QoreHashNode* Datasource::getOptionHash() const {
 }
 
 int Datasource::setOption(const char* opt, const QoreValue val, ExceptionSink* xsink) {
-    // maintain a copy of the option internally
-    priv->setOption(opt, val, xsink);
-    // only set options in private data if private data is already set
-    if (priv->private_data) {
-        return qore_dbi_private::get(*priv->dsl)->opt_set(this, opt, val, xsink);
-    }
-
+    // the errors of this call are collected in a sink of its own, as the caller's can already hold an exception
+    ExceptionSink opt_xsink;
     // issue #3243: validate options before sending them to the driver
-    OptInputHelper opt_helper(xsink, *qore_dbi_private::get(*priv->dsl), opt, true, val);
-    return *xsink ? -1 : 0;
+    OptInputHelper opt_helper(&opt_xsink, *qore_dbi_private::get(*priv->dsl), opt, true, val);
+    // with an open connection, the driver must accept the value as well
+    int rc = 0;
+    if (!opt_xsink && priv->private_data) {
+        rc = qore_dbi_private::get(*priv->dsl)->opt_set_validated(this, opt, opt_helper.val, &opt_xsink);
+    }
+    if (opt_xsink) {
+        // a value that was refused is not kept: it never becomes current, also not on the next connection
+        xsink->assimilate(opt_xsink);
+        return -1;
+    }
+    // the copy of the option that is set on every new connection
+    priv->setOption(opt, opt_helper.val, xsink);
+    return rc;
 }
 
 const QoreHashNode* Datasource::getConnectOptions() const {

@@ -446,6 +446,9 @@ public class CsvReadDataProvider inherits DataProvider::AbstractDataProvider {
 
         #! the record type, kept once read: a search releases the iterator when it is exhausted
         *hash<string, AbstractDataField> record_type;
+
+        #! An empty input can have no fields; this is still a cached type
+        bool record_type_read = False;
     }
 
     #! Creates the CsvReadDataProvider with the input data path and optionally an option hash
@@ -542,13 +545,15 @@ public class CsvReadDataProvider inherits DataProvider::AbstractDataProvider {
     private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) {
         # the type is read before any search, which deletes the iterator once it has no more records; asking for
         # the type again afterwards (as the example data fallback does when there are no records) must not use it
-        if (record_type) {
+        if (record_type_read) {
             return record_type;
         }
         if (!i.valid()) {
             i.peek();
         }
-        return record_type = i.getRecordType();
+        record_type = i.getRecordType();
+        record_type_read = True;
+        return record_type;
     }
 
     #! Returns data provider static info

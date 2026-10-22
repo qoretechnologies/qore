@@ -149,10 +149,47 @@ hash<auto> resp = manager.request(url, "GET", "/api/status");
 manager.closeAll();
     @endcode
 
+    @par Connection Migration (HTTP/3)
+    After a change of the local network, move the HTTP/3 connections to new network paths; a connection that cannot be
+    migrated drains, so new requests get a new connection:
+    @code{.py}
+%requires HttpClientIo
+
+HttpClientConnectionManager manager({"protocol": "h3"});
+manager.request("https://example.com", "GET", "/api/resource");
+# ... the network changes
+int migrated = manager.migrateAll();
+    @endcode
+
+    @par Seeing a Connection Drain (GOAWAY)
+    A connection that is used for a long time, such as a leased one, can wait for the server's \c GOAWAY: its
+    requests in progress can finish, but new requests belong on another connection:
+    @code{.py}
+%requires HttpClientIo
+
+HttpClientConnectionManager manager();
+HttpClientConnection conn = manager.leaseConnection("https://example.com");
+on_exit manager.releaseConnection(conn);
+int state = conn.waitForStateChange(HttpClientConnectionState::Ready, 1h);
+if (state == HttpClientConnectionState::Draining) {
+    # the server sent GOAWAY
+}
+    @endcode
+
     @section httpclientio_relnotes Release Notes
 
     @subsection httpclientio_v1_0 Version 1.0
     - URL errors give the URL without its password
+    - @ref HttpClientIo::Http3ClientConnection::migrate() "Http3ClientConnection::migrate()" returns once the
+      connection has been migrated and raises the error of a failed migration (\c QUIC-MIGRATION-ERROR,
+      \c HTTP3-MIGRATION-TIMEOUT, \c HTTP3-CONNECTION-CLOSED); a migration for which the server has no spare
+      connection ID yet waits for one;
+      @ref HttpClientIo::HttpClientConnectionManager::migrateAll() "migrateAll()" drains a connection that cannot be
+      migrated
+    - connections wait for a change of their state with
+      @ref Qore::AbstractHttpPollConnection::waitForStateChange() "waitForStateChange()", for example to see a
+      connection drain after the server's \c GOAWAY; the streams in progress on a draining connection can still send
+      their request bodies
     Initial (not yet released) version of the unified %HttpClientIo module —
     HTTP/1.1, HTTP/2, and HTTP/3 client I/O behind a single API, as currently
     implemented:
@@ -198,6 +235,10 @@ manager.closeAll();
     - Connection pooling with configurable limits, HTTP-proxy support,
       configurable automatic request retry, and QUIC connection migration for
       HTTP/3
+    - A pooled connection, also the connection of a persistent session, is used only for code whose
+      @ref sandboxing "network sandbox" allows where it leads, checked as a new connection would be; a connection
+      through an HTTP proxy leads to the proxy and to the destination that the proxy connects to, and a sandbox
+      must allow both; a connection leased for a persistent session is used only by that session
     - HTTP/3 connections are created without blocking: their poll operation resolves the host name and binds the
       UDP socket in the I/O controller, so asynchronous requests can retry them, try another address family, and
       race them against HTTP/2 for a redirect in an I/O worker; an address family in which a connection did not

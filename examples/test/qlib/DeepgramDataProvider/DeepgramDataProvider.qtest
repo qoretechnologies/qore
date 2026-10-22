@@ -1,6 +1,8 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
 %modern
 %allow-injection
 
@@ -331,7 +333,7 @@ public class DeepgramDataProviderTest inherits QUnit::Test {
         });
         http.setHandler("listen", "", MimeTypeJson, capture);
         http.setDefaultHandler("listen", capture);
-        int port = http.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        int port = http.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
         on_exit http.stop();
 
         DeepgramDataProvider::DeepgramTranscribeFileDataProvider prov({

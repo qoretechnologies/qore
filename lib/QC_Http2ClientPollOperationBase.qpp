@@ -122,16 +122,16 @@ bool Http2ClientPollOperationPriv::scanMembers(RObject& obj, RSetHelper& rsh) {
     // be DGC-invisible, blocking collection of any cycle that crosses the
     // Queue/EventNotifier.
     //
-    // Non-blocking: trylock both stream_lock and sq_lock.  If either is
-    // contended we return false and let the scanner try again in the next
-    // cycle — blocking here could deadlock with an app thread holding the
-    // lock and waiting on the same QoreObject's rsection lock (held by the
-    // scanner).  See qore_queue_private::scanMembers for the reference
-    // implementation of this pattern.
+    // Non-blocking: trylock both stream_lock and sq_lock; blocking here could deadlock with an app thread holding the
+    // lock and waiting on the same QoreObject's rsection lock (held by the scanner).  A container whose lock is held
+    // cannot report its values, so the scan is made due again at the object (RSetHelper::containerContended(); see
+    // design/dgc.md, "A container that a scan finds locked").  See qore_queue_private::scanMembers for the
+    // reference implementation of this pattern.
     //
     // Both containers are read in one critical section of stream_queues_lock: the I/O thread moves pending
     // registrations into stream_queues under it, so a registration in transit cannot be missed by both reads.
     if (stream_queues_lock.trylock()) {
+        rsh.containerContended(obj);
         return false;
     }
     AutoLocker ml(stream_queues_lock, true);
@@ -153,6 +153,8 @@ bool Http2ClientPollOperationPriv::scanMembers(RObject& obj, RSetHelper& rsh) {
                 return true;
             }
         }
+    } else {
+        rsh.containerContended(obj);
     }
     return false;
 }
@@ -720,16 +722,6 @@ QoreHashNode* Http2ClientPollOperationPriv::handleReading(ExceptionSink* xsink) 
         }
     }
 
-    // Drain registered CONNECT stream queues after every read poll cycle.
-    // The inner op may have processed DATA frames for CONNECT streams that
-    // need to be delivered to handler threads via their registered Queues.
-    drainStreamQueues(xsink);
-    if (*xsink) {
-        setError("HTTP2-READ-ERROR", "stream queue drain error", xsink);
-        op->deref(xsink);
-        return nullptr;
-    }
-
     // Report the response header events of the streams whose header arrived in this read cycle, before
     // the completed responses are dispatched: a client that monitors a response must see its header
     // while the body is still being read.  Only the requests that have finished registering themselves
@@ -818,6 +810,8 @@ QoreHashNode* Http2ClientPollOperationPriv::handleReading(ExceptionSink* xsink) 
                 }
             }
         }
+        // a streaming consumer's handle releases the stream when it is done with it
+        const bool streaming_consumer = action && action->isStreaming();
 
         if (action) {
             if (is_end && action->isStreaming()) {
@@ -874,6 +868,15 @@ QoreHashNode* Http2ClientPollOperationPriv::handleReading(ExceptionSink* xsink) 
                     ASYNC_IO_TRACE("H2Client handleReading: stream=%d queues=%d is_end=%d\n",
                         sid32, (int)stream_queues.size(), (int)is_end);
                     registered = stream_queues.find(sid32) != stream_queues.end();
+                    if (!registered) {
+                        // a registration that the drain below has not applied yet is a registration: it was made
+                        // before this data was dispatched, and the drain, which follows the dispatch, does not
+                        // signal data that a frame state wrote to the stream's queue (WebSocket over HTTP/2)
+                        AutoLocker al(sq_lock);
+                        registered = std::any_of(pending_stream_registrations.begin(),
+                            pending_stream_registrations.end(),
+                            [sid32](const std::pair<int32_t, StreamQueueInfo>& i) { return i.first == sid32; });
+                    }
                 }
                 if (registered) {
                     ASYNC_IO_TRACE("H2Client handleReading: signaling stream=%d\n", sid32);
@@ -884,6 +887,26 @@ QoreHashNode* Http2ClientPollOperationPriv::handleReading(ExceptionSink* xsink) 
                 }
             }
         }
+
+        // the request of a stream that ended without a streaming consumer (a request with its whole body, or one
+        // whose caller is gone) is complete, so nothing sends on the stream any more: its records are released
+        if (is_end && !streaming_consumer) {
+            static_cast<SocketHttp2ClientMultiplexPollOperation*>(op)->releaseStream(
+                static_cast<int32_t>(stream_id_val));
+        }
+    }
+
+    // Drain registered CONNECT stream queues after every read poll cycle.
+    // The inner op may have processed DATA frames for CONNECT streams that
+    // need to be delivered to handler threads via their registered Queues.
+    // The drain runs after the responses of the cycle have been dispatched: the end of a stream that it reports in a
+    // queue then follows the stream's last data, also when a frame state decodes that data into the same queue
+    // (a stream whose last DATA frame carries END_STREAM, such as the answer to a WebSocket close frame).
+    drainStreamQueues(xsink);
+    if (*xsink) {
+        setError("HTTP2-READ-ERROR", "stream queue drain error", xsink);
+        op->deref(xsink);
+        return nullptr;
     }
 
     // Check dispatched flag
@@ -1161,8 +1184,12 @@ void Http2ClientPollOperationPriv::notifyPendingStreams(const char* err, const c
 }
 
 void Http2ClientPollOperationPriv::fireReadyCallback(ExceptionSink* xsink) {
+    // where the connection leads, which a pool checks before it hands the connection to other code
+    std::shared_ptr<const QoreConnectionDestinations> destinations
+        = sock_obj ? sock_obj->getConnectedDestinations() : nullptr;
     AutoLocker al(stream_lock);
     if (connection_priv) {
+        connection_priv->setDestinations(std::move(destinations));
         connection_priv->onConnectionReady();  // Pure C++, no evalMethod, I/O-thread safe
     }
 }
@@ -1248,9 +1275,21 @@ void Http2ClientPollOperationPriv::drainStreamQueues(ExceptionSink* xsink) {
     releaseStreamQueueInfos(released, xsink);
 }
 
+#ifdef DEBUG
+// set by the dbg_h2_client_hold_stream_registrations() test hook; see qore_dbg_h2_client_hold_stream_registrations()
+static std::atomic<bool> dbg_hold_h2_client_stream_registrations{false};
+
+void qore_dbg_h2_client_hold_stream_registrations(bool hold) {
+    dbg_hold_h2_client_stream_registrations.store(hold, std::memory_order_release);
+}
+#endif
+
 void Http2ClientPollOperationPriv::drainStreamQueuesLocked(std::vector<StreamQueueInfo>& released,
         ExceptionSink* xsink) {
     // Apply pending registrations from app threads (under sq_lock briefly)
+#ifdef DEBUG
+    if (!dbg_hold_h2_client_stream_registrations.load(std::memory_order_acquire))
+#endif
     {
         AutoLocker al(sq_lock);
         for (auto& [sid, info] : pending_stream_registrations) {
@@ -1279,7 +1318,9 @@ void Http2ClientPollOperationPriv::drainStreamQueuesLocked(std::vector<StreamQue
     std::vector<int32_t> completed;
     for (auto& [stream_id, info] : stream_queues) {
         int drain_count = 0;
-        while (true) {
+        // the data of a stream decoded by a frame state reaches the queue through the frame state; reading it here
+        // would take it from the decoder
+        while (!info.frame_state) {
             BinaryNode* data = sock_obj->readHttp2StreamDataForAsyncPoll(stream_id, 0, xsink);
             if (*xsink) {
                 return;
@@ -1688,6 +1729,20 @@ void Http2ClientPollOperationPriv::installFrameState(int32_t stream_id, Queue* m
 
     ch_action->installFrameState(std::move(frame_state), initial_holder.release(), xsink);
     ch_action->deref(xsink);
+
+    // a queue registration of the stream for the same queue only notifies the stream's listener from now on: the
+    // frame state gets the stream's data and writes the decoded frames to the queue
+    AutoLocker ml(stream_queues_lock);
+    auto it = stream_queues.find(stream_id);
+    if (it != stream_queues.end() && it->second.queue == msg_queue) {
+        it->second.frame_state = true;
+    }
+    AutoLocker al(sq_lock);
+    for (auto& i : pending_stream_registrations) {
+        if (i.first == stream_id && i.second.queue == msg_queue) {
+            i.second.frame_state = true;
+        }
+    }
 }
 
 void Http2ClientPollOperationPriv::installSseState(int32_t stream_id, Queue* queue,
@@ -1784,6 +1839,12 @@ Http2ClientPollOperationBase::constructor(Socket[QoreSocketObject] socket, strin
         return;
     }
     QoreSocketObject* sock_ptr = *socket;
+
+    // the proxy connects to the target on the client's behalf, so the sandbox must allow the target as well
+    if (proxy_tunnel) {
+        qore_socket_private::get(*my_socket_priv::getPriv(*sock_ptr)->socket)->setSandboxProxyTarget(
+            target_host->c_str(), (int)target_port);
+    }
 
     // Create initial TCP connect operation
     sock_ptr->ref();
@@ -1919,6 +1980,20 @@ nothing Http2ClientPollOperationBase::setIdleTimeout(int idle_timeout_ms) [flags
 */
 nothing Http2ClientPollOperationBase::setMaxResponseBodySize(int max_size) [flags=NAMED_ARGS] {
     priv->setMaxResponseBodySize(max_size > 0 ? max_size : 0);
+}
+
+//! Releases the records that the session of the connection keeps for a stream that the caller is done with
+/** The session keeps the record of a reset of a stream by the server after the stream has closed, so that a send
+    on the stream reports the reset; the stream handles call this when they are destroyed, so a long-lived
+    connection does not keep a record for every stream the server reset.  Releasing a stream without records is a
+    no-op.
+
+    @param stream_id the ID of the stream
+
+    @since %Qore 3.0
+*/
+nothing Http2ClientPollOperationBase::releaseStream(int stream_id) [flags=NAMED_ARGS] {
+    priv->releaseStream(static_cast<int32_t>(stream_id));
 }
 
 //! Sets the encoding assumed for text response bodies whose character encoding is not determined otherwise

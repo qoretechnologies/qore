@@ -1,0 +1,164 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires ../../../../qlib/Util.qmod
+%requires ../../../../qlib/DataProvider/DataProvider.qmod
+%requires ../../../../qlib/SqlUtil/SqlUtil.qmod
+%requires ../../../../qlib/PgsqlSqlUtilBase.qmod
+%requires ../../../../qlib/PgsqlSqlUtil.qmod
+%requires ../../../../qlib/Schema/Schema.qmod
+%requires QUnit
+
+%prepend-module-path "${SCRIPT_DIR}"
+%requires ./PgsqlTestIsolation.qm
+
+%try-module pgsql
+%define NoPgsql
+%endtry
+
+%exec-class PgsqlForeignConstraintActionsTest
+
+#! Tests the foreign-constraint ON DELETE/ON UPDATE actions on PostgreSQL
+public class PgsqlForeignConstraintActionsTest inherits QUnit::Test {
+    constructor() : QUnit::Test("PgsqlForeignConstraintActions", "1.0", \ARGV) {
+        addTestCase("FK actions create, describe and align", \fkActions());
+        addTestCase("a FK without actions is unchanged", \fkNoActionsUnchanged());
+        addTestCase("invalid FK actions are refused", \fkActionValidation());
+        set_return_value(main());
+    }
+
+    globalTearDown() {
+        if (m_live) {
+            PgsqlRunSchema::teardown();
+        }
+    }
+
+    private {
+        bool m_live = False;
+    }
+
+
+    private Datasource connectOrSkip() {
+%ifdef NoPgsql
+        testSkip("pgsql module unavailable");
+%endif
+        if (!ENV.QORE_DB_CONNSTR_PGSQL) {
+            testSkip("live disposable database required");
+        }
+        if (!m_live) {
+            PgsqlRunSchema::setup(ENV.QORE_DB_CONNSTR_PGSQL, "PgsqlForeignConstraintActions");
+            m_live = True;
+        }
+        return new Datasource(ENV.QORE_DB_CONNSTR_PGSQL);
+    }
+
+
+    private PgsqlTable makeChild(Datasource ds, *string on_delete, *string on_update) {
+        PgsqlTable child(ds, "b4ra_child");
+        child.setupTable({
+            "columns": {
+                "id": {"qore_type": "integer", "notnull": True},
+                "pid": {"qore_type": "integer"},
+            },
+            "primary_key": {"name": "pk_b4ra_child", "columns": ("id",)},
+            "foreign_constraints": {
+                "fk_b4ra": {
+                    "columns": ("pid",),
+                    "table": "b4ra_parent",
+                    "target_columns": ("id",),
+                } + (on_delete ? {"on_delete": on_delete} : {})
+                  + (on_update ? {"on_update": on_update} : {}),
+            },
+        });
+        return child;
+    }
+
+
+    private AbstractForeignConstraint theFk(AbstractTable t) {
+        foreach AbstractForeignConstraint fk in (t.getForeignConstraints().iterator()) {
+            return fk;
+        }
+        throw "NO-FK", "no foreign constraint";
+    }
+
+
+    fkActions() {
+        Datasource ds = connectOrSkip();
+        on_exit ds.rollback();
+        ds.execRaw("create table b4ra_parent (id int not null primary key)");
+        PgsqlTable child = makeChild(ds, FK_CASCADE, FK_SET_NULL);
+
+        # the create SQL carries the actions
+        string add_sql = theFk(child).getCreateSql(child.getSqlName());
+        assertTrue(add_sql.find("on delete cascade") >= 0, add_sql);
+        assertTrue(add_sql.find("on update set null") >= 0, add_sql);
+
+        child.create();
+        ds.commit();
+
+        # the described constraint reads the actions back from the catalog
+        PgsqlTable described(ds, "b4ra_child");
+        AbstractForeignConstraint dfk = theFk(described);
+        assertEq(FK_CASCADE, dfk.on_delete);
+        assertEq(FK_SET_NULL, dfk.on_update);
+
+        # a template with the same actions proposes no SQL
+        assertEq((), described.getAlignSql(makeChild(ds, FK_CASCADE, FK_SET_NULL)));
+
+        # a template with a different action rebuilds the constraint (drop + add)
+        list<auto> align = described.getAlignSql(makeChild(ds, FK_RESTRICT, NOTHING));
+        assertEq(2, align.size(), sprintf("align: %y", align));
+        assertTrue(align[0] =~ /drop constraint/, align[0]);
+        assertTrue(align[1] =~ /add constraint/ && align[1] =~ /on delete restrict/, align[1]);
+
+        ds.execRaw("drop table b4ra_child");
+        ds.execRaw("drop table b4ra_parent");
+        ds.commit();
+    }
+
+
+    fkNoActionsUnchanged() {
+        Datasource ds = connectOrSkip();
+        on_exit ds.rollback();
+        ds.execRaw("create table b4ra_parent (id int not null primary key)");
+        # a foreign constraint without actions creates exactly as before: no ON DELETE/ON UPDATE clause
+        PgsqlTable child = makeChild(ds, NOTHING, NOTHING);
+        string add_sql = theFk(child).getCreateSql(child.getSqlName());
+        assertEq(-1, add_sql.find("on delete"));
+        assertEq(-1, add_sql.find("on update"));
+
+        child.create();
+        ds.commit();
+        # the described constraint has the database default (NOTHING) for both actions
+        AbstractForeignConstraint dfk = theFk(new PgsqlTable(ds, "b4ra_child"));
+        assertNothing(dfk.on_delete);
+        assertNothing(dfk.on_update);
+        # a re-alignment proposes no SQL
+        assertEq((), (new PgsqlTable(ds, "b4ra_child")).getAlignSql(makeChild(ds, NOTHING, NOTHING)));
+
+        ds.execRaw("drop table b4ra_child");
+        ds.execRaw("drop table b4ra_parent");
+        ds.commit();
+    }
+
+    #! the starting value must not be above the maximum in either direction (min <= start <= max), and a maximum
+    #! of 0 is a value; no connection is needed
+
+    fkActionValidation() {
+        # the action is validated when the constraint is built, with no connection needed
+        assertEq(FK_CASCADE, normalize_fk_action("cascade", "on_delete"));
+        assertEq(FK_SET_NULL, normalize_fk_action("set null", "on_delete"));
+        assertEq(FK_SET_NULL, normalize_fk_action("SET_NULL", "on_delete"));
+        # the database default normalizes to NOTHING, so it emits no SQL
+        assertNothing(normalize_fk_action("no action", "on_delete"));
+        assertNothing(normalize_fk_action(NOTHING, "on_delete"));
+        assertThrows("FOREIGN-CONSTRAINT-ERROR", "invalid on_delete",
+            \normalize_fk_action(), ("explode", "on_delete"));
+    }
+
+
+}

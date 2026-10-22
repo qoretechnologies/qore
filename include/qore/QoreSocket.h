@@ -45,6 +45,7 @@
 #include <cctype>
 #include <cstdlib>
 #include <cstring>
+#include <memory>
 #include <strings.h>
 #include <sys/socket.h>
 #include <sys/types.h>
@@ -1914,14 +1915,17 @@ public:
 
     //! closes the socket
     /** Deletes the socket file if it was a UNIX domain socket and was created with the QoreSocket::bind() call.
-         Also implicitly calls QoreSocket::shutdownSSL() if an SSL connection is active.
+        An active TLS connection sends its close_notify alert before the connection is closed (RFC 8446 section 6.1),
+        with one attempt that does not block, without waiting for the peer's alert; a TLS connection that another
+        thread is using is closed without the alert.
         @return 0 if OK, not 0 on error
     */
     DLLEXPORT int close();
 
     //! calls shutdown on the socket
     /** shuts down the socket for reading and writing, after this call further sends and receives are
-        disallowed until the socket is reopened.
+        disallowed until the socket is reopened.  An active TLS connection sends its close_notify alert first, as
+        with close().
 
         @note QoreSocket::shutdown() should normally be called before calling this function.
 
@@ -1944,6 +1948,29 @@ public:
     /** @return the file descriptor associated with this socket
     */
     DLLEXPORT int getSocket() const;
+
+    //! Keeps the socket's descriptor open while an async I/O event loop has it registered
+    /** For an I/O object whose pollable descriptor is that of a socket, to implement
+        AbstractPollableIoObjectBase::holdPollableDescriptor(): while the hold exists, a close of the socket from any
+        thread closes the socket for its users at once and shuts the descriptor down, and the descriptor is closed
+        when the last hold is released.
+
+        @param fd the descriptor read with getSocket()
+        @param hold set to the hold, which keeps @p fd open until it is released
+
+        @return 0 if the hold was taken, -1 if @p fd is no longer the socket's descriptor (the socket was closed or its
+        descriptor replaced)
+
+        @par Example:
+        @code{.cpp}
+int MyPollable::holdPollableDescriptor(int fd, std::shared_ptr<void>& hold) const {
+    return socket.holdDescriptor(fd, hold);
+}
+        @endcode
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT int holdDescriptor(int fd, std::shared_ptr<void>& hold) const;
 
     //! returns the character encoding associated with this socket
     /** @return the character encoding associated with this socket

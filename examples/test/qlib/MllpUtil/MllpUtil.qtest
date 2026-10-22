@@ -48,6 +48,8 @@ class MllpUtilTest inherits QUnit::Test {
         addTestCase("TLS client test", \tlsClientTest());
         addTestCase("connection scheme test", \connectionSchemeTest());
         addTestCase("negative test", \negativeTest());
+        addTestCase("frame block bytes in a message", \frameBlockBytesTest());
+        addTestCase("ACK with an escaped segment terminator", \ackSegmentInjectionTest());
         addTestCase("listener bind target test", \listenerBindTargetTest());
         addTestCase("sandboxed listener bind test", \sandboxedListenerBindTest());
 
@@ -306,6 +308,68 @@ sub run_listener(string target, Queue q, Queue stop) {
         } catch () {
             return False;
         }
+    }
+
+    #! a message cannot contain the MLLP block bytes, which would start or end a frame inside it
+    private frameBlockBytesTest() {
+        assertThrows("MLLP-FRAME-ERROR", "the message contains the MLLP end block byte 0x1c at byte offset 3",
+            \MllpUtil::mllp_frame(), "MSH\x1c\rMSH|^~\\&|forged\r");
+        assertThrows("MLLP-FRAME-ERROR", "the message contains the MLLP start block byte 0x0b at byte offset 0",
+            \MllpUtil::mllp_frame(), "\x0bMSH|^~\\&|x\r");
+        # no other byte below 0x20 can be in a frame, except CR, which ends a segment, and LF, which senders that end
+        # segments with CRLF use and which cannot end a frame
+        assertThrows("MLLP-FRAME-ERROR", "the message contains the control character 0x09 at byte offset 1, which an "
+            "MLLP frame cannot carry", \MllpUtil::mllp_frame(), "a\tb");
+        assertThrows("MLLP-FRAME-ERROR", "control character 0x00 at byte offset 4", \MllpUtil::mllp_frame(),
+            "MSH|\x00\r");
+        assertThrows("MLLP-FRAME-ERROR", "control character 0x1f at byte offset 2", \MllpUtil::mllp_frame(),
+            "ab\x1f");
+        # the first byte that cannot be framed is reported
+        assertThrows("MLLP-FRAME-ERROR", "the message contains the MLLP end block byte 0x1c at byte offset 1",
+            \MllpUtil::mllp_frame(), "a\x1cb\x01");
+        assertThrows("MLLP-FRAME-ERROR", "control character 0x01 at byte offset 1", \MllpUtil::mllp_frame(),
+            "a\x01b\x1c");
+        assertEq(<0b610d0a621c0d>, MllpUtil::mllp_frame("a\r\nb"));
+        assertEq(<0b617f621c0d>, MllpUtil::mllp_frame("a\x7fb"));
+        # an encoding with bytes below 0x20 in its characters, such as UTF-16, cannot be framed
+        assertThrows("MLLP-FRAME-ERROR", "control character 0x00 at byte offset 0", \MllpUtil::mllp_frame(),
+            ("MSH", "UTF-16BE"));
+        # an escaped HL7 value can always be framed
+        Hl7v2Util::Hl7v2Delimiters d();
+        assertEq(binary(chr(0x0b) + "a\\X09\\b\\X00\\c" + chr(0x1c) + "\r"),
+            MllpUtil::mllp_frame(d.escape("a\tb\x00c")));
+    }
+
+    #! a field value received escaped is escaped again when it is echoed in an ACK, so it cannot add a segment or a
+    #! frame of its own to the ACK
+    private ackSegmentInjectionTest() {
+        # MSH-10 holds the escape sequences of a CR, a forged MSA segment (with escaped field separators) and the
+        # MLLP end block byte
+        string request = "MSH|^~\\&|ADT|HOSP|EHR|HOSP|202605261200||ADT^A01|ID1\\X0D\\MSA\\F\\AE\\F\\forged\\X1C\\|P|"
+            "2.5.1\r";
+        string ack = MllpUtil::mllp_build_ack(request);
+        list<string> segments = (select ack.split("\r"), $1.val());
+        assertEq(2, segments.size(), "the ACK has its two segments: " + ack);
+        assertEq("MSH", segments[0].substr(0, 3));
+        assertEq("MSA", segments[1].substr(0, 3));
+        # the control ID is echoed as it was received
+        assertEq("AA|ID1\\X0D\\MSA\\F\\AE\\F\\forged\\X1C\\", segments[1].substr(4));
+
+        # the same over the wire: the listener answers with the ACK, which the client reads as one ACK
+        MllpUtil::MllpListener listener("127.0.0.1:0", {"timeout": 30s});
+        listener.start(*string sub (string msg) {
+            return MllpUtil::mllp_build_ack(msg);
+        });
+        on_exit listener.stop(30s);
+        Socket sock();
+        sock.connect("127.0.0.1:" + listener.getPort(), 30s);
+        on_exit sock.close();
+        MllpUtil::mllp_send_message(sock, request, 30s);
+        string received = MllpUtil::mllp_read_message(sock, 30s);
+        hash<MllpUtil::MllpAckInfo> info = MllpUtil::mllp_parse_ack(received);
+        assertEq("AA", info.acknowledgment_code);
+        assertEq("ID1\rMSA|AE|forged\x1c", info.message_control_id);
+        assertEq(2, (select received.split("\r"), $1.val()).size());
     }
 
     private listenerApiTest() {

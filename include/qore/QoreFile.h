@@ -641,6 +641,12 @@ public:
     // NOTE: QoreFile::makeSpecial() can only be called right after the constructor (private API)
     DLLLOCAL void makeSpecial(int sfd);
 
+    //! makes the file a special file that owns its descriptor (private API)
+    /** Like makeSpecial(), it cannot be reopened, but close() and the destruction of the object close the descriptor
+        (the ends of File::getPipe()); it can only be called right after the constructor
+    */
+    DLLLOCAL void makeOwnedSpecial(int fd);
+
     //! sets the event queue (not part of the library's pubilc API), must be already referenced before call
     DLLLOCAL void setEventQueue(ExceptionSink* xsink, Queue* q, QoreValue arg, bool with_data);
 

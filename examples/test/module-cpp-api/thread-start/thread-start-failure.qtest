@@ -1,0 +1,44 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+# the "cppapiuser" test module is built into the build tree by examples/test/module-cpp-api/CMakeLists.txt and is not
+# installed, so QORE_MODULE_DIR must include the build tree (run_tests.sh does this)
+%requires cppapiuser
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class ThreadStartFailureTest
+
+#! Tests that a thread start that fails does not deadlock with a thread that holds the thread list's lock
+/** A thread start held the stack lock across pthread_create() and its failure handling, which takes the thread
+    list's lock to deregister the TID; q_enforce_thread_size_on_primary_thread() holds the thread list's lock while
+    it takes the stack lock, so a failing thread start and a call of it could deadlock.  The stack lock is now only
+    held while the thread is created.
+
+    pthread_create() fails deterministically: cpp_api_thread_start_failure_race() sets the default thread stack size
+    to a size that no process can map while it starts threads in one thread and calls the C++ API function in
+    another.  Both loops have a fixed number of iterations; a deadlock makes the test wait forever (the test runner's
+    time limit is only a guard).
+*/
+class ThreadStartFailureTest inherits QUnit::Test {
+    #! the number of failing thread starts and of C++ API calls
+    const Iterations = 100000;
+
+    constructor() : QUnit::Test("ThreadStartFailureTest", "1.0", \ARGV) {
+        addTestCase("a failing thread start and the primary thread stack size", \testFailingStart());
+        set_return_value(main());
+    }
+
+    testFailingStart() {
+        int default_size = get_default_thread_stack_size();
+        assertEq(Iterations, cpp_api_thread_start_failure_race(Iterations), "no thread could be started");
+        assertEq(default_size, get_default_thread_stack_size(), "the default thread stack size was restored");
+        # threads can be started again
+        Counter c(1);
+        background c.dec();
+        c.waitForZero();
+    }
+}

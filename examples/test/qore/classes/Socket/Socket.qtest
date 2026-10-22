@@ -1,6 +1,8 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
 %modern
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
@@ -209,6 +211,11 @@ class SocketTest inherits QUnit::Test {
         addTestCase("Happy Eyeballs blackhole fallback", \happyEyeballsBlackholeTest());
         addTestCase("Happy Eyeballs SSL connect", \happyEyeballsSslTest());
         addTestCase("fd_generation re-verification", \fdGenerationTest());
+        addTestCase("a receive follows at once a receive that the controller ended", \recvAfterEndedWaitTest());
+        addTestCase("a send follows at once a write wait that the controller ended", \sendAfterEndedWriteWaitTest());
+        addTestCase("a listening socket is usable at once after an accept that the controller ended",
+            \listenAfterEndedAcceptWaitTest());
+        addTestCase("a receive follows at once an idle data check", \recvAfterIdleDataCheckTest());
         addTestCase("recoverable recv timeout", \recoverableRecvTimeoutTest());
         addTestCase("wildcard bind serves all address families", \wildcardBindAllFamiliesTest());
         addTestCase("wildcard bind reserves the port in all address families", \wildcardBindReservesPortTest());
@@ -253,7 +260,7 @@ class SocketTest inherits QUnit::Test {
     private doServ(Queue q) {
         Socket s0();
         # bind on a random free port
-        s0.bind(0);
+        s0.bind("localhost:0");
         s0.listen();
         q.push(s0.getSocketInfo().port);
         s0.setCertificate(TestCert);
@@ -1576,7 +1583,7 @@ class SocketTest inherits QUnit::Test {
                 background sub () {
                     Socket ssl();
                     # bind on a random free port
-                    ssl.bind(0);
+                    ssl.bind("localhost:0");
                     ssl.listen();
 
                     q.push(ssl.getSocketInfo().port);
@@ -1694,7 +1701,7 @@ class SocketTest inherits QUnit::Test {
                 background sub () {
                     Socket ssl();
                     # bind on a random free port
-                    ssl.bind(0);
+                    ssl.bind("127.0.0.1:0");
                     ssl.listen();
 
                     q.push(ssl.getSocketInfo().port);
@@ -1770,7 +1777,7 @@ class SocketTest inherits QUnit::Test {
                 background sub () {
                     Socket ssl();
                     # bind on a random free port
-                    ssl.bind(0);
+                    ssl.bind("127.0.0.1:0");
                     ssl.listen();
 
                     q.push(ssl.getSocketInfo().port);
@@ -1932,7 +1939,7 @@ class SocketTest inherits QUnit::Test {
     connectionIdTest() {
         Socket s();
         assertEq(0, s.getConnectionId());
-        s.bind(0);
+        s.bind("127.0.0.1:0");
         s.close();
         assertEq(1, s.getConnectionId());
     }
@@ -1944,7 +1951,7 @@ class SocketTest inherits QUnit::Test {
         # create server socket
         Socket s();
         # bind on a random free port
-        s.bind(0);
+        s.bind("127.0.0.1:0");
         s.listen();
         s.setCertificate(TestCert);
         s.setPrivateKey(TestCert);
@@ -1989,7 +1996,7 @@ class SocketTest inherits QUnit::Test {
 
     sslReadError(Queue q) {
         Socket s();
-        s.bind(0);
+        s.bind("127.0.0.1:0");
         s.listen();
         s.setCertificate(TestCert);
         s.setPrivateKey(TestCert);
@@ -2003,7 +2010,7 @@ class SocketTest inherits QUnit::Test {
         background sub () {
             try {
                 Socket server();
-                server.bind(0);
+                server.bind("127.0.0.1:0");
                 server.listen();
                 server.setCertificate(TestCert);
                 server.setPrivateKey(TestCert);
@@ -2038,7 +2045,7 @@ class SocketTest inherits QUnit::Test {
 
     sslUpgradePollOutputTest() {
         Socket server();
-        server.bind(0);
+        server.bind("127.0.0.1:0");
         server.listen();
         int port = server.getSocketInfo().port;
 
@@ -2111,7 +2118,7 @@ class SocketTest inherits QUnit::Test {
         on_exit unsetenv("QORE_TEST_SSL_PARTIAL_WRITE_LIMIT");
 
         Socket server();
-        server.bind(0);
+        server.bind("127.0.0.1:0");
         server.listen();
         server.setCertificate(TestCert);
         server.setPrivateKey(TestCert);
@@ -2174,7 +2181,7 @@ class SocketTest inherits QUnit::Test {
         # Server side
         background sub () {
             Socket server();
-            server.bind(0);
+            server.bind("127.0.0.1:0");
             server.listen();
             server.setCertificate(TestCert);
             server.setPrivateKey(TestCert);
@@ -3327,6 +3334,132 @@ class SocketTest inherits QUnit::Test {
         server.close();
     }
 
+    #! Holds the releases of the async I/O controller's I/O threads until the test case ends
+    /** The references that an I/O thread releases on a callback worker, those to a sync call's poll operation among
+        them, are kept until the test case ends, so an operation outlives the delivery of its result for certain.
+        Skips the test case in a release build, which has no debug hooks.
+    */
+    private holdControllerReleases() {
+        try {
+            call_function("dbg_async_io_hold_releases", True);
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "NO-FUNCTION" || ex.err == "UNDEFINED-FUNCTION-CALL") {
+                testSkip("debug build required for dbg_async_io_hold_releases()");
+            }
+            rethrow;
+        }
+    }
+
+    #! Releases what holdControllerReleases() held
+    private static releaseControllerReleases() {
+        call_function("dbg_async_io_hold_releases", False);
+    }
+
+    #! Returns a listening socket, a client connected to it, and the socket it accepted
+    private hash<auto> makeConnection() {
+        Socket server();
+        server.bind("localhost:0");
+        server.listen();
+        int port = server.getSocketInfo().port;
+
+        Socket client();
+        client.connect("localhost:" + port, 5s);
+
+        Socket accepted = server.accept(5s);
+        assertTrue(accepted.isOpen());
+        return {"server": server, "client": client, "accepted": accepted, "port": port};
+    }
+
+    #! Returns the exception that a call raises
+    private static *hash<ExceptionInfo> getException(code call) {
+        try {
+            call();
+        } catch (hash<ExceptionInfo> ex) {
+            return ex;
+        }
+    }
+
+    #! Tests that a sync receive can follow at once a sync receive whose wait the I/O controller ended
+    /** Regression test (CI pipeline 61208, job 213567): when the descriptor that a controller-backed sync call waits
+        on is closed or replaced, the controller ends the call with SOCKET-CLOSED without aborting its operation, as
+        aborting it can close the descriptor that the socket has now; the operation's claim on the receive direction
+        of the socket was released only when the operation object was destroyed, after the caller had its result and
+        on a callback worker.  A receive made at once failed with SOCKET-NON-BLOCK-ERROR, depending on the timing of
+        that worker.  The controller's releases are held, so the operation object outlives the result for certain.
+    */
+    recvAfterEndedWaitTest() {
+        hash<auto> c = makeConnection();
+        holdControllerReleases();
+        on_exit releaseControllerReleases();
+
+        Socket accepted = c.accepted;
+        call_function("dbg_force_fd_swap_next_wait", accepted);
+        assertEq("SOCKET-CLOSED", getException(sub () { accepted.recv(1, 500ms); }).err,
+            "the controller ends the wait when the descriptor changes");
+
+        # the operation of the first receive is still alive, but it does not claim the socket any more
+        c.client.send("x");
+        assertEq("x", accepted.recv(1, 5s));
+    }
+
+    #! Tests that a send can follow at once an isWriteFinished() whose wait the I/O controller ended
+    /** The same as recvAfterEndedWaitTest() for the operation that waits until a socket can be written, which claims
+        the send direction of the socket.
+    */
+    sendAfterEndedWriteWaitTest() {
+        hash<auto> c = makeConnection();
+        holdControllerReleases();
+        on_exit releaseControllerReleases();
+
+        Socket accepted = c.accepted;
+        call_function("dbg_force_fd_swap_next_wait", accepted);
+        assertEq("SOCKET-CLOSED", getException(sub () { accepted.isWriteFinished(5s); }).err,
+            "the controller ends the wait when the descriptor changes");
+
+        accepted.send("x");
+        assertEq("x", c.client.recv(1, 5s));
+    }
+
+    #! Tests that a listening socket can be used at once after an accept() whose wait the I/O controller ended
+    /** The same as recvAfterEndedWaitTest() for an accept operation, which claims the listening socket for accepting.
+    */
+    listenAfterEndedAcceptWaitTest() {
+        hash<auto> c = makeConnection();
+        holdControllerReleases();
+        on_exit releaseControllerReleases();
+
+        Socket server = c.server;
+        call_function("dbg_force_fd_swap_next_wait", server);
+        assertEq("SOCKET-CLOSED", getException(sub () { server.accept(500ms); }).err,
+            "the controller ends the wait when the descriptor changes");
+
+        # a setup call claims the whole socket; Socket::listen() returns -1 for an error
+        assertEq(0, server.listen());
+        Socket client2();
+        client2.connect("localhost:" + c.port, 5s);
+        Socket accepted2 = server.accept(5s);
+        accepted2.send("y");
+        assertEq("y", client2.recv(1, 5s));
+    }
+
+    #! Tests that a receive can follow at once QoreSocketObject::checkIdleData()
+    /** The operation that checks a connection for unexpected data claimed the receive direction of the socket until
+        the operation object was destroyed, although it ends at once; the receive that follows the check on a
+        connection to be used again failed with SOCKET-NON-BLOCK-ERROR, depending on the timing of the callback worker
+        that destroys it.
+    */
+    recvAfterIdleDataCheckTest() {
+        hash<auto> c = makeConnection();
+        holdControllerReleases();
+        on_exit releaseControllerReleases();
+
+        Socket accepted = c.accepted;
+        assertEq(0, call_function("dbg_socket_check_idle_data", accepted), "no data on the idle connection");
+
+        c.client.send("x");
+        assertEq("x", accepted.recv(1, 5s));
+    }
+
     #! Tests that a recv() that times out leaves the socket usable
     /** Regression test: SocketPollSocketOperationBase::abortLocked() reset poll_state before calling
         abortNeedsClose(), and every override decides whether an abort is recoverable by asking the poll
@@ -3387,9 +3520,9 @@ class SocketTest inherits QUnit::Test {
             Socket server();
             on_exit server.close();
             if (api == "bindINET") {
-                server.bindINET(NOTHING, 0, True);
+                server.bindINET(NOTHING, 0, True);  # all-interfaces: tests the bind on all interfaces
             } else {
-                assertEq(0, server.bind(0, True));
+                assertEq(0, server.bind(0, True));  # all-interfaces: tests the bind on all interfaces
             }
             server.listen();
             hash<auto> info = server.getSocketInfo();
@@ -3437,7 +3570,7 @@ class SocketTest inherits QUnit::Test {
         }
 
         Socket server();
-        server.bindINET(NOTHING, 0, True);
+        server.bindINET(NOTHING, 0, True);  # all-interfaces: tests the bind on all interfaces
         server.listen();
         on_exit server.close();
         int port = server.getSocketInfo().port;
@@ -3474,7 +3607,7 @@ class SocketTest inherits QUnit::Test {
         Socket server();
         *hash<ExceptionInfo> bind_ex;
         try {
-            server.bindINET(NOTHING, port, False);
+            server.bindINET(NOTHING, port, False);  # all-interfaces: tests the bind on all interfaces
         } catch (hash<ExceptionInfo> ex) {
             bind_ex = ex;
         }
@@ -3490,7 +3623,7 @@ class SocketTest inherits QUnit::Test {
     wildcardBindSingleFamilyTest() {
         # an explicit IPv4 bind stays IPv4-only
         Socket v4();
-        v4.bindINET(NOTHING, 0, True, AF_INET);
+        v4.bindINET(NOTHING, 0, True, AF_INET);  # all-interfaces: tests the bind on all interfaces
         on_exit v4.close();
         hash<auto> info = v4.getSocketInfo();
         assertEq(AF_INET, info.family);
@@ -3499,7 +3632,7 @@ class SocketTest inherits QUnit::Test {
         # a datagram socket keeps the resolved IPv4 wildcard address, because each datagram is addressed with the
         # address family of the socket
         Socket udp();
-        udp.bindINET(NOTHING, 0, True, AF_UNSPEC, SOCK_DGRAM);
+        udp.bindINET(NOTHING, 0, True, AF_UNSPEC, SOCK_DGRAM);  # all-interfaces: tests the bind on all interfaces
         on_exit udp.close();
         info = udp.getSocketInfo();
         assertEq(AF_INET, info.family);
@@ -3548,7 +3681,7 @@ class SocketTest inherits QUnit::Test {
         }
 
         Socket server();
-        server.bindINET("::", 0, True, AF_INET6);
+        server.bindINET("::", 0, True, AF_INET6);  # all-interfaces: tests the bind on all interfaces
         server.listen();
         on_exit server.close();
         int port = server.getSocketInfo().port;

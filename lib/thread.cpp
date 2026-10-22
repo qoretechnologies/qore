@@ -47,6 +47,8 @@
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/RuntimeConfig.h"
 #include "qore/intern/QoreClosureNode.h"
+#include "qore/intern/QoreForkHandlers.h"
+#include "qore/intern/QorePollCompat.h"
 #include "qore/intern/ModuleInfo.h"
 #include "qore/intern/QoreHashNodeIntern.h"
 #include "qore/intern/QoreJIT.h"
@@ -133,6 +135,11 @@ QoreCounter thread_counter;
 // global counter for threads with external lifecycle management (ThreadPool)
 QoreCounter tp_thread_counter;
 
+// the counts that the current thread adds to thread_counter and tp_thread_counter: a child process created with fork()
+// by this thread keeps only these, since the other threads do not exist in the child
+thread_local int qore_thread_counter_share = 0;
+thread_local int qore_tp_thread_counter_share = 0;
+
 ThreadCleanupList tclist;
 
 const TypedHashDecl* hashdeclQueueTryResult = nullptr;
@@ -142,12 +149,6 @@ DLLLOCAL bool threads_initialized = false;
 
 // recursive mutex attribute
 DLLLOCAL pthread_mutexattr_t ma_recursive;
-
-#ifndef HAVE_GETHOSTBYADDR_R
-DLLLOCAL QoreThreadLock lck_gethostbyaddr;
-#endif
-
-DLLLOCAL QoreRWLock lck_debug_program;
 
 QoreThreadLock stack_lck;
 // 8MB default thread stack size
@@ -483,6 +484,12 @@ public:
     // the sandbox context of the thread that started the operation that this thread is continuing; when set, it
     // replaces the sandbox manager resolution below (see QoreSandboxContextHelper)
     const QoreSandboxContext* sandbox_context = nullptr;
+
+    // the sandbox inherited from the code that started this thread (background, q_start_thread()), or applied for a
+    // task with QoreSandboxCaptureHelper; it governs the thread as the outermost caller of everything the thread
+    // runs, so it is only used when no Program on the thread's program-context stack has a sandbox manager (see
+    // QoreInheritedSandboxHelper and design/thread-sandbox-inheritance.md)
+    const QoreSandboxContext* inherited_sandbox_context = nullptr;
 
     // current namespace context for parsing
     qore_ns_private* current_ns = nullptr;
@@ -839,11 +846,46 @@ void ThreadEntry::activate(int tid, pthread_t n_ptid, QoreProgram* p, bool forei
     assert(!::thread_data.get());
     thread_data = new ThreadData(tid, p, foreign, flags);
     ::thread_data.set(thread_data);
+    // the thread's lock-free releases publish in its hazard slot; called on the thread itself, as the thread data is
+    // set (see qore_robject_hazard_register())
+    qore_robject_hazard_register(tid);
     status = QTS_ACTIVE;
-    // set lvstack if QoreProgram set
-    if (p) {
-        thread_data->tpd->saveProgram(true, 0);
+}
+
+void QoreThreadList::activate(int tid, pthread_t ptid, QoreProgram* p, bool foreign, int flags) {
+    ThreadData* td;
+    {
+        AutoLocker al(lck);
+        entry[tid].activate(tid, ptid, p, foreign, flags);
+        td = entry[tid].thread_data;
     }
+    // set lvstack if QoreProgram set; this runs the Program's thread initialization code, which is user code: it
+    // can start threads, list them, or check for cancellation, all of which take the thread list lock
+    if (p) {
+        td->tpd->saveProgram(true, nullptr);
+    }
+}
+
+void ThreadEntry::abandonAfterFork() {
+    assert(status != QTS_AVAIL);
+    delete tidnode;
+    tidnode = nullptr;
+    // the thread does not exist in the child; its data is not freed, since Programs can still refer to it
+    thread_data = nullptr;
+    joined = false;
+    clearCancelState();
+    waiting_on = nullptr;
+    waiting_mutex = nullptr;
+    wake_cond = nullptr;
+    wake_mutex = nullptr;
+    wake_next = -1;
+    wake_queued = false;
+    wake_busy = false;
+    waiting_fd.store(-1, std::memory_order_relaxed);
+    wake_reg_depth = 0;
+    // the descriptors are the child's own copies
+    closeCancelWakeup();
+    status = QTS_AVAIL;
 }
 
 void ThreadEntry::cleanup() {
@@ -1244,13 +1286,17 @@ public:
     QoreValue fc;
     QoreProgram* pgm;
     std::vector<QoreObject*> closure_objs;
+    //! the sandbox of the starting code, which governs the new thread as its outermost caller, or nullptr
+    std::unique_ptr<QoreInheritedSandbox> sandbox;
     int tid;
     const QoreProgramLocation* loc;
     bool registered = false,
         started = false;
 
-    DLLLOCAL BGThreadParams(QoreValue f, int t, std::vector<QoreObject*>&& n_closure_objs, ExceptionSink* xsink)
-        : fc(f), pgm(getProgram()), closure_objs(std::move(n_closure_objs)), tid(t) {
+    DLLLOCAL BGThreadParams(QoreValue f, int t, std::vector<QoreObject*>&& n_closure_objs,
+            std::unique_ptr<QoreInheritedSandbox>&& n_sandbox, ExceptionSink* xsink)
+        : fc(f), pgm(getProgram()), closure_objs(std::move(n_closure_objs)), sandbox(std::move(n_sandbox)),
+            tid(t) {
         assert(xsink);
         {
             ThreadData* td = thread_data.get();
@@ -2870,6 +2916,11 @@ ThreadProgramData* get_thread_program_data() {
    return td->tpd;
 }
 
+ThreadProgramData* get_thread_program_data_if_any() {
+   ThreadData* td = thread_data.get();
+   return td ? td->tpd : nullptr;
+}
+
 ThreadLocalProgramData* get_thread_local_program_data() {
    ThreadData* td = thread_data.get();
    assert(td);
@@ -3579,22 +3630,22 @@ ThreadLocalProgramData* ProgramThreadCountContextHelper::getContextFrame(int& fr
     return tlpd;
 }
 
-//! Resolves the sandbox manager governing the current thread, optionally reporting its Program
+//! Resolves the sandbox manager governing the current thread, optionally reporting the ID of its Program
 /** The resolution order is: the current Program, then the enclosing caller Programs innermost
-    first, then the call-program context fallback.  Callers that need the Program the manager was
-    found on (ex: get_cancel_scope_pgm_id()) must use this function rather than combining a manager
-    lookup with getProgram(): the manager can be found on an enclosing caller Program while the
-    current Program has none, which is the normal case for library or module code called from
-    sandboxed user code.
+    first, then the call-program context fallback, and finally the sandbox the thread inherited from
+    the code that started it.  Callers that need the Program the manager was found on (ex:
+    get_cancel_scope_pgm_id()) must use this function rather than combining a manager lookup with
+    getProgram(): the manager can be found on an enclosing caller Program while the current Program
+    has none, which is the normal case for library or module code called from sandboxed user code.
 
-    @param pgm if non-null, set to the Program the manager was found on, or nullptr if none
+    @param pgm_id if non-null, set to the ID of the Program the manager was found on, or 0 if none
 
     @return the referenced manager (the caller owns the reference), or nullptr if there is none
 */
-static QoreSandboxManager* find_thread_sandbox_manager_ref_intern(QoreProgram** pgm = nullptr,
+static QoreSandboxManager* find_thread_sandbox_manager_ref_intern(unsigned* pgm_id = nullptr,
         bool policy = false) {
-    if (pgm) {
-        *pgm = nullptr;
+    if (pgm_id) {
+        *pgm_id = 0;
     }
     ThreadData* td = thread_data.get();
     if (!td) {
@@ -3606,6 +3657,9 @@ static QoreSandboxManager* find_thread_sandbox_manager_ref_intern(QoreProgram** 
         QoreSandboxManager* sm = policy ? ctx->policy_manager : ctx->manager;
         if (sm) {
             sm->ref();
+            if (pgm_id && !policy) {
+                *pgm_id = ctx->pgm_id;
+            }
         }
         return sm;
     }
@@ -3613,10 +3667,10 @@ static QoreSandboxManager* find_thread_sandbox_manager_ref_intern(QoreProgram** 
     // callers; see ThreadData::sandbox_policy_barrier
     const bool barrier = policy && td->sandbox_policy_barrier;
     // helper: try to resolve a ref'd manager from a single program
-    auto try_pgm = [pgm](QoreProgram* p) -> QoreSandboxManager* {
+    auto try_pgm = [pgm_id](QoreProgram* p) -> QoreSandboxManager* {
         QoreSandboxManager* sm = p ? qore_program_private::get(*p)->getSandboxManagerRef() : nullptr;
-        if (sm && pgm) {
-            *pgm = p;
+        if (sm && pgm_id) {
+            *pgm_id = p->getProgramId();
         }
         return sm;
     };
@@ -3642,6 +3696,18 @@ static QoreSandboxManager* find_thread_sandbox_manager_ref_intern(QoreProgram** 
         if (QoreSandboxManager* sm = try_pgm(td->call_program_context)) {
             return sm;
         }
+    }
+    // 4) the sandbox inherited from the code that started this thread: the outermost caller of everything the
+    // thread runs; the Program of its manager is only known by its ID
+    if (const QoreSandboxContext* ctx = td->inherited_sandbox_context) {
+        QoreSandboxManager* sm = policy ? ctx->policy_manager : ctx->manager;
+        if (sm) {
+            sm->ref();
+            if (pgm_id && !policy) {
+                *pgm_id = ctx->pgm_id;
+            }
+        }
+        return sm;
     }
     return nullptr;
 }
@@ -3679,13 +3745,9 @@ QoreSandboxContext::QoreSandboxContext() {
         }
         return;
     }
-    QoreProgram* pgm = nullptr;
-    manager = find_thread_sandbox_manager_ref_intern(&pgm);
-    if (manager) {
-        // the manager is owned by the Program it was found on
-        assert(pgm);
-        pgm_id = pgm->getProgramId();
-    }
+    manager = find_thread_sandbox_manager_ref_intern(&pgm_id);
+    // the manager is owned by the Program it was found on
+    assert(!manager || pgm_id);
     policy_manager = find_thread_sandbox_manager_ref_intern(nullptr, true);
 }
 
@@ -3710,6 +3772,93 @@ QoreSandboxContextHelper::QoreSandboxContextHelper(const QoreSandboxContext& ctx
 QoreSandboxContextHelper::~QoreSandboxContextHelper() {
     if (active) {
         thread_data.get()->sandbox_context = old_ctx;
+    }
+}
+
+int QoreInheritedSandbox::capture(ExceptionSink* xsink, std::unique_ptr<QoreInheritedSandbox>& rv) {
+    assert(xsink);
+    std::unique_ptr<QoreInheritedSandbox> sbx(new QoreInheritedSandbox);
+    if (!sbx->ctx.manager && !sbx->ctx.policy_manager) {
+        // no sandbox governs the starting code
+        return 0;
+    }
+    // the thread is counted against the limit of the manager that governs everything but policy checks; the
+    // policy manager differs only under a policy barrier, which does not change who started the thread
+    if (QoreSandboxManager* sm = sbx->ctx.manager) {
+        if (sm->acquireThreadSlot(xsink)) {
+            return -1;
+        }
+        sm->ref();
+        sbx->counted = sm;
+    }
+    rv = std::move(sbx);
+    return 0;
+}
+
+QoreInheritedSandbox::~QoreInheritedSandbox() {
+    releaseSlot();
+}
+
+void QoreInheritedSandbox::releaseSlot() {
+    if (counted) {
+        counted->releaseThreadSlot();
+        counted->deref(nullptr);
+        counted = nullptr;
+    }
+}
+
+QoreInheritedSandboxHelper::QoreInheritedSandboxHelper(const QoreSandboxContext* ctx) {
+    if (!ctx) {
+        return;
+    }
+    ThreadData* td = thread_data.get();
+    if (td) {
+        old_ctx = td->inherited_sandbox_context;
+        td->inherited_sandbox_context = ctx;
+        active = true;
+    }
+}
+
+QoreInheritedSandboxHelper::~QoreInheritedSandboxHelper() {
+    reset();
+}
+
+void QoreInheritedSandboxHelper::reset() {
+    if (active) {
+        thread_data.get()->inherited_sandbox_context = old_ctx;
+        active = false;
+    }
+}
+
+QoreSandboxCapture::QoreSandboxCapture() : ctx(new QoreSandboxContext) {
+}
+
+QoreSandboxCapture::~QoreSandboxCapture() {
+    delete ctx;
+}
+
+bool QoreSandboxCapture::isSandboxed() const {
+    return ctx->manager || ctx->policy_manager;
+}
+
+bool QoreSandboxCapture::sameSandbox(const QoreSandboxCapture& other) const {
+    return ctx->manager == other.ctx->manager && ctx->policy_manager == other.ctx->policy_manager
+        && ctx->pgm_id == other.ctx->pgm_id;
+}
+
+QoreSandboxCaptureHelper::QoreSandboxCaptureHelper(const QoreSandboxCapture& capture) {
+    ThreadData* td = thread_data.get();
+    if (td) {
+        // an unsandboxed submitter's work runs as on a thread it started: governed by the Programs it enters only
+        old_ctx = td->inherited_sandbox_context;
+        td->inherited_sandbox_context = capture.isSandboxed() ? capture.ctx : nullptr;
+        active = true;
+    }
+}
+
+QoreSandboxCaptureHelper::~QoreSandboxCaptureHelper() {
+    if (active) {
+        thread_data.get()->inherited_sandbox_context = old_ctx;
     }
 }
 
@@ -3830,7 +3979,8 @@ CurrentProgramRuntimeExternalParseContextHelper::operator bool() const {
 
 ProgramRuntimeExternalParseContextHelper::ProgramRuntimeExternalParseContextHelper(QoreProgram* pgm) : pgm(pgm) {
     if (qore_program_private::lockParsing(*pgm, 0)) {
-        pgm = nullptr;
+        // the member, not the parameter: the destructor must not release parse ownership it never acquired
+        this->pgm = nullptr;
     }
 }
 
@@ -4261,9 +4411,12 @@ struct ThreadArg {
     // Intrusive completion queue: thread exit must not allocate memory.
     ThreadArg* next = nullptr;
     pthread_t native_id{};
+    //! the sandbox of the starting code, which governs the new thread as its outermost caller, or nullptr
+    std::unique_ptr<QoreInheritedSandbox> sandbox;
 
-    DLLLOCAL ThreadArg(q_thread_t n_f, void* a, int n_tid, int n_flags = QTF_NONE)
-            : f(n_f), arg(a), tid(n_tid), flags(n_flags) {
+    DLLLOCAL ThreadArg(q_thread_t n_f, void* a, int n_tid, int n_flags = QTF_NONE,
+            std::unique_ptr<QoreInheritedSandbox>&& n_sandbox = std::unique_ptr<QoreInheritedSandbox>())
+            : f(n_f), arg(a), tid(n_tid), flags(n_flags), sandbox(std::move(n_sandbox)) {
     }
 
     DLLLOCAL void run(ExceptionSink* xsink) {
@@ -4343,6 +4496,27 @@ public:
         }
         AutoLocker al(mutex);
         started = stopping = false;
+    }
+
+    //! acquires the lock before fork()
+    void forkPrepare() {
+        mutex.lock();
+    }
+
+    //! releases the lock in the parent after fork()
+    void forkParent() {
+        mutex.unlock();
+    }
+
+    //! makes the reaper usable in the child after fork(), where its thread does not exist
+    /** The threads queued for joining do not exist in the child either; their arguments are not freed, as freeing
+        them could run code that expects the threads.  The next external-lifecycle thread starts a new reaper.
+    */
+    void forkChild() {
+        started = stopping = false;
+        head = tail = nullptr;
+        condition.reinitAfterFork();
+        mutex.reinitAfterFork();
     }
 
 private:
@@ -4426,6 +4600,12 @@ namespace {
         ThreadArg* ta = (ThreadArg*)arg;
         // save flags before ta is deleted
         int ta_flags = ta->flags;
+        // the count added for this thread when it was started
+        if (ta_flags & QTF_EXTERNAL_LIFECYCLE) {
+            qore_tp_thread_counter_share = 1;
+        } else {
+            qore_thread_counter_share = 1;
+        }
 
         register_thread(ta->tid, pthread_self(), 0, false, ta->flags);
         printd(5, "q_run_thread() ta: %p TID %d started\n", ta, ta->tid);
@@ -4435,6 +4615,11 @@ namespace {
         pthread_cleanup_push(qore_thread_cleanup, nullptr);
 
         {
+            // the sandbox of the starting code governs everything this thread runs, including its teardown; the
+            // ThreadArg of an external-lifecycle thread outlives the thread, so it is taken from it here
+            std::unique_ptr<QoreInheritedSandbox> sandbox(std::move(ta->sandbox));
+            QoreInheritedSandboxHelper sandbox_helper(sandbox ? &sandbox->ctx : nullptr);
+
             ExceptionSink xsink;
 
             {
@@ -4445,6 +4630,10 @@ namespace {
                 ta->run(&xsink);
                 // the thread function has returned; everything from here on is teardown
                 end_thread_cancellation(true);
+                // the thread's work has ended: it stops counting against the sandbox's thread limit
+                if (sandbox) {
+                    sandbox->releaseSlot();
+                }
                 if (tlpd) {
                     QoreValue val((AbstractQoreNode*)nullptr);
                     tlpd->dbgExit(nullptr, val, &xsink);
@@ -4468,6 +4657,10 @@ namespace {
 
                 assert(xsink.isException() || !td->active_exceptions);
 
+                // the thread's data is deleted next
+                sandbox_helper.reset();
+                sandbox.reset();
+
                 // delete internal thread data structure and release TID entry
                 thread_list.deleteDataRelease(ta->tid);
 
@@ -4486,8 +4679,10 @@ namespace {
         // OPENSSL_thread_stop() acquires OpenSSL's global lock and can cause
         // contention with concurrent TLS handshakes (e.g. QUIC/ngtcp2).
         if (ta_flags & QTF_EXTERNAL_LIFECYCLE) {
+            // the reaper releases the count once it has joined this thread
             external_thread_reaper.complete(ta);
         } else {
+            qore_thread_counter_share = 0;
             thread_counter.dec();
         }
         return nullptr;
@@ -4495,6 +4690,8 @@ namespace {
 
     extern "C" void* op_background_thread(void* x) {
         BGThreadParams* btp = (BGThreadParams*)x;
+        // the count added for this thread when it was started
+        qore_thread_counter_share = 1;
         // register thread
         register_thread(btp->tid, pthread_self(), btp->pgm);
         printd(5, "op_background_thread() btp: %p TID %d started\n", btp, btp->tid);
@@ -4504,6 +4701,11 @@ namespace {
         pthread_cleanup_push(qore_thread_cleanup, nullptr);
 
         {
+            // the sandbox of the starting code governs everything this thread runs, including its teardown; it is
+            // taken from btp because btp is deleted before the thread's data
+            std::unique_ptr<QoreInheritedSandbox> sandbox(std::move(btp->sandbox));
+            QoreInheritedSandboxHelper sandbox_helper(sandbox ? &sandbox->ctx : nullptr);
+
             ExceptionSink xsink;
 
             // register thread in Program object
@@ -4548,6 +4750,11 @@ namespace {
                 purge_thread_resources(&xsink);
 
                 int tid = btp->tid;
+                // the thread's work has ended: it stops counting against the sandbox's thread limit before the
+                // Program sees it end
+                if (sandbox) {
+                    sandbox->releaseSlot();
+                }
                 // dereference current Program object
                 btp->del();
 
@@ -4563,6 +4770,10 @@ namespace {
                 // run any cleanup functions
                 tclist.exec();
 
+                // the thread's data is deleted next; the inherited sandbox stops counting the thread here
+                sandbox_helper.reset();
+                sandbox.reset();
+
                 // delete internal thread data structure and release TID entry
                 thread_list.deleteDataRelease(tid);
             }
@@ -4571,9 +4782,23 @@ namespace {
         pthread_cleanup_pop(1);
         // NOTE: do not call OPENSSL_thread_stop() here — returning from the
         // thread function triggers TLS destructors automatically (see above).
+        qore_thread_counter_share = 0;
         thread_counter.dec();
         return nullptr;
     }
+}
+
+//! creates a native thread with the default attributes and returns the pthread_create() error, if any
+/** The stack lock is only held while the thread is created: it guards the default attributes, and its holder takes
+    no other lock; the failure paths of the callers take the thread list lock and run cleanup code, which must not
+    happen with the stack lock held
+*/
+static int q_create_native_thread(void* (*f)(void*), void* arg) {
+    pthread_t ptid;
+#ifdef QORE_MANAGE_STACK
+    AutoLocker al(stack_lck);
+#endif
+    return pthread_create(&ptid, ta_default.get_ptr(), f, arg);
 }
 
 QoreValue do_op_background(const QoreValue left, ExceptionSink* xsink) {
@@ -4583,6 +4808,13 @@ QoreValue do_op_background(const QoreValue left, ExceptionSink* xsink) {
 
 QoreValue do_op_background(RuntimeConfig& rc, const QoreValue left, ExceptionSink* xsink) {
     if (!left) {
+        return QoreValue();
+    }
+
+    // the new thread inherits the sandbox of the starting code; capturing it counts the thread against the sandbox's
+    // thread limit before anything else is done
+    std::unique_ptr<QoreInheritedSandbox> sandbox;
+    if (QoreInheritedSandbox::capture(xsink, sandbox)) {
         return QoreValue();
     }
 
@@ -4598,7 +4830,8 @@ QoreValue do_op_background(RuntimeConfig& rc, const QoreValue left, ExceptionSin
         return QoreValue();
     }
 
-    BGThreadParams* tp = new BGThreadParams(nl.release(), tid, closure_capture.takeObjects(), xsink);
+    BGThreadParams* tp = new BGThreadParams(nl.release(), tid, closure_capture.takeObjects(), std::move(sandbox),
+        xsink);
     if (*xsink) {
         tp->cleanup(xsink);
         tp->del();
@@ -4606,16 +4839,10 @@ QoreValue do_op_background(RuntimeConfig& rc, const QoreValue left, ExceptionSin
         return QoreValue();
     }
 
-    int rc_thread;
-    pthread_t ptid;
-
     thread_counter.inc();
 
-#ifdef QORE_MANAGE_STACK
-    AutoLocker al(stack_lck);
-#endif
-
-    if ((rc_thread = pthread_create(&ptid, ta_default.get_ptr(), op_background_thread, tp))) {
+    int rc_thread = q_create_native_thread(op_background_thread, tp);
+    if (rc_thread) {
         tp->cleanup(xsink);
         tp->del();
 
@@ -4627,10 +4854,25 @@ QoreValue do_op_background(RuntimeConfig& rc, const QoreValue left, ExceptionSin
     return tid;
 }
 
+//! Captures the sandbox that a thread started with q_start_thread() inherits, unless the flags opt out
+static int q_capture_start_thread_sandbox(ExceptionSink* xsink, int flags,
+        std::unique_ptr<QoreInheritedSandbox>& sandbox) {
+    if (flags & QTF_NO_SANDBOX_INHERIT) {
+        return 0;
+    }
+    return QoreInheritedSandbox::capture(xsink, sandbox);
+}
+
 int q_start_thread(ExceptionSink* xsink, q_thread_t f, void* arg) {
     // the cleanup at process exit waits for the threads that thread_counter counts before it sets qore_shutdown and
     // never again, so a thread started after that must be an external-lifecycle thread, which it waits for at its end
     assert(!qore_shutdown.load(std::memory_order_relaxed));
+    // the new thread inherits the sandbox of the starting code; capturing it counts the thread against the sandbox's
+    // thread limit
+    std::unique_ptr<QoreInheritedSandbox> sandbox;
+    if (q_capture_start_thread_sandbox(xsink, QTF_NONE, sandbox)) {
+        return -1;
+    }
     int tid = get_thread_entry();
     //printd(2, "got %d()\n", tid);
 
@@ -4640,21 +4882,11 @@ int q_start_thread(ExceptionSink* xsink, q_thread_t f, void* arg) {
         return -1;
     }
 
-    ThreadArg* ta = new ThreadArg(f, arg, tid);
+    ThreadArg* ta = new ThreadArg(f, arg, tid, QTF_NONE, std::move(sandbox));
 
-    //printd(5, "tp = %p\n", tp);
-    // create thread
-    int rc;
-    pthread_t ptid;
-
-#ifdef QORE_MANAGE_STACK
-    // make sure accesses to ta_default are made locked
-    AutoLocker al(stack_lck);
-#endif
-
-    //printd(5, "calling pthread_create(%p, %p, %p, %p)\n", &ptid, &ta_default, op_background_thread, tp);
     thread_counter.inc();
-    if ((rc = pthread_create(&ptid, ta_default.get_ptr(), q_run_thread, ta))) {
+    int rc = q_create_native_thread(q_run_thread, ta);
+    if (rc) {
         delete ta;
         thread_counter.dec();
         deregister_thread(tid);
@@ -4667,7 +4899,9 @@ int q_start_thread(ExceptionSink* xsink, q_thread_t f, void* arg) {
 
 size_t q_thread_stack_tls_size() {
 #if defined(__GLIBC__) && defined(HAVE_DLFCN_H)
-    static size_t tls_size = []() -> size_t {
+    // computed without a static initialization guard (see QoreLazyValue): threads are started while another thread
+    // forks
+    static constinit QoreLazyValue<size_t> tls_size_setting([]() -> size_t {
         // __pthread_get_minstack() returns the static TLS size, the guard size, and PTHREAD_STACK_MIN; it is a
         // GLIBC_PRIVATE symbol, so it is looked up at run time
         typedef size_t (*minstack_t)(const pthread_attr_t*);
@@ -4682,8 +4916,8 @@ size_t q_thread_stack_tls_size() {
         size_t min = minstack(&attr);
         pthread_attr_destroy(&attr);
         return min > static_cast<size_t>(PTHREAD_STACK_MIN) ? min - PTHREAD_STACK_MIN : 0;
-    }();
-    return tls_size;
+    });
+    return tls_size_setting.get();
 #else
     return 0;
 #endif
@@ -4693,6 +4927,10 @@ int q_start_thread(ExceptionSink* xsink, q_thread_t f, void* arg, size_t stack_s
     // the cleanup at process exit waits for the threads that thread_counter counts before it sets qore_shutdown and
     // never again, so a thread started after that must be an external-lifecycle thread, which it waits for at its end
     assert(!qore_shutdown.load(std::memory_order_relaxed) || (flags & QTF_EXTERNAL_LIFECYCLE));
+    std::unique_ptr<QoreInheritedSandbox> sandbox;
+    if (q_capture_start_thread_sandbox(xsink, flags, sandbox)) {
+        return -1;
+    }
     if ((flags & QTF_EXTERNAL_LIFECYCLE) && external_thread_reaper.ensureStarted(xsink)) {
         return -1;
     }
@@ -4704,7 +4942,7 @@ int q_start_thread(ExceptionSink* xsink, q_thread_t f, void* arg, size_t stack_s
     }
 
     // QTF_NO_STACK_GUARD: lightweight threads with custom stack sizes bypass the Qore stack guard
-    ThreadArg* ta = new ThreadArg(f, arg, tid, flags | QTF_NO_STACK_GUARD);
+    ThreadArg* ta = new ThreadArg(f, arg, tid, flags | QTF_NO_STACK_GUARD, std::move(sandbox));
 
     // Create a local pthread attr with the requested stack size
     QorePThreadAttr local_attr;
@@ -4742,6 +4980,10 @@ int q_start_thread(ExceptionSink* xsink, q_thread_t f, void* arg, int flags) {
     // the cleanup at process exit waits for the threads that thread_counter counts before it sets qore_shutdown and
     // never again, so a thread started after that must be an external-lifecycle thread, which it waits for at its end
     assert(!qore_shutdown.load(std::memory_order_relaxed) || (flags & QTF_EXTERNAL_LIFECYCLE));
+    std::unique_ptr<QoreInheritedSandbox> sandbox;
+    if (q_capture_start_thread_sandbox(xsink, flags, sandbox)) {
+        return -1;
+    }
     if ((flags & QTF_EXTERNAL_LIFECYCLE) && external_thread_reaper.ensureStarted(xsink)) {
         return -1;
     }
@@ -4752,21 +4994,15 @@ int q_start_thread(ExceptionSink* xsink, q_thread_t f, void* arg, int flags) {
         return -1;
     }
 
-    ThreadArg* ta = new ThreadArg(f, arg, tid, flags);
-
-    int rc;
-    pthread_t ptid;
-
-#ifdef QORE_MANAGE_STACK
-    AutoLocker al(stack_lck);
-#endif
+    ThreadArg* ta = new ThreadArg(f, arg, tid, flags, std::move(sandbox));
 
     if (flags & QTF_EXTERNAL_LIFECYCLE) {
         tp_thread_counter.inc();
     } else {
         thread_counter.inc();
     }
-    if ((rc = pthread_create(&ptid, ta_default.get_ptr(), q_run_thread, ta))) {
+    int rc = q_create_native_thread(q_run_thread, ta);
+    if (rc) {
         delete ta;
         if (flags & QTF_EXTERNAL_LIFECYCLE) {
             tp_thread_counter.dec();
@@ -4834,7 +5070,8 @@ void q_enforce_thread_size_on_primary_thread() {
     QoreThreadDataHelper qtdh(initial_thread);
     ThreadData* td = qtdh.get();
     if (td) {
-        // make sure accesses to stack info are made locked
+        // make sure accesses to stack info are made locked; the stack lock is a leaf below the thread list (see
+        // QoreForkHandlers.h)
         AutoLocker al(stack_lck);
         td->setStackSize(qore_thread_stack_size);
     }
@@ -5109,10 +5346,6 @@ QoreHashNode* QoreThreadList::getAllCallStacks() {
     ReferenceHolder<QoreHashNode> h(new QoreHashNode(
         qore_get_complex_list_type(hashdeclCallStackInfo->getTypeInfo())), nullptr);
 
-    if (exiting) {
-        return h.release();
-    }
-
     auto ph = qore_hash_private::get(**h);
 
     QoreString str;
@@ -5275,6 +5508,8 @@ QoreHashNode* QoreThreadList::getCallStackHash(const QoreStackLocation& stack_lo
 // every listed thread under lck, and it used to find the pointer to data that had already been freed, in the window
 // between the delete and the lock.
 void QoreThreadList::deleteData(int tid) {
+    // the thread's releases from here on take the locking path: its TID's slot can be given to a new thread
+    qore_robject_hazard_unregister();
     {
         AutoLocker al(lck);
         entry[tid].thread_data = nullptr;
@@ -5287,6 +5522,8 @@ void QoreThreadList::deleteData(int tid) {
 }
 
 void QoreThreadList::deleteDataRelease(int tid) {
+    // the thread's releases from here on take the locking path: its TID's slot can be given to a new thread
+    qore_robject_hazard_unregister();
     {
         AutoLocker al(lck);
         entry[tid].thread_data = nullptr;
@@ -5300,6 +5537,8 @@ void QoreThreadList::deleteDataRelease(int tid) {
 }
 
 void QoreThreadList::deleteDataReleaseSignalThread() {
+    // the thread's releases from here on take the locking path: its TID's slot can be given to a new thread
+    qore_robject_hazard_unregister();
     thread_data.get()->del(nullptr);
     {
         AutoLocker al(lck);
@@ -5312,34 +5551,6 @@ void QoreThreadList::deleteDataReleaseSignalThread() {
     AutoLocker al(lck);
     entry[0].joined = true;
     releaseIntern(0);
-}
-
-unsigned QoreThreadList::cancelAllActiveThreads() {
-    int tid = q_gettid();
-
-    // thread cancel count
-    unsigned tcc = 0;
-
-    QoreThreadListIterator i;
-
-    assert(!exiting);
-    exiting = true;
-
-    while (i.next()) {
-        if (*i != (unsigned)tid) {
-            //printf("QoreThreadList::cancelAllActiveThreads() canceling TID %d ptid: %p (this TID: %d)\n", *i, entry[*i].ptid, tid);
-            int trc = pthread_cancel(entry[*i].ptid);
-            if (!trc) {
-                ++tcc;
-#ifdef DEBUG
-            } else {
-                printd(0, "pthread_cancel() returned %d (%s) on tid %d (%p)\n", trc, strerror(trc), tid, entry[*i].ptid);
-#endif
-            }
-        }
-    }
-
-    return tcc;
 }
 
 q_user_tld::q_user_tld(void* data, q_thread_local_destructor destructor) : data(data), destructor(destructor) {
@@ -5571,6 +5782,17 @@ public:
         started = stopping = false;
     }
 
+    //! makes the waker usable in the child after fork(), where its thread does not exist
+    /** The lock was acquired before fork(); the thread is started again when it is next needed (see ensureStarted())
+    */
+    void forkChild() {
+        started = stopping = false;
+        head = tail = -1;
+        done.reinitAfterFork();
+        cond_ready.reinitAfterFork();
+        lck.reinitAfterFork();
+    }
+
 private:
     QoreCondition cond_ready;
     pthread_t native_id{};
@@ -5630,6 +5852,113 @@ void QoreCondWaker::run() {
         }
         done.broadcast();
     }
+}
+
+void QoreThreadList::forkChild(int tid) {
+    // the threads of the parent other than the forking thread do not exist in the child
+    for (int i = 0; i < MAX_QORE_THREADS; ++i) {
+        if (i != tid && !entry[i].available()) {
+            entry[i].abandonAfterFork();
+        }
+    }
+    num_threads = (tid > 0 && !entry[tid].available()) ? 1 : 0;
+    // held by this thread since forkPrepare()
+    lck.reinitAfterFork();
+}
+
+int qore_fork_get_tid() {
+    ThreadData* td = thread_data.get();
+    return td ? td->tid : -1;
+}
+
+namespace {
+//! the fork handler of the thread list: only the forking thread exists in the child
+class QoreThreadListForkHandler : public QoreForkHandler {
+public:
+    QoreThreadListForkHandler() : QoreForkHandler(QFLR_THREAD_LIST, "thread_list") {
+    }
+
+    void prepare() noexcept override {
+        thread_list.forkPrepare();
+    }
+
+    void parent() noexcept override {
+        thread_list.forkParent();
+    }
+
+    void child() noexcept override {
+        thread_list.forkChild(qore_fork_get_tid());
+    }
+};
+
+//! the fork handler of the process-wide thread counters: the child keeps only the forking thread's share
+/** Otherwise the child's exit and the end of its Programs would wait for threads that do not exist in it
+*/
+class QoreThreadCountersForkHandler : public QoreForkHandler {
+public:
+    QoreThreadCountersForkHandler() : QoreForkHandler(QFLR_THREAD_COUNTERS, "thread_counters") {
+    }
+
+    void prepare() noexcept override {
+        thread_counter.lockForFork();
+        tp_thread_counter.lockForFork();
+    }
+
+    void parent() noexcept override {
+        tp_thread_counter.unlockForFork();
+        thread_counter.unlockForFork();
+    }
+
+    void child() noexcept override {
+        tp_thread_counter.reinitAfterFork(qore_tp_thread_counter_share);
+        thread_counter.reinitAfterFork(qore_thread_counter_share);
+    }
+};
+
+//! the fork handler of the condition waker: its thread is started again in the child when it is needed
+class QoreCondWakerForkHandler : public QoreForkHandler {
+public:
+    QoreCondWakerForkHandler() : QoreForkHandler(QFLR_COND_WAKER, "cond_waker") {
+    }
+
+    void prepare() noexcept override {
+        cond_waker.lck.lock();
+    }
+
+    void parent() noexcept override {
+        cond_waker.lck.unlock();
+    }
+
+    void child() noexcept override {
+        cond_waker.forkChild();
+    }
+};
+
+//! the fork handler of the external thread reaper: its thread is started again in the child when it is needed
+class QoreThreadReaperForkHandler : public QoreForkHandler {
+public:
+    QoreThreadReaperForkHandler() : QoreForkHandler(QFLR_LEAF, "external_thread_reaper") {
+    }
+
+    void prepare() noexcept override {
+        external_thread_reaper.forkPrepare();
+    }
+
+    void parent() noexcept override {
+        external_thread_reaper.forkParent();
+    }
+
+    void child() noexcept override {
+        external_thread_reaper.forkChild();
+    }
+};
+
+QoreThreadListForkHandler thread_list_fork_handler;
+QoreThreadCountersForkHandler thread_counters_fork_handler;
+QoreCondWakerForkHandler cond_waker_fork_handler;
+QoreThreadReaperForkHandler thread_reaper_fork_handler;
+QoreForkThreadLock stack_lck_fork_handler(stack_lck, QFLR_STACK, "stack_lck");
+QoreForkThreadLock u_tld_seq_fork_handler(u_tld_seq, QFLR_LEAF, "u_tld_seq");
 }
 
 void qore_stop_cond_waker() {
@@ -5776,15 +6105,15 @@ static unsigned get_cancel_scope_pgm_id() {
     if (td && td->sandbox_context) {
         return td->sandbox_context->manager ? td->sandbox_context->pgm_id : 0;
     }
-    QoreProgram* pgm = nullptr;
-    QoreSandboxManager* sm = find_thread_sandbox_manager_ref_intern(&pgm);
+    unsigned pgm_id = 0;
+    QoreSandboxManager* sm = find_thread_sandbox_manager_ref_intern(&pgm_id);
     if (!sm) {
         return 0;
     }
     sm->deref(nullptr);
-    // the manager is owned by the Program it was found on, therefore the Program cannot be nullptr here
-    assert(pgm);
-    return pgm->getProgramId();
+    // the manager is owned by the Program it was found on, therefore the Program ID cannot be 0 here
+    assert(pgm_id);
+    return pgm_id;
 }
 
 //! Evaluates a pending cancellation request for the current thread against its Program context
@@ -5818,6 +6147,11 @@ static bool check_cancel_in_scope(int tid) {
         }
         // 3) call program context fallback; matches qore_find_thread_sandbox_manager_ref()
         if (td->call_program_context && td->call_program_context->getProgramId() == scope) {
+            return true;
+        }
+        // 4) a thread that inherited the requesting Program's sandbox from the code that started it runs on that
+        // Program's behalf wherever it currently is
+        if (td->inherited_sandbox_context && td->inherited_sandbox_context->pgm_id == scope) {
             return true;
         }
     }
@@ -5956,12 +6290,23 @@ int qore_cancellable_poll(struct pollfd* fds, unsigned nfds, int timeout_ms, Exc
 
     int64 deadline_us = timeout_ms > 0 ? q_get_monotonic_us() + static_cast<int64>(timeout_ms) * 1000 : 0;
 
+#ifdef DARWIN
+    // a wait on a named pipe uses select(2), since poll(2) misses its hang-up (see QorePollCompat.h); the wakeup
+    // channel, a kqueue, works with both
+    bool use_select = qore_poll_needs_select(fds, nfds);
+#endif
+
     // no cancellation can be delivered while it is deferred, and a thread unknown to Qore cannot be cancelled,
     // so the wait is a plain poll(); EINTR resumes it for the rest of the timeout
     int tid = q_gettid();
     if (tid < 0 || tid >= MAX_QORE_THREADS || qore_is_cancel_deferred()) {
         while (true) {
-            int rc = poll(fds, nfds, qore_poll_remaining_ms(timeout_ms, deadline_us));
+            int remaining_ms = qore_poll_remaining_ms(timeout_ms, deadline_us);
+#ifdef DARWIN
+            int rc = use_select ? qore_select_poll(fds, nfds, remaining_ms) : poll(fds, nfds, remaining_ms);
+#else
+            int rc = poll(fds, nfds, remaining_ms);
+#endif
             if (rc >= 0 || errno != EINTR) {
                 return rc;
             }
@@ -6015,7 +6360,12 @@ int qore_cancellable_poll(struct pollfd* fds, unsigned nfds, int timeout_ms, Exc
         int poll_errno = 0;
         bool cancelled = qore_check_cancel(xsink, operation);
         if (!cancelled) {
-            rc = poll(pfds, nfds + 1, qore_poll_remaining_ms(timeout_ms, deadline_us));
+            int remaining_ms = qore_poll_remaining_ms(timeout_ms, deadline_us);
+#ifdef DARWIN
+            rc = use_select ? qore_select_poll(pfds, nfds + 1, remaining_ms) : poll(pfds, nfds + 1, remaining_ms);
+#else
+            rc = poll(pfds, nfds + 1, remaining_ms);
+#endif
             poll_errno = errno;
         }
         if (!nested) {

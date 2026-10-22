@@ -353,8 +353,8 @@ binary ProtobufSchema::encode(string type, hash<auto> data) {
     @return the decoded message as a hash
 
     @throw PROTOBUF-TYPE-ERROR if the message type is not found, or if \a type contains a NUL character
-    @throw PROTOBUF-DECODE-ERROR if parsing fails
-    @throw HASH-KEY-ERROR if a string map key in the message contains a NUL character
+    @throw PROTOBUF-DECODE-ERROR if parsing fails, or a string map key in the message contains a NUL character,
+    which a hash key cannot hold
 
     @since %protobuf 1.0
 */
@@ -391,7 +391,8 @@ string ProtobufSchema::toJson(string type, hash<auto> data) {
 
     @throw PROTOBUF-TYPE-ERROR if the message type is not found, or if \a type contains a NUL character
     @throw PROTOBUF-JSON-ERROR if JSON parsing fails
-    @throw HASH-KEY-ERROR if a string map key in the message contains a NUL character
+    @throw PROTOBUF-DECODE-ERROR if a string map key in the message contains a NUL character, which a hash key cannot
+    hold, so the message cannot be decoded to a hash
 
     @since %protobuf 1.0
 */

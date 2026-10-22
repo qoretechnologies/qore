@@ -38,12 +38,15 @@
 #include <qore/QoreCondition.h>
 
 #include <atomic>
+#include <memory>
+#include <mutex>
 #include <utility>
 #include <vector>
 
 // Forward declarations for ready-notifier support
 class QoreEventNotifier;
 class QoreObject;
+class QoreConnectionDestinations;
 
 //! C++ base class providing connection state management for HTTP poll connections
 /** This class implements the connection state machine (CONNECTING, READY,
@@ -121,6 +124,22 @@ public:
         }
         return state.load(std::memory_order_acquire) == READY;
     }
+
+    //! Blocks until the state differs from @a from_state, the timeout expires, or the thread is cancelled
+    /** Every state transition broadcasts the condition this waits on, so a change is never missed: if the state
+        already differs from @a from_state, the call returns at once.  The wait ends at once if the thread is
+        cancelled or its program is interrupted.
+
+        @param from_state the state to wait to leave
+        @param timeout_ms the maximum time to wait in milliseconds; <= 0 means no timeout
+        @param xsink raises \c THREAD-CANCELLED or \c PROGRAM-INTERRUPTED if the wait was interrupted
+
+        @return the state after the wait; equal to @a from_state if the timeout expired; -1 if an exception was
+        raised
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT int waitForStateChange(int from_state, int64_t timeout_ms, ExceptionSink* xsink);
 
     //! Transitions to DRAINING (GOAWAY received)
     DLLEXPORT void setDraining() {
@@ -246,7 +265,34 @@ public:
         }
     }
 
+    //! Records where the connection leads
+    /** Called by the protocol implementation with the destinations of its socket before it reports the connection
+        ready; a connection pool checks them against the network sandbox of the code it hands the connection to.
+
+        @param d the destinations; a null pointer if the socket's connect did not record them
+
+        @since %Qore 3.0
+    */
+    DLLLOCAL void setDestinations(std::shared_ptr<const QoreConnectionDestinations> d) {
+        std::lock_guard<std::mutex> l(destinations_lock);
+        destinations.swap(d);
+    }
+
+    //! Returns where the connection leads, or a null pointer if not known (yet)
+    /** @since %Qore 3.0
+    */
+    DLLLOCAL std::shared_ptr<const QoreConnectionDestinations> getDestinations() const {
+        std::lock_guard<std::mutex> l(destinations_lock);
+        return destinations;
+    }
+
 private:
+    //! Where the connection leads; guarded by @ref destinations_lock
+    std::shared_ptr<const QoreConnectionDestinations> destinations;
+
+    //! Guards @ref destinations; a leaf lock: nothing else is locked while it is held
+    mutable std::mutex destinations_lock;
+
     //! Connection state — values match Qore HttpClientConnectionState enum
     std::atomic<int> state{CONNECTING};
 

@@ -734,7 +734,7 @@ public class TableauDataProviderTest inherits QUnit::Test {
             "logger": new Logger("server", LoggerLevel::getLevelError()),
         });
         on_exit server.stop();
-        int port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
         FakeTableauHandler handler();
         server.setHandler("tableau", "", NOTHING, handler);
         server.setDefaultHandler("tableau", handler);
@@ -855,7 +855,7 @@ public class TableauDataProviderTest inherits QUnit::Test {
             "logger": new Logger("server", LoggerLevel::getLevelError()),
         });
         on_exit server.stop();
-        int port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
         FakeTableauHandler handler();
         server.setHandler("tableau", "", NOTHING, handler);
         server.setDefaultHandler("tableau", handler);

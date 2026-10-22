@@ -44,7 +44,7 @@ class ForeignConstraintColumnQuotingTest inherits QUnit::Test {
             },
             AbstractForeignConstraint sub (string name, Columns cols, ForeignConstraintTarget target) {
                 return new Sqlite3ForeignConstraint(name, cols, target);
-            }, "'", "'");
+            }, '"', '"');
         addTestCase("Oracle composite draft key preserves deferrability", \oracleDeferred());
         set_return_value(main());
     }

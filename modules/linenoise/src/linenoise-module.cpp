@@ -25,6 +25,21 @@
 QoreNamespace LinenoiseNS("Qore::Linenoise");
 
 QoreRecursiveThreadLock lock;
+thread_local int linenoise_lock_depth = 0;
+
+//! the fork handler of the module lock (see QoreForkHandler.h)
+/** The lock is held while a thread waits for terminal input and while user callbacks run, so fork() does not wait
+    for it (QFR_MODULE_RESET): the child initializes it again and takes it again as often as the forking thread held
+    it, since a callback can call fork()
+*/
+static QoreForkHandlerRegistration* linenoise_lock_fork_reg = nullptr;
+
+static void linenoise_lock_fork_child(void*) {
+    qore_fork_reinit_recursive_thread_lock(lock);
+    for (int i = 0; i < linenoise_lock_depth; ++i) {
+        lock.lock();
+    }
+}
 ResolvedCallReferenceNode* callbackNode = nullptr;
 ResolvedCallReferenceNode* hintsCallbackNode = nullptr;
 ResolvedCallReferenceNode* syntaxCallbackNode = nullptr;
@@ -129,7 +144,7 @@ int parseKeySpec(const char* spec, ExceptionSink* xsink) {
 
 // C trampoline for user key bindings
 static int qore_linenoise_user_key_cb(const char* line, int pos, char** new_line, int* new_pos, void* userData) {
-    AutoLocker al(lock);
+    LinenoiseLockHelper al;
 
     ResolvedCallReferenceNode* cb = static_cast<ResolvedCallReferenceNode*>(userData);
     if (!cb) {
@@ -174,7 +189,7 @@ static int qore_linenoise_user_key_cb(const char* line, int pos, char** new_line
 }
 
 static void qore_linenoise_completion_cb(const char *input, linenoiseCompletions *lc) {
-    AutoLocker al(lock);
+    LinenoiseLockHelper al;
 
     if (!callbackNode) {
         return;
@@ -209,7 +224,7 @@ static void qore_linenoise_completion_cb(const char *input, linenoiseCompletions
 }
 
 static char* qore_linenoise_hints_cb(const char* input, int* color, int* bold) {
-    AutoLocker al(lock);
+    LinenoiseLockHelper al;
 
     if (!hintsCallbackNode) {
         return NULL;
@@ -260,7 +275,7 @@ static void qore_linenoise_free_hints_cb(void* hint) {
 }
 
 static char* qore_linenoise_syntax_cb(const char* buf) {
-    AutoLocker al(lock);
+    LinenoiseLockHelper al;
 
     if (!syntaxCallbackNode) {
         return NULL;
@@ -290,7 +305,7 @@ static char* qore_linenoise_syntax_cb(const char* buf) {
 
 // History provider C trampolines
 char* qore_history_provider_prev_cb(const char* prefix, void* userData) {
-    AutoLocker al(lock);
+    LinenoiseLockHelper al;
     if (!historyProviderPriv) {
         return NULL;
     }
@@ -304,7 +319,7 @@ char* qore_history_provider_prev_cb(const char* prefix, void* userData) {
 }
 
 char* qore_history_provider_next_cb(const char* prefix, void* userData) {
-    AutoLocker al(lock);
+    LinenoiseLockHelper al;
     if (!historyProviderPriv) {
         return NULL;
     }
@@ -318,7 +333,7 @@ char* qore_history_provider_next_cb(const char* prefix, void* userData) {
 }
 
 void qore_history_provider_reset_cb(void* userData) {
-    AutoLocker al(lock);
+    LinenoiseLockHelper al;
     if (!historyProviderPriv) {
         return;
     }
@@ -330,7 +345,7 @@ void qore_history_provider_reset_cb(void* userData) {
 }
 
 char* qore_history_provider_search_cb(const char* pattern, int direction, void* userData) {
-    AutoLocker al(lock);
+    LinenoiseLockHelper al;
     if (!historyProviderPriv) {
         return NULL;
     }
@@ -360,7 +375,7 @@ static void linenoise_program_cleanup(QoreProgram* pgm) {
     QoreObject* provider_obj = nullptr;
     HistoryProviderPriv* provider_priv = nullptr;
     {
-        AutoLocker al(lock);
+        LinenoiseLockHelper al;
         for (std::map<int, ResolvedCallReferenceNode*>::iterator i = keyBindingCallbacks.begin();
                 i != keyBindingCallbacks.end();) {
             if (i->second && i->second->getProgram() == pgm) {
@@ -399,6 +414,14 @@ static void linenoise_program_cleanup(QoreProgram* pgm) {
 }
 
 static void linenoise_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
+    assert(!linenoise_lock_fork_reg);
+    linenoise_lock_fork_reg = qore_register_fork_handler(QFR_MODULE_RESET, "linenoise", nullptr, nullptr,
+        linenoise_lock_fork_child, nullptr);
+    if (!linenoise_lock_fork_reg) {
+        xsink.outOfMemory();
+        return;
+    }
+
     LinenoiseNS.addSystemClass(initAbstractHistoryProviderClass(LinenoiseNS));
     init_linenoise_functions(LinenoiseNS);
 
@@ -416,6 +439,8 @@ static void linenoise_module_ns_init(QoreNamespace* rns, QoreNamespace* qns, Exc
 }
 
 static void linenoise_module_delete() {
+    qore_unregister_fork_handler(linenoise_lock_fork_reg);
+    linenoise_lock_fork_reg = nullptr;
     qore_deregister_program_cleanup_callback(linenoise_program_cleanup);
     ExceptionSink xsink;
     if (callbackNode) {

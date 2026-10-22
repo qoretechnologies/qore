@@ -1,0 +1,414 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# Reads and waits on named pipes (FIFOs) see the end of the pipe once its writers have closed, and a closed reader
+# from the write end.  On macOS, poll(2) and kqueue report neither, while select(2) does: a blocking File read,
+# File::isDataAvailable(), a timed FileInputStream read, an EventLoop, Socket::poll(), a poll read
+# (ReadOnlyFile::startPollRead()) and Socket::sendFromInputStream() waited forever, or for the whole timeout, at the
+# end of a named pipe.  A wait on a pipe whose writer does not write still times out and can still be cancelled,
+# also on a descriptor above FD_SETSIZE (1024 on macOS), which a fixed-size select(2) set cannot hold.
+#
+# A wait that misses the end never ends, so these tests fail by hanging (the test runner's time limit is the guard):
+# the waits that must see the end have a timeout of an hour, and isDataAvailable() one of a minute, after which it
+# reports that no data is available.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+
+%requires QUnit
+%requires FsUtil
+%requires Util
+
+%exec-class FileFifoTest
+
+class FileFifoTest inherits QUnit::Test {
+    public {
+        #! the timeout of the waits that must see the end of a pipe
+        const Long = 1h;
+
+        #! the same timeout in milliseconds, for the methods that take an integer
+        const LongMs = 3600000;
+
+        #! FD_SETSIZE on macOS (and with glibc and musl)
+        const FdSetSize = 1024;
+
+        #! the data written to the pipes
+        const Data = <64617461>;
+    }
+
+    private {
+        #! the directory with the pipes
+        string dir;
+
+        #! the number of pipes made
+        int pipes;
+    }
+
+    constructor() : QUnit::Test("File named pipes", "1.0", \ARGV) {
+        addTestCase("a blocking read returns the data, then the end", \testBlockingRead());
+        addTestCase("isDataAvailable() reports the end", \testIsDataAvailable());
+        addTestCase("a timed stream read returns at the end", \testStreamRead());
+        addTestCase("a read from a writer that does not write times out", \testTimeout());
+        addTestCase("a blocked read is cancelled", \testCancel());
+        addTestCase("an EventLoop reports the end and a closed reader", \testEventLoop());
+        addTestCase("Socket::poll() and a poll read see the end", \testSocketPoll());
+        addTestCase("Socket::sendFromInputStream() sends the data up to the end", \testSendFromInputStream());
+        addTestCase("descriptors above FD_SETSIZE", \testHighDescriptors());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        dir = make_tmp_dir("file-fifo");
+    }
+
+    globalTearDown() {
+        remove_tree(dir);
+    }
+
+    testBlockingRead() {
+        foreach string method in ("readBinary", "read", "readShortBinary") {
+            Queue may_close();
+            Counter closed(1);
+            File r = openWithWriter(may_close, closed);
+            on_exit may_close.push(True);
+            switch (method) {
+                case "readBinary":
+                    # the writer closes before the read waits, or while it waits
+                    may_close.push(True);
+                    assertEq(Data, r.readBinary(-1), method + ": the data, up to the end");
+                    break;
+                case "read":
+                    may_close.push(True);
+                    assertEq(Data.toString(), r.read(-1), method + ": the data, up to the end");
+                    break;
+                case "readShortBinary":
+                    assertEq(Data, r.readShortBinary(4096), method + ": the data");
+                    may_close.push(True);
+                    assertEq(NOTHING, r.readShortBinary(4096), method + ": the end");
+                    break;
+            }
+            closed.waitForZero();
+        }
+    }
+
+    testIsDataAvailable() {
+        Queue may_close();
+        Counter closed(1);
+        File r = openWithWriter(may_close, closed);
+        on_exit may_close.push(True);
+        assertTrue(r.isDataAvailable(Long), "the data is available");
+        assertEq(Data, r.readShortBinary(4096), "the data");
+        may_close.push(True);
+        closed.waitForZero();
+        assertTrue(r.isDataAvailable(1m), "the end is available");
+        assertEq(NOTHING, r.readShortBinary(4096), "the end");
+    }
+
+    testStreamRead() {
+        string path = makeFifo();
+        Counter closed(1);
+        background sub () {
+            on_exit closed.dec();
+            File w();
+            w.open2(path, O_WRONLY);
+            w.write(Data);
+        }();
+        FileInputStream is(path);
+        closed.waitForZero();
+        binary data;
+        while (*binary chunk = is.readWithTimeout(4096, LongMs)) {
+            data += chunk;
+        }
+        assertEq(Data, data, "the data, up to the end");
+    }
+
+    testTimeout() {
+        hash<auto> p = openIdle();
+        File r = p.r;
+        assertThrows("FILE-READ-TIMEOUT", \r.readShortBinary(), (4096, 50ms), "readShortBinary()");
+        assertThrows("FILE-READ-TIMEOUT", \r.readBinary(), (-1, 50ms), "readBinary()");
+        assertThrows("FILE-READ-TIMEOUT", \r.read(), (-1, 50ms), "read()");
+        assertFalse(r.isDataAvailable(50ms), "isDataAvailable()");
+        FileInputStream is(p.path);
+        assertEq(NOTHING, is.readWithTimeout(4096, 50), "FileInputStream::readWithTimeout()");
+    }
+
+    testCancel() {
+        hash<auto> p = openIdle();
+        File r = p.r;
+        list<hash<auto>> cases = (
+            {"name": "readBinary()", "call": sub () { r.readBinary(-1); }},
+            {"name": "readShortBinary()", "call": sub () { r.readShortBinary(4096); }},
+            {"name": "isDataAvailable()", "call": sub () { r.isDataAvailable(-1); }},
+        );
+        foreach hash<auto> c in (cases) {
+            for (int i = 0; i < 3; ++i) {
+                assertEq("THREAD-CANCELLED", cancelBlocked(c.call), c.name);
+            }
+        }
+    }
+
+    testEventLoop() {
+        # the read end
+        {
+            Queue may_close();
+            Counter closed(1);
+            File r = openWithWriter(may_close, closed);
+            on_exit may_close.push(True);
+            EventLoop loop();
+            loop.add(r, SOCK_POLLIN);
+            *list<hash<EventPollInfo>> l = loop.poll(Long);
+            assertEq(1, l.size(), "read end: one event");
+            assertEq(SOCK_POLLIN, l[0].events & SOCK_POLLIN, "read end: the data is reported");
+            assertEq(Data, r.readShortBinary(4096), "read end: the data");
+            may_close.push(True);
+            closed.waitForZero();
+            l = loop.poll(Long);
+            assertEq(1, l.size(), "read end: one event at the end");
+            assertEq(SOCK_POLLIN, l[0].events & SOCK_POLLIN, "read end: the end is reported");
+            assertEq(NOTHING, r.readShortBinary(4096), "read end: the end");
+            loop.del(r);
+        }
+
+        # the write end of a full pipe whose reader closes
+        {
+            string path = makeFifo();
+            File r();
+            r.open2(path, O_RDONLY | O_NONBLOCK);
+            File w();
+            w.open2(path, O_WRONLY | O_NONBLOCK);
+            fill(w);
+            EventLoop loop();
+            loop.add(w, SOCK_POLLOUT);
+            assertEq(NOTHING, loop.poll(0), "write end: a full pipe is not writable");
+            r.close();
+            *list<hash<EventPollInfo>> l = loop.poll(Long);
+            assertEq(1, l.size(), "write end: one event once the reader has closed");
+            assertNeq(0, l[0].events & (SOCK_POLLOUT | SOCK_POLLERR), "write end: the closed reader is reported");
+            assertThrows("FILE-WRITE-ERROR", "Broken pipe", \w.write(), ("x",), "write end: the write fails");
+            loop.del(w);
+        }
+    }
+
+    testSocketPoll() {
+        # Socket::poll() with a File at the end of the pipe
+        {
+            Queue may_close();
+            Counter closed(1);
+            File r = openWithWriter(may_close, closed);
+            on_exit may_close.push(True);
+            assertEq(Data, r.readShortBinary(4096), "Socket::poll(): the data");
+            may_close.push(True);
+            closed.waitForZero();
+            list<hash<SocketPollInfo>> l = Socket::poll((<SocketPollInfo>{"events": SOCK_POLLIN, "socket": r},),
+                Long);
+            assertEq(1, l.size(), "Socket::poll(): the end is reported");
+            assertEq(SOCK_POLLIN, l[0].events & SOCK_POLLIN, "Socket::poll(): read readiness at the end");
+            assertEq(NOTHING, r.readShortBinary(4096), "Socket::poll(): the end");
+        }
+
+        # a poll read that waits when the writer closes; the poll read opens the pipe itself, so another reader
+        # lets the writer open first
+        {
+            string path = makeFifo();
+            Queue written();
+            Queue may_close();
+            Counter closed(1);
+            background sub () {
+                on_exit closed.dec();
+                File w();
+                w.open2(path, O_WRONLY);
+                w.write(Data);
+                written.push(True);
+                may_close.get();
+            }();
+            File holder();
+            holder.open2(path, O_RDONLY);
+            written.get();
+            File f();
+            AbstractPollOperation op = f.startPollRead(path, False);
+            holder.close();
+            bool signalled;
+            on_exit {
+                if (!signalled) {
+                    may_close.push(True);
+                }
+                closed.waitForZero();
+            }
+            while (!op.goalReached()) {
+                *hash<SocketPollInfo> info = op.continuePoll();
+                if (info) {
+                    if (!signalled) {
+                        # the data has been read, and the next read would block: the writer closes now
+                        may_close.push(True);
+                        signalled = True;
+                    }
+                    list<hash<SocketPollInfo>> l = Socket::poll((info,), Long);
+                    assertEq(1, l.size(), "poll read: readiness is reported");
+                }
+            }
+            assertTrue(signalled, "poll read: the read waited for the writer");
+            assertEq(Data, op.getOutput(), "poll read: the data, up to the end");
+        }
+    }
+
+    testSendFromInputStream() {
+        string sock_path = tmp_location() + DirSep + "qore-fifo-" + get_random_string(12);
+        on_exit unlink(sock_path);
+        Socket server();
+        server.bindUNIX(sock_path);
+        server.listen();
+        Queue received();
+        background sub () {
+            try {
+                Socket peer = server.accept(Long);
+                received.push(peer.recvBinary(-1, Long));
+            } catch (hash<ExceptionInfo> ex) {
+                received.push(ex);
+            }
+        }();
+        # the connection is made first, so that the server always ends: when the client is closed
+        Socket client();
+        client.connectUNIX(sock_path);
+
+        string path = makeFifo();
+        Counter closed(1);
+        background sub () {
+            on_exit closed.dec();
+            File w();
+            w.open2(path, O_WRONLY);
+            w.write(Data);
+        }();
+        FileInputStream is(path);
+        closed.waitForZero();
+
+        client.sendFromInputStream(is, -1, Long);
+        client.close();
+        auto rv = received.get();
+        if (rv.typeCode() == NT_HASH) {
+            throw rv.err, rv.desc, rv.arg;
+        }
+        assertEq(Data, rv, "the data, up to the end");
+    }
+
+    testHighDescriptors() {
+        int limit = getDescriptorLimit();
+        if (limit < FdSetSize + 64) {
+            testSkip(sprintf("the descriptor limit (%d) is too low to open descriptors above FD_SETSIZE (%d)", limit,
+                FdSetSize));
+        }
+        # every free descriptor up to FD_SETSIZE is taken, so the descriptors opened next are above it
+        list<File> fillers;
+        while (True) {
+            File f();
+            f.open2("/dev/null", O_RDONLY);
+            fillers += f;
+            if (f.getPollableDescriptor() >= FdSetSize) {
+                break;
+            }
+        }
+
+        {
+            Queue may_close();
+            Counter closed(1);
+            File r = openWithWriter(may_close, closed);
+            on_exit may_close.push(True);
+            assertGt(FdSetSize, r.getPollableDescriptor(), "the reader's descriptor is above FD_SETSIZE");
+            assertEq(Data, r.readShortBinary(4096), "the data");
+            may_close.push(True);
+            closed.waitForZero();
+            assertTrue(r.isDataAvailable(1m), "isDataAvailable() reports the end");
+            EventLoop loop();
+            loop.add(r, SOCK_POLLIN);
+            *list<hash<EventPollInfo>> l = loop.poll(Long);
+            assertEq(1, l.size(), "the EventLoop reports the end");
+            assertEq(NOTHING, r.readShortBinary(4096), "the end");
+            loop.del(r);
+        }
+
+        {
+            hash<auto> p = openIdle();
+            File r = p.r;
+            assertGt(FdSetSize, r.getPollableDescriptor(), "the idle reader's descriptor is above FD_SETSIZE");
+            assertThrows("FILE-READ-TIMEOUT", \r.readShortBinary(), (4096, 50ms), "a read times out");
+            assertEq("THREAD-CANCELLED", cancelBlocked(sub () { r.readBinary(-1); }), "a read is cancelled");
+        }
+    }
+
+    #! makes a named pipe and returns its path
+    private string makeFifo() {
+        string path = join_paths(dir, sprintf("fifo-%d", ++pipes));
+        if (mkfifo(path)) {
+            throw "MKFIFO-ERROR", sprintf("%s: %s", path, strerror());
+        }
+        return path;
+    }
+
+    #! returns the read end of a new named pipe; a background thread writes Data and closes the write end once
+    #! may_close gets a value, and then decrements closed (the callers push a value on exit as well, so that a
+    #! failed assertion does not leave the thread waiting)
+    private File openWithWriter(Queue may_close, Counter closed) {
+        string path = makeFifo();
+        background sub () {
+            on_exit closed.dec();
+            File w();
+            w.open2(path, O_WRONLY);
+            w.write(Data);
+            may_close.get();
+        }();
+        File r();
+        r.open2(path, O_RDONLY);
+        return r;
+    }
+
+    #! returns a hash with the read end (\c r) of a new named pipe whose writer (\c w) never writes, and its path
+    private hash<auto> openIdle() {
+        string path = makeFifo();
+        # opening for reading and writing does not wait for a reader
+        File w();
+        w.open2(path, O_RDWR);
+        File r();
+        r.open2(path, O_RDONLY);
+        return {"path": path, "r": r, "w": w};
+    }
+
+    #! fills a pipe opened with O_NONBLOCK
+    private static fill(File w) {
+        binary chunk = binary(strmul("x", 4096));
+        try {
+            while (True) {
+                w.write(chunk);
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err != "FILE-WRITE-ERROR" || ex.desc !~ /Resource temporarily unavailable/) {
+                rethrow;
+            }
+        }
+    }
+
+    #! runs the call in a thread, cancels the thread and returns the error that ended the call
+    private static string cancelBlocked(code call) {
+        Queue started();
+        Queue done();
+        int tid = background sub () {
+            try {
+                started.push(True);
+                call();
+                done.push("NONE");
+            } catch (hash<ExceptionInfo> ex) {
+                done.push(ex.err);
+            }
+        }();
+        started.get();
+        cancel_thread(tid, "named pipe test");
+        return done.get();
+    }
+
+    #! returns the soft limit of open descriptors
+    private static int getDescriptorLimit() {
+        string limit = trim(backquote("ulimit -n"));
+        return limit == "unlimited" ? MAXINT : limit.toInt();
+    }
+}

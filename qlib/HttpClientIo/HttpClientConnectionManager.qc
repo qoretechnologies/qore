@@ -106,6 +106,18 @@ auto mgr_h2 = new HttpClientConnectionManager({"protocol": "h2"});
 auto mgr_h3 = new HttpClientConnectionManager({"protocol": "h3"});
     @endcode
 
+    @par Sandboxing
+    A connection is checked against the @ref sandboxing "network sandbox" of the code that opens it.  The pool
+    hands an open connection to later requests only if the network sandbox of the code making the request allows
+    where the connection leads, checked as a new connection would be, with the sandbox as it is configured then;
+    otherwise the request makes its own connection, which its sandbox decides on, and if no further connection can
+    be opened (see \c max_connections_per_host), the request fails with the sandbox's \c NETWORK-ACCESS-DENIED.
+    The connection of a persistent session is checked the same way, and the request fails with
+    \c NETWORK-ACCESS-DENIED if the sandbox does not allow it.  A connection through an HTTP proxy leads to the
+    proxy and to the destination that the proxy connects to; a sandbox must allow both.  The destination of a proxy
+    connection made by code without a sandbox is not resolved by the client, so that connection is not handed to
+    sandboxed code.
+
     @par Shared Global Controller
     All managers share the process-wide AsyncSocketIo global controller singleton
     (via @ref AsyncSocketIo::getGlobalAsyncIoController()). The controller uses
@@ -116,6 +128,17 @@ auto mgr_h3 = new HttpClientConnectionManager({"protocol": "h3"});
     another controller.
 */
 public class HttpClientConnectionManager inherits HttpClientConnectionManagerBase {
+    private {
+        #! The errors of @ref migrateAll() that are errors of the caller, not of the connection being migrated
+        /** They end @ref migrateAll(); any other error of a migration drains its connection
+        */
+        const MigrateAllCallerErrors = {
+            "SOCKET-SYNC-ON-IO-THREAD-ERROR": True,
+            "THREAD-CANCELLED": True,
+            "PROGRAM-INTERRUPTED": True,
+        };
+    }
+
     public {
         #! Interval before re-probing HTTP/3 for hosts that fell back to HTTP/2
         const H3_REPROBE_INTERVAL = 5m;
@@ -1921,9 +1944,30 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
     }
 
     #! Migrates all ready HTTP/3 connections to new network paths
-    /** @return the number of connections successfully migrated
+    /** Call this when the local network changes (for example, a new interface or address): each ready HTTP/3
+        connection is migrated with @ref Http3ClientConnection::migrate(), one after the other, each waiting up to
+        \a migration_timeout for the migration to start.  A connection that cannot be migrated is drained: the requests
+        in progress on it finish, and new requests get a new connection.  Connections of other protocols are not
+        changed.
+
+        @par Example:
+        @code{.py}
+int migrated = mgr.migrateAll(5s);
+printf("%d connection(s) migrated\n", migrated);
+        @endcode
+
+        @param migration_timeout the maximum time that each migration waits to start, including the wait for a
+        spare connection ID (see @ref Http3ClientConnection::migrate()); if no value is given, each connection's
+        connect timeout is used; a value <= 0 means no timeout
+
+        @return the number of connections migrated
+
+        @throw SOCKET-SYNC-ON-IO-THREAD-ERROR called on an async I/O thread, which drives the connections and so could
+        never see the result of a migration
+        @throw THREAD-CANCELLED the thread was cancelled; the connections not migrated yet are not changed
+        @throw PROGRAM-INTERRUPTED the program was interrupted; the connections not migrated yet are not changed
     */
-    int migrateAll() {
+    int migrateAll(*timeout migration_timeout) {
         # Pin @c pool_lock across this method: see @ref pool_lock_pin.
         RWLock pool_lock_pin = pool_lock;
         # Register as an in-flight caller so the destructor drains us: see @ref in_flight_drain.
@@ -1944,14 +1988,19 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
         int migrated = 0;
         foreach hash<auto> item in (to_migrate) {
             try {
-                if (item.conn.migrate()) {
+                if (item.conn.migrate(migration_timeout)) {
                     ++migrated;
                     log(LoggerLevel::DEBUG, "migrated connection %d to %s",
                         item.conn.getConnectionId(), item.key);
                 }
             } catch (hash<ExceptionInfo> ex) {
+                # errors of the caller, not of the connection, end the call: the other connections are not drained
+                if (MigrateAllCallerErrors{ex.err}) {
+                    rethrow;
+                }
                 log(LoggerLevel::ERROR, "migration failed for connection %d to %s: %s: %s",
                     item.conn.getConnectionId(), item.key, ex.err, ex.desc);
+                # a connection that cannot be migrated is drained, so new requests get a new connection
                 try {
                     item.conn.setDraining();
                 } catch () {
@@ -2168,6 +2217,8 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
         # transaction stays on the one leased socket; see pinConnection() / leaseConnection().
         *HttpClientConnection pinned = getPinnedConnection();
         if (pinned && pinned.getPoolKey() == key) {
+            # the session's connection can be used only by code whose network sandbox allows it
+            pinned.checkSandboxUse();
             if (!pinned.tryReserveStream()) {
                 throw "HTTPCLIENT-CAPACITY-ERROR",
                     sprintf("no free stream slot on the pinned persistent connection %d to %s",
@@ -2206,8 +2257,10 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
                                 continue;
                             }
                             # skip connections exclusively leased for a persistent session:
-                            # only their owning thread (via the pin above) may use them
-                            if (!live_conn && !conn.isLeased() && conn.tryReserveStream()) {
+                            # only their owning thread (via the pin above) may use them; a connection is
+                            # handed only to code whose network sandbox allows it
+                            if (!live_conn && !conn.isLeased() && conn.sandboxAllowsUse()
+                                && conn.tryReserveStream()) {
                                 live_conn = conn;
                             }
                         }
@@ -2277,7 +2330,10 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
                                 conn.getConnectionId(), key);
                         } else {
                             push live, conn;
-                            if (!reusable && !conn.isDraining() && conn.tryReserveStream()) {
+                            # as in the scan above: a leased connection belongs to its session, and a connection
+                            # is handed only to code whose network sandbox allows it
+                            if (!reusable && !conn.isDraining() && !conn.isLeased() && conn.sandboxAllowsUse()
+                                && conn.tryReserveStream()) {
                                 reusable = conn;
                             }
                         }
@@ -2300,10 +2356,21 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
                 int current_count = pool.hasKey(key) ? pool{key}.size() : 0;
                 if (opts.max_connections_per_host
                         && current_count >= opts.max_connections_per_host) {
-                    # Pick connection with fewest streams
+                    # Pick connection with fewest streams; a leased connection belongs to its session, and a
+                    # connection is handed only to code whose network sandbox allows it
                     list<HttpClientConnection> candidates;
+                    *HttpClientConnection sandbox_refused;
                     int min_streams = MAXINT;
                     foreach HttpClientConnection conn in (pool{key}) {
+                        if (conn.isLeased()) {
+                            continue;
+                        }
+                        if (!conn.sandboxAllowsUse()) {
+                            if (!sandbox_refused) {
+                                sandbox_refused = conn;
+                            }
+                            continue;
+                        }
                         int streams = conn.getActiveStreamCount();
                         if (streams < min_streams) {
                             min_streams = streams;
@@ -2323,6 +2390,10 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
                                 best.getConnectionId(), min_streams, key);
                             return best;
                         }
+                    } else if (sandbox_refused) {
+                        # no further connection can be opened, and the sandbox does not allow the open ones: raise
+                        # its denial
+                        sandbox_refused.checkSandboxUse();
                     }
                     throw "HTTPCLIENT-CAPACITY-ERROR",
                         sprintf("all %d connections to %s have reached the concurrent "
@@ -3008,6 +3079,10 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
                             continue;
                         }
                         if (!isConnectionAlive(conn)) {
+                            continue;
+                        }
+                        # a connection is handed only to code whose network sandbox allows it
+                        if (!conn.sandboxAllowsUse()) {
                             continue;
                         }
                         reuse = conn;

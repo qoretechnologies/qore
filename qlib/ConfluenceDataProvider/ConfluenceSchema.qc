@@ -68,8 +68,7 @@ public hashdecl ConfluenceSchemaProvenanceInfo {
     whether the site is reached directly or through Atlassian's OAuth2 gateway, which is why one schema
     serves both; see @ref ConfluenceRestClient::ConfluenceRestClientBase "ConfluenceRestClientBase".
 
-    The schema is parsed once, on first use, rather than when the module loads, so that a program that only
-    needs the connection does not pay for it.
+    The schema is parsed once, when the module loads and registers its actions, which are built from it.
 */
 public class ConfluenceSchema {
     public {

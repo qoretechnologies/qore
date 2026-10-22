@@ -295,6 +295,15 @@ public:
         }
     }
 
+    //! Releases the records that the session keeps for a stream that the caller is done with
+    /** Application threads; see Http2Session::releaseStream()
+    */
+    DLLLOCAL void releaseStream(int32_t stream_id) {
+        if (sock_obj) {
+            sock_obj->releaseHttp2Stream(stream_id);
+        }
+    }
+
     //! Returns the time in microseconds since data was last received on the connection, or -1 if none was received
     /** Can be called from any thread
     */
@@ -404,6 +413,11 @@ public:
         QoreObject* queue_obj;              //!< ref'd QoreObject wrapping queue (for DGC)
         QoreEventNotifier* notifier;        //!< ref'd EventNotifier for wake-up, or nullptr
         QoreObject* notifier_obj;           //!< ref'd QoreObject wrapping notifier, or nullptr
+        //! True if the stream's data is decoded by a frame state that writes to the queue (see installFrameState())
+        /** The frame state gets the stream's data through the stream's action and ends its output itself, so the
+            raw data is not read for the queue; the registration only notifies the stream's listener
+        */
+        bool frame_state = false;
     };
 
     //! Registers a Queue (and optional EventNotifier) for a CONNECT stream
@@ -730,5 +744,16 @@ DLLLOCAL QoreClass* initHttp2ClientPollOperationBaseClass(QoreNamespace& qorens)
 //! Class ID — defined by the generated QPP code (qore_classid_t storage in
 //! the generated .cpp file, initialised from the registered class).
 DLLLOCAL extern qore_classid_t CID_HTTP2CLIENTPOLLOPERATIONBASE;
+
+#ifdef DEBUG
+//! Debug-only: holds the stream queue registrations of HTTP/2 client connections pending, or applies them again
+/** Called by the dbg_h2_client_hold_stream_registrations() test hook.  While held, the I/O thread does not apply the
+    stream queue registrations made by application threads (Http2ClientPollOperationPriv::registerStreamQueue()):
+    they stay pending, as when no read cycle has drained the stream queues since they were made.
+
+    @param hold true to hold the registrations pending from now on, false to apply them again
+*/
+DLLLOCAL void qore_dbg_h2_client_hold_stream_registrations(bool hold);
+#endif
 
 #endif // _QORE_CLASS_HTTP2CLIENTPOLLOPERATIONBASE_H

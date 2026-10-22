@@ -37,6 +37,11 @@
 using SshUtilObjectMap = std::map<std::string, QoreObject*>;
 
 static QoreThreadLock sshutil_registry_lock;
+//! the fork handler of the registry's lock (see QoreForkHandler.h)
+/** The registry can be used in a child process created with fork(); the lock's holders check for cancellation (the
+    library's thread list lock) and allocate memory, and it is taken while no other registered lock is held
+*/
+static QoreForkHandlerRegistration* sshutil_registry_fork_reg = nullptr;
 static SshUtilObjectMap client_identity_providers;
 static SshUtilObjectMap server_host_key_providers;
 static SshUtilObjectMap host_key_stores;
@@ -289,6 +294,23 @@ static void sshutil_take_program_objects(SshUtilObjectMap& m, const QoreProgram*
             ++i;
         }
     }
+}
+
+int SshUtilRegistry::registerForkHandler(ExceptionSink* xsink) {
+    assert(!sshutil_registry_fork_reg);
+    sshutil_registry_fork_reg = qore_register_fork_handler(QFR_MODULE_CANCELLABLE, "sshutil_registry",
+        qore_fork_prepare_thread_lock, qore_fork_parent_thread_lock, qore_fork_child_thread_lock,
+        &sshutil_registry_lock);
+    if (!sshutil_registry_fork_reg) {
+        xsink->outOfMemory();
+        return -1;
+    }
+    return 0;
+}
+
+void SshUtilRegistry::unregisterForkHandler() {
+    qore_unregister_fork_handler(sshutil_registry_fork_reg);
+    sshutil_registry_fork_reg = nullptr;
 }
 
 void SshUtilRegistry::releaseProgram(QoreProgram* pgm) {

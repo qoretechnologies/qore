@@ -1763,12 +1763,17 @@ public class OpenApi3Schema inherits ObjectBase, AbstractRestSchemaValidator {
     #! Returns the data type for the given type specification
     AbstractDataProviderType getType(string path, string typestr, *string format, *SchemaObject arrayItems,
             bool required = True, *bool strict) {
+        if (!isTypeBuildActive()) {
+            return runTypeBuild(AbstractDataProviderType sub () {
+                return getType(path, typestr, format, arrayItems, required, strict);
+            });
+        }
         string id;
         if (*AbstractDataProviderType rv = checkType(path, typestr, format, arrayItems, required, \id, strict)) {
             return rv;
         }
         AbstractDataProviderType rv = getTypeIntern(path, typestr, format, arrayItems, required, strict);
-        typemap{id}{required ? "Y" : "N"} = rv;
+        setCachedType(id, required ? "Y" : "N", rv);
         return rv;
     }
 
@@ -1777,21 +1782,39 @@ public class OpenApi3Schema inherits ObjectBase, AbstractRestSchemaValidator {
             *SchemaObject arrayItems, bool required = True, reference<string> id, *bool strict) {
         id = sprintf("%s-%s-%s-%s%s", path, typestr, format ?? "x", arrayItems ? arrayItems.uniqueHash() : "x",
             strict ? "-strict" : "");
-        return getCacheType(\typemap{id}, required ? "Y" : "N");
-    }
-
-    #! Returns a cached type
-    private static *AbstractDataProviderType getCacheType(reference<hash<string, AbstractDataProviderType>> h,
-            string key) {
+        string key = required ? "Y" : "N";
+        *hash<string, AbstractDataProviderType> h = typemap{id};
         if (h) {
             if ((key == "N") && !h.N) {
-                return h.N = h.Y.getOrNothingType();
+                AbstractDataProviderType rv = h.Y.getOrNothingType();
+                setCachedType(id, key, rv);
+                return rv;
             }
             if ((key == "Y") && !h.Y) {
-                return h.Y = h.N.getMandatoryType();
+                AbstractDataProviderType rv = h.N.getMandatoryType();
+                setCachedType(id, key, rv);
+                return rv;
             }
             return h{key};
         }
+    }
+
+    #! Caches a type, recording the write in the type build in progress
+    private setCachedType(string id, string key, AbstractDataProviderType t) {
+        if (isTypeBuildActive()) {
+            *AbstractDataProviderType prev = typemap{id}{key};
+            recordTypeBuildWrite(sub () {
+                if (prev) {
+                    typemap{id}{key} = prev;
+                } else {
+                    remove typemap{id}{key};
+                    if (!typemap{id}) {
+                        remove typemap{id};
+                    }
+                }
+            });
+        }
+        typemap{id}{key} = t;
     }
 
     #! Returns the data type corresponding to the values
@@ -5399,6 +5422,18 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
         return openapi3;
     }
 
+    #! Returns the document whose type builds this schema takes part in
+    /** @return the owning document, or @ref nothing if it no longer exists: a schema can outlive its document
+        through a type that refers to it, and then builds its types as before, which is only possible from the
+        types it has already cached
+
+        @since OpenApi3 1.0
+    */
+    *RestSchemaValidator::AbstractRestSchemaValidator getTypeBuildSchema() {
+        # the document is held through a weak reference, which does not exist once the document is deleted
+        return exists openapi3 ? openapi3 : NOTHING;
+    }
+
     #! private constructor; use newSchemaObject() instead
     /**
         @param name the name of the object
@@ -5947,6 +5982,12 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
         @return the data type of the schema as a mandatory union alternative
     */
     AbstractDataProviderType getAlternativeDataType(*object rest) {
+        *RestSchemaValidator::AbstractRestSchemaValidator schema = getTypeBuildSchema();
+        if (schema && !schema.isTypeBuildActive()) {
+            return schema.runTypeBuild(AbstractDataProviderType sub () {
+                return getAlternativeDataType(rest);
+            });
+        }
         # the conditions under which getDataType() returns a plain scalar or array type
         bool plain = (prefix_items ? False : additional_items)
             && !(discriminatorMapping && !oneOf && !anyOf)
@@ -5957,8 +5998,14 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
             return getDataType(True, rest);
         }
         if (!alternativeDataType) {
-            alternativeDataType = openapi3.getType("/", type, format, items, !nullable, True)
+            AbstractDataProviderType t = openapi3.getType("/", type, format, items, !nullable, True)
                 .copyWithConstraints(getConstraintInfo());
+            if (schema) {
+                schema.recordTypeBuildWrite(sub () {
+                    remove alternativeDataType;
+                });
+            }
+            alternativeDataType = t;
         }
         return alternativeDataType;
     }
@@ -5978,6 +6025,12 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
 
     #! Returns the data type for the schema
     AbstractDataProviderType getDataType(bool required = True, *object rest) {
+        *RestSchemaValidator::AbstractRestSchemaValidator schema = getTypeBuildSchema();
+        if (schema && !schema.isTypeBuildActive()) {
+            return schema.runTypeBuild(AbstractDataProviderType sub () {
+                return getDataType(required, rest);
+            });
+        }
         required = required && !nullable;
         if (prefix_items || !additional_items) {
             if (!dataType) {
@@ -5990,11 +6043,11 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
                 }
                 AbstractDataProviderType element_type = types.size() == 1 ? types[0]
                     : types ? new QoreUnionDataType(types) : AbstractDataProviderTypeMap."auto";
-                dataType = (new OpenApi3TupleDataType(self, element_type, False))
-                    .copyWithConstraints(getConstraintInfo());
+                setCachedDataType(True, (new OpenApi3TupleDataType(self, element_type, False))
+                    .copyWithConstraints(getConstraintInfo()));
             }
             if (required) { return dataType; }
-            if (!orNothingDataType) { orNothingDataType = dataType.getOrNothingType(); }
+            if (!orNothingDataType) { setCachedDataType(False, dataType.getOrNothingType()); }
             return orNothingDataType;
         }
         if (discriminatorMapping && !oneOf && !anyOf) {
@@ -6020,16 +6073,16 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
                         single.addField(field);
                     }
                     single.setDefaultOtherFieldType(branch.getDefaultOtherFieldType());
-                    dataType = single;
+                    setCachedDataType(True, single);
                 } else {
-                    dataType = new OpenApi3DiscriminatorDataType(discriminator, alternatives);
+                    setCachedDataType(True, new OpenApi3DiscriminatorDataType(discriminator, alternatives));
                 }
             }
             if (required) {
                 return dataType;
             }
             if (!orNothingDataType) {
-                orNothingDataType = dataType.getOrNothingType();
+                setCachedDataType(False, dataType.getOrNothingType());
             }
             return orNothingDataType;
         }
@@ -6038,12 +6091,12 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
             # type even when it is a composition, which a scalar type name cannot express
             if (required) {
                 if (!dataType) {
-                    dataType = allOf[0].getDataType(True, rest);
+                    setCachedDataType(True, allOf[0].getDataType(True, rest));
                 }
                 return dataType;
             }
             if (!orNothingDataType) {
-                orNothingDataType = allOf[0].getDataType(False, rest);
+                setCachedDataType(False, allOf[0].getDataType(False, rest));
             }
             return orNothingDataType;
         }
@@ -6059,12 +6112,12 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
             on_exit pop CompositionStack;
             if (required) {
                 if (!dataType) {
-                    dataType = getCompositionDataType(True, rest);
+                    setCachedDataType(True, getCompositionDataType(True, rest));
                 }
                 return dataType;
             }
             if (!orNothingDataType) {
-                orNothingDataType = dataType ? dataType.getOrNothingType() : getCompositionDataType(False, rest);
+                setCachedDataType(False, dataType ? dataType.getOrNothingType() : getCompositionDataType(False, rest));
             }
             return orNothingDataType;
         }
@@ -6073,13 +6126,14 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
             # constraints gets its own copy
             if (required) {
                 if (!dataType) {
-                    dataType = getSchemaType("/", type, format, items, True).copyWithConstraints(getConstraintInfo());
+                    setCachedDataType(True,
+                        getSchemaType("/", type, format, items, True).copyWithConstraints(getConstraintInfo()));
                 }
                 return dataType;
             }
             if (!orNothingDataType) {
-                orNothingDataType = dataType ? dataType.getOrNothingType() : getSchemaType("/", type, format, items,
-                    False).copyWithConstraints(getConstraintInfo());
+                setCachedDataType(False, dataType ? dataType.getOrNothingType() : getSchemaType("/", type, format,
+                    items, False).copyWithConstraints(getConstraintInfo()));
             }
             return orNothingDataType;
         }

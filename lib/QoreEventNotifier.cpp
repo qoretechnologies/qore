@@ -32,6 +32,7 @@
 #include <qore/Qore.h>
 #include "qore/intern/QoreEventNotifier.h"
 
+#include <cassert>
 #include <cerrno>
 #include <unistd.h>
 #include <fcntl.h>
@@ -42,10 +43,69 @@
 #include <sys/event.h>
 #endif
 
+namespace {
+//! The descriptor that an event notifier is polled with; closed by its last reference
+struct QoreEventNotifierFd {
+    int fd;
+
+    explicit QoreEventNotifierFd(int fd) : fd(fd) {
+    }
+
+    ~QoreEventNotifierFd() {
+        ::close(fd);
+    }
+};
+}
+
+void QoreEventNotifier::initPollFdRef(int fd) {
+    if (fd >= 0) {
+        poll_fd_ref = std::make_shared<QoreEventNotifierFd>(fd);
+    }
+}
+
+int QoreEventNotifier::holdPollableDescriptor(int fd, std::shared_ptr<void>& hold) const {
+    std::lock_guard<std::mutex> lg(poll_fd_lock);
+    if (fd < 0 || !poll_fd_ref || static_cast<QoreEventNotifierFd*>(poll_fd_ref.get())->fd != fd) {
+        return -1;
+    }
+    hold = poll_fd_ref;
+    return 0;
+}
+
 #ifdef DARWIN
 // Initialize static counter for unique EVFILT_USER identifiers
 // Start at 1 to avoid using 0 as an identifier
 std::atomic<uintptr_t> QoreEventNotifier::next_ident{1};
+#endif
+
+#ifdef DEBUG
+std::atomic<void (*)(QoreEventNotifier* notifier)> QoreEventNotifier::dbg_in_use_hook{nullptr};
+std::atomic<void (*)(QoreEventNotifier* notifier)> QoreEventNotifier::dbg_close_wait_hook{nullptr};
+#endif
+
+#ifndef __linux__
+//! Creates a non-blocking, close-on-exec pipe; returns 0 on success, -1 on error (exception raised)
+static int qore_event_notifier_make_pipe(int (&fds)[2], ExceptionSink* xsink) {
+    if (pipe(fds) < 0) {
+        xsink->raiseErrnoException("EVENT-NOTIFIER-ERROR", errno, "pipe() failed");
+        return -1;
+    }
+
+    for (int fd : fds) {
+        // Set both ends to non-blocking
+        int flags = fcntl(fd, F_GETFL);
+        if (flags >= 0) {
+            fcntl(fd, F_SETFL, flags | O_NONBLOCK);
+        }
+        // Set close-on-exec
+        fcntl(fd, F_SETFD, FD_CLOEXEC);
+    }
+#ifdef DARWIN
+    // Prevent SIGPIPE on write to closed pipe (macOS-specific)
+    fcntl(fds[1], F_SETNOSIGPIPE, 1);
+#endif
+    return 0;
+}
 #endif
 
 QoreEventNotifier::QoreEventNotifier(ExceptionSink* xsink) {
@@ -53,57 +113,27 @@ QoreEventNotifier::QoreEventNotifier(ExceptionSink* xsink) {
     // Linux: use eventfd for efficient signaling
     // EFD_NONBLOCK: non-blocking reads
     // EFD_CLOEXEC: close on exec (security best practice)
-    notify_fd = eventfd(0, EFD_NONBLOCK | EFD_CLOEXEC);
-    if (notify_fd < 0) {
+    int nfd = eventfd(0, EFD_NONBLOCK | EFD_CLOEXEC);
+    if (nfd < 0) {
         xsink->raiseErrnoException("EVENT-NOTIFIER-ERROR", errno, "eventfd() failed");
+        return;
     }
-#elif defined(DARWIN)
+    notify_fd.store(nfd, std::memory_order_release);
+    initPollFdRef(nfd);
+#else
+#ifdef DARWIN
     // macOS: allocate unique identifier for EVFILT_USER optimization
     // The actual kqueue binding happens later via bindToKqueue()
     user_ident = next_ident.fetch_add(1, std::memory_order_relaxed);
-
-    // Create fallback pipe (used when not bound to kqueue)
-    if (pipe(pipe_fd) < 0) {
-        xsink->raiseErrnoException("EVENT-NOTIFIER-ERROR", errno, "pipe() failed");
+#endif
+    // a pipe: the fallback on macOS (used when not bound to kqueue), the mechanism on other platforms
+    int fds[2];
+    if (qore_event_notifier_make_pipe(fds, xsink)) {
         return;
     }
-
-    // Set both ends to non-blocking
-    int flags = fcntl(pipe_fd[0], F_GETFL);
-    if (flags >= 0) {
-        fcntl(pipe_fd[0], F_SETFL, flags | O_NONBLOCK);
-    }
-    flags = fcntl(pipe_fd[1], F_GETFL);
-    if (flags >= 0) {
-        fcntl(pipe_fd[1], F_SETFL, flags | O_NONBLOCK);
-    }
-
-    // Set close-on-exec
-    fcntl(pipe_fd[0], F_SETFD, FD_CLOEXEC);
-    fcntl(pipe_fd[1], F_SETFD, FD_CLOEXEC);
-
-    // Prevent SIGPIPE on write to closed pipe (macOS-specific)
-    fcntl(pipe_fd[1], F_SETNOSIGPIPE, 1);
-#else
-    // Other platforms: use pipe
-    if (pipe(pipe_fd) < 0) {
-        xsink->raiseErrnoException("EVENT-NOTIFIER-ERROR", errno, "pipe() failed");
-        return;
-    }
-
-    // Set both ends to non-blocking
-    int flags = fcntl(pipe_fd[0], F_GETFL);
-    if (flags >= 0) {
-        fcntl(pipe_fd[0], F_SETFL, flags | O_NONBLOCK);
-    }
-    flags = fcntl(pipe_fd[1], F_GETFL);
-    if (flags >= 0) {
-        fcntl(pipe_fd[1], F_SETFL, flags | O_NONBLOCK);
-    }
-
-    // Set close-on-exec
-    fcntl(pipe_fd[0], F_SETFD, FD_CLOEXEC);
-    fcntl(pipe_fd[1], F_SETFD, FD_CLOEXEC);
+    pipe_fd[0].store(fds[0], std::memory_order_release);
+    pipe_fd[1].store(fds[1], std::memory_order_release);
+    initPollFdRef(fds[0]);
 #endif
 }
 
@@ -111,38 +141,84 @@ QoreEventNotifier::~QoreEventNotifier() {
     closeFd();
 }
 
+bool QoreEventNotifier::beginUse() {
+    uint32_t prev = use_state.fetch_add(1, std::memory_order_acq_rel);
+    if (prev & CLOSED_BIT) {
+        endUse();
+        return false;
+    }
+    return true;
+}
+
+void QoreEventNotifier::endUse() {
+    uint32_t prev = use_state.fetch_sub(1, std::memory_order_acq_rel);
+    assert(prev & IN_USE_MASK);
+    // wake closeFd() when the last call using the descriptor ends after it set the closed bit; the lock pairs the
+    // notification with its wait, which checks the count with the lock held
+    if ((prev & CLOSED_BIT) && (prev & IN_USE_MASK) == 1) {
+        std::lock_guard<std::mutex> l(close_mutex);
+        close_cond.notify_all();
+    }
+}
+
 void QoreEventNotifier::closeFd() {
+    // no call can start using the descriptor once the closed bit is set
+    uint32_t prev = use_state.fetch_or(CLOSED_BIT, std::memory_order_acq_rel);
+    if (prev & CLOSED_BIT) {
+        return;
+    }
+    // wait for the calls that are using the descriptor: each one is a single non-blocking system call
+    if (prev & IN_USE_MASK) {
+#ifdef DEBUG
+        if (void (*hook)(QoreEventNotifier*) = dbg_close_wait_hook.load(std::memory_order_acquire)) {
+            hook(this);
+        }
+#endif
+        std::unique_lock<std::mutex> l(close_mutex);
+        close_cond.wait(l, [this]() {
+            return !(use_state.load(std::memory_order_acquire) & IN_USE_MASK);
+        });
+    }
+
+    // the descriptor the notifier is polled with is closed by its last reference: an async I/O event loop that has it
+    // registered keeps it open until it has removed it (see holdPollableDescriptor())
+    std::shared_ptr<void> polled;
+    {
+        std::lock_guard<std::mutex> lg(poll_fd_lock);
+        polled = std::move(poll_fd_ref);
 #ifdef __linux__
-    if (notify_fd >= 0) {
-        ::close(notify_fd);
-        notify_fd = -1;
-    }
-#elif defined(DARWIN)
-    // Note: we don't need to explicitly remove the EVFILT_USER from kqueue
-    // as the EventLoop will handle that, or it will be auto-cleaned if the
-    // kqueue is closed. We just close the fallback pipe if still open.
-    if (pipe_fd[0] >= 0) {
-        ::close(pipe_fd[0]);
-        pipe_fd[0] = -1;
-    }
-    if (pipe_fd[1] >= 0) {
-        ::close(pipe_fd[1]);
-        pipe_fd[1] = -1;
-    }
+        notify_fd.store(-1, std::memory_order_release);
 #else
-    if (pipe_fd[0] >= 0) {
-        ::close(pipe_fd[0]);
-        pipe_fd[0] = -1;
+        pipe_fd[0].store(-1, std::memory_order_release);
+#endif
     }
-    if (pipe_fd[1] >= 0) {
-        ::close(pipe_fd[1]);
-        pipe_fd[1] = -1;
+    polled.reset();
+#ifndef __linux__
+    // Note (macOS): we don't need to explicitly remove the EVFILT_USER from kqueue as the EventLoop will handle
+    // that, or it will be auto-cleaned if the kqueue is closed; notify() does nothing once the notifier is closed.
+    int wfd = pipe_fd[1].exchange(-1, std::memory_order_acq_rel);
+    if (wfd >= 0) {
+        ::close(wfd);
     }
 #endif
 }
 
 void QoreEventNotifier::notify() {
+    // the descriptor stays open while the call uses it; nothing to do once the notifier is closed
+    UseHelper uh(*this);
+    if (!uh) {
+        return;
+    }
+#ifdef DEBUG
+    if (void (*hook)(QoreEventNotifier*) = dbg_in_use_hook.load(std::memory_order_acquire)) {
+        hook(this);
+    }
+#endif
 #ifdef __linux__
+    int nfd = notify_fd.load(std::memory_order_acquire);
+    if (nfd < 0) {
+        return;
+    }
     // eventfd: write a counter value (1) to signal
     // Multiple writes before read will accumulate
     uint64_t val = 1;
@@ -150,9 +226,10 @@ void QoreEventNotifier::notify() {
     // it just means we've signaled many times, which is fine
     ssize_t rc;
     do {
-        rc = ::write(notify_fd, &val, sizeof(val));
+        rc = ::write(nfd, &val, sizeof(val));
     } while (rc < 0 && errno == EINTR);
-#elif defined(DARWIN)
+#else
+#ifdef DARWIN
     // Load optimized first — the acquire pairs with the release store in
     // bindToKqueue(), guaranteeing that kq_fd is visible when optimized is
     // true.  Loading kq_fd before the synchronization point would allow ARM64
@@ -173,69 +250,67 @@ void QoreEventNotifier::notify() {
             // kevent failed — fall through to pipe below
         }
     }
-    // Fallback path (not optimized, kq_fd not valid, or kevent failed): write to pipe
-    if (pipe_fd[1] >= 0) {
-        char c = '.';
-        ssize_t rc;
-        do {
-            rc = ::write(pipe_fd[1], &c, 1);
-        } while (rc < 0 && errno == EINTR);
-        // Ignore EAGAIN - pipe is full, notification is already pending
-    }
-#else
-    // pipe: write a byte to signal
+#endif
+    // pipe (the fallback path on macOS: not optimized, kq_fd not valid, or kevent failed): write a byte to signal
     // If pipe is full, that's fine - there's already a pending notification
+    int wfd = pipe_fd[1].load(std::memory_order_acquire);
+    if (wfd < 0) {
+        return;
+    }
     char c = '.';
     ssize_t rc;
     do {
-        rc = ::write(pipe_fd[1], &c, 1);
+        rc = ::write(wfd, &c, 1);
     } while (rc < 0 && errno == EINTR);
     // Ignore EAGAIN - pipe is full, notification is already pending
 #endif
 }
 
 void QoreEventNotifier::acknowledge(ExceptionSink* xsink) {
+    // the descriptor stays open while the call uses it; nothing to do once the notifier is closed
+    UseHelper uh(*this);
+    if (!uh) {
+        return;
+    }
+#ifdef DEBUG
+    if (void (*hook)(QoreEventNotifier*) = dbg_in_use_hook.load(std::memory_order_acquire)) {
+        hook(this);
+    }
+#endif
 #ifdef __linux__
+    int nfd = notify_fd.load(std::memory_order_acquire);
+    if (nfd < 0) {
+        return;
+    }
     // eventfd: read the counter to acknowledge all pending notifications
     uint64_t val = 0;
     ssize_t rc;
     do {
-        rc = ::read(notify_fd, &val, sizeof(val));
+        rc = ::read(nfd, &val, sizeof(val));
     } while (rc < 0 && errno == EINTR);
 
     // EAGAIN is fine - no pending notification (shouldn't happen if called after poll)
     if (rc < 0 && errno != EAGAIN) {
         xsink->raiseErrnoException("EVENT-NOTIFIER-ERROR", errno, "eventfd read failed");
     }
-#elif defined(DARWIN)
+#else
+#ifdef DARWIN
     if (optimized.load(std::memory_order_acquire)) {
         // Optimized path: EVFILT_USER with EV_CLEAR auto-resets
         // Nothing to do - the event is automatically acknowledged when returned from kevent()
         return;
     }
-    // Fallback path: drain pipe
-    char buf[64];
-    ssize_t rc;
-    while (true) {
-        do {
-            rc = ::read(pipe_fd[0], buf, sizeof(buf));
-        } while (rc < 0 && errno == EINTR);
-
-        if (rc <= 0) {
-            // EAGAIN means pipe is empty - we're done
-            if (rc < 0 && errno != EAGAIN) {
-                xsink->raiseErrnoException("EVENT-NOTIFIER-ERROR", errno, "pipe read failed");
-            }
-            break;
-        }
+#endif
+    int rfd = pipe_fd[0].load(std::memory_order_acquire);
+    if (rfd < 0) {
+        return;
     }
-#else
     // pipe: drain all bytes from the read end
     char buf[64];
     ssize_t rc;
     while (true) {
         do {
-            rc = ::read(pipe_fd[0], buf, sizeof(buf));
+            rc = ::read(rfd, buf, sizeof(buf));
         } while (rc < 0 && errno == EINTR);
 
         if (rc <= 0) {

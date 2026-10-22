@@ -109,8 +109,11 @@ object obj2 = m.call(obj1);
 
     @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the class and method has been destroyed
     @throw METHOD-ERROR the object was not instantiated from the class implementing this method
+    @throw CREATE-OBJECT-ERROR the calling code's or the class's Program's sandboxing restrictions do not allow the class (see @ref reflection_caller_privilege)
 */
 object CopyMethod::call(object obj) {
+    // the privileges of the calling code, captured before switching to the class's Program
+    QoreReflectionCaller caller;
     // get read access to program object
     QoreExternalProgramContextHelper tch(xsink, m->pgm);
     if (*xsink) {
@@ -123,5 +126,10 @@ object CopyMethod::call(object obj) {
     }
 
     const QoreClass* cls = m->m->getClass();
+    // copying creates an object of the class: the class must be allowed by the caller and the class's Program
+    if (check_constructor(caller, cls, m->pgm, xsink)) {
+        return QoreValue();
+    }
+    QoreReflectionCallCheckHelper call_check(caller, m->pgm);
     return cls->execCopy(obj, xsink);
 }

@@ -73,11 +73,11 @@ auto sub test(binary data) {
         set_return_value(main());
     }
 
-    #! A text key with a NUL character cannot be a hash key; it was cut at the NUL character
+    #! A text key with a NUL character cannot be a hash key, so the data cannot be parsed to a hash
     testNulKey() {
         # {"a\x00b": 1}: a map of one entry with a three-byte text key
-        assertThrows("HASH-KEY-ERROR", "key \"a\\\\x00b\" contains a NUL character at byte offset 1", \parse_cbor(),
-            <a16361006201>);
+        assertThrows("CBOR-PARSE-ERROR", "CBOR map key \"a\\\\x00b\" contains a NUL character at byte offset 1, "
+            "which a Qore hash key cannot hold", \parse_cbor(), <a16361006201>);
         # a value keeps its NUL character
         assertEq({"a": "x\x00y"}, parse_cbor(make_cbor({"a": "x\x00y"})));
     }

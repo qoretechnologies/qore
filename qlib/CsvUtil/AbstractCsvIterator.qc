@@ -207,7 +207,8 @@ public namespace CsvUtil {
             @param opts a hash of optional options; see @ref abstractcsviterator_options for more information
 
             @throw ABSTRACTCSVITERATOR-ERROR invalid or unknown option; invalid data type for option;
-            \c "header-names" is @ref True "True" \c "headers" is also present; unknown field type
+            \c "header-names" is @ref True "True" \c "headers" is also present; unknown field type; a header name
+            given with the \c "headers" option has a NUL character
          */
         constructor(AbstractLineIterator li, *hash<auto> opts): CsvHelper("ABSTRACTCSVITERATOR-ERROR") {
             lineIterator = li;
@@ -406,6 +407,9 @@ public namespace CsvUtil {
         #! Moves the current line / record position to the next line / record; returns @ref False if there are no more lines to iterate
         /** This method will return @ref True again after it returns @ref False once if the file being iterated has data that can be iterated, otherwise it will always return @ref False. The iterator object should not be used to retrieve a value after this method returns @ref False.
             @return @ref False if there are no lines / records to iterate (in which case the iterator object is invalid and should not be used); @ref True if successful (meaning that the iterator object is valid)
+
+            @throw ABSTRACTCSVITERATOR-ERROR a header name has a NUL character, which cannot be the key of a field in a
+            record
 
             @note that if headers are not given as an option to the constructor, then they are detected and set the first time AbstractCsvIterator::next() is run on a file (see @ref getHeaders())
          */

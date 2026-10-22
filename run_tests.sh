@@ -16,6 +16,9 @@ print_usage () {
   echo "  QORE_TEST_OPTS           Additional options to pass to qore (e.g., '-penable-debug')."
   echo "  QORE_TEST_DIRS           Space-separated test directories (as found in $BASE_TEST_PATH) to run when no"
   echo "                           -d option is given (e.g., 'qore/misc qore/vars'); default: all tests."
+  echo "  QORE_TEST_EXTRA_DIRS     Space-separated directories outside $BASE_TEST_PATH (relative to the current"
+  echo "                           directory or absolute) whose tests are run as well (e.g., 'modules/ml/test');"
+  echo "                           the tests of the binary modules in ./modules are run only when named here."
   echo "  TEST_TIMEOUT             Seconds a single test may run before it is killed (default: 300); a test"
   echo "                           declares its own budget with a '# test-timeout: <seconds>' comment.  A test"
   echo "                           that exceeds it is first sent SIGUSR1 (QUnit tests print the call stacks of"
@@ -114,9 +117,18 @@ fi
 
 # If no test dirs were specified, run all the tests
 if [ -z "$TEST_DIRS" ]; then
-    #TEST_DIRS="$BASE_TEST_PATH ./modules"
     TEST_DIRS="$BASE_TEST_PATH"
 fi
+
+# Tests outside the test directory, such as those of the binary modules (modules/*/test), are run when named, so
+# that the default set of tests stays the same
+for dir in $QORE_TEST_EXTRA_DIRS; do
+    if [ ! -d "$dir" ]; then
+        echo "ERROR: QORE_TEST_EXTRA_DIRS entry '$dir' is not a directory" >&2
+        exit 1
+    fi
+    TEST_DIRS="$TEST_DIRS $dir"
+done
 
 QORE=""
 QR=""
@@ -321,14 +333,17 @@ echo "Core dump ulimit: ${CORE_ULIMIT:-unknown}"
 CORE_DIR="${CORE_DIR:-./crash-dumps}"
 mkdir -p "$CORE_DIR" 2>/dev/null
 CORE_DIR_ABS=$(cd "$CORE_DIR" && pwd)
-# Try to set core pattern to write cores to our directory (may fail in containers)
+# Try to set core pattern to write cores to our directory (may fail in containers).  Not in a CI job: Linux has one
+# core pattern for the whole machine, which a CI job shares with the other jobs on its node, and a path in this tree
+# does not exist in their containers, so their cores would be lost; the CI scripts set the pattern every job on the
+# node sets (examples/test/docker_test/ci-core-capture.sh), and the cores are found below where it puts them.
 CORE_PATTERN_SET=0
-if [ -w /proc/sys/kernel/core_pattern ]; then
+if [ -z "$CI" ] && [ -w /proc/sys/kernel/core_pattern ]; then
     echo "$CORE_DIR_ABS/core.%e.%p" > /proc/sys/kernel/core_pattern
     CORE_PATTERN_SET=1
 fi
 # Also try sysctl (works on some systems where /proc write fails)
-if [ $CORE_PATTERN_SET -eq 0 ]; then
+if [ -z "$CI" ] && [ $CORE_PATTERN_SET -eq 0 ]; then
     sysctl -w "kernel.core_pattern=$CORE_DIR_ABS/core.%e.%p" 2>/dev/null && CORE_PATTERN_SET=1
 fi
 # macOS writes cores to kern.corefile (/cores/core.%P), which only root can write, so a crashing test left no
@@ -377,24 +392,132 @@ case "$KERN_CORE_PATTERN" in
         ;;
 esac
 
+# the directories searched for the core of a test, in the order they are searched
+CORE_SEARCH_DIRS='"$CORE_DIR_ABS" "$SYSTEM_CORE_DIR" . /tmp /var/lib/apport/coredump /var/crash'
+
+# prints the find(1) name pattern of the core files in the given search directory
+core_search_name() {
+    if [ "$1" = "$SYSTEM_CORE_DIR" ]; then
+        printf '%s\n' "$SYSTEM_CORE_NAME"
+    elif [ "$1" = /var/crash ]; then
+        printf '%s\n' '*.crash'
+    else
+        printf '%s\n' 'core*'
+    fi
+}
+
+# prints the core files in the search directories, in the order they are searched
+list_test_cores() {
+    eval "set -- $CORE_SEARCH_DIRS"
+    for CORE_SEARCH_DIR in "$@"; do
+        if [ -n "$CORE_SEARCH_DIR" ] && [ -d "$CORE_SEARCH_DIR" ]; then
+            find "$CORE_SEARCH_DIR" -maxdepth 1 -type f -name "$(core_search_name "$CORE_SEARCH_DIR")" -print \
+                2>/dev/null
+        fi
+    done
+}
+
+# Sets CORE_FILE to the core the current test left: a file written after the test started, or one that did not
+# exist before the test (TEST_CORES_BEFORE), as BusyBox find (Alpine) compares whole seconds and so does not find a
+# core written in the second the test started
 find_test_core() {
     CORE_FILE=""
-    for CORE_SEARCH_DIR in "$CORE_DIR_ABS" "$SYSTEM_CORE_DIR" . /tmp /var/lib/apport/coredump /var/crash; do
+    eval "set -- $CORE_SEARCH_DIRS"
+    for CORE_SEARCH_DIR in "$@"; do
         if [ -z "$CORE_SEARCH_DIR" ] || [ ! -d "$CORE_SEARCH_DIR" ]; then
             continue
         fi
-        CORE_SEARCH_NAME='core*'
-        if [ "$CORE_SEARCH_DIR" = "$SYSTEM_CORE_DIR" ]; then
-            CORE_SEARCH_NAME=$SYSTEM_CORE_NAME
-        elif [ "$CORE_SEARCH_DIR" = /var/crash ]; then
-            CORE_SEARCH_NAME='*.crash'
-        fi
+        CORE_SEARCH_NAME=$(core_search_name "$CORE_SEARCH_DIR")
         CORE_FILE=$(find "$CORE_SEARCH_DIR" -maxdepth 1 -type f -name "$CORE_SEARCH_NAME" \
             -newer "$TEST_START_MARKER" -print 2>/dev/null | head -1)
+        if [ -z "$CORE_FILE" ]; then
+            CORE_FILE=$(find "$CORE_SEARCH_DIR" -maxdepth 1 -type f -name "$CORE_SEARCH_NAME" -print 2>/dev/null \
+                | awk -v before="$TEST_CORES_BEFORE" \
+                    'BEGIN { while ((getline f < before) > 0) seen[f] = 1 } !($0 in seen) { print; exit }')
+        fi
         if [ -n "$CORE_FILE" ]; then
             break
         fi
     done
+}
+
+# The pipes the output of the tests goes to (Linux only): a CI job reads its output through a pipe and ends only when
+# no process holds it any more.  run_tests.sh and the processes that started it hold them as they should.
+TEST_OUTPUT_PIPES=""
+RUN_TESTS_ANCESTORS=""
+if [ -r /proc/self/environ ]; then
+    for fd in 1 2; do
+        target=`readlink /proc/$$/fd/$fd 2>/dev/null`
+        case "$target" in
+            pipe:*) TEST_OUTPUT_PIPES="$TEST_OUTPUT_PIPES $target" ;;
+        esac
+    done
+    RUN_TESTS_ANCESTORS=$$
+    ancestor=$$
+    while [ "$ancestor" -gt 1 ]; do
+        ancestor=`awk '/^PPid:/ { print $2 }' /proc/$ancestor/status 2>/dev/null`
+        if [ -z "$ancestor" ]; then
+            break
+        fi
+        RUN_TESTS_ANCESTORS="$RUN_TESTS_ANCESTORS $ancestor"
+    done
+fi
+
+# qore_ci_running_processes(): tells the processes a test left running from a BusyBox timeout watcher and from one
+# that has ended meanwhile
+. "$BASE_TEST_PATH/docker_test/ci-job-processes.sh"
+
+# Sets TEST_SURVIVORS to the processes the current test started that are still running (Linux only).  Every process a
+# test starts, and every process those start, inherits QORE_TEST_PROCESS_MARK in its environment, also when it
+# leaves the test's session or is adopted by another parent, so a process that still has it when the test has ended
+# was not ended by the test.  Any other process that holds the output of the tests as its standard output or error,
+# such as one a test started with an environment of its own, is one too.
+find_test_survivors() {
+    TEST_SURVIVORS=""
+    if [ ! -r /proc/self/environ ]; then
+        return
+    fi
+    if [ -n "$TEST_OUTPUT_PIPES" ]; then
+        # the commands that look for them must not hold the output themselves
+        TEST_SURVIVORS=`{ ls -l /proc/[0-9]*/fd/1 /proc/[0-9]*/fd/2 | awk -v pipes="$TEST_OUTPUT_PIPES" \
+            -v own="$RUN_TESTS_ANCESTORS" 'BEGIN {
+                n = split(pipes, list, " ")
+                for (i = 1; i <= n; ++i) {
+                    pipe[list[i]] = 1
+                }
+                n = split(own, list, " ")
+                for (i = 1; i <= n; ++i) {
+                    skip[list[i]] = 1
+                }
+            }
+            $(NF - 1) == "->" && ($NF in pipe) {
+                split($(NF - 2), path, "/")
+                if (!(path[3] in skip) && !(path[3] in seen)) {
+                    seen[path[3]] = 1
+                    printf "%s ", path[3]
+                }
+            }'; } 2>/dev/null`
+    fi
+    TEST_SURVIVORS="$TEST_SURVIVORS"`awk -v mark="QORE_TEST_PROCESS_MARK=$1" 'BEGIN {
+        RS = "\0"
+        for (i = 1; i < ARGC; ++i) {
+            f = ARGV[i]
+            while ((getline e < f) > 0) {
+                if (e == mark) {
+                    sub(/^\/proc\//, "", f)
+                    sub(/\/environ$/, "", f)
+                    printf "%s ", f
+                    break
+                }
+            }
+            close(f)
+        }
+        exit
+    }' /proc/[0-9]*/environ`
+    # a process found both ways is listed once
+    if [ -n "$TEST_SURVIVORS" ]; then
+        TEST_SURVIVORS=`printf '%s\n' $TEST_SURVIVORS | sort -un | tr '\n' ' '`
+    fi
 }
 
 # Print info about used variables etc.
@@ -512,9 +635,11 @@ fi
 
 # A separate marker per runner also permits concurrent test shards.
 TEST_START_MARKER=$(mktemp "$CORE_DIR_ABS/test-start.XXXXXX") || exit 1
+# the core files there were when the current test started (see find_test_core())
+TEST_CORES_BEFORE=$(mktemp "$CORE_DIR_ABS/test-cores.XXXXXX") || exit 1
 # the FIFO through which a test and run_tests.sh report events to the watchdog of the test (see run_with_watchdog())
 TEST_EVENT_FIFO="$CORE_DIR_ABS/test-events.$$"
-trap 'rm -f "$TEST_START_MARKER" "$TEST_EVENT_FIFO"' 0
+trap 'rm -f "$TEST_START_MARKER" "$TEST_CORES_BEFORE" "$TEST_EVENT_FIFO"' 0
 
 # A test that exceeds its time limit is first sent SIGUSR1, unless signal handling is disabled (where SIGUSR1 would
 # end it without a core dump): a QUnit test then prints the call stacks of all its threads and reports it through
@@ -603,21 +728,60 @@ for test in $TESTS; do
         THIS_TEST_TIMEOUT=$TEST_TIMEOUT
     fi
 
+    list_test_cores > "$TEST_CORES_BEFORE"
     touch "$TEST_START_MARKER"
+    # given to the test, and so inherited by every process it starts, but not to the helpers that time it (see
+    # find_test_survivors())
+    TEST_PROCESS_MARK="$$.$i"
+    TEST_ENV="env QORE_TEST_PROCESS_MARK=$TEST_PROCESS_MARK"
     if [ $MEASURE_TIME -eq 1 ]; then
         if [ -n "$TIMEOUT_CMD" ]; then
-            eval $TIMEOUT_CMD $TIMEOUT_SIGNAL_OPTS $THIS_TEST_TIMEOUT $TIME_CMD $QORE $QORE_TEST_OPTS $test $TEST_OUTPUT_FORMAT
+            eval $TIMEOUT_CMD $TIMEOUT_SIGNAL_OPTS $THIS_TEST_TIMEOUT $TIME_CMD $TEST_ENV $QORE $QORE_TEST_OPTS $test $TEST_OUTPUT_FORMAT
         else
-            eval $TIME_CMD $QORE $QORE_TEST_OPTS $test $TEST_OUTPUT_FORMAT
+            eval $TIME_CMD $TEST_ENV $QORE $QORE_TEST_OPTS $test $TEST_OUTPUT_FORMAT
         fi
     else
         if [ -n "$TIMEOUT_CMD" ]; then
-            run_with_watchdog $THIS_TEST_TIMEOUT $QORE $QORE_TEST_OPTS $test $TEST_OUTPUT_FORMAT
+            run_with_watchdog $THIS_TEST_TIMEOUT $TEST_ENV $QORE $QORE_TEST_OPTS $test $TEST_OUTPUT_FORMAT
         else
-            $QORE $QORE_TEST_OPTS $test $TEST_OUTPUT_FORMAT
+            $TEST_ENV $QORE $QORE_TEST_OPTS $test $TEST_OUTPUT_FORMAT
         fi
     fi
     test_exit=$?
+
+    # A test must end every process it starts: one still running keeps the output of the tests open, so that a CI job
+    # running them does not end until its time limit, and it can interfere with the tests that follow
+    find_test_survivors "$TEST_PROCESS_MARK"
+    # a BusyBox timeout watcher is ended without failing the test: the command it watches, if still running, is a
+    # survivor of its own; a process that has ended since it was found is not running
+    TEST_LEFTOVERS=""
+    TEST_LEFTOVER_LINES=""
+    TEST_SURVIVOR_STATES=""
+    if [ -n "$TEST_SURVIVORS" ]; then
+        TEST_SURVIVOR_STATES=`qore_ci_running_processes $TEST_SURVIVORS`
+    fi
+    while read -r kind pid cmd; do
+        case "$kind" in
+            watcher)
+                kill -KILL $pid 2>/dev/null
+                ;;
+            running)
+                TEST_LEFTOVERS="$TEST_LEFTOVERS $pid"
+                TEST_LEFTOVER_LINES="$TEST_LEFTOVER_LINES  pid $pid: $cmd
+"
+                ;;
+        esac
+    done <<EOF
+$TEST_SURVIVOR_STATES
+EOF
+    if [ -n "$TEST_LEFTOVERS" ]; then
+        echo "*** FAILURE: the test left processes running; they are killed: ***"
+        printf '%s' "$TEST_LEFTOVER_LINES"
+        kill -KILL $TEST_LEFTOVERS 2>/dev/null
+        if [ $test_exit -eq 0 ]; then
+            test_exit=1
+        fi
+    fi
 
     # GNU timeout returns 124; busybox timeout (Alpine) returns 143 (128+SIGTERM)
     if [ $test_exit -eq 124 ] || [ $test_exit -eq 143 ]; then
@@ -742,4 +906,9 @@ if [ $PRINT_TEXT -eq 1 ]; then
     echo "*************************************"
 fi
 
+# the exit status is the number of failed tests; it has 8 bits, so 256 failed tests would exit with 0 as if every
+# test had passed
+if [ $FAILED_TEST_COUNT -gt 255 ]; then
+    exit 255
+fi
 exit $FAILED_TEST_COUNT

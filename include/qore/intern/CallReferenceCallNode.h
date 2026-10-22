@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -51,6 +51,13 @@ private:
     DLLLOCAL virtual QoreValue evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const;
 
     DLLLOCAL virtual int parseInitImpl(QoreValue& val, QoreParseContext& parse_context);
+
+    //! Releases the call expression and the arguments with the caller's exception sink
+    /** The copy that the background operator makes holds runtime values: the closure or call reference, with the
+        variables it captures, and the evaluated arguments.  Releasing them can run destructors, whose exceptions go
+        to the thread releasing the node; the destructor has no exception sink.
+    */
+    DLLLOCAL virtual bool derefImpl(ExceptionSink* xsink);
 
     DLLLOCAL virtual const QoreTypeInfo* getTypeInfo() const {
         return nullptr;

@@ -534,15 +534,20 @@ class PgsqlSearchPathTest inherits QUnit::Test {
         # a sequence as it is described produces no SQL
         assertEq((), db.getAlignSql({"tables": {}, "sequences": {
             "sp_seq_adv": {"start": 10, "increment": 1},
-            "sp_seq_attr": {"start": 7, "increment": 3, "end": 1000},
+            "sp_seq_attr": {"start": 7, "increment": 3, "end": 1000, "min": 5, "cycle": True},
         }}));
-        # an existing sequence is not created again nor restarted when the description differs, so it keeps its
-        # value
+        # an existing sequence whose parameters differ is altered, never created again nor restarted, so it keeps
+        # its value (@since SqlUtil 3.11.0; before, a parameter difference produced no SQL)
         list<auto> sql = db.getAlignSql({"tables": {}, "sequences": {"sp_seq_adv": {"start": 1, "increment": 5,
             "end": 50}}});
-        assertEq((), sql);
+        assertEq(("alter sequence sp_seq_adv increment by 5 maxvalue 50",), sql);
         map ds.exec($1), sql;
-        assertEq(13, ds.selectRow("select nextval('sp_seq_adv') as v").v);
+        # the current value (12, after three nextval calls on a sequence that starts at 10) is preserved, and the
+        # new increment of 5 applies, so the next value is 17, not a value from a recreated sequence
+        assertEq(17, ds.selectRow("select nextval('sp_seq_adv') as v").v);
+        # the altered sequence now describes as it was aligned, so a second alignment produces no SQL
+        assertEq((), db.getAlignSql({"tables": {}, "sequences": {"sp_seq_adv": {"start": 1, "increment": 5,
+            "end": 50}}}));
         # a missing sequence is created
         assertEq(("create sequence sp_seq_missing start with 3 increment by 1 no maxvalue",),
             db.getAlignSql({"tables": {}, "sequences": {"sp_seq_missing": {"start": 3}}}));

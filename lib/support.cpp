@@ -31,6 +31,7 @@
 #include <qore/Qore.h>
 
 #include "qore/intern/qore_program_private.h"
+#include "qore/intern/QoreForkHandlers.h"
 
 #include <cstdarg>
 #include <cstdio>
@@ -49,6 +50,8 @@ extern bool threads_initialized;
 
 #ifdef QORE_SERIALIZE_DEBUGGING_OUTPUT
 static QoreThreadLock debug_output_lock;
+// the debug output can be used in a child process created with fork() (see QoreForkHandlers.h)
+static QoreForkThreadLock debug_output_fork_handler(debug_output_lock, QFLR_DEBUG_OUTPUT, "debug_output");
 #endif
 
 #define QORE_QUICK_TIMESTAMP_LOG

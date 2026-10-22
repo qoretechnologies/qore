@@ -82,7 +82,8 @@ void ManagedDatasource::cleanup(ExceptionSink *xsink) {
 
 void ManagedDatasource::destructor(ExceptionSink* xsink) {
     AutoLocker al(&ds_lock);
-    if (tid == q_gettid() || tid == -1)
+    const int lock_tid = lockTid();
+    if (lock_tid == q_gettid() || lock_tid == -1)
         // closeUnlocked will throw an exception if a transaction is in progress (and release the transaction lock if held)
         closeUnlocked(xsink);
     else
@@ -91,7 +92,8 @@ void ManagedDatasource::destructor(ExceptionSink* xsink) {
         // - is left holding the last reference to this datasource.  Its thread-exit purge closes the
         // connection and frees the datasource; see ThreadResourceList::purge()
         xsink->raiseException("DATASOURCE-ERROR", "%s:%s@%s: TID %d deleted Datasource while TID %d is holding the " \
-            "transaction lock", getDriverName(), getUsernameStr().c_str(), getDBNameStr().c_str(), q_gettid(), tid);
+            "transaction lock", getDriverName(), getUsernameStr().c_str(), getDBNameStr().c_str(), q_gettid(),
+            lock_tid);
 }
 
 void ManagedDatasource::deref(ExceptionSink *xsink) {
@@ -116,30 +118,27 @@ void ManagedDatasource::deref() {
 int ManagedDatasource::grabLockIntern(ExceptionSink* xsink) {
     int ctid = q_gettid();
 
-    if (tid == ctid) {
+    if (lockTid() == ctid) {
         return 0;
     }
 
-    // the deadline for a positive timeout; a negative timeout means no timeout
+    // the deadline for a positive timeout; a timeout of 0 or less means no timeout, as documented (and as for the
+    // DatasourcePool error timeout): the wait ends when the lock is released or, with an exception sink, when the
+    // thread is cancelled
     int64 deadline_us = tl_timeout_ms > 0 ? q_get_monotonic_us() + static_cast<int64>(tl_timeout_ms) * 1000 : 0;
 
-    while (tid != -1) {
+    while (lockTid() != -1) {
         // Check for cancellation or program interrupt
         if (xsink && qore_check_cancel(xsink, "datasource lock acquisition")) {
             return -2;  // -2 indicates interrupt
-        }
-
-        if (!tl_timeout_ms) {
-            // Zero timeout means try once without waiting - fail immediately if lock not available
-            printd(5, "ManagedDatasource::grabLockIntern() this=%p lock not available (tl_timeout_ms=0), tid %d holds lock\n", this, tid);
-            return -1;
         }
 
         int64 wait_ms = -1;
         if (tl_timeout_ms > 0) {
             int64 remaining_us = deadline_us - q_get_monotonic_us();
             if (remaining_us <= 0) {
-                printd(5, "ManagedDatasource::grabLockIntern() this=%p timed out after %dms waiting for tid %d to release lock\n", this, tl_timeout_ms, tid);
+                printd(5, "ManagedDatasource::grabLockIntern() this=%p timed out after %dms waiting for tid %d to "
+                    "release lock\n", this, tl_timeout_ms, lockTid());
                 return -1;
             }
             wait_ms = (remaining_us + 999) / 1000;
@@ -157,7 +156,7 @@ int ManagedDatasource::grabLockIntern(ExceptionSink* xsink) {
         --waiting;
     }
 
-    tid = ctid;
+    setLockTid(ctid);
 
     return 0;
 }
@@ -173,7 +172,7 @@ int ManagedDatasource::grabLock(ExceptionSink *xsink) {
             xsink->raiseException("TRANSACTION-LOCK-TIMEOUT", "%s:%s@%s: TID %d timed out on datasource '%s@%s' after waiting %d millisecond%s on transaction lock held by TID %d",
                                     getDriverName(), getUsernameStr().c_str(), getDBNameStr().c_str(),
                                     q_gettid(), un ? un : "<n/a>", db ? db : "<n/a>", tl_timeout_ms,
-                                    tl_timeout_ms == 1 ? "" : "s", tid);
+                                    tl_timeout_ms == 1 ? "" : "s", lockTid());
         }
         // rc == -2 means interrupt, exception already raised by checkIOInterrupt
         return -1;
@@ -182,8 +181,11 @@ int ManagedDatasource::grabLock(ExceptionSink *xsink) {
 }
 
 void ManagedDatasource::releaseLockIntern() {
-   assert(tid == q_gettid());
-   tid = -1;
+   assert(lockTid() == q_gettid());
+   // the thread gives up the connection: the driver data of statements destroyed in other threads while it held it
+   // is closed first, in this thread
+   closeOrphans();
+   setLockTid(-1);
    if (waiting)
       cond.signal();
 }
@@ -194,7 +196,7 @@ void ManagedDatasource::releaseLock() {
 }
 
 void ManagedDatasource::forceReleaseLockIntern() {
-   tid = -1;
+   setLockTid(-1);
    if (waiting)
       cond.signal();
 }
@@ -203,29 +205,47 @@ ManagedDatasource* ManagedDatasource::copy() {
    return new ManagedDatasource(*this);
 }
 
+void ManagedDatasource::closeOrphans() {
+    if (!isOpen()) {
+        // a connection closes them when it is closed
+        return;
+    }
+    ExceptionSink close_xsink;
+    qore_ds_private::get(*this)->closeOrphans(&close_xsink);
+    qore_dbi_private::reportCloseWarnings(this, close_xsink);
+}
+
 int ManagedDatasource::acquireLock(ExceptionSink* xsink, bool& new_lock) {
     AutoLocker al(&ds_lock);
     // Observe ownership under the same mutex that protects acquisition and release.
-    new_lock = tid != q_gettid();
+    new_lock = lockTid() != q_gettid();
     return grabLock(xsink);
 }
 
-int ManagedDatasource::startDBAction(ExceptionSink *xsink, bool &new_transaction) {
+int ManagedDatasource::startDBAction(ExceptionSink *xsink, bool &new_transaction, bool open) {
     AutoLocker al(&ds_lock);
 
     // save previous trans lock status
-    new_transaction = (tid != q_gettid());
+    new_transaction = (lockTid() != q_gettid());
 
     // first grab the transaction lock
     if (grabLock(xsink))
         return -1;
 
-    // open the datasource if necessary
-    if (!isOpen() && (Datasource::open(xsink) || *xsink)) {
-        // release transaction lock if necessary
-        if (new_transaction)
-            releaseLockIntern();
-        return -1;
+    if (!isOpen()) {
+        if (!open) {
+            // the closed datasource is not opened; the transaction lock stays held for the action, as it is for an
+            // open datasource, and is released by the caller
+            return 1;
+        }
+        // open the datasource
+        if (Datasource::open(xsink) || *xsink) {
+            // release transaction lock if necessary
+            if (new_transaction) {
+                releaseLockIntern();
+            }
+            return -1;
+        }
     }
 
     //printd(5, "ManagedDatasource::startDBAction() this=%p need_lock=%d new_trans=%p had_lock=%d\n", this, need_transaction_lock, new_transaction, had_lock);
@@ -249,7 +269,7 @@ bool ManagedDatasource::endDBActionIntern(char cmd, bool new_transaction) {
         releaseLockIntern();
     }
 
-    return tid == q_gettid();
+    return lockTid() == q_gettid();
 }
 
 bool ManagedDatasource::endDBAction(char cmd, bool new_transaction) {
@@ -258,11 +278,14 @@ bool ManagedDatasource::endDBAction(char cmd, bool new_transaction) {
 }
 
 void ManagedDatasource::setTransactionLockTimeout(int t_ms) {
-   tl_timeout_ms = t_ms;
+    // a thread waiting for the transaction lock reads the timeout with ds_lock held
+    AutoLocker al(&ds_lock);
+    tl_timeout_ms = t_ms;
 }
 
 int ManagedDatasource::getTransactionLockTimeout() const {
-   return tl_timeout_ms;
+    AutoLocker al(&ds_lock);
+    return tl_timeout_ms;
 }
 
 void ManagedDatasource::setAutoCommit(bool ac, ExceptionSink *xsink) {
@@ -431,8 +454,13 @@ int ManagedDatasource::open(ExceptionSink *xsink) {
 int ManagedDatasource::closeUnlocked(ExceptionSink *xsink) {
     int rc = 0;
 
-    if (grabLock(xsink))
+    // the lock is taken to wait for the actions of other threads to finish; a lock that this call takes is released
+    // when the connection is closed, so that the datasource is free for every thread afterwards, as a datasource
+    // that was never opened is
+    const bool new_lock = lockTid() != q_gettid();
+    if (grabLock(xsink)) {
         return -1;
+    }
 
     //printd(5, "ManagedDatasource::closeUnlocked() this: %p priv: %p %s:%s@%s open: %d trans: %d\n", this, qore_ds_private::get(*this), getDriverName(), getUsernameStr().c_str(), getDBNameStr().c_str(), isOpen(), isInTransaction());
 
@@ -465,12 +493,22 @@ int ManagedDatasource::closeUnlocked(ExceptionSink *xsink) {
             forceReleaseLockIntern();
         }
 
-        Datasource::close();
+        // an error closing the connection or its statements is raised; the connection is closed in every case
+        if (Datasource::close(xsink)) {
+            rc = -1;
+        }
     } else if (held) {
         // the connection this thread was holding is already gone, so the lock has to go with it:
         // leaving it held by a thread that may be about to exit would keep every other thread from
         // reopening the datasource
         forceReleaseLockIntern();
+    }
+
+    // otherwise the lock taken above was kept by this thread with no transaction and no thread resource to release
+    // it: currentThreadInTransaction() returned True after close(), other threads timed out on the lock, and a
+    // destructor run in another thread raised DATASOURCE-ERROR
+    if (new_lock && lockTid() == q_gettid()) {
+        releaseLockIntern();
     }
 
     return rc;

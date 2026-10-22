@@ -113,6 +113,7 @@ class WebSocketStreamBackpressureTest inherits QUnit::Test {
         server = new HttpServer(<HttpServerOptionInfo>{"logger": logger, "debug": True});
         server.setDefaultHandler("ws", handler);
         port = server.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
             "service": 0,
             "cert": new SSLCertificate(CertPem),
             "key": new SSLPrivateKey(KeyPem),
@@ -127,7 +128,7 @@ class WebSocketStreamBackpressureTest inherits QUnit::Test {
 
     h2Test() {
         WebSocketClient wsc = connect({
-            "url": "wss://localhost:" + port,
+            "url": "wss://127.0.0.1:" + port,
             "http_version": "2.0",
         });
         assertTrue(wsc.isHttp2(), "the client is connected over HTTP/2");

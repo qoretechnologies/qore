@@ -99,7 +99,7 @@ public class GroqRestClientTest inherits QUnit::Test {
     private pingTest() {
         HttpServer http(<HttpServerOptionInfo>{"logger": new Logger("test", LoggerLevel::getLevelWarn())});
         on_exit delete http;
-        int port = http.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        int port = http.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
         GroqPingHandler handler();
         http.setDefaultHandler("ping", handler);
         string url = sprintf("http://127.0.0.1:%d", port);

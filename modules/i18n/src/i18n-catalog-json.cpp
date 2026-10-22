@@ -346,8 +346,9 @@ private:
             if (*xsink) {
                 return QoreValue();
             }
-            // a key with a NUL character cannot be a hash key
-            if (QoreHashNode::checkKey(key->c_str(), key->size(), xsink)) {
+            // a key with a NUL character cannot be a hash key; the catalog cannot be parsed to a hash
+            if (QoreHashNode::checkKey(key->c_str(), key->size(), "I18N-CATALOG-JSON-ERROR",
+                    "i18n catalog JSON object key", xsink)) {
                 return QoreValue();
             }
             std::string key_text = key->c_str();

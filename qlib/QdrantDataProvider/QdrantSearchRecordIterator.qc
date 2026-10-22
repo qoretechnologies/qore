@@ -40,8 +40,13 @@ public class QdrantSearchRecordIterator inherits DataProvider::AbstractDataProvi
     /** @param rest the REST client connection
         @param collection_name the name of the collection to query
         @param where_cond the where clause mapped to Qdrant filter; supports both DataProvider expression trees
-        (with \c exp key) and plain hash equality conditions
+        (with \c exp key) and plain hash equality conditions; the field of an expression and each key of a plain hash
+        is a field path, written in the payload key syntax of Qdrant (see
+        @ref QdrantDataProvider::QdrantPayloadKey "QdrantPayloadKey"): \c order.id is the key \c id of the object
+        \c order, and <tt>Unit\\.Price</tt> the key \c Unit.Price
         @param search_options search options; assumed to have already been processed for validity
+
+        @throw WHERE-ERROR a field path has a key with a double quote or a backslash, which a Qdrant filter cannot name
     */
     constructor(RestClientIo::RestClientIo rest, string collection_name, *hash<auto> where_cond,
             *hash<auto> search_options)
@@ -126,13 +131,9 @@ public class QdrantSearchRecordIterator inherits DataProvider::AbstractDataProvi
                 exp.exp);
         }
         hash<DataProviderFieldReference> field_ref = cast<hash<DataProviderFieldReference>>(exp.args[0]);
-        # the field is a field path, written with the nesting syntax of Qdrant; a key with the separator cannot
-        # be written in it
-        *string field = AbstractDataProvider::getFieldPathName(field_ref.field, ".", field_ref.field_path);
-        if (!exists field) {
-            throw "WHERE-ERROR", sprintf("the field \"%s\" has a key with a dot, which Qdrant cannot name",
-                field_ref.field);
-        }
+        # the field is a field path, written with the payload key syntax of Qdrant: a key with a dot, or another
+        # character that the syntax uses, is quoted
+        string field = QdrantSearchRecordIterator::getPayloadKey(field_ref.field, field_ref.field_path);
 
         # For IN operator, collect all values into a single list
         if (exp.exp == DP_SEARCH_OP_IN) {
@@ -162,6 +163,23 @@ public class QdrantSearchRecordIterator inherits DataProvider::AbstractDataProvi
                 "but got %d", exp.exp, exp.args.size());
         }
         return call_function_args(expinfo.impl, (field, exp.args[1]));
+    }
+
+    #! Returns the Qdrant payload key path for a field path
+    /** @param field the field path: keys separated by dots, with a dot in a key escaped with a backslash
+        @param field_path the keys of \a field, if they are known
+
+        @return the payload key path; see @ref QdrantDataProvider::QdrantPayloadKey "QdrantPayloadKey"
+
+        @throw WHERE-ERROR a key has a double quote or a backslash, which a Qdrant filter cannot name
+    */
+    static string getPayloadKey(string field, *list<string> field_path) {
+        *string key = QdrantPayloadKey::getPath(field_path ?? AbstractDataProvider::getFieldPath(field));
+        if (!exists key) {
+            throw "WHERE-ERROR", sprintf("the field \"%s\" has a key with a double quote or a backslash, which a "
+                "Qdrant filter cannot name", field);
+        }
+        return key;
     }
 
     #! Returns @ref True if the iterator is valid
@@ -210,10 +228,13 @@ public class QdrantSearchRecordIterator inherits DataProvider::AbstractDataProvi
             return processExpressionArg(cast<hash<DataProviderExpression>>(where_cond));
         }
 
-        # Plain hash: convert each key: value pair to equality conditions
+        # Plain hash: convert each key: value pair to equality conditions; each key is a field path
         list<auto> conditions;
         foreach hash<auto> pair in (where_cond.pairIterator()) {
-            push conditions, {"key": pair.key, "match": {"value": pair.value}};
+            push conditions, {
+                "key": QdrantSearchRecordIterator::getPayloadKey(pair.key),
+                "match": {"value": pair.value},
+            };
         }
         if (conditions.size() == 1) {
             return conditions[0];

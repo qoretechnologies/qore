@@ -1,0 +1,181 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires ../../../../qlib/Util.qmod
+%requires ../../../../qlib/DataProvider/DataProvider.qmod
+%requires ../../../../qlib/SqlUtil/SqlUtil.qmod
+%requires ../../../../qlib/PgsqlSqlUtilBase.qmod
+%requires ../../../../qlib/PgsqlSqlUtil.qmod
+%requires ../../../../qlib/Schema/Schema.qmod
+%requires QUnit
+
+%prepend-module-path "${SCRIPT_DIR}"
+%requires ./PgsqlTestIsolation.qm
+
+%try-module pgsql
+%define NoPgsql
+%endtry
+
+%exec-class PgsqlIdentifierQuotingTest
+
+#! Tests that PostgreSQL identifiers from untrusted data are quoted and escaped, never pasted into SQL
+public class PgsqlIdentifierQuotingTest inherits QUnit::Test {
+    public {
+        # a table name, column name, index name etc. that would inject SQL if it were pasted unquoted
+        const Hostile = (
+            "a\"b",
+            "x\"; drop table victim; --",
+            "a); drop table victim; select (",
+            "order",         # a reserved word
+            "Mixed Case",
+            "é cole",
+            "a'b",
+            "%v",
+            "a--b",
+            "a/*b*/c",
+        );
+    }
+
+    constructor() : QUnit::Test("PgsqlIdentifierQuoting", "1.0", \ARGV) {
+        addTestCase("the identifier rule", \identifierRule());
+        addTestCase("generated SQL quotes hostile names", \generatedSql());
+        addTestCase("ordinary names are unchanged", \ordinaryNames());
+        addTestCase("live hostile round trip", \liveRoundTrip());
+        set_return_value(main());
+    }
+
+    globalTearDown() {
+        if (m_live) {
+            PgsqlRunSchema::teardown();
+        }
+    }
+
+    private {
+        bool m_live = False;
+    }
+
+    #! the identifier rule, through the table's public getSqlIdentifier()
+    identifierRule() {
+        Datasource ds = connectOrSkip();
+        on_exit ds.rollback();
+        AbstractTable t = getTable(ds, "probe", {"id": {"qore_type": "integer", "notnull": True}});
+        # an ordinary name is returned as given (lower case, no quotes), so existing schemas do not churn
+        assertEq("abc", t.getColumnSqlName("abc"));
+        assertEq("a_b1", t.getColumnSqlName("a_b1"));
+        # a reserved word is quoted
+        assertEq("\"order\"", t.getColumnSqlName("order"));
+        # a name that is not an ordinary name is quoted, each double quote doubled, so it cannot change the SQL
+        assertEq("\"a\"\"b\"", t.getColumnSqlName("a\"b"));
+        assertEq("\"x\"\"; drop table victim; --\"", t.getColumnSqlName("x\"; drop table victim; --"));
+        assertEq("\"Mixed Case\"", t.getColumnSqlName("Mixed Case"));
+        # a non-ASCII name that PostgreSQL reads as one identifier is unchanged
+        assertEq("město", t.getColumnSqlName("město"));
+
+        # a name that cannot be an identifier is refused
+        assertThrows("IDENTIFIER-ERROR", "empty name", \t.getColumnSqlName(), (""));
+        assertThrows("IDENTIFIER-ERROR", "NUL character", \t.getColumnSqlName(), ("a" + chr(0) + "b"));
+    }
+
+    private AbstractTable getTable(Datasource ds, string name, hash<auto> cols) {
+        PgsqlTable t(ds, name);
+        t.setupTable({"columns": cols});
+        return t;
+    }
+
+    generatedSql() {
+        Datasource ds = connectOrSkip();
+        on_exit ds.rollback();
+
+        foreach string name in (Hostile) {
+            AbstractTable t = getTable(ds, "probe", {name: {"qore_type": "string", "size": 80},
+                "id": {"qore_type": "integer", "notnull": True}});
+            string quoted = t.getColumnSqlName(name);
+            # the quoted form is the name itself (ordinary) or a delimited identifier with no bare break-out
+            assertTrue(quoted == name || quoted =~ /^".*"$/, sprintf("column %y quoted as %y", name, quoted));
+            # a select naming the hostile column quotes it
+            list<auto> args;
+            string sql = t.getSelectSql({"columns": (name,)}, \args);
+            assertTrue(sql.find(quoted) >= 0, sprintf("select SQL %y has the quoted column %y", sql, quoted));
+
+            # an update of the hostile column quotes it, with a bound value
+            hash<SqlCommandInfo> upd = t.getUpdateSql({name: "v"}, {"id": 1});
+            assertTrue(upd.sql.find(quoted + " = %v") >= 0,
+                sprintf("update SQL %y has the quoted column %y", upd.sql, quoted));
+        }
+    }
+
+    ordinaryNames() {
+        Datasource ds = connectOrSkip();
+        on_exit ds.rollback();
+        # the SQL generated for ordinary names must be exactly what it was before this change, so schemas and
+        # alignment do not churn
+        AbstractTable t = getTable(ds, "probe", {"id": {"qore_type": "integer", "notnull": True},
+            "val": {"qore_type": "string", "size": 80}});
+        list<auto> args;
+        assertEq("select id, val from " + t.getSqlName(), t.getSelectSql({"columns": ("id", "val")}, \args));
+
+        hash<SqlCommandInfo> upd = t.getUpdateSql({"val": "x"}, {"id": 1});
+        assertEq("update " + t.getSqlName() + " set val = %v where id = %v", upd.sql);
+    }
+
+    private Datasource connectOrSkip() {
+%ifdef NoPgsql
+        testSkip("pgsql module unavailable");
+%endif
+        if (!ENV.QORE_DB_CONNSTR_PGSQL) {
+            testSkip("live disposable database required");
+        }
+        return new Datasource(ENV.QORE_DB_CONNSTR_PGSQL);
+    }
+
+    liveRoundTrip() {
+        Datasource ds = connectOrSkip();
+        PgsqlRunSchema::setup(ENV.QORE_DB_CONNSTR_PGSQL, "PgsqlIdentifierQuoting");
+        m_live = True;
+        on_exit ds.rollback();
+
+        # a victim table that an injection would drop
+        PgsqlTable victim(ds, "victim");
+        victim.setupTable({"columns": {"id": {"qore_type": "integer", "notnull": True}}});
+        victim.create();
+        ds.commit();
+
+        # a table whose own name, a column and an index all carry an injection payload
+        string tname = "inj\"; drop table victim; --";
+        string cname = "c\"; drop table victim; --";
+        PgsqlTable t(ds, tname);
+        t.setupTable({
+            "columns": {
+                "id": {"qore_type": "integer", "notnull": True},
+                cname: {"qore_type": "string", "size": 80},
+            },
+            "primary_key": {"name": "pk_inj", "columns": ("id",)},
+            "indexes": {"ix\"inj": {"columns": (cname,)}},
+        });
+        t.create();
+        ds.commit();
+
+        # the hostile names did not run as SQL: the victim table is still here
+        assertEq(1, ds.selectRow("select count(*) as c from information_schema.tables "
+            "where table_schema = %v and table_name = 'victim'", PgsqlRunSchema::getName()).c);
+
+        # a full DML round trip through the hostile column
+        t.insert({"id": 1, cname: "hello"});
+        ds.commit();
+        assertEq("hello", t.selectRow({"where": {"id": 1}}){cname});
+        assertEq(1, t.update({cname: "world"}, {"id": 1}));
+        ds.commit();
+        assertEq("world", t.selectRow({"where": {"id": 1}}){cname});
+        assertEq(1, t.del({"id": 1}));
+        ds.commit();
+        assertEq(0, t.rowCount());
+
+        # a re-alignment of the described table against itself proposes no SQL (hostile names round-trip)
+        PgsqlTable described(ds, tname);
+        assertEq((), t.getAlignSql(described));
+    }
+}

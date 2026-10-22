@@ -65,7 +65,8 @@ class AzureDocumentIntelligenceWireTest inherits QUnit::Test {
         server = new HttpServer(<HttpServerOptionInfo>{"logger": new Logger("azure-fixture", LoggerLevel::getLevelInfo())});
         handler = new AzureWireHandler();
         server.setDefaultHandler("azure", handler);
-        endpoint = "http://localhost:" + server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        endpoint = "http://localhost:"
+            + server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
         client = new AzureDocumentIntelligenceRestClientIo({"url": endpoint, "apikey": "fixture-key"});
         client.setSleeper(nothing sub (timeout delay) {});
         provider = new AzureDocumentIntelligenceDataProvider(client);

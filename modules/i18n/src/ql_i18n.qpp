@@ -64,6 +64,7 @@
 #include <iterator>
 #include <memory>
 #include <mutex>
+#include <new>
 #include <set>
 #include <string>
 #include <unordered_map>
@@ -1396,6 +1397,35 @@ static constexpr size_t I18N_MAX_RECORDED_LOCALE_DATA_FALLBACKS = 256;
 // the requested locales (BCP 47 tags) that ICU served with the data of the default or root locale
 static std::mutex i18n_locale_data_fallback_lock;
 static std::set<std::string> i18n_locale_data_fallbacks;
+
+// the fork handler of the fallback lock, a leaf lock (see QoreForkHandler.h)
+static QoreForkHandlerRegistration* i18n_locale_data_fallback_fork_reg = nullptr;
+
+int i18n_register_fork_handlers(ExceptionSink* xsink) {
+    assert(!i18n_locale_data_fallback_fork_reg);
+    i18n_locale_data_fallback_fork_reg = qore_register_fork_handler(QFR_MODULE_LEAF, "i18n_locale_data_fallbacks",
+        [](void*) {
+            i18n_locale_data_fallback_lock.lock();
+        },
+        [](void*) {
+            i18n_locale_data_fallback_lock.unlock();
+        },
+        [](void*) {
+            // held by the forking thread since the prepare handler; a std::mutex held by a thread of the parent
+            // cannot be unlocked in the child, so it is created again in place
+            new (&i18n_locale_data_fallback_lock) std::mutex();
+        }, nullptr);
+    if (!i18n_locale_data_fallback_fork_reg) {
+        xsink->outOfMemory();
+        return -1;
+    }
+    return 0;
+}
+
+void i18n_unregister_fork_handlers() {
+    qore_unregister_fork_handler(i18n_locale_data_fallback_fork_reg);
+    i18n_locale_data_fallback_fork_reg = nullptr;
+}
 
 // returns the BCP 47 form of an ICU locale name; "und" for the root locale
 static std::string i18n_locale_name_to_tag(const char* name) {
@@ -2938,8 +2968,8 @@ list<string> get_locale_data_fallbacks() [flags=RET_VALUE_ONLY;dom=EXTERNAL_INFO
     @param json UTF-8 JSON catalog data
     @return native catalog hash suitable for I18n::MessageCatalog
 
-    @throw I18N-CATALOG-JSON-ERROR if \a json is malformed, not UTF-8, or does not contain a JSON object
-    @throw HASH-KEY-ERROR a key has a NUL character, which a hash key cannot contain
+    @throw I18N-CATALOG-JSON-ERROR if \a json is malformed, not UTF-8, or does not contain a JSON object, or an
+    object key has a NUL character, which a hash key cannot hold
 
     @par Example:
     @code{.py}
@@ -2965,8 +2995,8 @@ hash<auto> parse_native_catalog_json(string json) [flags=RET_VALUE_ONLY] {
     @throw FILE-OPEN2-ERROR if the file cannot be opened, or the path contains a NUL character
     @throw FILE-READ-ERROR if the file cannot be read
     @throw I18N-CATALOG-ERROR if the file exceeds the default size limit
-    @throw I18N-CATALOG-JSON-ERROR if the file is not valid native catalog JSON
-    @throw HASH-KEY-ERROR a key has a NUL character, which a hash key cannot contain
+    @throw I18N-CATALOG-JSON-ERROR if the file is not valid native catalog JSON, or an object key has a NUL
+    character, which a hash key cannot hold
 
     @par Example:
     @code{.py}
@@ -2989,8 +3019,8 @@ hash<auto> load_native_catalog(string path) [dom=FILESYSTEM] {
     @throw FILE-OPEN2-ERROR if the file cannot be opened, or the path contains a NUL character
     @throw FILE-READ-ERROR if the file cannot be read
     @throw I18N-CATALOG-ERROR if \a max_file_len is invalid or the file exceeds it
-    @throw I18N-CATALOG-JSON-ERROR if the file is not valid native catalog JSON
-    @throw HASH-KEY-ERROR a key has a NUL character, which a hash key cannot contain
+    @throw I18N-CATALOG-JSON-ERROR if the file is not valid native catalog JSON, or an object key has a NUL
+    character, which a hash key cannot hold
 */
 hash<auto> load_native_catalog(string path, int max_file_len) [dom=FILESYSTEM] {
     QoreHashNode* catalog = i18n_load_native_catalog_json(path, max_file_len, xsink);

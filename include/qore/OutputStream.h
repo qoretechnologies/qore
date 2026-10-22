@@ -170,12 +170,23 @@ public:
     /**
       * @brief Write with timeout in milliseconds.
       *
-      * Default implementation uses getPollableDescriptor() + poll() + writeNonBlock().
+      * Default implementation uses getPollableDescriptor() + qore_cancellable_poll() + writeNonBlock(): the wait
+      * for a positive timeout ends at once with \c THREAD-CANCELLED or \c PROGRAM-INTERRUPTED when the thread is
+      * cancelled or its Program is interrupted (see qore_cancellable_poll()).
       * @param ptr the source buffer
       * @param count the number of bytes to write
       * @param timeout_ms timeout in milliseconds (-1 for blocking, 0 for non-blocking)
       * @param xsink the exception sink
       * @return the number of bytes written, 0 if would block or timeout
+      *
+      * @throw OUTPUT-STREAM-ERROR with a timeout of 0 or more: the wait failed or reported an error or a hang-up,
+      * as for a pipe whose reading end has closed; FileOutputStream reports a reading end that has closed with this
+      * error on every platform, also when only the write reports it (EPIPE, as on macOS)
+      * @throw THREAD-CANCELLED the thread was cancelled during the wait
+      * @throw PROGRAM-INTERRUPTED the thread's Program was interrupted during the wait
+      *
+      * A negative timeout writes with write(), whose errors are the stream's own (\c FILE-WRITE-ERROR for
+      * FileOutputStream).
       *
       * @since %Qore 2.2
       */

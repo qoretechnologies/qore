@@ -74,7 +74,7 @@ class HttpGatewayRerankerTest inherits QUnit::Test {
             "logger": logger,
             "debug": False,
         });
-        port = http.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        port = http.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
         handler = new FakeGatewayRerankHandler();
         http.setHandler("rr", "/", MimeTypeJson, handler);
     }

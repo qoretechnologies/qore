@@ -302,6 +302,8 @@ QoreStringNode* backquoteEval(const char* cmd, int& rc, ExceptionSink* xsink) {
             }
             if (spawn_rc == 0) {
                 const char* argv[] = {"sh", "-c", cmd, nullptr};
+                // the child gets a copy of the environment: it must not change while it is copied
+                QoreEnvironmentReadLock env_lock;
                 spawn_rc = posix_spawn(&pid, "/bin/sh", &actions, &attr, const_cast<char* const*>(argv), environ);
             }
         }
@@ -397,6 +399,8 @@ QoreStringNode* backquoteEval(const char* cmd, int& rc, ExceptionSink* xsink) {
             return nullptr;
         }
 
+        // the child gets a copy of the environment, which it passes to the command: the library's fork handlers hold
+        // the environment lock while the process is copied
         pid_t pid = fork();
         bool pgroup_ok = false;
         if (!pid) {
@@ -489,8 +493,13 @@ QoreStringNode* backquoteEval(const char* cmd, int& rc, ExceptionSink* xsink) {
     }
 #endif
 
-    // execute command in a new process and read stdout in parent
-    FILE* p = popen(cmd, "r");
+    // execute command in a new process and read stdout in parent; the child gets a copy of the environment, which
+    // must not change while it is copied
+    FILE* p;
+    {
+        QoreEnvironmentReadLock env_lock;
+        p = popen(cmd, "r");
+    }
     if (!p) {
         // could not fork or create pipe
         xsink->raiseException("BACKQUOTE-ERROR", q_strerror(errno));

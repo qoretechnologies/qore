@@ -1533,6 +1533,12 @@ fetch
     @section dataprovider_relnotes Release Notes
 
     @subsection dataprovider_v3_11 DataProvider v3.11
+    - an allowed value or element choice that is a string with a NUL character, which cannot be a key of the set of
+      allowed values, raises \c RUNTIME-TYPE-ERROR when it is set on a field or type, and a value with a NUL
+      character is refused as outside the allowed values (\c FIELD-VALUE-ERROR or \c TYPE-VALUE-ERROR); before, the
+      allowed values of a field and a value checked against them were cut at the NUL character, so that a value
+      could be accepted that was not an allowed value.  @ref DataProvider::AbstractDataField::setAllowedValues()
+      "setAllowedValues()" now leaves the previous allowed values of a field when it refuses a list
     - DPQL field completion follows field paths: after \c @ and a path of keys (<tt>\@create.</tt>,
       <tt>\@create.it</tt>), it offers the keys of the type the path reaches, each inserted as the field reference to
       its path as the serializer writes it (<tt>\@create.items</tt>, <tt>\@"create.order-id"</tt>); after accessors and
@@ -1719,6 +1725,16 @@ fetch
       returning a hash type without fields: the type of the options of an action has a field for each option, with
       its type (mandatory for a required option), description, default value and allowed values; other keys are
       still accepted as they are
+    - fixed an action whose \c get_output_type callback fails being returned without an output type and without
+      an error: the failure is now retained like a failed deferred initialization and returned by
+      @ref DataProvider::DataProviderActionCatalog::getInitializationFailures() "getInitializationFailures()", the
+      getters that return the action or its application's actions throw \c ACTION-OUTPUT-TYPE-ERROR, and each such
+      call attempts the callback again; a thread asking for an action while another thread was resolving its output
+      type could also get it without one (see @ref dataprovider_deferred_output_types)
+    - the getters that return actions build only the deferred output types of the actions they return, and the
+      application getters (\c getAllApps(), \c getApp(), \c getAppEx(), \c searchAppRegex(), \c searchAppSubstr())
+      and \c getDataProviderForAction() no longer build deferred output types, so loading one provider module and
+      reading one action no longer builds the output types of every action of every loaded module
 
     @subsection dataprovider_v3_10_2 DataProvider v3.10.2
     - the editor token spans of @ref DataProvider::DpqlActionSession "DpqlActionSession" (\c dpql-get-tokens and

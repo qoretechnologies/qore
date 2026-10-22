@@ -93,8 +93,7 @@ public hashdecl PineconeSchemaProvenanceInfo {
     the version they describe and the version the client sends, and this module's tests assert that the
     two agree.  Re-import all four when it moves, not one.
 
-    Each document is parsed once, on first use, rather than when the module loads, so that a program that
-    only holds the connection never pays for it.
+    Each document is parsed once, when the module loads and registers its actions, which are built from it.
 
     @since %PineconeDataProvider 1.0
 */

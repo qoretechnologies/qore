@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -57,7 +57,11 @@ public:
     }
 
     DLLLOCAL virtual QoreOperatorNode* copyBackground(ExceptionSink *xsink) const {
-        QoreMapOperatorNode* rv = copyBackgroundExplicit<QoreMapOperatorNode>(xsink);
+        // the expression is evaluated for each element with the operator's implicit arguments
+        QoreMapOperatorNode* rv = copyBackgroundIterating<QoreMapOperatorNode>(xsink, true);
+        if (!rv) {
+            return nullptr;
+        }
         rv->iterator_func = dynamic_cast<FunctionalOperator*>(rv->right.getInternalNode());
         return rv;
     }

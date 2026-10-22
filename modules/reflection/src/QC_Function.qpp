@@ -198,10 +198,13 @@ auto v = f.call(arg1, arg2);
     @return the return value of the function call
 
     @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the function has been destroyed
+    @throw INVALID-FUNCTION-ACCESS the calling code's or the function's Program's sandboxing restrictions do not allow the variant called (see @ref reflection_caller_privilege)
 
     @see callArgs()
 */
 auto Function::call(...) {
+    // the privileges of the calling code, captured before switching to the function's Program
+    QoreReflectionCaller caller;
     // get read access to program object
     QoreExternalProgramContextHelper tch(xsink, f->pgm);
     if (*xsink) {
@@ -209,7 +212,7 @@ auto Function::call(...) {
     }
 
     // the function ptr must be valid
-    return f->f->evalFunction(nullptr, args, f->pgm, xsink);
+    return f->f->evalFunction(nullptr, args, f->pgm, caller, xsink);
 }
 
 //! calls the given function with the given arguments as a list
@@ -223,10 +226,13 @@ auto v = f.callArgs(argv);
     @return the return value of the function call
 
     @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the function has been destroyed
+    @throw INVALID-FUNCTION-ACCESS the calling code's or the function's Program's sandboxing restrictions do not allow the variant called (see @ref reflection_caller_privilege)
 
     @see call()
 */
 auto Function::callArgs(*softlist<auto> argv) {
+    // the privileges of the calling code, captured before switching to the function's Program
+    QoreReflectionCaller caller;
     // get read access to program object
     QoreExternalProgramContextHelper tch(xsink, f->pgm);
     if (*xsink) {
@@ -234,7 +240,7 @@ auto Function::callArgs(*softlist<auto> argv) {
     }
 
     // the function ptr must be valid
-    return f->f->evalFunction(nullptr, argv, f->pgm, xsink);
+    return f->f->evalFunction(nullptr, argv, f->pgm, caller, xsink);
 }
 
 //! Returns a %Function object from the function name or namespace-justified path as a string
@@ -278,6 +284,11 @@ static Function Function::forName(Program[QoreProgram] pgm, string path) [flags=
     if (q_check_no_nul(path->c_str(), path->size(), "function name", "function names", "UNKNOWN-FUNCTION", xsink)) {
         return QoreValue();
     }
+    // a lookup in another Program is navigation in it
+    QoreReflectionCaller caller;
+    if (reflection_check_program_access(caller, *pgm, "look up functions in", xsink)) {
+        return QoreValue();
+    }
     return get_function_object(xsink, *path, *pgm);
 }
 
@@ -312,5 +323,10 @@ list<Function> l = Function::findAllRegex(pgm, "^gg");
     @return a list of functions matching the regular expression pattern argument or an empty list if no functions match
 */
 static list<Function> Function::findAllRegex(Program[QoreProgram] pgm, string pattern, *int re_opts) [flags=RET_VALUE_ONLY] {
+    // a lookup in another Program is navigation in it
+    QoreReflectionCaller caller;
+    if (reflection_check_program_access(caller, *pgm, "look up functions in", xsink)) {
+        return QoreValue();
+    }
     return find_all_funcs(*pattern, re_opts, *pgm, xsink);
 }

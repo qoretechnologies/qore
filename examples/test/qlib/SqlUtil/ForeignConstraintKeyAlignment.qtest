@@ -121,8 +121,9 @@ class ForeignConstraintKeyAlignmentTest inherits QUnit::Test {
 %endif
         OfflineDatasource ds("oracle:user/pass@db", "Oracle Database 19c Enterprise Edition Release 19.0.0.0.0",
             "oracle");
-        checkDriver(AbstractTable sub (string table) { return new OracleTable(ds, table); }, "user.fk_key_parent",
-            "user.fk_key_child");
+        # "user" is a reserved word in Oracle, so the schema of the connection's user is quoted
+        checkDriver(AbstractTable sub (string table) { return new OracleTable(ds, table); },
+            "\"user\".fk_key_parent", "\"user\".fk_key_child");
     }
 
     mssql() {

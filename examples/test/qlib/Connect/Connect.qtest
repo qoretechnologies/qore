@@ -89,7 +89,7 @@ class ConnectTest inherits QUnit::Test {
         # Register handlers with HttpServer
         m_http.setHandler("connect", "", NOTHING, handler);
         m_http.setDefaultHandler("connect", handler);
-        port = m_http.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        port = m_http.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
 
         set_return_value(main());
 

@@ -438,7 +438,7 @@ class GeminiToolSchemaTest inherits QUnit::Test {
         Logger logger("test", LoggerLevel::getLevelWarn());
         HttpServer http(<HttpServerOptionInfo>{"logger": logger, "debug": False});
         on_exit delete http;
-        int port = http.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        int port = http.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
         FakeGeminiStreamHandler handler(({
             "candidates": ({
                 "content": {"parts": ({"functionCall": {"name": "unsupported", "args": wire}},)},
@@ -767,7 +767,7 @@ class GeminiToolSchemaTest inherits QUnit::Test {
         Logger logger("test", LoggerLevel::getLevelWarn());
         HttpServer http(<HttpServerOptionInfo>{"logger": logger, "debug": False});
         on_exit delete http;
-        int port = http.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        int port = http.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
         FakeGeminiStreamHandler handler(());
         handler.error_body = BudgetErrorBody;
         http.setHandler("gemini", "/", MimeTypeJson, handler);

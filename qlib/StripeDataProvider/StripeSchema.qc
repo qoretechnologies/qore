@@ -65,8 +65,7 @@ public hashdecl StripeSchemaProvenanceInfo {
     exposing a few dozen operations.  1022 of the 1440 schemas survive pruning, because Stripe's types are
     heavily interconnected.
 
-    The schema is parsed once, on first use, rather than when the module loads, so that a program that only
-    needs the connection does not pay for it.
+    The schema is parsed once, when the module loads and registers its actions, which are built from it.
 */
 public class StripeSchema {
     public {

@@ -119,7 +119,7 @@ class SseStreamingTest inherits Test {
         server.setDefaultHandler("sse", handler);
         server.setHandler("callback-sse", "/callback-sse", NOTHING, callback_handler);
         server.setHandler("close-sse", "/close-sse", NOTHING, closing_handler);
-        port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        port = server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
     }
 
     globalTearDown() {
@@ -153,10 +153,10 @@ class SseStreamingTest inherits Test {
     }
 
     private hash<auto> sendRawSseRequest(Socket sock, string path) {
-        sock.connect("127.0.0.1:" + port, 5s);
+        sock.connect("localhost:" + port, 5s);
         hash<auto> send_info;
         sock.sendHTTPMessage("GET", path, "1.1", {
-            "Host": sprintf("127.0.0.1:%d", port),
+            "Host": sprintf("localhost:%d", port),
             "Accept": MimeTypeSse,
         }, NOTHING, \send_info);
         return sock.readHTTPHeader(5s);
