@@ -19,12 +19,8 @@ const GenericOptions = (
 const IndexOptions = (
     "driver": (
         "oracle": (
-            "index_tablespace": "omq_index",
             "compute_statistics": True,
         ),
-        "pgsql": (
-            "index_tablespace": "omq_index",
-            ),
         ),
     );
 

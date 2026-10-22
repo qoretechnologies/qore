@@ -68,8 +68,6 @@ create database ${OMQ_DB_NAME} encoding = 'utf8';
 create extension if not exists vector;
 create user ${OMQ_DB_USER} password 'omq' createrole;
 grant create, connect, temp on database ${OMQ_DB_NAME} to ${OMQ_DB_USER};
-grant create on tablespace omq_data to ${OMQ_DB_USER};
-grant create on tablespace omq_index to ${OMQ_DB_USER};
 grant select on all tables in schema pg_catalog to ${OMQ_DB_USER};
 grant all on schema public to ${OMQ_DB_USER};
 EOF
