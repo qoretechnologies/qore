@@ -706,16 +706,23 @@ string makeFormattedJSONString(auto data, *string encoding) [flags=RET_VALUE_ONL
 
     @return the %Qore data structure corresponding to the input string
 
-    @throw JSON-PARSE-ERROR syntax error parsing JSON string, or an object key has a NUL character (\c \\u0000),
-    which a hash key cannot hold
+    @throw JSON-PARSE-ERROR syntax error parsing JSON string, for example a number that does not have the form of
+    RFC 8259 section 6, such as \c "01", \c ".5", \c "1." or \c "1e", or text after the JSON value; or an object
+    key has a NUL character (\c \\u0000), which a hash key cannot hold
     @throw STACK-LIMIT-EXCEEDED the data is nested too deeply for the thread's stack
 
     @par Example:
     @code auto data = parse_json(json); @endcode
 
+    @note An integer outside the range of an \c int is returned as a \c number, which keeps its value; see
+    @ref jsonserializationguide
+
     @see @ref jsonserializationguide
 
-    @since json 1.5 as a replacement for deprecated camel-case parseJSON()
+    @since
+    - json 1.5 as a replacement for deprecated camel-case parseJSON()
+    - json 3.0 numbers are parsed as RFC 8259 section 6 defines them, and an integer outside the range of an \c int
+      is returned as a \c number
  */
 auto parse_json(string json_str) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     return parse_json(json_str, xsink);

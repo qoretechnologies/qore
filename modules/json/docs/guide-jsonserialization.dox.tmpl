@@ -22,8 +22,12 @@
     <b>JSON Deserialization</b>
     |!JSON-RPC Type|!%Qore Type|!Description
     |\c string|\c string|direct conversion
-    |\c number|\c int or \c float|if the JSON number is an integer, it is converted as an \c int, otherwise as a \
-        \c float
+    |\c number|\c int, \c number or \c float|if the JSON number is an integer, it is converted as an \c int, or \
+        as a \c number if it is outside the range of an \c int, so that its value is kept; otherwise as a \c float. \
+        A number must have the form of RFC 8259 section 6: an optional \c "-", \c "0" or digits that do not start \
+        with \c "0", an optional fraction (\c "." and at least one digit) and an optional exponent (\c "e" or \
+        \c "E", an optional sign and at least one digit); other forms, such as \c "01", \c ".5", \c "1.", \
+        \c "1e", \c "1e+", \c "-" or \c "+1", raise \c JSON-PARSE-ERROR
     |\c boolean|\c bool|direct conversion
     |\c array|\c list|direct conversion
     |\c struct|\c hash|direct conversion

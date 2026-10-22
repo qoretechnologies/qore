@@ -428,8 +428,14 @@ int JsonStreamWriter::value(QoreValue v, ExceptionSink* xsink) {
         case NT_NUMBER: {
             if (!checkSandboxLimits(xsink)) return -1;
             const QoreNumberNode* num = v.get<const QoreNumberNode>();
+            // as make_json(): a value that is not an ordinary number is null, which JSON can represent, and other
+            // values are written with all of their digits, so that an integer is read back with its value
             QoreString str;
-            num->toString(str, QORE_NF_SCIENTIFIC);
+            if (!num->ordinary()) {
+                str.concat("null");
+            } else {
+                num->getStringRepresentation(str);
+            }
             if (writeCommaIfNeeded(xsink)) return -1;
             if (!stack.empty() && stack.back().type == CT_ARRAY) {
                 if (writeNewlineIndent(xsink)) return -1;
@@ -628,6 +634,8 @@ nothing JsonStreamWriter::nullValue() {
     - hashes become JSON objects
     - lists become JSON arrays
     - strings, integers, floats, booleans, and NOTHING/NULL are written as their JSON equivalents
+    - arbitrary-precision numbers are written with all of their digits, as by @ref Qore::Json::make_json()
+      "make_json()"; a float or number that is not an ordinary number (NaN or an infinity) is written as \c null
 
     @par Example:
     @code{.py}

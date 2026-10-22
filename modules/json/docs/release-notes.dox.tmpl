@@ -160,6 +160,14 @@
     - fixed method index population bug in JsonRpcHandler
     - fixed internal method dispatch in JsonRpcHandler for private methods
     - fixed JSON number parsing for signed exponents such as \c 1.2e-05
+    - @ref Qore::Json::parse_json() "parse_json()" parses numbers as RFC 8259 section 6 defines them: a number that
+      does not have that form, such as \c "01", \c "-01", \c ".5", \c "-.5", \c "1.", \c "1e", \c "1e+", \c "-"
+      or \c "1e5.5", raises \c JSON-PARSE-ERROR; it returned a value for it (see
+      @ref qore_3_0_0_compatibility "Changes That Can Affect Backwards-Compatibility")
+    - @ref Qore::Json::parse_json() "parse_json()" returns an integer outside the range of an \c int as a
+      \c number, which keeps its value; it returned the largest or the smallest \c int
+    - @ref Qore::Json::parse_json() "parse_json()" raises \c JSON-PARSE-ERROR for text after a \c null value, as
+      after any other value; the text was ignored
 
     @section json_v1_9_1 json Module Version 1.9.1
     - improved MCP server capabilities by making the call context available to tools as well as improving error

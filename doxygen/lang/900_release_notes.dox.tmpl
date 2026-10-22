@@ -1272,6 +1272,24 @@ val = "string";      # OK
     when the checkout moves.  Recorded \c Qore::CFLAGS preserve reusable compiler options and their quoting,
     excluding build-machine file/debug/macro prefix maps.
 
+    @par JSON Numbers Must Have the Form That RFC 8259 Defines
+    @parblock
+    @ref Qore::Json::parse_json() "parse_json()" raises \c JSON-PARSE-ERROR for a number that does not have the form
+    of RFC 8259 section 6: a leading zero (\c "01", \c "-01"), a fraction without an integer part (\c ".5", \c "-.5")
+    or without digits (\c "1."), an exponent without digits (\c "1e", \c "1e+"), a sign without digits (\c "-"), or
+    a fraction after an exponent (\c "1e5.5").  It returned a value for each of them: \c 1, \c -1, \c 0.5, \c -0.5,
+    \c 1.0, \c 1.0, \c 1.0, \c 0 and \c 100000.0.  @ref Qore::Json::make_json() "make_json()" never produces such
+    numbers.
+
+    \c parse_json() returns an integer outside the range of an \c int as a \c number, which keeps its value; it
+    returned the largest or the smallest \c int instead, for example \c 9223372036854775807 for
+    \c 9223372036854775808, and for the digits that \c make_json() writes for the float \c 1e21.  Code that expects an
+    \c int for every JSON integer must accept a \c number for such a value.
+
+    \c parse_json() raises \c JSON-PARSE-ERROR for text after a \c null value, as after any other value; it ignored
+    the text, so that \c "null x" was parsed without an error.
+    @endparblock
+
     @par The linenoise Completion Callback Completes the Word at the Cursor
     @parblock
     The callback that @ref Qore::Linenoise::set_callback() "Linenoise::set_callback()" sets receives the text of the

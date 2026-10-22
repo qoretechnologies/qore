@@ -1,0 +1,202 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    A JSON number is "[ minus ] int [ frac ] [ exp ]" (RFC 8259 section 6): int is "0" or digits that do not start
+    with "0", frac is "." and at least one digit, and exp is "e" or "E", an optional sign and at least one digit.
+    parse_json() accepted other forms and returned a value for them; it and JsonSaxParser raise a parse error for
+    them, and keep the value of an integer outside the range of an int as a number.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires json
+
+%exec-class JsonNumbersTest
+
+class JsonNumbersTest inherits QUnit::Test {
+    public {
+        #! the numbers that RFC 8259 does not allow; parse_json() returned 1, -1, 0, 0.5, -0.5, 1.0, -1.0, 1.0, 1.0,
+        #! 1.0, 1.0, 0 and 100000.0 for the first thirteen
+        const Invalid = (
+            "01", "-01", "00", ".5", "-.5", "1.", "-1.", "1e", "1E", "1e+", "1e-", "-", "1e5.5",
+            "1.5.5", "1e5e5", "+1", "0x10", "1x", "1.x", "--1",
+        );
+
+        #! valid numbers and their values
+        const Valid = (
+            ("0", 0),
+            ("-0", 0),
+            ("0.5", 0.5),
+            ("-0.5", -0.5),
+            ("1e5", 1e5),
+            ("1E-5", 1e-5),
+            ("1.5e+3", 1500.0),
+            ("-1.5E-3", -0.0015),
+            ("0e0", 0.0),
+            ("0.0", 0.0),
+            ("1E+0", 1.0),
+            ("10", 10),
+            ("1.2e-05", 1.2e-05),
+            ("9223372036854775807", 9223372036854775807),
+            ("-9223372036854775808", -9223372036854775807 - 1),
+        );
+
+        #! integers outside the range of an int, which are kept as numbers
+        const Large = (
+            "9223372036854775808",
+            "-9223372036854775809",
+            "123456789012345678901234567890",
+            "-123456789012345678901234567890",
+        );
+    }
+
+    constructor() : QUnit::Test("JsonNumbersTest", "1.0") {
+        addTestCase("parse_json() refuses numbers that RFC 8259 does not allow", \invalidParseTest());
+        addTestCase("JsonSaxParser refuses numbers that RFC 8259 does not allow", \invalidSaxTest());
+        addTestCase("valid numbers are parsed", \validTest());
+        addTestCase("an integer outside the range of an int is a number", \largeTest());
+        addTestCase("text after null is refused", \trailingTextTest());
+        addTestCase("parse_toon() keeps the value of a large integer as parse_json() does", \toonTest());
+        addTestCase("JsonStreamWriter writes numbers that the parsers read back", \writerTest());
+        set_return_value(main());
+    }
+
+    invalidParseTest() {
+        foreach string n in (Invalid) {
+            # at the top level, in an array, and as the value of an object
+            foreach string json in ((n, "[" + n + "]", "[1, " + n + ", 2]", "{\"a\": " + n + "}", "[" + n + "\n]")) {
+                assertThrows("JSON-PARSE-ERROR", \parse_json(), json, sprintf("parse_json(%y)", json));
+            }
+        }
+    }
+
+    invalidSaxTest() {
+        foreach string n in (Invalid) {
+            foreach string json in (("[" + n + "]", "{\"a\": " + n + "}")) {
+                JsonSaxParser p();
+                assertThrows("JSON-SAX-PARSE-ERROR", sub () { p.parse(json, sub (hash<auto> e) {}); },
+                    NOTHING, sprintf("JsonSaxParser::parse(%y)", json));
+            }
+        }
+    }
+
+    validTest() {
+        foreach list<auto> v in (Valid) {
+            string n = v[0];
+            auto expected = v[1];
+            assertEq(expected, parse_json(n), n);
+            assertEq(expected.type(), parse_json(n).type(), n + " type");
+            # built element by element, so that no literal gives the containers an element type
+            list<auto> one = ();
+            one += expected;
+            assertEq(one, parse_json("[" + n + "]"), "[" + n + "]");
+            hash<auto> obj = {};
+            obj.a = expected;
+            obj.b = 1;
+            assertEq(obj, parse_json("{\"a\":" + n + ",\"b\":1}"), "{\"a\":" + n + "}");
+            # followed by whitespace
+            list<auto> two = one;
+            two += 2;
+            assertEq(two, parse_json("[" + n + " ,\t2\n]"), n + " with whitespace");
+            assertEq(expected, saxNumber("[" + n + "]"), "SAX " + n);
+        }
+    }
+
+    largeTest() {
+        foreach string n in (Large) {
+            auto v = parse_json(n);
+            assertEq("number", v.type(), n);
+            assertEq(number(n), v, n);
+            assertEq(n, v.toString(), n + " keeps its digits");
+            auto sv = saxNumber("[" + n + "]");
+            assertEq("number", sv.type(), "SAX " + n);
+            assertEq(number(n), sv, "SAX " + n);
+            # make_json() writes the digits, which parse_json() reads back with their value
+            assertEq(number(n), parse_json(make_json(number(n))), n + " round trip");
+        }
+    }
+
+    trailingTextTest() {
+        foreach string json in (("null x", "null null", "0 x", "false x", "true 1", "\"\" x")) {
+            assertThrows("JSON-PARSE-ERROR", \parse_json(), json, json);
+        }
+        assertNothing(parse_json("null"));
+        assertNothing(parse_json(" null \n"));
+    }
+
+    toonTest() {
+        foreach string n in (Large) {
+            assertEq(parse_json(make_json(number(n))), parse_toon(make_toon(number(n))), n);
+        }
+    }
+
+    writerTest() {
+        StringOutputStream sos();
+        JsonStreamWriter w(sos);
+        # built element by element, so that the floats and numbers keep their types
+        list<auto> values = ();
+        map values += $1, (0.1, 1e21, -0.5);
+        map values += $1, (123456789012345678901234567890n, 0.5n, 1e-7n, @nan@n, @inf@n);
+        map values += $1, (@nan@, @inf@);
+        w.value(values);
+        w.flush();
+        string out = sos.getData();
+        list<auto> parsed = parse_json(out);
+        assertEq(0.1, parsed[0]);
+        assertEq(1e21, parsed[1]);
+        assertEq(-0.5, parsed[2]);
+        assertEq(123456789012345678901234567890n, parsed[3]);
+        assertEq("number", parsed[3].type());
+        assertEq(0.5, parsed[4]);
+        assertEq(1e-7, parsed[5]);
+        # values that are not ordinary numbers are null, as with make_json()
+        foreach auto v in (parsed[6..9]) {
+            assertNothing(v);
+        }
+        assertEq(10, parsed.size());
+        # the number is written as by make_json(), with all of its digits
+        assertEq(parse_json(make_json(values[3])), parsed[3], "the number as with make_json()");
+        # make_json() writes a float with an integral value as digits, which are read back with their value, as a
+        # number, since the value is outside the range of an int
+        auto big = parse_json(make_json(1e21));
+        assertEq("number", big.type());
+        assertTrue(big == 1e21, "the value is kept");
+    }
+
+    #! returns the value of the first number event of the JSON text
+    private static auto saxNumber(string json) {
+        auto rv;
+        bool found;
+        JsonSaxParser p();
+        p.parse(json, sub (hash<auto> e) {
+            if (e.type == JsonSaxNumber && !found) {
+                rv = e.value;
+                found = True;
+            }
+        });
+        return rv;
+    }
+}
