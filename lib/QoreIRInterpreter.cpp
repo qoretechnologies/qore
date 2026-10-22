@@ -2413,7 +2413,15 @@ private:
     QoreProgramStackLocationHelper stack_helper{this, stmt, pgm};
 };
 
-static const QoreProgramLocation* qore_ir_user_variant_location(const UserVariantBase* uvb) {
+//! Returns the location of the call stack frame of an inline call: the call site, as for an AST call
+/** The location of a frame is where the code it belongs to was called from; the signature of the callee is the
+    location only of a call without a location of its own.
+*/
+static const QoreProgramLocation* qore_ir_call_frame_location(const QoreIRInstruction* inst,
+        const UserVariantBase* uvb) {
+    if (inst->loc) {
+        return inst->loc;
+    }
     const UserSignature* sig = uvb ? uvb->getUserSignature() : nullptr;
     return sig ? sig->getParseLocation() : nullptr;
 }
@@ -3761,7 +3769,7 @@ static bool tryExecuteInterpreterInlineIRFunction(QoreIRCallDirectInstruction* i
 
     const QoreIRFunction* callee_ir = inst->cached_callee_ir;
     const UserSignature* sig = uvb->getUserSignature();
-    QoreIRInlineCallStackLocation stack_loc(qore_ir_user_variant_location(uvb),
+    QoreIRInlineCallStackLocation stack_loc(qore_ir_call_frame_location(inst, uvb),
         qore_ir_function_call_name(inst->func), inst->variant ? inst->variant->getCallType() : CT_USER);
     unsigned num_params = sig->numParams();
     bool use_direct_params = inline_state == QORE_IR_INLINE_DIRECT_PARAMS;
@@ -3843,7 +3851,7 @@ static bool executeInterpreterInlineIRMethodTarget(DirectMethodInst* inst, const
 
     const QoreIRFunction* callee_ir = inst->cached_callee_ir;
     const UserSignature* sig = uvb->getUserSignature();
-    QoreIRInlineCallStackLocation stack_loc(qore_ir_user_variant_location(uvb),
+    QoreIRInlineCallStackLocation stack_loc(qore_ir_call_frame_location(inst, uvb),
         qore_ir_method_call_name(method), inst->variant ? inst->variant->getCallType() : CT_USER);
     unsigned num_params = sig->numParams();
     // Use the executing variant's class as the runtime class context (not
@@ -4082,7 +4090,7 @@ static bool tryExecuteInterpreterInlineIRStaticMethod(QoreIRCallStaticDirectInst
 
     const QoreIRFunction* callee_ir = inst->cached_callee_ir;
     const UserSignature* sig = uvb->getUserSignature();
-    QoreIRInlineCallStackLocation stack_loc(qore_ir_user_variant_location(uvb),
+    QoreIRInlineCallStackLocation stack_loc(qore_ir_call_frame_location(inst, uvb),
         qore_ir_method_call_name(inst->method), inst->variant ? inst->variant->getCallType() : CT_USER);
     unsigned num_params = sig->numParams();
     ClassOnlySubstitutionHelper cosh(qore_class_private::get(*inst->method->getClass()));
@@ -4133,7 +4141,7 @@ static bool tryExecuteInterpreterInlineIRStaticMethod(QoreIRCallStaticDirectInst
 }
 
 static bool tryExecuteInterpreterInlineIRClosure(QoreValue ref_val, QoreProgram* caller_pgm,
-        uint64_t* args, int nargs, QoreValue& result, ExceptionSink* xsink,
+        const QoreProgramLocation* call_loc, uint64_t* args, int nargs, QoreValue& result, ExceptionSink* xsink,
         bool* may_invalidate_external_caches = nullptr) {
     if (!ref_val.hasNode()) {
         return false;
@@ -4247,6 +4255,9 @@ static bool tryExecuteInterpreterInlineIRClosure(QoreValue ref_val, QoreProgram*
         }
         return true;
     }
+    // the closure's call stack frame, from the call site, as an AST call of a closure pushes it
+    QoreIRInlineCallStackLocation stack_loc(call_loc ? call_loc : sig->getParseLocation(), "<anonymous closure>",
+        CT_USER);
     ClosureTlpdEnsureHelper tlpd_helper(xsink, uvb->pgm);
     if (xsink && *xsink) {
         result = QoreValue();
@@ -5214,7 +5225,7 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
                 uint64_t ref_bits = toBits(ref_val);
                 if (nargs == 0) {
                     QoreValue inline_result;
-                    if (tryExecuteInterpreterInlineIRClosure(ref_val, getProgram(), nullptr, 0,
+                    if (tryExecuteInterpreterInlineIRClosure(ref_val, getProgram(), inv->loc, nullptr, 0,
                             inline_result, xsink)) {
                         return inline_result;
                     }
@@ -5223,7 +5234,7 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
                 if (nargs == 1) {
                     uint64_t arg0 = toBits(getIRValue(values, inv->operands[1]));
                     QoreValue inline_result;
-                    if (tryExecuteInterpreterInlineIRClosure(ref_val, getProgram(), &arg0, 1,
+                    if (tryExecuteInterpreterInlineIRClosure(ref_val, getProgram(), inv->loc, &arg0, 1,
                             inline_result, xsink)) {
                         return inline_result;
                     }
@@ -5237,8 +5248,8 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
                     args[i] = toBits(getIRValue(values, inv->operands[i + 1]));
                 }
                 QoreValue inline_result;
-                bool inline_done = tryExecuteInterpreterInlineIRClosure(ref_val, getProgram(), args, nargs,
-                    inline_result, xsink);
+                bool inline_done = tryExecuteInterpreterInlineIRClosure(ref_val, getProgram(), inv->loc, args,
+                    nargs, inline_result, xsink);
                 uint64_t result_bits = inline_done ? 0 : qore_rt_call_closure_fast(ref_bits, args, nargs, xsink);
                 if (nargs > SMALL_BUF) {
                     delete[] args;
@@ -7582,15 +7593,15 @@ next_instruction:
                 bool inline_may_invalidate_external_caches = true;
                 bool used_inline_ir = false;
                 if (nargs == 0) {
-                    used_inline_ir = tryExecuteInterpreterInlineIRClosure(ref_val, pgm, nullptr, 0, result, xsink,
-                        &inline_may_invalidate_external_caches);
+                    used_inline_ir = tryExecuteInterpreterInlineIRClosure(ref_val, pgm, inst->loc, nullptr, 0, result,
+                        xsink, &inline_may_invalidate_external_caches);
                     if (!used_inline_ir) {
                         result = fromBits(qore_rt_call_closure_0(ref_bits, xsink));
                     }
                 } else if (nargs == 1) {
                     uint64_t arg0 = toBits(getIRValue(values, inst->operands[1]));
-                    used_inline_ir = tryExecuteInterpreterInlineIRClosure(ref_val, pgm, &arg0, 1, result, xsink,
-                        &inline_may_invalidate_external_caches);
+                    used_inline_ir = tryExecuteInterpreterInlineIRClosure(ref_val, pgm, inst->loc, &arg0, 1, result,
+                        xsink, &inline_may_invalidate_external_caches);
                     if (!used_inline_ir) {
                         result = fromBits(qore_rt_call_closure_1(ref_bits, arg0, xsink));
                     }
@@ -7601,8 +7612,8 @@ next_instruction:
                     for (int i = 0; i < nargs; ++i) {
                         args[i] = toBits(getIRValue(values, inst->operands[i + 1]));
                     }
-                    used_inline_ir = tryExecuteInterpreterInlineIRClosure(ref_val, pgm, args, nargs, result, xsink,
-                        &inline_may_invalidate_external_caches);
+                    used_inline_ir = tryExecuteInterpreterInlineIRClosure(ref_val, pgm, inst->loc, args, nargs, result,
+                        xsink, &inline_may_invalidate_external_caches);
                     if (!used_inline_ir) {
                         result = fromBits(qore_rt_call_closure_fast(ref_bits, args, nargs, xsink));
                     }

@@ -1,0 +1,61 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ../../ExecModeHarness.qm
+
+%exec-class CallFrameLocationsTest
+
+#! Tests the locations of the call stack frames of an exception in each execution mode
+/** The frame of a call is where the call was made, as AST execution reports it.  The IR interpreter, which also
+    runs the first calls of JIT and tiered execution, gave the frame of a function, method or static method that it
+    called directly the location of the callee's declaration instead, and it pushed no frame at all for a closure
+    whose IR it ran directly (from the second call of the closure on).
+
+    Native code (JIT and AOT) does not push a frame for a call of compiled code from compiled code, so it is not
+    tested here yet.
+*/
+class CallFrameLocationsTest inherits QUnit::Test {
+    public {
+        #! the frames of LocChecks::run(): the function of each frame and the line it was called from
+        const Expected = (
+            "bad:32,via_function:54",
+            "bad:20,C::m:38,via_method:54",
+            "bad:24,C::s:42,via_static:54",
+            "bad:46,<anonymous closure>:47,via_closure:54",
+        );
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+    }
+
+    constructor() : QUnit::Test("CallFrameLocations", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+
+        addTestCase("each execution mode", \testExecModes());
+
+        set_return_value(main());
+    }
+
+    testExecModes() {
+        string worker = get_script_dir() + DirSep + "call-frame-locations-worker.q";
+        # the interpreted modes; see the native code note above
+        foreach string mode in (("ast", "ir")) {
+            string out = ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --exec-mode=%s %s",
+                libqore_dir, get_script_dir(), qore_bin, mode, worker));
+            list<string> lines = (map $1, out.split("\n"), $1.val());
+            assertEq(3, lines.size(), mode + ": rounds: " + out);
+            foreach string line in (lines) {
+                assertEq(Expected, line.split("|"), sprintf("%s: round %d", mode, $#));
+            }
+        }
+    }
+}

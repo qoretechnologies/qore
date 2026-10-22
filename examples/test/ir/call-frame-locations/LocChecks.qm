@@ -1,0 +1,63 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+module LocChecks {
+    version = "1.0";
+    desc = "call stack location checks";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+public namespace LocChecks {
+int sub bad() {
+    throw "ERR", "x";
+}
+
+class C {
+    int m() {
+        return bad();
+    }
+
+    static int s() {
+        return bad();
+    }
+}
+
+sub g(*int v) {
+}
+
+int sub via_function() {
+    g(bad());
+    return 0;
+}
+
+int sub via_method() {
+    C c();
+    return c.m();
+}
+
+int sub via_static() {
+    return C::s();
+}
+
+int sub via_closure() {
+    code c = int sub () { return bad(); };
+    return c();
+}
+
+public string sub run() {
+    list<string> out;
+    foreach code f in ((\via_function(), \via_method(), \via_static(), \via_closure())) {
+        try {
+            f();
+        } catch (hash<ExceptionInfo> ex) {
+            # the frames of this module, innermost first, without the call of f() itself
+            out += (map sprintf("%s:%d", $1.function, $1.line), ex.callstack,
+                $1.file =~ /LocChecks/ && $1.function != "run").join(",");
+        }
+    }
+    return out.join("|");
+}
+}
