@@ -5094,6 +5094,13 @@ while (*binary chunk = input.read(65536)) {
       In the C++ API, \c QoreFile::detachFd() leaves the object closed and without a descriptor, as documented: the
       object closed the descriptor detached from it, which the caller owns, when it was closed, opened again or
       destroyed, and a second detach returned the same descriptor again
+    - Fixed a crash when a binary module added to a namespace of a running Program while another thread imported a
+      user module from that Program: the public C++ namespace API (\c QoreNamespace::addNamespace() and the other
+      methods that add to a namespace) took no lock, so the import could read the namespace while it was being
+      changed.  This happened with the \c jni module, which adds its namespace to a module's Program the first time
+      Java code uses the module's classes, while other threads were starting.  In the C++ API,
+      \c ProgramRuntimeExternalParseContextHelper no longer releases parse ownership it could not acquire when the
+      Program is being deleted
     - Fixed a crash of @ref Qore::encode_url() "encode_url()" and @ref Qore::encode_uri_request()
       "encode_uri_request()" with a UTF-8 string that ends in the middle of a character, which read past the end of
       the string; such a string raises an \c INVALID-ENCODING exception

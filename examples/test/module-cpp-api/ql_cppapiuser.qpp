@@ -288,6 +288,34 @@ int cpp_api_counter_live_count() [flags=RET_VALUE_ONLY] {
     return api->counter_live_count();
 }
 
+//! adds a namespace to the root namespace of a loaded user module's Program, as a binary module does at runtime
+/** Takes the module Program's parse ownership, as module-jni does when it attaches its \c Jni namespace to a Program
+    the first time the Program's Java classes are used, and adds a new namespace through the public
+    QoreNamespace::addNamespace().  Other threads may be importing the module at the same time, copying from that root
+    namespace into their own Programs.
+
+    @param module the name of a loaded user module
+    @param name the name of the namespace to add; adding an existing name merges into it
+
+    @return @ref True "True" if the namespace was added, @ref False "False" if the module's Program could not be
+    owned for parsing because it is being deleted
+
+    @throw MODULE-PROGRAM-ERROR no user module with the given name is loaded
+*/
+bool cpp_api_add_module_namespace(string module, string name) {
+    QoreProgram* pgm = ModuleManager::findUserModuleProgram(module->c_str());
+    if (!pgm) {
+        xsink->raiseException("MODULE-PROGRAM-ERROR", "no user module '%s' is loaded", module->c_str());
+        return QoreValue();
+    }
+    ProgramRuntimeExternalParseContextHelper pch(pgm);
+    if (!pch) {
+        return false;
+    }
+    pgm->getRootNS()->addNamespace(new QoreNamespace(name->c_str()));
+    return true;
+}
+
 //! records each child process that this process creates with fork() in a file
 /** A pthread_atfork() child handler appends one byte to the file in every child created with fork(); a child created
     with posix_spawn() runs no handler, so it is not recorded.  The handler is registered once; the file is opened by

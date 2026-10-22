@@ -3541,7 +3541,8 @@ CurrentProgramRuntimeExternalParseContextHelper::operator bool() const {
 
 ProgramRuntimeExternalParseContextHelper::ProgramRuntimeExternalParseContextHelper(QoreProgram* pgm) : pgm(pgm) {
     if (qore_program_private::lockParsing(*pgm, 0)) {
-        pgm = nullptr;
+        // the member, not the parameter: the destructor must not release parse ownership it never acquired
+        this->pgm = nullptr;
     }
 }
 
