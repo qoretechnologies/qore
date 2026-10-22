@@ -4988,6 +4988,10 @@ while (*binary chunk = input.read(65536)) {
       - For example, \c "int", \c "float", \c "number", \c "bool" and \c "date" fields read by the
         @ref csvutilintro "CsvUtil" module from UTF-16 data were converted incorrectly
 
+    - Fixed conversions to stateful character encodings such as \c "ISO-2022-JP" of text whose converted form did
+      not fit the first output buffer: the conversion was started again without resetting the converter, so with
+      the iconv of glibc and macOS the output could start without the escape sequence of its first characters, and
+      those characters were then read as other characters
     - Fixed conversions to stateful character encodings such as \c "UTF-7" and \c "ISO-2022-JP" omitting the bytes
       that return the encoding to its initial state at the end of the output, so the last characters could not be
       decoded (ex: \c "é" converted to UTF-7 gave \c "+AO" instead of \c "+AOk-"); this affected
