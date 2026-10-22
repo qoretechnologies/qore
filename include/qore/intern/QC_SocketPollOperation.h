@@ -450,6 +450,24 @@ public:
         }
     }
 
+    //! Releases the operation's claim on the listening socket when the controller completes the operation
+    /** Called on the I/O thread before the result is delivered: the code that gets the result can use the socket at
+        once, although the operation object is released only later (its last references can be released on a callback
+        worker).  The claim is otherwise released when the accept ends or the operation is aborted, but the controller
+        ends a wait whose descriptor was closed or replaced without either.  abort() never closes the socket, so the
+        claim can be released here whatever the order.
+    */
+    DLLLOCAL virtual bool handleCompletion(bool canceled, const QoreHashNode* ex_hash, ExceptionSink* xsink) override {
+        if (sock) {
+            AutoLocker al(sock->priv->m);
+            if (set_non_block_accept) {
+                sock->priv->clearNonBlockAccept();
+                set_non_block_accept = false;
+            }
+        }
+        return false;
+    }
+
 protected:
     QoreSocketObject* sock = nullptr;
     int state = SPS_NONE;

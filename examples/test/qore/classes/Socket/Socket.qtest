@@ -211,6 +211,11 @@ class SocketTest inherits QUnit::Test {
         addTestCase("Happy Eyeballs blackhole fallback", \happyEyeballsBlackholeTest());
         addTestCase("Happy Eyeballs SSL connect", \happyEyeballsSslTest());
         addTestCase("fd_generation re-verification", \fdGenerationTest());
+        addTestCase("a receive follows at once a receive that the controller ended", \recvAfterEndedWaitTest());
+        addTestCase("a send follows at once a write wait that the controller ended", \sendAfterEndedWriteWaitTest());
+        addTestCase("a listening socket is usable at once after an accept that the controller ended",
+            \listenAfterEndedAcceptWaitTest());
+        addTestCase("a receive follows at once an idle data check", \recvAfterIdleDataCheckTest());
         addTestCase("recoverable recv timeout", \recoverableRecvTimeoutTest());
         addTestCase("wildcard bind serves all address families", \wildcardBindAllFamiliesTest());
         addTestCase("wildcard bind reserves the port in all address families", \wildcardBindReservesPortTest());
@@ -3327,6 +3332,132 @@ class SocketTest inherits QUnit::Test {
         client.close();
         accepted.close();
         server.close();
+    }
+
+    #! Holds the releases of the async I/O controller's I/O threads until the test case ends
+    /** The references that an I/O thread releases on a callback worker, those to a sync call's poll operation among
+        them, are kept until the test case ends, so an operation outlives the delivery of its result for certain.
+        Skips the test case in a release build, which has no debug hooks.
+    */
+    private holdControllerReleases() {
+        try {
+            call_function("dbg_async_io_hold_releases", True);
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "NO-FUNCTION" || ex.err == "UNDEFINED-FUNCTION-CALL") {
+                testSkip("debug build required for dbg_async_io_hold_releases()");
+            }
+            rethrow;
+        }
+    }
+
+    #! Releases what holdControllerReleases() held
+    private static releaseControllerReleases() {
+        call_function("dbg_async_io_hold_releases", False);
+    }
+
+    #! Returns a listening socket, a client connected to it, and the socket it accepted
+    private hash<auto> makeConnection() {
+        Socket server();
+        server.bind("localhost:0");
+        server.listen();
+        int port = server.getSocketInfo().port;
+
+        Socket client();
+        client.connect("localhost:" + port, 5s);
+
+        Socket accepted = server.accept(5s);
+        assertTrue(accepted.isOpen());
+        return {"server": server, "client": client, "accepted": accepted, "port": port};
+    }
+
+    #! Returns the exception that a call raises
+    private static *hash<ExceptionInfo> getException(code call) {
+        try {
+            call();
+        } catch (hash<ExceptionInfo> ex) {
+            return ex;
+        }
+    }
+
+    #! Tests that a sync receive can follow at once a sync receive whose wait the I/O controller ended
+    /** Regression test (CI pipeline 61208, job 213567): when the descriptor that a controller-backed sync call waits
+        on is closed or replaced, the controller ends the call with SOCKET-CLOSED without aborting its operation, as
+        aborting it can close the descriptor that the socket has now; the operation's claim on the receive direction
+        of the socket was released only when the operation object was destroyed, after the caller had its result and
+        on a callback worker.  A receive made at once failed with SOCKET-NON-BLOCK-ERROR, depending on the timing of
+        that worker.  The controller's releases are held, so the operation object outlives the result for certain.
+    */
+    recvAfterEndedWaitTest() {
+        hash<auto> c = makeConnection();
+        holdControllerReleases();
+        on_exit releaseControllerReleases();
+
+        Socket accepted = c.accepted;
+        call_function("dbg_force_fd_swap_next_wait", accepted);
+        assertEq("SOCKET-CLOSED", getException(sub () { accepted.recv(1, 500ms); }).err,
+            "the controller ends the wait when the descriptor changes");
+
+        # the operation of the first receive is still alive, but it does not claim the socket any more
+        c.client.send("x");
+        assertEq("x", accepted.recv(1, 5s));
+    }
+
+    #! Tests that a send can follow at once an isWriteFinished() whose wait the I/O controller ended
+    /** The same as recvAfterEndedWaitTest() for the operation that waits until a socket can be written, which claims
+        the send direction of the socket.
+    */
+    sendAfterEndedWriteWaitTest() {
+        hash<auto> c = makeConnection();
+        holdControllerReleases();
+        on_exit releaseControllerReleases();
+
+        Socket accepted = c.accepted;
+        call_function("dbg_force_fd_swap_next_wait", accepted);
+        assertEq("SOCKET-CLOSED", getException(sub () { accepted.isWriteFinished(5s); }).err,
+            "the controller ends the wait when the descriptor changes");
+
+        accepted.send("x");
+        assertEq("x", c.client.recv(1, 5s));
+    }
+
+    #! Tests that a listening socket can be used at once after an accept() whose wait the I/O controller ended
+    /** The same as recvAfterEndedWaitTest() for an accept operation, which claims the listening socket for accepting.
+    */
+    listenAfterEndedAcceptWaitTest() {
+        hash<auto> c = makeConnection();
+        holdControllerReleases();
+        on_exit releaseControllerReleases();
+
+        Socket server = c.server;
+        call_function("dbg_force_fd_swap_next_wait", server);
+        assertEq("SOCKET-CLOSED", getException(sub () { server.accept(500ms); }).err,
+            "the controller ends the wait when the descriptor changes");
+
+        # a setup call claims the whole socket; Socket::listen() returns -1 for an error
+        assertEq(0, server.listen());
+        Socket client2();
+        client2.connect("localhost:" + c.port, 5s);
+        Socket accepted2 = server.accept(5s);
+        accepted2.send("y");
+        assertEq("y", client2.recv(1, 5s));
+    }
+
+    #! Tests that a receive can follow at once QoreSocketObject::checkIdleData()
+    /** The operation that checks a connection for unexpected data claimed the receive direction of the socket until
+        the operation object was destroyed, although it ends at once; the receive that follows the check on a
+        connection to be used again failed with SOCKET-NON-BLOCK-ERROR, depending on the timing of the callback worker
+        that destroys it.
+    */
+    recvAfterIdleDataCheckTest() {
+        hash<auto> c = makeConnection();
+        holdControllerReleases();
+        on_exit releaseControllerReleases();
+
+        Socket accepted = c.accepted;
+        assertEq(0, call_function("dbg_socket_check_idle_data", accepted), "no data on the idle connection");
+
+        c.client.send("x");
+        assertEq("x", accepted.recv(1, 5s));
     }
 
     #! Tests that a recv() that times out leaves the socket usable

@@ -35,6 +35,7 @@
 #include "qore/intern/Http2Session.h"
 #include "qore/intern/QC_Socket.h"
 #include "qore/intern/QC_SocketPollOperationBase.h"
+#include <qore/SocketPollOperation.h>
 // QC_SocketPollOperation.h no longer needed — controller_notifier plumbing removed
 #include "qore/intern/QC_Http2PollOperationBase.h"
 #include "qore/intern/QC_Http2ClientPollOperationBase.h"
@@ -624,6 +625,40 @@ void AsyncIoDeferredRelease::release(ExceptionSink* xsink) {
     udata = QoreValue();
 }
 
+#ifdef DEBUG
+// the references held by the dbg_async_io_hold_releases() test hook; see dbgHoldOffIoThreadReleases()
+namespace {
+struct AsyncIoDebugHeldReleases {
+    //! True while the references are held; checked without the lock first, so a release takes no lock otherwise
+    std::atomic<bool> hold{false};
+    QoreThreadLock lock;
+    std::vector<std::unique_ptr<AsyncIoDeferredRelease>> held;
+
+    //! Returns the state, which is never destroyed: an I/O thread can still release references at process exit
+    DLLLOCAL static AsyncIoDebugHeldReleases& get() {
+        static AsyncIoDebugHeldReleases* state = new AsyncIoDebugHeldReleases;
+        return *state;
+    }
+};
+}
+
+void AsyncIoControllerPriv::dbgHoldOffIoThreadReleases(bool hold, ExceptionSink* xsink) {
+    assert(!on_async_io_thread);
+    AsyncIoDebugHeldReleases& state = AsyncIoDebugHeldReleases::get();
+    std::vector<std::unique_ptr<AsyncIoDeferredRelease>> held;
+    {
+        AutoLocker al(state.lock);
+        state.hold.store(hold, std::memory_order_release);
+        if (!hold) {
+            held.swap(state.held);
+        }
+    }
+    for (auto& refs : held) {
+        refs->release(xsink);
+    }
+}
+#endif
+
 void AsyncIoControllerPriv::releaseOffIoThread(AsyncIoDeferredRelease& refs, ExceptionSink* xsink) {
     if (refs.empty()) {
         return;
@@ -635,6 +670,18 @@ void AsyncIoControllerPriv::releaseOffIoThread(AsyncIoDeferredRelease& refs, Exc
     ensureCallDispatcher();
     std::unique_ptr<AsyncIoDeferredRelease> deferred(new AsyncIoDeferredRelease(refs));
     refs = AsyncIoDeferredRelease();
+#ifdef DEBUG
+    {
+        AsyncIoDebugHeldReleases& state = AsyncIoDebugHeldReleases::get();
+        if (state.hold.load(std::memory_order_acquire)) {
+            AutoLocker al(state.lock);
+            if (state.hold.load(std::memory_order_relaxed)) {
+                state.held.push_back(std::move(deferred));
+                return;
+            }
+        }
+    }
+#endif
     call_dispatcher.load(std::memory_order_acquire)->dispatchReleaseAsync(deferred.release());
 }
 
@@ -5999,6 +6046,20 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                             pinfo.spop_base->abort(xsink);
                         } else {
                             callAbort(pinfo.spop_obj, xsink);
+                        }
+                    }
+
+                    if (result.socket_wait_generation_changed) {
+                        // the operation is ended without abort(), which can close the descriptor that the socket
+                        // has now; its claim on the socket is released before its result is delivered, as the
+                        // operation object can outlive the delivery (its last references can be released on a
+                        // callback worker).  A socket operation cannot release it in handleCompletion(): abort()
+                        // decides whether its socket is closed, and one dispatched to a callback worker runs after
+                        // handleCompletion().  Other operations that claim a socket release it in handleCompletion().
+                        SocketPollSocketOperationBase* sock_op
+                            = dynamic_cast<SocketPollSocketOperationBase*>(pinfo.spop_base);
+                        if (sock_op) {
+                            sock_op->releaseSocketClaim();
                         }
                     }
 

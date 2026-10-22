@@ -1755,6 +1755,22 @@ private:
     */
     DLLLOCAL void releaseOffIoThread(AsyncIoDeferredRelease& refs, ExceptionSink* xsink);
 
+#ifdef DEBUG
+public:
+    //! Debug-only: holds the references that the I/O threads of every controller release off the I/O thread
+    /** Called by the dbg_async_io_hold_releases() test hook.  While held, the references handed to
+        releaseOffIoThread() on an I/O thread are kept instead of being released by a callback worker, so that a test
+        can make an object outlive the delivery of an operation's result deterministically; with @a hold = false,
+        the references held are released on the calling thread, which must not be an I/O thread.
+
+        @param hold true to hold the references from now on, false to stop holding them and release those held
+        @param xsink exception sink for the releases
+    */
+    DLLLOCAL static void dbgHoldOffIoThreadReleases(bool hold, ExceptionSink* xsink);
+
+private:
+#endif
+
     //! Start the I/O thread (caller must hold lock)
     DLLLOCAL void startIntern(ExceptionSink* xsink);
 

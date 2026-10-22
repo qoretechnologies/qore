@@ -13945,6 +13945,18 @@ bool SocketPollSocketOperationBase::abortNeedsClose() const {
     return true;
 }
 
+void SocketPollSocketOperationBase::releaseSocketClaim() {
+    // a Qore-language operation has no socket of its own
+    if (!sock) {
+        return;
+    }
+    AutoLocker al(sock->priv->m);
+    if (set_non_block) {
+        sock->priv->clearNonBlock(non_block_direction);
+        set_non_block = false;
+    }
+}
+
 void SocketConnectPollOperation::deref(ExceptionSink* xsink) {
     if (ROdereference()) {
         if (set_non_block) {

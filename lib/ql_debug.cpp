@@ -10188,6 +10188,33 @@ static QoreValue f_dbg_force_fd_swap_next_wait(const QoreListNode* params, Runti
     return QoreValue();
 }
 
+//! Debug-only: calls QoreSocketObject::checkIdleData(), which no Qore method calls, on a socket
+/** Tests use this to check what the sync idle-data check leaves on the socket.
+
+    @return the return value of QoreSocketObject::checkIdleData()
+ */
+static QoreValue f_dbg_socket_check_idle_data(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    QoreObject* obj = const_cast<QoreObject*>(get_param_value(params, 0).get<const QoreObject>());
+    ReferenceHolder<QoreSocketObject> sock(
+        static_cast<QoreSocketObject*>(obj->getReferencedPrivateData(CID_SOCKET, xsink)), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    int rv = sock->checkIdleData(xsink);
+    return *xsink ? QoreValue() : QoreValue(static_cast<int64>(rv));
+}
+
+//! Debug-only: holds the references that the async I/O threads release on callback workers, or releases them
+/** Tests use this to make an object outlive the delivery of an operation's result deterministically: while
+    @a hold is true, the references that an I/O thread releases off the I/O thread (the poll operation of a
+    controller-backed sync socket call, for one) are kept; with @a hold false, those held are released on the calling
+    thread.  A test must release them again (also when it fails), or the objects are kept until the process exits.
+ */
+static QoreValue f_dbg_async_io_hold_releases(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    AsyncIoControllerPriv::dbgHoldOffIoThreadReleases(get_param_value(params, 0).getAsBool(), xsink);
+    return QoreValue();
+}
+
 //! Debug-only: detach (release) a registered socket's private data while keeping the object live and its fd open.
 /** This reproduces, deterministically and without a race, the exact object state behind the AsyncIoController
     I/O-thread spin: an abrupt transport drop (a client that dropped TCP without a WebSocket close frame) tore the
@@ -11830,6 +11857,12 @@ void init_debug_functions(QoreNamespace& qns) {
 #ifdef DEBUG
     qns.addBuiltinVariant("dbg_force_fd_swap_next_wait", f_dbg_force_fd_swap_next_wait,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
+        QC_SOCKET->getTypeInfo(), QORE_PARAM_NO_ARG, "sock");
+    qns.addBuiltinVariant("dbg_async_io_hold_releases", f_dbg_async_io_hold_releases,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
+        boolTypeInfo, QORE_PARAM_NO_ARG, "hold");
+    qns.addBuiltinVariant("dbg_socket_check_idle_data", f_dbg_socket_check_idle_data,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK | QDOM_NETWORK, bigIntTypeInfo, 1,
         QC_SOCKET->getTypeInfo(), QORE_PARAM_NO_ARG, "sock");
     qns.addBuiltinVariant("dbg_async_io_quit_io_thread", f_dbg_async_io_quit_io_thread,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,

@@ -223,6 +223,18 @@ public:
         return ready ? ready_state : waiting_state;
     }
 
+    //! Releases the operation's claim on the socket when the controller completes the operation, however it ends
+    /** Called on the I/O thread before the result is delivered: the code that gets the result can use the socket at
+        once, although the operation object is released only later (its last references can be released on a callback
+        worker).  The claim is otherwise released when the wait ends or the operation is aborted, but the controller
+        ends a wait whose descriptor was closed or replaced without either.  abort() releases nothing else, so the
+        claim can be released here whatever the order.
+    */
+    DLLLOCAL virtual bool handleCompletion(bool canceled, const QoreHashNode* ex_hash, ExceptionSink* xsink) override {
+        clearNonBlock();
+        return false;
+    }
+
 private:
     DLLLOCAL void clearNonBlock() {
         if (set_non_block) {
@@ -346,8 +358,16 @@ public:
             }
         }
 
-        result = sock->checkIdleDataForAsyncPoll(xsink);
+        my_socket_priv* priv = my_socket_priv::getPriv(*sock);
+        AutoLocker al(priv->m);
+        result = sock->checkIdleDataForAsyncPollLocked(xsink);
         done = true;
+        // the check is done: its claim on the socket is released before the controller delivers its result, so the
+        // caller can use the socket as soon as it has the result, while the operation object is released later
+        if (set_non_block) {
+            priv->clearNonBlock(NB_RECV);
+            set_non_block = false;
+        }
         return nullptr;
     }
 

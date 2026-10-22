@@ -1478,6 +1478,35 @@ the sync I/O operation aborts with `SOCKET-CLOSED`.  See
 `examples/test/qore/classes/Socket/Socket.qtest` `fdGenerationTest` for the regression
 test.  The hook is DEBUG-only; the builtin is not registered in release builds.
 
+The controller ends such an operation without calling `abort()`, which can close the descriptor
+that the socket has now.  An operation's claim on its socket (the direction flags set with
+`setNonBlockFromAsyncController()`, or the accept count) must still end before the result is
+delivered: the result wakes the caller, which can use the socket again at once, while the
+controller's last references to the operation are released later on a callback worker
+(`releaseOffIoThread()`), so a claim released only with the operation object makes a call that
+follows at once fail with `SOCKET-NON-BLOCK-ERROR`, depending on that worker's timing (CI pipeline
+61208).  So, before the result is built:
+
+- a `SocketPollSocketOperationBase` operation is released with `releaseSocketClaim()`, called by
+  Phase 3 for an operation ended by the descriptor check.  It cannot release its claim in
+  `handleCompletion()`, which is called for every completion: its `abort()` decides whether the
+  socket is closed, and an `abort()` dispatched to a callback worker (a %Qore subclass that
+  overrides it) runs after `handleCompletion()`
+- the operations whose `abort()` only releases their claim (the readiness wait of
+  `Socket::isWriteFinished()` and its C++ counterpart in `QoreSocketObject.cpp`, and the accept
+  operations) release it in `handleCompletion()`
+- an operation that ends in its first `continuePoll()` releases its claim there, as the idle-data
+  check of `QoreSocketObject::checkIdleData()` does
+
+Debug builds expose `dbg_async_io_hold_releases(bool)` (in `lib/ql_debug.cpp`), which keeps the
+references that the I/O threads release off the I/O thread until it is called with `False`, so a
+test can make an operation outlive the delivery of its result for certain;
+`dbg_socket_check_idle_data(Socket)` calls `QoreSocketObject::checkIdleData()`, which no %Qore
+method calls.  The Socket.qtest cases "a receive follows at once a receive that the controller
+ended", "a send follows at once a write wait that the controller ended", "a listening socket is
+usable at once after an accept that the controller ended" and "a receive follows at once an idle
+data check" use them.
+
 ### QUIC Keepalive Policy
 
 QUIC keepalive (`ngtcp2_conn_set_keep_alive_timeout`) must be **gated on active stream count** for
