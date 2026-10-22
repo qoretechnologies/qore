@@ -1077,4 +1077,68 @@ int cpp_api_wait_child(int pid) [dom=PROCESS] {
     return rc;
 }
 
+//! keeps an exception in a sink managed outside of Qore, then adopts it in the calling thread
+/** The exception is raised in a sink of its own, on the calling thread or, if @p other_thread is @ref True, on a
+    thread registered with Qore for it, and handed over to a sink managed outside of Qore
+    (ExceptionSink::markExternallyManaged()), as a module keeps exceptions beyond the call that raised them or hands
+    them to another thread.  It is then assimilated into a sink of the calling thread, and, with @p rethrow, from that
+    sink into the sink of the call, as an exception crosses the sinks of nested calls and destructors; otherwise that
+    sink is cleared, as when the exception is handled.
+
+    With @p mark @ref True, the sink that raised the exception is marked before it is assimilated into the sink
+    managed outside of Qore; otherwise it is assimilated while it still counts the exception.
+
+    @return a hash of the state of the calling thread, unless the exception is rethrown: \c kept: whether it counted
+    an active exception while the exception was held outside of Qore; \c adopted: whether it counted one after
+    adopting it; \c handled: whether it counted one after it was cleared
+
+    @throw any the exception given if @p rethrow is @ref True
+*/
+*hash<auto> cpp_api_exception_handoff(string err, string desc, bool other, bool mark, bool rethrow) [dom=THREAD_CONTROL] {
+    ExceptionSink kept;
+    kept.markExternallyManaged();
+    std::string err_str(err->c_str());
+    std::string desc_str(desc->c_str());
+    auto raise_into_kept = [&kept, &err_str, &desc_str, mark] () {
+        ExceptionSink raised;
+        raised.raiseException(err_str.c_str(), "%s", desc_str.c_str());
+        if (mark) {
+            raised.markExternallyManaged();
+        }
+        kept.assimilate(raised);
+    };
+    if (other) {
+        // the worker thread is deregistered with an assertion that it counts no active exception
+        std::thread worker([&raise_into_kept] () {
+            QoreForeignThreadHelper qfth;
+            raise_into_kept();
+        });
+        worker.join();
+    } else {
+        raise_into_kept();
+    }
+    bool kept_active = q_active_exception();
+
+    ExceptionSink nested;
+    nested.assimilate(kept);
+    bool adopted_active = q_active_exception();
+    if (rethrow) {
+        xsink->assimilate(nested);
+        return QoreValue();
+    }
+    nested.clear();
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
+    rv->setKeyValue("kept", kept_active, nullptr);
+    rv->setKeyValue("adopted", adopted_active, nullptr);
+    rv->setKeyValue("handled", q_active_exception(), nullptr);
+    return rv.release();
+}
+
+//! returns @ref True if the calling thread counts an active exception
+/** @return @ref True if the calling thread counts an active exception (q_active_exception())
+*/
+bool cpp_api_active_exception() [dom=THREAD_CONTROL] {
+    return q_active_exception();
+}
+
 ///@}

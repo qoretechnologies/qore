@@ -258,6 +258,27 @@ public:
     DLLEXPORT int renamePrependLastException(const char* err, const char* desc_fmt, ...);
 
     //! Call if the ExceptionSink object will be managed outside of Qore
+    /** An exception is counted as active on the thread that holds it in a sink that %Qore manages, until it is
+        handled there.  A module that keeps exceptions beyond the call that raised them, or hands them to another
+        thread, keeps them in a sink marked with this function: its exceptions are not counted on any thread.
+        assimilate() moves the counts with the exceptions: exceptions assimilated into a sink managed outside of %Qore
+        leave the count of the current thread, and exceptions assimilated from such a sink into a sink that %Qore
+        manages are counted on the current thread, as if they were raised there.
+
+        @par Example:
+        @code{.cpp}
+// on a worker thread: keep the exceptions raised there for the thread that waits for the work
+ExceptionSink xs;
+stream->write(data, size, &xs);
+if (xs) {
+    xs.markExternallyManaged();
+    std::lock_guard<std::mutex> lock(bg_lock);
+    bg_xsink.assimilate(xs);    // bg_xsink was marked with markExternallyManaged() when it was created
+}
+// later, on the waiting thread: the exceptions are rethrown and counted there
+xsink->assimilate(bg_xsink);
+        @endcode
+    */
     DLLEXPORT void markExternallyManaged();
 
     //! Consumes the exception and returns an ExceptionInfo hash for it

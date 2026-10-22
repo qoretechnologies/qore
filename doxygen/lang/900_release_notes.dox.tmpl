@@ -4741,6 +4741,11 @@ while (*binary chunk = input.read(65536)) {
       \c fork(); the child gets a consistent copy of the environment without it.  Binary modules can register fork
       handlers for their own process-wide locks with the new C++ API function \c qore_register_fork_handler(); the
       \c i18n, \c linenoise, \c logger_bin, \c ml and \c sshutil modules do, so that a child process can use them
+    - Fixed the count of active exceptions when binary modules hand exceptions between threads: an exception
+      assimilated by \c ExceptionSink::assimilate() from a sink marked with \c ExceptionSink::markExternallyManaged()
+      was not counted on the thread that adopted it, so a later assimilation of that sink (for example across the
+      sink of a destructor) failed an assertion in debug builds, and an exception assimilated into such a sink stayed
+      counted on the thread that raised it; the counts now move with the exceptions
     - Fixed a deadlock when the thread initialization code of a Program (see
       @ref Qore::set_thread_init() "set_thread_init()") started a thread or read the call stacks of all threads
     - Fixed waits on named pipes (FIFOs) on macOS that did not see the end of the pipe once its writers had closed:
