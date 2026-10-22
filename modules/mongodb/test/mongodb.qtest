@@ -45,6 +45,10 @@ public class MongoDbTest inherits QUnit::Test {
         */
         string test_db = sprintf("qore_test_db_%d_%s", getpid(), get_random_string(8));
         string test_coll = "qore_test_collection";
+        #! True once the server has been checked
+        bool server_checked;
+        #! why the server cannot be used, if it cannot be reached
+        *string server_unavailable;
     }
 
     constructor() : Test("MongoDbTest", "1.0") {
@@ -86,13 +90,24 @@ public class MongoDbTest inherits QUnit::Test {
     }
 
     private bool ensureClient() {
-        if (!exists client) {
+        if (!server_checked) {
+            server_checked = True;
+            # the client connects to the server only when it is used, so the server is checked with a ping; a server
+            # that cannot be reached is not available, as for the other tests of database servers (CI's macOS job has
+            # the URL of the Linux jobs' MongoDB service, but no such service)
             try {
                 client = new MongoClient(mongodb_url);
+                client.ping();
             } catch (hash<ExceptionInfo> ex) {
-                testSkip("MongoDB not available: " + ex.desc);
-                return False;
+                if (ex.err != "MONGODB-CLIENT-ERROR") {
+                    rethrow;
+                }
+                server_unavailable = ex.desc;
+                remove client;
             }
+        }
+        if (server_unavailable) {
+            testSkip(sprintf("MongoDB not available at %y: %s", mongodb_url, server_unavailable));
         }
         return exists client;
     }

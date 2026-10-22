@@ -477,7 +477,16 @@ class MysqlIdentifierQuotingTest inherits QUnit::Test {
         testSkip("no mysql module");
 %endif
         Datasource ds(connstr);
-        ds.open();
+        # a server that cannot be reached is not available, as for the other MySQL tests (CI's macOS job has the
+        # connection string of the Linux jobs' database service, but no such service)
+        try {
+            ds.open();
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "DBI:MYSQL:CONNECT-ERROR") {
+                testSkip(sprintf("no MySQL connection: %s", ex.desc));
+            }
+            rethrow;
+        }
         return ds;
     }
 
