@@ -32,6 +32,7 @@
 %requires QUnit
 %requires FsUtil
 %requires mongodb
+%requires ../../../examples/test/TestCertificates.qm
 
 %exec-class MongoDbTest
 
@@ -1295,10 +1296,12 @@ sub test_pre_interrupt() {
         mkdir(outside_dir);
         string allowed_ca = allowed_dir + "/ca.pem";
         string outside_ca = outside_dir + "/ca.pem";
+        # a valid certificate, so that libmongoc loads the CA files that the sandbox allows: the only errors are the
+        # sandbox's and the connection's
         foreach string path in ((allowed_ca, outside_ca)) {
             File f();
             f.open2(path, O_CREAT | O_TRUNC | O_WRONLY);
-            f.write("not a certificate\n");
+            f.write(TestCertificates::CertPem);
             f.close();
         }
 
