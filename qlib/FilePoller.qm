@@ -110,9 +110,9 @@ module FilePoller {
 
     @subsection file_poller_2_1 FilePoller v2.1
     - a FilePoller object that is destroyed in its own polling thread, for example because an event or log callback
-      held its last reference, stops polling instead of deadlocking
+      held its last reference, stops polling; its destructor raised \c THREAD-ERROR
     - @ref FilePoller::FilePoller::stop() "stop()" and @ref FilePoller::FilePoller::stopNoWait() "stopNoWait()" wake
-      the polling thread at once instead of after the current poll interval
+      the polling thread at once when no \c sleep closure is set; it noticed a stop within 250 milliseconds
     - file-event timestamp examples are stable UTC samples; actual event timestamps are unchanged
 
     @subsection file_poller_2_0 FilePoller v2.0

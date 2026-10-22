@@ -94,9 +94,10 @@ http.waitStop();
     @section jsonrpchandler_relnotes JsonRpcHandler Release Notes
 
     @subsection jsonrpchandler_2_0_1 JsonRpcHandler v2.0.1
-    - the query parameter names and values of a \c GET request are URL-decoded, as
-      @ref Util::parse_uri_query() "parse_uri_query()" decodes them; a request whose query has a parameter name
-      that decodes to a string with a NUL character (such as \c "a%00b") is answered with status 400 (Bad Request)
+    - the query of a \c GET request is split into its parameters before their names and values are URL-decoded, as
+      @ref Util::parse_uri_query() "parse_uri_query()" does, so an encoded separator such as \c "%26" or \c "%3D" is
+      part of a name or value; a request whose query has a parameter name that decodes to a string with a NUL
+      character (such as \c "a%00b") is answered with status 400 (Bad Request)
 
     @subsection jsonrpchandler_2_0 JsonRpcHandler v2.0
     - updated to use the Logger module

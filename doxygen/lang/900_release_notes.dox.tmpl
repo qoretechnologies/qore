@@ -614,7 +614,8 @@
     - \c qore_module_init_t is \c void(QoreModuleInitContext&, \c ExceptionSink&) instead of
       \c QoreStringNode*(), and errors are reported as exceptions
     - \c qore_module_ns_init_t takes an additional \c ExceptionSink& parameter
-    - \c QoreModuleInfo uses default member initializers, so it can be extended without breaking modules
+    - the \c init_info member of \c QoreModuleInfo and \c qore_module_init_info_t are removed; \c init receives the
+      module path in \c QoreModuleInitContext::path
 
     @par AsyncSocketIo 3.0 Requires an Owner for Each Operation and Has No exec() Method
     @ref AsyncSocketIo::AsyncSocketIoController::submit() "AsyncSocketIoController::submit()" raises
@@ -1031,8 +1032,8 @@
     @par ProviderIndexUtil Returns Indexed Actions Without Type Objects
     @parblock
     The \c ProviderIndexUtil::tryGetApproximateActionsForApp() and \c ProviderIndexUtil::tryGetApproximateAppAction()
-    methods are removed.  They returned indexed actions with type objects restored from the index, which loaded the
-    modules of the providers.  Use
+    methods are removed.  They returned indexed actions with option type objects approximated from the names of
+    their base types.  Use
     @ref ProviderIndexUtil::ProviderIndexUtil::tryGetActionMetadataForApp() "ProviderIndexUtil::tryGetActionMetadataForApp()"
     and @ref ProviderIndexUtil::ProviderIndexUtil::tryGetActionMetadata() "ProviderIndexUtil::tryGetActionMetadata()"
     instead: they return the same actions with their option types described by plain data in each option's
@@ -1287,10 +1288,10 @@ val = "string";      # OK
     @parblock
     @ref Qore::Json::parse_json() "parse_json()" raises \c JSON-PARSE-ERROR for a number that does not have the form
     of RFC 8259 section 6: a leading zero (\c "01", \c "-01"), a fraction without an integer part (\c ".5", \c "-.5")
-    or without digits (\c "1."), an exponent without digits (\c "1e", \c "1e+"), a sign without digits (\c "-"), or
-    a fraction after an exponent (\c "1e5.5").  It returned a value for each of them: \c 1, \c -1, \c 0.5, \c -0.5,
-    \c 1.0, \c 1.0, \c 1.0, \c 0 and \c 100000.0.  @ref Qore::Json::make_json() "make_json()" never produces such
-    numbers.
+    or without digits (\c "1."), an exponent without digits (\c "1e"), a sign without digits (\c "-"), or a fraction
+    after an exponent (\c "1e5.5").  It returned a value for each of them: \c 1, \c -1, \c 0.5, \c -0.5, \c 1.0,
+    \c 1.0, \c 0 and \c 100000.0.  @ref Qore::Json::make_json() "make_json()" never produces such numbers.  A
+    signed exponent (\c "1e+5", \c "1e-5"), which it refused with \c JSON-PARSE-ERROR, is accepted.
 
     \c parse_json() returns an integer outside the range of an \c int as a \c number, which keeps its value; it
     returned the largest or the smallest \c int instead, for example \c 9223372036854775807 for
@@ -2391,8 +2392,8 @@ int echoed = child.echo(value);
     <b>Bug Fixes:</b>
     - \c $0 backreference in substitution replacement strings now correctly references the full match text
       (previously \c $0 was silently ignored)
-    - regex substitution preserves embedded NUL characters in patterns, subjects, replacement templates and
-      captures; integer validation cannot be bypassed by truncating an unmatched suffix
+    - regex substitution preserves embedded NUL characters in patterns, subjects and replacement templates;
+      integer validation cannot be bypassed by truncating an unmatched suffix
     - @ref Qore::RE_Ungreedy "RE_Ungreedy" (\c QRE_UNGREEDY) is now accepted by the regex API (previously defined
       in the public header but rejected at runtime)
 
@@ -4841,8 +4842,8 @@ while (*binary chunk = input.read(65536)) {
       does the same for messages and logs, also for a string that is not a valid URL, and the connection, client and
       data provider modules delivered with %Qore use it in their errors and logs
     - Fixed functions that format or encode text in an encoding that is not compatible with ASCII (UTF-16, EBCDIC):
-      @ref Qore::sprintf() "sprintf()" and related functions with such a format string, a quoted field that
-      continues on the next line of a line iterator was joined with a single-byte line feed, and
+      @ref Qore::sprintf() "sprintf()" and related functions read such a format string as single-byte text, a quoted
+      field that continues on the next line of a line iterator was joined with a single-byte line feed, and
       @ref Qore::html_encode() "html_encode()", @ref Qore::html_decode() "html_decode()",
       @ref Qore::encode_url() "encode_url()", and @ref Qore::encode_uri_request() "encode_uri_request()" raised
       \c UNSUPPORTED-ENCODING; such text is now processed in UTF-8
@@ -5283,7 +5284,7 @@ while (*binary chunk = input.read(65536)) {
       against the library with those flags targeted an older macOS than the library, and the linker warned about it
     - Fixed derived types such as \c list<hash<X>>, \c hash<string, X>, \c softlist<X> and \c reference<X> being
       taken from a destroyed type: they were cached by the address of the type they were built from, and a
-      hashdecl, class, or enum allocated at the same address after the @ref Qore::Program "Program" declaring the
+      hashdecl or class allocated at the same address after the @ref Qore::Program "Program" declaring the
       first one was destroyed was given the first type's derived types - a different type, whose element type no
       longer existed.  Type checks and error messages then depended on the memory allocator
     - Fixed @ref Qore::Program::importClass() "Program::importClass()",
@@ -5493,8 +5494,8 @@ while (*binary chunk = input.read(65536)) {
         serialized
       - added @ref DataProvider::DataProviderIndexedActionSummaryInfo "DataProviderIndexedActionSummaryInfo", the
         action-level record of an action from the data provider index
-      - @ref DataProvider::DataProviderActionCatalog::sealDiscovery() "DataProviderActionCatalog::sealDiscovery()"
-        can record the failures of individual apps and actions in the \c unavailable member of the discovery
+      - added @ref DataProvider::DataProviderActionCatalog::sealDiscovery() "DataProviderActionCatalog::sealDiscovery()",
+        which can record the failures of individual apps and actions in the \c unavailable member of the discovery
         report; see
         @ref DataProvider::DataProviderActionCatalog::isAppDiscoveryFailure() "DataProviderActionCatalog::isAppDiscoveryFailure()"
       - fixed the static initializers registered after one that fails being discarded without being run; they are
@@ -5755,7 +5756,7 @@ while (*binary chunk = input.read(65536)) {
       Java output directory
     - \c qpp reports an error for a member declaration of a hashdecl in a <tt>.qpp</tt> file that has no
       <tt>//!</tt> comment; such a member was left out of the hashdecl and of its documentation without a message
-    - \c qpp reports an error for anything other than a <tt>///@{</tt> line after the comment of a function or
+    - \c qpp reports an error for anything other than a <tt>///\@{</tt> line after the comment of a function or
       constant group in a <tt>.qpp</tt> file; it was read as part of the group description without a message, so a
       misspelled group start lost the group's constants or functions, and a namespace declaration placed before the
       group start was lost

@@ -1604,10 +1604,9 @@ fetch
     - added @ref DataProvider::DpqlSerializer::fieldReferenceForKey() "DpqlSerializer::fieldReferenceForKey()" and
       @ref DataProvider::AbstractDataProvider::getFieldPath() "AbstractDataProvider::getFieldPath()", which write the
       field reference to a key and give the keys of a field path
-    - fixed a backslash followed by any character other than a dot in a field path being read as a dot: the key
-      <tt>p\\q</tt> was read as <tt>p.</tt>.  In a field path, <tt>\\.</tt> is a dot and <tt>\\\\</tt> a
-      backslash of a key, and any other backslash is itself, so a key ending with a backslash can be followed by more
-      keys (<tt>a\\\\.b</tt> is the keys <tt>a\\</tt> and \c b); the new
+    - in a field path, <tt>\\.</tt> is a dot and <tt>\\\\</tt> a backslash of a key, and any other backslash is
+      itself, so a key ending with a backslash can be followed by more keys (<tt>a\\\\.b</tt> is the keys
+      <tt>a\\</tt> and \c b); the new
       @ref DataProvider::AbstractDataProvider::escapeFieldPathKey() "AbstractDataProvider::escapeFieldPathKey()"
       escapes a key as one part of a path, and a path joined from escaped keys reads them back exactly; the new
       @ref DataProvider::AbstractDataProvider::isPlainFieldPath() "AbstractDataProvider::isPlainFieldPath()" tells
@@ -1945,9 +1944,7 @@ fetch
     - fixed app and action module ownership when a deferred initialization closure loads another module; apps and
       actions registered by the loaded module while its own initializer runs were attributed to the module whose
       pending app was being initialized, so
-      @ref DataProvider::DataProviderActionCatalog::getModulePathsForApp() reported the wrong module for them, and
-      @ref DataProvider::DataProviderActionCatalog::getPresentationContributionsForModule() reported foreign
-      presentation strings as owned by that module
+      @ref DataProvider::DataProviderActionCatalog::getModulePathsForApp() reported the wrong module for them
     - added a declarative single-file read/write mapping so that generic consumers can read and write a file
       through any application without knowing its action and option names, which differ from application to
       application; used by the \c "conn://" scheme in the \c FileLocationHandler module:

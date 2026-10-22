@@ -9,7 +9,7 @@
     @section linenoise_3_0 linenoise Module Version 3.0
     - the module is delivered with %Qore and versions with it; it was a separate module, last released as version
       1.0.1
-    - lines are edited with the Linenoise-NG library, which edits UTF-8 text by its characters
+    - lines are edited with the Linenoise-NG library instead of Steve Bennett's linenoise fork
     - <b>the completion callback completes the word at the cursor</b>: the callback set with
       @ref Qore::Linenoise::set_callback() "set_callback()" receives the text of the line up to the cursor, and each
       string that it returns replaces the word before the cursor, which starts after the last space or other break
@@ -17,9 +17,7 @@
       replaced the whole line (see @ref qore_3_0_0_compatibility "Changes That Can Affect Backwards-Compatibility")
     - the completion callback receives its input as a UTF-8 string, a change of the callback while a completion is
       running is safe, and the handling of exceptions raised by the callback is improved
-    - @ref Qore::Linenoise::columns() "columns()" gives the width of the terminal as the terminal reports it instead
-      of the value of the \c COLUMNS environment variable, and the new @ref Qore::Linenoise::rows() "rows()" gives
-      its height
+    - added @ref Qore::Linenoise::rows() "rows()", which gives the height of the terminal
     - an external history manager can provide the history for the arrow keys and incremental search with an
       @ref Qore::Linenoise::AbstractHistoryProvider "AbstractHistoryProvider" set with
       @ref Qore::Linenoise::set_history_provider() "set_history_provider()"
@@ -47,9 +45,6 @@
       @ref Qore::Linenoise::edit_get_buffer() "edit_get_buffer()",
       @ref Qore::Linenoise::edit_set_silent() "edit_set_silent()" and
       @ref Qore::Linenoise::edit_key_type() "edit_key_type()"
-    - fixed memory leaks in @ref Qore::Linenoise::history() "history()" and
-      @ref Qore::Linenoise::history_set_max_len() "history_set_max_len()", which could also copy the wrong entries
-      when the history was not full; the history is also freed when the module is unloaded
     - @ref Qore::Linenoise::history_save() "history_save()" and @ref Qore::Linenoise::history_load() "history_load()"
       have the \c FILESYSTEM functional domain and respect its parse option
       (@ref Qore::PO_NO_FILESYSTEM "PO_NO_FILESYSTEM"), and are subject to the filesystem sandbox of the calling

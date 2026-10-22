@@ -94,11 +94,10 @@ printf("%Y\n", ans.body);
       requests with the async I/O of the @ref restclientiointro "RestClientIo" module;
       @ref ConnectionProvider::AbstractConnection::getAsync() "getAsync()" of a
       @ref GoogleRestClient::GoogleRestConnection "GoogleRestConnection" returns it
-    - @ref GoogleRestClient::GoogleDriveRestConnection "GoogleDriveRestConnection" transfers files of file locations
-      through Google Drive itself (see
+    - added @ref GoogleRestClient::GoogleDriveRestConnection "GoogleDriveRestConnection" for the \c gdrive scheme,
+      which transfers the files of file locations through Google Drive itself (see
       @ref ConnectionProvider::AbstractConnection::getFileLocationHandler() "getFileLocationHandler()"): an upload is
-      streamed with a resumable upload instead of being held in memory, and a download is the response body instead
-      of a base64-encoded JSON field
+      streamed with a resumable upload, and a download is the response body
     - fixed platform-generated connection URLs by declaring
       @ref GoogleRestClient::GoogleRestConnection::DefaultConnectionUrl "GoogleRestConnection::DefaultConnectionUrl"
 

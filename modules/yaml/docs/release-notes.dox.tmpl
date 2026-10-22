@@ -11,9 +11,9 @@
       of another key
     - bundled the native YAML module and all twelve user modules with Qore
     - fixed parsing timestamps with more than nine fractional-second digits, which could overflow
-    - fixed serializing a hash or list member that holds a weak (\c ":=") or opaque (\c "@=") reference: such a
-      member was refused with \c "cannot convert Qore type 'weak hash reference' to YAML", although its target is a
-      hash or list that can be serialized
+    - fixed serializing a hash or list member that holds a weak (\c ":=") reference: such a member was refused with
+      \c "cannot convert Qore type 'weak hash reference' to YAML", although its target is a hash or list that can be
+      serialized
     - added cancellation checks to scalar scanning and merge expansion
     - fixed a crash generating or parsing deeply nested YAML with @ref Qore::YAML::make_yaml() "make_yaml()" and
       @ref Qore::YAML::parse_yaml() "parse_yaml()": each level of nesting was processed recursively without checking
