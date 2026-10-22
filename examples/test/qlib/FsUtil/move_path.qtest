@@ -19,6 +19,7 @@ public class MovePathTest inherits QUnit::Test {
         addTestCase("move_path tree test", \test_move_path_tree());
         addTestCase("move_path tree overwrite test", \test_move_path_tree_overwrite());
         addTestCase("move_path tree exception test", \test_move_path_tree_exception());
+        addTestCase("move_path refused by the system", \test_move_path_refused());
         set_return_value(main());
     }
 
@@ -418,5 +419,18 @@ public class MovePathTest inherits QUnit::Test {
         assertThrows("SAME-PATH-ERROR", \move_path(), (dest_dir, dest_dir));
 
         remove_tree(dest_dir);
+    }
+
+    test_move_path_refused() {
+        string tmp_path = make_tmp_dir();
+        on_exit {
+            remove_tree(tmp_path);
+        }
+        hash<TmpFileHash> original = make_tmp_file(NOTHING, NOTHING, tmp_path);
+        original.file.close();
+        # the destination's directory does not exist, so the system refuses the move
+        string dest = join_paths(tmp_path, "missing", "dest");
+        assertThrows("RENAME-ERROR", \move_path(), (original.path, dest));
+        assertTrue(path_exists(original.path), "the source is not moved");
     }
 }
