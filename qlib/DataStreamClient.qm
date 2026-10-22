@@ -150,8 +150,6 @@ client.setMaxMessageSize(8 * 1024 * 1024);  # 8 MB
     - a response is read as YAML with any YAML media type: \c "application/yaml" (RFC 9512),
       \c "application/x-yaml", \c "text/x-yaml" or \c "text/yaml"; requests are sent with \c "text/x-yaml", the
       YAML media type of the DataStream protocol, which the servers of earlier releases require
-
-    @subsection datastreamclient_v1_5 DataStreamClient v1.5
     - added Connect protocol (DataStream 2.0) support with auto-negotiation: the client tries
       Connect mode first (over HTTP/2 or HTTP/3) and falls back to DataStream v1 if the server
       doesn't support Connect
@@ -162,13 +160,9 @@ client.setMaxMessageSize(8 * 1024 * 1024);  # 8 MB
       @ref DataStreamClient::DataStreamClient::getDetectedProtocol() "getDetectedProtocol()",
       @ref DataStreamClient::DataStreamClient::resetProtocolCache() "resetProtocolCache()"
     - updated copyright year to 2026
-
-    @subsection datastreamclient_v1_4 DataStreamClient v1.4
     - added \c %strict-args compile-time requirement
     - added debug logging support
     - updated copyright year to 2025
-
-    @subsection datastreamclient_v1_3 DataStreamClient v1.3
     - added a connection class
 
     @subsection datastreamclient_v1_2 DataStreamClient v1.2

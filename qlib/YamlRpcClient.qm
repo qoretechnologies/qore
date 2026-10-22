@@ -155,8 +155,6 @@ Content-Length: 118
     - added \c getAsyncImpl() to \c YamlRpcConnection returning a
       @ref yamlrpcclientiointro "YamlRpcClientIo" object for async I/O;
       call \c getAsync() on the connection to get the async variant
-
-    @subsection yrc_v_1_6 YamlRpcClient v1.6
     - added debug logging support
     - updated copyright year to 2025
 

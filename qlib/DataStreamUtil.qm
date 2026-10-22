@@ -308,12 +308,8 @@ message: "Hello, Hello, World!!"
     - @ref DataStreamUtil::ds_set_chunked_headers() "ds_set_chunked_headers()" and
       @ref DataStreamUtil::ds_set_non_chunked_headers() "ds_set_non_chunked_headers()" label DataStream data with
       the registered charset name \c utf-8 instead of the alias \c utf8; receivers accept both
-
-    @subsection datastreamutil_v1_3_1 DataStreamUtil v1.3.1
     - added the official \c "application/yaml" MIME type (RFC 9512) and \c "text/yaml" to
       @ref DataStreamUtil::DataStreamDeserializationSupport "DataStreamDeserializationSupport"
-
-    @subsection datastreamutil_v1_3 DataStreamUtil v1.3
     - added Connect protocol (DataStream 2.0) framing utility functions:
       @ref DataStreamUtil::connect_frame_message() "connect_frame_message()",
       @ref DataStreamUtil::connect_unframe_message() "connect_unframe_message()",
@@ -328,8 +324,6 @@ message: "Hello, Hello, World!!"
     - added \c max_message_size parameter to @ref connect_unframe_message() and
       @ref DataStreamUtil::connect_get_recv() for frame size validation
     - updated copyright year to 2026
-
-    @subsection datastreamutil_v1_2 DataStreamUtil v1.2
     - added \c %strict-args compile-time requirement
     - updated copyright year to 2025
 

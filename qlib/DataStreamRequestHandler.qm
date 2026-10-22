@@ -150,8 +150,6 @@ private nothing recvDataImpl(auto data) {
       "getResponseHeaderMessage()" override: non-streaming responses (subclasses that return a body in
       \c getResponseHeaderMessageImpl()) are automatically wrapped in a Connect frame when the request
       used the Connect protocol, so clients always receive a well-formed Connect response
-
-    @subsection datastreamrequesthandler_v1_1 DataStreamRequestHandler v1.1
     - added \c %strict-args compile-time requirement
     - added debug logging support
     - updated copyright year to 2026
