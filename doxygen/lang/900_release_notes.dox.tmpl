@@ -4,6 +4,11 @@
 
     @section qore_3_0_0 Qore 3.0.0
 
+    OpenAI-compatible LLM backends now preserve project or gateway prefixes in API roots such as
+    \c https://gateway.example.com/project/v1. Chat Completions and Responses requests, including streams,
+    reuse the final \c /v1 segment instead of duplicating it. Roots without that segment still append \c /v1;
+    roots with a trailing slash are supported.
+
     Applications using the OpenAI-compatible LLM facade can disable automatic tool-response repairs when they
     need to approve each additional model request against their own cost budget. Ordinary requests retain
     automatic repair behavior.

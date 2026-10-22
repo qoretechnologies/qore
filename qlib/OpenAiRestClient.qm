@@ -122,6 +122,9 @@ stream.close();
     @section OpenAiRestClientRelnotes Release Notes
 
     @subsection OpenAiRestClientv1_2 OpenAiRestClient v1.2
+
+    - OpenAI-compatible LLM providers preserve API root prefixes ending in \c /v1 (with an optional trailing
+      slash) for Chat Completions and Responses, including streaming, without adding a second \c /v1.
     - Preserve reasoning-only stream frames for compatible providers such as DeepSeek.
     - the provider factory reports, with @ref OpenAiRestClient::OpenAiLlmProviderFactory::getModelInfo()
       "OpenAiLlmProviderFactory::getModelInfo()", which OpenAI models cannot turn hidden reasoning off
@@ -1160,10 +1163,31 @@ public class OpenAiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
         SGLang.  Backends that publish at a different path (e.g. Perplexity
         at \c /chat/completions) override this method.
 
-        @return the URL path for chat-completions POST requests
+        @note The configured URL path is the API root. A final \c /v1 segment is reused; otherwise \c /v1
+        is appended. An optional trailing slash is supported. The same rule applies to Responses requests.
+
+        @par Example
+        A project-scoped gateway URL \c https://gateway.example.com/project/v1 resolves to
+        \c /project/v1/chat/completions.
+
+        @return the URL path for chat-completions POST requests, including the configured root
+        @throw PARSE-URL-ERROR the configured URL cannot be parsed
     */
     string getChatCompletionsPath() {
-        return "/v1/chat/completions";
+        return getOpenAiApiPath("chat/completions");
+    }
+
+    #! Resolves a standard OpenAI endpoint beneath the configured API root
+    private string getOpenAiApiPath(string endpoint) {
+        string path = parse_url(getConfig().url).path ?? "";
+        if (path !~ /\/$/) {
+            path += "/";
+        }
+        if (path !~ /\/v1\/$/) {
+            path += "v1/";
+        }
+        # Include the entire connection path so RestClientIo does not prepend it again.
+        return path + endpoint;
     }
 
     #! Preserves supported OpenAI wire controls at the generic facade boundary
@@ -1522,7 +1546,7 @@ public class OpenAiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
             }
         }
         if (responses) {
-            return {"responses": True, "path": "/v1/responses",
+            return {"responses": True, "path": getOpenAiApiPath("responses"),
                 "body": chatCompletionToResponses(body)};
         }
         # Provider-specific reasoning must never leak onto an incompatible wire API.
