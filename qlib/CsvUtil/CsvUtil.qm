@@ -430,7 +430,7 @@ while (i.next()) {
     - an empty CSV input can return its example record and field description after a search has finished,
       including an input with no columns
     - a header name with a NUL character, which cannot be the key of a field in a record, raises
-      \c ABSTRACTCSVITERATOR-ERROR when the headers are read; before, the iterator raised \c HASH-KEY-ERROR
+      \c ABSTRACTCSVITERATOR-ERROR when the headers are read; before, the name was cut at the NUL character
     - added the \c write-data action, which returns the CSV data created from the records given to it and the
       number of records (@ref DataProvider::GeneratedDataInfo "GeneratedDataInfo") instead of writing a file;
       @ref CsvUtil::CsvWriteDataProvider "CsvWriteDataProvider" returns the data from

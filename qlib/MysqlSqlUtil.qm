@@ -188,7 +188,7 @@ hash<auto> desc = {
     @subsection mysqlsqlutilv16 MysqlSqlUtil v1.6
     - security: names are quoted and escaped where they are not ordinary names, or refused if they cannot be
       identifiers in SQL run through the \c mysql driver, so that a table, column, index, constraint, sequence,
-      view, trigger, savepoint, schema or partition name or an alias can never change the SQL statement that it is
+      view, trigger, savepoint or schema name or an alias can never change the SQL statement that it is
       part of; before, only reserved words were quoted, and other names were given in SQL as they were, so that a
       name from data, as a column name from a file, could inject SQL (see @ref mysql_identifiers)
     - security: a string value with a backslash is given in SQL as a hex literal, which every \c sql_mode reads as
@@ -206,9 +206,10 @@ hash<auto> desc = {
       \c DEFAULT, which InnoDB enforces as \c RESTRICT, is refused (see @ref mysql_fk_actions)
     - documented that schema alignment does not change an emulated sequence that exists (see
       @ref mysql_sequences)
-    - fixed reading the default value of a string column on MariaDB 10.2.7 and later, and a string in a partition
-      bound, with a backslash or a new line: the server gives them as string literals with escapes, which were not
-      read, so that such a default value differed from the template's and was changed by every table alignment
+    - fixed reading the default value of a string column with a backslash or a new line on MariaDB 10.2.7 and later:
+      the server gives it as a string literal with escapes, which were not read, so that such a default value
+      differed from the template's and was changed by every table alignment; a string in a partition bound is read
+      the same way
     - fixed listing functions and procedures, which gave no names, as the query had no value for the schema
     - added the size of the current database (\c database(); see
       @ref SqlUtil::AbstractDatabase::getCurrentSchemaPhysicalSize() "AbstractDatabase::getCurrentSchemaPhysicalSize()")

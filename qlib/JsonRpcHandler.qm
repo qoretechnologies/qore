@@ -43,7 +43,7 @@
 %modern
 
 module JsonRpcHandler {
-    version = "2.0";
+    version = "2.0.1";
     desc = "JsonRpcHandler module for use with the HttpServer module";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -93,10 +93,13 @@ http.waitStop();
 
     @section jsonrpchandler_relnotes JsonRpcHandler Release Notes
 
+    @subsection jsonrpchandler_2_0_1 JsonRpcHandler v2.0.1
+    - a \c GET request whose query has a parameter name that decodes to a string with a NUL character (such as
+      \c "a%00b") is answered with status 400 (Bad Request); before, it was handled with the name cut at the NUL
+      character (\c "a")
+
     @subsection jsonrpchandler_2_0 JsonRpcHandler v2.0
     - updated to use the Logger module
-    - a \c GET request whose query has a parameter name that decodes to a NUL character (such as \c "a%00b") is
-      answered with status 400 (Bad Request) instead of 500
 
     @subsection jsonrpchandler_1_3_1 JsonRpcHandler v1.3.1
     - minor type fix in handling JSON-RPC method calls

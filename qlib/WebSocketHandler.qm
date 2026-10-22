@@ -143,13 +143,9 @@ printf("HTTP/3 WebSocket server listening on port 8443\n");
       server closes the connection; when the server or a listener stops, all connections wait at the same time, so
       the stop waits at most the close timeout in total.  The close code and reason reported for a connection are
       those of the client's close frame
-    - on HTTP/2 and HTTP/3, the server answers a client's close frame with its own, as RFC 6455 requires, and ends
-      the stream once the close handshake is complete (END_STREAM or FIN, RFC 8441 and RFC 9220); it ended the
-      WebSocket without answering, and an HTTP/2 stream was not ended.
-      @ref WebSocketHandler::WebSocketConnection::stop() "WebSocketConnection::stop()" sends a close frame on HTTP/2
-      and HTTP/3 too
-    - a CLOSE frame without a status code is reported with the close code 1005 (RFC 6455 section 7.1.5) and answered
-      without a status code; it was reported as 1000 and answered with 1000
+    - a CLOSE frame without a status code, which is reported with the close code 1005 (RFC 6455 section 7.1.5), is
+      answered with a CLOSE frame without a status code; it was answered with the status code 1005, which is never
+      sent (RFC 6455 section 7.4.1)
     - a message sent on a connection that is closing raises \c WEBSOCKET-CLOSING-ERROR instead of being discarded
       without notice: no data frame may follow a close frame (RFC 6455 section 5.5.1);
       @ref WebSocketHandler::WebSocketHandler::sendAll() "sendAll()" skips the connections that are closing

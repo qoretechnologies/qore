@@ -8,7 +8,7 @@
     result without an unused-result warning or a dummy local variable. It preserves evaluation, exceptions,
     and temporary-value cleanup in all execution modes and remains active when debugging is disabled.
 
-    <b>Security</b>: a thread started on behalf of sandboxed code now runs under the same @ref sandboxing "sandbox"
+    <b>Security</b>: a thread started on behalf of sandboxed code runs under the same @ref sandboxing "sandbox"
     as the code that started it, so it can never do more than that code could: the @ref background "background"
     operator, @ref Qore::call_async() "call_async()", @ref Qore::parallel_map() "parallel_map()",
     @ref Qore::parallel_foreach() "parallel_foreach()", an @ref Qore::AsyncIoController "AsyncIoController" timer
@@ -16,7 +16,7 @@
     policy, its program interrupts, its cancellation scope and its thread limit.  A thread that serves many callers
     (a @ref Qore::Thread::ThreadPool "ThreadPool" worker, an async I/O thread) is instead governed per task by the
     sandbox of the code that submitted that task.  @ref Qore::SandboxManager::setMaxThreads() "SandboxManager::setMaxThreads()"
-    now limits the number of such threads running at once and raises \c THREAD-CREATION-FAILURE at the limit.
+    limits the number of such threads running at once and raises \c THREAD-CREATION-FAILURE at the limit.
 
     <b>Security</b>: @ref reflection "reflection" follows the privileges of the calling code.  Calling a function or
     method, constructing an object, or reading or writing a member, constant or global variable through a reflection
@@ -34,11 +34,10 @@
     @ref RestClientIo::RestClientIo "RestClientIo" and @ref WebSocketClient::WebSocketClient "WebSocketClient"),
     including the connection of a persistent session, and to the connections of a
     @ref Qore::HTTPClient "HTTPClient" object (and of the clients built on it, such as
-    @ref RestClient::RestClient "RestClient"), over HTTP/1.1, HTTP/2, HTTP/3 and UNIX sockets.  Previously, sandboxed
-    code could send requests over a connection that other code had opened to a destination its own sandbox denies.
-    A connection made through a proxy leads to the proxy and to the destination the proxy connects to; a sandbox must
-    allow both, also for a new connection made by @ref HttpClientIo::HttpClientConnectionManager "HttpClientConnectionManager",
-    which previously checked only the proxy.
+    @ref RestClient::RestClient "RestClient"), over HTTP/1.1, HTTP/2, HTTP/3 and UNIX sockets, so sandboxed code
+    cannot send requests over a connection that other code opened to a destination its own sandbox denies.  A
+    connection made through a proxy leads to the proxy and to the destination the proxy connects to; a sandbox must
+    allow both, for a pooled connection and for a new one.
 
     <b>Security</b>: the steps of a poll operation that the async I/O controller runs on its callback workers,
     such as \c continuePoll() and \c onComplete() of an operation implemented in %Qore, are governed by the
@@ -112,57 +111,28 @@
     families to avoid, and reports the family of the connection with
     @ref Qore::Http3ClientPollOperationBase::getAddressFamily() "getAddressFamily()".
 
-    @ref HttpClientIo::Http3ClientConnection::migrate() "Http3ClientConnection::migrate()" returns once the HTTP/3
-    connection has moved to its new network path and raises the error of a migration that fails, for example
-    \c QUIC-MIGRATION-ERROR when the QUIC layer refuses it; it returned @ref True at once, and a failed migration was
-    not reported.  When the server has no spare connection ID for a new path, which happens after several migrations in
-    quick succession, the migration waits until the server provides one.  A migration that does not start within its
-    timeout raises \c HTTP3-MIGRATION-TIMEOUT and leaves the connection unchanged.
-    @ref HttpClientIo::HttpClientConnectionManager::migrateAll() "HttpClientConnectionManager::migrateAll()" counts
-    only the connections migrated and drains a connection that cannot be migrated, so new requests get a new
-    connection.
-
     The new @ref Qore::AbstractHttpPollConnection::waitForStateChange() "waitForStateChange()" of
     @ref httpclientiointro "HttpClientIo" connections waits until a connection changes state, so code that holds a
     connection for a long time (a leased connection, a WebSocket, Server-Sent Events) sees it drain when the server
-    sends HTTP/2 or HTTP/3 \c GOAWAY.  A request in progress on a draining connection can send the rest of its request
-    body, which raised \c HTTPCLIENT-STREAM-CLOSED, so the request could not be completed.  An HTTP/3 server that
-    shuts down a connection after its final \c GOAWAY no longer sends another \c GOAWAY with a larger stream ID,
-    which made the client close the connection with an error.
-
-    The errors that a sender sees after an HTTP/2 or HTTP/3 stream is reset or closed by the server no longer depend
-    on whether the response was read first: a send raises the stream's reset error (\c HTTP2-STREAM-RESET,
-    \c QUIC-STREAM-RESET) or \c HTTPCLIENT-STREAM-CLOSED, where it raised \c HTTPCLIENT-STATE-ERROR once the
-    response had been read, and every later send raises the reset again.  A request body completed after an early
-    response is now delivered: when a server sends its complete response before the request is complete and keeps
-    reading the request, the rest of the request and its end are sent, where the end of the request was dropped and
-    the server waited for it.  An HTTP/3 client sees the server's \c STOP_SENDING when it arrives, so a send after it
-    raises \c QUIC-STREAM-RESET instead of being dropped.
-
-    A long-lived HTTP/2 or HTTP/3 connection no longer keeps a record of every request it has served or every stream
-    the peer reset, on the client and on the server, so its memory use does not grow with the number of requests.
+    sends HTTP/2 or HTTP/3 \c GOAWAY.
 
     A WebSocket close started by a @ref websocketclientintro "WebSocketClient" connection now waits for the server's
     CLOSE frame, as <a href="https://datatracker.ietf.org/doc/html/rfc6455">RFC 6455</a> requires, and the close
-    code and reason reported after it are always the server's; before, an HTTP/1.1 client stopped as soon as its own
-    CLOSE frame was sent, and it reported its own or the server's code and reason depending on timing.  A server that
-    does not answer within the connection's I/O timeout ends the connection with code 1006 and the reason
-    \c "close handshake timed out", on HTTP/1.1, HTTP/2 and HTTP/3.  A close started by the server is reported once
-    to the client; it was reported twice.
+    code and reason reported after it are the server's; before, the client closed the connection as soon as its own
+    CLOSE frame was sent.  A server that does not answer within the connection's I/O timeout ends the connection with
+    code 1006 and the reason \c "close handshake timed out", on HTTP/1.1, HTTP/2 and HTTP/3.
 
     A close started by a @ref websockethandlerintro "WebSocketHandler" server
     (@ref WebSocketHandler::WebSocketConnection::stop() "WebSocketConnection::stop()", a server or listener stop, an
-    idle timeout, or a message that is too big) now sends the server's CLOSE frame and waits for the client's, at most
+    idle timeout, or a message that is too big) now waits for the client's CLOSE frame after it sends its own, at most
     the handler's new close timeout (default: 5 seconds; the \c close_timeout option), before the server closes the
-    connection; a server or listener stop closes all connections this way at the same time, so it waits at most the
-    close timeout in total, and WebSocket clients get a CLOSE frame (code 1001, going away) when a server stops.  The
-    close code and reason reported by the server are those of the client's CLOSE frame.  On HTTP/2 and HTTP/3, the
-    server now answers a client's CLOSE frame and ends the stream once the close handshake is complete; it did not
-    answer, and an HTTP/2 stream was not ended.
+    connection; before, the server closed the connection as soon as its CLOSE frame was sent.  A server or listener
+    stop closes all connections this way at the same time, so it waits at most the close timeout in total.  The close
+    code and reason reported by the server are those of the client's CLOSE frame.
 
-    A WebSocket CLOSE frame without a status code is now reported with the close code 1005 (no status received), as
-    RFC 6455 section 7.1.5 defines, and is answered with a CLOSE frame without a status code, as 1005 is never sent;
-    it was reported as 1000 and answered with 1000.
+    A WebSocket CLOSE frame without a status code, which is reported with the close code 1005 (no status received)
+    as RFC 6455 section 7.1.5 defines, is now answered with a CLOSE frame without a status code, on the client and on
+    the server; it was answered with the status code 1005, which RFC 6455 section 7.4.1 does not allow to be sent.
 
     A WebSocket message sent on a connection whose close handshake has started now raises
     \c WEBSOCKET-CLOSING-ERROR, on the client and on the server: no data frame may follow a CLOSE frame (RFC 6455
@@ -256,8 +226,8 @@
 
     Reads with a timeout with @ref Qore::InputStream::readWithTimeout() "InputStream::readWithTimeout()" and
     @ref Qore::FileInputStream::readWithTimeout() "FileInputStream::readWithTimeout()", and writes with a timeout
-    with the C++ API's <tt>OutputStream::writeWithTimeout()</tt>, now end as soon as the thread is cancelled or its
-    @ref Qore::Program "Program" is interrupted; they waited for their whole timeout.
+    with the C++ API's <tt>OutputStream::writeWithTimeout()</tt>, end as soon as the thread is cancelled or its
+    @ref Qore::Program "Program" is interrupted.
 
     @ref Qore::Thread::Mutex::lock() "Mutex::lock()", @ref Qore::Thread::RWLock "RWLock" read and write locks,
     @ref Qore::Thread::Gate::enter() "Gate::enter()", @ref Qore::Thread::Condition::wait() "Condition::wait()" and
@@ -484,9 +454,7 @@
     The final pass of a two-phase documentation build retains language and caller-provided
     reference indexes alongside user-module indexes, including paths containing spaces.
     An external module configured against a %Qore build tree, without installing %Qore, documents
-    itself with the build tree's documentation template and language reference index; its
-    configuration failed when no %Qore was installed, and used the files of an installed %Qore when
-    there was one.
+    itself with the build tree's documentation template and language reference index.
 
     The binary modules built with %Qore no longer export their internal symbols, only their entry
     points, C++ APIs and the other symbols they declare for use by other code, as external modules
@@ -990,13 +958,13 @@
     - character encoding names: a name with a NUL character is the name of an encoding that %Qore does not know (the
       whole name, with the NUL character escaped as \c \\x00), so converting to or from it raises
       \c ENCODING-CONVERSION-ERROR instead of using the encoding named by the part before the NUL character
-    - HTTP/1.x headers and chunked body trailers received: they are parsed as C strings, so a NUL character in a
-      header block cut it, and the header lines after it, such as \c Content-Length or \c Connection, were lost
-      without an error; a header with a NUL character raises \c SOCKET-HTTP-ERROR, and a trailer with one
-      \c READ-HTTP-CHUNK-ERROR, with synchronous and asynchronous I/O.  The
-      @ref httpserverintro "HttpServer" answers a request whose header cannot be read, such as one with a NUL
-      character, with status 400 (Bad Request) and closes the connection; before, the connection was closed without a
-      response, or the request was handled without the headers after the NUL character
+    - HTTP/1.x headers and chunked body trailers received: they were parsed as C strings, so a NUL character after
+      the request or status line cut the header block, and the header lines from it on, such as \c Content-Length or
+      \c Connection, were lost without an error; a header with a NUL character raises \c SOCKET-HTTP-ERROR, and a
+      trailer with one \c READ-HTTP-CHUNK-ERROR, with synchronous and asynchronous I/O.  The
+      @ref httpserverintro "HttpServer" answers a request with a NUL character in a header line with status 400 (Bad
+      Request) and closes the connection, as it already did for one in the request line; before, the request was
+      handled without the header lines from the NUL character on
     - HTTP/1.x header and trailer field lines received are parsed with the stricter rules that RFC 9112 requires;
       before, the header lines after an invalid line could be lost without an error, so that, for example,
       \c Content-Length was ignored and the body was read as another message:
@@ -1479,11 +1447,9 @@ val = "string";      # OK
     @par Stale In-Tree AOT Modules
     A build tree links the @ref exec_mode_aot "AOT" \c .qmod files that it builds into the source \c qlib
     directory, where the in-tree tests find them before the module sources.  A linked \c .qmod that is older than one
-    of its sources, as listed in the dependency file that @ref qcc_tool "qcc" wrote next to it, is no longer loaded:
-    the source module is loaded instead, with a warning that the \c .qmod must be rebuilt.  Previously an edit to a
-    module source was not used until the module was rebuilt, without any sign of it.  Installed modules are not
-    links, and are loaded as before.  The run-time check of the source of an AOT binary against the path it was
-    compiled from, which only printed a message in debug builds, has been removed.
+    of its sources, as listed in the dependency file that @ref qcc_tool "qcc" wrote next to it, is not loaded: the
+    source module is loaded instead, with a warning that the \c .qmod must be rebuilt.  Installed modules are not
+    links, and are always loaded.
 
     @par Autotools Build System Removed
     @parblock
@@ -5037,8 +5003,7 @@ while (*binary chunk = input.read(65536)) {
     - @ref Qore::Socket::shutdown() "Socket::shutdown()" on a secure connection now sends the TLS \c close_notify
       alert before it shuts down the connection, as @ref Qore::Socket::close() "Socket::close()" does (RFC 8446
       section 6.1): a peer saw the end of the connection as a truncation, and some peers treat that as an attack or
-      end the TLS session without keeping it for resumption.  A server connection that is closed after it was shut
-      down for sending sends the alert too
+      end the TLS session without keeping it for resumption
     - Fixed the \c comment key of a server-sent event received, parsed by
       @ref Qore::Socket::parseServerSentEvent() "Socket::parseServerSentEvent()" and the SSE clients: it also held the
       values of the fields that are not kept as strings, such as a retry time, and of unknown fields; only a line that
@@ -5048,14 +5013,12 @@ while (*binary chunk = input.read(65536)) {
       joined with LF, and the first retry time was used), an empty ID is kept as an empty string, as it resets the
       last event ID (before, it was ignored), and empty data lines are kept (before, a data line without a value was
       dropped unless it was the first one)
-    - server-sent event streams received are split into events as the WHATWG HTML event stream format requires, by
-      @ref Qore::Socket::readServerSentEvent() "Socket::readServerSentEvent()",
-      @ref Qore::HTTPClient::readServerSentEvent() "HTTPClient::readServerSentEvent()" and the SSE queue of the
-      HTTP/1.1, HTTP/2 and HTTP/3 client streams: one leading byte order mark (U+FEFF) of a stream is ignored (before,
-      it was read as part of the first field name, so the first field was lost), a blank line ends an event whatever
-      the line endings are (before, the SSE queue did not end an event at a blank line after a line with another
-      ending, such as LF and then CRLF, and joined it with the next one), and a block without a field that is kept,
-      such as one with only unknown fields, is not returned as an event
+    - server-sent event streams received by @ref Qore::Socket::readServerSentEvent() "Socket::readServerSentEvent()"
+      and @ref Qore::HTTPClient::readServerSentEvent() "HTTPClient::readServerSentEvent()" are split into events as
+      the WHATWG HTML event stream format requires: one leading byte order mark (U+FEFF) of a stream is ignored
+      (before, it was read as part of the first field name, so the first field was lost), and a block without a field
+      that is kept, such as one with only unknown fields, is not returned as an event (before, it was returned as an
+      event)
     - Fixed heap corruption and crashes when several threads use the process environment at the same time, for
       example @ref Qore::setenv() "setenv()" called from two threads on Alpine Linux (musl), or
       @ref Qore::getenv() "getenv()" called while another thread changes the environment, on any platform: every
@@ -5068,48 +5031,28 @@ while (*binary chunk = input.read(65536)) {
       API, such as a third-party library, is not serialized with it
     - Fixed child processes created with @ref Qore::fork() "fork()" that hung forever when other threads were running
       in the parent: a child created while another thread started or exited hung in @ref Qore::fork() "fork()"
-      itself, and children could also hang when they started a thread, changed a signal handler, used sockets, read
-      a time zone or a character encoding, or exited after native code had been compiled in the background.
-      @ref Qore::fork() "fork()" now briefly waits for threads that hold the library's process-wide locks, and the
-      child process gets them free and repairs the state of the threads that do not exist in it; this also applies
-      to a \c fork() made by native code.  In a child created while another thread was compiling code to native
-      code, code is not compiled to native code and runs in the IR tier.  Objects that another thread was using at
-      the moment of the fork, such as a locked mutex, still cannot be used in the child.  Native code must not hold
-      the environment lock (\c QoreEnvironmentReadLock, \c AtomicEnvironmentSetter) while it calls \c fork(); the
-      child gets a consistent copy of the environment without it.  Binary modules can register fork handlers for
-      their own process-wide locks with the new C++ API function \c qore_register_fork_handler(); the \c i18n,
-      \c linenoise, \c logger_bin, \c ml and \c sshutil modules do, so that a child process can use them, also
-      a child created in a completion callback of \c linenoise
+      itself, and children could also hang when they started a thread, changed a signal handler, or read a time
+      zone or a character encoding.  @ref Qore::fork() "fork()" now briefly waits for threads that hold the
+      library's process-wide locks, and the child process gets them free and repairs the state of the threads that
+      do not exist in it; this also applies to a \c fork() made by native code.  Objects that another thread was
+      using at the moment of the fork, such as a locked mutex, still cannot be used in the child.  Native code must
+      not hold the environment lock (\c QoreEnvironmentReadLock, \c AtomicEnvironmentSetter) while it calls
+      \c fork(); the child gets a consistent copy of the environment without it.  Binary modules can register fork
+      handlers for their own process-wide locks with the new C++ API function \c qore_register_fork_handler(); the
+      \c i18n, \c linenoise, \c logger_bin, \c ml and \c sshutil modules do, so that a child process can use them
     - Fixed a deadlock when the thread initialization code of a Program (see
       @ref Qore::set_thread_init() "set_thread_init()") started a thread or read the call stacks of all threads
-    - Fixed reads and waits on named pipes (FIFOs) on macOS that did not see the end of the pipe once its writers had
-      closed: a blocking read with @ref Qore::ReadOnlyFile "File" waited forever,
-      @ref Qore::ReadOnlyFile::isDataAvailable() "ReadOnlyFile::isDataAvailable()" and
-      @ref Qore::FileInputStream::readWithTimeout() "FileInputStream::readWithTimeout()" waited for their whole
-      timeout, and an @ref Qore::EventLoop "EventLoop", @ref Qore::Socket::poll() "Socket::poll()",
-      @ref Qore::ReadOnlyFile::startPollRead() "ReadOnlyFile::startPollRead()" and
-      @ref Qore::Socket::sendFromInputStream() "Socket::sendFromInputStream()" never saw the end; a wait to write to
-      a full named pipe whose reader had closed did not end either.  macOS does not report these conditions to the
-      readiness wait that %Qore used; waits on named pipes now use one that reports them, also for descriptors
-      numbered 1024 and above.  Waits on named pipes still time out and can still be cancelled
-    - Fixed reads and writes of @ref Qore::FileInputStream "FileInputStream" and
-      @ref Qore::FileOutputStream "FileOutputStream" that must not wait (with
-      @ref Qore::FileInputStream::readNonBlock() "FileInputStream::readNonBlock()", a timed read, and those of
-      socket transfers to and from file streams): they turned \c O_NONBLOCK on for their length, which every other
-      holder of the open file description saw, so that the reads and writes of a shell or a child process sharing
-      an inherited standard input or output could fail with \c EAGAIN in the meantime.  The flags are now left
-      unchanged: a pipe, a FIFO or a terminal is checked for readiness first.  A file stream must therefore not
-      share a pipe with other concurrent readers or writers, whose reads or writes between the check and the
-      stream's read or write make the stream wait for the pipe
+    - Fixed waits on named pipes (FIFOs) on macOS that did not see the end of the pipe once its writers had closed:
+      @ref Qore::ReadOnlyFile::isDataAvailable() "ReadOnlyFile::isDataAvailable()", reads with a timeout with
+      @ref Qore::ReadOnlyFile "File" and @ref Qore::FileInputStream "FileInputStream", and
+      @ref Qore::Socket::poll() "Socket::poll()" waited for their whole timeout, and a wait with
+      @ref Qore::Socket::poll() "Socket::poll()" to write to a full named pipe whose reader had closed did not end
+      either.  macOS does not report these conditions to the readiness wait that %Qore used; waits on named pipes
+      now use one that reports them, also for descriptors numbered 1024 and above, and still time out
     - Fixed the ends of a pipe made by @ref Qore::File::getPipe() "File::getPipe()", which were never closed: each
       call leaked two descriptors for the life of the process, @ref Qore::ReadOnlyFile::close() "close()" on an end
       did nothing, and the reading end never got the end of the input; the ends now close their descriptors with
       \c close() and when they are destroyed
-    - The C++ API's <tt>OutputStream::writeWithTimeout()</tt> with a timeout of 0 or more now reports a pipe whose
-      reading end has closed with \c OUTPUT-STREAM-ERROR on every platform: a
-      @ref Qore::FileOutputStream "FileOutputStream" gave \c FILE-WRITE-ERROR on macOS, where only the write
-      reports the closed reader; a negative timeout still writes with a blocking write, whose error is the stream's
-      own
     - Fixed the warnings of the files of a separated user module other than its \c .qm file: each was parsed with the
       warnings of the code loading the module (with \c qcc, the default warnings), not those the \c .qm file sets, so
       \c %%modern in the \c .qm file did not enable all warnings in the other files.  The module loader accepted an
@@ -5202,33 +5145,6 @@ while (*binary chunk = input.read(65536)) {
       or write could use its TLS connection after it was freed, and could read from or write to another connection
       that had been given the closed descriptor's number.  The read or write now fails, and the connection and the
       descriptor are released when it ends
-    - Fixed the async I/O threads using a CPU core for up to a millisecond before each timer that they wait for, such
-      as the timers of connection pools and protocol keep-alives: a wait was cut to whole milliseconds and ended
-      early, and the thread then polled without waiting until the timer was due.  Waits now use the system's finest
-      resolution and never end before the timer is due
-    - Fixed an HTTP/3 connection attempt to a server that does not answer waiting forever instead of failing at its
-      connect timeout, which also kept an automatic protocol selection from ever falling back or reporting the error:
-      when the timeout expired while the attempt was being processed, the async I/O controller did not continue it
-      again until a packet arrived.  An asynchronous operation that asks to be continued at once is now continued in
-      the next I/O loop iteration
-    - Fixed a hang on macOS that not even \c SIGKILL could end, when a socket was closed while the async I/O
-      controller started or changed waiting for I/O on it, for example when a poll operation was aborted by its
-      destructor: the close could wait forever in the system for the wait registered at the same time.  Fixed the
-      async I/O controller changing or removing the wait of another connection, which could then miss its I/O, when a
-      socket or an event notifier was closed while the controller waited for I/O on it and its descriptor number was
-      given to the other connection.  The descriptor of a socket or event notifier now stays open while the controller
-      waits for I/O on it, and is closed when the controller stops waiting
-    - Fixed the async I/O controller continuing a poll operation a second time for an I/O event that it had already
-      handled, when another request reached the controller before it waited for I/O again: an operation that
-      consumes its event in @ref Qore::AbstractPollOperation::continuePoll() "AbstractPollOperation::continuePoll()",
-      such as one that acknowledges an @ref Qore::EventNotifier "EventNotifier", could move on to its next step
-      without a new event
-    - Fixed a hang of an async I/O thread that stopped while an operation was being submitted to it, or of a
-      submission made while the controller shut down: the canceled operation's result was delivered while the
-      controller's internal lock was held, and the delivery could wait for that lock forever
-    - Fixed a data race in the HTTP/2 server when a connection was stopped while the async I/O controller finished
-      a step of its operation, and when the state or the error of the operation was read while the controller
-      processed it
     - Fixed a data race when @ref Qore::Socket::isOpen() "Socket::isOpen()" or another method that checks whether a
       socket is open was called while another thread closed the socket
     - Fixed a rare crash at the end of a process that used asynchronous socket I/O: the end of the process could
@@ -5414,13 +5330,9 @@ while (*binary chunk = input.read(65536)) {
       @ref Qore::SQL::DatasourcePool "DatasourcePool" they gave the thread a connection, opening a new one if none
       was free or waiting for one up to the pool's error timeout
 
-    - Fixed reference cycles closed by values held in a @ref Qore::Thread::Queue "Queue" or a
-      @ref Qore::TreeMap "TreeMap" sometimes never being collected when the last reference to the cycle from outside
-      it was released while another thread was using the container, for example a poll operation submitted to the
-      @ref Qore::AsyncIoController "AsyncIoController" that keeps its own result queue
-
-    - Fixed reference cycles in rare cases never being collected when references to two of their objects from outside
-      the cycle were released by different threads at the same time
+    - Fixed reference cycles closed by values held in a @ref Qore::Thread::Queue "Queue" sometimes never being
+      collected when the last reference to the cycle from outside it was released while another thread was using the
+      queue
 
     - Fixed an exception raised by a destructor, when a @ref background "background" thread releases the last
       reference to an object that its expression held (a variable captured by a closure, an argument of the call, an

@@ -284,22 +284,20 @@ table.addForeignConstraint("fk_order_lines_order", "order_id", "orders", "id", {
       tables and sequences are; before, they were listed in upper case
     - fixed values of data provider expressions that Firebird refused with <tt>Data type unknown</tt>, such as values
       in the select list, in arithmetic, in concatenation, in string functions, in the start and the count of a
-      substring, in a \c CASE expression and in a comparison of two values: such a value is now bound in a cast to
-      its type, and a value compared with a column is bound as before (see @ref xdbcfirebird_bound_values); the
-      start and the count of the \c op_substr() where operator are bound as integers
+      substring and in a comparison of two values: such a value is now bound in a cast to its type, and a value
+      compared with a column is bound as before (see @ref xdbcfirebird_bound_values); the start and the count of
+      the \c op_substr() where operator are bound as integers
     - fixed a cast to a character type without a size in a database with a character set of more than one byte per
       character, such as \c UTF8, which Firebird refused: it is now cast to the largest size of the character set
-      (8191 characters in \c UTF8), and the \c toString expression no longer has a fixed size of 8191 characters in
-      other character sets
-    - fixed the \c ltrim and \c rtrim expressions, which gave functions that Firebird does not have
+      (8191 characters in \c UTF8)
     - fixed a date given as a literal value, such as with \c cop_value(), which Firebird refused
     - behaviour change: the average of an integer or exact numeric column, or of an expression that returns an
       integer or a number, is exact, as on other databases: the average of 1 and 2 is 1.5, and the average of
       1.25 and 2.50 is 1.875; before, Firebird gave the average in the type of the column, so 1 and 1.87.  It is a
       number from Firebird 4 on, and a float on Firebird 3 (see @ref xdbcfirebird_averages)
-    - fixed date arithmetic with durations (\c years to \c microseconds and relative date values), which always
-      failed: a date plus or minus durations is now given as \c dateadd(), and a duration anywhere else is refused
-      with \c SQLUTIL-EXPRESSION-NOT-PUSHDOWNABLE (see @ref xdbcfirebird_date_arithmetic)
+    - fixed date arithmetic with relative date values, which always failed: a date plus or minus durations (relative
+      date values and the \c years to \c microseconds functions) is given as \c dateadd(), and a duration anywhere
+      else is refused with \c SQLUTIL-EXPRESSION-NOT-PUSHDOWNABLE (see @ref xdbcfirebird_date_arithmetic)
     - added support for @ref SqlUtil::cop_trunc_date() "cop_trunc_date()" and the \c truncate_date expression,
       which were refused as unknown
 

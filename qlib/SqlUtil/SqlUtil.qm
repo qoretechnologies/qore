@@ -175,10 +175,9 @@ module SqlUtil {
       \c cache as well; which parameters can be altered depends on the database, and the starting value is never
       changed, as that would reset the current value.  A new sequence is created with every parameter of its
       description (@ref SqlUtil::AbstractSequence::setDescription() "AbstractSequence::setDescription()")
-    - fixed a descending \c orderby entry (<tt>"-column"</tt> or a qualifier hash with \c desc) being sorted in
-      ascending order for a column that is quoted in SQL (a reserved word or a name that is not an ordinary
-      identifier) and for a column of the table in a join, with and without \c limit and \c offset, on every
-      database
+    - fixed a descending \c orderby entry (<tt>"-column"</tt>) being sorted in ascending order for a column whose
+      name is a reserved word and for a column of the table in a join, with and without \c limit and \c offset, on
+      every database
     - fixed a descending sequence that starts below its maximum being refused with \c SEQUENCE-ERROR, and a
       sequence that starts above its maximum, or with a maximum of 0 below its start, being accepted, so that the
       database refused it when it was created; the starting value is checked against the maximum in both
@@ -266,8 +265,9 @@ module SqlUtil {
       before a column change that only an older version of the database cannot make, and an alignment reports the
       same refusal with every version of the database, as on SQLite
     - an expression that has no SQL on the database, such as a regular expression on Firebird or SQL Server, is
-      refused with \c SQLUTIL-EXPRESSION-NOT-PUSHDOWNABLE also when it is a column or an argument of another
-      expression, as in a where clause; before, it raised \c PSEUDO-METHOD-DOES-NOT-EXIST
+      refused with \c SQLUTIL-EXPRESSION-NOT-PUSHDOWNABLE wherever it is used, as in a where clause, as a column or
+      as an argument of another expression; before, it was unknown to the database's module, and raised
+      \c SQLUTIL-EXPRESSION-ERROR or \c EXPRESSION-ERROR
     - a column operator can be given the query and the column that it is applied to, with the \c "withcolumn" key
       of its description, so that its SQL can depend on the type of the column (see
       @ref SqlUtil::AbstractTable::addCustomCopOperator() "AbstractTable::addCustomCopOperator()")

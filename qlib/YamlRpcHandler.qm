@@ -101,10 +101,11 @@ http.waitStop();
     - added module-level compile-time requirements: \c %strict-args, \c %require-types, \c %enable-all-warnings
     - added debug logging support
     - updated copyright year to 2025
-    - a \c GET request whose query has a parameter name that decodes to a NUL character (such as \c "a%00b") is
-      answered with status 400 (Bad Request) instead of 500
-    - a handler without a log closure handles requests when debugging is enabled, and with a log message closure;
-      before, logging a message raised \c RUNTIME-OVERLOAD-ERROR
+    - a \c GET request whose query has a parameter name that decodes to a string with a NUL character (such as
+      \c "a%00b") is answered with status 400 (Bad Request); before, it was handled with the name cut at the NUL
+      character (\c "a")
+    - a handler without a log closure handles requests with a log message closure; before, logging the message raised
+      \c RUNTIME-OVERLOAD-ERROR
 
     @subsection yamlrpchandler_v1_2 YamlRpcHandler v1.2
     - fixed a bug where serialization errors would result in confusing responses

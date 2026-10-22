@@ -239,8 +239,6 @@ $function$
       character, is refused with \c IDENTIFIER-ERROR
     - fixed @ref SqlUtil::AbstractDatabase::reclaimSpace() "reclaimSpace()" with the \c tables option vacuuming every
       table of the database once for each table given, instead of the tables given
-    - fixed a partition's catalog name with an upper-case letter not being quoted in the SQL that names it, and a
-      given partition SQL name not being checked to be an SQL name
     - fixed aligning a table whose primary key or unique constraint has the template's columns under another name:
       the key was dropped, which cascaded to the foreign constraints that reference it, and added again (a unique
       constraint was added "using index" its dropped index, which failed); the key is now renamed in place, with

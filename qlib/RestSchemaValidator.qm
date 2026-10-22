@@ -76,13 +76,10 @@ module RestSchemaValidator {
     @section restschemavalidator_relnotes RestSchemaValidator Module Release Notes
 
     @subsection restschemavalidator_2_5 RestSchemaValidator v2.5
-    - fixed a schema type build that fails part of the way through, for example on an enumeration value its type
-      cannot hold, leaving incomplete types in the schema's caches, so that building the same type again returned
-      the incomplete type instead of failing, and other types of the schema could refer to it; a build that fails
-      now leaves the caches as they were (see
-      @ref RestSchemaValidator::AbstractRestSchemaValidator::runTypeBuild())
-    - fixed concurrent type builds of one schema reading each other's incomplete types; the type builds of a schema
-      are serialized
+    - added @ref RestSchemaValidator::AbstractRestSchemaValidator::runTypeBuild() "runTypeBuild()", which runs a
+      type build of a schema as one transaction: the type builds of the schema are serialized, and a build that
+      fails part of the way through leaves the schema's type caches as they were; OpenAPI 3 schemas build their
+      types through it
     - prefer valid schema examples when describing fields and omit generated examples that violate the field type
     - JSON and YAML response bodies in another encoding than UTF-8 are converted to UTF-8 before they are parsed,
       instead of relabeling ISO-8859-1 text as UTF-8; HTTP bodies are decoded with their actual encoding (see

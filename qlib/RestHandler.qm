@@ -398,10 +398,10 @@ Content-Length: 16
     @section resthandler_relnotes RestHandler Release Notes
 
     @subsection rh_1_6_7 RestHandler v1.6.7
-    - a request whose query has a parameter name that decodes to a NUL character (such as \c "a%00b") is answered
-      with status 400 (Bad Request), and
-      @ref RestHandler::RestHandler::handleExternalRequest() "handleExternalRequest()" raises \c INVALID-URI-PATH with
-      status 400; before, the request failed with status 500
+    - a request whose query has a parameter name that decodes to a string with a NUL character (such as \c "a%00b")
+      is answered with status 400 (Bad Request); before, it was handled with the name cut at the NUL character
+      (\c "a").  @ref RestHandler::RestHandler::handleExternalRequest() "handleExternalRequest()" raises
+      \c INVALID-URI-PATH with status 400 for such a name
     - a chunked HTTP/1.1 request body sent to a REST method without a stream handler is deserialized and validated
       as other request bodies are, and a hash body is reflected in the method arguments; before, the method received
       the raw body

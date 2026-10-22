@@ -259,22 +259,16 @@ foreach hash<DataProviderDebugInfo> debug in (info) {
     @section websocketclient_relnotes WebSocketClient Module Release History
 
     @subsection wsc_v2_5 v2.5
-    - a close started by the client on an HTTP/1.1 connection now completes when the server's CLOSE frame arrives,
-      as RFC 6455 requires, instead of as soon as the client's CLOSE frame has been sent, so the close code and
-      reason reported after the close are always those of the server's CLOSE frame (RFC 6455 sections 7.1.5 and
-      7.1.6); before, they were the client's own or the server's depending on timing.  When the server does not
-      answer within the connection's I/O timeout, the connection ends with code 1006 and the reason
-      \c "close handshake timed out"
-    - a CLOSE frame started by the server is reported once in the received messages; it was reported twice
-    - a CLOSE frame without a status code is reported with the close code 1005 (RFC 6455 section 7.1.5) and answered
-      without a status code; it was reported as 1000 and answered with 1000
-    - on HTTP/2 and HTTP/3, a close started by the client (including the close on an idle timeout) waits for the
-      server's CLOSE frame too, at most the connection's I/O timeout, and the client's answer to a close started by
-      the server echoes the server's close code
+    - a close started by the client completes when the server's CLOSE frame arrives, as RFC 6455 requires (sections
+      7.1.5 and 7.1.6), over HTTP/1.1, HTTP/2 and HTTP/3, so the close code and reason reported after the close are
+      those of the server's CLOSE frame; before, the client closed the connection as soon as its own CLOSE frame was
+      sent.  When the server does not answer within the connection's I/O timeout, the connection ends with code 1006
+      and the reason \c "close handshake timed out"
+    - a CLOSE frame without a status code, which is reported with the close code 1005 (RFC 6455 section 7.1.5), is
+      answered with a CLOSE frame without a status code; it was answered with the status code 1005, which is never
+      sent (RFC 6455 section 7.4.1)
     - a data message sent after the close handshake started raises \c WEBSOCKET-CLOSING-ERROR: no data frame may
       follow a CLOSE frame (RFC 6455 section 5.5.1)
-    - @ref WebSocketClient::WebSocketClient::getPollOperation() "WebSocketClient::getPollOperation()" returns the
-      poll operation of an HTTP/2 or HTTP/3 connection; it raised a \c RUNTIME-TYPE-ERROR exception
     - the connect and reconnect log messages give the URL without its password
     - fixed a bug where a \c wss:// WebSocket connection in the default \c "auto" HTTP-version mode failed
       instead of connecting when the server negotiated HTTP/2 or HTTP/3 but could not establish the

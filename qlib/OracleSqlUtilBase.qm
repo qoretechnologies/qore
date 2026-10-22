@@ -333,9 +333,9 @@ hash schema = (
       the SQL statement that it is part of; such a name is quoted in upper case, as Oracle stores an unquoted name,
       and a name that Oracle cannot have in an identifier (with a double quote or a NUL character) or a database
       link name with characters other than letters, digits, \c "_", \c "$", \c "#", \c "." and \c "@" is refused
-      with \c IDENTIFIER-ERROR; ordinary names and reserved words are given in SQL as before, except that a schema
-      whose name is a reserved word (such as \c USER) is now quoted in the name of a table, as a column name is;
-      see @ref ora_identifiers
+      with \c IDENTIFIER-ERROR; ordinary names and reserved words are given in SQL as before, except that a table
+      or schema whose name is a reserved word (such as \c USER) is now quoted in the name of a table, as a column
+      name is; see @ref ora_identifiers
     - fixed the names of sequences in the @ref SqlUtil::cop_seq() "cop_seq()", @ref SqlUtil::cop_seq_currval()
       "cop_seq_currval()", @ref SqlUtil::uop_seq() "uop_seq()" and @ref SqlUtil::uop_seq_currval()
       "uop_seq_currval()" operators and in @ref SqlUtil::AbstractDatabase::getNextSequenceValue()
