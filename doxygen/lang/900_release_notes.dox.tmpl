@@ -1272,6 +1272,17 @@ val = "string";      # OK
     when the checkout moves.  Recorded \c Qore::CFLAGS preserve reusable compiler options and their quoting,
     excluding build-machine file/debug/macro prefix maps.
 
+    @par The linenoise Completion Callback Completes the Word at the Cursor
+    @parblock
+    The callback that @ref Qore::Linenoise::set_callback() "Linenoise::set_callback()" sets receives the text of the
+    line up to the cursor, and each string that it returns replaces the word before the cursor, which starts after
+    the last space or other break character, such as \c "(", \c "=" or \c ":".  With the linenoise module 1.0.1,
+    which was released separately, it received the whole line, and each string that it returned replaced the whole
+    line, so a callback that returns completed lines now repeats the start of a line with more than one word in it.
+    Such a callback must return the completed word instead.  See the @ref linenoisereleasehistory "linenoise release
+    notes" for the other changes since version 1.0.1.
+    @endparblock
+
     @par LoggerAppenderQueue Default Memory Limit
     @parblock
 \if QORE_LANG_FINAL
