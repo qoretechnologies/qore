@@ -128,19 +128,6 @@ if (fd >= 0 && !io->holdPollableDescriptor(fd, hold)) {
     */
     virtual void closeIo(ExceptionSink* xsink) = 0;
 
-#ifdef DARWIN
-    //! Sets the write end of a notification pipe for kqueue poll on macOS
-    /** On macOS, closing a monitored FD silently removes its kqueue filter without
-        delivering an event. This method allows Socket::poll() to register a notification
-        pipe so that close_internal() can wake up kevent() when the FD is closed.
-
-        @param fd the write end of the notification pipe, or -1 to clear
-
-        @since %Qore 3.0
-    */
-    virtual void setPollNotifyFd(int fd) {}
-#endif
-
     //! Returns true if the I/O object has buffered data ready to read
     /** For SSL sockets, this checks SSL_pending() — data decrypted by a
         previous SSL_read but not yet consumed. This data is invisible to
@@ -175,6 +162,21 @@ if (fd >= 0 && !io->holdPollableDescriptor(fd, hold)) {
         @since %Qore 3.0
     */
     virtual const std::string& getIoIdentityHash() const { return io_unique_hash; }
+
+    //! Sets the write end of a notification pipe for kqueue poll on macOS
+    /** On macOS, closing a monitored FD silently removes its kqueue filter without
+        delivering an event. This method allows Socket::poll() to register a notification
+        pipe so that close_internal() can wake up kevent() when the FD is closed.
+
+        It is called only on macOS but declared on every platform, as the last virtual method: binary modules do not
+        see the macros of the build of %Qore, so a declaration for macOS only gave the class one layout in %Qore and
+        another in modules, and declaring it last keeps the layout of the methods declared before it.
+
+        @param fd the write end of the notification pipe, or -1 to clear
+
+        @since %Qore 3.0
+    */
+    virtual void setPollNotifyFd([[maybe_unused]] int fd) {}
 
 private:
     std::string io_unique_hash;   //!< Stable unique identity (address reuse safe)
