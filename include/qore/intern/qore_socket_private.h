@@ -170,7 +170,9 @@ DLLLOCAL int qore_socket_bind_family_sockaddr_direct(QoreSocket* s, int family, 
     - to a given port fails with \c EADDRINUSE if a socket of the type uses the port on 0.0.0.0 or on 127.0.0.1, as
       found by binds of sockets that reuse the address and are closed again: a connection on the port, including one
       in \c TIME_WAIT from an earlier server on the port, does not refuse them, but a listening (or bound datagram)
-      socket on the address does
+      socket on the address does.  These binds hold the port for a moment, so a concurrent bind of the port can be
+      refused because of them; they are not made for an IPv4 socket that does not reuse the address, which macOS
+      itself refuses a port that any socket uses
     - of an IPv6 socket to port 0 gets the port that the system assigns to an IPv4 socket on 0.0.0.0, which no IPv4
       socket uses on any address; a port in use in IPv6 is replaced, up to \c QORE_BIND_RESERVATION_MAX_PORTS times,
       and then the system assigns the port

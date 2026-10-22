@@ -13242,8 +13242,12 @@ int qore_socket_bind_unshadowed(int sock, const struct sockaddr* addr, size_t ad
         if (qore_socket_bind_serves_ipv4_wildcard(sock, addr)) {
             int port = q_get_port_from_addr(addr);
             if (port > 0) {
-                if (qore_socket_ipv4_port_used(socktype, INADDR_ANY, port, sandbox_manager)
-                    || qore_socket_ipv4_port_used(socktype, INADDR_LOOPBACK, port, sandbox_manager)) {
+                // the probes bind the port for a moment, so a concurrent bind of the port can be refused because of
+                // them; they are not made for an IPv4 socket that does not reuse the address, which macOS itself
+                // refuses a port that any socket uses
+                if ((addr->sa_family != AF_INET || qore_socket_has_flag(sock, SOL_SOCKET, SO_REUSEADDR))
+                    && (qore_socket_ipv4_port_used(socktype, INADDR_ANY, port, sandbox_manager)
+                        || qore_socket_ipv4_port_used(socktype, INADDR_LOOPBACK, port, sandbox_manager))) {
                     sock_set_raw_error(EADDRINUSE);
                     return QORE_SOCKET_ERROR;
                 }
