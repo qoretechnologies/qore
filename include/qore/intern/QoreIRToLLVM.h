@@ -1373,6 +1373,25 @@ private:
 
     //! The number of background helpers emitted for the function being lowered
     unsigned bg_helper_count = 0;
+    //! The number of on_block_exit handlers emitted for the function being lowered
+    unsigned obe_handler_count = 0;
+    //! The native functions emitted for the on_block_exit handlers of the function being lowered, by handler IR
+    std::unordered_map<const QoreIRFunction*, llvm::Function*> obe_handler_fns;
+
+    //! Lowers an IR function that the function being lowered uses to a native function of its own in the module
+    /** Used for the helpers of background expressions and the bodies of on_block_exit handlers.  The nested function
+        takes the settings of this lowering; in AOT mode it shares the AOT context of the function being lowered: its
+        slot map and its location table, whose entries for the nested function are appended to this lowering's.
+
+        @param func the IR function to lower
+        @param name the name of the native function
+        @param module the module to emit it in
+        @param error the error, if it cannot be lowered
+
+        @return the native function, or nullptr if an error was raised
+    */
+    llvm::Function* lowerNestedFunction(const QoreIRFunction& func, const std::string& name, llvm::Module& module,
+            std::string& error);
 
     // Phase 5b: Try to emit a specialized list index access instead of qore_rt_invoke_expr.
     // Returns true if specialized code was emitted, false to fall through to generic path.

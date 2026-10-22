@@ -658,18 +658,12 @@ void qore_rt_thread_exit(ExceptionSink* xsink);
 
 class StatementBlock;
 
-//! Register an on_block_exit handler for deferred execution.
-//! type: OBE_Unconditional=0, OBE_Success=1, OBE_Error=2
-void qore_rt_push_on_block_exit(int type, StatementBlock* code);
-
-//! Register an on_block_exit handler with compiled IR for IR interpreter execution.
-void qore_rt_push_on_block_exit_ir(int type, StatementBlock* code, const QoreIRFunction* handler_ir);
-
 //! Register an on_block_exit handler with a natively compiled LLVM function.
+//! type: OBE_Unconditional=0, OBE_Success=1, OBE_Error=2
 //! compiled_fn is the native function pointer; handler_func provides all_body_locals
 //! for pre-instantiation/uninstantiation of handler locals.
-void qore_rt_push_compiled_handler(int type, StatementBlock* code,
-        uint64_t (*compiled_fn)(ExceptionSink*), const QoreIRFunction* handler_func);
+void qore_rt_push_compiled_handler(int type, uint64_t (*compiled_fn)(ExceptionSink*),
+        const QoreIRFunction* handler_func);
 
 //! Get current handler count (called at function entry to save base).
 int64_t qore_rt_get_on_block_exit_count();
@@ -685,8 +679,10 @@ void qore_rt_discard_on_block_exit(int64_t saved_count);
 
 struct QoreAOTContext;
 
-//! Register an on_block_exit handler via AOT context slot; raises if handler IR is missing.
-void qore_rt_push_on_block_exit_aot(QoreAOTContext* ctx, int32_t idx, int type, ExceptionSink* xsink);
+//! Register an on_block_exit handler of AOT-compiled code: its body is a native function sharing the AOT context of
+//! the function that registers it
+void qore_rt_push_compiled_handler_aot(QoreAOTContext* ctx, int type,
+        uint64_t (*aot_fn)(QoreAOTContext*, ExceptionSink*));
 
 //! AOT slot-indexed variant of qore_rt_sync_local().
 void qore_rt_sync_local_aot(QoreAOTContext* ctx, int32_t idx, uint64_t value);

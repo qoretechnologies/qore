@@ -256,7 +256,7 @@ struct QoreAOTContext {
     std::mutex global_resolution_mutex; //!< Guards lazy global slot resolution
     uint64_t* exprs = nullptr;      //!< NaN-boxed QoreValue for Invoke/Call/CallMethod/CallStatic/LValue
     int num_exprs = 0;
-    const AbstractStatement** stmts = nullptr;  //!< OnBlockExit/Foreach statement pointers
+    //! Always 0: kept in the native function descriptor layout; see QORE_AOT_BACKGROUND_HELPER_VERSION
     int num_stmts = 0;
     CaseNodeRegex** regex_cases = nullptr;       //!< Regex case objects for SwitchRegexMatch
     int num_regex_cases = 0;
@@ -318,10 +318,6 @@ struct QoreAOTContext {
     //! must outlive the location, and std::list never invalidates the strings it holds.
     std::list<std::string> pc_extra_files;
 
-    //! Deserialized handler IR functions for on_exit/on_success/on_error handlers.
-    //! Indexed by statement slot index. Non-null entries can be executed by the IR interpreter.
-    //! Used in strip-source mode where AST-based stmts[] are not available.
-    std::vector<std::unique_ptr<QoreIRFunction>> handler_irs;
 
     //! Shared serialized AOT metadata used to lazily materialize debug IR.
     std::shared_ptr<const QoreAOTDebugMetadata> debug_metadata;
@@ -386,9 +382,6 @@ struct QoreAOTContext {
             exprs = static_cast<uint64_t*>(calloc(num_exprs, sizeof(uint64_t)));
             call_targets = new QoreAOTCallTarget[num_exprs]();
         }
-        if (num_stmts > 0) {
-            stmts = static_cast<const AbstractStatement**>(calloc(num_stmts, sizeof(const AbstractStatement*)));
-        }
         if (num_regex_cases > 0) {
             regex_cases = static_cast<CaseNodeRegex**>(calloc(num_regex_cases, sizeof(CaseNodeRegex*)));
         }
@@ -421,7 +414,6 @@ struct AOTSlotMap {
     std::unordered_map<const void*, int32_t> global_slots;  //!< Var* -> slot index
     std::unordered_map<uint64_t, int32_t> expr_slots;       //!< NaN-boxed expr bits -> slot index
     std::unordered_map<uint64_t, std::string> expr_slot_sources; //!< Expr bits -> originating IR opcode diagnostic
-    std::unordered_map<const void*, int32_t> stmt_slots;    //!< StatementBlock* -> slot index (OnBlockExit)
     std::unordered_map<const void*, int32_t> regex_case_slots;  //!< CaseNodeRegex* -> slot index
     std::unordered_map<const void*, int32_t> lv_path_slots;  //!< QoreIRLValuePathInstruction* -> slot
     std::unordered_set<uint64_t> dot_eval_direct_bits;  //!< expr bits from DotEvalMethodDirect (classify as DOT_EVAL_TARGET)
@@ -470,17 +462,6 @@ struct AOTSlotMap {
         }
         int32_t slot = static_cast<int32_t>(expr_slots.size());
         expr_slots[expr_bits] = slot;
-        return slot;
-    }
-
-    //! Get or assign a slot for a StatementBlock* (OnBlockExit)
-    int32_t getStmtSlot(const void* stmt) {
-        auto it = stmt_slots.find(stmt);
-        if (it != stmt_slots.end()) {
-            return it->second;
-        }
-        int32_t slot = static_cast<int32_t>(stmt_slots.size());
-        stmt_slots[stmt] = slot;
         return slot;
     }
 
@@ -1347,15 +1328,6 @@ QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int 
 
 class AbstractStatement;
 class StatementBlock;
-
-//! Collect statement pointers for AOT stmt_slots by walking the AST in depth-first order.
-/** Collects OnBlockExitStatement handler code blocks and reference ForEachStatement pointers
-    in the same order that buildAOTSlotMap() processes them in the IR.
-    @param block the statement block to walk
-    @param stmts output vector of statement pointers
-*/
-void collectStmtSlotStatements(const StatementBlock* block,
-        std::vector<const AbstractStatement*>& stmts);
 
 //! Serialize a QoreValue expression tree to a binary blob using the EXPR_TREE format.
 /** Used by AOT binary serialization to persist BCA (Base Class Constructor Argument) expressions.

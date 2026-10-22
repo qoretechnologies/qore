@@ -219,7 +219,6 @@
 extern void collectAllStatementLocals(const StatementBlock* block, std::vector<LocalVar*>& locals);
 extern void removeBlockLocalsFromBodyLocals(const StatementBlock* block, std::vector<LocalVar*>& locals);
 extern void removeSignatureLocalsFromBodyLocals(std::vector<LocalVar*>& locals, const UserSignature* sig);
-// collectStmtSlotStatements() declared in QoreAOT.h, defined in Function.cpp
 
 // Defined in QoreAOT.cpp - generates unique variant key with parameter types
 extern std::string getVariantKey(const char* name, const AbstractQoreFunctionVariant* variant);
@@ -7047,173 +7046,13 @@ static QoreAOTContext* buildContextFromSlotMap(
         }
     }
 
-    // Read handler IR for statement slots
-    // For each stmt slot, read the handler IR flag and optionally deserialize the IR function
-    bool all_stmt_slots_have_ir = true;
+    // on_block_exit handlers are native functions of the function (see QoreIRToLLVM::lowerNestedFunction()); since
+    // QORE_AOT_BACKGROUND_HELPER_VERSION there are no statement slots, which held their IR for the IR interpreter
     if (num_stmts > 0) {
-        ctx->handler_irs.resize(num_stmts);
-        // Build local name map for handler IR deserialization.
-        //
-        // Include BOTH ctx->locals (parent function's slot vars) AND
-        // ctx->all_body_locals (body locals the parent function pre-instantiates
-        // via evalTiered — which also includes on_exit handler-body locals,
-        // collected transitively via collectAllStatementLocals).
-        //
-        // When the handler's own local shadows a parent name (e.g. outer block
-        // has `Bar al` and on_exit has `Foo al`), we must reuse the handler's
-        // OWN LocalVar* from all_body_locals (the one parent's evalTiered
-        // pre-instantiated on TLS with the handler's type), not the parent
-        // slot's same-named var.  Resolution is by (name, type_path): see the
-        // lookup in deserializeIRFunction that prefers the type-qualified key
-        // and falls back to name-only.
-        std::unordered_map<std::string, LocalVar*> handler_local_map;
-        for (auto* lv : ctx->all_body_locals) {
-            if (lv && lv->getName() && *lv->getName()) {
-                handler_local_map[lv->getName()] = lv;
-                // Also register under a (name|type_path) composite key so
-                // handler slot deser can pick the right var among same-named
-                // shadowing vars (parent has Bar al, handler has Foo al).
-                std::string tpath = getAOTTypePathForLValue(lv->getTypeInfoForLValue());
-                if (!tpath.empty()) {
-                    std::string ck(lv->getName());
-                    ck += '\x1f';
-                    ck += tpath;
-                    handler_local_map[ck] = lv;
-                }
-            }
-        }
-        for (int i = 0; i < num_locals; ++i) {
-            if (ctx->locals[i] && ctx->locals[i]->getName()) {
-                LocalVar* lv = ctx->locals[i];
-                // ctx->locals wins on bare-name collision so generic name-based
-                // lookups resolve to the parent slot by default.  The composite
-                // (name|type) key above lets the shadowing handler local win
-                // when the deserializer asks for it specifically.
-                handler_local_map[lv->getName()] = lv;
-                std::string tpath = getAOTTypePathForLValue(lv->getTypeInfoForLValue());
-                if (!tpath.empty()) {
-                    std::string ck(lv->getName());
-                    ck += '\x1f';
-                    ck += tpath;
-                    // Only insert if not already set by all_body_locals (which
-                    // covers handler-shadow vars). ctx->locals may duplicate
-                    // all_body_locals for same (name, type), which is fine.
-                    handler_local_map.emplace(std::move(ck), lv);
-                }
-            }
-        }
-        for (int i = 0; i < num_stmts; ++i) {
-            uint8_t has_handler_ir = QoreAOTBinaryReader::readU8(ptr);
-            if (has_handler_ir) {
-                // Read the size prefix so we can skip on failure
-                uint32_t handler_ir_size = QoreAOTBinaryReader::readU32(ptr);
-                const uint8_t* handler_ir_end = ptr + handler_ir_size;
-                // Deserialize handler IR function
-                std::string ir_error;
-                auto readExprCb = [pgm, ctx, local_owner_pgm](
-                        const QoreAOTBinaryReader& rdr, const uint8_t*& p,
-                        const uint8_t* e, std::string& err) -> QoreValue {
-                    // Peek at kind byte for special cases
-                    uint8_t kind_byte = QoreAOTBinaryReader::readU8(p);
-                    auto kind = static_cast<AOTExprKind>(kind_byte);
-                    if (kind == AOTExprKind::GENERIC_EVAL) {
-                        return QoreValue();
-                    }
-                    // EXPR_TREE: recursive expression tree (handler-specific)
-                    if (kind == AOTExprKind::EXPR_TREE) {
-                        uint32_t blob_size = QoreAOTBinaryReader::readU32(p);
-                        const uint8_t* blob_data = p;
-                        p += blob_size;
-                        ExprTreeDeserializer deser(blob_data, blob_size, pgm, ctx);
-                        uint64_t bits = deser.deserialize();
-                        if (bits) {
-                            QoreValue v;
-                            memcpy(&v, &bits, sizeof(v));
-                            return v;
-                        }
-                        return QoreValue();
-                    }
-                    // Delegate to readOneExpr for all other kinds (including NEW_OBJECT with args)
-                    // We already consumed the kind byte, so "put it back" by passing it directly
-                    // via a temporary local buffer trick... actually readOneExpr reads the kind byte
-                    // itself. Use a wrapper that re-reads from p-1 by adjusting p.
-                    --p;  // unconsume the kind byte so readOneExpr can read it
-                    return readOneExpr(rdr, p, e, err, pgm,
-                        ctx->locals, ctx->num_locals, ctx->globals, ctx->num_globals, local_owner_pgm);
-                };
-                auto handler = deserializeIRFunction(reader, ptr, end, pgm, readExprCb,
-                    &handler_local_map, ir_error,
-                    ctx->locals, num_locals, nullptr, false, nullptr, local_owner_pgm, false, nullptr,
-                    &ctx->all_body_locals);
-                if (handler) {
-                    // Compute slot IDs for the deserialized handler
-                    handler->computeSlotIdsAndEmbed();
-                    ctx->handler_irs[i] = std::move(handler);
-                    printd(3, "AOT buildCtx: '%s' stmt[%d] handler IR deserialized OK\n", name, i);
-                } else {
-                    printd(2, "AOT buildCtx: '%s' stmt[%d] handler IR deser failed: %s\n",
-                        name, i, ir_error.c_str());
-                    std::string msg = "statement slot " + std::to_string(i)
-                        + " handler IR deserialization failed";
-                    if (!ir_error.empty()) {
-                        msg += ": ";
-                        msg += ir_error;
-                    }
-                    setBuildError(msg);
-                    delete ctx;
-                    ptr = handler_ir_end;
-                    return nullptr;
-                }
-                // Ensure ptr is at the end of the handler IR data
-                ptr = handler_ir_end;
-            } else {
-                all_stmt_slots_have_ir = false;
-            }
-        }
-    }
-
-    // Resolve stmt_slots from the function's AST (on_block_exit handlers + reference foreach)
-    // Only needed for slots that don't have handler IR
-    if (num_stmts > 0 && !all_stmt_slots_have_ir) {
-        if (uvb) {
-            StatementBlock* sb = uvb->getStatementBlock();
-            if (sb) {
-                std::vector<const AbstractStatement*> stmt_list;
-                collectStmtSlotStatements(sb, stmt_list);
-                // Deduplicate in order (matching buildAOTSlotMap's getStmtSlot() semantics)
-                std::vector<const AbstractStatement*> unique_stmts;
-                std::unordered_set<const void*> seen;
-                for (const AbstractStatement* s : stmt_list) {
-                    if (seen.insert(reinterpret_cast<const void*>(s)).second) {
-                        unique_stmts.push_back(s);
-                    }
-                }
-                if (static_cast<int>(unique_stmts.size()) == num_stmts) {
-                    for (int i = 0; i < num_stmts; ++i) {
-                        if (!ctx->handler_irs[i]) {
-                            ctx->stmts[i] = unique_stmts[i];
-                        }
-                    }
-                } else {
-                    printd(2, "AOT buildCtx: '%s' stmt count mismatch: expected %d, got %d\n",
-                        name, num_stmts, (int)unique_stmts.size());
-                    has_unsupported = true;
-                }
-            } else {
-                // No statement block (strip-source) — if all stmt slots have handler IR, that's OK
-                if (!all_stmt_slots_have_ir) {
-                    printd(2, "AOT buildCtx: '%s' has %d stmt_slots but no statement block and missing handler IR\n",
-                        name, num_stmts);
-                    has_unsupported = true;
-                }
-            }
-        } else {
-            // Toplevel with on_block_exit/foreach — not supported in slot map path
-            // unless all stmt slots have handler IR
-            if (!all_stmt_slots_have_ir) {
-                has_unsupported = true;
-            }
-        }
+        setBuildError("the function has " + std::to_string(num_stmts) + " on_block_exit statement slot(s), which "
+            "this version of Qore no longer supports; recompile the code");
+        delete ctx;
+        return nullptr;
     }
 
     // Read location table (AOT runtime_loc tracking)
@@ -11209,8 +11048,8 @@ static void transplantClassClosureValues(
 }
 
 //! Build contexts from fallback AST variants but register on main program's variants.
-/** Used in V2 mode when slot map registration fails (e.g., functions with stmt_slots
-    that can't be resolved without full AST). Walks the fallback namespace to find
+/** Used in V2 mode when slot map registration fails (e.g., functions whose metadata
+    can't be resolved without the full AST). Walks the fallback namespace to find
     variants with bodies, builds contexts via IR re-lowering, then registers the
     compiled function pointer + context on the main program's matching variant.
 */

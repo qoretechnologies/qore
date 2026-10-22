@@ -473,7 +473,7 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_lv_path_unary_aot", reinterpret_cast<void*>(&qore_rt_lv_path_unary_aot) },
     { "qore_rt_lv_path_binary_mut_aot", reinterpret_cast<void*>(&qore_rt_lv_path_binary_mut_aot) },
     { "qore_rt_lv_path_ternary_aot", reinterpret_cast<void*>(&qore_rt_lv_path_ternary_aot) },
-    { "qore_rt_push_on_block_exit_aot", reinterpret_cast<void*>(&qore_rt_push_on_block_exit_aot) },
+    { "qore_rt_push_compiled_handler_aot", reinterpret_cast<void*>(&qore_rt_push_compiled_handler_aot) },
     { "qore_rt_call_fast_with_target", reinterpret_cast<void*>(&qore_rt_call_fast_with_target) },
     { "qore_rt_call_with_args", reinterpret_cast<void*>(&qore_rt_call_with_args) },
     { "qore_rt_call_function_with_base",
@@ -11311,12 +11311,13 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_ref_fast(uint64_t ref_bits, uint64_t*
 
 // --- On-block-exit handler support for JIT ---
 
+//! An on_block_exit handler registered by native code; its body is a native function
 struct JITOnBlockExitHandler {
     obe_type_e type;
-    StatementBlock* code;
-    const QoreIRFunction* handler_ir = nullptr;  //!< IR handler for IR interpreter execution
-    uint64_t (*compiled_fn)(ExceptionSink*) = nullptr;  //!< native compiled handler function
-    const QoreIRFunction* handler_func = nullptr;  //!< IR function for pre-instantiation of handler locals
+    uint64_t (*compiled_fn)(ExceptionSink*) = nullptr;  //!< handler compiled by the JIT
+    const QoreIRFunction* handler_func = nullptr;  //!< IR function for pre-instantiation of handler locals (JIT)
+    uint64_t (*aot_fn)(QoreAOTContext*, ExceptionSink*) = nullptr;  //!< handler in AOT-compiled code
+    QoreAOTContext* aot_ctx = nullptr;  //!< the AOT context that the AOT handler shares with its function
 };
 
 static thread_local std::vector<JITOnBlockExitHandler> jit_obe_handlers;
@@ -11425,18 +11426,16 @@ extern "C" DLLEXPORT void qore_rt_end_native_ir_slot_cache(void* guard_ptr, Exce
     delete guard;
 }
 
-extern "C" DLLEXPORT void qore_rt_push_on_block_exit(int type, StatementBlock* code) {
-    jit_obe_handlers.push_back({static_cast<obe_type_e>(type), code, nullptr, nullptr, nullptr});
+extern "C" DLLEXPORT void qore_rt_push_compiled_handler(int type, uint64_t (*compiled_fn)(ExceptionSink*),
+        const QoreIRFunction* handler_func) {
+    assert(compiled_fn);
+    jit_obe_handlers.push_back({static_cast<obe_type_e>(type), compiled_fn, handler_func, nullptr, nullptr});
 }
 
-extern "C" DLLEXPORT void qore_rt_push_on_block_exit_ir(int type, StatementBlock* code,
-        const QoreIRFunction* handler_ir) {
-    jit_obe_handlers.push_back({static_cast<obe_type_e>(type), code, handler_ir, nullptr, nullptr});
-}
-
-extern "C" DLLEXPORT void qore_rt_push_compiled_handler(int type, StatementBlock* code,
-        uint64_t (*compiled_fn)(ExceptionSink*), const QoreIRFunction* handler_func) {
-    jit_obe_handlers.push_back({static_cast<obe_type_e>(type), code, nullptr, compiled_fn, handler_func});
+extern "C" DLLEXPORT void qore_rt_push_compiled_handler_aot(QoreAOTContext* ctx, int type,
+        uint64_t (*aot_fn)(QoreAOTContext*, ExceptionSink*)) {
+    assert(ctx && aot_fn);
+    jit_obe_handlers.push_back({static_cast<obe_type_e>(type), nullptr, nullptr, aot_fn, ctx});
 }
 
 extern "C" DLLEXPORT int64_t qore_rt_get_on_block_exit_count() {
@@ -11498,74 +11497,70 @@ extern "C" DLLEXPORT void qore_rt_exec_on_block_exit_impl(int64_t saved_count, E
         for (int i = static_cast<int>(jit_obe_handlers.size()) - 1; i >= static_cast<int>(start); --i) {
             obe_type_e type = jit_obe_handlers[i].type;
             if (type == OBE_Unconditional || (!error && type == OBE_Success) || (error && type == OBE_Error)) {
-                if (jit_obe_handlers[i].code || jit_obe_handlers[i].handler_ir
-                        || jit_obe_handlers[i].compiled_fn) {
-                    // Instantiate exception for on_error blocks as an implicit arg
-                    std::unique_ptr<SingleArgvContextHelper> argv_helper;
-                    std::unique_ptr<CatchExceptionHelper> ex_helper;
-                    if (type == OBE_Error && xsink) {
-                        QoreException* except = xsink->getException();
-                        if (except) {
-                            ex_helper.reset(new CatchExceptionHelper(except));
-                            argv_helper.reset(new SingleArgvContextHelper(except->makeExceptionObject(), xsink));
+                // Instantiate exception for on_error blocks as an implicit arg
+                std::unique_ptr<SingleArgvContextHelper> argv_helper;
+                std::unique_ptr<CatchExceptionHelper> ex_helper;
+                if (type == OBE_Error && xsink) {
+                    QoreException* except = xsink->getException();
+                    if (except) {
+                        ex_helper.reset(new CatchExceptionHelper(except));
+                        argv_helper.reset(new SingleArgvContextHelper(except->makeExceptionObject(), xsink));
+                    }
+                }
+                // native code reports an exception by unwinding to this boundary with the exception already in
+                // the sink
+                if (jit_obe_handlers[i].aot_fn) {
+                    // the handler runs with the AOT context of its function
+                    QoreAOTContext* aot_ctx = jit_obe_handlers[i].aot_ctx;
+                    qore_aot_ensure_helper_pc_loc_map(aot_ctx, jit_obe_handlers[i].aot_fn);
+                    uint64_t rv_bits = 0;
+                    try {
+                        rv_bits = jit_obe_handlers[i].aot_fn(aot_ctx, &obe_xsink);
+                    } catch (const QoreJITException&) {
+                        rv_bits = 0;
+                    }
+                    fromBits(rv_bits).discard(&obe_xsink);
+                } else {
+                    assert(jit_obe_handlers[i].compiled_fn);
+                    const QoreIRFunction* hf = jit_obe_handlers[i].handler_func;
+                    if (hf) {
+                        const QoreParseOptions& po = runtime_get_parse_options();
+                        for (LocalVar* lv : hf->all_body_locals) {
+                            lv->instantiate(po);
                         }
                     }
-                    if (jit_obe_handlers[i].compiled_fn) {
-                        // Execute natively compiled handler
-                        const QoreIRFunction* hf = jit_obe_handlers[i].handler_func;
-                        if (hf) {
-                            const QoreParseOptions& po = runtime_get_parse_options();
-                            for (LocalVar* lv : hf->all_body_locals) {
-                                lv->instantiate(po);
-                            }
-                        }
-                        QoreValue rv(jit_obe_handlers[i].compiled_fn(&obe_xsink));
-                        rv.discard(nullptr);
-                        if (hf) {
-                            for (int j = (int)hf->all_body_locals.size() - 1; j >= 0; --j) {
-                                hf->all_body_locals[j]->uninstantiate(&obe_xsink);
-                            }
-                        }
-                    } else if (jit_obe_handlers[i].handler_ir) {
-                        // Execute compiled handler via IR interpreter
-                        // Phase 2, Fix 2c: Pass parent slot cache for handler access to parent scope
-                        QoreValue rv;
-                        QoreIRInterpreter::execute(*jit_obe_handlers[i].handler_ir, rv, &obe_xsink,
-                            nullptr, nullptr, nullptr,
-                            &jit_obe_handlers[i].handler_ir->pre_instantiated_cache,
-                            nullptr, nullptr, nullptr, false, nullptr,
-                            current_ir_slot_cache);
-                        rv.discard(nullptr);
-                    } else {
-                        StatementBlock* code = jit_obe_handlers[i].code;
-                        const QoreProgramLocation* loc = code ? code->loc : nullptr;
-                        if (loc) {
-                            obe_xsink.raiseException("IR-AST-FALLBACK-ERROR",
-                                "on-block-exit AST statement fallback is disabled: source=%s:%d; "
-                                "add native handler IR lowering instead",
-                                loc->getFileValue(), loc->start_line);
-                        } else {
-                            obe_xsink.raiseException("IR-AST-FALLBACK-ERROR",
-                                "on-block-exit AST statement fallback is disabled; "
-                                "add native handler IR lowering instead");
+                    uint64_t rv_bits = 0;
+                    try {
+                        rv_bits = jit_obe_handlers[i].compiled_fn(&obe_xsink);
+                    } catch (const QoreJITException&) {
+                        rv_bits = 0;
+                    }
+                    fromBits(rv_bits).discard(&obe_xsink);
+                    if (hf) {
+                        for (int j = (int)hf->all_body_locals.size() - 1; j >= 0; --j) {
+                            hf->all_body_locals[j]->uninstantiate(&obe_xsink);
                         }
                     }
-                    if (type == OBE_Error) {
-                        if (qore_es_private::get(obe_xsink)->rethrown) {
-                            if (xsink) {
-                                xsink->clear();
-                            }
-                        }
-                    }
-                    if (obe_xsink) {
+                }
+                // restore td->catchException before xsink can be cleared below, which releases the exception it
+                // refers to; see executeOnBlockExitHandlers() in the IR interpreter
+                ex_helper.reset();
+                argv_helper.reset();
+                if (type == OBE_Error) {
+                    if (qore_es_private::get(obe_xsink)->rethrown) {
                         if (xsink) {
-                            xsink->assimilate(obe_xsink);
-                        } else {
-                            obe_xsink.clear();
+                            xsink->clear();
                         }
-                        if (!error) {
-                            error = true;
-                        }
+                    }
+                }
+                if (obe_xsink) {
+                    if (xsink) {
+                        xsink->assimilate(obe_xsink);
+                    } else {
+                        obe_xsink.clear();
+                    }
+                    if (!error) {
+                        error = true;
                     }
                 }
             }
@@ -11594,30 +11589,6 @@ extern "C" DLLEXPORT void qore_rt_discard_on_block_exit(int64_t saved_count) {
 
 // --- AOT context-based helpers (Phase 7b) ---
 
-extern "C" DLLEXPORT void qore_rt_push_on_block_exit_aot(QoreAOTContext* ctx, int32_t idx, int type,
-        ExceptionSink* xsink) {
-    assert(ctx && idx >= 0 && idx < ctx->num_stmts);
-    // Check if handler IR is available (strip-source mode or optimized path)
-    if (idx < static_cast<int32_t>(ctx->handler_irs.size()) && ctx->handler_irs[idx]) {
-        // Use handler IR for IR interpreter execution
-        qore_rt_push_on_block_exit_ir(type, nullptr, ctx->handler_irs[idx].get());
-    } else {
-        const AbstractStatement* stmt = ctx->stmts[idx];
-        const QoreProgramLocation* loc = stmt ? stmt->loc : nullptr;
-        if (xsink && !*xsink) {
-            if (loc) {
-                xsink->raiseException("IR-AST-FALLBACK-ERROR",
-                    "AOT on-block-exit handler has no compiled handler IR: source=%s:%d; "
-                    "AST statement fallback is disabled",
-                    loc->getFileValue(), loc->start_line);
-            } else {
-                xsink->raiseException("IR-AST-FALLBACK-ERROR",
-                    "AOT on-block-exit handler has no compiled handler IR; "
-                    "AST statement fallback is disabled");
-            }
-        }
-    }
-}
 
 extern "C" DLLEXPORT CaseNodeRegex* qore_rt_get_regex_case_aot(QoreAOTContext* ctx, int32_t slot) {
     assert(ctx && slot >= 0 && slot < ctx->num_regex_cases);

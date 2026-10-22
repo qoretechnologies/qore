@@ -795,6 +795,8 @@ extern void removeBlockLocalsFromBodyLocals(const StatementBlock* block, std::ve
 extern void removeSignatureLocalsFromBodyLocals(std::vector<LocalVar*>& locals, const UserSignature* sig);
 extern void qoreAOTPruneClosureIRBodyLocals(QoreIRFunction* closure_ir, const UserSignature* sig,
         const LVarSet* vlist);
+extern bool qoreAOTPrepareClosureIRLocalSlots(QoreIRFunction* closure_ir, const UserSignature* sig,
+        const LVarSet* vlist);
 
 static constexpr const char* AOT_CLASS_REF_MODULE_PREFIX = "@qore-module:";
 
@@ -1215,7 +1217,6 @@ QoreAOTContext::~QoreAOTContext() {
     free(globals);
     free(exprs);
     delete[] call_targets;
-    free(stmts);
     free(regex_cases);
     free(lv_path_insts);
     free(locs);
@@ -1235,8 +1236,6 @@ struct AOTCompiledFunc {
     //! Constant FQNs whose nested reverse-map paths must be ignored while serializing this function's slots.
     std::vector<std::string> const_reverse_map_exclude_fqns;
     uint64_t feature_flags = 0;     //!< QORE_AOT_FEAT_* bitset required by this function
-    //! Handler IR functions indexed by stmt slot; owned by debug_ir when present.
-    std::vector<const QoreIRFunction*> handler_irs;
     //! Owned full function IR for source-stripped debugging and handler IR lifetime.
     std::unique_ptr<QoreIRFunction> debug_ir;
     //! AOT location table from LLVM codegen (owns data, safe after IR function deletion)
@@ -2403,29 +2402,13 @@ static void reportAOTCompileStats(const char* label, int compiled_count, int tot
         int failed_count, const std::vector<AOTCompiledFunc>& compiled_funcs,
         const char* target_triple, bool metadata_only = false) {
     int unsupported_count = 0;
-    int handler_fallback_count = 0;
     for (auto& cf : compiled_funcs) {
-        bool has_unsup = cf.slot_ids.has_unsupported_exprs;
-        // Check handler IRs for statement slots
-        int non_null_handlers = 0;
-        for (auto& hir : cf.handler_irs) {
-            if (hir) {
-                ++non_null_handlers;
-            }
-        }
-        bool has_handler_issue = cf.num_stmts > 0
-            && ((int)cf.handler_irs.size() != cf.num_stmts || non_null_handlers != cf.num_stmts);
-        if (has_unsup) {
+        if (cf.slot_ids.has_unsupported_exprs) {
             ++unsupported_count;
-        }
-        if (has_handler_issue && !has_unsup) {
-            ++handler_fallback_count;
-        }
-        if ((has_unsup || has_handler_issue) && q_env_is_set("QORE_AOT_DEBUG")) {
-            fprintf(stderr, "AOT: function '%s' is missing required AOT metadata (%s%s)\n",
-                cf.name.c_str(),
-                has_unsup ? "unsupported exprs" : "",
-                has_handler_issue ? (has_unsup ? " + missing handler IRs" : "missing handler IRs") : "");
+            if (q_env_is_set("QORE_AOT_DEBUG")) {
+                fprintf(stderr, "AOT: function '%s' is missing required AOT metadata (unsupported exprs)\n",
+                    cf.name.c_str());
+            }
         }
     }
     std::string resolved_target = qccTargetTriple(target_triple);
@@ -2445,18 +2428,10 @@ static void reportAOTCompileStats(const char* label, int compiled_count, int tot
                 resolved_target.c_str());
         }
     }
-    int total_fallback = unsupported_count + handler_fallback_count;
-    if (total_fallback > 0) {
-        printf("%sincomplete compilation metadata: %d/%d %s complete, %d missing required metadata",
-            QCC_LOG_PREFIX, compiled_count - total_fallback, compiled_count,
-            QCC_CODE_BODY_DESC, total_fallback);
-        if (unsupported_count > 0 && handler_fallback_count > 0) {
-            printf(" (%d unsupported exprs, %d missing handlers)",
-                unsupported_count, handler_fallback_count);
-        } else if (handler_fallback_count > 0) {
-            printf(" (%d missing handlers)", handler_fallback_count);
-        }
-        printf("\n");
+    if (unsupported_count > 0) {
+        printf("%sincomplete compilation metadata: %d/%d %s complete, %d missing required metadata\n",
+            QCC_LOG_PREFIX, compiled_count - unsupported_count, compiled_count,
+            QCC_CODE_BODY_DESC, unsupported_count);
     } else if (qccAOTVerbose()) {
         printf("%scomplete compilation metadata generated for %d %s\n",
             QCC_LOG_PREFIX, compiled_count, QCC_CODE_BODY_DESC);
@@ -2527,25 +2502,6 @@ static bool getFallbackRequirementReason(const AOTCompiledFuncWithSlots& f, std:
             reason += ")";
         }
         needs_fallback = true;
-    }
-
-    if (f.num_stmts > 0) {
-        int non_null_handlers = 0;
-        for (auto* hir : f.handler_irs) {
-            if (hir) {
-                ++non_null_handlers;
-            }
-        }
-
-        if ((int)f.handler_irs.size() != f.num_stmts || non_null_handlers != f.num_stmts) {
-            reason += reason.empty() ? "" : "; ";
-            reason += "missing statement handler IRs (have ";
-            reason += std::to_string(non_null_handlers);
-            reason += "/";
-            reason += std::to_string(f.num_stmts);
-            reason += ")";
-            needs_fallback = true;
-        }
     }
 
     return needs_fallback;
@@ -2813,8 +2769,6 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
 static void extractAOTSlotIdentities(const QoreIRFunction& func, const AOTSlotMap& slots,
         UserVariantBase* uvb, AOTSlotIdentities& out,
         const AOTConstantReverseMap* const_reverse_map = nullptr, QoreProgram* pgm = nullptr);
-static std::vector<const QoreIRFunction*> extractHandlerIRs(
-        QoreIRFunction& func, const AOTSlotMap& slots);
 
 //! Lower a constant/static-var init expression to an IR function.
 /** The init function evaluates the expression and returns the result.
@@ -5072,7 +5026,6 @@ static bool compileModuleInitClosureAsInitFunc(const QoreValue& init_c, const ch
     cif.num_locals = static_cast<int>(slots.local_slots.size());
     cif.num_globals = static_cast<int>(slots.global_slots.size());
     cif.num_exprs = static_cast<int>(slots.expr_slots.size());
-    cif.num_stmts = static_cast<int>(slots.stmt_slots.size());
     cif.num_regex_cases = static_cast<int>(slots.regex_case_slots.size());
     cif.num_lv_path_insts = static_cast<int>(slots.lv_path_slots.size());
     extractAOTSlotIdentities(*ir_func, slots, uvb, cif.slot_ids, const_reverse_map, pgm);
@@ -17650,6 +17603,17 @@ static bool compileAOTClosureBodiesForOwner(size_t owner_index, QoreProgram* pgm
             continue;
         }
 
+        // the runtime binds this body's local slots to the variables of the closure's serialized IR by slot index
+        // (AOTClosureRuntimeBinding::local_slots), so the slots must be those of that IR: its own slot ids, then the
+        // parameters, argv and the captures in the order the serializer reserves them; a capture that only an
+        // on_block_exit handler of the closure uses has no IR slot id otherwise
+        if (!qoreAOTPrepareClosureIRLocalSlots(ir_func, sig,
+                const_cast<UserClosureFunction*>(ucf)->getVList())) {
+            delete ir_func;
+            setAOTCompileFatal(fatal_error, "closure", native_key, "native closure local slot preparation",
+                "cancelled");
+            return false;
+        }
         qoreAOTPruneClosureIRBodyLocals(ir_func, sig,
             const_cast<UserClosureFunction*>(ucf)->getVList());
         if (sig) {
@@ -17979,7 +17943,6 @@ static bool compileAOTClosureBodiesForOwner(size_t owner_index, QoreProgram* pgm
         cf.num_locals = static_cast<int>(slots.local_slots.size());
         cf.num_globals = static_cast<int>(slots.global_slots.size());
         cf.num_exprs = static_cast<int>(slots.expr_slots.size());
-        cf.num_stmts = static_cast<int>(slots.stmt_slots.size());
         cf.num_regex_cases = static_cast<int>(slots.regex_case_slots.size());
         cf.num_lv_path_insts = static_cast<int>(slots.lv_path_slots.size());
         cf.const_reverse_map_exclude_fqns =
@@ -17989,9 +17952,6 @@ static bool compileAOTClosureBodiesForOwner(size_t owner_index, QoreProgram* pgm
         cf.num_exprs = static_cast<int>(cf.slot_ids.exprs.size());
         cf.num_locals = static_cast<int>(cf.slot_ids.locals.size());
         cf.num_globals = static_cast<int>(cf.slot_ids.globals.size());
-        if (!slots.stmt_slots.empty()) {
-            cf.handler_irs = extractHandlerIRs(*ir_func, slots);
-        }
         cf.aot_locs = std::move(aot_locs);
         cf.feature_flags = scanIRFeatureFlags(*ir_func);
         ir_func->name = native_key;
@@ -20416,7 +20376,6 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                     cf.num_locals = static_cast<int>(slots.local_slots.size());
                     cf.num_globals = static_cast<int>(slots.global_slots.size());
                     cf.num_exprs = static_cast<int>(slots.expr_slots.size());
-                    cf.num_stmts = static_cast<int>(slots.stmt_slots.size());
                     cf.num_regex_cases = static_cast<int>(slots.regex_case_slots.size());
                     cf.num_lv_path_insts = static_cast<int>(slots.lv_path_slots.size());
                     cf.const_reverse_map_exclude_fqns = pending_init_constant_fqn_list;
@@ -20427,10 +20386,6 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                     cf.num_exprs = static_cast<int>(cf.slot_ids.exprs.size());
                     cf.num_locals = static_cast<int>(cf.slot_ids.locals.size());
                     cf.num_globals = static_cast<int>(cf.slot_ids.globals.size());
-                    // Extract handler IR from OnBlockExit instructions (moves ownership)
-                    if (!slots.stmt_slots.empty()) {
-                        cf.handler_irs = extractHandlerIRs(*ir_func, slots);
-                    }
                     cf.aot_locs = std::move(aot_locs_local);
                     // Scan IR function for required features
                     cf.feature_flags = scanIRFeatureFlags(*ir_func);
@@ -20451,9 +20406,9 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                             aot_batch_callee_map, fatal_error)) {
                         return;
                     }
-                    printd(2, "AOT: compiled function '%s' to LLVM IR (locals=%d, globals=%d, exprs=%d, stmts=%d)\n",
+                    printd(2, "AOT: compiled function '%s' to LLVM IR (locals=%d, globals=%d, exprs=%d)\n",
                         variant_key.c_str(), (int)slots.local_slots.size(), (int)slots.global_slots.size(),
-                        (int)slots.expr_slots.size(), (int)slots.stmt_slots.size());
+                        (int)slots.expr_slots.size());
                 } else {
                     printd(2, "AOT: LLVM lowering failed for '%s': %s\n", variant_key.c_str(), llvm_error.c_str());
                     if (q_env_is_set("QORE_AOT_DEBUG")) {
@@ -20916,7 +20871,6 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                         cf.num_locals = static_cast<int>(slots.local_slots.size());
                         cf.num_globals = static_cast<int>(slots.global_slots.size());
                         cf.num_exprs = static_cast<int>(slots.expr_slots.size());
-                        cf.num_stmts = static_cast<int>(slots.stmt_slots.size());
                         cf.num_regex_cases = static_cast<int>(slots.regex_case_slots.size());
                         cf.num_lv_path_insts = static_cast<int>(slots.lv_path_slots.size());
                         cf.const_reverse_map_exclude_fqns = pending_init_constant_fqn_list;
@@ -20927,10 +20881,6 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                         cf.num_exprs = static_cast<int>(cf.slot_ids.exprs.size());
                         cf.num_locals = static_cast<int>(cf.slot_ids.locals.size());
                         cf.num_globals = static_cast<int>(cf.slot_ids.globals.size());
-                        // Extract handler IR from OnBlockExit instructions (moves ownership)
-                        if (!slots.stmt_slots.empty()) {
-                            cf.handler_irs = extractHandlerIRs(*ir_func, slots);
-                        }
                         cf.aot_locs = std::move(aot_locs_local);
                         // Scan IR function for required features
                         cf.feature_flags = scanIRFeatureFlags(*ir_func);
@@ -20952,15 +20902,13 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                             return;
                         }
                         if (q_env_is_set("QORE_AOT_DEBUG")) {
-                            fprintf(stderr, "AOT: compiled method '%s' to LLVM IR (locals=%d, globals=%d, exprs=%d, stmts=%d)\n",
+                            fprintf(stderr, "AOT: compiled method '%s' to LLVM IR (locals=%d, globals=%d, exprs=%d)\n",
                                 variant_key.c_str(), (int)slots.local_slots.size(),
-                                (int)slots.global_slots.size(), (int)slots.expr_slots.size(),
-                                (int)slots.stmt_slots.size());
+                                (int)slots.global_slots.size(), (int)slots.expr_slots.size());
                         }
-                        printd(2, "AOT: compiled method '%s' to LLVM IR (locals=%d, globals=%d, exprs=%d, stmts=%d)\n",
+                        printd(2, "AOT: compiled method '%s' to LLVM IR (locals=%d, globals=%d, exprs=%d)\n",
                             variant_key.c_str(), (int)slots.local_slots.size(),
-                            (int)slots.global_slots.size(), (int)slots.expr_slots.size(),
-                            (int)slots.stmt_slots.size());
+                            (int)slots.global_slots.size(), (int)slots.expr_slots.size());
                     } else {
                         printd(2, "AOT: LLVM lowering failed for '%s': %s\n",
                             variant_key.c_str(), llvm_error.c_str());
@@ -21133,7 +21081,6 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
             cif.num_locals = static_cast<int>(slots.local_slots.size());
             cif.num_globals = static_cast<int>(slots.global_slots.size());
             cif.num_exprs = static_cast<int>(slots.expr_slots.size());
-            cif.num_stmts = static_cast<int>(slots.stmt_slots.size());
             cif.num_regex_cases = static_cast<int>(slots.regex_case_slots.size());
             cif.num_lv_path_insts = static_cast<int>(slots.lv_path_slots.size());
             cif.const_reverse_map_exclude_direct_fqn = direct_exclude_fqn;
@@ -21565,9 +21512,10 @@ static void buildAOTPcLocMaps(const std::string& path,
         func_slots[i].pc_loc_map.clear();
     }
 
-    // The helpers of background expressions (<function>_bg_<n>, see QoreIRToLLVM::emitBackgroundHelper()) are
-    // native functions of their own whose loc-indices address the table of the function that starts them, and
-    // which run with its context: each gets a PC map of its own, keyed by its symbol, with that function's table
+    // The helpers of background expressions and the on_block_exit handlers (<function>_bg_<n>, <function>_obe_<n>,
+    // see QoreIRToLLVM::lowerNestedFunction()) are native functions of their own whose loc-indices address the table
+    // of the function they belong to, and which run with its context: each gets a PC map of its own, keyed by its
+    // symbol, with that function's table
     const size_t num_funcs = func_slots.size();
     size_t helper_scan_count = 0;
     for (const auto& f : funcs) {
@@ -21579,17 +21527,34 @@ static void buildAOTPcLocMaps(const std::string& path,
         if (sym_to_fws.count(sym)) {
             continue;
         }
-        size_t pos = sym.rfind("_bg_");
-        if (pos == std::string::npos || pos + 4 == sym.size()
-                || sym.find_first_not_of("0123456789", pos + 4) != std::string::npos) {
-            continue;
+        // strip the "_bg_<n>" and "_obe_<n>" suffixes of nested helpers until the function that owns them is found
+        std::string owner_sym = sym;
+        auto owner = sym_to_fws.end();
+        while (true) {
+            size_t pos = std::string::npos;
+            for (const char* suffix : {"_bg_", "_obe_"}) {
+                size_t p = owner_sym.rfind(suffix);
+                size_t digits = p == std::string::npos ? p : p + strlen(suffix);
+                if (p != std::string::npos && digits < owner_sym.size()
+                        && owner_sym.find_first_not_of("0123456789", digits) == std::string::npos
+                        && (pos == std::string::npos || p > pos)) {
+                    pos = p;
+                }
+            }
+            if (pos == std::string::npos) {
+                break;
+            }
+            owner_sym.erase(pos);
+            owner = sym_to_fws.find(owner_sym);
+            if (owner != sym_to_fws.end()) {
+                break;
+            }
         }
-        auto owner = sym_to_fws.find(sym.substr(0, pos));
         if (owner == sym_to_fws.end() || owner->second >= num_funcs) {
             continue;
         }
         AOTCompiledFuncWithSlots helper;
-        helper.name = func_slots[owner->second].name + " (background helper)";
+        helper.name = func_slots[owner->second].name + " (" + sym.substr(owner_sym.size() + 1) + ")";
         helper.llvm_symbol = sym;
         helper.aot_locs = func_slots[owner->second].aot_locs;
         func_slots.push_back(std::move(helper));
@@ -23882,7 +23847,6 @@ bool QoreAOT::compile(QoreProgram* pgm,
                     cf.num_locals = static_cast<int>(slots.local_slots.size());
                     cf.num_globals = static_cast<int>(slots.global_slots.size());
                     cf.num_exprs = static_cast<int>(slots.expr_slots.size());
-                    cf.num_stmts = static_cast<int>(slots.stmt_slots.size());
                     cf.num_regex_cases = static_cast<int>(slots.regex_case_slots.size());
                     cf.num_lv_path_insts = static_cast<int>(slots.lv_path_slots.size());
                     // Extract slot identities (no uvb for toplevel)
@@ -23924,9 +23888,9 @@ bool QoreAOT::compile(QoreProgram* pgm,
                         return false;
                     }
                     toplevel_ok = true;
-                    printd(2, "AOT: compiled _toplevel to LLVM IR (locals=%d, globals=%d, exprs=%d, stmts=%d)\n",
+                    printd(2, "AOT: compiled _toplevel to LLVM IR (locals=%d, globals=%d, exprs=%d)\n",
                         (int)slots.local_slots.size(), (int)slots.global_slots.size(),
-                        (int)slots.expr_slots.size(), (int)slots.stmt_slots.size());
+                        (int)slots.expr_slots.size());
                 } else {
                     if (q_env_is_set("QORE_AOT_DEBUG")) {
                         fprintf(stderr, "AOT: LLVM lowering failed for _toplevel: %s\n",
@@ -24074,9 +24038,6 @@ bool QoreAOT::compile(QoreProgram* pgm,
             fws.slot_ids = cf.slot_ids;
             setAOTFuncConstantExclusions(fws, cf);
             // Transfer handler IR pointers (non-owning: AOTCompiledFunc still owns them)
-            for (auto& hir : cf.handler_irs) {
-                fws.handler_irs.push_back(hir);
-            }
             fws.aot_locs = cf.aot_locs;
             fws.llvm_symbol = cf.llvm_symbol;
             fws.debug_ir = cf.debug_ir.get();
@@ -26340,9 +26301,6 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
             fws.slot_ids = cf.slot_ids;
             setAOTFuncConstantExclusions(fws, cf);
             // Transfer handler IR pointers (non-owning: AOTCompiledFunc still owns them)
-            for (auto& hir : cf.handler_irs) {
-                fws.handler_irs.push_back(hir);
-            }
             fws.aot_locs = cf.aot_locs;
             fws.llvm_symbol = cf.llvm_symbol;
             fws.debug_ir = cf.debug_ir.get();
@@ -26845,9 +26803,6 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
                 fws.slot_ids = cf.slot_ids;
                 setAOTFuncConstantExclusions(fws, cf);
                 // Transfer handler IR pointers (non-owning: AOTCompiledFunc still owns them)
-                for (auto& hir : cf.handler_irs) {
-                    fws.handler_irs.push_back(hir);
-                }
                 fws.aot_locs = cf.aot_locs;
             fws.llvm_symbol = cf.llvm_symbol;
                 fws.debug_ir = cf.debug_ir.get();
@@ -27514,9 +27469,6 @@ static bool emitScriptQoFromParsedProgram(QoreProgram* qpgm,
             fws.num_lv_path_insts = cf.num_lv_path_insts;
             fws.slot_ids = cf.slot_ids;
             setAOTFuncConstantExclusions(fws, cf);
-            for (auto& hir : cf.handler_irs) {
-                fws.handler_irs.push_back(hir);
-            }
             fws.aot_locs = cf.aot_locs;
             fws.llvm_symbol = cf.llvm_symbol;
             fws.debug_ir = cf.debug_ir.get();
@@ -29649,9 +29601,6 @@ bool QoreAOT::compileScriptAggregate(
                 fws.num_lv_path_insts = cf.num_lv_path_insts;
                 fws.slot_ids = cf.slot_ids;
                 setAOTFuncConstantExclusions(fws, cf);
-                for (auto& hir : cf.handler_irs) {
-                    fws.handler_irs.push_back(hir);
-                }
                 fws.aot_locs = cf.aot_locs;
                 fws.llvm_symbol = cf.llvm_symbol;
                 fws.debug_ir = cf.debug_ir.get();
@@ -30351,9 +30300,6 @@ bool QoreAOT::compileScriptFile(const char* target_file,
             fws.num_lv_path_insts = cf.num_lv_path_insts;
             fws.slot_ids = cf.slot_ids;
             setAOTFuncConstantExclusions(fws, cf);
-            for (auto& hir : cf.handler_irs) {
-                fws.handler_irs.push_back(hir);
-            }
             fws.aot_locs = cf.aot_locs;
             fws.llvm_symbol = cf.llvm_symbol;
             fws.debug_ir = cf.debug_ir.get();
@@ -30945,9 +30891,6 @@ bool QoreAOT::compileSeparatedModuleFile(const char* dir_path,
                 fws.num_lv_path_insts = cf.num_lv_path_insts;
                 fws.slot_ids = cf.slot_ids;
                 setAOTFuncConstantExclusions(fws, cf);
-                for (auto& hir : cf.handler_irs) {
-                    fws.handler_irs.push_back(hir);
-                }
                 fws.aot_locs = cf.aot_locs;
             fws.llvm_symbol = cf.llvm_symbol;
                 fws.debug_ir = cf.debug_ir.get();
@@ -31457,9 +31400,6 @@ bool QoreAOT::compileModuleFromObjects(const char* dir_path,
                 fws.num_lv_path_insts = cf.num_lv_path_insts;
                 fws.slot_ids = cf.slot_ids;
                 setAOTFuncConstantExclusions(fws, cf);
-                for (auto& hir : cf.handler_irs) {
-                    fws.handler_irs.push_back(hir);
-                }
                 fws.aot_locs = cf.aot_locs;
             fws.llvm_symbol = cf.llvm_symbol;
                 fws.debug_ir = cf.debug_ir.get();
@@ -32003,9 +31943,6 @@ bool QoreAOT::archiveModuleFromObjects(const char* dir_path,
                 fws.num_lv_path_insts = cf.num_lv_path_insts;
                 fws.slot_ids = cf.slot_ids;
                 setAOTFuncConstantExclusions(fws, cf);
-                for (auto& hir : cf.handler_irs) {
-                    fws.handler_irs.push_back(hir);
-                }
                 fws.aot_locs = cf.aot_locs;
             fws.llvm_symbol = cf.llvm_symbol;
                 fws.debug_ir = cf.debug_ir.get();
@@ -32299,16 +32236,14 @@ static bool shouldSkipExprInstructionExprSlot(const QoreIRExprInstruction* ei) {
 }
 
 //! Registers the variables that an on_block_exit handler reaches from outside the function running it
-/** A compiled function's handlers run as IR through the interpreter, and when the handler IR is loaded, each
-    local variable it uses is bound to a LocalVar of the enclosing AOT context: the function's own locals by slot,
-    its body locals (which include every handler's own locals) by name.  A variable that the handler reaches from
-    outside the function - a top-level local, a variable captured by a closure, or a parameter - is in neither set
-    unless the function body itself uses it, so it was bound to a fresh LocalVar that no scope ever
-    instantiated: reads returned NOTHING, writes were lost, and a captured variable could not be found at all.
+/** A compiled function's handlers are native functions sharing its AOT context (see
+    design/native-block-exit-handlers.md), and the debug IR of a handler binds each local variable it uses to a
+    LocalVar of that context: the function's own locals by slot, its body locals (which include every handler's own
+    locals) by name.  A variable that the handler reaches from outside the function - a top-level local, a variable
+    captured by a closure, or a parameter - is in neither set unless the function body itself uses it.
 
-    Registering those variables in the function's local slot table gives them a slot identity that the runtime
-    resolves to the real variable exactly as for the function body's own references, and the handler IR loader
-    binds the handler's reference to that variable.
+    Registering those variables in the function's local slot table, in the handler's slot order, gives them a slot
+    identity that the runtime resolves to the real variable exactly as for the function body's own references.
 
     Nested handlers are walked too: their outer variables must be bound by the same context.
 
@@ -32432,10 +32367,11 @@ void buildAOTSlotMap(const QoreIRFunction& func, AOTSlotMap& slots, bool seed_ir
     };
 
     // Preserve the IR local slot identity in the AOT local table.  Handler IR
-    // inherits parent locals by IR slot ID, and AOT handler deserialization uses
-    // ctx->locals[slot_id] for those parent slots.  If AOT local slots are
-    // allocated by instruction-walk order instead, handlers can inherit the
-    // wrong parent value when the two orders diverge.
+    // inherits parent locals by IR slot ID, and the IR of a closure loaded with
+    // its native body binds the body's local slots by IR slot ID
+    // (AOTClosureRuntimeBinding::local_slots).  If AOT local slots are
+    // allocated by instruction-walk order instead, they bind the wrong variable
+    // when the two orders diverge.
     if (seed_ir_local_slots) {
         for (const auto& [lv, slot_id] : func.local_var_slots) {
             if (lv) {
@@ -32838,8 +32774,6 @@ void buildAOTSlotMap(const QoreIRFunction& func, AOTSlotMap& slots, bool seed_ir
                 }
                 case QoreIROpcode::OnBlockExit: {
                     auto* obei = static_cast<QoreIROnBlockExitInstruction*>(inst.get());
-                    StatementBlock* code = obei->stmt->getCode();
-                    slots.getStmtSlot(reinterpret_cast<const void*>(code));
                     if (obei->handler_ir) {
                         if (!body_locals_built) {
                             for (const LocalVar* lv : func.all_body_locals) {
@@ -32848,6 +32782,8 @@ void buildAOTSlotMap(const QoreIRFunction& func, AOTSlotMap& slots, bool seed_ir
                             body_locals_built = true;
                         }
                         registerHandlerOuterLocals(*obei->handler_ir, body_locals, slots);
+                        // the handler is native code that shares this function's context, as a background helper is
+                        buildAOTSlotMap(*obei->handler_ir, slots, false);
                     }
                     break;
                 }
@@ -32938,13 +32874,11 @@ QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int 
     int local_count = 0;
     int global_count = 0;
     int expr_count = 0;
-    int stmt_count = 0;
     int regex_count = 0;
     int lv_path_count = 0;
     std::unordered_set<const void*> seen_locals;
     std::unordered_set<const void*> seen_globals;
     std::unordered_set<uint64_t> seen_exprs;
-    std::unordered_set<const void*> seen_stmts;
     std::unordered_set<const void*> seen_regex_cases;
     std::unordered_set<const void*> seen_lv_paths;
 
@@ -33323,15 +33257,6 @@ QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int 
                     countExprSlot(ci->sort_exp);
                     break;
                 }
-                case QoreIROpcode::OnBlockExit: {
-                    auto* obei = static_cast<QoreIROnBlockExitInstruction*>(inst.get());
-                    StatementBlock* code = obei->stmt->getCode();
-                    const void* key = reinterpret_cast<const void*>(code);
-                    if (seen_stmts.insert(key).second) {
-                        ++stmt_count;
-                    }
-                    break;
-                }
                 case QoreIROpcode::SwitchRegexMatch: {
                     auto* ri = static_cast<QoreIRSwitchRegexMatchInstruction*>(inst.get());
                     if (ri->regex_case) {
@@ -33371,16 +33296,16 @@ QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int 
 
     // Check if counts match before taking any refs
     if (local_count != num_locals || global_count != num_globals ||
-            expr_count != num_exprs || stmt_count != num_stmts ||
+            expr_count != num_exprs || num_stmts ||
             regex_count != num_regex_cases) {
         // Slot count mismatch between compile time and runtime - this can happen due to
         // expression object sharing differences in the parser (e.g., ?? operator chains),
         // or (during Phase 6b transition) regex cases not being fully serialized/deserialized.
         // Return nullptr to fall back to AST interpretation for this function.
         printd(1, "buildAOTContext: slot mismatch for '%s' (expected l=%d g=%d e=%d s=%d r=%d, "
-            "actual l=%d g=%d e=%d s=%d r=%d) - falling back to AST\n",
+            "actual l=%d g=%d e=%d s=0 r=%d) - falling back to AST\n",
             func.name.c_str(), num_locals, num_globals, num_exprs, num_stmts, num_regex_cases,
-            local_count, global_count, expr_count, stmt_count, regex_count);
+            local_count, global_count, expr_count, regex_count);
         return nullptr;
     }
 
@@ -33405,13 +33330,11 @@ QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int 
     int local_idx = 0;
     int global_idx = 0;
     int expr_idx = 0;
-    int stmt_idx = 0;
     int regex_idx = 0;
     int lv_path_idx = 0;
     seen_locals.clear();
     seen_globals.clear();
     seen_exprs.clear();
-    seen_stmts.clear();
     seen_regex_cases.clear();
     seen_lv_paths.clear();
 
@@ -33858,15 +33781,6 @@ QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int 
                     fillExprSlot(ci->exp);
                     fillExprSlot(ci->where_exp);
                     fillExprSlot(ci->sort_exp);
-                    break;
-                }
-                case QoreIROpcode::OnBlockExit: {
-                    auto* obei = static_cast<QoreIROnBlockExitInstruction*>(inst.get());
-                    StatementBlock* code = obei->stmt->getCode();
-                    const void* key = reinterpret_cast<const void*>(code);
-                    if (seen_stmts.insert(key).second) {
-                        ctx->stmts[stmt_idx++] = code;
-                    }
                     break;
                 }
                 case QoreIROpcode::SwitchRegexMatch: {
@@ -36775,41 +36689,8 @@ void extractAOTSlotIdentities(const QoreIRFunction& func, const AOTSlotMap& slot
     }
 
     collectAOTStaticVarRefs(func, out.static_var_refs);
-
-    // stmt_slots (on_block_exit handlers) are resolved from the function's AST at
-    // runtime in buildContextFromSlotMap(), so they no longer require source fallback.
 }
 
-//! Extract handler IR pointers for each statement slot in the compiled function.
-/** Walks the IR function to find OnBlockExit instructions with handler_ir and maps them
-    to their statement slot indices. Foreach instructions have null handler_ir.
-    @param func the IR function
-    @param slots the slot map with stmt_slot indices
-    @return vector of handler IR pointers indexed by stmt slot (null = no handler IR)
-*/
-static std::vector<const QoreIRFunction*> extractHandlerIRs(
-        QoreIRFunction& func, const AOTSlotMap& slots) {
-    std::vector<const QoreIRFunction*> result(slots.stmt_slots.size());
-    std::unordered_set<const void*> seen;
-
-    for (auto& block : func.blocks) {
-        for (auto& inst : block->instructions) {
-            if (inst->opcode == QoreIROpcode::OnBlockExit) {
-                auto* obei = static_cast<QoreIROnBlockExitInstruction*>(inst.get());
-                StatementBlock* code = obei->stmt->getCode();
-                const void* key = reinterpret_cast<const void*>(code);
-                if (seen.insert(key).second) {
-                    auto it = slots.stmt_slots.find(key);
-                    if (it != slots.stmt_slots.end() && obei->handler_ir) {
-                        result[it->second] = obei->handler_ir.get();
-                    }
-                }
-            }
-            // Foreach instructions don't have handler_ir — null stays in result
-        }
-    }
-    return result;
-}
 
 void QoreAOT::printSupportedTargets() {
     llvm::InitializeAllTargets();

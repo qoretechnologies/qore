@@ -14022,50 +14022,8 @@ bool serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompile
         }
         traceEntryOffset("after lvpath");
 
-        // Handler IR entries for statement slots
-        // For each stmt slot, write u8 flag (1 = handler IR follows, 0 = no handler IR)
-        // If handler IR is present, serialize the IR function inline
-        for (int i = 0; i < func.num_stmts; ++i) {
-            const QoreIRFunction* handler_ir = (i < static_cast<int>(func.handler_irs.size()))
-                ? func.handler_irs[i] : nullptr;
-            if (handler_ir) {
-                writer.writeU8(1);
-                // Write a size placeholder — we'll patch it after serializing the IR
-                uint32_t size_pos = writer.position();
-                writer.writeU32(0);  // placeholder
-
-                // Use a writeExpr callback that classifies and writes expressions
-                // using the parent function's slot info for variable resolution
-                const auto& parent_locals = func.slot_ids.locals;
-                const auto& parent_globals = func.slot_ids.globals;
-                auto writeExpr = [&parent_locals, &parent_globals, func_const_reverse_map](
-                        QoreAOTBinaryWriter& w, const QoreValue& expr) -> bool {
-                    return classifyAndWriteExpr(w, expr, parent_locals, parent_globals,
-                        func_const_reverse_map);
-                };
-                // the handler (and any handler nested in it) runs against this function's AOT context
-                AOTIRLocalBindingSource binding_source{&func.slot_ids.locals, &func.slot_ids.body_locals};
-                QoreAOTIRLocalBindingSourceHelper binding_source_helper(writer, &binding_source);
-                qoreAOTClearExprSerializationError();
-                bool handler_ok = serializeIRFunction(writer, *handler_ir, writeExpr);
-                std::string expr_error;
-                bool expr_error_set = qoreAOTTakeExprSerializationError(expr_error);
-                if (!handler_ok || expr_error_set) {
-                    error = "failed to serialize handler IR for function '" + func.name
-                        + "' stmt slot " + std::to_string(i);
-                    if (expr_error_set) {
-                        error += ": ";
-                        error += expr_error;
-                    }
-                    return false;
-                }
-                // Patch the size field
-                uint32_t end_pos = writer.position();
-                writer.patchU32(size_pos, end_pos - size_pos - 4);
-            } else {
-                writer.writeU8(0);
-            }
-        }
+        // on_block_exit handlers are native functions of the function; there are no statement slots
+        assert(!func.num_stmts);
         traceEntryOffset("after stmt-handlers");
 
         // Location table entries (AOT runtime_loc tracking)
@@ -14341,15 +14299,6 @@ void serializeEmbeddedSource(QoreAOTBinaryWriter& writer,
         if (func.slot_ids.has_unsupported_exprs) {
             fallback_funcs.push_back(&func);
             continue;
-        }
-        if (func.num_stmts > 0) {
-            bool all_have_ir = static_cast<int>(func.handler_irs.size()) == func.num_stmts
-                && std::all_of(func.handler_irs.begin(), func.handler_irs.end(),
-                    [](const QoreIRFunction* hir) { return hir != nullptr; });
-            if (!all_have_ir) {
-                fallback_funcs.push_back(&func);
-                continue;
-            }
         }
         // NOTE: constructor/destructor/copy methods no longer need blanket source
         // fallback — BCA data is serialized in the METHODS section (v2 format)

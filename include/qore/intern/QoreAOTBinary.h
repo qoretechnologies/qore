@@ -197,7 +197,10 @@ constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x44524F51;
 //!      name and type as before.
 //! v20: a serialized background instruction can be of the helper kind (issue #5482): the record carries whether
 //!      the helper runs with the object of the starting code, the helper's parameters and the helper's IR, whose
-//!      locals bind to the variables of the enclosing context.  A v9-v19 file has no such instruction.
+//!      locals bind to the variables of the enclosing context.  A v9-v19 file has no such instruction.  The
+//!      on_block_exit handlers of a compiled function are native functions of the function, so a function record has
+//!      no statement slots (num_stmts is 0, and no handler IR follows its LValuePath entries); a record of an older
+//!      version with statement slots is refused.
 constexpr uint16_t QORE_AOT_BINARY_MIN_VERSION = 9;
 constexpr uint16_t QORE_AOT_BINARY_VERSION = 20;
 //! First format version in which a serialized background instruction can be of the helper kind.
@@ -2247,9 +2250,6 @@ struct AOTCompiledFuncWithSlots {
     std::vector<std::string> const_reverse_map_exclude_fqns;
     //! Optional pre-filtered reverse map for functions whose init context must preserve alternate stable paths.
     std::shared_ptr<const AOTConstantReverseMap> const_reverse_map_override;
-    //! Handler IR functions for each statement slot (indexed by stmt slot index).
-    //! Non-null entries have serializable handler IR; null entries are rejected before AOT output is written.
-    std::vector<const QoreIRFunction*> handler_irs;
     //! Optional full function IR used when source-stripped AOT code is debugged.
     const QoreIRFunction* debug_ir = nullptr;
     //! AOT location table entry (owns the file string copy)

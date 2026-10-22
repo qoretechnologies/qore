@@ -1448,9 +1448,6 @@ void QoreIRToLLVM::declareRuntimeHelpers(llvm::Module& module) {
             llvm::FunctionType::get(void_type, {ptr_type}, false));
 
     // On-block-exit handler helpers
-    // push_on_block_exit: (i32, ptr) -> void
-    module.getOrInsertFunction("qore_rt_push_on_block_exit",
-            llvm::FunctionType::get(void_type, {llvm::Type::getInt32Ty(ctx), ptr_type}, false));
     // get_on_block_exit_count: () -> i64
     module.getOrInsertFunction("qore_rt_get_on_block_exit_count",
             llvm::FunctionType::get(i64_type, {}, false));
@@ -5393,8 +5390,7 @@ llvm::Value* QoreIRToLLVM::emitMaybeInvoke(llvm::FunctionCallee normal_helper,
                 || name == "qore_rt_invoke_expr_aot_throwing"
                 || name == "qore_rt_expr_op"
                 || name == "qore_rt_exec_statement"
-                || name == "qore_rt_exec_statement_throwing"
-                || name == "qore_rt_push_on_block_exit") {
+                || name == "qore_rt_exec_statement_throwing") {
             annotateAotExecutableExprFallback(call, inst);
         }
     };
@@ -9027,6 +9023,43 @@ bool QoreIRToLLVM::tryEmitBackgroundMetadata(const QoreIRBackgroundInstruction* 
     return false;
 }
 
+llvm::Function* QoreIRToLLVM::lowerNestedFunction(const QoreIRFunction& func, const std::string& name,
+        llvm::Module& module, std::string& error) {
+    QoreIRToLLVM nested_lowering(ctx);
+    nested_lowering.setSymbolName(name);
+    if (aot_mode) {
+        // the nested function shares the AOT context of the function being lowered: its slot tables and location
+        // table, whose entries for the nested function follow this function's entries so far
+        nested_lowering.setAOTMode(aot_slots);
+        nested_lowering.setAOTDirectClosureFastEntry(aot_direct_closure_fast_entry);
+        nested_lowering.setAOTLocTableBase(aot_loc_base + static_cast<int32_t>(aot_loc_table.size()));
+    }
+    if (active_di_builder && di_cu) {
+        nested_lowering.setSharedDebugInfo(active_di_builder, di_cu);
+    }
+    nested_lowering.setEmitDebugInfo(emit_debug_info);
+    nested_lowering.setDeferredExceptionChecking(deferred_exception_checking);
+    if (batch_callees) {
+        nested_lowering.setBatchCallees(batch_callees);
+    }
+    std::string nested_error;
+    if (!nested_lowering.lowerFunction(func, module, nested_error)) {
+        error = "'" + name + "' lowering failed: " + nested_error;
+        return nullptr;
+    }
+    llvm::Function* fn = module.getFunction(name);
+    if (!fn) {
+        error = "'" + name + "' was not emitted";
+        return nullptr;
+    }
+    if (aot_mode) {
+        for (const auto& loc : nested_lowering.getAOTLocTable()) {
+            aot_loc_table.push_back(loc);
+        }
+    }
+    return fn;
+}
+
 bool QoreIRToLLVM::emitBackgroundHelper(const QoreIRBackgroundInstruction* bg_inst, llvm::Module& module,
         llvm::Function* llvm_func, llvm::Value** result_out, std::string& error) {
     assert(bg_inst && bg_inst->kind == QoreIRBackgroundKind::Helper);
@@ -9037,37 +9070,9 @@ bool QoreIRToLLVM::emitBackgroundHelper(const QoreIRBackgroundInstruction* bg_in
 
     // the helper is a native function of its own in this module: it runs in the new thread
     std::string helper_name = llvm_func->getName().str() + "_bg_" + std::to_string(bg_helper_count++);
-    QoreIRToLLVM helper_lowering(ctx);
-    helper_lowering.setSymbolName(helper_name);
-    if (aot_mode) {
-        // the helper shares the starting function's AOT context: its slot tables and location table
-        helper_lowering.setAOTMode(aot_slots);
-        helper_lowering.setAOTDirectClosureFastEntry(aot_direct_closure_fast_entry);
-        helper_lowering.setAOTLocTableBase(aot_loc_base + static_cast<int32_t>(aot_loc_table.size()));
-    }
-    if (active_di_builder && di_cu) {
-        helper_lowering.setSharedDebugInfo(active_di_builder, di_cu);
-    }
-    helper_lowering.setEmitDebugInfo(emit_debug_info);
-    helper_lowering.setDeferredExceptionChecking(deferred_exception_checking);
-    if (batch_callees) {
-        helper_lowering.setBatchCallees(batch_callees);
-    }
-    std::string helper_error;
-    if (!helper_lowering.lowerFunction(*bg_inst->helper_ir, module, helper_error)) {
-        error = "background helper '" + helper_name + "' lowering failed: " + helper_error;
-        return false;
-    }
-    llvm::Function* helper_fn = module.getFunction(helper_name);
+    llvm::Function* helper_fn = lowerNestedFunction(*bg_inst->helper_ir, helper_name, module, error);
     if (!helper_fn) {
-        error = "background helper '" + helper_name + "' was not emitted";
         return false;
-    }
-    if (aot_mode) {
-        // the helper's location indices address the starting function's table after its own entries so far
-        for (const auto& loc : helper_lowering.getAOTLocTable()) {
-            aot_loc_table.push_back(loc);
-        }
     }
 
     // the values of the helper's parameters
@@ -9654,8 +9659,7 @@ bool QoreIRToLLVM::checkNoAotExecutableExprFallback(llvm::Function* llvm_func, s
                     && name != "qore_rt_invoke_expr_aot_throwing"
                     && name != "qore_rt_expr_op"
                     && name != "qore_rt_exec_statement"
-                    && name != "qore_rt_exec_statement_throwing"
-                    && name != "qore_rt_push_on_block_exit") {
+                    && name != "qore_rt_exec_statement_throwing") {
                 continue;
             }
 
@@ -9709,6 +9713,8 @@ bool QoreIRToLLVM::checkNoAotExecutableExprFallback(llvm::Function* llvm_func, s
 bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& module, std::string& error) {
     native_handler_cache_cancelled = false;
     bg_helper_count = 0;
+    obe_handler_count = 0;
+    obe_handler_fns.clear();
     current_ir_func = &func;
     current_module = &module;
     initTypes();
@@ -29716,72 +29722,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Value* type_val = llvm::ConstantInt::get(llvm::Type::getInt32Ty(ctx),
                     static_cast<int>(obe_type));
             StatementBlock* code = sinst->stmt ? sinst->stmt->getCode() : nullptr;
-            if (aot_mode) {
-                if (!code) {
-                    return setAotExpressionFallbackError(error, inst,
-                            "deserialized on-block-exit instruction has no AOT statement slot");
-                }
-                // AOT mode: use slot index instead of raw pointer
-                int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getStmtSlot(
-                        reinterpret_cast<const void*>(code));
-                auto helper = module.getOrInsertFunction("qore_rt_push_on_block_exit_aot",
-                        llvm::FunctionType::get(void_type,
-                            {ptr_type, i32_type, llvm::Type::getInt32Ty(ctx), ptr_type}, false));
-                builder->CreateCall(helper, {aot_ctx_arg,
-                        llvm::ConstantInt::get(i32_type, slot), type_val, xsink_arg});
-            } else if (sinst->handler_ir) {
-                // Try to compile handler body as a native LLVM function in the same module
-                QoreIRToLLVM handler_lowering(ctx);
-                // Share debug info so the handler is in the same compile unit
-                if (active_di_builder && di_cu) {
-                    handler_lowering.setSharedDebugInfo(active_di_builder, di_cu);
-                }
-                std::string handler_error;
-                bool handler_compiled = handler_lowering.lowerFunction(
-                        *sinst->handler_ir, module, handler_error);
-                llvm::Function* handler_fn = nullptr;
-                if (handler_compiled) {
-                    handler_fn = module.getFunction(sinst->handler_ir->name);
-                }
-                if (handler_compiled && handler_fn) {
-                    // Push compiled handler via native runtime helper
-                    if (q_env_is_set("QORE_LLVM_DEBUG")) {
-                        fprintf(stderr, "QoreIRToLLVM: compiled on_block_exit handler '%s' "
-                                "to native LLVM\n", sinst->handler_ir->name.c_str());
-                    }
-                    llvm::Value* code_ptr = llvm::ConstantInt::get(i64_type,
-                            reinterpret_cast<uint64_t>(code));
-                    llvm::Value* code_as_ptr = builder->CreateIntToPtr(code_ptr, ptr_type);
-                    llvm::Value* handler_func_ptr = llvm::ConstantInt::get(i64_type,
-                            reinterpret_cast<uint64_t>(sinst->handler_ir.get()));
-                    llvm::Value* handler_func_as_ptr = builder->CreateIntToPtr(
-                            handler_func_ptr, ptr_type);
-                    auto helper = module.getOrInsertFunction("qore_rt_push_compiled_handler",
-                            llvm::FunctionType::get(void_type,
-                                {llvm::Type::getInt32Ty(ctx), ptr_type, ptr_type, ptr_type},
-                                false));
-                    builder->CreateCall(helper,
-                            {type_val, code_as_ptr, handler_fn, handler_func_as_ptr});
-                } else {
-                    // LLVM lowering failed — fall back to IR interpreter path
-                    if (q_env_is_set("QORE_LLVM_DEBUG")) {
-                        fprintf(stderr, "QoreIRToLLVM: handler '%s' LLVM lowering failed: "
-                                "%s; falling back to IR interpreter\n",
-                                sinst->handler_ir->name.c_str(), handler_error.c_str());
-                    }
-                    llvm::Value* code_ptr = llvm::ConstantInt::get(i64_type,
-                            reinterpret_cast<uint64_t>(code));
-                    llvm::Value* code_as_ptr = builder->CreateIntToPtr(code_ptr, ptr_type);
-                    llvm::Value* handler_ir_ptr = llvm::ConstantInt::get(i64_type,
-                            reinterpret_cast<uint64_t>(sinst->handler_ir.get()));
-                    llvm::Value* handler_ir_as_ptr = builder->CreateIntToPtr(
-                            handler_ir_ptr, ptr_type);
-                    auto helper = module.getOrInsertFunction("qore_rt_push_on_block_exit_ir",
-                            llvm::FunctionType::get(void_type,
-                                {llvm::Type::getInt32Ty(ctx), ptr_type, ptr_type}, false));
-                    builder->CreateCall(helper, {type_val, code_as_ptr, handler_ir_as_ptr});
-                }
-            } else {
+            if (!sinst->handler_ir) {
                 error = "on-block-exit handler has no compiled handler IR";
                 if (code && code->loc) {
                     error += " at ";
@@ -29791,6 +29732,39 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 }
                 error += "; AST statement fallback is disabled";
                 return false;
+            }
+            // the handler body is a native function of its own in this module, emitted once for each handler
+            llvm::Function* handler_fn;
+            {
+                auto i = obe_handler_fns.find(sinst->handler_ir.get());
+                if (i != obe_handler_fns.end()) {
+                    handler_fn = i->second;
+                } else {
+                    std::string handler_name = llvm_func->getName().str() + "_obe_"
+                        + std::to_string(obe_handler_count++);
+                    handler_fn = lowerNestedFunction(*sinst->handler_ir, handler_name, module, error);
+                    if (!handler_fn) {
+                        error = "on-block-exit handler " + error;
+                        return false;
+                    }
+                    obe_handler_fns.emplace(sinst->handler_ir.get(), handler_fn);
+                }
+            }
+            if (aot_mode) {
+                // the handler runs with this function's AOT context
+                auto helper = module.getOrInsertFunction("qore_rt_push_compiled_handler_aot",
+                        llvm::FunctionType::get(void_type,
+                            {ptr_type, llvm::Type::getInt32Ty(ctx), ptr_type}, false));
+                builder->CreateCall(helper, {aot_ctx_arg, type_val, handler_fn});
+            } else {
+                llvm::Value* handler_func_ptr = llvm::ConstantInt::get(i64_type,
+                        reinterpret_cast<uint64_t>(sinst->handler_ir.get()));
+                llvm::Value* handler_func_as_ptr = builder->CreateIntToPtr(
+                        handler_func_ptr, ptr_type);
+                auto helper = module.getOrInsertFunction("qore_rt_push_compiled_handler",
+                        llvm::FunctionType::get(void_type,
+                            {llvm::Type::getInt32Ty(ctx), ptr_type, ptr_type}, false));
+                builder->CreateCall(helper, {type_val, handler_fn, handler_func_as_ptr});
             }
             // OnBlockExit produces NOTHING as its result
             values[inst->result.id] = llvm::ConstantInt::get(i64_type, VAL_NOTHING);
