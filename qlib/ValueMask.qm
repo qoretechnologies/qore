@@ -188,8 +188,7 @@ currency := a currency symbol (such as € $ £ ¥) or a 3-letter upper-case cod
     @section valuemask_relnotes Release Notes
 
     @subsection valuemask_v1_0 ValueMask v1.0
-    - initial release: the masks and patterns of the sheet contracts of Qorus design mode, for reading and
-      writing values and for spreadsheet display formats
+    - initial release
 */
 
 #! The ValueMask namespace contains all public definitions of the ValueMask module

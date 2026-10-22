@@ -86,9 +86,6 @@ module CohereRestClient {
 
     @subsection CohereRestClientv1_0 CohereRestClient v1.0
     - initial release
-    - a reasoning token budget of zero or
-      @ref QoreLlmUtils::LlmRequestOptions::disable_reasoning "disable_reasoning" turns thinking off on the Command A
-      reasoning models
 */
 
 %requires json
@@ -368,6 +365,12 @@ public class CohereRestConnection inherits RestClient::RestConnection {
     - \c api_key (required): Cohere API key
     - \c model (optional): Cohere model name; defaults to
       @ref CohereRestClient::CohereRestClientBase::DefaultChatModel "DefaultChatModel"
+
+    @par Reasoning
+
+    A @ref QoreLlmUtils::LlmRequestOptions::reasoning_token_budget "reasoning_token_budget" of zero or
+    @ref QoreLlmUtils::LlmRequestOptions::disable_reasoning "disable_reasoning" turns thinking off on the Command A
+    reasoning models (\c thinking \c {"type": "disabled"}); other Cohere models do not reason.
 
     @note Streaming is not implemented in v1.  Use the synchronous
     @ref chat() method.

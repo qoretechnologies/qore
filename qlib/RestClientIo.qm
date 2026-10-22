@@ -68,6 +68,10 @@ module RestClientIo {
     Certificate verification failures from HTTP/1.1, HTTP/2 and HTTP/3 requests raise \c SOCKET-SSL-ERROR with the
     original diagnostic. Synchronous and asynchronous requests do not retry certificate refusals; connections
     interrupted during the handshake can still be retried.
+    Synchronous and asynchronous requests, including requests with a call-local timeout and the requests of
+    @ref RestClientIo::RestClientIo::restDoRequestWithRetry() "restDoRequestWithRetry()", are sent again after a
+    transport error that allows it, for example when the server refused the request without processing it or its
+    connection failed.
     A connection that the @ref sandboxing "sandbox" denies raises \c NETWORK-ACCESS-DENIED (or
     \c FILESYSTEM-ACCESS-DENIED) as it is and is not retried either.
     This also applies to automatic protocol selection: when HTTP/3 and HTTP/2 are tried in parallel, a denial or a
@@ -183,26 +187,6 @@ resp = rc.restGet("/api/data");
     @section restclientio_relnotes Release Notes
 
     @subsection restclientio_v1_0 Version 1.0
-    - <b>security</b>: a credential sent in a header with a name of its own, such as \c Qorus-Token, no longer appears
-      in the \c request_headers and \c headers of a \c REST-RESPONSE-ERROR exception or of a
-      @ref RestClient::RestResponseInfo "RestResponseInfo", nor where a server echoes it in an error: headers whose
-      names contain \c token, \c secret, \c api-key or \c apikey, \c password or \c auth are redacted besides the
-      known authentication headers, and a client can declare further sensitive headers with the new
-      \c sensitive_headers option and @ref RestClientIo::RestClientIo::addSensitiveHeaders() "addSensitiveHeaders()";
-      the header given by \c token_api_key_header is sensitive as well (see @ref RestClient::RestDiagnostics
-      "RestDiagnostics")
-    - added reusable opt-in RestRetryPolicy and inherited request methods, with Retry-After, bounded
-      jittered backoff, cancellation, and safe retry observers (issue 5475)
-    - RestRetryOptions::attempt_timeout bounds one attempt, so a stalled attempt is retried within the budget
-    - call-local timeout requests now cancel unfinished I/O when their deadline expires
-    - a call-local request timeout (restDoRequestWithTimeout(), restPostWithTimeout()) is also the request's transport
-      deadline, so it may exceed the client's request timeout; such requests previously failed at the client's timeout
-    - requests with a call-local timeout, async requests, and the requests of restDoRequestWithRetry() are sent again
-      after a transport error in the same cases as restDoRequest() sends a request again, for example when the server
-      refused the request without processing it or its connection failed; they previously failed on the first such
-      error
-    - preserve fractional milliseconds in response waits so nested retry budgets do not send an extra request
-    - async request and SSE startup timeouts retain their completion error when the controller aborts I/O
     - initial release
 */
 
@@ -579,6 +563,8 @@ hash<RestResponseInfo> resp = f.get(30s);
           messages (see @ref RestClient::RestDiagnostics "RestDiagnostics" and @ref addSensitiveHeaders())
         - \c token: authentication token
         - \c token_type: authentication token type (default: \c "Bearer")
+        - \c token_api_key_header: the name of a header to send the token in as an API key, without a type prefix,
+          instead of \c Authorization; its value is sensitive like that of \c Authorization
         - \c cookie: an optional cookie value (e.g., \c "name=value" or \c "n1=v1; n2=v2") sent
           as a \c Cookie header with every request; works alongside the automatic cookie jar
         - \c error_passthru: if \c True, HTTP error responses are returned rather than throwing
@@ -951,9 +937,10 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
                 Matched without regard to case, as HTTP header names are case-insensitive.
 
                 Headers whose names contain \c token, \c secret, \c api-key or \c apikey, \c password or \c auth,
-                and headers declared with the \c sensitive_headers option or @ref addSensitiveHeaders(), are
-                sensitive as well; see @ref RestClient::RestDiagnostics "RestDiagnostics", which applies these rules
-                wherever this client reports headers.
+                headers declared with the \c sensitive_headers option or @ref addSensitiveHeaders(), and the header
+                given by the \c token_api_key_header option are sensitive as well; see
+                @ref RestClient::RestDiagnostics "RestDiagnostics", which applies these rules wherever this client
+                reports headers.
 
                 @since RestClientIo 1.1
             */
@@ -2006,7 +1993,8 @@ printf("server negotiated HTTP/%s\n", ver ?? "unknown");
 
         #! Sends an HTTP \c POST request with a call-local timeout
         /** Unlike @ref setTimeout(), this method does not mutate shared client
-            state, so concurrent callers can apply independent deadlines.
+            state, so concurrent callers can apply independent deadlines.  The timeout is the request's transport
+            deadline; see @ref restDoRequestWithTimeout().
 
             @param path request path
             @param body request body
@@ -2342,6 +2330,9 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
             without modifying client-wide settings; unfinished I/O is cancelled on timeout or cancellation.
             Synchronous request preparation is deducted from the response budget; credential providers
             must enforce their own acquisition timeouts.
+
+            \a timeout_ms is also the request's transport deadline in place of the client's request timeout, so a
+            request may take longer than the client's default as well as less.
 
             Positive fractional milliseconds are rounded up for the response wait, so conversion to the
             Future's millisecond granularity cannot expire the request early. This can extend the wait

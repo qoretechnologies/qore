@@ -1109,6 +1109,11 @@ if (resp.stop_reason == "tool_use") {
             treated as "no repair" and followed by the next repair in the
             sequence; it is not an error.
 
+        @note The optional \c cached_content field names the cached content resource of a provider with explicit
+            prompt caching (see @ref LlmRequestOptions::cached_content).  The reasoning history of assistant
+            messages (\c reasoning_blocks, or DeepSeek's \c reasoning_content) is passed back to the provider, and
+            the response has the provider's \c created timestamp when the provider reports one.
+
         @return OpenAI-compatible chat-completions response
 
         @throw LLM-ERROR the backend call failed

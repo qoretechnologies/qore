@@ -90,17 +90,6 @@ printf("%Y\n", ans.body);
 
     @subsection VoyageRestClientv1_0 VoyageRestClient v1.0
     - initial release
-    - the Voyage embedder packs each request up to Voyage's per-request input and token limits, paces all
-      embedders sharing an endpoint, API key, and model through one process-wide requests- and
-      tokens-per-minute limiter (configurable with the new \c requests-per-minute and \c tokens-per-minute
-      connection options), and retries HTTP 429 rejections with a shared, bounded backoff that honors
-      \c Retry-After before failing with \c EMBEDDER-RATE-LIMIT-ERROR
-    - the Voyage reranker, the data provider and connection pings use the same limiter (reranking models
-      have their own limits, configurable with the \c rerank-requests-per-minute and
-      \c rerank-tokens-per-minute connection options); pings never wait long and report
-      \c VOYAGE-RATE-LIMITED instead of blocking the connection monitor
-    - embedders and rerankers of one Voyage account share one REST client and its connections
-      (VoyageRestClientBase::getSharedClient()) instead of opening a connection per embedder
 */
 
 #! the VoyageRestClient namespace contains all the objects in the VoyageRestClient module

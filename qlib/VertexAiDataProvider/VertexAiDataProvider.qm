@@ -142,6 +142,10 @@ module VertexAiDataProvider {
     Gemini chat completions and Gecko embeddings are discoverable from
     <tt>qctl</tt>, the Qorus action catalog, and DPQL expressions.
 
+    Gemini 3.x generation requests omit the sampling parameters and numeric thinking budgets that Gemini 3.x
+    deprecates; use thinking levels instead.  Gemini 2.5 requests keep their sampling parameters and numeric
+    thinking budgets; see @ref geminibodyshapegeneration.
+
     @par Provided children
 
     - <tt>/generate-content</tt> — @ref VertexAiDataProvider::VertexAiGenerateContentDataProvider
@@ -159,8 +163,6 @@ AbstractDataProvider p = DataProvider::getFactoryObjectFromString(
     @section vertexaidataproviderrelnotes Release Notes
 
     @subsection vertexaidataprovider_v1_0 VertexAiDataProvider v1.0
-    - Gemini 3.x generation requests omit deprecated sampling parameters and numeric thinking budgets; use
-      thinking levels instead. Gemini 2.5 behavior is preserved; see @ref geminibodyshapegeneration.
     - initial release
 */
 

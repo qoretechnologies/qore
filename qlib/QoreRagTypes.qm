@@ -93,17 +93,6 @@ module QoreRagTypes {
 
     @subsection qoreragtypes_1_0 QoreRagTypes 1.0
     - initial release
-    - a subclass of @ref QoreRagUtils::EmbedderRateLimiter "EmbedderRateLimiter" can observe each admission, with
-      the instant at which it is made, in the private \c admitted() method
-    - HTTP embedders share RestClientIo's bounded transient-failure retries, configurable per embedder
-      and per call, with RAG retry telemetry (issue 5475)
-    - EmbedderConfig::attempt_timeout bounds one HTTP attempt so a stalled attempt is retried within the
-      budget; embedders that size their own requests derive it with AbstractEmbedder::defaultAttemptTimeoutMs()
-      (a third of the budget for a small request, half for a large one, at most 10 s and never below 3 s)
-    - added @ref QoreRagUtils::EmbedderRateLimiter "EmbedderRateLimiter", a process-wide requests- and
-      tokens-per-minute limiter for provider requests, and the \c requests_per_minute,
-      \c tokens_per_minute, \c rate_limit_max_retries, and \c rate_limit_timeout
-      @ref QoreRagUtils::EmbedderConfig "EmbedderConfig" fields honored by embedders that pace their requests
 */
 
 #! Provider-neutral RAG types and abstract classes (shared with QoreRagUtils)

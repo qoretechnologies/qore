@@ -134,15 +134,6 @@ hash<ChatResponse> r = p.chat((<ChatMessage>{"role": "user", "content": "hi"},))
 
     @subsection azureopenairestclient_v1_0 AzureOpenAiRestClient v1.0
     - initial release
-    - the provider factory reports, with @ref AzureOpenAiRestClient::AzureOpenAiLlmProviderFactory::getModelInfo()
-      "AzureOpenAiLlmProviderFactory::getModelInfo()", which models cannot turn hidden reasoning off
-      (\c reasoning_always_on): the o-series, \c gpt-5, \c gpt-5-mini, \c gpt-5-nano, \c gpt-5-codex and
-      \c gpt-5-pro
-    - a reasoning token budget of zero or
-      @ref QoreLlmUtils::LlmRequestOptions::disable_reasoning "disable_reasoning" turns reasoning off with the
-      reasoning effort \c none on the models that accept it, and selects the lowest effort of the models that cannot
-      turn reasoning off (@ref AzureOpenAiRestClient::AzureOpenAiLlmProvider::getAzureOffReasoningEffort()
-      "AzureOpenAiLlmProvider::getAzureOffReasoningEffort()"); requests for other models are unchanged
 */
 
 #! Contains all public definitions in the AzureOpenAiRestClient module
@@ -600,7 +591,10 @@ public class AzureOpenAiLlmProvider inherits OpenAiRestClient::OpenAiLlmProvider
     }
 
     #! Returns the reasoning effort that turns reasoning off for an Azure OpenAI model, or the model's lowest effort
-    /** Evidence, https://learn.microsoft.com/en-us/azure/ai-foundry/openai/how-to/reasoning: "\c gpt-5.6,
+    /** A @ref QoreLlmUtils::LlmRequestOptions::reasoning_token_budget "reasoning_token_budget" of zero or
+        @ref QoreLlmUtils::LlmRequestOptions::disable_reasoning "disable_reasoning" sends this reasoning effort.
+
+        Evidence, https://learn.microsoft.com/en-us/azure/ai-foundry/openai/how-to/reasoning: "\c gpt-5.6,
         \c gpt-5.5, \c gpt-5.4, \c gpt-5.2, \c gpt-5.1, \c gpt-5.1-codex, \c gpt-5.1-codex-max, and
         \c gpt-5.1-codex-mini support 'None' as a value for the \c reasoning_effort parameter", and the page marks a
         reasoning effort "including \c none" for \c gpt-6-astra, \c gpt-6-sol, \c gpt-6-luna and \c gpt-6.1-sol.

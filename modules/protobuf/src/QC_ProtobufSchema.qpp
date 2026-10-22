@@ -138,6 +138,8 @@ qclass ProtobufSchema [arg=QoreProtobufSchema* schema; ns=Qore::Protobuf; dom=FI
 
     @throw PROTOBUF-SCHEMA-ERROR if the file cannot be loaded or parsed, or if \a path or \a proto_file contains a NUL
     character
+    @throw FILESYSTEM-ACCESS-DENIED if the sandbox of the calling program does not allow \a path to be read
+    @throw SANDBOX-PATH-ERROR if the sandbox of the calling program cannot resolve \a path
 
     @since %protobuf 1.0
 */

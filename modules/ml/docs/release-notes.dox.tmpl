@@ -6,13 +6,4 @@
 
     @section ml_3_0 ml Module Version 3.0
     - initial release
-    - the files read and written for ONNX models are subject to the filesystem sandbox of the calling program: the
-      model, its external data, the optimized model and the profile, and the files named by ONNX Runtime options;
-      with a sandbox, content identity capture is always required, so that ONNX Runtime only reads bytes the sandbox
-      allowed, and only ONNX Runtime options that name no file, or whose file is checked, may be set; see
-      @ref ml_onnx_sandbox
-    - the content identity of an ORT format model is complete: an ORT format model cannot have external data, so its
-      content is its bytes, and a model whose content is captured is loaded in the format in which it was captured
-    - the filesystem sandbox check of ONNX content identity capture honors a policy barrier established with
-      \c SandboxManager::callWithSystemPolicy()
 */

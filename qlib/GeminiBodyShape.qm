@@ -238,28 +238,6 @@ try {
 
     @subsection geminibodyshape_v1_0 GeminiBodyShape v1.0
     - initial release
-    - Gemini 3.x uses qualitative thinking levels and omits deprecated sampling parameters and numeric budgets;
-      a budget of zero selects the lowest thinking level that every provider accepts, \c LOW, since Gemini 3.x
-      cannot turn thinking off; Gemini 2.5 retains its existing controls (see @ref geminibodyshapegeneration)
-    - a thinking budget of zero selects the smallest budget of Gemini 2.5 Pro, 128, which cannot turn thinking off
-      and rejected a budget of zero (@ref minimumThinkingBudget()); @ref reasoningAlwaysOn() says which models spend
-      reasoning tokens even with a budget of zero
-    - \c disable_reasoning selects the least thinking of the Gemini 3.x and Gemini 2.5 models, like a budget of zero
-    - explicit prompt caching: @ref shapeChatBody() takes a \c cached_content reference and then leaves out
-      \c systemInstruction, \c tools and \c toolConfig, which belong to the cached content
-      (@ref shapeCachedContentBody()); providers take it from
-      @ref QoreLlmUtils::LlmRequestOptions::cached_content "LlmRequestOptions::cached_content"
-    - @ref normalizeUsage() marks that thinking tokens are not part of the output tokens
-      (\c reasoning_in_output = @ref False) and reports the cached tokens explicitly, as \c 0 for a cache miss
-    - tool parameter schemas keep their nested members, so that Gemini can fill nested objects and arrays of objects
-      instead of sending \c {}; values that Gemini's schema cannot declare are sent as JSON text and returned to
-      callers with their original types; their descriptions summarize their shape in at most
-      @ref SchemaSummaryMaxChars characters (see @ref geminibodyshapetoolschemas)
-    - the constraints that Gemini's schema does not receive (allowed values, defaults, formats, patterns, lengths,
-      ranges, item and property counts) are stated in the schema's description (see @ref geminibodyshapetoolschemas)
-    - a request that Gemini rejects because its tool declarations exceed its constrained-decoding budget raises
-      \c GEMINI-TOOL-SCHEMA-TOO-COMPLEX with the number and size of the tools, instead of a generic \c LLM-ERROR
-      (see @ref geminibodyshapetoolschemacomplexity)
 */
 
 #! Contains all public definitions in the GeminiBodyShape module

@@ -79,12 +79,6 @@ module OllamaRestClient {
 
     @subsection OllamaRestClientv1_0 OllamaRestClient v1.0
     - initial release
-    - the provider factory reports, with @ref OllamaRestClient::OllamaLlmProviderFactory::getModelInfo()
-      "OllamaLlmProviderFactory::getModelInfo()", which models cannot turn hidden reasoning off (\c
-      reasoning_always_on): the GPT-OSS models
-    - a reasoning token budget of zero or @ref QoreLlmUtils::LlmRequestOptions::disable_reasoning "disable_reasoning"
-      selects the lowest reasoning effort, \c low, of the GPT-OSS models; requests for models whose reasoning controls
-      have not been verified are unchanged
 */
 
 %requires json
@@ -289,7 +283,10 @@ public class OllamaLlmProvider inherits OpenAiRestClient::OpenAiLlmProvider {
         return "ollama";
     }
     #! Returns the reasoning effort that turns reasoning off for a model, or the model's lowest effort
-    /** Evidence, https://docs.ollama.com/api/openai-compatibility: "GPT-OSS keeps its existing OpenAI compatibility
+    /** A @ref QoreLlmUtils::LlmRequestOptions::reasoning_token_budget "reasoning_token_budget" of zero or
+        @ref QoreLlmUtils::LlmRequestOptions::disable_reasoning "disable_reasoning" sends this reasoning effort.
+
+        Evidence, https://docs.ollama.com/api/openai-compatibility: "GPT-OSS keeps its existing OpenAI compatibility
         conversion: "minimal" uses "low" ... and "none" requests no thinking output", and its thinking values are
         \c low, \c medium and \c high (https://docs.ollama.com/capabilities/thinking), so its lowest effort is
         \c low.  Whether \c none is accepted depends on the model ("Use /api/show to discover each model's supported

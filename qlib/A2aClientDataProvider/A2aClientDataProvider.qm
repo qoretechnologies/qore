@@ -74,7 +74,6 @@ module A2aClientDataProvider {
     @section a2aclientdataprovider_relnotes Release Notes
 
     @subsection a2aclientdataprovider_v1_0 A2aClientDataProvider v1.0
-    - debug messages give the URL without its password
     - initial release
 */
 

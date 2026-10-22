@@ -91,7 +91,6 @@ client.close();
     @section yamlrpcclientio_relnotes Release History
 
     @subsection yamlrpcclientio_v1_0 YamlRpcClientIo v1.0
-    - HTTP errors give the URL without its password
     - initial release
 */
 

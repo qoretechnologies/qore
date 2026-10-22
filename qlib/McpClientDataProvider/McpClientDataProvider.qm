@@ -110,7 +110,6 @@ module McpClientDataProvider {
     @section mcpclientdataprovider_relnotes Release Notes
 
     @subsection mcpclientdataprovider_v1_0 McpClientDataProvider v1.0
-    - debug messages give the URL without its password
     - initial release
 */
 
