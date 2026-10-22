@@ -26,7 +26,7 @@
 %modern
 
 module FilePoller {
-    version = "2.0";
+    version = "2.1";
     desc = "Filesystem polling solution";
     author = "Petr Vanek <petr@yarpen.cz>";
     url = "http://qore.org";
@@ -108,8 +108,14 @@ module FilePoller {
 
     @section file_poller_relnotes FilePoller Release Notes
 
-    @subsection file_poller_2_0 FilePoller v2.0
+    @subsection file_poller_2_1 FilePoller v2.1
+    - a FilePoller object that is destroyed in its own polling thread, for example because an event or log callback
+      held its last reference, stops polling instead of deadlocking
+    - @ref FilePoller::FilePoller::stop() "stop()" and @ref FilePoller::FilePoller::stopNoWait() "stopNoWait()" wake
+      the polling thread at once instead of after the current poll interval
     - file-event timestamp examples are stable UTC samples; actual event timestamps are unchanged
+
+    @subsection file_poller_2_0 FilePoller v2.0
     - added support for the data provider action catalog API
       (<a href="https://github.com/qoretechnologies/qore/issues/4808">issue 4808</a>)
 

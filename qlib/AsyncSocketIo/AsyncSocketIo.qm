@@ -32,7 +32,7 @@
 %requires(reexport) HttpServerUtil
 
 module AsyncSocketIo {
-    version = "1.0";
+    version = "3.0";
     desc    = "API for async socket I/O";
     author  = "David Nichols <david@qore.org>";
     url     = "http://qore.org";
@@ -81,6 +81,24 @@ module AsyncSocketIo {
     @endcode
 
     @section asyncsocketiorelnotes Release Notes
+
+    @subsection asyncsocketio_3_0 AsyncSocketIo 3.0
+    - @ref AsyncSocketIo::AsyncSocketIoController "AsyncSocketIoController" runs its operations in the native
+      @ref Qore::AsyncIoController "AsyncIoController" with the operating system's event loop (epoll on Linux, kqueue
+      on macOS and BSD), with I/O threads, callback worker threads and timers
+    - <b>changes that can affect backwards compatibility</b>:
+      - @ref AsyncSocketIo::AsyncSocketIoController::submit() "submit()" requires the \c owner key of its argument,
+        which @ref AsyncSocketIo::AsyncSocketIoController::cancelByOwner() "cancelByOwner()" uses when its owner
+        shuts down, and returns @ref nothing for an operation without a goal
+      - the \c exec() method is removed; call @ref Qore::Thread::Queue::get() "Queue::get()" on the Queue that
+        @ref AsyncSocketIo::AsyncSocketIoController::submit() "submit()" returns instead
+    - new methods to cancel operations by key or owner, to close a socket with its operation, to wait for the
+      controller and for an @ref Qore::EventNotifier "EventNotifier", to run tasks and timers on the callback
+      workers, and to drain the callbacks of an owner
+    - new @ref AsyncSocketIo::AbstractStreamContext "AbstractStreamContext",
+      @ref AsyncSocketIo::AsyncHttp2ServerStream "AsyncHttp2ServerStream" and
+      @ref AsyncSocketIo::NotifierPollOperation "NotifierPollOperation" classes for HTTP/2 and HTTP/3 streams and
+      event notifiers
 
     @subsection asyncsocketio_1_0 AsyncSocketIo 1.0
     - initial release

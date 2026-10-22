@@ -616,6 +616,13 @@
     - \c qore_module_ns_init_t takes an additional \c ExceptionSink& parameter
     - \c QoreModuleInfo uses default member initializers, so it can be extended without breaking modules
 
+    @par AsyncSocketIo 3.0 Requires an Owner for Each Operation and Has No exec() Method
+    @ref AsyncSocketIo::AsyncSocketIoController::submit() "AsyncSocketIoController::submit()" raises
+    \c CONTROLLER-ADD-ERROR for an operation without an \c owner, which the controller uses to cancel the operations of
+    an owner that shuts down, and returns @ref nothing for an operation without a goal; the \c exec() method, which
+    waited for the result of an operation, is removed.  Set \c owner in the operation info, and call
+    @ref Qore::Thread::Queue::get() "Queue::get()" on the Queue that \c submit() returns to wait for the result.
+
     @par The Short Command-Line Options -M and -G Have New Meanings
     The \c qore command-line option \c -M is \c --modern, and \c -G is \c --enable-debug; in %Qore 2.2, \c -M was
     \c --no-namespace-defs and \c -G was \c --no-global-vars.  Scripts and command lines that use \c -M or \c -G
@@ -2677,6 +2684,12 @@ while (*binary chunk = input.read(65536)) {
         raise \c THREAD-CANCELLED or \c PROGRAM-INTERRUPTED when the thread is cancelled or the program is
         interrupted
 
+    - @ref asyncsocketiointro "AsyncSocketIo" module (version 3.0)
+      - runs its operations in the native @ref Qore::AsyncIoController "AsyncIoController" with the operating
+        system's event loop (epoll on Linux, kqueue on macOS and BSD); \c AsyncSocketIoController::submit() requires
+        an \c owner, and its \c exec() method is removed (see
+        @ref qore_3_0_0_compatibility "Changes That Can Affect Backwards-Compatibility")
+
     - @ref awsrestclientintro "AwsRestClient" module
       - added the full AWS credential chain: AWS_* environment variables, ECS task-role, IMDSv2
         token-protected flow, and STS \c AssumeRole bootstrap, tried in order
@@ -3482,9 +3495,6 @@ while (*binary chunk = input.read(65536)) {
       - new module providing a data provider API for AsyncAPI schemas
       - inherited operation messages provide request and event types, including unions for multiple payloads;
         inbound messages use the same validation as the core schema API
-
-    - @ref asyncsocketiointro "AsyncSocketIo" module
-      - high-performance event loop for asynchronous socket I/O using epoll (Linux) / kqueue (macOS/BSD)
 
     - @ref avroutilintro "AvroUtil" module
       - new module mapping @ref avrointro "avro" schemas to @ref dataproviderintro "DataProvider"

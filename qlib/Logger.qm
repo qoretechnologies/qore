@@ -34,7 +34,7 @@
 %requires(reexport) logger_bin
 
 module Logger {
-    version = "1.0";
+    version = "1.1";
     desc = "user module implementing Log4q logger library";
     author = "Tomas Mandys <tomas.mandys@qoretechnologies.com>";
     url = "http://qore.org";
