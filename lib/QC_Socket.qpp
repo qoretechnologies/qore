@@ -8130,6 +8130,9 @@ bool Socket::isQuic() [flags=CONSTANT] {
     @return the stream ID assigned to this request
 
     @throw QUIC-ERROR if no QUIC session is active or an error occurs, or the method or path contains a NUL or another control character than horizontal tab
+    @throw HTTP3-IDLE-CLOSE the QUIC connection was closed by its idle timer, including a connection that has been idle for longer than its idle timeout, whose timer has not run yet (RFC 9000 section 10.1); the request was not sent, and it can be repeated on a new connection
+    @throw HTTP3-LOCAL-CLOSE the QUIC connection was closed locally; the request was not sent
+    @throw HTTP3-PEER-CLOSE the QUIC connection was closed by the server; the request was not sent
 
     @note This method requires an active QUIC session, typically established via
     @ref startPollQuicConnect()
@@ -8178,6 +8181,9 @@ int Socket::submitQuicRequest(string method, string path, *hash<auto> headers, *
     @return the stream ID assigned to this request
 
     @throw QUIC-ERROR if no QUIC session is active or an error occurs, or the method or path contains a NUL or another control character than horizontal tab
+    @throw HTTP3-IDLE-CLOSE the QUIC connection was closed by its idle timer, including a connection that has been idle for longer than its idle timeout, whose timer has not run yet (RFC 9000 section 10.1); the request was not sent, and it can be repeated on a new connection
+    @throw HTTP3-LOCAL-CLOSE the QUIC connection was closed locally; the request was not sent
+    @throw HTTP3-PEER-CLOSE the QUIC connection was closed by the server; the request was not sent
 
     @since %Qore 3.0
 */

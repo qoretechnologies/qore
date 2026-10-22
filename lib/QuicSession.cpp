@@ -1969,47 +1969,8 @@ int QuicSession::handleExpiryLocked(ExceptionSink* xsink) {
     if (rv != 0) {
         if (rv == NGTCP2_ERR_IDLE_CLOSE) {
             // Idle timeout is a normal condition — the connection should be
-            // closed gracefully without raising an exception.  Set idle_closed_
-            // so isClosed() reports closed on the next check: ngtcp2 does NOT
-            // transition conn->state on NGTCP2_ERR_IDLE_CLOSE (see
-            // ngtcp2_conn.c:11221), so ngtcp2_conn_in_{closing,draining}_period()
-            // both keep returning false.  Without this flag the caller's
-            // isClosed() check would still return false and the UDP socket would
-            // leak.
-            idle_closed_.store(true, std::memory_order_release);
-            printd(5, "QuicSession::handleExpiry(): idle timeout (session %lld)\n",
-                (long long)session_id_);
-#if defined(DEBUG) || defined(DEBUG_ASYNC_IO)
-            ngtcp2_conn_info cinfo;
-            ngtcp2_conn_get_conn_info(conn_, &cinfo);
-            const ngtcp2_transport_params* rp = ngtcp2_conn_get_remote_transport_params2(conn_);
-            ASYNC_IO_TRACE("QuicSession::handleExpiry IDLE_CLOSE session=%lld streams=%zu "
-                "local_idle_ns=%llu peer_max_idle_ns=%llu pkt_sent=%llu pkt_recv=%llu "
-                "pkt_lost=%llu ping_recv=%llu bytes_in_flight=%llu\n",
-                static_cast<long long>(session_id_), streams_.size(),
-                static_cast<unsigned long long>(local_idle_timeout_ns_),
-                static_cast<unsigned long long>(rp ? rp->max_idle_timeout : 0),
-                static_cast<unsigned long long>(cinfo.pkt_sent),
-                static_cast<unsigned long long>(cinfo.pkt_recv),
-                static_cast<unsigned long long>(cinfo.pkt_lost),
-                static_cast<unsigned long long>(cinfo.ping_recv),
-                static_cast<unsigned long long>(cinfo.bytes_in_flight));
-#endif
-            // An idle close is a real close: it must have the same observable
-            // effects as an explicit teardown, or threads parked on this session
-            // never wake.  idle_closed_ alone only feeds getCloseReason(); the
-            // closed_-based paths (waitForStreamDrain() returning -1, stream
-            // data/drain waiters, datagram Queue sentinels) would keep reporting
-            // a live session forever.  That is what parks an SSE producer in
-            // sendRawStringIntern() against a dead peer: its 1 MB stream buffer
-            // never drains, so waitForStreamDrain() returns 1 (timed out) on
-            // every call instead of -1 (gone).  markClosed() only takes
-            // datagram_mutex_, and mtx_ (held here, recursive) is already
-            // ordered before it on the receive path, so this is safe.
-            markClosed();
-            // RFC 9000 Section 10.1: idle timeout is a silent close — no
-            // CONNECTION_CLOSE frame is sent.  Do NOT set pending_write_ here;
-            // callers must observe isClosed() to tear the session down.
+            // closed gracefully without raising an exception.
+            closeIdleLocked();
             return 0;
         }
         xsink->raiseException("QUIC-TIMER-ERROR", "ngtcp2_conn_handle_expiry failed: %s",
@@ -2031,6 +1992,102 @@ int QuicSession::handleExpiryLocked(ExceptionSink* xsink) {
     }
 
     return 0;
+}
+
+void QuicSession::closeIdleLocked() {
+    // Set idle_closed_ so isClosed() reports closed on the next check: ngtcp2 does NOT transition conn->state on
+    // NGTCP2_ERR_IDLE_CLOSE (see ngtcp2_conn.c:11221), so ngtcp2_conn_in_{closing,draining}_period() both keep
+    // returning false.  Without this flag the caller's isClosed() check would still return false and the UDP socket
+    // would leak.
+    idle_closed_.store(true, std::memory_order_release);
+    printd(5, "QuicSession::closeIdleLocked(): idle timeout (session %lld)\n", (long long)session_id_);
+#if defined(DEBUG) || defined(DEBUG_ASYNC_IO)
+    if (conn_) {
+        ngtcp2_conn_info cinfo;
+        ngtcp2_conn_get_conn_info(conn_, &cinfo);
+        const ngtcp2_transport_params* rp = ngtcp2_conn_get_remote_transport_params2(conn_);
+        ASYNC_IO_TRACE("QuicSession::closeIdleLocked IDLE_CLOSE session=%lld streams=%zu "
+            "local_idle_ns=%llu peer_max_idle_ns=%llu pkt_sent=%llu pkt_recv=%llu "
+            "pkt_lost=%llu ping_recv=%llu bytes_in_flight=%llu\n",
+            static_cast<long long>(session_id_), streams_.size(),
+            static_cast<unsigned long long>(local_idle_timeout_ns_),
+            static_cast<unsigned long long>(rp ? rp->max_idle_timeout : 0),
+            static_cast<unsigned long long>(cinfo.pkt_sent),
+            static_cast<unsigned long long>(cinfo.pkt_recv),
+            static_cast<unsigned long long>(cinfo.pkt_lost),
+            static_cast<unsigned long long>(cinfo.ping_recv),
+            static_cast<unsigned long long>(cinfo.bytes_in_flight));
+    }
+#endif
+    // An idle close is a real close: it must have the same observable effects as an explicit teardown, or threads
+    // parked on this session never wake.  idle_closed_ alone only feeds getCloseReason(); the closed_-based paths
+    // (waitForStreamDrain() returning -1, stream data/drain waiters, datagram Queue sentinels) would keep reporting
+    // a live session forever.  That is what parks an SSE producer in sendRawStringIntern() against a dead peer: its
+    // 1 MB stream buffer never drains, so waitForStreamDrain() returns 1 (timed out) on every call instead of -1
+    // (gone).  markClosed() only takes datagram_mutex_, and mtx_ (held by the caller, recursive) is already ordered
+    // before it on the receive path, so this is safe.
+    markClosed();
+    // RFC 9000 Section 10.1: idle timeout is a silent close — no CONNECTION_CLOSE frame is sent.  Do NOT set
+    // pending_write_ here; callers must observe isClosed() to tear the session down.
+}
+
+#ifdef DEBUG
+//! Test hook: idle-closes the session of the next client request submitted after QORE_QUIC_TEST_IDLE_CLOSE_AT_SUBMIT
+//! got a new value, as if its idle timer had expired between connect and submit
+/** It fires once per value, so that a request retried on a new connection finds it open; the variable is read on
+    every call because tests scope it to one case in a shared test process.
+
+    @return true if the session of the request is to be closed
+*/
+static bool quic_test_idle_close_at_submit() {
+    QoreEnvironmentValue token_holder("QORE_QUIC_TEST_IDLE_CLOSE_AT_SUBMIT");
+    const char* token = token_holder.c_str();
+    if (!token || !*token) {
+        return false;
+    }
+    static std::mutex last_token_lock;
+    static std::string last_token;
+    std::lock_guard<std::mutex> lock(last_token_lock);
+    if (last_token == token) {
+        return false;
+    }
+    last_token = token;
+    return true;
+}
+#endif
+
+bool QuicSession::refuseRequestOnClosedLocked(ExceptionSink* xsink) {
+#ifdef DEBUG
+    if (!idle_closed_.load(std::memory_order_acquire) && quic_test_idle_close_at_submit()) {
+        closeIdleLocked();
+    }
+#endif
+    // RFC 9000 section 10.1: a connection that has been idle for longer than its idle timeout is closed, and its
+    // state discarded, whether or not the idle timer has run yet; a request submitted on it would never be sent, so
+    // the timers that are due are run first, as the I/O thread runs them, which closes such a connection
+    if (!idle_closed_.load(std::memory_order_acquire) && conn_) {
+        ngtcp2_tstamp expiry = getExpiryLocked();
+        if (expiry != UINT64_MAX && expiry <= nowLocked() && handleExpiryLocked(xsink) < 0) {
+            return true;
+        }
+    }
+    switch (getCloseReason()) {
+        case CloseReason::Open:
+            return false;
+        case CloseReason::Idle:
+            xsink->raiseException("HTTP3-IDLE-CLOSE", "QUIC connection closed by its idle timer before the "
+                "request was sent; the request was not sent");
+            break;
+        case CloseReason::LocalClose:
+            xsink->raiseException("HTTP3-LOCAL-CLOSE", "QUIC connection closed locally before the request was "
+                "sent; the request was not sent");
+            break;
+        case CloseReason::PeerClose:
+            xsink->raiseException("HTTP3-PEER-CLOSE", "QUIC connection closed by the peer before the request was "
+                "sent; the request was not sent");
+            break;
+    }
+    return true;
 }
 
 int QuicSession::handleExpiry(ExceptionSink* xsink) {
@@ -2212,6 +2269,9 @@ int64_t QuicSession::submitRequest(const char* method, const char* path,
         xsink->raiseException("QUIC-HTTP3-ERROR", "HTTP/3 layer not initialized");
         return -1;
     }
+    if (refuseRequestOnClosedLocked(xsink)) {
+        return -1;
+    }
 
     // Open a new bidirectional stream
     int64_t stream_id;
@@ -2342,6 +2402,9 @@ int64_t QuicSession::submitRequestStreaming(const char* method, const char* path
         xsink->raiseException("QUIC-HTTP3-ERROR", "HTTP/3 layer not initialized");
         return -1;
     }
+    if (refuseRequestOnClosedLocked(xsink)) {
+        return -1;
+    }
 
     // Open a new bidirectional stream
     int64_t stream_id;
@@ -2468,6 +2531,9 @@ int64_t QuicSession::submitConnectRequest(const char* path, const qore_http_head
 
     if (!h3_conn_) {
         xsink->raiseException("QUIC-HTTP3-ERROR", "HTTP/3 layer not initialized");
+        return -1;
+    }
+    if (refuseRequestOnClosedLocked(xsink)) {
         return -1;
     }
 
