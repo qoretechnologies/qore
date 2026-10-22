@@ -3,11 +3,11 @@
 # test-listener-addresses.qtest Copyright (C) 2026 Qore Technologies, s.r.o.
 #
 # Fails when a test listens on all interfaces without saying why.  A test's clients connect to a loopback address or
-# to a host name, and a socket on all interfaces shares its port with any socket that another program binds to a more
-# specific address of the same port, which then receives those clients instead of the test's server; on macOS, a
-# program of the same user can do so after the test's server has started.  A test server therefore listens on the
-# host that its clients connect to, and a test that listens on all interfaces on purpose, for example to test such a
-# bind, says why with a comment on the line of the call, or on a comment line directly above it:
+# to a host name, and a socket that another program binds to a more specific address of the same port receives those
+# clients instead of a test server on all interfaces; the systems refuse most such binds, but not all of them (see
+# Socket::bindINET()).  A test server therefore listens on the host that its clients connect to, and a test that
+# listens on all interfaces on purpose, for example to test such a bind, says why with a comment on the line of the
+# call, or on a comment line directly above it:
 #
 #     server.bindINET(NOTHING, 0, True);  # all-interfaces: a socket on all interfaces serves IPv6 clients too
 

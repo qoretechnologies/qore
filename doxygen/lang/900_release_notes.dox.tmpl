@@ -1508,6 +1508,22 @@ val = "string";      # OK
     @ref httpserverintro "HttpServer"; see @ref Qore::Socket::bindINET() "Socket::bindINET()".
     @endparblock
 
+    @par On macOS, a Specific Address Is Refused a Port That a Socket Holds on All Interfaces
+    @parblock
+    On macOS, a bind of a specific address, such as \c 127.0.0.1 or \c ::1, with \c SO_REUSEADDR no longer succeeds
+    on a port that another socket of the same user holds on a wildcard address that covers it (\c 0.0.0.0, or a
+    dual-stack socket on \c ::), which then lost the clients of that address to the new socket.  The bind fails with
+    \c SOCKET-BIND-ERROR (\c EADDRINUSE) if the other socket listens or does not reuse the address, as on Linux.  A
+    stream socket is also refused the port if the other socket reuses the address and does not listen, which Linux
+    allows, because macOS gives a connection request for the address to the socket bound there even if it does not
+    listen, which drops it.  Of two sockets that reuse the address and are bound to such addresses of a port, the one
+    that listens first holds the port, and @ref Qore::Socket::listen() "Socket::listen()" of the other one fails with
+    \c EADDRINUSE, as on Linux.  Binds without \c SO_REUSEADDR were already refused.  This applies to binds and
+    listens of a @ref Qore::Socket "Socket" and to the listeners of @ref httpserverintro "HttpServer"; a server that
+    listens on a specific address must use another port than a server of the same user that listens on all
+    interfaces.  See @ref Qore::Socket::bindINET() "Socket::bindINET()".  Linux is unchanged.
+    @endparblock
+
     @par qpp Fails the Build for Every Error It Reports
     @parblock
     \c qpp, the preprocessor that generates the C++ code and the documentation of binary modules from

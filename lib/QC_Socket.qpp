@@ -3964,12 +3964,21 @@ nothing Socket::bindUNIX(string path, softint socket_type = SOCK_STREAM,
     socket on \c "::", never shares its port with another socket that uses the port for IPv4, because the IPv4
     clients of that socket's address would reach it instead of this socket.  Linux refuses such a bind itself.  On
     macOS, the bind fails with \c SOCKET-BIND-ERROR (\c EADDRINUSE) if another socket uses the port on \c "0.0.0.0"
-    or \c "127.0.0.1"; other addresses are not checked, and connections on the port, including connections in
-    \c TIME_WAIT from an earlier server on the port, do not make the bind fail.  A port assigned by the system (port
-    \c 0) to a stream socket is one that no IPv4 socket uses.  On macOS, a socket of the same user that later binds a specific address of
-    the port and reuses the address still receives the IPv4 clients of that address, which no bind on all interfaces
-    can prevent; a server whose clients connect to one address, such as \c "127.0.0.1" for local clients, binds that
-    address instead to avoid it.
+    or \c "127.0.0.1"; other addresses are not checked by the bind, but @ref Qore::Socket::listen() "Socket::listen()"
+    then fails if a socket on such an address of the port listens, as described below, and connections on the port,
+    including connections in \c TIME_WAIT from an earlier server on the port, do not make the bind fail.  A port assigned by the system (port
+    \c 0) to a stream socket is one that no IPv4 socket uses.
+
+    In turn, a socket that binds a specific address of a given port, such as \c "127.0.0.1" or \c "::1", would
+    receive the clients of that address instead of a socket that holds the port on a wildcard address that covers it
+    (\c "0.0.0.0" covers the IPv4 addresses, and a dual-stack socket on \c "::" all addresses).  The bind fails with
+    \c SOCKET-BIND-ERROR (\c EADDRINUSE), also with \c SO_REUSEADDR, if the other socket listens or does not reuse
+    the address, as Linux refuses it; macOS allows it with \c SO_REUSEADDR, so on macOS the bind checks the sockets of
+    the system itself.  On macOS, a stream socket with \c SO_REUSEADDR is also refused the port if the other socket
+    reuses the address and does not listen, which Linux allows, because macOS gives a connection request for the
+    address to the socket bound there even if it does not listen, which drops it.  Of two sockets that reuse the
+    address and are bound to such addresses of a port, the one that listens first holds the port, and
+    @ref Qore::Socket::listen() "Socket::listen()" of the other one fails with \c EADDRINUSE, on macOS as on Linux.
 
     A stream socket bound to a host name, such as \c "localhost", whose addresses are in more than one address
     family, is bound on one address and holds its port on the name's addresses in the other address families until
@@ -4121,9 +4130,13 @@ Socket Socket::acceptSSL() {
 
     @param backlog the size of the queue for pending connections
 
-    @return Returns 0 for success, -1 for error
+    @return Returns 0 for success, -1 for error, in which case @ref Qore::errno() "errno()" gives the error number
 
     @throw SOCKET-NOT-OPEN The socket is not bound
+
+    @note The listen fails with \c EADDRINUSE if another socket that shares the socket's port on an address that both
+    serve (see @ref Qore::Socket::bindINET() "Socket::bindINET()") listens or does not reuse the address; of two
+    such sockets, the one that listens first holds the port, on macOS as on Linux
 
     @since %Qore 0.8.8 the \a backlog parameter was added
 */

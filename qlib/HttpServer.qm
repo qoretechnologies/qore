@@ -1519,10 +1519,9 @@ server.setCompressionLevels({"br": 4, "zstd": 3});
 
         @note On macOS, a listener on all interfaces is refused a port that another program already uses for IPv4 on
         \c 0.0.0.0 or \c 127.0.0.1 (\c SOCKET-BIND-ERROR), as Linux refuses it, and a port assigned by the system
-        (port \c 0) is one that no IPv4 socket uses.  A program of the same user that later binds a specific address
-        of the port with \c SO_REUSEADDR still receives the IPv4 clients of that address on macOS; a server whose
-        clients connect to one address, such as \c 127.0.0.1, listens on that address with a \c node to avoid it.
-        See @ref Qore::Socket::bindINET() "Socket::bindINET()"
+        (port \c 0) is one that no IPv4 socket uses.  A program that later binds a specific address of the port, such
+        as \c 127.0.0.1, is refused it, also with \c SO_REUSEADDR, on macOS as on Linux.  See
+        @ref Qore::Socket::bindINET() "Socket::bindINET()"
      */
     hash<auto> addListener(int port) {
         hash<auto> rv = addListenerAsync(port).get();
@@ -1583,10 +1582,9 @@ server.setCompressionLevels({"br": 4, "zstd": 3});
 
         @note On macOS, a listener on all interfaces is refused a port that another program already uses for IPv4 on
         \c 0.0.0.0 or \c 127.0.0.1 (\c SOCKET-BIND-ERROR), as Linux refuses it, and a port assigned by the system
-        (port \c 0) is one that no IPv4 socket uses.  A program of the same user that later binds a specific address
-        of the port with \c SO_REUSEADDR still receives the IPv4 clients of that address on macOS; a server whose
-        clients connect to one address, such as \c 127.0.0.1, listens on that address with a \c node to avoid it.
-        See @ref Qore::Socket::bindINET() "Socket::bindINET()"
+        (port \c 0) is one that no IPv4 socket uses.  A program that later binds a specific address of the port, such
+        as \c 127.0.0.1, is refused it, also with \c SO_REUSEADDR, on macOS as on Linux.  See
+        @ref Qore::Socket::bindINET() "Socket::bindINET()"
      */
     hash<auto> addListener(hash<HttpListenerOptionInfo> opts) {
         hash<auto> rv = addListenerAsync(opts).get();

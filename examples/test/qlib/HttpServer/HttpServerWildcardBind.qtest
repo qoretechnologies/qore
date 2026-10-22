@@ -76,9 +76,8 @@ class HttpServerWildcardBindTest inherits QUnit::Test {
     }
 
     #! returns a listening TCP socket on the given IPv4 address and port that no other socket uses
-    /** The socket does not reuse the address, so the bind is refused if any socket uses the port; with
-        SO_REUSEADDR, macOS allows a bind of 127.0.0.1 on a port that another program's socket uses on all interfaces,
-        or that only connections use, and the socket then receives that program's IPv4 clients of 127.0.0.1.
+    /** The socket does not reuse the address, so the bind is refused if any socket uses the port, also one on which
+        only connections remain; with SO_REUSEADDR, macOS allows a bind of 127.0.0.1 on such a port.
     */
     private static Socket holder(string address, int port) {
         Socket s();

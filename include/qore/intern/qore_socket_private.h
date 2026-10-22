@@ -175,7 +175,19 @@ DLLLOCAL int qore_socket_bind_family_sockaddr_direct(QoreSocket* s, int family, 
       socket uses on any address; a port in use in IPv6 is replaced, up to \c QORE_BIND_RESERVATION_MAX_PORTS times,
       and then the system assigns the port
 
-    On other systems, and for other addresses, it is \c bind().
+    A socket bound to a specific address of a port also receives the clients of that address instead of a socket on
+    a wildcard address of the port.  Linux refuses a bind with \c SO_REUSEADDR of a specific address to a given port
+    if a socket on a wildcard address that covers it holds the port and listens or does not reuse the address; macOS
+    allows it.  On macOS, therefore, such a bind fails with \c EADDRINUSE, as found in the system's socket table:
+    - of a stream socket, if a socket that is not connected holds a wildcard address that covers the address on the
+      port, whether it listens or not, because a connection request to a stream socket that is bound but not
+      listening is dropped on macOS, while Linux gives it to the socket that listens
+    - of a datagram socket, if such a socket does not reuse the address, as on Linux
+    .
+    unless both sockets reuse the port and belong to the same user, as on Linux.  A bind without \c SO_REUSEADDR is
+    refused by macOS itself.
+
+    On other systems, and for other binds, it is \c bind().
 
     @param sock the socket descriptor
     @param addr the address to bind
@@ -188,6 +200,20 @@ DLLLOCAL int qore_socket_bind_family_sockaddr_direct(QoreSocket* s, int family, 
 */
 DLLLOCAL int qore_socket_bind_unshadowed(int sock, const struct sockaddr* addr, size_t addrlen, int socktype,
     QoreSandboxManager* sandbox_manager);
+
+//! Puts a TCP socket in the listening state so that, on macOS, it never shares its port with another listener
+/** Two sockets that reuse the address can be bound to overlapping addresses of a port, such as \c 0.0.0.0 and
+    \c 127.0.0.1, if neither listens.  Linux then refuses the listen of the second one; macOS allows it, and the socket
+    on the more specific address receives the clients of that address.  On macOS, therefore, the listen fails with
+    \c EADDRINUSE if another socket that serves an address in common with the socket on its port listens, or does
+    not reuse the address, unless both sockets reuse the port and belong to the same user, as on Linux; the system's
+    socket table is read for it.
+
+    On other systems, it is \c listen().
+
+    @return 0 for success, \c QORE_SOCKET_ERROR for an error, with the system error number set
+*/
+DLLLOCAL int qore_socket_listen_unshadowed(int sock, int backlog);
 DLLLOCAL int sock_get_error();
 DLLLOCAL void sock_set_raw_error(int rc);
 DLLLOCAL QoreListNode* qore_socket_resolve_addrinfo_asyncio(ExceptionSink* xsink, const char* node,
@@ -2533,7 +2559,7 @@ struct qore_socket_private : public QoreReferenceCounter {
         listening = true;
         return 0;
 #else
-        int rc = ::listen(sock, backlog);
+        int rc = qore_socket_listen_unshadowed(sock, backlog);
         if (!rc) {
             listening = true;
         }
@@ -3182,7 +3208,8 @@ struct qore_socket_private : public QoreReferenceCounter {
 
     //! Makes the open IPv6 socket accept IPv4 traffic as well, as IPv4-mapped IPv6 addresses (RFC 3493 section 5.3)
     /** The option is always set explicitly, because the default differs between systems (Linux follows the
-        \c net.ipv6.bindv6only sysctl; Windows and the BSDs default to IPv6-only sockets).
+        \c net.ipv6.bindv6only sysctl and macOS the \c net.inet6.ip6.v6only sysctl, which are 0 by default; Windows
+        and FreeBSD default to IPv6-only sockets).
 
         @return 0 for success, -1 if the system does not support dual-stack sockets
     */

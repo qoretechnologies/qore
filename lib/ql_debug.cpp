@@ -3320,6 +3320,229 @@ public:
 };
 #endif
 
+#ifndef _Q_WINDOWS
+//! Sockets on overlapping addresses of a port share it only as Linux allows it
+/** qore_socket_bind_unshadowed() and qore_socket_listen_unshadowed() follow Linux's rules: two TCP sockets that
+    serve an address in common share its port only if both reuse the address and the other one does not listen, or if
+    both reuse the port and belong to the same user; of two such sockets that are bound, the one that listens first
+    holds the port.  On Linux the system applies the rules; on macOS, which allows a socket that reuses the address to
+    bind a specific address of a port held on a wildcard address, and two such sockets to listen, the functions apply
+    them, and a TCP socket is refused a specific address of a port held on a wildcard address also if the other socket
+    reuses the address and does not listen, because macOS gives the connection requests to the address to the socket
+    bound there, which drops them if it does not listen.  The sockets are made with the system's API, as the Socket
+    class makes no IPv6-only socket.
+*/
+class SpecificBindTest {
+public:
+    static void run(UnitTestCounters& c) {
+        runIpv6OnlyHolder(c);
+        runListenOrder(c);
+        runReusePort(c);
+        runMappedAddress(c);
+    }
+
+private:
+    //! closes the descriptor when it goes out of scope
+    struct Fd {
+        int fd = -1;
+        DLLLOCAL ~Fd() {
+            if (fd >= 0) {
+                ::close(fd);
+            }
+        }
+    };
+
+    //! returns an open TCP socket with the options, or -1
+    static int open(int family, bool v6only, bool reuse, bool reuseport = false) {
+        int fd = socket(family, SOCK_STREAM, 0);
+        if (fd < 0) {
+            return -1;
+        }
+        int one = 1;
+        int v6 = v6only ? 1 : 0;
+        if ((family == AF_INET6 && setsockopt(fd, IPPROTO_IPV6, IPV6_V6ONLY, &v6, sizeof(v6)))
+            || (reuse && setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &one, sizeof(one)))
+#ifdef SO_REUSEPORT
+            || (reuseport && setsockopt(fd, SOL_SOCKET, SO_REUSEPORT, &one, sizeof(one)))
+#endif
+            ) {
+            ::close(fd);
+            return -1;
+        }
+        return fd;
+    }
+
+    //! binds the socket to the address and port with qore_socket_bind_unshadowed(); returns 0 or the error number
+    static int bindTo(int fd, int family, const char* address, int port) {
+        struct sockaddr_storage ss = {};
+        socklen_t len;
+        if (family == AF_INET) {
+            struct sockaddr_in* sin = reinterpret_cast<struct sockaddr_in*>(&ss);
+            sin->sin_family = AF_INET;
+            sin->sin_port = htons(port);
+            inet_pton(AF_INET, address, &sin->sin_addr);
+            len = sizeof(*sin);
+        } else {
+            struct sockaddr_in6* sin6 = reinterpret_cast<struct sockaddr_in6*>(&ss);
+            sin6->sin6_family = AF_INET6;
+            sin6->sin6_port = htons(port);
+            inet_pton(AF_INET6, address, &sin6->sin6_addr);
+            len = sizeof(*sin6);
+        }
+#ifdef DARWIN
+        ss.ss_len = len;
+#endif
+        return qore_socket_bind_unshadowed(fd, reinterpret_cast<struct sockaddr*>(&ss), len, SOCK_STREAM, nullptr)
+            ? errno : 0;
+    }
+
+    //! puts the socket in the listening state with qore_socket_listen_unshadowed(); returns 0 or the error number
+    static int listenOn(int fd) {
+        return qore_socket_listen_unshadowed(fd, 5) ? errno : 0;
+    }
+
+    //! returns the port of the bound socket, or -1
+    static int portOf(int fd) {
+        struct sockaddr_storage ss = {};
+        socklen_t len = sizeof(ss);
+        if (getsockname(fd, reinterpret_cast<struct sockaddr*>(&ss), &len)) {
+            return -1;
+        }
+        return ss.ss_family == AF_INET ? ntohs(reinterpret_cast<struct sockaddr_in*>(&ss)->sin_port)
+            : ntohs(reinterpret_cast<struct sockaddr_in6*>(&ss)->sin6_port);
+    }
+
+    //! returns true if a socket can be bound to the IPv6 loopback address
+    static bool hasIpv6() {
+        Fd s{open(AF_INET6, true, false)};
+        return s.fd >= 0 && !bindTo(s.fd, AF_INET6, "::1", 0);
+    }
+
+    //! the result of a TCP bind of a specific address with SO_REUSEADDR over a wildcard socket that reuses the address
+    //! and does not listen: Linux allows it, macOS refuses it
+    static constexpr int ReuseBoundHolderResult =
+#ifdef DARWIN
+        EADDRINUSE;
+#else
+        0;
+#endif
+
+    //! an IPv6-only socket on :: serves no IPv4 address: 127.0.0.1 may share its port, ::1 may not
+    static void runIpv6OnlyHolder(UnitTestCounters& c) {
+        if (!hasIpv6()) {
+            return;
+        }
+        {
+            Fd h{open(AF_INET6, true, true)};
+            UT_ASSERT_EQ(c, 0, h.fd >= 0 ? bindTo(h.fd, AF_INET6, "::", 0) : -1,
+                "specific bind: an IPv6-only holder that reuses the address is bound");
+            Fd v6{open(AF_INET6, true, true)};
+            UT_ASSERT_EQ(c, ReuseBoundHolderResult, bindTo(v6.fd, AF_INET6, "::1", portOf(h.fd)),
+                "specific bind: ::1 with SO_REUSEADDR over a bound IPv6-only socket on :: that reuses the address");
+        }
+        for (bool listening : {true, false}) {
+            Fd h{open(AF_INET6, true, false)};
+            UT_ASSERT(c, h.fd >= 0, "specific bind: an IPv6-only holder is opened");
+            if (h.fd < 0) {
+                return;
+            }
+            UT_ASSERT_EQ(c, 0, bindTo(h.fd, AF_INET6, "::", 0), "specific bind: the IPv6-only holder is bound");
+            if (listening) {
+                UT_ASSERT_EQ(c, 0, listenOn(h.fd), "specific bind: the IPv6-only holder listens");
+            }
+            int port = portOf(h.fd);
+            Fd v4{open(AF_INET, false, true)};
+            UT_ASSERT_EQ(c, 0, bindTo(v4.fd, AF_INET, "127.0.0.1", port),
+                "specific bind: 127.0.0.1 shares the port of an IPv6-only socket on ::");
+            Fd v6{open(AF_INET6, true, true)};
+            UT_ASSERT_EQ(c, EADDRINUSE, bindTo(v6.fd, AF_INET6, "::1", port),
+                "specific bind: ::1 with SO_REUSEADDR is refused the port of an IPv6-only socket on :: that does not "
+                "reuse the address");
+        }
+    }
+
+    //! of two sockets bound with SO_REUSEADDR to overlapping addresses, the one that listens first holds the port
+    static void runListenOrder(UnitTestCounters& c) {
+        // 127.0.0.1 over a bound socket on 0.0.0.0: Linux allows the bind, macOS refuses it
+        for (bool wildcard_first : {true, false}) {
+            Fd h{open(AF_INET, false, true)};
+            Fd s{open(AF_INET, false, true)};
+            UT_ASSERT(c, h.fd >= 0 && s.fd >= 0, "specific bind: the listen order sockets are opened");
+            if (h.fd < 0 || s.fd < 0) {
+                return;
+            }
+            UT_ASSERT_EQ(c, 0, bindTo(h.fd, AF_INET, "0.0.0.0", 0), "specific bind: the wildcard socket is bound");
+            int rc = bindTo(s.fd, AF_INET, "127.0.0.1", portOf(h.fd));
+            UT_ASSERT_EQ(c, ReuseBoundHolderResult, rc,
+                "specific bind: 127.0.0.1 over a bound socket on 0.0.0.0 that reuses the address");
+            if (rc) {
+                continue;
+            }
+            assertListenOrder(c, wildcard_first ? h.fd : s.fd, wildcard_first ? s.fd : h.fd);
+        }
+        // a dual-stack socket on :: over a bound socket on ::1, which both systems allow
+        if (!hasIpv6()) {
+            return;
+        }
+        for (bool wildcard_first : {true, false}) {
+            Fd s{open(AF_INET6, true, true)};
+            Fd h{open(AF_INET6, false, true)};
+            UT_ASSERT(c, h.fd >= 0 && s.fd >= 0, "specific bind: the IPv6 listen order sockets are opened");
+            if (h.fd < 0 || s.fd < 0) {
+                return;
+            }
+            UT_ASSERT_EQ(c, 0, bindTo(s.fd, AF_INET6, "::1", 0), "specific bind: the socket on ::1 is bound");
+            UT_ASSERT_EQ(c, 0, bindTo(h.fd, AF_INET6, "::", portOf(s.fd)),
+                "specific bind: a dual-stack socket on :: shares the port of a bound socket on ::1 that reuses the "
+                "address");
+            assertListenOrder(c, wildcard_first ? h.fd : s.fd, wildcard_first ? s.fd : h.fd);
+        }
+    }
+
+    //! asserts that the first socket listens and the second one then cannot
+    static void assertListenOrder(UnitTestCounters& c, int first, int second) {
+        UT_ASSERT_EQ(c, 0, listenOn(first), "specific bind: the first socket listens");
+        UT_ASSERT_EQ(c, EADDRINUSE, listenOn(second), "specific bind: the second socket cannot listen");
+    }
+
+    //! two sockets that reuse the port share it, if both reuse it
+    static void runReusePort(UnitTestCounters& c) {
+#ifdef SO_REUSEPORT
+        for (bool both : {true, false}) {
+            Fd h{open(AF_INET, false, true, true)};
+            UT_ASSERT(c, h.fd >= 0, "specific bind: the SO_REUSEPORT holder is opened");
+            if (h.fd < 0) {
+                return;
+            }
+            UT_ASSERT_EQ(c, 0, bindTo(h.fd, AF_INET, "0.0.0.0", 0), "specific bind: the SO_REUSEPORT holder is bound");
+            UT_ASSERT_EQ(c, 0, listenOn(h.fd), "specific bind: the SO_REUSEPORT holder listens");
+            Fd s{open(AF_INET, false, true, both)};
+            UT_ASSERT_EQ(c, both ? 0 : EADDRINUSE, bindTo(s.fd, AF_INET, "127.0.0.1", portOf(h.fd)),
+                both ? "specific bind: 127.0.0.1 with SO_REUSEPORT shares the port of a listener that reuses the port"
+                    : "specific bind: 127.0.0.1 without SO_REUSEPORT is refused the port of a listener on 0.0.0.0");
+        }
+#endif
+    }
+
+    //! an IPv4-mapped address of a dual-stack socket is an IPv4 address of the port
+    static void runMappedAddress(UnitTestCounters& c) {
+        if (!hasIpv6()) {
+            return;
+        }
+        Fd h{open(AF_INET, false, false)};
+        UT_ASSERT(c, h.fd >= 0, "specific bind: the IPv4 listener is opened");
+        if (h.fd < 0) {
+            return;
+        }
+        UT_ASSERT_EQ(c, 0, bindTo(h.fd, AF_INET, "0.0.0.0", 0), "specific bind: the IPv4 listener is bound");
+        UT_ASSERT_EQ(c, 0, listenOn(h.fd), "specific bind: the IPv4 listener listens");
+        Fd s{open(AF_INET6, false, true)};
+        UT_ASSERT_EQ(c, EADDRINUSE, bindTo(s.fd, AF_INET6, "::ffff:127.0.0.1", portOf(h.fd)),
+            "specific bind: ::ffff:127.0.0.1 with SO_REUSEADDR is refused the port of a listener on 0.0.0.0");
+    }
+};
+#endif
+
 //! A socket closed by another thread while its descriptor is registered keeps the descriptor's number
 /** The system gives the lowest free descriptor number to the next socket or file opened by any thread, so an I/O
     thread that still has the number of a closed descriptor registered in its event loop would remove or change the
@@ -10773,6 +10996,9 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     AsyncIoDescriptorHoldTest::runOwnedExtraFd(c);
     AsyncIoDescriptorHoldTest::runRefusedExtraFd(c);
     QoreCaresSocketsTest::run(c);
+#ifndef _Q_WINDOWS
+    SpecificBindTest::run(c);
+#endif
     AsyncIoAbandonedSubmitTest::run(c);
     AsyncIoRegistrationCloseTest::run(c);
     AsyncIoZeroPollHintTest::run(c);

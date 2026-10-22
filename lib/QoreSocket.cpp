@@ -79,6 +79,15 @@
 #include <netinet/in.h>
 #include <netinet/tcp.h>
 #endif
+#ifdef DARWIN
+// the socket table of the system, as netstat reads it, for the port checks of qore_socket_bind_unshadowed() and
+// qore_socket_listen_unshadowed()
+#include <sys/socketvar.h>
+#include <sys/sysctl.h>
+#include <netinet/in_pcb.h>
+#include <netinet/tcp_var.h>
+#include <netinet/tcp_fsm.h>
+#endif
 
 // maximum number of non-blocking network operations before returning
 constexpr unsigned max_nonblock_ops = 32;
@@ -12871,25 +12880,290 @@ static int qore_socket_bind_ipv4_free_port(int sock, const struct sockaddr* addr
     }
     return ::bind(sock, addr, addrlen);
 }
+
+//! The addresses that a TCP or UDP socket serves on its port, for the port checks of macOS
+/** Each address family has no address, one address, or all of its addresses: a socket on the wildcard address of
+    its family serves all of them, and a dual-stack IPv6 socket on the IPv6 wildcard address also serves all IPv4
+    addresses.
+*/
+struct QoreSocketServedAddrs {
+    enum Kind : unsigned char { NONE, ONE, ALL };
+    Kind v4 = NONE;
+    Kind v6 = NONE;
+    struct in_addr a4 = {};
+    struct in6_addr a6 = {};
+
+    //! sets the addresses of an IPv4 socket bound to the address
+    DLLLOCAL void setIpv4(const struct in_addr& addr) {
+        v4 = addr.s_addr == htonl(INADDR_ANY) ? ALL : ONE;
+        a4 = addr;
+    }
+
+    //! sets the addresses of an IPv6 socket bound to the address
+    DLLLOCAL void setIpv6(const struct in6_addr& addr, bool v6only) {
+        if (IN6_IS_ADDR_UNSPECIFIED(&addr)) {
+            v6 = ALL;
+            v4 = v6only ? NONE : ALL;
+        } else if (IN6_IS_ADDR_V4MAPPED(&addr)) {
+            struct in_addr mapped;
+            memcpy(&mapped, &addr.s6_addr[12], sizeof(mapped));
+            setIpv4(mapped);
+        } else {
+            v6 = ONE;
+            a6 = addr;
+        }
+    }
+
+    //! sets the addresses of a socket bound to the address; returns false if it is not an IPv4 or IPv6 address
+    DLLLOCAL bool set(const struct sockaddr* addr, bool v6only) {
+        if (addr->sa_family == AF_INET) {
+            setIpv4(reinterpret_cast<const struct sockaddr_in*>(addr)->sin_addr);
+            return true;
+        }
+        if (addr->sa_family == AF_INET6) {
+            setIpv6(reinterpret_cast<const struct sockaddr_in6*>(addr)->sin6_addr, v6only);
+            return true;
+        }
+        return false;
+    }
+
+    //! returns true if the socket serves all addresses of a family
+    DLLLOCAL bool isWildcard() const {
+        return v4 == ALL || v6 == ALL;
+    }
+
+    //! returns true if the sockets serve an address in common
+    DLLLOCAL bool overlaps(const QoreSocketServedAddrs& other) const {
+        return overlaps(v4, other.v4, !memcmp(&a4, &other.a4, sizeof(a4)))
+            || overlaps(v6, other.v6, !memcmp(&a6, &other.a6, sizeof(a6)));
+    }
+
+    //! returns true if the sockets serve the same addresses
+    DLLLOCAL bool sameAs(const QoreSocketServedAddrs& other) const {
+        return v4 == other.v4 && v6 == other.v6 && (v4 != ONE || !memcmp(&a4, &other.a4, sizeof(a4)))
+            && (v6 != ONE || !memcmp(&a6, &other.a6, sizeof(a6)));
+    }
+
+private:
+    DLLLOCAL static bool overlaps(Kind k1, Kind k2, bool same_address) {
+        if (k1 == NONE || k2 == NONE) {
+            return false;
+        }
+        return k1 == ALL || k2 == ALL || same_address;
+    }
+};
+
+//! A socket of the system's socket table that is bound to a port and not connected
+struct QoreSocketTableEntry {
+    QoreSocketServedAddrs addrs;
+    int port = 0;
+    bool listening = false;
+    //! the socket's options, such as SO_REUSEADDR and SO_REUSEPORT
+    int options = 0;
+    uid_t uid = 0;
+};
+
+//! Calls @a f with each socket of the type in the system's socket table that is bound to a port and not connected
+/** The table is the one that \c netstat reads (\c net.inet.tcp.pcblist64 or \c net.inet.udp.pcblist64); it lists
+    the sockets of all users.
+
+    @return 0 if the table was read, -1 if not; @a f may have been called for a part of it in that case
+*/
+template <typename F>
+static int qore_socket_for_each_bound_socket(int socktype, F&& f) {
+    static_assert(__BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__,
+        "the length of a record of the socket table is read from the low 32 bits of its first field");
+    bool tcp = socktype == SOCK_STREAM;
+    const char* name = tcp ? "net.inet.tcp.pcblist64" : "net.inet.udp.pcblist64";
+    std::vector<char> buf;
+    size_t len = 0;
+    for (unsigned i = 0; ; ++i) {
+        if (sysctlbyname(name, nullptr, &len, nullptr, 0)) {
+            return -1;
+        }
+        // room for sockets created after the size is read
+        len += len / 8 + 4096;
+        buf.resize(len);
+        if (!sysctlbyname(name, buf.data(), &len, nullptr, 0)) {
+            break;
+        }
+        if (errno != ENOMEM || i == 3) {
+            return -1;
+        }
+    }
+    struct xinpgen gen;
+    if (len < sizeof(gen)) {
+        return -1;
+    }
+    memcpy(&gen, buf.data(), sizeof(gen));
+    size_t record_size = tcp ? sizeof(struct xtcpcb64) : sizeof(struct xinpcb64);
+    for (size_t pos = gen.xig_len; pos + sizeof(uint32_t) <= len; ) {
+        uint32_t record_len;
+        memcpy(&record_len, buf.data() + pos, sizeof(record_len));
+        if (record_len <= sizeof(struct xinpgen)) {
+            // the generation record that ends the table
+            return 0;
+        }
+        if (record_len < record_size || pos + record_len > len) {
+            return -1;
+        }
+        struct xinpcb64 inp;
+        int state = -1;
+        if (tcp) {
+            struct xtcpcb64 record;
+            memcpy(&record, buf.data() + pos, sizeof(record));
+            inp = record.xt_inpcb;
+            state = record.t_state;
+        } else {
+            memcpy(&inp, buf.data() + pos, sizeof(inp));
+        }
+        pos += record_len;
+        QoreSocketTableEntry e;
+        e.port = ntohs(inp.inp_lport);
+        if (!e.port || inp.inp_fport) {
+            continue;
+        }
+        if (inp.inp_vflag & INP_IPV6) {
+            e.addrs.setIpv6(inp.inp_dependladdr.inp6_local, inp.inp_flags & IN6P_IPV6_V6ONLY);
+        } else if (inp.inp_vflag & INP_IPV4) {
+            e.addrs.setIpv4(inp.inp_dependladdr.inp46_local.ia46_addr4);
+        } else {
+            continue;
+        }
+        e.options = inp.xi_socket.so_options;
+        e.listening = tcp && (state == TCPS_LISTEN || (e.options & SO_ACCEPTCONN));
+        e.uid = inp.xi_socket.so_uid;
+        f(static_cast<const QoreSocketTableEntry&>(e));
+    }
+    // the table has no end record
+    return -1;
+}
+
+//! Returns true if a socket option that is a flag is set on the socket
+static bool qore_socket_has_flag(int sock, int level, int option) {
+    int value = 0;
+    socklen_t len = sizeof(value);
+    return !getsockopt(sock, level, option, &value, &len) && value;
+}
+
+//! Returns true if another socket holds the port on an address that the socket also serves
+/** Two sockets that serve an address in common share its port if both reuse the port and belong to the same user,
+    and, if @a reuse_shares is true, as on Linux, if both reuse the address and the other one does not listen.
+    Connections, including those in \c TIME_WAIT, are not considered.  The sockets in a part of the socket table that
+    cannot be read are not found; if no part can be read, the port is not held.
+
+    @param socktype the socket type, \c SOCK_STREAM or \c SOCK_DGRAM
+    @param ours the addresses that the socket serves
+    @param port the port
+    @param sock the socket, whose \c SO_REUSEADDR and \c SO_REUSEPORT options are checked
+    @param reuse_shares true if two sockets that reuse the address share the port while the other one does not listen
+    @param at_listen true when the socket is about to listen: the sockets on the same addresses, which are the socket
+    itself and other sockets that reuse the port with it, are then not considered
+*/
+static bool qore_socket_port_held(int socktype, const QoreSocketServedAddrs& ours, int port, int sock,
+        bool reuse_shares, bool at_listen) {
+    bool reuse = qore_socket_has_flag(sock, SOL_SOCKET, SO_REUSEADDR);
+    bool reuseport = qore_socket_has_flag(sock, SOL_SOCKET, SO_REUSEPORT);
+    uid_t uid = geteuid();
+    bool held = false;
+    try {
+        qore_socket_for_each_bound_socket(socktype, [&](const QoreSocketTableEntry& e) {
+            if (held || e.port != port || !e.addrs.overlaps(ours) || (at_listen && e.addrs.sameAs(ours))) {
+                return;
+            }
+            if ((reuse_shares && reuse && (e.options & SO_REUSEADDR) && !e.listening)
+                || (reuseport && (e.options & SO_REUSEPORT) && e.uid == uid)) {
+                return;
+            }
+            held = true;
+        });
+    } catch (std::bad_alloc&) {
+        // the table could not be read
+        return false;
+    }
+    return held;
+}
+
+//! Returns true if a bind of a specific address with SO_REUSEADDR is refused because a socket holds the port
+/** macOS allows a socket that reuses the address to bind a specific address of a port that another socket of the
+    same user holds on a wildcard address, and the socket then receives the clients of that address instead.  Linux
+    refuses the bind if the other socket listens or does not reuse the address, and so does this function for a
+    datagram socket.  A stream socket is refused the port on macOS whenever another socket holds it on the wildcard
+    address: a connection request to the specific address reaches the socket bound there, also if it does not listen,
+    in which case the request is dropped, while Linux gives it to the socket that listens.  A bind without
+    SO_REUSEADDR is refused by macOS itself, and a system-assigned port is never one that a socket on a wildcard
+    address holds.
+*/
+static bool qore_socket_bind_specific_refused(int sock, const struct sockaddr* addr, int socktype) {
+    int port = q_get_port_from_addr(addr);
+    if (port <= 0 || !qore_socket_has_flag(sock, SOL_SOCKET, SO_REUSEADDR)) {
+        return false;
+    }
+    QoreSocketServedAddrs ours;
+    if (!ours.set(addr, qore_socket_has_flag(sock, IPPROTO_IPV6, IPV6_V6ONLY)) || ours.isWildcard()) {
+        return false;
+    }
+    return qore_socket_port_held(socktype, ours, port, sock, socktype != SOCK_STREAM, false);
+}
+
+//! Returns true if a listen of the TCP socket is refused because another socket holds its port
+/** Of two sockets that reuse the address and serve an address in common, and that are bound but not listening, macOS
+    allows both to listen, and the one on the more specific address receives the clients of that address.  Linux
+    refuses the listen of the second one.
+*/
+static bool qore_socket_listen_refused(int sock) {
+    int type = 0;
+    socklen_t len = sizeof(type);
+    if (getsockopt(sock, SOL_SOCKET, SO_TYPE, &type, &len) || type != SOCK_STREAM) {
+        return false;
+    }
+    struct sockaddr_storage addr;
+    len = sizeof(addr);
+    if (getsockname(sock, reinterpret_cast<struct sockaddr*>(&addr), &len)) {
+        return false;
+    }
+    int port = q_get_port_from_addr(reinterpret_cast<const struct sockaddr*>(&addr));
+    QoreSocketServedAddrs ours;
+    if (port <= 0 || !ours.set(reinterpret_cast<const struct sockaddr*>(&addr),
+            qore_socket_has_flag(sock, IPPROTO_IPV6, IPV6_V6ONLY))) {
+        return false;
+    }
+    return qore_socket_port_held(SOCK_STREAM, ours, port, sock, true, true);
+}
 #endif
 
 int qore_socket_bind_unshadowed(int sock, const struct sockaddr* addr, size_t addrlen, int socktype,
         QoreSandboxManager* sandbox_manager) {
 #ifdef DARWIN
-    if ((socktype == SOCK_STREAM || socktype == SOCK_DGRAM) && qore_socket_bind_serves_ipv4_wildcard(sock, addr)) {
-        int port = q_get_port_from_addr(addr);
-        if (port > 0) {
-            if (qore_socket_ipv4_port_used(socktype, INADDR_ANY, port, sandbox_manager)
-                || qore_socket_ipv4_port_used(socktype, INADDR_LOOPBACK, port, sandbox_manager)) {
-                sock_set_raw_error(EADDRINUSE);
-                return QORE_SOCKET_ERROR;
+    if (socktype == SOCK_STREAM || socktype == SOCK_DGRAM) {
+        if (qore_socket_bind_serves_ipv4_wildcard(sock, addr)) {
+            int port = q_get_port_from_addr(addr);
+            if (port > 0) {
+                if (qore_socket_ipv4_port_used(socktype, INADDR_ANY, port, sandbox_manager)
+                    || qore_socket_ipv4_port_used(socktype, INADDR_LOOPBACK, port, sandbox_manager)) {
+                    sock_set_raw_error(EADDRINUSE);
+                    return QORE_SOCKET_ERROR;
+                }
+            } else if (addr->sa_family == AF_INET6) {
+                return qore_socket_bind_ipv4_free_port(sock, addr, addrlen, socktype, sandbox_manager);
             }
-        } else if (addr->sa_family == AF_INET6) {
-            return qore_socket_bind_ipv4_free_port(sock, addr, addrlen, socktype, sandbox_manager);
+        } else if (qore_socket_bind_specific_refused(sock, addr, socktype)) {
+            sock_set_raw_error(EADDRINUSE);
+            return QORE_SOCKET_ERROR;
         }
     }
 #endif
     return ::bind(sock, addr, addrlen);
+}
+
+int qore_socket_listen_unshadowed(int sock, int backlog) {
+#ifdef DARWIN
+    if (qore_socket_listen_refused(sock)) {
+        sock_set_raw_error(EADDRINUSE);
+        return QORE_SOCKET_ERROR;
+    }
+#endif
+    return ::listen(sock, backlog);
 }
 
 #ifdef DARWIN
