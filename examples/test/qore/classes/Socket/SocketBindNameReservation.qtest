@@ -35,6 +35,11 @@
 %exec-class SocketBindNameReservationTest
 
 class SocketBindNameReservationTest inherits QUnit::Test {
+    public {
+        #! the number of ports that the given-port test tries; only a port range almost all in use exhausts them
+        const MaxPortAttempts = 1024;
+    }
+
     constructor() : Test("SocketBindNameReservationTest", "1.0") {
         addTestCase("the port is held in the other address family", \reservationTest());
         addTestCase("a client of the name reaches the socket", \connectByNameTest());
@@ -164,12 +169,43 @@ class SocketBindNameReservationTest inherits QUnit::Test {
         (string addr, int family) = SocketBindNameReservationTest::otherLoopback(info.family);
 
         # another socket holds a port in the other address family; a bind to the name with that port as before
-        # binds the name's first address that can be bound
-        Socket holder();
-        on_exit holder.close();
-        holder.bindINET(addr, 0, False, family);
-        holder.listen();
-        int port = holder.getSocketInfo(False).port;
+        # binds the name's first address that can be bound.  The system assigns the holder's port in the other address
+        # family, and concurrent programs can use the port in the name's: macOS assigns a port of one family without
+        # checking the other.  The port of the name's first address is therefore bound too, by a listener that a
+        # connection to it then replaces: no socket listens on the port, no concurrent program can take it, and the
+        # bind of the name, which reuses the address, can.  A port in use at the name's first address is replaced by
+        # the next one that the system assigns in the other family
+        string first_addr = info.family == AF_INET6 ? "::1" : "127.0.0.1";
+        *Socket holder;
+        *Socket held_client;
+        *Socket held_peer;
+        on_exit {
+            map $1.close(), (holder, held_client, held_peer), $1;
+        }
+        int port;
+        for (int attempt = 0; attempt < MaxPortAttempts && !port; ++attempt) {
+            Socket other();
+            other.bindINET(addr, 0, False, family);
+            other.listen();
+            int candidate = other.getSocketInfo(False).port;
+            Socket listener();
+            try {
+                listener.bindINET(first_addr, candidate, False, info.family);
+                listener.listen();
+            } catch (hash<ExceptionInfo> ex) {
+                # the port is in use at the name's first address; the next one is tried
+                other.close();
+                continue;
+            }
+            Socket client();
+            client.connect(sprintf("%s:%d", info.family == AF_INET6 ? "[::1]" : first_addr, candidate), 5s);
+            held_peer = listener.accept(5s);
+            listener.close();
+            held_client = client;
+            holder = other;
+            port = candidate;
+        }
+        assertGt(0, port, "a port free at the name's first address is held in the other address family");
         Socket s();
         on_exit s.close();
         s.bind("localhost:" + port, True);
