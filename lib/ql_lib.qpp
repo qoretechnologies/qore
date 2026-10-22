@@ -2026,7 +2026,7 @@ string get_global_http2_mode() [dom=PROCESS] {
 
     @throw BLACKLIST-ERROR the module name contains a NUL character; see @ref path_nul_characters
 
-    @since %Qore 2.0.1
+    @since %Qore 2.1
 */
 int qore_add_module_to_blacklist(string name, string message = "by an API call") [flags=NAMED_ARGS;dom=PROCESS] {
     TempEncodingHelper n(name, QCS_DEFAULT, xsink);
@@ -2049,7 +2049,7 @@ int qore_add_module_to_blacklist(string name, string message = "by an API call")
 
     If the given module is already in the blacklist, then no error is raised
 
-    @since %Qore 2.0.1
+    @since %Qore 2.1
 */
 int qore_add_module_to_blacklist_ex(string name, string message = "by an API call") [flags=NAMED_ARGS;dom=PROCESS] {
     TempEncodingHelper n(name, QCS_DEFAULT, xsink);

@@ -91,7 +91,7 @@ DLLEXPORT void qore_get_runtime_context(QoreRuntimeContext* rc);
 DLLEXPORT bool is_valid_qore_thread();
 
 //! returns the current TID number
-/** @since %Qore 0.9.5.1
+/** @since %Qore 0.9.6
 */
 DLLEXPORT int q_gettid() noexcept;
 

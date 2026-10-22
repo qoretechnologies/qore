@@ -1240,7 +1240,7 @@ DLLEXPORT bool q_active_exception();
 
     @return 0 = module added, -1 = module already loaded, cannot be blacklisted, -2 = module already in blacklist
 
-    @since %Qore 2.0.1
+    @since %Qore 2.1
 */
 DLLEXPORT int q_add_module_to_blacklist(const char* name, const char* msg);
 

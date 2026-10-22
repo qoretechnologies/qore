@@ -3181,7 +3181,7 @@ nothing HTTPClient::setProxySecure(softbool secure = True) [flags=NAMED_ARGS] {
 //! Returns any username set for the connection
 /** @return any username set for the connection
 
-    @since %Qore 1.18.2
+    @since %Qore 1.19.0
 */
 *string HTTPClient::getUsername() [flags=CONSTANT] {
     return client->getUsername();
@@ -3190,7 +3190,7 @@ nothing HTTPClient::setProxySecure(softbool secure = True) [flags=NAMED_ARGS] {
 //! Returns any password set for the connection
 /** @return any password set for the connection
 
-    @since %Qore 1.18.2
+    @since %Qore 1.19.0
 */
 *string HTTPClient::getPassword() [flags=CONSTANT] {
     return client->getPassword();
@@ -3199,7 +3199,7 @@ nothing HTTPClient::setProxySecure(softbool secure = True) [flags=NAMED_ARGS] {
 //! Returns any username set for the proxy connection, if any
 /** @return any username set for the proxy connection, if any
 
-    @since %Qore 1.18.2
+    @since %Qore 1.19.0
 */
 *string HTTPClient::getProxyUsername() [flags=CONSTANT] {
     return client->getProxyUsername();
@@ -3208,7 +3208,7 @@ nothing HTTPClient::setProxySecure(softbool secure = True) [flags=NAMED_ARGS] {
 //! Returns any password set for the proxy connection, if any
 /** @return any password set for the proxy connection, if any
 
-    @since %Qore 1.18.2
+    @since %Qore 1.19.0
 */
 *string HTTPClient::getProxyPassword() [flags=CONSTANT] {
     return client->getProxyPassword();
