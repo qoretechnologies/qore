@@ -3684,16 +3684,46 @@ public:
         }
         const int notifier_fd = ctrl->io_threads[0]->notifier->fd();
 
-        // a port that nothing listens on: that of a listener that is closed
+        // a port on which nothing listens and that no other socket can be given: a listener bound without
+        // SO_REUSEADDR is connected to and then closed, so that only the connection holds the port.  A connection to
+        // the port is then refused at once on Linux and macOS, the system assigns the port to no other socket while
+        // the connection holds it, and a bind of the port is refused; only on macOS can a program of the same user
+        // still bind that port number with SO_REUSEADDR, which no socket can prevent there.  The port of a closed
+        // listener could be taken by a concurrent program before the connection, which would then succeed, and a
+        // socket that is bound but not listening would hold the port, but macOS drops a connection to such a socket
+        // instead of refusing it, so the connection would fail only when it timed out.
         int port;
+        QoreSocket holder;
+        int holder_peer = -1;
+        struct PeerCloser {
+            int& fd;
+            ~PeerCloser() {
+                if (fd >= 0) {
+                    ::close(fd);
+                }
+            }
+        } holder_peer_closer{holder_peer};
         {
             QoreSocket listener;
-            int rc = listener.bindINET("127.0.0.1", "0", true, AF_INET, SOCK_STREAM, 0, &xsink);
-            UT_ASSERT(c, !rc && !xsink, "connect failure listener binds");
+            int rc = listener.bindINET("127.0.0.1", "0", false, AF_INET, SOCK_STREAM, 0, &xsink);
+            if (!rc && !xsink) {
+                rc = listener.listen(1);
+            }
+            UT_ASSERT(c, !rc && !xsink, "connect failure port listener listens");
             if (rc || xsink) {
                 return;
             }
             port = listener.getPort();
+            rc = holder.connectINET("127.0.0.1", port, 5000, &xsink);
+            UT_ASSERT(c, !rc && !xsink, "connect failure port holder connects");
+            if (rc || xsink) {
+                return;
+            }
+            holder_peer = ::accept(listener.getSocket(), nullptr, nullptr);
+            UT_ASSERT(c, holder_peer >= 0, "connect failure port holder is accepted");
+            if (holder_peer < 0) {
+                return;
+            }
             listener.close();
         }
 
@@ -3735,7 +3765,16 @@ public:
         ValueHolder result(queue->shift(&xsink, 30000, &timed_out), &xsink);
         UT_ASSERT(c, !timed_out && !xsink && result->getType() == NT_HASH, "the connection ends");
         if (result->getType() == NT_HASH) {
-            UT_ASSERT(c, result->get<QoreHashNode>()->getKeyValue("ex").getType() == NT_HASH,
+            QoreValue ex = result->get<QoreHashNode>()->getKeyValue("ex");
+            const QoreHashNode* exh = ex.getType() == NT_HASH ? ex.get<const QoreHashNode>() : nullptr;
+            QoreValue err = exh ? exh->getKeyValue("err") : QoreValue();
+            QoreValue desc = exh ? exh->getKeyValue("desc") : QoreValue();
+            // the error of the refused connection, not of one that timed out
+            UT_ASSERT(c, err.getType() == NT_STRING
+                && !strcmp(err.get<const QoreStringNode>()->c_str(), "SOCKET-CONNECT-ERROR"),
+                "the connection fails with SOCKET-CONNECT-ERROR");
+            UT_ASSERT(c, desc.getType() == NT_STRING
+                && strstr(desc.get<const QoreStringNode>()->c_str(), strerror(ECONNREFUSED)),
                 "the connection is refused");
         }
         xsink.clear();
