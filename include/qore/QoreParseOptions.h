@@ -181,10 +181,11 @@ public:
     */
     DLLEXPORT static const QoreParseOptions NO_NEW;
 
-    //! extended option: allow old behavior where soft types accept NULL like NOTHING (bit 68)
-    /** Enables pre-3.0 behavior where non-optional soft types (softint, softnumber, etc.)
-        accepted SQL NULL values and treated them like NOTHING. This is an AST-only option
-        for backward compatibility.
+    //! extended option: non-optional soft scalar types accept SQL NULL as their zero or empty value (bit 68)
+    /** Restores the behavior of %Qore before 3.0: \c softint, \c softfloat, \c softnumber, \c softbool,
+        \c softstring, \c softdate and \c softbinary accept SQL NULL and convert it to \c 0, \c 0.0, \c 0n,
+        \c False, an empty string, 1970-01-01 and an empty binary; the option of the running code applies, in every
+        execution mode.
         @since %Qore 3.0
     */
     DLLEXPORT static const QoreParseOptions BROKEN_SOFT_TYPES;

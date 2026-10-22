@@ -3887,7 +3887,13 @@ qore_type_result_e QoreTypeInfo::runtimeAcceptsValue(const QoreValue& n) const {
         if (rv != QTI_NOT_EQUAL)
             return rv;
     }
-    return QTI_NOT_EQUAL;
+    // SQL NULL is converted, as the values of the other types that the type converts are
+    return acceptsBrokenSoftNull(n) ? QTI_AMBIGUOUS : QTI_NOT_EQUAL;
+}
+
+bool QoreTypeInfo::acceptsBrokenSoftNull(const QoreValue& n) const {
+    return n.getType() == NT_NULL && brokenSoftNullImpl()
+        && runtime_get_parse_options().hasAny(QoreParseOptions::BROKEN_SOFT_TYPES);
 }
 
 void QoreTypeInfo::doNonNumericWarning(const QoreProgramLocation* loc, const char* preface) const {
@@ -6450,6 +6456,11 @@ void QoreTypeInfo::acceptInputIntern(ExceptionSink* xsink, const char* arg_type,
         if (t.spec.acceptInput(xsink, *this, t.map, arg_type, obj, param_num, param_name, n, lvhelper)) {
             return;
         }
+    }
+    // with %broken-soft-types, a non-optional soft scalar type converts SQL NULL to its zero or empty value
+    if (acceptsBrokenSoftNull(n)) {
+        discard(n.assign(getDefaultQoreValueImpl()), xsink);
+        return;
     }
     doAcceptError(false, arg_type, obj, param_num, param_name, n, xsink, vts);
 }

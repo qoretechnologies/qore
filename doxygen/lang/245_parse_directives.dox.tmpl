@@ -38,7 +38,7 @@
     |@ref broken-operators "%broken-operators"|Accept spaces in multi-character operators as with pre-0.8.12
     |@ref broken-range "%broken-range"|Include the upper limit in @ref Qore::range() "range()" and @ref Qore::xrange() "xrange()" as with pre-0.9.5
     |@ref broken-references "%broken-references"|Do not enforce @ref reference_type "reference" and @ref reference_or_nothing_type "*reference" type restrictions as with pre-0.8.13
-    |@ref broken-soft-types "%broken-soft-types"|Allow soft types (e.g., @ref softint_type "softint", @ref softnumber_type "softnumber") to accept SQL NULL values and treat them like @ref nothing "NOTHING" as with pre-3.0 behavior. This is an AST-only option for backward compatibility; IR/JIT modes will enforce strict NULL rejection.<br/><br/>Since %Qore 3.0
+    |@ref broken-soft-types "%broken-soft-types"|The non-optional soft scalar types (e.g., @ref softint_type "softint", @ref softstring_type "softstring") accept SQL NULL as their zero or empty value as before %Qore 3.0<br/><br/>Since %Qore 3.0
     |@ref broken-sprintf "%broken-sprintf"|Use pre-0.9 sprintf format handling where no argument is handled differently than @ref nothing
     |@ref broken-varargs "%broken-varargs"|Assume varargs for all @ref abstract "abstract" methods as with pre-1.17
     |@ref correct-cast "%correct-cast"|revert the effect of the @ref broken-cast "%broken-cast" parse option
@@ -781,7 +781,14 @@ i+ =4;
     @ref QoreParseOptions::BROKEN_SOFT_TYPES
 
     @par Description:
-    Allow soft types (e.g., @ref softint_type "softint", @ref softnumber_type "softnumber") to accept SQL \c NULL values and treat them like @ref nothing "NOTHING" as with pre-3.0 behavior.  This is an AST-only option for backward compatibility; IR and JIT execution modes always enforce strict \c NULL rejection.
+    The non-optional soft scalar types accept SQL \c NULL and convert it to their zero or empty value, as they did
+    before %Qore 3.0: @ref softint_type "softint" to \c 0, @ref softfloat_type "softfloat" to \c 0.0,
+    @ref softnumber_type "softnumber" to \c 0n, @ref softbool_type "softbool" to @ref False,
+    @ref softstring_type "softstring" to an empty string, @ref softdate_type "softdate" to 1970-01-01 and
+    @ref softbinary_type "softbinary" to an empty binary, as parameters, return values and in assignments.  The
+    option of the running code applies, in every @ref execution_modes "execution mode".  Optional soft types (such
+    as @ref softint_or_nothing_type "*softint") accept \c NULL as @ref nothing "NOTHING" with or without this option,
+    and @ref softlist_type "softlist" converts it to an empty list.
 
     @see @ref correct-soft-types "%correct-soft-types"
 

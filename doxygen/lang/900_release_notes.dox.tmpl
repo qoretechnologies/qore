@@ -1278,12 +1278,8 @@ val = "string";      # OK
 
     <b>Workarounds:</b>
     - Use optional soft types (e.g., @ref softint_or_nothing_type "*softint") to accept NULL values
-    - Use the @ref broken-soft-types "%broken-soft-types" parse directive to restore pre-3.0 behavior (AST-only)
-    - Use @ref QoreParseOptions::BROKEN_SOFT_TYPES "QoreParseOptions::BROKEN_SOFT_TYPES" when setting up a
-      @ref Qore::Program "Program" object (AST-only)
-
-    <b>Note:</b> @ref broken-soft-types "%broken-soft-types" is AST-only and is not supported in the
-    @ref execution_modes "IR/JIT execution modes".
+    - Use the @ref broken-soft-types "%broken-soft-types" parse directive, or the \c broken-soft-types option of a
+      @ref Qore::Program "Program", to restore the pre-3.0 behavior in every execution mode
     @endparblock
 
     @par \%modern Is Now the Default for Non-.q Files

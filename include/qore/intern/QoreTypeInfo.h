@@ -1039,6 +1039,14 @@ protected:
 
     DLLLOCAL qore_type_result_e runtimeAcceptsValue(const QoreValue& n) const;
 
+    //! Returns true if the value is SQL NULL that this type accepts as its zero or empty value
+    /** Only a non-optional soft scalar type (\c softint, \c softfloat, \c softnumber, \c softbool,
+        \c softstring, \c softdate and \c softbinary) accepts it, and only when the running code has the
+        \c %broken-soft-types parse option (QoreParseOptions::BROKEN_SOFT_TYPES), as these types did before
+        %Qore 3.0.
+    */
+    DLLLOCAL bool acceptsBrokenSoftNull(const QoreValue& n) const;
+
     // returns true if this type could contain an object or a closure
     DLLLOCAL virtual bool needsScanImpl() const {
         return true;
@@ -1058,6 +1066,11 @@ protected:
 
     DLLLOCAL virtual QoreValue getDefaultQoreValueImpl() const {
         return QoreValue();
+    }
+
+    //! Returns true for a non-optional soft scalar type, which accepts SQL NULL with %broken-soft-types
+    DLLLOCAL virtual bool brokenSoftNullImpl() const {
+        return false;
     }
 
     // returns true if there is no type or if the type can be converted to a scalar (numeric, bool, int, string, etc) value, false true if otherwise
@@ -2987,6 +3000,11 @@ protected:
    DLLLOCAL virtual QoreValue getDefaultQoreValueImpl() const {
       return 0ll;
    }
+
+   // SQL NULL is accepted as the zero or empty value with %broken-soft-types
+   DLLLOCAL virtual bool brokenSoftNullImpl() const {
+      return true;
+   }
 };
 
 class QoreSoftBigIntOrNothingTypeInfo : public QoreTypeInfo {
@@ -3082,6 +3100,11 @@ protected:
 
    DLLLOCAL virtual QoreValue getDefaultQoreValueImpl() const {
       return 0.0;
+   }
+
+   // SQL NULL is accepted as the zero or empty value with %broken-soft-types
+   DLLLOCAL virtual bool brokenSoftNullImpl() const {
+      return true;
    }
 };
 
@@ -3179,6 +3202,11 @@ protected:
    DLLLOCAL virtual QoreValue getDefaultQoreValueImpl() const {
       return ZeroNumber->refSelf();
    }
+
+   // SQL NULL is accepted as the zero or empty value with %broken-soft-types
+   DLLLOCAL virtual bool brokenSoftNullImpl() const {
+      return true;
+   }
 };
 
 class QoreSoftNumberOrNothingTypeInfo : public QoreTypeInfo {
@@ -3260,6 +3288,11 @@ protected:
     DLLLOCAL virtual QoreValue getDefaultQoreValueImpl() const {
         return new BinaryNode();
     }
+
+   // SQL NULL is accepted as the zero or empty value with %broken-soft-types
+   DLLLOCAL virtual bool brokenSoftNullImpl() const {
+      return true;
+   }
 };
 
 class QoreSoftBinaryOrNothingTypeInfo : public QoreTypeInfo {
@@ -3340,6 +3373,11 @@ protected:
 
    DLLLOCAL virtual QoreValue getDefaultQoreValueImpl() const {
       return false;
+   }
+
+   // SQL NULL is accepted as the zero or empty value with %broken-soft-types
+   DLLLOCAL virtual bool brokenSoftNullImpl() const {
+      return true;
    }
 };
 
@@ -3528,6 +3566,11 @@ protected:
    DLLLOCAL virtual QoreValue getDefaultQoreValueImpl() const {
       return NullString->refSelf();
    }
+
+   // SQL NULL is accepted as the zero or empty value with %broken-soft-types
+   DLLLOCAL virtual bool brokenSoftNullImpl() const {
+      return true;
+   }
 };
 
 class QoreSoftStringOrNothingTypeInfo : public QoreTypeInfo {
@@ -3632,6 +3675,11 @@ protected:
 
    DLLLOCAL virtual QoreValue getDefaultQoreValueImpl() const {
       return ZeroDate->refSelf();
+   }
+
+   // SQL NULL is accepted as the zero or empty value with %broken-soft-types
+   DLLLOCAL virtual bool brokenSoftNullImpl() const {
+      return true;
    }
 };
 

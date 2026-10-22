@@ -1,156 +1,177 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    The non-optional soft scalar types reject SQL NULL; with the %broken-soft-types parse option they accept it as
+    their zero or empty value, as they did before Qore 3.0, and %correct-soft-types restores the rejection.
+*/
+
 %modern
 %enable-all-warnings
 
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
 
-public namespace soft_types_test;
+%exec-class SoftTypesTest
 
 class SoftTypesTest inherits QUnit::Test {
     public {
-        const TEST_NAME = "Soft Types Backward Compatibility Test";
-        const TEST_VERSION = "1.0";
-    }
+        #! the parse options of every Program the test code runs in
+        const BaseOptions = PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS;
 
-    testParseDirectiveExists() {
-        # Test that %broken-soft-types parse directive can be parsed
-        Program p = new Program();
-        p.parse("%broken-soft-types
-string x = \"test\";
-", "test-directive-exists");
-        p.run();
-    }
+        #! code that passes a value to and assigns it to each non-optional soft scalar type
+        /** Each use returns the value it gave or the code of the exception it raised.
+        */
+        const SoftCode = "softint sub fi(softint v) { return v; }
+softfloat sub ff(softfloat v) { return v; }
+softnumber sub fn(softnumber v) { return v; }
+softbool sub fb(softbool v) { return v; }
+softstring sub fs(softstring v) { return v; }
+softdate sub fd(softdate v) { return v; }
+softbinary sub fbin(softbinary v) { return v; }
 
-    testCorrectDirectiveReverts() {
-        # Test that %correct-soft-types parse directive can be parsed
-        Program p = new Program();
-        p.parse("%broken-soft-types
-%correct-soft-types
-string x = \"test\";
-", "test-correct-directive");
-        p.run();
-    }
-
-    testParseDirectiveInheritance() {
-        # Test that %broken-soft-types can be set and checked
-        Program p = new Program();
-        # Just verify the directive can be set without error
-        p.parse("%broken-soft-types
-hash h = {};
-", "test-inheritance");
-        p.run();
-    }
-
-    testSoftTypeNullRejectionByDefault() {
-        # By default (without %broken-soft-types), soft types should reject NULL
-        Program p = new Program();
-        p.parse("%modern
-%requires DataProvider
-
-public namespace test {
-    softlist<int> test_func(softlist<int> arg) {
-        return arg;
+auto sub attempt(code c) {
+    try {
+        return c();
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
     }
 }
 
-try {
-    test::test_func(NULL);
-    throw \"TEST-ERROR\", \"should have thrown exception for NULL\";
-} catch (ex) {
-    if (ex.err != \"RUNTIME-TYPE-ERROR\") {
-        rethrow;
-    }
-}
-", "test-default-rejection");
-        p.run();
-    }
-
-    testBrokenSoftTypesAcceptsNull() {
-        # With %broken-soft-types, soft types should accept NULL for backward compatibility
-        Program p = new Program();
-        p.parse("%modern
-%broken-soft-types
-%requires DataProvider
-
-public namespace test {
-    softlist<int> test_func(softlist<int> arg) {
-        return arg ?? ();
-    }
+hash<auto> sub uses(auto n) {
+    hash<auto> h;
+    # a call of the variant that the parser chose
+    h.\"softint call\" = attempt(auto sub () { return fi(n); });
+    h.\"softfloat call\" = attempt(auto sub () { return ff(n); });
+    h.\"softnumber call\" = attempt(auto sub () { return fn(n); });
+    h.\"softbool call\" = attempt(auto sub () { return fb(n); });
+    h.\"softstring call\" = attempt(auto sub () { return fs(n); });
+    h.\"softdate call\" = attempt(auto sub () { return fd(n); });
+    h.\"softbinary call\" = attempt(auto sub () { return fbin(n); });
+    # a call whose variant is found at runtime
+    h.\"softint dynamic call\" = attempt(auto sub () { return call_function(\"fi\", n); });
+    h.\"softstring dynamic call\" = attempt(auto sub () { return call_function(\"fs\", n); });
+    # assignments
+    h.\"softint assignment\" = attempt(auto sub () { softint v = 1; v = n; return v; });
+    h.\"softstring assignment\" = attempt(auto sub () { softstring v = \"x\"; v = n; return v; });
+    h.\"softdate assignment\" = attempt(auto sub () { softdate v = now(); v = n; return v; });
+    return h;
 }
 
-# Should not throw exception
-test::test_func(NULL);
-", "test-broken-accepts-null");
-        p.run();
+bool sub has_option() {
+    return Program::hasParseOption(\"broken-soft-types\");
+}
+";
+
+        #! the result of every use of SQL NULL with %broken-soft-types: the type's zero or empty value
+        const Accepted = {
+            "softint call": 0,
+            "softfloat call": 0.0,
+            "softnumber call": 0n,
+            "softbool call": False,
+            "softstring call": "",
+            "softdate call": 1970-01-01T00:00:00Z,
+            "softbinary call": binary(),
+            "softint dynamic call": 0,
+            "softstring dynamic call": "",
+            "softint assignment": 0,
+            "softstring assignment": "",
+            "softdate assignment": 1970-01-01T00:00:00Z,
+        };
     }
 
-    testCorrectSoftTypesRestoresRejection() {
-        # %correct-soft-types should restore NULL rejection after %broken-soft-types
-        Program p = new Program();
-        p.parse("%modern
-%broken-soft-types
-%correct-soft-types
-%requires DataProvider
-
-public namespace test {
-    softlist<int> test_func(softlist<int> arg) {
-        return arg;
-    }
-}
-
-try {
-    test::test_func(NULL);
-    throw \"TEST-ERROR\", \"should have thrown exception for NULL\";
-} catch (ex) {
-    if (ex.err != \"RUNTIME-TYPE-ERROR\") {
-        rethrow;
-    }
-}
-", "test-correct-rejection");
-        p.run();
+    constructor() : QUnit::Test("SoftTypesTest", "1.0") {
+        addTestCase("%broken-soft-types sets its parse option", \directiveTest());
+        addTestCase("non-optional soft types reject SQL NULL by default", \defaultRejectionTest());
+        addTestCase("non-optional soft types accept SQL NULL with %broken-soft-types", \brokenAcceptsTest());
+        addTestCase("the BROKEN_SOFT_TYPES option of a Program has the effect of the directive", \programOptionTest());
+        addTestCase("%correct-soft-types restores the rejection", \correctRestoresTest());
+        addTestCase("other values and types are not affected", \unaffectedTest());
+        set_return_value(main());
     }
 
-    testSoftListTypeNullRejection() {
-        # softlist<type> should reject NULL by default
-        Program p = new Program();
-        p.parse("%modern
-%requires DataProvider
-
-public {
-    QoreDataType dtype = new QoreDataType(new Type(\"softlist<string>\"));
-}
-
-try {
-    dtype.acceptsValue(NULL);
-    throw \"TEST-ERROR\", \"softlist<string> should reject NULL\";
-} catch (ex) {
-    assertEq(\"RUNTIME-TYPE-ERROR\", ex.err);
-    assertTrue(ex.desc =~ /NULL/);
-}
-", "test-softlist-rejection");
-        p.run();
+    directiveTest() {
+        assertTrue(run("%broken-soft-types\n").callFunction("has_option"), "the directive sets the option");
+        assertFalse(run("").callFunction("has_option"), "the option is not set by default");
+        assertFalse(run("%broken-soft-types\n%correct-soft-types\n").callFunction("has_option"),
+            "%correct-soft-types clears the option");
     }
 
-    testSoftHashTypeNullRejection() {
-        # softhash<type> should reject NULL by default
-        Program p = new Program();
-        p.parse("%modern
-%requires DataProvider
+    defaultRejectionTest() {
+        hash<auto> h = run("").callFunction("uses", NULL);
+        foreach hash<auto> i in (h.pairIterator()) {
+            assertTrue(i.value == "RUNTIME-TYPE-ERROR" || i.value == "RUNTIME-OVERLOAD-ERROR",
+                sprintf("%s of NULL is refused (%y)", i.key, i.value));
+        }
+        assertEq(Accepted.size(), h.size());
+    }
 
-public {
-    QoreDataType dtype = new QoreDataType(new Type(\"softhash<string>\"));
-}
+    brokenAcceptsTest() {
+        checkAccepted(run("%broken-soft-types\n").callFunction("uses", NULL), "with the directive");
+    }
 
-try {
-    dtype.acceptsValue(NULL);
-    throw \"TEST-ERROR\", \"softhash<string> should reject NULL\";
-} catch (ex) {
-    assertEq(\"RUNTIME-TYPE-ERROR\", ex.err);
-    assertTrue(ex.desc =~ /NULL/);
-}
-", "test-softhash-rejection");
-        p.run();
+    programOptionTest() {
+        Program pgm(BaseOptions);
+        pgm.setParseOptions(new ParseOptions("broken-soft-types"));
+        pgm.parse(SoftCode, "soft-types-option");
+        checkAccepted(pgm.callFunction("uses", NULL), "with the Program option");
+    }
+
+    correctRestoresTest() {
+        hash<auto> h = run("%broken-soft-types\n%correct-soft-types\n").callFunction("uses", NULL);
+        foreach hash<auto> i in (h.pairIterator()) {
+            assertTrue(i.value == "RUNTIME-TYPE-ERROR" || i.value == "RUNTIME-OVERLOAD-ERROR",
+                sprintf("%s of NULL is refused again (%y)", i.key, i.value));
+        }
+    }
+
+    unaffectedTest() {
+        Program pgm = run("%broken-soft-types\n");
+        # other values are converted as without the option
+        hash<auto> h = pgm.callFunction("uses", "1");
+        assertEq(1, h."softint call");
+        assertEq("1", h."softstring call");
+        assertEq(True, h."softbool call");
+        # NOTHING is refused by a non-optional type with %strict-args, with or without the option
+        assertTrue(pgm.callFunction("uses", NOTHING)."softint call" =~ /^RUNTIME-(TYPE|OVERLOAD)-ERROR$/,
+            "NOTHING is not accepted like NULL");
+        # an optional soft type accepts NULL as NOTHING, with or without the option
+        Program opt(BaseOptions);
+        opt.parse("%broken-soft-types\n*softint sub f(*softint v) { return v; }\n", "optional-soft");
+        assertEq(NOTHING, opt.callFunction("f", NULL));
+    }
+
+    #! asserts that every use of NULL gave the type's zero or empty value
+    private checkAccepted(hash<auto> h, string how) {
+        foreach hash<auto> i in (Accepted.pairIterator()) {
+            assertEq(i.value, h{i.key}, sprintf("%s of NULL %s", i.key, how));
+        }
+    }
+
+    #! returns a Program that has parsed the test code after the given parse directives
+    private static Program run(string directives) {
+        Program pgm(BaseOptions);
+        pgm.parse(directives + SoftCode, "soft-types");
+        return pgm;
     }
 }
