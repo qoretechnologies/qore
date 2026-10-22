@@ -593,29 +593,28 @@ public class GoHighLevelRestClientIo inherits RestClientIo::RestClientIo, GoHigh
 
         The location ID is not added for /oauth paths or when already present.
     */
-    private hash<auto> prepareRequest(string method, reference<string> path, auto body,
-            reference<*hash<auto>> hdr) {
+    private string prepareRequestPath(string method, string path) {
         *string loc_id = location_id;
-        if (loc_id && path !~ /^\/?oauth($|\?)/) {
-            if (method == "GET" || method == "DELETE") {
-                # GHL API uses camelCase "locationId" for most GET endpoints,
-                # but "location_id" (snake_case) for opportunities/search
-                if (path !~ /location/) {
-                    string loc_param = path =~ /opportunities\/search/ ? "location_id" : "locationId";
-                    path += (path =~ /\?/ ? "&" : "?") + loc_param + "=" + loc_id;
-                }
-            } else if (method == "POST" && body.typeCode() == NT_HASH && !body.locationId) {
-                # add locationId to the POST body only for top-level endpoints (e.g., contacts,
-                # contacts/search, opportunities) — resource-scoped endpoints like
-                # contacts/{id}/notes reject it
-                string clean_path = (path =~ x/^([^?]+)/)[0] ?? path;
-                clean_path =~ s/^\///;
-                if (clean_path.split("/").size() <= 2) {
-                    body.locationId = loc_id;
-                }
+        if (loc_id && path !~ /^\/?oauth($|\?)/ && (method == "GET" || method == "DELETE")
+                && path !~ /location/) {
+            string loc_param = path =~ /opportunities\/search/ ? "location_id" : "locationId";
+            path += (path =~ /\?/ ? "&" : "?") + loc_param + "=" + encode_url(loc_id, True);
+        }
+        return path;
+    }
+
+    private hash<auto> prepareRequest(string method, reference<string> path, auto body,
+            reference<*hash<auto>> hdr, *hash<RestClient::RestRequestContext> request_context) {
+        *string loc_id = location_id;
+        if (loc_id && path !~ /^\/?oauth($|\?)/ && method == "POST"
+                && body.typeCode() == NT_HASH && !body.locationId) {
+            string clean_path = (path =~ x/^([^?]+)/)[0] ?? path;
+            clean_path =~ s/^\///;
+            if (clean_path.split("/").size() <= 2) {
+                body.locationId = loc_id;
             }
         }
-        return RestClientIo::prepareRequest(method, \path, body, \hdr);
+        return RestClientIo::prepareRequest(method, \path, body, \hdr, request_context);
     }
 
     #! Sets options from the OAuth2 login response on the local object

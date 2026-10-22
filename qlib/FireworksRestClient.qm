@@ -164,6 +164,10 @@ public class FireworksRestClient inherits RestClient::RestClient, FireworksRestC
 public class FireworksRestClientIo inherits RestClientIo::RestClientIo, FireworksRestClientBase {
     constructor(hash<auto> opts, *HttpClientIo::HttpClientConnectionManager shared_mgr)
             : RestClientIo(FireworksRestClientBase::getOptions(opts), shared_mgr) {
+        # This provider adds its version to the configured inference namespace explicitly.
+        if (getValidator() instanceof NullRestSchemaValidator) {
+            setConnectionPath(FireworksRestClientBase::getOptions(opts).default_path);
+        }
     }
 }
 

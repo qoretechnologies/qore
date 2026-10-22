@@ -89,8 +89,8 @@ public class GoogleApiDataProvider inherits GoogleDataProviderBase {
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
         hash<auto> req_info = prepareRequestForSchema(req);
         try {
-            hash<RestClient::RestResponseInfo> resp = rest.restDoRequest(
-                http_method, req_info.pathstr, req_info.body);
+            hash<RestClient::RestResponseInfo> resp = rest.restDoRequestTarget(http_method, <RestClient::RestRequestTarget>{
+                "mode": RestClient::RestPathMode::OriginAbsolute, "path": req_info.pathstr}, req_info.body, NOTHING);
             return getResponseTypeImpl().acceptsValue(resp.body);
         } catch (hash<ExceptionInfo> ex) {
             # ensure that any error response body is included in the exception
@@ -127,7 +127,8 @@ public class GoogleApiDataProvider inherits GoogleDataProviderBase {
         hash<auto> req_info = prepareRequestForSchema(api, get_action, req, True);
 
         try {
-            return rest.restDoRequest("GET", req_info.pathstr).body;
+            return rest.restDoRequestTarget("GET", <RestClient::RestRequestTarget>{
+                "mode": RestClient::RestPathMode::OriginAbsolute, "path": req_info.pathstr}, NOTHING, NOTHING).body;
         } catch (hash<ExceptionInfo> ex) {
             # ensure that any error response body is included in the exception
             rethrow ex.err, ex.desc, ex.arg + {

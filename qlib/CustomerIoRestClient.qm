@@ -590,11 +590,21 @@ public class CustomerIoRestClientIo inherits RestClientIo::RestClientIo, Custome
         @ref MaxRetryTime
     */
     hash<RestClient::RestResponseInfo> restDoRequest(string method, string path, auto body, *hash<auto> hdr) {
+        return restDoRequestTarget(method, <RestClient::RestRequestTarget>{"path": path}, body, hdr);
+    }
+
+    #! Sends an explicit target with the provider's rate-limit retry policy
+    /** @copydoc RestClient::AbstractRestClient::restDoRequestTarget()
+    */
+    hash<RestClient::RestResponseInfo> restDoRequestTarget(string method,
+            hash<RestClient::RestRequestTarget> target, auto body, *hash<auto> hdr) {
+        hash<RestClient::RestRequestContext> request_context = resolveRequestTarget(target, method);
         date start_time = now_us();
         date current_delay = InitialRetryDelay;
         while (True) {
             try {
-                return RestClientIo::restDoRequest(method, path, body, hdr);
+                return RestClientIo::restDoRequestIntern(method, target.path, body, hdr, False, NOTHING,
+                    NOTHING, request_context);
             } catch (hash<ExceptionInfo> ex) {
                 if (ex.err != "REST-RESPONSE-ERROR" || ex.arg.status_code != 429) {
                     rethrow;

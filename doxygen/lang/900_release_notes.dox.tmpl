@@ -4,6 +4,12 @@
 
     @section qore_3_0_0 Qore 3.0.0
 
+    The @ref restclientintro "RestClient" module adds explicit API-relative and origin-absolute request targets
+    through @ref RestClient::RestRequestTarget "RestRequestTarget", also supported by the new
+    @ref restclientiointro "RestClientIo" module. API-relative endpoints are appended to the configured API root;
+    origin-absolute targets address a path from the host root. Existing HTTPClient and RestClient string methods
+    retain their contracts (<a href="https://github.com/qoretechnologies/qore/issues/5485">issue 5485</a>).
+
     The new @ref discard_statement "@@discard(expression);" statement explicitly discards an expression's
     result without an unused-result warning or a dummy local variable. It preserves evaluation, exceptions,
     and temporary-value cleanup in all execution modes and remains active when debugging is disabled.

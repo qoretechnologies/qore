@@ -4,11 +4,10 @@
 
 %modern
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/GoogleDataProvider
-%requires ../../../../qlib/GoogleCalendarDataProvider
-%requires ../../../../qlib/GmailDataProvider
-
+%requires QUnit
+%requires GoogleDataProvider
+%requires GoogleCalendarDataProvider
+%requires GmailDataProvider
 %exec-class OfflineGoogleSchemasTest
 
 #! Exposes the runtime cache to verify it cannot bypass static schema qualification
@@ -31,6 +30,11 @@ class RecordingGoogleClient inherits RestClientIo::RestClientIo {
     }
 
     constructor() : RestClientIo({"url": "https://www.googleapis.com"}) {
+    }
+
+    hash<RestClient::RestResponseInfo> restDoRequestTarget(string method,
+            hash<RestClient::RestRequestTarget> target, auto body, *hash<auto> hdr) {
+        return restDoRequest(method, target.path, body, hdr);
     }
 
     hash<RestClient::RestResponseInfo> restDoRequest(string method, string path, auto body, *hash<auto> hdr) {

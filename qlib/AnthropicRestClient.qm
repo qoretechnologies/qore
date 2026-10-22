@@ -572,7 +572,7 @@ public class AnthropicLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
         try {
             resp = withRetry(hash<auto> sub () {
                 # the request's own timeout (LlmRequestOptions::timeout_ms), not only the client's
-                return rest_client.restPostWithTimeout("/v1/messages", body,
+                return rest_client.restDoRequestTargetWithTimeout("POST", getMessagesTarget(), body,
                     buildAuthHeaders(), getRequestTimeoutMs(opts));
             }, opts);
         } catch (hash<ExceptionInfo> ex) {
@@ -614,7 +614,7 @@ public class AnthropicLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
         try {
             resp = withRetry(hash<auto> sub () {
                 # the request's own timeout (LlmRequestOptions::timeout_ms), not only the client's
-                return rest_client.restPostWithTimeout("/v1/messages", body,
+                return rest_client.restDoRequestTargetWithTimeout("POST", getMessagesTarget(), body,
                     buildAuthHeaders(), getRequestTimeoutMs(opts));
             }, opts);
         } catch (hash<ExceptionInfo> ex) {
@@ -714,8 +714,8 @@ public class AnthropicLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
         HttpClientStreamingIo::SseStreamReader reader;
         try {
             reader = withRetry(HttpClientStreamingIo::SseStreamReader sub () {
-                return rest_client.restSseReader("POST", "/v1/messages", hdr,
-                    json_body, on_stream);
+                return rest_client.restSseReaderTarget("POST", getMessagesTarget(), hdr,
+                    json_body, NOTHING, on_stream);
             }, opts);
         } catch (hash<ExceptionInfo> ex) {
             if (ex.err == "LLM-CANCELLED") {
@@ -1022,6 +1022,16 @@ public class AnthropicLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
             hdr."x-api-key" = getConfig().api_key;
         }
         return hdr;
+    }
+
+    #! Addresses the messages endpoint below the configured Anthropic namespace, with one final v1 segment
+    private hash<RestClient::RestRequestTarget> getMessagesTarget() {
+        string root = rtrim(rest_client.getConnectionPath() ?? "", "/");
+        if (root !~ /\/v1$/) {
+            root += "/v1";
+        }
+        return <RestClient::RestRequestTarget>{"mode": RestClient::RestPathMode::OriginAbsolute,
+            "path": RestClient::rest_request_path(<RestClient::RestRequestTarget>{"path": "messages"}, root)};
     }
 
     #! Lazy-initializes the underlying REST client

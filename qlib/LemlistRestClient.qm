@@ -385,18 +385,9 @@ public class LemlistRestClientIo inherits RestClientIo::RestClientIo, LemlistRes
             : RestClientIo(LemlistRestClientBase::getOptions(opts), shared_mgr) {
     }
 
-    #! Prepares a request, appending \c version=v2 to the path if not already present
-    private hash<auto> prepareRequest(string method, reference<string> path, auto body,
-            reference<*hash<auto>> hdr) {
-        path = LemlistRestClientBase::addVersion(path);
-        return RestClientIo::prepareRequest(method, \path, body, \hdr);
-    }
-
-    #! Prepares a request with a pre-serialized body, appending \c version=v2 to the path if not already present
-    private hash<auto> prepareRawRequest(string method, reference<string> path, *data body,
-            reference<*hash<auto>> hdr) {
-        path = LemlistRestClientBase::addVersion(path);
-        return RestClientIo::prepareRawRequest(method, \path, body, \hdr);
+    #! Appends \c version=v2 to the resolved target if not already present
+    private string prepareRequestPath(string method, string path) {
+        return LemlistRestClientBase::addVersion(path);
     }
 }
 } # namespace LemlistRestClient

@@ -217,6 +217,14 @@ public class GoogleDocumentAiRestClientBase {
         return endpoint;
     }
 
+    #! Validates the destination before serialization or request-target encoding
+    private validateTarget(string endpoint, *string path) {
+        if (normalizeEndpoint(endpoint) != credential_origin || path =~ /^\/?[a-zA-Z][-a-zA-Z0-9+.]*:/
+                || path =~ /^\/\// || path =~ /[#\r\n\\]/) {
+            throw "GOOGLE-DOCUMENTAI-CONFIG-ERROR", "authenticated requests must stay on the configured origin";
+        }
+    }
+
     #! Adds per-request authentication after validating the target
     /** @param endpoint current transport origin
         @param path prepared request path
@@ -225,10 +233,7 @@ public class GoogleDocumentAiRestClientBase {
         @throw GCP-AUTH-ERROR credential acquisition failed
     */
     private hash<auto> authenticate(string endpoint, *string path, *hash<auto> headers) {
-        if (normalizeEndpoint(endpoint) != credential_origin || path =~ /^\/?[a-zA-Z][-a-zA-Z0-9+.]*:/
-                || path =~ /^\/\// || path =~ /[#\r\n\\]/) {
-            throw "GOOGLE-DOCUMENTAI-CONFIG-ERROR", "authenticated requests must stay on the configured origin";
-        }
+        validateTarget(endpoint, path);
         # Resolve once so token and quota project come from the same credential selection.
         *string location = GcpAuth::resolveCredentialLocation(credential_location);
         string token = GcpAuth::getAccessToken(location, DefaultScopes);
@@ -287,19 +292,21 @@ public class GoogleDocumentAiRestClientIo inherits RestClientIo::RestClientIo,
     }
 
     private hash<auto> prepareRequest(string method, reference<string> path, auto body,
-            reference<*hash<auto>> hdr) {
-        # the request target given by the caller is validated before the base class percent-encodes it
+            reference<*hash<auto>> hdr, *hash<RestClient::RestRequestContext> request_context) {
+        # Validate before encoding; authentication is applied after the defaults are merged.
+        validateTarget(getUrl(), path);
         string target = path;
-        hash<auto> rv = RestClientIo::prepareRequest(method, \path, body, \hdr);
+        hash<auto> rv = RestClientIo::prepareRequest(method, \path, body, \hdr, request_context);
         hdr = authenticate(getUrl(), target, hdr);
         return rv;
     }
 
     private hash<auto> prepareRawRequest(string method, reference<string> path, *data body,
-            reference<*hash<auto>> hdr) {
-        # the request target given by the caller is validated before the base class percent-encodes it
+            reference<*hash<auto>> hdr, *hash<RestClient::RestRequestContext> request_context) {
+        # Validate before encoding; authentication is applied after the defaults are merged.
+        validateTarget(getUrl(), path);
         string target = path;
-        hash<auto> rv = RestClientIo::prepareRawRequest(method, \path, body, \hdr);
+        hash<auto> rv = RestClientIo::prepareRawRequest(method, \path, body, \hdr, request_context);
         hdr = authenticate(getUrl(), target, hdr);
         return rv;
     }

@@ -315,9 +315,9 @@ public class AzureOpenAiRestClientIo inherits RestClientIo::RestClientIo, AzureO
     }
 
     private hash<auto> prepareRequestIntern(string method, reference<string> path, auto body,
-            reference<*hash<auto>> hdr, bool raw) {
+            reference<*hash<auto>> hdr, bool raw, *hash<RestClient::RestRequestContext> request_context) {
         hdr = (hdr ?? {}) + getAzureAuthHeader();
-        return RestClientIo::prepareRequestIntern(method, \path, body, \hdr, raw);
+        return RestClientIo::prepareRequestIntern(method, \path, body, \hdr, raw, request_context);
     }
 
     private AbstractRestClient copySelf(hash<auto> options) {
@@ -706,6 +706,13 @@ public class AzureOpenAiLlmProvider inherits OpenAiRestClient::OpenAiLlmProvider
 
     string getMode() {
         return "azure-openai";
+    }
+
+    #! Vendor endpoints are relative to the configured API root
+    /** @return ApiRelative; see OpenAiRestClient::OpenAiLlmProvider::getChatCompletionsPathMode()
+    */
+    RestClient::RestPathMode getChatCompletionsPathMode() {
+        return RestClient::RestPathMode::ApiRelative;
     }
 
     #! Returns the Azure-deployment-routed chat completions path

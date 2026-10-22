@@ -290,7 +290,7 @@ public class GenericApiCallProvider inherits DataProvider::AbstractDataProvider 
             if (!body_type || body_type == "auto") {
                 resp = client.restDoRequest(req.method, path, body, hdr);
             } else {
-                resp = client.restDoRawRequest(req.method, path, body, hdr);
+                resp = client.restDoRawRequestTarget(req.method, <RestClient::RestRequestTarget>{"path": path}, body, hdr);
             }
         } catch (hash<ExceptionInfo> ex) {
             # Only HTTP response errors can be accepted by a status policy. Authentication,

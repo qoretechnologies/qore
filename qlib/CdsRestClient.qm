@@ -1633,10 +1633,10 @@ public class CdsRestClientIo inherits RestClientIo::RestClientIo, CdsRestClientB
     */
     private hash<RestClient::RestResponseInfo> buildResponse(hash<auto> raw, bool req_error_passthru,
             bool req_allow_any_response, string method, string path, *hash<auto> request_headers,
-            *data request_body) {
+            *data request_body, *hash<RestClient::RestRequestContext> request_context) {
         try {
             return RestClientIo::buildResponse(raw, req_error_passthru, req_allow_any_response, method, path,
-                request_headers, request_body);
+                request_headers, request_body, request_context);
         } catch (hash<ExceptionInfo> ex) {
             if (ex.err == "REST-RESPONSE-ERROR" && ex.arg.typeCode() == NT_HASH) {
                 CdsRestClientBase::checkCdsError(ex, ex.arg.body);

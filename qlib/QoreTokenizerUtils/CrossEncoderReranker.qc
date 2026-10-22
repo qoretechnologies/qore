@@ -524,7 +524,14 @@ public class CrossEncoderReranker {
             hdr."Authorization" = "Bearer " + api_key;
         }
 
-        hash<auto> resp = rest_client.restPost("/v1/rerank", body, hdr);
+        string root = rtrim(rest_client.getConnectionPath() ?? "", "/");
+        if (root !~ /\/v1$/) {
+            root += "/v1";
+        }
+        hash<auto> resp = rest_client.restDoRequestTarget("POST", <RestClient::RestRequestTarget>{
+            "mode": RestClient::RestPathMode::OriginAbsolute,
+            "path": RestClient::rest_request_path(<RestClient::RestRequestTarget>{"path": "rerank"}, root)},
+            body, hdr);
 
         # SGLang/Jina return either a top-level list of hits or {"results": [...]}
         auto hits;

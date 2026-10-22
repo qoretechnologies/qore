@@ -3,9 +3,9 @@
 %modern
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires json
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/AzureOpenAiDataProvider
-%requires ../../../../qlib/RestSchemaActions
+%requires QUnit
+%requires AzureOpenAiDataProvider
+%requires RestSchemaActions
 %exec-class AzureOpenAiConversationsTest
 
 class FoundryTestState {
@@ -25,9 +25,10 @@ class FoundryTestClient inherits RestClientIo::RestClientIo {
     private RestClient::AbstractRestClient copySelf(hash<auto> options) {
         return new FoundryTestClient(options, state);
     }
-    hash<RestClient::RestResponseInfo> restDoRawRequest(string method, string path, *data body, *hash<auto> hdr) {
-        hash<RestClient::RestResponseInfo> result = RestClientIo::restDoRawRequest(method, path, body, hdr);
-        if (method == "POST" && path =~ /\/conversations(?:\?|$)/ && result.body.id.val()) {
+    hash<RestClient::RestResponseInfo> restDoRawRequestTarget(string method,
+            hash<RestClient::RestRequestTarget> target, *data body, *hash<auto> hdr) {
+        hash<RestClient::RestResponseInfo> result = RestClientIo::restDoRawRequestTarget(method, target, body, hdr);
+        if (method == "POST" && target.path =~ /\/conversations(?:\?|$)/ && result.body.id.val()) {
             state.conversation_id = result.body.id;
         }
         return result;

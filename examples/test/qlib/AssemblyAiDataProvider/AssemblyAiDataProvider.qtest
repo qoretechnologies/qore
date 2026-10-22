@@ -24,6 +24,12 @@ class FakeAssemblyAiClient inherits AssemblyAiRestClientIo {
             : AssemblyAiRestClientIo(opts, mgr) {
         setSleeper(nothing sub (timeout to) {});
     }
+    #! Schema dispatch now supplies an explicit target; retain this mock's response recorder.
+    hash<RestClient::RestResponseInfo> restDoRawRequestTarget(string method,
+            hash<RestClient::RestRequestTarget> target, *data body, *hash<auto> hdr) {
+        return restDoRawRequest(method, target.path, body, hdr);
+    }
+
     hash<RestClient::RestResponseInfo> restDoRawRequest(string method, string path, *data body, *hash<auto> hdr) {
         push Log.calls, {"url": getUrl().toString(), "method": method, "path": path, "raw": body,
             "headers": getDefaultHeaders() + hdr};

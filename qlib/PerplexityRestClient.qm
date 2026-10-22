@@ -477,6 +477,13 @@ public class PerplexityLlmProvider inherits OpenAiRestClient::OpenAiLlmProvider 
         return "perplexity";
     }
 
+    #! Vendor endpoints are relative to the configured API root
+    /** @return ApiRelative; see OpenAiRestClient::OpenAiLlmProvider::getChatCompletionsPathMode()
+    */
+    RestClient::RestPathMode getChatCompletionsPathMode() {
+        return RestClient::RestPathMode::ApiRelative;
+    }
+
     #! Returns the Perplexity-specific chat-completions path
     string getChatCompletionsPath() {
         return "/chat/completions";

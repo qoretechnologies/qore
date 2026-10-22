@@ -272,12 +272,25 @@ public class DataStreamClientIo inherits RestClientIo::RestClientIo {
     #! Override to add DataStream/Connect protocol headers and handle DS-specific responses
     hash<RestClient::RestResponseInfo> restDoRequest(string method, string path, auto body,
             *hash<auto> hdr) {
+        return doDataStreamRequest(method, path, body, hdr);
+    }
+
+    #! Sends an explicit target with DataStream response handling
+    /** @copydoc RestClient::AbstractRestClient::restDoRequestTarget()
+    */
+    hash<RestClient::RestResponseInfo> restDoRequestTarget(string method,
+            hash<RestClient::RestRequestTarget> target, auto body, *hash<auto> hdr) {
+        return doDataStreamRequest(method, target.path, body, hdr, resolveRequestTarget(target, method));
+    }
+
+    private hash<RestClient::RestResponseInfo> doDataStreamRequest(string method, string path, auto body,
+            *hash<auto> hdr, *hash<RestClient::RestRequestContext> request_context) {
         # Save originals for potential retry
         auto save_body = body;
         *hash<auto> save_hdr = hdr;
         string save_path = path;
 
-        hash<auto> prepared = prepareRequest(method, \path, body, \hdr);
+        hash<auto> prepared = prepareRequest(method, \path, body, \hdr, request_context);
 
         # NOTE: do NOT add DataStream or Connect protocol headers here — restDoRequest()
         # is called for all regular REST requests (not just DataStream operations).
@@ -308,7 +321,7 @@ public class DataStreamClientIo inherits RestClientIo::RestClientIo {
             }
             path = save_path;
             hdr = save_hdr;
-            prepared = prepareRequest(method, \path, save_body, \hdr);
+            prepared = prepareRequest(method, \path, save_body, \hdr, prepared.request_context);
             raw = getConnectionManager().request(getUrl(), method, path, hdr,
                 prepared.serialized_body, req_to);
         }
@@ -335,7 +348,7 @@ public class DataStreamClientIo inherits RestClientIo::RestClientIo {
         try {
             return buildResponse(raw, prepared.error_passthru,
                 prepared.allow_any_response, method, path, hdr,
-                prepared.serialized_body);
+                prepared.serialized_body, prepared.request_context);
         } catch (hash<ExceptionInfo> ex) {
             if (prepared.error_passthru || raw.status_code < 300) {
                 rethrow;
@@ -900,14 +913,10 @@ public class DataStreamClientIo inherits RestClientIo::RestClientIo {
           an absolute server-side URL
     */
     private string applyConnectionPath(string path) {
-        if (path =~ /^\//) {
-            return path;
-        }
-        *string cp = getConnectionPath();
-        if (!cp.val()) {
-            return path;
-        }
-        return cp + "/" + path;
+        # Keep the streaming API's documented absolute-path contract while sharing joining and encoding.
+        return resolveRequestTarget(<RestClient::RestRequestTarget>{
+            "mode": path =~ /^\// ? RestClient::RestPathMode::OriginAbsolute : RestClient::RestPathMode::ApiRelative,
+            "path": path}).path;
     }
 
     #! Set Connect streaming headers for HTTP/2 (no Transfer-Encoding: chunked)

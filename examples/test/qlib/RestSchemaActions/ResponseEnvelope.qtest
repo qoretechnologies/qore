@@ -10,6 +10,12 @@
 class EnvelopeClient inherits RestClientIo::RestClientIo {
     public { auto body; }
     constructor() : RestClientIo({"url": "https://fixture.example"}) {}
+    #! Schema dispatch now supplies an explicit target; retain this mock's response recorder.
+    hash<RestClient::RestResponseInfo> restDoRawRequestTarget(string method,
+            hash<RestClient::RestRequestTarget> target, *data body, *hash<auto> hdr) {
+        return restDoRawRequest(method, target.path, body, hdr);
+    }
+
     hash<RestClient::RestResponseInfo> restDoRawRequest(string method, string path, *data data, *hash<auto> headers) {
         return <RestClient::RestResponseInfo>{"status_code": 202, "body": body,
             "headers": {"operation-location": "/jobs/1", "retry-after": "2"}};

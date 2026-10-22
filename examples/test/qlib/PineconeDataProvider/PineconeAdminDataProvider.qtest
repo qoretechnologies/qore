@@ -21,11 +21,11 @@
 */
 %modern
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/RestSchemaActions
-%requires ../../../../qlib/RestClientIo.qm
+%requires QUnit
+%requires RestSchemaActions
+%requires RestClientIo
 %requires json
-%requires ../../../../qlib/PineconeDataProvider
+%requires PineconeDataProvider
 %exec-class PineconeAdminProviderTest
 
 class PineconeAdminLog {
@@ -40,6 +40,12 @@ class PineconeAdminClient inherits PineconeAdminRestClientIo {
     }
     constructor(hash<auto> opts, *HttpClientIo::HttpClientConnectionManager mgr) : PineconeAdminRestClientIo(opts, mgr) {
     }
+    #! Schema dispatch now supplies an explicit target; retain this mock's response recorder.
+    hash<RestClient::RestResponseInfo> restDoRawRequestTarget(string method,
+            hash<RestClient::RestRequestTarget> target, *data body, *hash<auto> hdr) {
+        return restDoRawRequest(method, target.path, body, hdr);
+    }
+
     hash<RestClient::RestResponseInfo> restDoRawRequest(string method, string path, *data body,
             *hash<auto> headers) {
         PineconeAdminClient::log.requests += {"url": getUrl().toString(), "path": path, "method": method,

@@ -373,15 +373,11 @@ public class OpenApi3RequestDataProvider inherits OpenApi3DataProviderBase {
                 hdr.Accept = MimeTypeJson;
             }
 
-            # prepend base path to request, if any
-            string base_path = options.base_path ?? schema.getBasePath();
-            if (base_path.val() && base_path != "/") {
-                if (uri_path !~ /^\//) {
-                    base_path += "/";
-                }
-                uri_path = base_path + uri_path;
-            }
-            info = rest.restDoRawRequest(op.method, uri_path, body, hdr);
+            # The schema owns the namespace; compose it once before explicit absolute dispatch.
+            uri_path = RestClient::rest_request_path(<RestClient::RestRequestTarget>{"path": uri_path},
+                options.base_path ?? schema.getBasePath());
+            info = rest.restDoRawRequestTarget(op.method, <RestClient::RestRequestTarget>{
+                "mode": RestClient::RestPathMode::OriginAbsolute, "path": uri_path}, body, hdr);
             *hash<auto> rv;
             if (info.body.val()) {
                 rv.body = info.body;

@@ -1644,6 +1644,30 @@ public class AwsRestClientIo inherits RestClientIo::RestClientIo, AwsRestClientB
         return restDoRequestIntern(method, path, body, hdr, NOTHING, True, True, timeout_ms);
     }
 
+    #! Sends an explicit target with encoded path variables and a pre-serialized body
+    /** @param method HTTP method
+        @param target API-relative or origin-absolute target with already encoded path variables
+        @param body pre-serialized request body
+        @param hdr additional request headers
+        @param timeout_ms optional positive response deadline, including transport retries
+        @return the deserialized REST response
+        @throw REST-REQUEST-TARGET-ERROR invalid target or API root
+        @throw RESTCLIENTIO-OPTION-ERROR invalid timeout
+        @throw HTTPCLIENT-TIMEOUT the deadline is exhausted
+        @note SigV4 uses the encoded-path policy described by restDoEncodedRawRequest().
+        @par Example
+        @code{.py}
+        client.restDoEncodedRawRequestTarget("POST", <RestClient::RestRequestTarget>{
+            "mode": RestClient::RestPathMode::OriginAbsolute, "path": "/model/vendor.model%3A0/invoke"},
+            json_body, {"content-type": "application/json"});
+        @endcode
+    */
+    hash<RestClient::RestResponseInfo> restDoEncodedRawRequestTarget(string method,
+            hash<RestClient::RestRequestTarget> target, *data body, *hash<auto> hdr, *timeout timeout_ms) {
+        return restDoRequestIntern(method, target.path, body, hdr, NOTHING, True, True, timeout_ms,
+            resolveRequestTarget(target, method));
+    }
+
     #! Opens a SigV4-authenticated AWS event stream without buffering the response
     /** @param method HTTP method
         @param path request path with already percent-encoded path variables
@@ -1734,13 +1758,30 @@ public class AwsRestClientIo inherits RestClientIo::RestClientIo, AwsRestClientB
     */
     hash<auto> prepareAsyncRequestAttempt(string method, reference<string> path, auto body,
             reference<*hash<auto>> hdr, bool raw, reference<*auto> negotiate_context, *string shdr,
-            *code signer) {
+            *code signer, *hash<RestClient::RestRequestContext> request_context) {
         hash<auto> prepared = RestClientIo::prepareAsyncRequestAttempt(method, \path, body, \hdr, raw,
-            \negotiate_context, shdr, signer);
+            \negotiate_context, shdr, signer, request_context);
         signRequest(method, path, prepared.serialized_body, \hdr);
         return prepared + {
             "request_headers": hdr,
         };
+    }
+
+    #! Signs and sends an explicit target; see RestClient::AbstractRestClient::restDoRequestTarget()
+    /** @copydoc RestClient::AbstractRestClient::restDoRequestTarget() */
+    hash<RestClient::RestResponseInfo> restDoRequestTarget(string method,
+            hash<RestClient::RestRequestTarget> target, auto body, *hash<auto> hdr) {
+        return restDoRequestIntern(method, target.path, body, hdr, NOTHING, False, NOTHING, NOTHING,
+            resolveRequestTarget(target, method));
+    }
+
+    #! Signs and sends an explicit target with a serialized body
+    /** @copydoc RestClient::AbstractRestClient::restDoRawRequestTarget()
+    */
+    hash<RestClient::RestResponseInfo> restDoRawRequestTarget(string method,
+            hash<RestClient::RestRequestTarget> target, *data body, *hash<auto> hdr) {
+        return restDoRequestIntern(method, target.path, body, hdr, NOTHING, True, NOTHING, NOTHING,
+            resolveRequestTarget(target, method));
     }
 
     #! Internal: signs and sends a request, optionally assuming a content type for an untyped response
@@ -1757,7 +1798,8 @@ public class AwsRestClientIo inherits RestClientIo::RestClientIo, AwsRestClientB
         @return the deserialized @ref RestClient::RestResponseInfo hash
     */
     private hash<RestClient::RestResponseInfo> restDoRequestIntern(string method, string path, auto body,
-            *hash<auto> hdr, *string assume_content_type, *bool raw_body, *bool path_is_encoded, *timeout timeout_ms) {
+            *hash<auto> hdr, *string assume_content_type, *bool raw_body, *bool path_is_encoded, *timeout timeout_ms,
+            *hash<RestClient::RestRequestContext> request_context) {
         *int deadline_us;
         if (exists timeout_ms) {
             int started = requestNow();
@@ -1768,8 +1810,8 @@ public class AwsRestClientIo inherits RestClientIo::RestClientIo, AwsRestClientB
         }
         # Prepare request (serialize ordinary bodies; preserve already serialized raw bodies)
         hash<auto> prepared = raw_body
-            ? prepareRawRequest(method, \path, body, \hdr)
-            : prepareRequest(method, \path, body, \hdr);
+            ? prepareRawRequest(method, \path, body, \hdr, request_context)
+            : prepareRequest(method, \path, body, \hdr, request_context);
 
         # Sign the request
         signRequest(method, path, prepared.serialized_body, \hdr, path_is_encoded);
@@ -1807,7 +1849,7 @@ public class AwsRestClientIo inherits RestClientIo::RestClientIo, AwsRestClientB
         # Deserialize and return
         return buildResponse(raw, prepared.error_passthru,
             prepared.allow_any_response, method, path, hdr,
-            prepared.serialized_body);
+            prepared.serialized_body, prepared.request_context);
     }
 
     #! Internal: adds AWS Signature V4 to the request headers

@@ -209,12 +209,17 @@ public class StabilityAiRestClientBase {
         return endpoint;
     }
 
-    #! Adds the selected credentials only after validating the request target
-    private hash<auto> authenticate(string endpoint, *string path, *hash<auto> hdr) {
+    #! Validates the destination before serialization or request-target encoding
+    private validateTarget(string endpoint, *string path) {
         if (normalizeEndpoint(endpoint) != credential_origin || path =~ /^\/?[a-zA-Z][-a-zA-Z0-9+.]*:/
                 || path =~ /^\/\// || path =~ /[#\r\n\\]/ || path =~ /(^|\/)\.\.(\/|\?|$)/) {
             throw "STABILITYAI-CONFIG-ERROR", "authenticated requests must stay on the configured origin";
         }
+    }
+
+    #! Adds the selected credentials only after validating the request target
+    private hash<auto> authenticate(string endpoint, *string path, *hash<auto> hdr) {
+        validateTarget(endpoint, path);
         hdr = map {$1.key: $1.value}, hdr.pairIterator(),
             !inlist($1.key.lwr(), ("authorization", "organization"));
         hdr.authorization = "Bearer " + api_secret;
@@ -292,19 +297,21 @@ public class StabilityAiRestClientIo inherits RestClientIo::RestClientIo,
     }
 
     private hash<auto> prepareRequest(string method, reference<string> path, auto body,
-            reference<*hash<auto>> hdr) {
-        # the request target given by the caller is validated before the base class percent-encodes it
+            reference<*hash<auto>> hdr, *hash<RestClient::RestRequestContext> request_context) {
+        # Validate before encoding; authentication is applied after the defaults are merged.
+        validateTarget(getUrl(), path);
         string target = path;
-        hash<auto> rv = RestClientIo::prepareRequest(method, \path, body, \hdr);
+        hash<auto> rv = RestClientIo::prepareRequest(method, \path, body, \hdr, request_context);
         hdr = authenticate(getUrl(), target, hdr);
         return rv;
     }
 
     private hash<auto> prepareRawRequest(string method, reference<string> path, *data body,
-            reference<*hash<auto>> hdr) {
-        # the request target given by the caller is validated before the base class percent-encodes it
+            reference<*hash<auto>> hdr, *hash<RestClient::RestRequestContext> request_context) {
+        # Validate before encoding; authentication is applied after the defaults are merged.
+        validateTarget(getUrl(), path);
         string target = path;
-        hash<auto> rv = RestClientIo::prepareRawRequest(method, \path, body, \hdr);
+        hash<auto> rv = RestClientIo::prepareRawRequest(method, \path, body, \hdr, request_context);
         hdr = authenticate(getUrl(), target, hdr);
         return rv;
     }

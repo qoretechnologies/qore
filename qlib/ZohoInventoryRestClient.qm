@@ -753,27 +753,18 @@ public class ZohoInventoryRestClientIo inherits RestClientIo::RestClientIo, Zoho
         return domain;
     }
 
-    #! Adds the organization ID to the request path before the request is prepared
-    private hash<auto> prepareRequest(string method, reference<string> path, auto body,
-            reference<*hash<auto>> hdr) {
+    #! Adds the organization ID to the resolved target before encoding
+    private string prepareRequestPath(string method, string path) {
         addOrganizationId(\path);
-        return RestClientIo::prepareRequest(method, \path, body, \hdr);
-    }
-
-    #! Adds the organization ID to the request path before the raw request is prepared
-    private hash<auto> prepareRawRequest(string method, reference<string> path, *data body,
-            reference<*hash<auto>> hdr) {
-        addOrganizationId(\path);
-        return RestClientIo::prepareRawRequest(method, \path, body, \hdr);
+        return path;
     }
 
     #! Appends the organization_id query parameter to the given path
     /** The organization_id is appended to all API paths except for /organizations, which is used to retrieve
         the list of available organizations, and paths that already contain organization_id.
 
-        A request that is sent again (ex: after an authorization retry) is prepared again with the path that
-        already has the connection path prepended, therefore the /organizations path is matched as the last path
-        component.
+        The API root is already included, so /organizations is matched as the last path component.
+        Retries reuse the decorated target without adding query parameters again.
     */
     private addOrganizationId(reference<string> path) {
         # take a single snapshot of the organization ID, which can be changed concurrently

@@ -739,24 +739,12 @@ public class ZohoInvoiceRestClientIo inherits RestClientIo::RestClientIo, ZohoIn
         return domain;
     }
 
-    #! Prepares a request, adding the \c organization_id query parameter to the path
+    #! Adds the \c organization_id query parameter to the resolved target
     /** The organization ID is added to all paths except for \c /organizations, which is used to retrieve the
         list of available organizations.
     */
-    private hash<auto> prepareRequest(string method, reference<string> path, auto body,
-            reference<*hash<auto>> hdr) {
-        path = addOrganizationId(path);
-        return RestClientIo::prepareRequest(method, \path, body, \hdr);
-    }
-
-    #! Prepares a request with a pre-serialized body, adding the \c organization_id query parameter to the path
-    /** The organization ID is added to all paths except for \c /organizations, which is used to retrieve the
-        list of available organizations.
-    */
-    private hash<auto> prepareRawRequest(string method, reference<string> path, *data body,
-            reference<*hash<auto>> hdr) {
-        path = addOrganizationId(path);
-        return RestClientIo::prepareRawRequest(method, \path, body, \hdr);
+    private string prepareRequestPath(string method, string path) {
+        return addOrganizationId(path);
     }
 
     #! Returns the path with the \c organization_id query parameter added if required
@@ -772,13 +760,7 @@ public class ZohoInvoiceRestClientIo inherits RestClientIo::RestClientIo, ZohoIn
         if (!org_id || path =~ /[?&]organization_id=/) {
             return path;
         }
-        # the path relative to the connection path, if any, for the /organizations check
-        string rel_path = path;
-        *string conn_path = getConnectionPath();
-        if (conn_path.val() && rel_path.substr(0, conn_path.length()) == conn_path) {
-            rel_path = rel_path.substr(conn_path.length());
-        }
-        if (rel_path =~ /^\/?organizations($|\?)/) {
+        if (path =~ /(^|\/)organizations($|\?)/) {
             return path;
         }
         return path + (path =~ /\?/ ? "&" : "?") + "organization_id=" + org_id;

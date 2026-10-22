@@ -548,7 +548,7 @@ class RestClientIoTest inherits QUnit::Test {
         addTestCase("validator access", \testValidatorAccess());
         # Phase 2: Connection path
         addTestCase("connection path", \testConnectionPath());
-        addTestCase("connection path no double", \testConnectionPathNoDouble());
+        addTestCase("connection path explicit absolute", \testConnectionPathNoDouble());
         addTestCase("connection path clear", \testConnectionPathClear());
         addTestCase("connection path constructor", \testConnectionPathConstructor());
         addTestCase("connection path from url", \testConnectionPathFromUrl());
@@ -2423,9 +2423,10 @@ class RestClientIoTest inherits QUnit::Test {
         rest.setConnectionPath("/api");
         hash<RestClient::RestResponseInfo> resp = rest.restGet("/api/users");
         assertEq(200, resp.status_code);
-        # Should NOT double-prepend: path should be /api/users, not /api/api/users
-        assertRegex("api/users", resp.body.path);
-        assertEq(True, resp.body.path !~ /api\/api\//);
+        assertEq("/api/api/users", resp.body.raw_path);
+        resp = rest.restDoRequestTarget("GET", <RestClient::RestRequestTarget>{
+            "mode": RestClient::RestPathMode::OriginAbsolute, "path": "/api/users"}, NOTHING, NOTHING);
+        assertEq("/api/users", resp.body.raw_path);
     }
 
     testConnectionPathClear() {
@@ -2481,7 +2482,7 @@ class RestClientIoTest inherits QUnit::Test {
 
         assertEq(True, !rest2.getConnectionPath().val());
 
-        # Explicit default_path should take precedence over URL path
+        # The URL path takes precedence over the default_path fallback
         RestClientIo::RestClientIo rest3 = new RestClientIo::RestClientIo({
             "url": sprintf("https://127.0.0.1:%d/api/v2", port),
             "data": "json",
@@ -2492,7 +2493,7 @@ class RestClientIoTest inherits QUnit::Test {
         });
         on_exit rest3.close();
 
-        assertEq("/custom", rest3.getConnectionPath());
+        assertEq("/api/v2", rest3.getConnectionPath());
     }
 
     # ---- Phase 3: Basic auth ----
@@ -2852,8 +2853,7 @@ class RestClientIoTest inherits QUnit::Test {
         rest.setConnectionPath("/api/");
         hash<RestClient::RestResponseInfo> resp = rest.restGet("/test");
         assertEq(200, resp.status_code);
-        # Should have /api//test or /api/test depending on normalization
-        assertRegex("api/", resp.body.path);
+        assertEq("/api/test", resp.body.raw_path);
     }
 
     testConnectionPathEmptyVsNothing() {

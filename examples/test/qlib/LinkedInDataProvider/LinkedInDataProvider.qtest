@@ -166,6 +166,12 @@ class FakeLinkedInRestClientIo inherits LinkedInRestClient::LinkedInRestClientIo
         return record(method, path, body, hdr, False);
     }
 
+    #! Schema dispatch now supplies an explicit target; retain this mock's response recorder.
+    hash<RestClient::RestResponseInfo> restDoRawRequestTarget(string method,
+            hash<RestClient::RestRequestTarget> target, *data body, *hash<auto> hdr) {
+        return restDoRawRequest(method, target.path, body, hdr);
+    }
+
     hash<RestClient::RestResponseInfo> restDoRawRequest(string method, string path, *data body,
             *hash<auto> hdr) {
         return record(method, path, body, hdr, True);
@@ -193,6 +199,12 @@ class FakeUploadClient inherits RestClientIo::RestClientIo {
 
     push_response(hash<auto> resp) {
         push responses, resp;
+    }
+
+    #! Schema dispatch now supplies an explicit target; retain this mock's response recorder.
+    hash<RestClient::RestResponseInfo> restDoRawRequestTarget(string method,
+            hash<RestClient::RestRequestTarget> target, *data body, *hash<auto> hdr) {
+        return restDoRawRequest(method, target.path, body, hdr);
     }
 
     hash<RestClient::RestResponseInfo> restDoRawRequest(string method, string path, *data body,

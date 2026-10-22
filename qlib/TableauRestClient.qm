@@ -659,24 +659,37 @@ public class TableauRestClientIo inherits RestClientIo::RestClientIo, TableauRes
         @throw TABLEAU-ERROR the sign-in response does not contain a session token and site ID
     */
     hash<RestClient::RestResponseInfo> restDoRequest(string method, string path, auto body, *hash<auto> hdr) {
-        # Paths that don't need auth or site prefix
-        if (path =~ /^auth\// || path == "serverinfo") {
-            return RestClientIo::restDoRequest(method, path, body, hdr);
-        }
+        return restDoRequestTarget(method, <RestClient::RestRequestTarget>{"path": path}, body, hdr);
+    }
 
-        hash<auto> session = getSession();
-        try {
-            return RestClientIo::restDoRequest(method, "sites/" + session.site_luid + "/" + path, body,
-                hdr + {"X-Tableau-Auth": session.token});
-        } catch (hash<ExceptionInfo> ex) {
-            # On 401, sign in again and retry once
-            if (ex.err == "REST-RESPONSE-ERROR" && ex.arg.status_code == 401) {
-                invalidateSession(session.token);
-                session = getSession();
-                return RestClientIo::restDoRequest(method, "sites/" + session.site_luid + "/" + path, body,
-                    hdr + {"X-Tableau-Auth": session.token});
+    #! Sends an explicit target with the Tableau session credentials
+    /** API-relative targets retain automatic site scoping. Origin-absolute targets supply their complete path.
+        @copydoc RestClient::AbstractRestClient::restDoRequestTarget()
+    */
+    hash<RestClient::RestResponseInfo> restDoRequestTarget(string method,
+            hash<RestClient::RestRequestTarget> target, auto body, *hash<auto> hdr) {
+        if (target.mode == RestClient::RestPathMode::ApiRelative) {
+            target.path =~ s/^\/+//;
+            if (target.path =~ /^auth\// || target.path == "serverinfo") {
+                return RestClientIo::restDoRequest(method, target.path, body, hdr);
             }
-            rethrow;
+        }
+        hash<auto> session = getSession();
+        if (target.mode == RestClient::RestPathMode::ApiRelative) {
+            target.path = "sites/" + session.site_luid + "/" + target.path;
+        }
+        hash<RestClient::RestRequestContext> request_context = resolveRequestTarget(target, method);
+        try {
+            return RestClientIo::restDoRequestIntern(method, target.path, body,
+                hdr + {"X-Tableau-Auth": session.token}, False, NOTHING, NOTHING, request_context);
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err != "REST-RESPONSE-ERROR" || ex.arg.status_code != 401) {
+                rethrow;
+            }
+            invalidateSession(session.token);
+            session = getSession();
+            return RestClientIo::restDoRequestIntern(method, target.path, body,
+                hdr + {"X-Tableau-Auth": session.token}, False, NOTHING, NOTHING, request_context);
         }
     }
 

@@ -191,7 +191,9 @@ public class JinaContentDataProvider inherits JinaDataProviderCommon {
             client.clearConnectionPath();
         }
         req.stream = False;
-        hash<auto> response = client.restPost("/v1/chat/completions", req, {"Accept": MimeTypeJson}).body;
+        hash<auto> response = client.restDoRequestTarget("POST", <RestClient::RestRequestTarget>{
+            "mode": RestClient::RestPathMode::OriginAbsolute, "path": "/v1/chat/completions"},
+            req, {"Accept": MimeTypeJson}).body;
         if (exists response.created) {
             response.created = gmtime(response.created);
         }
@@ -373,7 +375,8 @@ public class JinaSegmentDataProvider inherits JinaContentDataProvider {
 
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
         validateRequest(req);
-        return rest.restPost("/v1/segment", req, {"Accept": MimeTypeJson}).body;
+        return rest.restDoRequestTarget("POST", <RestClient::RestRequestTarget>{
+            "mode": RestClient::RestPathMode::OriginAbsolute, "path": "/v1/segment"}, req, {"Accept": MimeTypeJson}).body;
     }
 }
 

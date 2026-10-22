@@ -69,8 +69,9 @@ public class ODataRecordIterator inherits AbstractODataRecordIterator {
         if (nextLink) {
             try {
                 # the next link is an absolute URL; requests take its path
-                hash<RestClient::RestResponseInfo> resp = rest.restGet(
-                    CdsRestDataProviderBase::getRequestPath(nextLink));
+                hash<RestClient::RestResponseInfo> resp = rest.restDoRequestTarget("GET",
+                    <RestClient::RestRequestTarget>{"mode": RestClient::RestPathMode::OriginAbsolute,
+                        "path": CdsRestDataProviderBase::getRequestPath(nextLink)}, NOTHING, NOTHING);
                 i = new ListHashIterator(resp.body.value ?? ());
                 nextLink = resp.body."@odata.nextLink";
                 return i.next();

@@ -160,6 +160,33 @@ RestClientIo rest({
 hash<RestResponseInfo> resp = rest.restGet("/v1/data");
     @endcode
 
+    @section restclientio_targets Request Targets and API Roots
+
+    String request paths are API-relative, including paths with a leading slash. With root \c /api,
+    \c /users sends \c /api/users and \c /api/users sends \c /api/api/users. No prefix matching is used.
+    To address the origin root, use an explicit target:
+
+    @code{.py}
+    rest.restDoRequestTarget("GET", <RestClient::RestRequestTarget>{
+        "mode": RestClient::RestPathMode::OriginAbsolute, "path": "/health"}, NOTHING, NOTHING);
+    @endcode
+
+    Explicit targets are supported by restDoRequestTarget(), restDoRawRequestTarget(),
+    restDoRequestTargetWithTimeout(), restDoRequestAsyncTarget(), startPollRequestTarget(),
+    restSseReaderTarget(), and restObserveSseTarget(). An already serialized body does not change the path mode.
+
+    A URL path takes precedence over \c default_path; a URL ending in \c / explicitly selects the origin root.
+    setConnectionPath() overrides this selection, and clearing it persists across reconnection. Roots are path
+    prefixes and cannot contain queries or fragments. A validator that manages URI paths supplies its own API
+    root. The target and validator are captured per request and retained across retries. Redirects use the
+    effective response URL and never reapply the original API root. See RestClient::rest_request_path() for
+    slash and query joining rules.
+
+    @note Migration from development versions: callers supplying complete prefixed paths must select
+        RestClient::RestPathMode::OriginAbsolute. Callers with URL paths and \c default_path must move any
+        intended override to setConnectionPath(). Released HTTPClient and RestClient string APIs retain their
+        contracts; HttpClientConnectionManager::request() still accepts complete request targets.
+
     @section restclientio_pool Connection Pooling
 
     The @ref RestClientIoPool class inherits both @ref RestClientIo and
@@ -616,7 +643,7 @@ hash<RestResponseInfo> resp = f.get(30s);
         - \c allow_any_response: if \c True, return raw body on deserialization errors instead
           of throwing
         - \c content_encoding: content encoding option (e.g., \c "auto", \c "gzip")
-        - \c default_path: connection path prepended to all request paths
+        - \c default_path: fallback API root used only when the URL has no path; queries and fragments are not allowed
         - \c proxy: proxy URL (e.g., \c "http://proxy:port")
         - \c max_redirects: the maximum number of redirects to follow (default: 5); see @ref restclientio_redirects
         - \c redirect_passthru: if \c True, redirect responses are returned instead of being followed
@@ -1321,15 +1348,13 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
                 setContentEncoding(opts.content_encoding);
             }
 
-            # Connection path: use explicit default_path if provided, otherwise extract from URL
-            if (opts.default_path) {
+            # A URL path (including "/") takes precedence over the fallback default_path.
+            connection_path = parse_url(url).path;
+            if (!connection_path.val()) {
                 connection_path = opts.default_path;
-            } else {
-                *string url_path = parse_url(url).path;
-                if (url_path.val() && url_path != "/") {
-                    connection_path = url_path;
-                }
             }
+            # Roots are path prefixes; queries belong to each request target.
+            RestClient::rest_request_path(<RestClient::RestRequestTarget>{"path": ""}, connection_path);
 
             # OAuth2 options
             if (opts.oauth2_grant_type) {
@@ -1871,6 +1896,7 @@ printf("server negotiated HTTP/%s\n", ver ?? "unknown");
         /** @param path the connection path (e.g., \c "/api/v2")
         */
         setConnectionPath(*string path) {
+            RestClient::rest_request_path(<RestClient::RestRequestTarget>{"path": ""}, path);
             AutoWriteLock al(config_lock);
             connection_path = path;
         }
@@ -2053,8 +2079,10 @@ printf("server negotiated HTTP/%s\n", ver ?? "unknown");
         hash<RestClient::RestResponseInfo> restDoRequestWithRetry(string method, string path,
                 auto body, *hash<auto> hdr, *RestRetryPolicy policy) {
             policy = policy ?? new RestRetryPolicy();
+            hash<RestClient::RestRequestContext> request_context = resolveRequestTarget(
+                <RestClient::RestRequestTarget>{"path": path}, method);
             return cast<hash<RestClient::RestResponseInfo>>(policy.execute(hash<auto> sub (int timeout_ms) {
-                return restDoRequestWithTimeout(method, path, body, hdr, timeout_ms);
+                return restDoRequestWithTimeout(method, path, body, hdr, timeout_ms, request_context);
             }));
         }
 
@@ -2159,7 +2187,8 @@ while (*hash<SseMessageInfo> evt = reader.readEvent(30s)) {
 
         private HttpClientStreamingIo::SseStreamReader restSseReaderIntern(
                 string method, string path, *hash<auto> hdr, *data body,
-                *date deadline, *code<nothing(HttpClientIo::HttpClientStreamHandle)> on_stream) {
+                *date deadline, *code<nothing(HttpClientIo::HttpClientStreamHandle)> on_stream,
+                *hash<RestClient::RestRequestContext> request_context) {
             ensureToken();
             hdr = hdr ?? {};
             if (!hdr.accept && !hdr.Accept) {
@@ -2174,7 +2203,8 @@ while (*hash<SseMessageInfo> evt = reader.readEvent(30s)) {
             while (True) {
                 bool redirected = rf && rf.getRedirects();
                 if (!redirected) {
-                    prepared = prepareRawRequest(method, \path, body, \hdr);
+                    prepared = prepareRawRequest(method, \path, body, \hdr, request_context);
+                    request_context = prepared.request_context;
                     if (exists prepared.negotiate_context) {
                         negotiate_context = prepared.negotiate_context;
                     }
@@ -2230,7 +2260,7 @@ while (*hash<SseMessageInfo> evt = reader.readEvent(30s)) {
                     list<auto> initial_data = validateSseResponseStart(stream,
                         method, path, hdr, prepared.serialized_body,
                         response_start.first_data, response,
-                        response_start.response_timeout, deadline);
+                        response_start.response_timeout, deadline, request_context);
                     # the reader replays the data consumed while validating the response, and decodes the stream
                     # according to its content encoding
                     # an event is limited to the maximum response body size of the client if set
@@ -2324,6 +2354,111 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
                 NOTHING);
         }
 
+        #! Sends a request with an explicit target; see RestClient::AbstractRestClient::restDoRequestTarget()
+        /** @copydoc RestClient::AbstractRestClient::restDoRequestTarget() */
+        hash<RestClient::RestResponseInfo> restDoRequestTarget(string method,
+                hash<RestClient::RestRequestTarget> target, auto body, *hash<auto> hdr) {
+            if (target.mode == RestClient::RestPathMode::ApiRelative) {
+                return restDoRequest(method, target.path, body, hdr);
+            }
+            return restDoRequestIntern(method, target.path, body, hdr, False, NOTHING, NOTHING,
+                resolveRequestTarget(target, method));
+        }
+
+        #! Sends a serialized body with an explicit target; see RestClient::AbstractRestClient::restDoRawRequestTarget()
+        /** @copydoc RestClient::AbstractRestClient::restDoRawRequestTarget() */
+        hash<RestClient::RestResponseInfo> restDoRawRequestTarget(string method,
+                hash<RestClient::RestRequestTarget> target, *data body, *hash<auto> hdr) {
+            if (target.mode == RestClient::RestPathMode::ApiRelative) {
+                return restDoRawRequest(method, target.path, body, hdr);
+            }
+            return restDoRequestIntern(method, target.path, body, hdr, True, NOTHING, NOTHING,
+                resolveRequestTarget(target, method));
+        }
+
+        #! Sends an explicit target with a call-local timeout
+        /** @param method HTTP method
+            @param target endpoint and path mode
+            @param body request body
+            @param hdr additional headers
+            @param timeout_ms positive timeout in milliseconds
+            @return the REST response
+            @throw RESTCLIENTIO-OPTION-ERROR the timeout is invalid
+            @throw REST-REQUEST-TARGET-ERROR the target or API root is invalid
+            @see restDoRequestWithTimeout(), RestClient::RestRequestTarget
+        */
+        hash<RestClient::RestResponseInfo> restDoRequestTargetWithTimeout(string method,
+                hash<RestClient::RestRequestTarget> target, auto body, *hash<auto> hdr, int timeout_ms) {
+            return restDoRequestWithTimeout(method, target.path, body, hdr, timeout_ms,
+                resolveRequestTarget(target, method));
+        }
+
+        #! Starts an async request with explicit path semantics
+        /** @param method HTTP method
+            @param target API-relative endpoint or origin-absolute target
+            @param body request body
+            @param hdr additional headers
+            @param raw True for an already serialized body
+            @param timeout_ms optional positive transport deadline in milliseconds
+            @return a cancellable future containing the deserialized REST response
+            @throw REST-REQUEST-TARGET-ERROR the path or API root is invalid
+            @throw RESTCLIENTIO-OPTION-ERROR the timeout is not positive
+            @see RestClient::RestRequestTarget for examples
+        */
+        RestFuture restDoRequestAsyncTarget(string method, hash<RestClient::RestRequestTarget> target,
+                auto body, *hash<auto> hdr, bool raw = False, *int timeout_ms) {
+            if (exists timeout_ms && timeout_ms <= 0) {
+                throw "RESTCLIENTIO-OPTION-ERROR", "timeout_ms must be positive";
+            }
+            hash<auto> async_info = startAsyncRequestOperation(method, target.path, body, hdr,
+                raw, False, NOTHING, NOTHING, NOTHING, timeout_ms, resolveRequestTarget(target, method));
+            RestClientIoAsyncRequestOperation op = async_info.operation;
+            return new RestFuture(async_info.future, bool sub () {
+                return op.cancel();
+            }, hash<RestClient::RestResponseInfo> sub (hash<auto> response) {
+                return buildAsyncOperationResponse(response, op);
+            });
+        }
+
+        #! Creates a caller-driven request with explicit path semantics
+        /** @param method HTTP method
+            @param target API-relative endpoint or origin-absolute target
+            @param body request body
+            @param hdr additional headers
+            @param raw True for an already serialized body
+            @return a caller-driven poll operation containing the REST response
+            @throw REST-REQUEST-TARGET-ERROR the path or API root is invalid
+            @see startPollRequest(), RestClient::RestRequestTarget
+        */
+        Qore::AbstractPollOperation startPollRequestTarget(string method, hash<RestClient::RestRequestTarget> target,
+                auto body, *hash<auto> hdr, bool raw = False) {
+            return startPollRequestIntern(method, target.path, body, hdr, raw, False,
+                resolveRequestTarget(target, method));
+        }
+
+        #! Opens an SSE reader with explicit path semantics and a serialized body
+        /** @param method HTTP method
+            @param target API-relative endpoint or origin-absolute target
+            @param hdr additional headers
+            @param body optional serialized body
+            @param timeout_ms optional positive response-start deadline in milliseconds
+            @param on_stream callback receiving each submitted stream, including retries and redirects
+            @return the SSE reader
+            @throw REST-REQUEST-TARGET-ERROR the path or API root is invalid
+            @throw RESTCLIENTIO-OPTION-ERROR the timeout is not positive
+            @see restSseReader(), RestClient::RestRequestTarget
+        */
+        HttpClientStreamingIo::SseStreamReader restSseReaderTarget(string method,
+                hash<RestClient::RestRequestTarget> target, *hash<auto> hdr, *data body, *int timeout_ms,
+                *code<nothing(HttpClientIo::HttpClientStreamHandle)> on_stream) {
+            if (exists timeout_ms && timeout_ms <= 0) {
+                throw "RESTCLIENTIO-OPTION-ERROR", "timeout_ms must be positive";
+            }
+            return restSseReaderIntern(method, target.path, hdr, body,
+                exists timeout_ms ? now_us() + milliseconds(timeout_ms) : NOTHING, on_stream,
+                resolveRequestTarget(target, method));
+        }
+
         #! Sends a generic REST request with a call-local timeout
         /** This is the method-neutral counterpart to
             @ref restPostWithTimeout(). The response wait bounds internal transport retries and redirects
@@ -2343,6 +2478,7 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
             @param body request body
             @param hdr optional request headers
             @param timeout_ms timeout for this request only in milliseconds
+            @param request_context internal request snapshot; target-aware callers provide this to retain their namespace
 
             @return the REST response
 
@@ -2361,14 +2497,14 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
         */
         hash<RestClient::RestResponseInfo> restDoRequestWithTimeout(
                 string method, string path, auto body, *hash<auto> hdr,
-                int timeout_ms) {
+                int timeout_ms, *hash<RestClient::RestRequestContext> request_context) {
             int started = requestNow();
             if (timeout_ms <= 0 || timeout_ms > (9223372036854775807 - started) / 1000) {
                 throw "RESTCLIENTIO-OPTION-ERROR",
                     "timeout_ms must be positive and fit a monotonic deadline";
             }
             int deadline = started + timeout_ms * 1000;
-            RestFuture future = restDoRequestAsyncWithTimeout(method, path, body, hdr, timeout_ms);
+            RestFuture future = restDoRequestAsyncWithTimeout(method, path, body, hdr, timeout_ms, request_context);
             try {
                 int remaining_us = deadline - requestNow();
                 if (remaining_us <= 0) {
@@ -2399,11 +2535,11 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
             @return a @ref RestFuture that resolves to a @ref RestClient::RestResponseInfo hash
         */
         private RestFuture restDoRequestAsyncWithTimeout(string method, string path, auto body, *hash<auto> hdr,
-                int timeout_ms) {
+                int timeout_ms, *hash<RestClient::RestRequestContext> request_context) {
             log(LoggerLevel::DEBUG, "restDoRequestAsyncWithTimeout() %s %s%s (timeout: %dms)", method, url, path,
                 timeout_ms);
             hash<auto> async_info = startAsyncRequestOperation(method, path, body, hdr, False, False, NOTHING,
-                NOTHING, NOTHING, timeout_ms);
+                NOTHING, NOTHING, timeout_ms, request_context);
             RestClientIoAsyncRequestOperation op = async_info.operation;
             return new RestFuture(async_info.future, bool sub () {
                 return op.cancel();
@@ -2478,7 +2614,8 @@ hash<RestClient::RestResponseInfo> resp = client.restDoRequestWithResponseLimit(
         #! Internal: shared request path for @ref restDoRequest() and @ref restDoRawRequest()
         private hash<RestClient::RestResponseInfo> restDoRequestIntern(string method, string path,
                 auto body, *hash<auto> hdr, bool raw,
-                *timeout request_timeout_ms, *int max_response_bytes) {
+                *timeout request_timeout_ms, *int max_response_bytes,
+                *hash<RestClient::RestRequestContext> request_context) {
             hash<HttpClientIo::HttpClientRequestOptions> req_opts = getCookieRequestOptions();
             if (max_response_bytes) {
                 req_opts.max_response_body_size = max_response_bytes;
@@ -2487,8 +2624,9 @@ hash<RestClient::RestResponseInfo> resp = client.restDoRequestWithResponseLimit(
 
             # 1. Snapshot config state and serialize body (or skip serialization for raw)
             hash<auto> prepared = raw
-                ? prepareRawRequest(method, \path, body, \hdr)
-                : prepareRequest(method, \path, body, \hdr);
+                ? prepareRawRequest(method, \path, body, \hdr, request_context)
+                : prepareRequest(method, \path, body, \hdr, request_context);
+            request_context = prepared.request_context;
             *auto negotiate_context = prepared.negotiate_context;
             bool negotiate_retry = True;
 
@@ -2514,8 +2652,8 @@ hash<RestClient::RestResponseInfo> resp = client.restDoRequestWithResponseLimit(
                     && tryNegotiateAuthRetry(raw_resp.headers, \hdr, \negotiate_context)) {
                 negotiate_retry = False;
                 prepared = raw
-                    ? prepareRawRequest(method, \path, body, \hdr)
-                    : prepareRequest(method, \path, body, \hdr);
+                    ? prepareRawRequest(method, \path, body, \hdr, request_context)
+                    : prepareRequest(method, \path, body, \hdr, request_context);
                 raw_resp = mgr.request(url, method, path, hdr,
                     prepared.serialized_body, req_to, False, req_opts);
             }
@@ -2523,8 +2661,8 @@ hash<RestClient::RestResponseInfo> resp = client.restDoRequestWithResponseLimit(
             # 3b. If 401 and the client has a user name and password, answer a Basic or Digest challenge once
             if (raw_resp.status_code == 401 && tryHttpAuthRetry(raw_resp.headers, \hdr)) {
                 prepared = raw
-                    ? prepareRawRequest(method, \path, body, \hdr)
-                    : prepareRequest(method, \path, body, \hdr);
+                    ? prepareRawRequest(method, \path, body, \hdr, request_context)
+                    : prepareRequest(method, \path, body, \hdr, request_context);
                 raw_resp = mgr.request(url, method, path, hdr,
                     prepared.serialized_body, req_to, False, req_opts);
             }
@@ -2537,7 +2675,7 @@ hash<RestClient::RestResponseInfo> resp = client.restDoRequestWithResponseLimit(
                     # If refresh fails, return the original 401 response
                     return buildResponse(raw_resp, prepared.error_passthru,
                         prepared.allow_any_response, method, path, hdr,
-                        prepared.serialized_body);
+                        prepared.serialized_body, prepared.request_context);
                 }
                 # Strip stale auth header from hdr — prepareRequest() merges as
                 # hdr = {} + headers + hdr, so the old value would override the
@@ -2545,8 +2683,8 @@ hash<RestClient::RestResponseInfo> resp = client.restDoRequestWithResponseLimit(
                 hdr -= getAuthHeaderName();
                 # Re-snapshot headers with new token
                 prepared = raw
-                    ? prepareRawRequest(method, \path, body, \hdr)
-                    : prepareRequest(method, \path, body, \hdr);
+                    ? prepareRawRequest(method, \path, body, \hdr, request_context)
+                    : prepareRequest(method, \path, body, \hdr, request_context);
                 raw_resp = mgr.request(url, method, path, hdr,
                     prepared.serialized_body, req_to, False, req_opts);
             }
@@ -2556,7 +2694,7 @@ hash<RestClient::RestResponseInfo> resp = client.restDoRequestWithResponseLimit(
             # 5. Deserialize
             hash<RestClient::RestResponseInfo> resp = buildResponse(raw_resp, prepared.error_passthru,
                 prepared.allow_any_response, method, path, hdr,
-                prepared.serialized_body);
+                prepared.serialized_body, prepared.request_context);
 
             # 6. Body-level auth error check on 200 OK: some servers return success with an error
             # payload when the token has expired; refresh and retry once
@@ -2568,13 +2706,13 @@ hash<RestClient::RestResponseInfo> resp = client.restDoRequestWithResponseLimit(
                 }
                 hdr -= getAuthHeaderName();
                 prepared = raw
-                    ? prepareRawRequest(method, \path, body, \hdr)
-                    : prepareRequest(method, \path, body, \hdr);
+                    ? prepareRawRequest(method, \path, body, \hdr, request_context)
+                    : prepareRequest(method, \path, body, \hdr, request_context);
                 raw_resp = mgr.request(url, method, path, hdr,
                     prepared.serialized_body, req_to, False, req_opts);
                 resp = buildResponse(raw_resp, prepared.error_passthru,
                     prepared.allow_any_response, method, path, hdr,
-                    prepared.serialized_body);
+                    prepared.serialized_body, prepared.request_context);
             }
 
             return resp;
@@ -2824,7 +2962,8 @@ hash<RestClient::RestResponseInfo> resp = client.restDoRequestWithResponseLimit(
         */
         private hash<auto> startAsyncRequestOperation(string method, string path, auto body,
                 *hash<auto> hdr, bool raw, *bool skip_ensure_token,
-                *EventNotifier completion_notifier, *string shdr, *code signer, *int request_timeout_ms) {
+                *EventNotifier completion_notifier, *string shdr, *code signer, *int request_timeout_ms,
+                *hash<RestClient::RestRequestContext> request_context) {
             if (!skip_ensure_token) {
                 ensureToken();
             }
@@ -2832,7 +2971,7 @@ hash<RestClient::RestResponseInfo> resp = client.restDoRequestWithResponseLimit(
             Promise p();
             Future f = p.getFuture();
             RestClientIoAsyncRequestOperation op(self, p, method, path, body, hdr,
-                raw, completion_notifier, shdr, signer, request_timeout_ms);
+                raw, completion_notifier, shdr, signer, request_timeout_ms, request_context);
             op.start();
             return {
                 "future": f,
@@ -2843,10 +2982,11 @@ hash<RestClient::RestResponseInfo> resp = client.restDoRequestWithResponseLimit(
         #! Prepares one async request attempt for RestClientIoAsyncRequestOperation
         hash<auto> prepareAsyncRequestAttempt(string method, reference<string> path,
                 auto body, reference<*hash<auto>> hdr, bool raw,
-                reference<*auto> negotiate_context, *string shdr, *code signer) {
+                reference<*auto> negotiate_context, *string shdr, *code signer,
+                *hash<RestClient::RestRequestContext> request_context) {
             hash<auto> prepared = raw
-                ? prepareRawRequest(method, \path, body, \hdr)
-                : prepareRequest(method, \path, body, \hdr);
+                ? prepareRawRequest(method, \path, body, \hdr, request_context)
+                : prepareRequest(method, \path, body, \hdr, request_context);
             if (exists prepared.negotiate_context) {
                 negotiate_context = prepared.negotiate_context;
             }
@@ -2912,7 +3052,7 @@ hash<RestClient::RestResponseInfo> resp = client.restDoRequestWithResponseLimit(
         hash<RestClient::RestResponseInfo> buildAsyncOperationResponse(hash<auto> raw,
                 RestClientIoAsyncRequestOperation op) {
             return buildResponse(raw, op.getErrorPassthru(), op.getAllowAnyResponse(),
-                op.getMethod(), op.getPath(), op.getRequestHeaders(), op.getRequestBody());
+                op.getMethod(), op.getPath(), op.getRequestHeaders(), op.getRequestBody(), op.getRequestContext());
         }
 
         #! Sends an async generic REST request and returns a RestFuture
@@ -3051,7 +3191,8 @@ hash<RestClient::RestResponseInfo> resp = client.restDoRequestWithResponseLimit(
 
         #! Internal: builds a caller-driven poll operation
         private RestClientIoAsyncRequestOperation startPollRequestIntern(string method, string path,
-                auto body, *hash<auto> hdr, bool raw, bool skip_ensure_token) {
+                auto body, *hash<auto> hdr, bool raw, bool skip_ensure_token,
+                *hash<RestClient::RestRequestContext> request_context) {
             log(LoggerLevel::DEBUG, "startPollRequest() %s %s%s", method, url, path);
 
             if (!skip_ensure_token) {
@@ -3062,7 +3203,7 @@ hash<RestClient::RestResponseInfo> resp = client.restDoRequestWithResponseLimit(
             # NOTE: the Future is held by the operation for the life of the poll; a Promise resolved or
             # rejected with no Future in existence has nowhere to deliver the result
             RestClientIoAsyncRequestOperation op(self, p, method, path, body, hdr, raw, NOTHING,
-                NOTHING, NOTHING);
+                NOTHING, NOTHING, NOTHING, request_context);
             op.holdFuture(p.getFuture());
             op.startCallerDriven();
             return op;
@@ -3109,7 +3250,8 @@ hash<RestClient::RestResponseInfo> resp = client.restDoRequestWithResponseLimit(
         hash<auto> doRequestRawAsyncWithNotifier(string method, string path, *hash<auto> hdr,
                 *data body, EventNotifier notifier) {
             return startAsyncRequestOperation(method, path, body, hdr, True,
-                True, notifier, NOTHING, NOTHING);
+                True, notifier, NOTHING, NOTHING, NOTHING, resolveRequestTarget(<RestClient::RestRequestTarget>{
+                    "mode": RestClient::RestPathMode::OriginAbsolute, "path": path}, method));
         }
 
         #! Submits an async ping request with EventNotifier signaling
@@ -3123,15 +3265,16 @@ hash<RestClient::RestResponseInfo> resp = client.restDoRequestWithResponseLimit(
             @param hdr base request headers; only updated by Negotiate challenge retries
             @param notifier EventNotifier to signal on response completion
             @param gss_context Negotiate context to keep across ping retries
+            @param request_context the target and validator retained by the ping
 
             @return hash with "future" (Future) and "stream_id" (int)
         */
         hash<auto> submitPingRequestWithNotifier(string method, reference<string> path,
                 auto body, reference<*hash<auto>> hdr, EventNotifier notifier,
-                reference<*auto> gss_context) {
+                reference<*auto> gss_context, hash<RestClient::RestRequestContext> request_context) {
             *hash<auto> request_headers = hdr;
             hash<auto> prepared = prepareRequest(method, \path, body,
-                \request_headers);
+                \request_headers, request_context);
             if (exists prepared.negotiate_context) {
                 gss_context = prepared.negotiate_context;
             }
@@ -3267,11 +3410,13 @@ hash<RestClient::RestResponseInfo> resp = client.restDoRequestWithResponseLimit(
                 if (ui.port) {
                     base_url_str += sprintf(":%d", ui.port);
                 }
-                req_path = ui.path ?? "/";
+                req_path = get_http_request_target(token_url_str);
             } else {
                 base_url_str = url;
                 req_path = token_url_str;
             }
+            # Token endpoints are complete origin-relative targets, independent of the API namespace.
+            req_path = RestClient::rest_request_path(<RestClient::RestRequestTarget>{"path": req_path}, NOTHING);
 
             # Build request headers — same logic as doOAuth2TokenRequest()
             hash<auto> auth_hdr = {
@@ -3353,10 +3498,12 @@ hash<RestClient::RestResponseInfo> resp = client.restDoRequestWithResponseLimit(
         */
         hash<RestClient::RestResponseInfo> doSignedRequest(string shdr, code signer,
                 string method, string path, auto body, *hash<auto> hdr) {
+            *hash<RestClient::RestRequestContext> request_context;
             ensureToken();
 
             # 1. Snapshot config state and serialize body
-            hash<auto> prepared = prepareRequest(method, \path, body, \hdr);
+            hash<auto> prepared = prepareRequest(method, \path, body, \hdr, request_context);
+            request_context = prepared.request_context;
             *auto negotiate_context = prepared.negotiate_context;
             bool negotiate_retry = True;
 
@@ -3375,7 +3522,7 @@ hash<RestClient::RestResponseInfo> resp = client.restDoRequestWithResponseLimit(
             if (raw.status_code == 401 && negotiate_retry
                     && tryNegotiateAuthRetry(raw.headers, \hdr, \negotiate_context)) {
                 negotiate_retry = False;
-                prepared = prepareRequest(method, \path, body, \hdr);
+                prepared = prepareRequest(method, \path, body, \hdr, request_context);
                 sig = signer({"path": path, "body": prepared.serialized_body,
                     "hdr": hdr - shdr});
                 hdr{shdr} = sig;
@@ -3390,12 +3537,12 @@ hash<RestClient::RestResponseInfo> resp = client.restDoRequestWithResponseLimit(
                 } catch () {
                     return buildResponse(raw, prepared.error_passthru,
                         prepared.allow_any_response, method, path, hdr,
-                        prepared.serialized_body);
+                        prepared.serialized_body, prepared.request_context);
                 }
                 # Strip stale auth header from hdr (see restDoRequest comment)
                 hdr -= getAuthHeaderName();
                 # Re-snapshot headers with new token
-                prepared = prepareRequest(method, \path, body, \hdr);
+                prepared = prepareRequest(method, \path, body, \hdr, request_context);
                 sig = signer({"path": path, "body": prepared.serialized_body,
                     "hdr": hdr - shdr});
                 hdr{shdr} = sig;
@@ -3408,7 +3555,7 @@ hash<RestClient::RestResponseInfo> resp = client.restDoRequestWithResponseLimit(
             # 6. Deserialize
             hash<RestClient::RestResponseInfo> resp = buildResponse(raw, prepared.error_passthru,
                 prepared.allow_any_response, method, path, hdr,
-                prepared.serialized_body);
+                prepared.serialized_body, prepared.request_context);
 
             # 7. Body-level auth error retry (see restDoRequest)
             if (isBodyAuthError(resp) && canRetryAuth()) {
@@ -3418,7 +3565,7 @@ hash<RestClient::RestResponseInfo> resp = client.restDoRequestWithResponseLimit(
                     return resp;
                 }
                 hdr -= getAuthHeaderName();
-                prepared = prepareRequest(method, \path, body, \hdr);
+                prepared = prepareRequest(method, \path, body, \hdr, request_context);
                 sig = signer({"path": path, "body": prepared.serialized_body,
                     "hdr": hdr - shdr});
                 hdr{shdr} = sig;
@@ -3426,7 +3573,7 @@ hash<RestClient::RestResponseInfo> resp = client.restDoRequestWithResponseLimit(
                     getCookieRequestOptions());
                 resp = buildResponse(raw, prepared.error_passthru,
                     prepared.allow_any_response, method, path, hdr,
-                    prepared.serialized_body);
+                    prepared.serialized_body, prepared.request_context);
             }
 
             return resp;
@@ -3521,8 +3668,44 @@ hash<RestClient::RestResponseInfo> resp = client.restDoRequestWithResponseLimit(
             @return a hash with \c serialized_body and \c error_passthru keys
         */
         private hash<auto> prepareRequest(string method, reference<string> path, auto body,
-                reference<*hash<auto>> hdr) {
-            return prepareRequestIntern(method, \path, body, \hdr, False);
+                reference<*hash<auto>> hdr, *hash<RestClient::RestRequestContext> request_context) {
+            return prepareRequestIntern(method, \path, body, \hdr, False, request_context);
+        }
+
+        #! Resolves and encodes a target with a snapshot of its validator
+        /** @param target the endpoint and explicit path mode
+            @param method HTTP method passed to the provider's query decoration hook
+            @return immutable request preparation state, reused by retries
+            @throw REST-REQUEST-TARGET-ERROR the path or API root is invalid
+            @see RestClient::RestRequestTarget for examples
+        */
+        hash<RestClient::RestRequestContext> resolveRequestTarget(hash<RestClient::RestRequestTarget> target,
+                string method = "GET") {
+            AutoReadLock al(config_lock);
+            return resolveRequestTargetIntern(target, method);
+        }
+
+        #! Caller holds config_lock; resolving never mutates client configuration
+        private hash<RestClient::RestRequestContext> resolveRequestTargetIntern(
+                hash<RestClient::RestRequestTarget> target, string method) {
+            string path = RestClient::rest_request_path(target,
+                validator.managesUriPath() ? validator.getBasePath() : connection_path);
+            return <RestClient::RestRequestContext>{
+                "path": HttpClientIo::encode_http_request_target(prepareRequestPath(method, path),
+                    pre_encoded_urls, encode_chars),
+                "validator": validator,
+            };
+        }
+
+        #! Adds provider-specific query parameters to the resolved, unencoded target
+        /** Called exactly once per request with config_lock held for reading. Overrides must not change
+            client configuration or acquire config_lock. Retries reuse the resulting encoded target.
+            @param method HTTP method
+            @param path complete target before encoding
+            @return the target including any provider-specific parameters
+        */
+        private string prepareRequestPath(string method, string path) {
+            return path;
         }
 
         #! Internal: snapshots config state; leaves pre-serialized body as-is
@@ -3539,26 +3722,18 @@ hash<RestClient::RestResponseInfo> resp = client.restDoRequestWithResponseLimit(
             @return a hash with \c serialized_body and \c error_passthru keys
         */
         private hash<auto> prepareRawRequest(string method, reference<string> path, *data body,
-                reference<*hash<auto>> hdr) {
-            return prepareRequestIntern(method, \path, body, \hdr, True);
+                reference<*hash<auto>> hdr, *hash<RestClient::RestRequestContext> request_context) {
+            return prepareRequestIntern(method, \path, body, \hdr, True, request_context);
         }
 
         #! Internal: shared prep path for @ref prepareRequest() and @ref prepareRawRequest()
         private hash<auto> prepareRequestIntern(string method, reference<string> path, auto body,
-                reference<*hash<auto>> hdr, bool raw) {
-            # Normalize path to be absolute (HTTP/2/3 :path pseudo-header requires leading "/"); an empty path
-            # addresses the connection path itself and is resolved below
-            bool empty_path = !path.val();
-            if (!empty_path && path[0] != "/") {
-                path = "/" + path;
-            }
-
+                reference<*hash<auto>> hdr, bool raw, *hash<RestClient::RestRequestContext> request_context) {
             *string req_sct;
             *hash<auto> req_seh;
             bool req_no_charset;
             bool req_error_passthru;
             bool req_allow_any_response;
-            *string req_connection_path;
             *string req_body_encoding;
             *HttpAuthenticator req_basic_auth;
             RestSchemaValidator::AbstractRestSchemaValidator req_validator;
@@ -3572,25 +3747,13 @@ hash<RestClient::RestResponseInfo> resp = client.restDoRequestWithResponseLimit(
                 req_no_charset = noCharset;
                 req_error_passthru = error_passthru;
                 req_allow_any_response = allow_any_response;
-                req_connection_path = connection_path;
-                req_validator = validator;
-            }
-
-            # Apply connection path (avoid double-prepending); like HTTPClient, an empty request path sends the
-            # connection path as-is instead of appending a trailing "/" to it
-            if (req_connection_path.val()) {
-                if (empty_path) {
-                    path = req_connection_path;
-                } else if (path.substr(0, req_connection_path.length()) != req_connection_path) {
-                    path = req_connection_path + path;
+                if (!request_context) {
+                    request_context = resolveRequestTargetIntern(<RestClient::RestRequestTarget>{"path": path}, method);
                 }
-            } else if (empty_path) {
-                path = "/";
+                req_validator = request_context.validator;
             }
 
-            # the characters that a request target may not contain are percent-encoded, as with the synchronous
-            # client; a pre-encoded path is only validated
-            path = HttpClientIo::encode_http_request_target(path, pre_encoded_urls, encode_chars);
+            path = request_context.path;
 
             # Normalize header keys to lowercase for HTTP/2 and HTTP/3 compatibility
             hdr = map {$1.key.lwr(): $1.value}, hdr.pairIterator();
@@ -3599,22 +3762,18 @@ hash<RestClient::RestResponseInfo> resp = client.restDoRequestWithResponseLimit(
             maybeAddPreemptiveNegotiateHeader(\hdr, \negotiate_context);
 
             *data serialized_body;
-            if (exists body) {
-                if (raw) {
-                    # Pre-serialized body: caller owns serialization and Content-Type
-                    serialized_body = body;
-                } else {
-                    # Give subclasses a chance to transform the body (e.g.,
-                    # MewsRestClientIo injects auth tokens into every request)
-                    body = preprocessRequestBody(body);
-                    hash<RestSchemaValidator::RestRequestClientInfo> req = req_validator.processRequest(
-                        method, path, body, hdr, req_sct);
-                    serialized_body = req.body;
-                    # Use lowercase header keys for HTTP/2 and HTTP/3 compatibility
-                    if (!hdr."content-type") {
-                        hdr."content-type" = req.content;
-                    }
+            if (raw) {
+                serialized_body = body;
+            } else {
+                body = preprocessRequestBody(body);
+                hash<RestSchemaValidator::RestRequestClientInfo> req = req_validator.processRequest(
+                    method, path, body, hdr, req_sct);
+                serialized_body = req.body;
+                if (exists body && !hdr."content-type") {
+                    hdr."content-type" = req.content;
                 }
+            }
+            if (exists serialized_body) {
                 # a string body is sent in the character encoding set with the encoding option, like with HTTPClient
                 if (req_body_encoding && serialized_body.typeCode() == NT_STRING
                         && serialized_body.encoding() != req_body_encoding) {
@@ -3643,6 +3802,7 @@ hash<RestClient::RestResponseInfo> resp = client.restDoRequestWithResponseLimit(
             }
 
             hash<auto> rv = {
+                "request_context": request_context,
                 "serialized_body": serialized_body,
                 "error_passthru": req_error_passthru,
                 "allow_any_response": req_allow_any_response,
@@ -3756,7 +3916,8 @@ rest.addSensitiveHeaders("Qorus-Token");
         */
         private hash<RestClient::RestResponseInfo> buildResponse(hash<auto> raw,
                 bool req_error_passthru, bool req_allow_any_response, string method,
-                string path, *hash<auto> request_headers, *data request_body) {
+                string path, *hash<auto> request_headers, *data request_body,
+                *hash<RestClient::RestRequestContext> request_context) {
             hash<string, bool> extra = getSensitiveHeaderSet();
             on_error {
                 hash<auto> safe = RestClient::RestDiagnostics::redact($1, request_headers, extra);
@@ -3769,7 +3930,7 @@ rest.addSensitiveHeaders("Qorus-Token");
             RestSchemaValidator::AbstractRestSchemaValidator resp_validator;
             {
                 AutoReadLock al(config_lock);
-                resp_validator = validator;
+                resp_validator = request_context ? request_context.validator : validator;
             }
 
             auto resp_body = raw.body;
@@ -3910,7 +4071,8 @@ rest.addSensitiveHeaders("Qorus-Token");
         private list<auto> validateSseResponseStart(HttpClientIo::HttpClientStreamHandle stream,
                 string method, string path, hash<auto> request_headers,
                 *data request_body, auto first_data, *hash<auto> response,
-                *timeout response_timeout, *date deadline = NOTHING) {
+                *timeout response_timeout, *date deadline = NOTHING,
+                *hash<RestClient::RestRequestContext> request_context) {
             # the response headers of an error, and any credential of the request echoed in it, are redacted
             hash<string, bool> extra = getSensitiveHeaderSet();
             on_error {
@@ -3932,7 +4094,7 @@ rest.addSensitiveHeaders("Qorus-Token");
                     raw_response.body = drainSseErrorBody(stream, first_data,
                         response_timeout, deadline);
                     buildResponse(raw_response, False, req_allow_any_response,
-                        method, path, request_headers, request_body);
+                        method, path, request_headers, request_body, request_context);
                 }
                 # a successful response that is not an event stream (for example the JSON document of a server
                 # that ignored the SSE request) would otherwise be read as a stream without events
@@ -4541,11 +4703,12 @@ rest.addSensitiveHeaders("Qorus-Token");
                 if (url_info.port) {
                     base_url += sprintf(":%d", url_info.port);
                 }
-                req_path = url_info.path ?? "/";
+                req_path = get_http_request_target(token_url);
             } else {
                 base_url = url;
                 req_path = token_url;
             }
+            req_path = RestClient::rest_request_path(<RestClient::RestRequestTarget>{"path": req_path}, NOTHING);
 
             # Build headers (lowercase for HTTP/2/3)
             hash<auto> hdr = {
@@ -5170,7 +5333,9 @@ obs.observersReady();
             @endcode
         */
         HttpClientStreamingIo::SseObservable restObserveSse(string method, string path,
-                auto body, *hash<auto> hdr, *hash<auto> opts) {
+                auto body, *hash<auto> hdr, *hash<auto> opts, *hash<RestClient::RestRequestContext> request_context) {
+            request_context = request_context ?? resolveRequestTarget(
+                <RestClient::RestRequestTarget>{"path": path}, method);
             # Ensure Accept: text/event-stream header
             hdr = hdr ?? {};
             if (!hdr."accept" && !hdr."Accept") {
@@ -5187,20 +5352,35 @@ obs.observersReady();
             }
             obs_opts.startup_callback =
                 auto sub (HttpClientStreamingIo::SseObservable obs) {
-                    return startSseObservableOperation(obs, method, path, body, hdr);
+                    return startSseObservableOperation(obs, method, path, body, hdr, request_context);
                 };
 
             return new HttpClientStreamingIo::SseObservable(mgr, url, method, path, hdr,
                 NOTHING, obs_opts);
         }
 
+        #! Creates an SSE observable with explicit path semantics
+        /** @param method HTTP method
+            @param target endpoint and path mode
+            @param body request body, serialized by the client
+            @param hdr additional headers
+            @param opts observable options, as for restObserveSse()
+            @return the observable; call observersReady() to start receiving events
+            @throw REST-REQUEST-TARGET-ERROR the target or API root is invalid
+            @see restObserveSse(), RestClient::RestRequestTarget
+        */
+        HttpClientStreamingIo::SseObservable restObserveSseTarget(string method,
+                hash<RestClient::RestRequestTarget> target, auto body, *hash<auto> hdr, *hash<auto> opts) {
+            return restObserveSse(method, target.path, body, hdr, opts, resolveRequestTarget(target, method));
+        }
+
         #! Starts an event-driven RestClientIo SSE observable connection
         private *code<bool()> startSseObservableOperation(
                 HttpClientStreamingIo::SseObservable obs, string method, string path,
-                auto body, *hash<auto> hdr) {
+                auto body, *hash<auto> hdr, *hash<RestClient::RestRequestContext> request_context) {
             ensureToken();
             RestClientIoSseObservableStartOperation op(self, obs, method, path,
-                body, hdr);
+                body, hdr, request_context);
             op.start();
             return bool sub () {
                 return op.cancel();
@@ -5210,9 +5390,9 @@ obs.observersReady();
         #! Raises the REST response error used by event-driven SSE observable startup
         raiseSseObservableResponseError(hash<auto> raw, string method, string path,
                 *hash<auto> request_headers, *data request_body,
-                bool req_allow_any_response) {
+                bool req_allow_any_response, *hash<RestClient::RestRequestContext> request_context) {
             buildResponse(raw, False, req_allow_any_response, method, path,
-                request_headers, request_body);
+                request_headers, request_body, request_context);
         }
     }
 
@@ -5542,6 +5722,9 @@ public class RestClientIoAsyncRequestOperation inherits Qore::AbstractPollOperat
         #! Final request allow_any_response option
         bool request_allow_any_response;
 
+        #! Request-local path and validator, retained across retries
+        *hash<RestClient::RestRequestContext> request_context;
+
         #! Prepared request attempt waiting for connection submission
         *hash<auto> prepared_attempt;
 
@@ -5576,7 +5759,9 @@ public class RestClientIoAsyncRequestOperation inherits Qore::AbstractPollOperat
     #! Creates a new async request operation
     constructor(RestClientIo rcio, Promise promise, string method, string path, auto body,
             *hash<auto> hdr, bool raw, *EventNotifier completion_notifier,
-            *string signer_header, *code signer, *int request_timeout_ms) {
+            *string signer_header, *code signer, *int request_timeout_ms,
+            *hash<RestClient::RestRequestContext> request_context) {
+        self.request_context = request_context;
         self.rcio = rcio;
         self.request_timeout_ms = request_timeout_ms > 0 ? request_timeout_ms : NOTHING;
         self.promise = promise;
@@ -5772,6 +5957,12 @@ public class RestClientIoAsyncRequestOperation inherits Qore::AbstractPollOperat
         return path;
     }
 
+    #! Returns the validator and target snapshot retained by this operation
+    /** @return the prepared request context, or NOTHING before preparation */
+    *hash<RestClient::RestRequestContext> getRequestContext() {
+        return request_context;
+    }
+
     *hash<auto> getRequestHeaders() {
         return hdr;
     }
@@ -5961,7 +6152,8 @@ public class RestClientIoAsyncRequestOperation inherits Qore::AbstractPollOperat
 
     private prepareAttempt() {
         prepared_attempt = rcio.prepareAsyncRequestAttempt(method, \path, body, \hdr,
-            raw, \negotiate_context, signer_header, signer);
+            raw, \negotiate_context, signer_header, signer, request_context);
+        request_context = prepared_attempt.request_context;
         request_body = prepared_attempt.serialized_body;
         request_error_passthru = prepared_attempt.error_passthru;
         request_allow_any_response = prepared_attempt.allow_any_response;
@@ -6038,6 +6230,7 @@ public class RestClientIoSseObservableStartOperation inherits Qore::AbstractPoll
         *HttpRedirectFollower rf;
 
         *hash<auto> prepared_attempt;
+        *hash<RestClient::RestRequestContext> request_context;
         *data request_body;
         bool request_allow_any_response;
 
@@ -6052,7 +6245,9 @@ public class RestClientIoSseObservableStartOperation inherits Qore::AbstractPoll
     }
 
     constructor(RestClientIo rcio, HttpClientStreamingIo::SseObservable observable,
-            string method, string path, auto body, *hash<auto> hdr) {
+            string method, string path, auto body, *hash<auto> hdr,
+            *hash<RestClient::RestRequestContext> request_context) {
+        self.request_context = request_context;
         self.rcio = rcio;
         self.observable = observable;
         self.method = method;
@@ -6266,7 +6461,8 @@ public class RestClientIoSseObservableStartOperation inherits Qore::AbstractPoll
 
     private prepareAttempt() {
         prepared_attempt = rcio.prepareAsyncRequestAttempt(method, \path, body,
-            \hdr, False, \negotiate_context, NOTHING, NOTHING);
+            \hdr, False, \negotiate_context, NOTHING, NOTHING, request_context);
+        request_context = prepared_attempt.request_context;
         request_body = prepared_attempt.serialized_body;
         request_allow_any_response = prepared_attempt.allow_any_response;
     }
@@ -6450,7 +6646,7 @@ public class RestClientIoSseObservableStartOperation inherits Qore::AbstractPoll
             raw.body = error_body;
         }
         rcio.raiseSseObservableResponseError(raw, method, path, hdr,
-            request_body, request_allow_any_response);
+            request_body, request_allow_any_response, request_context);
         throw "REST-RESPONSE-ERROR",
             sprintf("HTTP %d response received", raw.status_code), rcio.getSafeDiagnostic(raw, hdr);
     }
@@ -6619,6 +6815,7 @@ public class RestClientIoPingPollOperation inherits Qore::AbstractPollOperation<
 
         #! HTTP path for the ping request
         string ping_path;
+        hash<RestClient::RestRequestContext> ping_context;
 
         #! HTTP body for the ping request
         auto ping_body;
@@ -6680,17 +6877,25 @@ public class RestClientIoPingPollOperation inherits Qore::AbstractPollOperation<
         # addresses a Confluence site as /ex/confluence/<cloud_id>; dropping
         # it then asks the host for something it never named, and the ping
         # 404s while every other request on the connection succeeds.
-        if (ping_path =~ /^http/) {
+        hash<RestClient::RestRequestTarget> target = <RestClient::RestRequestTarget>{"path": ping_path};
+        if (ping_path =~ /^https?:\/\//) {
             ping_url_parent = rcio;
-            rcio = cast<RestClientIo>(ping_url_parent.copyWithUrl(ping_path));
-            ping_path = "";
+            hash<UrlInfo> ui = parse_url(ping_path);
+            string origin = sprintf("%s://%s", ui.protocol, ui.host);
+            if (ui.port) {
+                origin += ":" + ui.port;
+            }
+            rcio = cast<RestClientIo>(ping_url_parent.copyWithUrl(origin));
+            target = <RestClient::RestRequestTarget>{"mode": RestClient::RestPathMode::OriginAbsolute,
+                "path": get_http_request_target(ping_path)};
         } else if (ping_path && ping_path[0] == "/" && !conn.pingInheritsConnectionPath()) {
-            rcio.clearConnectionPath();
+            target.mode = RestClient::RestPathMode::OriginAbsolute;
         }
 
         if (schema_validator) {
             rcio.setValidator(schema_validator);
         }
+        ping_context = rcio.resolveRequestTarget(target, ping_method);
 
         # If the token is in the expiry window, refresh it before the first request
         if (rcio.tokenRequiresRefresh()) {
@@ -7173,7 +7378,7 @@ public class RestClientIoPingPollOperation inherits Qore::AbstractPollOperation<
         state = SPS_IO_WAITING;
         hash<auto> result = rcio.submitPingRequestWithNotifier(
             ping_method, \ping_path, ping_body, \ping_headers, notifier,
-            \negotiate_context);
+            \negotiate_context, ping_context);
         pending_future = result.future;
         pending_stream = result.stream;
     }
@@ -7405,7 +7610,7 @@ public class RestClientSyncSseStream {
         }
         # the stream is closed if it cannot be opened
         on_error rest.close();
-        rest.setConnectionPath(sync_rest.getConnectionPath());
+        string resolved_path = sync_rest.getLegacyRequestPath(path);
         hash<auto> headers = sync_rest.getDefaultHeaders() + (hdr ?? {});
         # only an event stream is accepted
         headers -= (select keys headers, $1.lwr() == "accept");
@@ -7418,7 +7623,8 @@ public class RestClientSyncSseStream {
             }
         }
         try {
-            reader = rest.restSseReader(method, path, headers, payload);
+            reader = rest.restSseReaderTarget(method, <RestClient::RestRequestTarget>{
+                "mode": RestClient::RestPathMode::OriginAbsolute, "path": resolved_path}, headers, payload);
         } catch (hash<ExceptionInfo> ex) {
             if (ex.err == "REST-RESPONSE-ERROR" && ex.arg.typeCode() == NT_HASH && ex.arg.status_code) {
                 if (ex.arg.status_code >= 300) {

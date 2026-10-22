@@ -1168,6 +1168,14 @@ public class OpenAiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
         return getOpenAiApiPath("chat/completions");
     }
 
+    #! Returns the path mode of the chat-completions endpoint
+    /** Vendor implementations returning endpoints relative to their API root override this with ApiRelative.
+        @return OriginAbsolute for the complete OpenAI-compatible target
+    */
+    RestClient::RestPathMode getChatCompletionsPathMode() {
+        return RestClient::RestPathMode::OriginAbsolute;
+    }
+
     #! Resolves a standard OpenAI endpoint beneath the configured API root
     private string getOpenAiApiPath(string endpoint) {
         string path = parse_url(getConfig().url).path ?? "";
@@ -1177,7 +1185,7 @@ public class OpenAiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
         if (path !~ /\/v1\/$/) {
             path += "v1/";
         }
-        # Include the entire connection path so RestClientIo does not prepend it again.
+        # This is a complete target, dispatched explicitly as OriginAbsolute.
         return path + endpoint;
     }
 
@@ -1242,7 +1250,7 @@ public class OpenAiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
         hash<auto> resp;
         try {
             resp = withRetry(hash<auto> sub () {
-                return rest_client.restPostWithTimeout(wire.path, wire.body,
+                return rest_client.restDoRequestTargetWithTimeout("POST", wire.target, wire.body,
                     buildAuthHeader(), getRequestTimeoutMs(opts));
             }, opts);
         } catch (hash<ExceptionInfo> ex) {
@@ -1275,7 +1283,7 @@ public class OpenAiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
         hash<auto> resp;
         try {
             resp = withRetry(hash<auto> sub () {
-                return rest_client.restPostWithTimeout(wire.path, wire.body,
+                return rest_client.restDoRequestTargetWithTimeout("POST", wire.target, wire.body,
                     buildAuthHeader(), getRequestTimeoutMs(opts));
             }, opts);
         } catch (hash<ExceptionInfo> ex) {
@@ -1329,8 +1337,8 @@ public class OpenAiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
         HttpClientStreamingIo::SseStreamReader reader;
         try {
             reader = withRetry(HttpClientStreamingIo::SseStreamReader sub () {
-                return rest_client.restSseReaderWithTimeout("POST",
-                    wire.path, hdr, json_body,
+                return rest_client.restSseReaderTarget("POST",
+                    wire.target, hdr, json_body,
                     remainingStreamTimeout(getRequestTimeoutMs(opts), request_deadline), on_stream);
             }, opts);
         } catch (hash<ExceptionInfo> ex) {
@@ -1537,7 +1545,8 @@ public class OpenAiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
             }
         }
         if (responses) {
-            return {"responses": True, "path": getOpenAiApiPath("responses"),
+            return {"responses": True, "target": <RestClient::RestRequestTarget>{
+                    "mode": RestClient::RestPathMode::OriginAbsolute, "path": getOpenAiApiPath("responses")},
                 "body": chatCompletionToResponses(body)};
         }
         # Provider-specific reasoning must never leak onto an incompatible wire API.
@@ -1547,7 +1556,8 @@ public class OpenAiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
             messages += msg;
         }
         body.messages = messages;
-        return {"responses": False, "path": getChatCompletionsPath(), "body": body};
+        return {"responses": False, "target": <RestClient::RestRequestTarget>{
+            "mode": getChatCompletionsPathMode(), "path": getChatCompletionsPath()}, "body": body};
     }
 
     #! Converts the prepared strict chat contract into stateless Responses input

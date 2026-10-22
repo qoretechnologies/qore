@@ -197,7 +197,8 @@ public class DeepSeekDataProviderCommon inherits DataProvider::AbstractDataProvi
             msg.addPart(req.expires_after_seconds.toString(), "expires_after[seconds]");
         }
         hash<MessageInfo> info = msg.getMsgAndHeaders();
-        return rest.restDoRawRequest("POST", "/v1/files", info.body, info.hdr).body;
+        return rest.restDoRawRequestTarget("POST", <RestClient::RestRequestTarget>{
+            "mode": RestClient::RestPathMode::OriginAbsolute, "path": "/v1/files"}, info.body, info.hdr).body;
     }
 }
 }
