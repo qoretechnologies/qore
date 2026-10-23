@@ -296,8 +296,7 @@ public class QoreDataField inherits AbstractDataField {
             "allowed_values_creatable": allowed_values_creatable ?? False,
             "element_allowed_values": element_allowed_values,
             "element_allowed_values_creatable": element_allowed_values_creatable ?? False,
-            "type": getType().getInfo(){"name", "path", "base_type", "options", "default_value", "mandatory", "tags",
-                "default_field_type_info"},
+            "type": getType().getConfigInfo(),
             "attr": attr,
         };
     }

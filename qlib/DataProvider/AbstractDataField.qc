@@ -653,8 +653,7 @@ public class AbstractDataField inherits Qore::Serializable {
     hash<DataFieldInfo> getConfigInfo() {
         on_error rethrow $1.err, sprintf("%s (while reading field %s %s)", $1.desc, getType().getName(), getName());
         return getLocalInfo() + <DataFieldInfo>{
-            "type": getType().getInfo(){"name", "path", "base_type", "options", "default_value", "mandatory", "tags",
-                "default_field_type_info"},
+            "type": getType().getConfigInfo(),
         };
     }
 

@@ -483,6 +483,20 @@ invoice.addField(new QoreDataField("approved", "Approval status", BoolOrNothingT
         return rv;
     }
 
+    #! Returns the description of the type that a field's configuration carries
+    /** In addition to the members that AbstractDataProviderType::getConfigInfo() returns, a hash type that declares
+        no fields describes the type of its other fields in \c default_field_type_info, as getInfo() does.
+
+        @since DataProvider 3.11
+    */
+    hash<DataTypeInfo> getConfigInfo() {
+        hash<DataTypeInfo> rv = QoreDataType::getConfigInfo();
+        if (!fields && default_other_field_type) {
+            rv.default_field_type_info = default_other_field_type.getInfo();
+        }
+        return rv;
+    }
+
     #! Returns an "or nothing" type equivalent to the current type as well as all fields
     /** @return an "or nothing" type equivalent to the current type as well as all fields
     */

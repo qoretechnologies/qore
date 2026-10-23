@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.
 
 %modern
 
@@ -68,6 +69,21 @@ class SettableElementType inherits AbstractDataProviderType {
     }
 }
 
+#! A hash type whose fields and element type must not be visited
+class UntraversableHashType inherits HashDataType {
+    constructor() : HashDataType("untraversable", NOTHING, {"x": 1}, {"a": 1}) {
+        addField(new QoreDataField("str", "a string field", StringType));
+    }
+
+    *hash<string, hash<DataFieldInfo>> getFieldInfo() {
+        throw "TYPE-TRAVERSED", "the fields of the type were described";
+    }
+
+    *AbstractDataProviderType getElementType() {
+        throw "TYPE-TRAVERSED", "the element type of the type was described";
+    }
+}
+
 #! Tests that type-graph traversals are bounded in time and memory
 /** Type graphs are traversed as live objects, so they are not necessarily trees:
     - a type object reachable from more than one parent (a shared subtype in a DAG) must be expanded once, not
@@ -96,6 +112,9 @@ public class DataProviderTypeGraphTest inherits QUnit::Test {
         addTestCase("shared subtype info is identical at every occurrence", \sharedSubtypeInfoTest());
         addTestCase("cyclic element types terminate", \cyclicElementTypeTest());
         addTestCase("cyclic field types terminate", \cyclicFieldTypeTest());
+        addTestCase("a field's configuration describes its type as getInfo() does", \configInfoTest());
+        addTestCase("a field's configuration does not describe the type graph", \configInfoUntraversedTest());
+        addTestCase("a field's configuration on a large cyclic graph is bounded", \configInfoCyclicGraphTest());
 
         set_return_value(main());
     }
@@ -193,5 +212,88 @@ public class DataProviderTypeGraphTest inherits QUnit::Test {
         hash<auto> child = info.fields.self.type;
         assertTrue(child.recursive, "the cycle is marked as recursive");
         assertNothing(child.fields, "the cycle is truncated rather than followed");
+    }
+
+    #! The configuration members of getInfo(), which the type described a field's configuration with before
+    private hash<DataTypeInfo> getExpectedConfigInfo(AbstractDataProviderType t) {
+        return t.getInfo(){AbstractDataProviderType::ConfigInfoKeys};
+    }
+
+    #! getConfigInfo() returns the configuration members of getInfo() for every kind of type
+    configInfoTest() {
+        HashDataType cyclic();
+        cyclic.addField(new QoreDataField("self", "self-referencing field", cyclic));
+        HashDataType with_path("with_path", NOTHING, {"x": 1}, {"a": 1});
+        with_path.setPath("types/with_path");
+        hash<string, AbstractDataProviderType> types = {
+            "string": AbstractDataProviderType::get(StringType),
+            "or nothing": AbstractDataProviderType::get(StringOrNothingType),
+            "options": new QoreDataType(StringType, {"qore.no_null": True}, {"x": 1}, "default"),
+            "hash with fields": getSharedSubtypeDag(2),
+            "hash with other fields": new HashDataType(),
+            "hash with path, tags and default": with_path,
+            "list": new ListDataType(AbstractDataProviderType::get(IntType)),
+            "union": new QoreUnionDataType((AbstractDataProviderType::get(IntType),
+                AbstractDataProviderType::get(StringType))),
+            "cyclic": cyclic,
+        };
+        foreach hash<auto> i in (types.pairIterator()) {
+            hash<DataTypeInfo> expected = getExpectedConfigInfo(i.value);
+            assertEq(expected, i.value.getConfigInfo(), i.key);
+            assertEq(expected, new QoreDataField("f", "a field", i.value).getConfigInfo().type, i.key + " field");
+        }
+        # the members that a type may lack are given only if it has them
+        assertEq("types/with_path", with_path.getConfigInfo().path);
+        assertEq({"a": 1}, with_path.getConfigInfo().default_value);
+        assertEq({"x": 1}, with_path.getConfigInfo().tags);
+        assertFalse(AbstractDataProviderType::get(StringType).getConfigInfo().hasKey("path"));
+        assertFalse(AbstractDataProviderType::get(StringType).getConfigInfo().hasKey("default_field_type_info"));
+        assertEq("auto", new HashDataType().getConfigInfo().default_field_type_info.base_type);
+        assertFalse(getSharedSubtypeDag(1).getConfigInfo().hasKey("default_field_type_info"),
+            "a hash type with fields has no default field type");
+        # nothing beyond the configuration members, not even the hashdecl's default member values
+        foreach hash<auto> i in (types.pairIterator()) {
+            assertEq(0, elements (map $1, keys i.value.getConfigInfo(),
+                !inlist($1, AbstractDataProviderType::ConfigInfoKeys)), i.key);
+        }
+    }
+
+    #! getConfigInfo() describes the type itself, never its fields or element type
+    configInfoUntraversedTest() {
+        UntraversableHashType t();
+        assertThrows("TYPE-TRAVERSED", \t.getInfo());
+        hash<DataTypeInfo> info = new QoreDataField("f", "a field", t).getConfigInfo().type;
+        assertEq("untraversable", info.name);
+        assertEq("hash", info.base_type);
+        assertEq({"x": 1}, info.tags);
+        assertEq({"a": 1}, info.default_value);
+        assertFalse(info.hasKey("fields"));
+        assertFalse(info.hasKey("element_type"));
+    }
+
+    #! A field's configuration on a deep graph whose shared subtypes are on a cycle is described in bounded time
+    /** Info on a type truncated by a cycle depends on the path to it, so getInfo() cannot memoize the types on a
+        cycle and re-expands each shared subtype once per path to it (Fanout ** Depth); a field's configuration does
+        not traverse the graph at all
+    */
+    configInfoCyclicGraphTest() {
+        HashDataType root();
+        AbstractDataProviderType rv = root;
+        for (int i = 0; i < Depth; ++i) {
+            HashDataType t();
+            foreach string fname in ("a", "b", "c") {
+                t.addField(new QoreDataField(fname, "shared subtype", rv));
+            }
+            rv = t;
+        }
+        # close the cycle: the leaf refers back to the top of the graph
+        root.addField(new QoreDataField("top", "cycle to the top", rv));
+
+        date start = now_us();
+        hash<DataFieldInfo> info = new QoreDataField("f", "a field", rv).getConfigInfo();
+        date elapsed = now_us() - start;
+        assertLt(MaxTraversalTime, elapsed, "a field's configuration must not traverse the type graph");
+        assertEq("hash", info.type.base_type);
+        assertFalse(info.type.hasKey("default_field_type_info"), "the type declares fields");
     }
 }

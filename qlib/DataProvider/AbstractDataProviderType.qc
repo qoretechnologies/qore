@@ -397,6 +397,12 @@ public class AbstractDataProviderType inherits Qore::Serializable {
 
         #! Default description
         const string DefaultDesc = "no description available";
+
+        #! The members of the type description returned by getConfigInfo()
+        /** @since DataProvider 3.11
+        */
+        const list<string> ConfigInfoKeys = ("name", "path", "base_type", "options", "default_value", "mandatory",
+            "tags", "default_field_type_info");
     }
 
     private {
@@ -693,13 +699,7 @@ public class AbstractDataProviderType inherits Qore::Serializable {
             "short_desc": getShortDescription(),
             "desc": getDesc(),
             "supported_options": getSupportedOptions(),
-            "options": options
-                ? (map {
-                    $1.key: ($1.value.typeCode() == NT_OBJECT || $1.value.callp())
-                        ? "<" + $1.value.fullType() + ">"
-                        : $1.value,
-                }, options.pairIterator())
-                : NOTHING,
+            "options": getOptionInfo(),
             "base_type": getBaseTypeName(),
             # NOTE: asked through isMandatory() rather than by looking for NT_NOTHING in the direct type
             # hash; that hash reports the base type code of the type's value, so an "or nothing" type
@@ -731,6 +731,47 @@ public class AbstractDataProviderType inherits Qore::Serializable {
             imap{ck} = rv;
         }
         return rv;
+    }
+
+    #! Returns the description of the type that a field's configuration carries
+    /** These are the members of getInfo() that describe the type itself: its name, path, base type, options, default
+        value, whether it is mandatory, its tags and, for a hash type that declares no fields, the description of the
+        type of its other fields.  The type's fields, element type and union members are not described, so the cost
+        does not depend on the size of the type graph below the type, which a complete description of a large or
+        cyclic graph makes many times higher.
+
+        @return the members of getInfo() named in @ref ConfigInfoKeys that the type has
+
+        @since DataProvider 3.11
+    */
+    hash<DataTypeInfo> getConfigInfo() {
+        hash<DataTypeInfo> rv = <DataTypeInfo>{
+            "name": getName(),
+            "options": getOptionInfo(),
+            "base_type": getBaseTypeName(),
+            "mandatory": isMandatory(),
+            "tags": getTags(),
+        };
+        if (exists (auto v = getDefaultValue())) {
+            rv.default_value = v;
+        }
+        if (path.val()) {
+            rv.path = path;
+        }
+        # the hashdecl's default member values are not part of the description
+        return rv{ConfigInfoKeys};
+    }
+
+    #! Returns the option values for a type description; objects and callable values are given by their type
+    private *hash<auto> getOptionInfo() {
+        if (!options) {
+            return;
+        }
+        return map {
+            $1.key: ($1.value.typeCode() == NT_OBJECT || $1.value.callp())
+                ? "<" + $1.value.fullType() + ">"
+                : $1.value,
+        }, options.pairIterator();
     }
 
     #! Returns information on fields supported
