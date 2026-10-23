@@ -624,7 +624,7 @@ public class DpqlSerializer {
 
     #! Serializes a template reference
     /** Uses the \c raw field for perfect round-trip fidelity. Falls back to reconstruction
-        from parts if \c raw is empty.
+        from parts if \c raw is empty (@ref templateReference())
 
         @since DataProvider 3.3
     */
@@ -632,14 +632,33 @@ public class DpqlSerializer {
         if (ref.raw) {
             return ref.raw;
         }
-        # Reconstruct from parts
-        string result = "$" + ref.tmpl_context + ":";
-        if (ref.tmpl_value =~ /[^a-zA-Z0-9_.*]/) {
-            result += "{" + ref.tmpl_value + "}";
-        } else {
-            result += ref.tmpl_value;
+        return DpqlSerializer::templateReference(ref.tmpl_context, ref.tmpl_value);
+    }
+
+    #! Returns a template reference as DPQL writes it
+    /** A value of letters, digits, \c _, \c . and \c * is written as it is (\c $local:order.id); any other value,
+        and an empty one, is written in braces (\c $local:{order id}, \c $var:{}), as \c $local: without a value is
+        not a template
+
+        @param ctx the template context
+        @param value the template value
+
+        @return the template reference, which the parser reads as the same context and value
+
+        @par Example:
+        @code{.py}
+# $local:{order id} == 1
+string dpql = DpqlSerializer::templateReference("local", "order id") + " == 1";
+        @endcode
+
+        @since DataProvider 3.11
+    */
+    static string templateReference(string ctx, string value) {
+        string result = "$" + ctx + ":";
+        if (!value.val() || value =~ /[^a-zA-Z0-9_.*]/) {
+            return result + "{" + value + "}";
         }
-        return result;
+        return result + value;
     }
 
     #! Serializes a field reference

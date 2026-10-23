@@ -222,6 +222,10 @@ const DpqlLoneFieldMarkerMessage = "An `@` names a field: pick one from the list
 #! What a diagnostic says of a \c $ that no template follows
 const DpqlLoneTemplateMarkerMessage = "A `$` starts a template: pick one from the list, or remove the `$`.";
 
+#! What a diagnostic says of a template without what it refers to after its \c ':'
+const DpqlUnfinishedTemplateMessage = "This template isn't finished: pick one from the list, or write what it "
+    "refers to after the ':'.";
+
 #! Tokenizer for DPQL (Data Provider Query Language) expressions
 /** This class provides lexical analysis of DPQL query expressions, correctly handling:
     - Field references (\c \@field or <tt>\@\"field with spaces\"</tt>)
@@ -274,8 +278,16 @@ public class DpqlTokenizer {
         #! Context flag: when True, '{' is a key accessor; when False, it's a hash literal
         bool in_field_ref_context = False;
         #! The byte position of a character that a diagnostic said cannot follow an \c @ or a \c $
-        /** The character is then not reported again as a character that cannot be used */
+        /** The character is then not reported again as a character that cannot be used; it is also the position of
+            the character after a template's context name when the \c ':' is missing, which the diagnostic about the
+            missing \c ':' covers
+        */
         int named_char_pos = -1;
+        #! True after a quoted field name that was not closed before the end of its line
+        /** The field name's closing quote, written on a later line, pairs the quotes that follow it differently, so
+            text in double quotes that is not closed at the end of the input is not reported again
+        */
+        bool field_quote_open = False;
     }
 
     #! Creates a tokenizer for the given DPQL expression
@@ -731,7 +743,7 @@ public class DpqlTokenizer {
             }
             # Single = is not valid in DPQL
             advance();
-            addError("Invalid operator '=', did you mean '=='?", "DPQL-E004",
+            addError("Use '==' to compare: a single '=' isn't an operator.", "DPQL-E004",
                 start_line, start_column, line, column);
             return makeToken(DPQL_TOK_ERROR, "=", start_line, start_column);
         }
@@ -782,7 +794,7 @@ public class DpqlTokenizer {
             }
             # Single & is invalid
             advance();
-            addError("Invalid operator '&', did you mean '&&'?", "DPQL-E004",
+            addError("Use '&&' to join two conditions: a single '&' isn't an operator.", "DPQL-E004",
                 start_line, start_column, line, column);
             return makeToken(DPQL_TOK_ERROR, "&", start_line, start_column);
         }
@@ -795,7 +807,7 @@ public class DpqlTokenizer {
             }
             # Single | is invalid
             advance();
-            addError("Invalid operator '|', did you mean '||'?", "DPQL-E004",
+            addError("Use '||' to join two conditions: a single '|' isn't an operator.", "DPQL-E004",
                 start_line, start_column, line, column);
             return makeToken(DPQL_TOK_ERROR, "|", start_line, start_column);
         }
@@ -894,6 +906,7 @@ public class DpqlTokenizer {
                     addError("A field name can't go on to the next line: add the closing '\"' before the line "
                         "ends.", "DPQL-E003",
                         start_line, start_column, line, column);
+                    field_quote_open = True;
                     return makeToken(DPQL_TOK_ERROR, value, start_line, start_column);
                 } else {
                     value += c;
@@ -995,6 +1008,10 @@ public class DpqlTokenizer {
 
         # Expect ':' separator
         if (pos >= len || currentChar() != ":") {
+            # the diagnostic covers the character written where the ':' is missing
+            if (pos < len && !isSpaceChar(currentCodePoint())) {
+                named_char_pos = pos;
+            }
             addError(sprintf("This template needs a ':' after `%s`: pick one from the list, or remove the `$`.",
                     value),
                 "DPQL-E032", start_line, start_column, line, column);
@@ -1004,11 +1021,11 @@ public class DpqlTokenizer {
         advance();  # skip ':'
 
         if (pos >= len) {
-            addError("This template isn't finished: pick one from the list, or write what it refers to after the "
-                "':'.", "DPQL-E033",
-                start_line, start_column, line, column);
+            addError(DpqlUnfinishedTemplateMessage, "DPQL-E033", start_line, start_column, line, column);
             return makeToken(DPQL_TOK_ERROR, value, start_line, start_column);
         }
+        # the length of the template up to its value
+        int value_start = value.size();
 
         c = currentChar();
 
@@ -1104,6 +1121,11 @@ public class DpqlTokenizer {
                     break;
                 }
             }
+            # a template without what it refers to is not finished, wherever it is (ex: "$local: == 1")
+            if (value.size() == value_start) {
+                addError(DpqlUnfinishedTemplateMessage, "DPQL-E033", start_line, start_column, line, column);
+                return makeToken(DPQL_TOK_ERROR, value, start_line, start_column);
+            }
         }
 
         # Check for optional ::type suffix
@@ -1156,9 +1178,12 @@ public class DpqlTokenizer {
             }
         }
 
-        # Reached end without closing quote
-        addError("Unterminated string literal", "DPQL-E002",
-            start_line, start_column, line, column);
+        # Reached end without closing quote; the closing quote of a field name written on the next line is not text
+        # that is reported again
+        if (!(field_quote_open && quote == '"')) {
+            addError(sprintf("This text has no closing quote (%s): add one at its end.", quote), "DPQL-E002",
+                start_line, start_column, line, column);
+        }
         return makeToken(DPQL_TOK_ERROR, value, start_line, start_column);
     }
 
@@ -1206,8 +1231,8 @@ public class DpqlTokenizer {
                 }
             } else {
                 # Invalid exponent - revert
-                addError("Invalid numeric literal: incomplete exponent", "DPQL-E001",
-                    start_line, start_column, line, column);
+                addError(sprintf("This number isn't finished: write digits after the '%s', or remove the '%s'.",
+                    exp, exp), "DPQL-E001", start_line, start_column, line, column);
             }
         }
 
@@ -1286,8 +1311,8 @@ public class DpqlTokenizer {
                 }
             } else if (c == "\n") {
                 # Newline in regex is invalid
-                addError("Unterminated regex pattern", "DPQL-E009",
-                    start_line, start_column, line, column);
+                addError("A pattern can't go on to the next line: add the closing '/' before the line ends.",
+                    "DPQL-E009", start_line, start_column, line, column);
                 return makeToken(DPQL_TOK_ERROR, value, start_line, start_column);
             } else {
                 value += c;
@@ -1296,7 +1321,7 @@ public class DpqlTokenizer {
         }
 
         # Reached end without closing /
-        addError("Unterminated regex pattern", "DPQL-E009",
+        addError("This pattern has no closing '/': add one at its end, such as /abc/.", "DPQL-E009",
             start_line, start_column, line, column);
         return makeToken(DPQL_TOK_ERROR, value, start_line, start_column);
     }
@@ -1505,7 +1530,8 @@ public class DpqlTokenizer {
             }
         }
 
-        addError("Unterminated list literal", "DPQL-E013", start_line, start_column, line, column);
+        addError("This list has no closing ')': add one after its last value, such as (1, 2).", "DPQL-E013",
+            start_line, start_column, line, column);
         return makeToken(DPQL_TOK_ERROR, value, start_line, start_column);
     }
 
@@ -1577,7 +1603,8 @@ public class DpqlTokenizer {
             }
         }
 
-        addError("Unterminated hash literal", "DPQL-E013", start_line, start_column, line, column);
+        addError("These key-value pairs have no closing '}': add one after the last pair, such as {a=1, b=2}.",
+            "DPQL-E013", start_line, start_column, line, column);
         return makeToken(DPQL_TOK_ERROR, value, start_line, start_column);
     }
 
@@ -1608,7 +1635,8 @@ public class DpqlTokenizer {
 
         if (!readDigits(4, \value) || !expectChar("-", \value) || !readDigits(2, \value) || !expectChar("-", \value)
             || !readDigits(2, \value)) {
-            addError("Invalid date literal", "DPQL-E011", start_line, start_column, line, column);
+            addError("This date isn't complete: write it as 2026-10-23.", "DPQL-E011", start_line, start_column, line,
+                column);
             return makeToken(DPQL_TOK_ERROR, value, start_line, start_column);
         }
 
@@ -1617,14 +1645,16 @@ public class DpqlTokenizer {
             value += currentChar();
             advance();
             if (!readDigits(2, \value) || !expectChar(":", \value) || !readDigits(2, \value)) {
-                addError("Invalid time literal in date", "DPQL-E011", start_line, start_column, line, column);
+                addError("This date's time isn't complete: write hours and minutes after the T, such as "
+                    "2026-10-23T14:30.", "DPQL-E011", start_line, start_column, line, column);
                 return makeToken(DPQL_TOK_ERROR, value, start_line, start_column);
             }
             if (pos < len && currentChar() == ":") {
                 value += ":";
                 advance();
                 if (!readDigits(2, \value)) {
-                    addError("Invalid seconds in date literal", "DPQL-E011", start_line, start_column, line, column);
+                    addError("This date's seconds aren't complete: write two digits after the ':', such as "
+                        "2026-10-23T14:30:05.", "DPQL-E011", start_line, start_column, line, column);
                     return makeToken(DPQL_TOK_ERROR, value, start_line, start_column);
                 }
             }
@@ -1632,8 +1662,8 @@ public class DpqlTokenizer {
                 value += ".";
                 advance();
                 if (!readDigits(1, \value, True)) {
-                    addError("Invalid fractional seconds in date literal", "DPQL-E011", start_line, start_column,
-                        line, column);
+                    addError("This date's fraction of a second isn't complete: write digits after the '.', such as "
+                        "2026-10-23T14:30:05.250.", "DPQL-E011", start_line, start_column, line, column);
                     return makeToken(DPQL_TOK_ERROR, value, start_line, start_column);
                 }
             }
@@ -1644,7 +1674,9 @@ public class DpqlTokenizer {
                 value += currentChar();
                 advance();
                 if (!readDigits(2, \value) || !expectChar(":", \value) || !readDigits(2, \value)) {
-                    addError("Invalid timezone in date literal", "DPQL-E011", start_line, start_column, line, column);
+                    addError("This date's time zone isn't complete: write hours and minutes after the + or -, such as "
+                        "2026-10-23T14:30:00+02:00, or Z for UTC.", "DPQL-E011", start_line, start_column, line,
+                        column);
                     return makeToken(DPQL_TOK_ERROR, value, start_line, start_column);
                 }
             }
@@ -1686,13 +1718,15 @@ public class DpqlTokenizer {
                 value += c;
                 advance();
                 if (hex_len == 0 || (hex_len % 2) != 0) {
-                    addError("Invalid binary literal length", "DPQL-E012", start_line, start_column, line, column);
+                    addError("Binary data needs two hexadecimal digits for each byte, such as <0a1b>.", "DPQL-E012",
+                        start_line, start_column, line, column);
                     return makeToken(DPQL_TOK_ERROR, value, start_line, start_column);
                 }
                 return makeToken(DPQL_TOK_BINARY, value, start_line, start_column);
             }
             if (c !~ /[0-9A-Fa-f]/) {
-                addError("Invalid binary literal", "DPQL-E012", start_line, start_column, line, column);
+                addError("Binary data is written as hexadecimal digits between < and >, such as <0a1b>.",
+                    "DPQL-E012", start_line, start_column, line, column);
                 return makeToken(DPQL_TOK_ERROR, value, start_line, start_column);
             }
             value += c;
@@ -1700,7 +1734,8 @@ public class DpqlTokenizer {
             advance();
         }
 
-        addError("Unterminated binary literal", "DPQL-E012", start_line, start_column, line, column);
+        addError("This binary data has no closing '>': add one after its digits, such as <0a1b>.", "DPQL-E012",
+            start_line, start_column, line, column);
         return makeToken(DPQL_TOK_ERROR, value, start_line, start_column);
     }
 

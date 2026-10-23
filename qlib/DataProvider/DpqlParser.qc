@@ -55,6 +55,58 @@ const hash<auto> DpqlPrefixOperatorSpecs = {
     DP_OP_TAKEUNTIL: {"min": 2, "max": 2},
 };
 
+#! The number of days in each month of a year that is not a leap year, as date diagnostics say them
+const list<int> DpqlMonthDays = (31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31);
+
+#! The parts of a date literal that date diagnostics check: the year, month and day, and the hour, minutes and seconds
+const string DpqlDateLiteralParts = "^([0-9]{4})-([0-9]{2})-([0-9]{2})"
+    "(?:[Tt ]([0-9]{2}):([0-9]{2})(?::([0-9]{2}))?)?";
+
+#! The names of the months, as date diagnostics say them
+const list<string> DpqlMonthNames = ("January", "February", "March", "April", "May", "June", "July", "August",
+    "September", "October", "November", "December");
+
+#! What a diagnostic says of \c exists without a field after it
+const DpqlExistsNeedsFieldMessage = "'exists' needs a field after it, such as exists @name.";
+
+#! What a diagnostic says of a \c . without a key after it
+const DpqlDotNeedsKeyMessage = "A '.' must be followed by the name of a key: pick one from the list, or remove the "
+    "'.'.";
+
+#! What a diagnostic says of the list wildcard written with something else
+const DpqlListWildcardAloneMessage = "[*] stands for every item, so it is written alone: write [*], with nothing else "
+    "between the brackets.";
+
+#! What a diagnostic says of the hash wildcard written with something else
+const DpqlHashWildcardAloneMessage = "{*} stands for every value, so it is written alone: write {*}, with nothing "
+    "else between the braces.";
+
+#! Parentheses that hold the arguments of a function call
+const DpqlParenCall = "call";
+#! Parentheses that hold the values after \c in
+const DpqlParenList = "list";
+#! Parentheses that group an expression
+const DpqlParenGroup = "group";
+#! Parentheses that hold the field of \c exists
+const DpqlParenExists = "exists";
+
+#! An example of each prefix expression operator, as diagnostics show them
+/** @since DataProvider 3.11
+*/
+const hash<string, string> DpqlPrefixOperatorExamples = {
+    DP_OP_MAP: "map @name, @users",
+    DP_OP_HASH_MAP: "hash_map @name, @age, @users",
+    DP_OP_SELECT: "select @users, @age >= 30",
+    DP_OP_FIRST: "first @age >= 30, @users",
+    DP_OP_ANY: "any @active, @users",
+    DP_OP_ALL: "all @active, @users",
+    DP_OP_COUNT: "count @users",
+    DP_OP_TAKE: "take 2, @users",
+    DP_OP_DROP: "drop 1, @users",
+    DP_OP_TAKEWHILE: "takewhile @age < 35, @users",
+    DP_OP_TAKEUNTIL: "takeuntil @age >= 35, @users",
+};
+
 #! The escapes of a quoted field name, as listed in messages
 /** @since DataProvider 3.11
 */
@@ -696,7 +748,7 @@ scoped = map DpqlParser::isItemScopedArg(exp, $#), exp.args;
                         "severity": "warning",
                         "message": sprintf("Part %d of the %s evaluates to %s, but each part of a condition must "
                             "evaluate to true or false. Compare the value instead, for example "
-                            "@status == \"open\".", i + 1, op_name, arg_type.getName()),
+                            "@status == \"open\".", i + 1, op_name, getTypeSentenceForm(arg_type)),
                         "code": "DPQL-W004",
                         "line": 1,
                         "column": 1,
@@ -936,7 +988,7 @@ scoped = map DpqlParser::isItemScopedArg(exp, $#), exp.args;
         @param end_message what a diagnostic says when the text ends where the token is expected; by default, that
         the token is missing at the end
         @param other_message what a diagnostic says when another token is where the token is expected; by default,
-        that the token was expected
+        that the token is missing before it
 
         @return the token
     */
@@ -944,19 +996,63 @@ scoped = map DpqlParser::isItemScopedArg(exp, $#), exp.args;
             *string other_message) {
         skipWhitespace();
         if (atEnd()) {
-            addError(end_message ?? (token_type == DPQL_TOK_RPAREN
-                    ? "Something is missing at the end: a ')' to close the '('."
-                    : sprintf("Something is missing at the end: %s.", description)),
+            addError(end_message ?? sprintf("Something is missing at the end: %s.", description),
                 "DPQL-E001", line, column, line, column);
             throw "DPQL-PARSE-ERROR", "Unexpected end of input";
         }
         hash<DpqlTokenInfo> tok = nextToken();
         if (tok.type != token_type) {
-            addError(other_message ?? sprintf("Expected %s, got '%s'", description, tok.value),
-                "DPQL-E001", tok);
+            # a token that the tokenizer could not read has been reported by it
+            if (tok.type != DPQL_TOK_ERROR) {
+                addError(other_message ?? sprintf("Something is missing before '%s': %s.", tok.value, description),
+                    "DPQL-E001", tok);
+            }
             throw "DPQL-PARSE-ERROR", sprintf("Expected %s", description);
         }
         return tok;
+    }
+
+    #! Expects the \c ')' that closes a \c '(' and returns it
+    /** @param kind what the parentheses hold: one of the \c DpqlParen* constants, which say what a diagnostic says
+        when something else is where the \c ')' is expected
+
+        @return the token
+
+        @since %DataProvider 3.11
+    */
+    private hash<DpqlTokenInfo> expectClosingParen(string kind) {
+        skipWhitespace();
+        if (atEnd()) {
+            addError("Something is missing at the end: a ')' to close the '('.", "DPQL-E001", line, column, line,
+                column);
+            throw "DPQL-PARSE-ERROR", "Unexpected end of input";
+        }
+        hash<DpqlTokenInfo> tok = nextToken();
+        if (tok.type == DPQL_TOK_RPAREN) {
+            return tok;
+        }
+        # a token that the tokenizer could not read has been reported by it
+        if (tok.type != DPQL_TOK_ERROR) {
+            string msg;
+            switch (kind) {
+                case DpqlParenCall:
+                case DpqlParenList:
+                    msg = "Something follows a complete value here: separate the values with ',', or close the '(' "
+                        "with ')'.";
+                    break;
+                case DpqlParenExists:
+                    msg = "'exists' takes one field in its parentheses: close the '(' with ')' after the field.";
+                    break;
+                default:
+                    msg = tok.type == DPQL_TOK_COMMA
+                        ? "A ',' here separates the values of a list: close the list with ')' after its last value, "
+                            "such as (1, 2)."
+                        : "Something follows a complete value here: join them with an operator, or close the '(' "
+                            "with ')'.";
+            }
+            addError(msg, "DPQL-E001", tok);
+        }
+        throw "DPQL-PARSE-ERROR", "Expected ')'";
     }
 
     #! Parses or_expr: and_expr { "||" and_expr }
@@ -1201,7 +1297,7 @@ scoped = map DpqlParser::isItemScopedArg(exp, $#), exp.args;
                         if (!atEnd() && peek().type == DPQL_TOK_LIST) {
                             auto parsed = parseStructuredLiteral();
                             if (parsed.typeCode() != NT_LIST) {
-                                addError("Expected list literal after 'in'", "DPQL-E013",
+                                addError("'in' needs its values in parentheses, such as in (1, 2).", "DPQL-E013",
                                     line, column, line, column);
                                 throw "DPQL-PARSE-ERROR", "Expected list literal";
                             }
@@ -1214,7 +1310,7 @@ scoped = map DpqlParser::isItemScopedArg(exp, $#), exp.args;
                             skipWhitespace();
                             values = parseValueList();
                             skipWhitespace();
-                            expect(DPQL_TOK_RPAREN, "')'");
+                            expectClosingParen(DpqlParenList);
                         }
                         return <DataProviderExpression>{
                             "exp": negated ? DP_OP_NOT_IN : DP_SEARCH_OP_IN,
@@ -1287,8 +1383,11 @@ scoped = map DpqlParser::isItemScopedArg(exp, $#), exp.args;
 
         hash<DpqlTokenInfo> tok = peek();
         if (tok.type != DPQL_TOK_REGEX) {
-            addError(sprintf("'%s' needs a pattern between slashes after it, such as /abc/.", op_sym), "DPQL-E009",
-                tok);
+            # a pattern that the tokenizer could not read has been reported by it
+            if (tok.type != DPQL_TOK_ERROR) {
+                addError(sprintf("'%s' needs a pattern between slashes after it, such as /abc/.", op_sym),
+                    "DPQL-E009", tok);
+            }
             throw "DPQL-PARSE-ERROR", "Expected regex pattern";
         }
 
@@ -1298,13 +1397,13 @@ scoped = map DpqlParser::isItemScopedArg(exp, $#), exp.args;
         # Parse the regex: /pattern/flags
         # Extract pattern and flags
         if (pattern.size() < 2 || pattern[0] != "/") {
-            addError("Invalid regex pattern", "DPQL-E009", tok);
+            addError("A pattern is written between slashes, such as /abc/.", "DPQL-E009", tok);
             throw "DPQL-PARSE-ERROR", "Invalid regex pattern";
         }
 
         int last_slash = rindex(pattern, "/");
         if (last_slash <= 0) {
-            addError("Invalid regex pattern", "DPQL-E009", tok);
+            addError("A pattern is written between slashes, such as /abc/.", "DPQL-E009", tok);
             throw "DPQL-PARSE-ERROR", "Invalid regex pattern";
         }
 
@@ -1327,7 +1426,8 @@ scoped = map DpqlParser::isItemScopedArg(exp, $#), exp.args;
                         flag_list += flag;
                         break;
                     default:
-                        addError(sprintf("Unknown regex flag '%s'", flag), "DPQL-E009", tok);
+                        addError(sprintf("'%s' isn't a pattern option: the options are i, s, m, x and u, after the "
+                            "closing '/'.", flag), "DPQL-E009", tok);
                 }
             }
             if (flag_list) {
@@ -1397,11 +1497,12 @@ scoped = map DpqlParser::isItemScopedArg(exp, $#), exp.args;
                 auto exp = parseOrExpr();
                 skipWhitespace();
                 if (prefix_name_tok && !atEnd() && peek().type == DPQL_TOK_COMMA) {
-                    addError(sprintf("Operator '%s' uses prefix syntax, not function-call syntax",
-                        prefix_name_tok.value), "DPQL-E001", prefix_name_tok);
+                    addError(sprintf("'%s' is written without parentheses around its values, as in %s.",
+                        prefix_name_tok.value, getPrefixOperatorExample(prefix_name_tok)), "DPQL-E001",
+                        prefix_name_tok);
                     throw "DPQL-PARSE-ERROR", "Invalid operator syntax";
                 }
-                expect(DPQL_TOK_RPAREN, "')'");
+                expectClosingParen(DpqlParenGroup);
                 return exp;
             }
 
@@ -1416,7 +1517,7 @@ scoped = map DpqlParser::isItemScopedArg(exp, $#), exp.args;
                     }
                     # a value after it cannot be an operand of anything else
                     if (DpqlValueStartTokens{peek().type}) {
-                        addError("Operator 'exists' expects a field reference, such as exists @name", "DPQL-E025",
+                        addError(DpqlExistsNeedsFieldMessage, "DPQL-E025",
                             peek());
                         throw "DPQL-PARSE-ERROR", "Expected a field reference";
                     }
@@ -1479,19 +1580,19 @@ scoped = map DpqlParser::isItemScopedArg(exp, $#), exp.args;
             skipWhitespace();
         }
         if (atEnd() || peek().type != DPQL_TOK_FIELD) {
-            addError("Operator 'exists' expects a field reference, such as exists @name", "DPQL-E025",
+            addError(DpqlExistsNeedsFieldMessage, "DPQL-E025",
                 atEnd() ? name_tok : peek());
             throw "DPQL-PARSE-ERROR", "Expected a field reference";
         }
         hash<DpqlTokenInfo> field_tok = peek();
         auto operand = parseFieldRef();
         if (*string issue = dp_exists_operand_issue(operand)) {
-            addError("Operator 'exists' " + issue, "DPQL-E025", field_tok);
+            addError("'exists' " + issue + ".", "DPQL-E025", field_tok);
             throw "DPQL-PARSE-ERROR", "Invalid operand of exists";
         }
         if (paren) {
             skipWhitespace();
-            expect(DPQL_TOK_RPAREN, "')'");
+            expectClosingParen(DpqlParenExists);
         }
         return <DataProviderExpression>{
             "exp": DP_OP_EXISTS,
@@ -1646,12 +1747,12 @@ scoped = map DpqlParser::isItemScopedArg(exp, $#), exp.args;
                 nextToken();  # consume .
                 skipWhitespace();
                 if (atEnd()) {
-                    addError("Expected identifier after '.'", "DPQL-E020", tok);
+                    addError(DpqlDotNeedsKeyMessage, "DPQL-E020", tok);
                     throw "DPQL-PARSE-ERROR", "Expected identifier after '.'";
                 }
                 hash<DpqlTokenInfo> id_tok = peek();
                 if (id_tok.type != DPQL_TOK_IDENTIFIER && id_tok.type != DPQL_TOK_FIELD) {
-                    addError("Expected identifier after '.'", "DPQL-E020", id_tok);
+                    addError(DpqlDotNeedsKeyMessage, "DPQL-E020", id_tok);
                     throw "DPQL-PARSE-ERROR", "Expected identifier after '.'";
                 }
                 # @field or @"field" after the dot is the name of the field
@@ -1696,14 +1797,15 @@ scoped = map DpqlParser::isItemScopedArg(exp, $#), exp.args;
         nextToken();  # consume *
         skipWhitespace();
         if (atEnd() || peek().type == DPQL_TOK_EOF) {
-            addError(sprintf("Unclosed %s accessor, expected '%s'", list_wildcard ? "index" : "key", close), code,
+            addError(list_wildcard
+                    ? "This '[' isn't closed: add a ']' after the '*', as in [*]."
+                    : "This '{' isn't closed: add a '}' after the '*', as in {*}.", code,
                 open_tok);
             throw "DPQL-PARSE-ERROR", sprintf("Unclosed %s accessor", list_wildcard ? "index" : "key");
         }
         hash<DpqlTokenInfo> tok = peek();
         if (tok.type != (list_wildcard ? DPQL_TOK_RBRACKET : DPQL_TOK_RBRACE)) {
-            addError(sprintf("Expected '%s' after '*': the wildcard %s is written alone, without %s", close,
-                list_wildcard ? "[*]" : "{*}", list_wildcard ? "indexes" : "keys"), code, tok);
+            addError(list_wildcard ? DpqlListWildcardAloneMessage : DpqlHashWildcardAloneMessage, code, tok);
             throw "DPQL-PARSE-ERROR", sprintf("Expected '%s' after '*'", close);
         }
         nextToken();  # consume ] or }
@@ -1736,7 +1838,7 @@ scoped = map DpqlParser::isItemScopedArg(exp, $#), exp.args;
             nextToken();  # consume .
             skipWhitespace();
             if (atEnd()) {
-                addError("Expected identifier after '.'", "DPQL-E020", tok);
+                addError(DpqlDotNeedsKeyMessage, "DPQL-E020", tok);
                 throw "DPQL-PARSE-ERROR", "Expected identifier after '.'";
             }
             hash<DpqlTokenInfo> id_tok = peek();
@@ -1754,7 +1856,7 @@ scoped = map DpqlParser::isItemScopedArg(exp, $#), exp.args;
                 }
                 return parseWildcardFieldPath(getFieldTokenName(id_tok));
             }
-            addError("Expected identifier after '.'", "DPQL-E020", id_tok);
+            addError(DpqlDotNeedsKeyMessage, "DPQL-E020", id_tok);
             throw "DPQL-PARSE-ERROR", "Expected identifier after '.'";
         }
         if (tok.type == DPQL_TOK_LBRACE) {
@@ -1794,7 +1896,7 @@ scoped = map DpqlParser::isItemScopedArg(exp, $#), exp.args;
             hash<DpqlTokenInfo> dot = nextToken();  # consume .
             skipWhitespace();
             if (atEnd()) {
-                addError("Expected identifier after '.'", "DPQL-E020", dot);
+                addError(DpqlDotNeedsKeyMessage, "DPQL-E020", dot);
                 throw "DPQL-PARSE-ERROR", "Expected identifier after '.'";
             }
             hash<DpqlTokenInfo> id_tok = peek();
@@ -1811,7 +1913,7 @@ scoped = map DpqlParser::isItemScopedArg(exp, $#), exp.args;
                     "args": (<DataProviderFieldReference>{"field": path}, getFieldTokenKey(id_tok)),
                 });
             }
-            addError("Expected identifier after '.'", "DPQL-E020", id_tok);
+            addError(DpqlDotNeedsKeyMessage, "DPQL-E020", id_tok);
             throw "DPQL-PARSE-ERROR", "Expected identifier after '.'";
         }
         return parseAccessorChain(<DataProviderFieldReference>{"field": path});
@@ -1950,7 +2052,7 @@ scoped = map DpqlParser::isItemScopedArg(exp, $#), exp.args;
 
             if (!first) {
                 if (tok.type != DPQL_TOK_COMMA) {
-                    addError("Expected ',' or ']' in index accessor", "DPQL-E022", tok);
+                    addError("Separate the positions with ',', or close the '[' with ']'.", "DPQL-E022", tok);
                     throw "DPQL-PARSE-ERROR", "Expected ',' or ']'";
                 }
                 nextToken();  # consume ,
@@ -1964,7 +2066,7 @@ scoped = map DpqlParser::isItemScopedArg(exp, $#), exp.args;
             first = False;
 
             if (tok.type == DPQL_TOK_OP_MULTIPLY || tok.type == DPQL_TOK_WILDCARD) {
-                addError("The wildcard [*] is written alone, without indexes", "DPQL-E022", tok);
+                addError(DpqlListWildcardAloneMessage, "DPQL-E022", tok);
                 throw "DPQL-PARSE-ERROR", "Wildcard combined with indexes";
             }
 
@@ -1973,12 +2075,12 @@ scoped = map DpqlParser::isItemScopedArg(exp, $#), exp.args;
         }
 
         if (!closed) {
-            addError("Unclosed index accessor, expected ']'", "DPQL-E022", lbracket);
+            addError("This '[' isn't closed: add a ']' after the position.", "DPQL-E022", lbracket);
             throw "DPQL-PARSE-ERROR", "Unclosed index accessor";
         }
 
         if (!items) {
-            addError("Empty index accessor is not allowed", "DPQL-E022", lbracket);
+            addError("Write a position between the brackets, such as [0], or remove them.", "DPQL-E022", lbracket);
             throw "DPQL-PARSE-ERROR", "Empty index accessor";
         }
 
@@ -2008,7 +2110,8 @@ scoped = map DpqlParser::isItemScopedArg(exp, $#), exp.args;
             tok = peek();
             if (tok.type == DPQL_TOK_RBRACKET || tok.type == DPQL_TOK_COMMA) {
                 # [..] alone is not allowed
-                addError("Range must have at least one bound; '[..]' is not supported", "DPQL-E021", tok);
+                addError("A range needs a first or a last position, such as [0..2], [2..] or [..2].", "DPQL-E021",
+                    tok);
                 throw "DPQL-PARSE-ERROR", "Range must have at least one bound";
             }
             int end_idx = parseInteger();
@@ -2049,7 +2152,7 @@ scoped = map DpqlParser::isItemScopedArg(exp, $#), exp.args;
     private int parseInteger() {
         hash<DpqlTokenInfo> tok = peek();
         if (tok.type != DPQL_TOK_NUMBER) {
-            addError("Expected integer in index", "DPQL-E022", tok);
+            addError("A position is a whole number, such as [0], [-1] or [1..3].", "DPQL-E022", tok);
             throw "DPQL-PARSE-ERROR", "Expected integer in index";
         }
         nextToken();  # consume number
@@ -2057,7 +2160,7 @@ scoped = map DpqlParser::isItemScopedArg(exp, $#), exp.args;
         string value = tok.value;
         # Check for float
         if (index(value, ".") >= 0) {
-            addError("Index must be integer, not float", "DPQL-E023", tok);
+            addError(sprintf("A position is a whole number, such as [1], not %s.", tok.value), "DPQL-E023", tok);
             throw "DPQL-PARSE-ERROR", "Index must be integer, not float";
         }
         return value.toInt();
@@ -2092,7 +2195,7 @@ scoped = map DpqlParser::isItemScopedArg(exp, $#), exp.args;
 
             if (!first) {
                 if (tok.type != DPQL_TOK_COMMA) {
-                    addError("Expected ',' or '}' in key accessor", "DPQL-E024", tok);
+                    addError("Separate the keys with ',', or close the '{' with '}'.", "DPQL-E024", tok);
                     throw "DPQL-PARSE-ERROR", "Expected ',' or '}'";
                 }
                 nextToken();  # consume ,
@@ -2106,7 +2209,7 @@ scoped = map DpqlParser::isItemScopedArg(exp, $#), exp.args;
             first = False;
 
             if (tok.type == DPQL_TOK_OP_MULTIPLY || tok.type == DPQL_TOK_WILDCARD) {
-                addError("The wildcard {*} is written alone, without keys", "DPQL-E024", tok);
+                addError(DpqlHashWildcardAloneMessage, "DPQL-E024", tok);
                 throw "DPQL-PARSE-ERROR", "Wildcard combined with keys";
             }
 
@@ -2114,12 +2217,12 @@ scoped = map DpqlParser::isItemScopedArg(exp, $#), exp.args;
         }
 
         if (!closed) {
-            addError("Unclosed key accessor, expected '}'", "DPQL-E024", lbrace);
+            addError("This '{' isn't closed: add a '}' after the key.", "DPQL-E024", lbrace);
             throw "DPQL-PARSE-ERROR", "Unclosed key accessor";
         }
 
         if (!key_list) {
-            addError("Empty key accessor is not allowed", "DPQL-E024", lbrace);
+            addError("Write a key between the braces, such as {name}, or remove them.", "DPQL-E024", lbrace);
             throw "DPQL-PARSE-ERROR", "Empty key accessor";
         }
 
@@ -2148,7 +2251,7 @@ scoped = map DpqlParser::isItemScopedArg(exp, $#), exp.args;
             return tok.value;
         }
 
-        addError("Expected key name in key accessor", "DPQL-E024", tok);
+        addError("A key is a name, or text in quotes, such as {name} or {\"order id\"}.", "DPQL-E024", tok);
         throw "DPQL-PARSE-ERROR", "Expected key name";
     }
 
@@ -2215,7 +2318,60 @@ scoped = map DpqlParser::isItemScopedArg(exp, $#), exp.args;
     #! Parses a date literal
     private date parseDateLiteral() {
         hash<DpqlTokenInfo> tok = nextToken();
-        return date(tok.value);
+        # a part of the date or time that is out of its range is reported as such
+        if (*string issue = getDateLiteralIssue(tok.value)) {
+            addError(issue, "DPQL-E011", tok);
+            throw "DPQL-PARSE-ERROR", "Invalid date literal";
+        }
+        try {
+            return date(tok.value);
+        } catch (hash<ExceptionInfo> ex) {
+            addError(sprintf("'%s' can't be read as a date: write it as 2026-10-23, or with a time as "
+                "2026-10-23T14:30:00.", tok.value), "DPQL-E011", tok);
+            throw "DPQL-PARSE-ERROR", "Invalid date literal";
+        }
+    }
+
+    #! Returns what is wrong with a part of a date literal that is out of its range, or nothing if no part is
+    /** The tokenizer has read the literal as a date (@ref DpqlTokenizer): \c YYYY-MM-DD, optionally followed by a
+        time (\c T or a space, \c HH:MM, optional \c :SS and fraction, and an optional time zone)
+
+        @param text the date literal
+
+        @return the message that names the part and its range, or @ref nothing
+
+        @since %DataProvider 3.11
+    */
+    private static *string getDateLiteralIssue(string text) {
+        *list<*string> parts = regex_extract(text, DpqlDateLiteralParts);
+        if (!parts) {
+            return;
+        }
+        int year = parts[0].toInt();
+        int month = parts[1].toInt();
+        int day = parts[2].toInt();
+        if (month < 1 || month > 12) {
+            return sprintf("'%s' isn't a real date: the month must be from 1 to 12.", text);
+        }
+        int days = DpqlMonthDays[month - 1];
+        if (month == 2 && ((!(year % 4) && (year % 100)) || !(year % 400))) {
+            days = 29;
+        }
+        if (day < 1 || day > days) {
+            return sprintf("'%s' isn't a real date: the day must be from 1 to %d in %s %d.", text, days,
+                DpqlMonthNames[month - 1], year);
+        }
+        if (exists parts[3]) {
+            if (parts[3].toInt() > 23) {
+                return sprintf("'%s' isn't a real time of day: the hour must be from 0 to 23.", text);
+            }
+            if (parts[4].toInt() > 59) {
+                return sprintf("'%s' isn't a real time of day: the minutes must be from 0 to 59.", text);
+            }
+            if (exists parts[5] && parts[5].toInt() > 59) {
+                return sprintf("'%s' isn't a real time of day: the seconds must be from 0 to 59.", text);
+            }
+        }
     }
 
     #! Parses a binary literal
@@ -2235,7 +2391,10 @@ scoped = map DpqlParser::isItemScopedArg(exp, $#), exp.args;
         try {
             return parse_to_qore_value(tok.value);
         } catch (hash<ExceptionInfo> ex) {
-            addError(ex.desc ?? "Invalid list/hash literal", "DPQL-E013", tok);
+            addError(tok.type == DPQL_TOK_HASH
+                    ? "These key-value pairs can't be read: write them between braces, such as {a=1, b=2}."
+                    : "This list can't be read: write its values between parentheses, separated by commas, such as "
+                        "(1, 2).", "DPQL-E013", tok);
             throw "DPQL-PARSE-ERROR", "Invalid list/hash literal";
         }
     }
@@ -2274,11 +2433,12 @@ scoped = map DpqlParser::isItemScopedArg(exp, $#), exp.args;
         }
 
         skipWhitespace();
-        expect(DPQL_TOK_RPAREN, "')'");
+        expectClosingParen(DpqlParenCall);
 
         # Validate function name against expression map
         if (expressions && !expressions{name}) {
-            addWarning(sprintf("Unknown function '%s'", token_name), "DPQL-W001", name_tok);
+            addWarning(sprintf("'%s' isn't a function that can be used here: pick one from the list.", token_name),
+                "DPQL-W001", name_tok);
         } else if (expressions{name}) {
             hash<DataProviderExpressionInfo> info = expressions{name};
             int expected = info.args.size();
@@ -2287,7 +2447,7 @@ scoped = map DpqlParser::isItemScopedArg(exp, $#), exp.args;
                 int min = AbstractDataProvider::getRequiredArgCount(info);
                 if (actual < min) {
                     addWarning(
-                        sprintf("Function '%s' expects at least %d argument%s, got %d",
+                        sprintf("'%s' needs at least %d value%s in its parentheses; it has %d.",
                             token_name, min, min == 1 ? "" : "s", actual),
                         "DPQL-W002", name_tok);
                 }
@@ -2296,14 +2456,14 @@ scoped = map DpqlParser::isItemScopedArg(exp, $#), exp.args;
                 int min_required = AbstractDataProvider::getRequiredArgCount(info);
                 if (actual < min_required) {
                     addWarning(
-                        sprintf("Function '%s' expects %s%d argument%s, got %d",
+                        sprintf("'%s' needs %s%d value%s in its parentheses; it has %d.",
                             token_name,
                             min_required != expected ? "at least " : "",
                             min_required, min_required == 1 ? "" : "s", actual),
                         "DPQL-W002", name_tok);
                 } else if (actual > expected) {
                     addWarning(
-                        sprintf("Function '%s' expects at most %d argument%s, got %d",
+                        sprintf("'%s' takes at most %d value%s in its parentheses; it has %d.",
                             token_name, expected, expected == 1 ? "" : "s", actual),
                         "DPQL-W002", name_tok);
                 }
@@ -2335,9 +2495,8 @@ scoped = map DpqlParser::isItemScopedArg(exp, $#), exp.args;
             skipWhitespace();
             if (atEnd()) {
                 addError(args.size() < min_args
-                    ? sprintf("Operator '%s' expects at least %d argument%s, got %d",
-                        name_tok.value, min_args, min_args == 1 ? "" : "s", args.size())
-                    : sprintf("Unexpected end of input in operator '%s'", name_tok.value),
+                    ? getPrefixOperatorArityMessage(name_tok, name, min_args, max_args)
+                    : getMissingValueMessage(),
                     "DPQL-E001", name_tok);
                 throw "DPQL-PARSE-ERROR", "Unexpected end of input";
             }
@@ -2353,17 +2512,16 @@ scoped = map DpqlParser::isItemScopedArg(exp, $#), exp.args;
             }
 
             if (args.size() >= max_args) {
-                addError(sprintf("Operator '%s' expects at most %d argument%s, got more",
-                    name_tok.value, max_args, max_args == 1 ? "" : "s"), "DPQL-E001", peek());
+                addError(sprintf("'%s' takes at most %d value%s, as in %s: remove this ',' and what follows it.",
+                    name_tok.value, max_args, max_args == 1 ? "" : "s", getPrefixOperatorExample(name_tok)),
+                    "DPQL-E001", peek());
                 throw "DPQL-PARSE-ERROR", "Too many arguments";
             }
             nextToken();
         }
 
         if (args.size() < min_args) {
-            addError(sprintf("Operator '%s' expects at least %d argument%s, got %d",
-                name_tok.value, min_args, min_args == 1 ? "" : "s", args.size()),
-                "DPQL-E001", name_tok);
+            addError(getPrefixOperatorArityMessage(name_tok, name, min_args, max_args), "DPQL-E001", name_tok);
             throw "DPQL-PARSE-ERROR", "Too few arguments";
         }
 
@@ -2375,6 +2533,44 @@ scoped = map DpqlParser::isItemScopedArg(exp, $#), exp.args;
             "exp": name,
             "args": args,
         };
+    }
+
+    #! Returns what a diagnostic says of a prefix expression operator that has fewer values than it needs
+    /** @param name_tok the operator's name as written
+        @param name the operator's expression name
+        @param min_args the number of values that it needs
+        @param max_args the number of values that it takes
+
+        @return the message, with an example of the operator
+
+        @since %DataProvider 3.11
+    */
+    private string getPrefixOperatorArityMessage(hash<DpqlTokenInfo> name_tok, string name, int min_args,
+            int max_args) {
+        if (min_args == 1) {
+            return sprintf("'%s' needs a value after it, as in %s.", name_tok.value,
+                getPrefixOperatorExample(name_tok));
+        }
+        return sprintf("'%s' needs %s%d values, separated by ',', as in %s.", name_tok.value,
+            min_args < max_args ? "at least " : "", min_args, getPrefixOperatorExample(name_tok));
+    }
+
+    #! Returns an example of a prefix expression operator, written with its name as it is written in the text
+    /** @param name_tok the operator's name as written
+
+        @return the example, such as <tt>map \@name, \@users</tt>
+
+        @since %DataProvider 3.11
+    */
+    private string getPrefixOperatorExample(hash<DpqlTokenInfo> name_tok) {
+        string name = resolveExpressionName(name_tok.value);
+        *string example = DpqlPrefixOperatorExamples{name};
+        if (!example) {
+            return name_tok.value + " ...";
+        }
+        # the example is written with the operator's name as the text writes it
+        int space = example.find(" ");
+        return name_tok.value + example.substr(space);
     }
 
     #! Validates argument types against function signature
@@ -2396,17 +2592,12 @@ scoped = map DpqlParser::isItemScopedArg(exp, $#), exp.args;
 
             # Check type_code constraints
             if (sig.type_code == ST_Field && !is_field_ref) {
-                string pname = info.arg_info[i].display_name ?? sprintf("arg%d", i);
-                addWarning(
-                    sprintf("Argument '%s' of '%s' expects a field reference (@field)", pname, name),
+                addWarning(sprintf("%s must be a field, such as @name.", describeArgument(name, info, i)),
                     "DPQL-W003", tok);
                 continue;
             }
             if (sig.type_code == ST_Value && is_field_ref) {
-                string pname = info.arg_info[i].display_name ?? sprintf("arg%d", i);
-                addWarning(
-                    sprintf("Argument '%s' of '%s' expects a literal value, not a field reference",
-                        pname, name),
+                addWarning(sprintf("%s must be written out, not taken from a field.", describeArgument(name, info, i)),
                     "DPQL-W003", tok);
                 continue;
             }
@@ -2420,11 +2611,8 @@ scoped = map DpqlParser::isItemScopedArg(exp, $#), exp.args;
 
             # Check if the argument type is compatible with the expected type
             if (!AbstractDataProvider::isArgTypeCompatible(sig.type, arg_type)) {
-                string pname = info.arg_info[i].display_name ?? sprintf("arg%d", i);
-                addWarning(
-                    sprintf("Argument '%s' of '%s' has type '%s', expected '%s'",
-                        pname, name, arg_type.getName(), sig.type.getName()),
-                    "DPQL-W004", tok);
+                addWarning(sprintf("%s must be %s, not %s.", describeArgument(name, info, i),
+                    getTypeSentenceForm(sig.type), getTypeSentenceForm(arg_type)), "DPQL-W004", tok);
             }
         }
 
@@ -2437,29 +2625,53 @@ scoped = map DpqlParser::isItemScopedArg(exp, $#), exp.args;
                 bool is_field_ref = arg instanceof hash<DataProviderFieldReference>;
 
                 if (last_sig.type_code == ST_Field && !is_field_ref) {
-                    addWarning(
-                        sprintf("Varargs argument %d of '%s' expects a field reference",
-                            i + 1, name),
+                    addWarning(sprintf("Value %d of '%s' must be a field, such as @name.", i + 1, name),
                         "DPQL-W003", tok);
                     continue;
                 }
                 if (last_sig.type_code == ST_Value && is_field_ref) {
-                    addWarning(
-                        sprintf("Varargs argument %d of '%s' expects a literal value",
-                            i + 1, name),
+                    addWarning(sprintf("Value %d of '%s' must be written out, not taken from a field.", i + 1, name),
                         "DPQL-W003", tok);
                     continue;
                 }
 
                 *AbstractDataProviderType arg_type = inferArgType(arg);
                 if (arg_type && !AbstractDataProvider::isArgTypeCompatible(last_sig.type, arg_type)) {
-                    addWarning(
-                        sprintf("Varargs argument %d of '%s' has type '%s', expected '%s'",
-                            i + 1, name, arg_type.getName(), last_sig.type.getName()),
-                        "DPQL-W004", tok);
+                    addWarning(sprintf("Value %d of '%s' must be %s, not %s.", i + 1, name,
+                        getTypeSentenceForm(last_sig.type), getTypeSentenceForm(arg_type)), "DPQL-W004", tok);
                 }
             }
         }
+    }
+
+    #! Returns how a diagnostic names an argument of a function: by its display name, or by its position
+    /** @param name the function's name as written
+        @param info the function's definition
+        @param i the argument's position, from 0
+
+        @return <tt>The value 'Start' of 'substr'</tt>, or <tt>Value 2 of 'substr'</tt> for an argument without a
+        display name
+
+        @since %DataProvider 3.11
+    */
+    private static string describeArgument(string name, hash<DataProviderExpressionInfo> info, int i) {
+        *string display_name = info.arg_info[i].display_name;
+        return display_name.val()
+            ? sprintf("The value '%s' of '%s'", display_name, name)
+            : sprintf("Value %d of '%s'", i + 1, name);
+    }
+
+    #! Returns how a sentence names a type: its sentence form in the type catalogue, or its name
+    /** @param type the type
+
+        @return the type's @ref DataProvider::DataTypeCatalogueInfo::sentence_form "sentence_form" in the
+        @ref DataProvider::DataTypeCatalogue "DataTypeCatalogue" (\c "a whole number"), or its type name for a type
+        that the catalogue does not name
+
+        @since %DataProvider 3.11
+    */
+    private static string getTypeSentenceForm(AbstractDataProviderType type) {
+        return DataTypeCatalogue::lookupType(type).sentence_form ?? type.getName();
     }
 
     #! Reports a comparison whose result is the same for every record

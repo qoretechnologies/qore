@@ -300,12 +300,12 @@ class DpqlWildcardTest inherits QUnit::Test {
         # an unclosed wildcard
         list<hash<DpqlDiagnostic>> errs = parseErrors('@orders[*');
         assertEq("DPQL-E022", errs[0].code);
-        assertRegex("Unclosed index accessor", errs[0].message);
+        assertEq("This '[' isn't closed: add a ']' after the '*', as in [*].", errs[0].message);
         errs = parseErrors('@orders[*.id');
         assertEq("DPQL-E022", errs[0].code);
         errs = parseErrors('@prices{*');
         assertEq("DPQL-E024", errs[0].code);
-        assertRegex("Unclosed key accessor", errs[0].message);
+        assertEq("This '{' isn't closed: add a '}' after the '*', as in {*}.", errs[0].message);
 
         # the * is alone
         foreach string dpql in ('@prices{**}', '@prices{*, a}', '@prices{a, *}', '@prices{* a}') {

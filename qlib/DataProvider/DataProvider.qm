@@ -1027,11 +1027,13 @@ class MyDebugCollector inherits AbstractDebugInfoCollector {
 
     @par Literals
     - Strings: \c "hello" or \c 'world'
-    - Dates: <tt>2026-01-02</tt>, <tt>2026-01-02T15:20:11.123+01:00</tt>
+    - Dates: <tt>2026-01-02</tt>, <tt>2026-01-02T15:20:11.123+01:00</tt>; a date or a time of day that does not exist
+      (<tt>2026-02-30</tt>, <tt>2026-01-02T24:00</tt>) is refused with \c DPQL-E011, which says which part is out of
+      its range
     - Binary: <tt>&lt;deadbeef&gt;</tt>
     - Lists: <tt>(one, two, 3)</tt>
     - Hashes: <tt>{a=1, b=two}</tt>
-    - Unquoted identifiers are treated as strings: \c \@domain \c == \c omq
+    - Unquoted identifiers are treated as strings: \c \@domain \c == \c example
     - Numbers: \c 123, \c 45.67, \c -10
     - Booleans: \c true, \c false
     - Null: \c null
@@ -1301,7 +1303,10 @@ if (!result.success) {
     <tt>"Something follows a complete value here: join them with an operator, such as +, == or &&."</tt>.  A
     program that reacts to a diagnostic reads its \c code and its range, which do not change when a message is
     reworded; one code can have a message for each situation that raises it.  A character or a token that a
-    diagnostic has reported is not reported a second time by a diagnostic about the same text.
+    diagnostic has reported is not reported a second time by a diagnostic about the same text, nor is text that an
+    earlier error made unreadable, such as the closing quote of a field name written on the next line.  A template
+    without what it refers to after its \c ':' (<tt>$local:</tt>) is refused wherever it is written, also when
+    something follows it (\c DPQL-E033).
 
     @ref DataProvider::DpqlParser::parse() "DpqlParser::parse()" and
     @ref DataProvider::DataProvider::parseDpqlExpression() "DataProvider::parseDpqlExpression()" throw
@@ -1567,6 +1572,11 @@ fetch
       patterns in the new \c qore.validation_regex_desc tag and
       @ref DataProvider::QoreStringFormatDataType::getValidationRegexDesc()
       "QoreStringFormatDataType::getValidationRegexDesc()"
+    - added @ref DataProvider::DpqlSerializer::templateReference() "DpqlSerializer::templateReference()", which
+      writes a template reference in the form that the parser reads back: a value with characters other than letters,
+      digits, \c _, \c . and \c *, and an empty value, in braces (<tt>$local:{order id}</tt>, <tt>$var:{}</tt>);
+      the serializer and @ref DataProvider::DataProvider::renderExpression() "DataProvider::renderExpression()" write
+      a template reference given by its context and value this way
     - added @ref DataProvider::DataTypeCatalogue "DataTypeCatalogue" and
       @ref DataProvider::DataTypeCatalogueInfo "DataTypeCatalogueInfo", the names in plain words with which a user
       interface shows the data types to a person: a label (\c "Whole number") and the form used inside a sentence

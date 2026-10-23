@@ -1334,7 +1334,7 @@ hash<DataProviderExpression> exp = DataProvider::deserializeExpressionFromJson(j
             return <DataProviderTemplateReference>{
                 "tmpl_context": arg.tmpl_context,
                 "tmpl_value": arg.tmpl_value,
-                "raw": arg.raw ?? ("$" + arg.tmpl_context + ":" + arg.tmpl_value),
+                "raw": arg.raw ?? DpqlSerializer::templateReference(arg.tmpl_context, arg.tmpl_value),
             };
         }
         if (arg.hasKey("field") && arg.size() == 1) {
@@ -2235,14 +2235,7 @@ if (action.data_provider_info) {
         if (ref.raw) {
             return ref.raw;
         }
-        # Reconstruct from parts
-        string result = "$" + ref.tmpl_context + ":";
-        if (ref.tmpl_value =~ /[^a-zA-Z0-9_.*]/) {
-            result += "{" + ref.tmpl_value + "}";
-        } else {
-            result += ref.tmpl_value;
-        }
-        return result;
+        return DpqlSerializer::templateReference(ref.tmpl_context, ref.tmpl_value);
     }
 
     #! Returns a descriptive string for the given expression argument

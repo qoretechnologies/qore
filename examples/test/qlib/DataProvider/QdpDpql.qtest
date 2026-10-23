@@ -211,9 +211,9 @@ public class QdpDpqlTest inherits QUnit::Test {
         hash<auto> result = runQdp(args);
         assertTrue(result.rc != 0);
         # the single '=' is reported once, and not again as a token after the expression
-        assertEq(1, result.err.split("Invalid operator").size() - 1, result.err);
+        assertEq(1, result.err.split("a single '=' isn't an operator").size() - 1, result.err);
         assertEq(-1, result.err.find("follows a complete value"), result.err);
-        assertRegex("DPQL parse error: Invalid operator '=', did you mean '=='\\? \\(line 1, column 7\\)",
+        assertRegex("DPQL parse error: Use '==' to compare: a single '=' isn't an operator\\. \\(line 1, column 7\\)",
             result.err);
     }
 

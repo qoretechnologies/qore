@@ -162,6 +162,11 @@ public class DpqlTest inherits QUnit::Test {
         addTestCase("quoted field names: a reference to one key", \fieldReferenceForKeyTests());
         addTestCase("diagnostics say in plain words how to make the text valid", \plainWordDiagnosticsTests());
         addTestCase("the end of the input is the end after it has been peeked at", \tokenizerEndAfterPeekTests());
+        addTestCase("warnings say in plain words what a value must be", \plainWordWarningTests());
+        addTestCase("a template without what it refers to is not finished wherever it is", \unfinishedTemplateTests());
+        addTestCase("a date that does not exist is a date error", \invalidDateTests());
+        addTestCase("a template reference built from its parts is written so that it reads back",
+            \templateReferenceFormTests());
         addTestCase("a parse error gives the position before the message", \parseErrorDescriptionTests());
         addTestCase("template completion details are in plain words", \templateCompletionDetailTests());
         addTestCase("an empty document offers what can start a value", \emptyDocumentCompletionTests());
@@ -1812,7 +1817,7 @@ public class DpqlTest inherits QUnit::Test {
                 'map(@users, @name)');
             assertFalse(result.success);
             assertTrue(result.diagnostics.size() > 0);
-            assertTrue(result.diagnostics[0].message =~ /prefix syntax/);
+            assertTrue(result.diagnostics[0].message =~ /is written without parentheses around its values/);
         }
     }
 
@@ -3564,8 +3569,8 @@ public class DpqlTest inherits QUnit::Test {
             list<hash<DpqlDiagnostic>> warnings = select result.diagnostics, $1.severity == "warning";
             assertEq(1, warnings.size(), "should warn about ST_Field violation");
             assertEq("DPQL-W003", warnings[0].code, "should be type code warning");
-            assertTrue(warnings[0].message.find("field reference") >= 0,
-                "warning should mention field reference");
+            assertEq("The value 'Field' of 'test-func' must be a field, such as @name.", warnings[0].message,
+                "warning should say that the value must be a field");
         }
 
         # ST_Value violation: field ref passed where literal expected
@@ -3576,8 +3581,8 @@ public class DpqlTest inherits QUnit::Test {
             list<hash<DpqlDiagnostic>> warnings = select result.diagnostics, $1.severity == "warning";
             assertEq(1, warnings.size(), "should warn about ST_Value violation");
             assertEq("DPQL-W003", warnings[0].code, "should be type code warning");
-            assertTrue(warnings[0].message.find("literal value") >= 0,
-                "warning should mention literal value");
+            assertEq("The value 'Count' of 'test-func' must be written out, not taken from a field.",
+                warnings[0].message, "warning should say that the value must be written out");
         }
 
         # Correct usage: field ref for ST_Field, literal for ST_Value
@@ -4316,7 +4321,7 @@ public class DpqlTest inherits QUnit::Test {
             assertFalse(result.success);
             assertTrue(result.diagnostics.size() > 0);
             assertEq("DPQL-E022", result.diagnostics[0].code);
-            assertTrue(result.diagnostics[0].message =~ /[Uu]nclosed/);
+            assertTrue(result.diagnostics[0].message =~ /isn't closed/);
         }
 
         # Test error: unclosed index accessor with range should fail
@@ -4333,7 +4338,7 @@ public class DpqlTest inherits QUnit::Test {
             assertFalse(result.success);
             assertTrue(result.diagnostics.size() > 0);
             assertEq("DPQL-E024", result.diagnostics[0].code);
-            assertTrue(result.diagnostics[0].message =~ /[Uu]nclosed/);
+            assertTrue(result.diagnostics[0].message =~ /isn't closed/);
         }
 
         # Test error: unclosed key accessor with multiple keys should fail
@@ -8400,7 +8405,8 @@ public class DpqlTest inherits QUnit::Test {
                     hash<DpqlParseResult> result = DataProvider::parseDpqlExpressionWithInfo(text);
                     assertFalse(result.success, text);
                     assertEq("DPQL-E001", result.diagnostics[0].code, text);
-                    assertRegex("prefix syntax", result.diagnostics[0].message, text);
+                    assertRegex("is written without parentheses around its values, as in ",
+                        result.diagnostics[0].message, text);
                 }
             }
         }
@@ -8410,12 +8416,14 @@ public class DpqlTest inherits QUnit::Test {
             hash<DpqlParseResult> result = DataProvider::parseDpqlExpressionWithInfo('(count @a, @l, @x) > 1');
             assertFalse(result.success);
             assertEq("DPQL-E001", result.diagnostics[0].code);
-            assertRegex("at most 2 arguments", result.diagnostics[0].message);
+            assertRegex("^'count' takes at most 2 values, as in count @users: remove this ',' and what follows it\\.$",
+                result.diagnostics[0].message);
 
             result = DataProvider::parseDpqlExpressionWithInfo('(select @a > 1) == ()');
             assertFalse(result.success);
             assertEq("DPQL-E001", result.diagnostics[0].code);
-            assertRegex("at least 2 arguments", result.diagnostics[0].message);
+            assertRegex("^'select' needs 2 values, separated by ',', as in select @users, @age >= 30\\.$",
+                result.diagnostics[0].message);
 
             result = DataProvider::parseDpqlExpressionWithInfo('(count @a > 1,) > 1');
             assertFalse(result.success);
@@ -8478,7 +8486,7 @@ public class DpqlTest inherits QUnit::Test {
                     result = DataProvider::parseDpqlExpressionWithInfo(text);
                     list<hash<DpqlDiagnostic>> w = select result.diagnostics, $1.code == "DPQL-W002";
                     assertEq(1, w.size(), text);
-                    assertRegex(sprintf("expects %s%d argument", min < max ? "at least " : "", min), w[0].message,
+                    assertRegex(sprintf("needs %s%d value", min < max ? "at least " : "", min), w[0].message,
                         text);
                 }
 
@@ -8486,7 +8494,7 @@ public class DpqlTest inherits QUnit::Test {
                 result = DataProvider::parseDpqlExpressionWithInfo(text);
                 list<hash<DpqlDiagnostic>> w = select result.diagnostics, $1.code == "DPQL-W002";
                 assertEq(1, w.size(), text);
-                assertRegex(sprintf("expects at most %d argument", max), w[0].message, text);
+                assertRegex(sprintf("takes at most %d value", max), w[0].message, text);
                 ++checked;
             }
             # the registry has many functions, and many of them with optional arguments
@@ -8503,7 +8511,7 @@ public class DpqlTest inherits QUnit::Test {
                 hash<DpqlParseResult> result = DataProvider::parseDpqlExpressionWithInfo(text);
                 list<hash<DpqlDiagnostic>> w = select result.diagnostics, $1.code == "DPQL-W002";
                 assertEq(1, w.size(), text);
-                assertEq(sprintf("Function '%s' expects at least %d argument%s, got %d", i.key, i.value,
+                assertEq(sprintf("'%s' needs at least %d value%s in its parentheses; it has %d.", i.key, i.value,
                     i.value == 1 ? "" : "s", i.value - 1), w[0].message, text);
             }
         }
@@ -8525,14 +8533,15 @@ public class DpqlTest inherits QUnit::Test {
         # negative: required arguments are still required
         {
             foreach hash<auto> i in ({
-                    "trim()": "Function 'trim' expects at least 1 argument, got 0",
-                    'trim(@s, "a", "b")': "Function 'trim' expects at most 2 arguments, got 3",
-                    "digest(@s)": "Function 'digest' expects at least 2 arguments, got 1",
-                    'encrypt(@s, "aes256")': "Function 'encrypt' expects at least 3 arguments, got 2",
-                    'encrypt(@s, "aes256", @k, @iv, @x)': "Function 'encrypt' expects at most 4 arguments, got 5",
-                    'regex-subst(@s, "a")': "Function 'regex-subst' expects at least 3 arguments, got 2",
+                    "trim()": "'trim' needs at least 1 value in its parentheses; it has 0.",
+                    'trim(@s, "a", "b")': "'trim' takes at most 2 values in its parentheses; it has 3.",
+                    "digest(@s)": "'digest' needs at least 2 values in its parentheses; it has 1.",
+                    'encrypt(@s, "aes256")': "'encrypt' needs at least 3 values in its parentheses; it has 2.",
+                    'encrypt(@s, "aes256", @k, @iv, @x)':
+                        "'encrypt' takes at most 4 values in its parentheses; it has 5.",
+                    'regex-subst(@s, "a")': "'regex-subst' needs at least 3 values in its parentheses; it has 2.",
                     # the key of hmac is typed "any", which does not declare it optional
-                    'hmac(@s, "sha1")': "Function 'hmac' expects 3 arguments, got 2",
+                    'hmac(@s, "sha1")': "'hmac' needs 3 values in its parentheses; it has 2.",
                 }.pairIterator()) {
                 hash<DpqlParseResult> result = DataProvider::parseDpqlExpressionWithInfo(i.key);
                 assertTrue(result.success, i.key);
@@ -8597,14 +8606,14 @@ public class DpqlTest inherits QUnit::Test {
                 "fopt(@a)": NOTHING,
                 "fopt(@a, 1)": NOTHING,
                 'fopt(@a, 1, "x")': NOTHING,
-                "fopt()": "Function 'fopt' expects at least 1 argument, got 0",
-                'fopt(@a, 1, "x", "y")': "Function 'fopt' expects at most 3 arguments, got 4",
+                "fopt()": "'fopt' needs at least 1 value in its parentheses; it has 0.",
+                'fopt(@a, 1, "x", "y")': "'fopt' takes at most 3 values in its parentheses; it has 4.",
                 'fany(@a, @b)': NOTHING,
                 # a wildcard type accepts nothing, but does not declare the argument optional
-                'fany(@a)': "Function 'fany' expects 2 arguments, got 1",
+                'fany(@a)': "'fany' needs 2 values in its parentheses; it has 1.",
                 'fmid(@a, @b, @c)': NOTHING,
                 # only trailing optional arguments can be omitted
-                'fmid(@a, @b)': "Function 'fmid' expects 3 arguments, got 2",
+                'fmid(@a, @b)': "'fmid' needs 3 values in its parentheses; it has 2.",
             };
             foreach hash<auto> i in (cases.pairIterator()) {
                 hash<DpqlParseResult> result = DataProvider::parseDpqlExpressionWithInfo(i.key, expmap);
@@ -8995,11 +9004,11 @@ public class DpqlTest inherits QUnit::Test {
             "@active || toNumber(@name)", "lwr(@name) == \"x\"");
         map assertRegex($1.value, (select DataProvider::validateDpqlExpression($1.key, parser_fields),
             $1.code == "DPQL-W004")[0].message ?? "<no warning>", $1.key), {
-            "@name && @age == 1": "^Part 1 of the AND evaluates to string, but each part of a condition must "
+            "@name && @age == 1": "^Part 1 of the AND evaluates to text, but each part of a condition must "
                 "evaluate to true or false\\. Compare the value instead, for example @status == \"open\"\\.$",
-            "@age == 1 || @status": "^Part 2 of the OR evaluates to string, but each part of a condition must",
-            "!@name": "^Part 1 of the NOT evaluates to string, but each part of a condition must",
-            "lwr(@age) == \"x\"": "has type 'int', expected 'string'",
+            "@age == 1 || @status": "^Part 2 of the OR evaluates to text, but each part of a condition must",
+            "!@name": "^Part 1 of the NOT evaluates to text, but each part of a condition must",
+            "lwr(@age) == \"x\"": "must be text, not a whole number\\.$",
         }.pairIterator();
     }
 
@@ -9166,8 +9175,10 @@ public class DpqlTest inherits QUnit::Test {
             assertSerializedAs(i.value, i.key);
         }
         # a keyword is not a name after a dot
-        assertThrows("DPQL-PARSE-ERROR", "identifier after '\\.'", \DataProvider::parseDpqlExpression(), '@x[0].true');
-        assertThrows("DPQL-PARSE-ERROR", "identifier after '\\.'", \DataProvider::parseDpqlExpression(), '@x[0].1a');
+        assertThrows("DPQL-PARSE-ERROR", "must be followed by the name of a key", \DataProvider::parseDpqlExpression(),
+            '@x[0].true');
+        assertThrows("DPQL-PARSE-ERROR", "must be followed by the name of a key", \DataProvider::parseDpqlExpression(),
+            '@x[0].1a');
 
         # an expression built without the parser
         hash<DataProviderExpression> exp = <DataProviderExpression>{
@@ -9373,9 +9384,9 @@ public class DpqlTest inherits QUnit::Test {
         };
         assertEq((), map $1.message, DataProvider::validateDpqlExpression('coalesce(@a, (1,2))', fields));
         assertEq((), map $1.message, DataProvider::validateDpqlExpression('map @value * 2, (1, 2)', fields));
-        assertEq(("Argument 'String Value' of 'substr' has type 'list<auto>', expected 'string'",),
+        assertEq(("The value 'String Value' of 'substr' must be text, not a list.",),
             map $1.message, DataProvider::validateDpqlExpression('substr((1,2), 0)', fields));
-        assertEq(("Argument 'Start' of 'substr' has type 'list<auto>', expected 'int'",),
+        assertEq(("The value 'Start' of 'substr' must be a whole number, not a list.",),
             map $1.message, DataProvider::validateDpqlExpression('substr("abc", (1,2))', fields));
 
         # the values of in are a list of values, as before
@@ -9444,19 +9455,20 @@ public class DpqlTest inherits QUnit::Test {
                 {"text": 'exists @a[0..1]', "error": "takes one position in each index accessor"},
                 {"text": 'exists @a[0, 2]', "error": "takes one position in each index accessor"},
                 {"text": 'exists @a{b, c}', "error": "takes one key in each key accessor"},
-                {"text": 'exists 1', "error": "expects a field reference"},
-                {"text": 'exists "a"', "error": "expects a field reference"},
-                {"text": 'exists null', "error": "expects a field reference"},
-                {"text": 'exists $static:x', "error": "expects a field reference"},
-                {"text": 'exists (1)', "error": "expects a field reference"},
+                {"text": 'exists 1', "error": "needs a field after it, such as exists @name\\.$"},
+                {"text": 'exists "a"', "error": "needs a field after it, such as exists @name\\.$"},
+                {"text": 'exists null', "error": "needs a field after it, such as exists @name\\.$"},
+                {"text": 'exists $static:x', "error": "needs a field after it, such as exists @name\\.$"},
+                {"text": 'exists (1)', "error": "needs a field after it, such as exists @name\\.$"},
             )) {
             list<string> errors = parseErrors(i.text);
             assertEq(1, errors.size(), i.text);
-            assertEq("DPQL-E025: Operator 'exists' ", errors[0].substr(0, 29), i.text);
+            assertEq("DPQL-E025: 'exists' ", errors[0].substr(0, 20), i.text);
             assertRegex(i.error, errors[0], i.text);
         }
         # the parenthesis holds only the field reference
-        assertEq(("DPQL-E001: Expected ')', got '+'",), parseErrors('exists (@a + 1)'));
+        assertEq(("DPQL-E001: 'exists' takes one field in its parentheses: close the '(' with ')' after the field.",),
+            parseErrors('exists (@a + 1)'));
         # an operand built without the parser is refused when evaluated
         assertThrows("DATA-PROVIDER-EXPRESSION-ERROR", "exists expects a field reference",
             \AbstractDataProvider::evalGenericExpression(), ({}, <DataProviderExpression>{
@@ -9743,6 +9755,11 @@ public class DpqlTest inherits QUnit::Test {
         const string LoneField = "An `@` names a field: pick one from the list, or remove the `@`.";
         const string Follows = "Something follows a complete value here: join them with an operator, such as +, == "
             "or &&.";
+        const string Unfinished = "This template isn't finished: pick one from the list, or write what it refers to "
+            "after the ':'.";
+        const string NextLine = "A field name can't go on to the next line: add the closing '\"' before the line ends.";
+        const string InParens = "Something follows a complete value here: separate the values with ',', or close the "
+            "'(' with ')'.";
         list<list<auto>> cases = (
             ("$", (("DPQL-E030", 1, 1, 1, 2, LoneTemplate),)),
             ("$ ", (("DPQL-E031", 1, 1, 1, 2, LoneTemplate),)),
@@ -9756,8 +9773,15 @@ public class DpqlTest inherits QUnit::Test {
                 "'€' can't follow a `$`: pick a template from the list, or remove the `$`."),)),
             ("$local", (("DPQL-E032", 1, 1, 1, 7,
                 "This template needs a ':' after `$local`: pick one from the list, or remove the `$`."),)),
-            ("$local:", (("DPQL-E033", 1, 1, 1, 8,
-                "This template isn't finished: pick one from the list, or write what it refers to after the ':'."),)),
+            ("$local:", (("DPQL-E033", 1, 1, 1, 8, Unfinished),)),
+            # a template without what it refers to is not finished wherever it is
+            ("$local: ", (("DPQL-E033", 1, 1, 1, 8, Unfinished),)),
+            ("$local: == 1", (("DPQL-E033", 1, 1, 1, 8, Unfinished),)),
+            ("$local:)", (("DPQL-E033", 1, 1, 1, 8, Unfinished),)),
+            ("@a == $data: && @b", (("DPQL-E033", 1, 7, 1, 13, Unfinished),)),
+            # the character written where the ':' is missing is not reported again
+            ("$local.x", (("DPQL-E032", 1, 1, 1, 7,
+                "This template needs a ':' after `$local`: pick one from the list, or remove the `$`."),)),
             ("$qore-expr:{", (("DPQL-E034", 1, 1, 1, 13,
                 "This template's '{' isn't closed: add a '}' after what it refers to."),)),
             ("@", (("DPQL-E003", 1, 1, 1, 2, LoneField),)),
@@ -9767,11 +9791,104 @@ public class DpqlTest inherits QUnit::Test {
             ("@-", (("DPQL-E003", 1, 1, 1, 2,
                 "'-' can't follow an `@`: pick a field from the list, or remove the `@`."),)),
             ('@"abc', (("DPQL-E003", 1, 1, 1, 6, "This field name has no closing '\"': add one after the name."),)),
+            # the closing quote of a field name on the next line is not reported again as text without one
+            ("@\"a\nb\"", (("DPQL-E003", 1, 1, 1, 4, NextLine),)),
+            ("@\"a\nb\" == \"x\"", (("DPQL-E003", 1, 1, 1, 4, NextLine),)),
+            ('@a == "x', (("DPQL-E002", 1, 7, 1, 9, "This text has no closing quote (\"): add one at its end."),)),
+            ("@a == 'x", (("DPQL-E002", 1, 7, 1, 9, "This text has no closing quote ('): add one at its end."),)),
+            ("@a == 1e", (("DPQL-E001", 1, 7, 1, 9,
+                "This number isn't finished: write digits after the 'e', or remove the 'e'."),)),
+            ("@a == 1E+", (("DPQL-E001", 1, 7, 1, 10,
+                "This number isn't finished: write digits after the 'E+', or remove the 'E+'."),)),
+            ("@a == /x", (("DPQL-E009", 1, 7, 1, 9,
+                "This pattern has no closing '/': add one at its end, such as /abc/."),)),
+            # the pattern that the tokenizer reported is not reported again by the parser
+            ("@a =~ /x\n/", (("DPQL-E009", 1, 7, 1, 9,
+                "A pattern can't go on to the next line: add the closing '/' before the line ends."),)),
+            ("@a =~ /x/g", (("DPQL-E009", 1, 7, 1, 11,
+                "'g' isn't a pattern option: the options are i, s, m, x and u, after the closing '/'."),)),
+            ("@a == {", (("DPQL-E013", 1, 7, 1, 8,
+                "These key-value pairs have no closing '}': add one after the last pair, such as {a=1, b=2}."),)),
+            # a date or a time that is not real is a date error that says which part is out of its range
+            ("@a == 2026-13-45", (("DPQL-E011", 1, 7, 1, 17,
+                "'2026-13-45' isn't a real date: the month must be from 1 to 12."),)),
+            ("@a == 2026-02-29", (("DPQL-E011", 1, 7, 1, 17,
+                "'2026-02-29' isn't a real date: the day must be from 1 to 28 in February 2026."),)),
+            ("@a == 1900-02-29", (("DPQL-E011", 1, 7, 1, 17,
+                "'1900-02-29' isn't a real date: the day must be from 1 to 28 in February 1900."),)),
+            ("@a == 2026-04-31", (("DPQL-E011", 1, 7, 1, 17,
+                "'2026-04-31' isn't a real date: the day must be from 1 to 30 in April 2026."),)),
+            ("@a == 2026-01-00", (("DPQL-E011", 1, 7, 1, 17,
+                "'2026-01-00' isn't a real date: the day must be from 1 to 31 in January 2026."),)),
+            ("@a == 2026-01-01T24:00", (("DPQL-E011", 1, 7, 1, 23,
+                "'2026-01-01T24:00' isn't a real time of day: the hour must be from 0 to 23."),)),
+            ("@a == 2026-01-01T23:60", (("DPQL-E011", 1, 7, 1, 23,
+                "'2026-01-01T23:60' isn't a real time of day: the minutes must be from 0 to 59."),)),
+            ("@a == 2026-01-01T23:59:60", (("DPQL-E011", 1, 7, 1, 26,
+                "'2026-01-01T23:59:60' isn't a real time of day: the seconds must be from 0 to 59."),)),
+            ("@a == 2026-01-01T1", (("DPQL-E011", 1, 7, 1, 19,
+                "This date's time isn't complete: write hours and minutes after the T, such as 2026-10-23T14:30."),)),
+            ("@a == 2026-01-01T10:00:5", (("DPQL-E011", 1, 7, 1, 25,
+                "This date's seconds aren't complete: write two digits after the ':', such as 2026-10-23T14:30:05."),)),
+            ("@a == 2026-01-01T10:00:00.", (("DPQL-E011", 1, 7, 1, 27,
+                "This date's fraction of a second isn't complete: write digits after the '.', such as "
+                    "2026-10-23T14:30:05.250."),)),
+            ("@a == 2026-01-01T10:00:00+02", (("DPQL-E011", 1, 7, 1, 29,
+                "This date's time zone isn't complete: write hours and minutes after the + or -, such as "
+                    "2026-10-23T14:30:00+02:00, or Z for UTC."),)),
+            ("@a == <0a1>", (("DPQL-E012", 1, 7, 1, 12,
+                "Binary data needs two hexadecimal digits for each byte, such as <0a1b>."),)),
+            ("@a[", (("DPQL-E022", 1, 3, 1, 4, "This '[' isn't closed: add a ']' after the position."),)),
+            ("@a[]", (("DPQL-E022", 1, 3, 1, 4,
+                "Write a position between the brackets, such as [0], or remove them."),)),
+            ("@a[x]", (("DPQL-E022", 1, 4, 1, 5, "A position is a whole number, such as [0], [-1] or [1..3]."),)),
+            ("@a[1.5]", (("DPQL-E023", 1, 4, 1, 7, "A position is a whole number, such as [1], not 1.5."),)),
+            ("@a[1 2]", (("DPQL-E022", 1, 6, 1, 7, "Separate the positions with ',', or close the '[' with ']'."),)),
+            ("@a[*, 1]", (("DPQL-E022", 1, 5, 1, 6, "[*] stands for every item, so it is written alone: write [*], "
+                "with nothing else between the brackets."),)),
+            ("@a[*", (("DPQL-E022", 1, 3, 1, 4, "This '[' isn't closed: add a ']' after the '*', as in [*]."),)),
+            ("@a[..]", (("DPQL-E021", 1, 6, 1, 7,
+                "A range needs a first or a last position, such as [0..2], [2..] or [..2]."),)),
+            ("@a{", (("DPQL-E024", 1, 3, 1, 4, "This '{' isn't closed: add a '}' after the key."),)),
+            ("@a{}", (("DPQL-E024", 1, 3, 1, 4, "Write a key between the braces, such as {name}, or remove them."),)),
+            ("@a{x y}", (("DPQL-E024", 1, 6, 1, 7, "Separate the keys with ',', or close the '{' with '}'."),)),
+            ("@a{*, b}", (("DPQL-E024", 1, 5, 1, 6, "{*} stands for every value, so it is written alone: write {*}, "
+                "with nothing else between the braces."),)),
+            ("@a{==}", (("DPQL-E024", 1, 4, 1, 6,
+                "A key is a name, or text in quotes, such as {name} or {\"order id\"}."),)),
+            ("@a.", (("DPQL-E020", 1, 3, 1, 4,
+                "A '.' must be followed by the name of a key: pick one from the list, or remove the '.'."),)),
+            ("exists 1", (("DPQL-E025", 1, 8, 1, 9, "'exists' needs a field after it, such as exists @name."),)),
+            ("exists @a[*]", (("DPQL-E025", 1, 8, 1, 10,
+                "'exists' does not take a wildcard; test each item with any or all, such as any exists @id, "
+                    "@orders."),)),
+            ("exists(@a @b)", (("DPQL-E001", 1, 11, 1, 13,
+                "'exists' takes one field in its parentheses: close the '(' with ')' after the field."),)),
+            ("map @a", (("DPQL-E001", 1, 1, 1, 4,
+                "'map' needs at least 2 values, separated by ',', as in map @name, @users."),)),
+            ("count", (("DPQL-E001", 1, 1, 1, 6, "'count' needs a value after it, as in count @users."),)),
+            ("map (@a, @b)", (("DPQL-E001", 1, 1, 1, 4,
+                "'map' is written without parentheses around its values, as in map @name, @users."),)),
+            ("select @u, @a, @b", (("DPQL-E001", 1, 14, 1, 15, "'select' takes at most 2 values, as in select @users, "
+                "@age >= 30: remove this ',' and what follows it."),)),
+            ("map @a, @b,", (("DPQL-E001", 1, 1, 1, 4, "Something is missing at the end: a value after ','."),)),
+            ("lower(@a @b)", (("DPQL-E001", 1, 10, 1, 12, InParens),)),
+            ("@a in (1 2)", (("DPQL-E001", 1, 10, 1, 11, InParens),)),
+            ("(@a @b)", (("DPQL-E001", 1, 5, 1, 7,
+                "Something follows a complete value here: join them with an operator, or close the '(' with ')'."),)),
+            ("@a == (1, 2", (("DPQL-E001", 1, 9, 1, 10, "A ',' here separates the values of a list: close the list "
+                "with ')' after its last value, such as (1, 2)."),)),
+            ("@a in (1,,2)", (("DPQL-E001", 1, 10, 1, 11,
+                "Something is missing before ',': a value, such as a field or a template."),)),
             ("#", (("DPQL-E001", 1, 1, 1, 2,
                 "'#' can't be used here: remove it, or put it in quotes to make it text."),)),
             ("@a € 1", (("DPQL-E001", 1, 4, 1, 5,
                 "'€' can't be used here: remove it, or put it in quotes to make it text."),)),
-            ("@a = 1", (("DPQL-E004", 1, 4, 1, 5, "Invalid operator '=', did you mean '=='?"),)),
+            ("@a = 1", (("DPQL-E004", 1, 4, 1, 5, "Use '==' to compare: a single '=' isn't an operator."),)),
+            ("@a & @b", (("DPQL-E004", 1, 4, 1, 5,
+                "Use '&&' to join two conditions: a single '&' isn't an operator."),)),
+            ("@a | @b", (("DPQL-E004", 1, 4, 1, 5,
+                "Use '||' to join two conditions: a single '|' isn't an operator."),)),
             ("@a @b", (("DPQL-E001", 1, 4, 1, 6, Follows),)),
             ("@a == 1 2", (("DPQL-E001", 1, 9, 1, 10, Follows),)),
             ("@a)", (("DPQL-E001", 1, 3, 1, 4, "This ')' has no '(' to close: remove it."),)),
@@ -9812,11 +9929,155 @@ public class DpqlTest inherits QUnit::Test {
         foreach list<auto> c in (cases) {
             hash<DpqlParseResult> r = DataProvider::parseDpqlExpressionWithInfo(c[0]);
             assertFalse(r.success, c[0]);
+            # an error is never an internal error of the parser
+            assertEq((), (select r.diagnostics, $1.message =~ /Internal parser error/), c[0]);
             assertEq(c[1], (map ($1.code, $1.line, $1.column, $1.end_line, $1.end_column, $1.message), r.diagnostics),
                 c[0]);
             # every message is text that can be encoded
             map assertEq($1.message, binary_to_string(binary($1.message), "UTF-8"), c[0]), r.diagnostics;
         }
+    }
+
+    #! Warnings about functions and their values say what is expected in plain words, with the types' sentence forms
+    plainWordWarningTests() {
+        hash<string, AbstractDataField> fields = getTestFields();
+        hash<string, hash<DataProviderExpressionInfo>> expmap = DataProviderGenericExpressions + {
+            "each-field": <DataProviderExpressionInfo>{
+                "type": DET_Function,
+                "name": "each-field",
+                "display_name": "Each Field",
+                "short_desc": "Takes fields",
+                "desc": "Takes fields",
+                "symbol": "each-field()",
+                "varargs": True,
+                "args": (
+                    <DataProviderSignatureTypeInfo>{
+                        "type": AbstractDataProviderType::get(StringType),
+                        "type_code": ST_Field,
+                    },
+                ),
+                "return_type": AbstractDataProviderType::get(StringType),
+            },
+            "each-value": <DataProviderExpressionInfo>{
+                "type": DET_Function,
+                "name": "each-value",
+                "display_name": "Each Value",
+                "short_desc": "Takes values",
+                "desc": "Takes values",
+                "symbol": "each-value()",
+                "varargs": True,
+                "args": (
+                    <DataProviderSignatureTypeInfo>{
+                        "type": AbstractDataProviderType::get(IntType),
+                        "type_code": ST_Value,
+                    },
+                ),
+                "return_type": AbstractDataProviderType::get(IntType),
+            },
+        };
+        hash<string, list<auto>> cases = {
+            "unknownfunc(1)": ("DPQL-W001", 1, 1, 1, 12,
+                "'unknownfunc' isn't a function that can be used here: pick one from the list."),
+            "lwr()": ("DPQL-W002", 1, 1, 1, 4, "'lwr' needs 1 value in its parentheses; it has 0."),
+            "lwr(@name, 1)": ("DPQL-W002", 1, 1, 1, 4, "'lwr' takes at most 1 value in its parentheses; it has 2."),
+            'substr(@name, "x")': ("DPQL-W004", 1, 15, 1, 18,
+                "The value 'Start' of 'substr' must be a whole number, not text."),
+            "lwr(@age)": ("DPQL-W004", 1, 5, 1, 9, "The value 'String' of 'lwr' must be text, not a whole number."),
+            "each-field(@name, \"x\")": ("DPQL-W003", 1, 19, 1, 22,
+                "Value 2 of 'each-field' must be a field, such as @name."),
+            "each-value(1, @age)": ("DPQL-W003", 1, 15, 1, 19,
+                "Value 2 of 'each-value' must be written out, not taken from a field."),
+            "each-value(1, \"x\")": ("DPQL-W004", 1, 15, 1, 18,
+                "Value 2 of 'each-value' must be a whole number, not text."),
+        };
+        foreach hash<auto> i in (cases.pairIterator()) {
+            hash<DpqlParseResult> r = DataProvider::parseDpqlExpressionWithInfo(i.key, expmap, fields);
+            assertTrue(r.success, i.key);
+            assertEq((i.value,), (map ($1.code, $1.line, $1.column, $1.end_line, $1.end_column, $1.message),
+                r.diagnostics), i.key);
+        }
+    }
+
+    #! A template without what it refers to after its ':' is refused wherever it is written (DPQL-E033)
+    unfinishedTemplateTests() {
+        foreach string text in (("$local:", "$local: ", "$local:\n", "$local: == 1", "$local:)", "@a == $data: && @b",
+                "($static:)")) {
+            hash<DpqlParseResult> r = DataProvider::parseDpqlExpressionWithInfo(text);
+            assertFalse(r.success, sprintf("%y", text));
+            assertEq(("DPQL-E033",), (map $1.code, r.diagnostics), sprintf("%y", text));
+            # the template is not a template token, so that an editor shows it as an error
+            assertEq((), (select r.tokens, $1.type == DPQL_TOK_TEMPLATE), sprintf("%y", text));
+        }
+        # a template with what it refers to is a template, however it is written
+        foreach string text in (("$local:x == 1", "$local:{a b} == 1", "$local:* == 1", "$local:x::int == 1",
+                "$local:a??{$static:b} == 1", "$local:a.b == 1")) {
+            hash<DpqlParseResult> r = DataProvider::parseDpqlExpressionWithInfo(text);
+            assertTrue(r.success, text);
+            assertEq(1, (select r.tokens, $1.type == DPQL_TOK_TEMPLATE).size(), text);
+        }
+    }
+
+    #! A template reference without its raw text is written in the form that the parser reads back
+    templateReferenceFormTests() {
+        hash<string, list<string>> cases = {
+            "$local:order.id": ("local", "order.id"),
+            "$local:*": ("local", "*"),
+            "$local:{order id}": ("local", "order id"),
+            "$qore-expr:{1 + 2}": ("qore-expr", "1 + 2"),
+            # an empty value is written in braces, as a template without a value is not finished
+            "$var:{}": ("var", ""),
+        };
+        foreach hash<auto> i in (cases.pairIterator()) {
+            assertEq(i.key, DpqlSerializer::templateReference(i.value[0], i.value[1]), i.key);
+            hash<auto> parts = {"tmpl_context": i.value[0], "tmpl_value": i.value[1]};
+            # from the parts alone, as a client sends them
+            hash<DataProviderExpression> exp = DataProvider::deserializeExpressionFromJson({
+                "exp": DP_SEARCH_OP_EQ,
+                "args": (parts, 1),
+            });
+            assertEq(i.key, exp.args[0].raw, i.key);
+            string text = DataProvider::serializeDpqlExpression(<DataProviderExpression>{
+                "exp": DP_SEARCH_OP_EQ,
+                "args": (cast<hash<DataProviderTemplateReference>>(parts), 1),
+            });
+            assertEq(i.key + " == 1", text, i.key);
+            assertEq(parts, DataProvider::parseDpqlExpression(text).args[0]{"tmpl_context", "tmpl_value"}, i.key);
+            assertEq(i.key + " == 1", DataProvider::renderExpression(<DataProviderExpression>{
+                "exp": DP_SEARCH_OP_EQ,
+                "args": (cast<hash<DataProviderTemplateReference>>(parts), 1),
+            }), i.key);
+        }
+    }
+
+    #! A date literal that does not exist is refused with the date code, saying which part is out of its range
+    invalidDateTests() {
+        hash<string, string> cases = {
+            "2026-13-01": "the month must be from 1 to 12",
+            "2026-00-01": "the month must be from 1 to 12",
+            "2026-02-29": "the day must be from 1 to 28 in February 2026",
+            "2100-02-29": "the day must be from 1 to 28 in February 2100",
+            "2026-06-31": "the day must be from 1 to 30 in June 2026",
+            "2026-12-32": "the day must be from 1 to 31 in December 2026",
+            "2026-01-01T24:00": "the hour must be from 0 to 23",
+            "2026-01-01 23:60": "the minutes must be from 0 to 59",
+            "2026-01-01T23:59:60": "the seconds must be from 0 to 59",
+        };
+        foreach hash<auto> i in (cases.pairIterator()) {
+            string text = "@a == " + i.key;
+            hash<DpqlParseResult> r = DataProvider::parseDpqlExpressionWithInfo(text);
+            assertFalse(r.success, i.key);
+            assertEq(1, r.diagnostics.size(), i.key);
+            hash<DpqlDiagnostic> d = r.diagnostics[0];
+            assertEq("DPQL-E011", d.code, i.key);
+            # the range is the date
+            assertEq((1, 7, 1, 7 + i.key.size()), (d.line, d.column, d.end_line, d.end_column), i.key);
+            assertRegex(sprintf("^'%s' isn't a real (date|time of day): %s\\.$", i.key, i.value), d.message, i.key);
+        }
+        # dates that exist are read as they are written
+        assertEq(2024-02-29, DataProvider::parseDpqlExpression("@a == 2024-02-29").args[1]);
+        assertEq(2000-02-29, DataProvider::parseDpqlExpression("@a == 2000-02-29").args[1]);
+        assertEq(2026-12-31T23:59:59, DataProvider::parseDpqlExpression("@a == 2026-12-31T23:59:59").args[1]);
+        assertEq(2026-01-01T00:00:00, DataProvider::parseDpqlExpression("@a == 2026-01-01T00:00").args[1]);
     }
 
     #! The tokenizer is at the end of the input once the end has been peeked at
