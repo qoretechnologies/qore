@@ -105,6 +105,8 @@ module Util {
     @section utilrelnotes Release Notes
 
     @subsection util_3_0 Util 3.0
+    - added get_http_endpoint_url() for fixed HTTP endpoints with a fallback path, preserving queries and
+      removing fragments without changing the connection authority
     - @ref Util::get_file_from_http() "get_file_from_http()" and @ref Util::get_file_from_url() "get_file_from_url()"
       send HTTP requests with the @ref httpclientiointro "HttpClientIo" module, which is
       loaded at runtime; the timeouts, redirect handling, and the errors raised for error responses and redirects are
@@ -2471,6 +2473,59 @@ public data sub get_file_from_ftp(string url, string path, *hash<UrlRetrievalOpt
     return options.as_binary ? f.getAsBinary(file) : f.getAsString(file);
 }
 
+#! Returns an HTTP endpoint URL with a fallback path and without a fragment
+/** Selects a fixed endpoint, as used by JSON-, YAML-, and XML-RPC clients. This does not resolve a URI
+    reference or append a REST endpoint to an API root.
+
+    @param url an absolute HTTP or HTTPS URL, after mapping any application-specific scheme
+    @param default_path a fallback path used only if the URL has no path, even when it has a query or
+    fragment; NOTHING or an empty string selects the root. Leading slashes are normalized to one.
+    Queries, fragments, NUL characters, and URI schemes are not allowed in the fallback path.
+
+    @return the endpoint URL: an existing path (including a single slash) wins over the fallback;
+    the URL's query is retained verbatim, including an empty query; the fragment is removed. Internal
+    slashes, trailing slashes, dot segments, and percent escapes are preserved. Characters that cannot
+    appear in the request target are encoded as by get_http_request_target(). The authority, including
+    any credentials, is retained and never taken from default_path.
+
+    @throw HTTP-ENDPOINT-URL-ERROR the URL is not an absolute HTTP(S) URL with a host, or default_path
+    is not a path, or either input contains a NUL character. Invalid URL errors do not include credentials.
+
+    @note The returned URL may contain credentials; use get_safe_url() when displaying it.
+    Both constructors of an RPC client apply these rules before creating its connection manager.
+
+    @par Example
+    @code{.py}
+string endpoint = get_http_endpoint_url("https://rpc.example.com?tenant=west#help", "/RPC2");
+# endpoint = "https://rpc.example.com/RPC2?tenant=west"
+string target = get_http_request_target(endpoint);
+# target = "/RPC2?tenant=west"
+    @endcode
+
+    @since Util 3.0
+*/
+public string sub get_http_endpoint_url(string url, *string default_path) {
+    *list<*string> parts = url =~ x/^([a-zA-Z][a-zA-Z0-9+.-]*:\/\/[^\/?#]+)([^?#]*)(\?[^#]*)?(?:#.*)?$/s;
+    if (!parts || url.contains(chr(0))) {
+        throw "HTTP-ENDPOINT-URL-ERROR", "the endpoint must be an absolute HTTP or HTTPS URL without NUL characters";
+    }
+    hash<UrlInfo> info;
+    try {
+        # Parse only the authority: parse_url() treats a fragment after a bare port as part of that port.
+        info = parse_url(parts[0] + "/");
+    } catch (hash<ExceptionInfo> ex) {
+        throw "HTTP-ENDPOINT-URL-ERROR", "the endpoint has an invalid authority";
+    }
+    if (!info.host.val() || (info.protocol.lwr() != "http" && info.protocol.lwr() != "https")) {
+        throw "HTTP-ENDPOINT-URL-ERROR", "the endpoint must be an absolute HTTP or HTTPS URL with a host";
+    }
+    if ((default_path ?? "").contains(chr(0)) || default_path =~ /[?#]|^[a-zA-Z][a-zA-Z0-9+.-]*:/) {
+        throw "HTTP-ENDPOINT-URL-ERROR", "default_path must be a path without a query, fragment, NUL, or URI scheme";
+    }
+    string path = parts[1].val() ? parts[1] : "/" + ltrim(default_path ?? "", "/");
+    return parts[0] + encode_http_request_target(path + (parts[2] ?? ""));
+}
+
 #! Returns the HTTP request target (the path and query) of a URL
 /** @par Example:
     @code{.py}
@@ -2485,9 +2540,16 @@ string target = get_http_request_target("https://example.com/a b/c?x=1#top");
     octets, double quotes, angle brackets, curly brackets, the backslash, the caret, the grave accent, and the
     vertical bar) are percent-encoded, while percent-encoded octets and URI delimiters are kept exactly as given
 
+    @throw PARSE-URL-ERROR the URL cannot be parsed or contains a NUL character
+
     @since Util 3.0
 */
 public string sub get_http_request_target(string url) {
+    if (url.contains(chr(0))) {
+        throw "PARSE-URL-ERROR", "the URL contains a NUL character";
+    }
+    # A fragment after an authority without a path must not become part of its host or port.
+    url =~ s/#.*$//s;
     return encode_http_request_target(parse_url(url).path);
 }
 

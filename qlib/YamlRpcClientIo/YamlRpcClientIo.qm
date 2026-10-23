@@ -25,7 +25,7 @@
 # minimum qore version
 %requires qore >= 2.0
 %requires yaml
-%requires Util
+%requires Util >= 3.0
 %requires Logger
 %requires HttpClientIo
 %requires(reexport) ConnectionProvider >= 1.4
@@ -75,6 +75,24 @@ module YamlRpcClientIo {
     - API-compatible with the \c YamlRpcClient class
     - Debug info variants for all call methods
     - ConnectionProvider integration with \c yamlrpcio:// and \c yamlrpcios:// URL schemes
+
+    @subsection yamlrpcclientio_urls Endpoint URLs
+
+    Both constructor forms select a fixed endpoint with @ref Util::get_http_endpoint_url(). An existing
+    URL path, including an explicit <tt>/</tt>, wins over \c default_path. When the URL has no path,
+    \c default_path supplies it (default: <tt>YAML</tt>); <tt>custom</tt> and <tt>/custom</tt> both
+    select <tt>/custom</tt>, and an empty default selects <tt>/</tt>. A query or fragment alone is not
+    a path: <tt>http://rpc.example.com?tenant=west#help</tt> selects <tt>/YAML?tenant=west</tt>.
+
+    The query is preserved, including an empty <tt>?</tt>, duplicate parameters, and percent escapes.
+    Fragments are removed. Existing internal/trailing slashes and dot segments are preserved; unsafe
+    characters are percent-encoded once. The fallback is always a path on the same authority, never a
+    URI reference or URL; query, fragment, NUL, and URI scheme syntax in it are rejected even when the
+    URL already has a path. These rules apply after mapping the documented RPC scheme aliases to HTTP(S).
+
+    \c getUrl() returns the selected endpoint URL, including the query and without the fragment. It can
+    contain credentials: use \c Qore::get_safe_url() for display. These rules describe the Io clients;
+    the native synchronous RPC clients retain their existing URL behavior.
 
     @subsection yamlrpcclientio_usage Usage Example
 

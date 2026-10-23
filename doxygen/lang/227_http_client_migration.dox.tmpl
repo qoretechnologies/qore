@@ -55,6 +55,87 @@ if (resp.status_code != 200) {
     clients (see @ref Qore::get_http_body_encoding() "get_http_body_encoding()"); a request can receive the
     octets of the body instead (the \c decode_text argument).
 
+    @section http_client_migration_urls URLs, Request Targets, and API Roots
+
+    Choose the addressing operation explicitly. A complete URL selects an origin (scheme, host, effective
+    port). An HTTP request target is the path and optional query sent to that origin. A URI reference is
+    resolved against a complete base URL. A REST endpoint is appended to an API root. These operations
+    deliberately have different meanings for a leading slash, an empty string, and a trailing slash.
+
+    |!API|!Meaning of its path or URL argument
+    |\c HTTPClient::send()|an HTTP request target on the configured origin; an empty argument selects the connection/default path. It does not perform URI-reference resolution. Even an absolute URL is sent as a target to the configured origin.
+    |\c HTTPClient::sendUrl()|an RFC 3986 URI reference resolved against the complete configured URL, without modifying the client. An absolute URL or <tt>//host/path</tt> can select another origin.
+    |\c HttpClientConnectionManager::request() and its async/stream APIs|the URL argument selects the origin; the separate path argument is the complete request target. The URL's path is not prepended, and an omitted/empty target selects <tt>/</tt>.
+    |\c RestClientIo string endpoint APIs, and explicit \c RestPathMode::ApiRelative targets in either REST client|append the endpoint to the effective API root. A leading slash or a matching root prefix never makes it absolute.
+    |explicit \c RestPathMode::OriginAbsolute targets in either REST client|send the supplied complete path/query on the configured origin, bypassing API-root appending. A leading slash is required; this mode never selects another host.
+    |released \c RestClient string APIs|retain their legacy path composition and raw-request behavior; use the explicit target APIs when migrating code that already produces complete paths.
+    |\c JsonRpcClientIo, \c YamlRpcClientIo, and external \c XmlRpcClientIo|select one fixed endpoint with \c Util::get_http_endpoint_url(); there is no per-call API-root appending or URI-reference resolution.
+    |external \c SoapClient and \c SoapClientIo HTTP bindings|resolve the serialized WSDL operation reference against the selected complete endpoint. SOAP-response retrieval resolves its resource reference in the same way. SOAP envelope bindings use their fixed endpoint.
+
+    @subsection http_client_migration_url_roots REST Root Selection
+
+    In \c RestClientIo an explicit connection-path override wins, including an explicitly empty or cleared
+    override. Otherwise the URL path wins, including a single <tt>/</tt>; \c default_path is a fallback
+    only when the URL has no path. A validator that owns the URI namespace supplies its \c getBasePath()
+    in place of the connection root. A schema builder that already includes that base must use
+    \c OriginAbsolute, so it is included exactly once. These choices survive reconnection and each request
+    retains its target and validator across authentication and transport retries.
+
+    Roots are path prefixes, so queries and fragments in a constructor URL path, \c default_path, or
+    connection-path override are rejected. Move queries into the endpoint/target. Full URLs and fragments
+    are rejected as REST targets. Encoding a literal data character as <tt>%23</tt> does not introduce a
+    fragment. REST composition preserves internal slashes, dot segments, escapes, query order, repeated
+    parameters, and an explicitly empty query; it normalizes only the root/endpoint joining boundary.
+
+    |!API root|!Endpoint|!ApiRelative target|!OriginAbsolute target
+    |<tt>/api/</tt>|<tt>users</tt>|<tt>/api/users</tt>|invalid: requires a leading slash
+    |<tt>/api</tt>|<tt>/users</tt>|<tt>/api/users</tt>|<tt>/users</tt>
+    |<tt>/api</tt>|<tt>/api/users</tt>|<tt>/api/api/users</tt>|<tt>/api/users</tt>
+    |<tt>/api</tt>|empty|<tt>/api</tt>|invalid: requires a leading slash
+    |<tt>/api</tt>|<tt>/</tt>|<tt>/api</tt>|<tt>/</tt>
+    |<tt>/api/</tt>|<tt>users/</tt>|<tt>/api/users/</tt>|invalid: requires a leading slash
+    |<tt>/api</tt>|<tt>?page=2</tt>|<tt>/api?page=2</tt>|invalid: requires a leading slash
+    |<tt>/api</tt>|<tt>/users?</tt>|<tt>/api/users?</tt>|<tt>/users?</tt>
+
+    @code{.py}
+%requires RestClientIo
+RestClientIo rest({"url": "https://api.example.com/api"});
+rest.restGet("orders"); # GET /api/orders
+rest.restDoRequestTarget("GET", <RestRequestTarget>{
+    "mode": RestPathMode::OriginAbsolute, "path": "/health"}, NOTHING, NOTHING); # GET /health
+    @endcode
+
+    @subsection http_client_migration_url_references URI References and Fixed Endpoints
+
+    With base <tt>https://api.example.com/base/file?old=1</tt>, URI resolution gives <tt>/base/send</tt>
+    for <tt>send</tt>, <tt>/send</tt> for <tt>/send</tt>, <tt>/base/file?rev=2</tt> for <tt>?rev=2</tt>,
+    and <tt>/base/file?old=1</tt> for an empty reference or <tt>#help</tt>. An explicit <tt>?</tt>
+    removes the inherited query value but keeps an empty query. A trailing slash on the base makes it a
+    directory: base <tt>/base/file/</tt> plus <tt>send</tt> resolves to <tt>/base/file/send</tt>.
+    WSDL HTTP operation locations must be relative references; a scheme-bearing absolute operation URL is
+    rejected, while SOAP-response resource references may be absolute URLs. Generated GET parameters are
+    inserted before a fragment so fragment removal cannot discard the query.
+    Literal dot segments are resolved; encoded slashes and dot segments remain data. Fragments are never
+    transmitted by URL-resolution APIs. Absolute URLs and authority-relative references can change origin;
+    configured credentials and default Authorization/Cookie/Host headers remain scoped to the original
+    origin. Explicit per-call headers belong to the selected target. See @ref httpclient_request_url.
+
+    Fixed RPC endpoints use the path already in the URL, including an explicit root <tt>/</tt>. Only a URL
+    without a path uses \c default_path; a query or fragment alone is not a path. Defaults are <tt>JSON</tt>,
+    <tt>YAML</tt>, and <tt>RPC2</tt> for the JSON, YAML, and XML Io clients. A fallback of <tt>custom</tt>
+    or <tt>/custom</tt> selects <tt>/custom</tt>; an empty fallback selects <tt>/</tt>. For example,
+    <tt>https://rpc.example.com?tenant=west#help</tt> with fallback <tt>/RPC2</tt> selects
+    <tt>https://rpc.example.com/RPC2?tenant=west</tt>. Queries are retained, fragments removed, and internal
+    or trailing slashes, dot segments, and escapes preserved. Both constructor forms and mapped RPC
+    schemes obey the same rules. Fallbacks must be paths without query, fragment, NUL, or URI scheme
+    syntax, even when the URL supplies a path. Native synchronous RPC clients retain their existing behavior.
+
+    When adapting a complete URL to a low-level manager request, extract its target explicitly with
+    \c Util::get_http_request_target(). That helper strips the fragment, supplies <tt>/</tt> for a missing
+    path, and preserves the query while encoding unsafe octets. Do not copy \c parse_url(url).path directly:
+    that field can include both the query and the fragment. Never apply REST root composition to a resolved
+    URI reference or redirect. All these addressing choices are independent of HTTP/1.1, HTTP/2, and HTTP/3.
+
     @section http_client_migration_options Options
 
     |!HTTPClient / RestClient option|!HttpClientIo / RestClientIo option|!Notes
@@ -75,7 +156,7 @@ if (resp.status_code != 200) {
     |\c headers|\c headers (\c RestClientIo)|the manager sends \c User-Agent and \c Accept-Encoding by default
     |\c username, \c password|\c credentials request option (manager); \c username, \c password (\c RestClientIo)|see @ref http_client_migration_auth
     |\c pre_encoded_urls, \c encode_chars|\c pre_encoded_urls, \c encode_chars (\c RestClientIo); @ref HttpClientIo::encode_http_request_target() "encode_http_request_target()"|the same encoding rules
-    |\c default_path|\c default_path (\c RestClientIo)|the same
+    |\c default_path|\c default_path (\c RestClientIo)|fallback API root only when the URL has no path; see @ref http_client_migration_url_roots
     |\c protocols, \c default_port|none|a URL gives its scheme and port; a URL without a scheme is an \c https URL, and other schemes than \c http and \c https raise \c HTTP-CLIENT-UNKNOWN-PROTOCOL
     |\c additional_methods|none|every request method is allowed
 

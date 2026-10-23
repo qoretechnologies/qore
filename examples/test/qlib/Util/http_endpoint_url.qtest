@@ -1,0 +1,66 @@
+#!/usr/bin/env qore
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%exec-class EndpointUrlTest
+
+class EndpointUrlTest inherits QUnit::Test {
+    constructor() : Test("HTTP fixed endpoint URLs", "1.0") {
+        addTestCase("Path selection, queries, fragments, and encoding", \paths());
+        addTestCase("Authority preservation", \authorities());
+        addTestCase("Invalid endpoint and fallback", \invalid());
+        addTestCase("Extracting targets from URLs without paths", \targets());
+        set_return_value(main());
+    }
+    private paths() {
+        foreach hash<auto> row in (
+                {"url":"", "default":NOTHING, "target":"/"},
+                {"url":"", "default":"", "target":"/"},
+                {"url":"", "default":"custom", "target":"/custom"},
+                {"url":"", "default":"/custom", "target":"/custom"},
+                {"url":"", "default":"///custom//", "target":"/custom//"},
+                {"url":"", "default":"/", "target":"/"},
+                {"url":"/", "default":"custom", "target":"/"},
+                {"url":"/rpc/", "default":"custom", "target":"/rpc/"},
+                {"url":"//rpc//", "default":"custom", "target":"//rpc//"},
+                {"url":"?x=%2F&x=2+3", "default":"custom", "target":"/custom?x=%2F&x=2+3"},
+                {"url":"?", "default":"custom", "target":"/custom?"},
+                {"url":"#help", "default":"custom", "target":"/custom"},
+                {"url":"?x=1#help", "default":"custom", "target":"/custom?x=1"},
+                {"url":"/rpc?x=%23#help", "default":"custom", "target":"/rpc?x=%23"},
+                {"url":"/rpc?#help", "default":"custom", "target":"/rpc?"},
+                {"url":"/a/../b/%2e/%2F", "target":"/a/../b/%2e/%2F"},
+                {"url":"", "default":"a/../b/%2e/%2F", "target":"/a/../b/%2e/%2F"},
+                {"url":"/a b/č?x=a b", "target":"/a%20b/%C4%8D?x=a%20b"},
+                {"url":"", "default":"a b/č", "target":"/a%20b/%C4%8D"}) {
+            string result = get_http_endpoint_url("https://example.com" + row.url, row.default);
+            assertEq("https://example.com" + row.target, result);
+            assertEq(row.target, get_http_request_target(result));
+        }
+    }
+    private authorities() {
+        foreach string origin in ("http://example.com", "HTTPS://Example.COM:443",
+                "http://[::1]:8080", "http://user:fixture@example.com:80",
+                "http://socket=%2Ftmp%2FRpc.sock") {
+            assertEq(origin + "/custom?x=1", get_http_endpoint_url(origin + "?x=1#top", "//custom"));
+        }
+    }
+    private invalid() {
+        foreach string url in ("", "relative", "/rpc", "ftp://example.com/rpc", "http:///rpc",
+                "http://example.com:" + chr(0), "http://user:fixture@example.com:bad") {
+            assertThrows("HTTP-ENDPOINT-URL-ERROR", \get_http_endpoint_url(), (url, "rpc"));
+        }
+        foreach string path in ("rpc?x=1", "rpc#help", "https://other/rpc", "a" + chr(0) + "b") {
+            assertThrows("HTTP-ENDPOINT-URL-ERROR", \get_http_endpoint_url(), ("http://example.com", path));
+            assertThrows("HTTP-ENDPOINT-URL-ERROR", \get_http_endpoint_url(), ("http://example.com/existing", path));
+        }
+    }
+    private targets() {
+        assertEq("/", get_http_request_target("http://example.com:8080#help?ignored=1"));
+        assertEq("/?x=%23", get_http_request_target("http://example.com:8080?x=%23#help"));
+        assertEq("/?", get_http_request_target("http://example.com:8080?#help"));
+        assertThrows("PARSE-URL-ERROR", \get_http_request_target(), "http://example.com#" + chr(0));
+    }
+}

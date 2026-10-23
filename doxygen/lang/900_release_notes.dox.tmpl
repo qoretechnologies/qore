@@ -2743,6 +2743,12 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
     @endcode
     @endparblock
 
+    @par Fixed HTTP Endpoint URLs
+    The new @ref Util::get_http_endpoint_url() "get_http_endpoint_url()" helper selects a URL path or its
+    configured fallback without changing the authority, preserves the query, removes the fragment, and encodes
+    unsafe target octets. See @ref http_client_migration_urls for the distinct rules for fixed endpoints,
+    complete HTTP targets, URI references, and REST API roots.
+
     @par Incremental Message Digests
     The new @ref Qore::Digest "Digest" class calculates a message digest from data added in parts, such as data
     read from a stream or received from the network, without holding the data in memory; intermediate digests can

@@ -103,10 +103,13 @@ public class JsonRpcClientIo {
         - \c connect_timeout: connection timeout in milliseconds (default: 45000)
         - \c timeout: transfer timeout in milliseconds (default: 45000)
         - \c version: JSON-RPC protocol version (\c "1.0", \c "1.1", or \c "2.0"; default: \c "2.0")
-        - \c default_path: default URL path if none in URL (default: \c "JSON")
+        - \c default_path: fallback path when the URL has no path, with or without a leading slash (default: \c "JSON")
         - \c http_protocol: HTTP protocol to use (\c "auto", \c "h1", \c "h2", \c "h3"; default: \c "auto")
         - \c logger: a \c LoggerInterface object for logging
         - \c headers: extra default headers as a hash
+
+        @see jsonrpcclientio_urls
+        @throw HTTP-ENDPOINT-URL-ERROR the endpoint URL or fallback path is invalid
 
         @par Example:
         @code{.py}
@@ -115,16 +118,8 @@ JsonRpcClientIo client("http://localhost:8080/JSON", {"timeout": 30000});
     */
     constructor(string url, *hash<auto> opts) {
         # Map custom schemes to http/https
-        self.url = mapUrl(url);
-        *string path = parse_url(self.url).path;
-        string default_path = opts.default_path ?? DefaultJsonRpcPath;
-        if (!path.val()) {
-            # Append default path if none in URL
-            url_path = "/" + default_path;
-            self.url += url_path;
-        } else {
-            url_path = path;
-        }
+        self.url = get_http_endpoint_url(mapUrl(url), opts.default_path ?? DefaultJsonRpcPath);
+        url_path = get_http_request_target(self.url);
 
         connect_timeout = opts.connect_timeout ?? DefaultConnectTimeout;
         io_timeout = opts.timeout ?? DefaultTimeout;
@@ -153,6 +148,9 @@ JsonRpcClientIo client("http://localhost:8080/JSON", {"timeout": 30000});
         @param no_connect this parameter is accepted for compatibility but ignored; connections
         are established on demand
 
+        @see jsonrpcclientio_urls
+        @throw HTTP-ENDPOINT-URL-ERROR the endpoint URL or fallback path is invalid
+
         @par Example:
         @code{.py}
 JsonRpcClientIo client({"url": "http://localhost:8080/JSON", "timeout": 30000});
@@ -164,15 +162,8 @@ JsonRpcClientIo client({"url": "http://localhost:8080/JSON", "timeout": 30000});
             throw "JSONRPCCLIENTIO-ERROR", "missing required 'url' option";
         }
 
-        self.url = mapUrl(input_url);
-        *string path = parse_url(self.url).path;
-        string default_path = opts.default_path ?? DefaultJsonRpcPath;
-        if (!path.val()) {
-            url_path = "/" + default_path;
-            self.url += url_path;
-        } else {
-            url_path = path;
-        }
+        self.url = get_http_endpoint_url(mapUrl(input_url), opts.default_path ?? DefaultJsonRpcPath);
+        url_path = get_http_request_target(self.url);
 
         connect_timeout = opts.connect_timeout ?? DefaultConnectTimeout;
         io_timeout = opts.timeout ?? DefaultTimeout;
@@ -480,7 +471,7 @@ string ver = client.getVersion();
         return jsonrpc_version;
     }
 
-    #! Returns the server URL
+    #! Returns the server URL with the selected path, its query, and no fragment
     /** @return the full URL including path
     */
     string getUrl() {
