@@ -391,18 +391,17 @@ The current implementation relies on explicit registries for extension safety:
 
 ## Exception Source Locations
 
-AOT-compiled code reports real per-frame source file and line numbers in
-exceptions, matching interpreted execution. The throwing location and full
-backtrace are reconstructed lazily at throw from line-number tables embedded in
-the artifact (emitted by default with debug info), so non-throwing code carries
-no per-statement location-updater cost. `--strip-debug-info` emits no line
-tables and retains the per-statement updater instead. Source text is not
-required: stripped-source artifacts still report file and line from the line
-tables.
-
-For the innermost-frame detection mechanism that decides, at throw, whether the
-innermost user frame is AOT (and therefore whether to resolve lazily), see
-[`aot-lazy-loc-innermost-frame.md`](aot-lazy-loc-innermost-frame.md).
+AOT-compiled code reports the source file and line of an exception and of each
+call stack frame as AST execution does, with or without debug info and source
+text. Each source location is a constant `QoreProgramLocation` in the image,
+one per distinct location of the module (`QoreIRToLLVM::getAotLocationConstant()`),
+and the code stores its address in the thread's runtime location when the line
+changes, as JIT code stores its location pointer; the location does not depend
+on the AOT context the code runs with, so code that runs with its caller's
+context (a context-independent fast entry) reports its own lines. Every direct
+call of user code and every call that the code runs inline as a summary of the
+callee's body pushes the callee's frame; see "Frames of native calls" in
+[`call-stack-publication.md`](call-stack-publication.md).
 
 ## Exception Cleanup Dominance
 

@@ -32,12 +32,15 @@
 #ifndef _QORE_INTERN_JITRUNTIME_H
 #define _QORE_INTERN_JITRUNTIME_H
 
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <string>
 
 class ExceptionSink;
+struct QoreProgramLocation;
 class QoreIRFunction;
+class AbstractStatement;
 class QoreIRBackgroundInstruction;
 struct QoreAOTContext;
 class QoreIRLValuePathInstruction;
@@ -688,7 +691,7 @@ void qore_rt_push_compiled_handler_aot(QoreAOTContext* ctx, int type,
 /** @param storage storage of the size and alignment given by qore_rt_native_call_frame_size() and
     qore_rt_native_call_frame_align() in the caller's native frame
     @param thread_data the current thread's data, which the caller gets once when it is entered
-    (qore_rt_get_thread_data_for_native_calls())
+    (QoreNativeEntrySlots::thread_data)
     @param call_name the name of the frame: the callee's UserVariantBase::getCallName(), which lives as long as the
     native code
     @param statements the callee's statement block
@@ -699,8 +702,54 @@ void qore_rt_push_compiled_handler_aot(QoreAOTContext* ctx, int type,
 void qore_rt_push_native_call_frame(void* storage, void* thread_data, const std::string* call_name,
         const StatementBlock* statements);
 
-//! Returns the current thread's data for qore_rt_push_native_call_frame()
-void* qore_rt_get_thread_data_for_native_calls();
+//! Pushes the call stack frame of a call that AOT-compiled code makes directly to a native entry of user code
+/** As qore_rt_push_native_call_frame(); the callee is the call target of the call's expression slot in the caller's
+    context.
+
+    @param ctx the caller's AOT context
+    @param target_slot the expression slot of the call, whose call target is the callee
+    @param call_loc the location of the call, which the caller's image holds, or nullptr for the caller's current
+    location
+*/
+void qore_rt_push_native_call_frame_aot(void* storage, void* thread_data, QoreAOTContext* ctx, int32_t target_slot,
+        const QoreProgramLocation* call_loc);
+
+//! Pushes the frame of a call of user code that AOT-compiled code runs inline, as a summary of the callee's body
+/** As qore_rt_push_native_call_frame_aot(); the runtime location is then the location of the callee's body, which
+    the callee's image holds (UserVariantBase::getAOTBodyLocation()), until the frame is popped.
+*/
+void qore_rt_push_native_inline_call_frame_aot(void* storage, void* thread_data, QoreAOTContext* ctx,
+        int32_t target_slot, const QoreProgramLocation* call_loc);
+
+//! The thread's runtime location slots and data that native code gets once when a function is entered
+/** Native code accesses the fields by index (QoreIRToLLVM::lowerFunction()), so the order is fixed. */
+struct QoreNativeEntrySlots {
+    void* thread_data;                       //!< for qore_rt_push_native_call_frame() and friends
+    const QoreProgramLocation** loc_ptr;     //!< the thread's runtime location
+    const AbstractStatement** stmt_ptr;      //!< the thread's runtime statement
+    uintptr_t* sp_ptr;                       //!< the thread's innermost non-AOT frame marker
+};
+
+//! Fills the thread's runtime location slots and data for a native function being entered
+void qore_rt_get_native_entry_slots(QoreNativeEntrySlots* slots);
+
+//! Pushes the call stack frame of a call that AOT-compiled code makes directly to a callee it names
+/** As qore_rt_push_native_call_frame_aot(), for a call without a call target, such as a call of a known call
+    reference: the frame's name is \a call_name, interned on the first call of the site and cached in
+    \a call_name_cache, a global of the module initialized to nullptr; \a callee_loc is the location of the
+    callee's body if the code runs the callee inline (see qore_rt_push_native_inline_call_frame_aot()), or nullptr.
+*/
+void qore_rt_push_native_call_frame_aot_named(void* storage, void* thread_data, const char* call_name,
+        std::atomic<const std::string*>* call_name_cache, const QoreProgramLocation* call_loc,
+        const QoreProgramLocation* callee_loc);
+
+//! Pushes the call stack frame of a closure call that AOT-compiled code makes directly to the closure's native entry
+/** As qore_rt_push_native_call_frame(); the frame is named as an AST call of a closure names it and is located at the
+    caller's runtime location.  Pop it with qore_rt_pop_native_call_frame().
+*/
+void qore_rt_push_native_closure_call_frame(void* storage);
+
+
 
 //! Pops the call stack frame pushed by qore_rt_push_native_call_frame() in the same storage
 void qore_rt_pop_native_call_frame(void* storage);

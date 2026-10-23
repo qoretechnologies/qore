@@ -4925,12 +4925,13 @@ QoreParseOptions UserVariantBase::getParseOptions(const QoreParseOptions& po) co
 }
 
 void UserVariantBase::registerPrecompiledAOTFunction(
-        AotFunctionPtr fn, QoreAOTContext* ctx) {
+        AotFunctionPtr fn, QoreAOTContext* ctx, const QoreProgramLocation* body_loc) {
     QoreAOTContext* old_ctx = cached_aot_ctx.exchange(ctx, std::memory_order_acq_rel);
     if (old_ctx != ctx) {
         delete old_ctx;
     }
     cached_aot_fn = fn;
+    aot_body_loc = body_loc;
     {
         std::lock_guard<std::mutex> lock(aot_lazy_function_ir_mutex);
         aot_lazy_function_ir.reset();
@@ -4950,12 +4951,13 @@ void UserVariantBase::registerPrecompiledAOTFunction(
     current_tier.store(TIER_JIT, std::memory_order_release);
 }
 
-void UserVariantBase::registerLazyPrecompiledAOTFunction(AotFunctionPtr fn,
+void UserVariantBase::registerLazyPrecompiledAOTFunction(AotFunctionPtr fn, const QoreProgramLocation* body_loc,
         std::shared_ptr<const QoreAOTLazyFunctionIR> lazy_ir,
         uint32_t entry_index, bool context_uses_argv, bool context_uses_self) {
     QoreAOTContext* old_ctx = cached_aot_ctx.exchange(nullptr, std::memory_order_acq_rel);
     delete old_ctx;
     cached_aot_fn = fn;
+    aot_body_loc = body_loc;
     {
         std::lock_guard<std::mutex> lock(aot_lazy_function_ir_mutex);
         aot_lazy_function_ir = std::move(lazy_ir);
@@ -5475,18 +5477,21 @@ static bool irBlockHasTerminatorFunc(const QoreIRBasicBlock* block) {
     return isTerminator(block->instructions.back()->opcode);
 }
 
-const std::string& UserVariantBase::getCallName() const {
-    std::call_once(call_name_once, [this]() {
-        const AbstractQoreFunctionVariant* variant = getAbstractFunctionVariant();
-        if (const char* class_name = variant ? variant->className() : nullptr) {
-            call_name = class_name;
-            call_name += "::";
-        }
-        if (source_qf) {
-            call_name += source_qf->getName();
-        }
-    });
-    return call_name;
+void UserVariantBase::buildCallName() const {
+    static std::mutex lck;
+    std::lock_guard<std::mutex> lock(lck);
+    if (call_name_ready.load(std::memory_order_relaxed)) {
+        return;
+    }
+    const AbstractQoreFunctionVariant* variant = getAbstractFunctionVariant();
+    if (const char* class_name = variant ? variant->className() : nullptr) {
+        call_name = class_name;
+        call_name += "::";
+    }
+    if (source_qf) {
+        call_name += source_qf->getName();
+    }
+    call_name_ready.store(true, std::memory_order_release);
 }
 
 QoreIRFunction* UserVariantBase::lowerIRFunction(const char* name, const std::string& unique_name,
@@ -7453,6 +7458,10 @@ int QoreFunction::addPendingVariant(AbstractQoreFunctionVariant* variant) {
         return -1;
     }
 
+    // a variant's parse initialization records the function owning it, which AOT-deserialized variants skip
+    if (UserVariantBase* uvb = variant->getUserVariantBase()) {
+        uvb->setSourceFunction(this);
+    }
     vlist.push_back(variant);
 
     return 0;

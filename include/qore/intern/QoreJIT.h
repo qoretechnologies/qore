@@ -538,6 +538,12 @@ struct BatchCalleeInfo {
     std::string body_contract_source_file;
     std::string body_contract_hash;
     std::vector<QoreAOTBodyContractDependency> body_contract_dependencies;
+    //! The location of the body (qore_ir_get_body_location()) of a function of the same compilation, which AOT code
+    //! that a call of it without a call target (QoreIRToLLVM::emitPushAotInlineCallFrame()) runs inline at; no line
+    //! if unknown, as for an imported function, whose body location the runtime takes from its own image
+    std::string body_loc_file;
+    int32_t body_loc_start_line = 0;
+    int32_t body_loc_end_line = 0;
 
     bool hasImportableBodySummary() const {
         return scalar_leaf.kind != AOTScalarLeafKind::None
@@ -575,6 +581,11 @@ struct BatchCalleeInfo {
             || hasBodyEffectContract();
     }
 };
+
+//! Returns the location of the body of a function: the location of its first return statement, or of its first
+//! located instruction if it has none, which is where a summary of the body runs; nullptr if it has none or the
+//! compilation is cancelled
+DLLLOCAL const QoreProgramLocation* qore_ir_get_body_location(const QoreIRFunction& func);
 
 //! Populate conservative interprocedural summaries for a batch of lowered
 //! functions. The function pointers remain owned by the caller.

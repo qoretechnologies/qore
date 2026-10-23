@@ -6389,6 +6389,8 @@ static bool qore_aot_fast_entry_is_context_independent(const AbstractQoreFunctio
                     }
                     break;
                 }
+                // the frame of such a call is named at compile time, as the function may run with the context of its
+                // caller (QoreIRToLLVM::emitPushAotInlineCallFrame())
                 case QoreIROpcode::CallDirect: {
                     const auto* call = static_cast<const QoreIRCallDirectInstruction*>(inst);
                     int arg_start = qore_aot_is_deferred_source_function_call(call->expr) ? 1 : 0;
@@ -12789,11 +12791,52 @@ static bool resolveAOTBatchBodyDependencyProvenance(
     return true;
 }
 
+const QoreProgramLocation* qore_ir_get_body_location(const QoreIRFunction& func) {
+    const QoreProgramLocation* first = nullptr;
+    size_t check_count = 0;
+    for (const auto& block : func.blocks) {
+        for (const auto& inst : block->instructions) {
+            if (++check_count % 100 == 0
+                    && qore_check_cancel(nullptr, "AOT function body location")) {
+                return nullptr;
+            }
+            if (!inst || !inst->loc || inst->loc->start_line <= 0) {
+                continue;
+            }
+            if (inst->opcode == QoreIROpcode::Return || inst->opcode == QoreIROpcode::ReturnNothing) {
+                return inst->loc;
+            }
+            if (!first) {
+                first = inst->loc;
+            }
+        }
+    }
+    return first;
+}
+
 bool qore_ir_resolve_batch_function_summaries(
         const std::vector<std::pair<const AbstractQoreFunctionVariant*,
             const QoreIRFunction*>>& functions,
         std::unordered_map<const AbstractQoreFunctionVariant*, BatchCalleeInfo>& batch_callees,
         bool collect_body_dependency_provenance) {
+    // the location of each body, for the callers that a summary of the body takes the place of a call in
+    size_t body_loc_count = 0;
+    for (const auto& [variant, func] : functions) {
+        if (++body_loc_count % 100 == 0 && qore_check_cancel(nullptr, "AOT function body locations")) {
+            return false;
+        }
+        auto it = func ? batch_callees.find(variant) : batch_callees.end();
+        if (it == batch_callees.end()) {
+            continue;
+        }
+        if (const QoreProgramLocation* loc = qore_ir_get_body_location(*func)) {
+            it->second.body_loc_file = loc->getFileValue();
+            it->second.body_loc_start_line = loc->start_line;
+            it->second.body_loc_end_line = loc->end_line;
+        } else if (qore_check_cancel(nullptr, "AOT function body location")) {
+            return false;
+        }
+    }
     if (q_env_is_set("QORE_DISABLE_INTERPROCEDURAL_SUMMARIES")
             || q_env_is_set("QORE_DISABLE_AOT_FUNCTION_EFFECT_SUMMARY")) {
         return !collect_body_dependency_provenance
@@ -17252,7 +17295,16 @@ static bool defineAOTClosureNativeDispatch(llvm::LLVMContext& ctx,
         }
         fast_args.push_back(aot_ctx);
         fast_args.push_back(xsink);
+        // the call stack frame of the closure's call, which the fallbacks below push through their runtime helpers
+        llvm::IRBuilder<> frame_builder(entry, entry->getFirstInsertionPt());
+        llvm::AllocaInst* frame_storage = frame_builder.CreateAlloca(llvm::Type::getInt8Ty(ctx),
+            llvm::ConstantInt::get(i64_ty, qore_rt_native_call_frame_size()), "native_call_frame");
+        frame_storage->setAlignment(llvm::Align(qore_rt_native_call_frame_align()));
+        builder.CreateCall(module.getOrInsertFunction("qore_rt_push_native_closure_call_frame",
+            llvm::FunctionType::get(llvm::Type::getVoidTy(ctx), {ptr_ty}, false)), {frame_storage});
         llvm::Value* fast_result = builder.CreateCall(fast_fn, fast_args);
+        builder.CreateCall(module.getOrInsertFunction("qore_rt_pop_native_call_frame",
+            llvm::FunctionType::get(llvm::Type::getVoidTy(ctx), {ptr_ty}, false)), {frame_storage});
         if (!guarded) {
             builder.CreateRet(fast_result);
             if (!guarded_captures) {
@@ -22971,6 +23023,13 @@ static bool emitObjectFile(llvm::Module& module, const std::string& path, std::s
         return false;
     }
     module.setDataLayout(tm->createDataLayout());
+    // the code holds its source locations as constant data in the layout of this library's locations, which is
+    // the layout of a target with pointers of the same size
+    if (module.getDataLayout().getPointerSize() == sizeof(void*)
+            && !QoreIRToLLVM::checkAotLocationLayout(module.getDataLayout(), error)) {
+        delete tm;
+        return false;
+    }
 
     // LLVM emits functions in module-list order. That list can inherit
     // unordered namespace traversal order even though symbol names and
@@ -23473,7 +23532,7 @@ static void generateMainAndTableV2(llvm::LLVMContext& ctx, llvm::Module& module,
         label_data, "qore_aot_label");
 
     // Build the function table (same as v1)
-    auto* func_entry_type = llvm::StructType::get(ctx, {ptr_type, ptr_type, i32_type, i32_type, i32_type, i32_type, i32_type});
+    auto* func_entry_type = llvm::StructType::get(ctx, {ptr_type, ptr_type, i32_type, i32_type, i32_type, i32_type, i32_type, ptr_type});
 
     std::vector<llvm::Constant*> func_entries;
     for (auto& cf : compiled_funcs) {
@@ -23497,7 +23556,8 @@ static void generateMainAndTableV2(llvm::LLVMContext& ctx, llvm::Module& module,
             llvm::ConstantInt::get(i32_type, cf.num_exprs),
             llvm::ConstantInt::get(i32_type, cf.num_stmts),
             llvm::ConstantInt::get(i32_type,
-                encodeAOTRegexCountAndContext(cf.num_regex_cases, cf.slot_ids))
+                encodeAOTRegexCountAndContext(cf.num_regex_cases, cf.slot_ids)),
+            QoreIRToLLVM::getAotBodyLocation(module, cf.llvm_symbol),
         });
         func_entries.push_back(entry);
     }
@@ -23522,7 +23582,8 @@ static void generateMainAndTableV2(llvm::LLVMContext& ctx, llvm::Module& module,
             llvm::ConstantInt::get(i32_type, cif.num_exprs),
             llvm::ConstantInt::get(i32_type, cif.num_stmts),
             llvm::ConstantInt::get(i32_type,
-                encodeAOTRegexCountAndContext(cif.num_regex_cases, cif.slot_ids))
+                encodeAOTRegexCountAndContext(cif.num_regex_cases, cif.slot_ids)),
+            QoreIRToLLVM::getAotBodyLocation(module, cif.llvm_symbol),
         });
         func_entries.push_back(entry);
     }
@@ -25308,9 +25369,10 @@ static bool emitScriptRegisterSymbols(llvm::LLVMContext& ctx,
     //       int num_exprs;                // i32
     //       int num_stmts;                // i32
     //       int num_regex_cases = 0;      // i32
+    //       const QoreProgramLocation* body_loc; // ptr
     //   };
     auto* func_entry_type = llvm::StructType::get(ctx,
-        {ptr_type, ptr_type, i32_type, i32_type, i32_type, i32_type, i32_type});
+        {ptr_type, ptr_type, i32_type, i32_type, i32_type, i32_type, i32_type, ptr_type});
 
     std::vector<llvm::Constant*> entries;
     for (size_t i = 0; i < compiled_funcs.size(); ++i) {
@@ -25344,6 +25406,7 @@ static bool emitScriptRegisterSymbols(llvm::LLVMContext& ctx,
             llvm::ConstantInt::get(i32_type, cf.num_stmts),
             llvm::ConstantInt::get(i32_type,
                 encodeAOTRegexCountAndContext(cf.num_regex_cases, cf.slot_ids)),
+            QoreIRToLLVM::getAotBodyLocation(module, cf.llvm_symbol),
         });
         entries.push_back(entry);
     }
@@ -25688,7 +25751,7 @@ static void generateModuleABIV2(llvm::LLVMContext& ctx, llvm::Module& module,
         modname_data, "qore_aot_mod_name");
 
     // Build function table (same format as executable AOT)
-    auto* func_entry_type = llvm::StructType::get(ctx, {ptr_type, ptr_type, i32_type, i32_type, i32_type, i32_type, i32_type});
+    auto* func_entry_type = llvm::StructType::get(ctx, {ptr_type, ptr_type, i32_type, i32_type, i32_type, i32_type, i32_type, ptr_type});
     std::vector<llvm::Constant*> func_entries;
     for (auto& cf : compiled_funcs) {
         llvm::Constant* name_str = llvm::ConstantDataArray::getString(ctx, cf.name, true);
@@ -25715,7 +25778,8 @@ static void generateModuleABIV2(llvm::LLVMContext& ctx, llvm::Module& module,
             llvm::ConstantInt::get(i32_type, cf.num_exprs),
             llvm::ConstantInt::get(i32_type, cf.num_stmts),
             llvm::ConstantInt::get(i32_type,
-                encodeAOTRegexCountAndContext(cf.num_regex_cases, cf.slot_ids))
+                encodeAOTRegexCountAndContext(cf.num_regex_cases, cf.slot_ids)),
+            QoreIRToLLVM::getAotBodyLocation(module, cf.llvm_symbol),
         });
         func_entries.push_back(entry);
     }

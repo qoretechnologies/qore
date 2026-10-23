@@ -474,9 +474,15 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_lv_path_binary_mut_aot", reinterpret_cast<void*>(&qore_rt_lv_path_binary_mut_aot) },
     { "qore_rt_lv_path_ternary_aot", reinterpret_cast<void*>(&qore_rt_lv_path_ternary_aot) },
     { "qore_rt_push_compiled_handler_aot", reinterpret_cast<void*>(&qore_rt_push_compiled_handler_aot) },
-    { "qore_rt_get_thread_data_for_native_calls",
-        reinterpret_cast<void*>(&qore_rt_get_thread_data_for_native_calls) },
+    { "qore_rt_get_native_entry_slots", reinterpret_cast<void*>(&qore_rt_get_native_entry_slots) },
     { "qore_rt_push_native_call_frame", reinterpret_cast<void*>(&qore_rt_push_native_call_frame) },
+    { "qore_rt_push_native_call_frame_aot", reinterpret_cast<void*>(&qore_rt_push_native_call_frame_aot) },
+    { "qore_rt_push_native_inline_call_frame_aot",
+        reinterpret_cast<void*>(&qore_rt_push_native_inline_call_frame_aot) },
+    { "qore_rt_push_native_call_frame_aot_named",
+        reinterpret_cast<void*>(&qore_rt_push_native_call_frame_aot_named) },
+    { "qore_rt_push_native_closure_call_frame",
+        reinterpret_cast<void*>(&qore_rt_push_native_closure_call_frame) },
     { "qore_rt_pop_native_call_frame", reinterpret_cast<void*>(&qore_rt_pop_native_call_frame) },
     { "qore_rt_call_fast_with_target", reinterpret_cast<void*>(&qore_rt_call_fast_with_target) },
     { "qore_rt_call_with_args", reinterpret_cast<void*>(&qore_rt_call_with_args) },
@@ -624,6 +630,14 @@ extern "C" DLLEXPORT void qore_rt_set_runtime_loc_aot(QoreAOTContext* ctx, int32
 
 // AOT mode: set runtime location through TLS slots cached by generated code at
 // function entry. Keep qore_rt_set_runtime_loc_aot() for existing AOT artifacts.
+extern "C" DLLEXPORT void qore_rt_get_native_entry_slots(QoreNativeEntrySlots* slots) {
+    RuntimeLocationCache cache = get_runtime_location_cache();
+    slots->thread_data = cache.thread_data;
+    slots->loc_ptr = cache.loc_ptr;
+    slots->stmt_ptr = cache.stmt_ptr;
+    slots->sp_ptr = cache.sp_ptr;
+}
+
 extern "C" DLLEXPORT void qore_rt_set_runtime_loc_aot_cached(QoreAOTContext* ctx, int32_t loc_index,
         const QoreProgramLocation** loc_ptr, const AbstractStatement** stmt_ptr) {
     if (loc_ptr && stmt_ptr && ctx && ctx->locs && loc_index >= 0 && loc_index < ctx->num_locs
@@ -1161,9 +1175,6 @@ extern "C" DLLEXPORT int64_t qore_rt_check_cancel(ExceptionSink* xsink, const ch
 // Thread-local flag set by JIT guard failure to request deopt to AST.
 // evalTiered() checks this after JIT returns and re-executes via AST if set.
 static thread_local bool tl_jit_deopt_requested = false;
-
-// Empty string used as fallback call name when no cached IR function is available.
-static const std::string jit_empty_call_name;
 
 static LocalVar* findIRSelfLocal(const QoreIRFunction* ir) {
     if (!ir) {
@@ -9866,14 +9877,23 @@ private:
 */
 class QoreNativeCallStackLocation : public QoreStackLocation {
 public:
+    //! Pushes the frame
+    /** @param call_loc the location of the call, or nullptr for the caller's current location: the JIT keeps the
+        runtime location of the code it runs, while AOT-compiled code gives the location of each call
+        @param callee_loc the location of the callee's body, for AOT code that runs the callee inline (a summary of
+        its body), or nullptr if the callee keeps its own runtime location
+    */
     DLLLOCAL QoreNativeCallStackLocation(void* thread_data, const std::string& call_name,
-            const StatementBlock* statements) : thread_data(thread_data), call_name(call_name), statements(statements) {
-        prev = push_native_call_stack_location(thread_data, this, saved_stmt, saved_pgm, loc, runtime_loc_sp);
+            const StatementBlock* statements, const QoreProgramLocation* call_loc = nullptr,
+            const QoreProgramLocation* callee_loc = nullptr)
+            : thread_data(thread_data), call_name(call_name), statements(statements) {
+        prev = push_native_call_stack_location(thread_data, this, call_loc, loc, saved_stmt, saved_pgm, runtime_loc,
+            runtime_loc_sp, callee_loc);
     }
 
     //! Pops the frame and restores the caller's runtime location, which the callee changed
     DLLLOCAL ~QoreNativeCallStackLocation() {
-        pop_native_call_stack_location(thread_data, prev, saved_stmt, loc, runtime_loc_sp);
+        pop_native_call_stack_location(thread_data, prev, saved_stmt, runtime_loc, runtime_loc_sp);
     }
 
     DLLLOCAL const QoreProgramLocation& getLocation() const override {
@@ -9897,13 +9917,15 @@ public:
     }
 
 private:
-    //! the data of the thread, which the caller got once (qore_rt_get_thread_data_for_native_calls())
+    //! the data of the thread, which the caller got once (QoreNativeEntrySlots::thread_data)
     void* thread_data;
     const std::string& call_name;
     const StatementBlock* statements;
     // the members below are written by push_native_call_stack_location() before the location is pushed
-    //! the caller's location: the location of the frame, restored when the frame is popped
+    //! the location of the call: the location of the frame
     const QoreProgramLocation* loc;
+    //! the caller's runtime location, restored when the frame is popped
+    const QoreProgramLocation* runtime_loc;
     //! the caller's statement, restored when the frame is popped
     const AbstractStatement* saved_stmt;
     QoreProgram* saved_pgm;
@@ -9921,14 +9943,69 @@ size_t qore_rt_native_call_frame_align() {
     return alignof(QoreNativeCallStackLocation);
 }
 
-extern "C" DLLEXPORT void* qore_rt_get_thread_data_for_native_calls() {
-    return get_thread_data_for_native_calls();
-}
-
 extern "C" DLLEXPORT void qore_rt_push_native_call_frame(void* storage, void* thread_data,
         const std::string* call_name, const StatementBlock* statements) {
     assert(storage && thread_data && call_name);
     new (storage) QoreNativeCallStackLocation(thread_data, *call_name, statements);
+}
+
+//! Pushes the frame of a call that AOT code makes to the call target of an expression slot
+/** @param inline_body true if the callee runs inline at the location of its body
+*/
+static void qore_rt_push_native_call_frame_aot_impl(void* storage, void* thread_data, QoreAOTContext* ctx,
+        int32_t target_slot, const QoreProgramLocation* call_loc, bool inline_body) {
+    assert(storage && thread_data && ctx);
+    // the callee is the call target of the call's expression slot, resolved when the caller's context was built
+    assert(target_slot >= 0 && target_slot < ctx->num_exprs);
+    const QoreAOTCallTarget& target = ctx->call_targets[target_slot];
+    const UserVariantBase* callee = target.uvb ? target.uvb
+        : (target.variant ? target.variant->getUserVariantBase() : nullptr);
+    static const std::string unknown_call_name;
+    new (storage) QoreNativeCallStackLocation(thread_data, callee ? callee->getCallName() : unknown_call_name,
+        callee ? callee->getStatementBlock() : nullptr, call_loc,
+        inline_body && callee ? callee->getAOTBodyLocation() : nullptr);
+}
+
+extern "C" DLLEXPORT void qore_rt_push_native_call_frame_aot(void* storage, void* thread_data,
+        QoreAOTContext* ctx, int32_t target_slot, const QoreProgramLocation* call_loc) {
+    qore_rt_push_native_call_frame_aot_impl(storage, thread_data, ctx, target_slot, call_loc, false);
+}
+
+extern "C" DLLEXPORT void qore_rt_push_native_inline_call_frame_aot(void* storage, void* thread_data,
+        QoreAOTContext* ctx, int32_t target_slot, const QoreProgramLocation* call_loc) {
+    qore_rt_push_native_call_frame_aot_impl(storage, thread_data, ctx, target_slot, call_loc, true);
+}
+
+//! Returns the frame name for a name given by AOT-compiled code, which lives for the rest of the process
+static const std::string* qore_rt_intern_native_call_name(const char* name) {
+    static std::mutex lck;
+    static std::unordered_map<std::string, std::unique_ptr<const std::string>> names;
+    std::lock_guard<std::mutex> lock(lck);
+    std::unique_ptr<const std::string>& rv = names[name];
+    if (!rv) {
+        rv = std::make_unique<const std::string>(name);
+    }
+    return rv.get();
+}
+
+extern "C" DLLEXPORT void qore_rt_push_native_call_frame_aot_named(void* storage, void* thread_data,
+        const char* call_name, std::atomic<const std::string*>* call_name_cache,
+        const QoreProgramLocation* call_loc, const QoreProgramLocation* callee_loc) {
+    assert(storage && thread_data && call_name && call_name_cache);
+    // the name is interned on the first call of the site, which caches it
+    const std::string* name = call_name_cache->load(std::memory_order_acquire);
+    if (!name) {
+        name = qore_rt_intern_native_call_name(call_name);
+        call_name_cache->store(name, std::memory_order_release);
+    }
+    new (storage) QoreNativeCallStackLocation(thread_data, *name, nullptr, call_loc, callee_loc);
+}
+
+extern "C" DLLEXPORT void qore_rt_push_native_closure_call_frame(void* storage) {
+    assert(storage);
+    // the name of the frame of a closure call, as an AST call of a closure names it
+    static const std::string closure_call_name("<anonymous closure>");
+    new (storage) QoreNativeCallStackLocation(get_thread_data_for_native_calls(), closure_call_name, nullptr);
 }
 
 extern "C" DLLEXPORT void qore_rt_pop_native_call_frame(void* storage) {
@@ -10402,17 +10479,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_fast(const QoreFunction* func,
         sig->argvid->instantiate(argv ? argv->refSelf() : nullptr);
     }
 
-    // Use cached IR name when available (zero allocation); fall back to building the name
-    std::string call_name_buf;
-    if (!ir) {
-        const char* class_name = func->className();
-        if (class_name) {
-            call_name_buf = class_name;
-            call_name_buf += "::";
-        }
-        call_name_buf += func->getName();
-    }
-    const std::string& call_name = ir ? ir->getDisplayName() : call_name_buf;
+    // the name of the frame, as an AST call names it
+    const std::string& call_name = uvb->getCallName();
 
     // Tiered promotion: this fast-call path bypasses evalTiered(), so account for
     // the execution here and promote the callee to native once it is hot (no-op
@@ -10615,9 +10683,8 @@ static uint64_t execClosureDirect(const QoreClosureBase* cb, const UserVariantBa
         return toBits(QoreValue());
     }
 
-    // Get call name from cached IR if available, otherwise use static name
-    static const std::string closure_name("<anonymous closure>");
-    const std::string& call_name = ir ? ir->getDisplayName() : closure_name;
+    // the name of the frame, as an AST call of a closure names it
+    static const std::string call_name("<anonymous closure>");
 
     QoreValue val{};
     {
@@ -10835,9 +10902,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_fast_with_target(uint64_t (*target_fn
         sig->argvid->instantiate(argv ? argv->refSelf() : nullptr);
     }
 
-    // Get call name from cached IR function (always available for JIT-compiled functions)
-    const QoreIRFunction* ir = uvb->getCachedIR();
-    const std::string& call_name = ir ? ir->getDisplayName() : jit_empty_call_name;
+    // the name of the frame, as an AST call names it
+    const std::string& call_name = uvb->getCallName();
 
     QoreValue val{};
     {
@@ -10905,9 +10971,11 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_self_recursive(const AbstractQoreFunc
                 priv->pushIntern(val);
             }
         }
-        const QoreIRFunction* ir = uvb->getCachedIR();
-        const std::string& call_name = ir ? ir->getDisplayName() : jit_empty_call_name;
-        QoreValue result = uvb->callTieredPublic(call_name.c_str(), arg_list, nullptr, xsink);
+        // evalTiered() pushes no call stack frame (an AST call's CodeEvaluationHelper does), so the frame of the call
+        // is pushed here
+        QoreNativeCallStackLocation frame(get_thread_data_for_native_calls(), uvb->getCallName(),
+            uvb->getStatementBlock());
+        QoreValue result = uvb->callTieredPublic(uvb->getCallName().c_str(), arg_list, nullptr, xsink);
         return toBits(result);
     }
 
@@ -10961,9 +11029,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_self_recursive(const AbstractQoreFunc
         sig->argvid->instantiate(argv ? argv->refSelf() : nullptr);
     }
 
-    // Use cached IR name when available (zero allocation)
-    const QoreIRFunction* ir = uvb->getCachedIR();
-    const std::string& call_name = ir ? ir->getDisplayName() : jit_empty_call_name;
+    // the name of the frame, as an AST call names it
+    const std::string& call_name = uvb->getCallName();
 
     // Call through execJITWithDeopt which handles body locals, stack location, and deopt
     QoreValue val{};
@@ -11250,17 +11317,8 @@ static uint64_t qore_rt_call_method_fast_impl(const QoreMethod* method,
         sig->argvid->instantiate(argv ? argv->refSelf() : nullptr);
     }
 
-    // Use cached IR name when available (zero allocation); fall back to building the name
-    std::string call_name_buf;
-    if (!ir) {
-        const char* cls = method->getClass() ? method->getClass()->getName() : nullptr;
-        if (cls) {
-            call_name_buf = cls;
-            call_name_buf += "::";
-        }
-        call_name_buf += method->getName();
-    }
-    const std::string& call_name = ir ? ir->getDisplayName() : call_name_buf;
+    // the name of the frame, as an AST call names it
+    const std::string& call_name = uvb->getCallName();
 
     QoreValue val{};
     {
@@ -14757,8 +14815,8 @@ static uint64_t qore_rt_call_direct_aot_impl(QoreAOTContext* ctx, int32_t slot,
             return toBits(QoreValue());
         }
 
-        const QoreIRFunction* ir = uvb->getCachedIR();
-        const std::string& call_name = ir ? ir->getDisplayName() : jit_empty_call_name;
+        // the name of the frame, as an AST call names it
+        const std::string& call_name = uvb->getCallName();
 
         QoreValue val{};
         {
@@ -15320,9 +15378,12 @@ static uint64_t qore_rt_call_self_recursive_aot_impl(AotFunctionPtr self_fn,
         }
     }
 
-    // Call AOT function directly — no deopt, no stack location
+    // Call AOT function directly — no deopt — with the call stack frame of the call, located at the caller's
+    // runtime location, as the frames that the other call helpers push
     uint64_t result_bits;
     {
+        QoreNativeCallStackLocation frame(get_thread_data_for_native_calls(), uvb->getCallName(),
+            uvb->getStatementBlock());
         ArgvContextHelper argv_helper(argv.release(), xsink);
         result_bits = self_fn(ctx, xsink);
     }
@@ -16429,12 +16490,8 @@ static bool try_dispatch_method_fast(QoreObject* o, const QoreMethod* method,
         sig->argvid->instantiate(argv ? argv->refSelf() : nullptr);
     }
 
-    // Use cached IR name when available (zero allocation); fall back to building the name
-    std::string call_name_buf;
-    if (!ir) {
-        call_name_buf = std::string(method->getClass()->getName()) + "::" + method->getName();
-    }
-    const std::string& call_name = ir ? ir->getDisplayName() : call_name_buf;
+    // the name of the frame, as an AST call names it
+    const std::string& call_name = uvb->getCallName();
 
     QoreValue val{};
     {
@@ -17847,13 +17904,8 @@ static uint64_t qore_rt_call_static_method_direct_impl(const QoreMethod* method,
         return toBits(QoreValue());
     }
 
-    // Use cached IR name when available (zero allocation); fall back to building the name
-    const QoreIRFunction* ir = uvb->getCachedIR();
-    std::string call_name_buf;
-    if (!ir) {
-        call_name_buf = std::string(method->getClass()->getName()) + "::" + method->getName();
-    }
-    const std::string& call_name = ir ? ir->getDisplayName() : call_name_buf;
+    // the name of the frame, as an AST call names it
+    const std::string& call_name = uvb->getCallName();
 
     QoreValue val{};
     {

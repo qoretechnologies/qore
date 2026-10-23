@@ -81,6 +81,27 @@ afterwards, and `QoreJITStackLocation::getProgram()` chooses between its explici
 `CodeEvaluationHelper` pushes from `init()`, called in its constructor body, and pops in its destructor body, so it
 satisfies the rule without the member helper.
 
+### Frames of native calls
+
+Native code (JIT and AOT) pushes the frame of each call of user code that it makes directly, without a runtime
+helper: `QoreNativeCallStackLocation` (`lib/JITRuntime.cpp`), constructed in storage of the caller's native frame by
+`qore_rt_push_native_call_frame*()` and destroyed by `qore_rt_pop_native_call_frame()`. Its constructor pushes in its
+body, after its members are initialized, and `push_native_call_stack_location()` (`lib/thread.cpp`) writes the values
+it reports (the call's location, the caller's statement and program) before it publishes it; its destructor pops in
+its body. The caller gets the thread's data once, when it is entered (`qore_rt_get_native_entry_slots()`), so a push
+and a pop make no thread-local lookup.
+
+The frame's location is the location of the call. The frame saves the caller's runtime location, which the callee
+changes, and restores it when it is popped, so a line after a call that returned reports the caller's location. A
+call that AOT code runs inline (a summary of the callee's body) pushes the frame too, with
+`qore_rt_push_native_inline_call_frame_aot()`, which makes the location of the callee's body, held by the callee's
+image, the runtime location until the pop; a summary proven not to raise an exception has no frame, as nothing can
+see it.
+
+AOT code keeps its runtime location as JIT code does: it stores the address of a constant `QoreProgramLocation` of its
+image when the line changes (and at the start of every block), so every thread's stack, its own current line
+included, can be read at any time; an exception takes its location and its call stack from them as they are.
+
 ### Known limitation: external module frames
 
 `QoreExternalRuntimeStackLocationHelper` (public API, subclassed by binary modules such as jni and python) pushes

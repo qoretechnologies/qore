@@ -69,6 +69,17 @@ public:
     //! Returns the NaN-boxed QoreValue as uint64_t.
     bool lowerFunction(const QoreIRFunction& func, llvm::Module& module, std::string& error);
 
+    //! Returns the type of the constant locations that AOT code holds in its image: QoreProgramLocation
+    static llvm::StructType* getAotLocationType(llvm::LLVMContext& ctx);
+
+    //! Returns the location of the body of the AOT function with the given symbol, lowered into the module, for its
+    //! function table entry (QoreAOTFunc::body_loc), or a null pointer if unknown
+    static llvm::Constant* getAotBodyLocation(llvm::Module& module, const std::string& symbol);
+
+    //! Checks that the layout of the constant locations of AOT code in a module with the given data layout is the
+    //! layout of QoreProgramLocation in this process; returns false with an error if not
+    static bool checkAotLocationLayout(const llvm::DataLayout& dl, std::string& error);
+
     //! Remove decref calls whose value is proven to be NOTHING.
     //! @return the number of calls removed
     static size_t pruneNoopDecrefs(llvm::Module& module);
@@ -733,6 +744,10 @@ private:
     // already populated by the thrown QoreJITException's underlying raise site.
     // Gated by env var so existing check-based path remains default.
     bool aot_eh_enabled = false;
+    //! the number of native call frames that the code being emitted runs in (emitPushNativeCallFrame() and friends),
+    //! which a C++ exception thrown by a helper would leave on the thread's call stack, as it skips their pop; the
+    //! code in a frame therefore calls the helpers that return their exceptions (emitMaybeInvoke())
+    int open_native_call_frames = 0;
 
     // Set by an EH invoke emission site to tell the NEXT emitExceptionCheck
     // call to skip (control is on the invoke's normal edge where xsink is
@@ -975,6 +990,14 @@ private:
 
     //! Return the AOT loc-index for `loc`, appending to aot_loc_table on first use.
     int32_t getOrAddAotLocIndex(const QoreProgramLocation* loc);
+
+    //! Returns the constant location that AOT code holds in its image for `loc`, one per distinct location of the
+    //! module, or nullptr if `loc` has no line
+    /** A location held by the image does not depend on the AOT context that the code runs with, which is not the
+        code's own in a context-independent fast entry, and lives as long as the image, which is never unloaded.
+    */
+    llvm::Constant* getAotLocationConstant(const QoreProgramLocation* loc, llvm::Module& module);
+
 
     //! Emit a runtime_loc update if the instruction's source line changed
     void emitRuntimeLocationUpdate(const QoreIRInstruction* inst, llvm::Module& module);
@@ -1383,6 +1406,72 @@ private:
     llvm::CallInst* emitNativeCall(llvm::FunctionCallee fn, llvm::ArrayRef<llvm::Value*> args,
             const AbstractQoreFunctionVariant* callee, llvm::Module& module, llvm::Function* llvm_func,
             const llvm::Twine& name = "");
+
+    //! Emits a call that AOT-compiled code makes directly to a native entry of user code, with its frame
+    /** As emitNativeCall(); the callee is the call target of \a target_slot in this function's context, and the
+        frame is located at \a inst's location (qore_rt_push_native_call_frame_aot()).
+    */
+    llvm::CallInst* emitNativeCallAOT(llvm::FunctionCallee fn, llvm::ArrayRef<llvm::Value*> args,
+            int32_t target_slot, const QoreIRInstruction* inst, llvm::Module& module, llvm::Function* llvm_func,
+            const llvm::Twine& name = "");
+
+    //! Emits the push of the frame of a direct native call in JIT code; see emitNativeCall()
+    void emitPushNativeCallFrame(const AbstractQoreFunctionVariant* callee, llvm::Module& module,
+            llvm::Function* llvm_func);
+    //! Emits the push of the frame of a direct native call in AOT code; see emitNativeCallAOT()
+    /** @param inline_body true if the callee runs inline, at its body's location
+        (qore_rt_push_native_inline_call_frame_aot())
+    */
+    llvm::CallInst* emitPushNativeCallFrameAOT(int32_t target_slot, const QoreIRInstruction* inst,
+            llvm::Module& module, llvm::Function* llvm_func, bool inline_body = false);
+    //! Emits the push of the frame of a direct native call without a call target in AOT code, naming the callee
+    /** @param callee_loc the location of the callee's body if the callee runs inline, or a null pointer
+    */
+    llvm::CallInst* emitPushNativeCallFrameAOTNamed(const std::string& call_name, const QoreIRInstruction* inst,
+            llvm::Module& module, llvm::Function* llvm_func, llvm::Constant* callee_loc);
+    //! Returns the location of a call that AOT code makes, for the frame of the call: the constant location of the
+    //! instruction, or a null pointer
+    llvm::Constant* getAotCallLocation(const QoreIRInstruction* inst, llvm::Module& module);
+    //! Emits the pop of the frame pushed by emitPushNativeCallFrame() or emitPushNativeCallFrameAOT()
+    void emitPopNativeCallFrame(llvm::Module& module);
+
+    //! The instructions that push the frame of an AOT call whose callee may run inline, as a body summary
+    struct AotInlineCallFrame {
+        llvm::Instruction* push = nullptr;
+    };
+    //! Emits the push of the frame of an AOT call whose callee may run inline, which makes the location of the
+    //! callee's body the runtime location, where the inline code runs
+    /** @param target_slot the expression slot of the call, whose call target names the frame and gives the location
+        of the callee's body (UserVariantBase::getAOTBodyLocation()), or -1 if the call has none
+        @param callee the callee, an entry of batch_callees
+
+        A call without a call target, or one made by a function that may run with the context of its caller
+        (mayRunWithCallerContext()), whose context does not have the call's call target, has a frame named at compile
+        time, located at the body location of a callee of this compilation (BatchCalleeInfo::body_loc_file).
+    */
+    AotInlineCallFrame emitPushAotInlineCallFrame(int32_t target_slot, const BatchCalleeInfo& callee,
+            const QoreIRInstruction* inst, llvm::Module& module, llvm::Function* llvm_func);
+    //! Returns true if the function being lowered may run with the AOT context of its caller: a fast entry that is
+    //! context-independent or whose callee information is unknown
+    bool mayRunWithCallerContext() const;
+    //! Returns the variant of an entry of batch_callees, or nullptr if it is not one
+    const AbstractQoreFunctionVariant* getBatchCalleeVariant(const BatchCalleeInfo& callee);
+    //! the variants of the entries of batch_callees, by entry, built on first use (getBatchCalleeVariant())
+    std::unordered_map<const BatchCalleeInfo*, const AbstractQoreFunctionVariant*> batch_callee_variants;
+    //! Pushes the frame of an AOT call of a method whose callee may run inline, as emitPushAotInlineCallFrame(), for
+    //! the call target of the call's expression, if it has one
+    AotInlineCallFrame emitPushAotInlineMethodCallFrame(QoreValue expr, const BatchCalleeInfo& callee,
+            const QoreIRInstruction* inst, llvm::Module& module, llvm::Function* llvm_func);
+    //! Ends the frame pushed by emitPushAotInlineCallFrame()
+    /** @param keep true if the call is made or its inline code may raise an exception: the frame is popped;
+        otherwise the push is removed, as nothing can see the frame of inline code that raises no exception (it makes
+        no calls and cannot block)
+    */
+    void endAotInlineCallFrame(AotInlineCallFrame& frame, bool keep, llvm::Module& module);
+    //! Returns the AOT expression slot of a direct function call, whose call target is the callee
+    int32_t getCallDirectExprSlot(const QoreIRCallDirectInstruction& call);
+    //! Creates the storage of the frames of the native calls of the function being lowered, once
+    void ensureNativeCallFrameStorage(llvm::Module& module, llvm::Function* llvm_func);
 
     //! The storage of the frames of the native calls of the function being lowered, created by the first one
     /** One is enough: a native call's frame is popped before the function makes another call. */

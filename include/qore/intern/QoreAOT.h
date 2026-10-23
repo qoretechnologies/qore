@@ -500,6 +500,9 @@ struct QoreAOTFunc {
     int num_exprs;                              //!< number of expression slots
     int num_stmts;                              //!< number of statement slots (OnBlockExit)
     int num_regex_cases = 0;                    //!< number of regex case slots (SwitchRegexMatch)
+    //! the location of the function's body, held by the image; nullptr if unknown (see
+    //! UserVariantBase::getAOTBodyLocation())
+    const QoreProgramLocation* body_loc = nullptr;
 };
 
 //! QoreAOTFunc::num_regex_cases keeps its ABI-sized i32 while carrying context metadata.

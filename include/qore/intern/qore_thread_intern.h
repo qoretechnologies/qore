@@ -349,12 +349,18 @@ DLLLOCAL void* get_thread_data_for_native_calls();
     non-AOT frame marker (the caller's), which pop_native_call_stack_location() restores.
 
     @param thread_data_ptr the current thread's data (get_thread_data_for_native_calls())
+    @param call_loc the location of the call, or nullptr for the thread's current runtime location
+    @param frame_loc receives the location of the frame: \a call_loc or the current runtime location
+    @param callee_loc the runtime location from the push on, for a callee that runs inline at its body's location
+    (AOT code), or nullptr if the callee sets its own
 
     @return the location that the pushed one replaces, to restore with pop_native_call_stack_location()
 */
 DLLLOCAL const QoreStackLocation* push_native_call_stack_location(void* thread_data_ptr, QoreStackLocation* stack_loc,
+        const QoreProgramLocation* call_loc, const QoreProgramLocation*& frame_loc,
         const AbstractStatement*& current_stmt, QoreProgram*& current_pgm,
-        const QoreProgramLocation*& runtime_loc, uintptr_t& runtime_loc_sp);
+        const QoreProgramLocation*& runtime_loc, uintptr_t& runtime_loc_sp,
+        const QoreProgramLocation* callee_loc = nullptr);
 //! Pops a location pushed by push_native_call_stack_location() and restores the caller's runtime location
 DLLLOCAL void pop_native_call_stack_location(void* thread_data_ptr, const QoreStackLocation* stack_loc,
         const AbstractStatement* runtime_stmt, const QoreProgramLocation* runtime_loc, uintptr_t runtime_loc_sp);
@@ -374,6 +380,7 @@ struct RuntimeLocationCache {
     const QoreProgramLocation** loc_ptr;
     const AbstractStatement** stmt_ptr;
     uintptr_t* sp_ptr;   //!< runtime_loc_sp slot (innermost non-AOT frame address)
+    void* thread_data;   //!< the thread's data, for push_native_call_stack_location()
 };
 
 //! Returns cached pointers to the current thread's runtime location fields.

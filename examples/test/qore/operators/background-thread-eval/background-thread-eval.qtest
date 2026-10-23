@@ -109,7 +109,7 @@ code c = sub () { f(x); };
         foreach string mode in (ExecModeHarness::ExecModes) {
             foreach string which in ("arg", "target") {
                 checkExceptionOutput(mode, which, runWorker("background-thread-eval-worker.q", get_script_dir(),
-                    "--exec-mode=" + mode, which, ExecModeHarness::NativeCheck::Jit), True);
+                    "--exec-mode=" + mode, which, ExecModeHarness::NativeCheck::Jit));
             }
         }
     }
@@ -131,9 +131,8 @@ code c = sub () { f(x); };
         checkWorkerOutput("aot eager closure IR", runWorker("background-thread-eval-module-worker.q", tmp.path, "",
             "", NOTHING, "QORE_DISABLE_AOT_NATIVE_CLOSURES=1 QORE_DISABLE_AOT_LAZY_CLOSURE_IR=1"));
         foreach string which in ("arg", "target") {
-            # compiled code makes direct calls without a call stack frame of their own
             checkExceptionOutput("aot", which, runWorker("background-thread-eval-module-worker.q", tmp.path, "",
-                which), False);
+                which));
         }
     }
 
@@ -241,26 +240,19 @@ code c = sub () { f(x); };
     }
 
     #! checks that the exception of the argument or the call target was an exception of the new thread
-    /** @param call_frame true if the call stack must have the frame of the function raising the exception
-    */
-    private checkExceptionOutput(string label, string which, string out, bool call_frame) {
+    private checkExceptionOutput(string label, string which, string out) {
         label += " " + which;
         # the starting code caught nothing
         assertRegex("(?m)^" + which + "-caught=0$", out, label + ": exception not raised to the caller");
         # the called code did not run
         assertNRegex("must-not-run", out, label + ": called code not run");
         # the thread ended with the exception, raised in the new thread: the thread's call stack starts with the
-        # thread start and has no frame between it and the code that raised the exception
+        # thread start, followed by the frame of the function that raised the exception and nothing between them
         string func = which == "arg" ? "bad" : "bad_ref";
         string err = which == "arg" ? "ARG-ERROR: raised by an argument" : "TARGET-ERROR: raised by the call target";
-        if (call_frame) {
-            assertRegex("unhandled QORE User exception thrown in TID [0-9]+ .* in " + func + "\\(\\) .*\n" + err
-                + "\ncall stack:\n  2: " + func + "\\(\\) [^\n]*\n  1: \\*thread start\\*", out,
-                label + ": exception in the new thread");
-        } else {
-            assertRegex("unhandled QORE User exception thrown in TID [0-9]+ .*\n" + err
-                + "\ncall stack:\n  1: \\*thread start\\*", out, label + ": exception in the new thread");
-        }
+        assertRegex("unhandled QORE User exception thrown in TID [0-9]+ .* in " + func + "\\(\\) .*\n" + err
+            + "\ncall stack:\n  2: " + func + "\\(\\) [^\n]*\n  1: \\*thread start\\*", out,
+            label + ": exception in the new thread");
     }
 
     private checkResults(string label, hash<string, string> results) {

@@ -10101,7 +10101,7 @@ static void registerAOTFunctionsFromSlotMaps(
             lazy_entry.class_ctx = variant_class_ctx;
             lazy_entry.aot_func = aot_func;
             lazy_context_table->entries.push_back(std::move(lazy_entry));
-            uvb->registerLazyPrecompiledAOTFunction(aot_func->fn_ptr, lazy_context_table,
+            uvb->registerLazyPrecompiledAOTFunction(aot_func->fn_ptr, aot_func->body_loc, lazy_context_table,
                 entry_index, qore_aot_func_uses_argv(*aot_func), qore_aot_func_uses_self(*aot_func));
             ++registered;
             func_map.erase(it);
@@ -10128,7 +10128,7 @@ static void registerAOTFunctionsFromSlotMaps(
                 func_name, (void*)ctx, (void*)uvb);
         }
         if (ctx && uvb) {
-            uvb->registerPrecompiledAOTFunction(aot_func->fn_ptr, ctx);
+            uvb->registerPrecompiledAOTFunction(aot_func->fn_ptr, ctx, aot_func->body_loc);
             ++registered;
             // Remove from func_map so any registration gap is reported precisely.
             func_map.erase(it);
@@ -10223,7 +10223,7 @@ static void registerAOTFunctionsInNamespace(qore_ns_private* ns, QoreProgram* pg
                 const QoreAOTFunc* aot_func = it->second;
                 QoreAOTContext* ctx = buildContextForVariant(uvb, function_name.c_str(), pgm, *aot_func);
                 if (ctx) {
-                    uvb->registerPrecompiledAOTFunction(aot_func->fn_ptr, ctx);
+                    uvb->registerPrecompiledAOTFunction(aot_func->fn_ptr, ctx, aot_func->body_loc);
                     ++registered;
                     printd(2, "AOT: registered pre-compiled function '%s' (locals=%d, globals=%d, exprs=%d)\n",
                         variant_key.c_str(), aot_func->num_locals, aot_func->num_globals, aot_func->num_exprs);
@@ -10287,7 +10287,7 @@ static void registerAOTFunctionsInNamespace(qore_ns_private* ns, QoreProgram* pg
                     const QoreAOTFunc* aot_func = it->second;
                     QoreAOTContext* ctx = buildContextForVariant(uvb, method_name.c_str(), pgm, *aot_func);
                     if (ctx) {
-                        uvb->registerPrecompiledAOTFunction(aot_func->fn_ptr, ctx);
+                        uvb->registerPrecompiledAOTFunction(aot_func->fn_ptr, ctx, aot_func->body_loc);
                         ++registered;
                         printd(2, "AOT: registered pre-compiled method '%s' (locals=%d, globals=%d, exprs=%d)\n",
                             variant_key.c_str(), aot_func->num_locals, aot_func->num_globals, aot_func->num_exprs);
@@ -11140,14 +11140,14 @@ static void registerFallbackFunctionsOnMainVariants(
                     main_sig->argvid = fb_sig->argvid;
                     main_sig->selfid = fb_sig->selfid;
                 }
-                main_uvb->registerPrecompiledAOTFunction(aot_func->fn_ptr, ctx);
+                main_uvb->registerPrecompiledAOTFunction(aot_func->fn_ptr, ctx, aot_func->body_loc);
                 ++registered;
                 printd(2, "AOT v2: registered '%s' from fallback (on main variant)\n",
                     variant_key.c_str());
             } else {
                 // No main variant found — register on fallback variant
                 // This happens when the function was defined only in fallback source
-                fb_uvb->registerPrecompiledAOTFunction(aot_func->fn_ptr, ctx);
+                fb_uvb->registerPrecompiledAOTFunction(aot_func->fn_ptr, ctx, aot_func->body_loc);
                 ++registered;
                 printd(2, "AOT v2: registered '%s' from fallback (on fallback variant)\n",
                     variant_key.c_str());
@@ -11317,12 +11317,12 @@ static void registerFallbackFunctionsOnMainVariants(
                             main_ucv->transplantBCAList(fb_ucv);
                         }
                     }
-                    main_uvb->registerPrecompiledAOTFunction(aot_func->fn_ptr, ctx);
+                    main_uvb->registerPrecompiledAOTFunction(aot_func->fn_ptr, ctx, aot_func->body_loc);
                     ++registered;
                     printd(2, "AOT v2: registered '%s' from fallback (on main variant)\n",
                         variant_key.c_str());
                 } else {
-                    fb_uvb->registerPrecompiledAOTFunction(aot_func->fn_ptr, ctx);
+                    fb_uvb->registerPrecompiledAOTFunction(aot_func->fn_ptr, ctx, aot_func->body_loc);
                     ++registered;
                     printd(2, "AOT v2: registered '%s' from fallback (on fallback variant)\n",
                         variant_key.c_str());

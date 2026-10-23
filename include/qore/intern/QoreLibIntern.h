@@ -36,6 +36,7 @@
 #include <map>
 #include <string>
 #include <vector>
+#include <type_traits>
 
 class MethodVariantBase;
 class RuntimeConfig;
@@ -565,6 +566,22 @@ public:
         return !(*this == loc);
     }
 
+    //! The layout of a location, which AOT-compiled code holds as constant data of its image
+    struct Layout {
+        size_t size;
+        size_t start_line, end_line, start_column, end_column, file, source, lang, offset;
+    };
+
+    //! Returns the layout of a location
+    DLLLOCAL static Layout getLayout() {
+        const QoreProgramLocation l;
+        auto off = [&l](const void* member) -> size_t {
+            return static_cast<size_t>(static_cast<const char*>(member) - reinterpret_cast<const char*>(&l));
+        };
+        return {sizeof(l), off(&l.start_line), off(&l.end_line), off(&l.start_column), off(&l.end_column),
+            off(&l.file), off(&l.source), off(&l.lang), off(&l.offset)};
+    }
+
 protected:
     const char* file = nullptr;
     const char* source = nullptr;
@@ -575,6 +592,10 @@ public:
     // for source blocks embedded in a larger file, so a 16-bit field wrapped for sufficiently large sources
     int32_t offset = 0;
 };
+
+// AOT-compiled code holds locations as constant data, which no constructor or destructor runs for
+static_assert(std::is_trivially_copyable<QoreProgramLocation>::value
+    && std::is_trivially_destructible<QoreProgramLocation>::value);
 
 DLLLOCAL extern const QoreProgramLocation loc_builtin;
 

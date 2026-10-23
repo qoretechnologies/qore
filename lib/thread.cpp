@@ -2444,8 +2444,10 @@ void* get_thread_data_for_native_calls() {
 }
 
 const QoreStackLocation* push_native_call_stack_location(void* thread_data_ptr, QoreStackLocation* stack_loc,
+        const QoreProgramLocation* call_loc, const QoreProgramLocation*& frame_loc,
         const AbstractStatement*& current_stmt, QoreProgram*& current_pgm,
-        const QoreProgramLocation*& runtime_loc, uintptr_t& runtime_loc_sp) {
+        const QoreProgramLocation*& runtime_loc, uintptr_t& runtime_loc_sp,
+        const QoreProgramLocation* callee_loc) {
     ThreadData* td = static_cast<ThreadData*>(thread_data_ptr);
     assert(td == thread_data.get());
 
@@ -2454,8 +2456,14 @@ const QoreStackLocation* push_native_call_stack_location(void* thread_data_ptr, 
     current_stmt = td->runtime_statement;
     runtime_loc = td->runtime_loc;
     runtime_loc_sp = td->runtime_loc_sp;
+    frame_loc = call_loc ? call_loc : runtime_loc;
 
-    return publish_pushed_stack_location(td, stack_loc);
+    const QoreStackLocation* prev = publish_pushed_stack_location(td, stack_loc);
+    if (callee_loc) {
+        td->runtime_statement = nullptr;
+        td->runtime_loc = callee_loc;
+    }
+    return prev;
 }
 
 void pop_native_call_stack_location(void* thread_data_ptr, const QoreStackLocation* stack_loc,
@@ -2532,7 +2540,8 @@ RuntimeLocationCache get_runtime_location_cache() {
     return RuntimeLocationCache{
         &td->runtime_loc,
         &td->runtime_statement,
-        &td->runtime_loc_sp
+        &td->runtime_loc_sp,
+        td
     };
 }
 
@@ -5294,10 +5303,9 @@ QoreHashNode* QoreThreadList::getCallStackHash(qore_call_t call_type, const std:
 }
 
 // static
-QoreHashNode* QoreThreadList::getCallStackHash(const QoreStackLocation& stack_loc,
-        const QoreProgramLocation* override_loc) {
+QoreHashNode* QoreThreadList::getCallStackHash(const QoreStackLocation& stack_loc) {
     ReferenceHolder<QoreHashNode> h(getCallStackHash(stack_loc.getCallType(), stack_loc.getCallName(),
-        override_loc ? *override_loc : stack_loc.getLocation()), nullptr);
+        stack_loc.getLocation()), nullptr);
 
     QoreProgram* pgm = stack_loc.getProgram();
     if (pgm) {

@@ -7,11 +7,12 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
+%requires FsUtil
 %requires ../../ExecModeHarness.qm
 
 %exec-class CallFrameLocationsTest
 
-#! Tests the locations of the call stack frames of an exception in each execution mode
+#! Tests the locations of the call stack frames of an exception in each execution mode and in compiled code
 /** The frame of a call is where the call was made, as AST execution reports it.  The IR interpreter, which also
     runs the first calls of JIT and tiered execution, gave the frame of a function, method or static method that it
     called directly the location of the callee's declaration instead, and it pushed no frame at all for a closure
@@ -21,30 +22,42 @@
     entry), so the callee was missing from the call stack, and the caller's location stayed the callee's after the
     call returned, so an exception raised later on the line of the call was reported in the callee; and the frames
     that runtime helpers pushed for methods were named without their class.
+
+    AOT-compiled code pushed no frame for its direct calls either, and it found the locations of an exception from
+    the native stack when the exception was raised, which reported the location of the call instead of the location
+    in a callee that ran with the context of its caller (a context-independent fast entry), and missed frames whose
+    calls the compiler had inlined.
 */
 class CallFrameLocationsTest inherits QUnit::Test {
     public {
         #! the results of LocChecks::run(): where the exception was raised, then the function of each frame and the
         #! line it was called from
         const Expected = (
-            "@15,bad:32,via_function:64",
-            "@15,bad:20,C::m:38,via_method:64",
-            "@15,bad:24,C::s:42,via_static:64",
-            "@15,bad:56,<anonymous closure>:57,via_closure:64",
-            "@52,via_same_line:64",
+            "@15,bad:32,via_function:94",
+            "@15,bad:20,C::m:38,via_method:94",
+            "@15,bad:24,C::s:42,via_static:94",
+            "@15,bad:56,<anonymous closure>:57,via_closure:94",
+            "@52,via_same_line:94",
+            "@62,divide:66,via_division:94",
+            "@72,D::div:82,via_method_division:94",
+            "@76,D::sdiv:86,via_static_division:94",
         );
     }
 
     private {
         string qore_bin;
+        string qcc_bin;
         string libqore_dir;
     }
 
     constructor() : QUnit::Test("CallFrameLocations", "1.0", \ARGV) {
         qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
         libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
 
         addTestCase("each execution mode", \testExecModes());
+        addTestCase("compiled module", \testCompiledModule());
+        addTestCase("compiled executable", \testCompiledExecutable());
 
         set_return_value(main());
     }
@@ -52,13 +65,76 @@ class CallFrameLocationsTest inherits QUnit::Test {
     testExecModes() {
         string worker = get_script_dir() + DirSep + "call-frame-locations-worker.q";
         foreach string mode in (ExecModeHarness::ExecModes) {
-            string out = ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --exec-mode=%s %s",
-                libqore_dir, get_script_dir(), qore_bin, mode, worker));
-            list<string> lines = (map $1, out.split("\n"), $1.val());
-            assertEq(3, lines.size(), mode + ": rounds: " + out);
-            foreach string line in (lines) {
-                assertEq(Expected, line.split("|"), sprintf("%s: round %d", mode, $#));
+            checkOutput(mode, ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b "
+                "--exec-mode=%s %s", libqore_dir, get_script_dir(), qore_bin, mode, worker)));
+        }
+    }
+
+    testCompiledModule() {
+        string worker = get_script_dir() + DirSep + "call-frame-locations-worker.q";
+        # the code raises the exceptions of its helpers by C++ unwinding with QORE_AOT_EH=1
+        foreach string opt in (("", "--strip-debug-info", "QORE_AOT_EH=1")) {
+            TmpDir tmp("qore-call-frame-locations-");
+            # the directory holds only the compiled module, so the worker cannot load the source instead
+            string qmod = tmp.path + DirSep + "LocChecks.qmod";
+            string env = opt =~ /=/ ? opt : "";
+            string out = backquote(sprintf("%s QORE_LIBDIR=%s %s -m %s -o %s %s 2>&1", env, libqore_dir, qcc_bin,
+                env ? "" : opt, qmod, get_script_dir() + DirSep + "LocChecks.qm"));
+            assertTrue(is_file(qmod), "compiled the module: " + out);
+            checkOutput("module " + opt, ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s "
+                "%s -b %s", libqore_dir, tmp.path, qore_bin, worker)));
+        }
+    }
+
+    testCompiledExecutable() {
+        # the module's code as a script with the same lines, which prints the results like the worker
+        list<string> lines = ReadOnlyFile::readTextFile(get_script_dir() + DirSep + "LocChecks.qm").split("\n");
+        # blank the module declaration, from its first line to the line closing it
+        bool in_declaration = False;
+        int blanked = 0;
+        for (int i = 0; i < lines.size(); ++i) {
+            if (lines[i] =~ /^module LocChecks /) {
+                in_declaration = True;
             }
+            if (in_declaration) {
+                bool last = lines[i] == "}";
+                lines[i] = "";
+                ++blanked;
+                if (last) {
+                    break;
+                }
+            }
+        }
+        assertEq(7, blanked, "the lines of the module declaration");
+        lines += "for (int i = 0; i < 3; ++i) {";
+        lines += "    print(LocChecks::run() + \"\\n\");";
+        lines += "}";
+        foreach string opt in (("", "--strip-debug-info")) {
+            TmpDir tmp("qore-call-frame-locations-");
+            # the frames are of the module's code by the name of its file
+            string script = tmp.path + DirSep + "LocChecks.q";
+            writeFile(script, lines.join("\n") + "\n");
+            string exe = tmp.path + DirSep + "loc-checks";
+            string out = backquote(sprintf("QORE_LIBDIR=%s %s %s -o %s %s 2>&1", libqore_dir, qcc_bin, opt, exe,
+                script));
+            assertTrue(is_file(exe), "compiled the executable: " + out);
+            checkOutput("executable " + opt, ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s %s", libqore_dir,
+                exe)));
+        }
+    }
+
+    private writeFile(string path, string data) {
+        File f();
+        f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(data);
+        f.close();
+    }
+
+    private checkOutput(string label, string out) {
+        list<string> lines = (map $1, out.split("\n"), $1.val());
+        assertEq(3, lines.size(), label + ": rounds: " + out);
+        foreach string line in (lines) {
+            assertEq(Expected, line.split("|"), sprintf("%s: round %d", label, $#));
         }
     }
 }

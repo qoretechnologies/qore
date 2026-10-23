@@ -57,9 +57,39 @@ int sub via_closure() {
     return c();
 }
 
+# AOT code can run the fast entry of this function with the context of its caller
+int sub divide(int a, int b) {
+    return a / b;
+}
+
+int sub via_division() {
+    int v = divide(10, 0);
+    return v;
+}
+
+class D {
+    int div(int a, int b) {
+        return a / b;
+    }
+
+    static int sdiv(int a, int b) {
+        return a / b;
+    }
+}
+
+int sub via_method_division() {
+    D d();
+    return d.div(10, 0);
+}
+
+int sub via_static_division() {
+    return D::sdiv(10, 0);
+}
+
 public string sub run() {
     list<string> out;
-    foreach code f in ((\via_function(), \via_method(), \via_static(), \via_closure(), \via_same_line())) {
+    foreach code f in ((\via_function(), \via_method(), \via_static(), \via_closure(), \via_same_line(),
+            \via_division(), \via_method_division(), \via_static_division())) {
         try {
             f();
         } catch (hash<ExceptionInfo> ex) {

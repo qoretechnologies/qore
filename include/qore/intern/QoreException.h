@@ -59,12 +59,6 @@ DLLLOCAL extern size_t qore_aot_collect_backtrace_locs(
 // Helper to safely get runtime location with fallback to loc_builtin
 static inline const QoreProgramLocation& get_runtime_location_safe() {
     const QoreProgramLocation* loc = get_runtime_location();
-    // AOT lazy source-location recovery: prefer the location of the innermost AOT
-    // frame when available (gate phase returns nullptr, keeping the eager value).
-    const QoreProgramLocation* lazy = qore_aot_resolve_throw_location(loc);
-    if (lazy) {
-        return *lazy;
-    }
     return loc ? *loc : loc_builtin;
 }
 
