@@ -1121,12 +1121,9 @@ public class DpqlTokenizer {
                     break;
                 }
             }
-            # a template without what it refers to is not finished, wherever it is (ex: "$local: == 1")
-            if (value.size() == value_start) {
-                addError(DpqlUnfinishedTemplateMessage, "DPQL-E033", start_line, start_column, line, column);
-                return makeToken(DPQL_TOK_ERROR, value, start_line, start_column);
-            }
         }
+        # the length of the template with its value
+        int value_end = value.size();
 
         # Check for optional ::type suffix
         if (pos + 1 < len && currentChar() == ":" && peekChar() == ":") {
@@ -1142,6 +1139,13 @@ public class DpqlTokenizer {
                     break;
                 }
             }
+        }
+
+        # a template without what it refers to is not finished, wherever it is (ex: "$local: == 1"); a type written
+        # after the missing value ("$local:::int") is part of the template that is reported
+        if (value_end == value_start) {
+            addError(DpqlUnfinishedTemplateMessage, "DPQL-E033", start_line, start_column, line, column);
+            return makeToken(DPQL_TOK_ERROR, value, start_line, start_column);
         }
 
         return makeToken(DPQL_TOK_TEMPLATE, value, start_line, start_column);

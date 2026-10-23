@@ -9778,6 +9778,8 @@ public class DpqlTest inherits QUnit::Test {
             ("$local: ", (("DPQL-E033", 1, 1, 1, 8, Unfinished),)),
             ("$local: == 1", (("DPQL-E033", 1, 1, 1, 8, Unfinished),)),
             ("$local:)", (("DPQL-E033", 1, 1, 1, 8, Unfinished),)),
+            # a type written after the missing value is part of the template that is reported, not text after it
+            ("$local:::int == 1", (("DPQL-E033", 1, 1, 1, 13, Unfinished),)),
             ("@a == $data: && @b", (("DPQL-E033", 1, 7, 1, 13, Unfinished),)),
             # the character written where the ':' is missing is not reported again
             ("$local.x", (("DPQL-E032", 1, 1, 1, 7,
@@ -10001,7 +10003,7 @@ public class DpqlTest inherits QUnit::Test {
     #! A template without what it refers to after its ':' is refused wherever it is written (DPQL-E033)
     unfinishedTemplateTests() {
         foreach string text in (("$local:", "$local: ", "$local:\n", "$local: == 1", "$local:)", "@a == $data: && @b",
-                "($static:)")) {
+                "($static:)", "$local:::int", "$local:::int == 1")) {
             hash<DpqlParseResult> r = DataProvider::parseDpqlExpressionWithInfo(text);
             assertFalse(r.success, sprintf("%y", text));
             assertEq(("DPQL-E033",), (map $1.code, r.diagnostics), sprintf("%y", text));
