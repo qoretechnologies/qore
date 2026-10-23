@@ -132,6 +132,16 @@ class SslConsumerCheckTest inherits QUnit::Test {
         assertEq(0, r.rc, r.output);
         assertRegex("module mod_sub: .*dep_other.* loads .*libssl[.](so[.])?4.* privately", r.output);
 
+        # a GNU ld linker script in place of a library stands for the library that it names; there are no linker
+        # scripts on macOS
+        if (PlatformOS != "Darwin") {
+            r = check("module-linker-script");
+            assertEq(0, r.rc, r.output);
+            assertRegex("module mod_script: .*scriptdir/[^ ]*dep_other.* loads .*libssl[.](so[.])?4.* privately",
+                r.output);
+            assertNRegex("cannot read the libraries", r.output);
+        }
+
         r = check("module-own-openssl-same");
         assertEq(0, r.rc, r.output);
         assertNRegex("privately|Warning", r.output);
