@@ -42,6 +42,8 @@
 #include "qore/intern/DatasourceStatementHelper.h"
 #include "qore/intern/QoreSQLStatement.h"
 #include "qore/intern/SqlMutationContext.h"
+#include "qore/intern/DbiForkRegistry.h"
+#include "qore/intern/QoreForkHandlers.h"
 
 #include <map>
 #include <deque>
@@ -146,11 +148,16 @@ public:
     }
 };
 
-class DatasourcePool : public AbstractThreadResource, public QoreCondition, public QoreThreadLock, public DatasourceStatementHelper {
+class DatasourcePool : public AbstractThreadResource, public QoreCondition, public QoreThreadLock, public DatasourceStatementHelper,
+        public QoreDbiForkObject {
     friend class DatasourcePoolActionHelper;
 protected:
     Datasource** pool;
-    int* tid_list;            // list of thread IDs per pool index
+    //! the TID of the thread holding each connection, or 0 if the connection is free
+    /** Kept beside tmap and free_list in an array of integers, so that it is consistent in a child process created
+        with fork() while a thread of the parent was changing them; see forkCheckUnlocked()
+    */
+    int* tid_list;
     thread_use_t tmap;        // map from tids to pool index
     free_list_t free_list;
 
@@ -172,6 +179,41 @@ protected:
     DatasourceConfig config;
 
     bool valid;
+
+    //! the fork generation of the process that the pool's connections belong to; see forkCheckUnlocked()
+    unsigned fork_generation = qore_fork_get_generation();
+    //! the TID of the thread whose next action that uses a connection raises \c DATASOURCE-FORK-ERROR, or 0
+    /** In a child process created with fork(): the forking thread held a connection in a transaction in the parent,
+        which an action without a connection gave up (see QoreDbiForkCheck::Defer)
+    */
+    int fork_lost_tx_tid = 0;
+
+    //! gives up the connections of the parent process in a child created with fork(); the pool lock must be held
+    /** The connections belong to the process that opened them (see qore_ds_private::abandon()), and the threads that
+        held connections in the parent do not exist in this process, unless one of them is the forking thread: every
+        connection is given up without calling the driver and made free again, and the allocation containers, which a
+        thread of the parent can have been changing when the process was copied, are replaced without being
+        traversed.  Connections are opened again when they are needed.
+
+        A transaction that the current thread held a connection for in the parent cannot be continued: the action
+        that would continue it raises \c DATASOURCE-FORK-ERROR.
+
+        @param mode Raise for an action that uses a connection, Defer for one that does not (the error is raised by
+        the next action of the thread that does; \a xsink can be nullptr), Discard when the pool is closed or
+        destroyed
+        @param remove_resource if true, the thread resource that the forking thread registered for its connection in
+        the parent is removed (false when it is being run as the thread resource)
+
+        @return 0 if nothing was given up, 1 if the connections of the parent were given up, -1 if an exception was
+        raised (they were given up as well)
+    */
+    DLLLOCAL int forkCheckUnlocked(ExceptionSink* xsink, QoreDbiForkCheck mode, bool remove_resource = true);
+
+    //! gives up the connections of the parent process in a child created with fork(); takes the pool lock
+    DLLLOCAL int forkCheck(ExceptionSink* xsink, QoreDbiForkCheck mode, bool remove_resource = true) {
+        AutoLocker al(static_cast<QoreThreadLock*>(this));
+        return forkCheckUnlocked(xsink, mode, remove_resource);
+    }
 
 #ifdef DEBUG
     QoreThreadLocalStorage<QoreString> thread_local_storage;
@@ -237,6 +279,16 @@ public:
     DLLLOCAL DatasourcePool(const DatasourcePool& old, ExceptionSink* xsink);
 
     DLLLOCAL virtual ~DatasourcePool();
+
+    //! initializes the pool lock and its condition again in a child process created with fork(); see
+    //! QoreDbiForkObject
+    DLLLOCAL void forkChild() noexcept override {
+        // the waiters are threads of the parent; the connections they held are given up when the pool is next used
+        // (see forkCheckUnlocked())
+        QoreCondition::reinitAfterFork();
+        QoreThreadLock::reinitAfterFork();
+        wait_count = 0;
+    }
 
     using AbstractPrivateData::deref;
     DLLLOCAL virtual void deref(ExceptionSink* xsink) {
@@ -369,6 +421,10 @@ public:
 
     DLLLOCAL bool currentThreadInTransaction() const {
         SafeLocker sl((QoreThreadLock*)this);
+        // in a child process created with fork(), a connection that the thread held in the parent is not held here
+        if (fork_generation != qore_fork_get_generation()) {
+            return false;
+        }
         return tmap.find(q_gettid()) != tmap.end();
     }
 

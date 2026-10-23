@@ -197,6 +197,31 @@ static int mydb_close_sink(Datasource* ds, ExceptionSink* xsink) {
 #endif
     @endcode
 
+    @subsection dbi_fork Connections in a Child Process Created with fork()
+
+    A child process created with \c fork() has a copy of the private data of every connection of its parent and of
+    every statement prepared on one, but the database sessions, and the network connections or client library
+    handles that the private data refers to, still belong to the parent: anything that the child sends on them, or a
+    close of them, changes or ends the parent's sessions.  The %Qore library therefore never calls a driver with the
+    connection or statement data of the parent in the child:
+    - when the child closes or destroys an inherited @ref Qore::SQL::Datasource "Datasource",
+      @ref Qore::SQL::DatasourcePool "DatasourcePool" or @ref Qore::SQL::SQLStatement "SQLStatement" (also when the
+      child's program ends), the library gives up the inherited private data without calling the driver: no rollback
+      or commit, no \c QDBI_METHOD_STMT_CLOSE, and no \c QDBI_METHOD_CLOSE or \c QDBI_METHOD_CLOSE_SINK
+    - when the child uses an inherited connection, the library gives it up the same way, and the driver's open method
+      makes a new connection for the action; a statement is prepared again with the new connection.  An action that
+      would continue a transaction of the parent raises \c DATASOURCE-FORK-ERROR instead
+    .
+    The private data given up this way is not freed, since a driver could only free it by using the connection: it
+    stays allocated until the child process ends.
+
+    A driver needs no logic of its own for connections that a child process inherits, and it must not close, roll
+    back or log off connections in a fork handler or a \c pthread_atfork() handler, since that would change or end
+    the parent's sessions.  A driver's own process-wide locks need fork handlers as described in
+    @ref qore_module_fork_handlers.  A driver that has connections or client library objects that the library does
+    not know about, such as a thread of its own that holds a connection, gives them up in the child the same way,
+    without using them.
+
     @subsection dbi_select DBI Select Method
 
     Function signature: \ref q_dbi_select_t

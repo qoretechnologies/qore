@@ -62,6 +62,10 @@ extern QoreClass* QC_ABSTRACTDATASOURCE;
     - Current column values in query results iterated with SQLStatement::next() as above can also be dereferenced directly from the SQLStatement object by using the column name in lower case as a member name (using SQLStatement::memberGate(), see that method for an example)
     - Query results can also be returned in blocks using SQLStatement::fetchRows(), SQLStatement::fetchColumns(), and SQLStatement::fetchColumnar() ("rows" and "columns" in this case refer to the output data format; also using these methods there is no need to call SQLStatement::next())
     - When using an SQLStatement object with a DatasourcePool, the statement will be automatically closed when the connection is returned to the pool (for example, by committing or rolling back the transaction).
+    - In a child process created with @ref Qore::fork() "fork()", a statement that the parent prepared or executed is
+      given up without being closed on the server: closing or destroying it does not call the driver, and using it
+      prepares it again with a new connection, unless its connection was in a transaction of the parent, which raises
+      a \c DATASOURCE-FORK-ERROR exception; see @ref datasource_fork
 
     The following methods are useful when executing all statements:
     - SQLStatement::prepare()

@@ -638,6 +638,16 @@
     closes one end while it still uses the descriptor elsewhere, for example through a descriptor number given to
     another API, must keep the object open as long as the descriptor is used.
 
+    @par Child Processes Do Not Use the Database Connections of Their Parent
+    A child process created with @ref Qore::fork() "fork()" gives up the connections of the
+    @ref Qore::SQL::Datasource "Datasource", @ref Qore::SQL::DatasourcePool "DatasourcePool" and
+    @ref Qore::SQL::SQLStatement "SQLStatement" objects that it inherits, since their database sessions belong to the
+    parent: it opens new connections when it uses these objects, and an action that would continue a transaction of
+    the parent raises the new \c DATASOURCE-FORK-ERROR exception.  Code that continued a transaction of the parent
+    in a child, using the parent's session, must start its own transaction on a new connection instead.  The memory
+    that the drivers use for the inherited connections stays allocated until the child ends.  See
+    @ref datasource_fork.
+
     @par Binary Modules Implement Module API 2.0
     %Qore implements version 2.0 of the binary module API (%Qore 2.2 implemented 1.4), so every external binary
     module must be rebuilt for this version:
@@ -4809,6 +4819,17 @@ while (*binary chunk = input.read(65536)) {
       \c fork(); the child gets a consistent copy of the environment without it.  Binary modules can register fork
       handlers for their own process-wide locks with the new C++ API function \c qore_register_fork_handler(); the
       \c i18n, \c linenoise, \c logger_bin, \c ml and \c sshutil modules do, so that a child process can use them
+    - Fixed child processes created with @ref Qore::fork() "fork()" that ended or changed the database sessions of
+      their parent: a child that closed or destroyed a @ref Qore::SQL::Datasource "Datasource",
+      @ref Qore::SQL::DatasourcePool "DatasourcePool" or @ref Qore::SQL::SQLStatement "SQLStatement" that it had
+      inherited, also when its program ended, rolled back, closed the statements of or logged off the parent's
+      session, so that the parent lost its connection, its transaction or its open cursors, or crashed, and a child
+      that used an inherited object used the parent's session.  A child that used a
+      %Datasource whose transaction lock another thread of the parent held waited for the transaction lock timeout
+      (120 seconds by default) and raised \c TRANSACTION-LOCK-TIMEOUT.  A child now gives up the connections that
+      it inherits without sending anything on them and opens new connections when it needs them; an action that
+      would continue a transaction of the parent raises \c DATASOURCE-FORK-ERROR at once.  Database drivers need no
+      changes for this; see @ref datasource_fork
     - Fixed the count of active exceptions when binary modules hand exceptions between threads: an exception
       assimilated by \c ExceptionSink::assimilate() from a sink marked with \c ExceptionSink::markExternallyManaged()
       was not counted on the thread that adopted it, so a later assimilation of that sink (for example across the

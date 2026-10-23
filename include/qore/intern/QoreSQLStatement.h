@@ -35,6 +35,8 @@
 #include "qore/intern/sql_statement_private.h"
 
 #include "qore/intern/DatasourceStatementHelper.h"
+#include "qore/intern/DbiForkRegistry.h"
+#include "qore/intern/QoreForkHandlers.h"
 
 #include <atomic>
 
@@ -46,7 +48,7 @@
 class DBActionHelper;
 class QoreColumnarResult;
 
-class QoreSQLStatement : public AbstractPrivateData, public SQLStatement {
+class QoreSQLStatement : public AbstractPrivateData, public SQLStatement, public QoreDbiForkObject {
     friend class DBActionHelper;
 
 protected:
@@ -74,6 +76,11 @@ protected:
     bool raw = false;
     // valid flag; changed by the thread that uses the statement, and read by any thread with valid(), so atomic
     std::atomic<bool> validp{false};
+    //! the fork generation of the process that the driver data belongs to; see dropInheritedData()
+    /** Set when the statement is prepared, by the thread that holds its connection, and when inherited data is
+        dropped; read by every action of any thread, so atomic
+    */
+    std::atomic<unsigned> data_generation{0};
 
     DLLLOCAL int checkStatus(ExceptionSink* xsink, DBActionHelper& dba, int stat, const char* action);
 
@@ -85,7 +92,9 @@ protected:
     DLLLOCAL int prepareArgs(bool n_raw, const QoreString& n_str, const QoreListNode* args, ExceptionSink* xsink);
 
 public:
-    DLLLOCAL QoreSQLStatement(DatasourceStatementHelper* dsh) : dsh(dsh->helperRefSelf()) {
+    DLLLOCAL QoreSQLStatement(DatasourceStatementHelper* dsh) : dsh(dsh->helperRefSelf()),
+            data_generation(qore_fork_get_generation()) {
+        forkRegister();
     }
 
     DLLLOCAL QoreSQLStatement(Datasource* ds, void* data, DatasourceStatementHelper* dsh, unsigned char status);
@@ -134,6 +143,20 @@ public:
 
     // called by the datasource object if the connection is lost or the transaction has been committed or rolled back
     DLLLOCAL void transactionDone(bool clear, bool close, ExceptionSink* xsink);
+
+    //! gives up driver data that belongs to a connection of an ancestor process, in a child created with fork()
+    /** The data belongs to the connection that the statement was prepared on, which this process gave up without
+        calling the driver (see qore_ds_private::abandon()): it is given up the same way, the statement leaves that
+        connection, and it is prepared again on its next use
+
+        @return true if the data was given up
+    */
+    DLLLOCAL bool dropInheritedData();
+
+    //! initializes the statement's lock again in a child process created with fork(); see QoreDbiForkObject
+    DLLLOCAL void forkChild() noexcept override {
+        stmt_lock.reinitAfterFork();
+    }
 
     DLLLOCAL QoreStringNode* getSQL(ExceptionSink* xsink);
 };

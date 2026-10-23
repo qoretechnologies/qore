@@ -39,6 +39,8 @@
 #include "qore/intern/QoreSQLStatement.h"
 #include "qore/intern/DatasourceStatementHelper.h"
 #include "qore/intern/SqlMutationContext.h"
+#include "qore/intern/DbiForkRegistry.h"
+#include "qore/intern/QoreForkHandlers.h"
 
 #include <atomic>
 #include <map>
@@ -50,7 +52,7 @@
 typedef std::set<QoreSQLStatement*> stmt_set_t;
 typedef std::vector<std::pair<std::string, const QoreTypeInfo*>> qore_dbi_typed_result_members_t;
 
-struct qore_ds_private {
+struct qore_ds_private : public QoreDbiForkObject {
     // mutex
     mutable QoreThreadLock m;
 
@@ -74,6 +76,14 @@ struct qore_ds_private {
     bool mutation_conn_lost = false;
     //! true while the driver owns an active native bulk-load protocol session
     bool bulk_load_active = false;
+    //! the fork generation of the process that opened the connection (see qore_fork_get_generation()); see
+    //! isInherited()
+    unsigned open_generation = 0;
+    //! why the next action that uses the connection raises \c DATASOURCE-FORK-ERROR, or nullptr
+    /** In a child process created with fork(): a transaction of the parent that was given up by an action that did
+        not use the connection (see QoreDbiForkCheck::Defer); see raiseForkLostTransaction()
+    */
+    std::atomic<const char*> fork_lost_tx{nullptr};
 
     mutable DBIDriver* dsl;
     const QoreEncoding* qorecharset = QCS_DEFAULT;
@@ -153,6 +163,7 @@ struct qore_ds_private {
 
     DLLLOCAL qore_ds_private(Datasource* n_ds, DBIDriver* ndsl, DatasourceStatementHelper* dsh) : ds(n_ds),
             dsl(ndsl), opt(new QoreHashNode(autoTypeInfo)), dsh(dsh) {
+        forkRegister();
     }
 
     DLLLOCAL qore_ds_private(const qore_ds_private& old, Datasource* n_ds, DatasourceStatementHelper* dsh) :
@@ -166,9 +177,11 @@ struct qore_ds_private {
             event_arg(old.event_arg.refSelf()),
             mutation_ctx(old.getMutationCtx() ? old.getMutationCtx()->refSelf() : nullptr),
             dsh(dsh) {
+        forkRegister();
     }
 
     DLLLOCAL ~qore_ds_private() {
+        forkUnregister();
         assert(!private_data);
         assert(stmt_set.empty());
         // the driver data of destroyed statements is closed with the connection
@@ -186,6 +199,82 @@ struct qore_ds_private {
             ctx->deref(&xsink);
         }
     }
+
+    //! initializes the lock again in a child process created with fork(); see QoreDbiForkObject
+    DLLLOCAL void forkChild() noexcept override {
+        m.reinitAfterFork();
+    }
+
+    //! returns true if the connection is open and was opened by an ancestor of this process
+    /** This is a child process created with fork(): the connection's session belongs to the process that opened
+        it, which shares its network connection (see abandon())
+    */
+    DLLLOCAL bool isInherited() const {
+        return isopen && open_generation != qore_fork_get_generation();
+    }
+
+    //! gives up a connection that an ancestor of this process opened; see isInherited()
+    /** The connection's session belongs to the process that opened it, which shares its network connection: the
+        driver is not called (no rollback, no statement close, no logoff), so that the parent's session is not
+        changed, and the driver data of the connection and of its statements is given up (it is freed when the
+        process ends; see qore_dbi_keep_abandoned()).  The statement set and the placeholders of destroyed statements
+        are replaced without being traversed, as a thread of the parent can have been changing them when the process
+        was copied; the statements drop their inherited driver data themselves (see
+        QoreSQLStatement::dropInheritedData()).
+
+        The datasource is closed afterwards, with no transaction in progress.
+    */
+    DLLLOCAL void abandon();
+
+    //! gives up an inherited connection; a transaction in progress is raised by the next action that uses the
+    //! connection (see raiseForkLostTransaction())
+    DLLLOCAL void abandonInherited() {
+        assert(isInherited());
+        if (inTransaction()) {
+            setForkLostTransaction(QoreDbiForkReasonTransaction);
+        }
+        abandon();
+    }
+
+    //! records a transaction of the parent that was given up, for the next action that uses the connection
+    /** The first reason is kept.
+    */
+    DLLLOCAL void setForkLostTransaction(const char* reason) {
+        const char* none = nullptr;
+        fork_lost_tx.compare_exchange_strong(none, reason, std::memory_order_relaxed);
+    }
+
+    //! forgets a transaction of the parent that was given up; the connection is closed or destroyed
+    DLLLOCAL void clearForkLostTransaction() {
+        fork_lost_tx.store(nullptr, std::memory_order_relaxed);
+    }
+
+    //! raises \c DATASOURCE-FORK-ERROR once for a transaction of the parent that was given up
+    /** @return 0 if no transaction was given up, -1 if an exception was raised
+    */
+    DLLLOCAL int raiseForkLostTransaction(ExceptionSink* xsink) {
+        if (!fork_lost_tx.load(std::memory_order_relaxed)) {
+            return 0;
+        }
+        const char* reason = fork_lost_tx.exchange(nullptr, std::memory_order_relaxed);
+        if (!reason) {
+            return 0;
+        }
+        qore_dbi_raise_fork_error(xsink, *ds, reason);
+        return -1;
+    }
+
+    //! gives up an inherited connection before it is used; see isInherited()
+    /** For an action that uses the connection; a ManagedDatasource and a DatasourcePool give up their inherited
+        connections before their actions themselves (except for actions that use no connection, which leave it to the
+        Datasource method).  An inherited connection is given up, and a new one is opened for the action, unless the
+        connection was in a transaction, which belongs to the process that opened it: then \c DATASOURCE-FORK-ERROR
+        is raised, as it is for a transaction that an earlier action gave up (see raiseForkLostTransaction()); the
+        datasource is closed then, so a later action opens a new connection
+
+        @return 0 if the action can use the connection, -1 if an exception was raised
+    */
+    DLLLOCAL int forkCheck(ExceptionSink* xsink);
 
     //! returns the mutation observer context or nullptr; this is the fast-path accessor
     DLLLOCAL SqlMutationContext* getMutationCtx() const {
@@ -580,6 +669,14 @@ struct qore_ds_private {
     */
     DLLLOCAL int close(ExceptionSink* xsink) {
         assert(xsink);
+        // a transaction of the parent of a child process created with fork() ends with the connection without an
+        // error
+        clearForkLostTransaction();
+        if (isInherited()) {
+            // the connection belongs to the process that opened it: nothing is sent on it
+            abandon();
+            return 0;
+        }
         if (isopen) {
             //printd(5, "qore_ds_private::close() this: %p in_transaction: %d active_transaction: %d\n", this, in_transaction, active_transaction);
             if (bulk_load_active && !connection_aborted) {

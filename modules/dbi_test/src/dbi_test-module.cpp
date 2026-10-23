@@ -41,9 +41,13 @@
 #include <qore/SQLStatement.h>
 
 #include <atomic>
+#include <condition_variable>
 #include <cstring>
 #include <memory>
+#include <mutex>
 #include <string>
+
+#include <unistd.h>
 
 #ifndef PACKAGE_VERSION
 #define PACKAGE_VERSION "1.0"
@@ -66,6 +70,9 @@
 //! driver option returning the number of statements closed in the process, and how many of them in another thread
 //! than the thread that prepared them
 #define DBITEST_OPT_STMT_CLOSE_STATS "stmt-close-stats"
+//! driver option: if True, its value is the identifier of the connection, which is unique in the process and in its
+//! children; otherwise it has no value, so that the configuration of a datasource does not depend on its connection
+#define DBITEST_OPT_SESSION "session"
 
 static DBIDriver* DBID_DBITEST = nullptr;
 static DBIDriver* DBID_DBITEST_NO_BULK = nullptr;
@@ -82,12 +89,92 @@ static std::atomic<int64> dbitest_live_connections(0);
 static std::atomic<int64> dbitest_stmt_closes(0);
 //! the number of statements closed in another thread than the one that prepared them
 static std::atomic<int64> dbitest_foreign_stmt_closes(0);
+//! the last connection identifier assigned; see DbiTestConn::id
+static std::atomic<int64> dbitest_last_session(0);
+
+//! the calls of the driver in the process, for the tests of child processes created with fork()
+/** A call is "inherited" when it uses a connection or a statement that another process opened or prepared: the
+    parent of a child process created with fork(), whose session the child must not change
+*/
+struct DbiTestCallStats {
+    std::atomic<int64> opens{0};
+    std::atomic<int64> closes{0};
+    std::atomic<int64> commits{0};
+    std::atomic<int64> rollbacks{0};
+    std::atomic<int64> stmt_closes{0};
+    //! calls with a connection or a statement of another process
+    std::atomic<int64> inherited_calls{0};
+};
+static DbiTestCallStats dbitest_calls;
+
+//! a gate that holds the next connection open in the driver, so that a test can fork while a thread is opening a
+//! connection (and holds the lock of its datasource); see f_dbitest_block_next_open()
+class DbiTestOpenGate {
+public:
+    //! makes the next open wait until release() is called
+    void arm() {
+        std::lock_guard<std::mutex> lck(m);
+        armed = true;
+        entered = false;
+        released = false;
+    }
+
+    //! called by the open method: waits if the gate is armed
+    void pass() {
+        std::unique_lock<std::mutex> lck(m);
+        if (!armed) {
+            return;
+        }
+        armed = false;
+        entered = true;
+        cond.notify_all();
+        while (!released) {
+            cond.wait(lck);
+        }
+    }
+
+    //! waits until an open is waiting at the gate
+    void waitEntered() {
+        std::unique_lock<std::mutex> lck(m);
+        while (!entered) {
+            cond.wait(lck);
+        }
+    }
+
+    //! lets the waiting open continue
+    void release() {
+        std::lock_guard<std::mutex> lck(m);
+        released = true;
+        cond.notify_all();
+    }
+
+private:
+    std::mutex m;
+    std::condition_variable cond;
+    bool armed = false;
+    bool entered = false;
+    bool released = false;
+};
+//! never destroyed: a child process created with fork() while a thread of the parent waits at the gate must not wait
+//! for that thread when it destroys the condition at its exit
+static DbiTestOpenGate& dbitest_open_gate = *new DbiTestOpenGate;
+
+//! the statistics written by the module's delete function; see dbitest_report_at_exit()
+static int dbitest_report_fd = -1;
+static int64 dbitest_report_base[6];
 
 class DbiTestConn {
 public:
     DLLLOCAL DbiTestConn() {
         ++dbitest_live_connections;
     }
+
+    //! the process that opened the connection
+    pid_t pid = getpid();
+    //! the identifier of the connection's session
+    int64 id = ++dbitest_last_session;
+    //! if the identifier is the value of the session option; see DBITEST_OPT_SESSION
+    bool report_session = false;
 
     DLLLOCAL ~DbiTestConn() {
         --dbitest_live_connections;
@@ -164,10 +251,17 @@ public:
     bool fail_close = false;
     //! the thread that prepared the statement, which holds its connection
     int prepare_tid = 0;
+    //! the process that prepared the statement
+    pid_t pid = getpid();
 };
 
 static DbiTestConn* get_conn(Datasource* ds) {
-    return reinterpret_cast<DbiTestConn*>(ds->getPrivateData());
+    DbiTestConn* conn = reinterpret_cast<DbiTestConn*>(ds->getPrivateData());
+    // every call that uses a connection gets it here
+    if (conn && conn->pid != getpid()) {
+        ++dbitest_calls.inherited_calls;
+    }
+    return conn;
 }
 
 //! returns the canned result set as a hash of column lists
@@ -258,13 +352,16 @@ static int dbitest_run_copy(Datasource* ds, int64 total_bytes, int64 chunk, Exce
 /* ------------------------------------------------------------------------- connection methods */
 
 static int dbitest_open(Datasource* ds, ExceptionSink* xsink) {
+    dbitest_open_gate.pass();
     assert(!ds->getPrivateData());
     ds->setPrivateData(new DbiTestConn);
+    ++dbitest_calls.opens;
     return 0;
 }
 
 //! the close method of drivers that cannot report an error
 static int dbitest_close(Datasource* ds) {
+    ++dbitest_calls.closes;
     DbiTestConn* conn = get_conn(ds);
     ds->setPrivateData(nullptr);
     delete conn;
@@ -277,6 +374,7 @@ static int dbitest_close(Datasource* ds) {
     when an error is reported.
 */
 static int dbitest_close_sink(Datasource* ds, ExceptionSink* xsink) {
+    ++dbitest_calls.closes;
     std::unique_ptr<DbiTestConn> conn(get_conn(ds));
     ds->setPrivateData(nullptr);
     if (conn && conn->faultIs("close")) {
@@ -373,6 +471,7 @@ static QoreValue dbitest_execraw(Datasource* ds, const QoreString* str, Exceptio
 }
 
 static int dbitest_commit(Datasource* ds, ExceptionSink* xsink) {
+    ++dbitest_calls.commits;
     DbiTestConn* conn = get_conn(ds);
     ++conn->commits;
     ++conn->calls;
@@ -389,6 +488,7 @@ static int dbitest_commit(Datasource* ds, ExceptionSink* xsink) {
 }
 
 static int dbitest_rollback(Datasource* ds, ExceptionSink* xsink) {
+    ++dbitest_calls.rollbacks;
     DbiTestConn* conn = get_conn(ds);
     ++conn->calls;
     if (conn->faultIs("rollback")) {
@@ -573,6 +673,10 @@ static int dbitest_opt_set(Datasource* ds, const char* opt, const QoreValue val,
         conn->rows = val.getAsBigInt();
         return 0;
     }
+    if (!strcmp(opt, DBITEST_OPT_SESSION)) {
+        conn->report_session = val.getAsBool();
+        return 0;
+    }
     if (!strcmp(opt, DBITEST_OPT_STREAM_CHUNK)) {
         conn->stream_chunk = val.getAsBigInt();
         return 0;
@@ -610,6 +714,9 @@ static QoreValue dbitest_opt_get(const Datasource* ds, const char* opt) {
     if (!strcmp(opt, DBITEST_OPT_FAULT)) {
         return new QoreStringNode(conn->fault);
     }
+    if (!strcmp(opt, DBITEST_OPT_SESSION)) {
+        return conn->report_session ? QoreValue(conn->id) : QoreValue();
+    }
     if (!strcmp(opt, DBITEST_OPT_ROWS)) {
         return conn->rows;
     }
@@ -634,7 +741,12 @@ static QoreValue dbitest_opt_get(const Datasource* ds, const char* opt) {
 /* -------------------------------------------------------------------------- statement methods */
 
 static DbiTestStmt* get_stmt(SQLStatement* stmt) {
-    return reinterpret_cast<DbiTestStmt*>(stmt->getPrivateData());
+    DbiTestStmt* s = reinterpret_cast<DbiTestStmt*>(stmt->getPrivateData());
+    // every call that uses a statement gets it here
+    if (s && s->pid != getpid()) {
+        ++dbitest_calls.inherited_calls;
+    }
+    return s;
 }
 
 static int dbitest_stmt_prepare(SQLStatement* stmt, const QoreString& str, const QoreListNode* args,
@@ -742,6 +854,7 @@ static int dbitest_stmt_close(SQLStatement* stmt, ExceptionSink* xsink) {
     std::unique_ptr<DbiTestStmt> s(get_stmt(stmt));
     stmt->setPrivateData(nullptr);
     ++dbitest_stmt_closes;
+    ++dbitest_calls.stmt_closes;
     if (s && s->prepare_tid != q_gettid()) {
         ++dbitest_foreign_stmt_closes;
     }
@@ -833,9 +946,80 @@ static void dbitest_add_methods(qore_dbi_method_list& methods, bool bulk_load, b
     methods.registerOption(DBITEST_OPT_STMT_CLOSE_STATS, "the number of statements closed in the process "
         "(\"closes\"), and how many of them were closed in another thread than the thread that prepared them "
         "(\"foreign_closes\")");
+    methods.registerOption(DBITEST_OPT_SESSION, "if True, the value is the identifier of the connection's session, "
+        "unique in the process and its children", boolTypeInfo);
+}
+
+//! the module's namespace, for the tests of child processes created with fork()
+static QoreNamespace DbiTestNS("Qore::DbiTest");
+
+//! returns the calls of the driver in the process
+static QoreHashNode* dbitest_get_call_stats_hash() {
+    ReferenceHolder<QoreHashNode> h(new QoreHashNode(bigIntTypeInfo), nullptr);
+    h->setKeyValue("opens", dbitest_calls.opens.load(), nullptr);
+    h->setKeyValue("closes", dbitest_calls.closes.load(), nullptr);
+    h->setKeyValue("commits", dbitest_calls.commits.load(), nullptr);
+    h->setKeyValue("rollbacks", dbitest_calls.rollbacks.load(), nullptr);
+    h->setKeyValue("stmt_closes", dbitest_calls.stmt_closes.load(), nullptr);
+    h->setKeyValue("inherited_calls", dbitest_calls.inherited_calls.load(), nullptr);
+    return h.release();
+}
+
+//! Qore::DbiTest::get_call_stats(): returns the driver calls made in the process
+/** The keys are \c opens, \c closes, \c commits, \c rollbacks, \c stmt_closes and \c inherited_calls (calls
+    with a connection or a statement of another process); a child process created with fork() starts with the counts
+    of its parent
+*/
+static QoreValue f_dbitest_get_call_stats(const QoreListNode* args, RuntimeConfig& rc, ExceptionSink* xsink) {
+    return dbitest_get_call_stats_hash();
+}
+
+//! Qore::DbiTest::report_at_exit(int fd): the module's delete function writes the calls made from now on to fd
+/** For a child process created with fork() that ends its script: the delete function of the module runs when the
+    process ends, after its Programs, with their datasources, were destroyed.  The line written is
+    "opens=N closes=N commits=N rollbacks=N stmt_closes=N inherited_calls=N"
+*/
+static QoreValue f_dbitest_report_at_exit(const QoreListNode* args, RuntimeConfig& rc, ExceptionSink* xsink) {
+    dbitest_report_fd = (int)get_param_value(args, 0).getAsBigInt();
+    dbitest_report_base[0] = dbitest_calls.opens.load();
+    dbitest_report_base[1] = dbitest_calls.closes.load();
+    dbitest_report_base[2] = dbitest_calls.commits.load();
+    dbitest_report_base[3] = dbitest_calls.rollbacks.load();
+    dbitest_report_base[4] = dbitest_calls.stmt_closes.load();
+    dbitest_report_base[5] = dbitest_calls.inherited_calls.load();
+    return QoreValue();
+}
+
+//! Qore::DbiTest::block_next_open(): the next connection opened by the driver waits until release_open() is called
+static QoreValue f_dbitest_block_next_open(const QoreListNode* args, RuntimeConfig& rc, ExceptionSink* xsink) {
+    dbitest_open_gate.arm();
+    return QoreValue();
+}
+
+//! Qore::DbiTest::wait_open_blocked(): waits until a connection waits in the driver after block_next_open()
+static QoreValue f_dbitest_wait_open_blocked(const QoreListNode* args, RuntimeConfig& rc, ExceptionSink* xsink) {
+    dbitest_open_gate.waitEntered();
+    return QoreValue();
+}
+
+//! Qore::DbiTest::release_open(): lets the connection that waits in the driver open
+static QoreValue f_dbitest_release_open(const QoreListNode* args, RuntimeConfig& rc, ExceptionSink* xsink) {
+    dbitest_open_gate.release();
+    return QoreValue();
 }
 
 static void dbitest_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
+    DbiTestNS.addBuiltinVariant("get_call_stats", f_dbitest_get_call_stats, QCF_NO_FLAGS, QDOM_DATABASE,
+        hashTypeInfo);
+    DbiTestNS.addBuiltinVariant("report_at_exit", f_dbitest_report_at_exit, QCF_NO_FLAGS, QDOM_DATABASE,
+        nothingTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "fd");
+    DbiTestNS.addBuiltinVariant("block_next_open", f_dbitest_block_next_open, QCF_NO_FLAGS, QDOM_DATABASE,
+        nothingTypeInfo);
+    DbiTestNS.addBuiltinVariant("wait_open_blocked", f_dbitest_wait_open_blocked, QCF_NO_FLAGS, QDOM_DATABASE,
+        nothingTypeInfo);
+    DbiTestNS.addBuiltinVariant("release_open", f_dbitest_release_open, QCF_NO_FLAGS, QDOM_DATABASE,
+        nothingTypeInfo);
+
     qore_dbi_method_list methods;
     dbitest_add_methods(methods, true, true);
 
@@ -860,9 +1044,27 @@ static void dbitest_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink
 }
 
 static void dbitest_module_ns_init(QoreNamespace* rns, QoreNamespace* qns, ExceptionSink& xsink) {
+    qns->addNamespace(DbiTestNS.copy());
 }
 
 static void dbitest_module_delete() {
+    if (dbitest_report_fd < 0) {
+        return;
+    }
+    char buf[256];
+    int len = snprintf(buf, sizeof(buf), "opens=%lld closes=%lld commits=%lld rollbacks=%lld stmt_closes=%lld "
+        "inherited_calls=%lld\n",
+        (long long)(dbitest_calls.opens.load() - dbitest_report_base[0]),
+        (long long)(dbitest_calls.closes.load() - dbitest_report_base[1]),
+        (long long)(dbitest_calls.commits.load() - dbitest_report_base[2]),
+        (long long)(dbitest_calls.rollbacks.load() - dbitest_report_base[3]),
+        (long long)(dbitest_calls.stmt_closes.load() - dbitest_report_base[4]),
+        (long long)(dbitest_calls.inherited_calls.load() - dbitest_report_base[5]));
+    if (len > 0) {
+        ssize_t rc = write(dbitest_report_fd, buf, len);
+        (void)rc;
+    }
+    dbitest_report_fd = -1;
 }
 
 extern "C" DLLEXPORT void dbitest_qore_module_desc(QoreModuleInfo& mod_info) {

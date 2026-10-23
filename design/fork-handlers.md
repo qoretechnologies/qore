@@ -62,7 +62,7 @@ cannot deadlock with a thread that keeps to the order.
 | 510 | condition waker (`cond_waker.lck`) | ACQUIRE | — |
 | 520 | stack lock (`stack_lck`) | ACQUIRE | — (only `pthread_create()`) |
 | 900 | AOT PC map attach lock (`g_aot_pc_attach_lock`) | ACQUIRE | AOT PC map lock, environment |
-| 1000 | leaf locks: caches and registries (among them the JIT caches and queue, the AOT PC map, the AOT pending constants, the AOT regex cache, the content hashes of the sources of linked AOT modules, and the QUIC idle-close test hook of debug builds), and the leaf locks of modules (`QFR_MODULE_LEAF`: the i18n locale data fallbacks, the logger_bin event start time and id sequence, the ml ONNX provider list) | ACQUIRE | environment, debug output, allocation tracking |
+| 1000 | leaf locks: caches and registries (among them the JIT caches and queue, the AOT PC map, the AOT pending constants, the AOT regex cache, the content hashes of the sources of linked AOT modules, the DBI object registry, and the QUIC idle-close test hook of debug builds), and the leaf locks of modules (`QFR_MODULE_LEAF`: the i18n locale data fallbacks, the logger_bin event start time and id sequence, the ml ONNX provider list) | ACQUIRE | environment, debug output, allocation tracking |
 | 1500 | environment (`SystemEnvironment`) | ACQUIRE | debug output, allocation tracking |
 | 1900 | debug output (`printd()`) | ACQUIRE | allocation tracking |
 | 1950 | allocation tracking (only with `ENABLE_ALLOC_TRACKING`) | ACQUIRE | — |
@@ -199,10 +199,16 @@ Besides the locks:
   environment and creates descriptors). A reference to the parent's controller raises `ASYNC-IO-ERROR` in
   the child.
 
+- **Database connections**: the locks of every `Datasource`, `DatasourcePool` and `SQLStatement` are initialized
+  again by the child handler of the DBI object registry, and the connections and statements of the parent are given
+  up without calling the drivers, so that the child neither uses nor ends the parent's sessions; see
+  `design/dbi-fork.md`.
+
 ## What is not covered
 
 - Per-object locks that a thread of the parent held at the moment of the fork: object r-sections, variable locks,
-  socket, queue and mutex objects, namespaces. A child that uses such an object waits forever, as before.
+  socket, queue and mutex objects, namespaces. A child that uses such an object waits forever, as before. The locks
+  of the DBI objects are the exception (see "What the child repairs").
 - Locks of third-party libraries (OpenSSL, LLVM, PCRE2, c-ares) and of the C++ runtime (the guard of a function-local
   static that another thread was initializing, for the statics that do not read the environment, and the per-object
   once flags of IR lowering).

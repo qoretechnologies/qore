@@ -1044,6 +1044,11 @@ if (pid = fork()) {
       used in the child
     - in a child process created while another thread was compiling code to native code, code is not compiled to
       native code and runs in the IR tier
+    - the database connections of the parent (of @ref Qore::SQL::Datasource "Datasource",
+      @ref Qore::SQL::DatasourcePool "DatasourcePool" and @ref Qore::SQL::SQLStatement "SQLStatement" objects) are
+      given up in the child without changing the parent's sessions, and the child opens new connections when it uses
+      these objects; an action that would continue a transaction of the parent raises \c DATASOURCE-FORK-ERROR (see
+      @ref datasource_fork)
     - on some platforms, after a fork(), the only safe call is @ref exec(), many system calls are not async-signal
       safe, including pthread_create() which is used to start new threads; on these platforms, the %Qore process will
       crash if unsafe operations are called after a fork()

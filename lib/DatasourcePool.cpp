@@ -31,6 +31,7 @@
 #include <qore/Qore.h>
 #include "qore/intern/DatasourcePool.h"
 #include "qore/intern/qore_ds_private.h"
+#include <algorithm>
 #include <memory>
 
 DatasourcePoolActionHelper::~DatasourcePoolActionHelper() {
@@ -116,12 +117,15 @@ DatasourcePool::DatasourcePool(ExceptionSink* xsink, DBIDriver* ndsl, const char
 
     assert(!(a && !q));
 
+    std::fill(tid_list, tid_list + mx, 0);
+
     // create minimum datasources if possible
     printd(5, "DatasourcePool::DatasourcePool(driver: %p user: %s pass: %s db: %s charset: %s host: %s min: %d max: %d port: %d) pool: %p\n",
             ndsl, user ? user : "(null)", pass ? pass : "(null)", db ? db : "(null)", charset ? charset : "(null)",
             hostname ? hostname : "(null)", min, max, port, pool);
 
     init(xsink);
+    forkRegister();
 }
 
 DatasourcePool::DatasourcePool(const DatasourcePool& old, ExceptionSink* xsink) :
@@ -146,12 +150,15 @@ DatasourcePool::DatasourcePool(const DatasourcePool& old, CopyLock&& lock, Excep
     callback_arg(old.callback_arg.refSelf()),
     config(old.config),
     valid(false) {
+    std::fill(tid_list, tid_list + old.max, 0);
     // the connections of the copy are opened without the lock of the pool that was copied
     lock.unlock();
     init(xsink);
+    forkRegister();
 }
 
 DatasourcePool::~DatasourcePool() {
+    forkUnregister();
     //printd(5, "DatasourcePool::~DatasourcePool() this: %p\n", this);
     for (unsigned i = 0; i < cmax; ++i)
         delete pool[i];
@@ -195,11 +202,79 @@ void DatasourcePool::init(ExceptionSink* xsink) {
     valid = true;
 }
 
+int DatasourcePool::forkCheckUnlocked(ExceptionSink* xsink, QoreDbiForkCheck mode, bool remove_resource) {
+    const unsigned gen = qore_fork_get_generation();
+    const int tid = q_gettid();
+    if (fork_generation == gen) {
+        // a transaction of the parent that an action without a connection gave up
+        if (fork_lost_tx_tid && mode != QoreDbiForkCheck::Defer) {
+            const bool raise = mode == QoreDbiForkCheck::Raise && fork_lost_tx_tid == tid;
+            if (raise || mode == QoreDbiForkCheck::Discard) {
+                fork_lost_tx_tid = 0;
+            }
+            if (raise) {
+                qore_dbi_raise_fork_error(xsink, *pool[0], QoreDbiForkReasonPoolTransaction);
+                return -1;
+            }
+        }
+        return 0;
+    }
+    fork_generation = gen;
+    bool held = false;
+    bool in_transaction = false;
+    for (unsigned i = 0; i < cmax; ++i) {
+        if (tid_list[i] == tid) {
+            held = true;
+            in_transaction = pool[i]->isInTransaction();
+        }
+        tid_list[i] = 0;
+        qore_ds_private* priv = qore_ds_private::get(*pool[i]);
+        if (priv->isInherited()) {
+            // the transaction state of a connection is the pool's: it is the state of the thread that held it
+            priv->abandon();
+        }
+    }
+    // the allocations of the parent's threads are forgotten; the containers are replaced without being traversed
+    if (!tmap.empty()) {
+        std::unique_ptr<thread_use_t> old(new thread_use_t);
+        old->swap(tmap);
+        qore_dbi_keep_abandoned(old.release());
+    }
+    if (!free_list.empty()) {
+        std::unique_ptr<free_list_t> old(new free_list_t);
+        old->swap(free_list);
+        qore_dbi_keep_abandoned(old.release());
+    }
+    for (unsigned i = 0; i < cmax; ++i) {
+        free_list.push_back(i);
+    }
+    if (held && remove_resource) {
+        // the resource that the forking thread registered in the parent would end the parent's transaction
+        remove_thread_resource(this);
+    }
+    if (in_transaction) {
+        if (mode == QoreDbiForkCheck::Raise) {
+            qore_dbi_raise_fork_error(xsink, *pool[0], QoreDbiForkReasonPoolTransaction);
+            return -1;
+        }
+        if (mode == QoreDbiForkCheck::Defer) {
+            fork_lost_tx_tid = tid;
+        }
+    }
+    return 1;
+}
+
 void DatasourcePool::cleanup(ExceptionSink* xsink) {
    int tid = q_gettid();
 
    // thread must have a Datasource allocated
    SafeLocker sl((QoreThreadLock *)this);
+   // in a child process created with fork(), the connection that the thread held in the parent is given up: its
+   // transaction belongs to the parent, so nothing is rolled back (the thread resource is being run, so it is not
+   // removed)
+   if (forkCheckUnlocked(xsink, QoreDbiForkCheck::Discard, false)) {
+       return;
+   }
    thread_use_t::iterator i = tmap.find(tid);
    assert(i != tmap.end());
    sl.unlock();
@@ -219,6 +294,7 @@ void DatasourcePool::cleanup(ExceptionSink* xsink) {
    // grab lock to add to free list and erase thread map entry
    sl.lock();
    free_list.push_back(i->second);
+   tid_list[i->second] = 0;
    // erase thread map entry
    tmap.erase(i);
    // signal any waiting threads
@@ -229,6 +305,10 @@ void DatasourcePool::cleanup(ExceptionSink* xsink) {
 void DatasourcePool::destructor(ExceptionSink* xsink) {
     //printd(5, "DatasourcePool::destructor() this: %p\n", this);
     SafeLocker sl((QoreThreadLock*)this);
+
+    // in a child process created with fork(), the connections of the parent are given up first: nothing is rolled
+    // back or sent on them
+    forkCheckUnlocked(xsink, QoreDbiForkCheck::Discard);
 
     // mark object as invalid in case any threads are waiting on a free Datasource
     valid = false;
@@ -303,6 +383,7 @@ void DatasourcePool::freeDS(ExceptionSink* xsink) {
    thread_use_t::iterator i = tmap.find(tid);
    assert(!pool[i->second]->isInTransaction());
    free_list.push_back(i->second);
+   tid_list[i->second] = 0;
 
    // issue 1250: close any other statements created on this datasource
    qore_ds_private::get(*pool[i->second])->transactionDone(true, true, xsink);
@@ -355,11 +436,18 @@ Datasource* DatasourcePool::getDS(bool &new_ds, ExceptionSink* xsink) {
 
 Datasource* DatasourcePool::findAllocatedDS() {
     SafeLocker sl((QoreThreadLock*)this);
+    // in a child process created with fork(), the connections of the parent are given up first
+    {
+        // (a transaction of the parent is raised by the next action that uses a connection)
+        forkCheckUnlocked(nullptr, QoreDbiForkCheck::Defer);
+    }
     thread_use_t::iterator i = tmap.find(q_gettid());
     return i == tmap.end() ? nullptr : pool[i->second];
 }
 
 void DatasourcePool::closeConnections(ExceptionSink* xsink) {
+    // in a child process created with fork(), the connections of the parent are given up: nothing is sent on them
+    forkCheck(xsink, QoreDbiForkCheck::Discard);
     // no other reference to the pool exists, so no thread can hold or allocate a connection
     for (unsigned i = 0; i < cmax; ++i) {
         // an error closing a connection is raised, and the others are still closed
@@ -413,6 +501,12 @@ Datasource* DatasourcePool::getDSIntern(bool& new_ds, int64& wait_total, Excepti
     Datasource* ds;
 
     SafeLocker sl((QoreThreadLock*)this);
+
+    // in a child process created with fork(), the connections of the parent are given up first: the action uses a
+    // new connection, unless it would continue a transaction of the parent
+    if (forkCheckUnlocked(xsink, QoreDbiForkCheck::Raise) < 0) {
+        return nullptr;
+    }
 
     // increase request counter
     ++stats_reqs;
@@ -668,6 +762,11 @@ QoreStringNode* DatasourcePool::toString() {
     QoreStringNode* str = new QoreStringNode;
 
     SafeLocker sl((QoreThreadLock *)this);
+    {
+        // in a child process created with fork(), the connections of the parent are given up first
+        // (a transaction of the parent is raised by the next action that uses a connection)
+        forkCheckUnlocked(nullptr, QoreDbiForkCheck::Defer);
+    }
     str->sprintf("this: %p, min: %d, max: %d, cmax: %d, wait_count: %d, thread_map = (", this, min, max, cmax, wait_count);
     thread_use_t::const_iterator ti = tmap.begin();
     while (ti != tmap.end()) {
@@ -736,6 +835,11 @@ const QoreEncoding* DatasourcePool::getQoreEncoding() const {
 bool DatasourcePool::inTransaction() {
     int tid = q_gettid();
     AutoLocker al((QoreThreadLock*)this);
+    {
+        // in a child process created with fork(), the connections of the parent are given up first
+        // (a transaction of the parent is raised by the next action that uses a connection)
+        forkCheckUnlocked(nullptr, QoreDbiForkCheck::Defer);
+    }
     return tmap.find(tid) != tmap.end();
 }
 

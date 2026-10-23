@@ -685,6 +685,148 @@ QoreStringNode* qore_ds_private::getConfigString() const {
     return str.release();
 }
 
+//! the registry of the DBI objects whose locks are initialized again in a child process created with fork()
+/** Its lock is a leaf lock (QFLR_LEAF): its holders only link and unlink objects and keep pointers.  The prepare
+    handler acquires it, so that no object is being registered or removed while the process is copied, and the child
+    handler initializes the locks of every registered object again (see QoreDbiForkObject).
+*/
+class QoreDbiForkRegistry : public QoreForkHandler {
+public:
+    DLLLOCAL QoreDbiForkRegistry() : QoreForkHandler(QFLR_LEAF, "dbi_objects") {
+    }
+
+    void add(QoreDbiForkObject* o) {
+        AutoLocker al(l);
+        assert(!o->fork_registered);
+        o->fork_prev = nullptr;
+        o->fork_next = head;
+        if (head) {
+            head->fork_prev = o;
+        }
+        head = o;
+        o->fork_registered = true;
+    }
+
+    void remove(QoreDbiForkObject* o) noexcept {
+        AutoLocker al(l);
+        if (!o->fork_registered) {
+            return;
+        }
+        if (o->fork_prev) {
+            o->fork_prev->fork_next = o->fork_next;
+        } else {
+            head = o->fork_next;
+        }
+        if (o->fork_next) {
+            o->fork_next->fork_prev = o->fork_prev;
+        }
+        o->fork_prev = o->fork_next = nullptr;
+        o->fork_registered = false;
+    }
+
+    void keep(void* p) {
+        AutoLocker al(l);
+        if (!abandoned) {
+            // never freed, so that what it points to stays reachable until the process ends
+            abandoned = new std::vector<void*>;
+        }
+        abandoned->push_back(p);
+    }
+
+    void prepare() noexcept override {
+        l.lock();
+    }
+
+    void parent() noexcept override {
+        l.unlock();
+    }
+
+    void child() noexcept override {
+        // only the forking thread is left, and the list is consistent, as the lock is held since prepare()
+        for (QoreDbiForkObject* o = head; o; o = o->fork_next) {
+            o->forkChild();
+        }
+        l.reinitAfterFork();
+    }
+
+private:
+    QoreThreadLock l;
+    //! the registered objects
+    QoreDbiForkObject* head = nullptr;
+    //! memory given up by a child process; see qore_dbi_keep_abandoned()
+    std::vector<void*>* abandoned = nullptr;
+};
+
+static QoreDbiForkRegistry dbi_fork_registry;
+
+QoreDbiForkObject::~QoreDbiForkObject() {
+    assert(!fork_registered);
+}
+
+void QoreDbiForkObject::forkRegister() {
+    dbi_fork_registry.add(this);
+}
+
+void QoreDbiForkObject::forkUnregister() {
+    dbi_fork_registry.remove(this);
+}
+
+void qore_dbi_keep_abandoned(void* p) {
+    if (p) {
+        dbi_fork_registry.keep(p);
+    }
+}
+
+void qore_dbi_raise_fork_error(ExceptionSink* xsink, const Datasource& ds, const char* reason) {
+    xsink->raiseException("DATASOURCE-FORK-ERROR", "%s:%s@%s: the connection was opened by the parent of this "
+        "process, which was created with fork(), and %s; the connection was given up without changing the parent's "
+        "session, and the next action opens a new connection", ds.getDriverName(), ds.getUsernameStr().c_str(),
+        ds.getDBNameStr().c_str(), reason);
+}
+
+void qore_ds_private::abandon() {
+    assert(isInherited());
+    {
+        AutoLocker al(m);
+        // the containers are replaced without being traversed; the statements drop their inherited data themselves
+        if (!stmt_set.empty()) {
+            std::unique_ptr<stmt_set_t> old(new stmt_set_t);
+            old->swap(stmt_set);
+            qore_dbi_keep_abandoned(old.release());
+        }
+        if (!orphan_stmts.empty()) {
+            std::unique_ptr<std::vector<SQLStatement*>> old(new std::vector<SQLStatement*>);
+            old->swap(orphan_stmts);
+            qore_dbi_keep_abandoned(old.release());
+        }
+    }
+    qore_dbi_keep_abandoned(private_data);
+    private_data = nullptr;
+    isopen = false;
+    connection_aborted = false;
+    keep_lock = false;
+    bulk_load_active = false;
+    commit_in_progress = false;
+    mutation_conn_lost = false;
+    setInTransaction(false);
+    active_transaction = false;
+    tx_id.clear();
+    tx_seq = 0;
+    stream_declared_bytes = -1;
+    stream_rejected = false;
+    clearTypedResultHashDeclCache();
+}
+
+int qore_ds_private::forkCheck(ExceptionSink* xsink) {
+    if (isInherited()) {
+        abandonInherited();
+        if (!fork_lost_tx.load(std::memory_order_relaxed)) {
+            return ds->open(xsink);
+        }
+    }
+    return raiseForkLostTransaction(xsink);
+}
+
 Datasource::Datasource(DBIDriver* ndsl, DatasourceStatementHelper* dsh) : priv(new qore_ds_private(this, ndsl, dsh)) {
 }
 
@@ -1034,6 +1176,10 @@ static void ds_mutation_read_post(qore_ds_private* priv, ExceptionSink* xsink) {
 
 QoreValue Datasource::select(const QoreString* query_str, const QoreListNode* args, ExceptionSink* xsink) {
     assert(xsink);
+    // a connection opened by the parent of a child process created with fork() is not used
+    if (priv->forkCheck(xsink)) {
+        return QoreValue();
+    }
     if (ds_mutation_read_pre(priv, xsink)) {
         return QoreValue();
     }
@@ -1051,6 +1197,10 @@ QoreValue Datasource::select(const QoreString* query_str, const QoreListNode* ar
 
 QoreValue Datasource::selectTyped(const QoreString* query_str, const QoreListNode* args, ExceptionSink* xsink) {
     assert(xsink);
+    // a connection opened by the parent of a child process created with fork() is not used
+    if (priv->forkCheck(xsink)) {
+        return QoreValue();
+    }
     if (ds_mutation_read_pre(priv, xsink)) {
         return QoreValue();
     }
@@ -1069,6 +1219,10 @@ QoreValue Datasource::selectTyped(const QoreString* query_str, const QoreListNod
 QoreColumnarResult* Datasource::selectColumnar(const QoreString* query_str, const QoreListNode* args,
         ExceptionSink* xsink) {
     assert(xsink);
+    // a connection opened by the parent of a child process created with fork() is not used
+    if (priv->forkCheck(xsink)) {
+        return nullptr;
+    }
     if (ds_mutation_read_pre(priv, xsink)) {
         return nullptr;
     }
@@ -1086,6 +1240,10 @@ QoreColumnarResult* Datasource::selectColumnar(const QoreString* query_str, cons
 
 QoreValue Datasource::selectRows(const QoreString* query_str, const QoreListNode* args, ExceptionSink* xsink) {
     assert(xsink);
+    // a connection opened by the parent of a child process created with fork() is not used
+    if (priv->forkCheck(xsink)) {
+        return QoreValue();
+    }
     if (ds_mutation_read_pre(priv, xsink)) {
         return QoreValue();
     }
@@ -1103,6 +1261,10 @@ QoreValue Datasource::selectRows(const QoreString* query_str, const QoreListNode
 
 QoreValue Datasource::selectRowsTyped(const QoreString* query_str, const QoreListNode* args, ExceptionSink* xsink) {
     assert(xsink);
+    // a connection opened by the parent of a child process created with fork() is not used
+    if (priv->forkCheck(xsink)) {
+        return QoreValue();
+    }
     if (ds_mutation_read_pre(priv, xsink)) {
         return QoreValue();
     }
@@ -1120,6 +1282,10 @@ QoreValue Datasource::selectRowsTyped(const QoreString* query_str, const QoreLis
 
 QoreHashNode* Datasource::selectRow(const QoreString* query_str, const QoreListNode* args, ExceptionSink* xsink) {
     assert(xsink);
+    // a connection opened by the parent of a child process created with fork() is not used
+    if (priv->forkCheck(xsink)) {
+        return nullptr;
+    }
     if (ds_mutation_read_pre(priv, xsink)) {
         return nullptr;
     }
@@ -1138,6 +1304,10 @@ QoreHashNode* Datasource::selectRow(const QoreString* query_str, const QoreListN
 QoreValue Datasource::exec_internal(bool doBind, const QoreString* query_str, const QoreListNode* args,
         ExceptionSink* xsink) {
     assert(xsink);
+    // a connection opened by the parent of a child process created with fork() is not used
+    if (priv->forkCheck(xsink)) {
+        return QoreValue();
+    }
 
     // mutation observer admission point; delivered before any implicit transaction is started so
     // that a rejected operation can never leave an open transaction behind
@@ -1252,6 +1422,10 @@ QoreValue Datasource::execRaw(const QoreString* query_str, ExceptionSink* xsink)
 int Datasource::bulkLoadBegin(const QoreString* table, const QoreListNode* columns, const QoreHashNode* options,
         ExceptionSink* xsink) {
     assert(xsink);
+    // a connection opened by the parent of a child process created with fork() is not used
+    if (priv->forkCheck(xsink)) {
+        return -1;
+    }
     if (!table || table->empty() || !columns || columns->empty()) {
         xsink->raiseException("DBI-BULK-LOAD-ERROR", "a target table and at least one target column are required");
         return -1;
@@ -1299,6 +1473,10 @@ int Datasource::bulkLoadBegin(const QoreString* table, const QoreListNode* colum
 
 int Datasource::bulkLoadRows(const QoreHashNode* rows, ExceptionSink* xsink) {
     assert(xsink);
+    // a connection opened by the parent of a child process created with fork() is not used
+    if (priv->forkCheck(xsink)) {
+        return -1;
+    }
     if (!rows) {
         xsink->raiseException("DBI-BULK-LOAD-ERROR", "a native bulk-load row block is required");
         return -1;
@@ -1318,6 +1496,10 @@ int Datasource::bulkLoadRows(const QoreHashNode* rows, ExceptionSink* xsink) {
 
 int Datasource::bulkLoadEnd(bool success, ExceptionSink* xsink) {
     assert(xsink);
+    // a connection opened by the parent of a child process created with fork() is not used
+    if (priv->forkCheck(xsink)) {
+        return -1;
+    }
     if (!priv->bulk_load_active) {
         xsink->raiseException("DBI-BULK-LOAD-ERROR", "no native bulk-load operation is active on this datasource");
         return -1;
@@ -1339,6 +1521,10 @@ int Datasource::bulkLoadEnd(bool success, ExceptionSink* xsink) {
 
 QoreHashNode* Datasource::describe(const QoreString* query_str, const QoreListNode* args, ExceptionSink* xsink) {
     assert(xsink);
+    // a connection opened by the parent of a child process created with fork() is not used
+    if (priv->forkCheck(xsink)) {
+        return nullptr;
+    }
     if (ds_mutation_read_pre(priv, xsink)) {
         return nullptr;
     }
@@ -1365,6 +1551,10 @@ int Datasource::beginImplicitTransaction(ExceptionSink* xsink) {
 }
 
 int Datasource::beginTransaction(ExceptionSink* xsink) {
+    // a connection opened by the parent of a child process created with fork() is not used
+    if (priv->forkCheck(xsink)) {
+        return -1;
+    }
     int rc = beginImplicitTransaction(xsink);
     if (!rc && !priv->inTransaction()) {
         priv->setInTransaction(true);
@@ -1377,6 +1567,10 @@ int Datasource::beginTransaction(ExceptionSink* xsink) {
 }
 
 int Datasource::commit(ExceptionSink* xsink) {
+    // a connection opened by the parent of a child process created with fork() is not used
+    if (priv->forkCheck(xsink)) {
+        return -1;
+    }
     if (!priv->inTransaction() && beginImplicitTransaction(xsink))
         return -1;
 
@@ -1384,6 +1578,10 @@ int Datasource::commit(ExceptionSink* xsink) {
 }
 
 int Datasource::rollback(ExceptionSink* xsink) {
+    // a connection opened by the parent of a child process created with fork() is not used
+    if (priv->forkCheck(xsink)) {
+        return -1;
+    }
     if (!priv->inTransaction() && beginImplicitTransaction(xsink))
         return -1;
 
@@ -1393,6 +1591,11 @@ int Datasource::rollback(ExceptionSink* xsink) {
 int Datasource::open(ExceptionSink* xsink) {
     assert(xsink);
     int rc;
+
+    // a connection opened by the parent of a child process created with fork() is given up, and a new one is opened
+    if (priv->isInherited()) {
+        priv->abandonInherited();
+    }
 
     if (!priv->isopen) {
         // copy pending connection values to connection values
@@ -1404,6 +1607,7 @@ int Datasource::open(ExceptionSink* xsink) {
         if (!*xsink) {
             assert(priv->qorecharset);
             priv->isopen = true;
+            priv->open_generation = qore_fork_get_generation();
         }
     } else {
         rc = 0;
@@ -1600,6 +1804,10 @@ const DBIDriver* Datasource::getDriver() const {
 }
 
 QoreValue Datasource::getServerVersion(ExceptionSink* xsink) {
+    // a connection opened by the parent of a child process created with fork() is not used
+    if (priv->forkCheck(xsink)) {
+        return QoreValue();
+    }
     return qore_dbi_private::get(*priv->dsl)->getServerVersion(this, xsink);
 }
 
@@ -1608,6 +1816,10 @@ QoreValue Datasource::getClientVersion(ExceptionSink* xsink) const {
 }
 
 QoreStringNode* Datasource::getDriverRealName(ExceptionSink* xsink) {
+    // a connection opened by the parent of a child process created with fork() is not used
+    if (priv->forkCheck(xsink)) {
+        return nullptr;
+    }
     return qore_dbi_private::get(*priv->dsl)->getDriverRealName(this, xsink);
 }
 
@@ -1620,6 +1832,11 @@ int Datasource::setOption(const char* opt, const QoreValue val, ExceptionSink* x
     ExceptionSink opt_xsink;
     // issue #3243: validate options before sending them to the driver
     OptInputHelper opt_helper(&opt_xsink, *qore_dbi_private::get(*priv->dsl), opt, true, val);
+    // a connection opened by the parent of a child process created with fork() is given up: the option is set on
+    // the next connection
+    if (priv->isInherited()) {
+        priv->abandonInherited();
+    }
     // with an open connection, the driver must accept the value as well
     int rc = 0;
     if (!opt_xsink && priv->private_data) {
@@ -1640,6 +1857,10 @@ const QoreHashNode* Datasource::getConnectOptions() const {
 }
 
 QoreValue Datasource::getOption(const char* opt, ExceptionSink* xsink) {
+    // a connection opened by the parent of a child process created with fork() is not used
+    if (priv->forkCheck(xsink)) {
+        return QoreValue();
+    }
     if (!isOpen()) {
         xsink->raiseException("DATASOURCE-ERROR", "cannot retrieve the value for option '%s' when the datasource is " \
             "closed; use getOptionHash() to retrieve raw configuration option when the datasource is closed", opt);

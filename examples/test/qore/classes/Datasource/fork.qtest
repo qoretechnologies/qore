@@ -1,0 +1,512 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires dbitest
+
+%exec-class DatasourceForkTest
+
+#! The connections of a parent process in a child process created with fork()
+/** A child process created with fork() shares the network connection of every database session of its parent.  The
+    child must neither end nor change those sessions: closing or destroying an inherited Datasource, DatasourcePool or
+    SQLStatement gives the connection up without calling the driver (no rollback, no statement close, no logoff), and
+    using it counts as a lost connection: the child gets a new connection, unless the action would continue a
+    transaction of the parent, which raises DATASOURCE-FORK-ERROR.
+
+    The "dbitest" mock driver counts its calls (Qore::DbiTest::get_call_stats()), among them the calls that use a
+    connection or a statement of another process; it needs no server.
+
+    Each child writes its result to a pipe whose write end it keeps open until it has exited: the parent reads until
+    the end of the data, so it waits for the child's exit deterministically.  A child that waits forever makes the
+    parent wait forever (the test runner's time limit is only a guard).
+*/
+class DatasourceForkTest inherits QUnit::Test {
+    public {
+        const ConnStr = "dbitest:u/p@db";
+    }
+
+    constructor() : QUnit::Test("DatasourceForkTest", "1.0", \ARGV) {
+        addTestCase("a child destroys a Datasource of its parent", \testDestroy());
+        addTestCase("a child destroys a Datasource in a transaction of the forking thread",
+            \testDestroyInTransaction());
+        addTestCase("a child uses a Datasource of its parent", \testUse());
+        addTestCase("a child reads an option of a Datasource of its parent", \testReadOption());
+        addTestCase("a child uses a Datasource in a transaction of the forking thread", \testUseInTransaction());
+        addTestCase("a child uses a Datasource in a transaction after actions that need no connection",
+            \testUseInTransactionAfterNoConnection());
+        addTestCase("a child closes a Datasource in a transaction of the forking thread", \testCloseInTransaction());
+        addTestCase("a child uses a Datasource whose transaction lock another thread of its parent holds",
+            \testUseOtherThreadTransaction());
+        addTestCase("a child uses a Datasource that another thread of its parent is opening", \testUseWhileOpening());
+        addTestCase("a child destroys an SQLStatement of its parent", \testDestroyStatement());
+        addTestCase("a child uses an SQLStatement of its parent", \testUseStatement());
+        addTestCase("a child closes an SQLStatement of its parent, then uses the Datasource",
+            \testCloseStatement());
+        addTestCase("a child destroys a DatasourcePool of its parent", \testDestroyPool());
+        addTestCase("a child uses a DatasourcePool in a transaction of the forking thread",
+            \testUsePoolInTransaction());
+        addTestCase("a child uses a DatasourcePool in a transaction after an action that needs no connection",
+            \testUsePoolInTransactionAfterNoConnection());
+        addTestCase("a child ends its script with the connections of its parent", \testScriptEnd());
+        addTestCase("fork() while another thread holds the lock of the DBI object registry", \testRegistryLock());
+        set_return_value(main());
+    }
+
+    #! returns a datasource whose session option gives the identifier of its connection
+    private static Datasource getDatasource() {
+        Datasource ds(ConnStr);
+        ds.setOption("session", True);
+        return ds;
+    }
+
+    #! returns the driver calls made in this process since the given counts
+    private static hash<auto> callsSince(hash<auto> base) {
+        hash<auto> now = Qore::DbiTest::get_call_stats();
+        return map {$1: now{$1} - base{$1}}, keys now;
+    }
+
+    #! runs the code in a child process created with fork() and returns its result
+    /** The child writes the string that the code returns, or the code of the exception that it raises, to a pipe and
+        exits with exit() while it holds the write end of the pipe open, so the parent reads the result until the child
+        has exited.
+    */
+    private string runChild(code child) {
+        hash<PipeInfo> pipe = File::getPipe();
+        # the child must not write the parent's buffered output again when it exits
+        flush();
+        int pid = fork();
+        if (!pid) {
+            pipe.read.close();
+            string result;
+            try {
+                result = child();
+            } catch (hash<ExceptionInfo> ex) {
+                result = "exception: " + ex.err;
+            }
+            pipe.write.write(result);
+            Qore::exit(0);
+        }
+        pipe.write.close();
+        assertGt(0, pid);
+        string result;
+        while (*binary data = pipe.read.readBinary(4096)) {
+            result += data.toString();
+        }
+        return result;
+    }
+
+    #! the driver calls of a child's code, as a string that the parent can compare
+    private static string childCalls(hash<auto> base) {
+        hash<auto> c = callsSince(base);
+        return sprintf("opens=%d closes=%d commits=%d rollbacks=%d stmt_closes=%d inherited_calls=%d", c.opens,
+            c.closes, c.commits, c.rollbacks, c.stmt_closes, c.inherited_calls);
+    }
+
+    testDestroy() {
+        Datasource ds = getDatasource();
+        ds.select("select 1");
+        auto session = ds.getOption("session");
+        assertEq(Type::Int, session.type(), "the session option gives the connection");
+        string result = runChild(string sub () {
+            hash<auto> base = Qore::DbiTest::get_call_stats();
+            delete ds;
+            return childCalls(base);
+        });
+        assertEq("opens=0 closes=0 commits=0 rollbacks=0 stmt_closes=0 inherited_calls=0", result);
+        # the parent's session is unchanged
+        assertEq(session, ds.getOption("session"));
+        assertEq({"id": (1, 2), "val": ("a", "b")}, ds.select("select 1"));
+    }
+
+    testDestroyInTransaction() {
+        Datasource ds = getDatasource();
+        ds.beginTransaction();
+        ds.exec("insert into t values (1)");
+        auto session = ds.getOption("session");
+        assertEq(Type::Int, session.type(), "the session option gives the connection");
+        string result = runChild(string sub () {
+            hash<auto> base = Qore::DbiTest::get_call_stats();
+            # no DATASOURCE-TRANSACTION-EXCEPTION: the transaction belongs to the parent, so nothing is rolled back
+            delete ds;
+            return childCalls(base);
+        });
+        assertEq("opens=0 closes=0 commits=0 rollbacks=0 stmt_closes=0 inherited_calls=0", result);
+        # the parent's transaction is still in progress on its session
+        assertTrue(ds.currentThreadInTransaction());
+        assertEq(session, ds.getOption("session"));
+        hash<auto> base = Qore::DbiTest::get_call_stats();
+        ds.commit();
+        assertEq(1, callsSince(base).commits);
+    }
+
+    testUse() {
+        Datasource ds = getDatasource();
+        ds.select("select 1");
+        auto session = ds.getOption("session");
+        assertEq(Type::Int, session.type(), "the session option gives the connection");
+        string result = runChild(string sub () {
+            hash<auto> base = Qore::DbiTest::get_call_stats();
+            # the inherited connection is given up, and the child gets a new one
+            ds.select("select 1");
+            string rv = childCalls(base);
+            return rv + sprintf(" new_session=%y", ds.getOption("session") != session);
+        });
+        assertEq("opens=1 closes=0 commits=0 rollbacks=0 stmt_closes=0 inherited_calls=0 new_session=True", result);
+        assertEq(session, ds.getOption("session"));
+    }
+
+    #! the value of an option is the connection's: the child reads it from a new connection
+    testReadOption() {
+        Datasource ds = getDatasource();
+        ds.select("select 1");
+        auto session = ds.getOption("session");
+        assertEq(Type::Int, session.type(), "the session option gives the connection");
+        string result = runChild(string sub () {
+            hash<auto> base = Qore::DbiTest::get_call_stats();
+            auto child_session = ds.getOption("session");
+            ds.select("select 1");
+            return childCalls(base) + sprintf(" new_session=%y", child_session != session);
+        });
+        assertEq("opens=1 closes=0 commits=0 rollbacks=0 stmt_closes=0 inherited_calls=0 new_session=True", result);
+        assertEq(session, ds.getOption("session"));
+    }
+
+    testUseInTransaction() {
+        Datasource ds = getDatasource();
+        ds.beginTransaction();
+        ds.exec("insert into t values (1)");
+        string result = runChild(string sub () {
+            hash<auto> base = Qore::DbiTest::get_call_stats();
+            string rv;
+            try {
+                ds.select("select 1");
+                rv = "no error";
+            } catch (hash<ExceptionInfo> ex) {
+                rv = ex.err;
+            }
+            # the connection was given up, so the next action opens a new connection
+            ds.select("select 1");
+            ds.commit();
+            return rv + " " + childCalls(base);
+        });
+        assertEq("DATASOURCE-FORK-ERROR opens=1 closes=0 commits=1 rollbacks=0 stmt_closes=0 inherited_calls=0",
+            result);
+        assertTrue(ds.currentThreadInTransaction());
+        ds.rollback();
+    }
+
+    #! the actions that need no connection give the inherited connection up without an error; the transaction of the
+    #! parent is raised by the first action that uses a connection
+    testUseInTransactionAfterNoConnection() {
+        Datasource ds = getDatasource();
+        ds.beginTransaction();
+        ds.exec("insert into t values (1)");
+        string result = runChild(string sub () {
+            hash<auto> base = Qore::DbiTest::get_call_stats();
+            string rv = sprintf("in_transaction=%y", ds.inTransaction());
+            ds.getOptionHash();
+            ds.getConfigHash();
+            ds.setAutoCommit(False);
+            try {
+                ds.select("select 1");
+                rv += " no error";
+            } catch (hash<ExceptionInfo> ex) {
+                rv += " " + ex.err;
+            }
+            ds.select("select 1");
+            return rv + " " + childCalls(base);
+        });
+        assertEq("in_transaction=False DATASOURCE-FORK-ERROR opens=1 closes=0 commits=0 rollbacks=0 stmt_closes=0 "
+            "inherited_calls=0", result);
+        assertTrue(ds.inTransaction());
+        assertTrue(ds.currentThreadInTransaction());
+        ds.rollback();
+    }
+
+    #! closing the datasource ends the child's part in the parent's transaction without an error
+    testCloseInTransaction() {
+        Datasource ds = getDatasource();
+        ds.beginTransaction();
+        ds.exec("insert into t values (1)");
+        string result = runChild(string sub () {
+            hash<auto> base = Qore::DbiTest::get_call_stats();
+            ds.close();
+            ds.select("select 1");
+            return childCalls(base);
+        });
+        assertEq("opens=1 closes=0 commits=0 rollbacks=0 stmt_closes=0 inherited_calls=0", result);
+        assertTrue(ds.currentThreadInTransaction());
+        ds.rollback();
+    }
+
+    testUseOtherThreadTransaction() {
+        Datasource ds = getDatasource();
+        # no timeout: a child that waited for the lock of a thread of the parent would wait forever
+        ds.setTransactionLockTimeout(0);
+        Queue started();
+        Queue release();
+        Counter done(1);
+        background sub () {
+            on_exit done.dec();
+            ds.beginTransaction();
+            ds.exec("insert into t values (1)");
+            started.push(True);
+            release.get();
+            ds.commit();
+        }();
+        started.get();
+        string result = runChild(string sub () {
+            hash<auto> base = Qore::DbiTest::get_call_stats();
+            string rv;
+            try {
+                ds.select("select 1");
+                rv = "no error";
+            } catch (hash<ExceptionInfo> ex) {
+                rv = ex.err;
+            }
+            # the parent's lock and connection were given up
+            ds.select("select 1");
+            return rv + " " + childCalls(base);
+        });
+        release.push(True);
+        done.waitForZero();
+        assertEq("DATASOURCE-FORK-ERROR opens=1 closes=0 commits=0 rollbacks=0 stmt_closes=0 inherited_calls=0",
+            result);
+    }
+
+    testUseWhileOpening() {
+        Datasource ds = getDatasource();
+        Counter done(1);
+        # the next connection waits in the driver while its thread holds the datasource's lock
+        Qore::DbiTest::block_next_open();
+        background sub () {
+            on_exit done.dec();
+            ds.open();
+        }();
+        Qore::DbiTest::wait_open_blocked();
+        string result = runChild(string sub () {
+            hash<auto> base = Qore::DbiTest::get_call_stats();
+            # the locks that the opening thread of the parent holds are usable in the child: the transaction lock of
+            # the other thread is given up with an error, and the next action opens a connection
+            string rv;
+            try {
+                ds.select("select 1");
+                rv = "no error";
+            } catch (hash<ExceptionInfo> ex) {
+                rv = ex.err;
+            }
+            ds.select("select 1");
+            return rv + " " + childCalls(base);
+        });
+        Qore::DbiTest::release_open();
+        done.waitForZero();
+        assertEq("DATASOURCE-FORK-ERROR opens=1 closes=0 commits=0 rollbacks=0 stmt_closes=0 inherited_calls=0",
+            result);
+        assertEq({"id": (1, 2), "val": ("a", "b")}, ds.select("select 1"));
+    }
+
+    #! the statement is executed, so that it holds driver data, which belongs to the connection, when the parent forks
+    testDestroyStatement() {
+        Datasource ds = getDatasource();
+        SQLStatement stmt(ds);
+        stmt.prepare("select 1");
+        stmt.exec();
+        stmt.fetchRows();
+        auto session = ds.getOption("session");
+        assertEq(Type::Int, session.type(), "the session option gives the connection");
+        string result = runChild(string sub () {
+            hash<auto> base = Qore::DbiTest::get_call_stats();
+            delete stmt;
+            delete ds;
+            return childCalls(base);
+        });
+        assertEq("opens=0 closes=0 commits=0 rollbacks=0 stmt_closes=0 inherited_calls=0", result);
+        # the parent's statement and session are unchanged
+        assertEq(session, ds.getOption("session"));
+        hash<auto> base = Qore::DbiTest::get_call_stats();
+        ds.commit();
+        assertEq(1, callsSince(base).stmt_closes, "the parent closes its statement with its transaction");
+        stmt.exec();
+        assertEq(({"id": 1, "val": "a"}, {"id": 2, "val": "b"}), stmt.fetchRows());
+        ds.commit();
+    }
+
+    #! the statement is executed, so that it holds driver data, which belongs to the connection, when the parent forks
+    testUseStatement() {
+        Datasource ds = getDatasource();
+        SQLStatement stmt(ds);
+        stmt.prepare("select 1");
+        stmt.exec();
+        stmt.fetchRows();
+        string result = runChild(string sub () {
+            hash<auto> base = Qore::DbiTest::get_call_stats();
+            # the statement's transaction (it holds the transaction lock) belongs to the parent
+            string rv;
+            try {
+                stmt.exec();
+                rv = "no error";
+            } catch (hash<ExceptionInfo> ex) {
+                rv = ex.err;
+            }
+            # the statement is prepared again on the child's new connection
+            stmt.exec();
+            int rows = stmt.fetchRows().size();
+            ds.commit();
+            return sprintf("%s rows=%d ", rv, rows) + childCalls(base);
+        });
+        assertEq("DATASOURCE-FORK-ERROR rows=2 opens=1 closes=0 commits=1 rollbacks=0 stmt_closes=1 "
+            "inherited_calls=0", result);
+        ds.commit();
+        stmt.exec();
+        assertEq(2, stmt.fetchRows().size());
+        ds.commit();
+    }
+
+    #! closing the statement needs no connection: the transaction of the parent that the statement started is raised
+    #! by the next action of the datasource
+    testCloseStatement() {
+        Datasource ds = getDatasource();
+        SQLStatement stmt(ds);
+        stmt.prepare("select 1");
+        stmt.exec();
+        stmt.fetchRows();
+        string result = runChild(string sub () {
+            hash<auto> base = Qore::DbiTest::get_call_stats();
+            stmt.close();
+            string rv;
+            try {
+                ds.select("select 1");
+                rv = "no error";
+            } catch (hash<ExceptionInfo> ex) {
+                rv = ex.err;
+            }
+            ds.select("select 1");
+            return rv + " " + childCalls(base);
+        });
+        assertEq("DATASOURCE-FORK-ERROR opens=1 closes=0 commits=0 rollbacks=0 stmt_closes=0 inherited_calls=0",
+            result);
+        ds.commit();
+    }
+
+    testDestroyPool() {
+        hash<auto> config = parse_datasource(ConnStr) + {"options": {"min": 1, "max": 1, "session": True}};
+        DatasourcePool pool(config);
+        pool.select("select 1");
+        auto session = pool.getOption("session");
+        assertEq(Type::Int, session.type(), "the session option gives the connection");
+        string result = runChild(string sub () {
+            hash<auto> base = Qore::DbiTest::get_call_stats();
+            delete pool;
+            return childCalls(base);
+        });
+        assertEq("opens=0 closes=0 commits=0 rollbacks=0 stmt_closes=0 inherited_calls=0", result);
+        assertEq(session, pool.getOption("session"));
+        assertEq({"id": (1, 2), "val": ("a", "b")}, pool.select("select 1"));
+    }
+
+    testUsePoolInTransaction() {
+        DatasourcePool pool(ConnStr + "{min=1,max=1}");
+        pool.beginTransaction();
+        pool.exec("insert into t values (1)");
+        string result = runChild(string sub () {
+            hash<auto> base = Qore::DbiTest::get_call_stats();
+            string rv;
+            try {
+                pool.select("select 1");
+                rv = "no error";
+            } catch (hash<ExceptionInfo> ex) {
+                rv = ex.err;
+            }
+            # the pool's connections were given up, so the next action opens a new connection
+            pool.select("select 1");
+            pool.commit();
+            return rv + " " + childCalls(base);
+        });
+        assertEq("DATASOURCE-FORK-ERROR opens=1 closes=0 commits=1 rollbacks=0 stmt_closes=0 inherited_calls=0",
+            result);
+        pool.rollback();
+    }
+
+    testUsePoolInTransactionAfterNoConnection() {
+        DatasourcePool pool(ConnStr + "{min=1,max=1}");
+        pool.beginTransaction();
+        pool.exec("insert into t values (1)");
+        string result = runChild(string sub () {
+            hash<auto> base = Qore::DbiTest::get_call_stats();
+            string rv = sprintf("in_transaction=%y", pool.inTransaction());
+            try {
+                pool.select("select 1");
+                rv += " no error";
+            } catch (hash<ExceptionInfo> ex) {
+                rv += " " + ex.err;
+            }
+            pool.select("select 1");
+            return rv + " " + childCalls(base);
+        });
+        assertEq("in_transaction=False DATASOURCE-FORK-ERROR opens=1 closes=0 commits=0 rollbacks=0 stmt_closes=0 "
+            "inherited_calls=0", result);
+        assertTrue(pool.inTransaction());
+        pool.rollback();
+    }
+
+    #! the child ends its script, which destroys the parent's datasources (one of them in a transaction of the forking
+    #! thread), pool and statement and deletes the driver module; the script runs in another process, whose output, and
+    #! the child's, is read until both have exited
+    testScriptEnd() {
+        TmpFile script(NOTHING, ".q");
+        script.file.write("%modern\n%requires dbitest\n"
+            "Datasource ds(" + sprintf("%y", ConnStr) + ");\n"
+            "ds.beginTransaction();\n"
+            "ds.exec(\"insert into t values (1)\");\n"
+            "DatasourcePool pool(" + sprintf("%y", ConnStr + "{min=1,max=1}") + ");\n"
+            "pool.select(\"select 1\");\n"
+            "Datasource ds2(" + sprintf("%y", ConnStr) + ");\n"
+            "SQLStatement stmt(ds2);\n"
+            "stmt.prepare(\"select 1\");\n"
+            "stmt.exec();\n"
+            "stmt.fetchRows();\n"
+            "hash<PipeInfo> pipe = File::getPipe();\n"
+            "flush();\n"
+            "if (!fork()) {\n"
+            "    pipe.read.close();\n"
+            "    # the delete function of the driver module writes the calls made from now on when the process ends\n"
+            "    Qore::DbiTest::report_at_exit(1);\n"
+            "} else {\n"
+            "    pipe.write.close();\n"
+            "    while (pipe.read.readBinary(4096)) {\n"
+            "    }\n"
+            "    ds.commit();\n"
+            "    ds2.commit();\n"
+            "    printf(\"parent: done\\n\");\n"
+            "}\n");
+        script.file.close();
+        string output = backquote(sprintf("%s --enable-debug %s 2>&1", shellQuote(QORE_ARGV[0]),
+            shellQuote(script.path)));
+        assertRegex("opens=0 closes=0 commits=0 rollbacks=0 stmt_closes=0 inherited_calls=0", output);
+        assertRegex("parent: done", output);
+        assertNRegex("EXCEPTION", output);
+    }
+
+    #! the registry of the DBI objects whose locks are initialized again in a child is a leaf lock: fork() waits for
+    #! a thread that holds it, and the child can take it
+    testRegistryLock() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the test needs a debug build of the library");
+        }
+        hash<auto> r = call_function("dbg_fork_while_handler_held", "dbi_objects");
+        assertTrue(r.waited, "fork() waited for the thread holding the lock");
+        assertEq(0, r.status, "the child took the lock");
+    }
+
+    #! returns the argument quoted for the shell
+    private static string shellQuote(string arg) {
+        return "'" + replace(arg, "'", "'\\''") + "'";
+    }
+}
