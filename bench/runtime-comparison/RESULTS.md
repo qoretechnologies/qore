@@ -19995,3 +19995,117 @@ remain unestablished.
 All raw windows, references, drivers, profiles, dependency checks, exclusions and
 the 62-item audit are preserved in
 [results-aot-post-packages-checkpoint-macos-arm64.json](results-aot-post-packages-checkpoint-macos-arm64.json).
+
+## Rejected native-call cleanup specialization (2026-10-23)
+
+Baseline `a2567f836` has the preceding checkpoint's production source. Two
+compiler candidates completed separate screens of 432 runs / 1296 windows each.
+Neither passed its predeclared benefit gate; all experimental source and test
+changes were removed. There is no new retained optimization or Java/develop
+comparison in this checkpoint.
+
+Both runtimes use Release `-O3 -DNDEBUG`, allocation tracking off, LLVM22.1.8,
+and `qcc -O3`. Each screen compares the frozen preceding executable/runtime,
+the candidate, and the candidate compiler with only its selector disabled.
+The latter two share their runtime. Default, reverse and shuffle-487 layouts,
+three fresh forks, three warmups and three 300-ms measured windows use count4096,
+seed7. Aggregate ns/item is the median of the three layout medians of fork means.
+These are whole-workload timings, not isolated call latency. Owned builds/tests/
+profiles were idle during timing; host load, frequency and thermals were uncontrolled.
+
+The gate required at least 3% improvement in the geometric mean of six call
+targets against both controls, plus at least 5% for integer or floating indirect
+calls against both. Confirmation and the 55-workload repeated-regression gate
+were conditional on passing the screen. Neither was run for these failed screens.
+
+|!Candidate|!Six-target change vs before|!Six-target change vs disabled|!Decision
+|Coercion cleanup capture annotation|-2.201%|-0.516%|Reject
+|Bounded cleanup predicate edges|-1.855%|-0.928%|Reject
+
+|!Capture-annotation workload|!Before ns/item|!Candidate ns/item|!Disabled ns/item|!Change vs disabled
+|indirect_call|7.033|6.725|6.971|-3.533%
+|indirect_float|6.591|6.611|6.527|+1.288%
+|monomorphic_call|3.479|3.470|3.483|-0.366%
+|monomorphic_float_call|3.462|3.482|3.464|+0.538%
+|closure_call|16.778|15.629|15.768|-0.885%
+|closure_capture|22.083|21.547|21.562|-0.070%
+|indirect_float_result|7.247|7.390|7.143|+3.454%
+
+|!Bounded-edge workload|!Before ns/item|!Candidate ns/item|!Disabled ns/item|!Change vs disabled
+|indirect_call|6.821|6.644|6.941|-4.283%
+|indirect_float|6.377|6.450|6.339|+1.760%
+|monomorphic_call|3.451|3.533|3.525|+0.251%
+|monomorphic_float_call|3.421|3.351|3.389|-1.099%
+|closure_call|16.223|15.305|15.305|-0.000%
+|closure_capture|21.606|20.710|21.151|-2.087%
+|indirect_float_result|7.142|7.295|7.070|+3.170%
+|temporary_hash|316.077|320.141|309.724|+3.363%
+
+The apparent plain-closure gains against the preceding build are mostly or
+entirely reproduced by the disabled control; they cannot be credited to either
+optimization. Temporary-hash screen flags had disjoint fork-mean ranges: capture
+annotation, shuffle-487 +3.550% versus disabled; bounded edges, default +7.822%
+and shuffle-487 +3.415% versus disabled. These are separate candidates, not
+independent confirmation of one candidate's repeated regression. All 16 workload
+results, layouts, process statuses and raw streams remain in the dataset.
+
+### Code experiments and validation
+
+Unannotated late jump threading changed cold stack-overflow returns but left
+hot cleanup decoding intact; it was rejected before timing. The capture annotation
+made the coercion output's nonescaping write-only contract visible at eligible
+native-continuation call sites, reducing integer/floating caller instruction
+counts from467/498 to429/442 without sufficient measured benefit. An offline
+combined pass still left generic tag checks. Its first CLI invocation failed
+InstCombine's fixed-point verification; the API-equivalent no-fixed-point-check
+invocation retained IR verification and passed. Neither offline result was timed.
+
+The edge candidate propagated the existing pure tag predicate through PHIs with
+at most four incoming edges and a constant-NOTHING edge. Actual decrefs stayed
+in place. The first shape speculated error predicates onto normal paths and was
+rejected before timing. Requiring dedicated predecessors removed that problem;
+a final successor-count bound made the analysis bounded before querying unique
+successors. Only this final bounded version was timed. Native integer success
+uses two flag branches instead of the generic cleanup decoders; all cleanup,
+sink, cancellation and runtime call guards remain. Cold code and register demand
+still matter: cleaner hot IR did not establish a worthwhile throughput gain.
+
+Each prepared candidate passes4995 reference checks. Final bounded-edge focused
+Release validation passes9 fixtures /35 cases /3137 assertions, including scalar
+representations, opaque ownership, coercion, error continuations and cancellation.
+Independent replay verifies both complete screens. The first capture replay failed
+because Python3.9 lacks `zip(strict=True)`; an explicit length assertion fixed the
+verifier, with no retiming or changed samples. Failed attempts remain archived.
+
+A subsequent compile-only runtime probe carries the wrapper's immediately
+checked cache identity into the private reusable helper. It removes two compare
+instructions but makes all four helpers call the stack guard out of line and
+save extra registers; floating-unary stack size grows80 to96 bytes. It was rejected
+at code review, never linked or executed. This is not a measured slowdown.
+
+Restored source matches HEAD exactly for all five inspected production/test
+files. The unchanged frozen optimized runtime passes9 fixtures /35 cases /2895
+assertions; all125 main qmod aliases remain unchanged. These are selected Release
+checks, not new Debug/full-suite/sanitizer/cross-platform qualification.
+
+### Next investigation
+
+This closes the measured cleanup-predicate approach without a retained change.
+The reusable helper already has no TLS lookup in the inspected hot path. Remaining
+work includes live admission/readiness, physical stack checks, native entry,
+per-call diagnostic publication and reader-safe restoration. Removing static
+checks alone has not closed the Java gap. Do not repeat these candidates by
+tuning thresholds or padding, or relax guards, ownership or reader semantics.
+
+The next structural call investigation is compiler-visible prepared dispatch:
+first specify invocation-owned immutable metadata and the mutable flag/address
+checks that generated code would still perform, then inspect whether a versioned
+entry can eliminate the extra C++ dispatch frame. Preserve old artifacts and
+debugger/body/readiness invalidation, stack overflow, asynchronous readers and
+fallback semantics. Require an assembly improvement before implementing and
+qualifying a fresh measured candidate. This is a plan, not a validated optimization;
+Java parity and a global performance ceiling remain unestablished.
+
+All62 audit items, patches, selected IR/assembly, drivers, actual terminal receipts,
+references, restoration checks and2592 raw windows are preserved in
+[results-aot-native-cleanup-rejected-macos-arm64.json](results-aot-native-cleanup-rejected-macos-arm64.json).

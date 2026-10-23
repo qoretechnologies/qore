@@ -3917,3 +3917,36 @@ See RESULTS and `results-aot-post-packages-checkpoint-macos-arm64.json` for all
 numbers, raw evidence, profiling, limitations and all62 audit items. Next pursue
 a distinct measured dispatch specialization while preserving live checks and
 observable frame/ownership/cancellation semantics; rejected shortcuts stay rejected.
+
+## Native-call cleanup experiments rejected (2026-10-23)
+
+No production change is retained from late native-call cleanup specialization.
+Separate optimized screens contain432 runs /1296 windows each, three layouts and
+before/candidate/compiler-disabled controls. A coercion capture annotation improves
+the six-target geometric mean2.201% versus before but only0.516% versus disabled;
+bounded PHI-edge cleanup predicates improve1.855% and0.928%. Both miss the declared
+3% aggregate /5% indirect target gate. Floating indirect calls and boxed-float
+result controls are adverse. Temporary hashes raise screen flags; no independent
+confirmation or broad regression run was warranted. No new Java comparison.
+
+Unannotated jump threading, speculative error-edge predicates and a later
+wrapper-identity runtime probe were rejected before timing. The latter's two
+removed compares cause extra stack-guard calls/register saves and an80-to96-byte
+floating helper frame on this compiler. Neither fewer static instructions nor a
+cleaner native-success path establishes a throughput benefit.
+
+Final bounded-edge correctness checks pass35 cases /3137 assertions; all candidate
+preparations pass4995 references each. Both timed campaigns pass independent raw
+replay. After removing every experimental source/test edit, the unchanged optimized
+checkpoint runtime passes35 cases /2895 assertions;125 module aliases are unchanged.
+These are selected Release checks, not full-suite/Debug/cross-platform qualification.
+See RESULTS and `results-aot-native-cleanup-rejected-macos-arm64.json` for the complete
+measurement, failure, restoration and62-item audit evidence.
+
+Next specify and inspect compiler-visible prepared dispatch as a distinct
+structural experiment: invocation-owned metadata, live debugger/body/readiness
+checks, compatible versioned entry and complete stack/frame/reader/fallback
+semantics. The aim is to remove a C++ dispatch frame, not change call observability.
+The inspected reusable path already passes RuntimeConfig and has no TLS lookup.
+This future design is unimplemented; Java parity and a global ceiling remain
+unestablished. Keep the rejected cleanup and guard-shape experiments rejected.
