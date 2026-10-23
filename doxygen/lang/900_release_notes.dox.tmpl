@@ -34,7 +34,14 @@
     require full Program access. Caller-and-target functional-domain checks remain in place. The trusted
     user-module exception is limited to member-default evaluation, including typed-hash conversion, so @ref dataproviderintro "DataProvider" continues
     to consume such Programs' types. Namespace constant handles now retain the requested Program for access checks.
+    Modules can reflect back into an active caller through a chain of module calls; an intervening application
+    Program ends that chain, and restricting domains and sandbox checks still apply.
     See @ref reflection_caller_privilege and <a href="https://github.com/qoretechnologies/qore/issues/5483">issue 5483</a>.
+
+    @ref Qore::SQL::Datasource "Datasource" and @ref Qore::SQL::DatasourcePool "DatasourcePool" serialization
+    preserves driver-option types and string delimiters using structured configuration. Previously, integer
+    options became strings and commas in option values were parsed as separators. Deserialization still accepts
+    the legacy connection-string representation.
 
     <b>Security</b>: an open connection that a connection pool keeps for reuse is handed only to code whose
     @ref sandboxing "network sandbox" allows where the connection leads, checked as a new connection would be, with

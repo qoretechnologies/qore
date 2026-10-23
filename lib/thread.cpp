@@ -3278,6 +3278,36 @@ QoreSandboxManager* qore_find_thread_sandbox_manager_ref() {
     return find_thread_sandbox_manager_ref_intern();
 }
 
+bool qore_reflection_has_module_caller(const QoreProgram* caller, const QoreProgram* target,
+        ExceptionSink* xsink) {
+    ThreadData* td = thread_data.get();
+    if (!td) {
+        return false;
+    }
+    bool found_caller = td->current_pgm == caller;
+    unsigned iterations = 0;
+    for (const ProgramThreadCountContextHelper* ch = td->current_pgm_ctx; ch; ch = ch->getOldContext()) {
+        if (++iterations % 100 == 0 && qore_check_cancel(xsink, "checking reflection module callers")) {
+            return false;
+        }
+        const QoreProgram* pgm = ch->getOldProgram();
+        if (!pgm) {
+            continue;
+        }
+        if (!found_caller) {
+            found_caller = pgm == caller;
+            continue;
+        }
+        if (pgm == target) {
+            return true;
+        }
+        if (!pgm->getParseOptions().hasAny(QoreParseOptions(PO_IN_MODULE))) {
+            return false;
+        }
+    }
+    return false;
+}
+
 QoreSandboxManager* qore_find_thread_sandbox_policy_manager_ref() {
     return find_thread_sandbox_manager_ref_intern(nullptr, true);
 }

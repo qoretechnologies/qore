@@ -593,7 +593,9 @@ DLLEXPORT const QoreNamespace* qore_program_find_namespace(const QoreProgram& pg
     - reading or writing a class's members or constants: the class's functional domain is checked in the same way
     - navigation and value access in another Program (checkProgramAccess()): allowed from that Program, from a
       Program that created it (directly or through Programs it created), or when the caller is at least as
-      privileged as that Program
+      privileged as that Program. A user module can also reflect back into an enclosing caller through module
+      contexts, up to and including the first non-module Program; restricting domains and sandbox identity are
+      still checked, and this permission never crosses an intervening application Program
 
     See design/reflection-caller-privilege.md.
 

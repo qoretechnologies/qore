@@ -1,0 +1,69 @@
+#!/usr/bin/env qore
+# Copyright 2026 Qore Technologies, s.r.o. SPDX-License-Identifier: MIT
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%prepend-module-path "${SCRIPT_DIR}/../../../../../build/modules/dbi_test"
+%requires QUnit
+%requires dbitest
+%exec-class DatasourceSerializationOptionsTest
+
+class DatasourceSerializationOptionsTest inherits QUnit::Test {
+    constructor() : Test("Datasource serialization options", "1.0", \ARGV) {
+        addTestCase("integer options retain their types", \integerOptions());
+        addTestCase("string option delimiters remain data", \stringOptions());
+        addTestCase("legacy connection strings remain readable", \legacy());
+        addTestCase("pool options retain values and size limits", \poolOptions());
+        set_return_value(main());
+    }
+
+    integerOptions() {
+        Datasource ds({"type": "dbitest", "db": "test", "options": {"rows": 7, "stream-chunk": 3}});
+        Datasource restored = Serializable::deserialize(ds.serializeToData());
+        assertEq(ds.getConfigHash(), restored.getConfigHash());
+        assertEq(ds.getConfigHash(), Serializable::deserialize(ds.serialize()).getConfigHash());
+        assertEq(NT_INT, restored.getConfigHash().options.rows.typeCode());
+        restored.open();
+        on_exit restored.close();
+        assertEq(7, restored.exec("insert into t values (1)"));
+        restored.rollback();
+    }
+
+    stringOptions() {
+        Datasource ds({"type": "dbitest", "db": "test", "options": {"fault": "select,exec"}});
+        Datasource restored = Serializable::deserialize(ds.serializeToData());
+        assertEq("select,exec", restored.getConfigHash().options.fault);
+        restored.open();
+        on_exit restored.close();
+        assertThrows("DBI-TEST-SELECT-ERROR", sub () { restored.select("select 1"); });
+    }
+
+    legacy() {
+        Datasource ds({"type": "dbitest", "db": "test"});
+        hash<SerializationInfo> serialized = ds.serializeToData();
+        serialized._index."0"._class_data."Qore::SQL::Datasource".conf = ds.getConfigString();
+        Datasource restored = Serializable::deserialize(serialized);
+        assertEq(ds.getConfigHash(), restored.getConfigHash());
+        restored.open();
+        on_exit restored.close();
+        assertEq(1, restored.exec("insert into t values (1)"));
+        restored.rollback();
+    }
+
+    poolOptions() {
+        DatasourcePool pool({"type": "dbitest", "db": "test",
+            "options": {"rows": 7, "stream-chunk": 3, "min": 1, "max": 3}});
+        DatasourcePool restored = Serializable::deserialize(pool.serializeToData());
+        assertEq(pool.getConfigHash(), restored.getConfigHash());
+        DatasourcePool from_binary = Serializable::deserialize(pool.serialize());
+        assertEq(pool.getConfigHash(), from_binary.getConfigHash());
+        assertEq(NT_INT, restored.getConfigHash().options.rows.typeCode());
+        assertEq(7, restored.exec("insert into t values (1)"));
+        restored.rollback();
+
+        hash<SerializationInfo> legacy = pool.serializeToData();
+        legacy._index."0"._class_data."Qore::SQL::DatasourcePool".conf = pool.getConfigString();
+        DatasourcePool old = Serializable::deserialize(legacy);
+        assertEq(pool.getConfigString(), old.getConfigString());
+    }
+}

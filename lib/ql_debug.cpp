@@ -4017,14 +4017,42 @@ private:
         for (bool wildcard_first : {true, false}) {
             Fd s{open(AF_INET6, true, true)};
             Fd h{open(AF_INET6, false, true)};
-            UT_ASSERT(c, h.fd >= 0 && s.fd >= 0, "specific bind: the IPv6 listen order sockets are opened");
-            if (h.fd < 0 || s.fd < 0) {
+            Fd reservation{open(AF_INET6, false, true)};
+            UT_ASSERT(c, h.fd >= 0 && s.fd >= 0 && reservation.fd >= 0,
+                "specific bind: the IPv6 listen order sockets are opened");
+            if (h.fd < 0 || s.fd < 0 || reservation.fd < 0) {
                 return;
             }
-            UT_ASSERT_EQ(c, 0, bindTo(s.fd, AF_INET6, "::1", 0), "specific bind: the socket on ::1 is bound");
-            UT_ASSERT_EQ(c, 0, bindTo(h.fd, AF_INET6, "::", portOf(s.fd)),
+            // Allocate across both families: an ephemeral port on ::1 alone can already be in use on IPv4.
+            // Keep the reservation until both test sockets are bound, so there is no close-and-rebind race.
+            int rc = bindTo(reservation.fd, AF_INET6, "::", 0);
+            UT_ASSERT_EQ(c, 0, rc, "specific bind: a dual-stack port is reserved");
+            if (rc) {
+                return;
+            }
+            struct sockaddr_in6 addr = {};
+            addr.sin6_family = AF_INET6;
+            addr.sin6_port = htons(portOf(reservation.fd));
+            addr.sin6_addr = in6addr_loopback;
+#ifdef DARWIN
+            addr.sin6_len = sizeof(addr);
+#endif
+            // This is fixture setup: macOS permits the native bind, while the Qore wrapper deliberately refuses
+            // a specific address over a bound wildcard. The wildcard bind under test follows below.
+            rc = ::bind(s.fd, reinterpret_cast<struct sockaddr*>(&addr), sizeof(addr)) ? errno : 0;
+            UT_ASSERT_EQ(c, 0, rc, "specific bind: the socket on ::1 is bound");
+            if (rc) {
+                return;
+            }
+            rc = bindTo(h.fd, AF_INET6, "::", portOf(s.fd));
+            UT_ASSERT_EQ(c, 0, rc,
                 "specific bind: a dual-stack socket on :: shares the port of a bound socket on ::1 that reuses the "
                 "address");
+            if (rc) {
+                return;
+            }
+            ::close(reservation.fd);
+            reservation.fd = -1;
             assertListenOrder(c, wildcard_first ? h.fd : s.fd, wildcard_first ? s.fd : h.fd);
         }
     }

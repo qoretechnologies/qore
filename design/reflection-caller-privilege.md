@@ -65,7 +65,7 @@ manager other than the target's own. `PO_IN_MODULE` is an execution-context mark
 
 |!Operation|!Explicitly-allowed domains|!Execution and values
 |Structural navigation (`Structural`)|Not compared|Only declarations and handles; no initializers or target state
-|Value access and calls (`Value`)|Caller must allow every such domain the target allows|Reads, writes and calls require full access
+|Value access and calls (`Value`)|Caller must allow every such domain the target allows, or return through an active module call chain|Reads, writes and calls require full access
 |Member defaults and typed-hash casts (`MemberDefault`)|Full comparison except for trusted user-module code|Evaluates the initializer in the target context
 
 Thus code without injection or debugger capability can inspect a foreign Program's structure without acquiring its
@@ -75,6 +75,20 @@ The existing domain checks still apply to classes and callable variants. Builtin
 `Program` constructor can create a child with the target's options, and `create_object()` can execute a target class's
 constructor. A builtin's own domain therefore does not prove that it cannot exercise the target's privileges.
 Normal methods, copy and destructor calls also check the object's own Program, including inherited methods.
+
+#### Callbacks through modules
+
+A module may reflect back into a Program already participating in its active call chain without duplicating that
+Program's explicitly-allowed options. For example, `RestClientIo::copyWithUrl()` constructs an application-defined
+subclass through reflection while the application is calling the library. The check starts at the captured module
+caller, excludes context switches introduced by the reflection API, and walks outward through module contexts.
+The first non-module Program may be the target, but the walk never crosses it. An intervening application Program
+therefore cannot borrow a more privileged outer caller's authority. An unrelated target, including a Program
+created by that outer caller, is not authorized by this rule.
+
+Restricting domains, sandbox-manager identity, callable domains, and the runtime restriction override remain in
+force. This rule grants no general module exemption and does not expose inactive Programs to module callbacks.
+The context walk checks cooperative cancellation every 100 entries.
 
 #### Defaults and module compatibility
 

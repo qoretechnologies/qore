@@ -89,7 +89,7 @@ public ConnectionProvider::AbstractConnection sub get_mod_connection(string name
         throw "CONNECTION-ERROR", sprintf("connection %y is unknown to the test connection provider; known "
             "connections: %y", name, keys ConnectionMap());
     }
-    return conf.cls.newObject(conf.config);
+    return Class::forName(conf.class_name).newObject(conf.config);
 }
 
 public *hash<string, ConnectionProvider::AbstractConnection> sub get_mod_connections() {
@@ -97,7 +97,7 @@ public *hash<string, ConnectionProvider::AbstractConnection> sub get_mod_connect
     # the declared complex return type
     hash<string, ConnectionProvider::AbstractConnection> rv();
     foreach hash<auto> i in (ConnectionMap().pairIterator()) {
-        rv{i.key} = i.value.cls.newObject(i.value.config);
+        rv{i.key} = Class::forName(i.value.class_name).newObject(i.value.config);
     }
     return rv;
 }
@@ -106,11 +106,13 @@ public *hash<string, ConnectionProvider::AbstractConnection> sub get_mod_connect
 /** Built on each call so that the test can change FLH_TEST_ROOT between test cases
 */
 hash<string, hash<auto>> sub ConnectionMap() {
+    # Keep class names as configuration. Resolve them where the connection is requested: this helper can run
+    # in an earlier module Program, whose reflection handles do not grant execution rights to another Program.
     string root = getenv("FLH_TEST_ROOT") ?? "/nonexistent-flh-test-root";
     return {
         # a filesystem connection rooted at the test directory
         "files": {
-            "cls": Class::forName("ConnectionProvider::FilesystemConnection"),
+            "class_name": "ConnectionProvider::FilesystemConnection",
             "config": {
                 "name": "files",
                 "desc": "test filesystem connection",
@@ -119,7 +121,7 @@ hash<string, hash<auto>> sub ConnectionMap() {
         },
         # a read-only filesystem connection over the same directory
         "files-ro": {
-            "cls": Class::forName("ConnectionProvider::FilesystemConnection"),
+            "class_name": "ConnectionProvider::FilesystemConnection",
             "config": {
                 "name": "files-ro",
                 "desc": "read-only test filesystem connection",
@@ -129,7 +131,7 @@ hash<string, hash<auto>> sub ConnectionMap() {
         },
         # an FTP connection whose URL carries a password; used to verify that credentials never appear in errors
         "ftp-secret": {
-            "cls": Class::forName("ConnectionProvider::FtpConnection"),
+            "class_name": "ConnectionProvider::FtpConnection",
             "config": {
                 "name": "ftp-secret",
                 "desc": "test FTP connection with a password in the URL",
@@ -138,7 +140,7 @@ hash<string, hash<auto>> sub ConnectionMap() {
         },
         # a connection type with no file location support at all
         "no-files": {
-            "cls": Class::forName("FileLocationTestConnectionProvider::NoFileConnection"),
+            "class_name": "FileLocationTestConnectionProvider::NoFileConnection",
             "config": {
                 "name": "no-files",
                 "desc": "connection with no file location support",
@@ -147,7 +149,7 @@ hash<string, hash<auto>> sub ConnectionMap() {
         },
         # a connection serving the in-memory test application; resolves through tier 2
         "testapp": {
-            "cls": Class::forName("FileLocationTestConnectionProvider::TestAppConnection"),
+            "class_name": "FileLocationTestConnectionProvider::TestAppConnection",
             "config": {
                 "name": "testapp",
                 "desc": "connection serving the in-memory test application",
@@ -157,7 +159,7 @@ hash<string, hash<auto>> sub ConnectionMap() {
         # a connection that provides a native handler AND serves the test application, so that tier 1b can be
         # shown to take precedence over tier 2
         "native": {
-            "cls": Class::forName("FileLocationTestConnectionProvider::NativeFileConnection"),
+            "class_name": "FileLocationTestConnectionProvider::NativeFileConnection",
             "config": {
                 "name": "native",
                 "desc": "connection providing a native file location handler",
@@ -166,7 +168,7 @@ hash<string, hash<auto>> sub ConnectionMap() {
         },
         # a connection whose native handler is not a handler at all
         "bad-native": {
-            "cls": Class::forName("FileLocationTestConnectionProvider::BadNativeFileConnection"),
+            "class_name": "FileLocationTestConnectionProvider::BadNativeFileConnection",
             "config": {
                 "name": "bad-native",
                 "desc": "connection returning an object that is not a file location handler",

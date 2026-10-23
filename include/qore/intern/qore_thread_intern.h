@@ -319,6 +319,13 @@ DLLLOCAL void set_runtime_loc_sp(uintptr_t sp);
     sandboxed application program inherits the caller's sandbox. */
 DLLLOCAL QoreSandboxManager* qore_find_thread_sandbox_manager_ref();
 
+//! Returns whether target is an enclosing caller reached only through user-module contexts.
+/** Starts at the captured caller, ignoring context switches made by the reflection API itself.
+    The first non-module Program is included but is never crossed. Cancellation is reported in xsink.
+*/
+DLLLOCAL bool qore_reflection_has_module_caller(const QoreProgram* caller, const QoreProgram* target,
+    ExceptionSink* xsink);
+
 //! Resolves the manager for a POLICY check (filesystem/network); honors the policy barrier
 /** Identical to @ref qore_find_thread_sandbox_manager_ref() except that an active policy
     barrier stops resolution at the current Program, so trusted infrastructure code does not
