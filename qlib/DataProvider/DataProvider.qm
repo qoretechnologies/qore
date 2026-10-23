@@ -1572,6 +1572,11 @@ fetch
       patterns in the new \c qore.validation_regex_desc tag and
       @ref DataProvider::QoreStringFormatDataType::getValidationRegexDesc()
       "QoreStringFormatDataType::getValidationRegexDesc()"
+    - fixed every error raised while evaluating an expression being described as an error in the return value type
+      of each expression that it passed through (<tt>error in return value type "bool" for ">" expression: error in
+      return value type "auto" for "/" expression: division by zero found in integer expression</tt>); an error
+      keeps its own description, and only a result that an expression's return type does not accept is described
+      so
     - added @ref DataProvider::DpqlSerializer::templateReference() "DpqlSerializer::templateReference()", which
       writes a template reference in the form that the parser reads back: a value with characters other than letters,
       digits, \c _, \c . and \c *, and an empty value, in braces (<tt>$local:{order id}</tt>, <tt>$var:{}</tt>);

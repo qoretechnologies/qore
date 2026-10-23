@@ -104,15 +104,12 @@ class DpqlWildcardTest inherits QUnit::Test {
         return AbstractDataProvider::evalGenericExpressionValue(rec, DataProvider::parseDpqlExpression(dpql));
     }
 
-    #! Returns the result of evaluating an expression, or the error that it raises, without the context added to
-    #! the message of an error for each expression that it passes through
+    #! Returns the result of evaluating an expression, or the error that it raises
     static hash<auto> outcome(string dpql, hash<auto> rec = Rec) {
         try {
             return {"value": DpqlWildcardTest::eval(dpql, rec)};
         } catch (hash<ExceptionInfo> ex) {
-            string desc = ex.desc;
-            desc =~ s/error in return value type "[^"]*" for "[^"]*" expression: //g;
-            return {"err": ex.err, "desc": desc};
+            return {"err": ex.err, "desc": ex.desc};
         }
     }
 

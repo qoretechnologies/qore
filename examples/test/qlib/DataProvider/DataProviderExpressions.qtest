@@ -93,6 +93,7 @@ class DataProviderExpressionsTest inherits QUnit::Test {
         addTestCase("item context: hash sources", \itemContextHashTests());
         addTestCase("item context: nested operators", \itemContextNestingTests());
         addTestCase("item context: caller values and errors", \itemContextCallerTests());
+        addTestCase("an evaluation error keeps its description", \evaluationErrorDescriptionTests());
         set_return_value(main());
     }
 
@@ -1287,5 +1288,58 @@ class DataProviderExpressionsTest inherits QUnit::Test {
         assertTrue(eval_expr("like", ("", "")));
         assertTrue(eval_expr("like", ("", "%")));
         assertFalse(eval_expr("like", ("", "_")));
+    }
+
+    #! An error that evaluating an expression raises keeps its own description; only a result that the expression's
+    #! return type does not accept is described as an error in the return value type
+    evaluationErrorDescriptionTests() {
+        # errors of the evaluation, also in nested expressions
+        hash<string, list<string>> cases = {
+            "@age / 0 > 1": ("DIVISION-BY-ZERO", "division by zero found in integer expression"),
+            "(@age / 0 > 1) && true": ("DIVISION-BY-ZERO", "division by zero found in integer expression"),
+            "lwr(@x) == \"a\"": ("INVALID-OPERATION",
+                "expression references invalid key \"x\" in field reference \"x\"; valid keys: [\"age\"]"),
+        };
+        foreach hash<auto> i in (cases.pairIterator()) {
+            *hash<ExceptionInfo> err;
+            try {
+                AbstractDataProvider::evalGenericExpressionValue({"age": 25}, DataProvider::parseDpqlExpression(i.key));
+            } catch (hash<ExceptionInfo> ex) {
+                err = ex;
+            }
+            assertEq(i.value, (err.err, err.desc), i.key);
+        }
+
+        # a result that the return type does not accept is an error in the return value type
+        *hash<auto> custom = get_app_registry("dp-custom-expressions");
+        on_exit set_app_registry("dp-custom-expressions", custom);
+        set_app_registry("dp-custom-expressions", (custom ?? {}) + {
+            "qore-test-wrong-type": {
+                "exp": <DataProviderExpressionInfo>{
+                    "type": DET_Function,
+                    "name": "qore-test-wrong-type",
+                    "display_name": "Wrong Type",
+                    "short_desc": "Gives text for a whole number",
+                    "desc": "Gives text for a whole number",
+                    "symbol": "qore-test-wrong-type()",
+                    "args": (),
+                    "return_type": AbstractDataProviderTypeMap."int",
+                },
+                "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp, *hash<auto> template_context) {
+                    return "not a number";
+                },
+            },
+        });
+        *hash<ExceptionInfo> err;
+        try {
+            AbstractDataProvider::evalGenericExpression({}, <DataProviderExpression>{
+                "exp": "qore-test-wrong-type",
+                "args": (),
+            });
+        } catch (hash<ExceptionInfo> ex) {
+            err = ex;
+        }
+        assertEq("RUNTIME-TYPE-ERROR", err.err);
+        assertRegex("^error in return value type \"int\" for \"qore-test-wrong-type\" expression: ", err.desc);
     }
 }

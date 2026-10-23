@@ -476,7 +476,8 @@ class DpqlActionSessionTest inherits QUnit::Test {
         assertEq(1, e100.size(), "DPQL-E100 is reported");
         assertEq("error", e100[0].severity);
         # the message says what happened, not the code of the exception
-        assertRegex("^The search condition could not be checked here: .*division by zero", e100[0].message);
+        assertEq("The search condition could not be checked here: division by zero found in integer expression",
+            e100[0].message);
         assertEq(-1, e100[0].message.find("DIVISION-BY-ZERO"), e100[0].message);
     }
 
