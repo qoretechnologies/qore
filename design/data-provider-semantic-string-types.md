@@ -144,5 +144,8 @@ regexes.
 2. Register `"<name>"`/`"*<name>"` in `AbstractDataProviderTypeMap`.
 3. Add `case "<name>":` to `getTypeIntern()` in `Swagger.qm` and `OpenApi3.qm`, and an entry to
    `OpenApi3TypeMapper::TypeMap`.
-4. Add `QoreStringFormatDataType.qc.dox.h` is already in `doxygen/qlib/Doxyfile.DataProvider` (one entry
-   covers the class); extend `examples/test/qlib/DataProvider/DataProvider.qtest` coverage.
+4. Give the format a description of its regex in plain words (the `format_regex_desc` constructor argument) and an
+   entry in `DataTypeCatalogue::Info` (`DataTypeCatalogue.qc`), which names it in user interfaces and DPQL
+   completion details.
+5. Extend `examples/test/qlib/DataProvider/DataProvider.qtest` and `DataTypeCatalogue.qtest` coverage; the
+   module's documentation is generated from every `.qc` file of `qlib/DataProvider`, so no Doxyfile changes.
