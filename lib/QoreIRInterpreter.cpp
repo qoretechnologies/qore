@@ -454,6 +454,11 @@ static bool guardPredicate(QoreIROpcode opcode, const QoreValue& value, const Qo
 #include <qore/intern/QoreHashNodeIntern.h>
 #include <qore/intern/qore_list_private.h>
 
+// the trace switches, which the interpreter reads on every return of a function, read from the environment once
+static constinit QoreEnvFlag ir_trace_bg_fallback_env("QORE_IR_TRACE_BG_FALLBACK");
+static constinit QoreEnvFlag ir_trace_debug_env("QORE_IR_TRACE_DEBUG");
+static constinit QoreEnvFlag ir_trace_exceptions_env("QORE_IR_TRACE_EXCEPTIONS");
+
 // Helper: evaluate a node and ensure the caller owns a reference to the result.
 // Some operator eval() implementations return with needs_deref=false (borrowed reference).
 // This function ensures we always return an owned reference.
@@ -4076,6 +4081,9 @@ static bool tryExecuteInterpreterInlineIRStaticMethod(QoreIRCallStaticDirectInst
         inst->inline_ir_state.store(QORE_IR_INLINE_INELIGIBLE, std::memory_order_release);
         return false;
     }
+    // the static method runs in this interpreter instead of being called, so the call is counted here for its
+    // promotion to native code; once it is native, this inline path is no longer taken
+    uvb->recordFastCallExecution();
 
     QoreProgram* exec_pgm = qore_ir_method_execution_program(inst->method, uvb);
     if (!exec_pgm) {
@@ -6448,7 +6456,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     QoreIRBasicBlock* debug_break_target = nullptr;
 
     auto returnAfterUnhandledException = [&](bool values_cleaned = false) -> bool {
-        if (q_env_is_set("QORE_IR_TRACE_EXCEPTIONS")) {
+        if (ir_trace_exceptions_env.get()) {
             fprintf(stderr, "[ir-exception] func='%s' return-unhandled xsink=%d\n",
                 func.name.c_str(), xsink && *xsink ? 1 : 0);
             fflush(stderr);
@@ -6969,7 +6977,7 @@ next_instruction:
                 && inst->cached_start_line != last_debug_line && !(xsink && *xsink)) {
             last_debug_line = inst->cached_start_line;
             AbstractStatement* dbg_stmt = getDebugStatement(inst);
-            if (q_env_is_set("QORE_IR_TRACE_DEBUG")) {
+            if (ir_trace_debug_env.get()) {
                 fprintf(stderr, "[ir-debug] func='%s' line=%d stmt=%p op=%d debug_active=%d\n",
                     func.name.c_str(), inst->cached_start_line + inst->loc->offset,
                     static_cast<void*>(dbg_stmt), static_cast<int>(inst->opcode), debug_active ? 1 : 0);
@@ -6977,7 +6985,7 @@ next_instruction:
             }
             if (dbg_stmt) {
                 int dbg_rc = tlpd->dbgStep(statements, dbg_stmt, xsink);
-                if (q_env_is_set("QORE_IR_TRACE_DEBUG")) {
+                if (ir_trace_debug_env.get()) {
                     fprintf(stderr, "[ir-debug] func='%s' line=%d dbg_rc=%d xsink=%d\n",
                         func.name.c_str(), inst->cached_start_line + inst->loc->offset, dbg_rc,
                         xsink && *xsink ? 1 : 0);
@@ -7873,7 +7881,7 @@ next_instruction:
                     cleanupLocalCaches();
                 }
                 if (xsink && *xsink) {
-                    if (q_env_is_set("QORE_IR_TRACE_EXCEPTIONS")) {
+                    if (ir_trace_exceptions_env.get()) {
                         fprintf(stderr, "[ir-exception] func='%s' invoke-op=%d loc=%s:%d ex-target=%p\n",
                             func.name.c_str(), static_cast<int>(inv->invoke_opcode),
                             inst->loc ? inst->loc->getFile() : "",
@@ -7883,7 +7891,7 @@ next_instruction:
                     }
                     if (debug_active) {
                         tlpd->dbgException(getDebugStatement(inst), xsink);
-                        if (q_env_is_set("QORE_IR_TRACE_EXCEPTIONS")) {
+                        if (ir_trace_exceptions_env.get()) {
                             fprintf(stderr, "[ir-exception] func='%s' after-dbgException xsink=%d ex-target=%p\n",
                                 func.name.c_str(), xsink && *xsink ? 1 : 0,
                                 static_cast<void*>(inv->exception_target));
@@ -7910,7 +7918,7 @@ next_instruction:
                         return returnAfterUnhandledException();
                     }
                     cleanupToTempScope(inv->temp_scope_id, true, false, true);
-                    if (q_env_is_set("QORE_IR_TRACE_EXCEPTIONS")) {
+                    if (ir_trace_exceptions_env.get()) {
                         fprintf(stderr, "[ir-exception] func='%s' branch-exception xsink=%d target=%p\n",
                             func.name.c_str(), xsink && *xsink ? 1 : 0,
                             static_cast<void*>(inv->exception_target));
@@ -7932,7 +7940,7 @@ next_instruction:
                 break;
             }
             case QoreIROpcode::LandingPad: {
-                if (q_env_is_set("QORE_IR_TRACE_EXCEPTIONS")) {
+                if (ir_trace_exceptions_env.get()) {
                     fprintf(stderr, "[ir-exception] func='%s' landingpad loc=%s:%d xsink=%d\n",
                         func.name.c_str(),
                         inst->loc ? inst->loc->getFile() : "",
@@ -8024,7 +8032,7 @@ next_instruction:
                     break;
                 }
                 QoreException* caught = xsink->catchException();
-                if (q_env_is_set("QORE_IR_TRACE_EXCEPTIONS")) {
+                if (ir_trace_exceptions_env.get()) {
                     fprintf(stderr, "[ir-exception] func='%s' catch.exception caught=%p xsink=%d\n",
                         func.name.c_str(), static_cast<void*>(caught), xsink && *xsink ? 1 : 0);
                     fflush(stderr);
@@ -15488,7 +15496,7 @@ load_local_done:
                 } else {
                     // The inner expression was not a decomposable call shape.
                     // Report it so native lowering can be added.
-                    if (q_env_is_set("QORE_IR_TRACE_BG_FALLBACK")) {
+                    if (ir_trace_bg_fallback_env.get()) {
                         const AbstractQoreNode* inner = bg_op ? bg_op->getExp().getInternalNode()
                                                               : nullptr;
                         const QoreProgramLocation* loc = inst->loc;
@@ -15773,7 +15781,7 @@ load_local_done:
                 if (debug_active) {
                     tlpd->dbgFunctionExit(statements, return_value, xsink);
                 }
-                if (q_env_is_set("QORE_IR_TRACE_EXCEPTIONS")) {
+                if (ir_trace_exceptions_env.get()) {
                     fprintf(stderr, "[ir-exception] func='%s' return xsink-after-dbg-exit=%d\n",
                         func.name.c_str(), xsink && *xsink ? 1 : 0);
                     fflush(stderr);
@@ -15788,7 +15796,7 @@ load_local_done:
                 if (debug_active) {
                     tlpd->dbgFunctionExit(statements, return_value, xsink);
                 }
-                if (q_env_is_set("QORE_IR_TRACE_EXCEPTIONS")) {
+                if (ir_trace_exceptions_env.get()) {
                     fprintf(stderr, "[ir-exception] func='%s' return-nothing xsink-after-dbg-exit=%d\n",
                         func.name.c_str(), xsink && *xsink ? 1 : 0);
                     fflush(stderr);

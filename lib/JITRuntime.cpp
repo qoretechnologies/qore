@@ -10686,6 +10686,10 @@ static uint64_t execClosureDirect(const QoreClosureBase* cb, const UserVariantBa
     // the name of the frame, as an AST call of a closure names it
     static const std::string call_name("<anonymous closure>");
 
+    // this fast-call path bypasses evalTiered(), so the call is counted here for the callee's promotion to
+    // native code, as qore_rt_call_fast() counts it (a no-op once the callee is native)
+    uvb->recordFastCallExecution();
+
     QoreValue val{};
     {
         ArgvContextHelper argv_helper(argv.release(), xsink);
@@ -11319,6 +11323,10 @@ static uint64_t qore_rt_call_method_fast_impl(const QoreMethod* method,
 
     // the name of the frame, as an AST call names it
     const std::string& call_name = uvb->getCallName();
+
+    // this fast-call path bypasses evalTiered(), so the call is counted here for the callee's promotion to
+    // native code, as qore_rt_call_fast() counts it (a no-op once the callee is native)
+    uvb->recordFastCallExecution();
 
     QoreValue val{};
     {
@@ -14818,6 +14826,10 @@ static uint64_t qore_rt_call_direct_aot_impl(QoreAOTContext* ctx, int32_t slot,
         // the name of the frame, as an AST call names it
         const std::string& call_name = uvb->getCallName();
 
+        // this fast-call path bypasses evalTiered(), so the call is counted here for the callee's promotion to
+        // native code, as qore_rt_call_fast() counts it (a no-op once the callee is native)
+        uvb->recordFastCallExecution();
+
         QoreValue val{};
         {
             ArgvContextHelper argv_helper(argv.release(), xsink);
@@ -16493,6 +16505,10 @@ static bool try_dispatch_method_fast(QoreObject* o, const QoreMethod* method,
     // the name of the frame, as an AST call names it
     const std::string& call_name = uvb->getCallName();
 
+    // this fast-call path bypasses evalTiered(), so the call is counted here for the callee's promotion to
+    // native code, as qore_rt_call_fast() counts it (a no-op once the callee is native)
+    uvb->recordFastCallExecution();
+
     QoreValue val{};
     {
         ArgvContextHelper argv_helper(argv.release(), xsink);
@@ -17906,6 +17922,10 @@ static uint64_t qore_rt_call_static_method_direct_impl(const QoreMethod* method,
 
     // the name of the frame, as an AST call names it
     const std::string& call_name = uvb->getCallName();
+
+    // this fast-call path bypasses evalTiered(), so the call is counted here for the callee's promotion to
+    // native code, as qore_rt_call_fast() counts it (a no-op once the callee is native)
+    uvb->recordFastCallExecution();
 
     QoreValue val{};
     {
