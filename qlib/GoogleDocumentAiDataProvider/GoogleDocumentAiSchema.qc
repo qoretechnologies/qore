@@ -85,7 +85,8 @@ public class GoogleDocumentAiSchema {
                 OpenApi3::OpenApi3Schema schema = OpenApi3::OpenApi3Loader::fromString(item.text, True);
                 list<hash<RestSchemaActionInfo>> manifest = Priv::GoogleDocumentAiManifest{item.version};
                 push built, new RestSchemaActionSet(schema, manifest,
-                    item.version == "v1" ? GoogleDocumentAiManifest::references() : NOTHING, built);
+                    item.version == "v1" ? GoogleDocumentAiManifest::references() : NOTHING, built,
+                    NOTHING, RestSchemaActionSet::LazyResponseTypes);
             }
             sets = built;
         }

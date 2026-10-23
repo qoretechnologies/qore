@@ -63,7 +63,10 @@ module TogetherDataProvider {
         foreach RestSchemaActionSet set in (TogetherSchema::getActionSets()) {
             foreach hash<DataProviderActionInfo> action in (set.getActionInfoList(TogetherDataProvider::AppName)) {
                 action.options = action.options ?? {};
-                action.output_type = action.output_type ?? AbstractDataProviderTypeMap."nothing";
+                # an output type built on first use comes from the callback
+                if (!action.output_type && !action.get_output_type) {
+                    action.output_type = AbstractDataProviderTypeMap."nothing";
+                }
                 DataProviderActionCatalog::registerAction(action);
             }
         }

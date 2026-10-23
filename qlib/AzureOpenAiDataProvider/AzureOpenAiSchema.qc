@@ -192,9 +192,11 @@ public class AzureOpenAiSchema {
             OpenApi3::OpenApi3Loader::fromFile(Priv::AzureOpenAiModuleDir + "/azure-openai-audio.json"),
         );
         RestSchemaActions::RestSchemaActionSet primary(parsed[0], AzureOpenAiManifest::Manifest,
-            AzureOpenAiManifest::ReferenceData);
+            AzureOpenAiManifest::ReferenceData,
+            NOTHING, NOTHING, RestSchemaActions::RestSchemaActionSet::LazyResponseTypes);
         RestSchemaActions::RestSchemaActionSet audio(parsed[1], AzureOpenAiAudioManifest::Manifest,
-            NOTHING, (primary,));
+            NOTHING, (primary,),
+            NOTHING, RestSchemaActions::RestSchemaActionSet::LazyResponseTypes);
         schemas = parsed;
         action_sets = (primary, audio);
     }

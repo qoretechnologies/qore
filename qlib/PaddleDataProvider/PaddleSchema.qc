@@ -68,7 +68,9 @@ public hashdecl PaddleSchemaProvenanceInfo {
     a couple of dozen operations.  237 of 519 component schemas survive pruning, because Paddle's entity
     types reference each other heavily.
 
-    The schema is parsed once, when the module loads and registers its actions, which are built from it.
+    The schema is parsed once, when the module loads and registers its actions, whose options are derived from
+    the requests; each action's output type is built when it is first needed (see
+    @ref RestSchemaActions::RestSchemaActionSetOptionInfo::lazy_response_types "lazy_response_types").
 */
 public class PaddleSchema {
     public {
@@ -111,7 +113,8 @@ public class PaddleSchema {
         AutoLock al(lck);
         if (!action_set) {
             action_set = new RestSchemaActionSet(PaddleSchema::getSchemaIntern(), PaddleManifest::Manifest,
-                PaddleManifest::ReferenceData);
+                PaddleManifest::ReferenceData,
+                NOTHING, NOTHING, RestSchemaActionSet::LazyResponseTypes);
         }
         return action_set;
     }

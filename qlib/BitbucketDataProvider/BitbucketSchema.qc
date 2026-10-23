@@ -75,7 +75,9 @@ public hashdecl BitbucketSchemaProvenanceInfo {
     nesting to name a branch, so the manifest presents them as plain values and converts them with wire
     codecs; see @ref BitbucketDataProvider::BitbucketManifest "BitbucketManifest".
 
-    The schema is parsed once, when the module loads and registers its actions, which are built from it.
+    The schema is parsed once, when the module loads and registers its actions, whose options are derived from
+    the requests; each action's output type is built when it is first needed (see
+    @ref RestSchemaActions::RestSchemaActionSetOptionInfo::lazy_response_types "lazy_response_types").
 */
 public class BitbucketSchema {
     public {
@@ -120,7 +122,8 @@ public class BitbucketSchema {
             # set is built, so they have to be there first
             BitbucketCodecs::register();
             action_set = new RestSchemaActionSet(BitbucketSchema::getSchemaIntern(),
-                BitbucketManifest::Manifest, BitbucketManifest::ReferenceData);
+                BitbucketManifest::Manifest, BitbucketManifest::ReferenceData,
+                NOTHING, NOTHING, RestSchemaActionSet::LazyResponseTypes);
         }
         return action_set;
     }

@@ -125,7 +125,8 @@ public class MistralSchema {
         AutoLock al(lck);
         if (!action_set) {
             action_set = new RestSchemaActions::RestSchemaActionSet(MistralSchema::getSchemaIntern(),
-                MistralManifest::Manifest, MistralManifest::ReferenceData);
+                MistralManifest::Manifest, MistralManifest::ReferenceData,
+                NOTHING, NOTHING, RestSchemaActions::RestSchemaActionSet::LazyResponseTypes);
         }
         return action_set;
     }

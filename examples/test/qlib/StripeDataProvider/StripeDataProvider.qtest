@@ -334,7 +334,10 @@ public class StripeDataProviderTest inherits QUnit::Test {
             assertTrue(a.short_desc.val(), a.action + ": short description");
             assertTrue(a.desc.val(), a.action + ": description");
             assertTrue(a.groups.val(), a.action + ": groups");
-            assertTrue(exists a.output_type, a.action + ": output type");
+            # the output type is built when it is first needed, by the callback the definition carries
+            assertTrue(exists a.output_type || exists a.get_output_type, a.action + ": output type");
+            assertTrue(aset.getOperationEx(a.action).getResponseType() instanceof AbstractDataProviderType,
+                a.action + ": output type built");
             assertTrue(a.options.val(), a.action + ": options");
             # a short description is a single plain-text line
             assertLt(90, a.short_desc.size(), a.action + ": short description length");

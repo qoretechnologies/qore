@@ -65,7 +65,10 @@ public hashdecl StripeSchemaProvenanceInfo {
     exposing a few dozen operations.  1022 of the 1440 schemas survive pruning, because Stripe's types are
     heavily interconnected.
 
-    The schema is parsed once, when the module loads and registers its actions, which are built from it.
+    The schema is parsed once, when the module registers its actions as it loads, because the options of every
+    action are derived from its request.  The output types, which make up most of the schema's types, are built
+    when each action's output type is first needed rather than when the module loads; see
+    @ref RestSchemaActions::RestSchemaActionSetOptionInfo::lazy_response_types "lazy_response_types".
 */
 public class StripeSchema {
     public {
@@ -106,7 +109,8 @@ public class StripeSchema {
         AutoLock al(lck);
         if (!action_set) {
             action_set = new RestSchemaActionSet(StripeSchema::getSchemaIntern(), StripeManifest::Manifest,
-                StripeManifest::ReferenceData);
+                StripeManifest::ReferenceData,
+                NOTHING, NOTHING, RestSchemaActionSet::LazyResponseTypes);
         }
         return action_set;
     }

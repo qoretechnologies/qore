@@ -1,0 +1,150 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires json
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/FsUtil.qm
+%requires ../../../../qlib/QUnit.qm
+
+%exec-class RestSchemaModuleLazyTypesTest
+
+#! Verifies that every provider module building REST-schema actions builds its output types on first use, and that
+#! they are the types built at load
+/** Each module is loaded twice, in separate processes: once with
+    @ref RestSchemaActions::RestSchemaActionSet::setEagerResponseTypes() "RestSchemaActionSet::setEagerResponseTypes()"
+    forcing every output type to be built at construction, and once as shipped.  Every action's output type,
+    options and other metadata must be identical.
+*/
+class RestSchemaModuleLazyTypesTest inherits QUnit::Test {
+    private {
+        #! The module sources
+        string qlib = normalize_dir(get_script_dir() + "/../../../../qlib");
+    }
+
+    constructor() : Test("REST-schema modules build output types on first use", "1.0") {
+        addTestCase("every REST-schema module opts in, and its lazy types equal its eager ones", \modulesTest());
+        set_return_value(main());
+    }
+
+    #! Returns the modules in the source tree that build REST-schema action sets or register their actions
+    /** @return module name -> whether the module builds an action set without opting in to lazy response types
+    */
+    private hash<string, bool> getModules() {
+        hash<string, bool> rv = {};
+        Dir top();
+        top.chdir(qlib);
+        foreach string name in (top.listDirs()) {
+            string path = qlib + DirSep + name;
+            if (name == "RestSchemaActions" || !is_file(path + DirSep + name + ".qm")) {
+                continue;
+            }
+            Dir dir();
+            dir.chdir(path);
+            bool builds;
+            bool registers;
+            bool lazy;
+            foreach string file in (dir.listFiles("\\.q[cm]$")) {
+                string src = ReadOnlyFile::readTextFile(path + DirSep + file);
+                builds = builds || RestSchemaModuleLazyTypesTest::constructsSet(src);
+                # a module registering the actions of a set another module builds
+                registers = registers || src.find(".getActionInfoList(") >= 0;
+                lazy = lazy || src.find("LazyResponseTypes") >= 0 || src.find("lazy_response_types") >= 0;
+            }
+            if (builds || registers) {
+                rv{name} = builds && !lazy;
+            }
+        }
+        return rv;
+    }
+
+    #! Returns @ref True if the source constructs a REST-schema action set
+    private static bool constructsSet(string src) {
+        foreach string line in (src.split("\n")) {
+            if (line =~ /new\s+(RestSchemaActions::)?RestSchemaActionSet\s*\(/) {
+                return True;
+            }
+            # a declaration that constructs one, as opposed to a method returning one
+            if (line =~ /^\s+(RestSchemaActions::)?RestSchemaActionSet\s+\w+\s*\(/
+                    && line !~ /^\s*(static|private|public)\b/ && line !~ /\)\s*\{\s*$/) {
+                return True;
+            }
+        }
+        return False;
+    }
+
+    #! Loads the modules in a new process and returns what it writes
+    private hash<auto> dump(string mode, list<string> modules) {
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        string output = dir + DirSep + mode + ".json";
+        string qore = ENV.QORE_EXECUTABLE ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string cmd = sprintf("%s %s %s %s %s 2>&1", qore, get_script_dir() + DirSep + "RestSchemaModuleTypes.q",
+            mode, output, modules.join(" "));
+        string log = backquote(cmd);
+        if (!is_file(output)) {
+            throw "TEST-ERROR", sprintf("%s did not write %s: %s", cmd, output, log);
+        }
+        return parse_json(ReadOnlyFile::readTextFile(output));
+    }
+
+    modulesTest() {
+        hash<string, bool> modules = getModules();
+        assertGt(20, modules.size(), "the REST-schema modules are found");
+        assertEq((), (map $1.key, modules.pairIterator(), $1.value) ?? (),
+            "every module building a REST-schema action set opts in to lazy response types");
+
+        list<string> names = sort(keys modules);
+        hash<auto> eager = dump("eager", names);
+        hash<auto> lazy = dump("lazy", names);
+
+        assertEq(keys eager.apps, keys lazy.apps, "the same applications are registered");
+        hash<string, int> lazy_actions = {};
+        # every difference, so that a failure names all of them: app -> action -> part
+        hash<string, hash<string, list<string>>> differences = {};
+        list<string> errors = ();
+        foreach hash<auto> i in (eager.apps.pairIterator()) {
+            string app = i.key;
+            hash<auto> e = i.value;
+            *hash<auto> l = lazy.apps{app};
+            if (e.error) {
+                push errors, sprintf("%s (eager): %s", app, e.error);
+            }
+            if (l.error) {
+                push errors, sprintf("%s (lazy): %s", app, l.error);
+            }
+            foreach hash<auto> a in (e.actions.pairIterator()) {
+                *hash<auto> la = l.actions{a.key};
+                foreach string part in (("metadata", "output_type")) {
+                    if (la{part} != a.value{part}) {
+                        differences{app}{a.key} += part;
+                    }
+                }
+                foreach string option in (keys (a.value.options + la.options)) {
+                    if (la.options{option} != a.value.options{option}) {
+                        differences{app}{a.key} += "option " + option;
+                    }
+                }
+            }
+            map differences{app}{$1} += "missing when eager", keys (l.actions - keys e.actions);
+            foreach hash<auto> a in (l.actions.pairIterator()) {
+                if (a.value.registered_lazy && !e.actions{a.key}.registered_lazy) {
+                    ++lazy_actions{e.module};
+                }
+            }
+        }
+        assertEq((), errors, "every output type is built");
+        assertEq({}, differences, "the lazy actions equal the eager ones");
+        # a module registering applications registers output types built on first use; a module that builds sets
+        # for another one to register is covered by that one
+        foreach string mod in (sort(keys (map {$1.module: True}, eager.apps.iterator()))) {
+            if (inlist(mod, names)) {
+                assertGt(0, lazy_actions{mod} ?? 0, mod + " registers output types built on first use");
+            }
+        }
+    }
+}

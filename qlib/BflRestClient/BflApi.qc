@@ -176,7 +176,8 @@ public class BflApi {
             "finetunes": <RestSchemaReferenceDataInfo>{"name": "finetunes", "action": "list-finetunes",
                 "records_path": "finetunes", "value_field": "finetune_id", "display_field": "name",
                 "desc": "Fine-tune available to the selected account."},
-        });
+        },
+        NOTHING, NOTHING, RestSchemaActionSet::LazyResponseTypes);
         return actions;
     }
 

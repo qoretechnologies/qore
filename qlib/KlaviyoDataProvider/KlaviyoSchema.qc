@@ -96,7 +96,9 @@ public hashdecl KlaviyoSchemaProvenanceInfo {
     declare \c "page[size]", so a generated action can always ask for the next page.  The import spec
     therefore has no \c normalize block, and the committed artifact carries no \c x-qore-normalized marker.
 
-    The schema is parsed once, when the module loads and registers its actions, which are built from it.
+    The schema is parsed once, when the module loads and registers its actions, whose options are derived from
+    the requests; each action's output type is built when it is first needed (see
+    @ref RestSchemaActions::RestSchemaActionSetOptionInfo::lazy_response_types "lazy_response_types").
 */
 public class KlaviyoSchema {
     public {
@@ -143,7 +145,8 @@ public class KlaviyoSchema {
         AutoLock al(lck);
         if (!action_set) {
             action_set = new RestSchemaActionSet(KlaviyoSchema::getSchemaIntern(),
-                KlaviyoManifest::Manifest, KlaviyoManifest::ReferenceData);
+                KlaviyoManifest::Manifest, KlaviyoManifest::ReferenceData,
+                NOTHING, NOTHING, RestSchemaActionSet::LazyResponseTypes);
         }
         return action_set;
     }

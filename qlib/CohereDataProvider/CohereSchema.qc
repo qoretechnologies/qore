@@ -124,7 +124,8 @@ public class CohereSchema {
         AutoLock al(lck);
         if (!action_set) {
             action_set = new RestSchemaActions::RestSchemaActionSet(CohereSchema::getSchemaIntern(),
-                CohereManifest::Manifest, CohereManifest::ReferenceData);
+                CohereManifest::Manifest, CohereManifest::ReferenceData,
+                NOTHING, NOTHING, RestSchemaActions::RestSchemaActionSet::LazyResponseTypes);
         }
         return action_set;
     }

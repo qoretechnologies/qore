@@ -38,7 +38,8 @@ public class AssemblyAiActions {
         list<hash<DataProviderActionInfo>> result = ();
         foreach RestSchemaActionSet set in (AssemblyAiSchema::getActionSets().iterator()) {
             foreach hash<DataProviderActionInfo> action in (set.getActionInfoList(app)) {
-                if (!action.output_type) {
+                # an output type built on first use comes from the callback
+                if (!action.output_type && !action.get_output_type) {
                     action.output_type = EmptyResponseType;
                 }
                 result += action;

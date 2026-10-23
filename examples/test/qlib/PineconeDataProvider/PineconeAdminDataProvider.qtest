@@ -92,10 +92,12 @@ class PineconeAdminProviderTest inherits QUnit::Test {
             assertTrue(a.short_desc.val() && a.short_desc.size() < 80);
             assertTrue(a.desc.val());
             assertNothing(a.cls);
+            # an output type built on first use is published by the callback the definition carries
             if (aset.getOperationEx(a.action).getResponseType()) {
-                assertTrue(exists a.output_type);
+                assertTrue(exists a.output_type || exists a.get_output_type);
             } else {
                 assertNothing(a.output_type);
+                assertNothing(a.get_output_type);
             }
             AbstractDataProvider child = p.getChildProviderEx(a.action);
             assertTrue(child.getInfo().supports_request);
@@ -107,7 +109,7 @@ class PineconeAdminProviderTest inherits QUnit::Test {
         }
         hash<DataProviderActionInfo> create = aset.getActionInfo("PineconeAdmin", "create-api-key");
         assertEq(6, create.options.roles.element_allowed_values.size());
-        assertTrue(create.output_type.getFields().value.getAttributes().sensitive);
+        assertTrue(create.get_output_type().getFields().value.getAttributes().sensitive);
         foreach string action in (("create-service-account", "rotate-service-account-secret")) {
             assertTrue(aset.getOperationEx(action).getResponseType().getFields().client_secret.getAttributes().sensitive);
         }

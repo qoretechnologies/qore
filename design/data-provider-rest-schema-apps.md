@@ -288,6 +288,41 @@ Beyond the drift-agreement test, each application's `.qtest` should cover:
 Flattening and its inverse, pruning invariants, drift classification and codec round-trips are tested
 once in `examples/test/qlib/RestSchemaActions/`, not per application.
 
+## Output types are built on first use
+
+Every `RestSchemaActionSet` a module constructs passes `RestSchemaActionSet::LazyResponseTypes` as its
+options. The constructor still resolves every operation and builds every request type, because the options of
+each action are derived from its request and the catalog needs them when the module registers its actions; the
+output types, which are most of the types a schema produces, are built by the `get_output_type` callback of each
+generated definition when the action is first read. Loading every module that registers an application (what
+`ActionProviderClass.qtest` does) went from about 61 s and 2.6 GB to about 40 s and 2.2 GB on a debug build, and
+the REST-schema modules' share from about 50 s and 1.37 GB to 30 s and 0.97 GB. The cost moves rather than
+disappears where a schema's types are one connected graph: Stripe loads in 3.5 s instead of 16 s, but the first
+output type opened then takes about 11 s, because it builds most of that graph.
+
+- **Module code must not give a generated definition an output type when it has a callback.** A module that
+  fills in a default (`EmptyResponseType`, `"nothing"`) checks that the definition has neither `output_type`
+  nor `get_output_type`; a module that replaces the schema's response with its own type removes the callback
+  as well (`StabilityAiDataProvider` does this for media responses).
+- **A test reading `output_type` from a generated definition reads the callback instead**, or the operation's
+  `getResponseType()`; the catalog resolves the callback for everything else.
+- `examples/test/qlib/RestSchemaActions/RestSchemaModuleLazyTypes.qtest` finds every module in the tree that
+  constructs an action set or registers another module's, fails if one does not opt in, and compares the output
+  types, options and metadata of every action built eagerly (`RestSchemaActionSet::setEagerResponseTypes()`) and
+  on first use. A new application is covered without being listed.
+
+Building a type on first use is only correct because a schema's types do not depend on the order in which they
+are built. Types and fields are cached per requiredness variant (mandatory and "or nothing"), and each variant is
+built from the schema; neither is ever derived from the other, cached one with `getOrNothingType()` or
+`getMandatoryType()`. A derived variant differs from the built one (the display name's case, the `qore.no_null`
+option, the class of boolean types, the required and preselected attributes of object fields and, when it is
+copied from a type still being built, its fields), so with derivation the type an action got depended on which
+actions had been built before it: 583 of the 1,601 actions differed between an eager and a lazy build. For the
+same reason the canonical field of a name, which is also the recursion cut a property on the far side of a cycle
+is handed, is the field of the bare use, and a use with a description or default of its own gets a copy.
+`examples/test/qlib/RestSchemaValidator/VariantOrder.qtest` builds each variant on its own and after the others,
+for OpenAPI 3 and Swagger 2.0, and requires the same result.
+
 ## What the first two ports taught
 
 **Measure a schema-support gap construct by construct, against the parser.** The initial Paddle

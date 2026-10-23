@@ -93,7 +93,9 @@ public hashdecl PineconeSchemaProvenanceInfo {
     the version they describe and the version the client sends, and this module's tests assert that the
     two agree.  Re-import all four when it moves, not one.
 
-    Each document is parsed once, when the module loads and registers its actions, which are built from it.
+    Each document is parsed once, when the module loads and registers its actions, whose options are derived
+    from the requests; each action's output type is built when it is first needed (see
+    @ref RestSchemaActions::RestSchemaActionSetOptionInfo::lazy_response_types "lazy_response_types").
 
     @since %PineconeDataProvider 1.0
 */
@@ -216,7 +218,8 @@ public class PineconeSchema {
         if (!admin_set) {
             admin_set = new RestSchemaActions::RestSchemaActionSet(
                 PineconeSchema::getSchemaIntern(AdminSchemaFileName), PineconeAdminManifest::Manifest,
-                PineconeAdminManifest::ReferenceData);
+                PineconeAdminManifest::ReferenceData,
+                NOTHING, NOTHING, RestSchemaActions::RestSchemaActionSet::LazyResponseTypes);
         }
         return admin_set;
     }
@@ -248,7 +251,8 @@ public class PineconeSchema {
                 PineconeSchema::getSchemaIntern(DataSchemaFileName), PineconeManifest::DataManifest,
                 PineconeManifest::DataReferenceData,
                 (PineconeSchema::getControlActionSetIntern(),
-                    PineconeSchema::getInferenceActionSetIntern()));
+                    PineconeSchema::getInferenceActionSetIntern()),
+                NOTHING, RestSchemaActions::RestSchemaActionSet::LazyResponseTypes);
         }
         return data_set;
     }
@@ -272,7 +276,8 @@ public class PineconeSchema {
         if (!inference_set) {
             inference_set = new RestSchemaActions::RestSchemaActionSet(
                 PineconeSchema::getSchemaIntern(InferenceSchemaFileName),
-                PineconeManifest::InferenceManifest, PineconeManifest::InferenceReferenceData);
+                PineconeManifest::InferenceManifest, PineconeManifest::InferenceReferenceData,
+                NOTHING, NOTHING, RestSchemaActions::RestSchemaActionSet::LazyResponseTypes);
         }
         return inference_set;
     }
@@ -283,7 +288,8 @@ public class PineconeSchema {
             control_set = new RestSchemaActions::RestSchemaActionSet(
                 PineconeSchema::getSchemaIntern(ControlSchemaFileName),
                 PineconeManifest::ControlManifest, PineconeManifest::ControlReferenceData,
-                PineconeSchema::getInferenceActionSetIntern(), PineconeManifest::HostSources);
+                PineconeSchema::getInferenceActionSetIntern(), PineconeManifest::HostSources,
+                RestSchemaActions::RestSchemaActionSet::LazyResponseTypes);
         }
         return control_set;
     }

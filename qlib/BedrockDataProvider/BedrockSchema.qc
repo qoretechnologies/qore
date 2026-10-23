@@ -170,9 +170,11 @@ public class BedrockSchema {
                 Priv::BedrockDataProviderModuleDir + "/bedrock-runtime-openapi.json"),
         );
         RestSchemaActions::RestSchemaActionSet control(parsed[0],
-            BedrockControlManifest::Manifest, BedrockControlManifest::ReferenceData);
+            BedrockControlManifest::Manifest, BedrockControlManifest::ReferenceData,
+            NOTHING, NOTHING, RestSchemaActions::RestSchemaActionSet::LazyResponseTypes);
         RestSchemaActions::RestSchemaActionSet runtime(parsed[1],
-            BedrockRuntimeManifest::Manifest, NOTHING, (control,));
+            BedrockRuntimeManifest::Manifest, NOTHING, (control,),
+            NOTHING, RestSchemaActions::RestSchemaActionSet::LazyResponseTypes);
         schemas = parsed;
         action_sets = (control, runtime);
     }

@@ -141,7 +141,8 @@ public class StabilityAiApi {
             actions = new RestSchemaActionSet(getSchemaIntern(), manifest, {
                 "engines": <RestSchemaReferenceDataInfo>{"name": "engines", "action": "list-engines",
                     "value_field": "id", "display_field": "name", "desc": "Available legacy image engine."},
-            });
+            },
+            NOTHING, NOTHING, RestSchemaActionSet::LazyResponseTypes);
         }
         return actions;
     }

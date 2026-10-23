@@ -159,7 +159,8 @@ public class AssemblyAiSchema {
                 OpenApi3::OpenApi3Schema schema = OpenApi3::OpenApi3Loader::fromFile(
                     Priv::AssemblyAiModuleDir + "/assemblyai-" + name + "-openapi.json");
                 parsed{name} = new RestSchemaActionSet(schema, Manifests{name}, refs{name},
-                    map $1, parsed.iterator());
+                    (map $1, parsed.iterator()),
+                    NOTHING, RestSchemaActionSet::LazyResponseTypes);
             }
             action_sets = parsed;
         }
