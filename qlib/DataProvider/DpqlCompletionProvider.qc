@@ -44,13 +44,22 @@ public hashdecl DpqlCompletionItem {
     *string snippet_text;
     #! Optional documentation or help text
     *string documentation;
-    #! Optional detail text shown next to the label (e.g., type information)
-    /** Displayed in a muted/grey style by most editors. Used to show:
-        - Field type (e.g., \c "string", \c "int")
-        - Function/operator return type (e.g., \c "→ bool")
-        - Expected argument type when inside a function call (e.g., \c "expected: string")
+    #! Optional detail text shown next to the label, in plain words
+    /** Displayed in a muted/grey style by most editors. Used to show, with the type names of the
+        @ref DataProvider::DataTypeCatalogue "DataTypeCatalogue":
+        - the type of a field or a template value, by its display name (e.g., \c "Text", \c "Whole number")
+        - what a function or an operator gives (e.g., \c "gives true or false")
+        - the type of the argument that the cursor is in, when inside a function call
+          (e.g., \c "this argument takes text", also after the type of a field: <tt>"Whole number; this argument
+          takes text"</tt>)
+        - that a template context needs a value after its \c ':' (\c "needs a value after ':'")
+
+        A type that the catalogue does not name is shown by its type name.
 
         @since DataProvider 3.4
+        @since DataProvider 3.11 in plain words, with the type names of the
+        @ref DataProvider::DataTypeCatalogue "DataTypeCatalogue"; before, type names (\c "int"), a return type after
+        an arrow (\c "→ bool"), \c "expected: string" and \c "requires argument"
     */
     *string detail;
     #! Optional text used by LSP clients to filter the typed word against this item
@@ -250,6 +259,11 @@ public class DpqlCompletionProvider {
             "documentation": "Each value of the hash, in key order: @prices{*} is map @value, @prices",
             "sort_priority": 0};
 
+        #! The detail of a template context that needs a value after its \c ':'
+        /** @since DataProvider 3.11
+        */
+        const TemplateNeedsValueDetail = "needs a value after ':'";
+
         #! Well-known template contexts with descriptions
         const list<auto> DefaultTemplateContexts = (
             {"label": "$static:", "kind": "template", "insert_text": "$static:",
@@ -369,7 +383,7 @@ public class DpqlCompletionProvider {
                 # If inside a function arg with allowed_values, offer only those
                 if (arg_ctx.allowed_values) {
                     items += getAllowedValueCompletions(arg_ctx.allowed_values,
-                        arg_ctx.expected_type_name, analysis.prefix);
+                        arg_ctx.expected_type_detail, analysis.prefix);
                     break;
                 }
 
@@ -406,8 +420,8 @@ public class DpqlCompletionProvider {
                 }
 
                 # Annotate items with expected type when inside a typed argument
-                if (arg_ctx.expected_type_name) {
-                    items = annotateExpectedType(items, arg_ctx.expected_type_name);
+                if (arg_ctx.expected_type_detail) {
+                    items = annotateExpectedType(items, arg_ctx.expected_type_detail);
                 }
                 break;
 
@@ -953,7 +967,7 @@ public class DpqlCompletionProvider {
                     "label": field_name,
                     "kind": "field",
                     "insert_text": insert_text,
-                    "detail": field.getType().getName(),
+                    "detail": getTypeDetail(field.getType()),
                     "documentation": info.short_desc ?? info.desc,
                     "sort_priority": 1,
                 };
@@ -1014,7 +1028,7 @@ public class DpqlCompletionProvider {
                 "label": i.key,
                 "kind": "field",
                 "insert_text": DpqlSerializer::fieldReferenceForPath(parts + (i.key,)),
-                "detail": key_field.getType().getName(),
+                "detail": getTypeDetail(key_field.getType()),
                 "documentation": info.short_desc ?? info.desc,
                 "sort_priority": 1,
             };
@@ -1063,7 +1077,7 @@ public class DpqlCompletionProvider {
                 "label": i.key,
                 "kind": "field",
                 "insert_text": DpqlSerializer::memberNameForKey(i.key),
-                "detail": key_field.getType().getName(),
+                "detail": getTypeDetail(key_field.getType()),
                 "documentation": info.short_desc ?? info.desc,
                 "sort_priority": 1,
             };
@@ -1216,7 +1230,7 @@ public class DpqlCompletionProvider {
                     "kind": "keyword",
                     "insert_text": sym + " ",
                     "documentation": info.short_desc ?? info.desc,
-                    "detail": info.return_type ? "-> " + info.return_type.getName() : NOTHING,
+                    "detail": info.return_type ? getGivesDetail(info.return_type) : NOTHING,
                     "sort_priority": 23,
                 };
             }
@@ -1273,7 +1287,7 @@ public class DpqlCompletionProvider {
                 "insert_text": sym + " ",
                 "snippet_text": sym + " " + placeholders.join(", ") + "$0",
                 "documentation": info.short_desc ?? info.desc,
-                "detail": info.return_type ? "-> " + info.return_type.getName() : NOTHING,
+                "detail": info.return_type ? getGivesDetail(info.return_type) : NOTHING,
                 "sort_priority": 35,
             };
         }
@@ -1287,8 +1301,9 @@ public class DpqlCompletionProvider {
 
         @param analysis the context analysis hash (may contain \c func_expr_name and \c arg_index)
         @param expressions the available expressions map
-        @return a hash with \c expected_type_name (string), \c type_code (int),
-            and \c allowed_values (list), or an empty hash if not in a function arg context
+        @return a hash with \c expected_type_name (string), \c expected_type_detail (string: the detail text that
+            says the type, such as \c "this argument takes text"), \c type_code (int), and \c allowed_values (list),
+            or an empty hash if not in a function arg context
 
         @since DataProvider 3.4
     */
@@ -1319,6 +1334,7 @@ public class DpqlCompletionProvider {
             string tname = sig.type.getName();
             if (tname != "any" && tname != "auto") {
                 result.expected_type_name = tname;
+                result.expected_type_detail = sprintf("this argument takes %s", getTypeSentenceForm(sig.type));
             }
         }
 
@@ -1335,14 +1351,14 @@ public class DpqlCompletionProvider {
 
     #! Gets completions for a restricted set of allowed values
     /** @param allowed_values list of allowed value info hashes
-        @param expected_type_name optional expected type name for detail annotation
+        @param expected_type_detail optional detail text that says the type of the argument
         @param prefix the current prefix to filter by
         @return a list of completion items for the allowed values
 
         @since DataProvider 3.4
     */
     private list<hash<DpqlCompletionItem>> getAllowedValueCompletions(
-            list<hash<AllowedValueInfo>> allowed_values, *string expected_type_name,
+            list<hash<AllowedValueInfo>> allowed_values, *string expected_type_detail,
             string prefix) {
         list<hash<DpqlCompletionItem>> items = ();
         string lwr_prefix = prefix.lwr();
@@ -1361,8 +1377,7 @@ public class DpqlCompletionProvider {
                     "label": val_str,
                     "kind": "value",
                     "insert_text": insert,
-                    "detail": expected_type_name
-                        ? sprintf("expected: %s", expected_type_name) : NOTHING,
+                    "detail": expected_type_detail,
                     "documentation": av.short_desc ?? av.desc,
                     "sort_priority": 10,
                 };
@@ -1373,25 +1388,62 @@ public class DpqlCompletionProvider {
     }
 
     #! Annotates completion items with the expected type for the current argument position
-    /** Adds a parenthetical expected type note to each item's \c detail field.
+    /** Adds what the argument takes to each item's \c detail field, after the detail that the item has, if any:
+        <tt>"Whole number; this argument takes text"</tt>
 
         @param items the list of completion items to annotate
-        @param expected_type_name the expected type name to show
+        @param annotation the detail text that says the type of the argument (\c "this argument takes text")
         @return the annotated list
 
         @since DataProvider 3.4
     */
     private list<hash<DpqlCompletionItem>> annotateExpectedType(
-            list<hash<DpqlCompletionItem>> items, string expected_type_name) {
-        string annotation = sprintf("expected: %s", expected_type_name);
+            list<hash<DpqlCompletionItem>> items, string annotation) {
         for (int i = 0; i < items.size(); ++i) {
             if (items[i].detail) {
-                items[i].detail += "  " + annotation;
+                items[i].detail += "; " + annotation;
             } else {
                 items[i].detail = annotation;
             }
         }
         return items;
+    }
+
+    #! Returns the detail text that names a type: its display name in the type catalogue
+    /** @param type the type
+
+        @return the type's @ref DataProvider::DataTypeCatalogueInfo::display_name "display_name" in the
+        @ref DataProvider::DataTypeCatalogue "DataTypeCatalogue" (\c "Whole number"), or its type name for a type that
+        the catalogue does not name
+
+        @since DataProvider 3.11
+    */
+    private static string getTypeDetail(AbstractDataProviderType type) {
+        return DataTypeCatalogue::lookupType(type).display_name ?? type.getName();
+    }
+
+    #! Returns how a sentence names a type: its sentence form in the type catalogue
+    /** @param type the type
+
+        @return the type's @ref DataProvider::DataTypeCatalogueInfo::sentence_form "sentence_form" in the
+        @ref DataProvider::DataTypeCatalogue "DataTypeCatalogue" (\c "a whole number"), or its type name for a type
+        that the catalogue does not name
+
+        @since DataProvider 3.11
+    */
+    private static string getTypeSentenceForm(AbstractDataProviderType type) {
+        return DataTypeCatalogue::lookupType(type).sentence_form ?? type.getName();
+    }
+
+    #! Returns the detail text that says what a function or an operator gives
+    /** @param type the return type
+
+        @return \c "gives" and the type's sentence form (\c "gives true or false")
+
+        @since DataProvider 3.11
+    */
+    private static string getGivesDetail(AbstractDataProviderType type) {
+        return "gives " + getTypeSentenceForm(type);
     }
 
     #! Gets function completions for DPQL
@@ -1472,8 +1524,7 @@ public class DpqlCompletionProvider {
                         "kind": "function",
                         "insert_text": sym + "(",
                         "snippet_text": snippet,
-                        "detail": info.return_type
-                            ? "→ " + info.return_type.getName() : NOTHING,
+                        "detail": info.return_type ? getGivesDetail(info.return_type) : NOTHING,
                         "documentation": info.short_desc ?? info.desc,
                         "sort_priority": 40,
                     };
@@ -1628,7 +1679,7 @@ public class DpqlCompletionProvider {
                         "label": ctx.display_name ?? raw,
                         "kind": "template",
                         "insert_text": raw,
-                        "detail": ctx.needs_arg ? "requires argument" : NOTHING,
+                        "detail": ctx.needs_arg ? TemplateNeedsValueDetail : NOTHING,
                         # always filter against the raw template text the user types
                         "filter_text": raw,
                         "documentation": ctx.description ?? sprintf("Template context: %s", ctx.name),
@@ -1686,8 +1737,10 @@ public class DpqlCompletionProvider {
                 "label": val.display_name ?? raw,
                 "kind": "template",
                 "insert_text": raw,
-                # show the value type next to the label when the host provides it
-                "detail": val.type,
+                # show the value type next to the label when the host provides it, by its catalogue name
+                "detail": val.type.typeCode() == NT_STRING
+                    ? (DataTypeCatalogue::lookup(val.type).display_name ?? val.type)
+                    : val.type,
                 # always filter against the raw template text the user types, regardless of label
                 "filter_text": raw,
                 "documentation": val.description ?? sprintf("Template value: %s", val.name),

@@ -531,8 +531,13 @@ components:
         detail:
           type: string
           description: >-
-            Optional detail text shown next to the label (e.g. value type
-            information); displayed in a muted style by most editors
+            Optional detail text shown next to the label, in plain words: the
+            type of a field or a template value ("Whole number"), what a
+            function or an operator gives ("gives true or false"), what the
+            argument at the cursor takes ("this argument takes text"), or that a
+            template context needs a value after its ':'; displayed in a muted
+            style by most editors; clients tell kinds of items apart by kind,
+            not by detail
         filter_text:
           type: string
           description: >-

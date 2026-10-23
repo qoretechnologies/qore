@@ -1345,8 +1345,18 @@ hash<string, AbstractDataField> fields = {
     "email": new QoreDataField("email", "Email", StringType),
 };
 list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions('@na', 3, fields);
-# Returns completions matching "na", e.g., [{"label": "name", "kind": "field", ...}]
+# Returns completions matching "na", e.g., [{"label": "name", "kind": "field", "detail": "Text", ...}]
     @endcode
+
+    The \c detail of a completion item says in plain words what the item is, with the type names of the
+    @ref DataProvider::DataTypeCatalogue "DataTypeCatalogue": the type of a field or a template value
+    (\c "Whole number"), what a function or an operator gives (\c "gives true or false"), what the argument that the
+    cursor is in takes (\c "this argument takes text"), and that a template context needs a value after its \c ':'
+    (\c "needs a value after ':'").  A client that needs to tell kinds of items apart reads the item's \c kind, not
+    its \c detail.
+
+    In an empty document, or one with only spaces, completion offers what can start an expression: the fields, the
+    template contexts, the functions and the operators that can start a value, as after an operator.
 
     @subsection dpql_websocket DPQL WebSocket API
 
@@ -1548,6 +1558,11 @@ fetch
     @section dataprovider_relnotes Release Notes
 
     @subsection dataprovider_v3_11 DataProvider v3.11
+    - added @ref DataProvider::DataTypeCatalogue "DataTypeCatalogue" and
+      @ref DataProvider::DataTypeCatalogueInfo "DataTypeCatalogueInfo", the names in plain words with which a user
+      interface shows the data types to a person: a label (\c "Whole number") and the form used inside a sentence
+      (\c "a whole number") for each base type and for the types of this module with a presentation of their own;
+      DPQL completion names types with them
     - an allowed value or element choice that is a string with a NUL character, which cannot be a key of the set of
       allowed values, raises \c RUNTIME-TYPE-ERROR when it is set on a field or type, and a value with a NUL
       character is refused as outside the allowed values (\c FIELD-VALUE-ERROR or \c TYPE-VALUE-ERROR); before, the

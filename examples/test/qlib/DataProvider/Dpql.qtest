@@ -163,6 +163,8 @@ public class DpqlTest inherits QUnit::Test {
         addTestCase("diagnostics say in plain words how to make the text valid", \plainWordDiagnosticsTests());
         addTestCase("the end of the input is the end after it has been peeked at", \tokenizerEndAfterPeekTests());
         addTestCase("a parse error gives the position before the message", \parseErrorDescriptionTests());
+        addTestCase("template completion details are in plain words", \templateCompletionDetailTests());
+        addTestCase("an empty document offers what can start a value", \emptyDocumentCompletionTests());
 
         # Return for compatibility with test harnesses that check the return value.
         set_return_value(main());
@@ -6159,7 +6161,7 @@ public class DpqlTest inherits QUnit::Test {
             # rich item: label is the display name, detail is the type, filter_text is the raw template,
             # insert_text is the raw template (unchanged), kind stays "template"
             assertEq("Message ID", rich.label, "rich item label is display_name");
-            assertEq("string", rich.detail, "rich item detail is type");
+            assertEq("Text", rich.detail, "rich item detail is the type's display name");
             assertEq("$data:id", rich.filter_text, "rich item filter_text is raw template");
             assertEq("$data:id", rich.insert_text, "rich item insert_text is raw template");
             assertEq("template", rich.kind, "rich item kind is template");
@@ -7502,20 +7504,20 @@ public class DpqlTest inherits QUnit::Test {
             list<hash<DpqlCompletionItem>> name_items = select items,
                 $1.label == "name";
             assertEq(1, name_items.size(), "field 'name' is offered");
-            assertEq("string", name_items[0].detail,
-                "field completion shows type in detail");
+            assertEq("Text", name_items[0].detail,
+                "field completion shows the type's display name in detail");
 
             list<hash<DpqlCompletionItem>> age_items = select items,
                 $1.label == "age";
             assertEq(1, age_items.size(), "field 'age' is offered");
-            assertEq("int", age_items[0].detail,
-                "field 'age' completion shows int type");
+            assertEq("Whole number", age_items[0].detail,
+                "field 'age' completion shows the int type's display name");
 
             list<hash<DpqlCompletionItem>> active_items = select items,
                 $1.label == "active";
             assertEq(1, active_items.size(), "field 'active' is offered");
-            assertEq("bool", active_items[0].detail,
-                "field 'active' completion shows bool type");
+            assertEq("True or false", active_items[0].detail,
+                "field 'active' completion shows the bool type's display name");
         }
 
         # --- Test 2: Function completions include return type in detail ---
@@ -7525,14 +7527,14 @@ public class DpqlTest inherits QUnit::Test {
             list<hash<DpqlCompletionItem>> substr_items = select items,
                 $1.label == "substr";
             assertEq(1, substr_items.size(), "substr is offered");
-            assertEq("→ string", substr_items[0].detail,
-                "function completion shows return type in detail");
+            assertEq("gives text", substr_items[0].detail,
+                "function completion says what the function gives in detail");
 
             list<hash<DpqlCompletionItem>> bool_items = select items,
                 $1.label == "bool-func";
             assertEq(1, bool_items.size(), "bool-func is offered");
-            assertEq("→ bool", bool_items[0].detail,
-                "function completion shows bool return type");
+            assertEq("gives true or false", bool_items[0].detail,
+                "function completion says that the function gives true or false");
         }
 
         # --- Test 3: Inside function arg with ST_Value constraint - no field refs ---
@@ -7592,8 +7594,8 @@ public class DpqlTest inherits QUnit::Test {
                 "substr(", 7, fields, exprs);
             # All items should have expected type annotation
             foreach hash<DpqlCompletionItem> item in (items) {
-                assertTrue(item.detail.find("expected: string") >= 0,
-                    sprintf("item '%s' has expected type annotation", item.label));
+                assertTrue(item.detail.find("this argument takes text") >= 0,
+                    sprintf("item '%s' says what the argument takes", item.label));
             }
         }
 
@@ -7603,9 +7605,10 @@ public class DpqlTest inherits QUnit::Test {
                 "", 0, fields, exprs);
             list<hash<DpqlCompletionItem>> field_items = select items,
                 $1.kind == "field";
-            # Field items should have type detail but NOT "expected:" prefix
+            # Field items should have type detail but NOT what an argument takes
+            assertTrue(field_items.size() > 0, "fields are offered at the top level");
             foreach hash<DpqlCompletionItem> item in (field_items) {
-                assertTrue(item.detail.find("expected:") < 0,
+                assertTrue(item.detail.find("this argument takes") < 0,
                     sprintf("top-level field '%s' should not have expected type annotation",
                         item.label));
             }
@@ -7625,8 +7628,8 @@ public class DpqlTest inherits QUnit::Test {
             list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions(
                 "enum-func(", 10, fields, exprs);
             foreach hash<DpqlCompletionItem> item in (items) {
-                assertEq("expected: string", item.detail,
-                    sprintf("allowed value '%s' shows expected type", item.label));
+                assertEq("this argument takes text", item.detail,
+                    sprintf("allowed value '%s' says what the argument takes", item.label));
             }
         }
     }
@@ -9850,5 +9853,67 @@ public class DpqlTest inherits QUnit::Test {
         assertEq("DPQL parse error at line 2, column 6: A `$` starts a template: pick one from the list, or remove "
             "the `$`.", err.desc);
         assertEq(("DPQL-E030",), (map $1.code, err.arg));
+    }
+
+    #! A template context that needs a value, and the type of a template value, are said in plain words
+    templateCompletionDetailTests() {
+        hash<string, AbstractDataField> fields = getTestFields();
+        AbstractDataProvider::clearTemplateCallbacks();
+        on_exit AbstractDataProvider::clearTemplateCallbacks();
+        assertTrue(AbstractDataProvider::setTemplateCallbacks(
+            auto sub (string ctx, string val, *hash<auto> tc) { return NOTHING; },
+            NOTHING,
+            list<hash<auto>> sub (*hash<auto> tc) {
+                return (
+                    {"name": "data", "description": "state data", "needs_arg": True},
+                    {"name": "now", "description": "the current time"},
+                );
+            },
+            list<hash<auto>> sub (string ctx, string prefix, *hash<auto> tc) {
+                if (ctx != "data") {
+                    return ();
+                }
+                return (
+                    {"name": "count", "type": "*softint"},
+                    {"name": "items", "type": "list<auto>"},
+                    {"name": "custom", "type": "MyRecord"},
+                    {"name": "raw"},
+                );
+            },
+        ));
+
+        hash<string, *string> ctx_details = map {$1.insert_text: $1.detail},
+            DataProvider::getDpqlCompletions("$", 1, fields);
+        assertEq({"$data:": "needs a value after ':'", "$now:": NOTHING}, ctx_details);
+
+        hash<string, *string> val_details = map {$1.insert_text: $1.detail},
+            DataProvider::getDpqlCompletions("$data:", 6, fields);
+        assertEq({
+            "$data:count": "Whole number",
+            "$data:items": "List",
+            # a type that the catalogue does not name is shown by its name
+            "$data:custom": "MyRecord",
+            "$data:raw": NOTHING,
+        }, val_details);
+    }
+
+    #! An empty document offers what the completion after an operator offers: the values that can start an expression
+    emptyDocumentCompletionTests() {
+        hash<string, AbstractDataField> fields = getTestFields();
+        list<string> after_op = sort(map $1.kind + ":" + $1.label, DataProvider::getDpqlCompletions("@age == ", 8,
+            fields));
+        foreach string text in (("", " ", "\n")) {
+            list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions(text, text.size(), fields);
+            assertEq(after_op, sort(map $1.kind + ":" + $1.label, items), sprintf("%y", text));
+            # fields, template namespaces and functions are all offered
+            hash<string, bool> kinds = map {$1.kind: True}, items;
+            assertTrue(kinds.field && kinds.template && kinds.function, sprintf("%y: %y", text, keys kinds));
+            assertTrue((select items, $1.kind == "field" && $1.label == "age")[0].detail == "Whole number");
+        }
+
+        # the same through an action session, as an editor asks for them
+        DpqlActionSession session();
+        hash<auto> rv = session.handleAction("dpql-get-completions", {"text": "", "position": 0, "fields": fields});
+        assertEq(after_op, sort(map $1.kind + ":" + $1.label, rv.completions));
     }
 }
