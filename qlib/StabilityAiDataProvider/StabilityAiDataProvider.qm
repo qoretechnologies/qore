@@ -82,7 +82,11 @@ module StabilityAiDataProvider {
         StabilityAiGenerateImageDataProvider::initializeTypes();
         foreach hash<DataProviderActionInfo> action in (StabilityAiApi::getActionSet()
                 .getActionInfoList(StabilityAiDataProvider::AppName)) {
-            if (action.metadata.kind != "json") { action.output_type = StabilityAiOperation::MediaType; }
+            if (action.metadata.kind != "json") {
+                # the media type replaces the schema's response, so no output type is built from it
+                remove action.get_output_type;
+                action.output_type = StabilityAiOperation::MediaType;
+            }
             DataProviderActionCatalog::registerAction(action);
         }
         foreach hash<auto> job in (StabilityAiWaitDataProvider::Jobs.pairIterator()) {

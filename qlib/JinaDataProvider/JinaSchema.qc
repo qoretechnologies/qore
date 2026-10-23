@@ -127,7 +127,8 @@ public class JinaSchema {
             action_set = new RestSchemaActions::RestSchemaActionSet(
                 JinaSchema::getSchemaIntern(),
                 JinaManifest::Manifest,
-                JinaManifest::ReferenceData);
+                JinaManifest::ReferenceData,
+                NOTHING, NOTHING, RestSchemaActions::RestSchemaActionSet::LazyResponseTypes);
         }
         return action_set;
     }

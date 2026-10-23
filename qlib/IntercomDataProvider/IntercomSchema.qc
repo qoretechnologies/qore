@@ -97,7 +97,9 @@ public hashdecl IntercomSchemaProvenanceInfo {
     \c x-qore-normalized.  \c "GET /tags", \c "GET /admins" and \c "GET /contacts/{contact_id}/tags" are
     left alone: they answer envelopes with no \c pages object at all, so they are genuinely unpaged.
 
-    The schema is parsed once, when the module loads and registers its actions, which are built from it.
+    The schema is parsed once, when the module loads and registers its actions, whose options are derived from
+    the requests; each action's output type is built when it is first needed (see
+    @ref RestSchemaActions::RestSchemaActionSetOptionInfo::lazy_response_types "lazy_response_types").
 */
 public class IntercomSchema {
     public {
@@ -140,7 +142,8 @@ public class IntercomSchema {
         AutoLock al(lck);
         if (!action_set) {
             action_set = new RestSchemaActionSet(IntercomSchema::getSchemaIntern(),
-                IntercomManifest::Manifest, IntercomManifest::ReferenceData);
+                IntercomManifest::Manifest, IntercomManifest::ReferenceData,
+                NOTHING, NOTHING, RestSchemaActionSet::LazyResponseTypes);
         }
         return action_set;
     }

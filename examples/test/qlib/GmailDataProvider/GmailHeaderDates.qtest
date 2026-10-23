@@ -1,0 +1,51 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o. SPDX-License-Identifier: MIT
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Logger
+%requires DataProvider
+%requires RestClient
+%requires RestClientIo
+%requires GoogleRestClient
+%requires GoogleDataProvider
+%requires GmailDataProvider
+
+%exec-class GmailHeaderDatesTest
+
+#! Gives the tests the header value conversion of the message watch
+class HeaderValues inherits GmailDataProvider::GmailMessageWatchDataProvider {
+    static auto value(string val) {
+        return getHeaderValue(val, {"type": AbstractDataProviderTypeMap."date"});
+    }
+}
+
+public class GmailHeaderDatesTest inherits QUnit::Test {
+    constructor() : Test("Gmail Date headers", "1.0") {
+        addTestCase("the zone of a Date header", \zoneTests());
+        set_return_value(main());
+    }
+
+    zoneTests() {
+        hash<string, date> cases = {
+            "Thu, 01 Jan 2026 10:00:00 +0100": 2026-01-01T09:00:00Z,
+            "Thu, 01 Jan 2026 10:00:00 +0100 (CET)": 2026-01-01T09:00:00Z,
+            "01 Jan 2026 10:00:00 -0800": 2026-01-01T18:00:00Z,
+            # RFC 5322 section 4.3: the North American zone names have their offsets, other names are -0000
+            "Thu, 01 Jan 2026 10:00:00 EST": 2026-01-01T15:00:00Z,
+            "Thu, 01 Jan 2026 10:00:00 pdt": 2026-01-01T17:00:00Z,
+            "Thu, 01 Jan 2026 10:00:00 GMT": 2026-01-01T10:00:00Z,
+            "Thu, 01 Jan 2026 10:00:00 UT": 2026-01-01T10:00:00Z,
+            "Thu, 01 Jan 2026 10:00:00 Z": 2026-01-01T10:00:00Z,
+            "Thu, 01 Jan 2026 10:00:00 XYZ": 2026-01-01T10:00:00Z,
+        };
+        foreach hash<auto> i in (cases.pairIterator()) {
+            date d = HeaderValues::value(i.key);
+            assertEq(i.value, d, i.key);
+            assertEq(i.value.getEpochMicroseconds(), d.getEpochMicroseconds(), i.key);
+        }
+    }
+}

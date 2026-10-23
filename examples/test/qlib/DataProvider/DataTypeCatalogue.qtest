@@ -1,0 +1,122 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o. SPDX-License-Identifier: MIT
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/DataProvider
+
+%exec-class DataTypeCatalogueTest
+
+public class DataTypeCatalogueTest inherits QUnit::Test {
+    constructor() : Test("DataTypeCatalogue test", "1.0") {
+        addTestCase("every entry is complete and named once", \entriesTest());
+        addTestCase("a type name is named by its entry or the entry of its base", \lookupTest());
+        addTestCase("a type is named by its name, its presentation or its base type", \lookupTypeTest());
+        addTestCase("every registered type is named, except an object", \registeredTypesTest());
+        addTestCase("a type that the catalogue does not name has no entry", \unknownTypeTest());
+        set_return_value(main());
+    }
+
+    entriesTest() {
+        assertEq(Type::List, DataTypeCatalogue::Info.type());
+        assertTrue(DataTypeCatalogue::Info.size() > 0);
+        foreach hash<DataTypeCatalogueInfo> info in (DataTypeCatalogue::Info) {
+            foreach string key in (("name", "display_name", "sentence_form", "short_desc", "desc")) {
+                assertTrue(info{key}.val(), sprintf("%s: %s", info.name, key));
+            }
+            # a label starts with a capital letter; the sentence form is written to be used inside a sentence
+            assertRegex("^[A-Z]", info.display_name, info.name);
+            assertRegex("^[a-z]", info.sentence_form, info.name);
+            assertEq(info, DataTypeCatalogue::Map{info.name}, info.name);
+        }
+        # each type has one entry
+        assertEq(DataTypeCatalogue::Info.size(), DataTypeCatalogue::Map.size());
+        # an alias names a type that has an entry
+        map assertTrue(DataTypeCatalogue::Map.hasKey($1.value), $1.key), DataTypeCatalogue::Aliases.pairIterator();
+    }
+
+    lookupTest() {
+        hash<string, list<string>> cases = {
+            # name: (display name, sentence form)
+            "int": ("Whole number", "a whole number"),
+            "*int": ("Whole number", "a whole number"),
+            "softint": ("Whole number", "a whole number"),
+            "*softint": ("Whole number", "a whole number"),
+            "integer": ("Whole number", "a whole number"),
+            "byte": ("Whole number", "a whole number"),
+            "float": ("Number", "a number"),
+            "number": ("Exact number", "an exact number"),
+            "bool": ("True or false", "true or false"),
+            "boolean": ("True or false", "true or false"),
+            "string": ("Text", "text"),
+            "supersoftstring": ("Text", "text"),
+            "date": ("Date", "a date and time"),
+            "unixts": ("Date", "a date and time"),
+            "binary": ("Binary data", "binary data"),
+            "*base64binary": ("Binary data", "binary data"),
+            "hexbinary": ("Binary data", "binary data"),
+            "data": ("Text or binary data", "text or binary data"),
+            "hash": ("Key-value pairs (hash)", "key-value pairs (a hash)"),
+            "hash<auto>": ("Key-value pairs (hash)", "key-value pairs (a hash)"),
+            "*hash<string, int>": ("Key-value pairs (hash)", "key-value pairs (a hash)"),
+            "list<string>": ("List", "a list"),
+            "softlist<auto>": ("List", "a list"),
+            "any": ("Any", "any value"),
+            "auto": ("Any", "any value"),
+            "nothing": ("No value", "no value"),
+            "rgbcolor": ("Color", "a color"),
+            "*rgbcolor": ("Color", "a color"),
+            "file": ("File", "a file"),
+            "email": ("Email address", "an email address"),
+            "*uri": ("Address (URI)", "an address (a URI)"),
+            "phone": ("Phone number", "a phone number"),
+        };
+        foreach hash<auto> i in (cases.pairIterator()) {
+            *hash<DataTypeCatalogueInfo> info = DataTypeCatalogue::lookup(i.key);
+            assertEq("hash<DataTypeCatalogueInfo>", info.fullType(), i.key);
+            assertEq(i.value, (info.display_name, info.sentence_form), i.key);
+        }
+    }
+
+    lookupTypeTest() {
+        assertEq("Whole number", DataTypeCatalogue::lookupType(AbstractDataProviderTypeMap."*softint").display_name);
+        assertEq("Number", DataTypeCatalogue::lookupType(AbstractDataProviderTypeMap."*float").display_name);
+        assertEq("Color", DataTypeCatalogue::lookupType(AbstractDataProviderTypeMap."*rgbcolor").display_name);
+        assertEq("Email address", DataTypeCatalogue::lookupType(AbstractDataProviderTypeMap."*email").display_name);
+        # a type named by a type the catalogue does not name is named by its base type
+        assertEq("Whole number", DataTypeCatalogue::lookupType(AbstractDataProviderTypeMap."epoch").display_name);
+        # a record type is key-value pairs
+        assertEq("Key-value pairs (hash)", DataTypeCatalogue::lookupType(new HashDataType("OrderRecord")).display_name);
+        # a list type named after what it holds is a list
+        assertEq("List", DataTypeCatalogue::lookupType(new ListDataType("Orders",
+            AbstractDataProviderTypeMap."int")).display_name);
+        # a hash type that presents itself as a type of the catalogue is named by that type
+        HashDataType color(AutoHashType, "MyColor", NOTHING, {"qore.external_name": "rgbcolor"});
+        assertEq("Color", DataTypeCatalogue::lookupType(color).display_name);
+        # a presentation that the catalogue does not name falls back to the base type
+        HashDataType widget(AutoHashType, "MyWidget", NOTHING, {"qore.external_name": "widget"});
+        assertEq("Key-value pairs (hash)", DataTypeCatalogue::lookupType(widget).display_name);
+    }
+
+    registeredTypesTest() {
+        foreach hash<auto> i in (AbstractDataProviderTypeMap.pairIterator()) {
+            *hash<DataTypeCatalogueInfo> info = DataTypeCatalogue::lookupType(i.value);
+            if (i.value.getBaseTypeName() == "object") {
+                assertNothing(info, i.key);
+                continue;
+            }
+            assertTrue(exists info, sprintf("%s (%s)", i.key, i.value.getName()));
+        }
+    }
+
+    unknownTypeTest() {
+        foreach string type in (("object", "*object", "MyRecord", "", "soft", "softx", "<auto>")) {
+            assertNothing(DataTypeCatalogue::lookup(type), sprintf("%y", type));
+        }
+        assertNothing(DataTypeCatalogue::lookupType(AbstractDataProviderTypeMap."object"));
+    }
+}

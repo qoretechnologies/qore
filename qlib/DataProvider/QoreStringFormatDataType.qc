@@ -30,6 +30,10 @@ public namespace DataProvider {
     \c qore.external_name tag) carries the semantic format so that user interfaces can render an
     appropriate input control (email field, IP field, etc.).
 
+    A format regex is published in the \c qore.validation_regex tag, and a description in plain words of the values
+    that it accepts, written to complete "Must be ...", in the \c qore.validation_regex_desc tag, so that a user
+    interface can say why it refuses a value.
+
     When a format regex is supplied the type acts as a server-side backstop: @ref acceptsValue() validates
     string input against the regex and throws \c RUNTIME-TYPE-ERROR on failure.  Validation is applied only
     on input/coercion paths (never on records returned from a data provider), and the regexes are
@@ -59,6 +63,9 @@ public class QoreStringFormatDataType inherits QoreStringDataTypeBase {
         #! An optional regex used to validate string input
         *string format_regex;
 
+        #! An optional description in plain words of the values that the format regex accepts
+        *string format_regex_desc;
+
         #! An example value in the format, if known
         *string example_value;
     }
@@ -72,11 +79,19 @@ public class QoreStringFormatDataType inherits QoreStringDataTypeBase {
         @param options optional type options
         @param example_value an example value in the format; defaults to the entry for \a type_name in
         @ref Examples, if any
+        @param format_regex_desc an optional description in plain words of the values that \a format_regex accepts,
+        written to complete "Must be ..." (\c "an email address, such as user@example.com"), published in the
+        \c qore.validation_regex_desc tag
+
+        @since %DataProvider 3.11 added the \a format_regex_desc parameter
     */
     constructor(Type base_type, string type_name, string display_name, string short_desc,
-            *string format_regex, *hash<auto> options, *string example_value)
+            *string format_regex, *hash<auto> options, *string example_value, *string format_regex_desc)
             : QoreStringDataTypeBase(base_type, options,
-                {"qore.external_name": type_name} + (format_regex ? {"qore.validation_regex": format_regex} : {}),
+                {"qore.external_name": type_name} + (format_regex ? {"qore.validation_regex": format_regex} : {})
+                    + (format_regex && format_regex_desc
+                        ? {"qore.validation_regex_desc": format_regex_desc}
+                        : {}),
                 NOTHING,
                 <NameDescInfo>{
                     "name": type_name,
@@ -85,6 +100,9 @@ public class QoreStringFormatDataType inherits QoreStringDataTypeBase {
                     "desc": short_desc,
                 }) {
         self.format_regex = format_regex;
+        if (format_regex) {
+            self.format_regex_desc = format_regex_desc;
+        }
         self.example_value = example_value ?? Examples{type_name};
     }
 
@@ -128,49 +146,66 @@ public class QoreStringFormatDataType inherits QoreStringDataTypeBase {
     *string getValidationRegex() {
         return format_regex;
     }
+
+    #! Returns the description in plain words of the values that the validation regex accepts, if any
+    /** @return the description, written to complete "Must be ...", or @ref nothing if the type does not validate its
+        input or has no description
+
+        @since %DataProvider 3.11
+    */
+    *string getValidationRegexDesc() {
+        return format_regex_desc;
+    }
 }
 
 #! An email address (string-backed)
 public const EmailType = new QoreStringFormatDataType(StringType, "email", "Email",
-    "An email address", '^[^@\s]+@[^@\s]+$');
+    "An email address", '^[^@\s]+@[^@\s]+$', NOTHING, NOTHING, "an email address, such as user@example.com");
 #! An email address or no value
 public const EmailOrNothingType = EmailType.getOrNothingType();
 
 #! A URI (string-backed)
 public const UriType = new QoreStringFormatDataType(StringType, "uri", "URI",
-    "A uniform resource identifier", '^[A-Za-z][A-Za-z0-9+.-]*:');
+    "A uniform resource identifier", '^[A-Za-z][A-Za-z0-9+.-]*:', NOTHING, NOTHING,
+    "an address that starts with its scheme, such as https://example.com/");
 #! A URI or no value
 public const UriOrNothingType = UriType.getOrNothingType();
 
 #! A UUID (string-backed)
 public const UuidType = new QoreStringFormatDataType(StringType, "uuid", "UUID",
     "A universally-unique identifier",
-    '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$');
+    '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$', NOTHING, NOTHING,
+    "a UUID: 32 hexadecimal digits in groups of 8, 4, 4, 4 and 12, such as 123e4567-e89b-12d3-a456-426614174000");
 #! A UUID or no value
 public const UuidOrNothingType = UuidType.getOrNothingType();
 
 #! A hostname (string-backed)
 public const HostnameType = new QoreStringFormatDataType(StringType, "hostname", "Hostname",
-    "A host or domain name", '^[A-Za-z0-9.\-]+$');
+    "A host or domain name", '^[A-Za-z0-9.\-]+$', NOTHING, NOTHING,
+    "a host or domain name of letters, digits, dots and hyphens, such as example.com");
 #! A hostname or no value
 public const HostnameOrNothingType = HostnameType.getOrNothingType();
 
 #! An IPv4 address (string-backed)
 public const Ipv4Type = new QoreStringFormatDataType(StringType, "ipv4", "IPv4 Address",
     "An IPv4 address",
-    '^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)(\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)){3}$');
+    '^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)(\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)){3}$', NOTHING, NOTHING,
+    "an IPv4 address: four numbers from 0 to 255 separated by dots, such as 192.0.2.1");
 #! An IPv4 address or no value
 public const Ipv4OrNothingType = Ipv4Type.getOrNothingType();
 
 #! An IPv6 address (string-backed)
 public const Ipv6Type = new QoreStringFormatDataType(StringType, "ipv6", "IPv6 Address",
-    "An IPv6 address", '^([0-9A-Fa-f]{0,4}:){2,7}[0-9A-Fa-f]{0,4}$');
+    "An IPv6 address", '^([0-9A-Fa-f]{0,4}:){2,7}[0-9A-Fa-f]{0,4}$', NOTHING, NOTHING,
+    "an IPv6 address: groups of up to four hexadecimal digits separated by colons, such as 2001:db8::1");
 #! An IPv6 address or no value
 public const Ipv6OrNothingType = Ipv6Type.getOrNothingType();
 
 #! A telephone number (string-backed)
 public const PhoneType = new QoreStringFormatDataType(StringType, "phone", "Phone Number",
-    "A telephone number", '^\+?[0-9 ().\-]{3,}$');
+    "A telephone number", '^\+?[0-9 ().\-]{3,}$', NOTHING, NOTHING,
+    "a telephone number: at least three digits, spaces, dots, hyphens or parentheses after an optional +, such as "
+        "+1 555 0100");
 #! A telephone number or no value
 public const PhoneOrNothingType = PhoneType.getOrNothingType();
 }

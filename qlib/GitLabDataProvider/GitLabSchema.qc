@@ -94,7 +94,9 @@ public hashdecl GitLabSchemaProvenanceInfo {
     @ref GitLabDataProvider::GitLabCreateCommitDataProvider "GitLabCreateCommitDataProvider".  It keeps its
     action ID, so nothing calling it can tell the difference.
 
-    The schema is parsed once, when the module loads and registers its actions, which are built from it.
+    The schema is parsed once, when the module loads and registers its actions, whose options are derived from
+    the requests; each action's output type is built when it is first needed (see
+    @ref RestSchemaActions::RestSchemaActionSetOptionInfo::lazy_response_types "lazy_response_types").
 */
 public class GitLabSchema {
     public {
@@ -137,7 +139,8 @@ public class GitLabSchema {
         AutoLock al(lck);
         if (!action_set) {
             action_set = new RestSchemaActionSet(GitLabSchema::getSchemaIntern(), GitLabManifest::Manifest,
-                GitLabManifest::ReferenceData);
+                GitLabManifest::ReferenceData,
+                NOTHING, NOTHING, RestSchemaActionSet::LazyResponseTypes);
         }
         return action_set;
     }

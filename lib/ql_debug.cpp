@@ -62,6 +62,7 @@
 #include "qore/intern/QC_Program.h"
 #include "qore/intern/DatasourcePool.h"
 #include "qore/intern/ManagedDatasource.h"
+#include "qore/intern/qore_ds_private.h"
 #include "qore/intern/SqlMutationContext.h"
 #include "qore/intern/QC_Future.h"
 #include "qore/intern/QC_FutureImpl.h"
@@ -1998,6 +1999,23 @@ static void ut_string_data_helper(UnitTestCounters& c) {
     }
 }
 
+//! Long date suffixes deliver cancellation, and parsing recovers after the request is cleared.
+static void ut_date_suffix_cancel(UnitTestCounters& c) {
+    std::string text = "2026-01-01T10:00:00Z";
+    text.append(4096, ' ');
+    ExceptionSink xsink;
+    int requested = qore_cancel_thread(q_gettid(), "date suffix unit test");
+    ReferenceHolder<DateTimeNode> cancelled(new DateTimeNode(nullptr, text.c_str(), &xsink), &xsink);
+    QoreValue error = xsink.getExceptionErr();
+    bool correct_error = error.getType() == NT_STRING && QoreStringDataHelper(error) == "THREAD-CANCELLED";
+    qore_clear_thread_cancel();
+    xsink.clear();
+    UT_ASSERT_EQ(c, 0, requested, "request cancellation for date suffix parsing");
+    UT_ASSERT(c, correct_error, "date suffix parsing reports THREAD-CANCELLED");
+    ReferenceHolder<DateTimeNode> recovered(new DateTimeNode(nullptr, text.c_str(), &xsink), &xsink);
+    UT_ASSERT(c, !xsink, "date suffix parsing succeeds after cancellation is cleared");
+}
+
 //! Native byte-order scans deliver cancellation without treating it as an inconclusive sample.
 static void ut_unicode_byte_order_cancel(UnitTestCounters& c) {
     std::string sample(QORE_UNICODE_BYTE_ORDER_SAMPLE, 'A');
@@ -2218,6 +2236,71 @@ int ut_wait_child(pid_t pid) {
     }
     return WIFEXITED(status) ? WEXITSTATUS(status) : -1;
 }
+}
+
+//! An inherited typed DBI cache is abandoned even if fork() copied it during a parent thread's insertion.
+static void ut_fork_dbi_typed_result_cache(UnitTestCounters& c) {
+    enum class CacheUse { Close, Lookup, Destroy };
+    for (CacheUse use : {CacheUse::Close, CacheUse::Lookup, CacheUse::Destroy}) {
+        bool open = use == CacheUse::Close;
+        // No driver is called: an open inherited connection is abandoned, and
+        // type-cache lookup itself needs no connection (also test a closed one).
+        std::unique_ptr<Datasource> ds(new Datasource(nullptr, nullptr));
+        auto* priv = qore_ds_private::get(*ds);
+        priv->isopen = open;
+        priv->open_generation = qore_fork_get_generation();
+        std::mutex m;
+        std::condition_variable cv;
+        bool ready = false;
+        bool release = false;
+        std::thread writer([&]() {
+            AutoLocker al(priv->m);
+            // This is the intermediate state of operator[] in
+            // getTypedResultHashDecl(), before its pointer assignment.
+            priv->typed_result_hashdecl_cache["interrupted-insertion"];
+            std::unique_lock<std::mutex> ul(m);
+            ready = true;
+            cv.notify_one();
+            cv.wait(ul, [&]() { return release; });
+            priv->typed_result_hashdecl_cache.clear();
+        });
+        {
+            std::unique_lock<std::mutex> ul(m);
+            cv.wait(ul, [&]() { return ready; });
+        }
+        pid_t pid = fork();
+        if (!pid) {
+            alarm(10);
+            if (use == CacheUse::Destroy) {
+                // A connection can already be closed when its parent's cache
+                // update is interrupted; destroying it must not inspect that cache.
+                ds.reset();
+                _exit(0);
+            }
+            ExceptionSink xsink;
+            if (open && (ds->close(&xsink) || xsink)) {
+                _exit(1);
+            }
+            // Reuse the same key: the child must create its own usable type,
+            // not read the inherited null entry. Destruction releases it normally.
+            const TypedHashDecl* hd = priv->getTypedResultHashDecl("test", "interrupted-insertion", {}, &xsink);
+            bool ok = hd && !xsink && priv->typed_result_hashdecl_cache.size() == 1;
+            ds.reset();
+            _exit(ok ? 0 : 2);
+        }
+        {
+            std::lock_guard<std::mutex> lg(m);
+            release = true;
+            cv.notify_one();
+        }
+        writer.join();
+        priv->isopen = false;
+        UT_ASSERT(c, pid > 0, "fork() succeeds during typed DBI cache insertion");
+        if (pid > 0) {
+            UT_ASSERT_EQ(c, 0, ut_wait_child(pid), "the child abandons the inherited cache and owns its new cache");
+        }
+        UT_ASSERT(c, priv->typed_result_hashdecl_cache.empty(), "the parent completes its own cache update");
+    }
 }
 
 //! fork() waits for a thread that holds a registered lock acquired before fork(), and the lock is free in the child
@@ -13107,6 +13190,7 @@ static QoreValue f_run_debug_unit_tests(const QoreListNode* params, RuntimeConfi
     ut_string_compare_soft_and_concat_chars(c);
     ut_stateful_string_api(c);
     ut_unicode_byte_order_cancel(c);
+    ut_date_suffix_cancel(c);
     ut_qorefile_timed_read_contract(c);
     ut_qorefile_open_sandbox_policy(c);
     ut_rsection_try_notify_does_not_block_on_writer(c);
@@ -13175,6 +13259,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     AsyncIoFrameSendTest::run(c);
     ut_cond_wait_cancel_in_window(c);
     ut_fork_waits_for_lock_holders(c);
+    ut_fork_dbi_typed_result_cache(c);
     ut_fork_signal_block_waiter(c);
     ut_fork_jit_compile_in_progress(c);
     ut_fork_jit_background_compiler(c);

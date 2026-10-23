@@ -41,8 +41,10 @@ public class AzureDocumentIntelligenceSchema {
             OpenApi3::OpenApi3Schema stream_schema = OpenApi3::OpenApi3Loader::fromString(
                 Priv::AzureDocumentIntelligenceStreamsText, True);
             RestSchemaActionSet main(main_schema, AzureDocumentIntelligenceManifest::Main,
-                AzureDocumentIntelligenceManifest::ReferenceData);
-            RestSchemaActionSet streams(stream_schema, AzureDocumentIntelligenceManifest::Streams, NOTHING, (main,));
+                AzureDocumentIntelligenceManifest::ReferenceData,
+                NOTHING, NOTHING, RestSchemaActionSet::LazyResponseTypes);
+            RestSchemaActionSet streams(stream_schema, AzureDocumentIntelligenceManifest::Streams, NOTHING, (main,),
+                NOTHING, RestSchemaActionSet::LazyResponseTypes);
             sets = (main, streams);
         }
         return sets;

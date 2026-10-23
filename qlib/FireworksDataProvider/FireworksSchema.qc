@@ -128,15 +128,20 @@ public class FireworksSchema {
         if (!sets) {
             hash<string, RestSchemaActionSet> pending;
             pending.Control = new RestSchemaActionSet(getSchemaIntern("control"),
-                FireworksManifest::ControlManifest, FireworksManifest::ReferenceData);
+                FireworksManifest::ControlManifest, FireworksManifest::ReferenceData,
+                NOTHING, NOTHING, RestSchemaActionSet::LazyResponseTypes);
             pending.Upload = new RestSchemaActionSet(getSchemaIntern("upload"),
-                FireworksManifest::UploadManifest, NOTHING, pending.Control);
+                FireworksManifest::UploadManifest, NOTHING, pending.Control,
+                NOTHING, RestSchemaActionSet::LazyResponseTypes);
             pending.Text = new RestSchemaActionSet(getSchemaIntern("text"),
-                FireworksManifest::TextManifest, NOTHING, pending.Control);
+                FireworksManifest::TextManifest, NOTHING, pending.Control,
+                NOTHING, RestSchemaActionSet::LazyResponseTypes);
             pending.Responses = new RestSchemaActionSet(getSchemaIntern("responses"),
-                FireworksManifest::ResponsesManifest, FireworksManifest::ResponseReferenceData, pending.Control);
+                FireworksManifest::ResponsesManifest, FireworksManifest::ResponseReferenceData, pending.Control,
+                NOTHING, RestSchemaActionSet::LazyResponseTypes);
             pending.Messages = new RestSchemaActionSet(getSchemaIntern("messages"),
-                FireworksManifest::MessagesManifest, NOTHING, pending.Control);
+                FireworksManifest::MessagesManifest, NOTHING, pending.Control,
+                NOTHING, RestSchemaActionSet::LazyResponseTypes);
             sets = pending;
         }
         return (sets.Control, sets.Upload, sets.Text, sets.Responses, sets.Messages);

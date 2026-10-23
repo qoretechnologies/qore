@@ -20413,3 +20413,56 @@ The larger immutable-frame proposal remains a design investigation: capture
 invocation-owned ancestors, prove every reachable diagnostic field's lifetime,
 and retire before any fallback/cache mutation. A scalar-looking source loop
 or pointer equality does not prove those requirements.
+
+
+## Develop integration through 28a6bbcb14 (2026-10-23)
+
+The performance branch integrates 17 develop commits through `28a6bbcb14`.
+The incoming DBI fork recovery needed one correction: an inherited typed-result
+cache can contain a partially assigned entry, including after a connection is
+closed. A deterministic writer paused under the real datasource lock and an
+actual fork reproduce a child SIGSEGV. The same executable exits normally with
+the fix. The child now marks every inherited cache and swaps it into
+process-lifetime storage without traversing it, following the incoming DBI
+abandonment policy. Its newly created cache retains normal ownership. Native
+regressions cover close, lookup and destruction. Long date suffix scans also
+check cancellation every 100 characters; boundary and cancellation/recovery
+regressions pass.
+
+Final qualification rebuilds the core and all 252 qmod targets in both Release
+and Debug, and restores all 253 source aliases to Release. Release remains
+`-O3 -DNDEBUG`, allocation tracking off, LLVM 22.1.8. Both builds pass 54 of
+55 selected fixtures. The known `SocketSpecificBind::otherProgramTest`
+macOS failure remains in both builds: 31 of its 32 assertions pass. Including
+that fixture, Release passes 36,226 of 36,227 assertions and Debug passes
+36,230 of 36,231. There are 18 Release and 16 Debug skipped cases: live Stripe,
+external SQL, Windows date cases, and Release-only exclusions of the Debug
+DBI registry fixture. Skips and the socket failures are not passes.
+
+Four additional Debug native invocations pass 11,768 assertions (AST/IR:
+3736 unit plus 2148 debug-unit assertions each). Both builds pass 555 IR and
+555 AOT reference comparisons, 2220 total. Eight DBI fixture loads verify the
+selected build's mock module. This is selected macOS arm64 qualification,
+not a full-suite, sanitizer or cross-platform result. The first qualification
+was deliberately stopped to fix the reproduced cache bug: 43 successful
+processes and one terminated child, exit 143, are preserved separately.
+
+The earlier private-owner-proof compile probe is declined without timing.
+It removes repeated owner checks but causes an extra hot stack-check call
+and register saves; the floating unary frame grows from 80 to 96 bytes.
+The isolated object was never linked or executed. Next test a scoped
+stack-check inlining hint before considering additive production helpers.
+A separate compiler hypothesis is to omit owner equality only when the
+callback operand is an invocation-invariant LLVM argument and the call site
+owns its cache; mutable/reloaded locals cannot receive that contract. Neither
+hypothesis establishes a performance benefit.
+
+All 62 audit items are recorded: 24 Pass / 38 N/A / zero Fail, scoped to the
+integration and authored fixes/evidence. Thirteen Markdown tables in three
+touched design files are converted to Qore format with every cell preserved;
+strict table parsing passes. The 65 incoming translation files parse as JSON;
+this is not a translation-quality review. Full raw exits, streams, reference
+checks, provenance, reproduction and audit are in
+[results-merge-28a6bbcb14-macos-arm64.json](results-merge-28a6bbcb14-macos-arm64.json)
+(SHA-256 `17d384cd81dc040f53b5cefa9a2b42e875b050aaaaca62740db4c47b063ac93e`).
+No new speedup, Java ratio or global performance ceiling is claimed.

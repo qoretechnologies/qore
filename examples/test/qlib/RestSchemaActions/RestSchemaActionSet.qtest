@@ -999,10 +999,24 @@ public class RestSchemaActionSetTest inherits QUnit::Test {
                     "element_allowed_values_creatable": True,
                 },
                 "dimensions": <RestSchemaFieldOverlayInfo>{"ignore": True},
+                "name": <RestSchemaFieldOverlayInfo>{
+                    "validation_regex": "^[A-Za-z]",
+                    "validation_regex_desc": "a name that starts with a letter, such as Hammer",
+                },
             },
         }), );
 
         *hash<string, AbstractDataField> fields = op.getRequestFields();
+        # a validation pattern and its description in plain words reach the field and the action option
+        assertEq("^[A-Za-z]", fields.name.getAttributes().validation_regex);
+        assertEq("a name that starts with a letter, such as Hammer", fields.name.getAttributes().validation_regex_desc);
+        hash<string, hash<ActionOptionInfo>> options = DataProviderActionCatalog::getActionOptionFromFields(fields);
+        assertEq("^[A-Za-z]", options.name.validation_regex);
+        assertEq("a name that starts with a letter, such as Hammer", options.name.validation_regex_desc);
+        # an overlay without them sets neither
+        assertNothing(options.category.validation_regex);
+        assertNothing(options.category.validation_regex_desc);
+
         # ordering: named fields first in the order given, then the rest in derived order
         assertEq(("name", "category", "tags", "status", "created", "homepage"), keys fields);
         # an ignored field is gone from both the form and the reverse map

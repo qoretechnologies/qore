@@ -323,6 +323,15 @@ public hashdecl ActionOptionBaseInfo inherits BaseOptionInfo {
     #! An optional regex pattern for validating string values
     *string validation_regex;
 
+    #! An optional description in plain words of the values that @ref validation_regex accepts
+    /** Written to complete "Must be ...", so that a user interface can say why it refuses a value instead of saying
+        that the value does not match the pattern, for example \c "a two-letter language code, such as en"; it
+        describes the pattern only, and is not used for validation
+
+        @since %DataProvider 3.11
+    */
+    *string validation_regex_desc;
+
     #! A tag allowing allowed values to be returned dynamically as reference data
     /** The value is the name of the reference data; if allowed_values are not present, calls will be made to
         @ref DataProvider::AbstractDataProvider::getReferenceData() "AbstractDataProvider::getReferenceData()"
@@ -3685,6 +3694,9 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
                 if (info.attr.validation_regex.val()) {
                     i.value.validation_regex = info.attr.validation_regex;
                 }
+                if (info.attr.validation_regex_desc.val()) {
+                    i.value.validation_regex_desc = info.attr.validation_regex_desc;
+                }
                 if (info.attr.ui_type.val()) {
                     i.value.ui_type = info.attr.ui_type;
                 }
@@ -3730,7 +3742,8 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
                 if (raw_info) {
                     i.value += raw_info{"required", "sensitive", "ref_data", "element_ref_data",
                         "default_ref_data", "preselected", "required_groups", "exclusive_with",
-                        "validation_regex", "depends_on", "on_change", "metadata", "messages",
+                        "validation_regex", "validation_regex_desc", "depends_on", "on_change", "metadata",
+                        "messages",
                         "icon", "image", "disabled", "readonly", "has_dependents", "supports_custom_values",
                         "supports_templates", "supports_expressions", "server_expression_handling",
                         "option_type_name", "ui_type", "input_field_names"};
@@ -3782,7 +3795,8 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
             } else {
                 info += i.value{"default_value", "required", "sensitive", "example_value", "ref_data",
                     "element_ref_data", "preselected", "required_groups", "exclusive_with",
-                    "validation_regex", "depends_on", "has_dependents", "on_change", "metadata", "icon",
+                    "validation_regex", "validation_regex_desc", "depends_on", "has_dependents", "on_change",
+                    "metadata", "icon",
                     "image", "supports_templates", "supports_custom_values", "server_expression_handling",
                     "ui_type", "input_field_names"} +
                     additional_fields;
@@ -3921,6 +3935,9 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
             }
             if ((*string str = i.value.validation_regex).val()) {
                 fh.attr.validation_regex = str;
+            }
+            if ((*string str = i.value.validation_regex_desc).val()) {
+                fh.attr.validation_regex_desc = str;
             }
             if (*list<string> l = i.value.on_change) {
                 fh.attr.on_change = l;

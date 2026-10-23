@@ -71,7 +71,9 @@ public hashdecl UnstructuredPlatformSchemaProvenanceInfo {
 
 #! Loads and holds the vendored Unstructured Platform API schema
 /** The schema is pruned to the exported operations and the transitive closure of everything they
-    reference.  It is parsed once, when the module loads and registers its actions, which are built from it.
+    reference.  It is parsed once, when the module loads and registers its actions, whose options are derived
+    from the requests; each action's output type is built when it is first needed (see
+    @ref RestSchemaActions::RestSchemaActionSetOptionInfo::lazy_response_types "lazy_response_types").
 
     @since %UnstructuredDataProvider 1.0
 */
@@ -117,7 +119,8 @@ public class UnstructuredPlatformSchema {
             action_set = new RestSchemaActions::RestSchemaActionSet(
                 UnstructuredPlatformSchema::getSchemaIntern(),
                 UnstructuredPlatformManifest::Manifest,
-                UnstructuredPlatformManifest::ReferenceData);
+                UnstructuredPlatformManifest::ReferenceData,
+                NOTHING, NOTHING, RestSchemaActions::RestSchemaActionSet::LazyResponseTypes);
         }
         return action_set;
     }

@@ -6223,7 +6223,15 @@ hash<GeneratedDataInfo> output = prov.finishCreate();
         @param exp the expression to evaluate
         @param template_context optional context hash passed through to template callbacks
 
+        @return the result of the expression
+
+        @throw any error that evaluating the expression raises, with its own description; a result that the
+        expression's return type does not accept raises the type's error with
+        <tt>error in return value type "<type>" for "<expression>" expression: </tt> before its description
+
         @since DataProvider 2.3
+        @since DataProvider 3.11 an error that evaluating the expression raises is not described as an error in the
+        return value type
     */
     static auto evalGenericExpression(hash<auto> rec, hash<DataProviderExpression> exp,
             *hash<auto> template_context) {
@@ -6246,9 +6254,15 @@ hash<GeneratedDataInfo> output = prov.finishCreate();
                 "operators: %y", exp.exp, keys GenericExpressionImplementations
                     + (ExtraExpressionImplementations ? keys ExtraExpressionImplementations : ()));
         }
-        on_error rethrow $1.err, sprintf("error in return value type %y for %y expression: %s",
-            expinfo.exp.return_type.getName(), expinfo.exp.name, $1.desc);
-        return expinfo.exp.return_type.acceptsValue(expinfo.impl(rec, exp, template_context));
+        # an error that evaluating the expression raises keeps its own description; only a result that the return
+        # type does not accept is an error in the return value type
+        auto rv = expinfo.impl(rec, exp, template_context);
+        try {
+            return expinfo.exp.return_type.acceptsValue(rv);
+        } catch (hash<ExceptionInfo> ex) {
+            rethrow ex.err, sprintf("error in return value type %y for %y expression: %s",
+                expinfo.exp.return_type.getName(), expinfo.exp.name, ex.desc), ex.arg;
+        }
     }
 
     #! Splits an expression tree into pushdownable and client-side parts

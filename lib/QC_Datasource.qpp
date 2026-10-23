@@ -664,6 +664,37 @@ int rows = db.exec("insert into table (varchar_col, timestamp_col, blob_col, num
     There is a timeout associated with the transaction lock; if a thread waits for the transaction lock for more than the timeout period, then an exception will be raised in the waiting thread. The timeout value can be read and changed with the Datasource::getTransactionLockTimeout() and Datasource::setTransactionLockTimeout() methods, respectively; a value of 0 or less means no timeout. The default transaction lock timeout value is 120 seconds.\n\n
     Note that the @ref Qore::SQL::SQLStatement "SQLStatement" class also grabs the transaction lock when executing if it is created using a %Datasource object in the constructor; for more information see the  @ref Qore::SQL::SQLStatement "SQLStatement" class documentation.  A statement destroyed in another thread than the one holding the transaction lock is closed by the thread holding the lock; see @ref Qore::SQL::SQLStatement::destructor() "SQLStatement::destructor()".
 
+    @anchor datasource_fork
+    @par Child Processes Created with fork()
+    A child process created with @ref Qore::fork() "fork()" has a copy of every %Datasource,
+    @ref Qore::SQL::DatasourcePool "DatasourcePool" and @ref Qore::SQL::SQLStatement "SQLStatement" object of its
+    parent, but the database sessions of their open connections still belong to the parent: the child shares the
+    network connection of each session with the parent, and any transaction in progress is the parent's.  The child
+    therefore gives up every connection that it inherits without changing the parent's session:
+    - when the child closes or destroys an inherited object, or ends while it still has inherited objects, nothing is
+      sent to the server: no rollback, no statement close and no logoff, and no
+      \c DATASOURCE-TRANSACTION-EXCEPTION is raised for a transaction of the parent
+    - when the child uses an inherited connection that was not in a transaction, the connection is treated as a lost
+      connection: the child transparently opens a new connection of its own
+    - when the child uses an inherited connection that was in a transaction, or whose
+      @ref transaction_lock "transaction lock" another thread of the parent held when the process was copied, a
+      \c DATASOURCE-FORK-ERROR exception is raised instead, since the transaction cannot be continued in the child;
+      the connection has been given up, so the next action opens a new connection.  The child does not wait for the
+      transaction lock of a thread that does not exist in the child
+    - an action that needs no connection (reading or setting options or the configuration, closing a statement) gives
+      an inherited connection up as well, without an error; a transaction in progress on it is reported by the first
+      action that uses a connection.  Closing or destroying the object ends it without an error
+    - Datasource::inTransaction(), Datasource::currentThreadInTransaction() and the corresponding
+      @ref Qore::SQL::DatasourcePool "DatasourcePool" methods return @ref False in the child for a transaction of the
+      parent
+    - an inherited statement is prepared again with the child's new connection when it is used
+    .
+    The memory that the driver uses for an inherited connection and its statements is not freed in the child, since
+    the driver could only free it by using the connection; it stays allocated until the child process ends.  This is
+    a fixed amount for each inherited connection and statement: the connections that the child opens itself are freed
+    normally.\n\n
+    The parent's objects are not affected: the parent keeps using its sessions and transactions normally.
+
     @par Thread Resource Handling
     The Datasource class manages the transaction lock as a @ref thread_resources "thread resource"; if the
     transaction is not released with a call to @ref Qore::SQL::Datasource::commit() "Datasource::commit()"
@@ -903,7 +934,9 @@ Datasource::copy() {
 }
 
 //! Opens a connection to the datasouce, using the connection parameters already set; an exception is thrown if any errors occur
-/** If the connection is already open, then no action is taken.
+/** If the connection is already open, then no action is taken; in a child process created with
+    @ref Qore::fork() "fork()", a connection of the parent is given up and a new one is opened (see
+    @ref datasource_fork).
 
     @par Example:
     @code{.py}
@@ -911,6 +944,9 @@ db.open();
     @endcode
 
     @note see the documentation for the DBI driver being used for possible exceptions
+
+    @throw DATASOURCE-FORK-ERROR in a child process created with @ref Qore::fork() "fork()", the connection of the
+    parent was in a transaction; see @ref datasource_fork (since %Qore 3.0)
 
     @see Datasource::reset()
 */
@@ -949,6 +985,8 @@ db.commit();
     @endcode
 
     @throw TRANSACTION-LOCK-TIMEOUT Timeout trying to acquire the transaction lock
+    @throw DATASOURCE-FORK-ERROR in a child process created with @ref Qore::fork() "fork()", the action would
+    continue a transaction of the parent; see @ref datasource_fork (since %Qore 3.0)
 
     @note see the documentation for the DBI driver being used for additional possible exceptions
 */
@@ -964,6 +1002,8 @@ db.rollback();
     @endcode
 
     @throw TRANSACTION-LOCK-TIMEOUT Timeout trying to acquire the transaction lock
+    @throw DATASOURCE-FORK-ERROR in a child process created with @ref Qore::fork() "fork()", the action would
+    continue a transaction of the parent; see @ref datasource_fork (since %Qore 3.0)
 
     @note see the documentation for the DBI driver being used for additional possible exceptions
 */
@@ -1014,6 +1054,8 @@ int rows = db.exec("insert into table (varchar_col, timestamp_col, blob_col, num
     @endcode
 
     @throw TRANSACTION-LOCK-TIMEOUT Timeout trying to acquire the transaction lock
+    @throw DATASOURCE-FORK-ERROR in a child process created with @ref Qore::fork() "fork()", the action would
+    continue a transaction of the parent; see @ref datasource_fork (since %Qore 3.0)
 
     @note see the documentation for the DBI driver being used for additional possible exceptions
 */
@@ -1043,6 +1085,8 @@ int rows = db.vexec("insert into example_table value (%v, %v, %v)", arg_list);
     @endcode
 
     @throw TRANSACTION-LOCK-TIMEOUT Timeout trying to acquire the transaction lock
+    @throw DATASOURCE-FORK-ERROR in a child process created with @ref Qore::fork() "fork()", the action would
+    continue a transaction of the parent; see @ref datasource_fork (since %Qore 3.0)
 
     @note see the documentation for the DBI driver being used for additional possible exceptions
 */
@@ -1073,6 +1117,8 @@ db.execRaw("create table my_tab (id number, some_text varchar2(30))");
     @endcode
 
     @throw TRANSACTION-LOCK-TIMEOUT Timeout trying to acquire the transaction lock
+    @throw DATASOURCE-FORK-ERROR in a child process created with @ref Qore::fork() "fork()", the action would
+    continue a transaction of the parent; see @ref datasource_fork (since %Qore 3.0)
 
     @note see the documentation for the DBI driver being used for additional possible exceptions
 */
@@ -1142,6 +1188,8 @@ if (query.firstValue())
     @endcode
 
     @throw TRANSACTION-LOCK-TIMEOUT Timeout trying to acquire the transaction lock
+    @throw DATASOURCE-FORK-ERROR in a child process created with @ref Qore::fork() "fork()", the action would
+    continue a transaction of the parent; see @ref datasource_fork (since %Qore 3.0)
 
     @note
     - See the documentation for the DBI driver being used for additional possible exceptions
@@ -1183,6 +1231,8 @@ list<*string> names = result.name;
     @endcode
 
     @throw TRANSACTION-LOCK-TIMEOUT Timeout trying to acquire the transaction lock
+    @throw DATASOURCE-FORK-ERROR in a child process created with @ref Qore::fork() "fork()", the action would
+    continue a transaction of the parent; see @ref datasource_fork (since %Qore 3.0)
 
     @note
     - Ad hoc typed results use anonymous runtime hashdecls; bind the value to \c hash<auto> unless assigning to a
@@ -1254,6 +1304,8 @@ ColumnarResult Datasource::selectColumnar(string sql, ...) [flags=RET_VALUE_ONLY
     @endcode
 
     @throw TRANSACTION-LOCK-TIMEOUT Timeout trying to acquire the transaction lock
+    @throw DATASOURCE-FORK-ERROR in a child process created with @ref Qore::fork() "fork()", the action would
+    continue a transaction of the parent; see @ref datasource_fork (since %Qore 3.0)
     @throw DBI-SELECT-ROW-ERROR more than 1 row retrieved from the server
 
     @note see the documentation for the DBI driver being used for additional possible exceptions
@@ -1283,6 +1335,8 @@ ColumnarResult Datasource::selectColumnar(string sql, ...) [flags=RET_VALUE_ONLY
     @endcode
 
     @throw TRANSACTION-LOCK-TIMEOUT Timeout trying to acquire the transaction lock
+    @throw DATASOURCE-FORK-ERROR in a child process created with @ref Qore::fork() "fork()", the action would
+    continue a transaction of the parent; see @ref datasource_fork (since %Qore 3.0)
 
     @note
     - See the documentation for the DBI driver being used for additional possible exceptions
@@ -1316,6 +1370,8 @@ foreach hash<auto> row in (rows) {
     @endcode
 
     @throw TRANSACTION-LOCK-TIMEOUT Timeout trying to acquire the transaction lock
+    @throw DATASOURCE-FORK-ERROR in a child process created with @ref Qore::fork() "fork()", the action would
+    continue a transaction of the parent; see @ref datasource_fork (since %Qore 3.0)
 
     @note The compatibility fallback cannot recover SQL width metadata that the driver did not provide; scalar integer
     row members are inferred as Qore \c int values.
@@ -1352,6 +1408,8 @@ if (query.firstValue())
     @endcode
 
     @throw TRANSACTION-LOCK-TIMEOUT Timeout trying to acquire the transaction lock
+    @throw DATASOURCE-FORK-ERROR in a child process created with @ref Qore::fork() "fork()", the action would
+    continue a transaction of the parent; see @ref datasource_fork (since %Qore 3.0)
 
     @note
     - See the documentation for the DBI driver being used for additional possible exceptions
@@ -1428,6 +1486,8 @@ ColumnarResult Datasource::vselectColumnar(string sql, *softlist<auto> arguments
     @endcode
 
     @throw TRANSACTION-LOCK-TIMEOUT Timeout trying to acquire the transaction lock
+    @throw DATASOURCE-FORK-ERROR in a child process created with @ref Qore::fork() "fork()", the action would
+    continue a transaction of the parent; see @ref datasource_fork (since %Qore 3.0)
 
     @note see the documentation for the DBI driver being used for additional possible exceptions
 
@@ -1459,6 +1519,8 @@ ColumnarResult Datasource::vselectColumnar(string sql, *softlist<auto> arguments
     @endcode
 
     @throw TRANSACTION-LOCK-TIMEOUT Timeout trying to acquire the transaction lock
+    @throw DATASOURCE-FORK-ERROR in a child process created with @ref Qore::fork() "fork()", the action would
+    continue a transaction of the parent; see @ref datasource_fork (since %Qore 3.0)
 
     @note
     - See the documentation for the DBI driver being used for additional possible exceptions
@@ -1516,6 +1578,8 @@ auto Datasource::vselectRowsTyped(string sql, *softlist<auto> arguments) [flags=
     @endcode
 
     @throw TRANSACTION-LOCK-TIMEOUT Timeout trying to acquire the transaction lock
+    @throw DATASOURCE-FORK-ERROR in a child process created with @ref Qore::fork() "fork()", the action would
+    continue a transaction of the parent; see @ref datasource_fork (since %Qore 3.0)
 
     @note see the documentation for the DBI driver being used for additional possible exceptions
 
@@ -1540,6 +1604,8 @@ db.beginTransaction();
 
     @throw AUTOCOMMIT-ERROR Cannot start a transaction when autocommit is enabled
     @throw TRANSACTION-LOCK-TIMEOUT Timeout trying to acquire the transaction lock
+    @throw DATASOURCE-FORK-ERROR in a child process created with @ref Qore::fork() "fork()", the action would
+    continue a transaction of the parent; see @ref datasource_fork (since %Qore 3.0)
  */
 nothing Datasource::beginTransaction() {
     ds->beginTransaction(xsink);
@@ -1905,6 +1971,8 @@ auto ver = db.getServerVersion();
     @endcode
 
     @throw TRANSACTION-LOCK-TIMEOUT Timeout trying to acquire the transaction lock
+    @throw DATASOURCE-FORK-ERROR in a child process created with @ref Qore::fork() "fork()", the action would
+    continue a transaction of the parent; see @ref datasource_fork (since %Qore 3.0)
 
     @note see the documentation for the DBI driver being used for additional possible exceptions
 */
@@ -1946,7 +2014,8 @@ auto Datasource::getClientVersion() {
 }
 
 //! Returns @ref True if a transaction is currently in progress, @ref False if not
-/** @return @ref True if a transaction is currently in progress, @ref False if not
+/** @return @ref True if a transaction is currently in progress, @ref False if not; in a child process created with
+    @ref Qore::fork() "fork()", a transaction of the parent is not in progress (see @ref datasource_fork)
 
     @par Example:
     @code{.py}
@@ -1954,7 +2023,7 @@ bool b = db.inTransaction();
     @endcode
 */
 bool Datasource::inTransaction() [flags=CONSTANT] {
-    return ds->isInTransaction();
+    return ds->inTransactionInProcess();
 }
 
 //! Returns @ref True if the current thread is in a transaction (i.e. holds the transaction lock), @ref False if not
@@ -2042,6 +2111,8 @@ Datasource::setOption(string option, auto value) [flags=NAMED_ARGS] {
 
     @throw DBI-OPTION-ERROR unknown or unsupported option passed to driver, or the option name contains a NUL character (since %Qore 3.0)
     @throw TRANSACTION-LOCK-TIMEOUT Timeout trying to acquire the transaction lock
+    @throw DATASOURCE-FORK-ERROR in a child process created with @ref Qore::fork() "fork()", the action would
+    continue a transaction of the parent; see @ref datasource_fork (since %Qore 3.0)
 
     @since %Qore 0.8.6
 */

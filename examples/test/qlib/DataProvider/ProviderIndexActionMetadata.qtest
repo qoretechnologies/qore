@@ -27,6 +27,10 @@ public class ProviderIndexActionMetadataTest inherits QUnit::Test {
         const RemovedApp = "QoreTestRemovedApp";
         const CachedApp = "QoreTestCachedApp";
 
+        # the validation pattern of the webhook option, and its description in plain words
+        const WebhookRegex = "^https://";
+        const WebhookRegexDesc = "an https address, such as https://example.com/hook";
+
         const ConnectionAlternative = {
             "connection_alternative": {
                 "option": "webhook",
@@ -91,6 +95,8 @@ public class ProviderIndexActionMetadataTest inherits QUnit::Test {
                             "display_name": "Webhook",
                             "short_desc": "webhook destination",
                             "type_info": type.getInfo(),
+                            "validation_regex": WebhookRegex,
+                            "validation_regex_desc": WebhookRegexDesc,
                         },
                     },
                     "metadata": ConnectionAlternative,
@@ -178,6 +184,8 @@ public class ProviderIndexActionMetadataTest inherits QUnit::Test {
         assertEq(ConnectionAlternative, action.metadata);
         assertEq("hash<IndexedActionOptionInfo>", action.options.webhook.fullType());
         assertEq("webhook destination", action.options.webhook.short_desc);
+        assertEq(WebhookRegex, action.options.webhook.validation_regex);
+        assertEq(WebhookRegexDesc, action.options.webhook.validation_regex_desc);
 
         # the type description is typed at every level
         hash<DataTypeInfo> type_info = action.options.webhook.type_info;
@@ -274,6 +282,8 @@ public class ProviderIndexActionMetadataTest inherits QUnit::Test {
                     "short_desc": "webhook destination",
                     "desc": "webhook destination",
                     "type": getOptionType(),
+                    "validation_regex": WebhookRegex,
+                    "validation_regex_desc": WebhookRegexDesc,
                 },
             },
             "output_type": output,
@@ -298,6 +308,10 @@ public class ProviderIndexActionMetadataTest inherits QUnit::Test {
         assertEq("hash<DataProviderIndexedActionInfo>", action.fullType());
         assertFalse(action.hasKey("output_type"));
         assertEq("QoreTestIndexedType", action.options.webhook.type_info.name);
+        # the validation pattern and its description are cached with the option
+        assertEq(WebhookRegex, action.options.webhook.validation_regex);
+        assertEq(WebhookRegexDesc, action.options.webhook.validation_regex_desc);
+        assertEq(WebhookRegexDesc, parse_json(make_json(action)).options.webhook.validation_regex_desc);
         assertEq(action, ProviderIndexUtil::searchCachedActionSubstr("a registered action")[0]);
 
         # the registered action's data provider info is cached with its types described by plain data
@@ -313,6 +327,7 @@ public class ProviderIndexActionMetadataTest inherits QUnit::Test {
         hash<DataProviderIndexInfo> index = ProviderIndexUtil::readDataProviderIndex();
         assertEq("hash<DataProviderIndexedActionInfo>", index.actioninfomap{CurrentApp}.send.fullType());
         assertEq("QoreTestIndexedType", index.actioninfomap{CurrentApp}.send.options.webhook.type_info.name);
+        assertEq(WebhookRegexDesc, index.actioninfomap{CurrentApp}.send.options.webhook.validation_regex_desc);
         assertEq("string", index.actioninfomap{LegacyApp}.send.options.subject.type_info.name);
         assertEq(index.actioninfomap{CurrentApp}.send, index.top_actioninfomap{CurrentApp + "/send"});
     }

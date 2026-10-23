@@ -4024,3 +4024,30 @@ Full evidence and the 62-item retained-evidence audit are in
 Next inspect a private-helper owner-match proof without changing reader
 synchronization. Deferred frame retirement still needs a complete proof of
 ancestor/location/cache ownership and all generic/error cleanup paths.
+
+
+## Develop integration through 28a6bbcb14 (2026-10-23)
+
+The branch integrates develop through `28a6bbcb14`. A reproduced inherited
+DBI typed-cache crash is fixed by abandoning the parent cache without walking
+it, including for closed connections; fresh child caches retain normal
+ownership. Native tests cover close, lookup and destruction. Long date suffix
+scans gain cancellation checks and boundary/cancellation regressions.
+
+The rebuilt Release and Debug runtimes each pass 54 of 55 selected fixtures;
+the known macOS cross-process socket case remains failed. Optional services
+and platform cases remain skipped. Additional checks pass 2220 IR/AOT reference
+comparisons and 11,768 Debug native assertions. All 252 qmod targets are rebuilt
+per configuration, with 253 aliases restored to Release. RESULTS and
+`bench/runtime-comparison/results-merge-28a6bbcb14-macos-arm64.json` preserve
+raw evidence, limitations and the 62-item audit. No call-path speedup is retained
+by this merge, and no new Java/develop timing was run.
+
+The private owner-proof compile probe is declined untimed because removing
+comparisons caused stack-check outlining, more register saves and a larger
+floating unary frame. Next test a scoped inlining hint; require favorable
+machine code before semantic qualification and optimized before/candidate/
+disabled measurements. Separately, invocation-invariant LLVM callback arguments
+may support a stronger cache-owner proof. That requires a distinct helper,
+complete cache lifetime proof and actual path verification. Reader synchronization
+remains unchanged; Java parity and a global ceiling remain unestablished.

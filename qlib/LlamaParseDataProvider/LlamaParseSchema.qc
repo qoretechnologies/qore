@@ -75,7 +75,9 @@ public hashdecl LlamaParseSchemaProvenanceInfo {
 
 #! Loads and holds the vendored LlamaIndex Cloud API description
 /** The schema is pruned to the exported operations and the transitive closure of everything they
-    reference.  It is parsed once, when the module loads and registers its actions, which are built from it.
+    reference.  It is parsed once, when the module loads and registers its actions, whose options are derived
+    from the requests; each action's output type is built when it is first needed (see
+    @ref RestSchemaActions::RestSchemaActionSetOptionInfo::lazy_response_types "lazy_response_types").
 
     @since %LlamaParseDataProvider 1.0
 */
@@ -122,7 +124,8 @@ public class LlamaParseSchema {
             action_set = new RestSchemaActions::RestSchemaActionSet(
                 LlamaParseSchema::getSchemaIntern(),
                 LlamaParseManifest::Manifest,
-                LlamaParseManifest::ReferenceData);
+                LlamaParseManifest::ReferenceData,
+                NOTHING, NOTHING, RestSchemaActions::RestSchemaActionSet::LazyResponseTypes);
         }
         return action_set;
     }

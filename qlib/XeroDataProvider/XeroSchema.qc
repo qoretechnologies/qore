@@ -97,7 +97,9 @@ public hashdecl XeroSchemaProvenanceInfo {
 
     @section xeroschema_parse Parsed On First Use
 
-    Each schema is parsed once, when the module loads and registers its actions, which are built from it.
+    Each schema is parsed once, when the module loads and registers its actions, whose options are derived from
+    the requests; each action's output type is built when it is first needed (see
+    @ref RestSchemaActions::RestSchemaActionSetOptionInfo::lazy_response_types "lazy_response_types").
 */
 public class XeroSchema {
     public {
@@ -173,7 +175,8 @@ public class XeroSchema {
         if (!projects_set) {
             projects_set = new RestSchemaActionSet(XeroSchema::getSchemaIntern(ProjectsSchemaFileName),
                 XeroManifest::ProjectsManifest, XeroManifest::ProjectsReferenceData,
-                XeroSchema::getAccountingActionSetIntern());
+                XeroSchema::getAccountingActionSetIntern(),
+                NOTHING, RestSchemaActionSet::LazyResponseTypes);
         }
         return projects_set;
     }
@@ -195,7 +198,8 @@ public class XeroSchema {
             # is built, so it has to be there first
             XeroCodecs::register();
             accounting_set = new RestSchemaActionSet(XeroSchema::getSchemaIntern(AccountingSchemaFileName),
-                XeroManifest::AccountingManifest, XeroManifest::AccountingReferenceData);
+                XeroManifest::AccountingManifest, XeroManifest::AccountingReferenceData,
+                NOTHING, NOTHING, RestSchemaActionSet::LazyResponseTypes);
         }
         return accounting_set;
     }

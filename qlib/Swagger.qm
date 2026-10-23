@@ -141,6 +141,10 @@ RestHandler handler(NOTHING, swagger);
     @section swagger_relnotes Swagger Module Release Notes
 
     @subsection swagger_2_6 Swagger v2.6
+    - fixed data types and fields depending on the order in which they were first requested: the mandatory and
+      optional variants of a type or field are each built from the schema instead of one being copied from the
+      other, so their names, null handling and required attributes are always what the schema specifies; a
+      required \c x-nullable property has an optional value type and is marked required
     - validate schema and parameter examples and omit placeholders that violate their constraints
     - JSON and YAML bodies in another encoding than UTF-8 are converted to UTF-8 before they are parsed, instead of
       being relabeled as UTF-8, which corrupted correctly labeled text such as YAML with a UTF-16 byte order mark;
@@ -1141,7 +1145,10 @@ public class SwaggerSchema inherits ParameterGroup, AbstractRestSchemaValidator 
     private *AbstractDataProviderType checkType(string path, string typestr, *string format,
             *SchemaObject arrayItems, bool required = True, reference<string> id) {
         id = sprintf("%s-%s-%s-%s", path, typestr, format ?? "x", arrayItems ? arrayItems.uniqueHash() : "x");
-        return getCacheType(\typemap{id}, required ? "Y" : "N");
+        # a variant that is not cached is built from its specification and never derived from the other one: a
+        # derived type is not the type the specification gives, so a type would depend on which variant was built
+        # first
+        return typemap{id}{required ? "Y" : "N"};
     }
 
     #! Returns the data type corresponding to the values

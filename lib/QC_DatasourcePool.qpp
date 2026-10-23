@@ -219,6 +219,15 @@ static void DatasourcePool_deserializer(QoreObject& self, const QoreHashNode* sd
     Executing a %DatasourcePool method while not in a transaction is realized by allocating a temporary connection to the calling thread which is re-released when the method returns. No explicit commits are executed by the class, therefore it is an error to execute transaction-relevant commands without first calling DatasourcePool::exec(), DatasourcePool::vexec(), DatasourcePool::execRaw(), or DatasourcePool::beginTransaction().\n\n
     Note that the @ref Qore::SQL::SQLStatement "SQLStatement" class also grabs allocates a persistent connection to the calling thread when executing if it is created using a %DatasourcePool object in the constructor; when connections are returned to the pool, all SQLStatement objects using the allocated datasource are closed automatically; for more information see the @ref Qore::SQL::SQLStatement "SQLStatement" class documentation.  A statement destroyed in another thread than the one holding its connection is closed by the thread holding the connection; see @ref Qore::SQL::SQLStatement::destructor() "SQLStatement::destructor()".
 
+    @par Child Processes Created with fork()
+    A child process created with @ref Qore::fork() "fork()" gives up the connections of a %DatasourcePool that it
+    inherits from its parent without sending anything on them (no rollback and no logoff), as the database sessions
+    belong to the parent, and opens new connections when it needs them.  If the forking thread held a connection in a
+    transaction, the first action of that thread in the child that uses a connection raises a
+    \c DATASOURCE-FORK-ERROR exception, since the transaction cannot be continued; destroying the pool ends it without
+    an error.  The threads of the parent that held connections do not exist in the child, so their connections are
+    free there.  See @ref datasource_fork for details.
+
     @par Thread Resource Handling
     The DatasourcePool class manages connection allocations as a @ref thread_resources "thread resource"; if the
     connection is not released with a call to @ref Qore::SQL::DatasourcePool::commit() "DatasourcePool::commit()"

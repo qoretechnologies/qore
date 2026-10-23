@@ -149,9 +149,11 @@ public class TogetherSchema {
             push parsed, OpenApi3Loader::fromFile(Priv::TogetherModuleDir
                 + sprintf("/together-v%d-openapi.json", version));
         }
-        RestSchemaActionSet primary(parsed[0], TogetherManifest::Manifest, TogetherManifest::ReferenceData);
+        RestSchemaActionSet primary(parsed[0], TogetherManifest::Manifest, TogetherManifest::ReferenceData,
+            NOTHING, NOTHING, RestSchemaActionSet::LazyResponseTypes);
         RestSchemaActionSet dedicated(parsed[1], TogetherDedicatedManifest::Manifest,
-            TogetherDedicatedManifest::ReferenceData, (primary,));
+            TogetherDedicatedManifest::ReferenceData, (primary,),
+            NOTHING, RestSchemaActionSet::LazyResponseTypes);
         schemas = parsed;
         action_sets = (primary, dedicated);
     }

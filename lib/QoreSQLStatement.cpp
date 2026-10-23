@@ -36,6 +36,7 @@
 #include "qore/intern/qore_ds_private.h"
 #include "qore/intern/qore_dbi_private.h"
 #include "qore/intern/DatasourcePool.h"
+#include "qore/intern/QoreForkHandlers.h"
 
 const char* QoreSQLStatement::stmt_statuses[] = { "idle", "prepared", "executed", "defined" };
 
@@ -74,6 +75,9 @@ public:
         Datasource* newds = connect
             ? stmt.dsh->helperStartAction(xsink, nt)
             : stmt.dsh->helperStartActionNoConnect(xsink, nt, connected);
+        // in a child process created with fork(), the statement's driver data from a connection of the parent was given
+        // up with that connection: the statement leaves it, and it is prepared again if the action needs it
+        stmt.dropInheritedData();
         // the statement's lock is a leaf lock: it is taken once the connection is available, and released before any
         // other lock is taken
         if (!connected) {
@@ -206,12 +210,45 @@ public:
     }
 };
 
-QoreSQLStatement::QoreSQLStatement(Datasource* ds, void* data, DatasourceStatementHelper* dsh, unsigned char status) : SQLStatement(ds, data), dsh(dsh->helperRefSelf()), status(status) {
+QoreSQLStatement::QoreSQLStatement(Datasource* ds, void* data, DatasourceStatementHelper* dsh, unsigned char status) : SQLStatement(ds, data), dsh(dsh->helperRefSelf()), status(status), data_generation(qore_fork_get_generation()) {
    qore_ds_private::get(*ds)->setStatementKeepLock(this);
+   forkRegister();
 }
 
 QoreSQLStatement::~QoreSQLStatement() {
+   forkUnregister();
    assert(!priv->data);
+}
+
+bool QoreSQLStatement::dropInheritedData() {
+    // the data of this process, which only the thread that holds the statement's connection changes, is not read
+    const unsigned gen = qore_fork_get_generation();
+    if (data_generation.load(std::memory_order_acquire) == gen) {
+        return false;
+    }
+    // a child process created with fork(): the first thread of the child to get here drops the data of the parent;
+    // the others wait for it, and no thread of the child uses the statement before
+    void* data;
+    {
+        AutoLocker al(stmt_lock);
+        if (data_generation.load(std::memory_order_relaxed) == gen) {
+            return false;
+        }
+        data = priv->data;
+        if (data) {
+            priv->data = nullptr;
+            status = STMT_IDLE;
+            validp = false;
+            priv->ds = nullptr;
+        }
+        data_generation.store(gen, std::memory_order_release);
+    }
+    if (!data) {
+        return false;
+    }
+    // freed when the process ends; see qore_dbi_keep_abandoned()
+    qore_dbi_keep_abandoned(data);
+    return true;
 }
 
 int QoreSQLStatement::checkStatus(ExceptionSink* xsink, DBActionHelper& dba, int stat, const char* action) {
@@ -282,9 +319,10 @@ void QoreSQLStatement::deref(ExceptionSink* xsink) {
         //printd(5, "QoreSQLStatement::deref() deleting this: %p cmd: %s\n", this, DAH_TEXT(cmd));
 
         // the statement is removed from its connection first: the connection closes the statements that it holds
-        // when its transaction ends, which can happen in another thread for a pool connection
-        Datasource* stmt_ds;
-        {
+        // when its transaction ends, which can happen in another thread for a pool connection; driver data from a
+        // connection that an ancestor of this process opened is given up with that connection instead
+        Datasource* stmt_ds = nullptr;
+        if (!dropInheritedData()) {
             AutoLocker al(stmt_lock);
             stmt_ds = priv->ds;
         }
@@ -311,7 +349,11 @@ void QoreSQLStatement::deref(ExceptionSink* xsink) {
 
 void QoreSQLStatement::transactionDone(bool clear, bool close, ExceptionSink* xsink) {
     //printd(5, "QoreSQLStatement::transactionDone() this: %p data: %p ds: %p clear: %d\n", this, priv->data, priv->ds, clear);
-    // called by the thread that holds the connection, which is the thread that uses the statement
+    // called by the thread that holds the connection, which is the thread that uses the statement; driver data of a
+    // connection that an ancestor of this process opened is given up without calling the driver
+    if (dropInheritedData()) {
+        return;
+    }
     if (priv->data) {
         assert(priv->ds);
         // if "close" is set, then we delete the statement's local data
@@ -331,7 +373,8 @@ void QoreSQLStatement::transactionDone(bool clear, bool close, ExceptionSink* xs
 }
 
 int QoreSQLStatement::closeIntern(ExceptionSink* xsink) {
-    if (!priv->data)
+    // driver data of a connection that an ancestor of this process opened is given up without calling the driver
+    if (dropInheritedData() || !priv->data)
         return 0;
 
     assert(priv->ds);
@@ -363,6 +406,7 @@ int QoreSQLStatement::prepareIntern(ExceptionSink* xsink) {
     int rc = qore_dbi_private::get(*priv->ds->getDriver())->stmt_prepare(this, str, prepare_args, xsink);
     if (!rc) {
         status = STMT_PREPARED;
+        data_generation.store(qore_fork_get_generation(), std::memory_order_release);
     }
     else
         closeIntern(xsink);

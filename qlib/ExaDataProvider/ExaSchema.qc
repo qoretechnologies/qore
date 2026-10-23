@@ -74,7 +74,9 @@ public hashdecl ExaSchemaProvenanceInfo {
 
 #! Loads and holds the vendored Exa Public API description
 /** The schema is pruned to the exported operations and the transitive closure of everything they
-    reference.  It is parsed once, when the module loads and registers its actions, which are built from it.
+    reference.  It is parsed once, when the module loads and registers its actions, whose options are derived
+    from the requests; each action's output type is built when it is first needed (see
+    @ref RestSchemaActions::RestSchemaActionSetOptionInfo::lazy_response_types "lazy_response_types").
 
     @since %ExaDataProvider 1.0
 */
@@ -119,7 +121,8 @@ public class ExaSchema {
         AutoLock al(lck);
         if (!action_set) {
             action_set = new RestSchemaActions::RestSchemaActionSet(ExaSchema::getSchemaIntern(),
-                ExaManifest::Manifest, ExaManifest::ReferenceData);
+                ExaManifest::Manifest, ExaManifest::ReferenceData,
+                NOTHING, NOTHING, RestSchemaActions::RestSchemaActionSet::LazyResponseTypes);
         }
         return action_set;
     }

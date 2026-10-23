@@ -68,7 +68,9 @@ public hashdecl ConfluenceSchemaProvenanceInfo {
     whether the site is reached directly or through Atlassian's OAuth2 gateway, which is why one schema
     serves both; see @ref ConfluenceRestClient::ConfluenceRestClientBase "ConfluenceRestClientBase".
 
-    The schema is parsed once, when the module loads and registers its actions, which are built from it.
+    The schema is parsed once, when the module loads and registers its actions, whose options are derived from
+    the requests; each action's output type is built when it is first needed (see
+    @ref RestSchemaActions::RestSchemaActionSetOptionInfo::lazy_response_types "lazy_response_types").
 */
 public class ConfluenceSchema {
     public {
@@ -110,7 +112,8 @@ public class ConfluenceSchema {
         AutoLock al(lck);
         if (!action_set) {
             action_set = new RestSchemaActionSet(ConfluenceSchema::getSchemaIntern(),
-                ConfluenceManifest::Manifest, ConfluenceManifest::ReferenceData);
+                ConfluenceManifest::Manifest, ConfluenceManifest::ReferenceData,
+                NOTHING, NOTHING, RestSchemaActionSet::LazyResponseTypes);
         }
         return action_set;
     }

@@ -81,7 +81,9 @@ public hashdecl GitHubSchemaProvenanceInfo {
     Adopting a newer description without moving the pin would generate actions against a version the
     requests never ask for.
 
-    The schema is parsed once, when the module loads and registers its actions, which are built from it.
+    The schema is parsed once, when the module loads and registers its actions, whose options are derived from
+    the requests; each action's output type is built when it is first needed (see
+    @ref RestSchemaActions::RestSchemaActionSetOptionInfo::lazy_response_types "lazy_response_types").
 */
 public class GitHubSchema {
     public {
@@ -127,7 +129,8 @@ public class GitHubSchema {
         AutoLock al(lck);
         if (!action_set) {
             action_set = new RestSchemaActionSet(GitHubSchema::getSchemaIntern(),
-                GitHubManifest::Manifest, GitHubManifest::ReferenceData);
+                GitHubManifest::Manifest, GitHubManifest::ReferenceData,
+                NOTHING, NOTHING, RestSchemaActionSet::LazyResponseTypes);
         }
         return action_set;
     }

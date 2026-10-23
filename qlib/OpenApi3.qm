@@ -1782,21 +1782,10 @@ public class OpenApi3Schema inherits ObjectBase, AbstractRestSchemaValidator {
             *SchemaObject arrayItems, bool required = True, reference<string> id, *bool strict) {
         id = sprintf("%s-%s-%s-%s%s", path, typestr, format ?? "x", arrayItems ? arrayItems.uniqueHash() : "x",
             strict ? "-strict" : "");
-        string key = required ? "Y" : "N";
-        *hash<string, AbstractDataProviderType> h = typemap{id};
-        if (h) {
-            if ((key == "N") && !h.N) {
-                AbstractDataProviderType rv = h.Y.getOrNothingType();
-                setCachedType(id, key, rv);
-                return rv;
-            }
-            if ((key == "Y") && !h.Y) {
-                AbstractDataProviderType rv = h.N.getMandatoryType();
-                setCachedType(id, key, rv);
-                return rv;
-            }
-            return h{key};
-        }
+        # a variant that is not cached is built from its specification and never derived from the other one: a
+        # derived type is not the type the specification gives, so a type would depend on which variant was built
+        # first
+        return typemap{id}{required ? "Y" : "N"};
     }
 
     #! Caches a type, recording the write in the type build in progress
@@ -6032,6 +6021,12 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
             });
         }
         required = required && !nullable;
+        if (*AbstractDataProviderType t = getReplacedDataType(required)) {
+            return t;
+        }
+        # each variant is built from the schema and never derived from a cached other variant, so that a type is the
+        # same whichever variant was built first; a tuple or discriminator type always builds the mandatory variant
+        # first and derives the "or nothing" variant from it, which does not depend on the order
         if (prefix_items || !additional_items) {
             if (!dataType) {
                 if (buildingComposition()) { return AbstractDataProviderTypeMap."auto"; }
@@ -6117,7 +6112,7 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
                 return dataType;
             }
             if (!orNothingDataType) {
-                setCachedDataType(False, dataType ? dataType.getOrNothingType() : getCompositionDataType(False, rest));
+                setCachedDataType(False, getCompositionDataType(False, rest));
             }
             return orNothingDataType;
         }
@@ -6132,8 +6127,8 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
                 return dataType;
             }
             if (!orNothingDataType) {
-                setCachedDataType(False, dataType ? dataType.getOrNothingType() : getSchemaType("/", type, format,
-                    items, False).copyWithConstraints(getConstraintInfo()));
+                setCachedDataType(False, getSchemaType("/", type, format, items, False)
+                    .copyWithConstraints(getConstraintInfo()));
             }
             return orNothingDataType;
         }

@@ -1495,23 +1495,71 @@
           "source": "Repository",
           "message": "저장소"
         },
-        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcmVwb3NpdG9yeSNmZjNlZTM3ZmFkMmM1MDMzYWM0ZDA0NDA4OWQ2ZTFlMzU5ZWVkODNmMDg3ZjZlZmI5NTI0NzFlYmE3NGExYjU4Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUQ.field.ZnVsbF9uYW1l.display_name": {
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcmVwb3NpdG9yeSNmNjc5ZjY3OTViZTkzYWZjNDkyOTIwNzE1OTIxZDY2NzRlNjY2OGYwZmU1YzhkYTAxMjIzZWRkMGY3MWYzMDM1Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUQ.field.Y3JlYXRlZF9vbg.display_name": {
+          "source": "Created On",
+          "message": "생성 날짜"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcmVwb3NpdG9yeSNmNjc5ZjY3OTViZTkzYWZjNDkyOTIwNzE1OTIxZDY2NzRlNjY2OGYwZmU1YzhkYTAxMjIzZWRkMGY3MWYzMDM1Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUQ.field.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "설명"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcmVwb3NpdG9yeSNmNjc5ZjY3OTViZTkzYWZjNDkyOTIwNzE1OTIxZDY2NzRlNjY2OGYwZmU1YzhkYTAxMjIzZWRkMGY3MWYzMDM1Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUQ.field.Zm9ya19wb2xpY3k.display_name": {
+          "source": "Fork Policy",
+          "message": "포크 정책"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcmVwb3NpdG9yeSNmNjc5ZjY3OTViZTkzYWZjNDkyOTIwNzE1OTIxZDY2NzRlNjY2OGYwZmU1YzhkYTAxMjIzZWRkMGY3MWYzMDM1Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUQ.field.Zm9ya19wb2xpY3k.desc": {
+          "source": "\nControls the rules for forking this repository.\n\n* **allow_forks**: unrestricted forking\n* **no_public_forks**: restrict forking to private forks (forks cannot\n  be made public later)\n* **no_forks**: deny all forking\n",
+          "message": "\n이 저장소의 포크 규칙을 제어합니다.\n\n* **allow_forks**: 제한 없는 포크 허용\n* **no_public_forks**: 비공개 포크로만 포크 제한(포크를 나중에 공개로 전환할 수 없음)\n* **no_forks**: 모든 포크 거부\n"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcmVwb3NpdG9yeSNmNjc5ZjY3OTViZTkzYWZjNDkyOTIwNzE1OTIxZDY2NzRlNjY2OGYwZmU1YzhkYTAxMjIzZWRkMGY3MWYzMDM1Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUQ.field.Zm9ya19wb2xpY3k.allowed-value.c3RyaW5nOmFsbG93X2Zvcmtz.display_name": {
+          "source": "allow_forks",
+          "message": "allow_forks"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcmVwb3NpdG9yeSNmNjc5ZjY3OTViZTkzYWZjNDkyOTIwNzE1OTIxZDY2NzRlNjY2OGYwZmU1YzhkYTAxMjIzZWRkMGY3MWYzMDM1Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUQ.field.Zm9ya19wb2xpY3k.allowed-value.c3RyaW5nOm5vX3B1YmxpY19mb3Jrcw.display_name": {
+          "source": "no_public_forks",
+          "message": "no_public_forks"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcmVwb3NpdG9yeSNmNjc5ZjY3OTViZTkzYWZjNDkyOTIwNzE1OTIxZDY2NzRlNjY2OGYwZmU1YzhkYTAxMjIzZWRkMGY3MWYzMDM1Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUQ.field.Zm9ya19wb2xpY3k.allowed-value.c3RyaW5nOm5vX2Zvcmtz.display_name": {
+          "source": "no_forks",
+          "message": "no_forks"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcmVwb3NpdG9yeSNmNjc5ZjY3OTViZTkzYWZjNDkyOTIwNzE1OTIxZDY2NzRlNjY2OGYwZmU1YzhkYTAxMjIzZWRkMGY3MWYzMDM1Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUQ.field.ZnVsbF9uYW1l.display_name": {
           "source": "Full Name",
           "message": "전체 이름"
         },
-        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcmVwb3NpdG9yeSNmZjNlZTM3ZmFkMmM1MDMzYWM0ZDA0NDA4OWQ2ZTFlMzU5ZWVkODNmMDg3ZjZlZmI5NTI0NzFlYmE3NGExYjU4Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUQ.field.ZnVsbF9uYW1l.short_desc": {
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcmVwb3NpdG9yeSNmNjc5ZjY3OTViZTkzYWZjNDkyOTIwNzE1OTIxZDY2NzRlNjY2OGYwZmU1YzhkYTAxMjIzZWRkMGY3MWYzMDM1Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUQ.field.ZnVsbF9uYW1l.short_desc": {
           "source": "The concatenation of the repository owner's username and the slugified name,…",
           "message": "저장소 소유자의 사용자 이름과 슬러그화된 이름의 연결,…"
         },
-        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcmVwb3NpdG9yeSNmZjNlZTM3ZmFkMmM1MDMzYWM0ZDA0NDA4OWQ2ZTFlMzU5ZWVkODNmMDg3ZjZlZmI5NTI0NzFlYmE3NGExYjU4Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUQ.field.ZnVsbF9uYW1l.desc": {
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcmVwb3NpdG9yeSNmNjc5ZjY3OTViZTkzYWZjNDkyOTIwNzE1OTIxZDY2NzRlNjY2OGYwZmU1YzhkYTAxMjIzZWRkMGY3MWYzMDM1Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUQ.field.ZnVsbF9uYW1l.desc": {
           "source": "The concatenation of the repository owner's username and the slugified name, e.g. \"evzijst/interruptingcow\". This is the same string used in Bitbucket URLs.",
           "message": "저장소 소유자의 사용자 이름과 슬러그화된 이름의 연결, 예: \"evzijst/interruptingcow\". 이 문자열은 Bitbucket URL에서 사용되는 것과 동일합니다."
         },
-        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcmVwb3NpdG9yeSNmZjNlZTM3ZmFkMmM1MDMzYWM0ZDA0NDA4OWQ2ZTFlMzU5ZWVkODNmMDg3ZjZlZmI5NTI0NzFlYmE3NGExYjU4Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUQ.field.aXNfcHJpdmF0ZQ.display_name": {
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcmVwb3NpdG9yeSNmNjc5ZjY3OTViZTkzYWZjNDkyOTIwNzE1OTIxZDY2NzRlNjY2OGYwZmU1YzhkYTAxMjIzZWRkMGY3MWYzMDM1Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUQ.field.aGFzX2lzc3Vlcw.display_name": {
+          "source": "Has Issues",
+          "message": "이슈 사용"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcmVwb3NpdG9yeSNmNjc5ZjY3OTViZTkzYWZjNDkyOTIwNzE1OTIxZDY2NzRlNjY2OGYwZmU1YzhkYTAxMjIzZWRkMGY3MWYzMDM1Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUQ.field.aGFzX2lzc3Vlcw.desc": {
+          "source": "\nThe issue tracker for this repository is enabled. Issue Tracker\nfeatures are not supported for repositories in workspaces\nadministered through admin.atlassian.com.\n",
+          "message": "\n이 저장소의 이슈 트래커가 활성화되어 있습니다. admin.atlassian.com을 통해 관리되는 워크스페이스의 저장소에는 이슈 트래커 기능이 지원되지 않습니다.\n"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcmVwb3NpdG9yeSNmNjc5ZjY3OTViZTkzYWZjNDkyOTIwNzE1OTIxZDY2NzRlNjY2OGYwZmU1YzhkYTAxMjIzZWRkMGY3MWYzMDM1Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUQ.field.aGFzX3dpa2k.display_name": {
+          "source": "Has Wiki",
+          "message": "위키 사용"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcmVwb3NpdG9yeSNmNjc5ZjY3OTViZTkzYWZjNDkyOTIwNzE1OTIxZDY2NzRlNjY2OGYwZmU1YzhkYTAxMjIzZWRkMGY3MWYzMDM1Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUQ.field.aGFzX3dpa2k.desc": {
+          "source": "\nThe wiki for this repository is enabled. Wiki\nfeatures are not supported for repositories in workspaces\nadministered through admin.atlassian.com.\n",
+          "message": "\n이 저장소의 위키가 활성화되어 있습니다. admin.atlassian.com을 통해 관리되는 워크스페이스의 저장소에는 위키 기능이 지원되지 않습니다.\n"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcmVwb3NpdG9yeSNmNjc5ZjY3OTViZTkzYWZjNDkyOTIwNzE1OTIxZDY2NzRlNjY2OGYwZmU1YzhkYTAxMjIzZWRkMGY3MWYzMDM1Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUQ.field.aXNfcHJpdmF0ZQ.display_name": {
           "source": "Is Private",
           "message": "비공개 여부"
         },
-        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcmVwb3NpdG9yeSNmZjNlZTM3ZmFkMmM1MDMzYWM0ZDA0NDA4OWQ2ZTFlMzU5ZWVkODNmMDg3ZjZlZmI5NTI0NzFlYmE3NGExYjU4Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUQ.field.bGlua3M.display_name": {
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcmVwb3NpdG9yeSNmNjc5ZjY3OTViZTkzYWZjNDkyOTIwNzE1OTIxZDY2NzRlNjY2OGYwZmU1YzhkYTAxMjIzZWRkMGY3MWYzMDM1Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUQ.field.bGFuZ3VhZ2U.display_name": {
+          "source": "Language",
+          "message": "언어"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcmVwb3NpdG9yeSNmNjc5ZjY3OTViZTkzYWZjNDkyOTIwNzE1OTIxZDY2NzRlNjY2OGYwZmU1YzhkYTAxMjIzZWRkMGY3MWYzMDM1Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUQ.field.bGlua3M.display_name": {
           "source": "Links",
           "message": "링크"
         },
@@ -1683,19 +1731,263 @@
           "source": "Name",
           "message": "이름"
         },
-        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcmVwb3NpdG9yeSNmZjNlZTM3ZmFkMmM1MDMzYWM0ZDA0NDA4OWQ2ZTFlMzU5ZWVkODNmMDg3ZjZlZmI5NTI0NzFlYmE3NGExYjU4Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUQ.field.dHlwZQ.display_name": {
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcmVwb3NpdG9yeSNmNjc5ZjY3OTViZTkzYWZjNDkyOTIwNzE1OTIxZDY2NzRlNjY2OGYwZmU1YzhkYTAxMjIzZWRkMGY3MWYzMDM1Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUQ.field.bWFpbmJyYW5jaA.display_name": {
+          "source": "Mainbranch",
+          "message": "기본 브랜치"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcmVwb3NpdG9yeSNmNjc5ZjY3OTViZTkzYWZjNDkyOTIwNzE1OTIxZDY2NzRlNjY2OGYwZmU1YzhkYTAxMjIzZWRkMGY3MWYzMDM1Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUQ.field.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "이름"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcmVwb3NpdG9yeSNmNjc5ZjY3OTViZTkzYWZjNDkyOTIwNzE1OTIxZDY2NzRlNjY2OGYwZmU1YzhkYTAxMjIzZWRkMGY3MWYzMDM1Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUQ.field.b3duZXI.display_name": {
+          "source": "Owner",
+          "message": "소유자"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcmVwb3NpdG9yeSNmNjc5ZjY3OTViZTkzYWZjNDkyOTIwNzE1OTIxZDY2NzRlNjY2OGYwZmU1YzhkYTAxMjIzZWRkMGY3MWYzMDM1Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUQ.field.cGFyZW50.display_name": {
+          "source": "Parent",
+          "message": "부모"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcmVwb3NpdG9yeSNmNjc5ZjY3OTViZTkzYWZjNDkyOTIwNzE1OTIxZDY2NzRlNjY2OGYwZmU1YzhkYTAxMjIzZWRkMGY3MWYzMDM1Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUQ.field.cHJvamVjdA.display_name": {
+          "source": "Project",
+          "message": "프로젝트"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcHJvamVjdCM3MmRiMTdhOTBmNTBjZmE3NGE0YjM1ZDZkZTEyN2NhMDQyYTc3YWFlMjZlNjMzMzdhZjA5NjA3Y2IzNmI5MjEwOm9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUTpmaWVsZDpjSEp2YW1WamRB.field.Y3JlYXRlZF9vbg.display_name": {
+          "source": "Created On",
+          "message": "생성 날짜"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcHJvamVjdCM3MmRiMTdhOTBmNTBjZmE3NGE0YjM1ZDZkZTEyN2NhMDQyYTc3YWFlMjZlNjMzMzdhZjA5NjA3Y2IzNmI5MjEwOm9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUTpmaWVsZDpjSEp2YW1WamRB.field.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "설명"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcHJvamVjdCM3MmRiMTdhOTBmNTBjZmE3NGE0YjM1ZDZkZTEyN2NhMDQyYTc3YWFlMjZlNjMzMzdhZjA5NjA3Y2IzNmI5MjEwOm9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUTpmaWVsZDpjSEp2YW1WamRB.field.aGFzX3B1YmxpY2x5X3Zpc2libGVfcmVwb3M.display_name": {
+          "source": "Has Publicly Visible Repos",
+          "message": "공개적으로 볼 수 있는 저장소 보유 여부"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcHJvamVjdCM3MmRiMTdhOTBmNTBjZmE3NGE0YjM1ZDZkZTEyN2NhMDQyYTc3YWFlMjZlNjMzMzdhZjA5NjA3Y2IzNmI5MjEwOm9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUTpmaWVsZDpjSEp2YW1WamRB.field.aGFzX3B1YmxpY2x5X3Zpc2libGVfcmVwb3M.desc": {
+          "source": "\nIndicates whether the project contains publicly visible repositories.\nNote that private projects cannot contain public repositories.",
+          "message": "\n프로젝트에 공개적으로 확인할 수 있는 저장소가 포함되어 있는지 여부를 나타냅니다.\n개인 프로젝트는 공개 저장소를 포함할 수 없습니다."
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcHJvamVjdCM3MmRiMTdhOTBmNTBjZmE3NGE0YjM1ZDZkZTEyN2NhMDQyYTc3YWFlMjZlNjMzMzdhZjA5NjA3Y2IzNmI5MjEwOm9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUTpmaWVsZDpjSEp2YW1WamRB.field.aXNfcHJpdmF0ZQ.display_name": {
+          "source": "Is Private",
+          "message": "비공개 여부"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcHJvamVjdCM3MmRiMTdhOTBmNTBjZmE3NGE0YjM1ZDZkZTEyN2NhMDQyYTc3YWFlMjZlNjMzMzdhZjA5NjA3Y2IzNmI5MjEwOm9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUTpmaWVsZDpjSEp2YW1WamRB.field.aXNfcHJpdmF0ZQ.desc": {
+          "source": "\nIndicates whether the project is publicly accessible, or whether it is\nprivate to the team and consequently only visible to team members.\nNote that private projects cannot contain public repositories.",
+          "message": "\n프로젝트가 공개적으로 접근 가능한지 여부, 또는 팀 내부에서만 사용 가능한 개인 프로젝트인지 여부를 나타냅니다.\n개인 프로젝트는 공개 저장소를 포함할 수 없습니다."
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcHJvamVjdCM3MmRiMTdhOTBmNTBjZmE3NGE0YjM1ZDZkZTEyN2NhMDQyYTc3YWFlMjZlNjMzMzdhZjA5NjA3Y2IzNmI5MjEwOm9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUTpmaWVsZDpjSEp2YW1WamRB.field.a2V5.display_name": {
+          "source": "Key",
+          "message": "키"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcHJvamVjdCM3MmRiMTdhOTBmNTBjZmE3NGE0YjM1ZDZkZTEyN2NhMDQyYTc3YWFlMjZlNjMzMzdhZjA5NjA3Y2IzNmI5MjEwOm9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUTpmaWVsZDpjSEp2YW1WamRB.field.a2V5.short_desc": {
+          "source": "The project's key",
+          "message": "프로젝트의 키"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcHJvamVjdCM3MmRiMTdhOTBmNTBjZmE3NGE0YjM1ZDZkZTEyN2NhMDQyYTc3YWFlMjZlNjMzMzdhZjA5NjA3Y2IzNmI5MjEwOm9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUTpmaWVsZDpjSEp2YW1WamRB.field.a2V5.desc": {
+          "source": "The project's key.",
+          "message": "프로젝트의 키."
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcHJvamVjdCM3MmRiMTdhOTBmNTBjZmE3NGE0YjM1ZDZkZTEyN2NhMDQyYTc3YWFlMjZlNjMzMzdhZjA5NjA3Y2IzNmI5MjEwOm9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUTpmaWVsZDpjSEp2YW1WamRB.field.bGlua3M.display_name": {
+          "source": "Links",
+          "message": "링크"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpIYXNoRGF0YVR5cGU6KmxpbmtzI2U2ZDdiMmJkNjRhMjg5YjNlYTIxYTFhNzY2OWFhNDUzYzhkOWNiMTY2Njg5YzM5NWY2MThjOTQ4M2M0MTlkYWE6b3B0aW9uOmJXRnBibUp5WVc1amFBOmZpZWxkOmRHRnlaMlYwOmZpZWxkOmNtVndiM05wZEc5eWVROmZpZWxkOmNISnZhbVZqZEE6ZmllbGQ6YkdsdWEzTQ.field.YXZhdGFy.display_name": {
+          "source": "Avatar",
+          "message": "아바타"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpIYXNoRGF0YVR5cGU6KmxpbmtzI2U2ZDdiMmJkNjRhMjg5YjNlYTIxYTFhNzY2OWFhNDUzYzhkOWNiMTY2Njg5YzM5NWY2MThjOTQ4M2M0MTlkYWE6b3B0aW9uOmJXRnBibUp5WVc1amFBOmZpZWxkOmRHRnlaMlYwOmZpZWxkOmNtVndiM05wZEc5eWVROmZpZWxkOmNISnZhbVZqZEE6ZmllbGQ6YkdsdWEzTQ.field.YXZhdGFy.short_desc": {
+          "source": "A link to a resource related to this object",
+          "message": "이 개체와 관련된 리소스에 대한 링크입니다."
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpIYXNoRGF0YVR5cGU6KmxpbmtzI2U2ZDdiMmJkNjRhMjg5YjNlYTIxYTFhNzY2OWFhNDUzYzhkOWNiMTY2Njg5YzM5NWY2MThjOTQ4M2M0MTlkYWE6b3B0aW9uOmJXRnBibUp5WVc1amFBOmZpZWxkOmRHRnlaMlYwOmZpZWxkOmNtVndiM05wZEc5eWVROmZpZWxkOmNISnZhbVZqZEE6ZmllbGQ6YkdsdWEzTQ.field.YXZhdGFy.desc": {
+          "source": "A link to a resource related to this object.",
+          "message": "이 개체와 관련된 리소스에 대한 링크입니다."
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpIYXNoRGF0YVR5cGU6KmxpbmtzI2U2ZDdiMmJkNjRhMjg5YjNlYTIxYTFhNzY2OWFhNDUzYzhkOWNiMTY2Njg5YzM5NWY2MThjOTQ4M2M0MTlkYWE6b3B0aW9uOmJXRnBibUp5WVc1amFBOmZpZWxkOmRHRnlaMlYwOmZpZWxkOmNtVndiM05wZEc5eWVROmZpZWxkOmNISnZhbVZqZEE6ZmllbGQ6YkdsdWEzTQ.field.aHRtbA.display_name": {
+          "source": "HTML",
+          "message": "HTML"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpIYXNoRGF0YVR5cGU6KmxpbmtzI2U2ZDdiMmJkNjRhMjg5YjNlYTIxYTFhNzY2OWFhNDUzYzhkOWNiMTY2Njg5YzM5NWY2MThjOTQ4M2M0MTlkYWE6b3B0aW9uOmJXRnBibUp5WVc1amFBOmZpZWxkOmRHRnlaMlYwOmZpZWxkOmNtVndiM05wZEc5eWVROmZpZWxkOmNISnZhbVZqZEE6ZmllbGQ6YkdsdWEzTQ.field.aHRtbA.short_desc": {
+          "source": "A link to a resource related to this object",
+          "message": "이 개체와 관련된 리소스에 대한 링크입니다."
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpIYXNoRGF0YVR5cGU6KmxpbmtzI2U2ZDdiMmJkNjRhMjg5YjNlYTIxYTFhNzY2OWFhNDUzYzhkOWNiMTY2Njg5YzM5NWY2MThjOTQ4M2M0MTlkYWE6b3B0aW9uOmJXRnBibUp5WVc1amFBOmZpZWxkOmRHRnlaMlYwOmZpZWxkOmNtVndiM05wZEc5eWVROmZpZWxkOmNISnZhbVZqZEE6ZmllbGQ6YkdsdWEzTQ.field.aHRtbA.desc": {
+          "source": "A link to a resource related to this object.",
+          "message": "이 개체와 관련된 리소스에 대한 링크입니다."
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcHJvamVjdCM3MmRiMTdhOTBmNTBjZmE3NGE0YjM1ZDZkZTEyN2NhMDQyYTc3YWFlMjZlNjMzMzdhZjA5NjA3Y2IzNmI5MjEwOm9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUTpmaWVsZDpjSEp2YW1WamRB.field.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "이름"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcHJvamVjdCM3MmRiMTdhOTBmNTBjZmE3NGE0YjM1ZDZkZTEyN2NhMDQyYTc3YWFlMjZlNjMzMzdhZjA5NjA3Y2IzNmI5MjEwOm9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUTpmaWVsZDpjSEp2YW1WamRB.field.bmFtZQ.short_desc": {
+          "source": "The name of the project",
+          "message": "프로젝트 이름"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcHJvamVjdCM3MmRiMTdhOTBmNTBjZmE3NGE0YjM1ZDZkZTEyN2NhMDQyYTc3YWFlMjZlNjMzMzdhZjA5NjA3Y2IzNmI5MjEwOm9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUTpmaWVsZDpjSEp2YW1WamRB.field.bmFtZQ.desc": {
+          "source": "The name of the project.",
+          "message": "프로젝트의 이름"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcHJvamVjdCM3MmRiMTdhOTBmNTBjZmE3NGE0YjM1ZDZkZTEyN2NhMDQyYTc3YWFlMjZlNjMzMzdhZjA5NjA3Y2IzNmI5MjEwOm9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUTpmaWVsZDpjSEp2YW1WamRB.field.b3duZXI.display_name": {
+          "source": "Owner",
+          "message": "소유자"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqdGVhbSMxNTI0YTY3MjFjNGU2YjkwMjI0OWExZWVkNDJkMDk0NDEyMmIwMTJkZDY2ZDEwNTVjZjVjZTU0NWJhZjA4ZGE5Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUTpmaWVsZDpjSEp2YW1WamRBOmZpZWxkOmIzZHVaWEk.field.Y3JlYXRlZF9vbg.display_name": {
+          "source": "Created On",
+          "message": "생성 날짜"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqdGVhbSMxNTI0YTY3MjFjNGU2YjkwMjI0OWExZWVkNDJkMDk0NDEyMmIwMTJkZDY2ZDEwNTVjZjVjZTU0NWJhZjA4ZGE5Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUTpmaWVsZDpjSEp2YW1WamRBOmZpZWxkOmIzZHVaWEk.field.ZGlzcGxheV9uYW1l.display_name": {
+          "source": "Display Name",
+          "message": "표시 이름"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqdGVhbSMxNTI0YTY3MjFjNGU2YjkwMjI0OWExZWVkNDJkMDk0NDEyMmIwMTJkZDY2ZDEwNTVjZjVjZTU0NWJhZjA4ZGE5Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUTpmaWVsZDpjSEp2YW1WamRBOmZpZWxkOmIzZHVaWEk.field.bGlua3M.display_name": {
+          "source": "Links",
+          "message": "링크"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqdGVhbSMxNTI0YTY3MjFjNGU2YjkwMjI0OWExZWVkNDJkMDk0NDEyMmIwMTJkZDY2ZDEwNTVjZjVjZTU0NWJhZjA4ZGE5Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUTpmaWVsZDpjSEp2YW1WamRBOmZpZWxkOmIzZHVaWEk.field.bGlua3M.short_desc": {
+          "source": "Links related to an Account",
+          "message": "계정과 관련된 링크"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqdGVhbSMxNTI0YTY3MjFjNGU2YjkwMjI0OWExZWVkNDJkMDk0NDEyMmIwMTJkZDY2ZDEwNTVjZjVjZTU0NWJhZjA4ZGE5Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUTpmaWVsZDpjSEp2YW1WamRBOmZpZWxkOmIzZHVaWEk.field.bGlua3M.desc": {
+          "source": "Links related to an Account.",
+          "message": "계정과 관련된 링크."
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpIYXNoRGF0YVR5cGU6KmFjY291bnRfbGlua3MjY2NhZTg2YTgwMjliMWRlNWYxNzkyMjg3ODFjODkwNDg3MGVkMzE3ZjlmZGFlNWUzZGU2NWIxZDBhNWZhMjgyYzpvcHRpb246YldGcGJtSnlZVzVqYUE6ZmllbGQ6ZEdGeVoyVjA6ZmllbGQ6Y21Wd2IzTnBkRzl5ZVE6ZmllbGQ6Y0hKdmFtVmpkQTpmaWVsZDpiM2R1WlhJOmZpZWxkOmJHbHVhM00.field.YXZhdGFy.display_name": {
+          "source": "Avatar",
+          "message": "아바타"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpIYXNoRGF0YVR5cGU6KmFjY291bnRfbGlua3MjY2NhZTg2YTgwMjliMWRlNWYxNzkyMjg3ODFjODkwNDg3MGVkMzE3ZjlmZGFlNWUzZGU2NWIxZDBhNWZhMjgyYzpvcHRpb246YldGcGJtSnlZVzVqYUE6ZmllbGQ6ZEdGeVoyVjA6ZmllbGQ6Y21Wd2IzTnBkRzl5ZVE6ZmllbGQ6Y0hKdmFtVmpkQTpmaWVsZDpiM2R1WlhJOmZpZWxkOmJHbHVhM00.field.YXZhdGFy.short_desc": {
+          "source": "A link to a resource related to this object",
+          "message": "이 개체와 관련된 리소스에 대한 링크입니다."
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpIYXNoRGF0YVR5cGU6KmFjY291bnRfbGlua3MjY2NhZTg2YTgwMjliMWRlNWYxNzkyMjg3ODFjODkwNDg3MGVkMzE3ZjlmZGFlNWUzZGU2NWIxZDBhNWZhMjgyYzpvcHRpb246YldGcGJtSnlZVzVqYUE6ZmllbGQ6ZEdGeVoyVjA6ZmllbGQ6Y21Wd2IzTnBkRzl5ZVE6ZmllbGQ6Y0hKdmFtVmpkQTpmaWVsZDpiM2R1WlhJOmZpZWxkOmJHbHVhM00.field.YXZhdGFy.desc": {
+          "source": "A link to a resource related to this object.",
+          "message": "이 개체와 관련된 리소스에 대한 링크입니다."
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpIYXNoRGF0YVR5cGU6KmxpbmsjMjNlOGE5ZTFkYjYwNGI0ZDVhZmJmNjg5YjUxODFiYzliZWFjYzY4ZDI4ZWI4OTVlMGM1OTg1MTE0MDEwZjg5YjpvcHRpb246YldGcGJtSnlZVzVqYUE6ZmllbGQ6ZEdGeVoyVjA6ZmllbGQ6Y21Wd2IzTnBkRzl5ZVE6ZmllbGQ6Y0hKdmFtVmpkQTpmaWVsZDpiM2R1WlhJOmZpZWxkOmJHbHVhM006ZmllbGQ6WVhaaGRHRnk.field.aHJlZg.display_name": {
+          "source": "Href",
+          "message": "Href"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpIYXNoRGF0YVR5cGU6KmxpbmsjMjNlOGE5ZTFkYjYwNGI0ZDVhZmJmNjg5YjUxODFiYzliZWFjYzY4ZDI4ZWI4OTVlMGM1OTg1MTE0MDEwZjg5YjpvcHRpb246YldGcGJtSnlZVzVqYUE6ZmllbGQ6ZEdGeVoyVjA6ZmllbGQ6Y21Wd2IzTnBkRzl5ZVE6ZmllbGQ6Y0hKdmFtVmpkQTpmaWVsZDpiM2R1WlhJOmZpZWxkOmJHbHVhM006ZmllbGQ6WVhaaGRHRnk.field.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "이름"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpIYXNoRGF0YVR5cGU6KmFjY291bnRfbGlua3MjY2NhZTg2YTgwMjliMWRlNWYxNzkyMjg3ODFjODkwNDg3MGVkMzE3ZjlmZGFlNWUzZGU2NWIxZDBhNWZhMjgyYzpvcHRpb246YldGcGJtSnlZVzVqYUE6ZmllbGQ6ZEdGeVoyVjA6ZmllbGQ6Y21Wd2IzTnBkRzl5ZVE6ZmllbGQ6Y0hKdmFtVmpkQTpmaWVsZDpiM2R1WlhJOmZpZWxkOmJHbHVhM00.field.aHRtbA.display_name": {
+          "source": "HTML",
+          "message": "HTML"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpIYXNoRGF0YVR5cGU6KmFjY291bnRfbGlua3MjY2NhZTg2YTgwMjliMWRlNWYxNzkyMjg3ODFjODkwNDg3MGVkMzE3ZjlmZGFlNWUzZGU2NWIxZDBhNWZhMjgyYzpvcHRpb246YldGcGJtSnlZVzVqYUE6ZmllbGQ6ZEdGeVoyVjA6ZmllbGQ6Y21Wd2IzTnBkRzl5ZVE6ZmllbGQ6Y0hKdmFtVmpkQTpmaWVsZDpiM2R1WlhJOmZpZWxkOmJHbHVhM00.field.aHRtbA.short_desc": {
+          "source": "A link to a resource related to this object",
+          "message": "이 개체와 관련된 리소스에 대한 링크입니다."
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpIYXNoRGF0YVR5cGU6KmFjY291bnRfbGlua3MjY2NhZTg2YTgwMjliMWRlNWYxNzkyMjg3ODFjODkwNDg3MGVkMzE3ZjlmZGFlNWUzZGU2NWIxZDBhNWZhMjgyYzpvcHRpb246YldGcGJtSnlZVzVqYUE6ZmllbGQ6ZEdGeVoyVjA6ZmllbGQ6Y21Wd2IzTnBkRzl5ZVE6ZmllbGQ6Y0hKdmFtVmpkQTpmaWVsZDpiM2R1WlhJOmZpZWxkOmJHbHVhM00.field.aHRtbA.desc": {
+          "source": "A link to a resource related to this object.",
+          "message": "이 개체와 관련된 리소스에 대한 링크입니다."
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpIYXNoRGF0YVR5cGU6KmFjY291bnRfbGlua3MjY2NhZTg2YTgwMjliMWRlNWYxNzkyMjg3ODFjODkwNDg3MGVkMzE3ZjlmZGFlNWUzZGU2NWIxZDBhNWZhMjgyYzpvcHRpb246YldGcGJtSnlZVzVqYUE6ZmllbGQ6ZEdGeVoyVjA6ZmllbGQ6Y21Wd2IzTnBkRzl5ZVE6ZmllbGQ6Y0hKdmFtVmpkQTpmaWVsZDpiM2R1WlhJOmZpZWxkOmJHbHVhM00.field.bWVtYmVycw.display_name": {
+          "source": "Members",
+          "message": "멤버"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpIYXNoRGF0YVR5cGU6KmFjY291bnRfbGlua3MjY2NhZTg2YTgwMjliMWRlNWYxNzkyMjg3ODFjODkwNDg3MGVkMzE3ZjlmZGFlNWUzZGU2NWIxZDBhNWZhMjgyYzpvcHRpb246YldGcGJtSnlZVzVqYUE6ZmllbGQ6ZEdGeVoyVjA6ZmllbGQ6Y21Wd2IzTnBkRzl5ZVE6ZmllbGQ6Y0hKdmFtVmpkQTpmaWVsZDpiM2R1WlhJOmZpZWxkOmJHbHVhM00.field.bWVtYmVycw.short_desc": {
+          "source": "A link to a resource related to this object",
+          "message": "이 개체와 관련된 리소스에 대한 링크입니다."
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpIYXNoRGF0YVR5cGU6KmFjY291bnRfbGlua3MjY2NhZTg2YTgwMjliMWRlNWYxNzkyMjg3ODFjODkwNDg3MGVkMzE3ZjlmZGFlNWUzZGU2NWIxZDBhNWZhMjgyYzpvcHRpb246YldGcGJtSnlZVzVqYUE6ZmllbGQ6ZEdGeVoyVjA6ZmllbGQ6Y21Wd2IzTnBkRzl5ZVE6ZmllbGQ6Y0hKdmFtVmpkQTpmaWVsZDpiM2R1WlhJOmZpZWxkOmJHbHVhM00.field.bWVtYmVycw.desc": {
+          "source": "A link to a resource related to this object.",
+          "message": "이 개체와 관련된 리소스에 대한 링크입니다."
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpIYXNoRGF0YVR5cGU6KmFjY291bnRfbGlua3MjY2NhZTg2YTgwMjliMWRlNWYxNzkyMjg3ODFjODkwNDg3MGVkMzE3ZjlmZGFlNWUzZGU2NWIxZDBhNWZhMjgyYzpvcHRpb246YldGcGJtSnlZVzVqYUE6ZmllbGQ6ZEdGeVoyVjA6ZmllbGQ6Y21Wd2IzTnBkRzl5ZVE6ZmllbGQ6Y0hKdmFtVmpkQTpmaWVsZDpiM2R1WlhJOmZpZWxkOmJHbHVhM00.field.cHJvamVjdHM.display_name": {
+          "source": "Projects",
+          "message": "프로젝트"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpIYXNoRGF0YVR5cGU6KmFjY291bnRfbGlua3MjY2NhZTg2YTgwMjliMWRlNWYxNzkyMjg3ODFjODkwNDg3MGVkMzE3ZjlmZGFlNWUzZGU2NWIxZDBhNWZhMjgyYzpvcHRpb246YldGcGJtSnlZVzVqYUE6ZmllbGQ6ZEdGeVoyVjA6ZmllbGQ6Y21Wd2IzTnBkRzl5ZVE6ZmllbGQ6Y0hKdmFtVmpkQTpmaWVsZDpiM2R1WlhJOmZpZWxkOmJHbHVhM00.field.cHJvamVjdHM.short_desc": {
+          "source": "A link to a resource related to this object",
+          "message": "이 개체와 관련된 리소스에 대한 링크입니다."
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpIYXNoRGF0YVR5cGU6KmFjY291bnRfbGlua3MjY2NhZTg2YTgwMjliMWRlNWYxNzkyMjg3ODFjODkwNDg3MGVkMzE3ZjlmZGFlNWUzZGU2NWIxZDBhNWZhMjgyYzpvcHRpb246YldGcGJtSnlZVzVqYUE6ZmllbGQ6ZEdGeVoyVjA6ZmllbGQ6Y21Wd2IzTnBkRzl5ZVE6ZmllbGQ6Y0hKdmFtVmpkQTpmaWVsZDpiM2R1WlhJOmZpZWxkOmJHbHVhM00.field.cHJvamVjdHM.desc": {
+          "source": "A link to a resource related to this object.",
+          "message": "이 개체와 관련된 리소스에 대한 링크입니다."
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpIYXNoRGF0YVR5cGU6KmFjY291bnRfbGlua3MjY2NhZTg2YTgwMjliMWRlNWYxNzkyMjg3ODFjODkwNDg3MGVkMzE3ZjlmZGFlNWUzZGU2NWIxZDBhNWZhMjgyYzpvcHRpb246YldGcGJtSnlZVzVqYUE6ZmllbGQ6ZEdGeVoyVjA6ZmllbGQ6Y21Wd2IzTnBkRzl5ZVE6ZmllbGQ6Y0hKdmFtVmpkQTpmaWVsZDpiM2R1WlhJOmZpZWxkOmJHbHVhM00.field.cmVwb3NpdG9yaWVz.display_name": {
+          "source": "Repositories",
+          "message": "저장소"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpIYXNoRGF0YVR5cGU6KmFjY291bnRfbGlua3MjY2NhZTg2YTgwMjliMWRlNWYxNzkyMjg3ODFjODkwNDg3MGVkMzE3ZjlmZGFlNWUzZGU2NWIxZDBhNWZhMjgyYzpvcHRpb246YldGcGJtSnlZVzVqYUE6ZmllbGQ6ZEdGeVoyVjA6ZmllbGQ6Y21Wd2IzTnBkRzl5ZVE6ZmllbGQ6Y0hKdmFtVmpkQTpmaWVsZDpiM2R1WlhJOmZpZWxkOmJHbHVhM00.field.cmVwb3NpdG9yaWVz.short_desc": {
+          "source": "A link to a resource related to this object",
+          "message": "이 개체와 관련된 리소스에 대한 링크입니다."
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpIYXNoRGF0YVR5cGU6KmFjY291bnRfbGlua3MjY2NhZTg2YTgwMjliMWRlNWYxNzkyMjg3ODFjODkwNDg3MGVkMzE3ZjlmZGFlNWUzZGU2NWIxZDBhNWZhMjgyYzpvcHRpb246YldGcGJtSnlZVzVqYUE6ZmllbGQ6ZEdGeVoyVjA6ZmllbGQ6Y21Wd2IzTnBkRzl5ZVE6ZmllbGQ6Y0hKdmFtVmpkQTpmaWVsZDpiM2R1WlhJOmZpZWxkOmJHbHVhM00.field.cmVwb3NpdG9yaWVz.desc": {
+          "source": "A link to a resource related to this object.",
+          "message": "이 개체와 관련된 리소스에 대한 링크입니다."
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpIYXNoRGF0YVR5cGU6KmFjY291bnRfbGlua3MjY2NhZTg2YTgwMjliMWRlNWYxNzkyMjg3ODFjODkwNDg3MGVkMzE3ZjlmZGFlNWUzZGU2NWIxZDBhNWZhMjgyYzpvcHRpb246YldGcGJtSnlZVzVqYUE6ZmllbGQ6ZEdGeVoyVjA6ZmllbGQ6Y21Wd2IzTnBkRzl5ZVE6ZmllbGQ6Y0hKdmFtVmpkQTpmaWVsZDpiM2R1WlhJOmZpZWxkOmJHbHVhM00.field.c2VsZg.display_name": {
+          "source": "Self",
+          "message": "자체"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpIYXNoRGF0YVR5cGU6KmFjY291bnRfbGlua3MjY2NhZTg2YTgwMjliMWRlNWYxNzkyMjg3ODFjODkwNDg3MGVkMzE3ZjlmZGFlNWUzZGU2NWIxZDBhNWZhMjgyYzpvcHRpb246YldGcGJtSnlZVzVqYUE6ZmllbGQ6ZEdGeVoyVjA6ZmllbGQ6Y21Wd2IzTnBkRzl5ZVE6ZmllbGQ6Y0hKdmFtVmpkQTpmaWVsZDpiM2R1WlhJOmZpZWxkOmJHbHVhM00.field.c2VsZg.short_desc": {
+          "source": "A link to a resource related to this object",
+          "message": "이 개체와 관련된 리소스에 대한 링크입니다."
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpIYXNoRGF0YVR5cGU6KmFjY291bnRfbGlua3MjY2NhZTg2YTgwMjliMWRlNWYxNzkyMjg3ODFjODkwNDg3MGVkMzE3ZjlmZGFlNWUzZGU2NWIxZDBhNWZhMjgyYzpvcHRpb246YldGcGJtSnlZVzVqYUE6ZmllbGQ6ZEdGeVoyVjA6ZmllbGQ6Y21Wd2IzTnBkRzl5ZVE6ZmllbGQ6Y0hKdmFtVmpkQTpmaWVsZDpiM2R1WlhJOmZpZWxkOmJHbHVhM00.field.c2VsZg.desc": {
+          "source": "A link to a resource related to this object.",
+          "message": "이 개체와 관련된 리소스에 대한 링크입니다."
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqdGVhbSMxNTI0YTY3MjFjNGU2YjkwMjI0OWExZWVkNDJkMDk0NDEyMmIwMTJkZDY2ZDEwNTVjZjVjZTU0NWJhZjA4ZGE5Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUTpmaWVsZDpjSEp2YW1WamRBOmZpZWxkOmIzZHVaWEk.field.dHlwZQ.display_name": {
           "source": "Type",
           "message": "유형"
         },
-        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcmVwb3NpdG9yeSNmZjNlZTM3ZmFkMmM1MDMzYWM0ZDA0NDA4OWQ2ZTFlMzU5ZWVkODNmMDg3ZjZlZmI5NTI0NzFlYmE3NGExYjU4Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUQ.field.dXVpZA.display_name": {
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqdGVhbSMxNTI0YTY3MjFjNGU2YjkwMjI0OWExZWVkNDJkMDk0NDEyMmIwMTJkZDY2ZDEwNTVjZjVjZTU0NWJhZjA4ZGE5Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUTpmaWVsZDpjSEp2YW1WamRBOmZpZWxkOmIzZHVaWEk.field.dXVpZA.display_name": {
           "source": "UUID",
           "message": "UUID"
         },
-        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcmVwb3NpdG9yeSNmZjNlZTM3ZmFkMmM1MDMzYWM0ZDA0NDA4OWQ2ZTFlMzU5ZWVkODNmMDg3ZjZlZmI5NTI0NzFlYmE3NGExYjU4Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUQ.field.dXVpZA.short_desc": {
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcHJvamVjdCM3MmRiMTdhOTBmNTBjZmE3NGE0YjM1ZDZkZTEyN2NhMDQyYTc3YWFlMjZlNjMzMzdhZjA5NjA3Y2IzNmI5MjEwOm9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUTpmaWVsZDpjSEp2YW1WamRB.field.dHlwZQ.display_name": {
+          "source": "Type",
+          "message": "유형"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcHJvamVjdCM3MmRiMTdhOTBmNTBjZmE3NGE0YjM1ZDZkZTEyN2NhMDQyYTc3YWFlMjZlNjMzMzdhZjA5NjA3Y2IzNmI5MjEwOm9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUTpmaWVsZDpjSEp2YW1WamRB.field.dXBkYXRlZF9vbg.display_name": {
+          "source": "Updated On",
+          "message": "최종 수정일"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcHJvamVjdCM3MmRiMTdhOTBmNTBjZmE3NGE0YjM1ZDZkZTEyN2NhMDQyYTc3YWFlMjZlNjMzMzdhZjA5NjA3Y2IzNmI5MjEwOm9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUTpmaWVsZDpjSEp2YW1WamRB.field.dXVpZA.display_name": {
+          "source": "UUID",
+          "message": "UUID"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcHJvamVjdCM3MmRiMTdhOTBmNTBjZmE3NGE0YjM1ZDZkZTEyN2NhMDQyYTc3YWFlMjZlNjMzMzdhZjA5NjA3Y2IzNmI5MjEwOm9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUTpmaWVsZDpjSEp2YW1WamRB.field.dXVpZA.short_desc": {
+          "source": "The project's immutable id",
+          "message": "프로젝트의 고유 식별자"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcHJvamVjdCM3MmRiMTdhOTBmNTBjZmE3NGE0YjM1ZDZkZTEyN2NhMDQyYTc3YWFlMjZlNjMzMzdhZjA5NjA3Y2IzNmI5MjEwOm9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUTpmaWVsZDpjSEp2YW1WamRB.field.dXVpZA.desc": {
+          "source": "The project's immutable id.",
+          "message": "프로젝트의 고유 식별자."
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcmVwb3NpdG9yeSNmNjc5ZjY3OTViZTkzYWZjNDkyOTIwNzE1OTIxZDY2NzRlNjY2OGYwZmU1YzhkYTAxMjIzZWRkMGY3MWYzMDM1Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUQ.field.c2Nt.display_name": {
+          "source": "SCM",
+          "message": "SCM"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcmVwb3NpdG9yeSNmNjc5ZjY3OTViZTkzYWZjNDkyOTIwNzE1OTIxZDY2NzRlNjY2OGYwZmU1YzhkYTAxMjIzZWRkMGY3MWYzMDM1Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUQ.field.c2Nt.allowed-value.c3RyaW5nOmdpdA.display_name": {
+          "source": "git",
+          "message": "git"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcmVwb3NpdG9yeSNmNjc5ZjY3OTViZTkzYWZjNDkyOTIwNzE1OTIxZDY2NzRlNjY2OGYwZmU1YzhkYTAxMjIzZWRkMGY3MWYzMDM1Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUQ.field.c2l6ZQ.display_name": {
+          "source": "Size",
+          "message": "크기"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcmVwb3NpdG9yeSNmNjc5ZjY3OTViZTkzYWZjNDkyOTIwNzE1OTIxZDY2NzRlNjY2OGYwZmU1YzhkYTAxMjIzZWRkMGY3MWYzMDM1Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUQ.field.dHlwZQ.display_name": {
+          "source": "Type",
+          "message": "유형"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcmVwb3NpdG9yeSNmNjc5ZjY3OTViZTkzYWZjNDkyOTIwNzE1OTIxZDY2NzRlNjY2OGYwZmU1YzhkYTAxMjIzZWRkMGY3MWYzMDM1Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUQ.field.dXBkYXRlZF9vbg.display_name": {
+          "source": "Updated On",
+          "message": "최종 수정일"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcmVwb3NpdG9yeSNmNjc5ZjY3OTViZTkzYWZjNDkyOTIwNzE1OTIxZDY2NzRlNjY2OGYwZmU1YzhkYTAxMjIzZWRkMGY3MWYzMDM1Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUQ.field.dXVpZA.display_name": {
+          "source": "UUID",
+          "message": "UUID"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcmVwb3NpdG9yeSNmNjc5ZjY3OTViZTkzYWZjNDkyOTIwNzE1OTIxZDY2NzRlNjY2OGYwZmU1YzhkYTAxMjIzZWRkMGY3MWYzMDM1Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUQ.field.dXVpZA.short_desc": {
           "source": "The repository's immutable id",
           "message": "저장소의 고유 식별자"
         },
-        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcmVwb3NpdG9yeSNmZjNlZTM3ZmFkMmM1MDMzYWM0ZDA0NDA4OWQ2ZTFlMzU5ZWVkODNmMDg3ZjZlZmI5NTI0NzFlYmE3NGExYjU4Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUQ.field.dXVpZA.desc": {
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcmVwb3NpdG9yeSNmNjc5ZjY3OTViZTkzYWZjNDkyOTIwNzE1OTIxZDY2NzRlNjY2OGYwZmU1YzhkYTAxMjIzZWRkMGY3MWYzMDM1Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUQ.field.dXVpZA.desc": {
           "source": "The repository's immutable id. This can be used as a substitute for the slug segment in URLs. Doing this guarantees your URLs will survive renaming of the repository by its owner, or even transfer of the repository to a different user.",
           "message": "저장소의 고유 식별자. 이 식별자는 URL의 슬러그 세그먼트 대신 사용할 수 있습니다. 이를 통해 저장소 소유자의 이름 변경 또는 저장소의 다른 사용자로 이전에도 URL이 유지됩니다."
         },

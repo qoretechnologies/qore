@@ -17,7 +17,9 @@ string.
   serialization, mappers, and value handling are unchanged from a plain string. The semantic identity is
   carried by `getName()` (e.g. `"email"`) and the `qore.external_name` tag (also `"email"`), which is what a
   front end keys off to choose a widget. A permissive validation regex is additionally published in the
-  `qore.validation_regex` tag.
+  `qore.validation_regex` tag, and a description of the values it accepts in plain words, written to complete
+  "Must be ..." (`an email address, such as user@example.com`), in the `qore.validation_regex_desc` tag
+  (`getValidationRegexDesc()`), so that a UI can say why it refuses a value.
 - **Nullable variants for free.** `getOrNothingType()`/`getMandatoryType()` are inherited from
   `QoreDataType` (copy-mutate, `*`-prefix). Both `email` and `*email` are registered.
 - **Server-side validation is a backstop.** `acceptsValue()` validates string input against the format regex
@@ -51,11 +53,12 @@ preserves the `qore.external_name` tag, so the UI identity survives serializatio
 ## App-action options
 
 `DataProviderActionCatalog::getActionOptionFromFields()` propagates a field's `ui_type` (and the existing
-`validation_regex`/`sensitive`) into the derived `ActionOptionInfo`.
+`validation_regex`, `validation_regex_desc` and `sensitive`) into the derived `ActionOptionInfo`.
 
 A semantic-typed field surfaces its identity on the derived option through the option's **type**, not through
 `ActionOptionInfo::ui_type`: `ui_type` is populated only from an explicit field attribute, and a semantic type
-does not set one. A UI reads `option.type.getTag("qore.external_name")` (and `qore.validation_regex`) to pick a
+does not set one. A UI reads `option.type.getTag("qore.external_name")` (and `qore.validation_regex` and
+`qore.validation_regex_desc`) to pick a
 control. Covered by `semanticTypesThroughProviderTest()` in
 `examples/test/qlib/DataProvider/DataProvider.qtest`, which asserts both the tag path and that `ui_type` stays
 unset — see [Open design questions](#open-design-questions) for whether it should be derived.
@@ -88,17 +91,16 @@ accepted. In practice that means:
 
 Leaving a field as `string` is the correct outcome when the value is legitimately looser than the regex:
 
-| Left as `string` | Count | Why |
-|------------------|-------|-----|
-| Human-entered URL fields (CRM "website", social-profile URLs, a BigCommerce blog `url` **slug**) | 17 | `uri` requires a scheme; `www.example.com` is a legitimate thing for a user to type |
-| Phone input fields | 31 | the regex rejects extensions (`555-1234 x89`) and free-text placeholders these APIs accept |
-| Bitly `guid`/`group_guid`/`organization_guid` | 13 | Bitly GUIDs are opaque base62 ids (`Bg7ay8wPvXW`), not RFC-4122 |
-| Elasticsearch/OpenSearch `index_uuid` | 2 | base64url ids; the in-repo `example_value` `"aXNkZXhfMQ"` fails the RFC-4122 regex |
-| A `link` authored into a generated PDF | 1 | PDF.co never dereferences it, so it may hold anything |
-| Fields with no documented format (ClickFunnels/EmpathicBuilding `uuid`) | 2 | no evidence either way |
-| Gorgias `uri` fields | 4 | hold a relative path (`/api/...`), not a URI |
-| Firecrawl `link` | 1 | holds a hex colour value |
-| `SoftString*`-declared fields | 73 | see below |
+|!Left as `string`|!Count|!Why
+|Human-entered URL fields (CRM "website", social-profile URLs, a BigCommerce blog `url` **slug**)|17|`uri` requires a scheme; `www.example.com` is a legitimate thing for a user to type
+|Phone input fields|31|the regex rejects extensions (`555-1234 x89`) and free-text placeholders these APIs accept
+|Bitly `guid`/`group_guid`/`organization_guid`|13|Bitly GUIDs are opaque base62 ids (`Bg7ay8wPvXW`), not RFC-4122
+|Elasticsearch/OpenSearch `index_uuid`|2|base64url ids; the in-repo `example_value` `"aXNkZXhfMQ"` fails the RFC-4122 regex
+|A `link` authored into a generated PDF|1|PDF.co never dereferences it, so it may hold anything
+|Fields with no documented format (ClickFunnels/EmpathicBuilding `uuid`)|2|no evidence either way
+|Gorgias `uri` fields|4|hold a relative path (`/api/...`), not a URI
+|Firecrawl `link`|1|holds a hex colour value
+|`SoftString*`-declared fields|73|see below
 
 **`SoftString*` fields are never converted.** The semantic types are backed by `StringType`, and there is no
 soft variant, so replacing `SoftStringOrNothingType` with `UriOrNothingType` would silently drop the field's
@@ -141,5 +143,8 @@ regexes.
 2. Register `"<name>"`/`"*<name>"` in `AbstractDataProviderTypeMap`.
 3. Add `case "<name>":` to `getTypeIntern()` in `Swagger.qm` and `OpenApi3.qm`, and an entry to
    `OpenApi3TypeMapper::TypeMap`.
-4. Add `QoreStringFormatDataType.qc.dox.h` is already in `doxygen/qlib/Doxyfile.DataProvider` (one entry
-   covers the class); extend `examples/test/qlib/DataProvider/DataProvider.qtest` coverage.
+4. Give the format a description of its regex in plain words (the `format_regex_desc` constructor argument) and an
+   entry in `DataTypeCatalogue::Info` (`DataTypeCatalogue.qc`), which names it in user interfaces and DPQL
+   completion details.
+5. Extend `examples/test/qlib/DataProvider/DataProvider.qtest` and `DataTypeCatalogue.qtest` coverage; the
+   module's documentation is generated from every `.qc` file of `qlib/DataProvider`, so no Doxyfile changes.

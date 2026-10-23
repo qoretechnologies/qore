@@ -475,7 +475,10 @@ class DpqlActionSessionTest inherits QUnit::Test {
         list<hash<auto>> e100 = select r3.diagnostics, $1.code == "DPQL-E100";
         assertEq(1, e100.size(), "DPQL-E100 is reported");
         assertEq("error", e100[0].severity);
-        assertRegex("^The search condition could not be checked here: DIVISION-BY-ZERO: ", e100[0].message);
+        # the message says what happened, not the code of the exception
+        assertEq("The search condition could not be checked here: division by zero found in integer expression",
+            e100[0].message);
+        assertEq(-1, e100[0].message.find("DIVISION-BY-ZERO"), e100[0].message);
     }
 
     #! A field of the record is one key: completion writes a dot in its name escaped, as a dot in a field reference

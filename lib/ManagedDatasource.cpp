@@ -63,9 +63,54 @@ DatasourceActionHelper::~DatasourceActionHelper() {
     }
 }
 
+int ManagedDatasource::forkCheckUnlocked(ExceptionSink* xsink, QoreDbiForkCheck mode, bool remove_resource) {
+    qore_ds_private* priv = qore_ds_private::get(*this);
+    const int owner = lockTid();
+    // a lock acquired in an ancestor process: the thread that holds it does not exist here, unless it forked
+    if (owner != -1 && lockTidInProcess() == -1) {
+        if (owner == q_gettid()) {
+            if (remove_resource) {
+                // the resource that the forking thread registered in the parent would end the parent's transaction
+                remove_thread_resource(this);
+            }
+        } else if (mode != QoreDbiForkCheck::Discard) {
+            // the transaction of the other thread cannot be continued here
+            priv->setForkLostTransaction(QoreDbiForkReasonLock);
+        }
+        // there are no waiters in this process; see forkChild()
+        setLockTid(-1);
+    }
+    const bool inherited = priv->isInherited();
+    if (mode == QoreDbiForkCheck::Discard) {
+        // the transaction of the parent ends with the connection, without an error
+        if (inherited) {
+            priv->abandon();
+        }
+        priv->clearForkLostTransaction();
+        return 0;
+    }
+    // the driver is never called with the connection, also not by an action that uses no connection (it can read
+    // options from it or close the statements of other threads with it when it releases the lock)
+    if (inherited) {
+        priv->abandonInherited();
+    }
+    if (mode == QoreDbiForkCheck::Raise) {
+        return priv->raiseForkLostTransaction(xsink);
+    }
+    return inherited ? 1 : 0;
+}
+
 void ManagedDatasource::cleanup(ExceptionSink *xsink) {
     // this thread has the transaction lock
     AutoLocker al(&ds_lock);
+
+    // in a child process created with fork(), a connection opened by the parent is given up: its transaction
+    // belongs to the parent, so nothing is rolled back (the thread resource is being run, so it is not removed), and
+    // the lock acquired in the parent is released with it
+    forkCheckUnlocked(xsink, QoreDbiForkCheck::Discard, false);
+    if (lockTid() != q_gettid()) {
+        return;
+    }
 
     // the thread resource is registered whenever this thread acquires the connection, which a
     // prepared statement does when it is bound, with or without a transaction in progress; with no
@@ -82,6 +127,8 @@ void ManagedDatasource::cleanup(ExceptionSink *xsink) {
 
 void ManagedDatasource::destructor(ExceptionSink* xsink) {
     AutoLocker al(&ds_lock);
+    // in a child process created with fork(), a connection or transaction lock of the parent is given up
+    forkCheckUnlocked(xsink, QoreDbiForkCheck::Discard);
     const int lock_tid = lockTid();
     if (lock_tid == q_gettid() || lock_tid == -1)
         // closeUnlocked will throw an exception if a transaction is in progress (and release the transaction lock if held)
@@ -128,6 +175,11 @@ int ManagedDatasource::grabLockIntern(ExceptionSink* xsink) {
     int64 deadline_us = tl_timeout_ms > 0 ? q_get_monotonic_us() + static_cast<int64>(tl_timeout_ms) * 1000 : 0;
 
     while (lockTid() != -1) {
+        // a lock that a thread of the parent of this process held is free here; see forkCheckUnlocked()
+        if (lockTidInProcess() == -1) {
+            setLockTid(-1);
+            break;
+        }
         // Check for cancellation or program interrupt
         if (xsink && qore_check_cancel(xsink, "datasource lock acquisition")) {
             return -2;  // -2 indicates interrupt
@@ -215,8 +267,16 @@ void ManagedDatasource::closeOrphans() {
     qore_dbi_private::reportCloseWarnings(this, close_xsink);
 }
 
-int ManagedDatasource::acquireLock(ExceptionSink* xsink, bool& new_lock) {
+int ManagedDatasource::acquireLock(ExceptionSink* xsink, bool& new_lock, bool& fork_gave_up) {
     AutoLocker al(&ds_lock);
+    // a connection or lock of the parent of a child process created with fork() is given up first; the actions that
+    // take the lock this way need no connection (options and configuration), so a transaction of the parent is
+    // raised by the next action that uses a connection
+    int rc = forkCheckUnlocked(xsink, QoreDbiForkCheck::Defer);
+    if (rc < 0) {
+        return -1;
+    }
+    fork_gave_up = rc > 0;
     // Observe ownership under the same mutex that protects acquisition and release.
     new_lock = lockTid() != q_gettid();
     return grabLock(xsink);
@@ -224,6 +284,14 @@ int ManagedDatasource::acquireLock(ExceptionSink* xsink, bool& new_lock) {
 
 int ManagedDatasource::startDBAction(ExceptionSink *xsink, bool &new_transaction, bool open) {
     AutoLocker al(&ds_lock);
+
+    // a connection or lock of the parent of a child process created with fork() is given up first: the action uses a
+    // new connection, unless it would continue a transaction of the parent; for an action that makes no connection
+    // (the close of a statement), a transaction of the parent is raised by the next action that uses a connection
+    if (forkCheckUnlocked(xsink, open ? QoreDbiForkCheck::Raise : QoreDbiForkCheck::Defer) < 0) {
+        new_transaction = false;
+        return -1;
+    }
 
     // save previous trans lock status
     new_transaction = (lockTid() != q_gettid());
@@ -289,7 +357,7 @@ int ManagedDatasource::getTransactionLockTimeout() const {
 }
 
 void ManagedDatasource::setAutoCommit(bool ac, ExceptionSink *xsink) {
-   DatasourceLockHelper dslh(*this, xsink);
+   DatasourceLockHelper dslh(*this, xsink, QoreDbiForkCheck::Defer);
    if (!dslh)
       return;
 
@@ -443,7 +511,7 @@ int ManagedDatasource::rollback(ExceptionSink *xsink) {
 }
 
 int ManagedDatasource::open(ExceptionSink *xsink) {
-   DatasourceLockHelper dslh(*this, xsink);
+   DatasourceLockHelper dslh(*this, xsink, QoreDbiForkCheck::Raise);
    if (!dslh)
       return -1;
 
@@ -453,6 +521,10 @@ int ManagedDatasource::open(ExceptionSink *xsink) {
 // returns 0 for OK, -1 for exception
 int ManagedDatasource::closeUnlocked(ExceptionSink *xsink) {
     int rc = 0;
+
+    // in a child process created with fork(), a connection opened by the parent is given up: nothing is rolled back
+    // or sent on it
+    forkCheckUnlocked(xsink, QoreDbiForkCheck::Discard);
 
     // the lock is taken to wait for the actions of other threads to finish; a lock that this call takes is released
     // when the connection is closed, so that the datasource is free for every thread afterwards, as a datasource
@@ -632,6 +704,12 @@ QoreValue ManagedDatasource::getOption(const char* opt, ExceptionSink* xsink) {
     DatasourceActionHelper dbah(*this, xsink, DAH_NOCONN);
     if (!dbah)
         return QoreValue();
+    // the value is the connection's: a connection of the parent of a child process created with fork() that was
+    // given up is replaced, unless it was in a transaction
+    if (dbah.forkGaveUpConnection()
+        && (qore_ds_private::get(*this)->raiseForkLostTransaction(xsink) || Datasource::open(xsink))) {
+        return QoreValue();
+    }
     return Datasource::getOption(opt, xsink);
 }
 

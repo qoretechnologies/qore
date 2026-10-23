@@ -737,6 +737,9 @@ module GmailDataProvider {
     @section gmaildataprovider_relnotes Release Notes
 
     @subsection gmaildataprovider_v1_2 GmailDataProvider v1.2
+    - the \c Date header of a watched message is read with its zone as RFC 5322 section 4.3 defines it: a zone name
+      such as \c EST is its UTC offset, and \c GMT, \c UT and any other name are UTC; the name was ignored and the
+      time was taken as the local time
     - the \c send-message action uploads the message as it is; a line of the message with a single \c "." was
       given another \c "." as for the SMTP \c DATA command, which Gmail stored and showed
     - added the \c create-draft, \c list-drafts, \c get-draft, \c send-draft, and \c delete-draft actions for
