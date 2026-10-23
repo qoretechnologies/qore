@@ -577,11 +577,25 @@ public class DeepSeekLlmProvider inherits OpenAiRestClient::OpenAiLlmProvider {
         hash<auto> wire = OpenAiRestClient::OpenAiLlmProvider::prepareOpenAiWireRequest(body);
         foreach auto tool in (body.tools ?? ()) {
             if (tool.function.strict == True) {
-                wire.path = "/beta/chat/completions";
+                wire.target = <RestClient::RestRequestTarget>{
+                    "mode": RestClient::RestPathMode::OriginAbsolute,
+                    "path": getBetaChatCompletionsPath(),
+                };
                 break;
             }
         }
         return wire;
+    }
+
+    #! Returns the beta chat-completions endpoint beside the configured API root
+    /** The beta API replaces the \c v1 version segment, so a URL ending in \c /v1 or \c /v1/ selects the beta
+        endpoint beside it; any other URL path is kept as the root.
+
+        @return the complete URL path of the beta chat-completions endpoint
+    */
+    private string getBetaChatCompletionsPath() {
+        string root = parse_url(getConfig().url).path ?? "";
+        return regex_subst(root, "(/v1)?/?$", "") + "/beta/chat/completions";
     }
 
     #! Returns the reasoning effort that turns reasoning off for a model, or the model's lowest effort

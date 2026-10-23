@@ -7,6 +7,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires ../../../../qlib/Util.qm
 %requires ../../../../qlib/QUnit.qm
+%requires json
 %requires ../../../../qlib/QoreLlmTypes.qm
 %requires ../../../../qlib/QoreLlmUtils
 %requires ../../../../qlib/OpenAiRestClient.qm
@@ -34,6 +35,24 @@ class DeepSeekPingHandler inherits AbstractHttpRequestHandler {
     }
 }
 
+class DeepSeekChatPathHandler inherits AbstractHttpRequestHandler {
+    private {
+        Mutex lock();
+        list<string> paths = ();
+    }
+    hash handleRequest(hash cx, hash hdr, *data body) {
+        AutoLock al(lock);
+        paths += cx.raw_path;
+        return makeResponse(200, make_json({"model": "deepseek-chat", "choices": ({"index": 0,
+            "message": {"role": "assistant", "content": "ok"}, "finish_reason": "stop"},)}),
+            {"Content-Type": MimeTypeJson});
+    }
+    string getLastPath() {
+        AutoLock al(lock);
+        return paths[-1];
+    }
+}
+
 class SyncDeepSeekConnection inherits DeepSeekRestClient::DeepSeekRestConnection {
     constructor(string url, hash<auto> options)
             : DeepSeekRestConnection("sync-test", "test", url, {}, options) {
@@ -53,6 +72,7 @@ public class DeepSeekRestClientTest inherits QUnit::Test {
         addTestCase("provider preserves explicit URL",    \explicitUrlTest());
         addTestCase("factory getInfo advertises capabilities",
             \getInfoTest());
+        addTestCase("strict tool schemas are sent to the beta endpoint", \strictToolPathTest());
         addTestCase("default chat-completions path is OpenAI shape",
             \chatPathTest());
         addTestCase("REST client options apply Bearer mapping",
@@ -212,6 +232,41 @@ public class DeepSeekRestClientTest inherits QUnit::Test {
             });
         # OpenAI-compatible default — DeepSeek does NOT override the path
         assertEq("/v1/chat/completions", p.getChatCompletionsPath());
+    }
+
+    private strictToolPathTest() {
+        HttpServer http(<HttpServerOptionInfo>{"logger": new Logger("test", LoggerLevel::getLevelWarn())});
+        on_exit delete http;
+        int port = http.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+        DeepSeekChatPathHandler handler();
+        http.setDefaultHandler("chat", handler);
+        list<hash<QoreLlmUtils::ChatMessage>> messages = (<QoreLlmUtils::ChatMessage>{"role": "user",
+            "content": "Look up the status"},);
+        hash<QoreLlmUtils::ToolDefinition> tool = <QoreLlmUtils::ToolDefinition>{"name": "status",
+            "parameters": {"type": "object", "properties": {}, "additionalProperties": False}};
+        # the URL path of the API root -> the path of the beta and of the stable endpoint
+        hash<string, list<string>> roots = {
+            "": ("/beta/chat/completions", "/v1/chat/completions"),
+            "/": ("/beta/chat/completions", "/v1/chat/completions"),
+            "/v1": ("/beta/chat/completions", "/v1/chat/completions"),
+            "/v1/": ("/beta/chat/completions", "/v1/chat/completions"),
+            "/gateway": ("/gateway/beta/chat/completions", "/gateway/v1/chat/completions"),
+            "/gateway/v1": ("/gateway/beta/chat/completions", "/gateway/v1/chat/completions"),
+        };
+        foreach hash<auto> i in (roots.pairIterator()) {
+            DeepSeekRestClient::DeepSeekLlmProvider p(<QoreLlmUtils::LlmBackendConfig>{
+                "mode": "deepseek",
+                "url": sprintf("http://127.0.0.1:%d%s", port, i.key),
+                "model": "deepseek-chat",
+                "api_key": "k",
+            });
+            assertEq("ok", p.chat(messages, (tool + {"strict": True},)).content, i.key);
+            assertEq(i.value[0], handler.getLastPath(), "strict tool with root " + i.key);
+            p.chat(messages, (tool,));
+            assertEq(i.value[1], handler.getLastPath(), "non-strict tool with root " + i.key);
+            p.chat(messages);
+            assertEq(i.value[1], handler.getLastPath(), "no tools with root " + i.key);
+        }
     }
 
     private restOptionsTest() {
