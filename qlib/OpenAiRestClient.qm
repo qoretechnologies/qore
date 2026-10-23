@@ -1082,7 +1082,9 @@ class OpenAiStrictOutputSchema {
     objects. Provider-specific model limits still apply.
 
     Adapted structured streams buffer up to 16 MiB and emit one restored JSON or
-    tool-argument delta before the terminal event. Schemas without optional fields,
+    tool-argument delta before the terminal event; a caller can watch the raw
+    output as it arrives, and stop it, with
+    @ref QoreLlmUtils::LlmRequestOptions::stream_progress. Schemas without optional fields,
     ordinary text streams, and non-strict requests retain their existing streaming
     behavior. Refusals and truncated outputs bypass schema restoration;
     incomplete streams fail with \c OPENAI-STRUCTURED-OUTPUT-ERROR. This adaptation
@@ -1414,6 +1416,15 @@ public class OpenAiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
                 }
                 if (parsed.choices[0].delta.refusal.val()) {
                     structured_state.refusal += parsed.choices[0].delta.refusal;
+                }
+                if (opts.stream_progress) {
+                    # the caller watches the held-back output as it arrives, and can stop it by throwing
+                    opts.stream_progress(<QoreLlmUtils::ChatStreamEvent>{
+                        "event": evt.event,
+                        "delta": parsed.choices[0].delta.content.val()
+                            ? openAiContentText(parsed.choices[0].delta.content) : NOTHING,
+                        "raw": parsed,
+                    });
                 }
                 continue;
             }
