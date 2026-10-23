@@ -459,6 +459,12 @@ class DatasourceForkTest inherits QUnit::Test {
     #! the child ends its script, which destroys the parent's datasources (one of them in a transaction of the forking
     #! thread), pool and statement and deletes the driver module; the script runs in another process, whose output, and
     #! the child's, is read until both have exited
+    #! Under valgrind this case can fail with "Bad system call" (the script's process ends with SIGSYS), which is
+    #! valgrind's, not the code's: the script runs in a qore without -b, whose signal thread Qore wakes with SIGSYS,
+    #! blocked in every thread and taken with sigtimedwait().  When the tgkill() reaches the thread between two of its
+    #! sigtimedwait() calls, valgrind takes the signal for a synchronous one and gives it to the default handler despite
+    #! the thread's mask ("Delivering user-sent sync signal 31 as async signal ... not in syscall at all" with
+    #! --trace-signals; otherwise "Routing user-sent sync signal 31 via queue").  It never happens without valgrind.
     testScriptEnd() {
         TmpFile script(NOTHING, ".q");
         script.file.write("%modern\n%requires dbitest\n"
