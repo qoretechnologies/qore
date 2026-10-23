@@ -4,6 +4,13 @@
 
     @section qore_3_0_0 Qore 3.0.0
 
+    @ref Qore::seconds() "seconds()", numeric @ref Qore::date() "date()" conversions and the C++ relative-date
+    factories preserve durations larger than 2^31 seconds without overflowing intermediate 32-bit arithmetic.
+    Fractional numeric conversions also retain their microseconds, and adding such durations to an absolute date
+    uses 64-bit elapsed-second arithmetic. Elapsed hours remain hours across timezone
+    transitions; the existing signed 32-bit hour-component range is unchanged
+    (<a href="https://github.com/qoretechnologies/qore/issues/5507">issue 5507</a>).
+
     The @ref restclientintro "RestClient" module adds explicit API-relative and origin-absolute request targets
     through @ref RestClient::RestRequestTarget "RestRequestTarget", also supported by the new
     @ref restclientiointro "RestClientIo" module. API-relative endpoints are appended to the configured API root;

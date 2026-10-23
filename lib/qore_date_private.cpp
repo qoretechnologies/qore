@@ -954,7 +954,8 @@ qore_absolute_time &qore_absolute_time::operator+=(const qore_relative_time &dt)
     usecs += dt.us;
 
     // add time component
-    epoch += (SECS_PER_HOUR * dt.hour) + (SECS_PER_MINUTE * dt.minute) + dt.second;
+    epoch += static_cast<int64>(SECS_PER_HOUR) * dt.hour
+        + static_cast<int64>(SECS_PER_MINUTE) * dt.minute + dt.second;
 
     // normalize epoch and microseconds
     normalize_units2<int64, int>(epoch, usecs, 1000000);

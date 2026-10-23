@@ -330,6 +330,14 @@ public:
         int n_minute = 0, int n_second = 0, int n_us = 0);
 
     //! static "constructor" to create a relative time, including microseconds
+    /** @param n_second elapsed seconds
+        @param n_us additional microseconds, normalized with the seconds
+        @return a newly allocated relative date node; the caller owns its reference
+        @throw std::bad_alloc if allocating the result fails
+        @note The normalized hour component must fit an int. Hours are never converted to calendar days.
+        @par Example
+        Return accumulated service uptime with makeRelativeFromSeconds(3600000000LL), yielding 1000000 hours.
+    */
     DLLEXPORT static DateTimeNode* makeRelativeFromSeconds(int64 n_second, int n_us = 0);
 };
 

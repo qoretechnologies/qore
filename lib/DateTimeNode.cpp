@@ -262,13 +262,9 @@ DateTimeNode* DateTimeNode::makeRelativeUnnormalized(int y, int mo, int d, int h
 }
 
 DateTimeNode* DateTimeNode::makeRelativeFromSeconds(int64 s, int u) {
-    int h = s / 3600;
-    if (h)
-        s -= (h * 3600);
-    int m = s / 60;
-    if (m)
-        s -= (m * 60);
-    return new DateTimeNode(new qore_date_private(0, 0, 0, h, m, s, u, true));
+    SimpleRefHolder<DateTimeNode> rv(new DateTimeNode(true));
+    rv->setRelativeDateSeconds(s, u);
+    return rv.release();
 }
 
 int DateTimeNode::parseInit(QoreValue& val, QoreParseContext& parse_context) {
@@ -303,7 +299,8 @@ DateTimeValueHelper::DateTimeValueHelper(const QoreValue& n) {
             return;
         } else if (t == NT_FLOAT) {
             double f = n.getAsFloat();
-            dt = DateTime::makeRelativeFromSeconds((int64)f, (int)((f - (double)((int)f)) * 1000000));
+            int64 seconds = static_cast<int64>(f);
+            dt = DateTime::makeRelativeFromSeconds(seconds, static_cast<int>((f - seconds) * 1000000));
             del = true;
             return;
         } else if (t == NT_STRING) {
@@ -367,7 +364,8 @@ DateTimeNodeValueHelper::DateTimeNodeValueHelper(const QoreValue& n) {
             return;
         } else if (t == NT_FLOAT) {
             double f = n.getAsFloat();
-            dt = DateTimeNode::makeRelativeFromSeconds((int64)f, (int)((f - (double)((int)f)) * 1000000));
+            int64 seconds = static_cast<int64>(f);
+            dt = DateTimeNode::makeRelativeFromSeconds(seconds, static_cast<int>((f - seconds) * 1000000));
             del = true;
             return;
         } else if (t == NT_STRING) {
