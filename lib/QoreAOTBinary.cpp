@@ -183,22 +183,22 @@ uint32_t QoreAOTBinaryWriter::addSourcePath(const char* path) {
 }
 
 // ---------------------------------------------------------------------------
-// AOT PC->loc trailer (lazy on-throw source-location maps). See QoreAOTBinary.h
-// for the on-disk layout.
+// AOT module trailers (module dependencies, unavailable optional modules). See
+// QoreAOTBinary.h for the on-disk layout.
 // ---------------------------------------------------------------------------
 namespace {
-inline void pcmapPut32(std::vector<uint8_t>& out, uint32_t v) {
+inline void trailerPut32(std::vector<uint8_t>& out, uint32_t v) {
     out.push_back(static_cast<uint8_t>(v & 0xff));
     out.push_back(static_cast<uint8_t>((v >> 8) & 0xff));
     out.push_back(static_cast<uint8_t>((v >> 16) & 0xff));
     out.push_back(static_cast<uint8_t>((v >> 24) & 0xff));
 }
-inline void pcmapPut64(std::vector<uint8_t>& out, uint64_t v) {
+inline void trailerPut64(std::vector<uint8_t>& out, uint64_t v) {
     for (unsigned i = 0; i < 8; ++i) {
         out.push_back(static_cast<uint8_t>((v >> (i * 8)) & 0xff));
     }
 }
-inline bool pcmapGet32(const uint8_t* data, size_t len, size_t& p, uint32_t& v) {
+inline bool trailerGet32(const uint8_t* data, size_t len, size_t& p, uint32_t& v) {
     if (p + 4 > len) {
         return false;
     }
@@ -209,7 +209,7 @@ inline bool pcmapGet32(const uint8_t* data, size_t len, size_t& p, uint32_t& v) 
     p += 4;
     return true;
 }
-inline bool pcmapGet64(const uint8_t* data, size_t len, size_t& p, uint64_t& v) {
+inline bool trailerGet64(const uint8_t* data, size_t len, size_t& p, uint64_t& v) {
     if (p + 8 > len) {
         return false;
     }
@@ -223,239 +223,23 @@ inline bool pcmapGet64(const uint8_t* data, size_t len, size_t& p, uint64_t& v) 
 
 inline bool readAOTTrailerFooter(FILE* f, long end, uint64_t& payload_len,
         uint32_t& magic, uint32_t& version) {
-    if (end < static_cast<long>(QORE_AOT_PCMAP_FOOTER_SIZE)
-            || fseek(f, end - static_cast<long>(QORE_AOT_PCMAP_FOOTER_SIZE), SEEK_SET) != 0) {
+    if (end < static_cast<long>(QORE_AOT_TRAILER_FOOTER_SIZE)
+            || fseek(f, end - static_cast<long>(QORE_AOT_TRAILER_FOOTER_SIZE), SEEK_SET) != 0) {
         return false;
     }
-    uint8_t footer[QORE_AOT_PCMAP_FOOTER_SIZE];
+    uint8_t footer[QORE_AOT_TRAILER_FOOTER_SIZE];
     if (fread(footer, 1, sizeof(footer), f) != sizeof(footer)) {
         return false;
     }
     size_t p = 0;
-    return pcmapGet64(footer, sizeof(footer), p, payload_len)
-        && pcmapGet32(footer, sizeof(footer), p, magic)
-        && pcmapGet32(footer, sizeof(footer), p, version);
+    return trailerGet64(footer, sizeof(footer), p, payload_len)
+        && trailerGet32(footer, sizeof(footer), p, magic)
+        && trailerGet32(footer, sizeof(footer), p, version);
 }
 
 constexpr size_t QORE_AOT_MODULE_DEPS_MAX_PAYLOAD_SIZE = 16 * 1024 * 1024;
 constexpr size_t QORE_AOT_MODULE_DEPS_MAX_COUNT = 65536;
 } // anonymous namespace
-
-size_t qoreAOTSerializePcLocPayload(const std::vector<AOTCompiledFuncWithSlots>& func_slots,
-        std::vector<uint8_t>& out) {
-    const size_t count_pos = out.size();
-    pcmapPut32(out, 0);  // placeholder for num_funcs
-    uint32_t n = 0;
-    for (const auto& fws : func_slots) {
-        if (fws.pc_loc_map.empty() || fws.llvm_symbol.empty()) {
-            continue;
-        }
-        ++n;
-        pcmapPut32(out, static_cast<uint32_t>(fws.llvm_symbol.size()));
-        out.insert(out.end(), fws.llvm_symbol.begin(), fws.llvm_symbol.end());
-        pcmapPut32(out, static_cast<uint32_t>(fws.pc_loc_map.size()));
-        for (const auto& e : fws.pc_loc_map) {
-            pcmapPut32(out, e.first);
-            pcmapPut32(out, e.second);
-        }
-    }
-    // Backfill num_funcs now that it is known.
-    out[count_pos]     = static_cast<uint8_t>(n & 0xff);
-    out[count_pos + 1] = static_cast<uint8_t>((n >> 8) & 0xff);
-    out[count_pos + 2] = static_cast<uint8_t>((n >> 16) & 0xff);
-    out[count_pos + 3] = static_cast<uint8_t>((n >> 24) & 0xff);
-
-    // Optional trailing block: literal locations for entries whose loc-index addresses inlined code
-    // (see AOTCompiledFuncWithSlots::pc_extra_locs).  Appended AFTER every function record so that
-    // readers predating it parse the records above and ignore these bytes.
-    uint32_t num_extra_funcs = 0;
-    for (const auto& fws : func_slots) {
-        if (!fws.pc_loc_map.empty() && !fws.llvm_symbol.empty() && !fws.pc_extra_locs.empty()) {
-            ++num_extra_funcs;
-        }
-    }
-    if (num_extra_funcs) {
-        pcmapPut32(out, QORE_AOT_PCMAP_EXTRA_MAGIC);
-        pcmapPut32(out, num_extra_funcs);
-        for (const auto& fws : func_slots) {
-            if (fws.pc_loc_map.empty() || fws.llvm_symbol.empty() || fws.pc_extra_locs.empty()) {
-                continue;
-            }
-            pcmapPut32(out, static_cast<uint32_t>(fws.llvm_symbol.size()));
-            out.insert(out.end(), fws.llvm_symbol.begin(), fws.llvm_symbol.end());
-            pcmapPut32(out, static_cast<uint32_t>(fws.pc_extra_locs.size()));
-            for (const auto& loc : fws.pc_extra_locs) {
-                pcmapPut32(out, static_cast<uint32_t>(loc.start_line));
-                pcmapPut32(out, static_cast<uint32_t>(loc.end_line));
-                pcmapPut32(out, static_cast<uint32_t>(loc.file.size()));
-                out.insert(out.end(), loc.file.begin(), loc.file.end());
-            }
-        }
-    }
-    return n;
-}
-
-bool qoreAOTParsePcLocPayload(const uint8_t* data, size_t len,
-        std::vector<AOTPcLocFuncEntry>& out) {
-    size_t p = 0;
-    uint32_t n = 0;
-    if (!pcmapGet32(data, len, p, n)) {
-        return false;
-    }
-    out.clear();
-    out.reserve(n);
-    for (uint32_t i = 0; i < n; ++i) {
-        uint32_t slen = 0;
-        if (!pcmapGet32(data, len, p, slen) || p + slen > len) {
-            return false;
-        }
-        AOTPcLocFuncEntry m;
-        m.symbol.assign(reinterpret_cast<const char*>(data + p), slen);
-        p += slen;
-        uint32_t ne = 0;
-        if (!pcmapGet32(data, len, p, ne)) {
-            return false;
-        }
-        m.entries.reserve(ne);
-        for (uint32_t j = 0; j < ne; ++j) {
-            uint32_t off = 0, loc = 0;
-            if (!pcmapGet32(data, len, p, off) || !pcmapGet32(data, len, p, loc)) {
-                return false;
-            }
-            m.entries.emplace_back(off, loc);
-        }
-        out.push_back(std::move(m));
-    }
-
-    // Optional trailing extra-location block; absent in payloads written before it existed, in which
-    // case every entry resolves through the function's own loc table exactly as before.
-    uint32_t extra_magic = 0;
-    size_t probe = p;
-    if (pcmapGet32(data, len, probe, extra_magic) && extra_magic == QORE_AOT_PCMAP_EXTRA_MAGIC) {
-        p = probe;
-        uint32_t nf = 0;
-        if (!pcmapGet32(data, len, p, nf)) {
-            return true;  // truncated tail: keep the function records already parsed
-        }
-        for (uint32_t i = 0; i < nf; ++i) {
-            uint32_t slen = 0;
-            if (!pcmapGet32(data, len, p, slen) || p + slen > len) {
-                return true;
-            }
-            std::string sym(reinterpret_cast<const char*>(data + p), slen);
-            p += slen;
-            uint32_t ne = 0;
-            if (!pcmapGet32(data, len, p, ne)) {
-                return true;
-            }
-            AOTPcLocFuncEntry* target = nullptr;
-            for (auto& m : out) {
-                if (m.symbol == sym) {
-                    target = &m;
-                    break;
-                }
-            }
-            for (uint32_t j = 0; j < ne; ++j) {
-                uint32_t sline = 0, eline = 0, flen = 0;
-                if (!pcmapGet32(data, len, p, sline) || !pcmapGet32(data, len, p, eline)
-                        || !pcmapGet32(data, len, p, flen) || p + flen > len) {
-                    return true;
-                }
-                if (target) {
-                    AOTCompiledFuncWithSlots::AOTLocEntry loc;
-                    loc.start_line = static_cast<int32_t>(sline);
-                    loc.end_line = static_cast<int32_t>(eline);
-                    loc.file.assign(reinterpret_cast<const char*>(data + p), flen);
-                    target->extra_locs.push_back(std::move(loc));
-                }
-                p += flen;
-            }
-        }
-    }
-    return true;
-}
-
-bool qoreAOTAppendPcLocTrailer(const std::string& path, const std::vector<uint8_t>& payload,
-        std::string& error) {
-    if (payload.empty()) {
-        return true;
-    }
-    FILE* f = fopen(path.c_str(), "ab");
-    if (!f) {
-        error = "failed to open '" + path + "' to append PC->loc trailer: " + strerror(errno);
-        return false;
-    }
-    bool ok = fwrite(payload.data(), 1, payload.size(), f) == payload.size();
-    if (ok) {
-        std::vector<uint8_t> footer;
-        pcmapPut64(footer, payload.size());
-        pcmapPut32(footer, QORE_AOT_PCMAP_MAGIC);
-        pcmapPut32(footer, QORE_AOT_PCMAP_VERSION);
-        assert(footer.size() == QORE_AOT_PCMAP_FOOTER_SIZE);
-        ok = fwrite(footer.data(), 1, footer.size(), f) == footer.size();
-    }
-    if (fclose(f) != 0) {
-        ok = false;
-    }
-    if (!ok) {
-        error = "failed to write PC->loc trailer to '" + path + "': " + strerror(errno);
-        return false;
-    }
-    return true;
-}
-
-bool qoreAOTReadPcLocTrailer(const std::string& path, std::vector<AOTPcLocFuncEntry>& out) {
-    out.clear();
-    FILE* f = fopen(path.c_str(), "rb");
-    if (!f) {
-        return false;
-    }
-    bool ok = false;
-    do {
-        if (fseek(f, 0, SEEK_END) != 0) {
-            break;
-        }
-        long fsize = ftell(f);
-        long trailer_end = fsize;
-        uint64_t plen = 0;
-        uint32_t magic = 0, ver = 0;
-        if (!readAOTTrailerFooter(f, trailer_end, plen, magic, ver)) {
-            break;
-        }
-        // New qmods put the dependency trailer last so it is available before
-        // dlopen().  Skip it to find the preceding PC->loc footer.
-        if (magic == QORE_AOT_MODULE_DEPS_MAGIC) {
-            if (ver != QORE_AOT_MODULE_DEPS_VERSION || !plen
-                    || plen > static_cast<uint64_t>(trailer_end) - QORE_AOT_PCMAP_FOOTER_SIZE) {
-                break;
-            }
-            trailer_end -= static_cast<long>(plen + QORE_AOT_PCMAP_FOOTER_SIZE);
-            if (!readAOTTrailerFooter(f, trailer_end, plen, magic, ver)) {
-                break;
-            }
-        }
-        if (magic != QORE_AOT_PCMAP_MAGIC || ver != QORE_AOT_PCMAP_VERSION) {
-            break;
-        }
-        if (plen == 0 || plen > static_cast<uint64_t>(trailer_end) - QORE_AOT_PCMAP_FOOTER_SIZE) {
-            break;
-        }
-        std::vector<uint8_t> payload(plen);
-        if (fseek(f, trailer_end - static_cast<long>(QORE_AOT_PCMAP_FOOTER_SIZE)
-                - static_cast<long>(plen), SEEK_SET) != 0) {
-            break;
-        }
-        if (fread(payload.data(), 1, plen, f) != plen) {
-            break;
-        }
-        ok = qoreAOTParsePcLocPayload(payload.data(), payload.size(), out);
-    } while (false);
-    fclose(f);
-    if (!ok) {
-        out.clear();
-    }
-    return ok;
-}
 
 bool qoreAOTAppendModuleDependenciesTrailer(const std::string& path, const std::string& module_name,
         const std::vector<std::string>& dependencies, std::string& error) {
@@ -471,9 +255,9 @@ bool qoreAOTAppendModuleDependenciesTrailer(const std::string& path, const std::
 
     std::vector<uint8_t> payload;
     payload.reserve(8 + module_name.size());
-    pcmapPut32(payload, static_cast<uint32_t>(module_name.size()));
+    trailerPut32(payload, static_cast<uint32_t>(module_name.size()));
     payload.insert(payload.end(), module_name.begin(), module_name.end());
-    pcmapPut32(payload, static_cast<uint32_t>(dependencies.size()));
+    trailerPut32(payload, static_cast<uint32_t>(dependencies.size()));
     for (size_t i = 0; i < dependencies.size(); ++i) {
         if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT module dependency trailer output")) {
             error = "AOT module dependency trailer output cancelled";
@@ -490,15 +274,15 @@ bool qoreAOTAppendModuleDependenciesTrailer(const std::string& path, const std::
             error = "AOT module dependency trailer exceeds the maximum payload size";
             return false;
         }
-        pcmapPut32(payload, static_cast<uint32_t>(dependency.size()));
+        trailerPut32(payload, static_cast<uint32_t>(dependency.size()));
         payload.insert(payload.end(), dependency.begin(), dependency.end());
     }
 
     std::vector<uint8_t> footer;
-    pcmapPut64(footer, payload.size());
-    pcmapPut32(footer, QORE_AOT_MODULE_DEPS_MAGIC);
-    pcmapPut32(footer, QORE_AOT_MODULE_DEPS_VERSION);
-    assert(footer.size() == QORE_AOT_PCMAP_FOOTER_SIZE);
+    trailerPut64(footer, payload.size());
+    trailerPut32(footer, QORE_AOT_MODULE_DEPS_MAGIC);
+    trailerPut32(footer, QORE_AOT_MODULE_DEPS_VERSION);
+    assert(footer.size() == QORE_AOT_TRAILER_FOOTER_SIZE);
 
     FILE* f = fopen(path.c_str(), "ab");
     if (!f) {
@@ -538,7 +322,7 @@ int qoreAOTReadModuleDependenciesTrailer(const std::string& path, std::string& m
             break;
         }
         long fsize = ftell(f);
-        if (fsize < static_cast<long>(QORE_AOT_PCMAP_FOOTER_SIZE)) {
+        if (fsize < static_cast<long>(QORE_AOT_TRAILER_FOOTER_SIZE)) {
             break;
         }
         uint64_t payload_len = 0;
@@ -558,13 +342,13 @@ int qoreAOTReadModuleDependenciesTrailer(const std::string& path, std::string& m
             break;
         }
         if (!payload_len || payload_len > QORE_AOT_MODULE_DEPS_MAX_PAYLOAD_SIZE
-                || payload_len > static_cast<uint64_t>(fsize) - QORE_AOT_PCMAP_FOOTER_SIZE) {
+                || payload_len > static_cast<uint64_t>(fsize) - QORE_AOT_TRAILER_FOOTER_SIZE) {
             error = "invalid AOT module dependency metadata size";
             result = -1;
             break;
         }
         std::vector<uint8_t> payload(payload_len);
-        if (fseek(f, fsize - static_cast<long>(QORE_AOT_PCMAP_FOOTER_SIZE)
+        if (fseek(f, fsize - static_cast<long>(QORE_AOT_TRAILER_FOOTER_SIZE)
                 - static_cast<long>(payload_len), SEEK_SET) != 0
                 || fread(payload.data(), 1, payload.size(), f) != payload.size()) {
             error = "cannot read AOT module dependency metadata payload from '" + path + "'";
@@ -574,7 +358,7 @@ int qoreAOTReadModuleDependenciesTrailer(const std::string& path, std::string& m
 
         size_t p = 0;
         uint32_t name_len = 0;
-        if (!pcmapGet32(payload.data(), payload.size(), p, name_len)
+        if (!trailerGet32(payload.data(), payload.size(), p, name_len)
                 || !name_len || name_len > payload.size() - p) {
             error = "invalid AOT module name in dependency metadata";
             result = -1;
@@ -588,7 +372,7 @@ int qoreAOTReadModuleDependenciesTrailer(const std::string& path, std::string& m
         }
         p += name_len;
         uint32_t dependency_count = 0;
-        if (!pcmapGet32(payload.data(), payload.size(), p, dependency_count)) {
+        if (!trailerGet32(payload.data(), payload.size(), p, dependency_count)) {
             error = "missing AOT module dependency count";
             result = -1;
             break;
@@ -611,7 +395,7 @@ int qoreAOTReadModuleDependenciesTrailer(const std::string& path, std::string& m
                 break;
             }
             uint32_t dependency_len = 0;
-            if (!pcmapGet32(payload.data(), payload.size(), p, dependency_len)
+            if (!trailerGet32(payload.data(), payload.size(), p, dependency_len)
                     || !dependency_len || dependency_len > payload.size() - p) {
                 error = "invalid AOT module dependency entry";
                 valid = false;
@@ -654,7 +438,7 @@ bool qoreAOTAppendOptionalModulesTrailer(const std::string& path, const std::vec
         return false;
     }
     std::vector<uint8_t> payload;
-    pcmapPut32(payload, static_cast<uint32_t>(specs.size()));
+    trailerPut32(payload, static_cast<uint32_t>(specs.size()));
     for (size_t i = 0; i < specs.size(); ++i) {
         if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT optional module trailer output")) {
             error = "AOT optional module trailer output cancelled";
@@ -666,15 +450,15 @@ bool qoreAOTAppendOptionalModulesTrailer(const std::string& path, const std::vec
             error = "invalid AOT optional module trailer entry";
             return false;
         }
-        pcmapPut32(payload, static_cast<uint32_t>(spec.size()));
+        trailerPut32(payload, static_cast<uint32_t>(spec.size()));
         payload.insert(payload.end(), spec.begin(), spec.end());
     }
 
     std::vector<uint8_t> footer;
-    pcmapPut64(footer, payload.size());
-    pcmapPut32(footer, QORE_AOT_OPTIONAL_MODULES_MAGIC);
-    pcmapPut32(footer, QORE_AOT_OPTIONAL_MODULES_VERSION);
-    assert(footer.size() == QORE_AOT_PCMAP_FOOTER_SIZE);
+    trailerPut64(footer, payload.size());
+    trailerPut32(footer, QORE_AOT_OPTIONAL_MODULES_MAGIC);
+    trailerPut32(footer, QORE_AOT_OPTIONAL_MODULES_VERSION);
+    assert(footer.size() == QORE_AOT_TRAILER_FOOTER_SIZE);
 
     FILE* f = fopen(path.c_str(), "ab");
     if (!f) {
@@ -711,10 +495,10 @@ int qoreAOTReadOptionalModulesTrailer(const std::string& path, std::vector<std::
         uint64_t payload_len = 0;
         uint32_t magic = 0;
         uint32_t version = 0;
-        // the trailer precedes the dependency and PC->loc trailers, which are skipped
+        // the trailer precedes the dependency trailer, which is skipped
         bool found = false;
-        for (unsigned i = 0; i < 3; ++i) {
-            if (end < static_cast<long>(QORE_AOT_PCMAP_FOOTER_SIZE)
+        for (unsigned i = 0; i < 2; ++i) {
+            if (end < static_cast<long>(QORE_AOT_TRAILER_FOOTER_SIZE)
                     || !readAOTTrailerFooter(f, end, payload_len, magic, version)) {
                 break;
             }
@@ -722,11 +506,11 @@ int qoreAOTReadOptionalModulesTrailer(const std::string& path, std::vector<std::
                 found = true;
                 break;
             }
-            if ((magic != QORE_AOT_MODULE_DEPS_MAGIC && magic != QORE_AOT_PCMAP_MAGIC)
-                    || payload_len > static_cast<uint64_t>(end) - QORE_AOT_PCMAP_FOOTER_SIZE) {
+            if (magic != QORE_AOT_MODULE_DEPS_MAGIC
+                    || payload_len > static_cast<uint64_t>(end) - QORE_AOT_TRAILER_FOOTER_SIZE) {
                 break;
             }
-            end -= static_cast<long>(payload_len + QORE_AOT_PCMAP_FOOTER_SIZE);
+            end -= static_cast<long>(payload_len + QORE_AOT_TRAILER_FOOTER_SIZE);
         }
         if (!found) {
             break;
@@ -737,13 +521,13 @@ int qoreAOTReadOptionalModulesTrailer(const std::string& path, std::vector<std::
             break;
         }
         if (payload_len < 4 || payload_len > QORE_AOT_MODULE_DEPS_MAX_PAYLOAD_SIZE
-                || payload_len > static_cast<uint64_t>(end) - QORE_AOT_PCMAP_FOOTER_SIZE) {
+                || payload_len > static_cast<uint64_t>(end) - QORE_AOT_TRAILER_FOOTER_SIZE) {
             error = "invalid AOT optional module metadata size";
             result = -1;
             break;
         }
         std::vector<uint8_t> payload(payload_len);
-        if (fseek(f, end - static_cast<long>(QORE_AOT_PCMAP_FOOTER_SIZE) - static_cast<long>(payload_len),
+        if (fseek(f, end - static_cast<long>(QORE_AOT_TRAILER_FOOTER_SIZE) - static_cast<long>(payload_len),
                     SEEK_SET) != 0
                 || fread(payload.data(), 1, payload.size(), f) != payload.size()) {
             error = "cannot read AOT optional module metadata from '" + path + "'";
@@ -753,7 +537,7 @@ int qoreAOTReadOptionalModulesTrailer(const std::string& path, std::vector<std::
         size_t p = 0;
         uint32_t count = 0;
         // every entry needs at least a four-byte length and one byte of data
-        if (!pcmapGet32(payload.data(), payload.size(), p, count) || count > QORE_AOT_MODULE_DEPS_MAX_COUNT
+        if (!trailerGet32(payload.data(), payload.size(), p, count) || count > QORE_AOT_MODULE_DEPS_MAX_COUNT
                 || count > (payload.size() - p) / 5) {
             error = "invalid AOT optional module count";
             result = -1;
@@ -768,7 +552,7 @@ int qoreAOTReadOptionalModulesTrailer(const std::string& path, std::vector<std::
                 break;
             }
             uint32_t len = 0;
-            if (!pcmapGet32(payload.data(), payload.size(), p, len) || !len || len > payload.size() - p) {
+            if (!trailerGet32(payload.data(), payload.size(), p, len) || !len || len > payload.size() - p) {
                 error = "invalid AOT optional module entry";
                 valid = false;
                 break;
@@ -797,583 +581,6 @@ int qoreAOTReadOptionalModulesTrailer(const std::string& path, std::vector<std::
         specs.clear();
     }
     return result;
-}
-
-void qoreAOTFramePcLocSectionRecord(const std::vector<uint8_t>& payload, std::vector<uint8_t>& out) {
-    if (payload.empty()) {
-        return;
-    }
-    pcmapPut32(out, QORE_AOT_PCMAP_MAGIC);
-    pcmapPut32(out, static_cast<uint32_t>(payload.size()));
-    out.insert(out.end(), payload.begin(), payload.end());
-}
-
-// Locate the `qore_aot_pcloc` section bytes in a 64-bit ELF file via a self-contained
-// section-header walk (no libLLVM). Returns true and fills `sec` with the section
-// contents (copied) when found.
-static bool readElfSectionBytes(const std::string& path, const char* sec_name,
-        std::vector<uint8_t>& sec) {
-    sec.clear();
-    FILE* f = fopen(path.c_str(), "rb");
-    if (!f) {
-        return false;
-    }
-    bool ok = false;
-    do {
-        unsigned char e_ident[16];
-        if (fread(e_ident, 1, 16, f) != 16) {
-            break;
-        }
-        // ELF magic + 64-bit class + little-endian (the only AOT target layout).
-        if (e_ident[0] != 0x7f || e_ident[1] != 'E' || e_ident[2] != 'L' || e_ident[3] != 'F') {
-            break;
-        }
-        if (e_ident[4] != 2 /*ELFCLASS64*/ || e_ident[5] != 1 /*ELFDATA2LSB*/) {
-            break;
-        }
-        // Read the rest of the ELF64 header fields we need.
-        // Offsets within Elf64_Ehdr: e_shoff@40 (8), e_shentsize@58 (2), e_shnum@60 (2),
-        // e_shstrndx@62 (2).
-        unsigned char hdr[64 - 16];
-        if (fread(hdr, 1, sizeof(hdr), f) != sizeof(hdr)) {
-            break;
-        }
-        auto rd16 = [](const unsigned char* p) -> uint16_t {
-            return static_cast<uint16_t>(p[0]) | (static_cast<uint16_t>(p[1]) << 8);
-        };
-        auto rd64 = [](const unsigned char* p) -> uint64_t {
-            uint64_t v = 0;
-            for (int i = 0; i < 8; ++i) {
-                v |= static_cast<uint64_t>(p[i]) << (8 * i);
-            }
-            return v;
-        };
-        uint64_t e_shoff = rd64(hdr + (40 - 16));
-        uint16_t e_shentsize = rd16(hdr + (58 - 16));
-        uint16_t e_shnum = rd16(hdr + (60 - 16));
-        uint16_t e_shstrndx = rd16(hdr + (62 - 16));
-        if (!e_shoff || !e_shnum || e_shentsize < 64 || e_shstrndx >= e_shnum) {
-            break;
-        }
-        // Read the section header table.
-        std::vector<unsigned char> sh(static_cast<size_t>(e_shentsize) * e_shnum);
-        if (fseek(f, static_cast<long>(e_shoff), SEEK_SET) != 0
-                || fread(sh.data(), 1, sh.size(), f) != sh.size()) {
-            break;
-        }
-        // Within Elf64_Shdr: sh_name@0 (4), sh_offset@24 (8), sh_size@32 (8).
-        auto shdr = [&](uint16_t i) -> const unsigned char* {
-            return sh.data() + static_cast<size_t>(i) * e_shentsize;
-        };
-        auto rd32 = [](const unsigned char* p) -> uint32_t {
-            return static_cast<uint32_t>(p[0]) | (static_cast<uint32_t>(p[1]) << 8)
-                | (static_cast<uint32_t>(p[2]) << 16) | (static_cast<uint32_t>(p[3]) << 24);
-        };
-        // Read .shstrtab to resolve section names.
-        const unsigned char* str_sh = shdr(e_shstrndx);
-        uint64_t str_off = rd64(str_sh + 24);
-        uint64_t str_size = rd64(str_sh + 32);
-        if (!str_size) {
-            break;
-        }
-        std::vector<char> strtab(str_size);
-        if (fseek(f, static_cast<long>(str_off), SEEK_SET) != 0
-                || fread(strtab.data(), 1, str_size, f) != str_size) {
-            break;
-        }
-        size_t name_len = strlen(sec_name);
-        for (uint16_t i = 0; i < e_shnum; ++i) {
-            const unsigned char* s = shdr(i);
-            uint32_t nm = rd32(s + 0);
-            if (nm >= str_size) {
-                continue;
-            }
-            if (strncmp(strtab.data() + nm, sec_name, name_len) != 0
-                    || strtab[nm + name_len] != '\0') {
-                continue;
-            }
-            uint64_t off = rd64(s + 24);
-            uint64_t size = rd64(s + 32);
-            if (!size) {
-                break;
-            }
-            sec.resize(size);
-            if (fseek(f, static_cast<long>(off), SEEK_SET) != 0
-                    || fread(sec.data(), 1, size, f) != size) {
-                sec.clear();
-                break;
-            }
-            ok = true;
-            break;
-        }
-    } while (false);
-    fclose(f);
-    return ok;
-}
-
-// Little-endian fixed-width readers shared by the Mach-O walk below.
-static inline uint32_t machoRd32(const unsigned char* p) {
-    return static_cast<uint32_t>(p[0]) | (static_cast<uint32_t>(p[1]) << 8)
-        | (static_cast<uint32_t>(p[2]) << 16) | (static_cast<uint32_t>(p[3]) << 24);
-}
-static inline uint64_t machoRd64(const unsigned char* p) {
-    uint64_t v = 0;
-    for (int i = 0; i < 8; ++i) {
-        v |= static_cast<uint64_t>(p[i]) << (8 * i);
-    }
-    return v;
-}
-
-// Walk one 64-bit Mach-O image starting at file offset `slice_off`, accumulating the
-// bytes of every (seg,sect) section that matches into `sec`. Self-contained (no libLLVM).
-static void readMachoSliceSections(FILE* f, uint64_t slice_off, const char* seg,
-        const char* sect, std::vector<uint8_t>& sec) {
-    unsigned char mh[32];
-    if (fseek(f, static_cast<long>(slice_off), SEEK_SET) != 0
-            || fread(mh, 1, sizeof(mh), f) != sizeof(mh)) {
-        return;
-    }
-    // MH_MAGIC_64 (0xFEEDFACF) only — AOT targets are little-endian arm64 / x86_64.
-    if (machoRd32(mh) != 0xFEEDFACFu) {
-        return;
-    }
-    uint32_t ncmds = machoRd32(mh + 16);
-    uint32_t sizeofcmds = machoRd32(mh + 20);
-    if (!ncmds || !sizeofcmds || sizeofcmds > (64u << 20)) {
-        return;
-    }
-    std::vector<unsigned char> cmds(sizeofcmds);
-    if (fread(cmds.data(), 1, sizeofcmds, f) != sizeofcmds) {
-        return;
-    }
-    const size_t seg_len = strlen(seg);
-    const size_t sect_len = strlen(sect);
-    size_t p = 0;
-    for (uint32_t i = 0; i < ncmds && p + 8 <= sizeofcmds; ++i) {
-        uint32_t cmd = machoRd32(cmds.data() + p);
-        uint32_t cmdsize = machoRd32(cmds.data() + p + 4);
-        if (cmdsize < 8 || p + cmdsize > sizeofcmds) {
-            break;
-        }
-        if (cmd == 0x19u /*LC_SEGMENT_64*/ && cmdsize >= 72) {
-            uint32_t nsects = machoRd32(cmds.data() + p + 64);
-            // section_64 records follow the 72-byte segment_command_64 header.
-            if (static_cast<uint64_t>(nsects) * 80 + 72 <= cmdsize) {
-                for (uint32_t s = 0; s < nsects; ++s) {
-                    const unsigned char* sc = cmds.data() + p + 72 + static_cast<size_t>(s) * 80;
-                    // sectname@0 (16), segname@16 (16), addr@32, size@40, offset@48 (u32).
-                    if (strncmp(reinterpret_cast<const char*>(sc), sect, sect_len) == 0
-                            && (sect_len == 16 || sc[sect_len] == '\0')
-                            && strncmp(reinterpret_cast<const char*>(sc + 16), seg, seg_len) == 0
-                            && (seg_len == 16 || sc[16 + seg_len] == '\0')) {
-                        uint64_t size = machoRd64(sc + 40);
-                        uint32_t off = machoRd32(sc + 48);
-                        if (size && size < (256u << 20)) {
-                            std::vector<uint8_t> buf(size);
-                            if (fseek(f, static_cast<long>(slice_off + off), SEEK_SET) == 0
-                                    && fread(buf.data(), 1, size, f) == size) {
-                                sec.insert(sec.end(), buf.begin(), buf.end());
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        p += cmdsize;
-    }
-}
-
-// Locate the (seg,sect) Mach-O section bytes in a thin or FAT 64-bit Mach-O file,
-// accumulating every matching section (the linker concatenates same-named sections, and
-// the framed-record reader walks the result). Returns true when any bytes were found.
-static bool readMachoSectionBytes(const std::string& path, const char* seg, const char* sect,
-        std::vector<uint8_t>& sec) {
-    sec.clear();
-    FILE* f = fopen(path.c_str(), "rb");
-    if (!f) {
-        return false;
-    }
-    unsigned char magic[4];
-    if (fread(magic, 1, 4, f) != 4) {
-        fclose(f);
-        return false;
-    }
-    // FAT headers store fields big-endian. Select the slice matching this process's arch.
-    auto rd32be = [](const unsigned char* p) -> uint32_t {
-        return (static_cast<uint32_t>(p[0]) << 24) | (static_cast<uint32_t>(p[1]) << 16)
-            | (static_cast<uint32_t>(p[2]) << 8) | static_cast<uint32_t>(p[3]);
-    };
-    uint32_t m = rd32be(magic);
-    if (m == 0xCAFEBABEu || m == 0xCAFEBABFu) {  // FAT_MAGIC / FAT_MAGIC_64
-        bool fat64 = (m == 0xCAFEBABFu);
-#if defined(__aarch64__) || defined(__arm64__)
-        const uint32_t want_cpu = 0x0100000Cu;  // CPU_TYPE_ARM64
-#elif defined(__x86_64__)
-        const uint32_t want_cpu = 0x01000007u;  // CPU_TYPE_X86_64
-#else
-        const uint32_t want_cpu = 0;
-#endif
-        unsigned char nbuf[4];
-        if (fread(nbuf, 1, 4, f) == 4) {
-            uint32_t narch = rd32be(nbuf);
-            for (uint32_t i = 0; i < narch && i < 64; ++i) {
-                unsigned char a[32];
-                size_t asz = fat64 ? 32 : 20;
-                if (fread(a, 1, asz, f) != asz) {
-                    break;
-                }
-                uint32_t cputype = rd32be(a);
-                uint64_t off = fat64
-                    ? ((static_cast<uint64_t>(rd32be(a + 8)) << 32) | rd32be(a + 12))
-                    : rd32be(a + 8);
-                if (want_cpu && cputype == want_cpu) {
-                    readMachoSliceSections(f, off, seg, sect, sec);
-                    break;
-                }
-            }
-        }
-    } else if (m == 0xCFFAEDFEu /*MH_MAGIC_64 on disk, LE*/ || machoRd32(magic) == 0xFEEDFACFu) {
-        readMachoSliceSections(f, 0, seg, sect, sec);
-    }
-    fclose(f);
-    return !sec.empty();
-}
-
-bool qoreAOTReadPcLocSection(const std::string& path, std::vector<AOTPcLocFuncEntry>& out) {
-    out.clear();
-    std::vector<uint8_t> sec;
-    if (!readElfSectionBytes(path, QORE_AOT_PCLOC_SECTION_NAME, sec)
-            && !readMachoSectionBytes(path, QORE_AOT_PCLOC_MACHO_SEG,
-                QORE_AOT_PCLOC_MACHO_SECT, sec)) {
-        return false;
-    }
-    // Walk concatenated [magic][len][payload] records.
-    size_t p = 0;
-    const size_t n = sec.size();
-    while (p + 8 <= n) {
-        uint32_t magic = 0, plen = 0;
-        size_t q = p;
-        if (!pcmapGet32(sec.data(), n, q, magic) || !pcmapGet32(sec.data(), n, q, plen)) {
-            break;
-        }
-        if (magic != QORE_AOT_PCMAP_MAGIC || plen == 0 || q + plen > n) {
-            break;
-        }
-        std::vector<AOTPcLocFuncEntry> recs;
-        if (qoreAOTParsePcLocPayload(sec.data() + q, plen, recs)) {
-            for (auto& r : recs) {
-                out.push_back(std::move(r));
-            }
-        }
-        p = q + plen;
-    }
-    if (out.empty()) {
-        return false;
-    }
-    return true;
-}
-
-bool qoreAOTReadElfFuncSymbols(const std::string& path, std::vector<AOTElfFuncSym>& out,
-        bool& out_is_et_dyn) {
-    out.clear();
-    out_is_et_dyn = false;
-    FILE* f = fopen(path.c_str(), "rb");
-    if (!f) {
-        return false;
-    }
-    bool ok = false;
-    do {
-        unsigned char e_ident[16];
-        if (fread(e_ident, 1, 16, f) != 16) {
-            break;
-        }
-        if (e_ident[0] != 0x7f || e_ident[1] != 'E' || e_ident[2] != 'L' || e_ident[3] != 'F'
-                || e_ident[4] != 2 /*ELFCLASS64*/ || e_ident[5] != 1 /*ELFDATA2LSB*/) {
-            break;
-        }
-        unsigned char hdr[64 - 16];
-        if (fread(hdr, 1, sizeof(hdr), f) != sizeof(hdr)) {
-            break;
-        }
-        auto rd16 = [](const unsigned char* p) -> uint16_t {
-            return static_cast<uint16_t>(p[0]) | (static_cast<uint16_t>(p[1]) << 8);
-        };
-        // e_type is the first ELF64 header field after e_ident (offset 16 => hdr[0]).
-        out_is_et_dyn = (rd16(hdr + 0) == 3 /*ET_DYN*/);
-        auto rd32 = [](const unsigned char* p) -> uint32_t {
-            return static_cast<uint32_t>(p[0]) | (static_cast<uint32_t>(p[1]) << 8)
-                | (static_cast<uint32_t>(p[2]) << 16) | (static_cast<uint32_t>(p[3]) << 24);
-        };
-        auto rd64 = [](const unsigned char* p) -> uint64_t {
-            uint64_t v = 0;
-            for (int i = 0; i < 8; ++i) {
-                v |= static_cast<uint64_t>(p[i]) << (8 * i);
-            }
-            return v;
-        };
-        uint64_t e_shoff = rd64(hdr + (40 - 16));
-        uint16_t e_shentsize = rd16(hdr + (58 - 16));
-        uint16_t e_shnum = rd16(hdr + (60 - 16));
-        if (!e_shoff || !e_shnum || e_shentsize < 64) {
-            break;
-        }
-        std::vector<unsigned char> sh(static_cast<size_t>(e_shentsize) * e_shnum);
-        if (fseek(f, static_cast<long>(e_shoff), SEEK_SET) != 0
-                || fread(sh.data(), 1, sh.size(), f) != sh.size()) {
-            break;
-        }
-        auto shdr = [&](uint32_t i) -> const unsigned char* {
-            return sh.data() + static_cast<size_t>(i) * e_shentsize;
-        };
-        // Section header fields: sh_type@4(4), sh_link@40(4), sh_offset@24(8),
-        // sh_size@32(8), sh_entsize@56(8).
-        for (uint16_t i = 0; i < e_shnum; ++i) {
-            const unsigned char* s = shdr(i);
-            if (rd32(s + 4) != 2 /*SHT_SYMTAB*/) {
-                continue;
-            }
-            uint64_t sym_off = rd64(s + 24);
-            uint64_t sym_size = rd64(s + 32);
-            uint64_t sym_entsz = rd64(s + 56);
-            uint32_t strndx = rd32(s + 40);
-            if (!sym_size || sym_entsz < 24 || strndx >= e_shnum) {
-                continue;
-            }
-            const unsigned char* ss = shdr(strndx);
-            uint64_t str_off = rd64(ss + 24);
-            uint64_t str_size = rd64(ss + 32);
-            if (!str_size) {
-                continue;
-            }
-            std::vector<unsigned char> syms(sym_size);
-            std::vector<char> strtab(str_size);
-            if (fseek(f, static_cast<long>(sym_off), SEEK_SET) != 0
-                    || fread(syms.data(), 1, sym_size, f) != sym_size) {
-                break;
-            }
-            if (fseek(f, static_cast<long>(str_off), SEEK_SET) != 0
-                    || fread(strtab.data(), 1, str_size, f) != str_size) {
-                break;
-            }
-            uint64_t count = sym_size / sym_entsz;
-            for (uint64_t k = 0; k < count; ++k) {
-                const unsigned char* sym = syms.data() + k * sym_entsz;
-                // Elf64_Sym: st_name@0(4), st_info@4(1), st_value@8(8), st_size@16(8).
-                if ((sym[4] & 0xf) != 2 /*STT_FUNC*/) {
-                    continue;
-                }
-                uint64_t st_size = rd64(sym + 16);
-                if (!st_size) {
-                    continue;
-                }
-                uint32_t nm = rd32(sym + 0);
-                if (nm >= str_size) {
-                    continue;
-                }
-                AOTElfFuncSym e;
-                e.value = rd64(sym + 8);
-                e.size = st_size;
-                e.name.assign(strtab.data() + nm);
-                out.push_back(std::move(e));
-            }
-            // typically a single SYMTAB; stop after the first non-empty one
-            if (!out.empty()) {
-                ok = true;
-                break;
-            }
-        }
-    } while (false);
-    fclose(f);
-    if (!ok) {
-        out.clear();
-    }
-    return ok;
-}
-
-// Resolve the file offset of the 64-bit Mach-O image to parse (0 for thin; the matching
-// arch slice for FAT). Returns false when `f` is not a 64-bit Mach-O.
-static bool machoSliceOffset(FILE* f, uint64_t& slice_off) {
-    slice_off = 0;
-    if (fseek(f, 0, SEEK_SET) != 0) {
-        return false;
-    }
-    unsigned char magic[4];
-    if (fread(magic, 1, 4, f) != 4) {
-        return false;
-    }
-    auto rd32be = [](const unsigned char* p) -> uint32_t {
-        return (static_cast<uint32_t>(p[0]) << 24) | (static_cast<uint32_t>(p[1]) << 16)
-            | (static_cast<uint32_t>(p[2]) << 8) | static_cast<uint32_t>(p[3]);
-    };
-    uint32_t m = rd32be(magic);
-    if (m == 0xCAFEBABEu || m == 0xCAFEBABFu) {  // FAT_MAGIC / FAT_MAGIC_64
-        bool fat64 = (m == 0xCAFEBABFu);
-#if defined(__aarch64__) || defined(__arm64__)
-        const uint32_t want_cpu = 0x0100000Cu;  // CPU_TYPE_ARM64
-#elif defined(__x86_64__)
-        const uint32_t want_cpu = 0x01000007u;  // CPU_TYPE_X86_64
-#else
-        const uint32_t want_cpu = 0;
-#endif
-        unsigned char nbuf[4];
-        if (fread(nbuf, 1, 4, f) != 4) {
-            return false;
-        }
-        uint32_t narch = rd32be(nbuf);
-        for (uint32_t i = 0; i < narch && i < 64; ++i) {
-            unsigned char a[32];
-            size_t asz = fat64 ? 32 : 20;
-            if (fread(a, 1, asz, f) != asz) {
-                return false;
-            }
-            uint32_t cputype = rd32be(a);
-            uint64_t off = fat64
-                ? ((static_cast<uint64_t>(rd32be(a + 8)) << 32) | rd32be(a + 12))
-                : rd32be(a + 8);
-            if (want_cpu && cputype == want_cpu) {
-                slice_off = off;
-                return true;
-            }
-        }
-        return false;
-    }
-    // Thin little-endian MH_MAGIC_64 (on disk: CF FA ED FE -> 0xCFFAEDFE big-endian).
-    return m == 0xCFFAEDFEu;
-}
-
-// Read function symbols (value as offset from the image base, computed size, name with the
-// Mach-O leading '_' stripped) from a thin/FAT 64-bit Mach-O LC_SYMTAB. `out_is_pie` is
-// always true: Mach-O images are position-independent, so the runtime bias is dli_fbase
-// and `value` is the offset from it (matching qoreAOTReadElfFuncSymbols' ET_DYN contract).
-bool qoreAOTReadMachoFuncSymbols(const std::string& path, std::vector<AOTElfFuncSym>& out,
-        bool& out_is_pie) {
-    out.clear();
-    out_is_pie = true;
-    FILE* f = fopen(path.c_str(), "rb");
-    if (!f) {
-        return false;
-    }
-    // Capture the file size so all allocations below can be bounded against it: a corrupted
-    // or crafted nsyms/strsize must not trigger a huge allocation (this can run on the throw
-    // path during exception-backtrace resolution, where a bad_alloc would be catastrophic).
-    uint64_t fsize = 0;
-    if (fseek(f, 0, SEEK_END) == 0) {
-        long end = ftell(f);
-        if (end > 0) {
-            fsize = static_cast<uint64_t>(end);
-        }
-    }
-    bool ok = false;
-    do {
-        uint64_t slice = 0;
-        if (!machoSliceOffset(f, slice)) {
-            break;
-        }
-        unsigned char mh[32];
-        if (fseek(f, static_cast<long>(slice), SEEK_SET) != 0
-                || fread(mh, 1, sizeof(mh), f) != sizeof(mh)
-                || machoRd32(mh) != 0xFEEDFACFu) {
-            break;
-        }
-        uint32_t ncmds = machoRd32(mh + 16);
-        uint32_t sizeofcmds = machoRd32(mh + 20);
-        if (!ncmds || !sizeofcmds || sizeofcmds > (64u << 20)
-                || !fsize || slice + 32 + sizeofcmds > fsize) {
-            break;
-        }
-        std::vector<unsigned char> cmds(sizeofcmds);
-        if (fread(cmds.data(), 1, sizeofcmds, f) != sizeofcmds) {
-            break;
-        }
-        // Locate __TEXT vmaddr/vmsize (image preferred base + text extent) and LC_SYMTAB.
-        uint64_t text_vmaddr = 0, text_end = 0;
-        uint32_t symoff = 0, nsyms = 0, stroff = 0, strsize = 0;
-        bool have_text = false, have_symtab = false;
-        size_t p = 0;
-        for (uint32_t i = 0; i < ncmds && p + 8 <= sizeofcmds; ++i) {
-            uint32_t cmd = machoRd32(cmds.data() + p);
-            uint32_t cmdsize = machoRd32(cmds.data() + p + 4);
-            if (cmdsize < 8 || p + cmdsize > sizeofcmds) {
-                break;
-            }
-            if (cmd == 0x19u /*LC_SEGMENT_64*/ && cmdsize >= 72
-                    && !memcmp(cmds.data() + p + 8, "__TEXT\0\0\0\0\0\0\0\0\0\0", 16)) {
-                text_vmaddr = machoRd64(cmds.data() + p + 24);
-                text_end = text_vmaddr + machoRd64(cmds.data() + p + 32);
-                have_text = true;
-            } else if (cmd == 0x2u /*LC_SYMTAB*/ && cmdsize >= 24) {
-                symoff = machoRd32(cmds.data() + p + 8);
-                nsyms = machoRd32(cmds.data() + p + 12);
-                stroff = machoRd32(cmds.data() + p + 16);
-                strsize = machoRd32(cmds.data() + p + 20);
-                have_symtab = true;
-            }
-            p += cmdsize;
-        }
-        if (!have_text || !have_symtab || !nsyms || !strsize) {
-            break;
-        }
-        // Bound the symbol- and string-table allocations: both must lie wholly within the
-        // file (offsets are slice-relative). Rejects corrupted/oversized header fields.
-        uint64_t sym_bytes = static_cast<uint64_t>(nsyms) * 16;
-        if (!fsize || slice + symoff + sym_bytes > fsize || slice + stroff + strsize > fsize) {
-            break;
-        }
-        std::vector<unsigned char> syms(static_cast<size_t>(sym_bytes));
-        std::vector<char> strtab(strsize);
-        if (fseek(f, static_cast<long>(slice + symoff), SEEK_SET) != 0
-                || fread(syms.data(), 1, syms.size(), f) != syms.size()
-                || fseek(f, static_cast<long>(slice + stroff), SEEK_SET) != 0
-                || fread(strtab.data(), 1, strsize, f) != strsize) {
-            break;
-        }
-        for (uint32_t k = 0; k < nsyms; ++k) {
-            const unsigned char* s = syms.data() + static_cast<size_t>(k) * 16;
-            // nlist_64: n_strx@0(4), n_type@4(1), n_sect@5(1), n_desc@6(2), n_value@8(8).
-            uint8_t n_type = s[4];
-            if (n_type & 0xe0) {  // N_STAB (debug) entry
-                continue;
-            }
-            if ((n_type & 0x0e) != 0x0e) {  // N_TYPE != N_SECT
-                continue;
-            }
-            uint64_t n_value = machoRd64(s + 8);
-            if (n_value < text_vmaddr || n_value >= text_end) {  // only __TEXT functions
-                continue;
-            }
-            uint32_t strx = machoRd32(s);
-            if (strx == 0 || strx >= strsize) {
-                continue;
-            }
-            const char* nm = strtab.data() + strx;
-            if (!*nm) {
-                continue;
-            }
-            AOTElfFuncSym e;
-            e.value = n_value - text_vmaddr;  // offset from image base
-            e.size = 0;                       // filled by next-symbol delta below
-            e.name.assign(nm[0] == '_' ? nm + 1 : nm);
-            out.push_back(std::move(e));
-        }
-        if (out.empty()) {
-            break;
-        }
-        // Mach-O symbols carry no size; derive it from the gap to the next function symbol,
-        // bounding the last by the __TEXT segment end.
-        std::sort(out.begin(), out.end(),
-            [](const AOTElfFuncSym& a, const AOTElfFuncSym& b) { return a.value < b.value; });
-        uint64_t text_size = text_end - text_vmaddr;
-        for (size_t i = 0; i < out.size(); ++i) {
-            uint64_t next = (i + 1 < out.size()) ? out[i + 1].value : text_size;
-            out[i].size = (next > out[i].value) ? (next - out[i].value) : 0;
-        }
-        ok = true;
-    } while (false);
-    fclose(f);
-    if (!ok) {
-        out.clear();
-    }
-    return ok;
 }
 
 static bool qorePluginQordTrace() {
@@ -8026,19 +7233,8 @@ static QoreAOTSymbolKind aotSymbolKindForCallRelocation(QoreAOTCallRelocationTar
     return QoreAOTSymbolKind::FUNCTION;
 }
 
-static const char* aotFuncSlotSourceFile(const AOTCompiledFuncWithSlots& func, size_t expr_slot) {
-    if (expr_slot < func.aot_locs.size() && !func.aot_locs[expr_slot].file.empty()) {
-        return func.aot_locs[expr_slot].file.c_str();
-    }
-    if (!func.aot_locs.empty() && !func.aot_locs.front().file.empty()) {
-        return func.aot_locs.front().file.c_str();
-    }
-    return nullptr;
-}
-
 static const char* aotFuncSourceFile(const AOTCompiledFuncWithSlots& func) {
-    return !func.aot_locs.empty() && !func.aot_locs.front().file.empty()
-        ? func.aot_locs.front().file.c_str() : nullptr;
+    return func.source_file.empty() ? nullptr : func.source_file.c_str();
 }
 
 static bool aotAppendCallImportRecords(const std::vector<AOTCompiledFuncWithSlots>* funcs,
@@ -8063,7 +7259,7 @@ static bool aotAppendCallImportRecords(const std::vector<AOTCompiledFuncWithSlot
                     || expr.reloc_qore_path.empty()) {
                 continue;
             }
-            const char* consumer_file = aotFuncSlotSourceFile(func, j);
+            const char* consumer_file = aotFuncSourceFile(func);
             if (shouldSkipByCompileFile(consumer_file, compile_file, compile_files)) {
                 continue;
             }
@@ -8205,7 +7401,7 @@ static bool aotAppendStaticMemberImportRecords(const std::vector<AOTCompiledFunc
             if (path.empty()) {
                 continue;
             }
-            const char* consumer_file = aotFuncSlotSourceFile(func, j);
+            const char* consumer_file = aotFuncSourceFile(func);
             if (shouldSkipByCompileFile(consumer_file, compile_file, compile_files)) {
                 continue;
             }
@@ -14025,18 +13221,6 @@ bool serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompile
         // on_block_exit handlers are native functions of the function; there are no statement slots
         assert(!func.num_stmts);
         traceEntryOffset("after stmt-handlers");
-
-        // Location table entries (AOT runtime_loc tracking)
-        if (!writeLocTableCount(func.aot_locs.size(), "location table")) {
-            return false;
-        }
-        traceEntryOffset("after loc count");
-        for (auto& loc : func.aot_locs) {
-            qore_aot_write_line(writer, loc.start_line);
-            qore_aot_write_line(writer, loc.end_line);
-            writer.writeSourcePath(loc.file.c_str());
-        }
-        traceEntryOffset("after loc table");
 
         // Metadata-only statement location entries for source-stripped
         // ProgramControl::findStatementId() support.

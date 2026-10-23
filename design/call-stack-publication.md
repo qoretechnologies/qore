@@ -111,6 +111,10 @@ constructed or destroyed object. Fixing it needs an API addition that lets the m
 run and pop before its destructor runs (the class is part of the binary ABI, so the base class cannot simply stop
 pushing), plus the corresponding change in each module.
 
+For the same reason, no virtual function or data member may be added to `QoreStackLocation` or to any public class
+derived from it (`QoreExternalStackLocation` and its subclasses): a module compiled against the previous header
+would have no vtable slot or member at the new position, and the library calling or reading it would crash.
+
 ## Thread teardown
 
 A walker holds the thread list lock (`QoreThreadList::lck`) while it walks, and that is what keeps each listed

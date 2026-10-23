@@ -104,11 +104,8 @@ new thread's local variable stack. Therefore:
   slot ids (`seed_ir_local_slots = false`), so its synthetic parameters and its expressions get slots of the starting
   function in a deterministic order, and a metadata-only compile (`qcc -m --from-objects`) assigns the same slots
   without lowering it;
-- the helper's runtime-location indices address the starting function's location table: its lowering starts after
-  the parent's entries so far, and the parent appends the helper's entries;
-- the lazy PC-to-location map has an entry per helper symbol (`buildAOTPcLocMaps()`, attributing `_bg_<n>` symbols to
-  their function with its location table), which `qore_aot_ensure_helper_pc_loc_map()` attaches to the starting
-  function's context before the helper first runs.
+- the helper keeps the runtime location as the starting function does, storing the addresses of the constant locations
+  of the image (`QoreIRToLLVM::getAotLocationConstant()`), so it needs nothing from the context for its locations.
 
 ## Serialization
 

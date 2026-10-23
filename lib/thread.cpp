@@ -409,12 +409,6 @@ public:
     QoreThreadLock stack_walk_lck;
     // current dynamic runtime location
     const QoreProgramLocation* runtime_loc = &loc_builtin;
-    // Stack-frame address of the innermost LIVE non-AOT (AST/IR/JIT) frame that set
-    // runtime_loc per statement/line; 0 means "owned by an AOT frame (or not yet set)".
-    // Shadows runtime_loc's save/restore lifecycle so it never points at a dead frame.
-    // Read at throw to decide whether the innermost user frame is AOT (-> lazy location)
-    // or non-AOT (-> eager). See design/aot-lazy-loc-innermost-frame.md.
-    uintptr_t runtime_loc_sp = 0;
     // current dynamic runtime statement
     const AbstractStatement* runtime_statement = nullptr;
     const char* parse_code = nullptr; // the current function, method, or closure being parsed
@@ -2446,8 +2440,7 @@ void* get_thread_data_for_native_calls() {
 const QoreStackLocation* push_native_call_stack_location(void* thread_data_ptr, QoreStackLocation* stack_loc,
         const QoreProgramLocation* call_loc, const QoreProgramLocation*& frame_loc,
         const AbstractStatement*& current_stmt, QoreProgram*& current_pgm,
-        const QoreProgramLocation*& runtime_loc, uintptr_t& runtime_loc_sp,
-        const QoreProgramLocation* callee_loc) {
+        const QoreProgramLocation*& runtime_loc, const QoreProgramLocation* callee_loc) {
     ThreadData* td = static_cast<ThreadData*>(thread_data_ptr);
     assert(td == thread_data.get());
 
@@ -2455,7 +2448,6 @@ const QoreStackLocation* push_native_call_stack_location(void* thread_data_ptr, 
     current_pgm = td->current_pgm;
     current_stmt = td->runtime_statement;
     runtime_loc = td->runtime_loc;
-    runtime_loc_sp = td->runtime_loc_sp;
     frame_loc = call_loc ? call_loc : runtime_loc;
 
     const QoreStackLocation* prev = publish_pushed_stack_location(td, stack_loc);
@@ -2467,12 +2459,11 @@ const QoreStackLocation* push_native_call_stack_location(void* thread_data_ptr, 
 }
 
 void pop_native_call_stack_location(void* thread_data_ptr, const QoreStackLocation* stack_loc,
-        const AbstractStatement* runtime_stmt, const QoreProgramLocation* runtime_loc, uintptr_t runtime_loc_sp) {
+        const AbstractStatement* runtime_stmt, const QoreProgramLocation* runtime_loc) {
     ThreadData* td = static_cast<ThreadData*>(thread_data_ptr);
     assert(td == thread_data.get());
     td->runtime_statement = runtime_stmt;
     td->runtime_loc = runtime_loc;
-    td->runtime_loc_sp = runtime_loc_sp;
     publish_popped_stack_location(td, stack_loc);
 }
 
@@ -2540,17 +2531,8 @@ RuntimeLocationCache get_runtime_location_cache() {
     return RuntimeLocationCache{
         &td->runtime_loc,
         &td->runtime_statement,
-        &td->runtime_loc_sp,
         td
     };
-}
-
-uintptr_t get_runtime_loc_sp() {
-    return thread_data.get()->runtime_loc_sp;
-}
-
-void set_runtime_loc_sp(uintptr_t sp) {
-    thread_data.get()->runtime_loc_sp = sp;
 }
 
 void set_parse_file_info(QoreProgramLocation& loc) {

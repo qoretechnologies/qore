@@ -205,14 +205,10 @@
 #include <vector>
 #include <dlfcn.h>
 #include <mutex>
-#include <unwind.h>
 #ifdef DEBUG
 #include <condition_variable>
 #include <thread>
 #include <sys/wait.h>
-#endif
-#ifdef __GLIBC__
-#include <link.h>
 #endif
 
 // Defined in Function.cpp - collects all local variables from a StatementBlock and nested blocks
@@ -3376,6 +3372,15 @@ std::unique_ptr<QoreIRFunction> QoreAOTContext::materializeDebugIR(
     return deserializeDebugIRForContext(reader, debug_ir_start, debug_ir_end, this, name, error);
 }
 
+struct AOTClosureRuntimeBinding {
+    UserVariantBase* uvb = nullptr;
+    std::vector<LocalVar*> local_slots;
+    const qore_class_private* class_ctx = nullptr;
+};
+
+using AOTClosureRuntimeBindingMap =
+    std::unordered_map<std::string, AOTClosureRuntimeBinding>;
+
 //! Build QoreAOTContext from deserialized slot map identities (no IR re-lowering needed)
 /** Resolves local/global/expression slot identities by looking up objects
     in the program's namespace tree and the function's UserSignature.
@@ -3388,631 +3393,6 @@ std::unique_ptr<QoreIRFunction> QoreAOTContext::materializeDebugIR(
     @param name the function name (for debug output)
     @return heap-allocated QoreAOTContext, or nullptr on failure
 */
-// ---------------------------------------------------------------------------
-// Lazy AOT exception source-location registry.
-//
-// At module load we read the per-artifact PC->loc trailer (see QoreAOTBinary.h),
-// resolve each function's (native-offset -> loc-index) entries through the freshly
-// built ctx->locs table into (offset -> QoreProgramLocation*), and record the
-// function's native base in a global sorted registry. At throw, the raising AOT
-// frame's PC is mapped base+offset -> QoreProgramLocation* with no per-line runtime
-// cost (replacing the eager updater). Trailer files are parsed once per path.
-// ---------------------------------------------------------------------------
-namespace {
-struct AotPcRange {
-    uintptr_t base = 0;     //!< native function start (dladdr dli_saddr)
-    uintptr_t end = 0;      //!< exclusive upper bound (set when the registry is sorted)
-    uint32_t max_off = 0;   //!< largest mapped function-relative offset
-    //! sorted by offset: function-relative native offset -> source location
-    std::vector<std::pair<uint32_t, const QoreProgramLocation*>> offmap;
-};
-
-QoreThreadLock g_aot_pcmap_lock;  // guards all registry state below
-QoreThreadLock g_aot_pc_attach_lock;  // serializes first-execution attachment per context
-// the registry can be used in a child process created with fork() (see QoreForkHandlers.h): it is only changed under
-// g_aot_pcmap_lock, a leaf lock; the attachment lock is held while an artifact's location data is read from its file
-// and registered
-QoreForkThreadLock g_aot_pcmap_fork_handler(g_aot_pcmap_lock, QFLR_LEAF, "aot_pc_map");
-QoreForkThreadLock g_aot_pc_attach_fork_handler(g_aot_pc_attach_lock, QFLR_AOT_PC_ATTACH, "aot_pc_attach");
-//! One symbol's lazy PC->loc data: the (offset -> loc-index) rows plus the literal locations that
-//! indices at or above the function's loc-table size address (code inlined from another function).
-struct AotSymEntry {
-    std::vector<std::pair<uint32_t, uint32_t>> entries;
-    std::vector<AOTCompiledFuncWithSlots::AOTLocEntry> extra_locs;
-};
-using AotSymMap = std::unordered_map<std::string, AotSymEntry>;
-std::unordered_map<std::string, std::shared_ptr<const AotSymMap>> g_aot_trailer_cache;
-std::vector<AotPcRange> g_aot_pc_ranges;  //!< kept sorted by base once finalized
-bool g_aot_pc_ranges_sorted = true;
-//! Lock-free fast-path: true once any AOT PC range is registered. Lets the throw
-//! path skip the lock entirely in non-AOT programs (the common case).
-std::atomic<bool> g_aot_have_ranges{false};
-
-//! Lazy AOT exception source-location resolution is ON by default (Step 6, Phase A):
-//! the registry is built at load and the innermost-frame resolver runs at throw. Opt
-//! out with QORE_AOT_LOC_NO_LAZY (falls back to the eager runtime_loc). QORE_AOT_LOC_GATE
-//! still forces the build for diagnostic comparison. Validated lazy-active 789/789.
-inline bool aotLazyLocEnabled() {
-    static constinit QoreEnvFlag no_lazy_env("QORE_AOT_LOC_NO_LAZY");
-    static constinit QoreEnvFlag gate_env("QORE_AOT_LOC_GATE");
-    return !no_lazy_env.get() || gate_env.get();
-}
-
-// Load + cache the PC->loc trailer for `path`; returns null when absent/garbage.
-std::shared_ptr<const AotSymMap> getOrLoadPcLocTrailer(const char* path) {
-    std::string key(path);
-    {
-        AutoLocker al(g_aot_pcmap_lock);
-        auto it = g_aot_trailer_cache.find(key);
-        if (it != g_aot_trailer_cache.end()) {
-            return it->second;
-        }
-    }
-    // Parse outside the lock (file I/O). A concurrent loader may parse the same file
-    // too; the data is identical, last writer wins.
-    //
-    // Prefer the `qore_aot_pcloc` ELF SECTION (survives downstream relinking — e.g.
-    // qorus links per-file .qo's into the qorus-core executable, which drops any EOF
-    // trailer but keeps the section). Fall back to the EOF trailer for legacy artifacts
-    // that predate the section. The section may carry several concatenated records (one
-    // per input object linked into the artifact); the reader accumulates all of them.
-    std::vector<AOTPcLocFuncEntry> entries;
-    std::shared_ptr<AotSymMap> symmap;
-    if ((qoreAOTReadPcLocSection(key, entries) && !entries.empty())
-            || (qoreAOTReadPcLocTrailer(key, entries) && !entries.empty())) {
-        symmap = std::make_shared<AotSymMap>();
-        for (auto& e : entries) {
-            AotSymEntry se;
-            se.entries = std::move(e.entries);
-            se.extra_locs = std::move(e.extra_locs);
-            (*symmap)[e.symbol] = std::move(se);
-        }
-    }
-    AutoLocker al(g_aot_pcmap_lock);
-    auto it = g_aot_trailer_cache.find(key);
-    if (it != g_aot_trailer_cache.end()) {
-        return it->second;
-    }
-    g_aot_trailer_cache[key] = symmap;  // cache negatives (null) too
-    return symmap;
-}
-
-// Cached static-symbol table for an artifact, used to name AOT functions that dladdr
-// cannot (functions linked into an EXECUTABLE live only in .symtab, not .dynsym).
-struct AotSymtab {
-    bool is_et_dyn = false;                  //!< true => runtime addr = fbase + st_value
-    std::vector<AOTElfFuncSym> syms;         //!< sorted by value for address lookup
-};
-std::unordered_map<std::string, std::shared_ptr<const AotSymtab>> g_aot_symtab_cache;
-
-// Load + cache the .symtab FUNC symbols for `path` (sorted by value). Null when absent.
-std::shared_ptr<const AotSymtab> getOrLoadSymtab(const char* path) {
-    std::string key(path);
-    {
-        AutoLocker al(g_aot_pcmap_lock);
-        auto it = g_aot_symtab_cache.find(key);
-        if (it != g_aot_symtab_cache.end()) {
-            return it->second;
-        }
-    }
-    std::shared_ptr<AotSymtab> st;
-    std::vector<AOTElfFuncSym> syms;
-    bool is_dyn = false;
-    if ((qoreAOTReadElfFuncSymbols(key, syms, is_dyn)
-            || qoreAOTReadMachoFuncSymbols(key, syms, is_dyn)) && !syms.empty()) {
-        std::sort(syms.begin(), syms.end(),
-            [](const AOTElfFuncSym& a, const AOTElfFuncSym& b) { return a.value < b.value; });
-        st = std::make_shared<AotSymtab>();
-        st->is_et_dyn = is_dyn;
-        st->syms = std::move(syms);
-    }
-    AutoLocker al(g_aot_pcmap_lock);
-    auto it = g_aot_symtab_cache.find(key);
-    if (it != g_aot_symtab_cache.end()) {
-        return it->second;
-    }
-    g_aot_symtab_cache[key] = st;  // cache negatives too
-    return st;
-}
-
-//! Per-registration native-image cache.  All function pointers in one slot-map
-//! registration belong to the same linked artifact, so only the first one needs
-//! dladdr() to identify its file and load bias.  A thread-local scoped pointer
-//! keeps nested dependency/module registration independent and avoids retaining
-//! module handles or program state after registration finishes.
-struct AotPcArtifactCache {
-    bool resolved = false;
-    std::string path;
-    uintptr_t bias = 0;
-    std::shared_ptr<const AotSymMap> symmap;
-    std::shared_ptr<const AotSymtab> symtab;
-};
-
-thread_local AotPcArtifactCache* aot_pc_artifact_cache = nullptr;
-
-class AotPcArtifactCacheScope {
-public:
-    AotPcArtifactCacheScope() {
-        static constinit QoreEnvFlag enabled_env("QORE_AOT_LOC_NO_ARTIFACT_CACHE");
-        const bool enabled = !enabled_env.get();
-        if (enabled && aotLazyLocEnabled()) {
-            previous = aot_pc_artifact_cache;
-            aot_pc_artifact_cache = &cache;
-            active = true;
-        }
-    }
-
-    ~AotPcArtifactCacheScope() {
-        if (active) {
-            aot_pc_artifact_cache = previous;
-        }
-    }
-
-private:
-    AotPcArtifactCache cache;
-    AotPcArtifactCache* previous = nullptr;
-    bool active = false;
-};
-} // anonymous namespace
-
-// Attach the lazy PC->loc map for an AOT function to the global registry, resolving
-// its offset->loc-index entries through ctx->locs into offset->QoreProgramLocation*.
-// Best-effort: silently no-ops when the artifact carries no trailer (graceful for
-// --strip-debug-info / pre-feature builds, where the eager path remains the source).
-static void aotAttachPcLocMap(AotFunctionPtr fn_ptr, const QoreAOTContext* ctx) {
-    // Skip all lazy-location bookkeeping (dladdr1, trailer parse, registry, segment
-    // snapshot) unless the feature is enabled — default builds pay nothing.
-    if (!aotLazyLocEnabled()) {
-        return;
-    }
-    if (!fn_ptr || !ctx || !ctx->locs || ctx->num_locs <= 0) {
-        return;
-    }
-    Dl_info info{};
-    uintptr_t sym_size = 0;
-    std::shared_ptr<const AotSymMap> symmap;
-    std::shared_ptr<const AotSymtab> stab;
-    const bool cached_artifact = aot_pc_artifact_cache && aot_pc_artifact_cache->resolved;
-    if (cached_artifact) {
-        if (aot_pc_artifact_cache->path.empty()) {
-            return;
-        }
-        info.dli_fname = aot_pc_artifact_cache->path.c_str();
-        info.dli_fbase = reinterpret_cast<void*>(aot_pc_artifact_cache->bias);
-        symmap = aot_pc_artifact_cache->symmap;
-        stab = aot_pc_artifact_cache->symtab;
-    } else {
-        // Require only fname/fbase: dli_sname/dli_saddr may be ABSENT for functions that
-        // exist solely in .symtab (AOT functions linked into an executable like qorus-core
-        // are not in .dynsym, which is all dladdr sees) — those are resolved via .symtab.
-#ifdef __GLIBC__
-        const ElfW(Sym)* sym = nullptr;
-        if (!dladdr1(reinterpret_cast<void*>(fn_ptr), &info, reinterpret_cast<void**>(
-                const_cast<ElfW(Sym)**>(&sym)), RTLD_DL_SYMENT)
-                || !info.dli_fname) {
-            return;
-        }
-        if (sym && sym->st_size) {
-            sym_size = static_cast<uintptr_t>(sym->st_size);
-        }
-#else
-        if (!dladdr(reinterpret_cast<void*>(fn_ptr), &info) || !info.dli_fname) {
-            return;
-        }
-#endif
-        symmap = getOrLoadPcLocTrailer(info.dli_fname);
-        if (aot_pc_artifact_cache) {
-            aot_pc_artifact_cache->path = info.dli_fname;
-            aot_pc_artifact_cache->symmap = symmap;
-            if (symmap) {
-                // A static symbol table is required for address-to-symbol lookup once
-                // later functions skip dladdr().  If it is unavailable, leave this
-                // scope unresolved and preserve the original per-function path.
-                stab = getOrLoadSymtab(info.dli_fname);
-                aot_pc_artifact_cache->symtab = stab;
-                if (stab) {
-                    aot_pc_artifact_cache->bias = stab->is_et_dyn
-                        ? reinterpret_cast<uintptr_t>(info.dli_fbase) : 0;
-                    aot_pc_artifact_cache->resolved = true;
-                }
-            } else {
-                // Cache a missing trailer too: all pointers in this registration
-                // belong to the same artifact and would produce the same miss.
-                aot_pc_artifact_cache->resolved = true;
-            }
-        }
-    }
-    if (!symmap) {
-        if (q_env_is_set("QORE_AOT_LOC_DEBUG")) {
-            fprintf(stderr, "AOT-LOC: no map for fname=%s sym=%s\n",
-                info.dli_fname ? info.dli_fname : "?", info.dli_sname ? info.dli_sname : "?");
-        }
-        return;
-    }
-    // Resolve the function's name (-> map key), runtime start, and size. Prefer the
-    // dladdr/.dynsym result; fall back to .symtab when the symbol is absent there or
-    // its name isn't in the map (covers executable-resident AOT functions).
-    const AotSymEntry* sym_entries = nullptr;
-    uintptr_t fn_start = 0;
-    uintptr_t fn_size = 0;
-    if (info.dli_sname && info.dli_saddr) {
-        auto it = symmap->find(info.dli_sname);
-        if (it != symmap->end()) {
-            sym_entries = &it->second;
-            fn_start = reinterpret_cast<uintptr_t>(info.dli_saddr);
-            fn_size = sym_size;
-        }
-    }
-    if (sym_entries && !fn_size) {
-        // dladdr matched the function but gave no size (macOS: plain dladdr has no
-        // st_size). Recover the size from the symbol table so the registered PC range
-        // spans the WHOLE function — a return address past the last mapped offset (e.g.
-        // the throw call site) must stay in-range or lazy lookup misses and falls back
-        // to the function's declaration line.
-        if (!stab) {
-            stab = getOrLoadSymtab(info.dli_fname);
-        }
-        if (stab && !stab->syms.empty()) {
-            uintptr_t bias = stab->is_et_dyn
-                ? reinterpret_cast<uintptr_t>(info.dli_fbase) : 0;
-            uint64_t link_addr = static_cast<uint64_t>(reinterpret_cast<uintptr_t>(fn_ptr) - bias);
-            const auto& v = stab->syms;
-            size_t lo = 0, hi = v.size();
-            while (lo < hi) {
-                size_t mid = (lo + hi) / 2;
-                if (v[mid].value <= link_addr) { lo = mid + 1; } else { hi = mid; }
-            }
-            if (lo > 0) {
-                const AOTElfFuncSym& e = v[lo - 1];
-                if (e.size && link_addr < e.value + e.size) {
-                    fn_size = e.size;
-                }
-            }
-        }
-    }
-    if (!sym_entries) {
-        if (!stab) {
-            stab = getOrLoadSymtab(info.dli_fname);
-        }
-        if (stab && !stab->syms.empty()) {
-            uintptr_t bias = stab->is_et_dyn
-                ? reinterpret_cast<uintptr_t>(info.dli_fbase) : 0;
-            uint64_t link_addr = static_cast<uint64_t>(reinterpret_cast<uintptr_t>(fn_ptr) - bias);
-            // Largest st_value <= link_addr, then bounds-check against its size.
-            const auto& v = stab->syms;
-            size_t lo = 0, hi = v.size();
-            while (lo < hi) {
-                size_t mid = (lo + hi) / 2;
-                if (v[mid].value <= link_addr) { lo = mid + 1; } else { hi = mid; }
-            }
-            if (lo > 0) {
-                const AOTElfFuncSym& e = v[lo - 1];
-                if (link_addr < e.value + e.size) {
-                    auto it = symmap->find(e.name);
-                    if (it != symmap->end()) {
-                        sym_entries = &it->second;
-                        fn_start = bias + e.value;
-                        fn_size = e.size;
-                    }
-                }
-            }
-        }
-    }
-    if (!sym_entries) {
-        if (q_env_is_set("QORE_AOT_LOC_DEBUG")) {
-            fprintf(stderr, "AOT-LOC: sym MISS fname=%s dladdr-sym=%s (map has %zu syms)\n",
-                info.dli_fname ? info.dli_fname : "?", info.dli_sname ? info.dli_sname : "?",
-                symmap->size());
-        }
-        return;
-    }
-    AotPcRange range;
-    range.base = fn_start;
-    if (fn_size) {
-        range.end = range.base + fn_size;
-    }
-    range.offmap.reserve(sym_entries->entries.size());
-    // Locations for inlined code are carried literally by the map and addressed with indices at or
-    // above num_locs; materialize each one once, owned by the context (see QoreAOTContext::
-    // pc_extra_locs).  A blob written before that block existed simply has none, and an index past
-    // the end is dropped rather than resolved to something unrelated.
-    QoreAOTContext* mctx = const_cast<QoreAOTContext*>(ctx);
-    std::vector<const QoreProgramLocation*> materialized(sym_entries->extra_locs.size(), nullptr);
-    for (const auto& e : sym_entries->entries) {
-        const QoreProgramLocation* loc = nullptr;
-        if (e.second < static_cast<uint32_t>(ctx->num_locs)) {
-            loc = ctx->locs[e.second];
-        } else {
-            const size_t xi = e.second - static_cast<uint32_t>(ctx->num_locs);
-            if (xi >= sym_entries->extra_locs.size()) {
-                continue;
-            }
-            if (!materialized[xi]) {
-                const auto& x = sym_entries->extra_locs[xi];
-                if (x.start_line <= 0) {
-                    continue;
-                }
-                mctx->pc_extra_files.push_back(x.file);
-                auto* nl = new QoreProgramLocation(mctx->pc_extra_files.back().c_str(),
-                    x.start_line, x.end_line);
-                mctx->pc_extra_locs.push_back(nl);
-                materialized[xi] = nl;
-            }
-            loc = materialized[xi];
-        }
-        if (loc) {
-            range.offmap.emplace_back(e.first, loc);
-            if (e.first > range.max_off) {
-                range.max_off = e.first;
-            }
-        }
-    }
-    if (range.offmap.empty()) {
-        return;
-    }
-    std::sort(range.offmap.begin(), range.offmap.end(),
-        [](const std::pair<uint32_t, const QoreProgramLocation*>& a,
-           const std::pair<uint32_t, const QoreProgramLocation*>& b) {
-            return a.first < b.first;
-        });
-    // read before the leaf lock is taken
-    bool loc_debug = q_env_is_set("QORE_AOT_LOC_DEBUG");
-    AutoLocker al(g_aot_pcmap_lock);
-    g_aot_pc_ranges.push_back(std::move(range));
-    g_aot_pc_ranges_sorted = false;
-    g_aot_have_ranges.store(true, std::memory_order_release);
-    if (loc_debug) {
-        fprintf(stderr, "AOT-LOC: registered PC range base=0x%lx sym=%s entries=%zu (total=%zu)\n",
-            (unsigned long)fn_start, info.dli_sname ? info.dli_sname : "(symtab)",
-            g_aot_pc_ranges.back().offmap.size(),
-            g_aot_pc_ranges.size());
-    }
-}
-
-void qore_aot_ensure_pc_loc_map(QoreAOTContext* ctx) {
-    if (!ctx || ctx->pc_loc_map_attached.load(std::memory_order_acquire)) {
-        return;
-    }
-    AutoLocker al(g_aot_pc_attach_lock);
-    if (ctx->pc_loc_map_attached.load(std::memory_order_relaxed)) {
-        return;
-    }
-    aotAttachPcLocMap(ctx->pc_loc_fn, ctx);
-    ctx->pc_loc_map_attached.store(true, std::memory_order_release);
-}
-
-// the native helpers whose PC-to-source maps have been attached; guarded by g_aot_pc_attach_lock
-static std::unordered_set<uintptr_t> g_aot_attached_helpers;
-
-void qore_aot_ensure_helper_pc_loc_map(QoreAOTContext* ctx, AotFunctionPtr helper_fn) {
-    if (!ctx || !helper_fn) {
-        return;
-    }
-    AutoLocker al(g_aot_pc_attach_lock);
-    if (g_aot_attached_helpers.insert(reinterpret_cast<uintptr_t>(helper_fn)).second) {
-        aotAttachPcLocMap(helper_fn, ctx);
-    }
-}
-
-namespace {
-// Sort the registry by base and fill any missing upper bounds. Call with the lock
-// held. A range whose precise size was unavailable (no ELF symbol size) is bounded
-// by the next range's base, falling back to its last mapped offset for the final one.
-void finalizeAotPcRangesLocked() {
-    if (g_aot_pc_ranges_sorted) {
-        return;
-    }
-    std::sort(g_aot_pc_ranges.begin(), g_aot_pc_ranges.end(),
-        [](const AotPcRange& a, const AotPcRange& b) { return a.base < b.base; });
-    for (size_t i = 0; i < g_aot_pc_ranges.size(); ++i) {
-        AotPcRange& r = g_aot_pc_ranges[i];
-        if (r.end > r.base) {
-            continue;  // precise size already known
-        }
-        uintptr_t next = (i + 1 < g_aot_pc_ranges.size())
-            ? g_aot_pc_ranges[i + 1].base : 0;
-        uintptr_t loose = r.base + r.max_off + 64;
-        r.end = next > r.base ? std::min(next, loose) : loose;
-    }
-    g_aot_pc_ranges_sorted = true;
-}
-
-// Map a native PC to its source location via the registry, or nullptr if the PC is
-// not within a known AOT function.
-const QoreProgramLocation* aotLookupLocForPc(uintptr_t pc) {
-    AutoLocker al(g_aot_pcmap_lock);
-    if (g_aot_pc_ranges.empty()) {
-        return nullptr;
-    }
-    finalizeAotPcRangesLocked();
-    // Largest base <= pc.
-    size_t lo = 0, hi = g_aot_pc_ranges.size();
-    while (lo < hi) {
-        size_t mid = (lo + hi) / 2;
-        if (g_aot_pc_ranges[mid].base <= pc) { lo = mid + 1; } else { hi = mid; }
-    }
-    if (lo == 0) {
-        return nullptr;
-    }
-    const AotPcRange& r = g_aot_pc_ranges[lo - 1];
-    if (pc < r.base || pc >= r.end) {
-        return nullptr;
-    }
-    uint32_t off = static_cast<uint32_t>(pc - r.base);
-    // Largest mapped offset <= off.
-    size_t olo = 0, ohi = r.offmap.size();
-    while (olo < ohi) {
-        size_t mid = (olo + ohi) / 2;
-        if (r.offmap[mid].first <= off) { olo = mid + 1; } else { ohi = mid; }
-    }
-    if (olo == 0) {
-        return nullptr;
-    }
-    return r.offmap[olo - 1].second;
-}
-
-struct AotUnwindState {
-    const QoreProgramLocation* found = nullptr;
-    uintptr_t aot_cfa = 0;  //!< CFA of the innermost AOT frame (for the SP comparison)
-    int idx = 0;
-    int skip = 0;
-};
-_Unwind_Reason_Code aotUnwindCb(struct _Unwind_Context* uctx, void* arg) {
-    AotUnwindState* st = static_cast<AotUnwindState*>(arg);
-    uintptr_t ip = static_cast<uintptr_t>(_Unwind_GetIP(uctx));
-    if (!ip) {
-        return _URC_END_OF_STACK;
-    }
-    if (st->idx++ < st->skip) {
-        return _URC_NO_REASON;
-    }
-    // _Unwind_GetIP returns the return address (one past the call); look up ip-1 so we
-    // land inside the call instruction's line, matching the eager updater. Find the
-    // innermost AOT frame; whether it is the innermost USER frame is decided by the SP
-    // comparison in the resolver (runtime_loc_sp vs this CFA).
-    const QoreProgramLocation* loc = aotLookupLocForPc(ip - 1);
-    if (loc) {
-        st->found = loc;
-        st->aot_cfa = static_cast<uintptr_t>(_Unwind_GetCFA(uctx));
-        return _URC_END_OF_STACK;
-    }
-    return _URC_NO_REASON;
-}
-
-} // anonymous namespace
-
-// Resolve the source location of the innermost AOT stack frame for an exception
-// being raised on the current thread, or nullptr if no AOT frame is on the stack.
-// When QORE_AOT_LOC_GATE is set, compares against `eager` and logs any divergence;
-// the comparison phase keeps using the eager value (returns nullptr) so behavior is
-// unchanged until the lazy path is proven identical across the suite.
-const QoreProgramLocation* qore_aot_resolve_throw_location(const QoreProgramLocation* eager) {
-    // Lazy resolution is ON by default (Step 6, Phase A). Opt out with
-    // QORE_AOT_LOC_NO_LAZY (returns nullptr -> eager). QORE_AOT_LOC_GATE forces the
-    // comparison-only mode: compute + log the decision, but still return eager.
-    static constinit QoreLazyValue<QoreEnvironmentValue> gate_env_setting([]() -> QoreEnvironmentValue {
-        return QoreEnvironmentValue("QORE_AOT_LOC_GATE");
-    });
-    const char* gate_env = gate_env_setting.get().c_str();
-    static constinit QoreEnvFlag no_lazy_env("QORE_AOT_LOC_NO_LAZY");
-    const bool no_lazy = no_lazy_env.get();
-    if (!gate_env && no_lazy) {
-        return nullptr;
-    }
-    // Lock-free fast-path: no AOT code loaded -> nothing to do (common case).
-    if (!g_aot_have_ranges.load(std::memory_order_acquire)) {
-        return nullptr;
-    }
-    AotUnwindState st;
-    _Unwind_Backtrace(aotUnwindCb, &st);
-
-    // Decide whether the innermost USER frame is AOT. runtime_loc_sp is the stack-frame
-    // address of the innermost live non-AOT (AST/IR/JIT) frame that set runtime_loc; it
-    // is 0 while an AOT frame owns the location. Stacks grow down (inner = smaller addr):
-    //   - no AOT frame found            -> non-AOT exception, eager is authoritative
-    //   - sp == 0                       -> an AOT frame owns the location -> AOT innermost
-    //   - aot_cfa < sp                  -> the AOT frame is deeper than the live non-AOT
-    //                                      frame -> AOT innermost
-    //   - else                          -> a non-AOT frame is innermost -> eager
-    // See design/aot-lazy-loc-innermost-frame.md.
-    const QoreProgramLocation* lazy = nullptr;
-    bool aot_innermost = false;
-    if (st.found) {
-        uintptr_t sp = get_runtime_loc_sp();
-        aot_innermost = (sp == 0) || (st.aot_cfa < sp);
-        if (aot_innermost) {
-            lazy = st.found;
-        }
-    }
-
-    if (gate_env) {
-        // Report only when an AOT frame is on the stack (otherwise eager is trivially
-        // authoritative). The gate logs the eager-vs-lazy divergence tag AND the
-        // mechanism's decision so validation can confirm REGRESS? -> DEFER and that
-        // IMPROVE cases stay LAZY.
-        if (st.found) {
-            FILE* gate_out = stderr;
-            bool gate_close = false;
-            if (strcmp(gate_env, "1") && strcmp(gate_env, "on")) {
-                FILE* gf = fopen(gate_env, "a");
-                if (gf) { gate_out = gf; gate_close = true; }
-            }
-            auto fileOf = [](const QoreProgramLocation* l) -> const char* {
-                const char* f = l ? l->getFile() : nullptr;
-                return f ? f : "";
-            };
-            const char* ef = fileOf(eager);
-            int el = eager ? eager->start_line : -1;
-            const char* lf = fileOf(st.found);
-            int ll = st.found->start_line;
-            bool eager_real = eager && el > 0 && *ef && strcmp(ef, "<builtin>");
-            const char* tag = !eager_real ? "IMPROVE"
-                : (el == ll && !strcmp(ef, lf)) ? "OK" : "REGRESS?";
-            fprintf(gate_out, "AOT-LOC-GATE: %s decision=%s sp=%p aot_cfa=%p eager=%s:%d lazy=%s:%d\n",
-                tag, aot_innermost ? "LAZY" : "EAGER",
-                reinterpret_cast<void*>(get_runtime_loc_sp()),
-                reinterpret_cast<void*>(st.aot_cfa), ef, el, lf, ll);
-            if (gate_close) {
-                fclose(gate_out);
-            }
-        }
-        return nullptr;  // gate phase: keep eager behavior
-    }
-    return lazy;
-}
-
-namespace {
-struct AotCollectState {
-    std::vector<const QoreProgramLocation*>* out = nullptr;
-};
-_Unwind_Reason_Code aotCollectCb(struct _Unwind_Context* uctx, void* arg) {
-    AotCollectState* st = static_cast<AotCollectState*>(arg);
-    uintptr_t ip = static_cast<uintptr_t>(_Unwind_GetIP(uctx));
-    if (!ip) {
-        return _URC_END_OF_STACK;
-    }
-    // ip-1: land inside the call instruction's line (matches the eager updater).
-    const QoreProgramLocation* loc = aotLookupLocForPc(ip - 1);
-    if (loc) {
-        st->out->push_back(loc);
-    }
-    return _URC_NO_REASON;
-}
-} // anonymous namespace
-
-size_t qore_aot_collect_backtrace_locs(std::vector<const QoreProgramLocation*>& out) {
-    out.clear();
-    static constinit QoreEnvFlag no_lazy_env("QORE_AOT_LOC_NO_LAZY");
-    const bool no_lazy = no_lazy_env.get();
-    if (no_lazy) {
-        return 0;
-    }
-    if (!g_aot_have_ranges.load(std::memory_order_acquire)) {
-        return 0;
-    }
-    AotCollectState st;
-    st.out = &out;
-    _Unwind_Backtrace(aotCollectCb, &st);
-    if (q_env_is_set("QORE_AOT_LOC_DEBUG") && !out.empty()) {
-        fprintf(stderr, "AOT-LOC: backtrace collected %zu AOT frames:\n", out.size());
-        for (size_t i = 0; i < out.size(); ++i) {
-            const char* f = out[i] ? out[i]->getFile() : nullptr;
-            fprintf(stderr, "AOT-LOC:   R[%zu] = %s:%d\n", i, f ? f : "?",
-                out[i] ? out[i]->start_line : -1);
-        }
-    }
-    return out.size();
-}
-
-struct AOTClosureRuntimeBinding {
-    UserVariantBase* uvb = nullptr;
-    std::vector<LocalVar*> local_slots;
-    const qore_class_private* class_ctx = nullptr;
-};
-
-using AOTClosureRuntimeBindingMap =
-    std::unordered_map<std::string, AOTClosureRuntimeBinding>;
-
 static QoreAOTContext* buildContextFromSlotMap(
         const QoreAOTBinaryReader& reader,
         const uint8_t*& ptr, const uint8_t* end,
@@ -7067,8 +6447,8 @@ static QoreAOTContext* buildContextFromSlotMap(
         return nullptr;
     }
 
-    // Read location table (AOT runtime_loc tracking)
-    // Only read if entry_end is known and there's data remaining in the entry
+    // the statement location table follows, read only if there's data remaining in the entry; before
+    // QORE_AOT_NO_LOCATION_TABLE_VERSION, a location table that nothing reads any more precedes it and is skipped
     const uint8_t* loc_boundary = entry_end ? entry_end : end;
     const bool wide_loc_tables = (reader.getHeader().feature_flags & QORE_AOT_FEAT_WIDE_LOC_TABLES) != 0;
     const size_t loc_count_size = wide_loc_tables ? sizeof(uint32_t) : sizeof(uint16_t);
@@ -7077,46 +6457,16 @@ static QoreAOTContext* buildContextFromSlotMap(
             ? QoreAOTBinaryReader::readU32(p)
             : static_cast<uint32_t>(QoreAOTBinaryReader::readU16(p));
     };
-    if (trace_slot_reg) {
-        fprintf(stderr, "[aot-slot-reg] '%s': before loc table off=%zu entry_end=%zu\n",
-            name, static_cast<size_t>(ptr - entry_payload_start),
-            static_cast<size_t>(loc_boundary - entry_payload_start));
-    }
-    if (ptr + loc_count_size <= loc_boundary) {
+    if (reader.getHeader().version < QORE_AOT_NO_LOCATION_TABLE_VERSION && ptr + loc_count_size <= loc_boundary) {
         uint32_t num_loc_entries = readLocTableCount(ptr);
         if (trace_slot_reg) {
-            fprintf(stderr, "[aot-slot-reg] '%s': loc entries=%u off=%zu\n",
+            fprintf(stderr, "[aot-slot-reg] '%s': skipping loc entries=%u off=%zu\n",
                 name, num_loc_entries, static_cast<size_t>(ptr - entry_payload_start));
         }
-        if (num_loc_entries > 0) {
-            if (num_loc_entries > static_cast<uint32_t>(std::numeric_limits<int>::max())) {
-                setBuildError("location table entry count exceeds runtime int capacity: "
-                    + std::to_string(num_loc_entries));
-                delete ctx;
-                return nullptr;
-            }
-            ctx->num_locs = static_cast<int>(num_loc_entries);
-            ctx->locs = static_cast<const QoreProgramLocation**>(
-                calloc(num_loc_entries, sizeof(const QoreProgramLocation*)));
-            for (uint32_t i = 0; i < num_loc_entries && ptr < loc_boundary; ++i) {
-                int start_line = qore_aot_valid_line(qore_aot_read_line(reader, ptr));
-                int end_line = qore_aot_valid_line(qore_aot_read_line(reader, ptr));
-                const char* loc_file = reader.readStringRef(ptr);
-                if (start_line > 0) {
-                    // Intern the file name in the program's string pool —
-                    // the reader's decompressed pool dies when the parent
-                    // QoreAOTBinaryDeserializer goes out of scope, but
-                    // QoreProgramLocation::file is a raw const char* and
-                    // the loc object itself outlives the deserializer via
-                    // the AOT context.  See the matching deser site in
-                    // deserializeIRInstruction for the full rationale.
-                    const char* interned_file = (loc_file && pgm)
-                        ? qore_program_private::get(*pgm)->addString(loc_file)
-                        : (loc_file ? loc_file : "");
-                    ctx->locs[i] = new QoreProgramLocation(
-                        interned_file, start_line, end_line);
-                }
-            }
+        for (uint32_t i = 0; i < num_loc_entries && ptr < loc_boundary; ++i) {
+            qore_aot_read_line(reader, ptr);
+            qore_aot_read_line(reader, ptr);
+            reader.readStringRef(ptr);
         }
     }
 
@@ -7302,16 +6652,6 @@ static QoreAOTContext* buildContextFromSlotMap(
             + "; source fallback is disabled");
         delete ctx;
         return nullptr;
-    }
-
-    // Defer the native PC->loc map until first execution. Most module functions
-    // are never called by a short-lived loader process, and the map is needed
-    // only before this function can contribute a frame to an exception.
-    ctx->pc_loc_fn = aot_func.fn_ptr;
-    static constinit QoreEnvFlag eager_pc_loc_attach_env("QORE_AOT_LOC_EAGER_ATTACH");
-    const bool eager_pc_loc_attach = eager_pc_loc_attach_env.get();
-    if (eager_pc_loc_attach) {
-        qore_aot_ensure_pc_loc_map(ctx);
     }
 
     return ctx;
@@ -9487,10 +8827,6 @@ static void registerAOTFunctionsFromSlotMaps(
         AOTClosureRuntimeBindingMap* external_closure_bindings = nullptr,
         const QoreAOTBinaryDeserializer* deserialized_variants = nullptr,
         QoreProgram* local_owner_pgm = nullptr) {
-    // Function pointers in this registration come from one native image.  Cache
-    // its path, load bias, trailer, and symbol table after resolving the first
-    // function so the remaining functions avoid repeated dladdr() calls.
-    AotPcArtifactCacheScope pc_artifact_cache_scope;
     const bool use_resolution_cache = !q_env_is_set("QORE_DISABLE_AOT_RESOLUTION_CACHE");
     AOTSlotResolutionCache resolution_cache{pgm};
     AOTSlotResolutionCacheScope resolution_cache_scope(use_resolution_cache ? &resolution_cache : nullptr);
@@ -9518,8 +8854,7 @@ static void registerAOTFunctionsFromSlotMaps(
     const bool lazy_contexts = reader.getHeader().version >= QORE_AOT_LAZY_CONTEXT_FLAGS_VERSION
         && debug_metadata
         && !(pgm->getParseOptions() & PO_ALLOW_DEBUGGER)
-        && !q_env_is_set("QORE_DISABLE_AOT_LAZY_FUNCTION_CONTEXTS")
-        && !q_env_is_set("QORE_AOT_LOC_EAGER_ATTACH");
+        && !q_env_is_set("QORE_DISABLE_AOT_LAZY_FUNCTION_CONTEXTS");
     std::shared_ptr<QoreAOTLazyFunctionIR> lazy_context_table;
     if (lazy_contexts) {
         lazy_context_table = std::make_shared<QoreAOTLazyFunctionIR>(pgm);
@@ -15259,7 +14594,6 @@ int qore_aot_run_pending_constant_init(ConstantEntry* ce, ExceptionSink* xsink) 
         const char* old_name = set_module_context_name(rec->mod_name.empty() ? nullptr : rec->mod_name.c_str());
         const char* old_path = set_module_context_path(rec->mod_path.empty() ? nullptr : rec->mod_path.c_str());
         uint64_t raw_result = 0;
-        qore_aot_ensure_pc_loc_map(rec->ctx);
         try {
             raw_result = rec->fn_ptr(rec->ctx, &init_xsink);
         } catch (const QoreJITException&) {
@@ -15681,7 +15015,6 @@ static int executeInitFunctions(
             const char* init_mod_path = is_module_init && !desc.item_name.empty()
                 ? desc.item_name.c_str() : mod_path;
             ModuleInitNamePathContextHelper module_ctx(init_mod_name, init_mod_path);
-            qore_aot_ensure_pc_loc_map(info->ctx);
             if (is_module_init) {
                 // The compiled closure body expects its body locals to be
                 // pre-instantiated on the thread's lvstack (mimicking evalTiered's

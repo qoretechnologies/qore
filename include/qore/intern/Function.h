@@ -54,12 +54,6 @@ struct QoreAOTLazyClosureIR;
 struct QoreAOTLazyFunctionIR;
 using JitFunctionPtr = uint64_t (*)(ExceptionSink*);
 using AotFunctionPtr = uint64_t (*)(QoreAOTContext*, ExceptionSink*);
-DLLLOCAL void qore_aot_ensure_pc_loc_map(QoreAOTContext* ctx);
-//! Attaches the PC-to-source map of a native helper sharing a context, before it first runs
-/** The helper of a background expression is a native function of its own that uses the location table of the
-    function that starts it; its program counters are attached to that function's context once.
-*/
-DLLLOCAL void qore_aot_ensure_helper_pc_loc_map(QoreAOTContext* ctx, AotFunctionPtr helper_fn);
 
 // these data structures are all private to the library
 
@@ -462,8 +456,7 @@ class RuntimeConfig;
 #define ARG_DEF   (1 << 0)
 #define ARG_OTHER (1 << 1)
 
-class CodeEvaluationHelper : public QoreStackLocation, public ProgramThreadCountContextHelper,
-        public QoreAOTStackFrameMarker {
+class CodeEvaluationHelper : public QoreStackLocation, public ProgramThreadCountContextHelper {
 public:
     //! Creates the object for evaluating the given code (function, method, closure) with the given arguments
     /**
@@ -597,10 +590,6 @@ public:
         return stmt;
     }
 
-    DLLLOCAL bool isAOTFrame() const override {
-        return is_aot;
-    }
-
     //! Returns the method / function name only without any class
     DLLLOCAL const char* getName() const {
         return name;
@@ -641,9 +630,6 @@ protected:
     bool restore_type_param_instantiation = false;
     bool restore_rtflags = false;
     bool restore_call_program_context = false;
-    //! true when the called variant has a cached AOT function (frame executes natively),
-    //! so the exception machinery can repair its call-site location via the lazy registry
-    bool is_aot = false;
     // when true, defer switching the runtime parse options to the called Program until *after* argument
     // evaluation + variant resolution + the functional-domain (dom=...) check, so that a deliberate
     // cross-Program QoreProgram::callFunction() evaluates the dom check against the CALLER's parse
@@ -1172,7 +1158,6 @@ public:
                 return 0;
             }
             QoreAOTContext* ctx = cached_aot_ctx.load(std::memory_order_acquire);
-            qore_aot_ensure_pc_loc_map(ctx);
             // C++ EH prototype: the AOT code body is now emitted with
             // invoke/landingpad EH under QORE_AOT_EH=1. Per-function landing
             // pads resume the in-flight exception so it propagates up through

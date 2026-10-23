@@ -22,7 +22,7 @@ import zlib
 
 
 FOOTER = struct.Struct("<Q4sI")
-MAGICS = {b"QAMD", b"QPCM", b"QAOM"}
+MAGICS = {b"QAMD", b"QAOM"}
 
 
 def digest(data):

@@ -21,9 +21,8 @@ function, and a nested handler is named after the handler containing it, such as
 - AOT: `qore_rt_push_compiled_handler_aot()` registers the function with the AOT context of the function it belongs
   to, which it shares, as the helper of a background expression does (`background-helpers.md`): `buildAOTSlotMap()`
   walks the handler's IR without seeding its own slot ids, so its locals, expressions and nested handlers take slots of
-  that function, and its PC-to-location map is attached to that function's context
-  (`qore_aot_ensure_helper_pc_loc_map()`) before it first runs. Native code reports an exception by unwinding to the
-  runtime with the exception already in the sink (`QoreJITException`).
+  that function. Native code reports an exception by unwinding to the runtime with the exception already in the sink
+  (`QoreJITException`).
 
   The runtime binds the local slots of a native closure body to the variables of the closure's serialized IR by
   slot index (`AOTClosureRuntimeBinding::local_slots`), so the compiler prepares the closure's IR slots before it

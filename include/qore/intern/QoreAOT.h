@@ -294,31 +294,6 @@ struct QoreAOTContext {
     std::unordered_map<QoreAOTHashDeclPathCacheKey, const QoreTypeInfo*, QoreAOTHashDeclPathCacheKeyHash>
         type_path_cache;
 
-    //! Source locations for per-line runtime_loc tracking in AOT mode.
-    //! Indexed by location slot assigned during LLVM codegen. Populated from serialized
-    //! location table at load time. Used by the AOT runtime-location helpers.
-    const QoreProgramLocation** locs = nullptr;
-    int num_locs = 0;
-
-    //! Native function whose PC-to-source map is attached on first execution.
-    using PcLocFunctionPtr = uint64_t (*)(QoreAOTContext*, ExceptionSink*);
-    PcLocFunctionPtr pc_loc_fn = nullptr;
-    //! Published after the global PC map contains this function's complete range.
-    std::atomic<bool> pc_loc_map_attached{false};
-
-    //! Locations referenced only by the lazy PC->loc map, for code inlined into this function
-    /** LLVM inlines AOT functions into one another, and an inlined body's locations belong to the
-        callee's table, not this function's.  The PC map carries such locations literally and
-        addresses them with indices at or above num_locs; they are materialized here at attach time
-        so the map can hand out stable QoreProgramLocation pointers.  Owned by this context (the
-        destructor deletes them) together with the interned file strings they point at.
-    */
-    std::vector<const QoreProgramLocation*> pc_extra_locs;
-    //! Backing store for pc_extra_locs file names; QoreProgramLocation::file is a raw pointer that
-    //! must outlive the location, and std::list never invalidates the strings it holds.
-    std::list<std::string> pc_extra_files;
-
-
     //! Shared serialized AOT metadata used to lazily materialize debug IR.
     std::shared_ptr<const QoreAOTDebugMetadata> debug_metadata;
     //! Offset of this function's debug IR payload from its containing metadata section.
@@ -391,9 +366,6 @@ struct QoreAOTContext {
         }
     }
 };
-
-//! Attach a context's deferred native PC-to-source map before its function executes.
-DLLLOCAL void qore_aot_ensure_pc_loc_map(QoreAOTContext* ctx);
 
 //! Compile-time slot assignment map for AOT pointer indirection.
 /** Assigns monotonically increasing slot indices to each unique pointer encountered

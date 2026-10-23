@@ -209,31 +209,6 @@ public:
         deferred_exception_checking = v;
     }
 
-    //! Owned AOT location entry — stores location data by value, not by pointer.
-    //! Data is captured during LLVM codegen when the IR function is alive.
-    struct AOTLocEntry {
-        int start_line = 0;
-        int end_line = 0;
-        std::string file;
-    };
-
-    //! Get the AOT location table built during LLVM codegen.
-    //! Returns owned location entries (safe — no dangling pointer risk).
-    const std::vector<AOTLocEntry>& getAOTLocTable() const {
-        return aot_loc_table;
-    }
-
-    //! Offset added to every AOT location index emitted by this lowerer.
-    //! Outlined function-body helpers execute with the coordinator's
-    //! runtime ctx, whose ctx->locs table is the concatenation of the
-    //! helpers' and the coordinator's location tables; each lowerer gets
-    //! the running total of previously-emitted entries as its base so the
-    //! emitted indices address the merged table (see
-    //! aotLowerOutlinedFnHelpers() in QoreAOT.cpp).
-    void setAOTLocTableBase(int32_t base) {
-        aot_loc_base = base;
-    }
-
 private:
     llvm::LLVMContext& ctx;
 
@@ -969,27 +944,7 @@ private:
     // Runtime location tracking: per-function cached TLS pointers
     llvm::Value* loc_cache_ptr = nullptr;   //!< Cached ptr-to-ptr for runtime_loc TLS variable
     llvm::Value* stmt_cache_ptr = nullptr;  //!< Cached ptr-to-ptr for runtime_statement TLS variable
-    llvm::Value* loc_frame_cache_ptr = nullptr; //!< Cached ptr to runtime_loc_sp TLS (JIT only)
     int last_runtime_line = -1;             //!< Last source line emitted for location tracking
-
-    //! AOT location dedup: maps QoreProgramLocation* → slot index (AOT mode only).
-    //! The pointer is used only as a dedup key during the single LLVM codegen pass.
-    std::unordered_map<const QoreProgramLocation*, int32_t> aot_loc_slots;
-
-    //! Base offset for emitted AOT location indices (outlined helpers index
-    //! the coordinator's merged ctx->locs table) — see setAOTLocTableBase()
-    int32_t aot_loc_base = 0;
-    //! AOT location table: owns location data captured during LLVM codegen.
-    std::vector<AOTLocEntry> aot_loc_table;
-
-    //! AOT-mode debug-location encoding state: the loc-index currently encoded into
-    //! the DWARF column, advanced on source-line change (mirrors the eager updater's
-    //! line-change gate) so the emitted line table carries the exact active loc-index.
-    int last_aot_dbg_line = -1;
-    int32_t current_aot_loc_index = -1;
-
-    //! Return the AOT loc-index for `loc`, appending to aot_loc_table on first use.
-    int32_t getOrAddAotLocIndex(const QoreProgramLocation* loc);
 
     //! Returns the constant location that AOT code holds in its image for `loc`, one per distinct location of the
     //! module, or nullptr if `loc` has no line

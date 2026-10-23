@@ -10,28 +10,15 @@
 
 %exec-class AOTTopLevelSourceLocationsTest
 
-#! Regression test for AOT source locations in top-level code and in inlined callees
-/** Two defects made AOT lose or corrupt exception locations independently of line width:
-
-    - The top-level function's location table was never copied out of the LLVM lowerer, so
-      `_toplevel` was serialized with an empty table.  Nothing could resolve a location for
-      top-level code: the eager per-line updater no-oped, no PC->loc range was registered, and every
-      DWARF row for `_toplevel` was dropped post-emission.  Exceptions raised in top-level code
-      reported line -1 in every AOT mode.
-
-    - The DWARF column that carries the loc-index is local to the function whose lowerer emitted the
-      instruction, but at -O3 LLVM inlines AOT functions into one another and the inliner copies the
-      callee's DILocation — line and column — into the caller's line table.  The post-emission pass
-      resolved those indices against the CALLER's table, so an exception raised in inlined code
-      reported an unrelated line from the caller.
-
-    Both paths are checked against the AST baseline, in both AOT debug-info modes, since the two
-    modes resolve locations through completely different machinery.
+#! Regression test for AOT source locations in top-level code, in inlined callees and in compiled modules
+/** AOT code stores the address of a constant source location of its image as the runtime location when the line
+    changes, as JIT code does, so an exception takes its location as it is.  Exceptions raised in top-level code,
+    in a callee that LLVM inlines into its caller at -O3 and in a function of a compiled module must report the
+    line of the throw, as AST execution does, with and without debug info.
 */
 class AOTTopLevelSourceLocationsTest inherits QUnit::Test {
     public {
-        #! AOT resolves exception locations through the eager per-line updater when DWARF is
-        #! stripped and through the post-emission PC->loc map when it is kept
+        #! AOT locations do not depend on debug info; both modes are checked
         const AotModes = ("", "--strip-debug-info");
     }
 
@@ -52,7 +39,7 @@ class AOTTopLevelSourceLocationsTest inherits QUnit::Test {
         addTestCase("top-level exception location", \testTopLevelLocation());
         addTestCase("inlined callee exception location", \testInlinedCalleeLocation());
         addTestCase("top-level location in a source-stripped build", \testStrippedTopLevel());
-        addTestCase("module PC map attaches on first execution", \testDeferredModulePcMap());
+        addTestCase("module function exception location", \testModuleFunctionLocation());
 
         set_return_value(main());
     }
@@ -147,44 +134,42 @@ try {
             "source-stripped AOT reports the top-level throw line");
     }
 
-    testDeferredModulePcMap() {
-        TmpDir tmp("qore-aot-deferred-pc-loc-");
-        string source = write(tmp.path, "DeferredPcLoc.qm", "%modern
-module DeferredPcLoc {
+    testModuleFunctionLocation() {
+        TmpDir tmp("qore-aot-module-loc-");
+        string source = write(tmp.path, "ModuleLoc.qm", "%modern
+module ModuleLoc {
     version = \"1.0\";
-    desc = \"deferred PC location test module\";
+    desc = \"AOT module source location test module\";
     author = \"Qore Test\";
     url = \"https://qore.org\";
     license = \"MIT\";
 }
 
-public string sub deferredPcLocProbe() {
+public string sub moduleLocProbe() {
     try {
-        throw \"DEFERRED-PC-LOC\", \"first call\";
+        throw \"MODULE-LOC\", \"first call\";
     } catch (hash<ExceptionInfo> ex) {
-        return sprintf(\"%s:%d\", ex.err, ex.line);
+        return sprintf(\"%s:%d:%s\", ex.err, ex.line, basename(ex.file));
     }
 }
 ");
-        string qmod = tmp.path + "/DeferredPcLoc.qmod";
-        string compile_out = run(sprintf("%s %s -O3 -m -o %s %s", env, qcc_bin, qmod, source));
-        assertTrue(is_file(qmod), "deferred PC location module compiled: " + compile_out);
+        # the throw is on line 12 of the module source; -X prints the string quoted
+        string expected = "\"MODULE-LOC:12:ModuleLoc.qm\"";
+        string module_env = sprintf("%s QORE_MODULE_DIR=%s:$QORE_MODULE_DIR", env, tmp.path);
+        assertEq(expected, trim(run(sprintf("%s %s --exec-mode=ast -l %s -X 'moduleLocProbe()'", module_env,
+            qore_bin, source))), "AST baseline reports the throw line and file");
 
-        string module_env = sprintf("%s QORE_MODULE_DIR=%s:$QORE_MODULE_DIR QORE_AOT_LOC_DEBUG=1",
-            env, tmp.path);
-        string load_out = run(sprintf("%s %s -l DeferredPcLoc -X 1", module_env, qore_bin));
-        assertTrue(load_out !~ /AOT-LOC: registered PC range/,
-            "loading an unused function does not attach its PC map: " + load_out);
-
-        string call_out = run(sprintf("%s %s -l DeferredPcLoc -X 'deferredPcLocProbe()'",
-            module_env, qore_bin));
-        assertTrue(call_out =~ /AOT-LOC: registered PC range/
-                && call_out =~ /DEFERRED-PC-LOC:[1-9][0-9]*/,
-            "the first function execution attaches its PC map before a throw: " + call_out);
-
-        string eager_out = run(sprintf("%s QORE_AOT_LOC_EAGER_ATTACH=1 %s -l DeferredPcLoc -X 1",
-            module_env, qore_bin));
-        assertTrue(eager_out =~ /AOT-LOC: registered PC range/,
-            "the eager compatibility mode attaches the map while loading: " + eager_out);
+        string qmod = tmp.path + "/ModuleLoc.qmod";
+        foreach string mode in (AotModes) {
+            string compile_out = run(sprintf("%s %s -O3 %s -m -o %s %s", env, qcc_bin, mode, qmod, source));
+            assertTrue(is_file(qmod), "module compiled: " + compile_out);
+            string loaded = run(sprintf("%s %s -l ModuleLoc -X 'get_module_hash().ModuleLoc.filename'", module_env,
+                qore_bin));
+            assertTrue(loaded =~ /\.qmod"$/m, "the compiled module is loaded: " + loaded);
+            assertEq(expected, trim(run(sprintf("%s %s -l ModuleLoc -X 'moduleLocProbe()'", module_env, qore_bin))),
+                sprintf("the compiled module reports the throw line and file (%s)",
+                    mode.val() ? mode : "with debug info"));
+            unlink(qmod);
+        }
     }
 }

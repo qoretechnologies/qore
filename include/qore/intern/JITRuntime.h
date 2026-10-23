@@ -727,7 +727,6 @@ struct QoreNativeEntrySlots {
     void* thread_data;                       //!< for qore_rt_push_native_call_frame() and friends
     const QoreProgramLocation** loc_ptr;     //!< the thread's runtime location
     const AbstractStatement** stmt_ptr;      //!< the thread's runtime statement
-    uintptr_t* sp_ptr;                       //!< the thread's innermost non-AOT frame marker
 };
 
 //! Fills the thread's runtime location slots and data for a native function being entered

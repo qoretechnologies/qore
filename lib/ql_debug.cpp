@@ -952,8 +952,8 @@ static void ut_fork_waits_for_lock_holders(UnitTestCounters& c) {
         "program_registry", "program_cleanup", "breakpoints", "constant_value_locks", "opaque_target_shards",
         "encodings", "utc_offset_zones", "module_options", "app_registry", "complex_types", "external_types",
         "aot_deferred_types", "builtin_locations", "class_ids", "scan_waits", "node_watches", "async_io_logger",
-        "cipher_cache", "digest_cache", "jit_cache", "jit_bg_queue", "aot_pc_map", "aot_pc_attach",
-        "aot_pending_constants", "aot_regex_cache", "environment",
+        "cipher_cache", "digest_cache", "jit_cache", "jit_bg_queue", "aot_pending_constants",
+        "aot_regex_cache", "environment",
         nullptr,
     };
     for (const char** name = names; *name; ++name) {

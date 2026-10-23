@@ -1270,14 +1270,6 @@ void CodeEvaluationHelper::init(const QoreFunction* func, const AbstractQoreFunc
     rc.setRuntimeFlags(static_cast<q_rt_flags_t>(variant->getFlags()));
     restore_rtflags = true;
 
-    // Mark this frame as native-AOT when the called variant has a cached AOT function,
-    // so the exception machinery can repair its callstack call-site location via the
-    // lazy PC->loc registry. Set before the stack push so the visible frame reflects it.
-    {
-        const UserVariantBase* uvb = variant->getUserVariantBase();
-        is_aot = uvb && uvb->hasCachedAOT();
-    }
-
     // Cross-program calls execute with the target/source Program's TLPD, but caller-sensitive APIs walk stack
     // frame Programs, so the frame shows the caller's Program.  It is recorded as the location is pushed, not
     // assigned afterwards: other threads can read the location from then on.
@@ -6602,16 +6594,6 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
         }
 
         QoreValue val{};
-        // Save/restore the innermost-non-AOT-frame marker across native (JIT/AOT)
-        // execution. JIT code sets runtime_loc_sp per line to its own (inner) frame; on
-        // return an AOT caller must see its own outer marker again, not the stale inner
-        // one, so the throw resolver still classifies the AOT caller as innermost. AOT
-        // code never sets the marker, so for it this is a no-op. See
-        // design/aot-lazy-loc-innermost-frame.md.
-        struct SpGuard {
-            uintptr_t saved_sp;
-            ~SpGuard() { set_runtime_loc_sp(saved_sp); }
-        } sp_guard{get_runtime_loc_sp()};
         {
             // Only create ArgvContextHelper if argv is used
             std::optional<ArgvContextHelper> argv_helper;
@@ -6671,7 +6653,6 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
                 // through to the normal xsink-set path below.
                 try {
                     if (aot_ctx && cached_aot_fn) {
-                        qore_aot_ensure_pc_loc_map(aot_ctx);
                         result_bits = cached_aot_fn(aot_ctx, xsink);
                     } else {
                         assert(jit_fn);

@@ -5253,26 +5253,6 @@ llvm::DIFile* QoreIRToLLVM::getDIFile(const char* file_path) {
     return f;
 }
 
-int32_t QoreIRToLLVM::getOrAddAotLocIndex(const QoreProgramLocation* loc) {
-    auto it = aot_loc_slots.find(loc);
-    if (it != aot_loc_slots.end()) {
-        return it->second;
-    }
-    int32_t loc_index = aot_loc_base + static_cast<int32_t>(aot_loc_table.size());
-    aot_loc_slots[loc] = loc_index;
-    // Copy location data by value immediately — the table owns the data,
-    // eliminating any dependency on the loc pointer lifetime.
-    AOTLocEntry entry;
-    entry.start_line = loc->start_line;
-    entry.end_line = loc->end_line;
-    const char* f = loc->getFile();
-    if (f) {
-        entry.file = f;
-    }
-    aot_loc_table.push_back(std::move(entry));
-    return loc_index;
-}
-
 llvm::StructType* QoreIRToLLVM::getAotLocationType(llvm::LLVMContext& ctx) {
     // the members of QoreProgramLocation in declaration order: start_line, end_line, start_column, end_column,
     // file, source, lang, offset
@@ -5379,27 +5359,9 @@ void QoreIRToLLVM::setDebugLocation(const QoreIRInstruction* inst) {
     if (!di_sp) {
         return;
     }
-    unsigned line = 0;
-    unsigned col = 0;
-    if (inst->loc && inst->loc->start_line > 0) {
-        line = static_cast<unsigned>(inst->loc->start_line);
-        if (aot_mode) {
-            // Encode the active AOT loc-index into the DWARF column so the emitted
-            // line table can be read back post-emission as an exact native-offset ->
-            // loc-index map (drives lazy on-throw source-location recovery). Advance
-            // the index only on source-line change, mirroring emitRuntimeLocationUpdate's
-            // gate, so consecutive same-line instructions carry the same active location
-            // exactly as the eager updater would.
-            if (inst->loc->start_line != last_aot_dbg_line) {
-                last_aot_dbg_line = inst->loc->start_line;
-                current_aot_loc_index = getOrAddAotLocIndex(inst->loc);
-            }
-            if (current_aot_loc_index >= 0) {
-                col = static_cast<unsigned>(current_aot_loc_index + 1);
-            }
-        }
-    }
-    builder->SetCurrentDebugLocation(llvm::DILocation::get(ctx, line, col, di_sp));
+    // the line of the instruction; the column is left unknown (0)
+    unsigned line = inst->loc && inst->loc->start_line > 0 ? static_cast<unsigned>(inst->loc->start_line) : 0;
+    builder->SetCurrentDebugLocation(llvm::DILocation::get(ctx, line, 0, di_sp));
 }
 
 llvm::BasicBlock* QoreIRToLLVM::getOrCreateJitDeoptBlock(llvm::Module& module,
@@ -9282,11 +9244,9 @@ llvm::Function* QoreIRToLLVM::lowerNestedFunction(const QoreIRFunction& func, co
     QoreIRToLLVM nested_lowering(ctx);
     nested_lowering.setSymbolName(name);
     if (aot_mode) {
-        // the nested function shares the AOT context of the function being lowered: its slot tables and location
-        // table, whose entries for the nested function follow this function's entries so far
+        // the nested function shares the AOT context of the function being lowered: its slot tables
         nested_lowering.setAOTMode(aot_slots);
         nested_lowering.setAOTDirectClosureFastEntry(aot_direct_closure_fast_entry);
-        nested_lowering.setAOTLocTableBase(aot_loc_base + static_cast<int32_t>(aot_loc_table.size()));
     }
     if (active_di_builder && di_cu) {
         nested_lowering.setSharedDebugInfo(active_di_builder, di_cu);
@@ -9305,11 +9265,6 @@ llvm::Function* QoreIRToLLVM::lowerNestedFunction(const QoreIRFunction& func, co
     if (!fn) {
         error = "'" + name + "' was not emitted";
         return nullptr;
-    }
-    if (aot_mode) {
-        for (const auto& loc : nested_lowering.getAOTLocTable()) {
-            aot_loc_table.push_back(loc);
-        }
     }
     return fn;
 }
@@ -10809,16 +10764,11 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     // AOT mode: the addresses of the constant locations of the image (getAotLocationConstant()).
     loc_cache_ptr = nullptr;
     stmt_cache_ptr = nullptr;
-    loc_frame_cache_ptr = nullptr;
     last_runtime_line = -1;
-    last_aot_dbg_line = -1;
-    current_aot_loc_index = -1;
-    aot_loc_slots.clear();
-    aot_loc_table.clear();
     // the thread's runtime location slots and its data for the frames of native calls, got with one call
     // (QoreNativeEntrySlots)
     {
-        llvm::Type* slots_type = llvm::ArrayType::get(ptr_type, 4);
+        llvm::Type* slots_type = llvm::ArrayType::get(ptr_type, 3);
         llvm::AllocaInst* slots;
         {
             llvm::BasicBlock& entry = llvm_func->getEntryBlock();
@@ -10833,28 +10783,6 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
         native_call_thread_data = load_slot(0, "thread_data");
         loc_cache_ptr = load_slot(1, "loc_ptr");
         stmt_cache_ptr = load_slot(2, "stmt_ptr");
-        if (!aot_mode) {
-            loc_frame_cache_ptr = load_slot(3, "loc_frame_ptr");
-        }
-    }
-    // JIT mode: record this JIT frame's address as the innermost non-AOT owner of
-    // the runtime location, ONCE at function entry (the frame address is constant for
-    // the call, so no per-line store is needed). The evalTiered / fast-call SpGuard
-    // save/restores the caller's marker around the native call. Lets the AOT throw
-    // resolver tell a JIT frame from an AOT one.
-    if (!aot_mode) {
-        // Intrinsic::getDeclaration was renamed to getOrInsertDeclaration in LLVM 20
-        // (and removed in later toolchains, e.g. the macOS CI), so guard by version.
-#if LLVM_VERSION_MAJOR >= 20
-        llvm::Function* frameaddr = llvm::Intrinsic::getOrInsertDeclaration(&module,
-            llvm::Intrinsic::frameaddress, {llvm::PointerType::getUnqual(ctx)});
-#else
-        llvm::Function* frameaddr = llvm::Intrinsic::getDeclaration(&module,
-            llvm::Intrinsic::frameaddress, {llvm::PointerType::getUnqual(ctx)});
-#endif
-        llvm::Value* fa = builder->CreateCall(frameaddr,
-            {llvm::ConstantInt::get(llvm::Type::getInt32Ty(ctx), 0)});
-        builder->CreateStore(builder->CreatePtrToInt(fa, i64_type), loc_frame_cache_ptr);
     }
 
     // Compute remaining use counts for each register and identify registers

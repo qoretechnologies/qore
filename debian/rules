@@ -134,8 +134,8 @@ ifneq (,$(build_docs))
 endif
 
 override_dh_strip:
-	# strip and objcopy discard Qore's EOF trailers. Preserve the dependency,
-	# source-location and optional-module metadata around all dh_strip edits.
+	# strip and objcopy discard Qore's EOF trailers. Preserve the dependency and
+	# optional-module metadata around all dh_strip edits.
 	python3 debian/preserve-aot-metadata.py debian/qore-stdlib dh_strip
 
 override_dh_gencontrol:

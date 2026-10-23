@@ -47,8 +47,7 @@ class RpmPostTest(unittest.TestCase):
         (top / "SOURCES/probe.c").write_text("int package_probe(void) { return 42; }\n"
                                                "const char* source_path(void) { return __FILE__; }\n")
         trailers = b"".join(payload + struct.pack("<Q4sI", len(payload), magic, 1)
-                            for magic, payload in [(b"QAOM", b"optional"), (b"QPCM", b"locations"),
-                                                   (b"QAMD", b"dependencies")])
+                            for magic, payload in [(b"QAOM", b"optional"), (b"QAMD", b"dependencies")])
         (top / "SOURCES/trailers").write_bytes(trailers)
         recipe = top / "SPECS/qore-rpm-fixture.spec"
         recipe.write_text(f"""%{{load:{ROOT}/macros.qore}}

@@ -17,7 +17,7 @@ import sys
 
 
 FOOTER = struct.Struct("<Q4sI")
-MAGICS = {b"QAMD", b"QPCM", b"QAOM"}
+MAGICS = {b"QAMD", b"QAOM"}
 
 
 def read_trailers(path: Path) -> bytes:

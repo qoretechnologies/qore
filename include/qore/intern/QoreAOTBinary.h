@@ -203,8 +203,14 @@ constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x44524F51;
 //!      version with statement slots is refused.  An lvalue path can have Cast steps (LVPathStepKind::Cast, for a
 //!      cast<T>(lvalue)): in a function record the step's slot_id is the expression slot of its cast operator, and
 //!      in serialized IR the cast operator follows the step as an expression.
+//! v21: a function record has no location table before its statement location table.  AOT code holds its source
+//!      locations as constants in its image and stores their addresses as the runtime location, so nothing read
+//!      the table; a v9-v20 record's table is skipped.  The PC-to-location maps that AOT artifacts carried in a
+//!      trailer and in a `qore_aot_pcloc` section are no longer written or read either.
 constexpr uint16_t QORE_AOT_BINARY_MIN_VERSION = 9;
-constexpr uint16_t QORE_AOT_BINARY_VERSION = 20;
+constexpr uint16_t QORE_AOT_BINARY_VERSION = 21;
+//! First format version whose function records have no location table (see v21 above).
+constexpr uint16_t QORE_AOT_NO_LOCATION_TABLE_VERSION = 21;
 //! First format version in which a serialized background instruction can be of the helper kind.
 constexpr uint16_t QORE_AOT_BACKGROUND_HELPER_VERSION = 20;
 //! First format version identifying the variable each local slot record binds to (see
@@ -273,7 +279,7 @@ constexpr uint64_t QORE_AOT_FEAT_METHOD_SYNC = 1ULL << 34; //!< FUNCTIONS/METHOD
 constexpr uint64_t QORE_AOT_FEAT_TYPED_VALUE_CONTAINERS = 1ULL << 35; //!< Serialized list/hash values preserve complex/hashdecl runtime typeInfo
 constexpr uint64_t QORE_AOT_FEAT_MODULE_COMMANDS = 1ULL << 36; //!< `%module-cmd` directives replayed from source-stripped AOT metadata
 constexpr uint64_t QORE_AOT_FEAT_WIDE_IR_OPERANDS = 1ULL << 37; //!< Serialized debug/handler IR instruction operand counts are u16, not legacy u8
-constexpr uint64_t QORE_AOT_FEAT_WIDE_LOC_TABLES = 1ULL << 38; //!< SLOT_MAPS location and statement-location table counts are u32, not legacy u16
+constexpr uint64_t QORE_AOT_FEAT_WIDE_LOC_TABLES = 1ULL << 38; //!< SLOT_MAPS statement-location table counts (and before v21 location table counts) are u32, not legacy u16
 constexpr uint64_t QORE_AOT_FEAT_LOCAL_DECL_ORDINAL = 1ULL << 39; //!< local slot records carry body-local ordinal for duplicate-name disambiguation
 constexpr uint64_t QORE_AOT_FEAT_CLASS_INJECTION = 1ULL << 40; //!< class records preserve import/injection compatibility metadata
 constexpr uint64_t QORE_AOT_FEAT_VARIANT_PARSE_OPTIONS = 1ULL << 41; //!< variant signatures carry original body parse options for source-stripped domain checks
@@ -2238,7 +2244,6 @@ struct AOTSlotIdentities {
 //! Descriptor for a compiled function with slot identities
 struct AOTCompiledFuncWithSlots {
     std::string name;                //!< AOT function name (e.g. "myFunc", "MyClass::method")
-    std::string llvm_symbol;         //!< LLVM/native symbol name in the emitted object (for PC->loc mapping)
     int num_locals = 0;              //!< number of local variable slots
     int num_globals = 0;             //!< number of global variable slots
     int num_exprs = 0;               //!< number of expression slots
@@ -2254,30 +2259,11 @@ struct AOTCompiledFuncWithSlots {
     std::shared_ptr<const AOTConstantReverseMap> const_reverse_map_override;
     //! Optional full function IR used when source-stripped AOT code is debugged.
     const QoreIRFunction* debug_ir = nullptr;
-    //! AOT location table entry (owns the file string copy)
-    struct AOTLocEntry {
-        int32_t start_line = 0;
-        int32_t end_line = 0;
-        std::string file;
-    };
-    //! AOT location table indexed by slot. Populated from QoreIRToLLVM::getAOTLocTable().
-    std::vector<AOTLocEntry> aot_locs;
-    //! Native-PC map: sorted (function-relative native offset -> loc-index into aot_locs).
-    //! Built post-emission from the object's DWARF line table (column carries the exact
-    //! loc-index). Drives lazy on-throw source-location recovery (replaces the eager updater).
-    std::vector<std::pair<uint32_t, uint32_t>> pc_loc_map;
-    //! Literal locations referenced by pc_loc_map indices at or above aot_locs.size().
-    /** LLVM inlines one AOT function into another at -O3, and the inliner copies the callee's
-        DILocation (line AND column) into the caller's line table.  Since the DWARF column carries a
-        loc-index that is local to the function that emitted it, an inlined row's index means nothing
-        in the enclosing function's table — resolving it there yields an unrelated line.  The enclosing
-        function's serialized loc table cannot be extended at this point (the metadata blob is baked
-        into the module before object emission, while the PC map is derived from the emitted object),
-        so such locations are carried literally in the PC map itself: index `aot_locs.size() + k`
-        selects `pc_extra_locs[k]`.  Readers that predate this field simply drop those entries (their
-        index is >= ctx->num_locs), losing the inlined location but never reporting a wrong one.
+    //! the source file of the function's code; empty if unknown
+    /** Compile-time only: the consumer source file of the function's imports in the symbol index.  Never
+        serialized in the function record.
     */
-    std::vector<AOTLocEntry> pc_extra_locs;
+    std::string source_file;
     //! Source-stripped metadata-only statement locations for ProgramControl::findStatementId().
     struct AOTStmtLocEntry {
         int32_t start_line = 0;
@@ -2289,62 +2275,13 @@ struct AOTCompiledFuncWithSlots {
     std::vector<AOTStmtLocEntry> aot_stmt_locs;
 };
 
-//! AOT PC->loc trailer: appended to the END of the final loaded AOT artifact
-//! (.qo/.qmod/exe) after object emission and any debug-info stripping, carrying
-//! the per-function native-PC -> loc-index maps used for lazy on-throw source
-//! location recovery. Independent of the metadata blob (which is baked into the
-//! module before object emission, so it cannot carry post-emission native offsets).
-//!
-//! File layout: [payload][footer]. The fixed 16-byte footer sits at EOF:
-//!   uint64 payload_len; uint32 magic('QPCM'); uint32 version
-//! Payload (little-endian):
-//!   uint32 num_funcs
-//!   repeat: uint32 sym_len; char[sym_len] symbol;
-//!           uint32 num_entries; repeat: uint32 offset; uint32 loc_index
-//! Absence/garbage in the last 16 bytes simply means "no map" (graceful for
-//! pre-feature artifacts) — the loader falls back to the eager location path.
-static constexpr uint32_t QORE_AOT_PCMAP_MAGIC = 0x4d435051u;   //!< 'QPCM' little-endian
-static constexpr uint32_t QORE_AOT_PCMAP_VERSION = 1u;
-static constexpr size_t QORE_AOT_PCMAP_FOOTER_SIZE = 16;
-
-//! One function's parsed PC->loc map (symbol-keyed).
-struct AOTPcLocFuncEntry {
-    std::string symbol;                                  //!< native/LLVM symbol name
-    std::vector<std::pair<uint32_t, uint32_t>> entries;  //!< sorted (offset -> loc-index)
-    //! Literal locations for entries whose loc-index is at or above the function's loc-table size
-    //! (see AOTCompiledFuncWithSlots::pc_extra_locs): index `num_locs + k` selects `extra_locs[k]`.
-    std::vector<AOTCompiledFuncWithSlots::AOTLocEntry> extra_locs;
-};
-
-//! Marks the optional extra-location block appended after the PC->loc payload's function records
-/** The block is appended to the END of the payload, after every function record.  Readers that
-    predate it stop after the function-record count and ignore the trailing bytes, so the payload
-    stays parseable by older libqore builds with no version bump and no second section.
+//! The size of the fixed footer at the end of each AOT module trailer
+/** uint64 payload_len; uint32 magic; uint32 version
 */
-constexpr uint32_t QORE_AOT_PCMAP_EXTRA_MAGIC = 0x4c435051u;   //!< 'QPCL' little-endian
+static constexpr size_t QORE_AOT_TRAILER_FOOTER_SIZE = 16;
 
-//! Serialize the per-function PC->loc maps from func_slots into a trailer payload.
-//! Returns the number of functions written (functions with an empty map or symbol
-//! are skipped).
-size_t qoreAOTSerializePcLocPayload(const std::vector<AOTCompiledFuncWithSlots>& func_slots,
-        std::vector<uint8_t>& out);
-
-//! Parse a trailer payload (without footer) into per-function entries. Returns false
-//! on truncation/corruption.
-bool qoreAOTParsePcLocPayload(const uint8_t* data, size_t len,
-        std::vector<AOTPcLocFuncEntry>& out);
-
-//! Append a PC->loc trailer (payload + footer) to the file at `path`. No-op (returns
-//! true) when `payload` is empty. Sets `error` and returns false on I/O failure.
-bool qoreAOTAppendPcLocTrailer(const std::string& path, const std::vector<uint8_t>& payload,
-        std::string& error);
-
-//! Read and parse the PC->loc trailer from the file at `path`. Returns false (and
-//! leaves `out` empty) when the file has no valid trailer.
-bool qoreAOTReadPcLocTrailer(const std::string& path, std::vector<AOTPcLocFuncEntry>& out);
-
-//! AOT module dependency trailer appended after any PC->loc trailer.
-/** The fixed footer is the same 16-byte shape as the PC->loc footer:
+//! AOT module dependency trailer appended at the end of an AOT qmod
+/** The fixed footer (QORE_AOT_TRAILER_FOOTER_SIZE bytes) is:
     uint64 payload_len; uint32 magic('QAMD'); uint32 version.  The payload is:
     uint32 module_name_len; char[module_name_len] module_name; uint32 num_dependencies;
     repeat: uint32 dependency_len; char[dependency_len] dependency.
@@ -2378,7 +2315,7 @@ int qoreAOTReadModuleDependenciesTrailer(const std::string& path, std::string& m
         std::vector<std::string>& dependencies, std::string& error);
 
 //! AOT module optional-module trailer: the %try-module requests that failed when the module was compiled
-/** The fixed footer has the same 16-byte shape as the PC->loc footer:
+/** The fixed footer has the same shape as the dependency trailer's:
     uint64 payload_len; uint32 magic('QAOM'); uint32 version.  The payload is:
     uint32 count; repeat: uint32 spec_len; char[spec_len] spec, where each spec is the module request as written
     in the %try-module directive (a module name with an optional version constraint, such as
@@ -2415,66 +2352,6 @@ bool qoreAOTAppendOptionalModulesTrailer(const std::string& path, const std::vec
 */
 int qoreAOTReadOptionalModulesTrailer(const std::string& path, std::vector<std::string>& specs,
         std::string& error);
-
-//! ELF section name carrying the PC->loc map. Unlike the EOF trailer (which is
-//! dropped whenever a .qo is RE-LINKED into another artifact — e.g. qorus links its
-//! per-file .qo's into the qorus-core executable via the system linker), a real ELF
-//! section survives every link: the linker concatenates same-named input sections
-//! into the output artifact. So qcc adds this section to every object it emits and the
-//! map rides through arbitrary downstream linking with ZERO changes required of qore's
-//! users. Read from the loaded artifact file at throw time (the section is non-alloc /
-//! not mapped, so it is read from `dli_fname`, like the trailer). C-identifier name so
-//! it stays a clean section label.
-#define QORE_AOT_PCLOC_SECTION_NAME "qore_aot_pcloc"
-
-//! Mach-O equivalent of QORE_AOT_PCLOC_SECTION_NAME. Mach-O section names are
-//! (segment, section) pairs, each <=16 chars; GNU objcopy corrupts Mach-O, so the
-//! section is added with llvm-objcopy as "__QORE,__pcloc". The Mach-O linker
-//! concatenates same-named input sections exactly like ELF, so the relink-surviving
-//! contract holds identically. The framed-record payload format is the same on both.
-#define QORE_AOT_PCLOC_MACHO_SEG "__QORE"
-#define QORE_AOT_PCLOC_MACHO_SECT "__pcloc"
-
-//! Frame a serialized PC->loc payload as one self-delimiting section record:
-//! [uint32 magic('QPCM')][uint32 payload_len][payload]. Multiple objects' records are
-//! concatenated by the linker into one section; the reader walks them sequentially.
-//! No-op (leaves `out` empty) when `payload` is empty.
-void qoreAOTFramePcLocSectionRecord(const std::vector<uint8_t>& payload, std::vector<uint8_t>& out);
-
-//! Read + parse the qore_aot_pcloc section from the artifact at `path`, walking all
-//! concatenated records and accumulating their per-function entries into `out`. Handles
-//! both 64-bit ELF (`qore_aot_pcloc`) and 64-bit Mach-O (`__QORE,__pcloc`, thin or FAT)
-//! via self-contained parses (no libLLVM dependency on the throw path's TU). Returns
-//! false (and leaves `out` empty) when the artifact has no such section.
-bool qoreAOTReadPcLocSection(const std::string& path, std::vector<AOTPcLocFuncEntry>& out);
-
-//! One ELF static-symbol-table FUNC entry: link-time value + size + name.
-struct AOTElfFuncSym {
-    uint64_t value;   //!< st_value (link-time address / offset within the image)
-    uint64_t size;    //!< st_size
-    std::string name; //!< symbol name
-};
-
-//! Read all STT_FUNC symbols from the artifact's static symbol table (`.symtab`). This
-//! is needed because dladdr/dladdr1 only see the DYNAMIC table (`.dynsym`): functions
-//! AOT-linked into an EXECUTABLE (e.g. qorus-core) live only in `.symtab`, so dladdr
-//! cannot name them and the symbol-keyed PC->loc map can't be matched without this.
-//! `out_is_et_dyn` receives true for ET_DYN images (PIE exe / .so — st_value is a
-//! load-relative offset, runtime addr = dli_fbase + st_value) and false for ET_EXEC
-//! (st_value is absolute). Self-contained 64-bit-ELF parse. Returns false (out empty)
-//! when no `.symtab`.
-bool qoreAOTReadElfFuncSymbols(const std::string& path, std::vector<AOTElfFuncSym>& out,
-        bool& out_is_et_dyn);
-
-//! Mach-O counterpart of qoreAOTReadElfFuncSymbols: read __TEXT function symbols from the
-//! LC_SYMTAB of a thin/FAT 64-bit Mach-O. macOS dladdr provides no symbol size, so the
-//! PC->loc range would be bounded too tightly (return addresses past the last mapped
-//! offset fall outside, defeating lazy resolution); this recovers per-function sizes (gap
-//! to the next function symbol). `value` is the offset from the image base and `out_is_pie`
-//! is always true, so the runtime applies bias = dli_fbase exactly as for ELF ET_DYN. Names
-//! have the Mach-O leading '_' stripped to match the dladdr/dli_sname spelling.
-bool qoreAOTReadMachoFuncSymbols(const std::string& path, std::vector<AOTElfFuncSym>& out,
-        bool& out_is_pie);
 
 //! Descriptor for a compiled constant/static-var init function
 struct AOTCompiledInitFunc {

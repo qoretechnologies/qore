@@ -14,7 +14,10 @@
   clean trees parse once while incremental rebuilds retain exact per-file
   recompilation. See
   `design/aot-object-files-and-module-artifacts.md`,
-  `design/aot-script-context.md`, `design/aot-lazy-loc-innermost-frame.md`.
+  `design/aot-script-context.md`.  (The `qore_aot_pcloc` section and the lazy
+  locations were later removed: AOT code keeps its runtime location from
+  constant locations in its image; see "Source Locations" in
+  `design/aot-object-files-and-module-artifacts.md`.)
 
 **2026-06-26 re-measurement + evaluation (16-core x86_64, Release qcc):**
 DataProvider.qm (137 files, 1907 variants, 13.8 MB qmod) is the critical-path

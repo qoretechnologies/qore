@@ -597,54 +597,13 @@ bool qore_jit_validate_runtime_symbols(std::string& error) {
 }
 
 // --- Runtime location tracking for LLVM-generated code ---
-// Returns pointer to the thread-local runtime_loc variable for per-line location updates.
-// Called once at function entry; the returned pointer is stored and reused for each line change.
-extern "C" DLLEXPORT const QoreProgramLocation** qore_rt_get_loc_ptr() {
-    RuntimeLocationCache cache = get_runtime_location_cache();
-    return cache.loc_ptr;
-}
-
-// Returns pointer to the thread-local runtime_statement variable.
-extern "C" DLLEXPORT const AbstractStatement** qore_rt_get_stmt_ptr() {
-    RuntimeLocationCache cache = get_runtime_location_cache();
-    return cache.stmt_ptr;
-}
-
-// Returns pointer to the thread-local runtime_loc_sp variable. JIT-compiled code stores
-// its current stack frame address here per line so the AOT lazy-throw resolver can tell
-// a JIT frame (eager-tracked) from an AOT frame.
-extern "C" DLLEXPORT uintptr_t* qore_rt_get_loc_frame_ptr() {
-    RuntimeLocationCache cache = get_runtime_location_cache();
-    return cache.sp_ptr;
-}
-
-// AOT mode: set runtime location from context location table.
-// Per-line update: loads location pointer from ctx->locs[loc_index] and stores to TLS.
-extern "C" DLLEXPORT void qore_rt_set_runtime_loc_aot(QoreAOTContext* ctx, int32_t loc_index) {
-    if (ctx && ctx->locs && loc_index >= 0 && loc_index < ctx->num_locs && ctx->locs[loc_index]) {
-        RuntimeLocationCache cache = get_runtime_location_cache();
-        *cache.stmt_ptr = nullptr;
-        *cache.loc_ptr = ctx->locs[loc_index];
-    }
-}
-
-// AOT mode: set runtime location through TLS slots cached by generated code at
-// function entry. Keep qore_rt_set_runtime_loc_aot() for existing AOT artifacts.
+// Fills the thread's runtime location slots and data once at function entry; generated code stores the location
+// through them when the line changes.
 extern "C" DLLEXPORT void qore_rt_get_native_entry_slots(QoreNativeEntrySlots* slots) {
     RuntimeLocationCache cache = get_runtime_location_cache();
     slots->thread_data = cache.thread_data;
     slots->loc_ptr = cache.loc_ptr;
     slots->stmt_ptr = cache.stmt_ptr;
-    slots->sp_ptr = cache.sp_ptr;
-}
-
-extern "C" DLLEXPORT void qore_rt_set_runtime_loc_aot_cached(QoreAOTContext* ctx, int32_t loc_index,
-        const QoreProgramLocation** loc_ptr, const AbstractStatement** stmt_ptr) {
-    if (loc_ptr && stmt_ptr && ctx && ctx->locs && loc_index >= 0 && loc_index < ctx->num_locs
-            && ctx->locs[loc_index]) {
-        *stmt_ptr = nullptr;
-        *loc_ptr = ctx->locs[loc_index];
-    }
 }
 
 // --- Outlined function-body return token ---
@@ -9821,19 +9780,15 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_function_with_base_aot(
 }
 
 // Stack location for JIT/AOT-executed frames.
-class QoreJITStackLocation : public QoreStackLocation, public QoreAOTStackFrameMarker {
+class QoreJITStackLocation : public QoreStackLocation {
 public:
     DLLLOCAL QoreJITStackLocation(const std::string& call_name, const QoreProgramLocation* loc,
-            const StatementBlock* statements, QoreProgram* pgm, bool is_aot = false)
-        : call_name(call_name), loc(loc), statements(statements), pgm(pgm), is_aot(is_aot) {
+            const StatementBlock* statements, QoreProgram* pgm)
+        : call_name(call_name), loc(loc), statements(statements), pgm(pgm) {
     }
 
     DLLLOCAL const QoreProgramLocation& getLocation() const override {
         return loc ? *loc : loc_builtin;
-    }
-
-    DLLLOCAL bool isAOTFrame() const override {
-        return is_aot;
     }
 
     DLLLOCAL const std::string& getCallName() const override {
@@ -9858,7 +9813,6 @@ private:
     const QoreProgramLocation* loc;
     const StatementBlock* statements;
     QoreProgram* pgm;
-    bool is_aot = false;  //!< true when this frame executes an AOT-compiled function natively
     // saved_stmt and saved_pgm receive the thread's current statement and program from stack_helper's
     // constructor via output references, so they take no initializers
     const AbstractStatement* saved_stmt;
@@ -9888,12 +9842,12 @@ public:
             const QoreProgramLocation* callee_loc = nullptr)
             : thread_data(thread_data), call_name(call_name), statements(statements) {
         prev = push_native_call_stack_location(thread_data, this, call_loc, loc, saved_stmt, saved_pgm, runtime_loc,
-            runtime_loc_sp, callee_loc);
+            callee_loc);
     }
 
     //! Pops the frame and restores the caller's runtime location, which the callee changed
     DLLLOCAL ~QoreNativeCallStackLocation() {
-        pop_native_call_stack_location(thread_data, prev, saved_stmt, runtime_loc, runtime_loc_sp);
+        pop_native_call_stack_location(thread_data, prev, saved_stmt, runtime_loc);
     }
 
     DLLLOCAL const QoreProgramLocation& getLocation() const override {
@@ -9929,8 +9883,6 @@ private:
     //! the caller's statement, restored when the frame is popped
     const AbstractStatement* saved_stmt;
     QoreProgram* saved_pgm;
-    //! the caller's innermost non-AOT frame marker, restored when the frame is popped
-    uintptr_t runtime_loc_sp;
     //! the location that this one replaces on the thread's call stack
     const QoreStackLocation* prev;
 };
@@ -10089,10 +10041,8 @@ static void execJITWithDeopt(const UserVariantBase* uvb, const std::string& call
     // call; if not provided, we fall back to uvb->pgm (pre-existing behavior).
     const QoreProgramLocation* parse_loc = uvb->getUserSignature()->getParseLocation();
     const QoreProgramLocation* call_loc = get_runtime_location();
-    // Mark the frame as native-AOT (has_aot) so the exception machinery can repair its
-    // call-site location via the lazy PC->loc registry when the eager value is stale.
     QoreJITStackLocation jit_stack_loc(call_name, call_loc ? call_loc : parse_loc, uvb->getStatementBlock(),
-        caller_pgm ? caller_pgm : runtime_pgm, has_aot);
+        caller_pgm ? caller_pgm : runtime_pgm);
 
     struct ReceiverTypeInfoGuard {
         const QoreTypeInfo* old = nullptr;
@@ -10130,19 +10080,8 @@ static void execJITWithDeopt(const UserVariantBase* uvb, const std::string& call
         swapped_runtime_ctx = true;
     }
 
-    // Save/restore the innermost-non-AOT-frame marker across this native (JIT) call so an
-    // AOT caller that resumes after it sees its own outer marker, not this JIT frame's
-    // stale inner one. See design/aot-lazy-loc-innermost-frame.md.
-    struct SpGuard {
-        uintptr_t saved_sp;
-        ~SpGuard() { set_runtime_loc_sp(saved_sp); }
-    } sp_guard{get_runtime_loc_sp()};
-
     bool fn_invalidated = false;
     uint64_t result_bits = 0;
-    if (has_aot) {
-        qore_aot_ensure_pc_loc_map(uvb->getCachedAOTContext());
-    }
     try {
         result_bits = exec_fn(xsink, fn_invalidated);
     } catch (const QoreJITException&) {
@@ -11670,7 +11609,6 @@ extern "C" DLLEXPORT void qore_rt_exec_on_block_exit_impl(int64_t saved_count, E
                 if (jit_obe_handlers[i].aot_fn) {
                     // the handler runs with the AOT context of its function
                     QoreAOTContext* aot_ctx = jit_obe_handlers[i].aot_ctx;
-                    qore_aot_ensure_helper_pc_loc_map(aot_ctx, jit_obe_handlers[i].aot_fn);
                     uint64_t rv_bits = 0;
                     try {
                         rv_bits = jit_obe_handlers[i].aot_fn(aot_ctx, &obe_xsink);
@@ -14938,7 +14876,6 @@ extern "C" DLLEXPORT QoreAOTContext* qore_rt_get_aot_call_target_context(
         return nullptr;
     }
     QoreAOTContext* target_ctx = uvb->getCachedAOTContext();
-    qore_aot_ensure_pc_loc_map(target_ctx);
     return target_ctx;
 }
 
@@ -19241,21 +19178,12 @@ extern "C" DLLEXPORT uint64_t qore_rt_background_call_ref_call_aot(
 
 QoreValue qore_run_background_helper(const QoreBackgroundHelperCode& code, ExceptionSink* xsink) {
     if (code.aot_fn || code.jit_fn) {
-        // restore the innermost-non-AOT-frame marker after native code; see UserVariantBase::evalTiered()
-        struct SpGuard {
-            uintptr_t saved_sp;
-            ~SpGuard() {
-                set_runtime_loc_sp(saved_sp);
-            }
-        } sp_guard{get_runtime_loc_sp()};
         uint64_t result_bits;
         // native code reports an exception by unwinding to the boundary with the C++ caller; the exception is
         // already in xsink
         try {
             if (code.aot_fn) {
                 assert(code.aot_ctx);
-                qore_aot_ensure_pc_loc_map(code.aot_ctx);
-                qore_aot_ensure_helper_pc_loc_map(code.aot_ctx, code.aot_fn);
                 result_bits = code.aot_fn(code.aot_ctx, xsink);
             } else {
                 result_bits = code.jit_fn(xsink);

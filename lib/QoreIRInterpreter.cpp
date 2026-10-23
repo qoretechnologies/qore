@@ -5644,25 +5644,16 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     size_t local_slot_count = func.local_var_slots.empty()
         ? 0 : static_cast<size_t>(func.max_local_slot_id) + 1;
     IRCallFrame& frame = tl_frame_pool.push(reserve_size, local_slot_count);
-    // RAII guard: return the frame to the pool on any exit path, and save/restore the
-    // innermost-non-AOT-frame marker (runtime_loc_sp) across this call so an AOT caller
-    // that resumes after this IR call sees its own (outer) marker, not this frame's
-    // stale inner one. See design/aot-lazy-loc-innermost-frame.md.
+    // RAII guard: return the frame to the pool on any exit path
     struct FrameGuard {
         IRCallFrame& frame;
-        uintptr_t saved_sp;
         ~FrameGuard() {
             // Pooled frames outlive the call.  Never let a dormant frame retain
             // refs from IR-only local caches or missed cleanup paths.
             frame.releaseReferences(nullptr);
             tl_frame_pool.pop();
-            set_runtime_loc_sp(saved_sp);
         }
-    } frame_guard{frame, get_runtime_loc_sp()};
-    // Mark this IR-interpreter frame as the innermost non-AOT owner of the runtime
-    // location for the duration of the call (the frame address is constant, so set it
-    // once here rather than per line); FrameGuard restores the caller's marker on exit.
-    set_runtime_loc_sp(reinterpret_cast<uintptr_t>(__builtin_frame_address(0)));
+    } frame_guard{frame};
 
     IRValueSlots values{frame.values};
     auto& cleanup = frame.cleanup;
