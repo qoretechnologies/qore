@@ -1495,23 +1495,71 @@
           "source": "Repository",
           "message": "Repository"
         },
-        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcmVwb3NpdG9yeSNmZjNlZTM3ZmFkMmM1MDMzYWM0ZDA0NDA4OWQ2ZTFlMzU5ZWVkODNmMDg3ZjZlZmI5NTI0NzFlYmE3NGExYjU4Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUQ.field.ZnVsbF9uYW1l.display_name": {
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcmVwb3NpdG9yeSNmNjc5ZjY3OTViZTkzYWZjNDkyOTIwNzE1OTIxZDY2NzRlNjY2OGYwZmU1YzhkYTAxMjIzZWRkMGY3MWYzMDM1Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUQ.field.Y3JlYXRlZF9vbg.display_name": {
+          "source": "Created On",
+          "message": "Erstellt am"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcmVwb3NpdG9yeSNmNjc5ZjY3OTViZTkzYWZjNDkyOTIwNzE1OTIxZDY2NzRlNjY2OGYwZmU1YzhkYTAxMjIzZWRkMGY3MWYzMDM1Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUQ.field.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Beschreibung"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcmVwb3NpdG9yeSNmNjc5ZjY3OTViZTkzYWZjNDkyOTIwNzE1OTIxZDY2NzRlNjY2OGYwZmU1YzhkYTAxMjIzZWRkMGY3MWYzMDM1Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUQ.field.Zm9ya19wb2xpY3k.display_name": {
+          "source": "Fork Policy",
+          "message": "Fork-Richtlinie"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcmVwb3NpdG9yeSNmNjc5ZjY3OTViZTkzYWZjNDkyOTIwNzE1OTIxZDY2NzRlNjY2OGYwZmU1YzhkYTAxMjIzZWRkMGY3MWYzMDM1Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUQ.field.Zm9ya19wb2xpY3k.desc": {
+          "source": "\nControls the rules for forking this repository.\n\n* **allow_forks**: unrestricted forking\n* **no_public_forks**: restrict forking to private forks (forks cannot\n  be made public later)\n* **no_forks**: deny all forking\n",
+          "message": "\nSteuert die Regeln für das Forken dieses Repositorys.\n\n* **allow_forks**: uneingeschränktes Forken\n* **no_public_forks**: Forken auf private Forks beschränken (Forks können\n  später nicht öffentlich gemacht werden)\n* **no_forks**: jegliches Forken verweigern\n"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcmVwb3NpdG9yeSNmNjc5ZjY3OTViZTkzYWZjNDkyOTIwNzE1OTIxZDY2NzRlNjY2OGYwZmU1YzhkYTAxMjIzZWRkMGY3MWYzMDM1Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUQ.field.Zm9ya19wb2xpY3k.allowed-value.c3RyaW5nOmFsbG93X2Zvcmtz.display_name": {
+          "source": "allow_forks",
+          "message": "allow_forks"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcmVwb3NpdG9yeSNmNjc5ZjY3OTViZTkzYWZjNDkyOTIwNzE1OTIxZDY2NzRlNjY2OGYwZmU1YzhkYTAxMjIzZWRkMGY3MWYzMDM1Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUQ.field.Zm9ya19wb2xpY3k.allowed-value.c3RyaW5nOm5vX3B1YmxpY19mb3Jrcw.display_name": {
+          "source": "no_public_forks",
+          "message": "no_public_forks"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcmVwb3NpdG9yeSNmNjc5ZjY3OTViZTkzYWZjNDkyOTIwNzE1OTIxZDY2NzRlNjY2OGYwZmU1YzhkYTAxMjIzZWRkMGY3MWYzMDM1Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUQ.field.Zm9ya19wb2xpY3k.allowed-value.c3RyaW5nOm5vX2Zvcmtz.display_name": {
+          "source": "no_forks",
+          "message": "no_forks"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcmVwb3NpdG9yeSNmNjc5ZjY3OTViZTkzYWZjNDkyOTIwNzE1OTIxZDY2NzRlNjY2OGYwZmU1YzhkYTAxMjIzZWRkMGY3MWYzMDM1Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUQ.field.ZnVsbF9uYW1l.display_name": {
           "source": "Full Name",
           "message": "Vollständiger Name"
         },
-        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcmVwb3NpdG9yeSNmZjNlZTM3ZmFkMmM1MDMzYWM0ZDA0NDA4OWQ2ZTFlMzU5ZWVkODNmMDg3ZjZlZmI5NTI0NzFlYmE3NGExYjU4Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUQ.field.ZnVsbF9uYW1l.short_desc": {
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcmVwb3NpdG9yeSNmNjc5ZjY3OTViZTkzYWZjNDkyOTIwNzE1OTIxZDY2NzRlNjY2OGYwZmU1YzhkYTAxMjIzZWRkMGY3MWYzMDM1Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUQ.field.ZnVsbF9uYW1l.short_desc": {
           "source": "The concatenation of the repository owner's username and the slugified name,…",
           "message": "Die Verkettung des Benutzernamens des Repository-Eigentümers und des slugifizierten Namens,…"
         },
-        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcmVwb3NpdG9yeSNmZjNlZTM3ZmFkMmM1MDMzYWM0ZDA0NDA4OWQ2ZTFlMzU5ZWVkODNmMDg3ZjZlZmI5NTI0NzFlYmE3NGExYjU4Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUQ.field.ZnVsbF9uYW1l.desc": {
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcmVwb3NpdG9yeSNmNjc5ZjY3OTViZTkzYWZjNDkyOTIwNzE1OTIxZDY2NzRlNjY2OGYwZmU1YzhkYTAxMjIzZWRkMGY3MWYzMDM1Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUQ.field.ZnVsbF9uYW1l.desc": {
           "source": "The concatenation of the repository owner's username and the slugified name, e.g. \"evzijst/interruptingcow\". This is the same string used in Bitbucket URLs.",
           "message": "Die Verkettung des Benutzernamens des Repository-Eigentümers und des slugifizierten Namens, z. B. \"evzijst/interruptingcow\". Dies ist derselbe String, der in Bitbucket-URLs verwendet wird."
         },
-        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcmVwb3NpdG9yeSNmZjNlZTM3ZmFkMmM1MDMzYWM0ZDA0NDA4OWQ2ZTFlMzU5ZWVkODNmMDg3ZjZlZmI5NTI0NzFlYmE3NGExYjU4Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUQ.field.aXNfcHJpdmF0ZQ.display_name": {
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcmVwb3NpdG9yeSNmNjc5ZjY3OTViZTkzYWZjNDkyOTIwNzE1OTIxZDY2NzRlNjY2OGYwZmU1YzhkYTAxMjIzZWRkMGY3MWYzMDM1Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUQ.field.aGFzX2lzc3Vlcw.display_name": {
+          "source": "Has Issues",
+          "message": "Hat Issues"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcmVwb3NpdG9yeSNmNjc5ZjY3OTViZTkzYWZjNDkyOTIwNzE1OTIxZDY2NzRlNjY2OGYwZmU1YzhkYTAxMjIzZWRkMGY3MWYzMDM1Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUQ.field.aGFzX2lzc3Vlcw.desc": {
+          "source": "\nThe issue tracker for this repository is enabled. Issue Tracker\nfeatures are not supported for repositories in workspaces\nadministered through admin.atlassian.com.\n",
+          "message": "\nDer Issue-Tracker für dieses Repository ist aktiviert. Issue-Tracker-Funktionen\nwerden für Repositorys in Workspaces, die über\nadmin.atlassian.com verwaltet werden, nicht unterstützt.\n"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcmVwb3NpdG9yeSNmNjc5ZjY3OTViZTkzYWZjNDkyOTIwNzE1OTIxZDY2NzRlNjY2OGYwZmU1YzhkYTAxMjIzZWRkMGY3MWYzMDM1Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUQ.field.aGFzX3dpa2k.display_name": {
+          "source": "Has Wiki",
+          "message": "Hat Wiki"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcmVwb3NpdG9yeSNmNjc5ZjY3OTViZTkzYWZjNDkyOTIwNzE1OTIxZDY2NzRlNjY2OGYwZmU1YzhkYTAxMjIzZWRkMGY3MWYzMDM1Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUQ.field.aGFzX3dpa2k.desc": {
+          "source": "\nThe wiki for this repository is enabled. Wiki\nfeatures are not supported for repositories in workspaces\nadministered through admin.atlassian.com.\n",
+          "message": "\nDas Wiki für dieses Repository ist aktiviert. Wiki-Funktionen\nwerden für Repositorys in Workspaces, die über\nadmin.atlassian.com verwaltet werden, nicht unterstützt.\n"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcmVwb3NpdG9yeSNmNjc5ZjY3OTViZTkzYWZjNDkyOTIwNzE1OTIxZDY2NzRlNjY2OGYwZmU1YzhkYTAxMjIzZWRkMGY3MWYzMDM1Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUQ.field.aXNfcHJpdmF0ZQ.display_name": {
           "source": "Is Private",
           "message": "Ist privat"
         },
-        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcmVwb3NpdG9yeSNmZjNlZTM3ZmFkMmM1MDMzYWM0ZDA0NDA4OWQ2ZTFlMzU5ZWVkODNmMDg3ZjZlZmI5NTI0NzFlYmE3NGExYjU4Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUQ.field.bGlua3M.display_name": {
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcmVwb3NpdG9yeSNmNjc5ZjY3OTViZTkzYWZjNDkyOTIwNzE1OTIxZDY2NzRlNjY2OGYwZmU1YzhkYTAxMjIzZWRkMGY3MWYzMDM1Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUQ.field.bGFuZ3VhZ2U.display_name": {
+          "source": "Language",
+          "message": "Sprache"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcmVwb3NpdG9yeSNmNjc5ZjY3OTViZTkzYWZjNDkyOTIwNzE1OTIxZDY2NzRlNjY2OGYwZmU1YzhkYTAxMjIzZWRkMGY3MWYzMDM1Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUQ.field.bGlua3M.display_name": {
           "source": "Links",
           "message": "Links"
         },
@@ -1683,19 +1731,263 @@
           "source": "Name",
           "message": "Name"
         },
-        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcmVwb3NpdG9yeSNmZjNlZTM3ZmFkMmM1MDMzYWM0ZDA0NDA4OWQ2ZTFlMzU5ZWVkODNmMDg3ZjZlZmI5NTI0NzFlYmE3NGExYjU4Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUQ.field.dHlwZQ.display_name": {
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcmVwb3NpdG9yeSNmNjc5ZjY3OTViZTkzYWZjNDkyOTIwNzE1OTIxZDY2NzRlNjY2OGYwZmU1YzhkYTAxMjIzZWRkMGY3MWYzMDM1Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUQ.field.bWFpbmJyYW5jaA.display_name": {
+          "source": "Mainbranch",
+          "message": "Haupt-Branch"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcmVwb3NpdG9yeSNmNjc5ZjY3OTViZTkzYWZjNDkyOTIwNzE1OTIxZDY2NzRlNjY2OGYwZmU1YzhkYTAxMjIzZWRkMGY3MWYzMDM1Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUQ.field.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Name"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcmVwb3NpdG9yeSNmNjc5ZjY3OTViZTkzYWZjNDkyOTIwNzE1OTIxZDY2NzRlNjY2OGYwZmU1YzhkYTAxMjIzZWRkMGY3MWYzMDM1Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUQ.field.b3duZXI.display_name": {
+          "source": "Owner",
+          "message": "Eigentümer"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcmVwb3NpdG9yeSNmNjc5ZjY3OTViZTkzYWZjNDkyOTIwNzE1OTIxZDY2NzRlNjY2OGYwZmU1YzhkYTAxMjIzZWRkMGY3MWYzMDM1Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUQ.field.cGFyZW50.display_name": {
+          "source": "Parent",
+          "message": "Elternteil"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcmVwb3NpdG9yeSNmNjc5ZjY3OTViZTkzYWZjNDkyOTIwNzE1OTIxZDY2NzRlNjY2OGYwZmU1YzhkYTAxMjIzZWRkMGY3MWYzMDM1Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUQ.field.cHJvamVjdA.display_name": {
+          "source": "Project",
+          "message": "Projekt"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcHJvamVjdCM3MmRiMTdhOTBmNTBjZmE3NGE0YjM1ZDZkZTEyN2NhMDQyYTc3YWFlMjZlNjMzMzdhZjA5NjA3Y2IzNmI5MjEwOm9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUTpmaWVsZDpjSEp2YW1WamRB.field.Y3JlYXRlZF9vbg.display_name": {
+          "source": "Created On",
+          "message": "Erstellt am"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcHJvamVjdCM3MmRiMTdhOTBmNTBjZmE3NGE0YjM1ZDZkZTEyN2NhMDQyYTc3YWFlMjZlNjMzMzdhZjA5NjA3Y2IzNmI5MjEwOm9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUTpmaWVsZDpjSEp2YW1WamRB.field.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Beschreibung"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcHJvamVjdCM3MmRiMTdhOTBmNTBjZmE3NGE0YjM1ZDZkZTEyN2NhMDQyYTc3YWFlMjZlNjMzMzdhZjA5NjA3Y2IzNmI5MjEwOm9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUTpmaWVsZDpjSEp2YW1WamRB.field.aGFzX3B1YmxpY2x5X3Zpc2libGVfcmVwb3M.display_name": {
+          "source": "Has Publicly Visible Repos",
+          "message": "Hat öffentlich sichtbare Repos"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcHJvamVjdCM3MmRiMTdhOTBmNTBjZmE3NGE0YjM1ZDZkZTEyN2NhMDQyYTc3YWFlMjZlNjMzMzdhZjA5NjA3Y2IzNmI5MjEwOm9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUTpmaWVsZDpjSEp2YW1WamRB.field.aGFzX3B1YmxpY2x5X3Zpc2libGVfcmVwb3M.desc": {
+          "source": "\nIndicates whether the project contains publicly visible repositories.\nNote that private projects cannot contain public repositories.",
+          "message": "\nGibt an, ob das Projekt öffentlich sichtbare Repositorys enthält.\nHinweis: Private Projekte können keine öffentlichen Repositorys enthalten."
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcHJvamVjdCM3MmRiMTdhOTBmNTBjZmE3NGE0YjM1ZDZkZTEyN2NhMDQyYTc3YWFlMjZlNjMzMzdhZjA5NjA3Y2IzNmI5MjEwOm9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUTpmaWVsZDpjSEp2YW1WamRB.field.aXNfcHJpdmF0ZQ.display_name": {
+          "source": "Is Private",
+          "message": "Ist privat"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcHJvamVjdCM3MmRiMTdhOTBmNTBjZmE3NGE0YjM1ZDZkZTEyN2NhMDQyYTc3YWFlMjZlNjMzMzdhZjA5NjA3Y2IzNmI5MjEwOm9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUTpmaWVsZDpjSEp2YW1WamRB.field.aXNfcHJpdmF0ZQ.desc": {
+          "source": "\nIndicates whether the project is publicly accessible, or whether it is\nprivate to the team and consequently only visible to team members.\nNote that private projects cannot contain public repositories.",
+          "message": "\nGibt an, ob das Projekt öffentlich zugänglich ist oder ob es\nprivat für das Team ist und folglich nur für Teammitglieder sichtbar ist.\nHinweis: Private Projekte können keine öffentlichen Repositorys enthalten."
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcHJvamVjdCM3MmRiMTdhOTBmNTBjZmE3NGE0YjM1ZDZkZTEyN2NhMDQyYTc3YWFlMjZlNjMzMzdhZjA5NjA3Y2IzNmI5MjEwOm9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUTpmaWVsZDpjSEp2YW1WamRB.field.a2V5.display_name": {
+          "source": "Key",
+          "message": "Schlüssel"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcHJvamVjdCM3MmRiMTdhOTBmNTBjZmE3NGE0YjM1ZDZkZTEyN2NhMDQyYTc3YWFlMjZlNjMzMzdhZjA5NjA3Y2IzNmI5MjEwOm9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUTpmaWVsZDpjSEp2YW1WamRB.field.a2V5.short_desc": {
+          "source": "The project's key",
+          "message": "Der Projekt-Schlüssel"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcHJvamVjdCM3MmRiMTdhOTBmNTBjZmE3NGE0YjM1ZDZkZTEyN2NhMDQyYTc3YWFlMjZlNjMzMzdhZjA5NjA3Y2IzNmI5MjEwOm9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUTpmaWVsZDpjSEp2YW1WamRB.field.a2V5.desc": {
+          "source": "The project's key.",
+          "message": "Der Projekt-Schlüssel."
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcHJvamVjdCM3MmRiMTdhOTBmNTBjZmE3NGE0YjM1ZDZkZTEyN2NhMDQyYTc3YWFlMjZlNjMzMzdhZjA5NjA3Y2IzNmI5MjEwOm9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUTpmaWVsZDpjSEp2YW1WamRB.field.bGlua3M.display_name": {
+          "source": "Links",
+          "message": "Links"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpIYXNoRGF0YVR5cGU6KmxpbmtzI2U2ZDdiMmJkNjRhMjg5YjNlYTIxYTFhNzY2OWFhNDUzYzhkOWNiMTY2Njg5YzM5NWY2MThjOTQ4M2M0MTlkYWE6b3B0aW9uOmJXRnBibUp5WVc1amFBOmZpZWxkOmRHRnlaMlYwOmZpZWxkOmNtVndiM05wZEc5eWVROmZpZWxkOmNISnZhbVZqZEE6ZmllbGQ6YkdsdWEzTQ.field.YXZhdGFy.display_name": {
+          "source": "Avatar",
+          "message": "Avatar"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpIYXNoRGF0YVR5cGU6KmxpbmtzI2U2ZDdiMmJkNjRhMjg5YjNlYTIxYTFhNzY2OWFhNDUzYzhkOWNiMTY2Njg5YzM5NWY2MThjOTQ4M2M0MTlkYWE6b3B0aW9uOmJXRnBibUp5WVc1amFBOmZpZWxkOmRHRnlaMlYwOmZpZWxkOmNtVndiM05wZEc5eWVROmZpZWxkOmNISnZhbVZqZEE6ZmllbGQ6YkdsdWEzTQ.field.YXZhdGFy.short_desc": {
+          "source": "A link to a resource related to this object",
+          "message": "Ein Link zu einer Ressource, die mit diesem Objekt verbunden ist"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpIYXNoRGF0YVR5cGU6KmxpbmtzI2U2ZDdiMmJkNjRhMjg5YjNlYTIxYTFhNzY2OWFhNDUzYzhkOWNiMTY2Njg5YzM5NWY2MThjOTQ4M2M0MTlkYWE6b3B0aW9uOmJXRnBibUp5WVc1amFBOmZpZWxkOmRHRnlaMlYwOmZpZWxkOmNtVndiM05wZEc5eWVROmZpZWxkOmNISnZhbVZqZEE6ZmllbGQ6YkdsdWEzTQ.field.YXZhdGFy.desc": {
+          "source": "A link to a resource related to this object.",
+          "message": "Ein Link zu einer Ressource, die mit diesem Objekt verbunden ist."
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpIYXNoRGF0YVR5cGU6KmxpbmtzI2U2ZDdiMmJkNjRhMjg5YjNlYTIxYTFhNzY2OWFhNDUzYzhkOWNiMTY2Njg5YzM5NWY2MThjOTQ4M2M0MTlkYWE6b3B0aW9uOmJXRnBibUp5WVc1amFBOmZpZWxkOmRHRnlaMlYwOmZpZWxkOmNtVndiM05wZEc5eWVROmZpZWxkOmNISnZhbVZqZEE6ZmllbGQ6YkdsdWEzTQ.field.aHRtbA.display_name": {
+          "source": "HTML",
+          "message": "HTML"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpIYXNoRGF0YVR5cGU6KmxpbmtzI2U2ZDdiMmJkNjRhMjg5YjNlYTIxYTFhNzY2OWFhNDUzYzhkOWNiMTY2Njg5YzM5NWY2MThjOTQ4M2M0MTlkYWE6b3B0aW9uOmJXRnBibUp5WVc1amFBOmZpZWxkOmRHRnlaMlYwOmZpZWxkOmNtVndiM05wZEc5eWVROmZpZWxkOmNISnZhbVZqZEE6ZmllbGQ6YkdsdWEzTQ.field.aHRtbA.short_desc": {
+          "source": "A link to a resource related to this object",
+          "message": "Ein Link zu einer Ressource, die mit diesem Objekt verbunden ist"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpIYXNoRGF0YVR5cGU6KmxpbmtzI2U2ZDdiMmJkNjRhMjg5YjNlYTIxYTFhNzY2OWFhNDUzYzhkOWNiMTY2Njg5YzM5NWY2MThjOTQ4M2M0MTlkYWE6b3B0aW9uOmJXRnBibUp5WVc1amFBOmZpZWxkOmRHRnlaMlYwOmZpZWxkOmNtVndiM05wZEc5eWVROmZpZWxkOmNISnZhbVZqZEE6ZmllbGQ6YkdsdWEzTQ.field.aHRtbA.desc": {
+          "source": "A link to a resource related to this object.",
+          "message": "Ein Link zu einer Ressource, die mit diesem Objekt verbunden ist."
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcHJvamVjdCM3MmRiMTdhOTBmNTBjZmE3NGE0YjM1ZDZkZTEyN2NhMDQyYTc3YWFlMjZlNjMzMzdhZjA5NjA3Y2IzNmI5MjEwOm9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUTpmaWVsZDpjSEp2YW1WamRB.field.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Name"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcHJvamVjdCM3MmRiMTdhOTBmNTBjZmE3NGE0YjM1ZDZkZTEyN2NhMDQyYTc3YWFlMjZlNjMzMzdhZjA5NjA3Y2IzNmI5MjEwOm9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUTpmaWVsZDpjSEp2YW1WamRB.field.bmFtZQ.short_desc": {
+          "source": "The name of the project",
+          "message": "Der Name des Projekts"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcHJvamVjdCM3MmRiMTdhOTBmNTBjZmE3NGE0YjM1ZDZkZTEyN2NhMDQyYTc3YWFlMjZlNjMzMzdhZjA5NjA3Y2IzNmI5MjEwOm9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUTpmaWVsZDpjSEp2YW1WamRB.field.bmFtZQ.desc": {
+          "source": "The name of the project.",
+          "message": "Der Name des Projekts."
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcHJvamVjdCM3MmRiMTdhOTBmNTBjZmE3NGE0YjM1ZDZkZTEyN2NhMDQyYTc3YWFlMjZlNjMzMzdhZjA5NjA3Y2IzNmI5MjEwOm9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUTpmaWVsZDpjSEp2YW1WamRB.field.b3duZXI.display_name": {
+          "source": "Owner",
+          "message": "Eigentümer"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqdGVhbSMxNTI0YTY3MjFjNGU2YjkwMjI0OWExZWVkNDJkMDk0NDEyMmIwMTJkZDY2ZDEwNTVjZjVjZTU0NWJhZjA4ZGE5Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUTpmaWVsZDpjSEp2YW1WamRBOmZpZWxkOmIzZHVaWEk.field.Y3JlYXRlZF9vbg.display_name": {
+          "source": "Created On",
+          "message": "Erstellt am"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqdGVhbSMxNTI0YTY3MjFjNGU2YjkwMjI0OWExZWVkNDJkMDk0NDEyMmIwMTJkZDY2ZDEwNTVjZjVjZTU0NWJhZjA4ZGE5Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUTpmaWVsZDpjSEp2YW1WamRBOmZpZWxkOmIzZHVaWEk.field.ZGlzcGxheV9uYW1l.display_name": {
+          "source": "Display Name",
+          "message": "Anzeigename"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqdGVhbSMxNTI0YTY3MjFjNGU2YjkwMjI0OWExZWVkNDJkMDk0NDEyMmIwMTJkZDY2ZDEwNTVjZjVjZTU0NWJhZjA4ZGE5Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUTpmaWVsZDpjSEp2YW1WamRBOmZpZWxkOmIzZHVaWEk.field.bGlua3M.display_name": {
+          "source": "Links",
+          "message": "Links"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqdGVhbSMxNTI0YTY3MjFjNGU2YjkwMjI0OWExZWVkNDJkMDk0NDEyMmIwMTJkZDY2ZDEwNTVjZjVjZTU0NWJhZjA4ZGE5Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUTpmaWVsZDpjSEp2YW1WamRBOmZpZWxkOmIzZHVaWEk.field.bGlua3M.short_desc": {
+          "source": "Links related to an Account",
+          "message": "Links im Zusammenhang mit einem Konto"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqdGVhbSMxNTI0YTY3MjFjNGU2YjkwMjI0OWExZWVkNDJkMDk0NDEyMmIwMTJkZDY2ZDEwNTVjZjVjZTU0NWJhZjA4ZGE5Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUTpmaWVsZDpjSEp2YW1WamRBOmZpZWxkOmIzZHVaWEk.field.bGlua3M.desc": {
+          "source": "Links related to an Account.",
+          "message": "Links im Zusammenhang mit einem Konto."
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpIYXNoRGF0YVR5cGU6KmFjY291bnRfbGlua3MjY2NhZTg2YTgwMjliMWRlNWYxNzkyMjg3ODFjODkwNDg3MGVkMzE3ZjlmZGFlNWUzZGU2NWIxZDBhNWZhMjgyYzpvcHRpb246YldGcGJtSnlZVzVqYUE6ZmllbGQ6ZEdGeVoyVjA6ZmllbGQ6Y21Wd2IzTnBkRzl5ZVE6ZmllbGQ6Y0hKdmFtVmpkQTpmaWVsZDpiM2R1WlhJOmZpZWxkOmJHbHVhM00.field.YXZhdGFy.display_name": {
+          "source": "Avatar",
+          "message": "Avatar"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpIYXNoRGF0YVR5cGU6KmFjY291bnRfbGlua3MjY2NhZTg2YTgwMjliMWRlNWYxNzkyMjg3ODFjODkwNDg3MGVkMzE3ZjlmZGFlNWUzZGU2NWIxZDBhNWZhMjgyYzpvcHRpb246YldGcGJtSnlZVzVqYUE6ZmllbGQ6ZEdGeVoyVjA6ZmllbGQ6Y21Wd2IzTnBkRzl5ZVE6ZmllbGQ6Y0hKdmFtVmpkQTpmaWVsZDpiM2R1WlhJOmZpZWxkOmJHbHVhM00.field.YXZhdGFy.short_desc": {
+          "source": "A link to a resource related to this object",
+          "message": "Ein Link zu einer Ressource, die mit diesem Objekt verbunden ist"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpIYXNoRGF0YVR5cGU6KmFjY291bnRfbGlua3MjY2NhZTg2YTgwMjliMWRlNWYxNzkyMjg3ODFjODkwNDg3MGVkMzE3ZjlmZGFlNWUzZGU2NWIxZDBhNWZhMjgyYzpvcHRpb246YldGcGJtSnlZVzVqYUE6ZmllbGQ6ZEdGeVoyVjA6ZmllbGQ6Y21Wd2IzTnBkRzl5ZVE6ZmllbGQ6Y0hKdmFtVmpkQTpmaWVsZDpiM2R1WlhJOmZpZWxkOmJHbHVhM00.field.YXZhdGFy.desc": {
+          "source": "A link to a resource related to this object.",
+          "message": "Ein Link zu einer Ressource, die mit diesem Objekt verbunden ist."
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpIYXNoRGF0YVR5cGU6KmxpbmsjMjNlOGE5ZTFkYjYwNGI0ZDVhZmJmNjg5YjUxODFiYzliZWFjYzY4ZDI4ZWI4OTVlMGM1OTg1MTE0MDEwZjg5YjpvcHRpb246YldGcGJtSnlZVzVqYUE6ZmllbGQ6ZEdGeVoyVjA6ZmllbGQ6Y21Wd2IzTnBkRzl5ZVE6ZmllbGQ6Y0hKdmFtVmpkQTpmaWVsZDpiM2R1WlhJOmZpZWxkOmJHbHVhM006ZmllbGQ6WVhaaGRHRnk.field.aHJlZg.display_name": {
+          "source": "Href",
+          "message": "Href"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpIYXNoRGF0YVR5cGU6KmxpbmsjMjNlOGE5ZTFkYjYwNGI0ZDVhZmJmNjg5YjUxODFiYzliZWFjYzY4ZDI4ZWI4OTVlMGM1OTg1MTE0MDEwZjg5YjpvcHRpb246YldGcGJtSnlZVzVqYUE6ZmllbGQ6ZEdGeVoyVjA6ZmllbGQ6Y21Wd2IzTnBkRzl5ZVE6ZmllbGQ6Y0hKdmFtVmpkQTpmaWVsZDpiM2R1WlhJOmZpZWxkOmJHbHVhM006ZmllbGQ6WVhaaGRHRnk.field.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Name"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpIYXNoRGF0YVR5cGU6KmFjY291bnRfbGlua3MjY2NhZTg2YTgwMjliMWRlNWYxNzkyMjg3ODFjODkwNDg3MGVkMzE3ZjlmZGFlNWUzZGU2NWIxZDBhNWZhMjgyYzpvcHRpb246YldGcGJtSnlZVzVqYUE6ZmllbGQ6ZEdGeVoyVjA6ZmllbGQ6Y21Wd2IzTnBkRzl5ZVE6ZmllbGQ6Y0hKdmFtVmpkQTpmaWVsZDpiM2R1WlhJOmZpZWxkOmJHbHVhM00.field.aHRtbA.display_name": {
+          "source": "HTML",
+          "message": "HTML"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpIYXNoRGF0YVR5cGU6KmFjY291bnRfbGlua3MjY2NhZTg2YTgwMjliMWRlNWYxNzkyMjg3ODFjODkwNDg3MGVkMzE3ZjlmZGFlNWUzZGU2NWIxZDBhNWZhMjgyYzpvcHRpb246YldGcGJtSnlZVzVqYUE6ZmllbGQ6ZEdGeVoyVjA6ZmllbGQ6Y21Wd2IzTnBkRzl5ZVE6ZmllbGQ6Y0hKdmFtVmpkQTpmaWVsZDpiM2R1WlhJOmZpZWxkOmJHbHVhM00.field.aHRtbA.short_desc": {
+          "source": "A link to a resource related to this object",
+          "message": "Ein Link zu einer Ressource, die mit diesem Objekt verbunden ist"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpIYXNoRGF0YVR5cGU6KmFjY291bnRfbGlua3MjY2NhZTg2YTgwMjliMWRlNWYxNzkyMjg3ODFjODkwNDg3MGVkMzE3ZjlmZGFlNWUzZGU2NWIxZDBhNWZhMjgyYzpvcHRpb246YldGcGJtSnlZVzVqYUE6ZmllbGQ6ZEdGeVoyVjA6ZmllbGQ6Y21Wd2IzTnBkRzl5ZVE6ZmllbGQ6Y0hKdmFtVmpkQTpmaWVsZDpiM2R1WlhJOmZpZWxkOmJHbHVhM00.field.aHRtbA.desc": {
+          "source": "A link to a resource related to this object.",
+          "message": "Ein Link zu einer Ressource, die mit diesem Objekt verbunden ist."
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpIYXNoRGF0YVR5cGU6KmFjY291bnRfbGlua3MjY2NhZTg2YTgwMjliMWRlNWYxNzkyMjg3ODFjODkwNDg3MGVkMzE3ZjlmZGFlNWUzZGU2NWIxZDBhNWZhMjgyYzpvcHRpb246YldGcGJtSnlZVzVqYUE6ZmllbGQ6ZEdGeVoyVjA6ZmllbGQ6Y21Wd2IzTnBkRzl5ZVE6ZmllbGQ6Y0hKdmFtVmpkQTpmaWVsZDpiM2R1WlhJOmZpZWxkOmJHbHVhM00.field.bWVtYmVycw.display_name": {
+          "source": "Members",
+          "message": "Mitglieder"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpIYXNoRGF0YVR5cGU6KmFjY291bnRfbGlua3MjY2NhZTg2YTgwMjliMWRlNWYxNzkyMjg3ODFjODkwNDg3MGVkMzE3ZjlmZGFlNWUzZGU2NWIxZDBhNWZhMjgyYzpvcHRpb246YldGcGJtSnlZVzVqYUE6ZmllbGQ6ZEdGeVoyVjA6ZmllbGQ6Y21Wd2IzTnBkRzl5ZVE6ZmllbGQ6Y0hKdmFtVmpkQTpmaWVsZDpiM2R1WlhJOmZpZWxkOmJHbHVhM00.field.bWVtYmVycw.short_desc": {
+          "source": "A link to a resource related to this object",
+          "message": "Ein Link zu einer Ressource, die mit diesem Objekt verbunden ist"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpIYXNoRGF0YVR5cGU6KmFjY291bnRfbGlua3MjY2NhZTg2YTgwMjliMWRlNWYxNzkyMjg3ODFjODkwNDg3MGVkMzE3ZjlmZGFlNWUzZGU2NWIxZDBhNWZhMjgyYzpvcHRpb246YldGcGJtSnlZVzVqYUE6ZmllbGQ6ZEdGeVoyVjA6ZmllbGQ6Y21Wd2IzTnBkRzl5ZVE6ZmllbGQ6Y0hKdmFtVmpkQTpmaWVsZDpiM2R1WlhJOmZpZWxkOmJHbHVhM00.field.bWVtYmVycw.desc": {
+          "source": "A link to a resource related to this object.",
+          "message": "Ein Link zu einer Ressource, die mit diesem Objekt verbunden ist."
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpIYXNoRGF0YVR5cGU6KmFjY291bnRfbGlua3MjY2NhZTg2YTgwMjliMWRlNWYxNzkyMjg3ODFjODkwNDg3MGVkMzE3ZjlmZGFlNWUzZGU2NWIxZDBhNWZhMjgyYzpvcHRpb246YldGcGJtSnlZVzVqYUE6ZmllbGQ6ZEdGeVoyVjA6ZmllbGQ6Y21Wd2IzTnBkRzl5ZVE6ZmllbGQ6Y0hKdmFtVmpkQTpmaWVsZDpiM2R1WlhJOmZpZWxkOmJHbHVhM00.field.cHJvamVjdHM.display_name": {
+          "source": "Projects",
+          "message": "Projekte"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpIYXNoRGF0YVR5cGU6KmFjY291bnRfbGlua3MjY2NhZTg2YTgwMjliMWRlNWYxNzkyMjg3ODFjODkwNDg3MGVkMzE3ZjlmZGFlNWUzZGU2NWIxZDBhNWZhMjgyYzpvcHRpb246YldGcGJtSnlZVzVqYUE6ZmllbGQ6ZEdGeVoyVjA6ZmllbGQ6Y21Wd2IzTnBkRzl5ZVE6ZmllbGQ6Y0hKdmFtVmpkQTpmaWVsZDpiM2R1WlhJOmZpZWxkOmJHbHVhM00.field.cHJvamVjdHM.short_desc": {
+          "source": "A link to a resource related to this object",
+          "message": "Ein Link zu einer Ressource, die mit diesem Objekt verbunden ist"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpIYXNoRGF0YVR5cGU6KmFjY291bnRfbGlua3MjY2NhZTg2YTgwMjliMWRlNWYxNzkyMjg3ODFjODkwNDg3MGVkMzE3ZjlmZGFlNWUzZGU2NWIxZDBhNWZhMjgyYzpvcHRpb246YldGcGJtSnlZVzVqYUE6ZmllbGQ6ZEdGeVoyVjA6ZmllbGQ6Y21Wd2IzTnBkRzl5ZVE6ZmllbGQ6Y0hKdmFtVmpkQTpmaWVsZDpiM2R1WlhJOmZpZWxkOmJHbHVhM00.field.cHJvamVjdHM.desc": {
+          "source": "A link to a resource related to this object.",
+          "message": "Ein Link zu einer Ressource, die mit diesem Objekt verbunden ist."
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpIYXNoRGF0YVR5cGU6KmFjY291bnRfbGlua3MjY2NhZTg2YTgwMjliMWRlNWYxNzkyMjg3ODFjODkwNDg3MGVkMzE3ZjlmZGFlNWUzZGU2NWIxZDBhNWZhMjgyYzpvcHRpb246YldGcGJtSnlZVzVqYUE6ZmllbGQ6ZEdGeVoyVjA6ZmllbGQ6Y21Wd2IzTnBkRzl5ZVE6ZmllbGQ6Y0hKdmFtVmpkQTpmaWVsZDpiM2R1WlhJOmZpZWxkOmJHbHVhM00.field.cmVwb3NpdG9yaWVz.display_name": {
+          "source": "Repositories",
+          "message": "Repositorys"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpIYXNoRGF0YVR5cGU6KmFjY291bnRfbGlua3MjY2NhZTg2YTgwMjliMWRlNWYxNzkyMjg3ODFjODkwNDg3MGVkMzE3ZjlmZGFlNWUzZGU2NWIxZDBhNWZhMjgyYzpvcHRpb246YldGcGJtSnlZVzVqYUE6ZmllbGQ6ZEdGeVoyVjA6ZmllbGQ6Y21Wd2IzTnBkRzl5ZVE6ZmllbGQ6Y0hKdmFtVmpkQTpmaWVsZDpiM2R1WlhJOmZpZWxkOmJHbHVhM00.field.cmVwb3NpdG9yaWVz.short_desc": {
+          "source": "A link to a resource related to this object",
+          "message": "Ein Link zu einer Ressource, die mit diesem Objekt verbunden ist"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpIYXNoRGF0YVR5cGU6KmFjY291bnRfbGlua3MjY2NhZTg2YTgwMjliMWRlNWYxNzkyMjg3ODFjODkwNDg3MGVkMzE3ZjlmZGFlNWUzZGU2NWIxZDBhNWZhMjgyYzpvcHRpb246YldGcGJtSnlZVzVqYUE6ZmllbGQ6ZEdGeVoyVjA6ZmllbGQ6Y21Wd2IzTnBkRzl5ZVE6ZmllbGQ6Y0hKdmFtVmpkQTpmaWVsZDpiM2R1WlhJOmZpZWxkOmJHbHVhM00.field.cmVwb3NpdG9yaWVz.desc": {
+          "source": "A link to a resource related to this object.",
+          "message": "Ein Link zu einer Ressource, die mit diesem Objekt verbunden ist."
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpIYXNoRGF0YVR5cGU6KmFjY291bnRfbGlua3MjY2NhZTg2YTgwMjliMWRlNWYxNzkyMjg3ODFjODkwNDg3MGVkMzE3ZjlmZGFlNWUzZGU2NWIxZDBhNWZhMjgyYzpvcHRpb246YldGcGJtSnlZVzVqYUE6ZmllbGQ6ZEdGeVoyVjA6ZmllbGQ6Y21Wd2IzTnBkRzl5ZVE6ZmllbGQ6Y0hKdmFtVmpkQTpmaWVsZDpiM2R1WlhJOmZpZWxkOmJHbHVhM00.field.c2VsZg.display_name": {
+          "source": "Self",
+          "message": "Selbst"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpIYXNoRGF0YVR5cGU6KmFjY291bnRfbGlua3MjY2NhZTg2YTgwMjliMWRlNWYxNzkyMjg3ODFjODkwNDg3MGVkMzE3ZjlmZGFlNWUzZGU2NWIxZDBhNWZhMjgyYzpvcHRpb246YldGcGJtSnlZVzVqYUE6ZmllbGQ6ZEdGeVoyVjA6ZmllbGQ6Y21Wd2IzTnBkRzl5ZVE6ZmllbGQ6Y0hKdmFtVmpkQTpmaWVsZDpiM2R1WlhJOmZpZWxkOmJHbHVhM00.field.c2VsZg.short_desc": {
+          "source": "A link to a resource related to this object",
+          "message": "Ein Link zu einer Ressource, die mit diesem Objekt verbunden ist"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpIYXNoRGF0YVR5cGU6KmFjY291bnRfbGlua3MjY2NhZTg2YTgwMjliMWRlNWYxNzkyMjg3ODFjODkwNDg3MGVkMzE3ZjlmZGFlNWUzZGU2NWIxZDBhNWZhMjgyYzpvcHRpb246YldGcGJtSnlZVzVqYUE6ZmllbGQ6ZEdGeVoyVjA6ZmllbGQ6Y21Wd2IzTnBkRzl5ZVE6ZmllbGQ6Y0hKdmFtVmpkQTpmaWVsZDpiM2R1WlhJOmZpZWxkOmJHbHVhM00.field.c2VsZg.desc": {
+          "source": "A link to a resource related to this object.",
+          "message": "Ein Link zu einer Ressource, die mit diesem Objekt verbunden ist."
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqdGVhbSMxNTI0YTY3MjFjNGU2YjkwMjI0OWExZWVkNDJkMDk0NDEyMmIwMTJkZDY2ZDEwNTVjZjVjZTU0NWJhZjA4ZGE5Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUTpmaWVsZDpjSEp2YW1WamRBOmZpZWxkOmIzZHVaWEk.field.dHlwZQ.display_name": {
           "source": "Type",
           "message": "Typ"
         },
-        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcmVwb3NpdG9yeSNmZjNlZTM3ZmFkMmM1MDMzYWM0ZDA0NDA4OWQ2ZTFlMzU5ZWVkODNmMDg3ZjZlZmI5NTI0NzFlYmE3NGExYjU4Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUQ.field.dXVpZA.display_name": {
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqdGVhbSMxNTI0YTY3MjFjNGU2YjkwMjI0OWExZWVkNDJkMDk0NDEyMmIwMTJkZDY2ZDEwNTVjZjVjZTU0NWJhZjA4ZGE5Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUTpmaWVsZDpjSEp2YW1WamRBOmZpZWxkOmIzZHVaWEk.field.dXVpZA.display_name": {
           "source": "UUID",
           "message": "UUID"
         },
-        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcmVwb3NpdG9yeSNmZjNlZTM3ZmFkMmM1MDMzYWM0ZDA0NDA4OWQ2ZTFlMzU5ZWVkODNmMDg3ZjZlZmI5NTI0NzFlYmE3NGExYjU4Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUQ.field.dXVpZA.short_desc": {
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcHJvamVjdCM3MmRiMTdhOTBmNTBjZmE3NGE0YjM1ZDZkZTEyN2NhMDQyYTc3YWFlMjZlNjMzMzdhZjA5NjA3Y2IzNmI5MjEwOm9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUTpmaWVsZDpjSEp2YW1WamRB.field.dHlwZQ.display_name": {
+          "source": "Type",
+          "message": "Typ"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcHJvamVjdCM3MmRiMTdhOTBmNTBjZmE3NGE0YjM1ZDZkZTEyN2NhMDQyYTc3YWFlMjZlNjMzMzdhZjA5NjA3Y2IzNmI5MjEwOm9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUTpmaWVsZDpjSEp2YW1WamRB.field.dXBkYXRlZF9vbg.display_name": {
+          "source": "Updated On",
+          "message": "Aktualisiert am"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcHJvamVjdCM3MmRiMTdhOTBmNTBjZmE3NGE0YjM1ZDZkZTEyN2NhMDQyYTc3YWFlMjZlNjMzMzdhZjA5NjA3Y2IzNmI5MjEwOm9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUTpmaWVsZDpjSEp2YW1WamRB.field.dXVpZA.display_name": {
+          "source": "UUID",
+          "message": "UUID"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcHJvamVjdCM3MmRiMTdhOTBmNTBjZmE3NGE0YjM1ZDZkZTEyN2NhMDQyYTc3YWFlMjZlNjMzMzdhZjA5NjA3Y2IzNmI5MjEwOm9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUTpmaWVsZDpjSEp2YW1WamRB.field.dXVpZA.short_desc": {
+          "source": "The project's immutable id",
+          "message": "Die projektunveränderliche ID"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcHJvamVjdCM3MmRiMTdhOTBmNTBjZmE3NGE0YjM1ZDZkZTEyN2NhMDQyYTc3YWFlMjZlNjMzMzdhZjA5NjA3Y2IzNmI5MjEwOm9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUTpmaWVsZDpjSEp2YW1WamRB.field.dXVpZA.desc": {
+          "source": "The project's immutable id.",
+          "message": "Die projektunveränderliche ID."
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcmVwb3NpdG9yeSNmNjc5ZjY3OTViZTkzYWZjNDkyOTIwNzE1OTIxZDY2NzRlNjY2OGYwZmU1YzhkYTAxMjIzZWRkMGY3MWYzMDM1Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUQ.field.c2Nt.display_name": {
+          "source": "SCM",
+          "message": "SCM"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcmVwb3NpdG9yeSNmNjc5ZjY3OTViZTkzYWZjNDkyOTIwNzE1OTIxZDY2NzRlNjY2OGYwZmU1YzhkYTAxMjIzZWRkMGY3MWYzMDM1Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUQ.field.c2Nt.allowed-value.c3RyaW5nOmdpdA.display_name": {
+          "source": "git",
+          "message": "git"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcmVwb3NpdG9yeSNmNjc5ZjY3OTViZTkzYWZjNDkyOTIwNzE1OTIxZDY2NzRlNjY2OGYwZmU1YzhkYTAxMjIzZWRkMGY3MWYzMDM1Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUQ.field.c2l6ZQ.display_name": {
+          "source": "Size",
+          "message": "Größe"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcmVwb3NpdG9yeSNmNjc5ZjY3OTViZTkzYWZjNDkyOTIwNzE1OTIxZDY2NzRlNjY2OGYwZmU1YzhkYTAxMjIzZWRkMGY3MWYzMDM1Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUQ.field.dHlwZQ.display_name": {
+          "source": "Type",
+          "message": "Typ"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcmVwb3NpdG9yeSNmNjc5ZjY3OTViZTkzYWZjNDkyOTIwNzE1OTIxZDY2NzRlNjY2OGYwZmU1YzhkYTAxMjIzZWRkMGY3MWYzMDM1Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUQ.field.dXBkYXRlZF9vbg.display_name": {
+          "source": "Updated On",
+          "message": "Aktualisiert am"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcmVwb3NpdG9yeSNmNjc5ZjY3OTViZTkzYWZjNDkyOTIwNzE1OTIxZDY2NzRlNjY2OGYwZmU1YzhkYTAxMjIzZWRkMGY3MWYzMDM1Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUQ.field.dXVpZA.display_name": {
+          "source": "UUID",
+          "message": "UUID"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcmVwb3NpdG9yeSNmNjc5ZjY3OTViZTkzYWZjNDkyOTIwNzE1OTIxZDY2NzRlNjY2OGYwZmU1YzhkYTAxMjIzZWRkMGY3MWYzMDM1Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUQ.field.dXVpZA.short_desc": {
           "source": "The repository's immutable id",
           "message": "Die unveränderliche ID des Repositorys"
         },
-        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcmVwb3NpdG9yeSNmZjNlZTM3ZmFkMmM1MDMzYWM0ZDA0NDA4OWQ2ZTFlMzU5ZWVkODNmMDg3ZjZlZmI5NTI0NzFlYmE3NGExYjU4Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUQ.field.dXVpZA.desc": {
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcmVwb3NpdG9yeSNmNjc5ZjY3OTViZTkzYWZjNDkyOTIwNzE1OTIxZDY2NzRlNjY2OGYwZmU1YzhkYTAxMjIzZWRkMGY3MWYzMDM1Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUQ.field.dXVpZA.desc": {
           "source": "The repository's immutable id. This can be used as a substitute for the slug segment in URLs. Doing this guarantees your URLs will survive renaming of the repository by its owner, or even transfer of the repository to a different user.",
           "message": "Die unveränderliche ID des Repositorys. Diese kann als Ersatz für das Slug-Element in URLs verwendet werden. Dadurch wird sichergestellt, dass Ihre URLs auch bei Umbenennung des Repositorys durch den Besitzer oder sogar bei Übertragung auf einen anderen Benutzer erhalten bleiben."
         },

@@ -1495,23 +1495,71 @@
           "source": "Repository",
           "message": "Repozitár"
         },
-        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcmVwb3NpdG9yeSNmZjNlZTM3ZmFkMmM1MDMzYWM0ZDA0NDA4OWQ2ZTFlMzU5ZWVkODNmMDg3ZjZlZmI5NTI0NzFlYmE3NGExYjU4Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUQ.field.ZnVsbF9uYW1l.display_name": {
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcmVwb3NpdG9yeSNmNjc5ZjY3OTViZTkzYWZjNDkyOTIwNzE1OTIxZDY2NzRlNjY2OGYwZmU1YzhkYTAxMjIzZWRkMGY3MWYzMDM1Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUQ.field.Y3JlYXRlZF9vbg.display_name": {
+          "source": "Created On",
+          "message": "Vytvorené dňa"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcmVwb3NpdG9yeSNmNjc5ZjY3OTViZTkzYWZjNDkyOTIwNzE1OTIxZDY2NzRlNjY2OGYwZmU1YzhkYTAxMjIzZWRkMGY3MWYzMDM1Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUQ.field.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Popis"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcmVwb3NpdG9yeSNmNjc5ZjY3OTViZTkzYWZjNDkyOTIwNzE1OTIxZDY2NzRlNjY2OGYwZmU1YzhkYTAxMjIzZWRkMGY3MWYzMDM1Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUQ.field.Zm9ya19wb2xpY3k.display_name": {
+          "source": "Fork Policy",
+          "message": "Pravidlá forkovania"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcmVwb3NpdG9yeSNmNjc5ZjY3OTViZTkzYWZjNDkyOTIwNzE1OTIxZDY2NzRlNjY2OGYwZmU1YzhkYTAxMjIzZWRkMGY3MWYzMDM1Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUQ.field.Zm9ya19wb2xpY3k.desc": {
+          "source": "\nControls the rules for forking this repository.\n\n* **allow_forks**: unrestricted forking\n* **no_public_forks**: restrict forking to private forks (forks cannot\n  be made public later)\n* **no_forks**: deny all forking\n",
+          "message": "\nRiadi pravidlá pre forkovanie tohto repozitára.\n\n* **allow_forks**: neobmedzené forkovanie\n* **no_public_forks**: obmedzenie forkovania iba na súkromné forky (forky nemožno\n  neskôr zverejniť)\n* **no_forks**: zakázanie akéhokoľvek forkovania\n"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcmVwb3NpdG9yeSNmNjc5ZjY3OTViZTkzYWZjNDkyOTIwNzE1OTIxZDY2NzRlNjY2OGYwZmU1YzhkYTAxMjIzZWRkMGY3MWYzMDM1Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUQ.field.Zm9ya19wb2xpY3k.allowed-value.c3RyaW5nOmFsbG93X2Zvcmtz.display_name": {
+          "source": "allow_forks",
+          "message": "allow_forks"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcmVwb3NpdG9yeSNmNjc5ZjY3OTViZTkzYWZjNDkyOTIwNzE1OTIxZDY2NzRlNjY2OGYwZmU1YzhkYTAxMjIzZWRkMGY3MWYzMDM1Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUQ.field.Zm9ya19wb2xpY3k.allowed-value.c3RyaW5nOm5vX3B1YmxpY19mb3Jrcw.display_name": {
+          "source": "no_public_forks",
+          "message": "no_public_forks"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcmVwb3NpdG9yeSNmNjc5ZjY3OTViZTkzYWZjNDkyOTIwNzE1OTIxZDY2NzRlNjY2OGYwZmU1YzhkYTAxMjIzZWRkMGY3MWYzMDM1Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUQ.field.Zm9ya19wb2xpY3k.allowed-value.c3RyaW5nOm5vX2Zvcmtz.display_name": {
+          "source": "no_forks",
+          "message": "no_forks"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcmVwb3NpdG9yeSNmNjc5ZjY3OTViZTkzYWZjNDkyOTIwNzE1OTIxZDY2NzRlNjY2OGYwZmU1YzhkYTAxMjIzZWRkMGY3MWYzMDM1Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUQ.field.ZnVsbF9uYW1l.display_name": {
           "source": "Full Name",
           "message": "Celé meno"
         },
-        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcmVwb3NpdG9yeSNmZjNlZTM3ZmFkMmM1MDMzYWM0ZDA0NDA4OWQ2ZTFlMzU5ZWVkODNmMDg3ZjZlZmI5NTI0NzFlYmE3NGExYjU4Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUQ.field.ZnVsbF9uYW1l.short_desc": {
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcmVwb3NpdG9yeSNmNjc5ZjY3OTViZTkzYWZjNDkyOTIwNzE1OTIxZDY2NzRlNjY2OGYwZmU1YzhkYTAxMjIzZWRkMGY3MWYzMDM1Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUQ.field.ZnVsbF9uYW1l.short_desc": {
           "source": "The concatenation of the repository owner's username and the slugified name,…",
           "message": "Kombinácia používateľského mena vlastníka repozitára a zlomenej názov,…"
         },
-        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcmVwb3NpdG9yeSNmZjNlZTM3ZmFkMmM1MDMzYWM0ZDA0NDA4OWQ2ZTFlMzU5ZWVkODNmMDg3ZjZlZmI5NTI0NzFlYmE3NGExYjU4Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUQ.field.ZnVsbF9uYW1l.desc": {
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcmVwb3NpdG9yeSNmNjc5ZjY3OTViZTkzYWZjNDkyOTIwNzE1OTIxZDY2NzRlNjY2OGYwZmU1YzhkYTAxMjIzZWRkMGY3MWYzMDM1Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUQ.field.ZnVsbF9uYW1l.desc": {
           "source": "The concatenation of the repository owner's username and the slugified name, e.g. \"evzijst/interruptingcow\". This is the same string used in Bitbucket URLs.",
           "message": "Kombinácia používateľského mena vlastníka repozitára a zlomenej názov, napr. \"evzijst/interruptingcow\". Toto je rovnaký reťazec používaný v URL Bitbucket."
         },
-        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcmVwb3NpdG9yeSNmZjNlZTM3ZmFkMmM1MDMzYWM0ZDA0NDA4OWQ2ZTFlMzU5ZWVkODNmMDg3ZjZlZmI5NTI0NzFlYmE3NGExYjU4Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUQ.field.aXNfcHJpdmF0ZQ.display_name": {
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcmVwb3NpdG9yeSNmNjc5ZjY3OTViZTkzYWZjNDkyOTIwNzE1OTIxZDY2NzRlNjY2OGYwZmU1YzhkYTAxMjIzZWRkMGY3MWYzMDM1Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUQ.field.aGFzX2lzc3Vlcw.display_name": {
+          "source": "Has Issues",
+          "message": "Má issues"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcmVwb3NpdG9yeSNmNjc5ZjY3OTViZTkzYWZjNDkyOTIwNzE1OTIxZDY2NzRlNjY2OGYwZmU1YzhkYTAxMjIzZWRkMGY3MWYzMDM1Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUQ.field.aGFzX2lzc3Vlcw.desc": {
+          "source": "\nThe issue tracker for this repository is enabled. Issue Tracker\nfeatures are not supported for repositories in workspaces\nadministered through admin.atlassian.com.\n",
+          "message": "\nSledovanie issue pre tento repozitár je povolené. Funkcie nástroja Issue Tracker\nnie sú podporované pre repozitáre v pracovných priestoroch\nspravovaných cez admin.atlassian.com.\n"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcmVwb3NpdG9yeSNmNjc5ZjY3OTViZTkzYWZjNDkyOTIwNzE1OTIxZDY2NzRlNjY2OGYwZmU1YzhkYTAxMjIzZWRkMGY3MWYzMDM1Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUQ.field.aGFzX3dpa2k.display_name": {
+          "source": "Has Wiki",
+          "message": "Má wiki"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcmVwb3NpdG9yeSNmNjc5ZjY3OTViZTkzYWZjNDkyOTIwNzE1OTIxZDY2NzRlNjY2OGYwZmU1YzhkYTAxMjIzZWRkMGY3MWYzMDM1Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUQ.field.aGFzX3dpa2k.desc": {
+          "source": "\nThe wiki for this repository is enabled. Wiki\nfeatures are not supported for repositories in workspaces\nadministered through admin.atlassian.com.\n",
+          "message": "\nWiki pre tento repozitár je povolená. Funkcie Wiki\nnie sú podporované pre repozitáre v pracovných priestoroch\nspravovaných cez admin.atlassian.com.\n"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcmVwb3NpdG9yeSNmNjc5ZjY3OTViZTkzYWZjNDkyOTIwNzE1OTIxZDY2NzRlNjY2OGYwZmU1YzhkYTAxMjIzZWRkMGY3MWYzMDM1Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUQ.field.aXNfcHJpdmF0ZQ.display_name": {
           "source": "Is Private",
           "message": "Je súkromný"
         },
-        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcmVwb3NpdG9yeSNmZjNlZTM3ZmFkMmM1MDMzYWM0ZDA0NDA4OWQ2ZTFlMzU5ZWVkODNmMDg3ZjZlZmI5NTI0NzFlYmE3NGExYjU4Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUQ.field.bGlua3M.display_name": {
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcmVwb3NpdG9yeSNmNjc5ZjY3OTViZTkzYWZjNDkyOTIwNzE1OTIxZDY2NzRlNjY2OGYwZmU1YzhkYTAxMjIzZWRkMGY3MWYzMDM1Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUQ.field.bGFuZ3VhZ2U.display_name": {
+          "source": "Language",
+          "message": "Jazyk"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcmVwb3NpdG9yeSNmNjc5ZjY3OTViZTkzYWZjNDkyOTIwNzE1OTIxZDY2NzRlNjY2OGYwZmU1YzhkYTAxMjIzZWRkMGY3MWYzMDM1Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUQ.field.bGlua3M.display_name": {
           "source": "Links",
           "message": "Odkazy"
         },
@@ -1683,19 +1731,263 @@
           "source": "Name",
           "message": "Názov"
         },
-        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcmVwb3NpdG9yeSNmZjNlZTM3ZmFkMmM1MDMzYWM0ZDA0NDA4OWQ2ZTFlMzU5ZWVkODNmMDg3ZjZlZmI5NTI0NzFlYmE3NGExYjU4Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUQ.field.dHlwZQ.display_name": {
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcmVwb3NpdG9yeSNmNjc5ZjY3OTViZTkzYWZjNDkyOTIwNzE1OTIxZDY2NzRlNjY2OGYwZmU1YzhkYTAxMjIzZWRkMGY3MWYzMDM1Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUQ.field.bWFpbmJyYW5jaA.display_name": {
+          "source": "Mainbranch",
+          "message": "Hlavná vetva"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcmVwb3NpdG9yeSNmNjc5ZjY3OTViZTkzYWZjNDkyOTIwNzE1OTIxZDY2NzRlNjY2OGYwZmU1YzhkYTAxMjIzZWRkMGY3MWYzMDM1Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUQ.field.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Názov"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcmVwb3NpdG9yeSNmNjc5ZjY3OTViZTkzYWZjNDkyOTIwNzE1OTIxZDY2NzRlNjY2OGYwZmU1YzhkYTAxMjIzZWRkMGY3MWYzMDM1Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUQ.field.b3duZXI.display_name": {
+          "source": "Owner",
+          "message": "Vlastník"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcmVwb3NpdG9yeSNmNjc5ZjY3OTViZTkzYWZjNDkyOTIwNzE1OTIxZDY2NzRlNjY2OGYwZmU1YzhkYTAxMjIzZWRkMGY3MWYzMDM1Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUQ.field.cGFyZW50.display_name": {
+          "source": "Parent",
+          "message": "Rodič"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcmVwb3NpdG9yeSNmNjc5ZjY3OTViZTkzYWZjNDkyOTIwNzE1OTIxZDY2NzRlNjY2OGYwZmU1YzhkYTAxMjIzZWRkMGY3MWYzMDM1Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUQ.field.cHJvamVjdA.display_name": {
+          "source": "Project",
+          "message": "Projekt"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcHJvamVjdCM3MmRiMTdhOTBmNTBjZmE3NGE0YjM1ZDZkZTEyN2NhMDQyYTc3YWFlMjZlNjMzMzdhZjA5NjA3Y2IzNmI5MjEwOm9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUTpmaWVsZDpjSEp2YW1WamRB.field.Y3JlYXRlZF9vbg.display_name": {
+          "source": "Created On",
+          "message": "Vytvorené dňa"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcHJvamVjdCM3MmRiMTdhOTBmNTBjZmE3NGE0YjM1ZDZkZTEyN2NhMDQyYTc3YWFlMjZlNjMzMzdhZjA5NjA3Y2IzNmI5MjEwOm9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUTpmaWVsZDpjSEp2YW1WamRB.field.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Popis"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcHJvamVjdCM3MmRiMTdhOTBmNTBjZmE3NGE0YjM1ZDZkZTEyN2NhMDQyYTc3YWFlMjZlNjMzMzdhZjA5NjA3Y2IzNmI5MjEwOm9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUTpmaWVsZDpjSEp2YW1WamRB.field.aGFzX3B1YmxpY2x5X3Zpc2libGVfcmVwb3M.display_name": {
+          "source": "Has Publicly Visible Repos",
+          "message": "Má verejne viditeľné úložiská"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcHJvamVjdCM3MmRiMTdhOTBmNTBjZmE3NGE0YjM1ZDZkZTEyN2NhMDQyYTc3YWFlMjZlNjMzMzdhZjA5NjA3Y2IzNmI5MjEwOm9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUTpmaWVsZDpjSEp2YW1WamRB.field.aGFzX3B1YmxpY2x5X3Zpc2libGVfcmVwb3M.desc": {
+          "source": "\nIndicates whether the project contains publicly visible repositories.\nNote that private projects cannot contain public repositories.",
+          "message": "\nUkazuje, či projekt obsahuje verejne prístupné úložiská.\nUpozornenie: súkromné projekty nemôžu obsahovať verejné úložiská."
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcHJvamVjdCM3MmRiMTdhOTBmNTBjZmE3NGE0YjM1ZDZkZTEyN2NhMDQyYTc3YWFlMjZlNjMzMzdhZjA5NjA3Y2IzNmI5MjEwOm9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUTpmaWVsZDpjSEp2YW1WamRB.field.aXNfcHJpdmF0ZQ.display_name": {
+          "source": "Is Private",
+          "message": "Je súkromný"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcHJvamVjdCM3MmRiMTdhOTBmNTBjZmE3NGE0YjM1ZDZkZTEyN2NhMDQyYTc3YWFlMjZlNjMzMzdhZjA5NjA3Y2IzNmI5MjEwOm9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUTpmaWVsZDpjSEp2YW1WamRB.field.aXNfcHJpdmF0ZQ.desc": {
+          "source": "\nIndicates whether the project is publicly accessible, or whether it is\nprivate to the team and consequently only visible to team members.\nNote that private projects cannot contain public repositories.",
+          "message": "\nUkazuje, či je projekt verejne prístupný, alebo či je\nsúkromný pre tím a preto viditeľný len pre členov tím. \nUpozornenie: súkromné projekty nemôžu obsahovať verejné úložiská."
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcHJvamVjdCM3MmRiMTdhOTBmNTBjZmE3NGE0YjM1ZDZkZTEyN2NhMDQyYTc3YWFlMjZlNjMzMzdhZjA5NjA3Y2IzNmI5MjEwOm9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUTpmaWVsZDpjSEp2YW1WamRB.field.a2V5.display_name": {
+          "source": "Key",
+          "message": "Kľúč"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcHJvamVjdCM3MmRiMTdhOTBmNTBjZmE3NGE0YjM1ZDZkZTEyN2NhMDQyYTc3YWFlMjZlNjMzMzdhZjA5NjA3Y2IzNmI5MjEwOm9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUTpmaWVsZDpjSEp2YW1WamRB.field.a2V5.short_desc": {
+          "source": "The project's key",
+          "message": "Kľúč projektu"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcHJvamVjdCM3MmRiMTdhOTBmNTBjZmE3NGE0YjM1ZDZkZTEyN2NhMDQyYTc3YWFlMjZlNjMzMzdhZjA5NjA3Y2IzNmI5MjEwOm9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUTpmaWVsZDpjSEp2YW1WamRB.field.a2V5.desc": {
+          "source": "The project's key.",
+          "message": "Kľúč projektu."
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcHJvamVjdCM3MmRiMTdhOTBmNTBjZmE3NGE0YjM1ZDZkZTEyN2NhMDQyYTc3YWFlMjZlNjMzMzdhZjA5NjA3Y2IzNmI5MjEwOm9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUTpmaWVsZDpjSEp2YW1WamRB.field.bGlua3M.display_name": {
+          "source": "Links",
+          "message": "Odkazy"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpIYXNoRGF0YVR5cGU6KmxpbmtzI2U2ZDdiMmJkNjRhMjg5YjNlYTIxYTFhNzY2OWFhNDUzYzhkOWNiMTY2Njg5YzM5NWY2MThjOTQ4M2M0MTlkYWE6b3B0aW9uOmJXRnBibUp5WVc1amFBOmZpZWxkOmRHRnlaMlYwOmZpZWxkOmNtVndiM05wZEc5eWVROmZpZWxkOmNISnZhbVZqZEE6ZmllbGQ6YkdsdWEzTQ.field.YXZhdGFy.display_name": {
+          "source": "Avatar",
+          "message": "Avatar"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpIYXNoRGF0YVR5cGU6KmxpbmtzI2U2ZDdiMmJkNjRhMjg5YjNlYTIxYTFhNzY2OWFhNDUzYzhkOWNiMTY2Njg5YzM5NWY2MThjOTQ4M2M0MTlkYWE6b3B0aW9uOmJXRnBibUp5WVc1amFBOmZpZWxkOmRHRnlaMlYwOmZpZWxkOmNtVndiM05wZEc5eWVROmZpZWxkOmNISnZhbVZqZEE6ZmllbGQ6YkdsdWEzTQ.field.YXZhdGFy.short_desc": {
+          "source": "A link to a resource related to this object",
+          "message": "Odkaz na zdroj súvisiaci s týmto objektom"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpIYXNoRGF0YVR5cGU6KmxpbmtzI2U2ZDdiMmJkNjRhMjg5YjNlYTIxYTFhNzY2OWFhNDUzYzhkOWNiMTY2Njg5YzM5NWY2MThjOTQ4M2M0MTlkYWE6b3B0aW9uOmJXRnBibUp5WVc1amFBOmZpZWxkOmRHRnlaMlYwOmZpZWxkOmNtVndiM05wZEc5eWVROmZpZWxkOmNISnZhbVZqZEE6ZmllbGQ6YkdsdWEzTQ.field.YXZhdGFy.desc": {
+          "source": "A link to a resource related to this object.",
+          "message": "Odkaz na zdroj súvisiaci s týmto objektom."
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpIYXNoRGF0YVR5cGU6KmxpbmtzI2U2ZDdiMmJkNjRhMjg5YjNlYTIxYTFhNzY2OWFhNDUzYzhkOWNiMTY2Njg5YzM5NWY2MThjOTQ4M2M0MTlkYWE6b3B0aW9uOmJXRnBibUp5WVc1amFBOmZpZWxkOmRHRnlaMlYwOmZpZWxkOmNtVndiM05wZEc5eWVROmZpZWxkOmNISnZhbVZqZEE6ZmllbGQ6YkdsdWEzTQ.field.aHRtbA.display_name": {
+          "source": "HTML",
+          "message": "HTML"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpIYXNoRGF0YVR5cGU6KmxpbmtzI2U2ZDdiMmJkNjRhMjg5YjNlYTIxYTFhNzY2OWFhNDUzYzhkOWNiMTY2Njg5YzM5NWY2MThjOTQ4M2M0MTlkYWE6b3B0aW9uOmJXRnBibUp5WVc1amFBOmZpZWxkOmRHRnlaMlYwOmZpZWxkOmNtVndiM05wZEc5eWVROmZpZWxkOmNISnZhbVZqZEE6ZmllbGQ6YkdsdWEzTQ.field.aHRtbA.short_desc": {
+          "source": "A link to a resource related to this object",
+          "message": "Odkaz na zdroj súvisiaci s týmto objektom"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpIYXNoRGF0YVR5cGU6KmxpbmtzI2U2ZDdiMmJkNjRhMjg5YjNlYTIxYTFhNzY2OWFhNDUzYzhkOWNiMTY2Njg5YzM5NWY2MThjOTQ4M2M0MTlkYWE6b3B0aW9uOmJXRnBibUp5WVc1amFBOmZpZWxkOmRHRnlaMlYwOmZpZWxkOmNtVndiM05wZEc5eWVROmZpZWxkOmNISnZhbVZqZEE6ZmllbGQ6YkdsdWEzTQ.field.aHRtbA.desc": {
+          "source": "A link to a resource related to this object.",
+          "message": "Odkaz na zdroj súvisiaci s týmto objektom."
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcHJvamVjdCM3MmRiMTdhOTBmNTBjZmE3NGE0YjM1ZDZkZTEyN2NhMDQyYTc3YWFlMjZlNjMzMzdhZjA5NjA3Y2IzNmI5MjEwOm9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUTpmaWVsZDpjSEp2YW1WamRB.field.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Názov"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcHJvamVjdCM3MmRiMTdhOTBmNTBjZmE3NGE0YjM1ZDZkZTEyN2NhMDQyYTc3YWFlMjZlNjMzMzdhZjA5NjA3Y2IzNmI5MjEwOm9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUTpmaWVsZDpjSEp2YW1WamRB.field.bmFtZQ.short_desc": {
+          "source": "The name of the project",
+          "message": "Názov projektu"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcHJvamVjdCM3MmRiMTdhOTBmNTBjZmE3NGE0YjM1ZDZkZTEyN2NhMDQyYTc3YWFlMjZlNjMzMzdhZjA5NjA3Y2IzNmI5MjEwOm9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUTpmaWVsZDpjSEp2YW1WamRB.field.bmFtZQ.desc": {
+          "source": "The name of the project.",
+          "message": "Názov projektu."
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcHJvamVjdCM3MmRiMTdhOTBmNTBjZmE3NGE0YjM1ZDZkZTEyN2NhMDQyYTc3YWFlMjZlNjMzMzdhZjA5NjA3Y2IzNmI5MjEwOm9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUTpmaWVsZDpjSEp2YW1WamRB.field.b3duZXI.display_name": {
+          "source": "Owner",
+          "message": "Vlastník"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqdGVhbSMxNTI0YTY3MjFjNGU2YjkwMjI0OWExZWVkNDJkMDk0NDEyMmIwMTJkZDY2ZDEwNTVjZjVjZTU0NWJhZjA4ZGE5Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUTpmaWVsZDpjSEp2YW1WamRBOmZpZWxkOmIzZHVaWEk.field.Y3JlYXRlZF9vbg.display_name": {
+          "source": "Created On",
+          "message": "Vytvorené dňa"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqdGVhbSMxNTI0YTY3MjFjNGU2YjkwMjI0OWExZWVkNDJkMDk0NDEyMmIwMTJkZDY2ZDEwNTVjZjVjZTU0NWJhZjA4ZGE5Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUTpmaWVsZDpjSEp2YW1WamRBOmZpZWxkOmIzZHVaWEk.field.ZGlzcGxheV9uYW1l.display_name": {
+          "source": "Display Name",
+          "message": "Názov zobrazenia"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqdGVhbSMxNTI0YTY3MjFjNGU2YjkwMjI0OWExZWVkNDJkMDk0NDEyMmIwMTJkZDY2ZDEwNTVjZjVjZTU0NWJhZjA4ZGE5Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUTpmaWVsZDpjSEp2YW1WamRBOmZpZWxkOmIzZHVaWEk.field.bGlua3M.display_name": {
+          "source": "Links",
+          "message": "Odkazy"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqdGVhbSMxNTI0YTY3MjFjNGU2YjkwMjI0OWExZWVkNDJkMDk0NDEyMmIwMTJkZDY2ZDEwNTVjZjVjZTU0NWJhZjA4ZGE5Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUTpmaWVsZDpjSEp2YW1WamRBOmZpZWxkOmIzZHVaWEk.field.bGlua3M.short_desc": {
+          "source": "Links related to an Account",
+          "message": "Odkazy súvisiace s účtom"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqdGVhbSMxNTI0YTY3MjFjNGU2YjkwMjI0OWExZWVkNDJkMDk0NDEyMmIwMTJkZDY2ZDEwNTVjZjVjZTU0NWJhZjA4ZGE5Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUTpmaWVsZDpjSEp2YW1WamRBOmZpZWxkOmIzZHVaWEk.field.bGlua3M.desc": {
+          "source": "Links related to an Account.",
+          "message": "Odkazy súvisiace s účtom."
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpIYXNoRGF0YVR5cGU6KmFjY291bnRfbGlua3MjY2NhZTg2YTgwMjliMWRlNWYxNzkyMjg3ODFjODkwNDg3MGVkMzE3ZjlmZGFlNWUzZGU2NWIxZDBhNWZhMjgyYzpvcHRpb246YldGcGJtSnlZVzVqYUE6ZmllbGQ6ZEdGeVoyVjA6ZmllbGQ6Y21Wd2IzTnBkRzl5ZVE6ZmllbGQ6Y0hKdmFtVmpkQTpmaWVsZDpiM2R1WlhJOmZpZWxkOmJHbHVhM00.field.YXZhdGFy.display_name": {
+          "source": "Avatar",
+          "message": "Avatar"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpIYXNoRGF0YVR5cGU6KmFjY291bnRfbGlua3MjY2NhZTg2YTgwMjliMWRlNWYxNzkyMjg3ODFjODkwNDg3MGVkMzE3ZjlmZGFlNWUzZGU2NWIxZDBhNWZhMjgyYzpvcHRpb246YldGcGJtSnlZVzVqYUE6ZmllbGQ6ZEdGeVoyVjA6ZmllbGQ6Y21Wd2IzTnBkRzl5ZVE6ZmllbGQ6Y0hKdmFtVmpkQTpmaWVsZDpiM2R1WlhJOmZpZWxkOmJHbHVhM00.field.YXZhdGFy.short_desc": {
+          "source": "A link to a resource related to this object",
+          "message": "Odkaz na zdroj súvisiaci s týmto objektom"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpIYXNoRGF0YVR5cGU6KmFjY291bnRfbGlua3MjY2NhZTg2YTgwMjliMWRlNWYxNzkyMjg3ODFjODkwNDg3MGVkMzE3ZjlmZGFlNWUzZGU2NWIxZDBhNWZhMjgyYzpvcHRpb246YldGcGJtSnlZVzVqYUE6ZmllbGQ6ZEdGeVoyVjA6ZmllbGQ6Y21Wd2IzTnBkRzl5ZVE6ZmllbGQ6Y0hKdmFtVmpkQTpmaWVsZDpiM2R1WlhJOmZpZWxkOmJHbHVhM00.field.YXZhdGFy.desc": {
+          "source": "A link to a resource related to this object.",
+          "message": "Odkaz na zdroj súvisiaci s týmto objektom."
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpIYXNoRGF0YVR5cGU6KmxpbmsjMjNlOGE5ZTFkYjYwNGI0ZDVhZmJmNjg5YjUxODFiYzliZWFjYzY4ZDI4ZWI4OTVlMGM1OTg1MTE0MDEwZjg5YjpvcHRpb246YldGcGJtSnlZVzVqYUE6ZmllbGQ6ZEdGeVoyVjA6ZmllbGQ6Y21Wd2IzTnBkRzl5ZVE6ZmllbGQ6Y0hKdmFtVmpkQTpmaWVsZDpiM2R1WlhJOmZpZWxkOmJHbHVhM006ZmllbGQ6WVhaaGRHRnk.field.aHJlZg.display_name": {
+          "source": "Href",
+          "message": "Href"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpIYXNoRGF0YVR5cGU6KmxpbmsjMjNlOGE5ZTFkYjYwNGI0ZDVhZmJmNjg5YjUxODFiYzliZWFjYzY4ZDI4ZWI4OTVlMGM1OTg1MTE0MDEwZjg5YjpvcHRpb246YldGcGJtSnlZVzVqYUE6ZmllbGQ6ZEdGeVoyVjA6ZmllbGQ6Y21Wd2IzTnBkRzl5ZVE6ZmllbGQ6Y0hKdmFtVmpkQTpmaWVsZDpiM2R1WlhJOmZpZWxkOmJHbHVhM006ZmllbGQ6WVhaaGRHRnk.field.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Názov"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpIYXNoRGF0YVR5cGU6KmFjY291bnRfbGlua3MjY2NhZTg2YTgwMjliMWRlNWYxNzkyMjg3ODFjODkwNDg3MGVkMzE3ZjlmZGFlNWUzZGU2NWIxZDBhNWZhMjgyYzpvcHRpb246YldGcGJtSnlZVzVqYUE6ZmllbGQ6ZEdGeVoyVjA6ZmllbGQ6Y21Wd2IzTnBkRzl5ZVE6ZmllbGQ6Y0hKdmFtVmpkQTpmaWVsZDpiM2R1WlhJOmZpZWxkOmJHbHVhM00.field.aHRtbA.display_name": {
+          "source": "HTML",
+          "message": "HTML"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpIYXNoRGF0YVR5cGU6KmFjY291bnRfbGlua3MjY2NhZTg2YTgwMjliMWRlNWYxNzkyMjg3ODFjODkwNDg3MGVkMzE3ZjlmZGFlNWUzZGU2NWIxZDBhNWZhMjgyYzpvcHRpb246YldGcGJtSnlZVzVqYUE6ZmllbGQ6ZEdGeVoyVjA6ZmllbGQ6Y21Wd2IzTnBkRzl5ZVE6ZmllbGQ6Y0hKdmFtVmpkQTpmaWVsZDpiM2R1WlhJOmZpZWxkOmJHbHVhM00.field.aHRtbA.short_desc": {
+          "source": "A link to a resource related to this object",
+          "message": "Odkaz na zdroj súvisiaci s týmto objektom"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpIYXNoRGF0YVR5cGU6KmFjY291bnRfbGlua3MjY2NhZTg2YTgwMjliMWRlNWYxNzkyMjg3ODFjODkwNDg3MGVkMzE3ZjlmZGFlNWUzZGU2NWIxZDBhNWZhMjgyYzpvcHRpb246YldGcGJtSnlZVzVqYUE6ZmllbGQ6ZEdGeVoyVjA6ZmllbGQ6Y21Wd2IzTnBkRzl5ZVE6ZmllbGQ6Y0hKdmFtVmpkQTpmaWVsZDpiM2R1WlhJOmZpZWxkOmJHbHVhM00.field.aHRtbA.desc": {
+          "source": "A link to a resource related to this object.",
+          "message": "Odkaz na zdroj súvisiaci s týmto objektom."
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpIYXNoRGF0YVR5cGU6KmFjY291bnRfbGlua3MjY2NhZTg2YTgwMjliMWRlNWYxNzkyMjg3ODFjODkwNDg3MGVkMzE3ZjlmZGFlNWUzZGU2NWIxZDBhNWZhMjgyYzpvcHRpb246YldGcGJtSnlZVzVqYUE6ZmllbGQ6ZEdGeVoyVjA6ZmllbGQ6Y21Wd2IzTnBkRzl5ZVE6ZmllbGQ6Y0hKdmFtVmpkQTpmaWVsZDpiM2R1WlhJOmZpZWxkOmJHbHVhM00.field.bWVtYmVycw.display_name": {
+          "source": "Members",
+          "message": "Členovia"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpIYXNoRGF0YVR5cGU6KmFjY291bnRfbGlua3MjY2NhZTg2YTgwMjliMWRlNWYxNzkyMjg3ODFjODkwNDg3MGVkMzE3ZjlmZGFlNWUzZGU2NWIxZDBhNWZhMjgyYzpvcHRpb246YldGcGJtSnlZVzVqYUE6ZmllbGQ6ZEdGeVoyVjA6ZmllbGQ6Y21Wd2IzTnBkRzl5ZVE6ZmllbGQ6Y0hKdmFtVmpkQTpmaWVsZDpiM2R1WlhJOmZpZWxkOmJHbHVhM00.field.bWVtYmVycw.short_desc": {
+          "source": "A link to a resource related to this object",
+          "message": "Odkaz na zdroj súvisiaci s týmto objektom"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpIYXNoRGF0YVR5cGU6KmFjY291bnRfbGlua3MjY2NhZTg2YTgwMjliMWRlNWYxNzkyMjg3ODFjODkwNDg3MGVkMzE3ZjlmZGFlNWUzZGU2NWIxZDBhNWZhMjgyYzpvcHRpb246YldGcGJtSnlZVzVqYUE6ZmllbGQ6ZEdGeVoyVjA6ZmllbGQ6Y21Wd2IzTnBkRzl5ZVE6ZmllbGQ6Y0hKdmFtVmpkQTpmaWVsZDpiM2R1WlhJOmZpZWxkOmJHbHVhM00.field.bWVtYmVycw.desc": {
+          "source": "A link to a resource related to this object.",
+          "message": "Odkaz na zdroj súvisiaci s týmto objektom."
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpIYXNoRGF0YVR5cGU6KmFjY291bnRfbGlua3MjY2NhZTg2YTgwMjliMWRlNWYxNzkyMjg3ODFjODkwNDg3MGVkMzE3ZjlmZGFlNWUzZGU2NWIxZDBhNWZhMjgyYzpvcHRpb246YldGcGJtSnlZVzVqYUE6ZmllbGQ6ZEdGeVoyVjA6ZmllbGQ6Y21Wd2IzTnBkRzl5ZVE6ZmllbGQ6Y0hKdmFtVmpkQTpmaWVsZDpiM2R1WlhJOmZpZWxkOmJHbHVhM00.field.cHJvamVjdHM.display_name": {
+          "source": "Projects",
+          "message": "Projects"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpIYXNoRGF0YVR5cGU6KmFjY291bnRfbGlua3MjY2NhZTg2YTgwMjliMWRlNWYxNzkyMjg3ODFjODkwNDg3MGVkMzE3ZjlmZGFlNWUzZGU2NWIxZDBhNWZhMjgyYzpvcHRpb246YldGcGJtSnlZVzVqYUE6ZmllbGQ6ZEdGeVoyVjA6ZmllbGQ6Y21Wd2IzTnBkRzl5ZVE6ZmllbGQ6Y0hKdmFtVmpkQTpmaWVsZDpiM2R1WlhJOmZpZWxkOmJHbHVhM00.field.cHJvamVjdHM.short_desc": {
+          "source": "A link to a resource related to this object",
+          "message": "Odkaz na zdroj súvisiaci s týmto objektom"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpIYXNoRGF0YVR5cGU6KmFjY291bnRfbGlua3MjY2NhZTg2YTgwMjliMWRlNWYxNzkyMjg3ODFjODkwNDg3MGVkMzE3ZjlmZGFlNWUzZGU2NWIxZDBhNWZhMjgyYzpvcHRpb246YldGcGJtSnlZVzVqYUE6ZmllbGQ6ZEdGeVoyVjA6ZmllbGQ6Y21Wd2IzTnBkRzl5ZVE6ZmllbGQ6Y0hKdmFtVmpkQTpmaWVsZDpiM2R1WlhJOmZpZWxkOmJHbHVhM00.field.cHJvamVjdHM.desc": {
+          "source": "A link to a resource related to this object.",
+          "message": "Odkaz na zdroj súvisiaci s týmto objektom."
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpIYXNoRGF0YVR5cGU6KmFjY291bnRfbGlua3MjY2NhZTg2YTgwMjliMWRlNWYxNzkyMjg3ODFjODkwNDg3MGVkMzE3ZjlmZGFlNWUzZGU2NWIxZDBhNWZhMjgyYzpvcHRpb246YldGcGJtSnlZVzVqYUE6ZmllbGQ6ZEdGeVoyVjA6ZmllbGQ6Y21Wd2IzTnBkRzl5ZVE6ZmllbGQ6Y0hKdmFtVmpkQTpmaWVsZDpiM2R1WlhJOmZpZWxkOmJHbHVhM00.field.cmVwb3NpdG9yaWVz.display_name": {
+          "source": "Repositories",
+          "message": "Repozitáre"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpIYXNoRGF0YVR5cGU6KmFjY291bnRfbGlua3MjY2NhZTg2YTgwMjliMWRlNWYxNzkyMjg3ODFjODkwNDg3MGVkMzE3ZjlmZGFlNWUzZGU2NWIxZDBhNWZhMjgyYzpvcHRpb246YldGcGJtSnlZVzVqYUE6ZmllbGQ6ZEdGeVoyVjA6ZmllbGQ6Y21Wd2IzTnBkRzl5ZVE6ZmllbGQ6Y0hKdmFtVmpkQTpmaWVsZDpiM2R1WlhJOmZpZWxkOmJHbHVhM00.field.cmVwb3NpdG9yaWVz.short_desc": {
+          "source": "A link to a resource related to this object",
+          "message": "Odkaz na zdroj súvisiaci s týmto objektom"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpIYXNoRGF0YVR5cGU6KmFjY291bnRfbGlua3MjY2NhZTg2YTgwMjliMWRlNWYxNzkyMjg3ODFjODkwNDg3MGVkMzE3ZjlmZGFlNWUzZGU2NWIxZDBhNWZhMjgyYzpvcHRpb246YldGcGJtSnlZVzVqYUE6ZmllbGQ6ZEdGeVoyVjA6ZmllbGQ6Y21Wd2IzTnBkRzl5ZVE6ZmllbGQ6Y0hKdmFtVmpkQTpmaWVsZDpiM2R1WlhJOmZpZWxkOmJHbHVhM00.field.cmVwb3NpdG9yaWVz.desc": {
+          "source": "A link to a resource related to this object.",
+          "message": "Odkaz na zdroj súvisiaci s týmto objektom."
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpIYXNoRGF0YVR5cGU6KmFjY291bnRfbGlua3MjY2NhZTg2YTgwMjliMWRlNWYxNzkyMjg3ODFjODkwNDg3MGVkMzE3ZjlmZGFlNWUzZGU2NWIxZDBhNWZhMjgyYzpvcHRpb246YldGcGJtSnlZVzVqYUE6ZmllbGQ6ZEdGeVoyVjA6ZmllbGQ6Y21Wd2IzTnBkRzl5ZVE6ZmllbGQ6Y0hKdmFtVmpkQTpmaWVsZDpiM2R1WlhJOmZpZWxkOmJHbHVhM00.field.c2VsZg.display_name": {
+          "source": "Self",
+          "message": "Vlastný"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpIYXNoRGF0YVR5cGU6KmFjY291bnRfbGlua3MjY2NhZTg2YTgwMjliMWRlNWYxNzkyMjg3ODFjODkwNDg3MGVkMzE3ZjlmZGFlNWUzZGU2NWIxZDBhNWZhMjgyYzpvcHRpb246YldGcGJtSnlZVzVqYUE6ZmllbGQ6ZEdGeVoyVjA6ZmllbGQ6Y21Wd2IzTnBkRzl5ZVE6ZmllbGQ6Y0hKdmFtVmpkQTpmaWVsZDpiM2R1WlhJOmZpZWxkOmJHbHVhM00.field.c2VsZg.short_desc": {
+          "source": "A link to a resource related to this object",
+          "message": "Odkaz na zdroj súvisiaci s týmto objektom"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpIYXNoRGF0YVR5cGU6KmFjY291bnRfbGlua3MjY2NhZTg2YTgwMjliMWRlNWYxNzkyMjg3ODFjODkwNDg3MGVkMzE3ZjlmZGFlNWUzZGU2NWIxZDBhNWZhMjgyYzpvcHRpb246YldGcGJtSnlZVzVqYUE6ZmllbGQ6ZEdGeVoyVjA6ZmllbGQ6Y21Wd2IzTnBkRzl5ZVE6ZmllbGQ6Y0hKdmFtVmpkQTpmaWVsZDpiM2R1WlhJOmZpZWxkOmJHbHVhM00.field.c2VsZg.desc": {
+          "source": "A link to a resource related to this object.",
+          "message": "Odkaz na zdroj súvisiaci s týmto objektom."
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqdGVhbSMxNTI0YTY3MjFjNGU2YjkwMjI0OWExZWVkNDJkMDk0NDEyMmIwMTJkZDY2ZDEwNTVjZjVjZTU0NWJhZjA4ZGE5Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUTpmaWVsZDpjSEp2YW1WamRBOmZpZWxkOmIzZHVaWEk.field.dHlwZQ.display_name": {
           "source": "Type",
           "message": "Typ"
         },
-        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcmVwb3NpdG9yeSNmZjNlZTM3ZmFkMmM1MDMzYWM0ZDA0NDA4OWQ2ZTFlMzU5ZWVkODNmMDg3ZjZlZmI5NTI0NzFlYmE3NGExYjU4Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUQ.field.dXVpZA.display_name": {
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqdGVhbSMxNTI0YTY3MjFjNGU2YjkwMjI0OWExZWVkNDJkMDk0NDEyMmIwMTJkZDY2ZDEwNTVjZjVjZTU0NWJhZjA4ZGE5Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUTpmaWVsZDpjSEp2YW1WamRBOmZpZWxkOmIzZHVaWEk.field.dXVpZA.display_name": {
           "source": "UUID",
           "message": "UUID"
         },
-        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcmVwb3NpdG9yeSNmZjNlZTM3ZmFkMmM1MDMzYWM0ZDA0NDA4OWQ2ZTFlMzU5ZWVkODNmMDg3ZjZlZmI5NTI0NzFlYmE3NGExYjU4Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUQ.field.dXVpZA.short_desc": {
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcHJvamVjdCM3MmRiMTdhOTBmNTBjZmE3NGE0YjM1ZDZkZTEyN2NhMDQyYTc3YWFlMjZlNjMzMzdhZjA5NjA3Y2IzNmI5MjEwOm9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUTpmaWVsZDpjSEp2YW1WamRB.field.dHlwZQ.display_name": {
+          "source": "Type",
+          "message": "Typ"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcHJvamVjdCM3MmRiMTdhOTBmNTBjZmE3NGE0YjM1ZDZkZTEyN2NhMDQyYTc3YWFlMjZlNjMzMzdhZjA5NjA3Y2IzNmI5MjEwOm9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUTpmaWVsZDpjSEp2YW1WamRB.field.dXBkYXRlZF9vbg.display_name": {
+          "source": "Updated On",
+          "message": "Aktualizované dňa"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcHJvamVjdCM3MmRiMTdhOTBmNTBjZmE3NGE0YjM1ZDZkZTEyN2NhMDQyYTc3YWFlMjZlNjMzMzdhZjA5NjA3Y2IzNmI5MjEwOm9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUTpmaWVsZDpjSEp2YW1WamRB.field.dXVpZA.display_name": {
+          "source": "UUID",
+          "message": "UUID"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcHJvamVjdCM3MmRiMTdhOTBmNTBjZmE3NGE0YjM1ZDZkZTEyN2NhMDQyYTc3YWFlMjZlNjMzMzdhZjA5NjA3Y2IzNmI5MjEwOm9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUTpmaWVsZDpjSEp2YW1WamRB.field.dXVpZA.short_desc": {
+          "source": "The project's immutable id",
+          "message": "Nemeniteľné ID projektu"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcHJvamVjdCM3MmRiMTdhOTBmNTBjZmE3NGE0YjM1ZDZkZTEyN2NhMDQyYTc3YWFlMjZlNjMzMzdhZjA5NjA3Y2IzNmI5MjEwOm9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUTpmaWVsZDpjSEp2YW1WamRB.field.dXVpZA.desc": {
+          "source": "The project's immutable id.",
+          "message": "Nemeniteľné ID projektu."
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcmVwb3NpdG9yeSNmNjc5ZjY3OTViZTkzYWZjNDkyOTIwNzE1OTIxZDY2NzRlNjY2OGYwZmU1YzhkYTAxMjIzZWRkMGY3MWYzMDM1Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUQ.field.c2Nt.display_name": {
+          "source": "SCM",
+          "message": "SCM"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcmVwb3NpdG9yeSNmNjc5ZjY3OTViZTkzYWZjNDkyOTIwNzE1OTIxZDY2NzRlNjY2OGYwZmU1YzhkYTAxMjIzZWRkMGY3MWYzMDM1Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUQ.field.c2Nt.allowed-value.c3RyaW5nOmdpdA.display_name": {
+          "source": "git",
+          "message": "git"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcmVwb3NpdG9yeSNmNjc5ZjY3OTViZTkzYWZjNDkyOTIwNzE1OTIxZDY2NzRlNjY2OGYwZmU1YzhkYTAxMjIzZWRkMGY3MWYzMDM1Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUQ.field.c2l6ZQ.display_name": {
+          "source": "Size",
+          "message": "Veľkosť"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcmVwb3NpdG9yeSNmNjc5ZjY3OTViZTkzYWZjNDkyOTIwNzE1OTIxZDY2NzRlNjY2OGYwZmU1YzhkYTAxMjIzZWRkMGY3MWYzMDM1Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUQ.field.dHlwZQ.display_name": {
+          "source": "Type",
+          "message": "Typ"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcmVwb3NpdG9yeSNmNjc5ZjY3OTViZTkzYWZjNDkyOTIwNzE1OTIxZDY2NzRlNjY2OGYwZmU1YzhkYTAxMjIzZWRkMGY3MWYzMDM1Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUQ.field.dXBkYXRlZF9vbg.display_name": {
+          "source": "Updated On",
+          "message": "Aktualizované dňa"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcmVwb3NpdG9yeSNmNjc5ZjY3OTViZTkzYWZjNDkyOTIwNzE1OTIxZDY2NzRlNjY2OGYwZmU1YzhkYTAxMjIzZWRkMGY3MWYzMDM1Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUQ.field.dXVpZA.display_name": {
+          "source": "UUID",
+          "message": "UUID"
+        },
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcmVwb3NpdG9yeSNmNjc5ZjY3OTViZTkzYWZjNDkyOTIwNzE1OTIxZDY2NzRlNjY2OGYwZmU1YzhkYTAxMjIzZWRkMGY3MWYzMDM1Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUQ.field.dXVpZA.short_desc": {
           "source": "The repository's immutable id",
           "message": "Nemeniteľné ID repozitára"
         },
-        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcmVwb3NpdG9yeSNmZjNlZTM3ZmFkMmM1MDMzYWM0ZDA0NDA4OWQ2ZTFlMzU5ZWVkODNmMDg3ZjZlZmI5NTI0NzFlYmE3NGExYjU4Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUQ.field.dXVpZA.desc": {
+        "app.Qml0YnVja2V0.type.YWN0aW9uOmNtVndiM05wZEc5eWFXVnpYM2R2Y210emNHRmpaVjl5WlhCdlgzTnNkV2RmY0hWMDpPcGVuQXBpM0hhc2hEYXRhVHlwZToqcmVwb3NpdG9yeSNmNjc5ZjY3OTViZTkzYWZjNDkyOTIwNzE1OTIxZDY2NzRlNjY2OGYwZmU1YzhkYTAxMjIzZWRkMGY3MWYzMDM1Om9wdGlvbjpiV0ZwYm1KeVlXNWphQTpmaWVsZDpkR0Z5WjJWMDpmaWVsZDpjbVZ3YjNOcGRHOXllUQ.field.dXVpZA.desc": {
           "source": "The repository's immutable id. This can be used as a substitute for the slug segment in URLs. Doing this guarantees your URLs will survive renaming of the repository by its owner, or even transfer of the repository to a different user.",
           "message": "Nemeniteľné ID repozitára. Môže byť použité ako náhrada za segment slug v URL. Tým sa zabezpečuje, že URL prežijú premenovanie repozitára jeho vlastníkom alebo dokonca jeho prenájom na iného používateľa."
         },

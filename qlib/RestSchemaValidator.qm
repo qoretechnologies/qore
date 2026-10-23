@@ -80,6 +80,10 @@ module RestSchemaValidator {
       type build of a schema as one transaction: the type builds of the schema are serialized, and a build that
       fails part of the way through leaves the schema's type caches as they were; OpenAPI 3 schemas build their
       types through it
+    - fixed schema data types and fields depending on the order in which they were first requested: the mandatory
+      and optional variants of a type or field are each built from the schema instead of one being copied from the
+      other, so their names, null handling, constraints and required attributes are always what the schema
+      specifies
     - schema fields give the schema's example or default value as their example value when it is valid for the
       field type, and give no generated example that the field type would reject
     - JSON and YAML response bodies in another encoding than UTF-8 are converted to UTF-8 before they are parsed,
@@ -1318,6 +1322,11 @@ public namespace RestSchemaValidator {
                 *use* supplies means a recursive re-entry with a different description misses the
                 placeholder, and the type built at that depth is the incomplete one.  Per-use differences
                 live in @ref usemap instead.
+
+                The canonical field is the field of the bare use, with no description or default of its own,
+                which is what a property of a schema is, whichever use asks for the name first: a use building
+                it with its own documentation would hand that documentation to every property reached through
+                the cut while it is being built, so a field would depend on which use came first.
             */
             hash<string, hash<string, AbstractDataField>> fieldmap;
 
@@ -1328,21 +1337,24 @@ public namespace RestSchemaValidator {
                 own description and default value.  Publishing the canonical field for every use gave
                 whichever operation was registered second the first one's documentation.
 
-                A use that differs from the one the canonical field was built from gets a copy carrying
-                its own description and default over the canonical (finished) type.
+                A use with a description or default of its own gets a copy carrying them over the canonical
+                (finished) type.
             */
             hash<string, hash<string, AbstractDataField>> usemap;
 
-            #! The use key each name's canonical field was built from
-            hash<string, string> field_use;
-
-            #! Names whose canonical field is being built right now
+            #! Canonical fields being built right now: name -> {Y,N} -> @ref True
             /** A field in here is the recursion cut and is deliberately incomplete: its type is a
                 placeholder that is replaced in place once the build finishes.  Copying one would keep the
-                placeholder forever, so a use that arrives while its name is in here takes the canonical
+                placeholder forever, so a use that arrives while its variant is in here takes the canonical
                 field, exactly as every use did before per-use copies existed.
+
+                Keyed by variant as well, because building one variant can build the other one of the same name
+                when a schema refers back to itself, and the inner build finishing does not finish the outer one.
             */
-            hash<string, bool> building;
+            hash<string, hash<string, bool>> building;
+
+            #! The type given to replaceType(), from which a variant not cached when it was given is derived
+            *AbstractDataProviderType replacedDataType;
         }
 
         #! Returns the data provider type for a given type/format/items path
@@ -1397,31 +1409,55 @@ public namespace RestSchemaValidator {
                     return getDataType(required, rest);
                 });
             }
+            if (*AbstractDataProviderType t = getReplacedDataType(required)) {
+                return t;
+            }
+            # each variant is built from the schema and never derived from the other one: a derived variant is not
+            # the type the schema gives, so a type would depend on which variant was built first
             if (required) {
                 if (!dataType) {
-                    if (orNothingDataType) {
-                        setCachedDataType(True, orNothingDataType.getMandatoryType());
-                    } else {
-                        # "dataType" is assigned in the call below
-                        getDataTypeIntern("/", True, rest);
-                    }
+                    # "dataType" is assigned in the call below
+                    getDataTypeIntern("/", True, rest);
                 }
                 return dataType;
             }
             if (!orNothingDataType) {
-                if (dataType) {
-                    setCachedDataType(False, dataType.getOrNothingType());
-                } else {
-                    # "orNothingDataType" is assigned in the call below
-                    getDataTypeIntern("/", False, rest);
+                # "orNothingDataType" is assigned in the call below
+                getDataTypeIntern("/", False, rest);
+            }
+            return orNothingDataType;
+        }
+
+        #! Returns the given variant of the type given to replaceType(), or @ref nothing if it has not been called
+        /** A variant that was not cached when the type was replaced is derived from the replacement, because the
+            replacement and not the schema gives this schema's type from then on.
+
+            @param required @ref True for the mandatory type, @ref False for the "or nothing" type
+
+            @since RestSchemaValidator 2.5
+        */
+        private *AbstractDataProviderType getReplacedDataType(bool required) {
+            if (!replacedDataType) {
+                return NOTHING;
+            }
+            if (required) {
+                if (!dataType) {
+                    setCachedDataType(True, replacedDataType.getMandatoryType());
                 }
+                return dataType;
+            }
+            if (!orNothingDataType) {
+                setCachedDataType(False, replacedDataType.getOrNothingType());
             }
             return orNothingDataType;
         }
 
         #! Replaces the cached data type(s) for this schema with the given type
         /** Updates the mandatory and/or "or nothing" cached data types from the given type, preserving the
-            required/optional cardinality already present in the schema.
+            required/optional cardinality already present in the schema.  A variant that is asked for later is
+            derived from the given type rather than built from the schema.
+
+            Has no effect if neither variant of this schema's type has been built.
 
             @param t the new data type to use for this schema
 
@@ -1435,6 +1471,16 @@ public namespace RestSchemaValidator {
                 });
                 return;
             }
+            if (!dataType && !orNothingDataType) {
+                return;
+            }
+            if (schema && schema.isTypeBuildActive()) {
+                *AbstractDataProviderType prev = replacedDataType;
+                schema.recordTypeBuildWrite(sub () {
+                    replacedDataType = prev;
+                });
+            }
+            replacedDataType = t;
             if (t.isOrNothingType()) {
                 if (dataType) {
                     setCachedDataType(True, t.getMandatoryType());
@@ -1515,24 +1561,6 @@ public namespace RestSchemaValidator {
             } else {
                 fieldmap{key}{rstr} = field;
             }
-        }
-
-        #! Records the use key a canonical field is built from, recording the write in the type build in progress
-        /** @since RestSchemaValidator 2.5
-        */
-        private setFieldUse(string name, string ukey) {
-            *AbstractRestSchemaValidator schema = getTypeBuildSchema();
-            if (schema && schema.isTypeBuildActive()) {
-                *string prev = field_use{name};
-                schema.recordTypeBuildWrite(sub () {
-                    if (exists prev) {
-                        field_use{name} = prev;
-                    } else {
-                        remove field_use{name};
-                    }
-                });
-            }
-            field_use{name} = ukey;
         }
 
         #! Returns the data type for the given schema
@@ -1626,8 +1654,9 @@ public namespace RestSchemaValidator {
             if (*AbstractDataField rv = getCacheField(False, name, rstr)) {
                 return decorateField(rv, ukey, name, desc, required, default_value, rstr);
             }
-            return decorateField(getFieldIntern(path, name, desc, required, rest, default_value, rstr, ukey),
-                ukey, name, desc, required, default_value, rstr);
+            # the canonical field is built for the bare use, whichever use asks for it first; see fieldmap
+            return decorateField(getFieldIntern(path, name, NOTHING, required, rest, NOTHING, rstr), ukey, name,
+                desc, required, default_value, rstr);
         }
 
         #! Returns the key identifying one <b>use</b> of this schema as a field
@@ -1663,7 +1692,7 @@ public namespace RestSchemaValidator {
         */
         private AbstractDataField decorateField(AbstractDataField canonical, string ukey, string name,
                 *string desc, bool required, auto default_value, string rstr) {
-            if (building{name} || field_use{name} == ukey) {
+            if (building{name}{rstr} || ukey == AbstractRestSchemaObject::getFieldUseKey(name, NOTHING, NOTHING)) {
                 return canonical;
             }
             # built exactly as getFieldIntern() builds the canonical field, and given its finished type the
@@ -1676,15 +1705,35 @@ public namespace RestSchemaValidator {
                 "type": AutoType,
                 "allowed_values": getFieldEnumValues(),
                 "default_value": default_value,
-            } + ((type == "object" || hasSchemaCompositionFeatures()) && required ? {
-                "attr": {
-                    "preselected": True,
-                    "required": True,
-                },
-            } : NOTHING), getValidatedExampleCandidates(), getConstraintInfo());
+            } + getFieldPresenceInfo(required), getValidatedExampleCandidates(), getConstraintInfo());
             rv.updateFieldType(canonical.getType());
             setCachedField(True, ukey, rstr, rv);
             return rv;
+        }
+
+        #! Returns the field attributes of a use requiring an object, composition or nullable field
+        /** A use requiring such a field marks it required and preselected.  A required use of a nullable schema
+            has the value type of an optional use, because only the presence of the property is required and an
+            explicit \c null is valid, so for it these attributes are the only thing saying the field is required.
+
+            getFieldIntern() and decorateField() both take the attributes from here, so that a field is the same
+            whichever use built the canonical field.
+
+            @param required whether the use declares the field required
+
+            @return the attributes to add to the field's info, or @ref nothing if it needs none
+
+            @since RestSchemaValidator 2.5
+        */
+        private *hash<auto> getFieldPresenceInfo(bool required) {
+            if (required && (nullable || type == "object" || hasSchemaCompositionFeatures())) {
+                return {
+                    "attr": {
+                        "preselected": True,
+                        "required": True,
+                    },
+                };
+            }
         }
 
         #! Returns the description a field carries, with this schema's own merged into the use's
@@ -1752,28 +1801,10 @@ public namespace RestSchemaValidator {
             @param key the requiredness key: \c "Y" or \c "N"
         */
         private *AbstractDataField getCacheField(bool use, string cache_key, string key) {
-            *hash<string, AbstractDataField> h = use ? usemap{cache_key} : fieldmap{cache_key};
-            if (h) {
-                if ((key == "N") && !h.N) {
-                    AbstractDataField field = h.Y.getOrNothingType();
-                    setCachedField(use, cache_key, "N", field);
-                    return field;
-                }
-                if ((key == "Y") && !h.Y) {
-                    AbstractDataField field;
-                    if (nullable) {
-                        # A required nullable use has the same value type as an optional use;
-                        # only property presence changes. Never mutate the shared cached field.
-                        field = h.N.copy();
-                        field.setAttributes({"required": True, "preselected": True});
-                    } else {
-                        field = h.N.getMandatoryType();
-                    }
-                    setCachedField(use, cache_key, "Y", field);
-                    return field;
-                }
-                return h{key};
-            }
+            # a variant that is not cached is built from the schema by getFieldIntern() and never derived from the
+            # other one: a derived field is not the field the schema gives, so a field would depend on which
+            # variant was built first
+            return use ? usemap{cache_key}{key} : fieldmap{cache_key}{key};
         }
 
         #! Sets fields of a schema object
@@ -1784,40 +1815,21 @@ public namespace RestSchemaValidator {
 
         #! Returns a field definition from the schema parameter
         private AbstractDataField getFieldIntern(string path, string name, *string desc, bool required = True,
-                *object rest, auto default_value, *string rstr, *string ukey) {
+                *object rest, auto default_value, *string rstr) {
             if (!rstr) {
                 rstr = required ? "Y" : "N";
             }
-            # recorded before this schema's own description is merged into "desc" below, so that a use
-            # and the canonical field it matches always agree on the key
-            if (!ukey.val()) {
-                ukey = AbstractRestSchemaObject::getFieldUseKey(name, desc, default_value);
-            }
-            setFieldUse(name, ukey);
             string field_desc = getMergedFieldDesc(desc);
             # the field registered below is handed to anything that re-enters this schema while its type
-            # is being built, so it must not be copied until that build has finished
-            building{name} = True;
-            on_exit remove building{name};
-            if (type == "object" || hasSchemaCompositionFeatures()) {
-                # create the field with a placeholder type
-                RestSchemaExampleDataField field({
-                    "name": name,
-                    "desc": field_desc,
-                    "type": AutoType,
-                    "allowed_values": getFieldEnumValues(),
-                    "default_value": default_value,
-                } + (required ? {
-                    "attr": {
-                        "preselected": True,
-                        "required": True,
-                    },
-                } : NOTHING), getValidatedExampleCandidates(), getConstraintInfo());
-                setCachedField(False, name, rstr, field);
-                field.updateFieldType(getDataType(required, rest));
-                return field;
+            # is being built, so it must not be copied until that build has finished; the other variant of the
+            # name can be built inside this build, so only this variant is marked and unmarked here
+            building{name}{rstr} = True;
+            on_exit {
+                remove building{name}{rstr};
+                if (!building{name}) {
+                    remove building{name};
+                }
             }
-
             # create the field with a placeholder type
             RestSchemaExampleDataField field({
                 "name": name,
@@ -1825,9 +1837,16 @@ public namespace RestSchemaValidator {
                 "type": AutoType,
                 "allowed_values": getFieldEnumValues(),
                 "default_value": default_value,
-            }, getValidatedExampleCandidates(), getConstraintInfo());
+            } + getFieldPresenceInfo(required), getValidatedExampleCandidates(), getConstraintInfo());
             setCachedField(False, name, rstr, field);
-            field.updateFieldType(getSchemaType(path, type, format, items, required));
+            # a required use of a nullable schema has the value type of an optional use; only the presence of the
+            # property is required (see getFieldPresenceInfo())
+            bool required_value = required && !nullable;
+            if (type == "object" || hasSchemaCompositionFeatures()) {
+                field.updateFieldType(getDataType(required_value, rest));
+            } else {
+                field.updateFieldType(getSchemaType(path, type, format, items, required_value));
+            }
             return field;
         }
 

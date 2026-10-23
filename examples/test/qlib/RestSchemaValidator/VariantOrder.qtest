@@ -1,0 +1,501 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/RestSchemaValidator.qm
+%requires ../../../../qlib/OpenApi3.qm
+%requires ../../../../qlib/Swagger.qm
+%exec-class VariantOrderTest
+
+#! Verifies that each requiredness variant of a schema type or field is the same whichever variant is built first
+/** A schema's types and fields are cached per variant: mandatory and "or nothing".  Each variant must be built from
+    the schema: a variant derived from the other, cached one is not the type the schema gives, so a type would
+    depend on the order in which the types of a document were first asked for.
+
+    Every case here compares a variant built on its own, in a schema nothing else has been built in, with the same
+    variant built after the others, in both directions.
+*/
+class VariantOrderTest inherits QUnit::Test {
+    private {
+        #! How deep type graphs are expanded; deep enough for every schema here, which nest at most four levels
+        const MaxDepth = 8;
+
+        #! The reusable schemas, without the reference prefix of the document format
+        const Schemas = {
+            # an enumeration, whose constraint must survive in both variants
+            "Kind": {"type": "string", "enum": ("alpha", "beta")},
+            # a boolean, built as a class of its own in each variant
+            "Flag": {"type": "boolean"},
+            "Name": {"type": "string"},
+            "Count": {"type": "integer"},
+            # a list, whose description says whether it is optional
+            "Labels": {"type": "array", "items": {"type": "string"}},
+            # a list of enumerated values, whose element type must keep its constraint in both variants
+            "Modes": {"type": "array", "items": {"type": "string", "enum": ("fast", "slow")}},
+            # an object whose own fields are required or not whichever variant it is used as
+            "Child": {
+                "type": "object",
+                "required": ("id",),
+                "properties": {
+                    "id": {"type": "integer"},
+                    "note": {"type": "string"},
+                },
+            },
+            # the same properties required ...
+            "Strict": {
+                "type": "object",
+                "required": ("kind", "flag", "name", "count", "labels", "modes", "child"),
+                "properties": {
+                    "kind": {"$ref": "Kind"},
+                    "flag": {"$ref": "Flag"},
+                    "name": {"$ref": "Name"},
+                    "count": {"$ref": "Count"},
+                    "labels": {"$ref": "Labels"},
+                    "modes": {"$ref": "Modes"},
+                    "child": {"$ref": "Child"},
+                },
+            },
+            # ... and optional
+            "Loose": {
+                "type": "object",
+                "properties": {
+                    "kind": {"$ref": "Kind"},
+                    "flag": {"$ref": "Flag"},
+                    "name": {"$ref": "Name"},
+                    "count": {"$ref": "Count"},
+                    "labels": {"$ref": "Labels"},
+                    "modes": {"$ref": "Modes"},
+                    "child": {"$ref": "Child"},
+                },
+            },
+        };
+
+        #! Reusable schemas of OpenAPI 3 only: compositions
+        const OpenApi3Schemas = {
+            "Choice": {"oneOf": ({"type": "string"}, {"type": "integer"})},
+            "Either": {"anyOf": ({"$ref": "Kind"}, {"$ref": "Child"})},
+            "Holder": {
+                "type": "object",
+                "required": ("choice",),
+                "properties": {
+                    "choice": {"$ref": "Choice"},
+                    "either": {"$ref": "Either"},
+                },
+            },
+        };
+
+        #! The type builds the cases are made of: a reusable schema and the variant asked for
+        const Steps = (
+            ("Kind", True), ("Kind", False),
+            ("Flag", True), ("Flag", False),
+            ("Name", True), ("Name", False),
+            ("Count", True), ("Count", False),
+            ("Labels", True), ("Labels", False),
+            ("Modes", True), ("Modes", False),
+            ("Child", True), ("Child", False),
+            ("Strict", True), ("Strict", False),
+            ("Loose", True), ("Loose", False),
+            ("Remark", True), ("Remark", False),
+        );
+
+        #! The type builds of the OpenAPI 3 only schemas
+        const OpenApi3Steps = (
+            ("Choice", True), ("Choice", False),
+            ("Either", True), ("Either", False),
+            ("Holder", True), ("Holder", False),
+        );
+
+        #! The format-specific parts of each document format
+        const Formats = {
+            "OpenAPI 3": {
+                "prefix": "#/components/schemas/",
+                # nullable in OpenAPI 3.0
+                "nullable": {"type": "string", "nullable": True},
+            },
+            "Swagger 2.0": {
+                "prefix": "#/definitions/",
+                # the Swagger extension for nullable values
+                "nullable": {"type": "string", "x-nullable": True},
+            },
+        };
+
+        #! The uses of a parameter schema as a field: the description each supplies, and whether it requires it
+        const FieldUses = (
+            ("first use", True), ("first use", False),
+            ("second use", True), ("second use", False),
+        );
+    }
+
+    constructor() : Test("REST schema requiredness variants", "1.0", \ARGV) {
+        addTestCase("a type variant is the same whichever variant was built first", \typeOrderTest());
+        addTestCase("the variant built from the schema is what the schema specifies", \canonicalTest());
+        addTestCase("a field variant is the same whichever use built the other one", \fieldOrderTest());
+        addTestCase("a required nullable property has the optional value type and is required", \nullableTest());
+        addTestCase("a replaced type gives both variants", \replacedTypeTest());
+        addTestCase("a self-referential field is the same whichever use built its other variant",
+            \recursiveUseTest());
+        set_return_value(main());
+    }
+
+    typeOrderTest() {
+        # every difference, so that a failure names all of them: build -> order -> the paths that differ
+        hash<string, hash<string, list<string>>> differences = {};
+        foreach hash<auto> fmt in (Formats.pairIterator()) {
+            list<list<auto>> steps = getSteps(fmt.key);
+            foreach list<auto> step in (steps) {
+                string label = sprintf("%s %s %s", fmt.key, step[0], step[1] ? "mandatory" : "or nothing");
+                list<list<auto>> others = select steps, $1 != step;
+                hash<auto> alone = buildType(fmt.key, (step,));
+                hash<string, list<list<auto>>> orders = {
+                    "after the others": others + (step,),
+                    "after the others in reverse order": reverse(others) + (step,),
+                };
+                foreach hash<auto> order in (orders.pairIterator()) {
+                    if (list<string> paths = VariantOrderTest::diffPaths(alone, buildType(fmt.key, order.value))) {
+                        differences{label}{order.key} = paths;
+                    }
+                }
+            }
+        }
+        assertEq({}, differences, "each variant is the same whichever variants were built before it");
+    }
+
+    canonicalTest() {
+        foreach string fmt in (keys Formats) {
+            # the "or nothing" variant of an enumeration keeps its constraint even when the mandatory variant was
+            # built first
+            hash<auto> kind = buildType(fmt, (("Kind", True), ("Kind", False)));
+            assertFalse(kind.mandatory, fmt + ": or nothing");
+            assertEq(("alpha", "beta"), kind.constraints.enum_values, fmt + ": enum constraint");
+            # ... and so do the elements of a list field of them, in both variants of the list
+            hash<string, hash<auto>> parents = {
+                "required": buildType(fmt, (("Loose", False), ("Strict", True))),
+                "optional": buildType(fmt, (("Strict", True), ("Loose", False))),
+            };
+            foreach hash<auto> i in (parents.pairIterator()) {
+                hash<auto> modes = i.value.fields.modes.type;
+                assertEq(i.key == "required", modes.mandatory, fmt + ": " + i.key + " list");
+                assertEq(("fast", "slow"), modes.element.constraints.enum_values,
+                    fmt + ": " + i.key + " list element enum constraint");
+            }
+            # a scalar field's "or nothing" type accepts null, which its mandatory one refuses
+            assertTrue(buildType(fmt, (("Loose", False), ("Strict", True))).fields.name.type.options."qore.no_null",
+                fmt + ": mandatory refuses null");
+            assertNothing(buildType(fmt, (("Strict", True), ("Loose", False))).fields.name.type.options."qore.no_null",
+                fmt + ": or nothing accepts null");
+            # the variants of an object type share the requiredness of the object's own fields
+            hash<auto> opt = buildType(fmt, (("Child", True), ("Child", False)));
+            hash<auto> req = buildType(fmt, (("Child", False), ("Child", True)));
+            assertFalse(opt.mandatory, fmt + ": optional child");
+            assertTrue(req.mandatory, fmt + ": required child");
+            assertTrue(opt.fields.id.type.mandatory, fmt + ": a value of the optional child still requires its id");
+            assertFalse(opt.fields.note.type.mandatory, fmt + ": the note is optional");
+            assertEq(opt.fields, req.fields, fmt + ": the fields of both variants are the same");
+            # an object property is marked required where the parent requires it, and only there
+            hash<auto> strict = buildType(fmt, (("Loose", False), ("Strict", True)));
+            hash<auto> loose = buildType(fmt, (("Strict", True), ("Loose", False)));
+            assertEq({"preselected": True, "required": True}, strict.fields.child.attr, fmt + ": strict child");
+            assertNothing(loose.fields.child.attr, fmt + ": loose child");
+            foreach string name in (keys strict.fields) {
+                assertTrue(strict.fields{name}.type.mandatory, fmt + ": strict " + name);
+                assertFalse(loose.fields{name}.type.mandatory, fmt + ": loose " + name);
+            }
+        }
+    }
+
+    fieldOrderTest() {
+        foreach string fmt in (keys Formats) {
+            # an object schema, a scalar one and a nullable scalar one, whose fields are built differently
+            foreach string name in (("Child", "Kind", "Remark")) {
+                string label = fmt + " " + name;
+                # every order of the uses, and every difference, so that a failure names all of them:
+                # use -> the orders it differs in
+                hash<string, list<string>> differences = {};
+                foreach list<list<auto>> order in (VariantOrderTest::permutations(FieldUses)) {
+                    hash<string, hash<auto>> built = buildFields(fmt, name, order);
+                    foreach list<auto> use in (FieldUses) {
+                        string key = VariantOrderTest::useKey(use);
+                        if (VariantOrderTest::diffPaths(buildFields(fmt, name, (use,)){key}, built{key})) {
+                            differences{key} += (map VariantOrderTest::useKey($1), order).join(", ");
+                        }
+                    }
+                }
+                assertEq({}, differences, label + ": each use is the same whichever uses were built before it");
+                # each use carries its own description, and is required only where it requires the field
+                hash<string, hash<auto>> built = buildFields(fmt, name, FieldUses);
+                foreach list<auto> use in (FieldUses) {
+                    hash<auto> field = built{VariantOrderTest::useKey(use)};
+                    assertEq(use[0], field.desc, label + ": description");
+                    # a nullable value is optional even where the field is required
+                    assertEq(use[1] && name != "Remark", field.type.mandatory, label + ": value type");
+                    if (name == "Kind") {
+                        assertNothing(field.attr, label + ": a mandatory scalar needs no attributes");
+                    } else {
+                        assertEq(use[1], field.attr.required ?? False, label + ": required attribute");
+                    }
+                }
+            }
+        }
+    }
+
+    nullableTest() {
+        foreach hash<auto> fmt in (Formats.pairIterator()) {
+            hash<auto> schemas = getSchemas(fmt.key) + {
+                "Note": {
+                    "type": "object",
+                    "required": ("remark",),
+                    "properties": {
+                        "remark": {"$ref": fmt.value.prefix + "Remark"},
+                    },
+                },
+                "OptionalNote": {
+                    "type": "object",
+                    "properties": {
+                        "remark": {"$ref": fmt.value.prefix + "Remark"},
+                    },
+                },
+            };
+            list<list<auto>> steps = (("Note", True), ("OptionalNote", True));
+            foreach list<auto> step in (steps) {
+                list<list<auto>> others = select steps, $1 != step;
+                hash<auto> alone = buildTypeFrom(fmt.key, schemas, (step,));
+                assertEq(alone, buildTypeFrom(fmt.key, schemas, others + (step,)), fmt.key + " " + step[0]);
+            }
+            hash<auto> note = buildTypeFrom(fmt.key, schemas, (("OptionalNote", True), ("Note", True)));
+            # only the presence of the property is required: its value may be null
+            assertFalse(note.fields.remark.type.mandatory, fmt.key + ": the value is optional");
+            assertEq({"preselected": True, "required": True}, note.fields.remark.attr, fmt.key + ": required");
+            hash<auto> optional = buildTypeFrom(fmt.key, schemas, (("Note", True), ("OptionalNote", True)));
+            assertFalse(optional.fields.remark.type.mandatory, fmt.key + ": optional value");
+            assertNothing(optional.fields.remark.attr, fmt.key + ": not required");
+            assertEq(note.fields.remark.type, optional.fields.remark.type, fmt.key + ": the same value type");
+        }
+    }
+
+    replacedTypeTest() {
+        foreach string fmt in (keys Formats) {
+            AbstractRestSchemaValidator schema = getSchema(fmt, getSchemas(fmt));
+            AbstractDataProviderType string_type = AbstractDataProviderType::get("string");
+            # replacing a type that has not been built has no effect
+            schema.replaceTypeForReference("Name", AbstractDataProviderType::get("int"));
+            assertEq(buildType(fmt, (("Name", False),)),
+                VariantOrderTest::describe(schema.getTypeForReference("Name", False)), fmt + ": unbuilt");
+
+            # replacing a built type replaces both variants: the one built ...
+            assertEq(NT_HASH, schema.getTypeForReference("Child").getBaseTypeCode(), fmt + ": child");
+            schema.replaceTypeForReference("Child", string_type);
+            assertTrue(schema.getTypeForReference("Child") === string_type, fmt + ": replaced");
+            # ... and the one asked for afterwards, which is derived from the replacement rather than built
+            AbstractDataProviderType opt = schema.getTypeForReference("Child", False);
+            assertEq("string", opt.getBaseTypeName(), fmt + ": replaced optional");
+            assertTrue(opt.isOrNothingType(), fmt + ": optional");
+        }
+    }
+
+    recursiveUseTest() {
+        foreach hash<auto> fmt in (Formats.pairIterator()) {
+            # a node optionally holding another node, under a property with the name of the parameters below
+            hash<auto> schemas = getSchemas(fmt.key) + {
+                "Node": {
+                    "type": "object",
+                    "properties": {
+                        "id": {"type": "integer"},
+                        "node": {"$ref": fmt.value.prefix + "Node"},
+                    },
+                },
+            };
+            hash<auto> alone = buildTypeFrom(fmt.key, schemas, (("Node", True),));
+
+            # an optional parameter builds the optional field of the name, and a required one then builds the
+            # mandatory field and with it the node's type, whose property reaches the optional field while the
+            # mandatory one is still being built: it must get its own field, not the first parameter's
+            AbstractRestSchemaValidator schema = getSchema(fmt.key, schemas);
+            AbstractSchemaObject node = fmt.key == "Swagger 2.0"
+                ? cast<Swagger::SwaggerSchema>(schema).definitions.Node
+                : cast<OpenApi3::OpenApi3Schema>(schema).components.schemas.Node;
+            assertEq("an optional parameter", schema.getFieldFromSchema("node", "an optional parameter", node,
+                False).getDescription(), fmt.key + ": optional parameter");
+            assertEq("a required parameter", schema.getFieldFromSchema("node", "a required parameter", node,
+                True).getDescription(), fmt.key + ": required parameter");
+            hash<auto> after = VariantOrderTest::describe(schema.getTypeForReference("Node", True));
+            assertEq({}, map {$1: True}, VariantOrderTest::diffPaths(alone, after),
+                fmt.key + ": the node's type is the same as when it is built on its own");
+            assertNeq("an optional parameter", after.fields.node.desc, fmt.key + ": the property's own field");
+        }
+    }
+
+    #! Returns the reusable schemas with references in the given document format
+    private hash<auto> getSchemas(string fmt) {
+        string prefix = Formats{fmt}.prefix;
+        return (map {$1.key: VariantOrderTest::resolvePrefix($1.value, prefix)},
+            (Schemas + (fmt == "OpenAPI 3" ? OpenApi3Schemas : {})).pairIterator())
+            # a nullable string, in the format's own syntax
+            + {"Remark": Formats{fmt}.nullable};
+    }
+
+    #! Returns the type builds of the given document format
+    private list<list<auto>> getSteps(string fmt) {
+        return fmt == "OpenAPI 3" ? Steps + OpenApi3Steps : Steps;
+    }
+
+    #! Returns a value with each \c "$ref" given the reference prefix
+    private static auto resolvePrefix(auto v, string prefix) {
+        switch (v.typeCode()) {
+            case NT_HASH:
+                return map {$1.key: $1.key == "$ref" ? prefix + $1.value : VariantOrderTest::resolvePrefix($1.value,
+                    prefix)}, v.pairIterator();
+            case NT_LIST:
+                return map VariantOrderTest::resolvePrefix($1, prefix), v;
+        }
+        return v;
+    }
+
+    #! Returns a new schema of the given format with the given reusable schemas
+    private AbstractRestSchemaValidator getSchema(string fmt, hash<auto> schemas) {
+        if (fmt == "Swagger 2.0") {
+            return new Swagger::SwaggerSchema("", {
+                "swagger": "2.0",
+                "info": {"title": "Variants", "version": "1"},
+                "paths": {},
+                "definitions": schemas,
+            });
+        }
+        return new OpenApi3::OpenApi3Schema("", {
+            "openapi": "3.0.3",
+            "info": {"title": "Variants", "version": "1"},
+            "paths": {},
+            "components": {"schemas": schemas},
+        });
+    }
+
+    #! Builds the given types in a new schema in order and returns the description of the last one
+    private hash<auto> buildType(string fmt, list<list<auto>> steps) {
+        return buildTypeFrom(fmt, getSchemas(fmt), steps);
+    }
+
+    #! Builds the given types in a new schema with the given reusable schemas and describes the last one
+    private hash<auto> buildTypeFrom(string fmt, hash<auto> schemas, list<list<auto>> steps) {
+        AbstractRestSchemaValidator schema = getSchema(fmt, schemas);
+        AbstractDataProviderType t;
+        foreach list<auto> step in (steps) {
+            t = schema.getTypeForReference(step[0], step[1]);
+        }
+        return VariantOrderTest::describe(t);
+    }
+
+    #! Builds the given field uses of a reusable schema in a new schema and describes each
+    private hash<string, hash<auto>> buildFields(string fmt, string name, list<list<auto>> uses) {
+        AbstractRestSchemaValidator schema = getSchema(fmt, getSchemas(fmt));
+        AbstractSchemaObject so = fmt == "Swagger 2.0"
+            ? cast<Swagger::SwaggerSchema>(schema).definitions{name}
+            : cast<OpenApi3::OpenApi3Schema>(schema).components.schemas{name};
+        hash<string, hash<auto>> rv = {};
+        foreach list<auto> use in (uses) {
+            rv{VariantOrderTest::useKey(use)} = VariantOrderTest::describeField(
+                schema.getFieldFromSchema("param", use[0], so, use[1]), 0);
+        }
+        return rv;
+    }
+
+    #! Returns a label for a field use
+    private static string useKey(list<auto> use) {
+        return sprintf("%s %s", use[0], use[1] ? "required" : "optional");
+    }
+
+    #! Returns the paths at which two descriptions differ
+    private static list<string> diffPaths(auto a, auto b, string path = "") {
+        if (a.typeCode() == NT_HASH && b.typeCode() == NT_HASH) {
+            list<string> rv = ();
+            foreach string key in (keys (a + b)) {
+                rv += VariantOrderTest::diffPaths(a{key}, b{key}, path + "/" + key);
+            }
+            return rv;
+        }
+        if (a.typeCode() == NT_LIST && b.typeCode() == NT_LIST && a.size() == b.size()) {
+            list<string> rv = ();
+            for (int i = 0; i < a.size(); ++i) {
+                rv += VariantOrderTest::diffPaths(a[i], b[i], path + "[" + i + "]");
+            }
+            return rv;
+        }
+        return a === b ? () : (path ?: "/",);
+    }
+
+    #! Returns every order of the given elements
+    private static list<list<auto>> permutations(list<auto> l) {
+        if (l.size() < 2) {
+            return (l,);
+        }
+        list<list<auto>> rv = ();
+        for (int i = 0; i < l.size(); ++i) {
+            list<auto> rest = l;
+            splice rest, i, 1;
+            foreach list<auto> p in (VariantOrderTest::permutations(rest)) {
+                push rv, (l[i],) + p;
+            }
+        }
+        return rv;
+    }
+
+    #! Describes a type and everything reachable from it, down to a fixed depth
+    private static hash<auto> describe(AbstractDataProviderType t, int depth = 0) {
+        hash<auto> rv = VariantOrderTest::plain({
+            "class": t.className(),
+            "name": t.getName(),
+            "display_name": t.getDisplayName(),
+            "short_desc": t.getShortDescription(),
+            "desc": t.getDesc(),
+            "mandatory": t.isMandatory(),
+            "options": t.getOptions(),
+            "tags": t.getTags(),
+            "constraints": t.getConstraints(),
+            "default_value": t.getDefaultValue(),
+            "allowed_values": t.getAllowedValues(),
+        });
+        if (depth == MaxDepth) {
+            return rv;
+        }
+        if (*hash<string, AbstractDataField> fields = t.getFields()) {
+            rv.fields = map {$1.key: VariantOrderTest::describeField($1.value, depth + 1)}, fields.pairIterator();
+        }
+        if (*AbstractDataProviderType et = t.getElementType()) {
+            rv.element = VariantOrderTest::describe(et, depth + 1);
+        }
+        if (t instanceof QoreUnionDataType) {
+            rv.union = map VariantOrderTest::describe($1, depth + 1), cast<QoreUnionDataType>(t).getUnionTypes();
+        }
+        if (t instanceof HashDataType) {
+            if (*AbstractDataProviderType ot = cast<HashDataType>(t).getDefaultOtherFieldType()) {
+                rv.other = VariantOrderTest::describe(ot, depth + 1);
+            }
+        }
+        return rv;
+    }
+
+    #! Describes a field, its type and everything reachable from it, down to a fixed depth
+    private static hash<auto> describeField(AbstractDataField f, int depth) {
+        return VariantOrderTest::plain(f.getLocalInfo() - "unique_key")
+            + {"type": VariantOrderTest::describe(f.getType(), depth)};
+    }
+
+    #! Returns a value with objects and code replaced by their class name
+    private static auto plain(auto v) {
+        switch (v.typeCode()) {
+            case NT_HASH:
+                return map {$1.key: VariantOrderTest::plain($1.value)}, v.pairIterator();
+            case NT_LIST:
+                return map VariantOrderTest::plain($1), v;
+            case NT_OBJECT:
+                return "<" + v.className() + ">";
+            case NT_CLOSURE:
+            case NT_CALLREF:
+                return "<code>";
+        }
+        return v;
+    }
+}

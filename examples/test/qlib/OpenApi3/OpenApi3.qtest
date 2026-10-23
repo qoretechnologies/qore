@@ -4586,12 +4586,16 @@ public class OpenApi3Test inherits QUnit::Test {
         AbstractDataProviderType pay2 = so2.components.schemas.Payment.getDataType();
         assertEq(("amount", "invoice"), sort(keys pay2.getFields()),
             "and the schema reached through the cycle still carries its own fields");
-        # the far side of the cycle is cut at the field that closes it - "payments" is already cached as
-        # a placeholder when the recursion arrives - but it is still a type with the rest of its fields.
-        # A guard that cut every cycle rather than only compositions produced a fieldless "auto" here
-        # and memoized it, so every later use of the schema saw a body with no fields at all
-        assertEq(("number",), sort(keys pay2.getFields().invoice.getType().getFields()),
-            "and the type memoized for it through the cycle keeps the fields the cut does not remove");
+        # the optional type of the far side is built from the schema, not copied from its mandatory type
+        # while that is still being built, so it has every field: "payments" is the placeholder cached
+        # when the recursion arrives, which is completed in place.  A guard that cut every cycle rather
+        # than only compositions produced a fieldless "auto" here and memoized it, so every later use of
+        # the schema saw a body with no fields at all; a copy of the type under construction had only the
+        # fields added before the recursion, so the type depended on which end the cycle was entered from
+        assertEq(("number", "payments"), sort(keys pay2.getFields().invoice.getType().getFields()),
+            "and the type memoized for it through the cycle has all of its fields");
+        assertEq(sort(keys invoice.getFields()), sort(keys pay2.getFields().invoice.getType().getFields()),
+            "whichever end the cycle is entered from");
     }
 
     #! A response body property holding SQL NULL is validated as if it had no value
